@@ -35,7 +35,7 @@ class VerifiedCacheTests(unittest.TestCase):
         """Create an owned Git index containing representative coupled inputs."""
         self.assertFalse((ROOT / "results").is_symlink())
         (ROOT / "results").mkdir(mode=0o700, exist_ok=True)
-        temporary = tempfile.TemporaryDirectory(prefix="ci-verified.", dir=ROOT / "results")
+        temporary = tempfile.TemporaryDirectory(prefix="ci-verified space.", dir=ROOT / "results")
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         self.git("init", "--quiet")
@@ -57,6 +57,9 @@ class VerifiedCacheTests(unittest.TestCase):
             path = self.root / name
             path.parent.mkdir(parents=True, exist_ok=True)
             _ = path.write_text("original\n")
+        _ = (self.root / ".github/workflows/ci.yml").write_text(
+            (ROOT / ".github/workflows/ci.yml").read_text()
+        )
         self.git("add", ".")
         self.addCleanup(os.environ.update, dict(os.environ))
         self.addCleanup(os.environ.clear)
@@ -79,6 +82,20 @@ class VerifiedCacheTests(unittest.TestCase):
             capture_output=True,
             timeout=10,
         )
+
+    def backend_fixture(self, dependencies: tuple[str, ...] = ("src/main.rs",)) -> Path:
+        """Create both executables and Cargo-format dependency rules, including escaped spaces."""
+        output = self.root / "target/debug"
+        output.mkdir(parents=True, exist_ok=True)
+        for name in cache.BINARIES:
+            executable = output / name
+            _ = executable.write_bytes(b"owned executable fixture")
+            executable.chmod(0o700)
+            words = [str(executable) + ":", *(str(self.root / path) for path in dependencies)]
+            _ = (output / (name + ".d")).write_text(
+                " \\\n  ".join(word.replace(" ", "\\ ") for word in words) + "\n\n"
+            )
+        return output
 
     def test_frontend_code_reuses_backend_but_shared_json_fixture_invalidates_it(self) -> None:
         """Rust includes web/tests/layer-cap-cases.json at compile time."""
@@ -211,7 +228,7 @@ class VerifiedCacheTests(unittest.TestCase):
             path = self.root / name
             _ = path.write_text("new exact finding review\n")
             for scope, original in originals.items():
-                if scope.startswith(("codeql-", "native-")):
+                if scope.startswith(("codeql-", "native-")) or scope == "backend":
                     self.assertEqual(cache.cache_key(self.root, scope), original, name)
                 else:
                     self.assertNotEqual(cache.cache_key(self.root, scope), original, name)
@@ -413,17 +430,13 @@ class VerifiedCacheTests(unittest.TestCase):
 
     def test_backend_cache_checks_every_binary_before_installing_any(self) -> None:
         """Corrupt or symlinked restored executables must never reach the browser server."""
-        output = self.root / "target/debug"
-        output.mkdir(parents=True)
-        for name in cache.BINARIES:
-            path = output / name
-            _ = path.write_bytes(b"owned executable fixture")
-            path.chmod(0o700)
+        output = self.backend_fixture()
         directory = self.root / "cache"
         key = cache.cache_key(self.root, "backend")
         cache.save(self.root, "backend", key, directory)
         for name in cache.BINARIES:
             (output / name).unlink()
+            (output / (name + ".d")).unlink()
         self.assertEqual(cache.verify(self.root, "backend", key, directory), "1" * 40)
         for name in cache.BINARIES:
             self.assertEqual((output / name).read_bytes(), b"owned executable fixture")
@@ -436,6 +449,162 @@ class VerifiedCacheTests(unittest.TestCase):
         (directory / "load_test").symlink_to(directory / "simplestChat")
         with self.assertRaises(OSError):
             _ = cache.verify(self.root, "backend", key, directory)
+
+    def test_backend_closure_preserves_build_inputs_without_operational_invalidations(self) -> None:
+        """Documentation and Python tests cannot change compiler inputs or embedded Rust data."""
+        inputs = (
+            *cache.BACKEND_FILES,
+            "Cargo.lock",
+            "Cargo.toml",
+            "rust-toolchain.toml",
+            ".cargo/config.toml",
+            "load_tests/bin/load_test.rs",
+            "load_tests/clients/measurement.rs",
+            "migrations/new.sql",
+            "src/embedded.txt",
+            "other-target/helper.rs",
+            "web/new-target/helper.rs",
+            "web/tests/layer-cap-cases.json",
+        )
+        unrelated = (
+            "README.md",
+            "docs/testing.md",
+            "ops/ansible/tests/test_security_ci.py",
+            "ops/ansible/files/release_public.py",
+            "security/exceptions.json",
+            "web/e2e/package-lock.json",
+            "web/package.json",
+            "Dockerfile",
+        )
+        for name in (*inputs, *unrelated):
+            if name == ".github/workflows/ci.yml":
+                continue
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            _ = path.write_text("original\n")
+        self.git("add", ".")
+        original = cache.cache_key(self.root, "backend")
+        for name in unrelated:
+            _ = (self.root / name).write_text("unrelated edit\n")
+            self.assertEqual(cache.cache_key(self.root, "backend"), original, name)
+        for name in set(inputs) - {".github/workflows/ci.yml"}:
+            path = self.root / name
+            _ = path.write_text("changed compiler input\n")
+            self.assertNotEqual(cache.cache_key(self.root, "backend"), original, name)
+            _ = path.write_text("original\n")
+
+    def test_backend_workflow_projection_preserves_the_actual_build_contract(self) -> None:
+        """Execute key construction against real workflow edits, including rejected YAML shapes."""
+        path = self.root / ".github/workflows/ci.yml"
+        original = path.read_text()
+        key = cache.cache_key(self.root, "backend")
+        for before, after, changed in (
+            ("name: Build production container", "name: Build the production image", False),
+            ("test:stress", "test:stress-extra", False),
+            ("cargo build --locked --all-features --bins", "cargo build --locked --bins", True),
+            ('OPENSSL_STATIC: "1"', 'OPENSSL_STATIC: "0"', True),
+            ("target/openssl-3.5.9", "target/openssl-3.5.10", True),
+            ("cache-key: rust-build", "cache-key: different-build", True),
+        ):
+            with self.subTest(before=before):
+                self.assertIn(before, original)
+                _ = path.write_text(original.replace(before, after))
+                self.assertEqual(cache.cache_key(self.root, "backend") != key, changed)
+        for altered in (
+            original + "\nenv:\n  RUSTFLAGS: changed\n",
+            original.replace("  browser:\n", "  browser: &shared\n"),
+            original.replace("    env:\n", "    env: *shared\n"),
+            original.replace("Save the exact backend success", "renamed boundary"),
+            original.replace(
+                "  web:\n", "    defaults:\n      run:\n        shell: custom\n\n  web:\n"
+            ),
+            original.replace("  web:\n", "    container: changed\n\n  web:\n"),
+        ):
+            _ = path.write_text(altered)
+            with self.assertRaisesRegex(ToolError, "ci_backend_workflow"):
+                _ = cache.cache_key(self.root, "backend")
+
+    def test_backend_setup_defaults_stay_stable_and_compiler_overrides_invalidate(self) -> None:
+        """Pinned setup's observed exports cannot break cold publication or weaken overrides."""
+        with patch.dict(os.environ):
+            _ = os.environ.pop("CARGO_HOME", None)
+            _ = os.environ.pop("CARGO_INCREMENTAL", None)
+            before = cache.cache_key(self.root, "backend")
+            os.environ.update(
+                {
+                    "CARGO_HOME": str(Path.home() / ".cargo"),
+                    "CARGO_INCREMENTAL": "0",
+                    "CARGO_TERM_COLOR": "always",
+                    "CACHE_ON_FAILURE": "false",
+                }
+            )
+            self.assertEqual(cache.cache_key(self.root, "backend"), before)
+            for name in (
+                *(cache.BACKEND_ENVIRONMENT - {"CARGO_TARGET_DIR"}),
+                "CARGO_PROFILE_DEV_OPT_LEVEL",
+                "CARGO_BUILD_RUSTFLAGS",
+            ):
+                with patch.dict(os.environ, {name: "changed"}):
+                    self.assertNotEqual(cache.cache_key(self.root, "backend"), before, name)
+            with (
+                patch.dict(os.environ, {"CARGO_TARGET_DIR": str(self.root / "other-output")}),
+                self.assertRaisesRegex(ToolError, "ci_backend_target_directory"),
+            ):
+                _ = cache.cache_key(self.root, "backend")
+            with patch.dict(os.environ, {"CARGO_INCREMENTAL": "1"}):
+                self.assertNotEqual(cache.cache_key(self.root, "backend"), before)
+
+    def test_backend_dependency_guard_rejects_unbound_sources_before_publication(self) -> None:
+        """A successfully compiled embedded file must still be tracked and keyed."""
+        for dependency in ("docs/example.md", "src/untracked.txt", "target/unbound.rs"):
+            path = self.root / dependency
+            path.parent.mkdir(parents=True, exist_ok=True)
+            _ = path.write_text("unbound input\n")
+            _ = self.backend_fixture(("src/main.rs", dependency))
+            destination = self.root / "cache"
+            with self.assertRaisesRegex(ToolError, "ci_backend_dep_unkeyed"):
+                cache.save(self.root, "backend", cache.cache_key(self.root, "backend"), destination)
+            self.assertFalse(destination.exists())
+
+    def test_backend_dependency_guard_binds_generated_inputs_and_depinfo_bytes(self) -> None:
+        """Generated files inherit pinned build inputs; restored dep-info is authenticated."""
+        generated = "target/debug/build/mediasoup-sys-1234567890abcdef/out/fbs.rs"
+        openssl = "target/openssl-3.5.9/lib/libssl.a"
+        for relative in (generated, openssl):
+            path = self.root / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            _ = path.write_text("generated fixture\n")
+        output = self.backend_fixture(("src/main.rs", "vendor", generated, openssl))
+        with patch.dict(os.environ, {"OPENSSL_DIR": str(self.root / "target/openssl-3.5.9")}):
+            key = cache.cache_key(self.root, "backend")
+            directory = self.root / "cache"
+            cache.save(self.root, "backend", key, directory)
+            for relative in (generated, openssl):
+                (self.root / relative).unlink()
+            for name in cache.BINARIES:
+                (output / name).unlink()
+            self.assertEqual(cache.verify(self.root, "backend", key, directory), "1" * 40)
+            for name in cache.BINARIES:
+                (output / name).unlink()
+            _ = (directory / "load_test.d").write_text("changed dependency rule\n")
+            with self.assertRaisesRegex(ToolError, "ci_cache_binary_changed"):
+                _ = cache.verify(self.root, "backend", key, directory)
+            self.assertFalse(any((output / name).exists() for name in cache.BINARIES))
+
+    def test_backend_dependency_guard_rejects_wrong_targets_and_unsupported_rules(self) -> None:
+        """Unsupported dependency formats and external files fail instead of being ignored."""
+        output = self.backend_fixture()
+        path = output / "simplestChat.d"
+        original = path.read_text()
+        for malformed in (
+            original.replace("/simplestChat:", "/another-binary:"),
+            original.rstrip() + " /unbound/compiler/source.rs\n",
+            original + "# env-dep:UNBOUND=value\n",
+            original.replace("src/main.rs", "target/openssl-3.5.8/lib/libssl.a"),
+        ):
+            _ = path.write_text(malformed)
+            with self.assertRaisesRegex(ToolError, "ci_backend_dep"):
+                cache.backend_dependencies(self.root, output, "simplestChat", built=True)
 
     def test_codeql_cannot_use_a_success_stamp_instead_of_a_traced_database(self) -> None:
         """Only the extraction-cache helper may use the native CodeQL input identity."""

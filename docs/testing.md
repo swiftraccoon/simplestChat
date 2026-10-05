@@ -636,11 +636,20 @@ already matches. Compile reports time configuration, generator, compilation and
 installation separately from runtime.
 
 Browser jobs reuse backend executables only for the same bound inputs and after
-checking both executable hashes. Every browser suite still runs against the
-current frontend. Cache entries are saved only after their corresponding build
-or check succeeds, without prefix fallback. A warm frontend change avoids
-unchanged backend compilation; cold caches and toolchain changes still require
-the complete affected work and are not represented as a fast-path success.
+checking both executable and compiler dependency-file hashes. Backend keys bind
+all Rust targets (including `load_tests`), embedded source/fixture trees, Cargo
+manifests/configuration, the complete native-toolchain action and its helpers,
+compiler environment overrides, and runner/trust identities. The CI workflow's
+global configuration and browser job through backend publication are bound;
+independent image-job, operations-test and documentation edits do not rebuild
+unchanged binaries. Unsupported workflow layouts fail closed.
+Before publication, both Cargo `.d` files must name the expected binary and only
+tracked, keyed sources or the known generated FlatBuffers/current pinned OpenSSL
+inputs. External files, untracked embedded files and unknown generated inputs
+are rejected. Restores recheck this dependency boundary before installing either
+binary. Every browser suite still runs against the current frontend. Entries are
+saved only after the corresponding build or check succeeds, without prefix
+fallback. Cold caches and changed compiler inputs still require complete builds.
 
 Production CI downloads and authenticates its pinned image-scanner tools while
 the disposable release/rollback fixture runs. Both bounded results must pass;
