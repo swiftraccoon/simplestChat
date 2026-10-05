@@ -25,6 +25,8 @@ isolated Linux environment. Do not automatically run the entire suite both local
 and on GitHub for every change. The CI performance targets are a five-minute
 ceiling and one minute for ordinary changes; these are not established runtime
 guarantees. Record measured runtimes and address overruns.
+Use standard free GitHub-hosted runners; CI must not require paid runners or an
+operator-provided host.
 
 GitHub issues a release signature only after every required check passes. The
 default deployment requires that signed artifact. When the operator explicitly
