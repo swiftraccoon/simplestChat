@@ -5,7 +5,7 @@ Run commands from the repository root.
 ## Prerequisites
 
 - Rust via rustup; the version is pinned in [rust-toolchain.toml](../rust-toolchain.toml).
-- Node.js and npm (minimum Node 22.12).
+- Node.js 26.10 or newer and npm.
 - Xcode command-line tools on macOS, or a Linux C++ toolchain.
 - `make`, `perl`, `curl`, `pkg-config`, `cmake`, and Python 3/pip.
   See [native dependencies](../vendor/README.md) for platform details.
