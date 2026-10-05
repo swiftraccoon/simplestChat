@@ -1,0 +1,51 @@
+---
+- name: Authenticate the candidate Compose executable before public maintenance
+  ansible.builtin.get_url:
+    url: "https://github.com/docker/compose/releases/download/v{{ scbench_docker_compose_version.split('-')[0] }}/docker-compose-linux-x86_64"
+    dest: /usr/local/libexec/simplestchat-public/compose-upgrade-candidate
+    checksum: "sha256:{{ scbench_docker_compose_binary_sha256 }}"
+    owner: root
+    group: root
+    mode: '0700'
+    timeout: 60
+    validate_certs: true
+
+- name: Require the new Compose to preserve resolved configuration and service identities
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/python3
+      - -c
+      - |
+        import json
+        import subprocess
+        import sys
+
+        candidate, version = sys.argv[1:]
+        environment = {"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "LC_ALL": "C",
+                       "DOCKER_HOST": "unix:///var/run/docker.sock"}
+        current = ["/usr/bin/docker", "--host", "unix:///var/run/docker.sock", "compose"]
+        arguments = ["--project-name", "simplestchat-public", "--project-directory", "/etc/simplestchat-public",
+                     "--env-file", "/etc/simplestchat-public/app.env", "-f", "/etc/simplestchat-public/compose.public.yml"]
+
+        def run(prefix, arguments):
+            result = subprocess.run(prefix + arguments, env=environment, capture_output=True, timeout=20, check=False)
+            if result.returncode != 0 or len(result.stdout) > 8 * 1024 * 1024:
+                sys.exit("Compose compatibility command failed; no services were stopped")
+            return result.stdout
+
+        if run([candidate], ["version", "--short"]).decode().strip() != version:
+            sys.exit("Candidate Compose does not match the selected package")
+        if json.loads(run(current, arguments + ["config", "--format", "json"])) != json.loads(
+                run([candidate], arguments + ["config", "--format", "json"])):
+            sys.exit("Candidate Compose changes resolved configuration; separate migration required")
+        for service in ("postgres", "simplestchat", "caddy"):
+            if run(current, arguments + ["config", "--hash", service]) != run(
+                    [candidate], arguments + ["config", "--hash", service]):
+                sys.exit("Candidate Compose changes a service identity; separate migration required")
+        print("Candidate Compose preserves configuration and all three service identities")
+      - /usr/local/libexec/simplestchat-public/compose-upgrade-candidate
+      - "{{ scbench_docker_compose_version.split('-')[0] }}"
+  changed_when: false
+  # Compose output includes credentials. Only the fixed success/failure messages
+  # leave the bounded child process; never expose its captured configuration.
+  no_log: true

@@ -58,6 +58,12 @@
         - release_artifact.py
         - release_json.py
 
+    - name: Verify runtime upgrade compatibility before stopping any services
+      ansible.builtin.include_tasks: tasks/runtime-upgrade-preflight.yml
+      when:
+        - scpub_upgrade_runtime | default(false) | bool
+        - not ansible_check_mode
+
     - name: Prepare, reboot once and recover the same public containers
       when: not ansible_check_mode
       block:
@@ -76,6 +82,12 @@
               - prepare
           changed_when: true
 
+        - name: Install the reviewed runtime packages only after ordered service stops
+          ansible.builtin.include_tasks: tasks/docker.yml
+          vars:
+            scbench_docker_defer_restart: true
+          when: scpub_upgrade_runtime | default(false) | bool
+
         - name: Reboot the explicitly authorized host and wait for Docker
           ansible.builtin.reboot:
             msg: Explicitly requested simplestChat public-host maintenance
@@ -83,6 +95,28 @@
             reboot_timeout: 600
             post_reboot_delay: 5
             test_command: /usr/bin/systemctl is-active docker.service
+
+        - name: Verify the running runtime and Compose versions after the reboot
+          ansible.builtin.command:
+            argv:
+              - /usr/bin/python3
+              - -c
+              - |
+                import subprocess
+                import sys
+
+                environment = {"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "LC_ALL": "C"}
+                docker = ["/usr/bin/docker", "--host", "unix:///var/run/docker.sock"]
+                checks = [(["info", "--format", "{% raw %}{{.ServerVersion}}{% endraw %}"], sys.argv[1]),
+                          (["compose", "version", "--short"], sys.argv[2])]
+                for arguments, expected in checks:
+                    result = subprocess.run(docker + arguments, env=environment, capture_output=True, timeout=20, check=False)
+                    if result.returncode != 0 or result.stdout.decode().strip() != expected:
+                        sys.exit("Running runtime does not match the reviewed package pins")
+              - "{{ scbench_docker_engine_version.split(':')[-1].split('-')[0] }}"
+              - "{{ scbench_docker_compose_version.split('-')[0] }}"
+          changed_when: false
+          when: scpub_upgrade_runtime | default(false) | bool
 
         - name: Restore the prepared services only after the boot identity changed
           ansible.builtin.command:
@@ -125,3 +159,10 @@
               recovery never converts this failure into success. Inspect {{ scpub_root }}/release-state.json and its
               private results directory before any further maintenance. A failed post-reboot recovery requires review,
               not an automatic retry or another reboot.
+
+      always:
+        - name: Remove the temporary compatibility executable
+          ansible.builtin.file:
+            path: /usr/local/libexec/simplestchat-public/compose-upgrade-candidate
+            state: absent
+          when: scpub_upgrade_runtime | default(false) | bool

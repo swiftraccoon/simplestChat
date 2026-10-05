@@ -10,6 +10,7 @@ import json
 import os
 import signal
 import stat
+import subprocess
 import sys
 import tempfile
 import time
@@ -679,12 +680,17 @@ class RebootPlaybookTests(unittest.TestCase):
         preparation = obj(workflow, "block", 0)
         self.assertEqual(at(preparation, "ansible.builtin.command", "argv", -1), "prepare")
         self.assertEqual(workflow["when"], "not ansible_check_mode")
-        self.assertIn("ansible.builtin.reboot", obj(workflow, "block", 1))
-        self.assertEqual(at(workflow, "block", 2, "ansible.builtin.command", "argv", -1), "resume")
+        upgrade = obj(workflow, "block", 1)
+        self.assertEqual(upgrade["ansible.builtin.include_tasks"], "tasks/docker.yml")
+        self.assertIs(obj(upgrade, "vars")["scbench_docker_defer_restart"], expr2=True)
+        self.assertEqual(upgrade["when"], "scpub_upgrade_runtime | default(false) | bool")
+        self.assertIn("ansible.builtin.reboot", obj(workflow, "block", 2))
+        self.assertIn("ansible.builtin.command", obj(workflow, "block", 3))
+        self.assertEqual(at(workflow, "block", 4, "ansible.builtin.command", "argv", -1), "resume")
         self.assertEqual(at(workflow, "rescue", 0, "ansible.builtin.command", "argv", -1), "cancel")
         self.assertIs(at(workflow, "rescue", 0, "failed_when"), expr2=False)
         self.assertIn("ansible.builtin.fail", obj(workflow, "rescue", -1))
-        for task in (preparation, obj(workflow, "block", 2), obj(workflow, "rescue", 0)):
+        for task in (preparation, obj(workflow, "block", 4), obj(workflow, "rescue", 0)):
             argv = strings(task, "ansible.builtin.command", "argv")
             self.assertIn("--property=RuntimeMaxSec=900", argv)
             self.assertIn("--wait", argv)
@@ -693,6 +699,43 @@ class RebootPlaybookTests(unittest.TestCase):
                 "ansible.builtin.apt" in task or "ansible.builtin.service" in task for task in tasks
             )
         )
+
+    def test_compose_upgrade_refuses_changed_configuration_hash_or_version(self) -> None:
+        """The actual preflight compares private outputs without emitting credentials."""
+        tasks = yaml_value((FILES.parent / "tasks/runtime-upgrade-preflight.yml").read_text())
+        code = strings(obj(tasks, 1), "ansible.builtin.command", "argv")[2]
+        expected = "5.6.0"
+        for changed in ("none", "configuration", "hash", "version", "command"):
+
+            def response(
+                args: Sequence[str], *, failure: str = changed, **_options: object
+            ) -> subprocess.CompletedProcess[bytes]:
+                candidate = args[0] == "/candidate"
+                status = 1 if failure == "command" and candidate else 0
+                if "version" in args:
+                    output = b"unexpected" if failure == "version" else expected.encode()
+                elif "--hash" in args:
+                    output = b"changed" if failure == "hash" and candidate else b"service hash"
+                else:
+                    value = (
+                        "changed" if failure == "configuration" and candidate else "private-secret"
+                    )
+                    output = json.dumps({"environment": {"SECRET": value}}).encode()
+                return subprocess.CompletedProcess(args, status, output, b"")
+
+            with (
+                self.subTest(changed=changed),
+                patch.object(sys, "argv", ["check", "/candidate", expected]),
+                patch.object(subprocess, "run", side_effect=response),
+                redirect_stdout(io.StringIO()) as output,
+            ):
+                if changed == "none":
+                    exec(compile(code, "compose-upgrade-preflight", "exec"), {})  # noqa: S102 -- Execute the checked-in inline helper against mocked commands.
+                    self.assertIn("preserves configuration", output.getvalue())
+                else:
+                    with self.assertRaises(SystemExit):
+                        exec(compile(code, "compose-upgrade-preflight", "exec"), {})  # noqa: S102 -- Same owned fixture, no external command execution.
+                self.assertNotIn("private-secret", output.getvalue())
 
 
 if __name__ == "__main__":

@@ -13,7 +13,7 @@ See [release integration checks](../../docs/testing.md#app-only-releases-and-rol
 for prerequisites and evidence limits. This is not a deployment or reboot test of
 your VPS; measure the first controlled rollout before relying on its timings.
 
-Use Docker Compose 5.5.1 for these release workflows, matching the provisioned
+Use Docker Compose 5.6.0 for these release workflows, matching the provisioned
 host and CI. Older versions can omit service `env_file` values from configuration
 hashes and reject unchanged containers. CI verifies the same version for both
 the runner user and the root-run release helper.
@@ -406,3 +406,23 @@ update needs a refresh to gain that recovery behavior.
 Independent frontend releases and room-aware overlapping app instances are not
 part of this first release path. UI changes still ship with the app image. Do not
 add random load balancing: live rooms and media ownership remain process-local.
+
+
+### Pinned Docker runtime upgrades
+
+For a reviewed Docker/containerd/Compose update on an existing public host, use
+`reboot.yml -e scpub_reboot=true -e scpub_upgrade_runtime=true`. Update the exact
+inventory package pins first; local inventory overrides group defaults. The
+candidate Compose executable must match its separately pinned official SHA-256.
+Before stopping services, the playbook compares its resolved configuration and
+all three service hashes against the installed Compose. Any difference fails
+before maintenance and requires a separate configuration migration.
+
+After preparation saves container identities and gracefully stops the public
+services, the existing signed apt workflow installs the exact packages with
+service auto-start disabled. One explicit host reboot activates the runtime;
+version checks precede the existing recovery/readiness checks. Containers,
+volumes and selected application/dependency images are retained. A failure is
+still a failed maintenance operation even if same-boot recovery succeeds.
+This interrupts active chat/media and also reboots the host's TURN/monitoring
+services. App-only releases do not upgrade Docker or reboot the host.

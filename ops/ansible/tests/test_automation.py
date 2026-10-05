@@ -231,11 +231,11 @@ class AutomationTests(unittest.TestCase):
         preferences = render("docker.preferences.j2")
         records = [block for block in preferences.split("\n\n") if "Package:" in block]
         expected = {
-            "docker-ce": "5:29.8.0-1~debian.13~trixie",
-            "docker-ce-cli": "5:29.8.0-1~debian.13~trixie",
-            "containerd.io": "2.3.5-1~debian.13~trixie",
+            "docker-ce": "5:29.8.2-1~debian.13~trixie",
+            "docker-ce-cli": "5:29.8.2-1~debian.13~trixie",
+            "containerd.io": "2.3.6-1~debian.13~trixie",
             "docker-buildx-plugin": "0.37.1-1~debian.13~trixie",
-            "docker-compose-plugin": "5.5.1-1~debian.13~trixie",
+            "docker-compose-plugin": "5.6.0-1~debian.13~trixie",
         }
         self.assertEqual(len(records), len(expected))
         for package, version in expected.items():

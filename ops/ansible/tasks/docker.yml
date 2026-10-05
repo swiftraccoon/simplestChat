@@ -163,6 +163,7 @@
     enabled: true
     state: started
     daemon_reload: true
+  when: not (scbench_docker_defer_restart | default(false) | bool)
 
 - name: Confirm the daemon responds through its local Unix socket
   ansible.builtin.command:
@@ -176,11 +177,15 @@
   register: scbench_docker_running_version
   changed_when: false
   check_mode: false
-  when: not ansible_check_mode
+  when:
+    - not ansible_check_mode
+    - not (scbench_docker_defer_restart | default(false) | bool)
 
 - name: Require the running daemon to match the selected package version
   ansible.builtin.assert:
     that:
       - scbench_docker_running_version.stdout | trim == (scbench_docker_engine_version.split(':')[-1].split('-')[0])
     fail_msg: The running Docker daemon differs from its package pin; review and restart it before benchmarking.
-  when: not ansible_check_mode
+  when:
+    - not ansible_check_mode
+    - not (scbench_docker_defer_restart | default(false) | bool)
