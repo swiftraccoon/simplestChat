@@ -114,7 +114,7 @@
     {
       "scanner": "zizmor",
       "fingerprint": "superfluous-actions:0fb2d712953646c2c07edb9a959b25649b214c63cb1143b35266a007af663b35",
-      "scope": ".github/workflows/security.yml#jobs/security-fast/steps/2/uses",
+      "scope": ".github/workflows/security.yml#jobs/security-fast/steps/3/uses",
       "owner": "swiftraccoon",
       "rationale": "The maintained local act image has no rustup; its fast security prerequisites failed with command not found. This existing pinned installer bootstraps rustup and installs the repository's exact Rust toolchain before the shared checks.",
       "reachability": "Only this exact step and immutable action reference are reviewed. Checkout disables persisted credentials, and the shared source security checks remain blocking. Re-reviewed 2026-10-05 at 89b12181: fixed repository-controlled toolchain/component inputs, HTTPS rustup bootstrap when absent, and bounded retries for official-server checksum propagation failures. Scope and expiry are unchanged.",

@@ -4,7 +4,8 @@
   "version": "0.1.0",
   "type": "module",
   "engines": {
-    "node": ">=26.10.0"
+    "node": ">=26.10.0",
+    "npm": ">=12.2.0"
   },
   "scripts": {
     "dev": "vite",
@@ -28,5 +29,6 @@
   },
   "dependencies": {
     "mediasoup-client": "3.24.4"
-  }
+  },
+  "packageManager": "npm@12.2.0"
 }

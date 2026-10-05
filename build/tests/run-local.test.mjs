@@ -52,7 +52,7 @@ if (command === 'rustup') {
 } else if (command === 'npm') {
   if (args.includes('ci')) fail('npm-ci');
   else if (args.includes('build')) fail('npm-build');
-  else if (args.includes('--version')) console.log('11.8.0');
+  else if (args.includes('--version')) console.log('12.2.0');
   else process.exit(95);
 } else if (command === 'install-openssl') {
   fail('openssl-install');
@@ -77,6 +77,7 @@ if (command === 'rustup') {
   // The inline availability preflight is covered separately. Never open ports
   // in these command-contract fixtures, and never execute real setup commands.
   if (args.includes('--version') || args.includes('-v')) console.log('v26.10.0');
+  if (args.includes('build/install-npm.mjs')) fail('npm-install');
 }
 else if (command === 'python3') console.log('Python 3.14.0');
 else if (command === 'openssl') console.log('OpenSSL 4.0.3 fixture');
@@ -207,6 +208,8 @@ test('local launcher pins Rust and refreshes locked web dependencies despite exi
   assert.equal(result.server.env.WEBRTC_SERVER_PORT_BASE, '40000');
   assert.equal(result.server.env.ALLOW_AD_HOC_ROOMS, 'true');
   assert.equal(result.events.filter(event => event.command === 'install-openssl').length, 0);
+  const npmInstaller = result.events.find(event => event.command === 'node' && event.args[0] === 'build/install-npm.mjs');
+  assert.deepEqual(npmInstaller.args, ['build/install-npm.mjs', path.join(setup.root, 'target/npm-12.2.0')]);
   const npm = result.events.filter(event => event.command === 'npm');
   assert.equal(npm.filter(event => event.args.includes('ci')).length, 1);
   assert.equal(npm.filter(event => event.args.includes('build')).length, 1);
@@ -286,7 +289,7 @@ test('local launcher requires the tracked pip constraint and both static OpenSSL
 });
 
 test('local launcher stops after setup/build failures and preserves server exit status', async t => {
-  for (const phase of ['rustup-which', 'openssl-install', 'npm-ci', 'npm-build', 'cargo', 'server']) {
+  for (const phase of ['rustup-which', 'openssl-install', 'npm-install', 'npm-ci', 'npm-build', 'cargo', 'server']) {
     const setup = await fixture(t, { installedOpenSsl: false, installedWeb: false });
     const result = await setup.run([], { FIXTURE_FAIL: phase, FIXTURE_FAILURE_CODE: '37' });
     assert.notEqual(result.status, 0, `${phase}: ${result.output}`);

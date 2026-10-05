@@ -5,7 +5,7 @@ Run commands from the repository root.
 ## Prerequisites
 
 - Rust via rustup; the version is pinned in [rust-toolchain.toml](../rust-toolchain.toml).
-- Node.js 26.10 or newer and npm.
+- Node.js 26.10 or newer and the pinned npm 12.2.0 installer below.
 - Xcode command-line tools on macOS, or a Linux C++ toolchain.
 - `make`, `perl`, `curl`, `pkg-config`, `cmake`, and Python 3/pip.
   See [native dependencies](../vendor/README.md) for platform details.
@@ -31,6 +31,21 @@ Run commands from the repository root.
   Go 1.25 or newer, Git, `patch`, and the documented disposable container runtime.
   It builds its checksum-pinned, patched `act` locally; an ambient `act`
   installation is not used.
+
+Install the same authenticated npm release used in CI and the frontend image
+builder, then prepend its repository-local directory to this shell's path:
+
+```sh
+node build/install-npm.mjs "$PWD/target/npm-12.2.0"
+export PATH="$PWD/target/npm-12.2.0/bin:$PATH"
+```
+
+The helper verifies the official npm archive's pinned SHA-512 before extraction,
+checks the installed version, and publishes a complete installation atomically.
+A repeated invocation reauthenticates the download and verifies every existing
+file against it; changed installations fail without being replaced. It does not
+modify a global npm installation. A fresh download is at most 16 MiB and has a
+60-second deadline; extraction and version verification also have deadlines.
 
 ## Guest-only local UI
 

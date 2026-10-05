@@ -208,6 +208,12 @@ jobs:
             web/package-lock.json
             web/e2e/package-lock.json
 
+      - name: Install checksum-pinned npm
+        working-directory: ${{ github.workspace }}
+        run: |
+          node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"
+          echo "$RUNNER_TEMP/simplestchat-npm-12.2.0/bin" >> "$GITHUB_PATH"
+
       - name: Check helper syntax, safety and cleanup
         run: build/check.sh --helpers
 
@@ -317,6 +323,13 @@ jobs:
           cache-dependency-path: |
             web/package-lock.json
             web/e2e/package-lock.json
+
+      - name: Install checksum-pinned npm
+        if: steps.verified.outputs.cache-hit != 'true'
+        working-directory: ${{ github.workspace }}
+        run: |
+          node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"
+          echo "$RUNNER_TEMP/simplestchat-npm-12.2.0/bin" >> "$GITHUB_PATH"
 
       # Include development dependencies from the first build so cargo test
       # reuses the same feature graph and native worker. Explicitly use its
@@ -588,6 +601,12 @@ jobs:
           cache-dependency-path: |
             web/package-lock.json
             web/e2e/package-lock.json
+
+      - name: Install checksum-pinned npm
+        working-directory: ${{ github.workspace }}
+        run: |
+          node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"
+          echo "$RUNNER_TEMP/simplestchat-npm-12.2.0/bin" >> "$GITHUB_PATH"
 
       # One feature set for every Rust target in CI. Distinct feature sets
       # (default for the server, load-test for the generator, all for the
@@ -887,6 +906,13 @@ jobs:
           node-version: 26.10.0
           cache: npm
           cache-dependency-path: web/package-lock.json
+
+      - name: Install checksum-pinned npm
+        working-directory: ${{ github.workspace }}
+        run: |
+          node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"
+          echo "$RUNNER_TEMP/simplestchat-npm-12.2.0/bin" >> "$GITHUB_PATH"
+
       - run: npm ci --ignore-scripts
       - run: ../build/check.sh --web
       - name: Audit web dependencies

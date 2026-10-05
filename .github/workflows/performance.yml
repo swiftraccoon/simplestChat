@@ -70,6 +70,12 @@ jobs:
         with:
           node-version: 26.10.0
 
+      - name: Install checksum-pinned npm
+        working-directory: ${{ github.workspace }}
+        run: |
+          node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"
+          echo "$RUNNER_TEMP/simplestchat-npm-12.2.0/bin" >> "$GITHUB_PATH"
+
       # The baseline is a detached worktree sharing this checkout's dependency
       # artifacts; only its workspace crate and vendored path crates compile.
       - name: Build the baseline server
@@ -166,6 +172,12 @@ jobs:
             web/package-lock.json
             web/e2e/package-lock.json
 
+      - name: Install checksum-pinned npm
+        working-directory: ${{ github.workspace }}
+        run: |
+          node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"
+          echo "$RUNNER_TEMP/simplestchat-npm-12.2.0/bin" >> "$GITHUB_PATH"
+
       - name: Build the server and the generator
         run: |
           cargo build --locked --release --bin simplestChat
@@ -260,6 +272,12 @@ jobs:
           cache-dependency-path: |
             web/package-lock.json
             web/e2e/package-lock.json
+
+      - name: Install checksum-pinned npm
+        working-directory: ${{ github.workspace }}
+        run: |
+          node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"
+          echo "$RUNNER_TEMP/simplestchat-npm-12.2.0/bin" >> "$GITHUB_PATH"
 
       - name: Build server and load generator
         run: cargo build --locked --all-features --bins

@@ -25,6 +25,9 @@ writeFileSync(output, JSON.stringify({ schemaVersion: 1, exceptions: records }) 
 IMAGE_REVIEWS
 
 FROM docker.io/library/node:26.10.0-bookworm-slim@sha256:662933cf47f013bc8e4beb31a6116448427a82057ba7c42c97e4c5ba766504c2 AS web-builder
+COPY build/install-npm.mjs /usr/local/lib/install-simplestchat-npm.mjs
+RUN node /usr/local/lib/install-simplestchat-npm.mjs /opt/npm-12.2.0
+ENV PATH="/opt/npm-12.2.0/bin:${PATH}"
 WORKDIR /web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci --ignore-scripts

@@ -73,6 +73,12 @@ jobs:
             web/package-lock.json
             web/e2e/package-lock.json
 
+      - name: Install checksum-pinned npm
+        working-directory: ${{ github.workspace }}
+        run: |
+          node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"
+          echo "$RUNNER_TEMP/simplestchat-npm-12.2.0/bin" >> "$GITHUB_PATH"
+
       - name: Check test helpers
         run: |
           bash -n build/with-test-postgres.sh build/with-test-server.sh

@@ -11,6 +11,7 @@
 build/**
 !build/pip-constraints.txt
 !build/install-openssl.sh
+!build/install-npm.mjs
 !build/security_tools.py
 !build/security-tools.lock.json
 !build/security_vendor.py

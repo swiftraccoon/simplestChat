@@ -28,10 +28,6 @@ for dependency in rustup node; do
         exit 2
     fi
 done
-if [ "$skip_web" = 0 ] && ! command -v npm >/dev/null 2>&1; then
-    echo 'Missing npm; see docs/development.md for prerequisites.' >&2
-    exit 2
-fi
 if [ "$skip_web" = 1 ] && [ ! -f web/dist/index.html ]; then
     echo '--skip-web requires web/dist/index.html; run without --skip-web first.' >&2
     exit 2
@@ -136,6 +132,9 @@ if [ ! -f "$OPENSSL_DIR/lib/libssl.a" ] || [ ! -f "$OPENSSL_DIR/lib/libcrypto.a"
     "$repo_root/build/install-openssl.sh" "$OPENSSL_DIR"
 fi
 if [ "$skip_web" = 0 ]; then
+    node build/install-npm.mjs "$repo_root/target/npm-12.2.0"
+    PATH="$repo_root/target/npm-12.2.0/bin:$PATH"
+    export PATH
     npm --prefix web ci --ignore-scripts
     npm --prefix web run build
 fi
