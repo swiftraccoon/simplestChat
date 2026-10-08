@@ -2533,3 +2533,63 @@ header.in-room .room-topic {
     display: none;
   }
 }
+
+/* Messaging controls share the live chat surface and stay within its scroll area. */
+.msg-edited {
+  margin-left: 0.4rem;
+  font-size: 0.65rem;
+  color: var(--text-secondary);
+}
+.history-message.chat-msg {
+  margin: 0.35rem 0;
+  padding: 0.55rem 0.7rem;
+}
+.history-message .msg-time {
+  position: static;
+  opacity: 1;
+  margin-right: 0.3rem;
+}
+.history-context,
+.history-edit,
+.chat-earlier {
+  padding: 0.3rem 0.45rem;
+  font-size: 0.75rem;
+}
+.history-edit,
+.history-context {
+  margin: 0.25rem 0 0.1rem 0.35rem;
+}
+.history-pagination {
+  flex-wrap: wrap;
+}
+.chat-history-start {
+  flex: 0 0 auto;
+}
+.chat-earlier {
+  display: block;
+  margin: 0.4rem auto;
+}
+.chat-pins-toggle {
+  padding: 0.25rem 0.35rem;
+  font-size: 0.7rem;
+  white-space: nowrap;
+}
+.chat-pinned-messages {
+  padding: 0.4rem;
+  border-bottom: 1px solid var(--border);
+}
+.chat-pinned-message {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.chat-pinned-link {
+  min-width: 0;
+  flex: 1;
+  padding: 0.35rem;
+  text-align: left;
+  font-size: 0.8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

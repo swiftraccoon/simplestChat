@@ -18,6 +18,7 @@ async function fixture() {
   };
   const state = {
     requests: [],
+    unread: async () => ({ unreadCount: 0 }),
     notifications: [],
     updated: [],
     signedOut: 0,
@@ -48,6 +49,7 @@ async function fixture() {
   const ui = {
     ...dom.ui,
     api: {
+      inboxUnread: (...args) => state.unread(...args),
       publicProfile: (id, token) => request(`/api/auth/profiles/${encodeURIComponent(id)}`, token),
       accountProfile: (token) => request('/api/auth/profile', token),
       accountSessions: (token, signal) =>
@@ -89,7 +91,12 @@ async function fixture() {
       './account-sessions': await loadTypeScript('src/account-sessions.ts', {
         modules: { './ui': ui },
       }),
-      './chat-history': { openPrivateInbox() {} },
+      './chat-history': {
+        openPrivateInbox() {},
+        onInboxChanged(listener) {
+          state.inboxListener = listener;
+        },
+      },
       './account-security': {
         ...security,
         mountAccountSecurity: (options) => {
@@ -884,8 +891,8 @@ test('room-scoped actions mount in the room tools while account actions stay in 
   });
   const api = await loadTypeScript('src/community-ui.ts', {
     modules: {
-      './ui': dom.ui,
-      './chat-history': { openPrivateInbox() {} },
+      './ui': { ...dom.ui, api: { ...dom.ui.api, inboxUnread: async () => ({ unreadCount: 0 }) } },
+      './chat-history': { openPrivateInbox() {}, onInboxChanged() {} },
       './account-security': security,
       './account-sessions': await loadTypeScript('src/account-sessions.ts', {
         modules: { './ui': dom.ui },
@@ -1095,4 +1102,29 @@ test('issued invitation secrets appear only in a one-time share panel; lists rev
   assert.equal(revoked, 1);
   view.close();
   assert.equal(panel.isConnected, false);
+});
+
+test('Messages badge follows confirmed unread counts and fences a replaced account', async () => {
+  const f = await fixture();
+  await flush();
+  f.state.unread = async () => ({ unreadCount: 5 });
+  await f.community.refreshMessages();
+  const button = f.header.children.find((node) => node.textContent.startsWith('Messages'));
+  assert.equal(button.textContent, 'Messages (5)');
+  assert.equal(button.getAttribute('aria-label'), 'Messages, 5 unread');
+  const pending = deferred();
+  f.state.unread = () => pending.promise;
+  const previous = f.community.refreshMessages();
+  f.auth.userId = 'account-b';
+  f.auth.jwt = 'token-b';
+  f.state.unread = async () => ({ unreadCount: 2 });
+  f.community.refresh();
+  await flush();
+  pending.resolve({ unreadCount: 700 });
+  await previous;
+  assert.equal(button.textContent, 'Messages (2)');
+  f.state.unread = async () => ({ unreadCount: 0 });
+  f.state.inboxListener();
+  await flush();
+  assert.equal(button.textContent, 'Messages');
 });

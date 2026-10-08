@@ -8,6 +8,7 @@ const message = (id, content = `Message ${id}`) => ({
   clientMessageId: `client-${id}`,
   participantId: 'peer',
   participantName: 'Peer',
+  revision: 0,
   recipientId: 'account',
   recipientName: 'Account',
   content,
@@ -18,6 +19,8 @@ const history = (messages = [message('newest')], nextCursor = null) => ({
   messages,
   nextCursor,
   readMessageId: null,
+  newerCursor: null,
+  firstUnreadMessageId: null,
   retentionDays: 30,
 });
 const inbox = (
@@ -43,6 +46,13 @@ async function fixture(t) {
     listeners.get(name).add(listener);
   };
   f.document.removeEventListener = (name, listener) => listeners.get(name)?.delete(listener);
+  const storage = new Map();
+  f.document.createTextNode = (text) => f.ui.el('text', text);
+  Object.defineProperty(f.Node.prototype, 'style', {
+    get() {
+      return { setProperty() {} };
+    },
+  });
   const state = {
     account: 'account',
     token: 'token-a',
@@ -52,6 +62,11 @@ async function fixture(t) {
     loadHistory: async () => history(),
     send: async (_token, _peer, data) => message(data.clientMessageId, data.content),
     markRead: async () => ({ readMessageId: 'newest' }),
+    edit: async (_token, _peer, _id, data) => ({
+      ...message(_id, data.content),
+      revision: data.expectedRevision + 1,
+      editedAt: '2026-10-08T00:00:00Z',
+    }),
     room: async (method) =>
       method === 'getChatHistory'
         ? history()
@@ -90,11 +105,24 @@ async function fixture(t) {
     privateHistory: invoke('history', (...args) => state.loadHistory(...args)),
     readPrivateMessages: invoke('read', (...args) => state.markRead(...args)),
     sendPrivateMessage: invoke('send', (...args) => state.send(...args)),
+    editPrivateMessage: invoke('edit', (...args) => state.edit(...args)),
   };
   const module = await loadTypeScript('src/chat-history.ts', {
-    modules: { './ui': { ...f.ui, api } },
+    modules: {
+      './ui': { ...f.ui, api },
+      './chat-store': await loadTypeScript('src/chat-store.ts'),
+      './avatar-colors': await loadTypeScript('src/avatar-colors.ts'),
+      './chat-message-ui': await loadTypeScript('src/chat-message-ui.ts', {
+        modules: { './ui': f.ui },
+        globals: { document: f.document },
+      }),
+    },
     globals: {
       document: f.document,
+      localStorage: {
+        getItem: (key) => storage.get(key) ?? null,
+        setItem: (key, value) => storage.set(key, value),
+      },
       window: { matchMedia: () => ({ matches: false }) },
       crypto: { randomUUID: () => `attempt-${++attemptId}` },
       URLSearchParams,
@@ -483,6 +511,26 @@ test('history HTTP APIs encode peer/cursor/search independently and validate eve
   const params = new URLSearchParams({ before: 'cursor /?&', q: 'name & text', limit: '50' });
   const signal = new AbortController().signal;
   for (const [invoke, path, method, response, body] of [
+    [
+      () => f.ui.api.inboxUnread('token', signal),
+      '/api/auth/inbox/unread',
+      'GET',
+      { unreadCount: 8 },
+    ],
+    [
+      () =>
+        f.ui.api.editPrivateMessage(
+          'token',
+          'peer /?',
+          'message /?',
+          { content: 'Corrected', expectedRevision: 2 },
+          signal,
+        ),
+      '/api/auth/inbox/peer%20%2F%3F/messages/message%20%2F%3F',
+      'PUT',
+      { ...message('edited', 'Corrected'), revision: 3, editedAt: '2026-10-08T00:00:00Z' },
+      { content: 'Corrected', expectedRevision: 2 },
+    ],
     [() => f.ui.api.inbox('token', params, signal), `/api/auth/inbox?${params}`, 'GET', inbox()],
     [
       () => f.ui.api.privateHistory('token', 'peer /?', params, signal),
@@ -559,4 +607,99 @@ test('inbox/history/read decoders bound result counts and reject malformed requi
   assert.deepEqual(decodeChatRead({ readMessageId: null, privateField: 'discarded' }), {
     readMessageId: null,
   });
+});
+
+test('search opens the result with surrounding context and newer pages without marking search hits read', async (t) => {
+  const f = await fixture(t);
+  f.state.loadHistory = async (_token, _peer, params) =>
+    params.has('around')
+      ? {
+          ...history([message('before'), message('match'), message('after')]),
+          newerCursor: 'newer-page',
+        }
+      : params.has('q')
+        ? history([message('match')])
+        : history();
+  const view = await f.openConversation();
+  search(view, 'match');
+  await flush();
+  action(view, 'Show in conversation').click();
+  await flush();
+  assert.equal(calls(f, 'history').at(-1).args[2].get('around'), 'match');
+  assert.deepEqual(rows(view), ['before', 'match', 'after']);
+  assert.equal(calls(f, 'read').length, 1);
+  action(view, 'Newer messages').click();
+  await flush();
+  assert.equal(calls(f, 'history').at(-1).args[2].get('after'), 'newer-page');
+});
+
+test('reopening an inbox conversation keeps its unsent draft separate from another account', async (t) => {
+  const f = await fixture(t);
+  let view = await f.openConversation();
+  view.querySelector('textarea').value = 'Finish this later';
+  view.querySelector('textarea').emit('input');
+  action(view, 'Close').click();
+  view = await f.openConversation();
+  assert.equal(view.querySelector('textarea').value, 'Finish this later');
+  action(view, 'Close').click();
+  for (const dialog of [...f.document.querySelectorAll('dialog')]) dialog.close();
+  f.state.account = 'another-account';
+  view = await f.openConversation();
+  assert.equal(view.querySelector('textarea').value, '');
+});
+
+test('resume requests the first unread context and does not mark messages beneath the viewport read', async (t) => {
+  const f = await fixture(t);
+  f.state.loadHistory = async () => ({
+    ...history(Array.from({ length: 8 }, (_, id) => message(`resume-${id}`))),
+    firstUnreadMessageId: 'resume-2',
+    newerCursor: 'more',
+  });
+  const view = await f.openConversation();
+  assert.equal(calls(f, 'history')[0].args[2].get('resume'), 'true');
+  assert.match(view.textContent, /New messages/);
+  assert.equal(calls(f, 'read').length, 0);
+  const list = view.querySelector('.history-messages');
+  list.scrollTop = list.scrollHeight;
+  list.emit('scroll');
+  await flush();
+  assert.equal(calls(f, 'read').at(-1).args[2], 'resume-7');
+  const loads = calls(f, 'history').length;
+  await f.tick();
+  assert.equal(
+    calls(f, 'history').length,
+    loads,
+    'polling must not resume again past an unread page the reader has not opened',
+  );
+});
+
+test('history edits update loaded text and quotes and defeat an older in-flight page', async (t) => {
+  const f = await fixture(t);
+  const original = message('editable', 'Original');
+  const reply = {
+    ...message('quote'),
+    replyTo: {
+      messageId: 'editable',
+      participantId: 'peer',
+      participantName: 'Peer',
+      excerpt: 'Original',
+    },
+  };
+  f.state.loadHistory = async () => history([structuredClone(original), structuredClone(reply)]);
+  const view = await f.openConversation();
+  const pending = deferred();
+  f.state.loadHistory = () => pending.promise;
+  const refresh = f.tick();
+  f.notifyHistoryEdit({
+    ...original,
+    content: 'Corrected',
+    revision: 1,
+    editedAt: '2026-10-08T00:00:00Z',
+  });
+  pending.resolve(history([structuredClone(original), structuredClone(reply)]));
+  await refresh;
+  await flush();
+  assert.doesNotMatch(view.textContent, /Original/);
+  assert.match(view.textContent, /Corrected.*Corrected/s);
+  assert.match(view.textContent, /edited/);
 });

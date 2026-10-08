@@ -31,3 +31,5 @@ export const decodeInbox = object<InboxPage>({
 export const decodeChatRead = object<{ readMessageId: string | null }>({
   readMessageId: nullable(text),
 });
+
+export const decodeInboxUnread = object<{ unreadCount: number }>({ unreadCount: integer(1000) });

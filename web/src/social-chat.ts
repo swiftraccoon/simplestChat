@@ -3,8 +3,15 @@ import type { RoomClient } from './room';
 import type { ChatEntry, ChatStyle, ChatStyleKind, ServerMessage } from './protocol';
 import { ChatStore, ConversationInputs, type ChatItem } from './chat-store';
 import { api, asyncButton, button, busy, el, field, modal } from './ui';
+import { appendLinkedText, appendEditedLabel, editMessageDialog } from './chat-message-ui';
 import { CHAT_PALETTE, chatColor } from './avatar-colors';
-import { openRoomHistory, notifyHistoryRemoval } from './chat-history';
+import {
+  openRoomHistory,
+  notifyHistoryRemoval,
+  notifyHistoryEdit,
+  onHistoryEdit,
+  notifyInboxChanged,
+} from './chat-history';
 
 /** How a viewer sees message times: on hover, or always in one format. */
 type TimestampFormat = 'hover' | 'time' | 'time12' | 'seconds' | 'datetime';
@@ -148,6 +155,7 @@ export class SocialChat {
   private seenAtBottom = true;
   // Where reading last resumed: the first message that had arrived unseen.
   private dividerKey: string | null = null;
+  private resumeKey: string | null = null;
   private readonly divider = el('div', undefined, 'chat-divider');
   // People offered while an @mention is being typed, and the highlighted one.
   private readonly mentionList = el('ul', undefined, 'mention-list');
@@ -155,6 +163,29 @@ export class SocialChat {
   private mentionActive = 0;
   // The message the next send answers, shown above the message box until sent or cancelled.
   private replyingTo: ChatItem | null = null;
+  private readonly historyStart = el('div', undefined, 'chat-history-start');
+  private readonly olderButton = button(
+    'Earlier messages',
+    () => {
+      this.loadEarlier().catch(() => {});
+    },
+    'chat-earlier',
+  );
+  private readonly pinsButton = button(
+    '',
+    () => {
+      this.pinsExpanded = !this.pinsExpanded;
+      this.renderPins();
+    },
+    'chat-pins-toggle',
+  );
+  private readonly pinsList = el('div', undefined, 'chat-pinned-messages');
+  private pins: ChatEntry[] = [];
+  private pinsExpanded = false;
+  private pinsVersion = 0;
+  private historyCursor: string | null = null;
+  private historyLoaded = false;
+  private historyLoading = false;
   private readonly replyBar = el('div', undefined, 'reply-bar');
 
   constructor(private readonly options: Options) {
@@ -165,7 +196,21 @@ export class SocialChat {
     const optionsButton = button('⋯', () => this.openPreferences(), 'chat-options-button');
     optionsButton.setAttribute('aria-label', 'Chat options');
     optionsButton.title = 'Chat options';
-    toolbar.append(this.conversations, this.closeButton, optionsButton);
+    toolbar.append(this.conversations, this.closeButton, this.pinsButton, optionsButton);
+    this.pinsButton.hidden = true;
+    this.historyStart.append(this.pinsList, this.olderButton);
+    onHistoryEdit((message) => {
+      if (this.store.editMessage(message)) this.render();
+      if (this.replyingTo?.messageId === message.messageId) {
+        const quote = this.replyBar.querySelector('.reply-bar-excerpt');
+        if (quote) quote.textContent = excerpt(this.replyingTo.content);
+      }
+      this.pinsVersion++;
+      this.pins = this.pins.map((pin) =>
+        pin.messageId === message.messageId && message.revision > pin.revision ? message : pin,
+      );
+      this.renderPins();
+    });
     document.getElementById('chat-panel')!.prepend(toolbar, this.conversationStatus);
     this.typingLine.hidden = true;
     this.typingLine.setAttribute('aria-live', 'polite');
@@ -389,9 +434,16 @@ export class SocialChat {
     this.chatSessionId = null;
     this.chatSequence = 0;
     this.store.reset();
+    this.pins = [];
+    this.pinsVersion++;
+    this.pinsExpanded = false;
+    this.historyCursor = null;
+    this.historyLoaded = false;
+    this.historyLoading = false;
     for (const row of this.rows.values()) row.node.remove();
     this.rows.clear();
     this.dividerKey = null;
+    this.resumeKey = null;
     this.divider.remove();
     this.cancelReply();
     this.composition.reset();
@@ -441,8 +493,10 @@ export class SocialChat {
       });
     }
     if (message.type === 'chatReceived') this.receive(message);
-    else if (message.type === 'privateMessageReceived') this.receive(message.message);
-    else if (message.type === 'messageAck') this.receive(message.message);
+    else if (message.type === 'privateMessageReceived') {
+      this.receive(message.message);
+      notifyInboxChanged();
+    } else if (message.type === 'messageAck') this.receive(message.message);
     else if (message.type === 'socialError' && message.clientMessageId) {
       // The reply has the original message ID, not a retry-attempt ID. Once
       // unconfirmed, a delayed rejection cannot prove the original was unsent.
@@ -482,6 +536,7 @@ export class SocialChat {
         if (this.replyingTo && discarded.has(this.replyingTo.messageId)) this.cancelReply();
       }
       for (const entry of snapshot.messages) this.ingest(entry, true);
+      this.refreshPins();
       this.render();
     } else if (message.type === 'messageRetryResult') {
       this.finishSend(message.clientMessageId, 'unknown');
@@ -511,9 +566,17 @@ export class SocialChat {
         if (item) delete item.retry;
       }
       this.render();
+    } else if (message.type === 'chatMessageEdited') {
+      notifyHistoryEdit(message.message);
+    } else if (message.type === 'pinnedMessagesChanged') {
+      this.pinsVersion++;
+      this.pins = message.messages;
+      this.render();
     } else if (message.type === 'chatMessageRemoved') {
       notifyHistoryRemoval(message.messageId, message.removedAt);
       this.store.removeMessage(message.messageId, message.removedAt);
+      this.pinsVersion++;
+      this.pins = this.pins.filter((pin) => pin.messageId !== message.messageId);
       if (this.replyingTo?.messageId === message.messageId) this.cancelReply();
       this.render();
     } else if (message.type === 'messageReactions') {
@@ -589,7 +652,7 @@ export class SocialChat {
     }
     this.switchConversation(id, name);
     document.querySelector<HTMLButtonElement>('[data-tab="chat"]')?.click();
-    this.render(true);
+    this.render();
     this.input.focus();
   }
 
@@ -641,6 +704,7 @@ export class SocialChat {
         participantName: '',
         content: text,
         sentAt: new Date().toISOString(),
+        revision: 0,
       },
       true,
     );
@@ -765,6 +829,7 @@ export class SocialChat {
     const recipientName = recipientId === undefined ? undefined : this.store.names.get(recipientId);
     // Sending shows the conversation is caught up; the divider has served its purpose.
     this.dividerKey = null;
+    this.resumeKey = null;
     const answering =
       this.replyingTo && this.store.conversation(this.replyingTo) === this.store.active
         ? this.replyingTo
@@ -787,6 +852,7 @@ export class SocialChat {
         ...(recipientName !== undefined && { recipientName }),
         content,
         sentAt: new Date().toISOString(),
+        revision: 0,
       },
       this.chatSessionId === null
         ? undefined
@@ -1002,7 +1068,15 @@ export class SocialChat {
     }
     let previousSender: string | undefined;
     let previousTime = 0;
-    let position = this.messages.firstChild;
+    if (this.historyStart.parentNode !== this.messages)
+      this.messages.insertBefore(this.historyStart, this.messages.firstChild);
+    this.olderButton.hidden =
+      privateChat ||
+      !room?.roomSettings?.historyRetentionDays ||
+      (this.historyLoaded && !this.historyCursor);
+    this.olderButton.disabled = this.historyLoading;
+    this.renderPins();
+    let position = this.historyStart.nextSibling;
     for (const message of visible) {
       const node = this.messageRow(message, room?.nickname);
       const time = Date.parse(message.sentAt);
@@ -1023,7 +1097,17 @@ export class SocialChat {
     this.placeDivider();
     this.resizeInput();
     this.messages.scrollTop = atBottom ? this.messages.scrollHeight : scrollTop;
-    if (forceScroll) this.seenAtBottom = true;
+    if (forceScroll) {
+      this.seenAtBottom = true;
+      this.resumeKey = null;
+    }
+    if (this.resumeKey && this.isVisible()) {
+      const row = this.rows.get(this.resumeKey)?.node;
+      row?.scrollIntoView?.({ block: 'start' });
+      this.seenAtBottom =
+        this.messages.scrollHeight - this.messages.scrollTop - this.messages.clientHeight < 48;
+      this.resumeKey = null;
+    }
     if (this.seenAtBottom && this.isVisible() && this.markActiveRead()) this.placeDivider();
     this.updateBadges();
   }
@@ -1079,13 +1163,17 @@ export class SocialChat {
         conversation === 'public'
           ? room.requestSocial('markChatRead', { messageId: id })
           : api.readPrivateMessages(token, conversation, id, this.readController.signal);
-      request.catch(() => {
-        if (
-          this.contextCurrent(activation, room, viewer) &&
-          this.savedRead.get(conversation) === id
-        )
-          this.savedRead.delete(conversation);
-      });
+      request
+        .then(() => {
+          if (this.contextCurrent(activation, room, viewer)) notifyInboxChanged();
+        })
+        .catch(() => {
+          if (
+            this.contextCurrent(activation, room, viewer) &&
+            this.savedRead.get(conversation) === id
+          )
+            this.savedRead.delete(conversation);
+        });
     }, 500);
   }
 
@@ -1137,7 +1225,10 @@ export class SocialChat {
       message.replyTo,
       message.reactions,
       message.removedAt,
+      message.editedAt,
+      message.revision,
       this.canRemove(message),
+      this.pins.some((pin) => pin.messageId === messageId),
     ]);
     const key = this.rowKey(message);
     const previous = this.rows.get(key);
@@ -1179,6 +1270,7 @@ export class SocialChat {
     meta.setAttribute('datetime', sentAt);
     meta.title = date.toLocaleString();
     node.append(meta);
+    appendEditedLabel(node, message);
     if (participantId) {
       // Delivery state stays visible even when the viewer chooses hover-only timestamps.
       if (status === 'pending' || status === 'failed' || status === 'unknown') {
@@ -1261,6 +1353,15 @@ export class SocialChat {
       control.title = label;
     }
     actions.append(react, reply, picker);
+    if (message.participantId === this.store.localId) {
+      actions.append(button('Edit', () => this.editMessage(message), 'msg-action'));
+    }
+    if (this.canRemove(message)) {
+      const pinned = this.pins.some((pin) => pin.messageId === message.messageId);
+      actions.append(
+        button(pinned ? 'Unpin' : 'Pin', () => this.pinMessage(message, !pinned), 'msg-action'),
+      );
+    }
     if (this.canRemove(message)) {
       const remove = button('Remove', () => this.confirmRemoval(message), 'msg-action');
       remove.setAttribute('aria-label', 'Remove message');
@@ -1272,6 +1373,153 @@ export class SocialChat {
     node.onclick = (event) => {
       if (!(event.target as Element).closest('button, a')) node.classList.toggle('show-actions');
     };
+  }
+
+  private editMessage(message: ChatItem): void {
+    const room = this.options.getRoom();
+    if (!room || message.participantId !== this.store.localId || message.removedAt) return;
+    const activation = this.activation;
+    const viewer = this.viewerKey;
+    editMessageDialog(message, {
+      current: () => this.contextCurrent(activation, room, viewer),
+      save: async (content, expectedRevision) =>
+        (
+          await room.requestSocial('editChatMessage', {
+            messageId: message.messageId,
+            content,
+            expectedRevision,
+          })
+        ).message,
+      changed: notifyHistoryEdit,
+    });
+  }
+
+  private pinMessage(message: ChatEntry, pinned: boolean): void {
+    const room = this.options.getRoom();
+    if (!room) return;
+    const activation = this.activation;
+    const viewer = this.viewerKey;
+    const version = ++this.pinsVersion;
+    room
+      .requestSocial('setPinnedMessage', { messageId: message.messageId, pinned })
+      .then((result) => {
+        if (!this.contextCurrent(activation, room, viewer)) return;
+        if (version !== this.pinsVersion) return;
+        this.pins = result.messages;
+        this.render();
+      })
+      .catch((error: unknown) => {
+        if (this.contextCurrent(activation, room, viewer))
+          this.options.notify(
+            error instanceof Error ? error.message : 'Could not update pinned messages',
+          );
+      });
+  }
+
+  /** Refresh expiry-sensitive saved state when the app returns or while it is visible. */
+  refreshSavedChat(): void {
+    if (document.hidden || !this.options.getRoom()?.localParticipantId) return;
+    this.refreshPins();
+  }
+
+  private refreshPins(): void {
+    const room = this.options.getRoom();
+    if (!room?.localParticipantId) return;
+    const activation = this.activation;
+    const viewer = this.viewerKey;
+    const version = this.pinsVersion;
+    room
+      .requestSocial('getPinnedMessages')
+      .then((result) => {
+        if (!this.contextCurrent(activation, room, viewer)) return;
+        if (version !== this.pinsVersion) return;
+        this.pins = result.messages;
+        this.render();
+      })
+      .catch(() => {
+        /* Reconnection retries the bounded snapshot. */
+      });
+  }
+
+  private renderPins(): void {
+    this.pinsButton.hidden = this.store.active !== 'public' || !this.pins.length;
+    this.pinsButton.textContent = `Pinned (${this.pins.length})`;
+    this.pinsButton.setAttribute('aria-expanded', String(this.pinsExpanded));
+    this.pinsList.hidden = this.pinsButton.hidden || !this.pinsExpanded;
+    this.pinsList.replaceChildren();
+    if (this.pinsList.hidden) return;
+    for (const pin of this.pins) {
+      const entry = el('div', undefined, 'chat-pinned-message');
+      entry.append(
+        button(
+          `${pin.participantName}: ${pin.content}`,
+          () => this.showMessage(pin.messageId),
+          'chat-pinned-link',
+        ),
+      );
+      if (['moderator', 'admin', 'owner'].includes(this.options.getRoom()?.role ?? ''))
+        entry.append(button('Unpin', () => this.pinMessage(pin, false), 'msg-action'));
+      this.pinsList.append(entry);
+    }
+  }
+
+  private async loadEarlier(): Promise<void> {
+    const room = this.options.getRoom();
+    if (!room || this.store.active !== 'public' || this.historyLoading) return;
+    const activation = this.activation;
+    const viewer = this.viewerKey;
+    this.historyLoading = true;
+    this.olderButton.disabled = true;
+    try {
+      let page = await room.requestSocial('getChatHistory', {
+        limit: 50,
+        ...(this.historyCursor && { before: this.historyCursor }),
+      });
+      const retained = new Set(this.store.messages.map((entry) => entry.messageId));
+      // A reconnect snapshot already contains the newest public rows. Skip overlapping
+      // saved pages so the first click actually reveals earlier text.
+      for (
+        let count = 0;
+        count < 6 &&
+        page.nextCursor &&
+        page.messages.every((entry) => retained.has(entry.messageId));
+        count++
+      ) {
+        if (!this.contextCurrent(activation, room, viewer)) return;
+        page = await room.requestSocial('getChatHistory', { limit: 50, before: page.nextCursor });
+      }
+      if (!this.contextCurrent(activation, room, viewer) || this.store.active !== 'public') return;
+      const top = this.messages.scrollTop;
+      const height = this.messages.scrollHeight;
+      for (const entry of page.messages) this.store.receive(entry, true);
+      const missing = page.messages.find(
+        (entry) =>
+          !retained.has(entry.messageId) &&
+          !this.store.messages.some((item) => item.messageId === entry.messageId),
+      );
+      if (missing) {
+        // The live window is bounded by both message count and characters. Keep its
+        // cursor unchanged and open saved context when older text cannot fit.
+        this.render();
+        this.showMessage(missing.messageId);
+        return;
+      }
+      this.historyCursor = page.nextCursor;
+      this.historyLoaded = true;
+      this.seenAtBottom = false;
+      this.render();
+      this.messages.scrollTop = top + this.messages.scrollHeight - height;
+    } catch (error) {
+      if (this.contextCurrent(activation, room, viewer))
+        this.options.notify(
+          error instanceof Error ? error.message : 'Earlier messages could not be loaded',
+        );
+    } finally {
+      if (this.contextCurrent(activation, room, viewer)) {
+        this.historyLoading = false;
+        this.olderButton.disabled = false;
+      }
+    }
   }
 
   private canRemove(message: ChatItem): boolean {
@@ -1367,7 +1615,17 @@ export class SocialChat {
       (entry) => entry.node.dataset['messageId'] === messageId,
     );
     if (!row) {
-      this.options.notify('That message is no longer in this chat');
+      const room = this.options.getRoom();
+      if (room?.roomSettings?.historyRetentionDays && this.store.active === 'public') {
+        const activation = this.activation;
+        const viewer = this.viewerKey;
+        openRoomHistory(
+          room,
+          () => this.contextCurrent(activation, room, viewer),
+          !!this.options.getToken?.(),
+          messageId,
+        );
+      } else this.options.notify('That message is no longer in this chat');
       return;
     }
     row.node.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
@@ -1602,9 +1860,11 @@ export class SocialChat {
     this.composition.save(this.store.active, this.input.value);
     const first = this.store.firstUnread(id);
     this.dividerKey = first ? this.rowKey(first) : null;
+    this.resumeKey = this.dividerKey;
+    this.seenAtBottom = !first;
     this.store.open(id, name);
     this.input.value = this.composition.draft(id);
-    this.render(true);
+    this.render(!first);
   }
 
   private closePrivate(): void {
@@ -2066,38 +2326,4 @@ export class SocialChat {
   }
 }
 
-/** Links stay whole; outside them, each occurrence of `mention` is marked, in any case. */
-export function appendLinkedText(parent: HTMLElement, text: string, mention?: string): void {
-  const pattern = /https?:\/\/[^\s<>]+/g;
-  // Bidi controls, zero-width space and the BOM can make a link read as another.
-  const hidden = /[\u200B\u202A-\u202E\u2066-\u2069\u2028\u2029\uFEFF]/;
-  let start = 0;
-  for (const match of text.matchAll(pattern)) {
-    const index = match.index;
-    if (hidden.test(match[0])) continue;
-    appendMarkedText(parent, text.slice(start, index), mention);
-    const link = el('a', match[0]);
-    link.href = match[0];
-    link.target = '_blank';
-    link.rel = 'noopener noreferrer';
-    parent.append(link);
-    start = index + match[0].length;
-  }
-  appendMarkedText(parent, text.slice(start), mention);
-}
-
-function appendMarkedText(parent: HTMLElement, text: string, mention: string | undefined): void {
-  if (!mention) {
-    parent.append(document.createTextNode(text));
-    return;
-  }
-  // Match on the original text: lowercasing can change a string's length.
-  const pattern = new RegExp(mention.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'giu');
-  let start = 0;
-  for (const match of text.matchAll(pattern)) {
-    parent.append(document.createTextNode(text.slice(start, match.index)));
-    parent.append(el('mark', match[0], 'mention'));
-    start = match.index + match[0].length;
-  }
-  parent.append(document.createTextNode(text.slice(start)));
-}
+export { appendLinkedText } from './chat-message-ui';

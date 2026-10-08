@@ -8,6 +8,7 @@ const entry = (id, extra = {}) => ({
   clientMessageId: `client-${id}`,
   participantId: 'alice',
   participantName: 'Alice',
+  revision: 0,
   content: `Message ${id}`,
   sentAt: '2026-01-01T00:00:00.000Z',
   ...extra,
@@ -69,6 +70,12 @@ test('replay merges chronologically and unseen entries, not duplicates, contribu
   );
   assert.equal(value.unread.get('alice'), 2);
   value.open('alice');
+  assert.equal(
+    value.unread.get('alice'),
+    2,
+    'opening a conversation does not prove its messages were visible',
+  );
+  value.markRead('alice');
   assert.equal(value.unread.size, 0);
   value.receive(older, true);
   assert.equal(value.unread.size, 0);
@@ -246,4 +253,74 @@ test('recovery prunes only captured confirmed public rows absent from authoritat
     ],
   );
   assert.equal(value.unread.has('public'), false);
+});
+
+test('edited messages fence older acknowledgements and update quotes without reviving removal', () => {
+  const value = store();
+  const original = entry('original');
+  const quote = entry('reply', {
+    replyTo: {
+      messageId: original.messageId,
+      participantId: 'alice',
+      participantName: 'Alice',
+      excerpt: original.content,
+    },
+  });
+  value.receive(original);
+  value.receive(quote);
+  value.editMessage({
+    ...original,
+    revision: 2,
+    editedAt: '2026-10-08T10:00:00Z',
+    content: 'Corrected content',
+  });
+  value.receive({ ...original, revision: 1, content: 'Stale edit' }, true);
+  assert.equal(value.messages[0].content, 'Corrected content');
+  assert.equal(value.messages[1].replyTo.excerpt, 'Corrected content');
+  value.removeMessage(original.messageId, '2026-10-08T11:00:00Z');
+  value.editMessage({ ...original, revision: 3, content: 'Must not revive' });
+  value.receive(original, true);
+  assert.equal(value.messages[0].content, '');
+  assert.equal(value.messages[1].replyTo.excerpt, 'Message removed');
+});
+
+test('an edit arriving before its original fences replay and remains conversation-private', () => {
+  const value = store();
+  const original = entry('first', { recipientId: 'local' });
+  value.editMessage({ ...original, revision: 1, content: 'New text' });
+  value.receive(original);
+  assert.equal(value.messages[0].content, 'New text');
+  assert.equal(
+    value.editMessage(entry('someone-elses-pm', { recipientId: 'bob', revision: 1 })),
+    false,
+  );
+});
+
+test('saved PM drafts remain account and peer scoped, bounded, and tolerate unavailable storage', async () => {
+  const { SavedPmDrafts } = await loadTypeScript('src/chat-store.ts');
+  const data = new Map();
+  const storage = {
+    getItem: (key) => data.get(key) ?? null,
+    setItem: (key, value) => data.set(key, value),
+  };
+  const drafts = new SavedPmDrafts(storage);
+  drafts.save('alice', 'bob', 'Keep this draft');
+  drafts.save('alice', 'carol', 'Other draft');
+  assert.equal(new SavedPmDrafts(storage).get('alice', 'bob'), 'Keep this draft');
+  assert.equal(drafts.get('carol', 'bob'), '');
+  drafts.save('alice', 'bob', '');
+  assert.equal(drafts.get('alice', 'carol'), 'Other draft');
+  assert.equal(drafts.get('alice', 'bob'), '');
+  for (let index = 0; index < 120; index++) drafts.save('alice', `peer-${index}`, 'x'.repeat(2000));
+  assert.ok([...data.values()].every((text) => text.length < 70 * 1024));
+  const denied = new SavedPmDrafts({
+    getItem() {
+      throw new Error('Denied');
+    },
+    setItem() {
+      throw new Error('Denied');
+    },
+  });
+  assert.doesNotThrow(() => denied.save('alice', 'bob', 'Typed'));
+  assert.equal(denied.get('alice', 'bob'), '');
 });

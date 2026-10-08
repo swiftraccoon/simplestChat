@@ -186,6 +186,7 @@ async function run() {
               participantName: 'Fixture guest',
               content: message.content,
               sentAt: new Date().toISOString(),
+              revision: 0,
             },
           });
         if (message.type === 'getRouterRtpCapabilities')
@@ -1098,6 +1099,7 @@ async function run() {
           recipientName: 'Fixture guest',
           content: `Private fixture message ${index}`,
           sentAt: new Date().toISOString(),
+          revision: 0,
         },
       });
     await input.fill('Unsent public draft');
@@ -1394,6 +1396,7 @@ function publicMessage(participantId, participantName, content) {
     participantName,
     content,
     sentAt: new Date().toISOString(),
+    revision: 0,
   };
 }
 run().catch((error) => {

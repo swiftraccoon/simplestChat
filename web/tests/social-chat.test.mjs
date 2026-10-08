@@ -12,6 +12,7 @@ const entry = (id, extra = {}) => ({
   clientMessageId: `client-${id}`,
   participantId: 'alice',
   participantName: 'Alice',
+  revision: 0,
   content: `Message ${id}`,
   sentAt: '2026-01-01T00:00:00Z',
   ...extra,
@@ -126,6 +127,7 @@ async function fixture({ touch = false, touchPoints = 0 } = {}) {
     requests: [],
     sent: [],
     notifications: [],
+    openedHistory: [],
     actions: [],
     storage: new Map(),
     handle: async () => ({}),
@@ -174,7 +176,9 @@ async function fixture({ touch = false, touchPoints = 0 } = {}) {
     getParticipants: () => participants,
     requestSocial(action, data) {
       state.requests.push({ action, data });
-      return state.handle(action, data);
+      return action === 'getPinnedMessages'
+        ? Promise.resolve({ messages: [] })
+        : state.handle(action, data);
     },
     sendChat(...args) {
       state.sent.push(['public', ...args]);
@@ -215,7 +219,23 @@ async function fixture({ touch = false, touchPoints = 0 } = {}) {
       './chat-store': chatModule,
       './ui': f.ui,
       './avatar-colors': colorModule,
-      './chat-history': { openRoomHistory() {}, notifyHistoryRemoval() {} },
+      './chat-history': {
+        openRoomHistory(...args) {
+          state.openedHistory.push(args);
+        },
+        notifyHistoryRemoval() {},
+        notifyHistoryEdit(message) {
+          state.editedListener?.(message);
+        },
+        onHistoryEdit(listener) {
+          state.editedListener = listener;
+        },
+        notifyInboxChanged() {},
+      },
+      './chat-message-ui': await loadTypeScript('src/chat-message-ui.ts', {
+        modules: { './ui': f.ui },
+        globals: { document: f.document },
+      }),
     },
     globals: {
       document: f.document,
@@ -302,6 +322,39 @@ function snapshot(messages) {
   return { type: 'socialResponse', action: 'getRoomSnapshot', data: { messages } };
 }
 
+test('earlier public history opens saved context when either live buffer limit is full', async (t) => {
+  for (const limit of ['messages', 'characters']) {
+    await t.test(limit, async () => {
+      const f = await fixture();
+      await f.chat.activate();
+      f.state.room.roomSettings = { historyRetentionDays: 7 };
+      const messages = Array.from({ length: limit === 'messages' ? 300 : 200 }, (_, i) =>
+        entry(`live-${i}`, { content: limit === 'messages' ? 'Recent text' : 'x'.repeat(2000) }),
+      );
+      f.chat.handleEvent(snapshot(messages));
+      const before = f.chat.store.messages.map((item) => item.messageId);
+      f.state.handle = async (action) => {
+        assert.equal(action, 'getChatHistory');
+        return {
+          messages: [entry('older', { sentAt: '2025-12-31T00:00:00Z', content: 'x'.repeat(2000) })],
+          nextCursor: 'next-older-page',
+        };
+      };
+      await f.chat.loadEarlier();
+      assert.deepEqual(
+        f.chat.store.messages.map((item) => item.messageId),
+        before,
+      );
+      assert.equal(f.chat.historyCursor, null);
+      assert.equal(f.state.openedHistory.length, 1);
+      assert.equal(f.state.openedHistory[0][3], 'server-older');
+      assert.equal(f.state.openedHistory[0][1](), true);
+      f.chat.reset();
+      assert.equal(f.state.openedHistory[0][1](), false, 'saved context keeps the room fence');
+    });
+  }
+});
+
 function observeRows(f) {
   const changes = { renders: 0, insertions: 0 };
   const render = f.chat.render.bind(f.chat);
@@ -323,7 +376,8 @@ function observeRows(f) {
   return changes;
 }
 
-const rows = (f) => [...f.chat.messages.children];
+const rows = (f) =>
+  [...f.chat.messages.children].filter((node) => node.classList.contains('chat-msg'));
 const contents = (f) => rows(f).map((node) => node.querySelector('.msg-text').textContent);
 const createdRows = (f) => f.created.filter((node) => node.classList.contains('chat-msg'));
 
@@ -785,7 +839,7 @@ test('hidden conversations, ignore changes and privacy resets discard cached DOM
   const beforeReset = rows(f);
   f.chat.reset();
   assert.equal(f.chat.rows.size, 0);
-  assert.equal(f.chat.messages.children.length, 0);
+  assert.equal(rows(f).length, 0);
   assert.ok(beforeReset.every((node) => !node.isConnected));
 });
 
@@ -2228,4 +2282,136 @@ test('private conversation status distinguishes saved account PMs, guest session
   f.chat.switchConversation('public');
   assert.equal(f.chat.conversationStatus.textContent, '');
   assert.equal(f.chat.conversationStatus.hidden, true);
+});
+
+test('only authors can edit and an accepted edit keeps the original row and updates quotes', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  const own = entry('own-edit', {
+    participantId: 'local',
+    participantName: 'Local',
+    content: 'Original own message',
+  });
+  f.chat.receive(own);
+  f.chat.receive(entry('other'));
+  assert.equal(
+    rows(f)[0]
+      .querySelectorAll('button')
+      .some((node) => node.textContent === 'Edit'),
+    true,
+  );
+  assert.equal(
+    rows(f)[1]
+      .querySelectorAll('button')
+      .some((node) => node.textContent === 'Edit'),
+    false,
+  );
+  const row = rows(f)[0];
+  row
+    .querySelectorAll('button')
+    .find((node) => node.textContent === 'Edit')
+    .click();
+  const dialog = f.document.querySelector('dialog');
+  dialog.querySelector('textarea').value = 'Fixed own message';
+  f.state.handle = async (action, data) => {
+    assert.equal(action, 'editChatMessage');
+    assert.deepEqual(data, {
+      messageId: own.messageId,
+      content: 'Fixed own message',
+      expectedRevision: 0,
+    });
+    return {
+      message: { ...own, content: data.content, revision: 1, editedAt: '2026-10-08T01:00:00Z' },
+    };
+  };
+  dialog
+    .querySelectorAll('button')
+    .find((node) => node.textContent === 'Save changes')
+    .click();
+  await flush();
+  assert.equal(rows(f)[0], row);
+  assert.match(row.textContent, /Fixed own message.*edited/s);
+  f.chat.handleEvent({ type: 'messageAck', clientMessageId: own.clientMessageId, message: own });
+  assert.match(row.textContent, /Fixed own message/);
+});
+
+test('pins remain collapsed until requested, ignore stale snapshots, and clear on removal', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  f.state.room.role = 'owner';
+  const message = entry('pin');
+  f.chat.receive(message);
+  assert.equal(
+    rows(f)[0]
+      .querySelectorAll('button')
+      .some((node) => node.textContent === 'Pin'),
+    true,
+  );
+  const pending = deferred();
+  const request = f.state.room.requestSocial;
+  f.state.room.requestSocial = (action, data) =>
+    action === 'getPinnedMessages' ? pending.promise : request(action, data);
+  f.chat.refreshPins();
+  f.chat.handleEvent({ type: 'pinnedMessagesChanged', messages: [message] });
+  assert.equal(
+    rows(f)[0]
+      .querySelectorAll('button')
+      .some((node) => node.textContent === 'Unpin'),
+    true,
+    'the broadcast updates the row action before its request response',
+  );
+  assert.equal(f.chat.pinsList.hidden, true);
+  f.chat.pinsButton.click();
+  assert.equal(f.chat.pinsList.hidden, false);
+  assert.match(f.chat.pinsList.textContent, /Message pin/);
+  pending.resolve({ messages: [] });
+  await flush();
+  assert.equal(f.chat.pins.length, 1);
+  f.chat.handleEvent({
+    type: 'chatMessageRemoved',
+    messageId: message.messageId,
+    removedAt: '2026-10-08T10:00:00Z',
+  });
+  assert.equal(f.chat.pinsButton.hidden, true);
+  assert.equal(f.chat.pinsList.hidden, true);
+});
+
+test('switching to a long live PM resumes at its first unread row and reads only after reaching the bottom', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  f.chat.messages.scrollHeight = 1200;
+  f.chat.messages.clientHeight = 200;
+  f.chat.messages.scrollTop = 1000;
+  const scrolled = [];
+  f.Node.prototype.scrollIntoView = function (options) {
+    if (this.dataset.messageId) {
+      scrolled.push({ id: this.dataset.messageId, block: options.block });
+      f.chat.messages.scrollTop = 200;
+    }
+  };
+  for (let index = 0; index < 10; index++)
+    f.chat.receive(entry(`unread-pm-${index}`, { recipientId: 'local' }));
+  assert.equal(f.chat.store.unread.get('alice'), 10);
+  f.chat.openPrivate('alice', 'Alice');
+  assert.deepEqual(scrolled.at(-1), { id: 'server-unread-pm-0', block: 'start' });
+  assert.equal(f.chat.messages.scrollTop, 200);
+  assert.equal(f.chat.store.unread.get('alice'), 10, 'rows beneath the viewport stay unread');
+  assert.equal(f.chat.seenAtBottom, false);
+  f.chat.render();
+  assert.equal(f.chat.messages.scrollTop, 200, 'subsequent renders keep the reading position');
+  f.chat.messages.scrollTop = 1000;
+  f.chat.messages.emit('scroll');
+  assert.equal(f.chat.store.unread.get('alice'), undefined);
+});
+
+test('opening a covered PM preserves unread until the conversation is visible', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  f.chat.receive(entry('covered-pm', { recipientId: 'local' }));
+  const dialog = f.ui.modal('Account');
+  f.chat.openPrivate('alice', 'Alice');
+  assert.equal(f.chat.store.unread.get('alice'), 1);
+  dialog.close();
+  f.chat.render();
+  assert.equal(f.chat.store.unread.get('alice'), undefined);
 });

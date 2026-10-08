@@ -124,7 +124,15 @@ const chat = object<ChatEntry>({
   replyTo: optional(replyRef),
   reactions: optional(list(reaction)),
   removedAt: optional(text),
+  editedAt: optional(text),
+  revision: integer(4_294_967_295),
 });
+const pins = (value: unknown): ChatEntry[] => {
+  const entries = list(chat)(value);
+  return entries.length <= 3 && entries.every((entry) => !entry.recipientId && !entry.removedAt)
+    ? entries
+    : invalid();
+};
 export const decodeChatEntry = chat;
 export const decodeHistoryRetention = (value: unknown): number => {
   const days = integer(90)(value);
@@ -137,6 +145,8 @@ export const decodeChatHistory = object<ChatHistoryPage>({
   },
   nextCursor: nullable(text),
   readMessageId: nullable(text),
+  newerCursor: nullable(text),
+  firstUnreadMessageId: nullable(text),
   retentionDays: decodeHistoryRetention,
 });
 export const decodeRoomSettings = object<RoomSettings>({
@@ -359,6 +369,9 @@ const socialDecoders: { [A in SocialAction]: Decoder<SocialResponses[A]> } = {
     messageId: text,
     removedAt: text,
   }),
+  editChatMessage: object<{ message: ChatEntry }>({ message: chat }),
+  getPinnedMessages: object<{ messages: ChatEntry[] }>({ messages: pins }),
+  setPinnedMessage: object<{ messages: ChatEntry[] }>({ messages: pins }),
   reactToMessage: object<{ messageId: string; reactions: ChatReaction[] }>({
     messageId: text,
     reactions: list(reaction),
@@ -417,6 +430,9 @@ const socialAction = choice(
   'changeNickname',
   'setChatStyle',
   'removeChatMessage',
+  'editChatMessage',
+  'getPinnedMessages',
+  'setPinnedMessage',
   'reactToMessage',
   'getRoomSnapshot',
   'getChatHistory',
@@ -532,6 +548,8 @@ const messages = {
     recipientName: optional(text),
     content: text,
     sentAt: text,
+    revision: integer(4_294_967_295),
+    editedAt: optional(text),
     chatStyle: optional(chatStyle),
     replyTo: optional(replyRef),
     reactions: optional(list(reaction)),
@@ -539,6 +557,8 @@ const messages = {
   }),
   privateMessageReceived: message('privateMessageReceived', { message: chat }),
   chatMessageRemoved: message('chatMessageRemoved', { messageId: text, removedAt: text }),
+  chatMessageEdited: message('chatMessageEdited', { message: chat }),
+  pinnedMessagesChanged: message('pinnedMessagesChanged', { messages: pins }),
   messageReactions: message('messageReactions', { messageId: text, reactions: list(reaction) }),
   messageAck: message('messageAck', { clientMessageId: text, message: chat }),
   messageRetryResult: message('messageRetryResult', {

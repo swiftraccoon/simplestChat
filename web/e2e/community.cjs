@@ -6,6 +6,7 @@
  * PLAYWRIGHT_BROWSERS_PATH can point at an isolated browser installation.
  */
 const { openRoomMenu } = require('./room-menu.cjs');
+const { installPwaFixture, checkPwa } = require('./pwa-checks.cjs');
 const { participantHovercardChecks } = require('./participant-hovercard-checks.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -58,6 +59,7 @@ const report = {
   playbackRecoveries: [],
   signalingReconnects: [],
   limitations: [
+    'Push transport and permission use controlled fixtures; real OS notification delivery remains a manual device check.',
     'Fake capture devices; not physical device or permission-prompt coverage.',
     'External capture termination is simulated with stop() plus an ended event on an owned fake local-stream track.',
     'Mobile checks resize a desktop viewport; they do not run a mobile browser.',
@@ -122,6 +124,7 @@ async function client(label, mobile = false, configureContext, independentCaptur
   });
   await configureContext?.(context);
   const page = await context.newPage();
+  if (label === 'owner') await installPwaFixture(page);
   page.setDefaultTimeout(10000);
   const entry = { label, context, page, errors: [], frames: [], warnings: [] };
   clients.push(entry);
@@ -703,9 +706,10 @@ async function action(page, name, label) {
 }
 async function header(page, name) {
   // Joined-room account and room actions share the More menu.
-  const target = page
-    .locator('#community-actions, #room-actions')
-    .getByRole('button', { name, exact: true });
+  const target = page.locator('#community-actions, #room-actions').getByRole('button', {
+    name: name === 'Messages' ? /^Messages(?:, .* unread)?$/ : name,
+    exact: name !== 'Messages',
+  });
   if (!(await target.isVisible())) await openRoomMenu(page);
   await target.click();
   return page.getByRole('dialog', { name, exact: true });
@@ -937,6 +941,9 @@ async function setRole(owner, name, role) {
       await visible(owner, 'Public hello');
       await visible(member, 'Public hello');
     });
+    await step('optional app notifications require an explicit Account action', async () => {
+      await checkPwa(owner, { openAccount: () => header(owner, 'Account'), closeDialog: close });
+    });
     await step('direct join respects the entered name without renaming the account', async () => {
       await owner
         .getByRole('button', { name: 'Actions for E2E Room Nickname', exact: true })
@@ -966,6 +973,50 @@ async function setRole(owner, name, role) {
     await step('participant hovercards work from roster and chat names', async () => {
       await participantHovercardChecks(owner, { name: 'E2E Guest', message: 'Public hello' });
     });
+    await step(
+      'authors edit public messages and moderators pin them in the compact chat controls',
+      async () => {
+        for (const page of [owner, member, guest]) await publicChat(page);
+        await send(owner, 'Message before correction');
+        await visible(member, 'Message before correction');
+        // The recipient can receive the broadcast before the sender receives its
+        // acknowledgement. Only the confirmed ID remains stable through editing.
+        const original = owner.locator('.chat-msg:not([data-message-id^="pending:"])').filter({
+          has: owner.locator('.msg-text').filter({ hasText: /^Message before correction$/ }),
+        });
+        const messageId = await original.getAttribute('data-message-id');
+        assert.ok(messageId);
+        const own = owner.locator(`.chat-msg[data-message-id="${messageId}"]`);
+        await own.hover();
+        await own.getByRole('button', { name: 'Edit', exact: true }).click();
+        const edit = owner.getByRole('dialog', { name: 'Edit message', exact: true });
+        await edit.getByLabel('Message', { exact: true }).fill('Corrected public message');
+        await edit.getByRole('button', { name: 'Save changes', exact: true }).click();
+        await edit.waitFor({ state: 'hidden' });
+        await visible(member, 'Corrected public message');
+        await own.locator('.msg-edited').waitFor({ state: 'visible' });
+        await own.hover();
+        await own.getByRole('button', { name: 'Pin', exact: true }).click();
+        const toggle = member.getByRole('button', { name: 'Pinned (1)', exact: true });
+        await toggle.waitFor({ state: 'visible' });
+        assert.equal(await member.locator('.chat-pinned-messages').isVisible(), false);
+        await toggle.click();
+        await member
+          .locator('.chat-pinned-link')
+          .filter({ hasText: 'Corrected public message' })
+          .waitFor({ state: 'visible' });
+        assert.equal(
+          await member
+            .locator('.chat-pinned-messages')
+            .getByRole('button', { name: 'Unpin', exact: true })
+            .count(),
+          0,
+        );
+        await own.hover();
+        await own.getByRole('button', { name: 'Unpin', exact: true }).click();
+        await toggle.waitFor({ state: 'hidden' });
+      },
+    );
     await step(
       'public removal confirms, scrubs quotes and remains removed after reconnect replay',
       async () => {
@@ -1043,7 +1094,9 @@ async function setRole(owner, name, role) {
           .filter({ hasText: 'Messages are kept for 7 days.' })
           .waitFor({ state: 'visible' });
         await close(history);
+        await send(guest, 'Context before the search result');
         await send(guest, 'Saved browser history message');
+        await send(guest, 'Context after the search result');
         await visible(owner, 'Saved browser history message');
         history = await roomHistory(guest);
         await history
@@ -1060,7 +1113,19 @@ async function setRole(owner, name, role) {
         await history
           .getByText('Saved browser history message', { exact: true })
           .waitFor({ state: 'visible' });
+        await history.getByRole('button', { name: 'Show in conversation', exact: true }).click();
+        await history
+          .getByText('Context before the search result', { exact: true })
+          .waitFor({ state: 'visible' });
+        await history
+          .getByText('Context after the search result', { exact: true })
+          .waitFor({ state: 'visible' });
         await close(history);
+        await owner.getByRole('button', { name: 'Earlier messages', exact: true }).click();
+        assert.equal(
+          await owner.getByRole('dialog', { name: 'Room history', exact: true }).count(),
+          0,
+        );
         history = await roomHistory(owner);
         const saved = history
           .locator('.history-message')
@@ -1319,6 +1384,32 @@ async function setRole(owner, name, role) {
         await conversation.getByRole('button', { name: 'Remove', exact: true }).count(),
         0,
       );
+      await conversation
+        .getByLabel('Private message', { exact: true })
+        .fill('An inbox draft for later');
+      await close(conversation);
+      await inbox.locator('.inbox-conversation').filter({ hasText: 'E2E Member' }).click();
+      assert.equal(
+        await conversation.getByLabel('Private message', { exact: true }).inputValue(),
+        'An inbox draft for later',
+      );
+      const sent = conversation
+        .locator('.history-message')
+        .filter({ hasText: 'Sent through saved inbox' });
+      await sent.getByRole('button', { name: 'Edit', exact: true }).click();
+      const edit = owner.getByRole('dialog', { name: 'Edit message', exact: true });
+      await edit.getByLabel('Message', { exact: true }).fill('Corrected saved private message');
+      await edit.getByRole('button', { name: 'Save changes', exact: true }).click();
+      await edit.waitFor({ state: 'hidden' });
+      await conversation
+        .getByText('Corrected saved private message', { exact: true })
+        .waitFor({ state: 'visible' });
+      await visible(member, 'Corrected saved private message');
+      assert.equal(
+        await guest.getByText('Corrected saved private message', { exact: true }).count(),
+        0,
+      );
+      await conversation.getByLabel('Private message', { exact: true }).fill('');
       await close(conversation);
       await close(inbox);
     });
@@ -1327,7 +1418,8 @@ async function setRole(owner, name, role) {
       await publicChat(owner);
       assert.equal(await owner.locator('#chat-input').inputValue(), '');
       await owner.locator('#chat-input').press('ArrowUp');
-      assert.equal(await owner.locator('#chat-input').inputValue(), '');
+      // Public recall contains the earlier public send, never the private send or draft.
+      assert.equal(await owner.locator('#chat-input').inputValue(), 'Message before correction');
       await action(owner, 'E2E Member', 'Private message');
       assert.equal(await owner.locator('#chat-input').inputValue(), 'Unsent private draft');
       await owner.locator('#chat-input').fill('');

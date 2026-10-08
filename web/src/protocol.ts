@@ -213,6 +213,8 @@ export type ServerMessage =
   | { type: 'chatStyleChanged'; participantId: string; chatStyle: ChatStyle }
   | { type: 'participantTyping'; participantId: string; targetParticipantId?: string }
   | { type: 'chatMessageRemoved'; messageId: string; removedAt: string }
+  | { type: 'chatMessageEdited'; message: ChatEntry }
+  | { type: 'pinnedMessagesChanged'; messages: ChatEntry[] }
   | { type: 'messageReactions'; messageId: string; reactions: ChatReaction[] }
   | { type: 'activeSpeaker'; participantId: string }
   | { type: 'audioLevels'; levels: { participantId: string; volume: number }[] }
@@ -312,6 +314,9 @@ export type SocialAction =
   | 'changeNickname'
   | 'setChatStyle'
   | 'removeChatMessage'
+  | 'editChatMessage'
+  | 'getPinnedMessages'
+  | 'setPinnedMessage'
   | 'reactToMessage'
   | 'getRoomSnapshot'
   | 'getChatHistory'
@@ -332,9 +337,19 @@ export interface SocialRequests {
   changeNickname: { nickname: string };
   setChatStyle: { chatStyle: ChatStyle };
   removeChatMessage: { messageId: string };
+  editChatMessage: { messageId: string; content: string; expectedRevision: number };
+  getPinnedMessages: undefined;
+  setPinnedMessage: { messageId: string; pinned: boolean };
   reactToMessage: { messageId: string; emoji: string };
   getRoomSnapshot: undefined;
-  getChatHistory: { before?: string; q?: string; limit?: number };
+  getChatHistory: {
+    before?: string;
+    after?: string;
+    around?: string;
+    resume?: boolean;
+    q?: string;
+    limit?: number;
+  };
   markChatRead: { messageId: string };
   setRoomHistory: { retentionDays: number };
   listRoomBans: { offset?: number };
@@ -352,6 +367,9 @@ export interface SocialResponses {
   changeNickname: { nickname: string };
   setChatStyle: { chatStyle: ChatStyle };
   removeChatMessage: { messageId: string; removedAt: string };
+  editChatMessage: { message: ChatEntry };
+  getPinnedMessages: { messages: ChatEntry[] };
+  setPinnedMessage: { messages: ChatEntry[] };
   reactToMessage: { messageId: string; reactions: ChatReaction[] };
   getRoomSnapshot: RoomSnapshot;
   getChatHistory: ChatHistoryPage;
@@ -395,6 +413,8 @@ export interface ChatEntry {
   recipientName?: string;
   content: string;
   removedAt?: string;
+  editedAt?: string;
+  revision: number;
   sentAt: string;
   /** The sender's look when they sent it. */
   chatStyle?: ChatStyle;
@@ -407,6 +427,8 @@ export interface ChatHistoryPage {
   messages: ChatEntry[];
   nextCursor: string | null;
   readMessageId: string | null;
+  newerCursor: string | null;
+  firstUnreadMessageId: string | null;
   retentionDays: number;
 }
 

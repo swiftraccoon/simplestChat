@@ -1524,10 +1524,19 @@ const mediaLifecycle = new MediaLifecycle({
   refreshDevices: () => mediaControls.refreshDevices(),
   resumeSignaling: () => signaling.resumeDeferredReconnect(),
 });
+const refreshSavedMessages = () => {
+  if (document.visibilityState === 'hidden') return;
+  community.refreshMessages().catch(() => {});
+  socialChat.refreshSavedChat();
+};
+const inboxRefresh = setInterval(refreshSavedMessages, 30_000);
+document.addEventListener('visibilitychange', refreshSavedMessages);
 window.addEventListener('pagehide', (event) => {
   if (event.persisted) return;
   mediaLifecycle.dispose();
   pwa.dispose();
+  clearInterval(inboxRefresh);
+  document.removeEventListener('visibilitychange', refreshSavedMessages);
 });
 
 signaling.setOnStatusChange((status) => {
@@ -2618,6 +2627,7 @@ joinBtn.addEventListener(
           socialChat.participantsChanged();
           updateRoomModeUI();
           applyRoomSettingsToUI();
+          socialChat.refreshSavedChat();
           roomTopic.textContent = settings.topic ?? '';
           roomTopic.hidden = !settings.topic;
         },

@@ -1,10 +1,22 @@
 import type { ChatEntry, ChatHistoryPage } from './protocol';
+import { SavedPmDrafts } from './chat-store';
+import { appendLinkedText, appendEditedLabel, editMessageDialog } from './chat-message-ui';
+import { chatColor } from './avatar-colors';
 import type { RoomClient } from './room';
 import { api, asyncButton, button, el, field, input, modal } from './ui';
 
 type HistoryOptions = {
   title: string;
   accountDialog?: boolean;
+  viewerId: string;
+  initialMessageId?: string;
+  draft?: { account: string; peer: string };
+  edit?: (
+    message: ChatEntry,
+    content: string,
+    revision: number,
+    signal: AbortSignal,
+  ) => Promise<ChatEntry>;
   current: () => boolean;
   load: (params: URLSearchParams, signal: AbortSignal) => Promise<ChatHistoryPage>;
   markRead?: (id: string, signal: AbortSignal) => Promise<unknown>;
@@ -12,6 +24,26 @@ type HistoryOptions = {
   send?: (content: string, id: string, signal: AbortSignal) => Promise<ChatEntry>;
   retention?: { days: number; save: (days: number) => Promise<unknown> };
 };
+const inboxListeners = new Set<() => void>();
+export function onInboxChanged(listener: () => void): () => void {
+  inboxListeners.add(listener);
+  return () => {
+    inboxListeners.delete(listener);
+  };
+}
+export function notifyInboxChanged(): void {
+  for (const listener of inboxListeners) listener();
+}
+const editListeners = new Set<(message: ChatEntry) => void>();
+export function onHistoryEdit(listener: (message: ChatEntry) => void): () => void {
+  editListeners.add(listener);
+  return () => {
+    editListeners.delete(listener);
+  };
+}
+export function notifyHistoryEdit(message: ChatEntry): void {
+  for (const listener of editListeners) listener(message);
+}
 const removalListeners = new Set<(id: string, at: string) => void>();
 
 /** Remove content from an open history view as soon as the live event arrives. */
@@ -20,22 +52,29 @@ export function notifyHistoryRemoval(id: string, at: string): void {
 }
 
 function messageNode(message: ChatEntry): HTMLElement {
-  const row = el('article', undefined, 'history-message');
-  row.setAttribute('data-message-id', message.messageId);
-  const time = el('time', new Date(message.sentAt).toLocaleString());
-  time.dateTime = message.sentAt;
-  const heading = el('div', undefined, 'history-message-heading');
-  heading.append(el('strong', message.participantName), time);
-  row.append(heading);
-  if (message.replyTo)
-    row.append(el('blockquote', `${message.replyTo.participantName}: ${message.replyTo.excerpt}`));
-  row.append(
-    el(
-      'p',
-      message.removedAt ? 'Message removed' : message.content,
-      message.removedAt ? 'setting-hint' : undefined,
-    ),
+  const style = message.chatStyle?.style ?? 'accent';
+  const row = el('article', undefined, `history-message chat-msg look-${style}`);
+  row.style.setProperty(
+    '--sender-color',
+    chatColor(message.participantName, message.chatStyle?.color ?? null),
   );
+  row.setAttribute('data-message-id', message.messageId);
+  const time = el('time', new Date(message.sentAt).toLocaleString(), 'msg-time');
+  time.dateTime = message.sentAt;
+  row.append(el('strong', message.participantName, 'sender'));
+  if (message.replyTo)
+    row.append(
+      el(
+        'blockquote',
+        `${message.replyTo.participantName}: ${message.replyTo.excerpt}`,
+        'msg-reply',
+      ),
+    );
+  const text = el('div', undefined, 'msg-text');
+  if (message.removedAt) text.textContent = 'Message removed';
+  else appendLinkedText(text, message.content);
+  row.append(text, time);
+  appendEditedLabel(row, message);
   return row;
 }
 
@@ -53,18 +92,33 @@ function openHistory(options: HistoryOptions): void {
   const searchForm = el('form', undefined, 'history-search');
   const searchButton = el('button', 'Search', 'btn-secondary');
   searchButton.type = 'submit';
-  const list = el('div', undefined, 'history-messages');
+  const list = el('div', undefined, 'history-messages timestamps-always');
   list.setAttribute('aria-label', 'Saved messages');
   list.setAttribute('tabindex', '0');
   const pages = el('div', undefined, 'history-pagination');
   let page: ChatHistoryPage | null = null;
   let before: string | null = null;
   let query = '';
+  let position: { after?: string; around?: string; resume?: boolean } = {};
+  let anchor: string | null = options.initialMessageId ?? null;
   let operation = 0;
   let loading = false;
   let read = '';
   const removed = new Map<string, string>();
+  const edits = new Map<string, ChatEntry>();
   const redact = (entry: ChatEntry): void => {
+    const edit = edits.get(entry.messageId);
+    if (edit && edit.revision > entry.revision)
+      Object.assign(entry, {
+        content: edit.content,
+        revision: edit.revision,
+        editedAt: edit.editedAt,
+      });
+    const quoted = entry.replyTo && edits.get(entry.replyTo.messageId);
+    if (quoted && entry.replyTo) {
+      const flat = quoted.content.split(/\s+/).join(' ').trim();
+      entry.replyTo.excerpt = flat.length > 140 ? `${flat.slice(0, 140).trimEnd()}…` : flat;
+    }
     const at = removed.get(entry.messageId);
     if (at) {
       entry.content = '';
@@ -91,6 +145,7 @@ function openHistory(options: HistoryOptions): void {
       !visible() ||
       before ||
       query ||
+      position.around ||
       !options.markRead ||
       !page?.retentionDays ||
       loading
@@ -100,15 +155,52 @@ function openHistory(options: HistoryOptions): void {
     const latest = page.messages[page.messages.length - 1]?.messageId;
     if (!latest || latest === read) return;
     read = latest;
-    options.markRead(latest, controller.signal).catch((error: unknown) => {
-      if (read === latest) read = '';
-      fail(error);
-    });
+    options
+      .markRead(latest, controller.signal)
+      .then(() => {
+        if (current()) notifyInboxChanged();
+      })
+      .catch((error: unknown) => {
+        if (read === latest) read = '';
+        fail(error);
+      });
   };
   const render = (bottom: boolean): void => {
     const scroll = list.scrollTop;
     const nodes = (page?.messages ?? []).map((message) => {
       const row = messageNode(message);
+      if (message.messageId === page?.firstUnreadMessageId) {
+        const divider = el('div', 'New messages', 'chat-divider');
+        divider.setAttribute('role', 'separator');
+        row.insertBefore(divider, row.firstChild);
+      }
+      if (query)
+        row.append(
+          button(
+            'Show in conversation',
+            () => {
+              search.value = '';
+              anchor = message.messageId;
+              load(null, false, '', { around: message.messageId }).catch(fail);
+            },
+            'history-context',
+          ),
+        );
+      if (options.edit && message.participantId === options.viewerId && !message.removedAt) {
+        row.append(
+          button(
+            'Edit',
+            () =>
+              editMessageDialog(message, {
+                current,
+                save: (content, revision) =>
+                  options.edit!(message, content, revision, controller.signal),
+                changed: notifyHistoryEdit,
+              }),
+            'history-edit',
+          ),
+        );
+      }
       if (options.remove && !message.removedAt) {
         row.append(
           button(
@@ -155,6 +247,12 @@ function openHistory(options: HistoryOptions): void {
         ),
       );
     list.scrollTop = bottom ? list.scrollHeight : scroll;
+    const target = anchor && nodes.find((row) => row.getAttribute('data-message-id') === anchor);
+    if (target) {
+      target.scrollIntoView?.({ block: 'start' });
+      target.classList?.toggle('flash', true);
+    }
+    anchor = null;
     updatePagination();
     status.textContent = page?.retentionDays
       ? `Messages are kept for ${page.retentionDays} days.${query ? ' Searching the newest 10,000 saved messages.' : ''}`
@@ -163,12 +261,14 @@ function openHistory(options: HistoryOptions): void {
   };
   const updatePagination = (): void => {
     older.disabled = loading || !page?.nextCursor;
-    newest.disabled = loading || !before;
+    newer.disabled = loading || !page?.newerCursor;
+    newest.disabled = loading || (!before && !page?.newerCursor && !position.around && !query);
   };
   const load = async (
     cursor: string | null,
     quiet = false,
     requestedQuery = query,
+    requestedPosition: typeof position = {},
   ): Promise<void> => {
     if (!current()) return;
     const version = ++operation;
@@ -178,16 +278,21 @@ function openHistory(options: HistoryOptions): void {
     const params = new URLSearchParams({ limit: '50' });
     if (cursor) params.set('before', cursor);
     if (requestedQuery) params.set('q', requestedQuery);
+    if (requestedPosition.after) params.set('after', requestedPosition.after);
+    if (requestedPosition.around) params.set('around', requestedPosition.around);
+    if (requestedPosition.resume) params.set('resume', 'true');
     try {
       const result = await options.load(params, controller.signal);
       if (!current() || version !== operation) return;
       page = result;
       page.messages.forEach(redact);
+      if (requestedPosition.resume && !quiet) anchor = page.firstUnreadMessageId;
+      position = requestedPosition;
       before = cursor;
       query = requestedQuery;
       if (!quiet) view.error.hidden = true;
       loading = false;
-      render(bottom);
+      render(bottom && !anchor);
     } catch (error) {
       if (version === operation) fail(error);
     } finally {
@@ -200,11 +305,18 @@ function openHistory(options: HistoryOptions): void {
   const older = button('Older messages', () => {
     if (!loading && page?.nextCursor) load(page.nextCursor).catch(fail);
   });
+  const newer = button('Newer messages', () => {
+    if (!loading && page?.newerCursor)
+      load(null, false, '', { after: page.newerCursor }).catch(fail);
+  });
   const newest = button('Newest messages', () => {
-    if (!loading && before) load(null).catch(fail);
+    if (!loading) {
+      search.value = '';
+      load(null, false, '').catch(fail);
+    }
   });
   updatePagination();
-  pages.append(older, newest);
+  pages.append(older, newer, newest);
   searchForm.append(field('Search messages', search), searchButton);
   searchForm.addEventListener('submit', (event) => {
     event.preventDefault();
@@ -256,6 +368,14 @@ function openHistory(options: HistoryOptions): void {
     composer.rows = 3;
     composer.maxLength = 2000;
     composer.placeholder = 'Write a private message…';
+    const drafts = new SavedPmDrafts(localStorage);
+    if (options.draft) composer.value = drafts.get(options.draft.account, options.draft.peer);
+    const saveDraft = (): void => {
+      if (options.draft && options.current())
+        drafts.save(options.draft.account, options.draft.peer, composer.value);
+    };
+    composer.addEventListener('input', saveDraft);
+    view.dialog.addEventListener('close', saveDraft, { once: true });
     let attempt: { content: string; id: string } | null = null;
     const send = asyncButton(
       'Send',
@@ -269,6 +389,8 @@ function openHistory(options: HistoryOptions): void {
           await options.send(content, submitted.id, controller.signal);
           if (!current()) return;
           if (composer.value.trim() === content) composer.value = '';
+          saveDraft();
+          notifyInboxChanged();
           attempt = null;
           search.value = '';
           await load(null, false, '');
@@ -305,6 +427,19 @@ function openHistory(options: HistoryOptions): void {
     page.messages.forEach(redact);
     render(false);
   };
+  const onEdited = (message: ChatEntry): void => {
+    if (!current() || removed.has(message.messageId)) return;
+    const previous = edits.get(message.messageId);
+    if (previous && previous.revision >= message.revision) return;
+    edits.set(message.messageId, message);
+    if (edits.size > 300) {
+      view.close();
+      return;
+    }
+    page?.messages.forEach(redact);
+    render(false);
+  };
+  editListeners.add(onEdited);
   removalListeners.add(onRemoved);
   list.addEventListener('scroll', markRead);
   const timer = setInterval(() => {
@@ -312,7 +447,10 @@ function openHistory(options: HistoryOptions): void {
       view.close();
       return;
     }
-    if (visible() && !loading) load(before, true).catch(fail);
+    // Repeating resume after its cursor advances would silently skip to the next
+    // unread page. Keep that page stable until the reader chooses Newer messages.
+    if (visible() && !loading && !(position.resume && page?.newerCursor))
+      load(before, true, query, position.resume ? {} : position).catch(fail);
   }, 15_000);
   view.dialog.addEventListener(
     'close',
@@ -320,19 +458,43 @@ function openHistory(options: HistoryOptions): void {
       controller.abort();
       clearInterval(timer);
       removalListeners.delete(onRemoved);
+      editListeners.delete(onEdited);
     },
     { once: true },
   );
-  load(null).catch(fail);
+  load(
+    null,
+    false,
+    '',
+    options.initialMessageId ? { around: options.initialMessageId } : { resume: true },
+  ).catch(fail);
 }
 
-export function openRoomHistory(room: RoomClient, current: () => boolean, signedIn: boolean): void {
+export function openRoomHistory(
+  room: RoomClient,
+  current: () => boolean,
+  signedIn: boolean,
+  initialMessageId?: string,
+): void {
   openHistory({
     title: 'Room history',
+    viewerId: room.localParticipantId ?? '',
+    ...(initialMessageId && { initialMessageId }),
+    edit: async (message, content, expectedRevision) =>
+      (
+        await room.requestSocial('editChatMessage', {
+          messageId: message.messageId,
+          content,
+          expectedRevision,
+        })
+      ).message,
     current,
     load: (params) =>
       room.requestSocial('getChatHistory', {
         ...(params.get('before') && { before: params.get('before')! }),
+        ...(params.get('after') && { after: params.get('after')! }),
+        ...(params.get('around') && { around: params.get('around')! }),
+        ...(params.has('resume') && { resume: true }),
         ...(params.get('q') && { q: params.get('q')! }),
         limit: 50,
       }),
@@ -402,6 +564,16 @@ export function openPrivateInbox(options: {
               openHistory({
                 title: `Messages with ${conversation.peerName}`,
                 accountDialog: true,
+                viewerId: account,
+                draft: { account, peer: conversation.peerId },
+                edit: (message, content, expectedRevision, signal) =>
+                  api.editPrivateMessage(
+                    token(),
+                    conversation.peerId,
+                    message.messageId,
+                    { content, expectedRevision },
+                    signal,
+                  ),
                 current: () => options.getAccountId() === account && !!options.getToken(),
                 load: (params, signal) =>
                   api.privateHistory(token(), conversation.peerId, params, signal),

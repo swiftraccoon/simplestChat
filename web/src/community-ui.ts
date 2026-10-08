@@ -1,5 +1,5 @@
 import type { AuthManager } from './auth';
-import { openPrivateInbox } from './chat-history';
+import { openPrivateInbox, onInboxChanged } from './chat-history';
 import { mountAccountSecurity, type AccountSecurityFlow } from './account-security';
 import { mountAccountSessions } from './account-sessions';
 import { appearancePicker } from './appearance';
@@ -65,6 +65,9 @@ export class CommunityUI {
       getAccountId: () => this.options.auth.userId,
     }),
   );
+  private inboxController = new AbortController();
+  private inboxPending: Promise<void> | null = null;
+  private inboxRefreshAgain = false;
   private readonly accountButton = button('Account', () => {
     const generation = this.generation;
     this.openAccount().catch((error) => {
@@ -101,6 +104,9 @@ export class CommunityUI {
     );
     const recovery = button('Recover with a saved key', () => this.openRecovery(), 'auth-link-btn');
     document.querySelector('#login-modal .auth-alt-actions')!.append(recovery);
+    onInboxChanged(() => {
+      this.refreshMessages().catch(() => {});
+    });
     this.refresh();
   }
 
@@ -111,6 +117,11 @@ export class CommunityUI {
     if (accountChanged) {
       this.accountIdentity = accountIdentity;
       this.accountGeneration++;
+      this.inboxController.abort();
+      this.inboxController = new AbortController();
+      this.inboxPending = null;
+      this.messagesButton.textContent = 'Messages';
+      this.messagesButton.setAttribute('aria-label', 'Messages');
     }
     const identity = `${this.options.auth.userId ?? ''}:${room?.currentRoomId ?? ''}:${room?.localParticipantId ?? ''}`;
     if (identity !== this.identity) {
@@ -128,6 +139,46 @@ export class CommunityUI {
     this.roomsButton.hidden = !this.options.auth.isLoggedIn;
     this.nicknameButton.hidden = !room?.localParticipantId;
     this.manageButton.hidden = !room?.localParticipantId || ROLES.indexOf(room.role) < 3;
+    if (accountChanged) this.refreshMessages().catch(() => {});
+  }
+
+  /** Refreshes the existing header badge without revealing another account's unread state. */
+  refreshMessages(): Promise<void> {
+    const token = this.options.auth.jwt;
+    const account = this.options.auth.userId;
+    if (!token || !account || document.hidden) return Promise.resolve();
+    if (this.inboxPending) {
+      this.inboxRefreshAgain = true;
+      return this.inboxPending;
+    }
+    const generation = this.accountGeneration;
+    const task = api
+      .inboxUnread(token, this.inboxController.signal)
+      .then((result) => {
+        if (generation !== this.accountGeneration || account !== this.options.auth.userId) return;
+        this.messagesButton.textContent = result.unreadCount
+          ? `Messages (${result.unreadCount >= 1000 ? '1,000+' : result.unreadCount})`
+          : 'Messages';
+        this.messagesButton.setAttribute(
+          'aria-label',
+          result.unreadCount
+            ? `Messages, ${result.unreadCount >= 1000 ? '1,000 or more' : result.unreadCount} unread`
+            : 'Messages',
+        );
+      })
+      .catch(() => {
+        /* Keep the last confirmed count until the next refresh. */
+      })
+      .finally(() => {
+        if (this.inboxPending !== task) return;
+        this.inboxPending = null;
+        if (this.inboxRefreshAgain) {
+          this.inboxRefreshAgain = false;
+          this.refreshMessages().catch(() => {});
+        }
+      });
+    this.inboxPending = task;
+    return task;
   }
 
   /** Cache only the current roster, with a hard memory bound; larger rosters keep initials. */

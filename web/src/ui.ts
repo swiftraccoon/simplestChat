@@ -21,7 +21,7 @@ import {
   type PasskeyOperation,
 } from './api-validation';
 import { decodeRoomSettings, decodeChatHistory, decodeChatEntry } from './protocol-validation';
-import { decodeInbox, decodeChatRead } from './chat-history-validation';
+import { decodeInbox, decodeChatRead, decodeInboxUnread } from './chat-history-validation';
 import { type Decoder, isRecord } from './validation';
 
 /** Account password selection mirrors the server's NFC and Unicode-scalar policy. */
@@ -329,6 +329,23 @@ export const api = {
     apiNoContent('/api/auth/push', token, 'PUT', data, signal),
   disablePush: (token: string, signal: AbortSignal) =>
     apiNoContent('/api/auth/push', token, 'DELETE', undefined, signal),
+  inboxUnread: (token: string, signal: AbortSignal) =>
+    apiJson(decodeInboxUnread, '/api/auth/inbox/unread', token, 'GET', undefined, signal),
+  editPrivateMessage: (
+    token: string,
+    peer: string,
+    messageId: string,
+    data: { content: string; expectedRevision: number },
+    signal: AbortSignal,
+  ) =>
+    apiJson(
+      decodeChatEntry,
+      `/api/auth/inbox/${encodeURIComponent(peer)}/messages/${encodeURIComponent(messageId)}`,
+      token,
+      'PUT',
+      data,
+      signal,
+    ),
   inbox: (token: string, params: URLSearchParams, signal: AbortSignal) =>
     apiJson(decodeInbox, `/api/auth/inbox?${params}`, token, 'GET', undefined, signal),
   privateHistory: (token: string, peer: string, params: URLSearchParams, signal: AbortSignal) =>

@@ -94,6 +94,7 @@ export class ChatStore {
   private readonly unreadMessages = new Set<string>();
   private readonly dismissedMessages = new Map<string, true>();
   private readonly removedMessages = new Map<string, string>();
+  private readonly editedMessages = new Map<string, ChatEntry>();
   active = 'public';
   localId = '';
 
@@ -143,6 +144,8 @@ export class ChatStore {
   receive(entry: ChatEntry, _replay = false): boolean {
     if (!this.accepts(entry) || this.dismissedMessages.has(this.key(entry))) return false;
     if (entry.removedAt) this.removeMessage(entry.messageId, entry.removedAt);
+    if (entry.editedAt && entry.revision > 0) this.editMessage(entry);
+    entry = this.revised(entry);
     entry = this.redacted(entry);
     const conversation = this.conversation(entry);
     const existing = this.messages.find(
@@ -150,6 +153,7 @@ export class ChatStore {
     );
     if (existing) {
       if (this.conversation(existing) !== conversation) return false;
+      if (!entry.removedAt && entry.revision < existing.revision) return false;
       Object.assign(existing, entry, { status: 'sent', error: undefined });
       if (existing.removedAt) delete existing.replyTo;
       delete existing.retry;
@@ -220,6 +224,60 @@ export class ChatStore {
     return true;
   }
 
+  /** Edits update loaded quotes and fence older in-flight acknowledgements or replay. */
+  editMessage(entry: ChatEntry): boolean {
+    if (!this.accepts(entry) || this.removedMessages.has(entry.messageId)) return false;
+    const loaded = this.messages.find((message) => message.messageId === entry.messageId);
+    if (loaded && (loaded.removedAt || loaded.revision >= entry.revision)) return false;
+    const previous = this.editedMessages.get(entry.messageId);
+    if (previous && previous.revision >= entry.revision) return false;
+    this.editedMessages.set(entry.messageId, { ...entry });
+    while (
+      this.editedMessages.size > this.maxMessages * 2 ||
+      [...this.editedMessages.values()].reduce(
+        (total, message) => total + message.content.length,
+        0,
+      ) > this.maxCharacters
+    )
+      this.editedMessages.delete(this.editedMessages.keys().next().value!);
+    let changed = false;
+    for (const message of this.messages) {
+      const revised = this.revised(message);
+      if (revised === message) continue;
+      Object.assign(message, this.redacted(revised));
+      changed = true;
+    }
+    this.trim();
+    return changed;
+  }
+
+  private revised(entry: ChatEntry): ChatEntry {
+    const edit = this.editedMessages.get(entry.messageId);
+    if (
+      edit &&
+      edit.revision > entry.revision &&
+      this.conversation(edit) === this.conversation(entry)
+    )
+      entry = {
+        ...entry,
+        content: edit.content,
+        revision: edit.revision,
+        ...(edit.editedAt && { editedAt: edit.editedAt }),
+      };
+    const quoted = entry.replyTo && this.editedMessages.get(entry.replyTo.messageId);
+    if (quoted && entry.replyTo) {
+      const flat = quoted.content.split(/\s+/).join(' ').trim();
+      return {
+        ...entry,
+        replyTo: {
+          ...entry.replyTo,
+          excerpt: flat.length > 140 ? `${flat.slice(0, 140).trimEnd()}…` : flat,
+        },
+      };
+    }
+    return entry;
+  }
+
   /** Redact late replay/acknowledgements too, including quotes without a loaded original. */
   private redacted(entry: ChatEntry): ChatEntry {
     if (entry.recipientId) return entry;
@@ -236,6 +294,7 @@ export class ChatStore {
 
   removeMessage(messageId: string, removedAt: string): boolean {
     this.removedMessages.set(messageId, removedAt);
+    this.editedMessages.delete(messageId);
     while (this.removedMessages.size > this.maxMessages * 2)
       this.removedMessages.delete(this.removedMessages.keys().next().value!);
     let changed = false;
@@ -290,7 +349,6 @@ export class ChatStore {
   open(id: string, name?: string): void {
     this.active = id;
     if (id !== 'public') this.names.set(id, name ?? this.names.get(id) ?? 'Conversation');
-    this.markRead(id);
     this.trim();
   }
 
@@ -319,6 +377,7 @@ export class ChatStore {
     this.names.clear();
     this.dismissedMessages.clear();
     this.removedMessages.clear();
+    this.editedMessages.clear();
     this.active = 'public';
     this.localId = localId;
   }
@@ -376,5 +435,49 @@ export class ChatStore {
       this.close(oldest);
     }
     this.refreshUnread();
+  }
+}
+
+/** Only unsent account PM drafts persist on this device, separated by account and peer. */
+export class SavedPmDrafts {
+  constructor(private readonly storage: Pick<Storage, 'getItem' | 'setItem'>) {}
+  private entries(account: string): [string, string][] {
+    try {
+      const value: unknown = JSON.parse(
+        this.storage.getItem(`simplestchat.pm-drafts.${account}`) ?? '[]',
+      );
+      if (!Array.isArray(value)) return [];
+      return value
+        .filter(
+          (entry): entry is [string, string] =>
+            Array.isArray(entry) &&
+            entry.length === 2 &&
+            typeof entry[0] === 'string' &&
+            entry[0].length <= 128 &&
+            typeof entry[1] === 'string' &&
+            entry[1].length <= 2000,
+        )
+        .slice(-100);
+    } catch {
+      return [];
+    }
+  }
+  get(account: string, peer: string): string {
+    return this.entries(account).find(([id]) => id === peer)?.[1] ?? '';
+  }
+  save(account: string, peer: string, text: string): void {
+    if (!account || !peer) return;
+    const entries = this.entries(account).filter(([id]) => id !== peer);
+    if (text) entries.push([peer, text.slice(0, 2000)]);
+    while (
+      entries.length > 100 ||
+      entries.reduce((size, [id, draft]) => size + id.length + draft.length, 0) > 64 * 1024
+    )
+      entries.shift();
+    try {
+      this.storage.setItem(`simplestchat.pm-drafts.${account}`, JSON.stringify(entries));
+    } catch {
+      /* Storage restrictions must never interrupt composing or sending. */
+    }
   }
 }
