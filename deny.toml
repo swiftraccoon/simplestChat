@@ -27,6 +27,7 @@ deny = [
 # Exact reviewed versions only; a new version still reaches duplicate detection.
 # security/dependency-budget.json also rejects increases or replacement groups.
 skip = [
+  { crate = "tower-http@=0.6.11", reason = "Current reqwest 0.13.5 requires tower-http 0.6 for the bounded Web Push client; the server uses current 0.7.1. Exact versions are bounded by security/dependency-budget.json." },
   { crate = "pem@=3.0.6", reason = "rtc/rtc-dtls 0.21 require pem 3; their current rcgen 0.14.10 requires pem 4. Exact optional load-test split reviewed 2026-10-05." },
   { crate = "synstructure@=0.13.2", reason = "asn1-rs-derive 0.5.1 requires 0.13; current ICU derive macros require 0.14. Exact build-time split reviewed 2026-10-05." },
   { crate = "asn1-rs@=0.6.2", reason = "Reviewed transitive version split; exact graph is bounded by security/dependency-budget.json." },
