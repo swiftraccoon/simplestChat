@@ -18,6 +18,7 @@ from test_support import ROOT, string, yaml_value
 import release_public as release
 import restore_verify as restore
 from release_json import decode_json, object_value
+from security_check import migration_uses_transaction
 
 POSTGRES_IMAGE = (
     "docker.io/library/postgres:18.6-bookworm@sha256:"
@@ -172,12 +173,22 @@ class RestoreDatabaseTests(unittest.TestCase):
         """Apply one actual packaged migration and record its exact checksum."""
         checksum = hashlib.sha384(migration.read_bytes()).hexdigest()
         version = int(migration.name.split("_")[0])
+        source = migration.read_text()
+        transactional = migration_uses_transaction(source)
+        prefix = (
+            "BEGIN;\nSET LOCAL ROLE simplestchat_migrate;\n"
+            if transactional
+            else "SET ROLE simplestchat_migrate;\n"
+        )
+        # psql reads stdin one statement at a time. Keep concurrent indexes outside
+        # both an explicit transaction and a multi-statement protocol execute.
         _ = self.sql(
             database,
-            "BEGIN;\nSET LOCAL ROLE simplestchat_migrate;\n"
-            + migration.read_text()
+            prefix
+            + source
             + f"\nINSERT INTO public._sqlx_migrations VALUES ({version},true,"
-            + f"decode('{checksum}','hex'));\nCOMMIT;",
+            + f"decode('{checksum}','hex'));\n"
+            + ("COMMIT;" if transactional else ""),
         )
         migrations[str(version)] = checksum
 
