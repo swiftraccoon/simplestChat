@@ -677,7 +677,11 @@ fn diagnostic_operation(message: &ClientMessage) -> OperationKind {
         | ClientMessage::ChangeNickname { .. }
         | ClientMessage::SetChatStyle { .. }
         | ClientMessage::ReactToMessage { .. }
+        | ClientMessage::RemoveChatMessage { .. }
         | ClientMessage::GetRoomSnapshot { .. }
+        | ClientMessage::GetChatHistory { .. }
+        | ClientMessage::MarkChatRead { .. }
+        | ClientMessage::SetRoomHistory { .. }
         | ClientMessage::ListRoomBans { .. }
         | ClientMessage::RemoveRoomBan { .. }
         | ClientMessage::ListRoomMembers { .. }
@@ -2802,7 +2806,11 @@ async fn handle_client_message(
         | ClientMessage::ChangeNickname { .. }
         | ClientMessage::SetChatStyle { .. }
         | ClientMessage::ReactToMessage { .. }
+        | ClientMessage::RemoveChatMessage { .. }
         | ClientMessage::GetRoomSnapshot { .. }
+        | ClientMessage::GetChatHistory { .. }
+        | ClientMessage::MarkChatRead { .. }
+        | ClientMessage::SetRoomHistory { .. }
         | ClientMessage::ListRoomBans { .. }
         | ClientMessage::RemoveRoomBan { .. }
         | ClientMessage::ListRoomMembers { .. }

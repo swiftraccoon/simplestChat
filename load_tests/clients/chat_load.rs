@@ -473,6 +473,7 @@ mod tests {
             sent_at: "2026-09-30T00:00:00Z".into(),
             chat_style: ChatStyle::default(),
             reply_to: None,
+            removed_at: None,
             reactions: Vec::new(),
         };
         (
@@ -487,6 +488,7 @@ mod tests {
                 message_id: entry.message_id,
                 client_message_id: entry.client_message_id,
                 sent_at: entry.sent_at,
+                removed_at: None,
                 chat_style: entry.chat_style,
                 reply_to: None,
             },

@@ -648,7 +648,7 @@ impl SignalingServer {
 
     /// Creates the Axum router for the signaling server
     pub fn router(self) -> Router {
-        use axum::routing::{delete, patch, post};
+        use axum::routing::{delete, patch, post, put};
 
         let auth_routes = Router::new()
             .route("/register", post(crate::auth::routes::register))
@@ -679,6 +679,12 @@ impl SignalingServer {
                     .layer(DefaultBodyLimit::max(32 * 1024)),
             )
             .route("/password", post(crate::auth::account::change_password))
+            .route("/inbox", get(crate::room::history::inbox))
+            .route(
+                "/inbox/{peer}/messages",
+                get(crate::room::history::messages).post(crate::room::history::send_message),
+            )
+            .route("/inbox/{peer}/read", put(crate::room::history::read))
             .route("/ws-ticket", post(crate::auth::ws_tickets::issue))
             .route(
                 "/recovery/key",

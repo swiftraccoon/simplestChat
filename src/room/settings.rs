@@ -28,6 +28,7 @@ pub struct RoomSettings {
     pub topic: Option<String>,
     pub name_style: ChatStyle,
     pub topic_style: ChatStyle,
+    pub history_retention_days: i32,
 }
 
 #[derive(FromRow)]
@@ -54,6 +55,7 @@ struct RoomRow {
     name_style: ChatStyle,
     #[sqlx(json)]
     topic_style: ChatStyle,
+    history_retention_days: i32,
 }
 
 #[derive(Debug, Deserialize)]
@@ -168,7 +170,7 @@ pub async fn load_room(
         "SELECT id, owner_id, display_name, password_hash, require_registration,
                 max_participants, max_broadcasters, allow_screen_sharing, allow_chat, allow_video,
                 moderated, invite_only, secret, lobby_enabled, push_to_talk,
-                guests_allowed, guests_can_broadcast, topic, name_style, topic_style
+                guests_allowed, guests_can_broadcast, topic, name_style, topic_style, history_retention_days
          FROM rooms WHERE id = $1",
     )
     .bind(room_id)
@@ -199,6 +201,7 @@ pub async fn load_room(
                 topic: r.topic,
                 name_style: r.name_style,
                 topic_style: r.topic_style,
+                history_retention_days: r.history_retention_days,
             },
             password_hash,
         )
@@ -294,6 +297,7 @@ pub async fn create_room(
         topic: req.topic.clone(),
         name_style: ChatStyle::default(),
         topic_style: ChatStyle::default(),
+        history_retention_days: 0,
     })
 }
 
@@ -550,6 +554,7 @@ mod tests {
             topic: Some("hello".to_string()),
             name_style: ChatStyle::default(),
             topic_style: ChatStyle::default(),
+            history_retention_days: 0,
         };
         let value = serde_json::to_value(&settings).unwrap();
         let obj = value.as_object().unwrap();

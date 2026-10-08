@@ -30,6 +30,7 @@ const settings = {
   id: 'fixture-room',
   displayName: 'Fixture room',
   nameStyle: automaticStyle,
+  historyRetentionDays: 0,
   topicStyle: automaticStyle,
   passwordProtected: false,
   requireRegistration: false,

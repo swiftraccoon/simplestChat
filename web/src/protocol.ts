@@ -204,13 +204,15 @@ export type ServerMessage =
         | 'sequence_superseded'
         | 'capacity'
         | 'conflict'
-        | 'recipient_unconfirmed';
+        | 'recipient_unconfirmed'
+        | 'storage_unconfirmed';
     }
   | SocialResponse
   | { type: 'socialError'; requestId?: string; clientMessageId?: string; message: string }
   | { type: 'nicknameChanged'; participantId: string; nickname: string }
   | { type: 'chatStyleChanged'; participantId: string; chatStyle: ChatStyle }
   | { type: 'participantTyping'; participantId: string; targetParticipantId?: string }
+  | { type: 'chatMessageRemoved'; messageId: string; removedAt: string }
   | { type: 'messageReactions'; messageId: string; reactions: ChatReaction[] }
   | { type: 'activeSpeaker'; participantId: string }
   | { type: 'audioLevels'; levels: { participantId: string; volume: number }[] }
@@ -309,8 +311,12 @@ export type SocialAction =
   | 'setChatPreferences'
   | 'changeNickname'
   | 'setChatStyle'
+  | 'removeChatMessage'
   | 'reactToMessage'
   | 'getRoomSnapshot'
+  | 'getChatHistory'
+  | 'markChatRead'
+  | 'setRoomHistory'
   | 'listRoomBans'
   | 'removeRoomBan'
   | 'listRoomMembers'
@@ -325,8 +331,12 @@ export interface SocialRequests {
   setChatPreferences: { allowPrivateMessages: boolean; ignoredParticipantIds: string[] };
   changeNickname: { nickname: string };
   setChatStyle: { chatStyle: ChatStyle };
+  removeChatMessage: { messageId: string };
   reactToMessage: { messageId: string; emoji: string };
   getRoomSnapshot: undefined;
+  getChatHistory: { before?: string; q?: string; limit?: number };
+  markChatRead: { messageId: string };
+  setRoomHistory: { retentionDays: number };
   listRoomBans: { offset?: number };
   removeRoomBan: { banId: string };
   listRoomMembers: { offset?: number };
@@ -341,8 +351,12 @@ export interface SocialResponses {
   setChatPreferences: { allowPrivateMessages: boolean; ignoredParticipantIds: string[] };
   changeNickname: { nickname: string };
   setChatStyle: { chatStyle: ChatStyle };
+  removeChatMessage: { messageId: string; removedAt: string };
   reactToMessage: { messageId: string; reactions: ChatReaction[] };
   getRoomSnapshot: RoomSnapshot;
+  getChatHistory: ChatHistoryPage;
+  markChatRead: { readMessageId: string | null };
+  setRoomHistory: { retentionDays: number };
   listRoomBans: RoomBansPage;
   removeRoomBan: { removed: boolean };
   listRoomMembers: RoomMembersPage;
@@ -380,12 +394,20 @@ export interface ChatEntry {
   recipientId?: string;
   recipientName?: string;
   content: string;
+  removedAt?: string;
   sentAt: string;
   /** The sender's look when they sent it. */
   chatStyle?: ChatStyle;
   /** The message this one answers, as the server quoted it. */
   replyTo?: ChatReplyRef;
   reactions?: ChatReaction[];
+}
+
+export interface ChatHistoryPage {
+  messages: ChatEntry[];
+  nextCursor: string | null;
+  readMessageId: string | null;
+  retentionDays: number;
 }
 
 export interface ChatReplyRef {
@@ -514,6 +536,7 @@ export interface RoomSettings {
   maxBroadcasters?: number;
   allowScreenSharing: boolean;
   allowChat: boolean;
+  historyRetentionDays: number;
   allowVideo: boolean;
   moderated: boolean;
   inviteOnly: boolean;

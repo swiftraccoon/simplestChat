@@ -28,6 +28,7 @@ HTTP / WebSocket
 | Profiles, recovery and refresh sessions | `auth/account.rs`, `auth/session.rs` |
 | One-use WebSocket authentication tickets | `auth/ws_tickets.rs` |
 | Membership, lobby, chat and reconnect state | `room/mod.rs`, `room/social.rs` |
+| Durable room history, PM inbox, read positions and chat expiry | `room/history.rs` |
 | Ordered persistence and uncertain-write handling | `room/control.rs` |
 | Persistent room/community API | `room/api.rs`, `room/community.rs`, `room/settings.rs` |
 | Roles, invitations and moderation retention | `room/roles.rs`, `room/invites.rs`, `room/moderation.rs` |
@@ -67,6 +68,25 @@ remove its router; failed router teardown retains the reservation for process
 recovery. Snapshot requests capture an owned, typed projection while holding a
 shared room read lock and serialize it after releasing that lock. Private-message
 visibility and moderator-only lobby entries are filtered during capture.
+
+Saved history is separate from the 300-entry / 256-KiB membership replay buffer.
+Migration 025 adds public-history retention to persisted rooms plus account PMs,
+inbox rows and read cursors. Public history defaults off; account PMs last 90
+days. Retained public messages and account-to-account PMs use room control to
+commit before delivery. Ephemeral chat validates and publishes under the room
+state lock without waiting for unrelated database writes. A private message
+involving a guest remains ephemeral. Inbox
+HTTP routes authorize the current account and derive the two-account conversation
+server-side; room history requires current membership. Pages and searches are
+bounded. The separate five-minute chat cleanup removes expired messages, inbox
+rows and cursors while read predicates enforce expiry immediately.
+
+`removeChatMessage` requires Moderator+ and a public message belonging to that
+room, including saved messages outside runtime replay. Its transaction removes
+saved text and quoted excerpts alongside a `message_removed` moderation event.
+Only message identity and actor/target metadata enter moderation history. Runtime
+history and retry receipts are scrubbed before `chatMessageRemoved` is published;
+removed messages reject new replies and reactions. PMs are excluded.
 
 Essential outbound queue overflow retires the affected WebSocket through
 `signaling/outbound.rs`, independently of the full message queue. Registrations

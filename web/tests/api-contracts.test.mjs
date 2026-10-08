@@ -52,6 +52,7 @@ const settings = {
   guestsCanBroadcast: true,
   topic: null,
   nameStyle: appearance,
+  historyRetentionDays: 0,
   topicStyle: appearance,
 };
 const invite = {

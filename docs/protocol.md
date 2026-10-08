@@ -17,6 +17,13 @@ Login, passkeys and refresh remain owned by [AuthManager](../web/src/auth.ts).
 | --- | --- | --- |
 | `publicProfile` | `GET /api/auth/profiles/:id` | `PublicProfile` |
 | `accountProfile` | `GET /api/auth/profile` | `AccountProfile` |
+| `accountSessions` | `GET /api/auth/sessions` | `AccountSession[]`: nonsecret ID, current marker, sign-in/refresh/expiry timestamps |
+| `revokeSession` | `DELETE /api/auth/sessions/:id` | `204`, no body; revokes only an owned session |
+| `revokeOtherSessions` | `DELETE /api/auth/sessions/others` | `204`, no body; keeps the caller's session |
+| `inbox` | `GET /api/auth/inbox` with optional `before` cursor | `{ conversations, nextCursor, retentionDays }` |
+| `privateHistory` | `GET /api/auth/inbox/:peer/messages` with optional `before`, `q`, `limit` | `ChatHistoryPage` |
+| `sendPrivateMessage` | `POST /api/auth/inbox/:peer/messages`, JSON `{clientMessageId, content}` | `ChatEntry` |
+| `readPrivateMessages` | `PUT /api/auth/inbox/:peer/read`, JSON `{messageId}` | `{ readMessageId: string \| null }` |
 | `updateProfile` | `PATCH /api/auth/profile` | `AccountProfile` |
 | `changePassword` | `POST /api/auth/password` | `204`, no body |
 | WebSocket ticket provider | `POST /api/auth/ws-ticket`, Bearer JWT and JSON `{}` | `{ ticket: string, expires_in: integer }` |
@@ -491,11 +498,48 @@ no payload. A `socialResponse` is a discriminated union: checking `action` also
 narrows `data`. Reporting creates an `open` report; resolving a report returns
 only `resolved` or `dismissed`. Do not reintroduce caller-selected response casts.
 
-Chat history is room-local memory, capped at 300 entries and 256 KiB of serialized
-entries. `getRoomSnapshot` returns the retained messages visible to the current
-membership, together with participants, producer state, settings and permissions.
-Visibility respects join/session boundaries and private-message/ignore rules.
-It is not a durable mailbox or unrestricted room-history endpoint.
+Reconnect replay is room-local memory, capped at 300 entries and 256 KiB of
+serialized entries. `getRoomSnapshot` returns messages visible to the current
+membership with participants, producer state, settings and permissions. Replay
+respects join/session boundaries and private-message/ignore rules.
+Before recovering, the browser captures the IDs of already-confirmed public
+rows. The first recovery snapshot discards those captured rows if no longer
+retained by the server, so a missed removal cannot leave older cached text
+visible. Public rows arriving after that capture, PMs and uncertain outgoing
+attempts are preserved; ordinary later snapshots do not prune unrelated rows.
+
+Saved history is separate PostgreSQL data. A room owner uses `setRoomHistory`
+with `retentionDays` (`0`, `1`, `7`, `30`, `90`); the default `0` is Off. Settings
+expose `historyRetentionDays`. Enabling history saves future public messages,
+including guest public messages, and admits current members to older retained
+messages regardless of their join time. Disabling purges saved public messages
+and read cursors. Shortening retention deletes expired messages and shortens
+remaining lifetimes; extending retention applies to future sends only.
+
+`getChatHistory` accepts optional `before`, `q` and `limit` and returns
+`{messages, nextCursor, readMessageId, retentionDays}`. The opaque cursor orders
+pages by server timestamp and message UUID; `limit` is 1–50 (default 50). Search
+accepts 3–128 characters and examines the newest 10,000 retained messages in that
+conversation. `markChatRead` takes `messageId`; the signed-in viewer's read cursor
+moves forward only. Both actions require current room membership. History Off
+returns an empty saved page; it does not extend runtime replay.
+
+Account-to-account PMs are retained for 90 days. Authenticated HTTP routes are
+`GET /api/auth/inbox`, `GET|POST /api/auth/inbox/:peer/messages` and
+`PUT /api/auth/inbox/:peer/read`. Message pages have the same history shape;
+inbox pages return `{conversations, nextCursor, retentionDays}`. Each conversation
+includes the peer identity/name, last message and an unread count capped at
+1,000. POST takes `{clientMessageId, content}` and PUT takes `{messageId}`.
+An HTTP send requires an existing account conversation started together in a
+room. Both room and HTTP account PM sends honor the two accounts' saved
+ignore/PM preferences under database row locks. Room-session preference changes
+also wait for in-flight durable sends before acknowledging, so an opt-out cannot
+overtake an accepted send. A known-success HTTP retry returns its existing receipt
+without redelivery, even after preferences change. Inbox delivery works while the
+peer is offline. Guest PMs remain ephemeral. Saved writes commit
+before room delivery/acknowledgement. An uncertain database commit quarantines
+the room and reports `messageRetryResult` with `storage_unconfirmed`, never a
+definite send rejection. Account identity scopes every inbox route; knowing another conversation's peer or message ID grants no access.
 
 Each participant has a chat look, `chatStyle`: `{ color, style }`. `color` is one
 of sixteen palette tokens (`CHAT_COLORS` in `src/signaling/protocol.rs`, mirrored
@@ -552,12 +596,26 @@ retained message it can see; `emoji` must be one of `REACTIONS` in
 everyone who can see the message carry the message's full reaction list, oldest
 first, as `{ emoji, participantIds }`. A message holds at most 64 reaction
 records, and reactions count toward the history byte budget. Reactions are not
-part of delivery receipts; a message evicted from history loses them.
+part of delivery receipts. Reactions on saved messages are persisted; adding a
+reaction through room chat still requires the message in current runtime replay.
+
+`removeChatMessage` takes `{requestId, messageId}` and requires Moderator+.
+It targets only public messages from the current room, including saved messages
+outside runtime replay. The response carries `{messageId, removedAt}` and the
+room receives `chatMessageRemoved` with the same fields. A removed `ChatEntry`
+keeps its message/sender/time identity, has `removedAt`, empty `content` and
+reactions, and no `replyTo`. Quoted excerpts in other retained messages become
+`Message removed`. Removal scrubs runtime replay, retry receipts and the database
+before publication; replay or a same-attempt retry cannot restore content. New
+replies and reactions to a removed message are refused. Repeating removal keeps
+the original marker and does not duplicate the moderation event. PM content is
+never exposed to this operation.
 
 Every sanction and report decision leaves an entry in the room's moderation
 history, written in the same transaction as the change it records: `kick`,
 `ban`, `unban`, `cam_ban`, `cam_unban`, `text_mute`, `text_unmute`,
-`report_resolved` and `report_dismissed`. `listModerationEvents` (Moderator+,
+`report_resolved`, `report_dismissed` and `message_removed`. Message removal
+records the removed message ID without its content. `listModerationEvents` (Moderator+,
 `offset` pages of 100, newest first) returns `ModerationEventEntry` values: who
 acted, whom it concerned (`targetAuthenticated` says whether `targetId` is an
 account), the reason, a ban's `expiresAt`, and the `reportId` it answered.
@@ -603,7 +661,8 @@ Legacy sends without a sequence retain only bounded-history/receipt deduplicatio
 The UI distinguishes confirmed, rejected and unconfirmed sends, and lets users
 reconcile/retry a retained uncertain attempt or copy it back to a draft. Explicit
 new delivery from a draft is a new decision. Full rejoin or server restart retires
-retry ownership; messages and receipts are not a durable mailbox. An
+retry ownership; these in-memory receipts do not become durable retry handles.
+Retained messages remain accessible through saved-history routes. An
 acknowledgement confirms server acceptance, not that every recipient read it.
 These bounds are not an exactly-once-delivery guarantee.
 
@@ -647,7 +706,8 @@ participant ID; old guest private-conversation state is not reassigned. Account
 changes and explicit departure still clear conversation state. Rejoined media
 starts off and requires the user's action to publish again. This is automatic
 room recovery, not uninterrupted text delivery, capture or WebRTC transport
-continuity, and does not persist runtime history across server restarts.
+continuity. Runtime replay is lost on restart; configured public history and
+account PMs remain available through the saved-history interfaces.
 
 “Refresh incoming media” explicitly retires existing receive consumers, awaits
 closure acknowledgement, then resubscribes to still-current remote producers.

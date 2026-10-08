@@ -4,6 +4,7 @@
 pub mod api;
 pub mod community;
 mod control;
+pub mod history;
 pub mod invites;
 pub mod moderation;
 pub mod roles;
@@ -4081,6 +4082,7 @@ impl RoomManager {
             display_name: room_id.to_string(),
             name_style: ChatStyle::default(),
             topic_style: ChatStyle::default(),
+            history_retention_days: 0,
             password_protected: false,
             require_registration: false,
             max_participants: None,

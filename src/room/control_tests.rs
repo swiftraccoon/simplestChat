@@ -325,6 +325,57 @@ async fn queued_control_revalidates_sender_permissions_before_applying_a_topic()
 }
 
 #[tokio::test]
+async fn chat_preference_ack_waits_for_inflight_durable_control() {
+    with_fixture(|mut fixture| async move {
+        let held = control::lock_room(&fixture.room).await;
+        let command = crate::signaling::protocol::ClientMessage::SetChatPreferences {
+            request_id: "disable-private".into(),
+            allow_private_messages: false,
+            ignored_participant_ids: vec![],
+        };
+        let mut preference = std::pin::pin!(fixture.manager.handle_social_request(
+            &fixture.room_id,
+            &fixture.owner.id,
+            &fixture.owner.sender,
+            &command,
+        ));
+        assert!(
+            futures_util::poll!(&mut preference).is_pending(),
+            "consent cannot overtake the durable send's control phase"
+        );
+        assert!(
+            fixture.owner_messages.try_recv().is_err(),
+            "no early opt-out acknowledgement"
+        );
+        assert!(
+            bounded(fixture.room.read())
+                .await
+                .participants
+                .get(&fixture.owner.id)
+                .unwrap()
+                .social
+                .accepts_inbox_from("peer")
+        );
+        drop(held);
+        bounded(preference).await.unwrap();
+        let response: Value =
+            serde_json::from_str(&bounded(fixture.owner_messages.recv()).await.unwrap()).unwrap();
+        assert_eq!(response["action"], "setChatPreferences");
+        assert_eq!(response["data"]["allowPrivateMessages"], false);
+        assert!(
+            !bounded(fixture.room.read())
+                .await
+                .participants
+                .get(&fixture.owner.id)
+                .unwrap()
+                .social
+                .accepts_inbox_from("peer")
+        );
+    })
+    .await;
+}
+
+#[tokio::test]
 async fn cancellation_while_queued_does_no_work_and_releases_its_admission_slot() {
     with_fixture(|fixture| async move {
         let held = control::lock_room(&fixture.room).await;

@@ -270,6 +270,7 @@ async fn quiet_lobby_socket_survives_without_gaining_room_admission() {
         display_name: "Heartbeat fixture".into(),
         name_style: Default::default(),
         topic_style: Default::default(),
+        history_retention_days: 0,
         password_protected: false,
         require_registration: false,
         max_participants: None,

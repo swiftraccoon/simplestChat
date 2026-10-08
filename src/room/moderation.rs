@@ -73,6 +73,7 @@ pub(crate) enum ModerationAction {
     TextUnmute,
     ReportResolved,
     ReportDismissed,
+    MessageRemoved,
 }
 
 impl ModerationAction {
@@ -87,6 +88,7 @@ impl ModerationAction {
             Self::TextUnmute => "text_unmute",
             Self::ReportResolved => "report_resolved",
             Self::ReportDismissed => "report_dismissed",
+            Self::MessageRemoved => "message_removed",
         }
     }
 
@@ -101,6 +103,7 @@ impl ModerationAction {
             Self::TextUnmute,
             Self::ReportResolved,
             Self::ReportDismissed,
+            Self::MessageRemoved,
         ]
         .into_iter()
         .find(|action| action.as_str() == value)

@@ -1,5 +1,5 @@
 //! Room-session chat and owner/moderator community tools.
-//! Private text is retained only in bounded memory, never in reports or logs.
+//! Private text stays out of reports and logs; account PM retention lives in `history`.
 use super::*;
 use crate::room::moderation::{
     Actor, MAX_MODERATION_EVENTS, ModerationAction, ModerationEvent, Target, record_event,
@@ -100,6 +100,40 @@ mod tests {
 
     fn message(json: &str) -> ClientMessage {
         serde_json::from_str(json).unwrap()
+    }
+
+    #[test]
+    fn uncertain_chat_storage_never_becomes_a_definite_rejection() {
+        let metrics = ServerMetrics::new();
+        let (sender, mut receiver) = mpsc::channel(1);
+        chat_persistence_failure(
+            &metrics,
+            &sender,
+            "uncertain",
+            sqlx::Error::Io(std::io::Error::from(std::io::ErrorKind::ConnectionAborted)),
+        )
+        .unwrap();
+        let result: Value = serde_json::from_str(&receiver.try_recv().unwrap()).unwrap();
+        assert_eq!(result["type"], "messageRetryResult");
+        assert_eq!(result["outcome"], "unknown");
+        assert_eq!(result["reason"], "storage_unconfirmed");
+        assert_eq!(result["clientMessageId"], "uncertain");
+        let definite =
+            chat_persistence_failure(&metrics, &sender, "rejected", sqlx::Error::PoolTimedOut)
+                .unwrap_err();
+        assert!(definite.downcast_ref::<SocialFailure>().is_some());
+        assert!(receiver.try_recv().is_err());
+        for _ in 0..2 {
+            chat_persistence_failure(
+                &metrics,
+                &sender,
+                "uncertain",
+                sqlx::Error::Io(std::io::Error::from(std::io::ErrorKind::ConnectionAborted)),
+            )
+            .unwrap();
+        }
+        // Even an unavailable outbound queue cannot turn an unknown commit
+        // into the SocialError which invites the client to submit a new ID.
     }
 
     #[test]
@@ -830,9 +864,11 @@ mod tests {
                 sent_at: chrono::Utc::now().to_rfc3339(),
                 chat_style: Default::default(),
                 reply_to: None,
+                removed_at: None,
                 reactions: Vec::new(),
             };
-            room.social.remember(alice.media_session_id, None, message);
+            room.social
+                .remember(alice.media_session_id, None, true, message);
         }
         assert!(room.social.history.len() < HISTORY_MESSAGES);
         assert!(room.social.history_bytes <= HISTORY_BYTES);
@@ -1231,6 +1267,188 @@ mod tests {
         assert!(react_to_message(&mut room, &alice.id, &message, "👍").is_err());
     }
 
+    #[test]
+    fn removing_public_chat_scrubs_quotes_reactions_and_retry_receipts() {
+        let (mut room, alice, bob, _carol, mut receivers) = fixture();
+        reply(
+            &mut room,
+            &alice,
+            "original",
+            None,
+            "remove this text",
+            None,
+        )
+        .unwrap();
+        let id = room
+            .social
+            .history
+            .back()
+            .unwrap()
+            .message
+            .message_id
+            .clone();
+        reply(&mut room, &bob, "quote", None, "a reply", Some(&id)).unwrap();
+        reply(
+            &mut room,
+            &alice,
+            "private",
+            Some(&bob.id),
+            "private remains",
+            None,
+        )
+        .unwrap();
+        react_to_message(&mut room, &bob.id, &id, "👍").unwrap();
+        let removed_at = "2026-10-07T12:00:00Z";
+        room.social.remove_message(&id, removed_at);
+        for entry in &room.social.history {
+            assert!(
+                !serde_json::to_string(&entry.message)
+                    .unwrap()
+                    .contains("remove this text")
+            );
+        }
+        for receipt in &room.social.receipts {
+            assert!(
+                !serde_json::to_string(&receipt.message)
+                    .unwrap()
+                    .contains("remove this text")
+            );
+        }
+        let original = &room.social.history[0].message;
+        assert_eq!(original.removed_at.as_deref(), Some(removed_at));
+        assert!(original.content.is_empty() && original.reactions.is_empty());
+        assert_eq!(
+            room.social.history[1]
+                .message
+                .reply_to
+                .as_ref()
+                .unwrap()
+                .excerpt,
+            "Message removed"
+        );
+        assert_eq!(room.social.history[2].message.content, "private remains");
+        assert!(react_to_message(&mut room, &bob.id, &id, "👍").is_err());
+        assert!(reply(&mut room, &bob, "late-reply", None, "late", Some(&id)).is_err());
+        while receivers[0].try_recv().is_ok() {}
+        reply(
+            &mut room,
+            &alice,
+            "original",
+            None,
+            "remove this text",
+            None,
+        )
+        .unwrap();
+        let ack: Value = serde_json::from_str(&receivers[0].try_recv().unwrap()).unwrap();
+        assert_eq!(ack["message"]["removedAt"], removed_at);
+        assert_eq!(ack["message"]["content"], "");
+        assert_eq!(
+            room.social.history.len(),
+            3,
+            "retry never recreates removed text"
+        );
+        assert_eq!(
+            room.social.history_bytes,
+            room.social.history.iter().map(|e| e.bytes).sum::<usize>()
+        );
+        assert_eq!(
+            room.social.receipt_bytes,
+            room.social.receipts.iter().map(|e| e.bytes).sum::<usize>()
+        );
+    }
+
+    #[tokio::test]
+    async fn message_removal_requires_moderation_and_never_targets_private_messages() {
+        let (mut room, alice, mut moderator, _carol, mut receivers) = fixture();
+        moderator.role = roles::Role::Moderator;
+        room.participants
+            .insert(moderator.id.clone(), moderator.clone());
+        reply(&mut room, &alice, "public", None, "remove", None).unwrap();
+        let public = room
+            .social
+            .history
+            .back()
+            .unwrap()
+            .message
+            .message_id
+            .clone();
+        reply(
+            &mut room,
+            &alice,
+            "private",
+            Some(&moderator.id),
+            "private",
+            None,
+        )
+        .unwrap();
+        let private = room
+            .social
+            .history
+            .back()
+            .unwrap()
+            .message
+            .message_id
+            .clone();
+        for receiver in &mut receivers {
+            while receiver.try_recv().is_ok() {}
+        }
+        let mut config = MediaConfig::default();
+        config.worker_config.num_workers = 1;
+        config.webrtc_server_port_base = 0;
+        let manager = RoomManager::new(config, ServerMetrics::new(), None)
+            .await
+            .unwrap();
+        let room_id = room.id.clone();
+        let room_lock = Arc::new(TokioRwLock::new(room));
+        manager
+            .rooms
+            .write()
+            .unwrap()
+            .insert(room_id.clone(), room_lock.clone());
+        let command = |message_id: &str| ClientMessage::RemoveChatMessage {
+            request_id: "remove".into(),
+            message_id: message_id.into(),
+        };
+        assert!(
+            manager
+                .handle_social_request(&room_id, &alice.id, &alice.sender, &command(&public))
+                .await
+                .is_err()
+        );
+        assert!(
+            manager
+                .handle_social_request(
+                    &room_id,
+                    &moderator.id,
+                    &moderator.sender,
+                    &command(&private)
+                )
+                .await
+                .is_err()
+        );
+        manager
+            .handle_social_request(
+                &room_id,
+                &moderator.id,
+                &moderator.sender,
+                &command(&public),
+            )
+            .await
+            .unwrap();
+        let room = room_lock.read().await;
+        assert!(room.social.history[0].message.removed_at.is_some());
+        assert_eq!(room.social.history[1].message.content, "private");
+        assert_eq!(room.social.moderation_events.len(), 1);
+        assert_eq!(
+            room.social.moderation_events[0].action,
+            ModerationAction::MessageRemoved
+        );
+        assert_eq!(room.social.moderation_events[0].target_id, alice.id);
+        let event: Value = serde_json::from_str(&receivers[0].try_recv().unwrap()).unwrap();
+        assert_eq!(event["type"], "chatMessageRemoved");
+        assert_eq!(event["messageId"], public);
+    }
+
     #[tokio::test]
     #[ignore = "requires disposable TEST_DATABASE_URL and mediasoup worker"]
     async fn database_an_account_keeps_its_chat_style_across_joins() {
@@ -1320,6 +1538,202 @@ mod tests {
             .execute(&pool)
             .await
             .unwrap();
+    }
+
+    #[tokio::test]
+    #[ignore = "requires disposable TEST_DATABASE_URL and mediasoup worker"]
+    async fn database_public_message_removal_scrubs_durable_history_without_runtime_copy() {
+        let pool =
+            sqlx::PgPool::connect(&std::env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL"))
+                .await
+                .unwrap();
+        let (mut room, alice, mut moderator, _carol, _receivers) = fixture();
+        moderator.role = roles::Role::Moderator;
+        room.participants
+            .insert(moderator.id.clone(), moderator.clone());
+        let room_id = format!("remove-{}", Uuid::new_v4());
+        let other_room = format!("remove-other-{}", Uuid::new_v4());
+        for person in [&alice, &moderator] {
+            sqlx::query("INSERT INTO users(id,email,display_name) VALUES($1,$2,$3)")
+                .bind(person.id.parse::<Uuid>().unwrap())
+                .bind(format!("{}@remove.invalid", person.id))
+                .bind(&person.name)
+                .execute(&pool)
+                .await
+                .unwrap();
+        }
+        for id in [&room_id, &other_room] {
+            sqlx::query("INSERT INTO rooms(id,owner_id,display_name,history_retention_days) VALUES($1,$2,$1,7)")
+                .bind(id).bind(moderator.id.parse::<Uuid>().unwrap()).execute(&pool).await.unwrap();
+        }
+        let mut settings = RoomManager::default_room_settings(&room_id);
+        settings.owner_id = moderator.id.parse().unwrap();
+        settings.history_retention_days = 7;
+        room.id = room_id.clone();
+        room.persisted = true;
+        room.settings = Some(settings);
+        reply(
+            &mut room,
+            &alice,
+            "original",
+            None,
+            "durable removed text",
+            None,
+        )
+        .unwrap();
+        let original = room.social.history.back().unwrap().message.clone();
+        reply(
+            &mut room,
+            &moderator,
+            "quote",
+            None,
+            "durable reply",
+            Some(&original.message_id),
+        )
+        .unwrap();
+        let quoted = room.social.history.back().unwrap().message.clone();
+        reply(
+            &mut room,
+            &alice,
+            "private",
+            Some(&moderator.id),
+            "private stays",
+            None,
+        )
+        .unwrap();
+        let private = room.social.history.back().unwrap().message.clone();
+        for message in [&original, &quoted] {
+            super::super::history::persist_message(
+                &pool,
+                Some(&room_id),
+                alice.media_session_id,
+                true,
+                7,
+                message,
+            )
+            .await
+            .unwrap();
+        }
+        super::super::history::persist_message(
+            &pool,
+            None,
+            alice.media_session_id,
+            true,
+            90,
+            &private,
+        )
+        .await
+        .unwrap();
+        let foreign = ChatEntry {
+            message_id: Uuid::new_v4().to_string(),
+            client_message_id: "foreign".into(),
+            ..original.clone()
+        };
+        super::super::history::persist_message(
+            &pool,
+            Some(&other_room),
+            alice.media_session_id,
+            true,
+            7,
+            &foreign,
+        )
+        .await
+        .unwrap();
+        room.social.history.clear();
+        room.social.history_bytes = 0;
+        room.social.receipts.clear();
+        room.social.receipt_bytes = 0;
+        let mut config = MediaConfig::default();
+        config.worker_config.num_workers = 1;
+        config.webrtc_server_port_base = 0;
+        let manager = RoomManager::new(config, ServerMetrics::new(), Some(pool.clone()))
+            .await
+            .unwrap();
+        manager
+            .rooms
+            .write()
+            .unwrap()
+            .insert(room_id.clone(), Arc::new(TokioRwLock::new(room)));
+        let command = |id: &str| ClientMessage::RemoveChatMessage {
+            request_id: "remove".into(),
+            message_id: id.into(),
+        };
+        for denied in [&foreign.message_id, &private.message_id] {
+            assert!(
+                manager
+                    .handle_social_request(
+                        &room_id,
+                        &moderator.id,
+                        &moderator.sender,
+                        &command(denied)
+                    )
+                    .await
+                    .is_err()
+            );
+        }
+        for _ in 0..2 {
+            manager
+                .handle_social_request(
+                    &room_id,
+                    &moderator.id,
+                    &moderator.sender,
+                    &command(&original.message_id),
+                )
+                .await
+                .unwrap();
+        }
+        let bodies: Vec<serde_json::Value> =
+            sqlx::query_scalar("SELECT body FROM chat_messages WHERE room_id=$1")
+                .bind(&room_id)
+                .fetch_all(&pool)
+                .await
+                .unwrap();
+        assert_eq!(bodies.len(), 2);
+        assert!(
+            bodies
+                .iter()
+                .all(|body| !body.to_string().contains("durable removed text"))
+        );
+        let removed = bodies
+            .iter()
+            .find(|body| body["messageId"] == original.message_id)
+            .unwrap();
+        assert_eq!(removed["content"], "");
+        assert!(removed["removedAt"].is_string());
+        let quote = bodies
+            .iter()
+            .find(|body| body["messageId"] == quoted.message_id)
+            .unwrap();
+        assert_eq!(quote["replyTo"]["excerpt"], "Message removed");
+        let events: i64 = sqlx::query_scalar(
+            "SELECT count(*) FROM moderation_events WHERE room_id=$1 AND action='message_removed'",
+        )
+        .bind(&room_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(events, 1, "repeated removal is idempotent");
+        let private_body: serde_json::Value =
+            sqlx::query_scalar("SELECT body FROM chat_messages WHERE id=$1")
+                .bind(private.message_id.parse::<Uuid>().unwrap())
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(private_body["content"], "private stays");
+        for id in [&room_id, &other_room] {
+            sqlx::query("DELETE FROM rooms WHERE id=$1")
+                .bind(id)
+                .execute(&pool)
+                .await
+                .unwrap();
+        }
+        for person in [&alice, &moderator] {
+            sqlx::query("DELETE FROM users WHERE id=$1")
+                .bind(person.id.parse::<Uuid>().unwrap())
+                .execute(&pool)
+                .await
+                .unwrap();
+        }
     }
 
     #[tokio::test]
@@ -1709,6 +2123,9 @@ mod tests {
     }
 }
 impl ParticipantSocial {
+    pub(super) fn accepts_inbox_from(&self, sender: &str) -> bool {
+        self.connected && self.allow_private_messages && !self.ignored.contains(sender)
+    }
     pub(crate) fn new(joined_sequence: u64) -> Self {
         Self {
             connected: true,
@@ -1726,6 +2143,7 @@ struct HistoryEntry {
     sequence: u64,
     sender_session: Uuid,
     recipient_session: Option<Uuid>,
+    sender_authenticated: bool,
     message: ChatEntry,
     /// Serialized size counted against `HISTORY_BYTES`; reactions change it.
     bytes: usize,
@@ -1737,6 +2155,18 @@ struct ChatReceipt {
     accepted_at: std::time::Instant,
     bytes: usize,
     message: ChatEntry,
+}
+
+struct PreparedChat {
+    message: ChatEntry,
+    sender_session: Uuid,
+    sender_authenticated: bool,
+    recipient: Option<(String, Uuid, mpsc::Sender<crate::OutboundJson>)>,
+    sequence: Option<u64>,
+    receipt_bytes: usize,
+    now: std::time::Instant,
+    persist: bool,
+    durable: bool,
 }
 
 struct ChatAttempt {
@@ -1896,6 +2326,8 @@ impl ClientMessage {
     pub(crate) fn social_budget(&self) -> SocialBudget {
         match self {
             Self::GetRoomSnapshot { .. }
+            | Self::GetChatHistory { .. }
+            | Self::MarkChatRead { .. }
             | Self::ListRoomBans { .. }
             | Self::ListRoomMembers { .. }
             | Self::ListRoomReports { .. }
@@ -1913,8 +2345,12 @@ impl ClientMessage {
             Self::SetChatPreferences { request_id, .. } => Some((request_id, "setChatPreferences")),
             Self::ChangeNickname { request_id, .. } => Some((request_id, "changeNickname")),
             Self::SetChatStyle { request_id, .. } => Some((request_id, "setChatStyle")),
+            Self::RemoveChatMessage { request_id, .. } => Some((request_id, "removeChatMessage")),
             Self::ReactToMessage { request_id, .. } => Some((request_id, "reactToMessage")),
             Self::GetRoomSnapshot { request_id } => Some((request_id, "getRoomSnapshot")),
+            Self::GetChatHistory { request_id, .. } => Some((request_id, "getChatHistory")),
+            Self::MarkChatRead { request_id, .. } => Some((request_id, "markChatRead")),
+            Self::SetRoomHistory { request_id, .. } => Some((request_id, "setRoomHistory")),
             Self::ListRoomBans { request_id, .. } => Some((request_id, "listRoomBans")),
             Self::RemoveRoomBan { request_id, .. } => Some((request_id, "removeRoomBan")),
             Self::ListRoomMembers { request_id, .. } => Some((request_id, "listRoomMembers")),
@@ -1962,6 +2398,31 @@ fn send(
         crate::OutboundJson::from(serde_json::to_string(message)?),
     )
     .map_err(|_| rejected("Connection is busy; please retry"))
+}
+
+/// An uncertain commit is not a rejected send. Its owned room was quarantined
+/// already; preserve the client's unconfirmed attempt instead of inviting a new ID.
+fn chat_persistence_failure(
+    metrics: &ServerMetrics,
+    sender: &mpsc::Sender<crate::OutboundJson>,
+    client_message_id: &str,
+    error: sqlx::Error,
+) -> Result<()> {
+    crate::db::record_error(&error);
+    if control::persistence_is_indeterminate(&error) {
+        let _ = send(
+            metrics,
+            sender,
+            &ServerMessage::MessageRetryResult {
+                client_message_id: client_message_id.to_owned(),
+                outcome: ChatRetryOutcome::Unknown,
+                reason: ChatRetryReason::StorageUnconfirmed,
+            },
+        );
+        Ok(())
+    } else {
+        Err(rejected("Message could not be saved; try again"))
+    }
 }
 
 fn acknowledge_chat(
@@ -2012,6 +2473,22 @@ fn replied_to(message: &ChatEntry) -> Option<&str> {
         .as_ref()
         .map(|reply| reply.message_id.as_str())
 }
+/// Erase message text and references without retaining a second hidden copy.
+pub(super) fn redact_message(message: &mut ChatEntry, message_id: &str, removed_at: &str) {
+    if message.recipient_id.is_some() {
+        return;
+    }
+    if message.message_id == message_id {
+        message.content.clear();
+        message.reply_to = None;
+        message.reactions.clear();
+        message.removed_at = Some(removed_at.to_owned());
+    } else if let Some(reply) = &mut message.reply_to
+        && reply.message_id == message_id
+    {
+        reply.excerpt = "Message removed".to_owned();
+    }
+}
 /// Quotes the retained message a reply answers. The replier must be able to see it,
 /// and it must belong to the same conversation: public with public, or the same pair.
 fn quote_reply(
@@ -2026,6 +2503,9 @@ fn quote_reply(
         .find(|entry| entry.message.message_id == message_id && visible(entry, sender))
         .ok_or_else(|| rejected("That message is no longer available to reply to"))?;
     let message = &original.message;
+    if message.removed_at.is_some() {
+        return Err(rejected("That message has been removed"));
+    }
     let same_conversation = match (recipient_id, message.recipient_id.as_deref()) {
         (None, None) => true,
         (Some(to), Some(other)) => {
@@ -2060,12 +2540,12 @@ fn quote_reply(
 }
 /// Adds `participant_id`'s reaction to a retained message it can see, or takes it
 /// back, and tells everyone who can see the message, the reactor included.
-fn react_to_message(
-    room: &mut Room,
+fn prepare_reaction(
+    room: &Room,
     participant_id: &str,
     message_id: &str,
     emoji: &str,
-) -> Result<Vec<ChatReaction>> {
+) -> Result<(usize, Vec<ChatReaction>)> {
     if !REACTIONS.contains(&emoji) {
         return Err(rejected("Choose one of the offered reactions"));
     }
@@ -2079,8 +2559,11 @@ fn react_to_message(
         .iter()
         .position(|entry| entry.message.message_id == message_id && visible(entry, actor))
         .ok_or_else(|| rejected("That message is no longer available"))?;
+    if room.social.history[index].message.removed_at.is_some() {
+        return Err(rejected("That message has been removed"));
+    }
     let reactor = participant_id.to_string();
-    let reactions = &mut room.social.history[index].message.reactions;
+    let mut reactions = room.social.history[index].message.reactions.clone();
     match reactions
         .iter()
         .position(|reaction| reaction.emoji == emoji)
@@ -2105,7 +2588,16 @@ fn react_to_message(
             }
         }
     }
-    let reactions = reactions.clone();
+    Ok((index, reactions))
+}
+
+fn publish_reaction(
+    room: &mut Room,
+    message_id: &str,
+    index: usize,
+    reactions: Vec<ChatReaction>,
+) -> Result<Vec<ChatReaction>> {
+    room.social.history[index].message.reactions = reactions.clone();
     let event =
         crate::OutboundJson::from(serde_json::to_string(&ServerMessage::MessageReactions {
             message_id: message_id.to_string(),
@@ -2118,6 +2610,17 @@ fn react_to_message(
     room.social.recount(index);
     Ok(reactions)
 }
+#[cfg(test)]
+fn react_to_message(
+    room: &mut Room,
+    participant_id: &str,
+    message_id: &str,
+    emoji: &str,
+) -> Result<Vec<ChatReaction>> {
+    let (index, reactions) = prepare_reaction(room, participant_id, message_id, emoji)?;
+    publish_reaction(room, message_id, index, reactions)
+}
+
 fn can_private_message(sender: &Participant, recipient: &Participant) -> bool {
     sender.id != recipient.id
         && recipient.social.allow_private_messages
@@ -2125,6 +2628,29 @@ fn can_private_message(sender: &Participant, recipient: &Participant) -> bool {
         && !sender.social.ignored.contains(&recipient.id)
 }
 impl RoomSocial {
+    /// Scrub both replay and deduplication receipts before broadcasting removal.
+    fn remove_message(&mut self, message_id: &str, removed_at: &str) {
+        self.history_bytes = 0;
+        for entry in &mut self.history {
+            redact_message(&mut entry.message, message_id, removed_at);
+            entry.bytes = serde_json::to_vec(&entry.message).map_or(HISTORY_BYTES, |v| v.len());
+            self.history_bytes += entry.bytes;
+        }
+        self.receipt_bytes = 0;
+        for entry in &mut self.receipts {
+            redact_message(&mut entry.message, message_id, removed_at);
+            entry.bytes =
+                serde_json::to_vec(&entry.message).map_or(CHAT_RECEIPT_BYTES, |v| v.len());
+            self.receipt_bytes += entry.bytes;
+        }
+        self.trim_history();
+        while self.receipt_bytes > CHAT_RECEIPT_BYTES {
+            let Some(entry) = self.receipts.pop_front() else {
+                break;
+            };
+            self.receipt_bytes = self.receipt_bytes.saturating_sub(entry.bytes);
+        }
+    }
     fn prune_receipts(&mut self, now: std::time::Instant) {
         while self
             .receipts
@@ -2230,6 +2756,7 @@ impl RoomSocial {
         &mut self,
         sender_session: Uuid,
         recipient_session: Option<Uuid>,
+        sender_authenticated: bool,
         message: ChatEntry,
     ) {
         // Names and identifiers also count, keeping retention bounded even with short text.
@@ -2239,6 +2766,7 @@ impl RoomSocial {
             sequence: self.next_sequence,
             sender_session,
             recipient_session,
+            sender_authenticated,
             message,
             bytes,
         });
@@ -2426,9 +2954,103 @@ impl RoomManager {
             },
             _ => return Err(rejected("Invalid chat command")),
         };
+        self.submit_chat_attempt(room_id, sender_id, expected_sender, attempt)
+            .await
+    }
+
+    async fn submit_chat_attempt(
+        &self,
+        room_id: &str,
+        sender_id: &str,
+        expected_sender: &mpsc::Sender<crate::OutboundJson>,
+        attempt: ChatAttempt,
+    ) -> Result<()> {
         let room_lock = self.get_room(room_id)?;
         let mut room = room_lock.write().await;
-        Self::process_chat_attempt(&mut room, sender_id, expected_sender, attempt)
+        let durable = self.db_pool.is_some()
+            && if let Some(recipient) = attempt.recipient_id.as_deref() {
+                room.participants
+                    .get(sender_id)
+                    .is_some_and(|sender| sender.authenticated)
+                    && room
+                        .participants
+                        .get(recipient)
+                        .is_some_and(|recipient| recipient.authenticated)
+            } else {
+                room.persisted
+                    && room
+                        .settings
+                        .as_ref()
+                        .is_some_and(|settings| settings.history_retention_days > 0)
+            };
+        if !durable {
+            // Validate and publish ephemeral chat in this same state-lock turn.
+            // It has no persistence phase that could race a consent change.
+            return Self::process_chat_attempt(&mut room, sender_id, expected_sender, attempt);
+        }
+        drop(room);
+        let sender_id = sender_id.to_owned();
+        let expected_sender = expected_sender.clone();
+        self.run_room_control(room_id, move |manager, room_id, _control| async move {
+            let room_lock = manager.get_room(&room_id)?;
+            let mut room = room_lock.write().await;
+            let Some(mut prepared) =
+                Self::prepare_chat_attempt(&mut room, &sender_id, &expected_sender, attempt)?
+            else {
+                return Ok(());
+            };
+            let retention_days = if prepared.message.recipient_id.is_some() {
+                history::PM_RETENTION_DAYS
+            } else {
+                room.settings
+                    .as_ref()
+                    .map_or(0, |s| s.history_retention_days)
+            };
+            if prepared.persist {
+                let pool = manager
+                    .db_pool
+                    .as_ref()
+                    .ok_or_else(|| rejected("History unavailable"))?;
+                drop(room);
+                let public_room = prepared
+                    .message
+                    .recipient_id
+                    .is_none()
+                    .then_some(room_id.as_str());
+                let persisted = manager
+                    .persist_room(
+                        &room_id,
+                        &room_lock,
+                        history::persist_message(
+                            pool,
+                            public_room,
+                            prepared.sender_session,
+                            prepared.sender_authenticated,
+                            retention_days,
+                            &prepared.message,
+                        ),
+                    )
+                    .await;
+                prepared.message = match persisted {
+                    Ok(message) => message,
+                    Err(error) => {
+                        return chat_persistence_failure(
+                            &manager.metrics,
+                            &expected_sender,
+                            &prepared.message.client_message_id,
+                            error,
+                        );
+                    }
+                };
+                prepared.receipt_bytes = serde_json::to_vec(&prepared.message)?.len();
+                prepared.durable = true;
+                room = room_lock.write().await;
+                room.ensure_live()?;
+                Self::participant_for_sender(&room, &sender_id, &expected_sender)?;
+            }
+            Self::finish_chat_attempt(&mut room, &sender_id, &expected_sender, prepared)
+        })
+        .await
     }
 
     pub async fn send_social_chat(
@@ -2440,18 +3062,23 @@ impl RoomManager {
         client_message_id: Option<String>,
         recipient_id: Option<&str>,
     ) -> Result<()> {
-        let room_lock = self.get_room(room_id)?;
-        let mut room = room_lock.write().await;
-        Self::process_social_chat(
-            &mut room,
+        self.submit_chat_attempt(
+            room_id,
             sender_id,
             expected_sender,
-            content,
-            client_message_id,
-            recipient_id,
+            ChatAttempt {
+                content,
+                client_message_id,
+                recipient_id: recipient_id.map(String::from),
+                sequence: None,
+                retry_session: None,
+                reply_to: None,
+            },
         )
+        .await
     }
 
+    #[cfg(test)]
     fn process_social_chat(
         room: &mut Room,
         sender_id: &str,
@@ -2475,12 +3102,12 @@ impl RoomManager {
         )
     }
 
-    fn process_chat_attempt(
+    fn prepare_chat_attempt(
         room: &mut Room,
         sender_id: &str,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         attempt: ChatAttempt,
-    ) -> Result<()> {
+    ) -> Result<Option<PreparedChat>> {
         let ChatAttempt {
             content,
             client_message_id,
@@ -2528,24 +3155,26 @@ impl RoomManager {
         if retry_session.as_ref().is_some_and(|session| {
             session.parse::<Uuid>().ok() != Some(sender.social.chat_session_id)
         }) {
-            return unknown(ChatRetryReason::SessionChanged);
+            return unknown(ChatRetryReason::SessionChanged).map(|()| None);
         }
         let sender_session = sender.media_session_id;
         if let Some(existing) = room.social.receipts.iter().find(|entry| {
             entry.sender_session == sender_session
                 && entry.message.client_message_id == client_message_id
         }) {
-            if existing.message.content != content
+            if (existing.message.removed_at.is_none()
+                && (existing.message.content != content
+                    || replied_to(&existing.message) != reply_to))
                 || existing.message.recipient_id.as_deref() != recipient_id
-                || replied_to(&existing.message) != reply_to
                 || existing.sequence != sequence
             {
                 if retry_session.is_none() {
                     return Err(rejected("Message ID was already used"));
                 }
-                return unknown(ChatRetryReason::Conflict);
+                return unknown(ChatRetryReason::Conflict).map(|()| None);
             }
-            return acknowledge_chat(&room.metrics, expected_sender, existing.message.clone());
+            return acknowledge_chat(&room.metrics, expected_sender, existing.message.clone())
+                .map(|()| None);
         }
         // This watermark survives receipt expiry and history eviction for the
         // exact membership. Missing older attempts must never be broadcast again.
@@ -2556,12 +3185,13 @@ impl RoomManager {
                 ChatRetryReason::ReceiptExpired
             } else {
                 ChatRetryReason::SequenceSuperseded
-            });
+            })
+            .map(|()| None);
         }
         // Without a receipt the original recipient's membership is unknown.
         // Never deliver retained private text into a replacement membership.
         if retry_session.is_some() && recipient_id.is_some() {
-            return unknown(ChatRetryReason::RecipientUnconfirmed);
+            return unknown(ChatRetryReason::RecipientUnconfirmed).map(|()| None);
         }
         let moderated = room.settings.as_ref().is_some_and(|s| s.moderated);
         if room.settings.as_ref().is_some_and(|s| !s.allow_chat)
@@ -2569,19 +3199,22 @@ impl RoomManager {
         {
             return Err(rejected("You are not allowed to chat"));
         }
+        let sender_authenticated = sender.authenticated;
         let sender_name = sender.name.clone();
         let sender_style = sender.chat_style.clone();
         if let Some(existing) = room.social.history.iter().find(|entry| {
             entry.sender_session == sender_session
                 && entry.message.client_message_id == client_message_id
         }) {
-            if existing.message.content != content
+            if (existing.message.removed_at.is_none()
+                && (existing.message.content != content
+                    || replied_to(&existing.message) != reply_to))
                 || existing.message.recipient_id.as_deref() != recipient_id
-                || replied_to(&existing.message) != reply_to
             {
                 return Err(rejected("Message ID was already used"));
             }
-            return acknowledge_chat(&room.metrics, expected_sender, existing.message.clone());
+            return acknowledge_chat(&room.metrics, expected_sender, existing.message.clone())
+                .map(|()| None);
         }
         let recipient = if let Some(id) = recipient_id {
             let recipient = room
@@ -2614,12 +3247,13 @@ impl RoomManager {
             sent_at: chrono::Utc::now().to_rfc3339(),
             chat_style: sender_style,
             reply_to,
+            removed_at: None,
             reactions: Vec::new(),
         };
         let receipt_bytes = serde_json::to_vec(&message)?.len();
         if receipt_bytes > CHAT_RECEIPT_BYTES {
             if retry_session.is_some() {
-                return unknown(ChatRetryReason::Capacity);
+                return unknown(ChatRetryReason::Capacity).map(|()| None);
             }
             return Err(rejected("Chat confirmation exceeds its size limit"));
         }
@@ -2629,15 +3263,74 @@ impl RoomManager {
         if recipient.is_none() && !room.reserve_chat_broadcast(now) {
             return Err(rejected("Room chat rate limit exceeded"));
         }
+        let persist = if recipient_id.is_some() {
+            sender_authenticated
+                && recipient_id
+                    .and_then(|id| room.participants.get(id))
+                    .is_some_and(|p| p.authenticated)
+        } else {
+            room.persisted
+                && room
+                    .settings
+                    .as_ref()
+                    .is_some_and(|settings| settings.history_retention_days > 0)
+        };
+        Ok(Some(PreparedChat {
+            message,
+            sender_session,
+            sender_authenticated,
+            recipient,
+            sequence,
+            receipt_bytes,
+            now,
+            persist,
+            durable: false,
+        }))
+    }
+
+    fn process_chat_attempt(
+        room: &mut Room,
+        sender_id: &str,
+        expected_sender: &mpsc::Sender<crate::OutboundJson>,
+        attempt: ChatAttempt,
+    ) -> Result<()> {
+        if let Some(prepared) =
+            Self::prepare_chat_attempt(room, sender_id, expected_sender, attempt)?
+        {
+            Self::finish_chat_attempt(room, sender_id, expected_sender, prepared)?;
+        }
+        Ok(())
+    }
+
+    fn finish_chat_attempt(
+        room: &mut Room,
+        sender_id: &str,
+        expected_sender: &mpsc::Sender<crate::OutboundJson>,
+        prepared: PreparedChat,
+    ) -> Result<()> {
+        let PreparedChat {
+            message,
+            sender_session,
+            sender_authenticated,
+            recipient,
+            sequence,
+            receipt_bytes,
+            now,
+            durable,
+            ..
+        } = prepared;
         if let Some((_, _, recipient_sender)) = &recipient {
             // Only acknowledged when the recipient's live connection accepted delivery.
-            send(
+            let delivered = send(
                 &room.metrics,
                 recipient_sender,
                 &ServerMessage::PrivateMessageReceived {
                     message: message.clone(),
                 },
-            )?;
+            );
+            if !durable {
+                delivered?;
+            }
         } else {
             let event = ServerMessage::ChatReceived {
                 participant_id: message.participant_id.clone(),
@@ -2646,6 +3339,7 @@ impl RoomManager {
                 message_id: message.message_id.clone(),
                 client_message_id: message.client_message_id.clone(),
                 sent_at: message.sent_at.clone(),
+                removed_at: message.removed_at.clone(),
                 chat_style: message.chat_style.clone(),
                 reply_to: message.reply_to.clone(),
             };
@@ -2675,6 +3369,7 @@ impl RoomManager {
         room.social.remember(
             sender_session,
             recipient.as_ref().map(|r| r.1),
+            sender_authenticated,
             message.clone(),
         );
         acknowledge_chat(&room.metrics, expected_sender, message)
@@ -2710,10 +3405,9 @@ impl RoomManager {
                 },
             );
         }
-        if matches!(
-            command,
-            ClientMessage::SetChatPreferences { .. } | ClientMessage::ChangeNickname { .. }
-        ) {
+        // PM consent changes share control with durable sends, so their ACK
+        // cannot overtake a send while it waits for its database commit.
+        if matches!(command, ClientMessage::ChangeNickname { .. }) {
             return self
                 .handle_social_request_inner(
                     room_id,
@@ -2890,6 +3584,132 @@ impl RoomManager {
             }
         }
         let data = match command {
+            ClientMessage::GetChatHistory {
+                before, q, limit, ..
+            } => {
+                let days = room
+                    .settings
+                    .as_ref()
+                    .map_or(0, |settings| settings.history_retention_days);
+                let query = history::HistoryQuery {
+                    before: before.clone(),
+                    q: q.clone(),
+                    limit: *limit,
+                };
+                query.validate().map_err(rejected)?;
+                if days == 0 || !room.persisted {
+                    json!({"messages": [], "nextCursor": null, "readMessageId": null, "retentionDays": 0})
+                } else {
+                    let pool = self
+                        .db_pool
+                        .as_ref()
+                        .ok_or_else(|| rejected("History unavailable"))?;
+                    let account = actor_authenticated
+                        .then(|| participant_id.parse::<Uuid>())
+                        .transpose()
+                        .map_err(|_| rejected("Invalid account"))?;
+                    drop(room);
+                    let mut page = tokio::time::timeout(
+                        control::PERSISTENCE_TIMEOUT,
+                        history::page(
+                            pool,
+                            &history::public_conversation(room_id),
+                            account,
+                            days,
+                            &query,
+                        ),
+                    )
+                    .await
+                    .map_err(|_| rejected("History request timed out"))??;
+                    room = room_lock.write().await;
+                    room.ensure_live()?;
+                    Self::participant_for_sender(&room, participant_id, expected_sender)?;
+                    let ignored = &room
+                        .participants
+                        .get(participant_id)
+                        .unwrap()
+                        .social
+                        .ignored;
+                    page.messages
+                        .retain(|message| !ignored.contains(&message.participant_id));
+                    serde_json::to_value(page)?
+                }
+            }
+            ClientMessage::MarkChatRead { message_id, .. } => {
+                if !actor_authenticated
+                    || !room.persisted
+                    || !room
+                        .settings
+                        .as_ref()
+                        .is_some_and(|settings| settings.history_retention_days > 0)
+                {
+                    return Err(rejected("Saved room history is unavailable"));
+                }
+                let account = participant_id
+                    .parse::<Uuid>()
+                    .map_err(|_| rejected("Invalid account"))?;
+                let message = message_id
+                    .parse::<Uuid>()
+                    .map_err(|_| rejected("Invalid message ID"))?;
+                let pool = self
+                    .db_pool
+                    .as_ref()
+                    .ok_or_else(|| rejected("History unavailable"))?;
+                drop(room);
+                let read = tokio::time::timeout(
+                    control::PERSISTENCE_TIMEOUT,
+                    history::mark_read(
+                        pool,
+                        &history::public_conversation(room_id),
+                        account,
+                        message,
+                    ),
+                )
+                .await
+                .map_err(|_| rejected("Read marker could not be saved"))?
+                .map_err(|error| {
+                    if matches!(error, sqlx::Error::RowNotFound) {
+                        rejected("Message unavailable")
+                    } else {
+                        error.into()
+                    }
+                })?;
+                room = room_lock.write().await;
+                room.ensure_live()?;
+                Self::participant_for_sender(&room, participant_id, expected_sender)?;
+                serde_json::to_value(read)?
+            }
+            ClientMessage::SetRoomHistory { retention_days, .. } => {
+                require_role(actor_role, roles::Role::Owner)?;
+                if !room.persisted {
+                    return Err(rejected("Only saved rooms can keep chat history"));
+                }
+                if ![0, 1, 7, 30, 90].contains(retention_days) {
+                    return Err(rejected("Choose off, 1, 7, 30 or 90 days"));
+                }
+                let pool = self
+                    .db_pool
+                    .as_ref()
+                    .ok_or_else(|| rejected("History unavailable"))?;
+                drop(room);
+                self.persist_room(
+                    room_id,
+                    &room_lock,
+                    history::set_retention(pool, room_id, *retention_days),
+                )
+                .await?;
+                room = room_lock.write().await;
+                room.ensure_live()?;
+                Self::participant_for_sender(&room, participant_id, expected_sender)?;
+                let settings = room
+                    .settings
+                    .as_mut()
+                    .ok_or_else(|| rejected("Room settings unavailable"))?;
+                settings.history_retention_days = *retention_days;
+                let settings = serde_json::to_value(settings)?;
+                room.broadcast_all(&ServerMessage::RoomSettingsChanged { settings });
+                json!({"retentionDays": retention_days})
+            }
             ClientMessage::SetChatPreferences {
                 allow_private_messages,
                 ignored_participant_ids,
@@ -2961,10 +3781,116 @@ impl RoomManager {
                 });
                 json!({"chatStyle": chat_style})
             }
+            ClientMessage::RemoveChatMessage { message_id, .. } => {
+                require_role(actor_role, roles::Role::Moderator)?;
+                if message_id.parse::<Uuid>().is_err() {
+                    return Err(rejected("Invalid message ID"));
+                }
+                let mut original = room
+                    .social
+                    .history
+                    .iter()
+                    .find(|entry| {
+                        entry.message.message_id == *message_id
+                            && entry.message.recipient_id.is_none()
+                    })
+                    .map(|entry| (entry.message.clone(), entry.sender_authenticated));
+                let persisted = room.persisted;
+                let keeps_history = room
+                    .settings
+                    .as_ref()
+                    .is_some_and(|s| s.history_retention_days > 0);
+                let pool = self.db_pool.clone();
+                if original.is_none() && persisted && keeps_history {
+                    let pool = pool
+                        .as_ref()
+                        .ok_or_else(|| rejected("Chat history unavailable"))?;
+                    drop(room);
+                    original = tokio::time::timeout(
+                        control::PERSISTENCE_TIMEOUT,
+                        super::history::lookup_public(pool, room_id, message_id),
+                    )
+                    .await
+                    .map_err(|_| rejected("Chat history timed out"))??;
+                    room = room_lock.write().await;
+                    room.ensure_live()?;
+                    Self::participant_for_sender(&room, participant_id, expected_sender)?;
+                }
+                let (original, authenticated) =
+                    original.ok_or_else(|| rejected("Message not found"))?;
+                let removed_at = original
+                    .removed_at
+                    .clone()
+                    .unwrap_or_else(|| chrono::Utc::now().to_rfc3339());
+                if original.removed_at.is_none() {
+                    let event = ModerationEvent::new(
+                        ModerationAction::MessageRemoved,
+                        Actor {
+                            id: participant_id,
+                            name: &actor_name,
+                        },
+                        Target {
+                            id: &original.participant_id,
+                            name: &original.participant_name,
+                            authenticated,
+                            ip: None,
+                        },
+                        Some(&format!("Message {message_id}")),
+                        None,
+                        None,
+                    );
+                    if persisted {
+                        let pool = pool
+                            .as_ref()
+                            .ok_or_else(|| rejected("Moderation unavailable"))?;
+                        drop(room);
+                        self.persist_room(room_id, &room_lock, async {
+                            let mut transaction = pool.begin().await?;
+                            if keeps_history {
+                                super::history::remove_public(
+                                    &mut transaction,
+                                    room_id,
+                                    message_id,
+                                    &removed_at,
+                                )
+                                .await?;
+                            }
+                            record_event(&mut transaction, room_id, &event, MAX_MODERATION_EVENTS)
+                                .await?;
+                            transaction.commit().await
+                        })
+                        .await?;
+                        room = room_lock.write().await;
+                        room.ensure_live()?;
+                    } else {
+                        room.social.record_moderation_event(event);
+                    }
+                }
+                room.social.remove_message(message_id, &removed_at);
+                room.broadcast_all(&ServerMessage::ChatMessageRemoved {
+                    message_id: message_id.clone(),
+                    removed_at: removed_at.clone(),
+                });
+                json!({"messageId": message_id, "removedAt": removed_at})
+            }
             ClientMessage::ReactToMessage {
                 message_id, emoji, ..
             } => {
-                let reactions = react_to_message(&mut room, participant_id, message_id, emoji)?;
+                let (index, reactions) =
+                    prepare_reaction(&room, participant_id, message_id, emoji)?;
+                if let Some(pool) = &self.db_pool {
+                    drop(room);
+                    self.persist_room(
+                        room_id,
+                        &room_lock,
+                        history::save_reactions(pool, message_id, &reactions),
+                    )
+                    .await?;
+                    room = room_lock.write().await;
+                    room.ensure_live()?;
+                    Self::participant_for_sender(&room, participant_id, expected_sender)?;
+                }
+                let reactions = publish_reaction(&mut room, message_id, index, reactions)?;
                 json!({"messageId": message_id, "reactions": reactions})
             }
             ClientMessage::ListRoomBans { offset, .. } => {

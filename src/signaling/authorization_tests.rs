@@ -464,6 +464,7 @@ impl Fixture {
             operation
                 .path
                 .replace("{id}", "00000000-0000-4000-8000-000000000001")
+                .replace("{peer}", "00000000-0000-4000-8000-000000000003")
                 .replace("{invite_id}", "00000000-0000-4000-8000-000000000002"),
         );
         if let Some(token) = token {
@@ -569,6 +570,187 @@ fn operation(method: &str, path: String, body: Option<Value>) -> HttpOperation {
         unauthenticated_status: None,
         checks: Vec::new(),
     }
+}
+
+#[tokio::test]
+#[ignore = "requires DISPOSABLE_TEST_DATABASE=1 and TEST_DATABASE_URL"]
+async fn authorization_database_inbox_offline_delivery_read_sync_and_consent() {
+    async fn data(response: Response) -> Value {
+        assert_eq!(response.status(), StatusCode::OK);
+        serde_json::from_slice(
+            &axum::body::to_bytes(response.into_body(), 256 * 1024)
+                .await
+                .unwrap(),
+        )
+        .unwrap()
+    }
+    let fixture = Fixture::new(3).await;
+    let alice = fixture.users[0];
+    let bob = fixture.users[1];
+    let stranger = fixture.users[2];
+    let initial = crate::signaling::protocol::ChatEntry {
+        message_id: Uuid::new_v4().to_string(),
+        client_message_id: "initial-room-pm".into(),
+        participant_id: alice.to_string(),
+        participant_name: "Alice".into(),
+        recipient_id: Some(bob.to_string()),
+        recipient_name: Some("Bob".into()),
+        content: "First conversation together in a room".into(),
+        sent_at: (chrono::Utc::now() - chrono::Duration::seconds(1)).to_rfc3339(),
+        removed_at: None,
+        chat_style: Default::default(),
+        reply_to: None,
+        reactions: vec![],
+    };
+    crate::room::history::persist_message(&fixture.pool, None, Uuid::new_v4(), true, 90, &initial)
+        .await
+        .unwrap();
+    // Nobody joins a runtime room: the recipient is offline throughout this test.
+    let payload =
+        json!({"clientMessageId":"offline-reply","content":"A message while you are away"});
+    let send = operation(
+        "POST",
+        format!("/api/auth/inbox/{bob}/messages"),
+        Some(payload.clone()),
+    );
+    let saved = data(fixture.request(&send, Some(&fixture.tokens[0]), 1).await).await;
+    let retry = data(fixture.request(&send, Some(&fixture.tokens[0]), 2).await).await;
+    assert_eq!(
+        saved["messageId"], retry["messageId"],
+        "HTTP retry is idempotent"
+    );
+    let conflict = operation(
+        "POST",
+        format!("/api/auth/inbox/{bob}/messages"),
+        Some(json!({"clientMessageId":"offline-reply","content":"different"})),
+    );
+    assert_eq!(
+        fixture
+            .request(&conflict, Some(&fixture.tokens[0]), 3)
+            .await
+            .status(),
+        StatusCode::BAD_REQUEST
+    );
+    let messages = operation("GET", format!("/api/auth/inbox/{alice}/messages"), None);
+    let history = data(
+        fixture
+            .request(&messages, Some(&fixture.tokens[1]), 4)
+            .await,
+    )
+    .await;
+    assert_eq!(history["messages"].as_array().unwrap().len(), 2);
+    assert_eq!(history["messages"][1]["content"], payload["content"]);
+    assert_eq!(history["retentionDays"], 90);
+    let inbox = operation("GET", "/api/auth/inbox".into(), None);
+    let unread = data(fixture.request(&inbox, Some(&fixture.tokens[1]), 5).await).await;
+    assert_eq!(unread["conversations"][0]["unreadCount"], 2);
+    let read = operation(
+        "PUT",
+        format!("/api/auth/inbox/{alice}/read"),
+        Some(json!({"messageId":saved["messageId"]})),
+    );
+    let marker = data(fixture.request(&read, Some(&fixture.tokens[1]), 6).await).await;
+    assert_eq!(marker["readMessageId"], saved["messageId"]);
+    let read_back = data(
+        fixture
+            .request(&messages, Some(&fixture.tokens[1]), 7)
+            .await,
+    )
+    .await;
+    assert_eq!(read_back["readMessageId"], saved["messageId"]);
+    let unread = data(fixture.request(&inbox, Some(&fixture.tokens[1]), 8).await).await;
+    assert_eq!(unread["conversations"][0]["unreadCount"], 0);
+    let foreign = data(
+        fixture
+            .request(&messages, Some(&fixture.tokens[2]), 9)
+            .await,
+    )
+    .await;
+    assert!(
+        foreign["messages"].as_array().unwrap().is_empty(),
+        "a guessed peer never reveals somebody else's conversation"
+    );
+    assert_eq!(
+        fixture
+            .request(&read, Some(&fixture.tokens[2]), 10)
+            .await
+            .status(),
+        StatusCode::BAD_REQUEST
+    );
+    let unsolicited = operation(
+        "POST",
+        format!("/api/auth/inbox/{stranger}/messages"),
+        Some(payload),
+    );
+    assert_eq!(
+        fixture
+            .request(&unsolicited, Some(&fixture.tokens[0]), 11)
+            .await
+            .status(),
+        StatusCode::BAD_REQUEST,
+        "only existing contacts can be messaged outside a room"
+    );
+    for (index, user, preferences) in [
+        (12, bob, json!({"allowPrivateMessages":false})),
+        (
+            13,
+            bob,
+            json!({"ignored":[{"id":alice.to_string(),"name":"Alice"}]}),
+        ),
+        (
+            14,
+            alice,
+            json!({"ignored":[{"id":bob.to_string(),"name":"Bob"}]}),
+        ),
+    ] {
+        sqlx::query("UPDATE users SET preferences='{}'::jsonb WHERE id=ANY($1)")
+            .bind(vec![alice, bob])
+            .execute(&fixture.pool)
+            .await
+            .unwrap();
+        sqlx::query("UPDATE users SET preferences=$2 WHERE id=$1")
+            .bind(user)
+            .bind(preferences)
+            .execute(&fixture.pool)
+            .await
+            .unwrap();
+        let confirmed = data(
+            fixture
+                .request(&send, Some(&fixture.tokens[0]), index + 20)
+                .await,
+        )
+        .await;
+        assert_eq!(
+            confirmed["messageId"], saved["messageId"],
+            "a known-success retry returns its receipt after consent changes, without redelivery"
+        );
+        let denied = operation(
+            "POST",
+            format!("/api/auth/inbox/{bob}/messages"),
+            Some(
+                json!({"clientMessageId":format!("denied-{index}"),"content":"must not be delivered"}),
+            ),
+        );
+        assert_eq!(
+            fixture
+                .request(&denied, Some(&fixture.tokens[0]), index)
+                .await
+                .status(),
+            StatusCode::BAD_REQUEST,
+            "account consent and either side's ignore list are enforced"
+        );
+    }
+    let count: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM chat_messages WHERE sender_account=$1")
+            .bind(alice)
+            .fetch_one(&fixture.pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        count, 2,
+        "idempotent retries and denied sends never create extra messages"
+    );
+    fixture.finish().await;
 }
 
 #[tokio::test]
@@ -901,8 +1083,12 @@ fn socket_boundary(message: &protocol::ClientMessage) -> &'static str {
         SetChatPreferences { .. } => "room-membership",
         SetChatStyle { .. } => "room-membership",
         ReactToMessage { .. } => "room-membership",
+        RemoveChatMessage { .. } => "room-membership",
         ChangeNickname { .. } => "room-membership",
         GetRoomSnapshot { .. } => "room-membership",
+        GetChatHistory { .. } => "room-membership",
+        MarkChatRead { .. } => "room-membership",
+        SetRoomHistory { .. } => "room-membership",
         ListRoomBans { .. } => "room-membership",
         RemoveRoomBan { .. } => "room-membership",
         ListRoomMembers { .. } => "room-membership",

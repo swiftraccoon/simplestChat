@@ -17,7 +17,7 @@ build/with-test-postgres.sh \
   --include-ignored --test-threads=1
 ```
 
-The three database tests require both `TEST_DATABASE_URL` and
+The six focused database tests require both `TEST_DATABASE_URL` and
 `DISPOSABLE_TEST_DATABASE=1`; the maintained helper sets them. These tests apply
 the tracked migrations before creating their own random account and room IDs.
 They delete their own rows in dependency order. A failure leaves the helper’s
@@ -36,10 +36,10 @@ skips database checks and is not a complete authorization result.
 | --- | --- |
 | Role hierarchy | All 36 actor/target moderation pairs and all 216 actor/target/granted-role combinations, using explicit expected allowlists independent of the production numeric comparisons. Settings, lobby admission, chat and broadcasting are checked for all six roles. |
 | Moderation dispatch | All 36 actor/target pairs reach the real camera-close and role-control handlers. Authorized requests are successful no-ops; denied requests leave the target’s role unchanged. All six roles also exercise ban/member/report/history reads and settings/topic controls at their distinct thresholds. No media is published, and the administration rate bucket is neither replaced nor disabled. |
-| Current HTTP sessions | All 24 session-authenticated method/handler pairs reject missing credentials, another account’s session ID, an absent session ID, a stale authentication version, and an expired database session. A valid own-session profile read succeeds and returns that account’s ID. |
+| Current HTTP sessions | All 31 session-authenticated method/handler pairs reject missing credentials, another account’s session ID, an absent session ID, a stale authentication version, and an expired database session. A valid own-session profile read succeeds and returns that account’s ID. |
 | Room authority | Real invitation list/create/revoke handlers check ordinary user, member, moderator, administrator and owner roles. An administrator may invite only to lower roles. Ownership in one room and membership in another are resolved independently. |
 | Tenant and account scope | A valid invitation ID from a different room cannot be revoked through the caller’s own room URL. One account cannot revoke another’s registration invitation. Only the room owner may update its identity. Denied mutations are followed by persisted-state checks. |
-| Socket membership | All 45 room-bound commands reject a replaced sender and then a removed participant through the real dispatcher, despite the socket’s retained room ID. No success reply is emitted to the unauthorized sender. |
+| Socket membership | All 49 room-bound commands reject a replaced sender and then a removed participant through the real dispatcher, despite the socket’s retained room ID. No success reply is emitted to the unauthorized sender. |
 | Lobby isolation | Every command declared inadmissible while waiting is decoded and dispatched against lobby state; it fails before room work or a response. Join, leave, reconnect and lobby chat have explicit distinct entries. Authentication renewal is a socket operation intercepted before room dispatch. |
 | Public and credential-establishment HTTP | Fixed cases exercise public health, readiness, capabilities, directory and profile reads; anonymous bounded telemetry; closed registration; credential/cookie/challenge requirements; and protected metrics. Anonymous passkey discovery must not disclose account credential IDs. Public profiles must not contain email, password/recovery hashes or authentication versions. |
 
@@ -51,7 +51,7 @@ establish that a handler invoked it.
 ## Operation inventory
 
 [`security/authorization/operations.json`](../security/authorization/operations.json)
-contains all 42 explicit Axum method/path/handler combinations and all 49
+contains all 49 explicit Axum method/path/handler combinations and all 53
 `ClientMessage` variants. Each entry names its boundary and executable checks;
 message entries also contain a reviewed minimal decoded fixture. These inputs
 are synthetic application data, not captured credentials or exploit payloads.

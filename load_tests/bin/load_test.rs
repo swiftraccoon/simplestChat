@@ -3948,6 +3948,7 @@ mod chat_and_continuous_audio_tests {
                     sent_at: "2026-09-30T00:00:00Z".into(),
                     chat_style: ChatStyle::default(),
                     reply_to: None,
+                    removed_at: None,
                     reactions: Vec::new(),
                 },
             };

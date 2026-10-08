@@ -118,6 +118,7 @@ async function harness(options = {}) {
           reconnectToken: 'reconnect-token',
           roomSettings: options.settings && {
             nameStyle: automaticStyle,
+            historyRetentionDays: 0,
             topicStyle: automaticStyle,
             ...options.settings,
           },
@@ -744,6 +745,7 @@ test('snapshot restores nickname, role, sanctions and server permissions before 
       allowChat: true,
       guestsCanBroadcast: true,
       nameStyle: automaticStyle,
+      historyRetentionDays: 0,
       topicStyle: automaticStyle,
     },
   });

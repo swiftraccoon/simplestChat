@@ -31,6 +31,7 @@ async function main() {
       window.__roomControlFixture = fixture;
       const settings = (id) => ({
         nameStyle: { color: null, style: 'accent' },
+        historyRetentionDays: 0,
         topicStyle: { color: null, style: 'accent' },
         id,
         displayName: id,

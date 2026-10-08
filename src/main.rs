@@ -148,6 +148,7 @@ async fn run_server(diagnostics: Diagnostics) -> Result<()> {
     // Connect to database (optional)
     let db_pool = db::connect().await?;
     if let Some(pool) = &db_pool {
+        let _chat_retention = simplestChat::room::history::spawn_retention(pool.clone());
         // Moderation history and closed reports age out on their own.
         let _retention = simplestChat::room::moderation::spawn_retention(
             pool.clone(),

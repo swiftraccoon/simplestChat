@@ -93,7 +93,7 @@ pub(super) fn clear_refresh_cookie_headers() -> HeaderMap {
     headers
 }
 
-pub(super) fn no_store_headers() -> HeaderMap {
+pub(crate) fn no_store_headers() -> HeaderMap {
     let mut headers = HeaderMap::new();
     headers.insert(
         header::CACHE_CONTROL,
@@ -175,7 +175,7 @@ fn authentication_credential_id(result: &AuthenticationResult) -> String {
     URL_SAFE_NO_PAD.encode(result.cred_id().as_ref())
 }
 
-pub(super) fn database_error(error: sqlx::Error) -> AuthError {
+pub(crate) fn database_error(error: sqlx::Error) -> AuthError {
     crate::db::record_error(&error);
     AuthError::DatabaseError(error.to_string())
 }
@@ -248,7 +248,7 @@ pub(super) async fn verify_password_async(
     .map_err(|error| AuthError::DatabaseError(format!("Verify error: {error}")))
 }
 
-pub(super) fn acquire_auth_request(
+pub(crate) fn acquire_auth_request(
     server: &SignalingServer,
 ) -> Result<tokio::sync::OwnedSemaphorePermit, AuthError> {
     server

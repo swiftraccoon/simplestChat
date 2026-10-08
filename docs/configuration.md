@@ -215,10 +215,14 @@ database-backed account or room operations available during an outage.
 
 Room settings, moderation, reports and identity writes release the chat/media
 state lock during SQL. A separate per-room control gate preserves permissions,
-membership and write order. Chat and routine media control remain available
-under the current policy while a write is pending; joins, leaves, reconnect
-rebinding and other control operations wait. Persisted writes are published to
-runtime state only after database success.
+membership and write order. Routine media control remains available under the
+current policy while a write is pending; joins, leaves, reconnect rebinding and
+other control operations wait. Retained public messages and account-to-account
+PMs use the same ordering to commit before delivery. Ephemeral chat validates and
+publishes under the short-lived room state lock, without waiting for unrelated
+database writes. Persisted writes are published to runtime state only after
+database success; message removal scrubs saved and runtime copies before its
+notification.
 
 Control admission waits at most five seconds; identity edits separately allow
 five seconds for creation admission. The complete write phase has a 15-second
@@ -233,6 +237,33 @@ memberships close, media cleanup is attempted with bounded waits, and the room I
 stays reserved until restart reloads durable state. The database row is not deleted
 or automatically retried. Inspect the room-persistence and cleanup logs before
 restarting; incomplete media cleanup is explicitly reported.
+
+## Chat retention
+
+`rooms.history_retention_days` defaults to `0` (Off). The room owner changes it
+through **Chat options → Room history**; accepted values are `0`, `1`, `7`, `30`
+and `90`. Retention is available only for persisted rooms with PostgreSQL.
+Enabling it saves future public messages and makes retained history available to
+all admitted participants, including newcomers. Disabling it deletes the saved
+public messages and read positions; reducing it deletes older messages and
+shortens remaining expiry dates. Increasing it affects future messages only.
+
+PMs between signed-in accounts are saved for 90 days. A PM involving a guest
+stays in the current room-session replay buffer. Account conversations may
+continue from the **Messages** inbox after either participant leaves; both
+accounts' PM opt-out and ignore rules still apply. The initial conversation must
+start together in a room. Read positions are account-scoped and move forward
+only. Search is bounded to the newest 10,000 retained messages per conversation;
+requests return at most 50 entries.
+
+Expiry predicates hide expired content immediately. A separate five-minute
+cleanup deletes up to 16 batches of 1,000 expired rows from each chat table per
+sweep, within a 15-second deadline. Database
+backups and WAL retain their own lifetimes, so retention changes do not promise
+erasure from earlier backups. Public-message removal atomically scrubs the saved
+message and quote excerpts with its moderation-history record before broadcasting
+the tombstone. Removed content is excluded from that record. Moderators cannot
+read or remove PMs through these controls.
 
 ## Shutdown
 

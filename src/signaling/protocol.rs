@@ -201,6 +201,23 @@ pub enum ClientMessage {
     },
     RetryChatMessage(RetryChatMessage),
     #[serde(rename_all = "camelCase")]
+    GetChatHistory {
+        request_id: String,
+        before: Option<String>,
+        q: Option<String>,
+        limit: Option<u32>,
+    },
+    #[serde(rename_all = "camelCase")]
+    MarkChatRead {
+        request_id: String,
+        message_id: String,
+    },
+    #[serde(rename_all = "camelCase")]
+    SetRoomHistory {
+        request_id: String,
+        retention_days: i32,
+    },
+    #[serde(rename_all = "camelCase")]
     SetChatPreferences {
         request_id: String,
         allow_private_messages: bool,
@@ -211,6 +228,12 @@ pub enum ClientMessage {
     SetChatStyle {
         request_id: String,
         chat_style: ChatStyle,
+    },
+    /// Remove a public message from live and retained chat (moderators only).
+    #[serde(rename_all = "camelCase")]
+    RemoveChatMessage {
+        request_id: String,
+        message_id: String,
     },
     /// Add this participant's reaction to a retained message, or take it back.
     #[serde(rename_all = "camelCase")]
@@ -548,6 +571,8 @@ pub enum ServerMessage {
         message_id: String,
         client_message_id: String,
         sent_at: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        removed_at: Option<String>,
         #[serde(default)]
         chat_style: ChatStyle,
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -597,6 +622,12 @@ pub enum ServerMessage {
         participant_id: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         target_participant_id: Option<String>,
+    },
+    /// A public message and any quotes of it must be replaced by a tombstone.
+    #[serde(rename_all = "camelCase")]
+    ChatMessageRemoved {
+        message_id: String,
+        removed_at: String,
     },
     /// A message's reactions changed; sent to everyone who can see it.
     #[serde(rename_all = "camelCase")]
@@ -816,6 +847,9 @@ pub struct ChatEntry {
     pub recipient_name: Option<String>,
     pub content: String,
     pub sent_at: String,
+    /// Moderator removal erases content while retaining its place in the conversation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub removed_at: Option<String>,
     /// The sender's look when they sent it, so history keeps it after they leave.
     #[serde(default)]
     pub chat_style: ChatStyle,
@@ -862,6 +896,7 @@ pub enum ChatRetryReason {
     Capacity,
     Conflict,
     RecipientUnconfirmed,
+    StorageUnconfirmed,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

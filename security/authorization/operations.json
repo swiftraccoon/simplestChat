@@ -614,6 +614,59 @@
         "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions",
         "authorization_database_session_controls_scope_reads_and_revocation_to_the_owner"
       ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/inbox",
+      "handler": "crate::room::history::inbox",
+      "policy": "current-session",
+      "body": null,
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions",
+        "authorization_database_inbox_offline_delivery_read_sync_and_consent"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/inbox/{peer}/messages",
+      "handler": "crate::room::history::messages",
+      "policy": "current-session",
+      "body": null,
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions",
+        "authorization_database_inbox_offline_delivery_read_sync_and_consent"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/inbox/{peer}/messages",
+      "handler": "crate::room::history::send_message",
+      "policy": "current-session",
+      "body": {
+        "clientMessageId": "policy-message",
+        "content": "Policy private message"
+      },
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions",
+        "authorization_database_inbox_offline_delivery_read_sync_and_consent"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/auth/inbox/{peer}/read",
+      "handler": "crate::room::history::read",
+      "policy": "current-session",
+      "body": {
+        "messageId": "00000000-0000-4000-8000-000000000005"
+      },
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions",
+        "authorization_database_inbox_offline_delivery_read_sync_and_consent"
+      ]
     }
   ],
   "websocket": [
@@ -963,6 +1016,22 @@
       "checks": [
         "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
         "authorization_dispatch_lobby_policy_covers_every_decoded_operation"
+      ]
+    },
+    {
+      "variant": "RemoveChatMessage",
+      "operation": "removeChatMessage",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "removeChatMessage",
+        "requestId": "policy-request",
+        "messageId": "00000000-0000-4000-8000-000000000001"
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation",
+        "message_removal_requires_moderation_and_never_targets_private_messages"
       ]
     },
     {
@@ -1353,6 +1422,50 @@
       "body": {
         "type": "denyFromLobby",
         "targetParticipantId": "00000000-0000-4000-8000-000000000006"
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation"
+      ]
+    },
+    {
+      "variant": "GetChatHistory",
+      "operation": "getChatHistory",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "getChatHistory",
+        "requestId": "policy-request"
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation"
+      ]
+    },
+    {
+      "variant": "MarkChatRead",
+      "operation": "markChatRead",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "markChatRead",
+        "requestId": "policy-request",
+        "messageId": "00000000-0000-4000-8000-000000000005"
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation"
+      ]
+    },
+    {
+      "variant": "SetRoomHistory",
+      "operation": "setRoomHistory",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "setRoomHistory",
+        "requestId": "policy-request",
+        "retentionDays": 7
       },
       "checks": [
         "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",

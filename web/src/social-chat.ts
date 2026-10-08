@@ -460,6 +460,8 @@ export class SocialChat {
         capacity: 'The room could not retain this confirmation. Try again within the retry window.',
         conflict: 'The original message identity could not be verified.',
         recipient_unconfirmed: 'The original private recipient session could not be verified.',
+        storage_unconfirmed:
+          'The database did not confirm whether this message was saved. Check saved history after reconnecting before sending it again.',
       };
       this.store.fail(
         message.clientMessageId,

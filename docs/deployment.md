@@ -435,11 +435,18 @@ and [development](development.md) for native build requirements.
   window revokes the token family. Password changes and saved-key recovery revoke
   existing tokens and active account connections. Ordinary logout relies on
   the socket revalidation interval rather than an immediate disconnect broadcast.
-- Public/private chat replay is in memory, limited to current membership and
-  300 entries / 256 KiB per room. Restart loses it; this is not a durable inbox.
-  Signed-in chat preferences and ignored accounts sync across devices;
-  guest-participant ignores are temporary. Device, layout, talk-mode and
-  notification choices remain local to the browser.
+- Reconnect replay remains bounded memory (300 entries / 256 KiB per room) and
+  respects the current membership. Saved chat is separate PostgreSQL data:
+  account-to-account PMs have 90-day retention, while persisted rooms default to
+  public history Off and may opt into 1, 7, 30 or 90 days. Admitted newcomers can
+  read retained public history. Guest PMs remain ephemeral. Room history Off
+  deletes saved public messages; reducing retention deletes older messages.
+  Plan database and backup capacity for the chosen retention. Deletion removes
+  live database content, including reply excerpts, but earlier backups and WAL
+  follow their own retention policies.
+- Signed-in chat preferences, ignored accounts and saved-conversation read
+  positions sync across devices. Guest-participant ignores are temporary.
+  Device, layout, talk-mode and notification choices remain local to the browser.
 - Private messages and SFU media are not application-layer end-to-end encrypted.
   DTLS/SRTP protects media hops, but the server terminates them and is inside the
   trust boundary.

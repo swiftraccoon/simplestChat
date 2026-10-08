@@ -1408,6 +1408,7 @@ export class RoomClient {
       case 'messageAck':
       case 'messageRetryResult':
       case 'messageReactions':
+      case 'chatMessageRemoved':
       case 'participantTyping':
       case 'privateMessageReceived': {
         this.events.onSocialEvent?.(msg);

@@ -11,7 +11,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE
 GRANT SELECT, INSERT, UPDATE, DELETE
   ON public.sessions, public.rooms, public.room_roles,
      public.room_states, public.room_reports, public.moderation_events,
-     public.invites
+     public.invites, public.chat_messages, public.chat_inbox, public.chat_read_cursors
   TO simplestchat_app;
 GRANT SELECT, INSERT, DELETE
   ON public.invite_redemptions

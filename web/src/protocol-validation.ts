@@ -9,6 +9,7 @@ import type {
   ChatReplyRef,
   ProducerMetadata,
   ChatEntry,
+  ChatHistoryPage,
   RoomSettings,
   RoomSnapshot,
   BanEntry,
@@ -122,6 +123,21 @@ const chat = object<ChatEntry>({
   chatStyle: optional(chatStyle),
   replyTo: optional(replyRef),
   reactions: optional(list(reaction)),
+  removedAt: optional(text),
+});
+export const decodeChatEntry = chat;
+export const decodeHistoryRetention = (value: unknown): number => {
+  const days = integer(90)(value);
+  return [0, 1, 7, 30, 90].includes(days) ? days : invalid();
+};
+export const decodeChatHistory = object<ChatHistoryPage>({
+  messages: (value) => {
+    const items = list(chat)(value);
+    return items.length <= 100 ? items : invalid();
+  },
+  nextCursor: nullable(text),
+  readMessageId: nullable(text),
+  retentionDays: decodeHistoryRetention,
 });
 export const decodeRoomSettings = object<RoomSettings>({
   id: text,
@@ -132,6 +148,7 @@ export const decodeRoomSettings = object<RoomSettings>({
   maxBroadcasters: optional(integer()),
   allowScreenSharing: boolean,
   allowChat: boolean,
+  historyRetentionDays: decodeHistoryRetention,
   allowVideo: boolean,
   moderated: boolean,
   inviteOnly: boolean,
@@ -338,11 +355,18 @@ const socialDecoders: { [A in SocialAction]: Decoder<SocialResponses[A]> } = {
   }),
   changeNickname: object<{ nickname: string }>({ nickname: text }),
   setChatStyle: object<{ chatStyle: ChatStyle }>({ chatStyle }),
+  removeChatMessage: object<{ messageId: string; removedAt: string }>({
+    messageId: text,
+    removedAt: text,
+  }),
   reactToMessage: object<{ messageId: string; reactions: ChatReaction[] }>({
     messageId: text,
     reactions: list(reaction),
   }),
   getRoomSnapshot: snapshot,
+  getChatHistory: decodeChatHistory,
+  markChatRead: object<{ readMessageId: string | null }>({ readMessageId: nullable(text) }),
+  setRoomHistory: object<{ retentionDays: number }>({ retentionDays: decodeHistoryRetention }),
   listRoomBans: object<{ bans: BanEntry[]; hasMore: boolean }>({
     bans: list(ban),
     hasMore: boolean,
@@ -392,8 +416,12 @@ const socialAction = choice(
   'setChatPreferences',
   'changeNickname',
   'setChatStyle',
+  'removeChatMessage',
   'reactToMessage',
   'getRoomSnapshot',
+  'getChatHistory',
+  'markChatRead',
+  'setRoomHistory',
   'listRoomBans',
   'removeRoomBan',
   'listRoomMembers',
@@ -507,8 +535,10 @@ const messages = {
     chatStyle: optional(chatStyle),
     replyTo: optional(replyRef),
     reactions: optional(list(reaction)),
+    removedAt: optional(text),
   }),
   privateMessageReceived: message('privateMessageReceived', { message: chat }),
+  chatMessageRemoved: message('chatMessageRemoved', { messageId: text, removedAt: text }),
   messageReactions: message('messageReactions', { messageId: text, reactions: list(reaction) }),
   messageAck: message('messageAck', { clientMessageId: text, message: chat }),
   messageRetryResult: message('messageRetryResult', {
@@ -521,6 +551,7 @@ const messages = {
       'capacity',
       'conflict',
       'recipient_unconfirmed',
+      'storage_unconfirmed',
     ),
   }),
   socialResponse,
