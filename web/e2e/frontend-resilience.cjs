@@ -202,6 +202,13 @@ async function run() {
             action: message.type,
             data: { allowPrivateMessages: true, ignoredParticipantIds: [] },
           });
+        if (message.type === 'getPinnedMessages')
+          send({
+            type: 'socialResponse',
+            requestId: message.requestId,
+            action: message.type,
+            data: { messages: [] },
+          });
         if (message.type === 'getRoomSnapshot')
           send({
             type: 'socialResponse',
@@ -315,6 +322,11 @@ async function run() {
         return;
       }
       if (url.pathname === '/api/rooms') return json([]);
+      if (url.pathname === '/api/auth/inbox/unread') {
+        assert.equal(route.request().method(), 'GET');
+        assert.match(route.request().headers().authorization, /^Bearer /);
+        return json({ unreadCount: 0 });
+      }
       if (url.pathname === '/api/auth/preferences')
         return json({
           allowPrivateMessages: true,

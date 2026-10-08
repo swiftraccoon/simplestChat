@@ -230,11 +230,13 @@ async function run(env = process.env) {
               );
             };
             Object.defineProperty(navigator, 'mediaDevices', {
-              value: Object.freeze({
-                getUserMedia: deny,
-                getDisplayMedia: deny,
-                enumerateDevices: deny,
-              }),
+              value: Object.freeze(
+                Object.assign(new EventTarget(), {
+                  getUserMedia: deny,
+                  getDisplayMedia: deny,
+                  enumerateDevices: deny,
+                }),
+              ),
               configurable: false,
             });
             for (const method of ['getUserMedia', 'webkitGetUserMedia', 'mozGetUserMedia'])
@@ -276,6 +278,11 @@ async function run(env = process.env) {
               if (url.pathname === '/favicon.ico' && request.method() === 'GET')
                 return route.fulfill({ status: 204 });
               if (url.pathname === '/api/capabilities') return json(200, capabilities);
+              if (url.pathname === '/api/auth/inbox/unread' && request.method() === 'GET') {
+                assert.equal(signedIn, true, 'Guests must not request account unread counts');
+                assert.equal(request.headers().authorization, 'Bearer owned-layout-fixture');
+                return json(200, { unreadCount: 7 });
+              }
               if (url.pathname === '/api/auth/ws-ticket') {
                 assert.equal(signedIn, true, 'Guests must not mint authenticated tickets');
                 assert.equal(request.method(), 'POST');
