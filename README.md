@@ -9,13 +9,14 @@ Run guest rooms on their own, or add PostgreSQL for accounts and persistent room
 - Public room directory, owned rooms, passwords, lobby admission, invitations and moderation.
 - Room chat and private messages with replies, reactions, mention completion, unread
   markers, drafts, ignore controls, personal chat colors and timestamp formats.
+- Moderator message removal, optional retained room history, and an account PM inbox
+  with search and read positions shared across devices.
 - Password/passkey accounts, profiles, and saved recovery keys.
 - Responsive layout and per-participant volume, mute, and video controls.
 - Sizing derived from the host it runs on (workers, quotas, ceilings, addresses,
   TURN capacity), every value overridable.
 
-Shared watch sessions, recording, durable chat history, and email verification
-are not implemented.
+Shared watch sessions, recording and email verification are not implemented.
 
 ## Quick start
 

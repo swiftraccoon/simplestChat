@@ -282,6 +282,40 @@ This mode checks one terminal observation for an empty room, a video-only join,
 an audio-only join and an audio reconnect using the diagnostic preview. It uses
 synthetic devices and cannot establish physical output audibility.
 
+### Chat removal and saved history
+
+The community browser suite checks public removal confirmation/cancellation,
+member/PM control visibility, quoted-text scrubbing on all peers and tombstones
+after a real signaling reconnect and snapshot. It also exercises public-history
+retention On/Off, guest reads, search and removal, plus reading and sending account
+PMs through Messages with live delivery and recipient isolation. Run against the
+freshly rebuilt server and production UI with an owned disposable database:
+
+```sh
+COMMUNITY_E2E=1 build/with-test-postgres.sh build/with-test-server.sh \
+  node web/e2e/community.cjs
+```
+
+The focused Rust database case
+`database_public_message_removal_scrubs_durable_history_without_runtime_copy`
+persists messages, removes the runtime copy, and verifies old-history deletion,
+quote scrubbing, PM/cross-room exclusion and one durable moderation event across
+repeated requests. Run it with the migrated disposable database and
+`--include-ignored`; ordinary Rust tests skip it. Source tests cover late replay,
+retry acknowledgements, removed reactions and reply-draft cancellation.
+
+`database_history_retention_pagination_private_isolation_and_monotonic_reads`
+covers saved pagination, expiry, isolation and forward-only read positions;
+`authorization_database_inbox_offline_delivery_read_sync_and_consent` covers the
+real inbox HTTP routes, offline sends, retries and preference enforcement.
+Browser source tests cover hidden/covered conversations staying unread, failed
+searches, out-of-order loads, account changes and idempotent send retries.
+
+Manually verify two physical devices and a server restart, newcomer access to
+opted-in room history, retention shortening/extension and guest PM continuity.
+These device/restart journeys and backup retention are separate from the
+automated browser and database checks above.
+
 ### Authenticated chat continuity
 
 Run the opt-in 20-minute session soak against a fresh local database and server:

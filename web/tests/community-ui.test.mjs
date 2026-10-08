@@ -89,6 +89,7 @@ async function fixture() {
       './account-sessions': await loadTypeScript('src/account-sessions.ts', {
         modules: { './ui': ui },
       }),
+      './chat-history': { openPrivateInbox() {} },
       './account-security': {
         ...security,
         mountAccountSecurity: (options) => {
@@ -884,6 +885,7 @@ test('room-scoped actions mount in the room tools while account actions stay in 
   const api = await loadTypeScript('src/community-ui.ts', {
     modules: {
       './ui': dom.ui,
+      './chat-history': { openPrivateInbox() {} },
       './account-security': security,
       './account-sessions': await loadTypeScript('src/account-sessions.ts', {
         modules: { './ui': dom.ui },
@@ -909,7 +911,7 @@ test('room-scoped actions mount in the room tools while account actions stay in 
   });
   assert.deepEqual(
     dom.header.children.map((node) => node.textContent),
-    ['Account', 'My rooms'],
+    ['Account', 'Messages', 'My rooms'],
   );
   assert.deepEqual(
     roomActions.children.map((node) => node.textContent),

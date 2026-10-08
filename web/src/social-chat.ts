@@ -4,6 +4,7 @@ import type { ChatEntry, ChatStyle, ChatStyleKind, ServerMessage } from './proto
 import { ChatStore, ConversationInputs, type ChatItem } from './chat-store';
 import { api, asyncButton, button, busy, el, field, modal } from './ui';
 import { CHAT_PALETTE, chatColor } from './avatar-colors';
+import { openRoomHistory, notifyHistoryRemoval } from './chat-history';
 
 /** How a viewer sees message times: on hover, or always in one format. */
 type TimestampFormat = 'hover' | 'time' | 'time12' | 'seconds' | 'datetime';
@@ -111,6 +112,9 @@ export class SocialChat {
   private readonly emojiPanel = el('div', undefined, 'emoji-panel');
   private readonly pendingStarted = new Map<string, number>();
   private readonly pending = new Map<string, ReturnType<typeof setTimeout>>();
+  private readonly savedRead = new Map<string, string>();
+  private readController = new AbortController();
+  private readTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly retrying = new Set<string>();
   private chatSessionId: string | null = null;
   private chatSequence = 0;
@@ -134,6 +138,7 @@ export class SocialChat {
   private membershipVersion = -1;
   private activationTask: Promise<void> | null = null;
   private activationSynced = false;
+  private snapshotPublicIds: Set<string> | null = null;
   private preferenceOperation = 0;
   private preferenceBusy = false;
   private accountSync = 0;
@@ -284,6 +289,7 @@ export class SocialChat {
       this.loadPreferences();
     }
     if (this.membershipVersion !== room.membershipVersion) {
+      this.prepareSnapshotRecovery();
       this.retireDeliveryAttempts();
       this.activation++;
       this.preferenceOperation++;
@@ -348,12 +354,30 @@ export class SocialChat {
     }
   }
 
+  /** Capture once before recovery so a delayed snapshot never prunes newer live rows. */
+  prepareSnapshotRecovery(): void {
+    if (this.snapshotPublicIds !== null) return;
+    this.snapshotPublicIds = new Set(
+      this.store.messages
+        .filter(
+          (message) => message.status === 'sent' && !message.recipientId && !!message.participantId,
+        )
+        .map((message) => message.messageId),
+    );
+  }
+
   reset(): void {
+    this.readController.abort();
+    this.readController = new AbortController();
+    if (this.readTimer !== null) clearTimeout(this.readTimer);
+    this.readTimer = null;
+    this.savedRead.clear();
     this.activation++;
     this.preferenceOperation++;
     this.preferenceBusy = false;
     this.activationTask = null;
     this.activationSynced = false;
+    this.snapshotPublicIds = null;
     this.membershipVersion = -1;
     this.preferencesDialog?.close();
     this.preferencesDialog = null;
@@ -447,6 +471,16 @@ export class SocialChat {
       }
       // Ingest synchronously so replay retains the same ordering, privacy and
       // acknowledgement semantics, then reconcile the bounded view just once.
+      if (this.snapshotPublicIds !== null) {
+        const discarded = this.store.prunePublicReplay(
+          this.snapshotPublicIds,
+          new Set(
+            snapshot.messages.filter((entry) => !entry.recipientId).map((entry) => entry.messageId),
+          ),
+        );
+        this.snapshotPublicIds = null;
+        if (this.replyingTo && discarded.has(this.replyingTo.messageId)) this.cancelReply();
+      }
       for (const entry of snapshot.messages) this.ingest(entry, true);
       this.render();
     } else if (message.type === 'messageRetryResult') {
@@ -476,6 +510,11 @@ export class SocialChat {
         );
         if (item) delete item.retry;
       }
+      this.render();
+    } else if (message.type === 'chatMessageRemoved') {
+      notifyHistoryRemoval(message.messageId, message.removedAt);
+      this.store.removeMessage(message.messageId, message.removedAt);
+      if (this.replyingTo?.messageId === message.messageId) this.cancelReply();
       this.render();
     } else if (message.type === 'messageReactions') {
       if (this.store.setReactions(message.messageId, message.reactions)) this.render();
@@ -631,8 +670,11 @@ export class SocialChat {
         (!this.seenAtBottom || !this.isVisible())
       )
         this.store.markUnread(message);
-      if (!replay && this.preferences.sounds) this.playSound(message.recipientId ? 700 : 440);
-      if (!replay) this.notifyDesktop(message);
+      const retained = this.store.messages.find((entry) => entry.messageId === message.messageId);
+      if (!replay && retained && !retained.removedAt) {
+        if (this.preferences.sounds) this.playSound(retained.recipientId ? 700 : 440);
+        this.notifyDesktop(retained);
+      }
     }
     return true;
   }
@@ -920,9 +962,15 @@ export class SocialChat {
     // Public chat needs no permanent banner; its mention hint lives in the composer.
     this.conversationStatus.hidden = !privateChat;
     this.renderTyping();
-    this.conversationStatus.textContent = privateChat
-      ? 'Private · available while both people are in this room · not saved after leaving'
-      : '';
+    this.conversationStatus.textContent = '';
+    if (privateChat) {
+      const peer = room?.getParticipants().get(this.store.active);
+      if (!peer) this.conversationStatus.textContent = 'Private · this person is offline';
+      else if (this.options.getToken?.() && peer.authenticated)
+        this.conversationStatus.textContent = 'Private · saved for 90 days in Messages';
+      else
+        this.conversationStatus.textContent = 'Private · available only during this room session';
+    }
     const disabled =
       !room?.localParticipantId ||
       !room.connected ||
@@ -988,10 +1036,57 @@ export class SocialChat {
     const first = this.store.firstUnread(this.store.active);
     const key = first ? this.rowKey(first) : this.dividerKey;
     this.store.markRead(this.store.active);
+    this.scheduleSavedRead();
     if (key === this.dividerKey) return false;
     this.dividerKey = key;
     if (placeNow) this.placeDivider();
     return true;
+  }
+
+  /** Reading the live room also advances the account's saved conversation cursor. */
+  private scheduleSavedRead(): void {
+    if (this.readTimer !== null || !this.options.getToken?.()) return;
+    const room = this.options.getRoom();
+    if (!room || !this.isVisible() || !this.seenAtBottom) return;
+    const conversation = this.store.active;
+    if (
+      conversation === 'public'
+        ? !room.roomSettings?.historyRetentionDays
+        : !room.getParticipants().get(conversation)?.authenticated
+    )
+      return;
+    const activation = this.activation;
+    const viewer = this.viewerKey;
+    this.readTimer = setTimeout(() => {
+      this.readTimer = null;
+      if (!this.contextCurrent(activation, room, viewer) || !this.isVisible() || !this.seenAtBottom)
+        return;
+      if (this.store.active !== conversation) {
+        this.scheduleSavedRead();
+        return;
+      }
+      const token = this.options.getToken?.();
+      if (!token) return;
+      const messages = this.store.messages.filter(
+        (entry) => entry.status === 'sent' && this.store.conversation(entry) === conversation,
+      );
+      const latest = messages[messages.length - 1];
+      if (!latest || this.savedRead.get(conversation) === latest.messageId) return;
+      const id = latest.messageId;
+      this.savedRead.set(conversation, id);
+      if (this.savedRead.size > 100) this.savedRead.delete(this.savedRead.keys().next().value!);
+      const request =
+        conversation === 'public'
+          ? room.requestSocial('markChatRead', { messageId: id })
+          : api.readPrivateMessages(token, conversation, id, this.readController.signal);
+      request.catch(() => {
+        if (
+          this.contextCurrent(activation, room, viewer) &&
+          this.savedRead.get(conversation) === id
+        )
+          this.savedRead.delete(conversation);
+      });
+    }, 500);
   }
 
   /** The divider sits above the first message that arrived unseen, while it is shown. */
@@ -1041,6 +1136,8 @@ export class SocialChat {
       color,
       message.replyTo,
       message.reactions,
+      message.removedAt,
+      this.canRemove(message),
     ]);
     const key = this.rowKey(message);
     const previous = this.rows.get(key);
@@ -1069,10 +1166,13 @@ export class SocialChat {
       node.append(quote);
     }
     const text = el('div', undefined, 'msg-text');
-    appendLinkedText(text, content, mentioned ? `@${nickname}` : undefined);
+    if (message.removedAt) {
+      text.textContent = 'Message removed';
+      text.classList.add('muted');
+    } else appendLinkedText(text, content, mentioned ? `@${nickname}` : undefined);
     node.append(text);
     this.appendReactions(node, message);
-    if (participantId && status === 'sent') this.appendActions(node, message);
+    if (participantId && status === 'sent' && !message.removedAt) this.appendActions(node, message);
     const meta = el('time', undefined, 'msg-time');
     const date = new Date(sentAt);
     meta.textContent = formatChatTime(date, this.preferences.timestamps);
@@ -1161,11 +1261,63 @@ export class SocialChat {
       control.title = label;
     }
     actions.append(react, reply, picker);
+    if (this.canRemove(message)) {
+      const remove = button('Remove', () => this.confirmRemoval(message), 'msg-action');
+      remove.setAttribute('aria-label', 'Remove message');
+      remove.title = 'Remove message for everyone';
+      actions.append(remove);
+    }
     node.append(actions);
     // Touch screens have no hover: a tap on the message shows its actions.
     node.onclick = (event) => {
       if (!(event.target as Element).closest('button, a')) node.classList.toggle('show-actions');
     };
+  }
+
+  private canRemove(message: ChatItem): boolean {
+    return (
+      !message.recipientId &&
+      !message.removedAt &&
+      ['moderator', 'admin', 'owner'].includes(this.options.getRoom()?.role ?? '')
+    );
+  }
+
+  private confirmRemoval(message: ChatItem): void {
+    const room = this.options.getRoom();
+    if (!room || !this.canRemove(message)) return;
+    const membership = room.membershipVersion;
+    const viewer = this.options.getViewerKey();
+    const current = (): boolean =>
+      this.options.getRoom() === room &&
+      room.membershipVersion === membership &&
+      this.options.getViewerKey() === viewer;
+    const dialog = modal('Remove message?');
+    dialog.body.append(
+      el(
+        'p',
+        'This removes the public message and its quoted text for everyone. A “Message removed” marker will remain.',
+      ),
+    );
+    const remove = asyncButton(
+      'Remove message',
+      async () => {
+        await busy(remove, dialog.error, async () => {
+          if (!current()) throw new Error('The room session changed.');
+          const result = await room.requestSocial('removeChatMessage', {
+            messageId: message.messageId,
+          });
+          if (current()) {
+            this.store.removeMessage(result.messageId, result.removedAt);
+            if (this.replyingTo?.messageId === result.messageId) this.cancelReply();
+            this.render();
+          }
+          dialog.close();
+        });
+      },
+      (error) =>
+        this.options.notify(error instanceof Error ? error.message : 'Could not remove message'),
+    );
+    dialog.body.append(button('Cancel', dialog.close), remove);
   }
 
   private react(message: ChatItem, emoji: string): void {
@@ -1470,6 +1622,7 @@ export class SocialChat {
   private isVisible(): boolean {
     return (
       !document.hidden &&
+      !document.querySelector('dialog[open]') &&
       document.getElementById('room-screen')?.hidden === false &&
       document.getElementById('chat-panel')?.classList.contains('active') === true
     );
@@ -1640,6 +1793,17 @@ export class SocialChat {
       this.preferencesDialog === view &&
       view.dialog.open &&
       this.contextCurrent(activation, room, viewer);
+    if (room.roomSettings)
+      view.body.append(
+        button('Room history…', () => {
+          view.close();
+          openRoomHistory(
+            room,
+            () => this.contextCurrent(activation, room, viewer),
+            !!this.options.getToken?.(),
+          );
+        }),
+      );
     const allow = el('input');
     allow.type = 'checkbox';
     allow.checked = this.preferences.allowPrivateMessages;

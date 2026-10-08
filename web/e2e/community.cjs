@@ -730,6 +730,14 @@ async function preferences(page, allow) {
   await dialog.getByRole('button', { name: 'Save preferences', exact: true }).click();
   await dialog.waitFor({ state: 'hidden' });
 }
+async function roomHistory(page) {
+  await page.getByRole('button', { name: 'Chat options', exact: true }).click();
+  const preferences = page.getByRole('dialog', { name: 'Chat preferences', exact: true });
+  await preferences.getByRole('button', { name: 'Room history…', exact: true }).click();
+  const history = page.getByRole('dialog', { name: 'Room history', exact: true });
+  await history.waitFor({ state: 'visible' });
+  return history;
+}
 async function chatEnabled(page, value) {
   await page.waitForFunction(
     (expected) => document.querySelector('#chat-input').disabled === !expected,
@@ -958,6 +966,120 @@ async function setRole(owner, name, role) {
     await step('participant hovercards work from roster and chat names', async () => {
       await participantHovercardChecks(owner, { name: 'E2E Guest', message: 'Public hello' });
     });
+    await step(
+      'public removal confirms, scrubs quotes and remains removed after reconnect replay',
+      async () => {
+        for (const page of [owner, member, guest]) await publicChat(page);
+        await send(guest, 'Removal fixture original');
+        await visible(member, 'Removal fixture original');
+        const original = member.locator('.chat-msg').filter({
+          has: member.locator('.msg-text').filter({ hasText: /^Removal fixture original$/ }),
+        });
+        const messageId = await original.getAttribute('data-message-id');
+        assert.ok(messageId);
+        assert.equal(
+          await original.getByRole('button', { name: 'Remove message', exact: true }).count(),
+          0,
+        );
+        await original.hover();
+        await original.getByRole('button', { name: 'Reply', exact: true }).click();
+        await send(member, 'Removal fixture reply');
+        await owner
+          .locator('.msg-reply')
+          .filter({ hasText: 'Removal fixture original' })
+          .waitFor({ state: 'visible' });
+        const ownerRow = owner.locator(`[data-message-id="${messageId}"]`);
+        await ownerRow.hover();
+        await ownerRow.getByRole('button', { name: 'Remove message', exact: true }).click();
+        let dialog = owner.getByRole('dialog', { name: 'Remove message?', exact: true });
+        await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+        await visible(owner, 'Removal fixture original');
+        await ownerRow.hover();
+        await ownerRow.getByRole('button', { name: 'Remove message', exact: true }).click();
+        dialog = owner.getByRole('dialog', { name: 'Remove message?', exact: true });
+        await dialog.getByRole('button', { name: 'Remove message', exact: true }).click();
+        await dialog.waitFor({ state: 'hidden' });
+        const checkRemoved = async (page) => {
+          await page
+            .locator(`[data-message-id="${messageId}"] .msg-text`)
+            .filter({ hasText: /^Message removed$/ })
+            .waitFor({ state: 'visible' });
+          await page
+            .locator('.msg-reply')
+            .filter({ hasText: 'Message removed' })
+            .waitFor({ state: 'visible' });
+          assert.equal(
+            await page
+              .locator('#chat-messages')
+              .getByText('Removal fixture original', { exact: false })
+              .count(),
+            0,
+          );
+        };
+        for (const page of [owner, member, guest]) await checkRemoved(page);
+        const before = await guest.evaluate(
+          () => window.__communitySignalingReconnect.snapshot().counters.receivedRoomSnapshot,
+        );
+        await guest.evaluate(() => window.__communitySignalingReconnect.closeCurrent());
+        await guest.waitForFunction(
+          (previous) =>
+            window.__communitySignalingReconnect.snapshot().counters.receivedRoomSnapshot >
+            previous,
+          before,
+        );
+        await connected(guest);
+        await checkRemoved(guest);
+      },
+    );
+    await step(
+      'saved public history supports retention, guest reading, search, removal and purge',
+      async () => {
+        let history = await roomHistory(owner);
+        assert.equal(await history.locator('.history-retention select').inputValue(), '0');
+        await history.locator('.history-retention select').selectOption('7');
+        await history.getByRole('button', { name: 'Save retention', exact: true }).click();
+        await history
+          .getByRole('status')
+          .filter({ hasText: 'Messages are kept for 7 days.' })
+          .waitFor({ state: 'visible' });
+        await close(history);
+        await send(guest, 'Saved browser history message');
+        await visible(owner, 'Saved browser history message');
+        history = await roomHistory(guest);
+        await history
+          .getByText('Saved browser history message', { exact: true })
+          .waitFor({ state: 'visible' });
+        assert.equal(await history.locator('.history-retention select').count(), 0);
+        assert.equal(await history.getByRole('button', { name: 'Remove', exact: true }).count(), 0);
+        await history.getByLabel('Search messages', { exact: true }).fill('browser history');
+        await history.getByRole('button', { name: 'Search', exact: true }).click();
+        await history
+          .getByRole('status')
+          .filter({ hasText: 'Searching the newest 10,000 saved messages.' })
+          .waitFor({ state: 'visible' });
+        await history
+          .getByText('Saved browser history message', { exact: true })
+          .waitFor({ state: 'visible' });
+        await close(history);
+        history = await roomHistory(owner);
+        const saved = history
+          .locator('.history-message')
+          .filter({ hasText: 'Saved browser history message' });
+        await saved.getByRole('button', { name: 'Remove', exact: true }).click();
+        const confirmation = owner.getByRole('dialog', { name: 'Remove message', exact: true });
+        await confirmation.getByRole('button', { name: 'Remove message', exact: true }).click();
+        await confirmation.waitFor({ state: 'hidden' });
+        await history.getByText('Message removed', { exact: true }).waitFor({ state: 'visible' });
+        await history.locator('.history-retention select').selectOption('0');
+        await history.getByRole('button', { name: 'Save retention', exact: true }).click();
+        await history
+          .getByRole('status')
+          .filter({ hasText: 'Room history is off.' })
+          .waitFor({ state: 'visible' });
+        assert.equal(await history.locator('.history-message').count(), 0);
+        await close(history);
+      },
+    );
     await step('personal settings share one capture-free keyboard-accessible dialog', async () => {
       const captures = await guest.evaluate(() => window.__communityCaptureRequests);
       assert.equal(
@@ -1153,6 +1275,14 @@ async function setRole(owner, name, role) {
         await visible(owner, 'Private owner hello');
         assert.equal(
           await owner
+            .locator('.chat-msg')
+            .filter({ hasText: 'Private owner hello' })
+            .getByRole('button', { name: 'Remove message', exact: true })
+            .count(),
+          0,
+        );
+        assert.equal(
+          await owner
             .locator('.msg-text')
             .filter({ hasText: /^Private owner hello$/ })
             .count(),
@@ -1163,6 +1293,35 @@ async function setRole(owner, name, role) {
         await visible(owner, 'Private member reply');
       },
     );
+    await step('account inbox reads retained PMs and sends through its composer', async () => {
+      const inbox = await header(owner, 'Messages');
+      await inbox.locator('.inbox-conversation').filter({ hasText: 'E2E Member' }).click();
+      const conversation = owner.getByRole('dialog', {
+        name: 'Messages with E2E Member',
+        exact: true,
+      });
+      await conversation
+        .getByText('Private owner hello', { exact: true })
+        .waitFor({ state: 'visible' });
+      await conversation
+        .getByText('Private member reply', { exact: true })
+        .waitFor({ state: 'visible' });
+      await conversation
+        .getByLabel('Private message', { exact: true })
+        .fill('Sent through saved inbox');
+      await conversation.getByLabel('Private message', { exact: true }).press('Enter');
+      await conversation
+        .getByText('Sent through saved inbox', { exact: true })
+        .waitFor({ state: 'visible' });
+      await visible(member, 'Sent through saved inbox');
+      assert.equal(await guest.getByText('Sent through saved inbox', { exact: true }).count(), 0);
+      assert.equal(
+        await conversation.getByRole('button', { name: 'Remove', exact: true }).count(),
+        0,
+      );
+      await close(conversation);
+      await close(inbox);
+    });
     await step('private drafts and sent-input recall stay in their conversation', async () => {
       await owner.locator('#chat-input').fill('Unsent private draft');
       await publicChat(owner);

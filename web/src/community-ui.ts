@@ -1,4 +1,5 @@
 import type { AuthManager } from './auth';
+import { openPrivateInbox } from './chat-history';
 import { mountAccountSecurity, type AccountSecurityFlow } from './account-security';
 import { mountAccountSessions } from './account-sessions';
 import { appearancePicker } from './appearance';
@@ -43,6 +44,7 @@ const INVITE_ROLES: readonly { value: number; label: string }[] = [
 const ROLES = ['guest', 'user', 'member', 'moderator', 'admin', 'owner'];
 /** History actions as the server names them, read as what happened to the target. */
 const ACTION_LABELS: Record<string, string> = {
+  message_removed: 'message removed',
   kick: 'kicked',
   ban: 'banned',
   unban: 'unbanned',
@@ -56,6 +58,12 @@ const ACTION_LABELS: Record<string, string> = {
 const actionLabel = (action: string): string => ACTION_LABELS[action] ?? action.replace(/_/g, ' ');
 
 export class CommunityUI {
+  private readonly messagesButton = button('Messages', () =>
+    openPrivateInbox({
+      getToken: () => this.options.auth.jwt,
+      getAccountId: () => this.options.auth.userId,
+    }),
+  );
   private readonly accountButton = button('Account', () => {
     const generation = this.generation;
     this.openAccount().catch((error) => {
@@ -84,7 +92,7 @@ export class CommunityUI {
 
   constructor(private readonly options: Options) {
     const accountActions = document.getElementById('community-actions')!;
-    accountActions.append(this.accountButton, this.roomsButton);
+    accountActions.append(this.accountButton, this.messagesButton, this.roomsButton);
     // Room-scoped actions belong with the room tools; the header keeps account actions.
     (document.getElementById('room-actions') ?? accountActions).append(
       this.nicknameButton,
@@ -115,6 +123,7 @@ export class CommunityUI {
       });
     }
     this.accountButton.hidden = !this.options.auth.isLoggedIn;
+    this.messagesButton.hidden = !this.options.auth.isLoggedIn;
     this.roomsButton.hidden = !this.options.auth.isLoggedIn;
     this.nicknameButton.hidden = !room?.localParticipantId;
     this.manageButton.hidden = !room?.localParticipantId || ROLES.indexOf(room.role) < 3;

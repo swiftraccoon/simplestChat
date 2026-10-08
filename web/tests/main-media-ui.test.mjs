@@ -959,3 +959,23 @@ test('speaking highlights expire when audio level reports stop arriving', async 
   assert.deepEqual([...tiles.get('bob').classes], []);
   assert.deepEqual([...rows.get('bob').classes], []);
 });
+
+test('signaling recovery captures the public replay boundary before subsequent UI updates', async () => {
+  const calls = [];
+  const api = evaluateTypeScript(
+    `let roomRecovering = false;
+     export const events = { ${await roomEventSource(['onRecoveryState'])} };`,
+    {
+      globals: {
+        document: createDOM().document,
+        connectionStatus: {},
+        socialChat: { prepareSnapshotRecovery: () => calls.push('capture') },
+        retireRoomSettingsAction: () => calls.push('retire'),
+        pttDeactivate: () => calls.push('ptt'),
+        applyRoomSettingsToUI: () => calls.push('settings'),
+      },
+    },
+  );
+  api.events.onRecoveryState('reconnecting');
+  assert.deepEqual(calls, ['capture', 'retire', 'ptt', 'settings']);
+});

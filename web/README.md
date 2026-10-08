@@ -73,7 +73,8 @@ For complete guest/account setup and LAN ICE addressing see
 | `src/media-controls.ts`, `audio-output.ts` | Private device preview, live hardware lists, speaker selection/test and viewer-local playback |
 | `src/layer-cap.ts` | Simulcast layer a remote tile can use at its rendered size, with hysteresis |
 | `src/settings-dialog.ts` | Shared settings tabs and native-dialog dismissal |
-| `src/social-chat.ts`, `chat-store.ts` | Room/PM conversations, composer, bounded replay and preferences |
+| `src/social-chat.ts`, `chat-store.ts` | Room/PM conversations, composer, bounded replay, removal tombstones and preferences |
+| `src/chat-history.ts` | Saved room history, retention controls, account PM inbox, search and shared read positions |
 | `src/*.css`, `index.html` | Layout, component styles and initial document |
 | `public/help.html`, `help.css` | Zero-JavaScript user help, copied into the production output |
 | `scripts/check-bundle.mjs`, `bundle-budget.json` | Aggregate raw/gzip asset limits enforced by every production build |
@@ -138,6 +139,29 @@ then scrolls. On devices without touch input, Enter sends and Shift+Enter adds a
 line. Touch-capable devices show Send and use Enter for new lines; Ctrl/Cmd+Enter
 sends in either mode. An open mention picker can use Enter to complete a name
 before sending.
+
+Chat options includes **Room history**. Owners choose Off (the default), 1, 7,
+30 or 90 days for persisted rooms. Everyone admitted to a room can read its saved
+public messages, including messages from before they joined. Turning retention
+off deletes saved public history; shortening it deletes messages outside the new
+period. Longer retention applies to future messages and does not recover or
+extend older saved messages.
+
+The signed-in header's **Messages** opens the account inbox. PMs between accounts
+are retained for 90 days, across rooms, devices and server restarts. Guest PMs
+remain bounded room-session data. Start a conversation together in a room; an
+existing account conversation can continue from Messages while either person is
+offline, subject to PM opt-out and ignore preferences. Saved history pages hold
+at most 50 messages, and search examines the newest 10,000 retained messages per
+conversation. The account's read position is saved on the server; the open inbox
+refreshes periodically. Session changes retire pending history work and clear
+its dialog data.
+
+Moderators, admins and owners can choose **Remove** on public messages, including
+older messages in Room history. Confirmation is required. Removal leaves a
+**Message removed** marker, clears reactions and quoted excerpts, and appears in
+moderation history without copying the removed text. It also scrubs reconnect
+replay and retry acknowledgements. PMs never offer moderator removal.
 
 Camera, screen-share and audio-only tiles have identical 16:9 dimensions in
 aligned rows, including the incomplete final row. Video fits inside each cell

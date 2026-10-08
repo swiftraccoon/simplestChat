@@ -20,7 +20,8 @@ import {
   decodePasskeySettings,
   type PasskeyOperation,
 } from './api-validation';
-import { decodeRoomSettings } from './protocol-validation';
+import { decodeRoomSettings, decodeChatHistory, decodeChatEntry } from './protocol-validation';
+import { decodeInbox, decodeChatRead } from './chat-history-validation';
 import { type Decoder, isRecord } from './validation';
 
 /** Account password selection mirrors the server's NFC and Unicode-scalar policy. */
@@ -306,6 +307,40 @@ async function apiNoContent(
 
 /** Endpoint-owned contracts: callers cannot select an arbitrary response type or decoder. */
 export const api = {
+  inbox: (token: string, params: URLSearchParams, signal: AbortSignal) =>
+    apiJson(decodeInbox, `/api/auth/inbox?${params}`, token, 'GET', undefined, signal),
+  privateHistory: (token: string, peer: string, params: URLSearchParams, signal: AbortSignal) =>
+    apiJson(
+      decodeChatHistory,
+      `/api/auth/inbox/${encodeURIComponent(peer)}/messages?${params}`,
+      token,
+      'GET',
+      undefined,
+      signal,
+    ),
+  sendPrivateMessage: (
+    token: string,
+    peer: string,
+    data: { clientMessageId: string; content: string },
+    signal: AbortSignal,
+  ) =>
+    apiJson(
+      decodeChatEntry,
+      `/api/auth/inbox/${encodeURIComponent(peer)}/messages`,
+      token,
+      'POST',
+      data,
+      signal,
+    ),
+  readPrivateMessages: (token: string, peer: string, messageId: string, signal: AbortSignal) =>
+    apiJson(
+      decodeChatRead,
+      `/api/auth/inbox/${encodeURIComponent(peer)}/read`,
+      token,
+      'PUT',
+      { messageId },
+      signal,
+    ),
   websocketTicket: (token: string, signal: AbortSignal) =>
     apiJson(decodeWebSocketTicket, '/api/auth/ws-ticket', token, 'POST', {}, signal),
   capabilities: () =>

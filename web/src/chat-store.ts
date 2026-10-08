@@ -93,6 +93,7 @@ export class ChatStore {
   readonly names = new Map<string, string>();
   private readonly unreadMessages = new Set<string>();
   private readonly dismissedMessages = new Map<string, true>();
+  private readonly removedMessages = new Map<string, string>();
   active = 'public';
   localId = '';
 
@@ -141,6 +142,8 @@ export class ChatStore {
 
   receive(entry: ChatEntry, _replay = false): boolean {
     if (!this.accepts(entry) || this.dismissedMessages.has(this.key(entry))) return false;
+    if (entry.removedAt) this.removeMessage(entry.messageId, entry.removedAt);
+    entry = this.redacted(entry);
     const conversation = this.conversation(entry);
     const existing = this.messages.find(
       (message) => message.messageId === entry.messageId || this.key(message) === this.key(entry),
@@ -148,6 +151,7 @@ export class ChatStore {
     if (existing) {
       if (this.conversation(existing) !== conversation) return false;
       Object.assign(existing, entry, { status: 'sent', error: undefined });
+      if (existing.removedAt) delete existing.replyTo;
       delete existing.retry;
       this.rememberName(entry);
       this.trim();
@@ -210,10 +214,64 @@ export class ChatStore {
   /** A retained message's reactions changed; they count toward the store's bound. */
   setReactions(messageId: string, reactions: ChatReaction[]): boolean {
     const item = this.messages.find((entry) => entry.messageId === messageId);
-    if (!item) return false;
+    if (!item || item.removedAt) return false;
     item.reactions = reactions;
     this.trim();
     return true;
+  }
+
+  /** Redact late replay/acknowledgements too, including quotes without a loaded original. */
+  private redacted(entry: ChatEntry): ChatEntry {
+    if (entry.recipientId) return entry;
+    const removedAt = this.removedMessages.get(entry.messageId) ?? entry.removedAt;
+    if (removedAt) {
+      const redacted = { ...entry, removedAt, content: '', reactions: [] };
+      delete redacted.replyTo;
+      return redacted;
+    }
+    if (entry.replyTo && this.removedMessages.has(entry.replyTo.messageId))
+      return { ...entry, replyTo: { ...entry.replyTo, excerpt: 'Message removed' } };
+    return entry;
+  }
+
+  removeMessage(messageId: string, removedAt: string): boolean {
+    this.removedMessages.set(messageId, removedAt);
+    while (this.removedMessages.size > this.maxMessages * 2)
+      this.removedMessages.delete(this.removedMessages.keys().next().value!);
+    let changed = false;
+    for (const item of this.messages) {
+      const safe = this.redacted(item);
+      if (safe === item) continue;
+      Object.assign(item, safe);
+      if (item.removedAt) {
+        delete item.retry;
+        delete item.replyTo;
+      }
+      changed = true;
+    }
+    this.trim();
+    return changed;
+  }
+
+  /** Discard pre-recovery public rows that the authoritative replay no longer contains. */
+  prunePublicReplay(captured: ReadonlySet<string>, retained: ReadonlySet<string>): Set<string> {
+    const discarded = new Set<string>();
+    for (let index = this.messages.length - 1; index >= 0; index--) {
+      const message = this.messages[index]!;
+      if (
+        message.status !== 'sent' ||
+        message.recipientId ||
+        !message.participantId ||
+        !captured.has(message.messageId) ||
+        retained.has(message.messageId)
+      )
+        continue;
+      discarded.add(message.messageId);
+      this.unreadMessages.delete(this.key(message));
+      this.messages.splice(index, 1);
+    }
+    this.refreshUnread();
+    return discarded;
   }
 
   markRead(id: string): void {
@@ -260,6 +318,7 @@ export class ChatStore {
     this.unreadMessages.clear();
     this.names.clear();
     this.dismissedMessages.clear();
+    this.removedMessages.clear();
     this.active = 'public';
     this.localId = localId;
   }

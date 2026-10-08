@@ -211,7 +211,12 @@ async function fixture({ touch = false, touchPoints = 0 } = {}) {
   let messageId = 0;
   const timers = new Map();
   const { SocialChat } = await loadTypeScript('src/social-chat.ts', {
-    modules: { './chat-store': chatModule, './ui': f.ui, './avatar-colors': colorModule },
+    modules: {
+      './chat-store': chatModule,
+      './ui': f.ui,
+      './avatar-colors': colorModule,
+      './chat-history': { openRoomHistory() {}, notifyHistoryRemoval() {} },
+    },
     globals: {
       document: f.document,
       window: { matchMedia: () => pointer },
@@ -250,6 +255,48 @@ async function fixture({ touch = false, touchPoints = 0 } = {}) {
   });
   return { ...f, state, http, chat, tab, participants, documentListeners, timers, pointer };
 }
+
+test('reading retained public chat advances a saved cursor once and cancels stale work', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  f.state.token = 'account-token';
+  f.state.room.roomSettings = { historyRetentionDays: 7 };
+  f.chat.handleEvent(snapshot([entry('saved')]));
+  assert.equal(f.timers.size, 1);
+  const [read] = f.timers.values();
+  f.timers.clear();
+  read();
+  await flush();
+  assert.deepEqual(
+    f.state.requests.filter((request) => request.action === 'markChatRead'),
+    [{ action: 'markChatRead', data: { messageId: 'server-saved' } }],
+  );
+  f.chat.render();
+  for (const timer of f.timers.values()) timer();
+  assert.equal(f.state.requests.filter((request) => request.action === 'markChatRead').length, 1);
+  f.chat.handleEvent(snapshot([entry('later')]));
+  const stale = [...f.timers.values()];
+  f.chat.reset();
+  for (const timer of stale) timer();
+  assert.equal(f.state.requests.filter((request) => request.action === 'markChatRead').length, 1);
+});
+
+test('saved read markers wait for an uncovered visible conversation', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  f.state.token = 'account-token';
+  f.state.room.roomSettings = { historyRetentionDays: 7 };
+  const dialog = f.ui.modal('Settings');
+  f.chat.handleEvent(snapshot([entry('unseen')]));
+  assert.equal(f.timers.size, 0);
+  dialog.close();
+  f.chat.render();
+  assert.equal(f.timers.size, 1);
+  f.document.hidden = true;
+  for (const timer of f.timers.values()) timer();
+  assert.equal(f.state.requests.filter((request) => request.action === 'markChatRead').length, 0);
+  f.chat.reset();
+});
 
 function snapshot(messages) {
   return { type: 'socialResponse', action: 'getRoomSnapshot', data: { messages } };
@@ -333,6 +380,26 @@ test('an unconfirmed public send retries the same identity and reconciles a late
     reason: 'receipt_expired',
   });
   assert.equal(original.status, 'sent', 'late uncertainty cannot downgrade confirmation');
+});
+
+test('an uncertain storage commit stays unknown and directs the sender to saved history', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  retrySession(f);
+  f.chat.input.value = 'durable original';
+  f.chat.send();
+  const original = f.chat.store.messages[0];
+  f.chat.handleEvent({
+    type: 'messageRetryResult',
+    clientMessageId: original.clientMessageId,
+    outcome: 'unknown',
+    reason: 'storage_unconfirmed',
+  });
+  assert.equal(original.status, 'unknown');
+  assert.equal(original.retry, undefined);
+  assert.match(original.error, /Check saved history/);
+  assert.equal(f.chat.store.messages.length, 1);
+  f.chat.reset();
 });
 
 test('private retry retains original recipient even when another conversation is active', async () => {
@@ -1996,4 +2063,169 @@ test('own messages and the reply composer keep the recorded room nickname', asyn
   f.chat.input.value = 'New message';
   f.chat.send();
   assert.equal(rows(f).at(-1).querySelector('.chat-sender-button').textContent, 'Current nickname');
+});
+
+test('moderators confirm public removal; private messages never offer removal', async () => {
+  const f = await fixture();
+  f.state.room.role = 'moderator';
+  await f.chat.activate();
+  f.chat.handleEvent({ type: 'chatReceived', ...entry('remove') });
+  let control = f.document
+    .getElementById('chat-messages')
+    .querySelectorAll('button')
+    .find((node) => node.getAttribute('aria-label') === 'Remove message');
+  assert.ok(control);
+  control.click();
+  assert.equal(
+    f.state.requests.filter((request) => request.action === 'removeChatMessage').length,
+    0,
+  );
+  const dialog = f.document.querySelector('dialog');
+  f.state.handle = async (action, data) =>
+    action === 'removeChatMessage'
+      ? { messageId: data.messageId, removedAt: '2026-10-07T12:00:00Z' }
+      : {};
+  dialog
+    .querySelectorAll('button')
+    .find((node) => node.textContent === 'Remove message')
+    .click();
+  await flush();
+  assert.equal(f.chat.store.messages[0].content, '');
+  assert.ok(f.document.getElementById('chat-messages').textContent.includes('Message removed'));
+  f.chat.handleEvent({
+    type: 'privateMessageReceived',
+    message: entry('private', { recipientId: 'local' }),
+  });
+  f.chat.store.active = 'alice';
+  f.chat.participantsChanged();
+  control = f.document
+    .getElementById('chat-messages')
+    .querySelectorAll('button')
+    .find((node) => node.getAttribute('aria-label') === 'Remove message');
+  assert.equal(control, undefined);
+});
+
+test('ordinary members lack removal controls and live deletion cancels a quote draft', async () => {
+  const f = await fixture();
+  f.state.room.role = 'user';
+  await f.chat.activate();
+  f.chat.handleEvent({ type: 'chatReceived', ...entry('remove') });
+  assert.equal(
+    f.document
+      .getElementById('chat-messages')
+      .querySelectorAll('button')
+      .find((node) => node.getAttribute('aria-label') === 'Remove message'),
+    undefined,
+  );
+  f.chat.startReply(f.chat.store.messages[0]);
+  f.chat.handleEvent({
+    type: 'chatMessageRemoved',
+    messageId: 'server-remove',
+    removedAt: '2026-10-07T12:00:00Z',
+  });
+  assert.equal(f.chat.replyingTo, null);
+  assert.equal(f.chat.store.messages[0].content, '');
+});
+
+test('retained reconnect drops pre-recovery public rows outside replay while preserving new live rows and PMs', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  f.chat.handleEvent(snapshot([]));
+  f.chat.handleEvent({ type: 'chatReceived', ...entry('gone') });
+  f.chat.handleEvent({ type: 'chatReceived', ...entry('retained') });
+  f.chat.handleEvent({
+    type: 'privateMessageReceived',
+    message: entry('private', { recipientId: 'local' }),
+  });
+  f.chat.input.value = 'Pending public';
+  f.chat.send();
+  const pending = f.chat.store.messages.find((message) => message.status === 'pending');
+  f.chat.startReply(f.chat.store.messages.find((message) => message.messageId === 'server-gone'));
+  const membership = f.state.room.membershipVersion;
+  f.chat.prepareSnapshotRecovery();
+  f.chat.handleEvent({ type: 'chatReceived', ...entry('new-live') });
+  f.chat.prepareSnapshotRecovery();
+  f.chat.handleEvent(snapshot([entry('retained')]));
+  assert.equal(
+    f.state.room.membershipVersion,
+    membership,
+    'a grace reconnect retains membership identity',
+  );
+  assert.equal(
+    f.chat.store.messages.some((message) => message.messageId === 'server-gone'),
+    false,
+  );
+  assert.ok(f.chat.store.messages.some((message) => message.messageId === 'server-new-live'));
+  assert.ok(f.chat.store.messages.some((message) => message.messageId === 'server-private'));
+  assert.ok(f.chat.store.messages.includes(pending));
+  assert.equal(pending.status, 'pending');
+  assert.equal(f.chat.replyingTo, null);
+  assert.equal(f.chat.snapshotPublicIds, null);
+  f.chat.handleEvent(snapshot([]));
+  assert.ok(
+    f.chat.store.messages.some((message) => message.messageId === 'server-retained'),
+    'ordinary later snapshots do not prune cache',
+  );
+  f.chat.reset();
+});
+
+test('membership activation captures once before its snapshot and reset retires recovery pruning', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  f.chat.handleEvent(snapshot([]));
+  f.chat.handleEvent({ type: 'chatReceived', ...entry('old') });
+  f.state.room.membershipVersion++;
+  await f.chat.activate();
+  f.chat.handleEvent({ type: 'chatReceived', ...entry('during-recovery') });
+  f.chat.handleEvent(snapshot([]));
+  assert.equal(
+    f.chat.store.messages.some((message) => message.messageId === 'server-old'),
+    false,
+  );
+  assert.ok(
+    f.chat.store.messages.some((message) => message.messageId === 'server-during-recovery'),
+  );
+  f.chat.prepareSnapshotRecovery();
+  f.chat.reset();
+  assert.equal(f.chat.snapshotPublicIds, null);
+  await f.chat.activate();
+  f.chat.handleEvent({ type: 'chatReceived', ...entry('during-recovery') });
+  f.chat.handleEvent(snapshot([]));
+  assert.ok(
+    f.chat.store.messages.some((message) => message.messageId === 'server-during-recovery'),
+    'the previous viewer/room capture cannot prune a replacement',
+  );
+});
+
+test('private conversation status distinguishes saved account PMs, guest sessions and offline peers', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  f.chat.openPrivate('alice', 'Alice');
+  assert.equal(
+    f.chat.conversationStatus.textContent,
+    'Private · available only during this room session',
+  );
+  f.state.token = 'account-token';
+  f.participants.get('alice').authenticated = true;
+  f.chat.participantsChanged();
+  assert.equal(f.chat.conversationStatus.textContent, 'Private · saved for 90 days in Messages');
+  f.participants.get('alice').authenticated = false;
+  f.chat.participantsChanged();
+  assert.equal(
+    f.chat.conversationStatus.textContent,
+    'Private · available only during this room session',
+  );
+  f.participants.get('alice').authenticated = true;
+  f.state.token = null;
+  f.chat.participantsChanged();
+  assert.equal(
+    f.chat.conversationStatus.textContent,
+    'Private · available only during this room session',
+  );
+  f.participants.delete('alice');
+  f.chat.participantsChanged();
+  assert.equal(f.chat.conversationStatus.textContent, 'Private · this person is offline');
+  f.chat.switchConversation('public');
+  assert.equal(f.chat.conversationStatus.textContent, '');
+  assert.equal(f.chat.conversationStatus.hidden, true);
 });

@@ -14,9 +14,9 @@ not avoid the limit. The initial budgets leave room for small product changes:
 
 | Asset group | Uncompressed limit | Gzip limit |
 | ----------- | ------------------ | ---------- |
-| JavaScript  | 560 KiB            | 128 KiB    |
-| CSS         | 64 KiB             | 12.5 KiB   |
-| HTML        | 48 KiB             | 11 KiB     |
+| JavaScript  | 568 KiB            | 132 KiB    |
+| CSS         | 65 KiB             | 12.5 KiB   |
+| HTML        | 48 KiB             | 12 KiB     |
 
 Limits are defined in [bundle-budget.json](../web/bundle-budget.json). Gzip uses
 level 6 independently for each file; the checker then sums each group. Run
@@ -30,6 +30,17 @@ These gates constrain delivery and parsing size; they do **not** establish
 startup latency, memory use, media quality or server capacity. Images, fonts,
 source maps and other non-JS/CSS/HTML files are not covered by these budgets.
 Measure runtime performance separately with the workflows below.
+
+The October 2026 message-removal, account-session and saved-conversation screens
+use a shared history reader and existing UI helpers; no runtime dependency was
+added. An isolated build of `cbe87d2` measured JavaScript 555,224 bytes raw /
+127,218 gzip, CSS 64,770 / 12,453, and HTML 45,381 / 11,251. The feature build
+measured JavaScript 572,972 / 132,219, CSS 65,713 / 12,679, and HTML 46,324 /
+11,555. The added code covers session revocation, bounded pagination/search,
+retention controls, unread synchronization and removal/retry reconciliation;
+the HTML increase is updated user help. Budgets now allow 568/132 KiB for
+JavaScript, 65/12.5 KiB for CSS and 48/12 KiB for HTML, including every emitted
+chunk. These size measurements do not establish runtime performance.
 
 Participant hovercards added a shared, dependency-free card and keyboard/touch
 name controls. The CSS gzip budget increased from 12 to 12.5 KiB after removing

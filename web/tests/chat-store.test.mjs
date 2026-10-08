@@ -167,3 +167,83 @@ test('input history, draft length, conversation metadata, and total composition 
   );
   assert.ok(characters <= 256 * 1024);
 });
+
+test('removal scrubs quotes, ignores late reactions and cannot be undone by stale replay', () => {
+  const value = store();
+  const original = entry('original', {
+    content: 'secret',
+    reactions: [{ emoji: '👍', participantIds: ['local'] }],
+  });
+  const quote = entry('quote', {
+    replyTo: {
+      messageId: original.messageId,
+      participantId: 'alice',
+      participantName: 'Alice',
+      excerpt: 'secret',
+    },
+  });
+  value.receive(original);
+  value.receive(quote);
+  value.receive(entry('private', { recipientId: 'local', content: 'private' }));
+  value.removeMessage(original.messageId, '2026-10-07T12:00:00Z');
+  value.receive(original, true);
+  value.receive(quote, true);
+  assert.equal(value.messages[0].content, '');
+  assert.equal(value.messages[0].removedAt, '2026-10-07T12:00:00Z');
+  assert.deepEqual(value.messages[0].reactions, []);
+  assert.equal(value.messages[1].replyTo.excerpt, 'Message removed');
+  assert.equal(value.messages[2].content, 'private');
+  assert.equal(
+    value.setReactions(original.messageId, [{ emoji: '👍', participantIds: ['local'] }]),
+    false,
+  );
+  value.reset('local');
+  value.receive(original);
+  assert.equal(value.messages[0].content, 'secret', 'removal IDs do not cross room identities');
+});
+
+test('removal arriving before its original still scrubs late content and quotes', () => {
+  const value = store();
+  value.removeMessage('server-original', '2026-10-07T12:00:00Z');
+  value.receive(entry('original'));
+  value.receive(
+    entry('quote', {
+      replyTo: {
+        messageId: 'server-original',
+        participantId: 'alice',
+        participantName: 'Alice',
+        excerpt: 'removed text',
+      },
+    }),
+  );
+  assert.equal(value.messages[0].content, '');
+  assert.equal(value.messages[1].replyTo.excerpt, 'Message removed');
+});
+
+test('recovery prunes only captured confirmed public rows absent from authoritative replay', () => {
+  const value = store();
+  value.receive(entry('gone'));
+  value.receive(entry('retained'));
+  value.receive(entry('private', { recipientId: 'local' }));
+  value.pending(entry('pending', { participantId: 'local' }));
+  value.pending(entry('unknown', { participantId: 'local' }));
+  value.fail('client-unknown', 'Unconfirmed', true);
+  value.receive(entry('notice', { participantId: '', participantName: '' }));
+  const captured = new Set(value.messages.map((message) => message.messageId));
+  value.markUnread(value.messages[0]);
+  value.receive(entry('new-live'));
+  const discarded = value.prunePublicReplay(captured, new Set(['server-retained']));
+  assert.deepEqual([...discarded], ['server-gone']);
+  assert.deepEqual(
+    value.messages.map((message) => message.messageId),
+    [
+      'server-retained',
+      'server-private',
+      'server-pending',
+      'server-unknown',
+      'server-notice',
+      'server-new-live',
+    ],
+  );
+  assert.equal(value.unread.has('public'), false);
+});

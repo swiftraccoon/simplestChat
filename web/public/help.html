@@ -114,8 +114,10 @@
           A pending message has not yet been confirmed. If it stays unconfirmed, use
           <strong>Retry</strong> to check the original send. Confirmation is limited to the current
           room session and may become unavailable. Copying it to a draft and sending again creates a
-          new message that could duplicate the original. Private messages cannot be sent to someone
-          who has left, opted out or blocked delivery.
+          new message that could duplicate the original. Room PMs require someone who is still
+          present. Signed-in people can continue an existing account conversation from
+          <strong>Messages</strong> while the other person is offline. PM opt-out and ignored
+          accounts still block delivery.
         </p>
         <p>
           Chat preferences let you turn private messages off and ignore participants. Ignoring is
@@ -125,8 +127,9 @@
           them or preserve a full recording.
         </p>
         <p>
-          Similar names are numbered in the room. The ID beside a name distinguishes participants;
-          an account badge means signed in, not verified identity. Hover for the full ID.
+          Similar names are numbered in the room. Hover or focus a name to view its participant
+          card, which labels the room nickname and account name. Being signed in does not verify
+          someone's identity.
         </p>
         <p>
           <strong>Chat options</strong> also set how message times appear and the color others
@@ -145,9 +148,13 @@
           screen.
         </p>
         <p>
-          <strong>Do not use chat as permanent storage.</strong> Recent history and reconnect
-          recovery are limited and live in server memory. Leaving, restarting the server or older
-          entries being evicted can make messages unavailable.
+          <strong>Messages</strong> keeps PMs between accounts for 90 days across devices and server
+          restarts. Start a conversation together in a room first. Guest PMs stay in the room
+          session. Open <strong>Chat options → Room history</strong> for saved public messages. Room
+          owners choose Off, 1, 7, 30 or 90 days. When history is on, people joining later can read
+          saved messages. Turning it off deletes saved public history; shortening the period deletes
+          older messages. Search covers the newest 10,000 retained messages in each conversation.
+          Chat is not permanent storage.
         </p>
         <p>
           Private messages and media are not end-to-end encrypted. Server operators are part of the
@@ -176,7 +183,11 @@
           viewing controls. Check the target and duration before banning someone, and use the
           management views to review bans, reports and the room's moderation history. Kicking or
           banning from a report resolves it and records what it led to; the owner's history also
-          shows the address a sanction applied to.
+          shows the address a sanction applied to. Moderators can choose <strong>Remove</strong> on
+          a public message, including in Room history. After confirmation, its text and quoted
+          excerpts disappear for everyone and a <strong>Message removed</strong> marker remains. The
+          action is recorded in moderation history. These controls do not reveal or remove private
+          messages.
         </p>
         <p>The people list marks roles with a symbol before the name:</p>
         <ul class="legend">

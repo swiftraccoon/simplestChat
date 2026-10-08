@@ -2659,6 +2659,7 @@ joinBtn.addEventListener(
           );
         },
         onRecoveryState: (state, message) => {
+          if (state === 'reconnecting') socialChat.prepareSnapshotRecovery();
           document.getElementById('room-recovery-notice')?.remove();
           roomRecovering = state !== 'connected';
           if (state !== 'connected') retireRoomSettingsAction();
