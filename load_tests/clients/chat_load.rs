@@ -474,6 +474,8 @@ mod tests {
             chat_style: ChatStyle::default(),
             reply_to: None,
             removed_at: None,
+                revision: 0,
+                edited_at: None,
             reactions: Vec::new(),
         };
         (
@@ -489,6 +491,8 @@ mod tests {
                 client_message_id: entry.client_message_id,
                 sent_at: entry.sent_at,
                 removed_at: None,
+                revision: 0,
+                edited_at: None,
                 chat_style: entry.chat_style,
                 reply_to: None,
             },

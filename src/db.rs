@@ -100,6 +100,9 @@ pub async fn connect() -> anyhow::Result<Option<PgPool>> {
     info!("Connected to PostgreSQL");
 
     if run_migrations {
+        // An interrupted concurrent build may leave an invalid named index. Never
+        // let IF NOT EXISTS mark its migration complete without repairing it.
+        verify_chat_indexes(&pool, false).await?;
         // Maintenance budgets, not the runtime's 10 s statement deadline: a large
         // index build or backfill must not fail at a limit meant for requests.
         let maintenance = PgConnectOptions::from_str(&url)
@@ -121,7 +124,8 @@ pub async fn connect() -> anyhow::Result<Option<PgPool>> {
 /// One column from each table the newest migrations shaped. A deployment that ran
 /// the binary against an unmigrated database fails here, at startup, with a message
 /// naming the gap, instead of on the first request that touches it.
-const EXPECTED_COLUMNS: [(&str, &str); 20] = [
+const EXPECTED_COLUMNS: [(&str, &str); 21] = [
+    ("chat_pins", "message_id"),
     ("push_keys", "private_key"),
     ("push_subscriptions", "generation"),
     ("rooms", "history_retention_days"),
@@ -143,6 +147,32 @@ const EXPECTED_COLUMNS: [(&str, &str); 20] = [
     ("invite_redemptions", "invite_hash"),
     ("webauthn_credentials", "credential_json"),
 ];
+
+/// Concurrent indexes are checked both before migration retry and before readiness.
+async fn verify_chat_indexes(pool: &PgPool, required: bool) -> anyhow::Result<()> {
+    let indexes: Vec<(String, bool, bool)> = sqlx::query_as(
+        "SELECT c.relname::text, i.indisvalid, i.indisready
+         FROM pg_catalog.pg_index i
+         JOIN pg_catalog.pg_class c ON c.oid=i.indexrelid
+         JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace
+         WHERE n.nspname='public' AND c.relname IN
+           ('chat_messages_incoming_unread','chat_messages_conversation_reply')",
+    )
+    .fetch_all(pool)
+    .await
+    .context("could not inspect concurrent chat indexes")?;
+    for (name, valid, ready) in &indexes {
+        if !valid || !ready {
+            bail!("database index {name} is incomplete; repair it before rerunning migrations");
+        }
+    }
+    if required && indexes.len() != 2 {
+        bail!(
+            "database schema is behind this build (missing chat lookup indexes); run the migrations first"
+        );
+    }
+    Ok(())
+}
 
 async fn verify_schema(pool: &PgPool) -> anyhow::Result<()> {
     // Fixed identifiers only; no runtime value enters the SQL text.
@@ -169,7 +199,7 @@ async fn verify_schema(pool: &PgPool) -> anyhow::Result<()> {
             missing.join(", ")
         );
     }
-    Ok(())
+    verify_chat_indexes(pool, true).await
 }
 
 fn schema_gaps(present: &[(String, String, String)]) -> Vec<String> {

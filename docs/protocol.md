@@ -21,7 +21,9 @@ Login, passkeys and refresh remain owned by [AuthManager](../web/src/auth.ts).
 | `revokeSession` | `DELETE /api/auth/sessions/:id` | `204`, no body; revokes only an owned session |
 | `revokeOtherSessions` | `DELETE /api/auth/sessions/others` | `204`, no body; keeps the caller's session |
 | `inbox` | `GET /api/auth/inbox` with optional `before` cursor | `{ conversations, nextCursor, retentionDays }` |
-| `privateHistory` | `GET /api/auth/inbox/:peer/messages` with optional `before`, `q`, `limit` | `ChatHistoryPage` |
+| `privateHistory` | `GET /api/auth/inbox/:peer/messages` with optional `before`, `after`, `around`, `resume`, `q`, `limit` | `ChatHistoryPage` |
+| `inboxUnread` | `GET /api/auth/inbox/unread` | `{ unreadCount }`, capped at 1,000 |
+| `editPrivateMessage` | `PUT /api/auth/inbox/:peer/messages/:messageId`, JSON `{content, expectedRevision}` | Updated author-owned `ChatEntry` |
 | `sendPrivateMessage` | `POST /api/auth/inbox/:peer/messages`, JSON `{clientMessageId, content}` | `ChatEntry` |
 | `readPrivateMessages` | `PUT /api/auth/inbox/:peer/read`, JSON `{messageId}` | `{ readMessageId: string \| null }` |
 | `updateProfile` | `PATCH /api/auth/profile` | `AccountProfile` |
@@ -516,13 +518,23 @@ messages regardless of their join time. Disabling purges saved public messages
 and read cursors. Shortening retention deletes expired messages and shortens
 remaining lifetimes; extending retention applies to future sends only.
 
-`getChatHistory` accepts optional `before`, `q` and `limit` and returns
-`{messages, nextCursor, readMessageId, retentionDays}`. The opaque cursor orders
-pages by server timestamp and message UUID; `limit` is 1–50 (default 50). Search
-accepts 3–128 characters and examines the newest 10,000 retained messages in that
-conversation. `markChatRead` takes `messageId`; the signed-in viewer's read cursor
-moves forward only. Both actions require current room membership. History Off
-returns an empty saved page; it does not extend runtime replay.
+`getChatHistory` accepts optional `before`, `after`, `around`, `resume`, `q` and
+`limit` and returns `{messages, nextCursor, newerCursor, firstUnreadMessageId,
+readMessageId, retentionDays}`. Messages are chronological; opaque cursors order
+pages by server timestamp and message UUID. `nextCursor` retrieves older messages
+through `before`; `newerCursor` retrieves later messages through `after`. `limit`
+is 1–50 (default 50). `around` names a retained message in this exact conversation
+and loads bounded context on either side. `resume: true` loads context around the
+first unread incoming message, or the latest page when nothing is unread. At most
+one of `before`, `after`, `around` and `resume: true` may be supplied. Search `q`
+accepts 3–128 characters, examines the newest 10,000 retained messages, and may be
+combined only with `before` pagination. A search result's ID can then open its
+surrounding conversation using `around` without `q`.
+
+`markChatRead` takes `messageId`; the signed-in viewer's read cursor moves forward
+only. Loading history does not mark it read. Both actions require current room
+membership. History Off returns an empty saved page; it does not extend runtime
+replay. The same positioning and read rules apply to authenticated PM history.
 
 Account-to-account PMs are retained for 90 days. Authenticated HTTP routes are
 `GET /api/auth/inbox`, `GET|POST /api/auth/inbox/:peer/messages` and
@@ -606,10 +618,45 @@ room receives `chatMessageRemoved` with the same fields. A removed `ChatEntry`
 keeps its message/sender/time identity, has `removedAt`, empty `content` and
 reactions, and no `replyTo`. Quoted excerpts in other retained messages become
 `Message removed`. Removal scrubs runtime replay, retry receipts and the database
-before publication; replay or a same-attempt retry cannot restore content. New
-replies and reactions to a removed message are refused. Repeating removal keeps
+before publication; replay or a same-attempt retry cannot restore content. Its pin
+is removed in the same persistence transaction. New replies, edits, pins and
+reactions to a removed message are refused. Repeating removal keeps
 the original marker and does not duplicate the moderation event. PM content is
 never exposed to this operation.
+
+`ChatEntry` and `chatReceived` carry a monotonic integer `revision`, initially 0,
+and edited messages carry `editedAt` as an RFC3339 timestamp. `editChatMessage`
+takes `{requestId, messageId, content, expectedRevision}` and returns `{message}`.
+Only the author may edit; guests additionally require the original room
+membership. Normal text limits and room chat permissions still apply. The edit
+preserves the message ID, send time, recipient, original appearance and delivery
+receipt. A mismatched revision is rejected; retrying the same content from the
+immediately preceding revision returns the committed result. Removal is terminal
+regardless of revision. Edits update existing quote excerpts and saved send
+receipts. New quoted sends and edits serialize per conversation so a new reply
+cannot commit a stale excerpt after the edit.
+
+Visible recipients receive `chatMessageEdited` with `{message}`. Private events
+remain confined to the two participants. Account PMs outside room replay use
+`PUT /api/auth/inbox/:peer/messages/:messageId` with `{content, expectedRevision}`;
+the server derives the conversation, checks ownership/current session and saved
+PM consent, commits, then reconciles live room sockets. Clients compare revisions
+when reconciling asynchronous history, events and receipts. An older body must
+never replace a newer edit or a removal tombstone.
+
+`getPinnedMessages` takes `{requestId}` and returns `{messages}`.
+`setPinnedMessage` takes `{requestId, messageId, pinned}` and returns the same
+shape; mutations require Moderator+ and target public messages in the current
+room. Rooms hold at most three pins, newest pin first. Changes broadcast
+`pinnedMessagesChanged` with `{messages}`. Ignored authors are filtered from a
+viewer's list. Without saved history, pins last only for that room runtime. With
+saved history enabled, pins survive restarts and share the original message's
+expiry; they never extend retention. Removing a message or disabling saved
+history removes its persisted pins. Expired pins are excluded on reads, and the
+browser refreshes visible pinned messages periodically and after settings changes.
+Migration 027 adds bounded pin slots; migrations 028–029 add indexes for unread
+counts and quote updates. Existing chat bodies begin at revision 0 without
+changing their text or retention.
 
 Every sanction and report decision leaves an entry in the room's moderation
 history, written in the same transaction as the change it records: `kick`,

@@ -89,6 +89,23 @@ Only message identity and actor/target metadata enter moderation history. Runtim
 history and retry receipts are scrubbed before `chatMessageRemoved` is published;
 removed messages reject new replies and reactions. PMs are excluded.
 
+Author edits carry `expectedRevision`; accepted bodies increment `revision` and
+set `editedAt`. Removal is terminal. Saved edit transactions update quote excerpts
+and retain message identity; per-conversation advisory locks also serialize quoted
+sends. Runtime edits update replay, receipts and pins, recalculate byte budgets,
+and reject stale completion order. HTTP PM edits reconcile room state under room
+control after their database commit. Cross-room publication releases the original
+room gate before entering another, so simultaneous room edits cannot deadlock.
+
+`getPinnedMessages`/`setPinnedMessage` expose at most three public pins; writes
+require Moderator+. Migration 027 stores pins with cascading message deletion;
+without saved room history they remain runtime-only. Retained pin reads enforce
+message expiry, and removal/unpin/history-off clears them. Migrations 028–029 add
+recipient-unread and conversation-quote indexes. Saved history supports bounded
+`around` context, forward `after` pagination and first-unread `resume` positioning;
+none of those reads advance an account's read marker. The inbox unread summary is
+capped at 1,000 and never returns message contents.
+
 Essential outbound queue overflow retires the affected WebSocket through
 `signaling/outbound.rs`, independently of the full message queue. Registrations
 hold weak sender references and leave with the connection handler. The reconnect

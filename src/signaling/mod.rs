@@ -688,6 +688,7 @@ impl SignalingServer {
             )
             .route("/password", post(crate::auth::account::change_password))
             .route("/inbox", get(crate::room::history::inbox))
+            .route("/inbox/unread", get(crate::room::history::unread_summary))
             .route(
                 "/push",
                 get(crate::push::status)
@@ -699,6 +700,10 @@ impl SignalingServer {
                 get(crate::room::history::messages).post(crate::room::history::send_message),
             )
             .route("/inbox/{peer}/read", put(crate::room::history::read))
+            .route(
+                "/inbox/{peer}/messages/{messageId}",
+                put(crate::room::history::edit_message),
+            )
             .route("/ws-ticket", post(crate::auth::ws_tickets::issue))
             .route(
                 "/recovery/key",

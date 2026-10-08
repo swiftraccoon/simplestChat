@@ -3949,6 +3949,8 @@ mod chat_and_continuous_audio_tests {
                     chat_style: ChatStyle::default(),
                     reply_to: None,
                     removed_at: None,
+                    revision: 0,
+                    edited_at: None,
                     reactions: Vec::new(),
                 },
             };

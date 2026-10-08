@@ -309,6 +309,118 @@ def dependency_checks(context: Context, tools: Path, reviews: Sequence[Exception
         require(vulnerabilities["total"] == 0, "npm_dependency_advisory")
 
 
+def migration_uses_transaction(sql: str) -> bool:
+    """Match SQLx's opt-out only for an exact first-line, single concurrent index.
+
+    The narrow lexical check only selects the execution mode; Squawk still parses
+    every statement with every rule enabled. Comments and SQL string literals
+    cannot hide a second operation. More complex nontransactional migrations need
+    an explicit policy change instead of an inline scanner suppression.
+    """
+    marker = "-- no-transaction"
+    if not sql.startswith(marker):
+        require(
+            re.search(r"(?im)^\s*--\s*no-transaction\b", sql) is None,
+            "migration_transaction_marker_position",
+        )
+        return True
+    require(sql.partition("\n")[0] == marker, "migration_transaction_marker_format")
+    body = sql.partition("\n")[2]
+    require(
+        all(token not in body for token in ("/*", "*/", "\\", "$", "\x00")),
+        "migration_concurrent_index_syntax",
+    )
+    code = re.sub(
+        r"'(?:''|[^'])*'|--[^\n]*",
+        lambda match: "" if match[0].startswith("--") else "''",
+        body,
+    ).strip()
+    require(
+        code.count(";") == 1
+        and code.endswith(";")
+        and re.fullmatch(
+            r"CREATE\s+(?:UNIQUE\s+)?INDEX\s+CONCURRENTLY\s+"
+            + r"(?:IF\s+NOT\s+EXISTS\s+)?[a-z_][a-z_0-9]*"
+            + r"\s+ON\s+[a-z_][a-z_0-9]*\s*\([^;]+;",
+            code,
+            re.IGNORECASE | re.DOTALL,
+        )
+        is not None,
+        "migration_requires_one_concurrent_index",
+    )
+    return False
+
+
+def migration_timeout_context(root: Path) -> bytes:
+    """Expose actual SQLx connection startup timeouts to the static SQL scanner."""
+    source = bounded_file(root / "src/db.rs", MAX_REPORT).decode("utf-8")
+    options = re.search(
+        r"let maintenance\s*=\s*PgConnectOptions::from_str\(&url\)" + r".*?\.options\(\[(.*?)\]\);",
+        source,
+        re.DOTALL,
+    )
+    require(options is not None, "migration_timeout_configuration_missing")
+    require("connect_with(&maintenance)" in source, "migration_timeout_connection_missing")
+    literal = r'\("(statement_timeout|lock_timeout)",\s*"([1-9][0-9]*(?:ms|s|min))"\)'
+    declared = options[1] if options is not None else ""
+    values = [(match[1], match[2]) for match in re.finditer(literal, declared)]
+    required = {"statement_timeout", "lock_timeout"}
+    require(
+        len(values) == len(required)
+        and {key for key, _ in values} == required
+        and not re.sub(literal, "", declared).strip(" ,\t\r\n"),
+        "migration_timeout_literals_required",
+    )
+    return "".join(f"SET {key} = '{value}';\n" for key, value in values).encode()
+
+
+def migration_checks(context: Context, tools: Path, migrations: Sequence[str]) -> None:
+    """Lint every unbaselined migration in the same transaction mode SQLx will use."""
+    groups: dict[bool, list[str]] = {True: [], False: []}
+    for name in migrations:
+        sql = bounded_file(context.root / name, MAX_REPORT).decode("utf-8")
+        groups[migration_uses_transaction(sql)].append(name)
+    for transactional, names in groups.items():
+        if not names:
+            continue
+        mode = "transactional" if transactional else "concurrent-index"
+        paths = [context.root / name for name in names]
+        if not transactional:
+            # SQLx sets these GUCs when opening its maintenance connection. They
+            # cannot live in the migration: a multi-statement execute would put
+            # CREATE INDEX CONCURRENTLY back inside an implicit transaction.
+            prefix = migration_timeout_context(context.root)
+            projected = context.output / "migration-context"
+            projected.mkdir(mode=0o700)
+            for path in paths:
+                write_private(projected / path.name, prefix + bounded_file(path, MAX_REPORT), 0o600)
+            paths = [projected / path.name for path in paths]
+        config = context.output / f"squawk-{mode}.toml"
+        settings = f'assume_in_transaction = {str(transactional).lower()}\npg_version = "18.6"\n'
+        write_private(
+            config,
+            b"excluded_rules = []\nincluded_rules = []\nexcluded_paths = []\n" + settings.encode(),
+            0o600,
+        )
+        _, output = context.run(
+            f"squawk-{mode}",
+            [
+                str(tool_path("squawk", tools)),
+                "--config",
+                str(config),
+                "--pg-version=18.6",
+                *(["--assume-in-transaction"] if transactional else []),
+                "--reporter=json",
+                *(str(path) for path in paths),
+            ],
+            cwd=context.output / "home",
+        )
+        require(
+            findings.list_value(cast("object", json.loads(output))) == [],
+            "migration_policy_findings",
+        )
+
+
 def source_checks(context: Context, tools: Path, *, include_vendor: bool = False) -> None:
     """Run tested repository rules and inspect new SQL plus rendered runtime restrictions."""
     _ = context.run(
@@ -326,31 +438,7 @@ def source_checks(context: Context, tools: Path, *, include_vendor: bool = False
         timeout=300,
     )
     migrations = findings.new_migrations(context.root)
-    if migrations:
-        config = context.output / "squawk.toml"
-        write_private(
-            config,
-            b"excluded_rules = []\nincluded_rules = []\nexcluded_paths = []\n"
-            + b'assume_in_transaction = true\npg_version = "18.6"\n',
-            0o600,
-        )
-        _, output = context.run(
-            "squawk",
-            [
-                str(tool_path("squawk", tools)),
-                "--config",
-                str(config),
-                "--pg-version=18.6",
-                "--assume-in-transaction",
-                "--reporter=json",
-                *(str(context.root / name) for name in migrations),
-            ],
-            cwd=context.output / "home",
-        )
-        require(
-            findings.list_value(cast("object", json.loads(output))) == [],
-            "migration_policy_findings",
-        )
+    migration_checks(context, tools, migrations)
     context.checks.append(
         {"name": "migration-review", "newFiles": len(migrations), "exitStatus": 0}
     )

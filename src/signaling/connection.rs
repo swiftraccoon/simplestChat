@@ -678,6 +678,9 @@ fn diagnostic_operation(message: &ClientMessage) -> OperationKind {
         | ClientMessage::SetChatStyle { .. }
         | ClientMessage::ReactToMessage { .. }
         | ClientMessage::RemoveChatMessage { .. }
+        | ClientMessage::EditChatMessage { .. }
+        | ClientMessage::GetPinnedMessages { .. }
+        | ClientMessage::SetPinnedMessage { .. }
         | ClientMessage::GetRoomSnapshot { .. }
         | ClientMessage::GetChatHistory { .. }
         | ClientMessage::MarkChatRead { .. }
@@ -2807,6 +2810,9 @@ async fn handle_client_message(
         | ClientMessage::SetChatStyle { .. }
         | ClientMessage::ReactToMessage { .. }
         | ClientMessage::RemoveChatMessage { .. }
+        | ClientMessage::EditChatMessage { .. }
+        | ClientMessage::GetPinnedMessages { .. }
+        | ClientMessage::SetPinnedMessage { .. }
         | ClientMessage::GetRoomSnapshot { .. }
         | ClientMessage::GetChatHistory { .. }
         | ClientMessage::MarkChatRead { .. }

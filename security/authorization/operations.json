@@ -670,6 +670,31 @@
     },
     {
       "method": "GET",
+      "path": "/api/auth/inbox/unread",
+      "handler": "crate::room::history::unread_summary",
+      "policy": "current-session",
+      "body": null,
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/auth/inbox/{peer}/messages/{messageId}",
+      "handler": "crate::room::history::edit_message",
+      "policy": "current-session",
+      "body": {
+        "content": "Edited message",
+        "expectedRevision": 0
+      },
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions"
+      ]
+    },
+    {
+      "method": "GET",
       "path": "/api/auth/push",
       "handler": "crate::push::status",
       "policy": "current-session",
@@ -1501,6 +1526,53 @@
         "type": "setRoomHistory",
         "requestId": "policy-request",
         "retentionDays": 7
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation"
+      ]
+    },
+    {
+      "variant": "EditChatMessage",
+      "operation": "editChatMessage",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "editChatMessage",
+        "requestId": "policy-request",
+        "messageId": "00000000-0000-4000-8000-000000000001",
+        "content": "Updated message",
+        "expectedRevision": 0
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation"
+      ]
+    },
+    {
+      "variant": "GetPinnedMessages",
+      "operation": "getPinnedMessages",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "getPinnedMessages",
+        "requestId": "policy-request"
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation"
+      ]
+    },
+    {
+      "variant": "SetPinnedMessage",
+      "operation": "setPinnedMessage",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "setPinnedMessage",
+        "requestId": "policy-request",
+        "messageId": "00000000-0000-4000-8000-000000000001",
+        "pinned": true
       },
       "checks": [
         "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",

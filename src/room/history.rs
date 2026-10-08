@@ -26,6 +26,9 @@ const CLEANUP_BATCH: i64 = 1_000;
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct HistoryQuery {
     pub before: Option<String>,
+    pub after: Option<String>,
+    pub around: Option<String>,
+    pub resume: Option<bool>,
     pub q: Option<String>,
     pub limit: Option<u32>,
 }
@@ -35,6 +38,8 @@ pub struct HistoryQuery {
 pub struct HistoryPage {
     pub messages: Vec<ChatEntry>,
     pub next_cursor: Option<String>,
+    pub newer_cursor: Option<String>,
+    pub first_unread_message_id: Option<String>,
     pub read_message_id: Option<String>,
     pub retention_days: i32,
 }
@@ -76,6 +81,61 @@ pub struct SendRequest {
     pub content: String,
 }
 
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EditRequest {
+    pub content: String,
+    pub expected_revision: u32,
+}
+
+/// Editing never changes identity, order, delivery receipts or conversation.
+pub(crate) fn apply_edit(
+    message: &mut ChatEntry,
+    request: &EditRequest,
+) -> Result<(), &'static str> {
+    if request.content.trim().is_empty()
+        || request.content.len() > 4096
+        || request
+            .content
+            .chars()
+            .any(|c| c.is_control() && c != '\n' && c != '\t')
+    {
+        return Err("Message must contain 1–4096 bytes of text");
+    }
+    if message.removed_at.is_some() {
+        return Err("That message has been removed");
+    }
+    if message.revision != request.expected_revision {
+        if request.expected_revision.checked_add(1) == Some(message.revision)
+            && message.content == request.content
+        {
+            return Ok(()); // The previous attempt committed but its response was lost.
+        }
+        return Err("This message changed. Reload it before editing again");
+    }
+    if message.content == request.content {
+        return Ok(());
+    }
+    message.revision = message
+        .revision
+        .checked_add(1)
+        .ok_or("This message cannot be edited again")?;
+    message.content.clone_from(&request.content);
+    message.edited_at = Some(Utc::now().to_rfc3339());
+    Ok(())
+}
+
+pub(crate) fn quote_excerpt(content: &str) -> String {
+    let flat = content.split_whitespace().collect::<Vec<_>>().join(" ");
+    let mut chars = flat.chars();
+    let head: String = chars.by_ref().take(140).collect();
+    if chars.next().is_some() {
+        format!("{}…", head.trim_end())
+    } else {
+        head
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 struct Cursor {
     at: DateTime<Utc>,
@@ -109,6 +169,24 @@ fn decode_cursor(value: Option<&str>) -> Result<Option<Cursor>, &'static str> {
 impl HistoryQuery {
     pub(crate) fn validate(&self) -> Result<(), &'static str> {
         decode_cursor(self.before.as_deref())?;
+        decode_cursor(self.after.as_deref())?;
+        let modes = usize::from(self.before.is_some())
+            + usize::from(self.after.is_some())
+            + usize::from(self.around.is_some())
+            + usize::from(self.resume == Some(true));
+        if modes > 1
+            || (self.q.is_some()
+                && (self.after.is_some() || self.around.is_some() || self.resume == Some(true)))
+        {
+            return Err("Choose one history position");
+        }
+        if self
+            .around
+            .as_ref()
+            .is_some_and(|id| id.parse::<Uuid>().is_err())
+        {
+            return Err("Invalid message ID");
+        }
         if self.limit.is_some_and(|limit| !(1..=50).contains(&limit)) {
             return Err("History pages contain 1–50 messages");
         }
@@ -229,6 +307,14 @@ pub(crate) async fn persist_message(
     )
     .await?;
     tx.commit().await?;
+    if saved.message_id == message.message_id
+        && let Some(recipient) = &saved.recipient_id
+    {
+        let recipient = recipient
+            .parse()
+            .map_err(|_| invalid("Invalid recipient"))?;
+        crate::push::enqueue(pool, recipient).await;
+    }
     Ok(saved)
 }
 
@@ -255,6 +341,34 @@ async fn insert_message(
         (None, Some(recipient)) if sender_authenticated => private_conversation(sender, recipient),
         _ => return Err(invalid("Invalid saved conversation")),
     };
+    // Serialize edits and quoted sends in one conversation so a reply cannot
+    // commit a pre-edit excerpt after an edit has already updated older quotes.
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1,29))")
+        .bind(&conversation)
+        .execute(&mut *connection)
+        .await?;
+    let mut message = message.clone();
+    if let Some(reply) = &mut message.reply_to {
+        let original: Option<SqlJson<ChatEntry>> = sqlx::query_scalar(
+            "SELECT body FROM chat_messages WHERE conversation=$1 AND id=$2 AND expires_at>now()",
+        )
+        .bind(&conversation)
+        .bind(
+            reply
+                .message_id
+                .parse::<Uuid>()
+                .map_err(|_| invalid("Invalid reply"))?,
+        )
+        .fetch_optional(&mut *connection)
+        .await?;
+        if let Some(original) = original {
+            reply.excerpt = if original.0.removed_at.is_some() {
+                "Message removed".into()
+            } else {
+                quote_excerpt(&original.0.content)
+            };
+        }
+    }
     let id: Uuid = message
         .message_id
         .parse()
@@ -271,7 +385,7 @@ async fn insert_message(
          ON CONFLICT (conversation,sender_session,client_message_id) DO NOTHING RETURNING body")
         .bind(id).bind(&conversation).bind(room).bind(sender_authenticated.then_some(sender))
         .bind(recipient).bind(sender_session).bind(&message.client_message_id).bind(at).bind(expires)
-        .bind(SqlJson(message)).fetch_optional(&mut *connection).await?;
+        .bind(SqlJson(&message)).fetch_optional(&mut *connection).await?;
     let saved = if let Some(saved) = inserted {
         saved.0
     } else {
@@ -280,7 +394,10 @@ async fn insert_message(
             .bind(&conversation).bind(sender_session).bind(&message.client_message_id)
             .fetch_one(&mut *connection).await?;
         if saved.0.removed_at.is_none()
-            && (saved.0.content != message.content || saved.0.reply_to != message.reply_to)
+            && saved.0.edited_at.is_none()
+            && (saved.0.content != message.content
+                || saved.0.reply_to.as_ref().map(|r| &r.message_id)
+                    != message.reply_to.as_ref().map(|r| &r.message_id))
         {
             return Err(invalid("Message ID was already used"));
         }
@@ -304,6 +421,8 @@ async fn insert_message(
     Ok(saved)
 }
 
+type MessageRow = (Uuid, DateTime<Utc>, SqlJson<ChatEntry>);
+
 pub(crate) async fn page(
     pool: &PgPool,
     conversation: &str,
@@ -312,43 +431,107 @@ pub(crate) async fn page(
     query: &HistoryQuery,
 ) -> Result<HistoryPage, sqlx::Error> {
     query.validate().map_err(invalid)?;
-    let cursor = decode_cursor(query.before.as_deref()).map_err(invalid)?;
+    let cursor =
+        decode_cursor(query.before.as_deref().or(query.after.as_deref())).map_err(invalid)?;
     let limit = query.limit.unwrap_or(PAGE_LIMIT as u32) as usize;
-    // Materialize a bounded recent window before substring matching. User text
-    // is a value, never a SQL pattern; '%' and '_' are literal characters.
-    let mut rows: Vec<(Uuid, DateTime<Utc>, SqlJson<ChatEntry>)> = if let Some(search) = &query.q {
+    let read: Option<(Uuid, DateTime<Utc>)> = if let Some(account) = account {
+        sqlx::query_as("SELECT message_id,sent_at FROM chat_read_cursors WHERE user_id=$1 AND conversation=$2 AND expires_at>now()")
+            .bind(account).bind(conversation).fetch_optional(pool).await?
+    } else {
+        None
+    };
+    let first_unread: Option<Uuid> = if let Some(account) = account {
+        sqlx::query_scalar(
+            "SELECT id FROM chat_messages WHERE conversation=$1 AND expires_at>now()
+            AND sender_account IS DISTINCT FROM $2 AND body->>'removedAt' IS NULL
+            AND ($3::timestamptz IS NULL OR (sent_at,id)>($3,$4)) ORDER BY sent_at,id LIMIT 1",
+        )
+        .bind(conversation)
+        .bind(account)
+        .bind(read.map(|r| r.1))
+        .bind(read.map(|r| r.0))
+        .fetch_optional(pool)
+        .await?
+    } else {
+        None
+    };
+    let anchor = query
+        .around
+        .as_deref()
+        .map(str::parse::<Uuid>)
+        .transpose()
+        .map_err(|_| invalid("Invalid message ID"))?
+        .or_else(|| {
+            (query.resume == Some(true))
+                .then_some(first_unread)
+                .flatten()
+        });
+    let mut rows: Vec<MessageRow> = if let Some(anchor) = anchor {
+        let at:DateTime<Utc> = sqlx::query_scalar("SELECT sent_at FROM chat_messages WHERE conversation=$1 AND id=$2 AND expires_at>now()")
+            .bind(conversation).bind(anchor).fetch_one(pool).await?;
+        // Two bounded index walks provide context on either side without an OFFSET scan.
+        sqlx::query_as("(SELECT id,sent_at,body FROM chat_messages WHERE conversation=$1 AND expires_at>now()
+                AND (sent_at,id)<($2,$3) ORDER BY sent_at DESC,id DESC LIMIT $4)
+            UNION ALL (SELECT id,sent_at,body FROM chat_messages WHERE conversation=$1 AND expires_at>now()
+                AND (sent_at,id)>=($2,$3) ORDER BY sent_at,id LIMIT $5)")
+            .bind(conversation).bind(at).bind(anchor).bind((limit/2) as i64).bind((limit-limit/2) as i64)
+            .fetch_all(pool).await?
+    } else if let Some(search) = &query.q {
+        // Materialize only a bounded recent window; '%' and '_' are literal characters.
         sqlx::query_as("WITH recent AS MATERIALIZED (
             SELECT id,sent_at,body FROM chat_messages WHERE conversation=$1 AND expires_at>now()
             ORDER BY sent_at DESC,id DESC LIMIT $6)
             SELECT id,sent_at,body FROM recent WHERE ($2::timestamptz IS NULL OR (sent_at,id)<($2,$3))
               AND body->>'removedAt' IS NULL AND position(lower($4) in lower(body->>'content'))>0
             ORDER BY sent_at DESC,id DESC LIMIT $5")
-            .bind(conversation).bind(cursor.as_ref().map(|c| c.at)).bind(cursor.as_ref().map(|c| c.id))
+            .bind(conversation).bind(cursor.as_ref().map(|c|c.at)).bind(cursor.as_ref().map(|c|c.id))
             .bind(search.trim()).bind((limit+1) as i64).bind(SEARCH_WINDOW).fetch_all(pool).await?
+    } else if query.after.is_some() {
+        sqlx::query_as(
+            "SELECT id,sent_at,body FROM chat_messages WHERE conversation=$1 AND expires_at>now()
+            AND (sent_at,id)>($2,$3) ORDER BY sent_at,id LIMIT $4",
+        )
+        .bind(conversation)
+        .bind(cursor.as_ref().map(|c| c.at))
+        .bind(cursor.as_ref().map(|c| c.id))
+        .bind((limit + 1) as i64)
+        .fetch_all(pool)
+        .await?
     } else {
         sqlx::query_as("SELECT id,sent_at,body FROM chat_messages WHERE conversation=$1 AND expires_at>now()
             AND ($2::timestamptz IS NULL OR (sent_at,id)<($2,$3)) ORDER BY sent_at DESC,id DESC LIMIT $4")
-            .bind(conversation).bind(cursor.as_ref().map(|c| c.at)).bind(cursor.as_ref().map(|c| c.id))
+            .bind(conversation).bind(cursor.as_ref().map(|c|c.at)).bind(cursor.as_ref().map(|c|c.id))
             .bind((limit+1) as i64).fetch_all(pool).await?
     };
-    let has_more = rows.len() > limit;
+    let more = rows.len() > limit;
     rows.truncate(limit);
-    let next_cursor = if has_more {
-        rows.last().map(|(id, at, _)| encode_cursor(*at, *id))
+    rows.sort_unstable_by_key(|(id, at, _)| (*at, *id));
+    let (next_cursor, newer_cursor) = if query.q.is_some() {
+        (
+            more.then(|| rows.first().map(|(id, at, _)| encode_cursor(*at, *id)))
+                .flatten(),
+            None,
+        )
+    } else if let (Some((first, first_at, _)), Some((last, last_at, _))) =
+        (rows.first(), rows.last())
+    {
+        let (older,newer):(bool,bool)=sqlx::query_as("SELECT
+            EXISTS(SELECT 1 FROM chat_messages WHERE conversation=$1 AND expires_at>now() AND (sent_at,id)<($2,$3)),
+            EXISTS(SELECT 1 FROM chat_messages WHERE conversation=$1 AND expires_at>now() AND (sent_at,id)>($4,$5))")
+            .bind(conversation).bind(first_at).bind(first).bind(last_at).bind(last).fetch_one(pool).await?;
+        (
+            older.then(|| encode_cursor(*first_at, *first)),
+            newer.then(|| encode_cursor(*last_at, *last)),
+        )
     } else {
-        None
+        (None, None)
     };
-    let read_message_id: Option<Uuid> = if let Some(account) = account {
-        sqlx::query_scalar("SELECT message_id FROM chat_read_cursors WHERE user_id=$1 AND conversation=$2 AND expires_at>now()")
-            .bind(account).bind(conversation).fetch_optional(pool).await?
-    } else {
-        None
-    };
-    rows.reverse();
     Ok(HistoryPage {
         messages: rows.into_iter().map(|(_, _, entry)| entry.0).collect(),
         next_cursor,
-        read_message_id: read_message_id.map(|id| id.to_string()),
+        newer_cursor,
+        first_unread_message_id: first_unread.map(|id| id.to_string()),
+        read_message_id: read.map(|(id, _)| id.to_string()),
         retention_days,
     })
 }
@@ -404,6 +587,10 @@ pub(crate) async fn remove_public(
     removed_at: &str,
 ) -> Result<Option<(ChatEntry, bool)>, sqlx::Error> {
     let id: Uuid = id.parse().map_err(|_| invalid("Invalid message ID"))?;
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1,29))")
+        .bind(public_conversation(room))
+        .execute(&mut *connection)
+        .await?;
     let row: Option<(SqlJson<ChatEntry>,bool)> = sqlx::query_as(
         "UPDATE chat_messages SET body=(body-'replyTo') || jsonb_build_object('content','','reactions','[]'::jsonb,'removedAt',COALESCE(body->>'removedAt',$3))
          WHERE room_id=$1 AND id=$2 AND expires_at>now() RETURNING body,sender_account IS NOT NULL")
@@ -413,7 +600,209 @@ pub(crate) async fn remove_public(
             WHERE room_id=$1 AND body->'replyTo'->>'messageId'=$2")
             .bind(room).bind(id.to_string()).execute(&mut *connection).await?;
     }
+    sqlx::query("DELETE FROM chat_pins WHERE room_id=$1 AND message_id=$2")
+        .bind(room)
+        .bind(id)
+        .execute(&mut *connection)
+        .await?;
     Ok(row.map(|(entry, authenticated)| (entry.0, authenticated)))
+}
+
+/// Caller has already locked account consent and the live HTTP session, if any.
+async fn edit_in_transaction(
+    connection: &mut PgConnection,
+    conversation: &str,
+    actor: Uuid,
+    guest_session: Option<Uuid>,
+    message: Uuid,
+    request: &EditRequest,
+) -> Result<ChatEntry, sqlx::Error> {
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1,29))")
+        .bind(conversation)
+        .execute(&mut *connection)
+        .await?;
+    let saved: SqlJson<ChatEntry> = sqlx::query_scalar(
+        "SELECT body FROM chat_messages
+        WHERE conversation=$1 AND id=$2 AND expires_at>now()
+          AND (sender_account=$3 OR (sender_account IS NULL AND sender_session=$4)) FOR UPDATE",
+    )
+    .bind(conversation)
+    .bind(message)
+    .bind(actor)
+    .bind(guest_session)
+    .fetch_one(&mut *connection)
+    .await?;
+    let mut edited = saved.0;
+    let old_revision = edited.revision;
+    apply_edit(&mut edited, request).map_err(invalid)?;
+    if old_revision != edited.revision {
+        sqlx::query("UPDATE chat_messages SET body=$2 WHERE id=$1")
+            .bind(message)
+            .bind(SqlJson(&edited))
+            .execute(&mut *connection)
+            .await?;
+        sqlx::query(
+            "UPDATE chat_messages SET body=jsonb_set(body,'{replyTo,excerpt}',$3)
+            WHERE conversation=$1 AND body->'replyTo'->>'messageId'=$2 AND expires_at>now()",
+        )
+        .bind(conversation)
+        .bind(message.to_string())
+        .bind(SqlJson(quote_excerpt(&edited.content)))
+        .execute(&mut *connection)
+        .await?;
+    }
+    Ok(edited)
+}
+
+pub(crate) async fn edit_saved(
+    pool: &PgPool,
+    room: Option<&str>,
+    actor: Uuid,
+    guest_session: Option<Uuid>,
+    original: &ChatEntry,
+    request: &EditRequest,
+) -> Result<ChatEntry, sqlx::Error> {
+    let mut tx = pool.begin().await?;
+    let conversation = if let Some(peer) = &original.recipient_id {
+        let peer = peer.parse().map_err(|_| invalid("Invalid recipient"))?;
+        let (sender, recipient) = lock_private_accounts(&mut tx, actor, peer).await?;
+        if guest_session.is_some() || !private_accounts_allow(&sender, &recipient) {
+            return Err(invalid("Private message unavailable"));
+        }
+        private_conversation(actor, peer)
+    } else {
+        public_conversation(room.ok_or_else(|| invalid("Room unavailable"))?)
+    };
+    let message = original
+        .message_id
+        .parse()
+        .map_err(|_| invalid("Invalid message ID"))?;
+    let edited = edit_in_transaction(
+        &mut tx,
+        &conversation,
+        actor,
+        guest_session,
+        message,
+        request,
+    )
+    .await?;
+    tx.commit().await?;
+    Ok(edited)
+}
+
+pub async fn edit_message(
+    State(server): State<SignalingServer>,
+    headers: HeaderMap,
+    Path((peer, message)): Path<(Uuid, Uuid)>,
+    Json(request): Json<EditRequest>,
+) -> Result<(HeaderMap, Json<ChatEntry>), AuthError> {
+    let _permit = routes::acquire_auth_request(&server)?;
+    let claims = account::authenticated_claims(&server, &headers).await?;
+    let own: Uuid = claims.sub.parse().map_err(|_| AuthError::InvalidToken)?;
+    let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
+    let mut tx = pool.begin().await.map_err(routes::database_error)?;
+    let (sender, recipient) = lock_private_accounts(&mut tx, own, peer)
+        .await
+        .map_err(edit_error)?;
+    if sender.auth_version != claims.auth_version {
+        return Err(AuthError::InvalidToken);
+    }
+    let current:bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM sessions WHERE id=$1 AND user_id=$2 AND expires_at>clock_timestamp() FOR SHARE)")
+        .bind(claims.sid).bind(own).fetch_one(&mut *tx).await.map_err(routes::database_error)?;
+    if !current {
+        return Err(AuthError::InvalidToken);
+    }
+    if !private_accounts_allow(&sender, &recipient) {
+        return Err(AuthError::InvalidInput("Private message unavailable"));
+    }
+    let edited = edit_in_transaction(
+        &mut tx,
+        &private_conversation(own, peer),
+        own,
+        None,
+        message,
+        &request,
+    )
+    .await
+    .map_err(edit_error)?;
+    tx.commit().await.map_err(routes::database_error)?;
+    server.room_manager().deliver_inbox_edit(&edited).await;
+    Ok((routes::no_store_headers(), Json(edited)))
+}
+
+fn edit_error(error: sqlx::Error) -> AuthError {
+    match error {
+        sqlx::Error::RowNotFound => AuthError::InvalidInput("Message unavailable"),
+        sqlx::Error::InvalidArgument(_) => {
+            AuthError::InvalidInput("Message unavailable or changed; refresh before editing")
+        }
+        other => routes::database_error(other),
+    }
+}
+
+pub(crate) async fn pinned_messages(
+    pool: &PgPool,
+    room: &str,
+) -> Result<Vec<ChatEntry>, sqlx::Error> {
+    let rows: Vec<SqlJson<ChatEntry>> = sqlx::query_scalar(
+        "SELECT m.body FROM chat_pins p JOIN chat_messages m ON m.id=p.message_id
+        WHERE p.room_id=$1 AND m.room_id=$1 AND m.expires_at>now() AND m.body->>'removedAt' IS NULL
+        ORDER BY p.pinned_at DESC,p.message_id DESC LIMIT 3",
+    )
+    .bind(room)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows.into_iter().map(|r| r.0).collect())
+}
+
+pub(crate) async fn set_pin(
+    pool: &PgPool,
+    room: &str,
+    message: &str,
+    pinned: bool,
+) -> Result<(), sqlx::Error> {
+    let message: Uuid = message.parse().map_err(|_| invalid("Invalid message ID"))?;
+    let mut tx = pool.begin().await?;
+    sqlx::query("SELECT id FROM rooms WHERE id=$1 FOR UPDATE")
+        .bind(room)
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query("DELETE FROM chat_pins WHERE room_id=$1 AND message_id IN (SELECT id FROM chat_messages WHERE expires_at<=now() OR body->>'removedAt' IS NOT NULL)")
+        .bind(room).execute(&mut *tx).await?;
+    if pinned {
+        let available:bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM chat_messages WHERE room_id=$1 AND id=$2 AND expires_at>now() AND body->>'removedAt' IS NULL)")
+            .bind(room).bind(message).fetch_one(&mut *tx).await?;
+        if !available {
+            return Err(sqlx::Error::RowNotFound);
+        }
+        let existing: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM chat_pins WHERE room_id=$1 AND message_id=$2)",
+        )
+        .bind(room)
+        .bind(message)
+        .fetch_one(&mut *tx)
+        .await?;
+        if !existing {
+            let slot:Option<i64> = sqlx::query_scalar("SELECT s FROM generate_series(1::bigint,3::bigint) s WHERE NOT EXISTS(SELECT 1 FROM chat_pins WHERE room_id=$1 AND slot=s) ORDER BY s LIMIT 1")
+                .bind(room).fetch_optional(&mut *tx).await?;
+            let slot = slot.ok_or_else(|| {
+                invalid("Unpin a message before pinning another; rooms keep up to three")
+            })?;
+            sqlx::query("INSERT INTO chat_pins(room_id,message_id,slot) VALUES($1,$2,$3)")
+                .bind(room)
+                .bind(message)
+                .bind(slot)
+                .execute(&mut *tx)
+                .await?;
+        }
+    } else {
+        sqlx::query("DELETE FROM chat_pins WHERE room_id=$1 AND message_id=$2")
+            .bind(room)
+            .bind(message)
+            .execute(&mut *tx)
+            .await?;
+    }
+    tx.commit().await
 }
 
 /// Public history stops being readable and is erased in the settings transaction.
@@ -462,7 +851,7 @@ pub async fn inbox(
         (SELECT count(*) FROM (SELECT 1 FROM chat_messages incoming
           LEFT JOIN chat_read_cursors r ON r.user_id=$1 AND r.conversation=i.conversation
           WHERE incoming.conversation=i.conversation AND incoming.recipient_account=$1 AND incoming.expires_at>now()
-            AND (r.message_id IS NULL OR (incoming.sent_at,incoming.id)>(r.sent_at,r.message_id)) LIMIT 1000) unread)
+            AND (r.message_id IS NULL OR r.expires_at<=now() OR (incoming.sent_at,incoming.id)>(r.sent_at,r.message_id)) LIMIT 1000) unread)
         FROM chat_inbox i JOIN users u ON u.id=i.peer_id JOIN chat_messages m ON m.id=i.last_message_id
         WHERE i.user_id=$1 AND i.expires_at>now() AND m.expires_at>now()
           AND ($2::timestamptz IS NULL OR (i.last_sent_at,i.last_message_id)<($2,$3))
@@ -494,6 +883,31 @@ pub async fn inbox(
             next_cursor,
             retention_days: PM_RETENTION_DAYS,
         }),
+    ))
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnreadSummary {
+    pub unread_count: i64,
+}
+
+pub async fn unread_summary(
+    State(server): State<SignalingServer>,
+    headers: HeaderMap,
+) -> Result<(HeaderMap, Json<UnreadSummary>), AuthError> {
+    let _permit = routes::acquire_auth_request(&server)?;
+    let claims = account::authenticated_claims(&server, &headers).await?;
+    let own: Uuid = claims.sub.parse().map_err(|_| AuthError::InvalidToken)?;
+    let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
+    let unread_count:i64 = sqlx::query_scalar("SELECT count(*) FROM (
+        SELECT 1 FROM chat_messages m LEFT JOIN chat_read_cursors r ON r.user_id=$1 AND r.conversation=m.conversation
+        WHERE m.recipient_account=$1 AND m.expires_at>now() AND m.body->>'removedAt' IS NULL
+          AND (r.message_id IS NULL OR r.expires_at<=now() OR (m.sent_at,m.id)>(r.sent_at,r.message_id)) LIMIT 1000) unread")
+        .bind(own).fetch_one(pool).await.map_err(routes::database_error)?;
+    Ok((
+        routes::no_store_headers(),
+        Json(UnreadSummary { unread_count }),
     ))
 }
 
@@ -600,7 +1014,7 @@ pub async fn send_message(
     let existing:Option<SqlJson<ChatEntry>>=sqlx::query_scalar("SELECT body FROM chat_messages WHERE conversation=$1 AND sender_session=$2 AND client_message_id=$3 AND expires_at>now()")
         .bind(&conversation).bind(own).bind(&request.client_message_id).fetch_optional(&mut *tx).await.map_err(routes::database_error)?;
     if let Some(existing) = existing {
-        if existing.0.content != request.content {
+        if existing.0.edited_at.is_none() && existing.0.content != request.content {
             return Err(AuthError::InvalidInput("Message ID was already used"));
         }
         return Ok((routes::no_store_headers(), Json(existing.0)));
@@ -627,6 +1041,8 @@ pub async fn send_message(
         content: request.content,
         sent_at: Utc::now().to_rfc3339(),
         removed_at: None,
+        revision: 0,
+        edited_at: None,
         chat_style: style,
         reply_to: None,
         reactions: Vec::new(),
@@ -636,6 +1052,7 @@ pub async fn send_message(
         .map_err(routes::database_error)?;
     tx.commit().await.map_err(routes::database_error)?;
     server.room_manager().deliver_inbox_message(&saved);
+    crate::push::enqueue(pool, peer).await;
     Ok((routes::no_store_headers(), Json(saved)))
 }
 
@@ -757,6 +1174,326 @@ mod tests {
             public_conversation(&a.to_string())
         );
     }
+    fn entry(content: &str) -> ChatEntry {
+        ChatEntry {
+            message_id: Uuid::new_v4().to_string(),
+            client_message_id: Uuid::new_v4().to_string(),
+            participant_id: Uuid::new_v4().to_string(),
+            participant_name: "Author".into(),
+            recipient_id: None,
+            recipient_name: None,
+            content: content.into(),
+            sent_at: Utc::now().to_rfc3339(),
+            removed_at: None,
+            revision: 0,
+            edited_at: None,
+            chat_style: Default::default(),
+            reply_to: None,
+            reactions: vec![],
+        }
+    }
+
+    #[test]
+    fn message_edits_are_revision_checked_idempotent_and_removal_is_terminal() {
+        let mut message = entry("Original");
+        let original_id = message.message_id.clone();
+        let request = EditRequest {
+            content: "Corrected".into(),
+            expected_revision: 0,
+        };
+        apply_edit(&mut message, &request).unwrap();
+        assert_eq!(message.revision, 1);
+        assert!(message.edited_at.is_some());
+        assert_eq!(message.message_id, original_id);
+        let edited_at = message.edited_at.clone();
+        apply_edit(&mut message, &request).unwrap();
+        assert_eq!(message.edited_at, edited_at);
+        assert!(
+            apply_edit(
+                &mut message,
+                &EditRequest {
+                    content: "Stale tab".into(),
+                    expected_revision: 0
+                }
+            )
+            .is_err()
+        );
+        assert_eq!(message.content, "Corrected");
+        for invalid in ["".into(), " ".into(), "x".repeat(4097), "bad\0text".into()] {
+            assert!(
+                apply_edit(
+                    &mut message,
+                    &EditRequest {
+                        content: invalid,
+                        expected_revision: 1
+                    }
+                )
+                .is_err()
+            );
+        }
+        message.removed_at = Some(Utc::now().to_rfc3339());
+        message.content.clear();
+        assert!(
+            apply_edit(
+                &mut message,
+                &EditRequest {
+                    content: "Restored".into(),
+                    expected_revision: 1
+                }
+            )
+            .is_err()
+        );
+        assert!(message.content.is_empty());
+    }
+
+    #[test]
+    fn history_positions_are_exclusive_and_message_ids_validated() {
+        for query in [
+            HistoryQuery {
+                around: Some("not-an-id".into()),
+                ..Default::default()
+            },
+            HistoryQuery {
+                around: Some(Uuid::new_v4().to_string()),
+                resume: Some(true),
+                ..Default::default()
+            },
+            HistoryQuery {
+                around: Some(Uuid::new_v4().to_string()),
+                q: Some("query".into()),
+                ..Default::default()
+            },
+            HistoryQuery {
+                after: Some("invalid".into()),
+                ..Default::default()
+            },
+        ] {
+            assert!(query.validate().is_err());
+        }
+    }
+
+    #[tokio::test]
+    #[ignore = "requires a migrated disposable TEST_DATABASE_URL"]
+    async fn database_chat_edits_pins_context_and_unread_preserve_visibility_and_retention() {
+        let pool = PgPool::connect(&std::env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL"))
+            .await
+            .unwrap();
+        let author = Uuid::new_v4();
+        let reader = Uuid::new_v4();
+        for user in [author, reader] {
+            sqlx::query(
+                "INSERT INTO users(id,email,display_name) VALUES($1,$2,'Chat update tester')",
+            )
+            .bind(user)
+            .bind(format!("{user}@chatupdates.invalid"))
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+        let room = format!("updates-{}", Uuid::new_v4());
+        sqlx::query(
+            "INSERT INTO rooms(id,owner_id,display_name,history_retention_days) VALUES($1,$2,$1,7)",
+        )
+        .bind(&room)
+        .bind(author)
+        .execute(&pool)
+        .await
+        .unwrap();
+        let session = Uuid::new_v4();
+        let mut messages = vec![];
+        for n in 0..6 {
+            let mut message = entry(&format!("Message {n}"));
+            message.participant_id = author.to_string();
+            message.sent_at = (Utc::now() - chrono::Duration::seconds(100 - n)).to_rfc3339();
+            if n == 1 {
+                let first: &ChatEntry = &messages[0];
+                message.reply_to = Some(crate::signaling::protocol::ChatReplyRef {
+                    message_id: first.message_id.clone(),
+                    participant_id: author.to_string(),
+                    participant_name: "Author".into(),
+                    excerpt: "Message 0".into(),
+                });
+            }
+            persist_message(&pool, Some(&room), session, true, 7, &message)
+                .await
+                .unwrap();
+            messages.push(message);
+        }
+        let conversation = public_conversation(&room);
+        mark_read(
+            &pool,
+            &conversation,
+            reader,
+            messages[1].message_id.parse().unwrap(),
+        )
+        .await
+        .unwrap();
+        let resumed = page(
+            &pool,
+            &conversation,
+            Some(reader),
+            7,
+            &HistoryQuery {
+                resume: Some(true),
+                limit: Some(4),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            resumed.first_unread_message_id.as_deref(),
+            Some(messages[2].message_id.as_str())
+        );
+        assert_eq!(
+            resumed
+                .messages
+                .iter()
+                .map(|m| m.message_id.as_str())
+                .collect::<Vec<_>>(),
+            messages[..4]
+                .iter()
+                .map(|m| m.message_id.as_str())
+                .collect::<Vec<_>>()
+        );
+        let newer = page(
+            &pool,
+            &conversation,
+            Some(reader),
+            7,
+            &HistoryQuery {
+                after: resumed.newer_cursor,
+                limit: Some(4),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(newer.messages.len(), 2);
+        assert_eq!(newer.messages[0].message_id, messages[4].message_id);
+        assert!(
+            page(
+                &pool,
+                &private_conversation(author, reader),
+                Some(reader),
+                90,
+                &HistoryQuery {
+                    around: Some(messages[0].message_id.clone()),
+                    ..Default::default()
+                }
+            )
+            .await
+            .is_err()
+        );
+        let request = EditRequest {
+            content: "Corrected original".into(),
+            expected_revision: 0,
+        };
+        assert!(
+            edit_saved(&pool, Some(&room), reader, None, &messages[0], &request)
+                .await
+                .is_err()
+        );
+        let edited = edit_saved(&pool, Some(&room), author, None, &messages[0], &request)
+            .await
+            .unwrap();
+        assert_eq!(edited.revision, 1);
+        assert_eq!(
+            edit_saved(&pool, Some(&room), author, None, &messages[0], &request)
+                .await
+                .unwrap()
+                .revision,
+            1
+        );
+        let stored = page(&pool, &conversation, None, 7, &HistoryQuery::default())
+            .await
+            .unwrap();
+        assert_eq!(
+            stored.messages[1].reply_to.as_ref().unwrap().excerpt,
+            "Corrected original"
+        );
+        // A retry of the original send returns its edited receipt, without redelivery or rollback.
+        assert_eq!(
+            persist_message(&pool, Some(&room), session, true, 7, &messages[0])
+                .await
+                .unwrap()
+                .content,
+            "Corrected original"
+        );
+        for message in messages.iter().take(3) {
+            set_pin(&pool, &room, &message.message_id, true)
+                .await
+                .unwrap();
+        }
+        set_pin(&pool, &room, &messages[0].message_id, true)
+            .await
+            .unwrap();
+        assert_eq!(pinned_messages(&pool, &room).await.unwrap().len(), 3);
+        assert!(
+            set_pin(&pool, &room, &messages[3].message_id, true)
+                .await
+                .is_err()
+        );
+        let mut tx = pool.begin().await.unwrap();
+        remove_public(
+            &mut tx,
+            &room,
+            &messages[0].message_id,
+            &Utc::now().to_rfc3339(),
+        )
+        .await
+        .unwrap();
+        tx.commit().await.unwrap();
+        assert_eq!(pinned_messages(&pool, &room).await.unwrap().len(), 2);
+        assert!(
+            edit_saved(
+                &pool,
+                Some(&room),
+                author,
+                None,
+                &edited,
+                &EditRequest {
+                    content: "Restore".into(),
+                    expected_revision: 1
+                }
+            )
+            .await
+            .is_err()
+        );
+        assert!(
+            set_pin(&pool, &room, &messages[0].message_id, true)
+                .await
+                .is_err()
+        );
+        let removed = page(&pool, &conversation, None, 7, &HistoryQuery::default())
+            .await
+            .unwrap();
+        assert_eq!(
+            removed.messages[1].reply_to.as_ref().unwrap().excerpt,
+            "Message removed"
+        );
+        // An expired pin disappears on reads even before the retention sweep runs.
+        sqlx::query("UPDATE chat_messages SET expires_at=now()-interval '1 second' WHERE id=$1")
+            .bind(messages[2].message_id.parse::<Uuid>().unwrap())
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert_eq!(pinned_messages(&pool, &room).await.unwrap().len(), 1);
+        set_retention(&pool, &room, 0).await.unwrap();
+        assert!(pinned_messages(&pool, &room).await.unwrap().is_empty());
+        sqlx::query("DELETE FROM rooms WHERE id=$1")
+            .bind(&room)
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("DELETE FROM users WHERE id=ANY($1)")
+            .bind(vec![author, reader])
+            .execute(&pool)
+            .await
+            .unwrap();
+        pool.close().await;
+    }
+
     #[tokio::test]
     #[ignore = "requires a migrated disposable TEST_DATABASE_URL"]
     async fn database_history_retention_pagination_private_isolation_and_monotonic_reads() {
@@ -801,6 +1538,8 @@ mod tests {
             content: format!("Message needle%_{n}"),
             sent_at: (base + chrono::Duration::seconds(n)).to_rfc3339(),
             removed_at: None,
+            revision: 0,
+            edited_at: None,
             chat_style: Default::default(),
             reply_to: None,
             reactions: vec![],

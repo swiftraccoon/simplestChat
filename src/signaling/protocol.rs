@@ -204,6 +204,9 @@ pub enum ClientMessage {
     GetChatHistory {
         request_id: String,
         before: Option<String>,
+        after: Option<String>,
+        around: Option<String>,
+        resume: Option<bool>,
         q: Option<String>,
         limit: Option<u32>,
     },
@@ -229,7 +232,24 @@ pub enum ClientMessage {
         request_id: String,
         chat_style: ChatStyle,
     },
-    /// Remove a public message from live and retained chat (moderators only).
+    /// Edit an authored message without overwriting a newer revision.
+    #[serde(rename_all = "camelCase")]
+    EditChatMessage {
+        request_id: String,
+        message_id: String,
+        content: String,
+        expected_revision: u32,
+    },
+    #[serde(rename_all = "camelCase")]
+    GetPinnedMessages {
+        request_id: String,
+    },
+    #[serde(rename_all = "camelCase")]
+    SetPinnedMessage {
+        request_id: String,
+        message_id: String,
+        pinned: bool,
+    },
     #[serde(rename_all = "camelCase")]
     RemoveChatMessage {
         request_id: String,
@@ -574,6 +594,10 @@ pub enum ServerMessage {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         removed_at: Option<String>,
         #[serde(default)]
+        revision: u32,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        edited_at: Option<String>,
+        #[serde(default)]
         chat_style: ChatStyle,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         reply_to: Option<ChatReplyRef>,
@@ -623,6 +647,10 @@ pub enum ServerMessage {
         #[serde(skip_serializing_if = "Option::is_none")]
         target_participant_id: Option<String>,
     },
+    #[serde(rename_all = "camelCase")]
+    ChatMessageEdited { message: ChatEntry },
+    #[serde(rename_all = "camelCase")]
+    PinnedMessagesChanged { messages: Vec<ChatEntry> },
     /// A public message and any quotes of it must be replaced by a tombstone.
     #[serde(rename_all = "camelCase")]
     ChatMessageRemoved {
@@ -850,6 +878,11 @@ pub struct ChatEntry {
     /// Moderator removal erases content while retaining its place in the conversation.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub removed_at: Option<String>,
+    /// Monotonic body revision; removal remains terminal regardless of revision.
+    #[serde(default)]
+    pub revision: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub edited_at: Option<String>,
     /// The sender's look when they sent it, so history keeps it after they leave.
     #[serde(default)]
     pub chat_style: ChatStyle,

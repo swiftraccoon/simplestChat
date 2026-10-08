@@ -465,6 +465,7 @@ impl Fixture {
                 .path
                 .replace("{id}", "00000000-0000-4000-8000-000000000001")
                 .replace("{peer}", "00000000-0000-4000-8000-000000000003")
+                .replace("{messageId}", "00000000-0000-4000-8000-000000000004")
                 .replace("{invite_id}", "00000000-0000-4000-8000-000000000002"),
         );
         if let Some(token) = token {
@@ -598,6 +599,8 @@ async fn authorization_database_inbox_offline_delivery_read_sync_and_consent() {
         content: "First conversation together in a room".into(),
         sent_at: (chrono::Utc::now() - chrono::Duration::seconds(1)).to_rfc3339(),
         removed_at: None,
+        revision: 0,
+        edited_at: None,
         chat_style: Default::default(),
         reply_to: None,
         reactions: vec![],
@@ -1083,7 +1086,10 @@ fn socket_boundary(message: &protocol::ClientMessage) -> &'static str {
         SetChatPreferences { .. } => "room-membership",
         SetChatStyle { .. } => "room-membership",
         ReactToMessage { .. } => "room-membership",
-        RemoveChatMessage { .. } => "room-membership",
+        RemoveChatMessage { .. }
+        | EditChatMessage { .. }
+        | GetPinnedMessages { .. }
+        | SetPinnedMessage { .. } => "room-membership",
         ChangeNickname { .. } => "room-membership",
         GetRoomSnapshot { .. } => "room-membership",
         GetChatHistory { .. } => "room-membership",
