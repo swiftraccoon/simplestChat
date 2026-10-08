@@ -170,7 +170,7 @@ pub async fn load_room(
         "SELECT id, owner_id, display_name, password_hash, require_registration,
                 max_participants, max_broadcasters, allow_screen_sharing, allow_chat, allow_video,
                 moderated, invite_only, secret, lobby_enabled, push_to_talk,
-                guests_allowed, guests_can_broadcast, topic, name_style, topic_style, history_retention_days
+                guests_allowed, guests_can_broadcast, topic, name_style, topic_style, history_retention_days::integer AS history_retention_days
          FROM rooms WHERE id = $1",
     )
     .bind(room_id)

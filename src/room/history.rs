@@ -425,7 +425,7 @@ pub(crate) async fn set_retention(pool: &PgPool, room: &str, days: i32) -> Resul
     let updated =
         sqlx::query("UPDATE rooms SET history_retention_days=$2,updated_at=now() WHERE id=$1")
             .bind(room)
-            .bind(days)
+            .bind(i64::from(days))
             .execute(&mut *tx)
             .await?;
     if updated.rows_affected() != 1 {
@@ -782,7 +782,7 @@ mod tests {
             .await
             .unwrap();
         let retention: i32 =
-            sqlx::query_scalar("SELECT history_retention_days FROM rooms WHERE id=$1")
+            sqlx::query_scalar("SELECT history_retention_days::integer FROM rooms WHERE id=$1")
                 .bind(&room)
                 .fetch_one(&pool)
                 .await

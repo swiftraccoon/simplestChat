@@ -1,15 +1,17 @@
 -- Room history is an explicit owner choice. Account PM history lasts 90 days.
-ALTER TABLE rooms ADD COLUMN history_retention_days INTEGER NOT NULL DEFAULT 0
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '10min';
+ALTER TABLE rooms ADD COLUMN history_retention_days BIGINT NOT NULL DEFAULT 0
     CHECK (history_retention_days IN (0, 1, 7, 30, 90));
 
 CREATE TABLE chat_messages (
     id UUID PRIMARY KEY,
     conversation TEXT NOT NULL,
-    room_id VARCHAR(128) REFERENCES rooms(id) ON DELETE CASCADE,
+    room_id TEXT REFERENCES rooms(id) ON DELETE CASCADE CHECK (char_length(room_id) <= 128),
     sender_account UUID REFERENCES users(id) ON DELETE CASCADE,
     recipient_account UUID REFERENCES users(id) ON DELETE CASCADE,
     sender_session UUID NOT NULL,
-    client_message_id VARCHAR(128) NOT NULL,
+    client_message_id TEXT NOT NULL CHECK (char_length(client_message_id) <= 128),
     sent_at TIMESTAMPTZ NOT NULL,
     expires_at TIMESTAMPTZ NOT NULL,
     body JSONB NOT NULL,
@@ -51,4 +53,4 @@ ALTER TABLE moderation_events DROP CONSTRAINT moderation_events_action_check;
 ALTER TABLE moderation_events ADD CONSTRAINT moderation_events_action_check CHECK (action IN (
     'kick', 'ban', 'unban', 'cam_ban', 'cam_unban', 'text_mute', 'text_unmute',
     'report_resolved', 'report_dismissed', 'message_removed'
-));
+)) NOT VALID;

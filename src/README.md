@@ -71,7 +71,8 @@ visibility and moderator-only lobby entries are filtered during capture.
 
 Saved history is separate from the 300-entry / 256-KiB membership replay buffer.
 Migration 025 adds public-history retention to persisted rooms plus account PMs,
-inbox rows and read cursors. Public history defaults off; account PMs last 90
+inbox rows and read cursors; migration 026 validates the expanded moderation
+action constraint in a separate transaction. Public history defaults off; account PMs last 90
 days. Retained public messages and account-to-account PMs use room control to
 commit before delivery. Ephemeral chat validates and publishes under the room
 state lock without waiting for unrelated database writes. A private message
