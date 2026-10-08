@@ -490,3 +490,28 @@ inherit this decision merely because the alert number is unchanged.
 | <a id="alert-67"></a>[67](https://github.com/swiftraccoon/simplestChat/security/code-scanning/67) | critical | false-positive | [`src/auth/common_passwords.rs:234`](../src/auth/common_passwords.rs#L234) | All literals are inside cfg(test) blocklist tests: known weak strings must be rejected and unrelated phrases accepted. They are local policy inputs, never provisioned account credentials. |
 | <a id="alert-68"></a>[68](https://github.com/swiftraccoon/simplestChat/security/code-scanning/68) | critical | false-positive | [`src/auth/common_passwords.rs:243`](../src/auth/common_passwords.rs#L243) | All literals are inside cfg(test) blocklist tests: known weak strings must be rejected and unrelated phrases accepted. They are local policy inputs, never provisioned account credentials. |
 | <a id="alert-69"></a>[69](https://github.com/swiftraccoon/simplestChat/security/code-scanning/69) | medium | false-positive | [`src/signaling/mod.rs:1658`](../src/signaling/mod.rs#L1658) | The sink is a cfg(test) assertion diagnostic for a response from the test-owned loopback HTTP server. The route returns fixed status/body bytes to test timeout and admission metrics; no external input or production logging path is used. |
+
+## Source re-review: chat and push routing fixtures
+
+On 2026-10-08, alerts 35, 63 and 69 were re-reviewed against source commit
+`48ee485c740fcac30536c55f78c6f011a60dafff`. Added chat/push routes change the complete
+`src/signaling/mod.rs` digest and shift these existing `cfg(test)` findings.
+Each complete flagged line is byte-identical to its prior reviewed source;
+primary columns, rule/tool version and rendered-message digest are unchanged.
+The numeric metrics assertion, isolated registration-fixture passphrase and
+test-owned loopback HTTP assertion remain within `mod security_tests` behind
+`#[cfg(test)]`. No new production sink or test-wide exclusion is approved.
+
+| Alert | Previous line | Reviewed line |
+| --- | --- | --- |
+| 35 | 1679 | 1698 |
+| 63 | 2044 | 2063 |
+| 69 | 1658 | 1689 |
+
+The reviewed complete-file SHA-256 is
+`c87670b468bcd77955e1f9b6775adb0354d9662ceb185e9578a65013c19ddec9`. The canonical identity helper
+derives replacement fingerprints from these exact source identities. Their
+original rationale, owner and 2026-11-29 expiry remain unchanged.
+`observedRevision` retains the actual prior analysis; `sourceProvenanceRevision`
+records this source-only review. The next original CodeQL analysis must match
+these complete identities independently. No remote alert state changed.
