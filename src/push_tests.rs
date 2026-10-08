@@ -1,6 +1,9 @@
 use super::*;
 use aws_lc_rs::signature::{ECDSA_P256_SHA256_FIXED, UnparsedPublicKey};
-use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+use sqlx::{
+    Connection as _, PgConnection,
+    postgres::{PgConnectOptions, PgPoolOptions},
+};
 use std::str::FromStr;
 
 #[test]
@@ -104,40 +107,40 @@ fn notification_provider_results_separate_expiry_retry_and_permanent_rejection()
 }
 
 /// The disposable integration server may have its real queue worker running.
-/// A unique schema keeps every test endpoint and pending row invisible to it;
-/// these tests invoke queue state helpers and never the network delivery path.
+/// A dedicated test schema keeps endpoints invisible to that worker. A session
+/// advisory lock serializes this fixture across tests without dynamic SQL.
 struct IsolatedPushDatabase {
-    admin: PgPool,
+    admin: PgConnection,
     pool: PgPool,
-    schema: String,
 }
 impl IsolatedPushDatabase {
     async fn new() -> Self {
         let url = std::env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL");
-        let admin = PgPool::connect(&url).await.unwrap();
-        let schema = format!("push_test_{}", Uuid::new_v4().simple());
-        let sql = format!("CREATE SCHEMA {schema}");
-        sqlx::query(sqlx::AssertSqlSafe(sql))
-            .execute(&admin)
+        let options = PgConnectOptions::from_str(&url).unwrap();
+        assert!(
+            matches!(options.get_host(), "127.0.0.1" | "::1" | "localhost")
+                && options
+                    .get_database()
+                    .is_some_and(|name| name.ends_with("_test")),
+            "Notification database tests require a loopback database ending in _test",
+        );
+        let mut admin = PgConnection::connect_with(&options).await.unwrap();
+        // Keep this dedicated connection alive until the schema is removed; a
+        // pool connection could return the session lock to an unrelated caller.
+        sqlx::query("SELECT pg_advisory_lock(7219647820751041)")
+            .execute(&mut admin)
             .await
             .unwrap();
-        for table in [
-            "users",
-            "sessions",
-            "chat_messages",
-            "chat_read_cursors",
-            "push_keys",
-            "push_subscriptions",
-        ] {
-            let sql = format!("CREATE TABLE {schema}.{table} (LIKE public.{table} INCLUDING ALL)");
-            sqlx::query(sqlx::AssertSqlSafe(sql))
-                .execute(&admin)
-                .await
-                .unwrap();
-        }
-        let options = PgConnectOptions::from_str(&url)
-            .unwrap()
-            .options([("search_path", schema.as_str())]);
+        // Refuse a pre-existing schema rather than deleting an unknown owner's data.
+        sqlx::raw_sql("CREATE SCHEMA push_test;
+            CREATE TABLE push_test.users (LIKE public.users INCLUDING ALL);
+            CREATE TABLE push_test.sessions (LIKE public.sessions INCLUDING ALL);
+            CREATE TABLE push_test.chat_messages (LIKE public.chat_messages INCLUDING ALL);
+            CREATE TABLE push_test.chat_read_cursors (LIKE public.chat_read_cursors INCLUDING ALL);
+            CREATE TABLE push_test.push_keys (LIKE public.push_keys INCLUDING ALL);
+            CREATE TABLE push_test.push_subscriptions (LIKE public.push_subscriptions INCLUDING ALL);")
+            .execute(&mut admin).await.unwrap();
+        let options = options.options([("search_path", "push_test")]);
         let pool = PgPoolOptions::new()
             .max_connections(4)
             .connect_with(options)
@@ -145,20 +148,19 @@ impl IsolatedPushDatabase {
             .unwrap();
         sqlx::query("ALTER TABLE push_subscriptions ADD FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE")
             .execute(&pool).await.unwrap();
-        Self {
-            admin,
-            pool,
-            schema,
-        }
+        Self { admin, pool }
     }
-    async fn close(self) {
+    async fn close(mut self) {
         self.pool.close().await;
-        let sql = format!("DROP SCHEMA {} CASCADE", self.schema);
-        sqlx::query(sqlx::AssertSqlSafe(sql))
-            .execute(&self.admin)
+        sqlx::query("DROP SCHEMA push_test CASCADE")
+            .execute(&mut self.admin)
             .await
             .unwrap();
-        self.admin.close().await;
+        sqlx::query("SELECT pg_advisory_unlock(7219647820751041)")
+            .execute(&mut self.admin)
+            .await
+            .unwrap();
+        self.admin.close().await.unwrap();
     }
     async fn user(&self) -> Uuid {
         sqlx::query_scalar(
