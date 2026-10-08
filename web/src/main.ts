@@ -16,6 +16,8 @@ import { ClientTelemetry } from './telemetry';
 import { CallOutcomeTelemetry, MediaTelemetry, observeFirstVideoFrame } from './media-telemetry';
 import { MediaControls, mediaErrorMessage } from './media-controls';
 import { MediaLifecycle } from './media-lifecycle';
+import { PwaControls } from './pwa';
+import { openPrivateInbox } from './chat-history';
 import { SocialChat } from './social-chat';
 import { CommunityUI } from './community-ui';
 import { ParticipantHovercard } from './participant-hovercard';
@@ -205,6 +207,7 @@ function updateAuthUI(): void {
   if (!roomBrowser.hidden) observeUiTask(loadRoomBrowser(), 'Could not refresh the room directory');
   updateJoinBtn();
   community.refresh();
+  pwa.accountChanged();
   participantHovercard.refresh();
 }
 
@@ -1422,7 +1425,17 @@ const socialChat = new SocialChat({
   notify: (message) => showToast(message),
   bindParticipantName: (anchor, id, name) => participantHovercard.bind(anchor, id, name),
 });
+const pwa = new PwaControls({
+  getToken: () => auth.jwt,
+  getAccountId: () => auth.userId,
+  openMessages: () => {
+    if (auth.isLoggedIn)
+      openPrivateInbox({ getToken: () => auth.jwt, getAccountId: () => auth.userId });
+    else openAuthDialog(loginModal);
+  },
+});
 const community = new CommunityUI({
+  mountAccountNotifications: (container, current) => pwa.mountAccount(container, current),
   auth,
   getRoom: () => room,
   notify: (message) => showToast(message),
@@ -1512,7 +1525,9 @@ const mediaLifecycle = new MediaLifecycle({
   resumeSignaling: () => signaling.resumeDeferredReconnect(),
 });
 window.addEventListener('pagehide', (event) => {
-  if (!event.persisted) mediaLifecycle.dispose();
+  if (event.persisted) return;
+  mediaLifecycle.dispose();
+  pwa.dispose();
 });
 
 signaling.setOnStatusChange((status) => {

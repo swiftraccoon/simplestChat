@@ -294,7 +294,7 @@ async function apiJson<T>(
 async function apiNoContent(
   path: string,
   token: string | null,
-  method: 'POST' | 'DELETE',
+  method: 'POST' | 'PUT' | 'DELETE',
   data?: unknown,
   signal?: AbortSignal,
 ): Promise<void> {
@@ -307,6 +307,28 @@ async function apiNoContent(
 
 /** Endpoint-owned contracts: callers cannot select an arbitrary response type or decoder. */
 export const api = {
+  pushStatus: (token: string, signal: AbortSignal) =>
+    apiJson(
+      (value: unknown) => {
+        if (
+          !isRecord(value) ||
+          typeof value['enabled'] !== 'boolean' ||
+          typeof value['publicKey'] !== 'string' ||
+          !/^[A-Za-z0-9_-]{87}$/.test(value['publicKey'])
+        )
+          throw new Error('Invalid notification settings response');
+        return { publicKey: value['publicKey'], enabled: value['enabled'] };
+      },
+      '/api/auth/push',
+      token,
+      'GET',
+      undefined,
+      signal,
+    ),
+  enablePush: (token: string, data: { endpoint: string }, signal: AbortSignal) =>
+    apiNoContent('/api/auth/push', token, 'PUT', data, signal),
+  disablePush: (token: string, signal: AbortSignal) =>
+    apiNoContent('/api/auth/push', token, 'DELETE', undefined, signal),
   inbox: (token: string, params: URLSearchParams, signal: AbortSignal) =>
     apiJson(decodeInbox, `/api/auth/inbox?${params}`, token, 'GET', undefined, signal),
   privateHistory: (token: string, peer: string, params: URLSearchParams, signal: AbortSignal) =>

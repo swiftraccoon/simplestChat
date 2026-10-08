@@ -21,6 +21,7 @@ import {
 } from './ui';
 
 interface Options {
+  mountAccountNotifications?: (container: HTMLElement, current: () => boolean) => void;
   auth: AuthManager;
   getRoom: () => RoomClient | null;
   notify: (message: string) => void;
@@ -477,6 +478,7 @@ export class CommunityUI {
           });
         },
       });
+      this.options.mountAccountNotifications?.(view.body, stillCurrent);
       // Registration invitations: the way in while registration is closed.
       const invites = el('div');
       const refreshInvites = async (): Promise<void> => {

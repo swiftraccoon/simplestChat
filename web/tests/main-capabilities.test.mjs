@@ -207,6 +207,7 @@ function authUiFixture(capabilities, signedIn) {
         updateJoinBtn: () => effects.push('join-controls'),
         community: { refresh: () => effects.push('community') },
         participantHovercard: { refresh() {} },
+        pwa: { accountChanged() {} },
       },
     },
   );
