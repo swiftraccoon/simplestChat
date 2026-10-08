@@ -10,6 +10,11 @@ const dockerfile = read('Dockerfile').replace(/\\\r?\n\s*/g, ' ');
 const webStage = dockerfile.split(/\bAS web-builder\s*\n/i)[1]?.split(/^FROM /m)[0];
 const ignoreRules = read('.dockerignore').split(/\r?\n/).map(line => line.trim())
   .filter(line => line && !line.startsWith('#'));
+const pwaFiles = ['manifest.webmanifest', 'sw.js',
+  ...JSON.parse(read('web/public/manifest.webmanifest')).icons.map(icon => {
+    assert.match(icon.src, /^\/[\w-]+\.png$/);
+    return icon.src.slice(1);
+  })].map(filename => `web/public/${filename}`);
 
 // Deliberately support only this file's exact paths, trailing /** and single
 // filename-extension wildcards. Docker matches a rule against parent paths too:
@@ -170,11 +175,13 @@ test('web-builder copies the complete production frontend input set', () => {
     'web/package.json', 'web/package-lock.json', 'web/tsconfig.json', ...projects,
     'web/vite.config.ts', 'web/index.html', 'web/src/main.ts',
     'web/scripts/check-bundle.mjs', 'web/scripts/mediasoup-runtime.mjs', 'web/bundle-budget.json',
-    'web/public/help.html', 'web/public/help.css',
+    'web/public/help.html', 'web/public/help.css', ...pwaFiles,
   ];
   for (const filename of required) {
     assert.equal(copiedDestination(filename), `/${filename}`,
       `${filename} must be copied to its expected web-builder path`);
+    assert.equal(excluded(filename), false,
+      `${filename} must be admitted to the production build context`);
   }
   const appProject = JSON.parse(read('web/tsconfig.tools.json')).extends;
   assert.equal(copiedDestination(path.posix.join('web', appProject)),
@@ -185,7 +192,7 @@ test('web-builder copies the complete production frontend input set', () => {
     'npm run typecheck && vite build && npm run check:bundle');
 });
 
-test('container context explicitly admits build configs and help without broadening web access', () => {
+test('container context explicitly admits build configs, help and PWA files without broadening web access', () => {
   assert.equal(ignoreRules[0], '**', 'Container context must remain deny by default');
   const webRules = ignoreRules.filter(rule => rule.replace(/^!/, '').startsWith('web'));
   assert.deepEqual(webRules.toSorted(), [
@@ -195,6 +202,8 @@ test('container context explicitly admits build configs and help without broaden
     '!web/scripts/', 'web/scripts/**', '!web/scripts/check-bundle.mjs',
     '!web/scripts/mediasoup-runtime.mjs',
     '!web/public/', 'web/public/**', '!web/public/help.html', '!web/public/help.css',
+    '!web/public/manifest.webmanifest', '!web/public/sw.js',
+    '!web/public/icon-192.png', '!web/public/icon-512.png',
     '!web/src/', 'web/src/**', '!web/src/*.ts', '!web/src/*.css',
   ].toSorted());
   for (const [index, rule] of ignoreRules.entries()) {
@@ -238,7 +247,8 @@ test('context excludes local-only descendants while retaining production inputs'
     'web/tsconfig.app.json', 'web/tsconfig.tools.json', 'web/vite.config.ts',
     'web/index.html', 'web/bundle-budget.json', 'web/scripts/check-bundle.mjs',
     'web/scripts/mediasoup-runtime.mjs',
-    'web/public/help.html', 'web/public/help.css', 'web/src/main.ts', 'web/src/style.css',
+    'web/public/help.html', 'web/public/help.css', ...pwaFiles,
+    'web/src/main.ts', 'web/src/style.css',
     'vendor/mediasoup-sys-0.19.0/subprojects/packagefiles/abseil-cpp/meson.build',
   ]) assert.equal(excluded(filename), false, `${filename} must remain available to the build`);
 });

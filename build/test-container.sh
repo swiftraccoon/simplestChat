@@ -79,6 +79,19 @@ test "${server_ready}" = 1
 test "$(curl --fail --silent --show-error --max-time 5 "${test_origin}/health")" = '{"status":"ok"}'
 curl --fail --silent --show-error --max-time 5 "${test_origin}/" >"${test_artifacts}/index.html"
 grep -iq '<!doctype html>' "${test_artifacts}/index.html"
+# These public files must survive the deny-by-default Docker context and be
+# served by the actual image, with browser-usable MIME types and unchanged bytes.
+for asset in manifest.webmanifest sw.js icon-192.png icon-512.png; do
+  content_type="$(curl --fail --silent --show-error --max-time 5 \
+    --output "${test_artifacts}/${asset}" --write-out '%{content_type}' \
+    "${test_origin}/${asset}")"
+  case "${asset}:${content_type%%;*}" in
+    manifest.webmanifest:application/manifest+json | sw.js:application/javascript | \
+      sw.js:text/javascript | icon-192.png:image/png | icon-512.png:image/png) ;;
+    *) echo "Unexpected production MIME type for ${asset}: ${content_type}" >&2; exit 1 ;;
+  esac
+  cmp "web/public/${asset}" "${test_artifacts}/${asset}"
+done
 test "$(<"${test_artifacts}/rooms.json")" = '[]'
 
 # Verify that startup ran every packaged migration, not just a liveness endpoint.
@@ -110,4 +123,4 @@ for ((attempt = 0; attempt < 120; attempt++)); do
   sleep 0.5
 done
 test "${server_ready}" = 1
-echo "PASS production image: migrations (${applied}), static UI, health, DB-backed API, registration and restart."
+echo "PASS production image: migrations (${applied}), static UI and PWA files, health, DB-backed API, registration and restart."

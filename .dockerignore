@@ -81,6 +81,10 @@ web/scripts/**
 web/public/**
 !web/public/help.html
 !web/public/help.css
+!web/public/manifest.webmanifest
+!web/public/sw.js
+!web/public/icon-192.png
+!web/public/icon-512.png
 !web/src/
 web/src/**
 !web/src/*.ts
