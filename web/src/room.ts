@@ -836,6 +836,14 @@ export class RoomClient {
     return this.media?.videoEnabled ?? false;
   }
 
+  setMediaPageActive(active: boolean): void {
+    this.media?.setPageActive(active);
+  }
+
+  resumeMediaConnection(): void {
+    if (this.connected) this.media?.resumeConnection();
+  }
+
   get hasMedia(): boolean {
     return this.media !== null && this.mediaReady;
   }

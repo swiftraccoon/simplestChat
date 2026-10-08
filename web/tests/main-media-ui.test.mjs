@@ -2,8 +2,18 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 import ts from '@typescript/typescript6';
-import { evaluateTypeScript, loadContractModules } from './source-loader.mjs';
+import { evaluateTypeScript, loadContractModules, loadTypeScript } from './source-loader.mjs';
 import { createDOM, flush } from './ui-fixture.mjs';
+
+const { mediaErrorMessage } = await loadTypeScript('src/media-controls.ts', {
+  modules: {
+    './media': {},
+    './media-controls.css': {},
+    './settings-dialog': {},
+    './settings-dialog.css': {},
+    './audio-output': {},
+  },
+});
 
 async function functionSource(name) {
   const source = await readFile(new URL('../src/main.ts', import.meta.url), 'utf8');
@@ -131,6 +141,7 @@ async function cameraUiFixture() {
         updateCamButton: (enabled) => state.updates.push(['camera', enabled]),
         updateLocalTile: () => state.updates.push(['tile']),
         showToast: (message) => state.toasts.push(message),
+        mediaErrorMessage,
       },
     },
   );

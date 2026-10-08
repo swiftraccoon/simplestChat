@@ -14,7 +14,8 @@ import { RoomNavigation } from './room-navigation';
 import type { ScreenShareResult } from './media';
 import { ClientTelemetry } from './telemetry';
 import { CallOutcomeTelemetry, MediaTelemetry, observeFirstVideoFrame } from './media-telemetry';
-import { MediaControls } from './media-controls';
+import { MediaControls, mediaErrorMessage } from './media-controls';
+import { MediaLifecycle } from './media-lifecycle';
 import { SocialChat } from './social-chat';
 import { CommunityUI } from './community-ui';
 import { ParticipantHovercard } from './participant-hovercard';
@@ -1503,8 +1504,15 @@ const participantHovercard = new ParticipantHovercard({
 signaling.setReconnectGate(
   () => Boolean(room?.currentRoomId) || document.visibilityState !== 'hidden',
 );
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') signaling.resumeDeferredReconnect();
+const mediaLifecycle = new MediaLifecycle({
+  getRoom: () => room,
+  setPageActive: (active) => mediaControls.setPageActive(active),
+  resumePlayback: () => mediaControls.resumePlayback(),
+  refreshDevices: () => mediaControls.refreshDevices(),
+  resumeSignaling: () => signaling.resumeDeferredReconnect(),
+});
+window.addEventListener('pagehide', (event) => {
+  if (!event.persisted) mediaLifecycle.dispose();
 });
 
 signaling.setOnStatusChange((status) => {
@@ -3181,7 +3189,7 @@ async function pttActivate(): Promise<void> {
     activeRoom.muteAudio();
     updateMicButton(false);
     updateLocalTile();
-    showToast(error instanceof Error ? error.message : 'Could not enable microphone');
+    showToast(mediaErrorMessage(error, 'microphone'));
   }
 }
 
@@ -3253,7 +3261,7 @@ async function toggleMicrophone(): Promise<void> {
   } catch (error) {
     if (room !== activeRoom || membership !== activeRoom.membershipVersion) return;
     updateMicButton(activeRoom.audioEnabled);
-    showToast(error instanceof Error ? error.message : 'Could not enable microphone');
+    showToast(mediaErrorMessage(error, 'microphone'));
   } finally {
     microphoneTogglePending = false;
   }
@@ -3273,7 +3281,7 @@ async function toggleCamera(): Promise<void> {
   } catch (error) {
     if (room !== activeRoom || membership !== activeRoom.membershipVersion) return;
     updateCamButton(activeRoom.videoEnabled);
-    showToast(error instanceof Error ? error.message : 'Could not enable camera');
+    showToast(mediaErrorMessage(error, 'camera'));
   } finally {
     cameraTogglePending = false;
   }

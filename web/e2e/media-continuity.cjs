@@ -438,6 +438,7 @@ async function progressing(page, name) {
 }
 
 async function lifecycleRecovery(viewer) {
+  stage = 'lifecycle-controls';
   const captured = await viewer.evaluate(() => window.__mediaProduct.captures);
   const tile = viewer.locator('.video-tile:not(.local)').first();
   await tile.locator('.personal-media-controls summary').click();
@@ -450,7 +451,7 @@ async function lifecycleRecovery(viewer) {
   await viewer.evaluate(() => {
     Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
     document.dispatchEvent(new Event('visibilitychange'));
-    window.dispatchEvent(new Event('pagehide'));
+    window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
     document.querySelector('.video-tile:not(.local) video').pause();
     for (let index = 0; index < 30; index++) {
       window.dispatchEvent(new Event('online'));
@@ -459,9 +460,10 @@ async function lifecycleRecovery(viewer) {
   });
   await viewer.waitForTimeout(350);
   assert.equal(await tile.locator('video').evaluate((video) => video.paused), true);
+  stage = 'lifecycle-visible-playback';
   await viewer.evaluate(() => {
     delete document.visibilityState;
-    window.dispatchEvent(new Event('pageshow'));
+    window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
     document.dispatchEvent(new Event('visibilitychange'));
     for (let index = 0; index < 30; index++) window.dispatchEvent(new Event('online'));
   });
@@ -481,6 +483,7 @@ async function lifecycleRecovery(viewer) {
     passed: true,
   });
 
+  stage = 'lifecycle-speaker-change';
   await viewer.evaluate(() => {
     window.__mediaProduct.chooserMode = 'allow';
     window.__mediaProduct.devices = [

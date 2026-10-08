@@ -8,6 +8,15 @@ import { evaluateTypeScript, loadContractModules, loadTypeScript } from './sourc
 const signalingModule = await loadTypeScript('src/signaling.ts', {
   modules: await loadContractModules(),
 });
+const { mediaErrorMessage } = await loadTypeScript('src/media-controls.ts', {
+  modules: {
+    './media': {},
+    './media-controls.css': {},
+    './settings-dialog': {},
+    './settings-dialog.css': {},
+    './audio-output': {},
+  },
+});
 
 const { Producer } = await import(
   new URL('./Producer.js', import.meta.resolve('mediasoup-client'))
@@ -1643,6 +1652,7 @@ async function pttFor(media) {
         updateMicButton: (enabled) => buttons.push(enabled),
         updateLocalTile() {},
         showToast: (error) => errors.push(error),
+        mediaErrorMessage,
       },
     },
   );
