@@ -79,11 +79,12 @@ function pageFailureTooling(diagnosticsFail = false) {
       async getStats() { return new Map([['T01', { id: 'T01', type: 'transport', iceState: 'new', dtlsState: 'new', bytesReceived: 0, bytesSent: 0 }]]); },
     };
     const window = { RTCPeerConnection: class { constructor() { return peer; } } };
+    const Notification = class {};
     const navigator = { mediaDevices: { getUserMedia() { throw new Error('fixture must not capture'); } } };
     const page = {
-      setDefaultTimeout() {}, on() {},
+      setDefaultTimeout() {}, on() {}, async route() {},
       async addInitScript(fn, argument) {
-        runInNewContext('(' + fn.toString() + ')(argument)', { window, navigator, performance, URL, argument });
+        runInNewContext('(' + fn.toString() + ')(argument)', { window, navigator, performance, URL, EventTarget, Notification, argument });
       },
       async goto() {
         new window.RTCPeerConnection();
