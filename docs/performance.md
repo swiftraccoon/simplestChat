@@ -14,8 +14,8 @@ not avoid the limit. The initial budgets leave room for small product changes:
 
 | Asset group | Uncompressed limit | Gzip limit |
 | ----------- | ------------------ | ---------- |
-| JavaScript  | 568 KiB            | 132 KiB    |
-| CSS         | 65 KiB             | 12.5 KiB   |
+| JavaScript  | 592 KiB            | 138 KiB    |
+| CSS         | 66 KiB             | 12.75 KiB  |
 | HTML        | 48 KiB             | 12 KiB     |
 
 Limits are defined in [bundle-budget.json](../web/bundle-budget.json). Gzip uses
@@ -41,6 +41,17 @@ retention controls, unread synchronization and removal/retry reconciliation;
 the HTML increase is updated user help. Budgets now allow 568/132 KiB for
 JavaScript, 65/12.5 KiB for CSS and 48/12 KiB for HTML, including every emitted
 chunk. These size measurements do not establish runtime performance.
+
+The October 8 messaging, lifecycle recovery, and optional push/install additions
+reuse shared chat rendering and existing UI helpers without adding a browser
+dependency. Against the previous 572,972 / 132,219-byte JavaScript baseline,
+the integrated build measures 601,349 / 139,761 bytes, including the service
+worker. CSS measures 66,532 / 12,837 bytes. The added code provides author edits,
+moderator pins, saved drafts, context navigation, unread badges, bounded resume
+recovery, and explicit notification controls. The worker does not cache chat or
+authenticated responses. Reviewed budgets are 592/138 KiB JavaScript and
+66/12.75 KiB CSS; HTML stays at 48/12 KiB. These are size measurements, not
+mobile latency or physical-device reliability results.
 
 Participant hovercards added a shared, dependency-free card and keyboard/touch
 name controls. The CSS gzip budget increased from 12 to 12.5 KiB after removing

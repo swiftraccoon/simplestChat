@@ -1,5 +1,14 @@
 {
-  "javascript": { "bytes": 581632, "gzipBytes": 135168 },
-  "styles": { "bytes": 66560, "gzipBytes": 12800 },
-  "html": { "bytes": 49152, "gzipBytes": 12288 }
+  "javascript": {
+    "bytes": 606208,
+    "gzipBytes": 141312
+  },
+  "styles": {
+    "bytes": 67584,
+    "gzipBytes": 13056
+  },
+  "html": {
+    "bytes": 49152,
+    "gzipBytes": 12288
+  }
 }
