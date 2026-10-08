@@ -39,6 +39,7 @@ const report = {
     'Output chooser, sink routing and device lists use controlled native-API fixtures; actual browser/device support remains a manual check.',
     'Display capture uses an owned fake camera stream; native screen picker UI and system/tab audio availability are not simulated as proof.',
     'Signaling loss closes one owned native WebSocket; this does not simulate an OS network change or UDP outage.',
+    'Hidden/visible/pageshow/devicechange hints are dispatched explicitly; the network outage uses browser request emulation, not Wi-Fi, cellular, Bluetooth, or OS lock/unlock.',
   ],
 };
 let stage = 'launch';
@@ -436,6 +437,87 @@ async function progressing(page, name) {
   throw new Error('Owned viewer did not resume decoding and playback readiness');
 }
 
+async function lifecycleRecovery(viewer) {
+  const captured = await viewer.evaluate(() => window.__mediaProduct.captures);
+  const tile = viewer.locator('.video-tile:not(.local)').first();
+  await tile.locator('.personal-media-controls summary').click();
+  await tile.locator('[data-control="mute"]').click();
+  await tile.locator('[data-control="volume"]').evaluate((input) => {
+    input.value = '32';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await tile.locator('.personal-media-dismiss').click();
+  await viewer.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+    document.dispatchEvent(new Event('visibilitychange'));
+    window.dispatchEvent(new Event('pagehide'));
+    document.querySelector('.video-tile:not(.local) video').pause();
+    for (let index = 0; index < 30; index++) {
+      window.dispatchEvent(new Event('online'));
+      navigator.mediaDevices.dispatchEvent(new Event('devicechange'));
+    }
+  });
+  await viewer.waitForTimeout(350);
+  assert.equal(await tile.locator('video').evaluate((video) => video.paused), true);
+  await viewer.evaluate(() => {
+    delete document.visibilityState;
+    window.dispatchEvent(new Event('pageshow'));
+    document.dispatchEvent(new Event('visibilitychange'));
+    for (let index = 0; index < 30; index++) window.dispatchEvent(new Event('online'));
+  });
+  await viewer.waitForFunction(
+    () => !document.querySelector('.video-tile:not(.local) video').paused,
+  );
+  assert.deepEqual(
+    await tile.locator('video').evaluate((video) => ({ muted: video.muted, volume: video.volume })),
+    { muted: true, volume: 0.32 },
+  );
+  assert.equal(await viewer.evaluate(() => window.__mediaProduct.captures), captured);
+  await tile.locator('.personal-media-controls summary').click();
+  await tile.locator('[data-control="mute"]').click();
+  await tile.locator('.personal-media-dismiss').click();
+  report.checks.push({
+    name: 'lifecycle-hints-resume-playback-preserve-personal-choices',
+    passed: true,
+  });
+
+  await viewer.evaluate(() => {
+    window.__mediaProduct.chooserMode = 'allow';
+    window.__mediaProduct.devices = [
+      { kind: 'audiooutput', deviceId: 'fixture-speaker', label: 'Fixture speaker', groupId: '' },
+    ];
+  });
+  let dialog = await settings(viewer);
+  await dialog.getByRole('button', { name: 'Choose another speaker', exact: true }).click();
+  await viewer.waitForFunction(() =>
+    document.querySelector('[data-output-status]').textContent.startsWith('Speaker selected'),
+  );
+  await dialog.getByRole('button', { name: 'Close your settings', exact: true }).click();
+  await viewer.evaluate(() => {
+    window.__mediaProduct.devices = [];
+    navigator.mediaDevices.dispatchEvent(new Event('devicechange'));
+  });
+  await viewer
+    .getByText(
+      'Your selected speaker is not currently listed. Reconnect it or choose a speaker in Your settings.',
+      { exact: true },
+    )
+    .waitFor();
+  dialog = await settings(viewer);
+  assert.equal(await dialog.locator('[data-output-device]').inputValue(), 'fixture-speaker');
+  await dialog.locator('[data-output-device]').selectOption('');
+  await dialog.getByRole('button', { name: 'Use speaker', exact: true }).click();
+  await viewer.waitForFunction(() =>
+    document.querySelector('[data-output-status]').textContent.startsWith('Speaker selected'),
+  );
+  await dialog.getByRole('button', { name: 'Close your settings', exact: true }).click();
+  assert.equal(await viewer.evaluate(() => window.__mediaProduct.captures), captured);
+  report.checks.push({
+    name: 'detached-speaker-notice-keeps-selected-output-until-user-changes-it',
+    passed: true,
+  });
+}
+
 async function main() {
   const browser = await playwright[options.name].launch(options.launchOptions);
   try {
@@ -479,6 +561,8 @@ async function main() {
     await publisher.evaluate(() => {
       window.__mediaProduct.rejectCameraQuality = false;
     });
+    stage = 'lifecycle-hints';
+    await lifecycleRecovery(viewer);
     if (options.name === 'chromium') {
       stage = 'native-freeze-resume';
       const session = await viewer.context().newCDPSession(viewer);
@@ -541,6 +625,26 @@ async function main() {
       () => window.__communitySignalingReconnect.snapshot().counters.reconnectSuccess > 0,
     );
     await progressing(viewer, 'native-signaling-reconnect-decoding');
+    stage = 'browser-request-outage';
+    const recoveries = await viewer.evaluate(
+      () => window.__communitySignalingReconnect.snapshot().counters.reconnectSuccess,
+    );
+    await viewer.context().setOffline(true);
+    try {
+      await viewer.evaluate(() => window.__communitySignalingReconnect.closeCurrent());
+      await viewer.waitForTimeout(400);
+    } finally {
+      await viewer.context().setOffline(false);
+    }
+    await viewer.evaluate(() => {
+      for (let index = 0; index < 30; index++) window.dispatchEvent(new Event('online'));
+    });
+    await viewer.waitForFunction(
+      (before) =>
+        window.__communitySignalingReconnect.snapshot().counters.reconnectSuccess > before,
+      recoveries,
+    );
+    await progressing(viewer, 'browser-request-outage-recovery-decoding');
     assert.equal(
       await viewer.evaluate(() => window.__mediaProduct.captures),
       viewerCaptureCounts,
@@ -577,6 +681,14 @@ async function main() {
     for (const page of [viewer, publisher]) {
       await page.locator('#leave-btn').click();
       await page.locator('#join-screen').waitFor({ state: 'visible' });
+      const before = await page.evaluate(() => window.__mediaProduct.captures);
+      await page.evaluate(() => {
+        window.dispatchEvent(new Event('online'));
+        window.dispatchEvent(new Event('pageshow'));
+        navigator.mediaDevices.dispatchEvent(new Event('devicechange'));
+      });
+      await page.waitForTimeout(350);
+      assert.equal(await page.evaluate(() => window.__mediaProduct.captures), before);
       assert.equal(
         await page.evaluate(() =>
           window.__communityPeers.every((peer) => peer.connectionState === 'closed'),

@@ -326,6 +326,8 @@ export class MediaControls {
   private speakerTest: SpeakerTest | null = null;
   private devices: ReturnType<typeof observeMediaDevices> | null = null;
   private outputWarning = false;
+  private deviceRefresh = false;
+  private lifecycleVersion = 0;
   private stallTimer: ReturnType<typeof setInterval> | null = null;
   private readonly frameWatches = new WeakMap<HTMLVideoElement, FrameWatch>();
   private readonly output = new AudioOutput(() => [
@@ -336,6 +338,50 @@ export class MediaControls {
   ]);
 
   constructor(private options: MediaControlsOptions) {}
+
+  /** Private previews and tones never resume themselves after backgrounding. */
+  setPageActive(active: boolean): void {
+    if (active) return;
+    this.preview?.stop();
+    this.speakerTest?.stop();
+  }
+
+  /** Reapply only this viewer's choices after the browser pauses existing media. */
+  resumePlayback(): void {
+    if (document.visibilityState === 'hidden') return;
+    for (const info of this.tiles.values()) info.video = null;
+    for (const id of this.playback.keys()) this.applyParticipant(id);
+  }
+
+  /** A disconnected Bluetooth/output device must not silently select a new speaker. */
+  refreshDevices(): void {
+    this.devices?.refresh();
+    const selected = this.output.selected;
+    if (!selected || this.deviceRefresh || this.tiles.size === 0) return;
+    const version = this.lifecycleVersion;
+    this.deviceRefresh = true;
+    Promise.resolve()
+      .then(() => navigator.mediaDevices?.enumerateDevices() ?? [])
+      .then((devices) => {
+        if (version !== this.lifecycleVersion || selected !== this.output.selected) return;
+        const present = devices.some(
+          (device) => device.kind === 'audiooutput' && device.deviceId === selected,
+        );
+        if (!present && !this.outputWarning) {
+          this.outputWarning = true;
+          this.options.notify(
+            'Your selected speaker is not currently listed. Reconnect it or choose a speaker in Your settings.',
+          );
+        } else if (present) this.outputWarning = false;
+      })
+      .catch(() => {
+        // Enumeration can be unavailable or permission-filtered; it never
+        // authorizes a fallback device or changes the user's output choice.
+      })
+      .finally(() => {
+        this.deviceRefresh = false;
+      });
+  }
 
   mountToolbar(container: HTMLElement): void {
     const toolbar = document.createElement('div');
@@ -992,6 +1038,8 @@ export class MediaControls {
   }
 
   reset(): void {
+    this.lifecycleVersion++;
+    this.outputWarning = false;
     this.closeSetup(false);
     for (const id of this.playback.keys()) this.detachParticipant(id);
   }
@@ -1132,7 +1180,7 @@ export class MediaControls {
   }
 }
 
-function mediaErrorMessage(error: unknown, device = 'Camera or microphone'): string {
+export function mediaErrorMessage(error: unknown, device = 'Camera or microphone'): string {
   if (error instanceof Error) {
     if (error.name === 'NotAllowedError')
       return `${device} access was denied. Allow access in your browser and try again.`;
@@ -1141,7 +1189,9 @@ function mediaErrorMessage(error: unknown, device = 'Camera or microphone'): str
     if (error.name === 'OverconstrainedError')
       return 'The selected device is unavailable. Choose a default device and try again.';
     if (error.name === 'NotReadableError')
-      return 'The device could not be opened. Check whether another app is using it.';
+      return `${device} could not be opened. Try another device in Your settings, or close other apps using it and try again.`;
+    if (error.name === 'InvalidStateError')
+      return 'Return to this tab and try again. Your browser paused access while the page was inactive.';
     return error.message;
   }
   return 'Could not open your media devices. Please try again.';

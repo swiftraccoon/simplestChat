@@ -263,6 +263,10 @@ export class MediaManager {
   } | null = null;
   private cameraStalled = false;
   private cameraChecking = false;
+  private pageActive = typeof document === 'undefined' || document.visibilityState !== 'hidden';
+  private pageVersion = 0;
+  private automaticVideoCapture = false;
+  private lastResumeCheck = -Infinity;
   private readonly cameraTimer: ReturnType<typeof setInterval>;
 
   constructor(signaling: SignalingClient) {
@@ -291,14 +295,29 @@ export class MediaManager {
     this.cameraChecking = true;
     try {
       const producer = this.videoProducer;
-      if (!producer || producer.closed || producer.paused || this.closed) {
+      const pageVersion = this.pageVersion;
+      if (
+        !producer ||
+        producer.closed ||
+        producer.paused ||
+        this.closed ||
+        !this.pageActive ||
+        this.signalingSuspended
+      ) {
         this.cameraFlow = null;
         this.setCameraStalled(false);
         return;
       }
       const frames = await encodedFrames(producer);
       const flow = this.cameraFlow;
-      if (frames === null || producer !== this.videoProducer) return;
+      if (
+        frames === null ||
+        producer !== this.videoProducer ||
+        !this.pageActive ||
+        pageVersion !== this.pageVersion ||
+        this.signalingSuspended
+      )
+        return;
       if (!flow || flow.producer !== producer || frames > flow.frames) {
         this.cameraFlow = { producer, frames, progressAt: now, reopened: false };
         this.setCameraStalled(false);
@@ -309,11 +328,54 @@ export class MediaManager {
           flow.reopened = true;
           flow.progressAt = now;
           console.warn('[media] the camera stopped delivering frames; reopening it');
-          await this.recaptureVideo().catch(() => false);
+          this.automaticVideoCapture = true;
+          try {
+            await this.recaptureVideo(
+              undefined,
+              () => this.pageActive && pageVersion === this.pageVersion && !this.signalingSuspended,
+            ).catch(() => false);
+          } finally {
+            this.automaticVideoCapture = false;
+          }
         }
       }
     } finally {
       this.cameraChecking = false;
+    }
+  }
+
+  /** Keep existing user choices; a background page cannot reopen a silent camera. */
+  setPageActive(active: boolean): void {
+    if (this.pageActive === active) return;
+    this.pageActive = active;
+    this.pageVersion++;
+    this.cameraFlow = null;
+    if (!active && this.automaticVideoCapture) this.pendingVideoTrack?.stop();
+  }
+
+  /** Lifecycle hints repair only unhealthy existing transports, never create capture. */
+  resumeConnection(now = Date.now()): void {
+    if (
+      this.closed ||
+      !this.pageActive ||
+      this.signalingSuspended ||
+      !this.signaling.connected ||
+      now - this.lastResumeCheck < 3000
+    )
+      return;
+    this.lastResumeCheck = now;
+    for (const transport of [this.sendTransport, this.recvTransport]) {
+      if (
+        !transport ||
+        transport.closed ||
+        !['failed', 'disconnected'].includes(transport.connectionState)
+      )
+        continue;
+      const timer = this.iceRestartTimers.get(transport.id);
+      if (timer) clearTimeout(timer);
+      this.iceRestartTimers.delete(transport.id);
+      if (!this.pendingControls.has(`ice:${transport.id}`))
+        this.sendControl({ type: 'restartIce', transportId: transport.id });
     }
   }
 
@@ -1155,11 +1217,18 @@ export class MediaManager {
   }
 
   /** Re-capture camera and replace track on existing producer */
-  private async recaptureVideo(deviceId?: string): Promise<boolean> {
+  private async recaptureVideo(
+    deviceId?: string,
+    canContinue: () => boolean = () => true,
+  ): Promise<boolean> {
     const producer = this.videoProducer;
     if (!producer) return false;
     const version = ++this.videoVersion;
-    const isCurrent = () => this.videoProducer === producer && version === this.videoVersion;
+    const isCurrent = () =>
+      !this.closed &&
+      this.videoProducer === producer &&
+      version === this.videoVersion &&
+      canContinue();
     let track: MediaStreamTrack | undefined;
     let unwatchCapture: (() => void) | undefined;
     try {
@@ -1178,7 +1247,19 @@ export class MediaManager {
       unwatchCapture = this.watchPendingCapture(track, 'video', isCurrent);
       if (!isCurrent()) return false;
       await producer.replaceTrack({ track });
-      if (!isCurrent()) return false;
+      if (!isCurrent()) {
+        // A native replacement already underway can retire the old track even
+        // after the page hides. Do not leave an ended replacement marked live,
+        // and never retire a newer user-requested camera operation.
+        if (
+          !this.closed &&
+          this.videoProducer === producer &&
+          version === this.videoVersion &&
+          producer.track === track
+        )
+          this.localCaptureStopped('video');
+        return false;
+      }
       if (track.readyState === 'ended') {
         this.localCaptureStopped('video');
         return false;

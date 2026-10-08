@@ -79,6 +79,8 @@ async function fixture(t) {
   const state = {
     plays: [],
     roomCalls: [],
+    notifications: [],
+    enumerate: async () => [],
     play: async () => {
       throw denied();
     },
@@ -94,6 +96,7 @@ async function fixture(t) {
     globals: {
       document: dom.document,
       window,
+      navigator: { mediaDevices: { enumerateDevices: () => state.enumerate() } },
       localStorage: { getItem: () => null, setItem() {} },
       Option: function (label, value) {
         const option = dom.document.createElement('option');
@@ -104,7 +107,7 @@ async function fixture(t) {
     },
   });
   const controls = new MediaControls({
-    notify() {},
+    notify: (message) => state.notifications.push(message),
     getRoom: () => ({
       setRemoteMediaHidden: (...args) => state.roomCalls.push(['hidden', ...args]),
       setRemoteVideoQuality: (...args) => state.roomCalls.push(['quality', ...args]),
@@ -429,4 +432,77 @@ test('non-policy playback rejection does not masquerade as an autoplay permissio
   f.controls.attachTile(f.tile, 'alice', 'Alice');
   await flush();
   assert.equal(f.notice.hidden, true);
+});
+
+test('resume preserves per-person mute, hide and volume while retrying paused visible playback', async (t) => {
+  const f = await fixture(t);
+  await flush();
+  f.state.play = async () => {};
+  f.control('volume').value = '32';
+  f.control('volume').emit('input');
+  f.control('mute').click();
+  await flush();
+  f.audio.paused = true;
+  f.controls.resumePlayback();
+  await flush();
+  assert.equal(f.audio.paused, false);
+  assert.equal(f.audio.muted, true);
+  assert.equal(f.audio.volume, 0.32);
+  f.control('hide').click();
+  const before = f.state.plays.length;
+  f.controls.resumePlayback();
+  await flush();
+  assert.equal(f.state.plays.length, before);
+  assert.equal(f.audio.paused, true);
+  assert.equal(f.audio.muted, true);
+});
+
+test('speaker disappearance is reported once without choosing a fallback or losing personal preferences', async (t) => {
+  const f = await fixture(t);
+  await f.controls.output.change('headset');
+  const pending = deferred();
+  let calls = 0;
+  f.state.enumerate = () => {
+    calls++;
+    return pending.promise;
+  };
+  for (let index = 0; index < 20; index++) f.controls.refreshDevices();
+  await flush();
+  assert.equal(calls, 1);
+  pending.resolve([]);
+  await flush();
+  assert.equal(f.controls.output.selected, 'headset');
+  assert.equal(f.state.notifications.length, 1);
+  assert.match(f.state.notifications[0], /Reconnect it or choose a speaker/);
+  f.controls.refreshDevices();
+  await flush();
+  assert.equal(f.state.notifications.length, 1);
+  f.state.enumerate = async () => [{ kind: 'audiooutput', deviceId: 'headset' }];
+  f.controls.refreshDevices();
+  await flush();
+  assert.equal(f.controls.outputWarning, false);
+});
+
+test('old room device enumeration cannot show a speaker warning after leave', async (t) => {
+  const f = await fixture(t);
+  await f.controls.output.change('headset');
+  const pending = deferred();
+  f.state.enumerate = () => pending.promise;
+  f.controls.refreshDevices();
+  await flush();
+  f.controls.reset();
+  pending.resolve([]);
+  await flush();
+  assert.deepEqual(f.state.notifications, []);
+});
+
+test('background lifecycle stops private preview and tones, without automatic foreground capture', async (t) => {
+  const f = await fixture(t);
+  const stopped = [];
+  f.controls.preview = { stop: () => stopped.push('preview') };
+  f.controls.speakerTest = { stop: () => stopped.push('tone'), dispose() {} };
+  f.controls.setPageActive(false);
+  assert.deepEqual(stopped, ['preview', 'tone']);
+  f.controls.setPageActive(true);
+  assert.deepEqual(stopped, ['preview', 'tone']);
 });

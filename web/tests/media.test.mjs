@@ -2542,3 +2542,119 @@ test('snapshot reconciliation stops missing local producers and preserves acknow
   assert.equal(media.videoEnabled, false);
   assert.equal(media.reconcileLocalProducers([audio.id]), false);
 });
+
+test('background time is excluded from camera stall recovery and existing microphone/video choices remain', async (t) => {
+  const { media, state } = await fixture(t);
+  await media.unmuteVideo();
+  encoding(state.producers.at(-1), () => 0);
+  await media.checkCameraFlow(0);
+  media.setPageActive(false);
+  await media.checkCameraFlow(100_000);
+  assert.equal(state.captureCalls.length, 1);
+  assert.equal(media.videoEnabled, true);
+  assert.equal(media.audioEnabled, false);
+  media.setPageActive(true);
+  await media.checkCameraFlow(200_000);
+  await media.checkCameraFlow(209_000);
+  assert.equal(state.captureCalls.length, 1, 'returning visible gets a fresh stall window');
+  await media.checkCameraFlow(210_000);
+  assert.equal(state.captureCalls.length, 2);
+});
+
+test('hide cancels late automatic camera capture without replacing the live producer', async (t) => {
+  const { media, state, newTrack } = await fixture(t);
+  await media.unmuteVideo();
+  const producer = state.producers.at(-1);
+  const original = producer.track;
+  encoding(producer, () => 0);
+  await media.checkCameraFlow(0);
+  const permission = deferred();
+  const opened = deferred();
+  state.capture = () => {
+    opened.resolve();
+    return permission.promise;
+  };
+  const checking = media.checkCameraFlow(10_000);
+  await opened.promise;
+  assert.equal(state.captureCalls.length, 2);
+  media.setPageActive(false);
+  const late = newTrack('video');
+  permission.resolve(new Stream([late]));
+  await checking;
+  assert.equal(late.readyState, 'ended');
+  assert.equal(producer.track, original);
+  assert.equal(original.readyState, 'live');
+});
+
+test('a hidden stats completion and suspended signaling cannot start automatic camera capture', async (t) => {
+  const { media, state } = await fixture(t);
+  await media.unmuteVideo();
+  const producer = state.producers.at(-1);
+  encoding(producer, () => 0);
+  await media.checkCameraFlow(0);
+  const stats = deferred();
+  producer.getStats = () => stats.promise;
+  const checking = media.checkCameraFlow(100_000);
+  media.setPageActive(false);
+  stats.resolve(new Map([['layer', { type: 'outbound-rtp', kind: 'video', framesEncoded: 0 }]]));
+  await checking;
+  media.setPageActive(true);
+  media.suspendSignaling();
+  await media.checkCameraFlow(200_000);
+  assert.equal(state.captureCalls.length, 1);
+});
+
+test('resume probes only unhealthy existing transports and bounds repeated network hints without capture', async (t) => {
+  const { media, state } = await fixture(t);
+  media.sendTransport.id = 'send';
+  media.sendTransport.connectionState = 'connected';
+  media.recvTransport = { id: 'recv', connectionState: 'failed', close() {} };
+  const reply = deferred();
+  state.controlReply = () => reply.promise;
+  media.resumeConnection(0);
+  media.resumeConnection(1);
+  media.resumeConnection(4000);
+  assert.deepEqual(state.sent, [{ type: 'restartIce', transportId: 'recv' }]);
+  assert.deepEqual(state.captureCalls, []);
+  media.setPageActive(false);
+  media.sendTransport.connectionState = 'failed';
+  media.resumeConnection(8000);
+  assert.equal(state.sent.length, 1);
+  reply.resolve({ type: 'transportConnected' });
+  await settleControls();
+  media.setPageActive(true);
+  media.suspendSignaling();
+  media.resumeConnection(9000);
+  assert.equal(state.sent.length, 1);
+  media.close();
+  media.resumeConnection(12_000);
+  assert.equal(state.sent.length, 1);
+});
+
+test('hide during an automatic native replacement retires an ended camera and offers explicit restart', async (t) => {
+  const { media, state } = await fixture(t);
+  const stopped = [];
+  media.onLocalCaptureStopped = (kind) => stopped.push(kind);
+  await media.unmuteVideo();
+  const producer = state.producers.at(-1);
+  encoding(producer, () => 0);
+  await media.checkCameraFlow(0);
+  const replacement = deferred();
+  const started = deferred();
+  state.replace = () => {
+    started.resolve();
+    return replacement.promise;
+  };
+  const checking = media.checkCameraFlow(10_000);
+  await started.promise;
+  media.setPageActive(false);
+  replacement.resolve();
+  await checking;
+  assert.equal(media.videoEnabled, false);
+  assert.equal(producer.closed, true);
+  assert.deepEqual(stopped, ['video']);
+  assert.ok(state.tracks.every((track) => track.readyState === 'ended'));
+  media.setPageActive(true);
+  await media.checkCameraFlow(100_000);
+  assert.equal(state.captureCalls.length, 2, 'foregrounding cannot republish a retired camera');
+});
