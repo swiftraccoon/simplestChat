@@ -477,6 +477,7 @@ const HTTP_ROUTES: &[&str] = &[
     "/api/auth/sessions/others",
     "/api/auth/sessions/{id}",
     "/api/auth/inbox",
+    "/api/auth/push",
     "/api/auth/inbox/{peer}/messages",
     "/api/auth/inbox/{peer}/read",
     "/api/auth/profile",

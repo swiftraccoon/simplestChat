@@ -559,6 +559,14 @@ impl SignalingServer {
         self.db_pool.as_ref()
     }
 
+    /// Contact URI for VAPID; configured origins are already validated at startup.
+    pub fn notification_origin(&self) -> Option<String> {
+        self.allowed_origins
+            .iter()
+            .find(|origin| origin.starts_with("https://"))
+            .cloned()
+    }
+
     pub fn jwt_secret(&self) -> Option<&str> {
         self.jwt_secret.as_deref()
     }
@@ -680,6 +688,12 @@ impl SignalingServer {
             )
             .route("/password", post(crate::auth::account::change_password))
             .route("/inbox", get(crate::room::history::inbox))
+            .route(
+                "/push",
+                get(crate::push::status)
+                    .put(crate::push::subscribe)
+                    .delete(crate::push::unsubscribe),
+            )
             .route(
                 "/inbox/{peer}/messages",
                 get(crate::room::history::messages).post(crate::room::history::send_message),

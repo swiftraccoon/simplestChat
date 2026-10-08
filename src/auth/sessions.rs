@@ -45,7 +45,7 @@ async fn list_sessions(pool: &PgPool, claims: &Claims) -> Result<Vec<AccountSess
 
 /// Recheck authorization under the same users-then-sessions locks used by login
 /// and refresh. A revoked session cannot race a later session-management write.
-async fn lock_current_session(
+pub(crate) async fn lock_current_session(
     transaction: &mut Transaction<'_, Postgres>,
     claims: &Claims,
 ) -> Result<(Uuid, String), AuthError> {

@@ -19,6 +19,7 @@ pub mod invite_codes;
 pub mod labels;
 pub mod media;
 pub mod metrics;
+pub mod push;
 pub mod room;
 pub mod saturation;
 pub mod shutdown;

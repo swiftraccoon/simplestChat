@@ -192,6 +192,10 @@ async fn run_server(diagnostics: Diagnostics) -> Result<()> {
     // Create and start signaling server
     let signaling_server =
         SignalingServer::new(room_manager.clone(), turn_config, metrics, db_pool.clone())?;
+    if let Some(pool) = &db_pool {
+        let _notifications =
+            simplestChat::push::spawn(pool.clone(), signaling_server.notification_origin()).await?;
+    }
     let port = simplestChat::configuration::read_usize("PORT", 3000, 1, 65535)? as u16;
 
     info!("Starting signaling server on port {}", port);

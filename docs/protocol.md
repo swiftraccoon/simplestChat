@@ -768,3 +768,54 @@ When changing the contract:
   operation can outlive its owner. Do not make browser visibility the authority
   for room permissions. See [testing](testing.md) and
   [contribution standards](../CONTRIBUTING.md).
+
+## Private-message push notifications
+
+Authenticated account sessions can opt in to generic Web Push alerts. These
+HTTP routes require the same current bearer token and live-session validation as
+other account operations; responses use `Cache-Control: no-store`:
+
+| Method and path | Request | Response |
+| --- | --- | --- |
+| `GET /api/auth/push` | No body | `{ "publicKey": "…", "enabled": false }` |
+| `PUT /api/auth/push` | `{ "endpoint": "https://…" }` | `204 No Content` |
+| `DELETE /api/auth/push` | No body | `204 No Content` |
+
+`enabled` describes the current authenticated session, not every device on the
+account. `publicKey` is the uncompressed 65-byte P-256 VAPID public key encoded
+as unpadded base64url. The signing key is generated once and retained in
+PostgreSQL's `push_keys` table; ordinary database backup/restore and server
+migration preserve it and existing subscriptions. The private key is never
+returned to a browser.
+
+Registration accepts only the endpoint field and stores one subscription per
+session, associated with that account's current authentication version. An
+endpoint can move between sessions of the same account. Reusing an endpoint
+bound to another account is rejected: the browser must unsubscribe and obtain a
+fresh subscription after the user's explicit enable action. Browser-side Web
+Locks and a nonsecret account/lease marker prevent delayed cleanup in one tab
+from unsubscribing a newer account's registration. Tokens, chat text and endpoint
+URLs are not persisted by the service worker.
+
+Endpoints are bounded to 2048 bytes and HTTPS on the supported browser-provider
+hosts: `fcm.googleapis.com`, `updates.push.services.mozilla.com`,
+`web.push.apple.com`, or a subdomain of `notify.windows.com`. Credentials,
+fragments, nondefault ports and empty paths are rejected. Outbound delivery uses
+no system proxy and follows no redirects. VAPID requests have an empty body:
+provider delivery cannot carry sender identities or message contents. The worker
+shows **New private messages** and opens the fixed app inbox destination.
+
+New durable account PMs coalesce into a bounded delivery queue; guest PMs do not.
+Before delivery, the worker checks live session/account authorization and whether
+an unexpired, unremoved PM is still unread. A message read during the initial
+coalescing window need not produce an alert. Failures use bounded retries;
+expired provider endpoints are removed. Queue bookkeeping never changes message
+acceptance or retries the chat message itself.
+
+Logout and individual/bulk session revocation delete session-owned subscriptions
+through the session foreign key. Account authentication-version changes also
+make old subscriptions ineligible. Disabling affects only the current session;
+other devices retain their independent opt-in. Provider delivery is best effort,
+and a notification already accepted by a provider may arrive after a read or
+sign-out. The app does not promise immediate recall, offline chat access, or
+end-to-end encryption for stored messages.
