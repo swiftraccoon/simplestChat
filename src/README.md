@@ -117,6 +117,17 @@ Migration 022 invalidates all existing sign-ins once and makes the family hash
 nonnullable; accounts, password/passkey credentials, recovery keys and memberships
 are preserved. The startup schema check refuses a nullable family column.
 
+`auth/sessions.rs` exposes account-owned session controls: `GET /api/auth/sessions`
+lists up to 32 live sessions with sign-in, last-refresh and expiry timestamps and
+a current-session marker. `DELETE /api/auth/sessions/{id}` revokes an individual
+session; `DELETE /api/auth/sessions/others` keeps the caller's session and revokes
+the rest. Neither listing nor revocation exposes refresh credentials or hashes.
+Mutations recheck the caller under users-then-sessions locks, so a revoked caller
+cannot complete a later revocation. Existing HTTP validation rejects the retired
+session immediately; active sockets and retained reconnect media check every five
+seconds. Revoking the current session clears its matching refresh cookie without
+clearing a newer sign-in cookie installed by another tab.
+
 Authenticated HTTP mints a 256-bit one-use upgrade ticket, consumed from the
 `ticket.` WebSocket subprotocol. Pending records contain a digest, session-bound
 claims and a monotonic deadline of at most 30 seconds; at most 10,000 records are

@@ -9,6 +9,7 @@ pub mod passkeys;
 pub mod password;
 pub mod routes;
 pub mod session;
+pub mod sessions;
 pub mod types;
 pub mod webauthn;
 

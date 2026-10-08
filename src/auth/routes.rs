@@ -103,7 +103,7 @@ pub(super) fn no_store_headers() -> HeaderMap {
     headers
 }
 
-fn refresh_token_from_headers(headers: &HeaderMap) -> Option<&str> {
+pub(super) fn refresh_token_from_headers(headers: &HeaderMap) -> Option<&str> {
     cookie_value(headers, REFRESH_COOKIE_NAME)
         .filter(|token| session::refresh_token_is_valid(token))
 }

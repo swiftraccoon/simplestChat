@@ -2,6 +2,7 @@ import type { AccountProfile, CreateRoomRequest, RoomListItem } from './protocol
 import {
   type ChatPreferences,
   decodeAccountProfile,
+  decodeAccountSessions,
   decodeServerCapabilities,
   decodeChatPreferences,
   decodeWebSocketTicket,
@@ -353,6 +354,18 @@ export const api = {
     ),
   accountProfile: (token: string | null) =>
     apiJson(decodeAccountProfile, '/api/auth/profile', token),
+  accountSessions: (token: string | null, signal?: AbortSignal) =>
+    apiJson(decodeAccountSessions, '/api/auth/sessions', token, 'GET', undefined, signal),
+  revokeSession: (token: string | null, id: string, signal?: AbortSignal) =>
+    apiNoContent(
+      `/api/auth/sessions/${encodeURIComponent(id)}`,
+      token,
+      'DELETE',
+      undefined,
+      signal,
+    ),
+  revokeOtherSessions: (token: string | null, signal?: AbortSignal) =>
+    apiNoContent('/api/auth/sessions/others', token, 'DELETE', undefined, signal),
   updateProfile: (
     token: string | null,
     data: Pick<AccountProfile, 'display_name' | 'bio' | 'avatar_url' | 'profile_style'>,

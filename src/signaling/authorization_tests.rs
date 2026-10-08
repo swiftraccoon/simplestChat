@@ -15,6 +15,9 @@ mod secret_canary_tests;
 #[path = "appearance_tests.rs"]
 mod appearance_tests;
 
+#[path = "auth_session_tests.rs"]
+mod auth_session_tests;
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub(super) struct Manifest {

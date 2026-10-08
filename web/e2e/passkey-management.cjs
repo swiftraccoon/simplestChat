@@ -1,6 +1,7 @@
 /** Exercise account management with native resident credentials on an owned local
  * server. Secrets stay in memory; reports contain fixed outcome labels only. */
 const assert = require('node:assert/strict');
+const { sessionManagementChecks } = require('./account-session-checks.cjs');
 const playwright = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 let failureStage = 'owned-browser-setup';
 
@@ -161,6 +162,15 @@ async function run() {
     );
     assert.equal(await account.getByLabel('Current password', { exact: true }).count(), 0);
     assert.equal(await account.getByLabel('New password', { exact: true }).count(), 0);
+    await account.getByRole('button', { name: 'New invite code', exact: true }).waitFor();
+    await account
+      .getByRole('button', { name: 'Sign out and forget this device', exact: true })
+      .waitFor();
+    await account.getByRole('button', { name: 'Sign out this session', exact: true }).waitFor();
+    assert.equal(
+      await account.getByRole('heading', { name: 'Signed-in sessions', exact: true }).isVisible(),
+      true,
+    );
     assert.equal(
       await account.getByLabel('Current password for verification', { exact: true }).isVisible(),
       false,
@@ -594,6 +604,21 @@ async function run() {
       'The original server credential is gone',
     );
     checks.push('ui-replacement-signin-preserves-passkey-only-account-and-recovery');
+    failureStage = 'ui-session-list-and-live-revocation';
+    await sessionManagementChecks({
+      page,
+      origin,
+      playwright,
+      credential,
+      token: replacementSession.token,
+      openAccount,
+      stage: (name) => {
+        failureStage = `ui-session-${name}`;
+      },
+    });
+    checks.push(
+      'ui-session-controls-revoke-individual-other-and-current-sessions-over-http-and-live-websockets',
+    );
     process.stdout.write(JSON.stringify({ browser: 'chromium', checks, passed: true }) + '\n');
   } finally {
     if (cdp && authenticatorId)

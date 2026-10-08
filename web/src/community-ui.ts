@@ -1,5 +1,6 @@
 import type { AuthManager } from './auth';
 import { mountAccountSecurity, type AccountSecurityFlow } from './account-security';
+import { mountAccountSessions } from './account-sessions';
 import { appearancePicker } from './appearance';
 import type { RoomClient } from './room';
 import type { AccountProfile, PublicProfile, RoomListItem } from './protocol';
@@ -317,6 +318,7 @@ export class CommunityUI {
 
   private async openAccount(): Promise<void> {
     let security: AccountSecurityFlow | null = null;
+    let sessions: ReturnType<typeof mountAccountSessions> | null = null;
     const view = modal('Account', () => security?.canDismiss ?? true);
     view.dialog.setAttribute('data-account-dialog', 'true');
     const token = this.options.auth.jwt;
@@ -383,6 +385,7 @@ export class CommunityUI {
           save.disabled = !canStart;
           if (changePassword) changePassword.disabled = !canStart;
           if (!canStart) for (const secret of passwordFields) secret.value = '';
+          sessions?.refreshControls();
         },
         completed: (kind) => {
           view.dialog.close();
@@ -398,56 +401,73 @@ export class CommunityUI {
         },
       });
       await security.load();
-      if (!stillCurrent() || !security.settings?.password_enabled) return;
-      view.body.append(el('h3', 'Change password'));
-      view.body.append(el('p', 'Changing your password signs out all sessions.', 'setting-hint'));
-      const current = input('', 'password', 512);
-      current.autocomplete = 'current-password';
-      const password = input('', 'password', 512);
-      password.autocomplete = 'new-password';
-      const confirm = input('', 'password', 512);
-      confirm.autocomplete = 'new-password';
-      passwordFields.push(current, password, confirm);
-      view.body.append(
-        field('Current password', current),
-        field('New password', password),
-        field('Confirm new password', confirm),
-      );
-      const change = asyncButton(
-        'Change password',
-        async () => {
-          if (!stillCurrent() || !security?.canStart) return;
-          validatePassword(password.value, confirm.value);
-          const update = {
-            current_password: current.value,
-            new_password: password.value,
-          };
-          await security.change(
-            (currentToken, signal) => api.changePassword(currentToken, update, signal),
-            () => {
-              view.dialog.close();
-              this.options.notify('Password changed. Sign in again with your new password.');
-              this.options
-                .onSignedOut()
-                .catch(() =>
-                  this.options.notify('Password changed. Reload to finish signing out.'),
-                );
-            },
-          );
+      if (!stillCurrent()) return;
+      if (security.settings?.password_enabled) {
+        view.body.append(el('h3', 'Change password'));
+        view.body.append(el('p', 'Changing your password signs out all sessions.', 'setting-hint'));
+        const current = input('', 'password', 512);
+        current.autocomplete = 'current-password';
+        const password = input('', 'password', 512);
+        password.autocomplete = 'new-password';
+        const confirm = input('', 'password', 512);
+        confirm.autocomplete = 'new-password';
+        passwordFields.push(current, password, confirm);
+        view.body.append(
+          field('Current password', current),
+          field('New password', password),
+          field('Confirm new password', confirm),
+        );
+        const change = asyncButton(
+          'Change password',
+          async () => {
+            if (!stillCurrent() || !security?.canStart) return;
+            validatePassword(password.value, confirm.value);
+            const update = {
+              current_password: current.value,
+              new_password: password.value,
+            };
+            await security.change(
+              (currentToken, signal) => api.changePassword(currentToken, update, signal),
+              () => {
+                view.dialog.close();
+                this.options.notify('Password changed. Sign in again with your new password.');
+                this.options
+                  .onSignedOut()
+                  .catch(() =>
+                    this.options.notify('Password changed. Reload to finish signing out.'),
+                  );
+              },
+            );
+          },
+          (error) => this.showError(view.error, error),
+        );
+        changePassword = change;
+        view.dialog.addEventListener(
+          'close',
+          () => {
+            current.value = '';
+            password.value = '';
+            confirm.value = '';
+          },
+          { once: true },
+        );
+        view.body.append(change);
+      }
+      sessions = mountAccountSessions({
+        container: view.body,
+        dialog: view.dialog,
+        security,
+        token: () => this.options.auth.jwt,
+        current: stillCurrent,
+        notify: this.options.notify,
+        signedOut: () => {
+          view.dialog.close();
+          this.options.notify('Session signed out.');
+          this.options.onSignedOut().catch(() => {
+            this.options.notify('Session signed out. Reload to finish signing out.');
+          });
         },
-        (error) => this.showError(view.error, error),
-      );
-      changePassword = change;
-      view.dialog.addEventListener(
-        'close',
-        () => {
-          current.value = '';
-          password.value = '';
-          confirm.value = '';
-        },
-        { once: true },
-      );
-      view.body.append(change);
+      });
       // Registration invitations: the way in while registration is closed.
       const invites = el('div');
       const refreshInvites = async (): Promise<void> => {

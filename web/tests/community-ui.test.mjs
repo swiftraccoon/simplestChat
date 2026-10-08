@@ -21,11 +21,24 @@ async function fixture() {
     notifications: [],
     updated: [],
     signedOut: 0,
+    forgotten: 0,
     room: null,
     handle: async (path) =>
       path === '/api/auth/passkeys'
         ? { password_enabled: true, recovery_enabled: false, passkeys: [], maximum: 10 }
-        : { ...profile },
+        : path === '/api/auth/sessions'
+          ? [
+              {
+                id: 'current-session',
+                current: true,
+                created_at: '2026-10-07T10:00:00Z',
+                refreshed_at: '2026-10-07T10:00:00Z',
+                expires_at: '2026-10-14T10:00:00Z',
+              },
+            ]
+          : path === '/api/auth/invites'
+            ? []
+            : { ...profile },
     upload: dom.ui.rasterUpload,
   };
   const request = async (...args) => {
@@ -37,6 +50,13 @@ async function fixture() {
     api: {
       publicProfile: (id, token) => request(`/api/auth/profiles/${encodeURIComponent(id)}`, token),
       accountProfile: (token) => request('/api/auth/profile', token),
+      accountSessions: (token, signal) =>
+        request('/api/auth/sessions', token, 'GET', undefined, signal),
+      revokeSession: (token, id, signal) =>
+        request(`/api/auth/sessions/${id}`, token, 'DELETE', undefined, signal),
+      revokeOtherSessions: (token, signal) =>
+        request('/api/auth/sessions/others', token, 'DELETE', undefined, signal),
+      registrationInvites: (token) => request('/api/auth/invites', token),
       updateProfile: (token, data) => request('/api/auth/profile', token, 'PATCH', data),
       changePassword: (token, data) => request('/api/auth/password', token, 'POST', data),
       passkeySettings: (token) => request('/api/auth/passkeys', token),
@@ -66,6 +86,9 @@ async function fixture() {
     modules: {
       './ui': ui,
       './appearance': await loadAppearanceFixture({ ...dom, ui }),
+      './account-sessions': await loadTypeScript('src/account-sessions.ts', {
+        modules: { './ui': ui },
+      }),
       './account-security': {
         ...security,
         mountAccountSecurity: (options) => {
@@ -100,6 +123,9 @@ async function fixture() {
     async onRoomDeleted() {},
     async onSignedOut() {
       state.signedOut++;
+    },
+    onForgetDevice() {
+      state.forgotten++;
     },
   });
   return { ...dom, ...api, ui, auth, state, profile, community };
@@ -432,6 +458,129 @@ test('closed account dialogs do not receive late load failures', async () => {
   assert.equal(error.textContent, '');
 });
 
+test('passkey-only accounts retain invitations, sessions and forget-device controls', async () => {
+  const f = await fixture();
+  const handle = f.state.handle;
+  f.state.handle = (path, ...args) =>
+    path === '/api/auth/passkeys'
+      ? {
+          password_enabled: false,
+          recovery_enabled: false,
+          passkeys: [{ id: 'key', created_at: '2026-10-07T10:00:00Z' }],
+          maximum: 10,
+        }
+      : handle(path, ...args);
+  await f.community.openAccount();
+  await flush();
+  const view = dialog(f, 'Account');
+  assert.ok(
+    !view.querySelectorAll('button').some((node) => node.textContent === 'Change password'),
+  );
+  action(view, 'New invite code');
+  action(view, 'Sign out this session');
+  action(view, 'Sign out and forget this device').click();
+  assert.equal(f.state.forgotten, 1);
+});
+
+test('session revocation uses refreshed credentials, owns account controls and signs out only its current identity', async () => {
+  const f = await fixture();
+  await f.community.openAccount();
+  await flush();
+  const view = dialog(f, 'Account');
+  const pending = deferred();
+  f.state.handle = () => pending.promise;
+  f.auth.jwt = 'refreshed-token';
+  const revoke = action(view, 'Sign out this session');
+  revoke.click();
+  revoke.click();
+  const calls = f.state.requests.filter((request) => request[2] === 'DELETE');
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][1], 'refreshed-token');
+  assert.equal(action(view, 'Save profile').disabled, true);
+  action(view, 'Close').click();
+  assert.equal(view.open, true);
+  pending.resolve();
+  await flush();
+  assert.equal(f.state.signedOut, 1);
+  assert.equal(view.open, false);
+});
+
+test('a late revoke completion cannot affect a new account', async () => {
+  const f = await fixture();
+  await f.community.openAccount();
+  await flush();
+  const view = dialog(f, 'Account');
+  const pending = deferred();
+  f.state.handle = () => pending.promise;
+  action(view, 'Sign out this session').click();
+  f.auth.userId = 'account-b';
+  f.auth.jwt = 'token-b';
+  f.community.refresh();
+  pending.resolve();
+  await flush();
+  assert.equal(f.state.signedOut, 0);
+  assert.equal(view.open, false);
+  assert.ok(!f.state.notifications.includes('Session signed out.'));
+});
+
+test('closing Account cancels the session list and discards its late response', async () => {
+  const f = await fixture();
+  const handle = f.state.handle;
+  const pending = deferred();
+  f.state.handle = (path, ...args) =>
+    path === '/api/auth/sessions' ? pending.promise : handle(path, ...args);
+  await f.community.openAccount();
+  const view = dialog(f, 'Account');
+  const request = f.state.requests.find((request) => request[0] === '/api/auth/sessions');
+  action(view, 'Close').click();
+  assert.equal(request[4].aborted, true);
+  pending.resolve([
+    {
+      id: 'late-session',
+      current: true,
+      created_at: '2026-10-07T10:00:00Z',
+      refreshed_at: '2026-10-07T10:00:00Z',
+      expires_at: '2026-10-14T10:00:00Z',
+    },
+  ]);
+  await flush();
+  assert.equal(
+    view.querySelectorAll('button').filter((node) => node.textContent === 'Sign out this session')
+      .length,
+    0,
+  );
+});
+
+test('other-session sign-out keeps this session and refreshes the list', async () => {
+  const f = await fixture();
+  const handle = f.state.handle;
+  let removed = false;
+  f.state.handle = async (path, ...args) => {
+    if (path === '/api/auth/sessions/others') {
+      removed = true;
+      return;
+    }
+    const result = await handle(path, ...args);
+    if (path === '/api/auth/sessions' && !removed)
+      return [...result, { ...result[0], id: 'other-session', current: false }];
+    return result;
+  };
+  await f.community.openAccount();
+  await flush();
+  const view = dialog(f, 'Account');
+  action(view, 'Sign out other sessions').click();
+  await flush();
+  assert.equal(removed, true);
+  assert.equal(f.state.signedOut, 0);
+  assert.equal(view.open, true);
+  assert.equal(action(view, 'Sign out other sessions').disabled, true);
+  assert.equal(
+    view.querySelectorAll('button').filter((node) => node.textContent === 'Sign out session')
+      .length,
+    0,
+  );
+});
+
 test('Account saves the separate hovercard appearance and updates its live name preview', async () => {
   const f = await fixture();
   f.profile.profile_style = { color: 'teal', style: 'bubble' };
@@ -486,9 +635,9 @@ test('identity changes close account dialogs and reject actions from stale contr
   save.click();
   await flush();
   assert.equal(
-    f.state.requests.length,
-    2,
-    'only the original account and security GETs should be sent',
+    f.state.requests.filter((request) => request[2] && request[2] !== 'GET').length,
+    0,
+    'stale account controls must not submit mutations',
   );
   assert.equal(f.state.updated.length, 0);
 });
@@ -666,7 +815,11 @@ test('profile completion cannot re-enable a control during a later uncertain acc
   await flush();
   assert.equal(f.state.requests.at(-1)[0], '/api/auth/profile');
   assert.equal(f.state.requests.at(-1)[2], 'PATCH');
-  assert.equal(f.state.requests.length, 3, 'the second mutation was refused');
+  assert.equal(
+    f.state.requests.filter((request) => request[2] === 'POST' || request[2] === 'PATCH').length,
+    1,
+    'the second mutation was refused',
+  );
   pending.resolve({ ...f.profile });
   await flush();
   assert.equal(save.disabled, false);
@@ -732,6 +885,9 @@ test('room-scoped actions mount in the room tools while account actions stay in 
     modules: {
       './ui': dom.ui,
       './account-security': security,
+      './account-sessions': await loadTypeScript('src/account-sessions.ts', {
+        modules: { './ui': dom.ui },
+      }),
       './appearance': await loadAppearanceFixture(dom),
     },
     globals: {

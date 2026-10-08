@@ -655,6 +655,12 @@ impl SignalingServer {
             .route("/login", post(crate::auth::routes::login))
             .route("/refresh", post(crate::auth::routes::refresh))
             .route("/logout", post(crate::auth::routes::logout))
+            .route("/sessions", get(crate::auth::sessions::list))
+            .route(
+                "/sessions/others",
+                delete(crate::auth::sessions::revoke_others),
+            )
+            .route("/sessions/{id}", delete(crate::auth::sessions::revoke))
             .route(
                 "/profile",
                 get(crate::auth::account::get_profile)

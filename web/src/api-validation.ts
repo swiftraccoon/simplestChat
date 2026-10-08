@@ -42,6 +42,43 @@ export interface PasskeySettings {
   passkeys: { id: string; created_at: string }[];
   maximum: number;
 }
+
+export interface AccountSession {
+  id: string;
+  current: boolean;
+  created_at: string;
+  refreshed_at: string;
+  expires_at: string;
+}
+
+export function decodeAccountSessions(value: unknown): AccountSession[] {
+  const timestamp = (value: unknown): string => {
+    const result = boundedText(value, 40);
+    if (
+      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/.test(result) ||
+      !Number.isFinite(Date.parse(result))
+    )
+      invalid();
+    return result;
+  };
+  const sessions = list((value: unknown): AccountSession => {
+    const entry = exact(value, ['id', 'current', 'created_at', 'refreshed_at', 'expires_at']);
+    return {
+      id: recordId(entry['id']),
+      current: boolean(entry['current']),
+      created_at: timestamp(entry['created_at']),
+      refreshed_at: timestamp(entry['refreshed_at']),
+      expires_at: timestamp(entry['expires_at']),
+    };
+  })(value);
+  if (
+    sessions.length > 32 ||
+    new Set(sessions.map((session) => session.id)).size !== sessions.length ||
+    sessions.filter((session) => session.current).length !== 1
+  )
+    invalid();
+  return sessions;
+}
 export type PasskeyOperation =
   { action: 'add' } | { action: 'remove' | 'replace'; id: string } | { action: 'recovery_key' };
 export type PasskeyActionResponse =

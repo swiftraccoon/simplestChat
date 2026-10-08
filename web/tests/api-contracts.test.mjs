@@ -11,6 +11,13 @@ const profile = {
   profile_style: appearance,
 };
 const account = { ...profile, email: 'person@example.test', recovery_enabled: false };
+const accountSession = {
+  id: '11111111-1111-4111-8111-111111111111',
+  current: true,
+  created_at: '2026-10-07T10:00:00Z',
+  refreshed_at: '2026-10-07T12:00:00Z',
+  expires_at: '2026-10-14T12:00:00Z',
+};
 const room = {
   id: 'room',
   display_name: 'Room',
@@ -71,6 +78,13 @@ const endpoints = [
     profile,
   ],
   ['account profile', (api) => api.accountProfile('token'), '/api/auth/profile', 'GET', account],
+  [
+    'account sessions',
+    (api) => api.accountSessions('token'),
+    '/api/auth/sessions',
+    'GET',
+    [accountSession],
+  ],
   [
     'profile update',
     (api) => api.updateProfile('token', profile),
@@ -277,9 +291,12 @@ test('passkey management endpoints have fixed strict contracts and preserve canc
 for (const [name, request, path, method, valid] of endpoints) {
   test(`${name} uses its fixed endpoint decoder and never forwards unknown fields`, async () => {
     const { ui, state } = await uiFixture();
-    const wire = Array.isArray(valid)
-      ? valid.map((entry) => ({ ...entry, internal: 'private' }))
-      : { ...valid, internal: 'private' };
+    const wire =
+      name === 'account sessions'
+        ? valid
+        : Array.isArray(valid)
+          ? valid.map((entry) => ({ ...entry, internal: 'private' }))
+          : { ...valid, internal: 'private' };
     const before = structuredClone(wire);
     state.response = { ok: true, status: 200, json: async () => wire };
     const value = await request(ui.api);
@@ -363,6 +380,49 @@ test('directory counts are nullable when a room was busy at listing time', async
   const [listed] = await ui.api.ownRooms(null);
   assert.equal(listed.participant_count, null);
   assert.equal(listed.broadcaster_count, null);
+});
+
+test('session listings reject secret fields, duplicate handles and invalid current-session markers', async () => {
+  const { ui, state } = await uiFixture();
+  for (const invalid of [
+    [],
+    [accountSession, accountSession],
+    [{ ...accountSession, current: false }],
+    [{ ...accountSession, refresh_token_hash: 'private-hash' }],
+    [{ ...accountSession, created_at: 'not a timestamp' }],
+    [{ ...accountSession, id: 'not a uuid' }],
+    Array.from({ length: 33 }, (_, index) => ({
+      ...accountSession,
+      id: `11111111-1111-4111-8111-${String(index).padStart(12, '0')}`,
+      current: index === 0,
+    })),
+  ]) {
+    state.response = { ok: true, status: 200, json: async () => invalid };
+    await assert.rejects(ui.api.accountSessions('token'), /invalid data/);
+  }
+});
+
+test('session revocations use fixed DELETE routes, preserve cancellation and require confirmed no-content responses', async () => {
+  const { ui, state } = await uiFixture();
+  const controller = new AbortController();
+  state.response = {
+    ok: true,
+    status: 204,
+    json: async () => {
+      throw new Error('Must not parse');
+    },
+  };
+  await ui.api.revokeSession('token', 'session /?', controller.signal);
+  await ui.api.revokeOtherSessions('token', controller.signal);
+  assert.deepEqual(
+    state.requests.map(([path, options]) => [path, options.method]),
+    [
+      ['/api/auth/sessions/session%20%2F%3F', 'DELETE'],
+      ['/api/auth/sessions/others', 'DELETE'],
+    ],
+  );
+  state.response = { ok: true, status: 200, json: async () => ({}) };
+  await assert.rejects(ui.api.revokeOtherSessions('token'), ui.ApiOutcomeUnknownError);
 });
 
 test('all serialized profile and directory fields remain required, including nullable values', async () => {

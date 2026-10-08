@@ -7,7 +7,7 @@ use sha2::{Digest, Sha256};
 use sqlx::{Executor, PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
-const MAX_ACTIVE_SESSIONS_PER_USER: i64 = 32;
+pub(super) const MAX_ACTIVE_SESSIONS_PER_USER: i64 = 32;
 const REFRESH_SECRET_BYTES: usize = 32;
 const REFRESH_TOKEN_PREFIX: &str = "v1n";
 const ENCODED_REFRESH_SECRET_LEN: usize = 43;

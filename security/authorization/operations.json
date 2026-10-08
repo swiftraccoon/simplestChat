@@ -578,6 +578,42 @@
         "database_ticket_http_and_upgrade_enforce_single_use_and_logout",
         "websocket_origin_defaults_to_literal_loopback_host"
       ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/sessions",
+      "handler": "crate::auth::sessions::list",
+      "policy": "current-session",
+      "body": null,
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions",
+        "authorization_database_session_controls_scope_reads_and_revocation_to_the_owner"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/auth/sessions/{id}",
+      "handler": "crate::auth::sessions::revoke",
+      "policy": "current-session",
+      "body": null,
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions",
+        "authorization_database_session_controls_scope_reads_and_revocation_to_the_owner"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/auth/sessions/others",
+      "handler": "crate::auth::sessions::revoke_others",
+      "policy": "current-session",
+      "body": null,
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions",
+        "authorization_database_session_controls_scope_reads_and_revocation_to_the_owner"
+      ]
     }
   ],
   "websocket": [

@@ -245,7 +245,12 @@ without opening a passkey prompt. A passkey-only replacement journey keeps one
 authenticator throughout, requires fresh proof and a saved-recovery-key
 acknowledgment before a separate registration gesture, then verifies the new
 credential signs into the same account without enabling a password. It also
-checks that the old server record and sessions are retired:
+checks that the old server record and sessions are retired. Its session-management
+checks create two additional sign-ins for that owned account, remove one through
+Account and then sign out all others, and verify HTTP rejection and live WebSocket
+closure while the current session survives. Finally it signs out the current
+session and verifies that refresh no longer restores it. Passkey-only Account
+controls must retain invitations, session management and forget-device actions:
 
 ```sh
 PASSKEY_E2E=1 build/with-test-postgres.sh build/with-test-server.sh \

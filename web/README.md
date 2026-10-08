@@ -65,6 +65,7 @@ For complete guest/account setup and LAN ICE addressing see
 | `src/participant-hovercard.ts` | Shared participant cards for roster and chat names, profile loading ownership and pointer/keyboard/touch interaction |
 | `src/appearance.ts` | Independent profile-card and room-heading appearance controls, previews and palette-only rendering |
 | `src/auth.ts`, `account-session-sync.ts`, `community-ui.ts` | Identity/session refresh and cross-tab reconciliation, profiles, recovery, room management |
+| `src/account-security.ts`, `account-sessions.ts` | Shared account-mutation ownership, passkey/recovery management and signed-in session controls |
 | `src/signaling.ts`, `protocol.ts` | WebSocket lifecycle and typed server protocol |
 | `src/validation.ts`, `api-validation.ts`, `protocol-validation.ts` | Shared decoder primitives and HTTP/WebSocket response validation |
 | `src/room.ts`, `room-navigation.ts` | Membership, confirmed room controls, lobby status and explicit URL navigation |
@@ -148,6 +149,14 @@ including Pin, volume and fullscreen, without covering the tile with separate
 permanent buttons.
 
 ## Availability, request ownership and large rooms
+
+Account lists signed-in sessions with the current one marked, sign-in and
+last-refresh times, and expiry. A session is a browser sign-in shared by its tabs;
+last refresh is not a measurement of user activity. Sign out individual sessions
+or all other sessions while keeping this one. These actions share ownership with
+profile, password and passkey changes; late responses cannot affect a replacement
+account. Passkey-only accounts retain sessions, registration invitations, and
+the separate **Sign out and forget this device** action.
 
 On startup the client reads the versioned `/api/capabilities` response and shows
 the account, registration and directory actions the server supports. Invite-only
