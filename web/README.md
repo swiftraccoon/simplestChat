@@ -66,10 +66,12 @@ For complete guest/account setup and LAN ICE addressing see
 | `src/appearance.ts` | Independent profile-card and room-heading appearance controls, previews and palette-only rendering |
 | `src/auth.ts`, `account-session-sync.ts`, `community-ui.ts` | Identity/session refresh and cross-tab reconciliation, profiles, recovery, room management |
 | `src/account-security.ts`, `account-sessions.ts` | Shared account-mutation ownership, passkey/recovery management and signed-in session controls |
+| `src/pwa.ts`, `public/sw.js`, `public/manifest.webmanifest` | Installation, optional generic PM push alerts and account-scoped subscription ownership; no offline cache |
 | `src/signaling.ts`, `protocol.ts` | WebSocket lifecycle and typed server protocol |
 | `src/validation.ts`, `api-validation.ts`, `protocol-validation.ts` | Shared decoder primitives and HTTP/WebSocket response validation |
 | `src/room.ts`, `room-navigation.ts` | Membership, confirmed room controls, lobby status and explicit URL navigation |
 | `src/media.ts` | Transports, capture, producers and consumers |
+| `src/media-lifecycle.ts` | Coalesced visibility, page-resume, online and hardware hints without new capture or room entry |
 | `src/media-controls.ts`, `audio-output.ts` | Private device preview, live hardware lists, speaker selection/test and viewer-local playback |
 | `src/layer-cap.ts` | Simulcast layer a remote tile can use at its rendered size, with hysteresis |
 | `src/settings-dialog.ts` | Shared settings tabs and native-dialog dismissal |
@@ -154,8 +156,22 @@ existing account conversation can continue from Messages while either person is
 offline, subject to PM opt-out and ignore preferences. Saved history pages hold
 at most 50 messages, and search examines the newest 10,000 retained messages per
 conversation. The account's read position is saved on the server; the open inbox
-refreshes periodically. Session changes retire pending history work and clear
-its dialog data.
+refreshes periodically. The existing Messages button shows the account unread count.
+Conversations resume around the first unread message; read positions advance only
+while the conversation is visible and scrolled to the end of the loaded page.
+Search results open with surrounding messages and older/newer navigation. Inbox
+PM drafts persist on this device, separately for each account and recipient;
+**Sign out and forget this device** clears them. Earlier retained public messages
+load inside the existing chat scroll area; once the live buffer is full, the same
+action opens the saved conversation at that older message. Session changes retire pending history
+work and clear its dialog data.
+
+Authors can edit their messages from live chat or saved history. An **edited**
+indicator records changes; a revision check prevents an older open editor from
+overwriting a newer edit. Loaded quotes update and removed content cannot return
+through delayed acknowledgements. Moderators, admins and owners can pin up to
+three public messages. The compact **Pinned** control expands within the chat;
+private messages cannot be pinned. Saved pins expire with their messages.
 
 Moderators, admins and owners can choose **Remove** on public messages, including
 older messages in Room history. Confirmation is required. Removal leaves a

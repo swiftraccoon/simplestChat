@@ -101,8 +101,18 @@ for detailed archive, scanner, database, license and ELF contracts.
 | Npm audit | Both web and browser-harness lockfiles | Lockfile audit remains necessary for bundled JavaScript. |
 | Changed dependency licenses | Authenticated npm release metadata and every hash-locked Python wheel use the existing license allowlist | Changed unsupported locks or unknown declarations fail; unchanged dependencies are not reclassified. |
 | Changed GitHub Actions | Exact-ref licenses and current reviewed/malware advisory feeds, with release versions bound to immutable action pins | Unresolved affected versions or incomplete metadata fail; no workflow code is downloaded or executed by this check. |
-| Squawk | New PostgreSQL migrations, transaction-aware and pinned to the deployed major | The fixed existing-migration baseline forbids edits to old SQL. |
+| Squawk | New PostgreSQL migrations, using their SQLx transaction mode and the deployed major | The fixed existing-migration baseline forbids edits to old SQL; inline rule suppressions are forbidden. |
 | Runtime configuration | Maintained rendered container restrictions and configuration invariants | Source tests cannot prove live kernel or provider state. |
+
+SQL migrations use transaction-aware lint by default. The exact first-line SQLx
+marker `-- no-transaction` is accepted only for one `CREATE INDEX CONCURRENTLY`
+statement. Those files are still linted with no rule exclusions. A generated
+scanner input prefixes the maintenance connection's literal statement and lock
+timeouts from `src/db.rs`; those settings cannot be placed in the migration's
+SQL batch because PostgreSQL would treat it as an implicit transaction. Missing
+or nonliteral startup budgets fail this check. Startup verifies that both chat
+lookup indexes are valid and ready, and refuses to retry a migration over an
+incomplete named index left by an interrupted concurrent build.
 
 The current-tree secret gate projects tracked or nonignored first-party files,
 including binaries and lockfiles, into bounded printable ASCII under neutral

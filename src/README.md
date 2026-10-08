@@ -29,6 +29,7 @@ HTTP / WebSocket
 | One-use WebSocket authentication tickets | `auth/ws_tickets.rs` |
 | Membership, lobby, chat and reconnect state | `room/mod.rs`, `room/social.rs` |
 | Durable room history, PM inbox, read positions and chat expiry | `room/history.rs` |
+| Optional session-owned PM push, retained VAPID identity and bounded delivery queue | `push.rs` |
 | Ordered persistence and uncertain-write handling | `room/control.rs` |
 | Persistent room/community API | `room/api.rs`, `room/community.rs`, `room/settings.rs` |
 | Roles, invitations and moderation retention | `room/roles.rs`, `room/invites.rs`, `room/moderation.rs` |

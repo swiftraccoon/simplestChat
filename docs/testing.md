@@ -845,6 +845,21 @@ Use an owner and a guest in separate browser contexts:
   the screen, then return. Check that controls remain reachable and media either
   works or gives clear recovery guidance. Record what happened; background media
   behavior is not assumed to match desktop browsers.
+- On physical iOS Safari and Android Chrome, repeat those lifecycle checks with
+  the camera on and microphone muted, then with push-to-talk. Confirm a resume
+  does not turn on a device the user switched off or reopen a private preview.
+  Switch Wi-Fi/cellular and reconnect Bluetooth headphones; retain per-person
+  mute/hide/volume and the selected speaker, or show a clear speaker-selection
+  action if that output disappeared. Switch front/back cameras and unplug/replug
+  an active input. After leaving or fully rejoining, capture must stay off until
+  the user explicitly enables it. These hardware checks remain manual; the
+  media-continuity suite uses synthetic lifecycle hints and fake device lists.
+- Install on a physical iPhone/iPad Home Screen and an Android browser that
+  supports Web Push. Enable notifications from Account, send an unread account
+  PM with the app closed, and verify the generic notification opens Messages.
+  Check denial, disabling, logout, another account on the same browser and revoked
+  sessions. Browser fixtures validate the UI and service worker logic without
+  contacting a real push provider or proving OS lock-screen delivery.
 
 Headless tests use fake devices and resized desktop viewports. Complete the
 manual checklist on real browsers and devices before a release.

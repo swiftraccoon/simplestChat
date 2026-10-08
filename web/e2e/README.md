@@ -58,7 +58,14 @@ It does not validate backend authentication. `room-control-confirmation.cjs`
 uses controlled replies to check pending controls, retained failed edits, and
 retired dialog ownership across room changes. `media-continuity.cjs` uses native
 WebRTC for camera off/on, explicit incoming-subscription repair, and signaling
-reconnect; Chromium also exercises page freeze/resume. Output chooser, hardware
+reconnect; Chromium also exercises page freeze/resume. Controlled lifecycle
+hints cover hidden/visible/pageshow transitions and online/devicechange bursts:
+paused playback resumes with the viewer's mute/volume choices intact, a missing
+selected speaker is reported without selecting another, and leaving cancels
+recovery. Browser request emulation also exercises a temporary offline interval
+followed by native WebSocket/session recovery and decoded video. This does not
+prove Wi-Fi/cellular handoff, an actual UDP outage, or OS lock/unlock behavior.
+Output chooser, hardware
 lists and display-capture outcomes use controlled browser API fixtures. Physical
 hardware, OS sleep, real picker permissions and actual speaker sound remain
 manual checks.
@@ -73,6 +80,15 @@ camera quality during preview and camera off/on; the retry must drop only qualit
 constraints, open native fake capture, refresh device names and restore decoded
 video. These fixtures cover the retry and permission-driven UI, not an operating
 system permission prompt or a physical camera's supported formats.
+
+The community suite's `pwa-checks.cjs` helper covers Account notification
+enable/disable, permission requested only from the button gesture, opening the
+fixed Messages destination, and the served install manifest. Its push provider,
+subscription and permission APIs are controlled fixtures; it does not prove OS
+notification delivery. Source tests separately execute the service worker's
+generic notification/click behavior and verify that it has no fetch/cache handler.
+Physical iOS/Android installation, lock-screen delivery and notification clicks
+remain manual device checks.
 
 ```sh
 AUTH_CROSS_TAB_E2E=1 E2E_BROWSER=firefox \

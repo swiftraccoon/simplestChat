@@ -9,8 +9,9 @@ Run guest rooms on their own, or add PostgreSQL for accounts and persistent room
 - Public room directory, owned rooms, passwords, lobby admission, invitations and moderation.
 - Room chat and private messages with replies, reactions, mention completion, unread
   markers, drafts, ignore controls, personal chat colors and timestamp formats.
-- Moderator message removal, optional retained room history, and an account PM inbox
-  with search and read positions shared across devices.
+- Message editing, moderator removal and room pins; optional retained room history;
+  an account PM inbox with search and read positions shared across devices.
+- An installable web app and optional private-message push notifications.
 - Password/passkey accounts, profiles, and saved recovery keys.
 - Responsive layout and per-participant volume, mute, and video controls.
 - Sizing derived from the host it runs on (workers, quotas, ceilings, addresses,
