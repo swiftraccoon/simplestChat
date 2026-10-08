@@ -24,6 +24,16 @@ POSTGRES_IMAGE = (
     "3725f4e2499eef5134592b3b4ab79a543ed7f8e533b05b5b637af926630f6650"
 )
 SESSION_FAMILY_MIGRATION = 22
+# This historical archive must carry only the grants available before migration 022.
+# The current production grant template is applied after all packaged migrations.
+PRE_SESSION_FAMILY_GRANTS = """BEGIN;
+GRANT SELECT, INSERT, UPDATE ON public.users TO simplestchat_app;
+GRANT SELECT, INSERT, UPDATE, DELETE
+    ON public.webauthn_credentials, public.sessions, public.rooms, public.room_roles,
+       public.room_states, public.room_reports, public.moderation_events, public.invites
+    TO simplestchat_app;
+GRANT SELECT, INSERT, DELETE ON public.invite_redemptions TO simplestchat_app;
+COMMIT;"""
 
 
 def diagnostic_tail(evidence: Path) -> str:
@@ -164,10 +174,10 @@ class RestoreDatabaseTests(unittest.TestCase):
         version = int(migration.name.split("_")[0])
         _ = self.sql(
             database,
-            "SET ROLE simplestchat_migrate;\n"
+            "BEGIN;\nSET LOCAL ROLE simplestchat_migrate;\n"
             + migration.read_text()
             + f"\nINSERT INTO public._sqlx_migrations VALUES ({version},true,"
-            + f"decode('{checksum}','hex'));",
+            + f"decode('{checksum}','hex'));\nCOMMIT;",
         )
         migrations[str(version)] = checksum
 
@@ -201,6 +211,15 @@ class RestoreDatabaseTests(unittest.TestCase):
         )
         self.assertEqual(counts["users"], 1)
         self.assertEqual(counts["sessions"], 1)
+        self.assertEqual(
+            self.sql(
+                target,
+                """SELECT to_regclass('public.chat_messages') IS NULL
+                    AND to_regclass('public.chat_inbox') IS NULL
+                    AND to_regclass('public.chat_read_cursors') IS NULL;""",
+            ).strip(),
+            b"t",
+        )
         self.assertEqual(
             self.sql(
                 target,
@@ -273,9 +292,7 @@ class RestoreDatabaseTests(unittest.TestCase):
                 if int(migration.name.split("_")[0]) >= SESSION_FAMILY_MIGRATION:
                     break
                 self.apply_migration(source, migration, migrations)
-            _ = self.sql(
-                source, (ROOT / "ops/ansible/templates/public-runtime-grants.sql.j2").read_text()
-            )
+            _ = self.sql(source, PRE_SESSION_FAMILY_GRANTS)
             _ = self.sql(
                 source,
                 "SET ROLE postgres;\n"
@@ -303,6 +320,10 @@ class RestoreDatabaseTests(unittest.TestCase):
                 for migration in migration_paths:
                     if int(migration.name.split("_")[0]) >= SESSION_FAMILY_MIGRATION:
                         self.apply_migration(source, migration, migrations)
+                _ = self.sql(
+                    source,
+                    (ROOT / "ops/ansible/templates/public-runtime-grants.sql.j2").read_text(),
+                )
                 archive = Path(directory) / "owned.dump"
                 _ = self.command("pg_dump", "--format=custom", "--file", str(archive), source)
                 if os.environ.get("RESTORE_CONTAINER_E2E") == "1":
