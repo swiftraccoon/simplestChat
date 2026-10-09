@@ -8,6 +8,7 @@ function browserFixture() {
   const source = fs.readFileSync(path.resolve(__dirname, '../src/main.ts'), 'utf8');
   const ast = ts.createSourceFile('main.ts', source, ts.ScriptTarget.Latest, true);
   const renderers = [
+    'ensureRemoteTile',
     'renderRemoteTrack',
     'removeRemoteTrack',
     'updateVideoGridCount',
@@ -30,10 +31,12 @@ function browserFixture() {
   const layout = module('video-layout');
   return `(() => {
     const audio = (() => { const exports = {}; ${module('audio-output')} return exports; })();
+    const receivePolicy = (() => { const exports = {}; ${module('receive-policy')} return exports; })();
     const controls = (() => {
       const exports = {};
       const require = (name) => {
         if (name === './audio-output') return audio;
+        if (name === './receive-policy') return receivePolicy;
         if (['./media', './settings-dialog', './media-controls.css', './settings-dialog.css'].includes(name)) return {};
         throw new Error('Unexpected tile-control dependency: ' + name);
       };
@@ -47,6 +50,9 @@ function browserFixture() {
     previousGrid.replaceWith(videoGrid);
     const remoteTiles = new Map();
     let pinnedTileKey = null;
+    let pictureInPictureVideo = null;
+    const tileVisibility = null;
+    const room = null;
     const mediaControls = new controls.MediaControls({getRoom: () => null, notify: () => {}});
     const telemetry = { record() {} };
     const observeFirstVideoFrame = () => {};

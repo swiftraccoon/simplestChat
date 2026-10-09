@@ -577,7 +577,7 @@ test('one pinned tile fills the stage, and a tile that is gone cannot stay pinne
         this.attributes[key] = value;
       },
     };
-    return { pin, classList: classes(), querySelector: () => pin };
+    return { pin, dataset: {}, classList: classes(), querySelector: () => pin };
   };
   const remoteTiles = new Map([
     ['alice', tile()],
@@ -589,7 +589,7 @@ test('one pinned tile fills the stage, and a tile that is gone cannot stay pinne
     ${await functionSource('setPinnedTile')}
     export { setPinnedTile };
     export const pinned = () => pinnedTileKey;`,
-    { globals: { remoteTiles, videoGrid } },
+    { globals: { remoteTiles, videoGrid, room: { setPinnedRemoteVideo() {} } } },
   );
   setPinnedTile('bob:screen');
   assert.equal(pinned(), 'bob:screen');
