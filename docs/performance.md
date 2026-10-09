@@ -14,9 +14,9 @@ not avoid the limit. The initial budgets leave room for small product changes:
 
 | Asset group | Uncompressed limit | Gzip limit |
 | ----------- | ------------------ | ---------- |
-| JavaScript  | 592 KiB            | 138 KiB    |
-| CSS         | 66 KiB             | 12.75 KiB  |
-| HTML        | 48 KiB             | 12 KiB     |
+| JavaScript  | 632 KiB            | 149 KiB    |
+| CSS         | 69 KiB             | 13.5 KiB   |
+| HTML        | 50 KiB             | 12.5 KiB   |
 
 Limits are defined in [bundle-budget.json](../web/bundle-budget.json). Gzip uses
 level 6 independently for each file; the checker then sums each group. Run
@@ -52,6 +52,16 @@ recovery, and explicit notification controls. The worker does not cache chat or
 authenticated responses. Reviewed budgets are 592/138 KiB JavaScript and
 66/12.75 KiB CSS; HTML stays at 48/12 KiB. These are size measurements, not
 mobile latency or physical-device reliability results.
+
+The October 9 receive modes, contacts/favorites, attachments and notification
+policy add no browser dependency. An isolated build of `4a23806` measured
+JavaScript 601,349 / 139,761 bytes raw/gzip, CSS 66,532 / 12,837, and HTML
+48,569 / 12,220. The integrated feature build measures 640,528 / 150,589,
+69,861 / 13,448, and 49,889 / 12,677 respectively. Shared upload/history controls
+and response decoders avoid separate implementations per screen; no binary
+file bytes or preview images are embedded in the bundle. The help page documents
+the new controls. Reviewed limits are now 632/149 KiB JavaScript, 69/13.5 KiB CSS
+and 50/12.5 KiB HTML. These measurements establish delivery size only.
 
 Participant hovercards added a shared, dependency-free card and keyboard/touch
 name controls. The CSS gzip budget increased from 12 to 12.5 KiB after removing
