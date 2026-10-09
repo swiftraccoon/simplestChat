@@ -4,6 +4,7 @@ interface PwaOptions {
   getToken: () => string | null;
   getAccountId: () => string | null;
   openMessages: () => void;
+  mountNotificationPreferences?: (container: HTMLElement, current: () => boolean) => void;
 }
 
 interface InstallPrompt extends Event {
@@ -227,7 +228,7 @@ export class PwaControls {
     status.setAttribute('role', 'status');
     const explanation = el(
       'p',
-      'Optional alerts for private messages, even when the app is closed. Notifications never show names or message text.',
+      'Enable optional background PM alerts on this browser. Your account notification rules and conversation mutes also apply. Background notifications never show names or message text.',
       'setting-hint',
     );
     const account = this.options.getAccountId();
@@ -352,6 +353,7 @@ export class PwaControls {
     };
     section.append(installHint, install, explanation, status, toggle);
     container.append(section);
+    this.options.mountNotificationPreferences?.(container, isCurrent);
     if (!pushAvailable() || !this.registration) {
       status.textContent =
         iosDevice() && !appInstalled()

@@ -17,6 +17,7 @@ import { CallOutcomeTelemetry, MediaTelemetry, observeFirstVideoFrame } from './
 import { MediaControls, mediaErrorMessage } from './media-controls';
 import { MediaLifecycle } from './media-lifecycle';
 import { PwaControls } from './pwa';
+import { NotificationPreferences } from './notification-preferences';
 import {
   createFavoriteButton,
   mountSavedRooms,
@@ -45,6 +46,7 @@ import { type VideoDeferredReason } from './receive-policy';
 import { observeVideoLayout } from './video-layout';
 import './community.css';
 import './participant-hovercard.css';
+import './notification-preferences.css';
 import './discovery.css';
 import type { CreateRoomRequest, RoomSettingsPatch } from './protocol';
 import type { ServerCapabilities } from './api-validation';
@@ -216,6 +218,7 @@ function updateAuthUI(): void {
   updateJoinBtn();
   community.refresh();
   pwa.accountChanged();
+  observeUiTask(notificationPreferences.refresh(), 'Could not refresh notification rules');
   refreshSavedRoomPicker();
   participantHovercard.refresh();
 }
@@ -371,6 +374,7 @@ readInviteLink();
 
 auth.setOnChange((loggedIn, tokenRefresh) => {
   if (loggedIn) restoredAccount = true;
+  if (!tokenRefresh) notificationPreferences.reset();
   updateAuthUI();
   if (loggedIn && tokenRefresh) {
     // Renew the existing socket as well as the next handshake, preserving room
@@ -1461,6 +1465,18 @@ window.addEventListener('pagehide', (event) => {
   telemetry.dispose();
   participantHovercard.destroy();
 });
+const notificationPreferences = new NotificationPreferences({
+  getToken: () => auth.jwt,
+  getAccountId: () => auth.userId,
+  notify: (message) => showToast(message),
+});
+const mountConversationNotifications = (
+  container: HTMLElement,
+  peerId: string,
+  current: () => boolean,
+): void => {
+  notificationPreferences.mountConversation(container, peerId, current);
+};
 const socialChat = new SocialChat({
   telemetry: telemetry.record,
   getRoom: () => room,
@@ -1468,21 +1484,27 @@ const socialChat = new SocialChat({
   getToken: () => auth.jwt,
   notify: (message) => showToast(message),
   bindParticipantName: (anchor, id, name) => participantHovercard.bind(anchor, id, name),
+  allowsNotification: (kind, peer) => notificationPreferences.allows(kind, peer),
+  mountConversationNotifications,
 });
 const pwa = new PwaControls({
   getToken: () => auth.jwt,
   getAccountId: () => auth.userId,
+  mountNotificationPreferences: (container, current) =>
+    notificationPreferences.mountAccount(container, current),
   openMessages: () => {
     if (auth.isLoggedIn)
       openPrivateInbox({
         getToken: () => auth.jwt,
         getAccountId: () => auth.userId,
+        mountConversationNotifications,
       });
     else openAuthDialog(loginModal);
   },
 });
 const community = new CommunityUI({
   mountAccountNotifications: (container, current) => pwa.mountAccount(container, current),
+  mountConversationNotifications,
   auth,
   getRoom: () => room,
   notify: (message) => showToast(message),
@@ -1584,6 +1606,7 @@ window.addEventListener('pagehide', (event) => {
   if (event.persisted) return;
   mediaLifecycle.dispose();
   pwa.dispose();
+  notificationPreferences.dispose();
   savedRoomMount?.dispose();
   clearInterval(inboxRefresh);
   document.removeEventListener('visibilitychange', refreshSavedMessages);

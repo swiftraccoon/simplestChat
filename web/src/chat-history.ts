@@ -19,6 +19,7 @@ type HistoryOptions = {
     signal: AbortSignal,
   ) => Promise<ChatEntry>;
   current: () => boolean;
+  mountNotifications?: (container: HTMLElement, current: () => boolean) => void;
   load: (params: URLSearchParams, signal: AbortSignal) => Promise<ChatHistoryPage>;
   markRead?: (id: string, signal: AbortSignal) => Promise<unknown>;
   remove?: (id: string) => Promise<{ removedAt: string }>;
@@ -85,6 +86,7 @@ function openHistory(options: HistoryOptions): void {
   if (options.accountDialog) view.dialog.setAttribute('data-account-dialog', 'true');
   const controller = new AbortController();
   const current = (): boolean => view.dialog.open && options.current();
+  options.mountNotifications?.(view.body, current);
   const status = el('p', 'Loading messages…', 'setting-hint');
   status.setAttribute('role', 'status');
   const search = input('', 'search', 128);
@@ -517,6 +519,11 @@ export function openRoomHistory(
 export function openPrivateInbox(options: {
   getToken: () => string | null;
   getAccountId: () => string | null;
+  mountConversationNotifications?: (
+    container: HTMLElement,
+    peerId: string,
+    current: () => boolean,
+  ) => void;
 }): void {
   const account = options.getAccountId();
   if (!account || !options.getToken()) return;
@@ -537,6 +544,8 @@ export function openPrivateInbox(options: {
       accountDialog: true,
       viewerId: account,
       draft: { account, peer: peerId },
+      mountNotifications: (container, current) =>
+        options.mountConversationNotifications?.(container, peerId, current),
       edit: (message, content, expectedRevision, signal) =>
         api.editPrivateMessage(
           token(),

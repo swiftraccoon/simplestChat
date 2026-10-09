@@ -23,6 +23,11 @@ import {
 import { decodeRoomSettings, decodeChatHistory, decodeChatEntry } from './protocol-validation';
 import { decodeInbox, decodeChatRead, decodeInboxUnread } from './chat-history-validation';
 import { decodeContacts, decodeSavedRooms } from './discovery-validation';
+import {
+  decodeNotificationPreferences,
+  type NotificationPolicy,
+  type ConversationNotificationPolicy,
+} from './notification-validation';
 import { type Decoder, isRecord } from './validation';
 
 /** Account password selection mirrors the server's NFC and Unicode-scalar policy. */
@@ -330,6 +335,38 @@ export const api = {
       token,
       'PUT',
       { favorite },
+      signal,
+    ),
+  notificationPreferences: (token: string, signal: AbortSignal) =>
+    apiJson(
+      decodeNotificationPreferences,
+      '/api/auth/notification-preferences',
+      token,
+      'GET',
+      undefined,
+      signal,
+    ),
+  saveNotificationPreferences: (token: string, policy: NotificationPolicy, signal: AbortSignal) =>
+    apiJson(
+      decodeNotificationPreferences,
+      '/api/auth/notification-preferences',
+      token,
+      'PUT',
+      policy,
+      signal,
+    ),
+  saveConversationNotifications: (
+    token: string,
+    peer: string,
+    policy: ConversationNotificationPolicy,
+    signal: AbortSignal,
+  ) =>
+    apiJson(
+      decodeNotificationPreferences,
+      `/api/auth/notification-preferences/conversations/${encodeURIComponent(peer)}`,
+      token,
+      'PUT',
+      policy,
       signal,
     ),
   pushStatus: (token: string, signal: AbortSignal) =>

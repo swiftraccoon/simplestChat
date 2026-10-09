@@ -8,6 +8,7 @@
 const { openRoomMenu } = require('./room-menu.cjs');
 const { installPwaFixture, checkPwa } = require('./pwa-checks.cjs');
 const { checkContactsBeforeRoom, checkSavedRoomsAcrossDevices } = require('./discovery-checks.cjs');
+const { checkNotificationPreferences } = require('./notification-checks.cjs');
 const { participantHovercardChecks } = require('./participant-hovercard-checks.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -949,6 +950,7 @@ async function setRole(owner, name, role) {
         const secondDevice = await client('owner-second-device');
         await login(secondDevice, ownerEmail, password);
         await checkSavedRoomsAcrossDevices(owner, secondDevice, { header, close });
+        await checkNotificationPreferences(owner, secondDevice, member, { header, close });
       },
     );
     await step('optional app notifications require an explicit Account action', async () => {

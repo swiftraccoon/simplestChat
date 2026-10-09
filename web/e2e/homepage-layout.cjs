@@ -288,6 +288,19 @@ async function run(env = process.env) {
                 assert.equal(request.headers().authorization, 'Bearer owned-layout-fixture');
                 return json(200, { rooms: [] });
               }
+              if (
+                url.pathname === '/api/auth/notification-preferences' &&
+                request.method() === 'GET'
+              ) {
+                assert.equal(signedIn, true, 'Guests must not request account notification rules');
+                assert.equal(request.headers().authorization, 'Bearer owned-layout-fixture');
+                return json(200, {
+                  privateMessages: true,
+                  mentions: true,
+                  quietHours: null,
+                  conversations: [],
+                });
+              }
               if (url.pathname === '/api/auth/ws-ticket') {
                 assert.equal(signedIn, true, 'Guests must not mint authenticated tickets');
                 assert.equal(request.method(), 'POST');

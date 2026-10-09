@@ -74,6 +74,7 @@ For complete guest/account setup and LAN ICE addressing see
 | `src/media-lifecycle.ts` | Coalesced visibility, page-resume, online and hardware hints without new capture or room entry |
 | `src/media-controls.ts`, `audio-output.ts` | Private device preview, live hardware lists, speaker selection/test and viewer-local playback |
 | `src/receive-policy.ts` | Bounded incoming video selection, visible/pinned priority and data saver/audio-only preferences |
+| `src/notification-preferences.ts`, `notification-validation.ts` | Account-synced notification rules, conversation mute/snooze and quiet hours |
 | `src/layer-cap.ts` | Simulcast layer a remote tile can use at its rendered size, with hysteresis |
 | `src/settings-dialog.ts` | Shared settings tabs and native-dialog dismissal |
 | `src/social-chat.ts`, `chat-store.ts` | Room/PM conversations, composer, bounded replay, removal tombstones and preferences |
@@ -348,3 +349,13 @@ get priority; offscreen videos are unsubscribed, and a hidden tab keeps only an
 explicit picture-in-picture video. Closing a consumer is acknowledged before a
 replacement is opened. Audio reception and publishing controls are independent.
 The receive choice is saved on this device.
+
+## Notifications
+
+Notification rules in Account follow the account across devices. Private-message
+and mention switches, per-conversation mute/snooze, and named-time-zone quiet
+hours apply to foreground notices/sounds and server push eligibility. Browser
+notification permission remains an explicit choice on each device. Preferences
+refresh on focus and every 30 seconds while visible; unknown or over-90-second
+stale account policy suppresses alerts until refreshed. Quiet-hour alerts are
+not replayed afterward. Already accepted push delivery cannot be recalled.

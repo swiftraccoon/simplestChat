@@ -26,6 +26,7 @@ export async function loadContractModules() {
   modules['./discovery-validation'] = await loadTypeScript('src/discovery-validation.ts', {
     modules,
   });
+  modules['./notification-validation'] = await loadTypeScript('src/notification-validation.ts');
   return modules;
 }
 

@@ -208,6 +208,7 @@ function authUiFixture(capabilities, signedIn) {
         community: { refresh: () => effects.push('community') },
         participantHovercard: { refresh() {} },
         pwa: { accountChanged() {} },
+        notificationPreferences: { refresh: async () => {} },
         refreshSavedRoomPicker() {},
       },
     },

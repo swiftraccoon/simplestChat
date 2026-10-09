@@ -1,0 +1,31 @@
+.notification-preferences {
+  display: grid;
+  gap: 0.65rem;
+}
+.notification-quiet-times {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+.notification-quiet-times > :last-child {
+  grid-column: 1 / -1;
+}
+.notification-quiet-times[hidden] {
+  display: none;
+}
+.notification-conversation {
+  font-size: 0.82rem;
+}
+.notification-conversation summary {
+  cursor: pointer;
+  width: fit-content;
+}
+.notification-conversation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.notification-conversation-actions button {
+  padding: 0.25rem 0.5rem;
+  font-size: inherit;
+}

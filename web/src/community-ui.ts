@@ -23,6 +23,11 @@ import {
 
 interface Options {
   mountAccountNotifications?: (container: HTMLElement, current: () => boolean) => void;
+  mountConversationNotifications?: (
+    container: HTMLElement,
+    peerId: string,
+    current: () => boolean,
+  ) => void;
   auth: AuthManager;
   getRoom: () => RoomClient | null;
   notify: (message: string) => void;
@@ -64,6 +69,8 @@ export class CommunityUI {
     openPrivateInbox({
       getToken: () => this.options.auth.jwt,
       getAccountId: () => this.options.auth.userId,
+      mountConversationNotifications: (container, peerId, current) =>
+        this.options.mountConversationNotifications?.(container, peerId, current),
     }),
   );
   private inboxController = new AbortController();

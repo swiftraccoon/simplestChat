@@ -90,6 +90,12 @@ type Options = {
   getToken?: () => string | null;
   notify: (message: string) => void;
   bindParticipantName: (anchor: HTMLButtonElement, id: string, name: string) => void;
+  allowsNotification?: (kind: 'private' | 'mention' | 'room', peerId?: string) => boolean;
+  mountConversationNotifications?: (
+    container: HTMLElement,
+    peerId: string,
+    current: () => boolean,
+  ) => void;
 };
 type MessageRow = { node: HTMLElement; fingerprint: string };
 type ConversationButton = { node: HTMLButtonElement; name: HTMLElement; unread: HTMLElement };
@@ -735,7 +741,7 @@ export class SocialChat {
       )
         this.store.markUnread(message);
       const retained = this.store.messages.find((entry) => entry.messageId === message.messageId);
-      if (!replay && retained && !retained.removedAt) {
+      if (!replay && retained && !retained.removedAt && this.allowsNotification(retained)) {
         if (this.preferences.sounds) this.playSound(retained.recipientId ? 700 : 440);
         this.notifyDesktop(retained);
       }
@@ -745,6 +751,7 @@ export class SocialChat {
 
   /** An opted-in desktop notice for a mention or private message while the tab is out of sight. */
   private notifyDesktop(message: ChatEntry): void {
+    if (!this.allowsNotification(message)) return;
     if (!this.preferences.notifications || typeof Notification === 'undefined') return;
     if (Notification.permission !== 'granted') return;
     if (!document.hidden && document.hasFocus?.() !== false) return;
@@ -792,6 +799,21 @@ export class SocialChat {
     } catch {
       /* Some browsers (Android Chrome) only notify through a service worker. */
     }
+  }
+
+  private allowsNotification(message: ChatEntry): boolean {
+    const nickname = this.options.getRoom()?.nickname;
+    const kind = message.recipientId
+      ? 'private'
+      : nickname && message.content.toLowerCase().includes(`@${nickname.toLowerCase()}`)
+        ? 'mention'
+        : 'room';
+    return (
+      this.options.allowsNotification?.(
+        kind,
+        kind === 'private' ? message.participantId : undefined,
+      ) ?? true
+    );
   }
 
   private closeDesktopNotices(): void {
@@ -2053,6 +2075,18 @@ export class SocialChat {
       this.preferencesDialog === view &&
       view.dialog.open &&
       this.contextCurrent(activation, room, viewer);
+    const peer = this.store.active;
+    if (
+      peer !== 'public' &&
+      this.options.getToken?.() &&
+      room.getParticipants().get(peer)?.authenticated
+    ) {
+      this.options.mountConversationNotifications?.(
+        view.body,
+        peer,
+        () => current() && this.store.active === peer,
+      );
+    }
     if (room.roomSettings)
       view.body.append(
         button('Room history…', () => {

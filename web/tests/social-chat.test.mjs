@@ -2415,3 +2415,49 @@ test('opening a covered PM preserves unread until the conversation is visible', 
   f.chat.render();
   assert.equal(f.chat.store.unread.get('alice'), undefined);
 });
+
+test('account notification rules gate both sounds and desktop notices without dropping messages', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  f.chat.preferences.sounds = true;
+  f.chat.preferences.notifications = await f.chat.notificationPermission(true);
+  f.document.hidden = true;
+  const sounds = [],
+    checks = [];
+  f.chat.playSound = (tone) => sounds.push(tone);
+  f.chat.options.allowsNotification = (kind, peer) => {
+    checks.push([kind, peer]);
+    return false;
+  };
+  f.chat.receive(entry('quiet-room'));
+  f.chat.receive(entry('quiet-mention', { content: 'hi @Local' }));
+  f.chat.receive(entry('quiet-pm', { recipientId: 'local', content: 'private' }));
+  assert.deepEqual(checks, [
+    ['room', undefined],
+    ['mention', undefined],
+    ['private', 'alice'],
+  ]);
+  assert.equal(f.chat.store.messages.length, 3);
+  assert.equal(sounds.length, 0);
+  assert.equal(f.state.notices.length, 0);
+  f.chat.options.allowsNotification = () => true;
+  f.chat.receive(entry('allowed', { recipientId: 'local', content: 'private' }));
+  assert.deepEqual(sounds, [700]);
+  assert.equal(f.state.notices.length, 1);
+});
+
+test('live account PM notification controls are scoped to the currently open peer', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  f.state.token = 'token';
+  f.participants.get('alice').authenticated = true;
+  const mounts = [];
+  f.chat.options.mountConversationNotifications = (...args) => mounts.push(args);
+  f.chat.openPrivate('alice', 'Alice');
+  f.chat.openPreferences();
+  assert.equal(mounts.length, 1);
+  assert.equal(mounts[0][1], 'alice');
+  assert.equal(mounts[0][2](), true);
+  f.chat.switchConversation('public');
+  assert.equal(mounts[0][2](), false);
+});

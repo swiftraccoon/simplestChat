@@ -332,6 +332,11 @@ async function run() {
         assert.match(route.request().headers().authorization, /^Bearer /);
         return json({ rooms: [] });
       }
+      if (url.pathname === '/api/auth/notification-preferences') {
+        assert.equal(route.request().method(), 'GET');
+        assert.match(route.request().headers().authorization, /^Bearer /);
+        return json({ privateMessages: true, mentions: true, quietHours: null, conversations: [] });
+      }
       if (url.pathname === '/api/auth/preferences')
         return json({
           allowPrivateMessages: true,
