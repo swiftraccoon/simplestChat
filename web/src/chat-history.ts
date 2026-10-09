@@ -1,5 +1,6 @@
 import type { ChatEntry, ChatHistoryPage } from './protocol';
 import { SavedPmDrafts } from './chat-store';
+import { mountContacts } from './discovery';
 import { appendLinkedText, appendEditedLabel, editMessageDialog } from './chat-message-ui';
 import { chatColor } from './avatar-colors';
 import type { RoomClient } from './room';
@@ -530,6 +531,32 @@ export function openPrivateInbox(options: {
       throw new Error('Sign in to read your messages');
     return value;
   };
+  const openConversation = (peerId: string, peerName: string): void => {
+    openHistory({
+      title: `Messages with ${peerName}`,
+      accountDialog: true,
+      viewerId: account,
+      draft: { account, peer: peerId },
+      edit: (message, content, expectedRevision, signal) =>
+        api.editPrivateMessage(
+          token(),
+          peerId,
+          message.messageId,
+          { content, expectedRevision },
+          signal,
+        ),
+      current: () => options.getAccountId() === account && !!options.getToken(),
+      load: (params, signal) => api.privateHistory(token(), peerId, params, signal),
+      markRead: (id, signal) => api.readPrivateMessages(token(), peerId, id, signal),
+      send: (content, id, signal) =>
+        api.sendPrivateMessage(token(), peerId, { content, clientMessageId: id }, signal),
+    });
+  };
+  const contacts = mountContacts(view.body, {
+    ...options,
+    current,
+    onMessage: openConversation,
+  });
   const status = el('p', 'Loading conversations…', 'setting-hint');
   status.setAttribute('role', 'status');
   const list = el('div', undefined, 'inbox-conversations');
@@ -561,32 +588,7 @@ export function openPrivateInbox(options: {
             '',
             () => {
               if (!current()) return;
-              openHistory({
-                title: `Messages with ${conversation.peerName}`,
-                accountDialog: true,
-                viewerId: account,
-                draft: { account, peer: conversation.peerId },
-                edit: (message, content, expectedRevision, signal) =>
-                  api.editPrivateMessage(
-                    token(),
-                    conversation.peerId,
-                    message.messageId,
-                    { content, expectedRevision },
-                    signal,
-                  ),
-                current: () => options.getAccountId() === account && !!options.getToken(),
-                load: (params, signal) =>
-                  api.privateHistory(token(), conversation.peerId, params, signal),
-                markRead: (id, signal) =>
-                  api.readPrivateMessages(token(), conversation.peerId, id, signal),
-                send: (content, id, signal) =>
-                  api.sendPrivateMessage(
-                    token(),
-                    conversation.peerId,
-                    { content, clientMessageId: id },
-                    signal,
-                  ),
-              });
+              openConversation(conversation.peerId, conversation.peerName);
             },
             'inbox-conversation',
           );
@@ -605,7 +607,7 @@ export function openPrivateInbox(options: {
         list.append(
           el(
             'p',
-            'No saved conversations yet. Start a PM with another signed-in person in a room.',
+            'No saved conversations yet. Message an accepted contact or someone in your room.',
             'setting-hint',
           ),
         );
@@ -635,12 +637,16 @@ export function openPrivateInbox(options: {
       view.close();
       return;
     }
-    if (!document.hidden) load(cursor).catch(fail);
+    if (!document.hidden) {
+      load(cursor).catch(fail);
+      contacts.refresh().catch(fail);
+    }
   }, 15_000);
   view.dialog.addEventListener(
     'close',
     () => {
       controller.abort();
+      contacts.dispose();
       clearInterval(timer);
     },
     { once: true },

@@ -3,6 +3,7 @@ import test from 'node:test';
 import { loadTypeScript } from './source-loader.mjs';
 import { deferred, flush, uiFixture } from './ui-fixture.mjs';
 import { loadAppearanceFixture } from './appearance-fixture.mjs';
+import { loadDiscoveryFixture } from './discovery-fixture.mjs';
 
 async function fixture() {
   const dom = await uiFixture();
@@ -65,6 +66,7 @@ async function fixture() {
       passkeyAction: (token, data) => request('/api/auth/passkeys/start', token, 'POST', data),
       redeemRecovery: (data) => request('/api/auth/recovery/redeem', null, 'POST', data),
       ownRooms: (token) => request('/api/rooms/mine', token),
+      savedRooms: async () => ({ rooms: [] }),
       updateRoomIdentity: (id, token, data) =>
         request(`/api/rooms/${encodeURIComponent(id)}/identity`, token, 'PATCH', data),
       deleteRoom: (id, token) => request(`/api/rooms/${encodeURIComponent(id)}`, token, 'DELETE'),
@@ -87,6 +89,7 @@ async function fixture() {
   const api = await loadTypeScript('src/community-ui.ts', {
     modules: {
       './ui': ui,
+      './discovery': await loadDiscoveryFixture({ ...dom, ui }),
       './appearance': await loadAppearanceFixture({ ...dom, ui }),
       './account-sessions': await loadTypeScript('src/account-sessions.ts', {
         modules: { './ui': ui },
@@ -893,6 +896,7 @@ test('room-scoped actions mount in the room tools while account actions stay in 
     modules: {
       './ui': { ...dom.ui, api: { ...dom.ui.api, inboxUnread: async () => ({ unreadCount: 0 }) } },
       './chat-history': { openPrivateInbox() {}, onInboxChanged() {} },
+      './discovery': await loadDiscoveryFixture(dom),
       './account-security': security,
       './account-sessions': await loadTypeScript('src/account-sessions.ts', {
         modules: { './ui': dom.ui },

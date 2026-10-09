@@ -78,6 +78,7 @@ For complete guest/account setup and LAN ICE addressing see
 | `src/settings-dialog.ts` | Shared settings tabs and native-dialog dismissal |
 | `src/social-chat.ts`, `chat-store.ts` | Room/PM conversations, composer, bounded replay, removal tombstones and preferences |
 | `src/chat-history.ts` | Saved room history, retention controls, account PM inbox, search and shared read positions |
+| `src/discovery.ts`, `discovery-validation.ts` | Accepted contacts, explicit contact links, account favorites and recent room shortcuts |
 | `src/*.css`, `index.html` | Layout, component styles and initial document |
 | `public/help.html`, `help.css` | Zero-JavaScript user help, copied into the production output |
 | `scripts/check-bundle.mjs`, `bundle-budget.json` | Aggregate raw/gzip asset limits enforced by every production build |
@@ -152,9 +153,10 @@ extend older saved messages.
 
 The signed-in header's **Messages** opens the account inbox. PMs between accounts
 are retained for 90 days, across rooms, devices and server restarts. Guest PMs
-remain bounded room-session data. Start a conversation together in a room; an
-existing account conversation can continue from Messages while either person is
-offline, subject to PM opt-out and ignore preferences. Saved history pages hold
+remain bounded room-session data. Start a conversation together in a room or use
+**Messages → Contacts** to share/paste a contact link and accept a request. Accepted
+contacts can start a PM without entering a room. Existing conversations can
+continue while either person is offline, subject to PM opt-out and ignore preferences. Saved history pages hold
 at most 50 messages, and search examines the newest 10,000 retained messages per
 conversation. The account's read position is saved on the server; the open inbox
 refreshes periodically. The existing Messages button shows the account unread count.
@@ -188,6 +190,13 @@ it without enlarging it or reserving a separate row. A compact viewing-controls
 button opens each remote tile's actions,
 including Pin, volume and fullscreen, without covering the tile with separate
 permanent buttons.
+
+Favorite rooms and successful recent room joins are saved with the account and
+appear in the existing room picker and **My rooms**. Star a room to keep it among
+up to 100 favorites; another 50 recent rooms are retained. Switching devices
+restores these shortcuts without automatically joining. Unlisted room details
+remain visible only to current owners or members. Contact requests and favorites
+use the same account fencing and explicit actions as the rest of the account UI.
 
 ## Availability, request ownership and large rooms
 

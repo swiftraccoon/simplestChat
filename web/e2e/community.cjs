@@ -7,6 +7,7 @@
  */
 const { openRoomMenu } = require('./room-menu.cjs');
 const { installPwaFixture, checkPwa } = require('./pwa-checks.cjs');
+const { checkContactsBeforeRoom, checkSavedRoomsAcrossDevices } = require('./discovery-checks.cjs');
 const { participantHovercardChecks } = require('./participant-hovercard-checks.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -929,6 +930,7 @@ async function setRole(owner, name, role) {
     await step('register owner/member, create room and guest join', async () => {
       await register(owner, ownerEmail, 'E2E Owner');
       await register(member, memberEmail, 'E2E Member');
+      await checkContactsBeforeRoom(owner, member, { base, header, close });
       await owner.locator('#create-room-btn').click();
       await owner.locator('#cr-id').fill(runId);
       await owner.locator('#cr-name').fill('E2E Community Room');
@@ -941,6 +943,14 @@ async function setRole(owner, name, role) {
       await visible(owner, 'Public hello');
       await visible(member, 'Public hello');
     });
+    await step(
+      'favorite rooms and accepted contacts follow an account to a second device',
+      async () => {
+        const secondDevice = await client('owner-second-device');
+        await login(secondDevice, ownerEmail, password);
+        await checkSavedRoomsAcrossDevices(owner, secondDevice, { header, close });
+      },
+    );
     await step('optional app notifications require an explicit Account action', async () => {
       await checkPwa(owner, { openAccount: () => header(owner, 'Account'), closeDialog: close });
     });
@@ -1130,11 +1140,16 @@ async function setRole(owner, name, role) {
         const saved = history
           .locator('.history-message')
           .filter({ hasText: 'Saved browser history message' });
+        const savedMessageId = await saved.getAttribute('data-message-id');
+        assert.ok(savedMessageId);
         await saved.getByRole('button', { name: 'Remove', exact: true }).click();
         const confirmation = owner.getByRole('dialog', { name: 'Remove message', exact: true });
         await confirmation.getByRole('button', { name: 'Remove message', exact: true }).click();
         await confirmation.waitFor({ state: 'hidden' });
-        await history.getByText('Message removed', { exact: true }).waitFor({ state: 'visible' });
+        await history
+          .locator(`.history-message[data-message-id="${savedMessageId}"]`)
+          .getByText('Message removed', { exact: true })
+          .waitFor({ state: 'visible' });
         await history.locator('.history-retention select').selectOption('0');
         await history.getByRole('button', { name: 'Save retention', exact: true }).click();
         await history
@@ -1414,12 +1429,15 @@ async function setRole(owner, name, role) {
       await close(inbox);
     });
     await step('private drafts and sent-input recall stay in their conversation', async () => {
+      await publicChat(owner);
+      await send(owner, 'Public recall fixture');
+      await action(owner, 'E2E Member', 'Private message');
       await owner.locator('#chat-input').fill('Unsent private draft');
       await publicChat(owner);
       assert.equal(await owner.locator('#chat-input').inputValue(), '');
       await owner.locator('#chat-input').press('ArrowUp');
       // Public recall contains the earlier public send, never the private send or draft.
-      assert.equal(await owner.locator('#chat-input').inputValue(), 'Message before correction');
+      assert.equal(await owner.locator('#chat-input').inputValue(), 'Public recall fixture');
       await action(owner, 'E2E Member', 'Private message');
       assert.equal(await owner.locator('#chat-input').inputValue(), 'Unsent private draft');
       await owner.locator('#chat-input').fill('');

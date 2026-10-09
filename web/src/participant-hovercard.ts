@@ -13,6 +13,7 @@ export interface ParticipantHovercardData {
   avatarUrl?: string;
   profileAvailable?: boolean;
   canMessage?: boolean;
+  canContact?: boolean;
   canMore?: boolean;
 }
 
@@ -28,6 +29,7 @@ export interface ParticipantHovercardOptions {
   getParticipant: (id: string, fallbackName: string) => ParticipantHovercardData | null;
   loadProfile?: (id: string) => Promise<ParticipantHovercardProfile | null>;
   onMessage?: (id: string, name: string) => void;
+  onContact?: (id: string) => void;
   onProfile?: (id: string, name: string) => void;
   onMore?: (id: string, name: string, anchor: HTMLElement) => void;
 }
@@ -184,6 +186,7 @@ export class ParticipantHovercard {
       current.online !== this.participant.online ||
       current.role !== this.participant.role ||
       current.canMessage !== this.participant.canMessage ||
+      current.canContact !== this.participant.canContact ||
       current.canMore !== this.participant.canMore ||
       current.profileAvailable !== this.participant.profileAvailable
     )
@@ -267,6 +270,12 @@ export class ParticipantHovercard {
         'Message',
         (current) => !current.self && current.online && !!current.canMessage,
         (current) => this.options.onMessage?.(id, current.name),
+      );
+    if (!data.self && data.canContact && this.options.onContact)
+      action(
+        'Add contact',
+        (current) => !current.self && !!current.canContact,
+        () => this.options.onContact?.(id),
       );
     if (data.profileAvailable && this.options.onProfile)
       action(

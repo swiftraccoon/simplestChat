@@ -283,6 +283,11 @@ async function run(env = process.env) {
                 assert.equal(request.headers().authorization, 'Bearer owned-layout-fixture');
                 return json(200, { unreadCount: 7 });
               }
+              if (url.pathname === '/api/auth/saved-rooms' && request.method() === 'GET') {
+                assert.equal(signedIn, true, 'Guests must not request account room shortcuts');
+                assert.equal(request.headers().authorization, 'Bearer owned-layout-fixture');
+                return json(200, { rooms: [] });
+              }
               if (url.pathname === '/api/auth/ws-ticket') {
                 assert.equal(signedIn, true, 'Guests must not mint authenticated tickets');
                 assert.equal(request.method(), 'POST');

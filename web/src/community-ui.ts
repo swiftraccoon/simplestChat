@@ -2,6 +2,7 @@ import type { AuthManager } from './auth';
 import { openPrivateInbox, onInboxChanged } from './chat-history';
 import { mountAccountSecurity, type AccountSecurityFlow } from './account-security';
 import { mountAccountSessions } from './account-sessions';
+import { mountSavedRooms, createFavoriteButton, offerContact } from './discovery';
 import { appearancePicker } from './appearance';
 import type { RoomClient } from './room';
 import type { AccountProfile, PublicProfile, RoomListItem } from './protocol';
@@ -179,6 +180,13 @@ export class CommunityUI {
       });
     this.inboxPending = task;
     return task;
+  }
+
+  requestContact(peer: string): void {
+    offerContact(peer, {
+      getToken: () => this.options.auth.jwt,
+      getAccountId: () => this.options.auth.userId,
+    });
   }
 
   /** Cache only the current roster, with a hard memory bound; larger rosters keep initials. */
@@ -651,10 +659,31 @@ export class CommunityUI {
   private async openRooms(): Promise<void> {
     const view = modal('My rooms');
     const token = this.options.auth.jwt;
+    const account = this.options.auth.userId;
+    const current = (): boolean =>
+      view.dialog.open && account === this.options.auth.userId && !!this.options.auth.jwt;
+    view.dialog.setAttribute('data-account-dialog', 'true');
+    const savedHost = el('div');
+    const saved = mountSavedRooms(savedHost, {
+      getToken: () => this.options.auth.jwt,
+      getAccountId: () => this.options.auth.userId,
+      current,
+      onJoin: (id) => {
+        view.close();
+        this.options.onJoinRoom(id);
+      },
+    });
+    view.dialog.addEventListener('close', saved.dispose, { once: true });
     const refresh = async (): Promise<void> => {
-      const rooms = await api.ownRooms(token);
-      if (!view.dialog.open) return;
-      view.body.replaceChildren();
+      const [rooms, shortcuts] = await Promise.all([
+        api.ownRooms(token),
+        api.savedRooms(token!, new AbortController().signal),
+      ]);
+      if (!current()) return;
+      const favorites = new Set(
+        shortcuts.rooms.filter((entry) => entry.favorite).map((entry) => entry.room.id),
+      );
+      view.body.replaceChildren(savedHost);
       if (!rooms.length)
         view.body.append(el('p', 'No owned rooms yet. Use Create Room on the join screen.'));
       else view.body.append(el('h3', 'Rooms you own'));
@@ -685,6 +714,17 @@ export class CommunityUI {
           ),
         );
         row.append(button('Invites…', () => this.roomInvites(room)));
+        row.append(
+          createFavoriteButton(room.id, favorites.has(room.id), {
+            getToken: () => this.options.auth.jwt,
+            getAccountId: () => this.options.auth.userId,
+            current,
+            onError: (error) => this.showError(view.error, error),
+            onChange: () => {
+              saved.refresh().catch((error) => this.showError(view.error, error));
+            },
+          }),
+        );
         row.append(
           button(
             'Delete room…',

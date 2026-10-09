@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { loadContractModules, loadTypeScript } from './source-loader.mjs';
 import { deferred, flush, uiFixture } from './ui-fixture.mjs';
+import { loadDiscoveryFixture } from './discovery-fixture.mjs';
 
 const message = (id, content = `Message ${id}`) => ({
   messageId: id,
@@ -101,6 +102,7 @@ async function fixture(t) {
       return handler(...args);
     };
   const api = {
+    contacts: async () => ({ accountId: state.account, contacts: [] }),
     inbox: invoke('inbox', (...args) => state.loadInbox(...args)),
     privateHistory: invoke('history', (...args) => state.loadHistory(...args)),
     readPrivateMessages: invoke('read', (...args) => state.markRead(...args)),
@@ -110,6 +112,7 @@ async function fixture(t) {
   const module = await loadTypeScript('src/chat-history.ts', {
     modules: {
       './ui': { ...f.ui, api },
+      './discovery': await loadDiscoveryFixture({ ...f, ui: { ...f.ui, api } }),
       './chat-store': await loadTypeScript('src/chat-store.ts'),
       './avatar-colors': await loadTypeScript('src/avatar-colors.ts'),
       './chat-message-ui': await loadTypeScript('src/chat-message-ui.ts', {

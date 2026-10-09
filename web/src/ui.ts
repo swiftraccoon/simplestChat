@@ -22,6 +22,7 @@ import {
 } from './api-validation';
 import { decodeRoomSettings, decodeChatHistory, decodeChatEntry } from './protocol-validation';
 import { decodeInbox, decodeChatRead, decodeInboxUnread } from './chat-history-validation';
+import { decodeContacts, decodeSavedRooms } from './discovery-validation';
 import { type Decoder, isRecord } from './validation';
 
 /** Account password selection mirrors the server's NFC and Unicode-scalar policy. */
@@ -307,6 +308,30 @@ async function apiNoContent(
 
 /** Endpoint-owned contracts: callers cannot select an arbitrary response type or decoder. */
 export const api = {
+  contacts: (token: string, signal: AbortSignal) =>
+    apiJson(decodeContacts, '/api/auth/contacts', token, 'GET', undefined, signal),
+  requestContact: (token: string, accountId: string, signal: AbortSignal) =>
+    apiNoContent('/api/auth/contacts', token, 'POST', { accountId }, signal),
+  acceptContact: (token: string, peer: string, signal: AbortSignal) =>
+    apiNoContent(`/api/auth/contacts/${encodeURIComponent(peer)}`, token, 'PUT', undefined, signal),
+  removeContact: (token: string, peer: string, signal: AbortSignal) =>
+    apiNoContent(
+      `/api/auth/contacts/${encodeURIComponent(peer)}`,
+      token,
+      'DELETE',
+      undefined,
+      signal,
+    ),
+  savedRooms: (token: string, signal: AbortSignal) =>
+    apiJson(decodeSavedRooms, '/api/auth/saved-rooms', token, 'GET', undefined, signal),
+  saveRoom: (token: string, roomId: string, favorite: boolean, signal: AbortSignal) =>
+    apiNoContent(
+      `/api/auth/saved-rooms/${encodeURIComponent(roomId)}`,
+      token,
+      'PUT',
+      { favorite },
+      signal,
+    ),
   pushStatus: (token: string, signal: AbortSignal) =>
     apiJson(
       (value: unknown) => {

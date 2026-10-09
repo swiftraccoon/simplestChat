@@ -17,6 +17,12 @@ import { CallOutcomeTelemetry, MediaTelemetry, observeFirstVideoFrame } from './
 import { MediaControls, mediaErrorMessage } from './media-controls';
 import { MediaLifecycle } from './media-lifecycle';
 import { PwaControls } from './pwa';
+import {
+  createFavoriteButton,
+  mountSavedRooms,
+  takeContactOffer,
+  type DiscoveryMount,
+} from './discovery';
 import { openPrivateInbox } from './chat-history';
 import { SocialChat } from './social-chat';
 import { CommunityUI } from './community-ui';
@@ -39,6 +45,7 @@ import { type VideoDeferredReason } from './receive-policy';
 import { observeVideoLayout } from './video-layout';
 import './community.css';
 import './participant-hovercard.css';
+import './discovery.css';
 import type { CreateRoomRequest, RoomSettingsPatch } from './protocol';
 import type { ServerCapabilities } from './api-validation';
 
@@ -209,11 +216,25 @@ function updateAuthUI(): void {
   updateJoinBtn();
   community.refresh();
   pwa.accountChanged();
+  refreshSavedRoomPicker();
   participantHovercard.refresh();
 }
 
 // Invitation secrets stay in the fragment and are removed before room navigation.
 let pendingInvite: string | null = null;
+let pendingContactOffer = takeContactOffer();
+let restoredAccount = false;
+
+function reviewPendingContact(): void {
+  if (!pendingContactOffer || !capabilities?.accounts || !restoredAccount) return;
+  if (!auth.isLoggedIn) {
+    openAuthDialog(loginModal);
+    return;
+  }
+  const peer = pendingContactOffer;
+  pendingContactOffer = null;
+  community.requestContact(peer);
+}
 let pendingInviteKind: 'room' | 'registration' = 'room';
 let inviteAccountEpoch = 0;
 let inviteView: ReturnType<typeof modal> | null = null;
@@ -349,6 +370,7 @@ function openRoomFromDialog(id: string): void {
 readInviteLink();
 
 auth.setOnChange((loggedIn, tokenRefresh) => {
+  if (loggedIn) restoredAccount = true;
   updateAuthUI();
   if (loggedIn && tokenRefresh) {
     // Renew the existing socket as well as the next handshake, preserving room
@@ -369,6 +391,7 @@ auth.setOnChange((loggedIn, tokenRefresh) => {
   signaling.disconnect();
   signaling.connect(loggedIn ? (auth.jwt ?? undefined) : undefined);
   if (loggedIn) observeUiTask(previewPendingInvite(), 'Invitation not reviewed');
+  if (loggedIn) reviewPendingContact();
 });
 
 // --- State ---
@@ -1451,7 +1474,10 @@ const pwa = new PwaControls({
   getAccountId: () => auth.userId,
   openMessages: () => {
     if (auth.isLoggedIn)
-      openPrivateInbox({ getToken: () => auth.jwt, getAccountId: () => auth.userId });
+      openPrivateInbox({
+        getToken: () => auth.jwt,
+        getAccountId: () => auth.userId,
+      });
     else openAuthDialog(loginModal);
   },
 });
@@ -1511,6 +1537,7 @@ const participantHovercard = new ParticipantHovercard({
       ...(color && { color }),
       profileAvailable: self ? auth.isLoggedIn : person?.authenticated === true,
       canMessage: online && !self && room.canChat,
+      canContact: !self && auth.isLoggedIn && person?.authenticated === true,
       canMore: online && !self,
     };
   },
@@ -1526,6 +1553,7 @@ const participantHovercard = new ParticipantHovercard({
       : null;
   },
   onMessage: (id, name) => socialChat.openPrivate(id, name),
+  onContact: (id) => community.requestContact(id),
   onProfile: (id) => observeUiTask(community.showProfile(id), 'Could not open the profile'),
   onMore: (id, name, anchor) => {
     const bounds = anchor.getBoundingClientRect();
@@ -1556,6 +1584,7 @@ window.addEventListener('pagehide', (event) => {
   if (event.persisted) return;
   mediaLifecycle.dispose();
   pwa.dispose();
+  savedRoomMount?.dispose();
   clearInterval(inboxRefresh);
   document.removeEventListener('visibilitychange', refreshSavedMessages);
 });
@@ -1659,6 +1688,7 @@ async function loadCapabilities(): Promise<void> {
     applyCapabilities(await api.capabilities());
     navigation.resumePendingJoin();
     observeUiTask(previewPendingInvite(), 'Invitation not reviewed');
+    reviewPendingContact();
   } catch {
     serverMode.textContent =
       'Server features could not be loaded. Check your connection and try again.';
@@ -1678,7 +1708,9 @@ observeUiTask(loadCapabilities(), 'Could not load server features');
 // Try to restore auth session from cookie, then connect WS
 observeUiTask(
   auth.tryRestore().then(() => {
+    restoredAccount = true;
     updateAuthUI();
+    reviewPendingContact();
     signaling.connect(auth.jwt ?? undefined);
     if (!pendingInvite) return;
     observeUiTask(previewPendingInvite(), 'Invitation not reviewed');
@@ -1722,6 +1754,32 @@ let roomBrowserQuery = '';
 let roomBrowserHasMore = false;
 let roomBrowserRequest = 0;
 let roomBrowserController: AbortController | null = null;
+let savedRoomMount: DiscoveryMount | null = null;
+let savedRoomAccount: string | null = null;
+const savedRoomPicker = el('details', undefined, 'directory-saved-rooms');
+savedRoomPicker.append(el('summary', 'Favorite & recent rooms'));
+const savedRoomContainer = el('div');
+savedRoomPicker.append(savedRoomContainer);
+roomList.before(savedRoomPicker);
+
+function refreshSavedRoomPicker(): void {
+  const account = capabilities?.roomDirectory ? auth.userId : null;
+  savedRoomPicker.hidden = account === null;
+  if (account !== savedRoomAccount) {
+    savedRoomMount?.dispose();
+    savedRoomMount = null;
+    savedRoomAccount = account;
+  }
+  if (!account) return;
+  if (savedRoomMount) observeUiTask(savedRoomMount.refresh(), 'Could not refresh saved rooms');
+  else
+    savedRoomMount = mountSavedRooms(savedRoomContainer, {
+      getToken: () => auth.jwt,
+      getAccountId: () => auth.userId,
+      current: () => savedRoomAccount === account,
+      onJoin: (id) => navigation.selectRoom(id),
+    });
+}
 const MIN_ROOM_SEARCH_TRIGRAM_LEN = 3;
 
 function hasIndexableRoomSearchTrigram(query: string): boolean {
@@ -1755,6 +1813,7 @@ async function loadRoomBrowser(append = false): Promise<void> {
   const request = ++roomBrowserRequest;
   roomBrowserController?.abort();
   const controller = new AbortController();
+  const account = auth.userId;
   roomBrowserController = controller;
   if (!append) {
     roomBrowserPage = 1;
@@ -1765,6 +1824,10 @@ async function loadRoomBrowser(append = false): Promise<void> {
   try {
     const params = new URLSearchParams({ page: String(roomBrowserPage), limit: '20' });
     if (roomBrowserQuery) params.set('q', roomBrowserQuery);
+    const saved =
+      auth.jwt && account
+        ? api.savedRooms(auth.jwt, controller.signal).catch(() => null)
+        : Promise.resolve(null);
     const rooms = await api.rooms(params, controller.signal).catch((error: unknown) => {
       if (!(error instanceof ApiError)) throw error;
       const explanation =
@@ -1775,7 +1838,10 @@ async function loadRoomBrowser(append = false): Promise<void> {
             : 'Could not load the room directory. You can still join directly by room name below.';
       throw new Error(explanation);
     });
-    if (request !== roomBrowserRequest) return;
+    const favorites = new Set(
+      (await saved)?.rooms.filter((entry) => entry.favorite).map((entry) => entry.room.id),
+    );
+    if (request !== roomBrowserRequest || auth.userId !== account) return;
     roomBrowserHasMore = rooms.length === 20;
     roomLoadMore.hidden = !roomBrowserHasMore;
 
@@ -1868,7 +1934,19 @@ async function loadRoomBrowser(append = false): Promise<void> {
 
       card.appendChild(info);
       card.appendChild(meta);
-      roomList.appendChild(card);
+      if (account) {
+        const row = el('div', undefined, 'directory-room-row');
+        const favorite = createFavoriteButton(r.id, favorites.has(r.id), {
+          getToken: () => auth.jwt,
+          getAccountId: () => auth.userId,
+          current: () => auth.userId === account && card.isConnected,
+          onError: (reason) =>
+            showToast(reason instanceof Error ? reason.message : 'Favorite could not be changed'),
+          onChange: () => refreshSavedRoomPicker(),
+        });
+        row.append(card, favorite);
+        roomList.append(row);
+      } else roomList.appendChild(card);
     }
   } catch (e) {
     if (request !== roomBrowserRequest) return;

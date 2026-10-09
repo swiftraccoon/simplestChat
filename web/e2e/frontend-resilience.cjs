@@ -327,6 +327,11 @@ async function run() {
         assert.match(route.request().headers().authorization, /^Bearer /);
         return json({ unreadCount: 0 });
       }
+      if (url.pathname === '/api/auth/saved-rooms') {
+        assert.equal(route.request().method(), 'GET');
+        assert.match(route.request().headers().authorization, /^Bearer /);
+        return json({ rooms: [] });
+      }
       if (url.pathname === '/api/auth/preferences')
         return json({
           allowPrivateMessages: true,

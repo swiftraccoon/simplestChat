@@ -23,6 +23,9 @@ export async function loadContractModules() {
   modules['./chat-history-validation'] = await loadTypeScript('src/chat-history-validation.ts', {
     modules,
   });
+  modules['./discovery-validation'] = await loadTypeScript('src/discovery-validation.ts', {
+    modules,
+  });
   return modules;
 }
 
