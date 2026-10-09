@@ -130,10 +130,12 @@ test('contact refreshes and actions cannot mutate another account after identity
   const pending = deferred();
   f.api.contacts = () => pending.promise;
   const mount = f.module.mountContacts(f.host, f.options);
+  const before = f.host.textContent;
   f.state.account = OTHER;
   pending.resolve({ accountId: OWN, contacts: [contact()] });
   await flush();
-  assert.doesNotMatch(f.host.textContent, /<script>/);
+  assert.equal(f.host.textContent, before);
+  assert.equal(f.host.querySelectorAll('.discovery-row').length, 0);
   click(f.host, 'Copy my contact link');
   await flush();
   assert.equal(f.state.copied, '');
