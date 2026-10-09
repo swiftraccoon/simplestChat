@@ -204,6 +204,8 @@ test('container context explicitly admits build configs, help and PWA files with
     '!web/public/', 'web/public/**', '!web/public/help.html', '!web/public/help.css',
     '!web/public/manifest.webmanifest', '!web/public/sw.js',
     '!web/public/icon-192.png', '!web/public/icon-512.png',
+    '!web/public/fonts/', 'web/public/fonts/**', '!web/public/fonts/outfit-latin.woff2',
+    '!web/public/fonts/Outfit-OFL.txt',
     '!web/src/', 'web/src/**', '!web/src/*.ts', '!web/src/*.css',
   ].toSorted());
   for (const [index, rule] of ignoreRules.entries()) {
