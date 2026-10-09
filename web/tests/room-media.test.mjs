@@ -21,7 +21,10 @@ test('producer closure updates local controls and still removes remote media', a
     }
   }
   const { RoomClient } = await loadTypeScript('src/room.ts', {
-    modules: { './media': { MediaManager: FakeMediaManager } },
+    modules: {
+      './receive-policy': await loadTypeScript('src/receive-policy.ts'),
+      './media': { MediaManager: FakeMediaManager },
+    },
   });
   const signaling = {
     setOnMessage(handler) {
@@ -100,7 +103,10 @@ test('a rejected remote subscription is reported instead of silently leaving a b
     closeConsumerByProducer() {}
   }
   const { RoomClient } = await loadTypeScript('src/room.ts', {
-    modules: { './media': { MediaManager: FakeMediaManager } },
+    modules: {
+      './receive-policy': await loadTypeScript('src/receive-policy.ts'),
+      './media': { MediaManager: FakeMediaManager },
+    },
   });
   const signaling = {
     setOnMessage(handler) {
@@ -165,7 +171,10 @@ async function captureStoppedFixture(events = {}) {
     }
   }
   const { RoomClient } = await loadTypeScript('src/room.ts', {
-    modules: { './media': { MediaManager: FakeMediaManager } },
+    modules: {
+      './receive-policy': await loadTypeScript('src/receive-policy.ts'),
+      './media': { MediaManager: FakeMediaManager },
+    },
   });
   const signaling = {
     setOnMessage(handler) {
@@ -328,7 +337,10 @@ async function incomingRefreshFixture(producerIds = ['camera', 'microphone']) {
     }
   }
   const { RoomClient } = await loadTypeScript('src/room.ts', {
-    modules: { './media': { MediaManager: FakeMediaManager } },
+    modules: {
+      './receive-policy': await loadTypeScript('src/receive-policy.ts'),
+      './media': { MediaManager: FakeMediaManager },
+    },
   });
   const signaling = {
     connected: true,
@@ -386,7 +398,7 @@ test('incoming refresh replaces subscriptions while preserving local capture and
   const capture = media.captureTrack;
   await room.refreshIncomingMedia();
   assert.deepEqual(media.retired, ['camera', 'microphone']);
-  assert.deepEqual(media.consumed, ['camera', 'microphone', 'camera', 'microphone']);
+  assert.deepEqual(media.consumed, ['microphone', 'camera', 'camera', 'microphone']);
   assert.equal(tracks.length, 4);
   assert.equal(managers.length, 1, 'refresh must reuse the current media manager');
   assert.equal(media.captureTrack, capture);
@@ -496,7 +508,7 @@ test('incoming refresh reports partial subscription failure while trying the rem
   managers[0].failedConsumes.add('camera');
   await assert.rejects(room.refreshIncomingMedia(), /Some incoming media could not be refreshed/);
   assert.deepEqual(managers[0].retired, ['camera', 'microphone']);
-  assert.deepEqual(managers[0].consumed, ['camera', 'microphone', 'camera', 'microphone']);
+  assert.deepEqual(managers[0].consumed, ['microphone', 'camera', 'camera', 'microphone']);
   assert.equal(unavailable.length, 1);
   assert.equal(unavailable[0][4], 'Subscription unavailable');
   assert.ok(managers[0].consumers.has('microphone'));
@@ -511,6 +523,6 @@ test('incoming refresh reports a rejected retirement without starting its replac
     if (producerId === 'camera') throw new Error('Retirement not confirmed');
   };
   await assert.rejects(room.refreshIncomingMedia(), /Some incoming media could not be refreshed/);
-  assert.deepEqual(managers[0].consumed, ['camera', 'microphone', 'microphone']);
+  assert.deepEqual(managers[0].consumed, ['microphone', 'camera', 'microphone']);
   await room.leave();
 });

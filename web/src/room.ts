@@ -20,6 +20,14 @@ import type {
 } from './protocol';
 import { SignalingClient } from './signaling';
 import {
+  loadReceiveMode,
+  normalizeReceiveMode,
+  selectIncomingVideos,
+  videoTileKey,
+  type ReceiveMode,
+  type VideoDeferredReason,
+} from './receive-policy';
+import {
   MediaManager,
   type CapturePreferences,
   type RemoteVideoQuality,
@@ -66,6 +74,13 @@ export type RoomEventHandler = {
     producerId: string,
     kind: 'audio' | 'video',
     source?: string,
+  ) => void;
+  /** Preserve the same tile while this viewer deliberately leaves its video unsubscribed. */
+  onRemoteVideoDeferred?: (
+    participantId: string,
+    participantName: string,
+    source: string | undefined,
+    reason: VideoDeferredReason,
   ) => void;
   /** The server or media stack refused a subscription; the tile would otherwise stay blank silently. */
   onRemoteMediaUnavailable?: (
@@ -209,6 +224,15 @@ export class RoomClient {
   private hiddenParticipants = new Set<string>();
   private videoQualities = new Map<string, RemoteVideoQuality>();
   private videoSizeCaps = new Map<string, number | null>();
+  private receiveMode = loadReceiveMode();
+  private receivePageActive = true;
+  private receiveVisibility = new Map<string, boolean>();
+  private pinnedVideo: string | null = null;
+  private pictureInPictureVideo: string | null = null;
+  private selectedVideos = new Set<string>();
+  private deferredVideos = new Map<string, VideoDeferredReason>();
+  private receiveRevision = 0;
+  private receiveReconcile: Promise<void> | null = null;
   private socialRequests = new Map<
     string,
     {
@@ -382,6 +406,10 @@ export class RoomClient {
     this.pendingConsumes.clear();
     this.failedConsumes.clear();
     this.consumeQueue = Promise.resolve();
+    this.receiveRevision++;
+    this.receiveReconcile = null;
+    this.selectedVideos.clear();
+    this.deferredVideos.clear();
     media?.close();
   }
 
@@ -647,6 +675,9 @@ export class RoomClient {
     this.hiddenParticipants.clear();
     this.videoQualities.clear();
     this.videoSizeCaps.clear();
+    this.receiveVisibility.clear();
+    this.pinnedVideo = null;
+    this.pictureInPictureVideo = null;
     this.rejectSocialRequests('Room left');
     this.closeMedia();
     this.mediaNeedsRebuild = false;
@@ -764,10 +795,13 @@ export class RoomClient {
     let failed = false;
     for (const participant of this.participants.values()) {
       if (participant.id === this.localId) continue;
-      for (const producerId of participant.producers.keys()) {
+      for (const [producerId, producer] of participant.producers) {
         if (this.pausedProducers.has(producerId)) continue;
         expected++;
-        if (!this.hiddenParticipants.has(participant.id)) {
+        if (
+          !this.hiddenParticipants.has(participant.id) &&
+          (producer.kind !== 'video' || this.selectedVideos.has(producerId))
+        ) {
           selected++;
           if (this.failedConsumes.has(producerId)) failed = true;
         }
@@ -792,6 +826,147 @@ export class RoomClient {
     for (const producerId of this.participants.get(participantId)?.producers.keys() ?? []) {
       this.media?.setConsumerHiddenByProducer(producerId, hidden);
     }
+    this.scheduleReceiveSelection();
+  }
+
+  setReceiveMode(mode: ReceiveMode): void {
+    this.receiveMode = normalizeReceiveMode(mode);
+    for (const participant of this.participants.values()) {
+      for (const [producerId, producer] of participant.producers) {
+        if (producer.kind === 'video')
+          this.applyVideoSizeCap(participant.id, producerId, producer.source);
+      }
+    }
+    this.scheduleReceiveSelection();
+  }
+
+  setRemoteVideoVisibility(
+    participantId: string,
+    source: string | undefined,
+    visible: boolean,
+  ): void {
+    const key = videoTileKey(participantId, source);
+    if (this.receiveVisibility.get(key) === visible) return;
+    this.receiveVisibility.set(key, visible);
+    this.scheduleReceiveSelection();
+  }
+
+  setPinnedRemoteVideo(participantId: string | null, source?: string): void {
+    this.pinnedVideo = participantId === null ? null : videoTileKey(participantId, source);
+    this.scheduleReceiveSelection();
+  }
+
+  setPictureInPictureVideo(participantId: string | null, source?: string): void {
+    this.pictureInPictureVideo =
+      participantId === null ? null : videoTileKey(participantId, source);
+    this.scheduleReceiveSelection();
+  }
+
+  private applyVideoSizeCap(participantId: string, producerId: string, source?: string): void {
+    const sizeCap = source === 'screen' ? null : (this.videoSizeCaps.get(participantId) ?? null);
+    if (this.receiveMode === 'data-saver' || sizeCap !== null)
+      this.media?.setConsumerSizeCapByProducer(
+        producerId,
+        this.receiveMode === 'data-saver' ? 0 : sizeCap,
+      );
+    else this.media?.setConsumerSizeCapByProducer?.(producerId, null);
+  }
+
+  /** Update intent immediately, then reclaim server slots before allocating replacements. */
+  private scheduleReceiveSelection(): void {
+    const videos = Array.from(this.participants.values()).flatMap((participant) =>
+      participant.id === this.localId
+        ? []
+        : Array.from(participant.producers, ([id, producer]) => ({
+            id,
+            participant,
+            producer,
+            key: videoTileKey(participant.id, producer.source),
+          })).filter(
+            ({ id, producer }) => producer.kind === 'video' && !this.pausedProducers.has(id),
+          ),
+    );
+    this.selectedVideos = selectIncomingVideos(
+      videos.map(({ id, participant, key }) => ({
+        id,
+        visible: this.receiveVisibility.get(key),
+        pinned: this.pinnedVideo === key,
+        pictureInPicture: this.pictureInPictureVideo === key,
+        hidden: this.hiddenParticipants.has(participant.id),
+      })),
+      this.receiveMode,
+      this.receivePageActive,
+      this.selectedVideos,
+    );
+    const known = new Set(videos.map(({ id }) => id));
+    for (const id of this.deferredVideos.keys()) if (!known.has(id)) this.deferredVideos.delete(id);
+    for (const { id, participant, producer, key } of videos) {
+      if (this.selectedVideos.has(id)) continue;
+      this.failedConsumes.delete(id);
+      const reason: VideoDeferredReason = this.hiddenParticipants.has(participant.id)
+        ? 'hidden'
+        : this.receiveMode === 'audio-only'
+          ? 'audio-only'
+          : !this.receivePageActive || this.receiveVisibility.get(key) === false
+            ? 'offscreen'
+            : 'limit';
+      if (this.deferredVideos.get(id) !== reason) {
+        this.deferredVideos.set(id, reason);
+        this.events.onRemoteVideoDeferred?.(
+          participant.id,
+          participant.name,
+          producer.source,
+          reason,
+        );
+      }
+    }
+    this.receiveRevision++;
+    if (this.receiveReconcile) return;
+    const media = this.media;
+    const generation = this.generation;
+    const connection = this.connectionGeneration;
+    if (!media || !this.mediaReady) return;
+    const current = () =>
+      this.media === media &&
+      this.generation === generation &&
+      this.connectionGeneration === connection;
+    let revision = this.receiveRevision;
+    const task = Promise.resolve()
+      .then(async () => {
+        do {
+          revision = this.receiveRevision;
+          await this.consumeQueue;
+          if (!current()) return;
+          // Include paused and recently deselected producers: they may still own a
+          // consumer or an unacknowledged close from a superseded consume.
+          const roster = Array.from(this.participants.values()).flatMap((participant) =>
+            Array.from(participant.producers, ([id, producer]) => ({
+              id,
+              participant,
+              producer,
+            })).filter(({ producer }) => producer.kind === 'video'),
+          );
+          for (const { id } of roster) {
+            if (!current()) return;
+            if (!this.selectedVideos.has(id)) await media.retireConsumerByProducer(id);
+          }
+          if (!current()) return;
+          if (revision !== this.receiveRevision) continue;
+          for (const { id, participant, producer } of roster) {
+            if (!current()) return;
+            if (!this.selectedVideos.has(id) || media.getConsumerTrackByProducer?.(id)) continue;
+            await this.consumeProducer(participant.id, id, 'video', producer.source);
+          }
+        } while (current() && revision !== this.receiveRevision);
+      })
+      .finally(() => {
+        if (this.receiveReconcile === task) {
+          this.receiveReconcile = null;
+          if (current() && revision !== this.receiveRevision) this.scheduleReceiveSelection();
+        }
+      });
+    this.receiveReconcile = task;
+    this.observeTask(task, 'Updating incoming video');
   }
 
   setRemoteVideoQuality(participantId: string, quality: RemoteVideoQuality): void {
@@ -808,7 +983,7 @@ export class RoomClient {
     this.videoSizeCaps.set(participantId, maxSpatialLayer);
     for (const [producerId, producer] of participant.producers) {
       if (producer.kind === 'video' && producer.source !== 'screen')
-        this.media?.setConsumerSizeCapByProducer(producerId, maxSpatialLayer);
+        this.applyVideoSizeCap(participantId, producerId, producer.source);
     }
   }
 
@@ -838,6 +1013,9 @@ export class RoomClient {
 
   setMediaPageActive(active: boolean): void {
     this.media?.setPageActive(active);
+    if (this.receivePageActive === active) return;
+    this.receivePageActive = active;
+    this.scheduleReceiveSelection();
   }
 
   resumeMediaConnection(): void {
@@ -872,6 +1050,7 @@ export class RoomClient {
       this.generation === generation &&
       this.connectionGeneration === connection &&
       this.connected;
+    await this.receiveReconcile;
     await this.consumeQueue;
     if (!current()) throw new Error('The room connection changed');
     // Snapshot this action's bounded roster. Live Map iterators can otherwise
@@ -889,6 +1068,7 @@ export class RoomClient {
     for (const { participantId, producerId, metadata } of subscriptions) {
       if (!current()) throw new Error('The room connection changed');
       if (this.participants.get(participantId)?.producers.get(producerId) !== metadata) continue;
+      if (metadata.kind === 'video' && !this.selectedVideos.has(producerId)) continue;
       try {
         await media.retireConsumerByProducer(producerId);
         if (!current()) throw new Error('The room connection changed');
@@ -1225,11 +1405,15 @@ export class RoomClient {
   }
 
   private async consumeExistingProducers(): Promise<void> {
+    this.scheduleReceiveSelection();
+    const videos = this.receiveReconcile;
     for (const p of this.participants.values()) {
       for (const [producerId, producer] of p.producers) {
-        await this.consumeProducer(p.id, producerId, producer.kind, producer.source);
+        if (producer.kind === 'audio')
+          await this.consumeProducer(p.id, producerId, producer.kind, producer.source);
       }
     }
+    await videos;
   }
 
   private async handlePostAdmission(msg: ServerMessage): Promise<void> {
@@ -1303,6 +1487,7 @@ export class RoomClient {
     // events arrive together. Signaling replies are independently correlated.
     const task = this.consumeQueue.then(async () => {
       if (!current()) return;
+      if (kind === 'video' && !this.selectedVideos.has(producerId)) return;
       try {
         const track =
           media.getConsumerTrackByProducer?.(producerId) ?? (await media.consume(producerId));
@@ -1310,14 +1495,19 @@ export class RoomClient {
           media.closeConsumerByProducer(producerId);
           return;
         }
+        if (kind === 'video' && !this.selectedVideos.has(producerId)) {
+          await media.retireConsumerByProducer(producerId);
+          return;
+        }
         this.failedConsumes.delete(producerId);
         if (this.hiddenParticipants.has(participantId))
           media.setConsumerHiddenByProducer(producerId, true);
         const quality = this.videoQualities.get(participantId);
         if (quality && kind === 'video') media.setConsumerQualityByProducer(producerId, quality);
-        const sizeCap = this.videoSizeCaps.get(participantId);
-        if (sizeCap !== undefined && kind === 'video' && source !== 'screen')
-          media.setConsumerSizeCapByProducer(producerId, sizeCap);
+        if (kind === 'video') {
+          this.applyVideoSizeCap(participantId, producerId, source);
+          this.deferredVideos.delete(producerId);
+        }
         if (!this.pausedProducers.has(producerId)) {
           this.events.onRemoteTrack(
             participantId,
@@ -1329,6 +1519,7 @@ export class RoomClient {
         }
       } catch (error) {
         if (!current()) return;
+        if (kind === 'video' && !this.selectedVideos.has(producerId)) return;
         this.failedConsumes.add(producerId);
         console.warn('[room] remote media unavailable:', producerId, error);
         this.events.onRemoteMediaUnavailable?.(
@@ -1457,6 +1648,8 @@ export class RoomClient {
         this.hiddenParticipants.delete(msg.participantId);
         this.videoQualities.delete(msg.participantId);
         this.videoSizeCaps.delete(msg.participantId);
+        this.receiveVisibility.delete(videoTileKey(msg.participantId));
+        this.receiveVisibility.delete(videoTileKey(msg.participantId, 'screen'));
         // Clean up paused state for this participant's producers
         const leaving = this.participants.get(msg.participantId);
         if (leaving) {
@@ -1469,6 +1662,7 @@ export class RoomClient {
         this.participants.delete(msg.participantId);
         this.events.onParticipantLeft(msg.participantId, leaving?.name);
         this.events.onParticipantsChanged(this.participants);
+        this.scheduleReceiveSelection();
         break;
       }
       case 'newProducer': {
@@ -1481,11 +1675,12 @@ export class RoomClient {
           });
         }
         this.events.onParticipantsChanged(this.participants);
-        // Auto-consume the new producer
-        this.observeTask(
-          this.consumeProducer(msg.participantId, msg.producerId, msg.kind, msg.source),
-          'Receiving media',
-        );
+        if (msg.kind === 'video') this.scheduleReceiveSelection();
+        else
+          this.observeTask(
+            this.consumeProducer(msg.participantId, msg.producerId, msg.kind, msg.source),
+            'Receiving media',
+          );
         break;
       }
       case 'producerClosed': {
@@ -1505,6 +1700,7 @@ export class RoomClient {
           }
         }
         this.events.onParticipantsChanged(this.participants);
+        this.scheduleReceiveSelection();
         break;
       }
       case 'iceRestarted': {
@@ -1548,6 +1744,7 @@ export class RoomClient {
             break;
           }
         }
+        this.scheduleReceiveSelection();
         break;
       }
       case 'producerResumed': {
@@ -1557,12 +1754,13 @@ export class RoomClient {
             const meta = p.producers.get(msg.producerId)!;
             console.log(`[room] producer ${msg.producerId} resumed → showing ${meta.kind} tile`);
             const track = this.media?.getConsumerTrackByProducer(msg.producerId);
-            if (track) {
+            if (track && (meta.kind !== 'video' || this.selectedVideos.has(msg.producerId))) {
               this.events.onRemoteTrack(pid, p.name, track, meta.kind, meta.source);
             }
             break;
           }
         }
+        this.scheduleReceiveSelection();
         break;
       }
       case 'activeSpeaker': {
@@ -1591,6 +1789,7 @@ export class RoomClient {
           }
         }
         this.events.onParticipantsChanged(this.participants);
+        this.scheduleReceiveSelection();
         break;
       }
       case 'camBanned': {
@@ -1815,6 +2014,7 @@ export class RoomClient {
     if (oldCamBanned !== this.localCamBanned && this.localId)
       this.events.onModeration(this.localCamBanned ? 'camBanned' : 'camUnbanned', this.localId);
     if (this._roomSettings) this.events.onRoomSettingsChanged(this._roomSettings);
+    this.scheduleReceiveSelection();
     for (const participant of this.participants.values()) {
       for (const [producerId, metadata] of participant.producers) {
         if (this.pausedProducers.has(producerId)) {
@@ -1827,7 +2027,7 @@ export class RoomClient {
             );
         } else if (oldPaused.has(producerId)) {
           const track = this.media?.getConsumerTrackByProducer(producerId);
-          if (track)
+          if (track && (metadata.kind !== 'video' || this.selectedVideos.has(producerId)))
             this.events.onRemoteTrack(
               participant.id,
               participant.name,
@@ -1838,7 +2038,7 @@ export class RoomClient {
         }
         // Reuse existing consumers, and retry previously missing ones. Metadata
         // identity and membership generation prevent late work restoring a tile.
-        if (!this.media?.getConsumerTrackByProducer(producerId)) {
+        if (metadata.kind === 'audio' && !this.media?.getConsumerTrackByProducer(producerId)) {
           this.observeTask(
             this.consumeProducer(participant.id, producerId, metadata.kind, metadata.source),
             'Receiving media',

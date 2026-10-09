@@ -87,6 +87,7 @@ async function fixture(t) {
   };
   const { MediaControls } = await loadTypeScript('src/media-controls.ts', {
     modules: {
+      './receive-policy': await loadTypeScript('src/receive-policy.ts'),
       './media': {},
       './media-controls.css': {},
       './settings-dialog': {},

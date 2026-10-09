@@ -73,6 +73,7 @@ For complete guest/account setup and LAN ICE addressing see
 | `src/media.ts` | Transports, capture, producers and consumers |
 | `src/media-lifecycle.ts` | Coalesced visibility, page-resume, online and hardware hints without new capture or room entry |
 | `src/media-controls.ts`, `audio-output.ts` | Private device preview, live hardware lists, speaker selection/test and viewer-local playback |
+| `src/receive-policy.ts` | Bounded incoming video selection, visible/pinned priority and data saver/audio-only preferences |
 | `src/layer-cap.ts` | Simulcast layer a remote tile can use at its rendered size, with hysteresis |
 | `src/settings-dialog.ts` | Shared settings tabs and native-dialog dismissal |
 | `src/social-chat.ts`, `chat-store.ts` | Room/PM conversations, composer, bounded replay, removal tombstones and preferences |
@@ -328,3 +329,13 @@ existing reconnect budget. Replacing the account/token, disconnecting or exhaust
 recovery cancels the owned preparation; late responses cannot open another identity's
 socket. Guests connect without a ticket. Authentication renewal on an established
 socket remains a correlated WebSocket frame, with its existing bounded retry policy.
+
+## Incoming media
+
+Receive settings offer Balanced (up to nine incoming videos), Data saver (up to
+four, lowest simulcast layer) and Audio only. Cameras and screen shares follow
+the same policy and retain identical tile dimensions. Visible and pinned tiles
+get priority; offscreen videos are unsubscribed, and a hidden tab keeps only an
+explicit picture-in-picture video. Closing a consumer is acknowledged before a
+replacement is opened. Audio reception and publishing controls are independent.
+The receive choice is saved on this device.

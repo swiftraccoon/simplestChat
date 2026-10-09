@@ -21,6 +21,7 @@ async function roomWithReplies(replies, telemetry = () => {}) {
   };
   const { RoomClient, RoomPasswordRequiredError } = await loadTypeScript('src/room.ts', {
     modules: {
+      './receive-policy': await loadTypeScript('src/receive-policy.ts'),
       './media': {
         MediaManager: class {
           async setup() {}

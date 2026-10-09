@@ -5,7 +5,10 @@ import { loadTypeScript } from './source-loader.mjs';
 async function settingsSender() {
   const messages = [];
   const { RoomClient } = await loadTypeScript('src/room.ts', {
-    modules: { './media': { MediaManager: class {} } },
+    modules: {
+      './receive-policy': await loadTypeScript('src/receive-policy.ts'),
+      './media': { MediaManager: class {} },
+    },
   });
   const room = new RoomClient(
     {

@@ -11,6 +11,12 @@ import './media-controls.css';
 import { configureSettingsDialog } from './settings-dialog';
 import './settings-dialog.css';
 import { AudioOutput, SpeakerTest, observeMediaDevices, outputErrorMessage } from './audio-output';
+import {
+  loadReceiveMode,
+  normalizeReceiveMode,
+  saveReceiveMode,
+  type ReceiveMode,
+} from './receive-policy';
 
 interface MediaControlsRoom {
   setCapturePreferences(preferences: CapturePreferences): void;
@@ -20,6 +26,7 @@ interface MediaControlsRoom {
   switchMic(deviceId: string): Promise<void>;
   setRemoteMediaHidden(participantId: string, hidden: boolean): void;
   setRemoteVideoQuality(participantId: string, quality: RemoteVideoQuality): void;
+  setReceiveMode(mode: ReceiveMode): void;
 }
 
 interface MediaControlsOptions {
@@ -410,6 +417,31 @@ export class MediaControls {
     });
     label.append(slider);
     toolbar.append(label);
+    const receiveLabel = document.createElement('label');
+    receiveLabel.textContent = 'Incoming video';
+    const receive = document.createElement('select');
+    receive.setAttribute('aria-label', 'Incoming video');
+    receive.title =
+      'Balanced: up to 9 videos. Data saver: up to 4 at low quality. Audio only: no incoming video. Your camera and microphone are unchanged.';
+    for (const [value, title] of [
+      ['balanced', 'Balanced'],
+      ['data-saver', 'Data saver'],
+      ['audio-only', 'Audio only'],
+    ]) {
+      receive.add(new Option(title, value));
+    }
+    receive.value = loadReceiveMode();
+    receive.addEventListener('change', () => {
+      const mode = normalizeReceiveMode(receive.value);
+      saveReceiveMode(mode);
+      this.options.getRoom()?.setReceiveMode(mode);
+      for (const mounted of this.toolbars) {
+        const select = mounted.querySelector('select');
+        if (select) select.value = mode;
+      }
+    });
+    receiveLabel.append(receive);
+    toolbar.append(receiveLabel);
     container.append(toolbar);
     this.toolbars.add(toolbar);
   }

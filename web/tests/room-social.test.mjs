@@ -191,7 +191,10 @@ async function harness(options = {}) {
     };
   }
   const { RoomClient } = await loadTypeScript('src/room.ts', {
-    modules: { './media': { MediaManager: Media } },
+    modules: {
+      './receive-policy': await loadTypeScript('src/receive-policy.ts'),
+      './media': { MediaManager: Media },
+    },
     globals,
   });
   const room = new RoomClient(signaling, events);

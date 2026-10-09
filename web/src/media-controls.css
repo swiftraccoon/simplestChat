@@ -148,13 +148,22 @@
   min-width: 0;
   font: inherit;
 }
-.personal-media-controls select {
+.personal-media-controls select,
+.media-controls-toolbar select {
   background: var(--surface);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
   color: var(--text);
   padding: 0.5rem;
   max-width: 100%;
+}
+.video-deferred-notice {
+  position: absolute;
+  inset: 45% 0.5rem auto;
+  padding: 0.4rem;
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--text-dim);
 }
 .media-advanced {
   border-top: 1px solid var(--border);

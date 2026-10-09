@@ -449,17 +449,17 @@ async function lifecycleRecovery(viewer) {
   });
   await tile.locator('.personal-media-dismiss').click();
   await viewer.evaluate(() => {
+    document.querySelector('.video-tile:not(.local) video').pause();
     Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
     document.dispatchEvent(new Event('visibilitychange'));
     window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
-    document.querySelector('.video-tile:not(.local) video').pause();
     for (let index = 0; index < 30; index++) {
       window.dispatchEvent(new Event('online'));
       navigator.mediaDevices.dispatchEvent(new Event('devicechange'));
     }
   });
   await viewer.waitForTimeout(350);
-  assert.equal(await tile.locator('video').evaluate((video) => video.paused), true);
+  assert.equal(await tile.locator('video').count(), 0, 'hidden pages release incoming video');
   stage = 'lifecycle-visible-playback';
   await viewer.evaluate(() => {
     delete document.visibilityState;
@@ -468,7 +468,7 @@ async function lifecycleRecovery(viewer) {
     for (let index = 0; index < 30; index++) window.dispatchEvent(new Event('online'));
   });
   await viewer.waitForFunction(
-    () => !document.querySelector('.video-tile:not(.local) video').paused,
+    () => document.querySelector('.video-tile:not(.local) video')?.paused === false,
   );
   assert.deepEqual(
     await tile.locator('video').evaluate((video) => ({ muted: video.muted, volume: video.volume })),
@@ -521,6 +521,55 @@ async function lifecycleRecovery(viewer) {
   });
 }
 
+async function receiveBudget(viewer, publisher) {
+  stage = 'receive-video-modes';
+  const tile = viewer.locator('.video-tile:not(.local)').first();
+  const before = await tile.boundingBox();
+  const captures = await viewer.evaluate(() => window.__mediaProduct.captures);
+  const publisherCaptures = await publisher.evaluate(() => window.__mediaProduct.captures);
+  await openRoomMenu(viewer);
+  const mode = viewer.getByLabel('Incoming video', { exact: true });
+  await mode.selectOption('audio-only');
+  await viewer.waitForFunction(
+    () => document.querySelectorAll('.video-tile:not(.local) video').length === 0,
+  );
+  assert.equal(await tile.locator('.video-deferred-notice').textContent(), 'Audio only');
+  const after = await tile.boundingBox();
+  assert.ok(
+    Math.abs(before.width - after.width) <= 1 && Math.abs(before.height - after.height) <= 1,
+    'deferred video keeps its existing tile dimensions',
+  );
+  await mode.selectOption('data-saver');
+  await progressing(viewer, 'data-saver-native-decoding');
+  await mode.selectOption('balanced');
+  await viewer.locator('#room-more-btn').click();
+  stage = 'offscreen-video-reclaim';
+  await tile.evaluate((element) => {
+    element.style.transform = 'translateY(100000px)';
+  });
+  await viewer.waitForFunction(
+    () => document.querySelectorAll('.video-tile:not(.local) video').length === 0,
+  );
+  assert.equal(
+    await tile.locator('.video-deferred-notice').textContent(),
+    'Video resumes when visible',
+  );
+  await tile.evaluate((element) => {
+    element.style.transform = '';
+  });
+  await progressing(viewer, 'visible-tile-resubscribes-and-decodes');
+  assert.equal(await viewer.evaluate(() => window.__mediaProduct.captures), captures);
+  assert.equal(await publisher.evaluate(() => window.__mediaProduct.captures), publisherCaptures);
+  assert.equal(
+    await publisher.locator('#cam-btn').evaluate((button) => button.classList.contains('active')),
+    true,
+  );
+  report.checks.push({
+    name: 'receive-modes-reclaim-offscreen-video-preserve-layout-and-publishing',
+    passed: true,
+  });
+}
+
 async function main() {
   const browser = await playwright[options.name].launch(options.launchOptions);
   try {
@@ -564,6 +613,7 @@ async function main() {
     await publisher.evaluate(() => {
       window.__mediaProduct.rejectCameraQuality = false;
     });
+    await receiveBudget(viewer, publisher);
     stage = 'lifecycle-hints';
     await lifecycleRecovery(viewer);
     if (options.name === 'chromium') {

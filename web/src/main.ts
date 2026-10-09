@@ -35,6 +35,7 @@ import {
 import { configureSettingsDialog } from './settings-dialog';
 import { avatarColors, chatColor } from './avatar-colors';
 import { spatialLayerForRenderedWidth } from './layer-cap';
+import { type VideoDeferredReason } from './receive-policy';
 import { observeVideoLayout } from './video-layout';
 import './community.css';
 import './participant-hovercard.css';
@@ -387,6 +388,26 @@ let cameraTogglePending = false;
 let microphoneTogglePending = false;
 const remoteTiles = new Map<string, HTMLDivElement>();
 let pinnedTileKey: string | null = null;
+let pictureInPictureVideo: HTMLVideoElement | null = null;
+const tileVisibility =
+  typeof IntersectionObserver === 'undefined'
+    ? null
+    : new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            const tile = entry.target as HTMLElement;
+            if (!tile.isConnected) continue;
+            const participantId = tile.dataset['participantId'];
+            if (participantId)
+              room?.setRemoteVideoVisibility(
+                participantId,
+                tile.dataset['videoSource'],
+                entry.isIntersecting,
+              );
+          }
+        },
+        { threshold: 0.01 },
+      );
 /** Size observers per camera tile: the layer a tile can show caps what it requests. */
 const tileLayerCaps = new Map<string, { observer: ResizeObserver; layer: number | null }>();
 
@@ -2486,6 +2507,7 @@ joinBtn.addEventListener(
         onLocalVideoStalled: handleLocalVideoStalled,
         onRemoteTrack: renderRemoteTrack,
         onRemoteTrackRemoved: removeRemoteTrack,
+        onRemoteVideoDeferred: renderDeferredVideo,
         onRemoteMediaUnavailable: (_participantId, participantName, kind, _source, reason) => {
           showToast(`Cannot receive ${participantName}'s ${kind}: ${reason}`, 6000);
         },
@@ -2909,6 +2931,8 @@ async function leaveRoomAndShowHome(): Promise<void> {
   clearChildren(chatMessages);
   unreadBadge.hidden = true;
   scrollBottomBtn.hidden = true;
+  tileVisibility?.disconnect();
+  pictureInPictureVideo = null;
   remoteTiles.clear();
   setPinnedTile(null);
   lobbyWaiters.clear();
@@ -3689,6 +3713,8 @@ function setPinnedTile(key: string | null): void {
     }
   }
   videoGrid.classList.toggle('has-pinned', pinnedTileKey !== null);
+  const tile = pinnedTileKey === null ? null : remoteTiles.get(pinnedTileKey);
+  room?.setPinnedRemoteVideo(tile?.dataset['participantId'] ?? null, tile?.dataset['videoSource']);
 }
 
 function updateVideoGridCount(): void {
@@ -3869,13 +3895,11 @@ function sortParticipantRoster(participants: Participant[]): void {
   );
 }
 
-function renderRemoteTrack(
+function ensureRemoteTile(
   participantId: string,
   participantName: string,
-  track: MediaStreamTrack,
-  _kind: 'audio' | 'video',
   source?: string,
-): void {
+): HTMLDivElement {
   const isScreen = source === 'screen' || source === 'screen-audio';
   const tileKey = isScreen ? `${participantId}:screen` : participantId;
   let tile = remoteTiles.get(tileKey);
@@ -3884,6 +3908,7 @@ function renderRemoteTrack(
     tile = document.createElement('div');
     tile.className = isScreen ? 'video-tile screen-share' : 'video-tile';
     tile.dataset['participantId'] = participantId;
+    if (isScreen) tile.dataset['videoSource'] = 'screen';
 
     // Context menu for moderation on remote tiles
     tile.addEventListener('contextmenu', (e) => {
@@ -3922,14 +3947,73 @@ function renderRemoteTrack(
     remoteTiles.set(tileKey, tile);
     videoGrid.appendChild(tile);
     updateVideoGridCount();
+    tileVisibility?.observe(tile);
   }
 
+  return tile;
+}
+
+function renderDeferredVideo(
+  participantId: string,
+  participantName: string,
+  source: string | undefined,
+  reason: VideoDeferredReason,
+): void {
+  const tile = ensureRemoteTile(participantId, participantName, source);
+  tile.dataset['videoDeferred'] = 'true';
+  const video = tile.querySelector('video');
+  if (video) {
+    video.srcObject = null;
+    video.remove();
+  }
+  stopObservingTileSize(source === 'screen' ? `${participantId}:screen` : participantId);
+  const avatar = tile.querySelector<HTMLElement>('.no-video-avatar');
+  if (avatar) avatar.style.display = 'none';
+  let notice = tile.querySelector<HTMLElement>('.video-deferred-notice');
+  if (!notice) {
+    notice = document.createElement('div');
+    notice.className = 'video-deferred-notice';
+    tile.append(notice);
+  }
+  const reasons = {
+    'audio-only': 'Audio only',
+    offscreen: 'Video resumes when visible',
+    limit: 'Pin to watch this video',
+    hidden: 'Video hidden for you',
+  };
+  notice.textContent = reasons[reason];
+  mediaControls.attachTile(tile, participantId, participantName);
+}
+
+function renderRemoteTrack(
+  participantId: string,
+  participantName: string,
+  track: MediaStreamTrack,
+  _kind: 'audio' | 'video',
+  source?: string,
+): void {
+  const isScreen = source === 'screen' || source === 'screen-audio';
+  const tileKey = isScreen ? `${participantId}:screen` : participantId;
+  const tile = ensureRemoteTile(participantId, participantName, source);
   if (track.kind === 'video') {
+    delete tile.dataset['videoDeferred'];
+    tile.querySelector('.video-deferred-notice')?.remove();
     let video = tile.querySelector('video');
     if (!video) {
       video = document.createElement('video');
       video.autoplay = true;
       video.playsInline = true;
+      const ownedVideo = video;
+      video.addEventListener('enterpictureinpicture', () => {
+        if (remoteTiles.get(tileKey) !== tile || tile.querySelector('video') !== ownedVideo) return;
+        pictureInPictureVideo = ownedVideo;
+        room?.setPictureInPictureVideo(participantId, source);
+      });
+      video.addEventListener('leavepictureinpicture', () => {
+        if (pictureInPictureVideo !== ownedVideo) return;
+        pictureInPictureVideo = null;
+        room?.setPictureInPictureVideo(null);
+      });
       tile.insertBefore(video, tile.firstChild);
     }
     observeFirstVideoFrame(video, telemetry.record);
@@ -3961,6 +4045,8 @@ function removeRemoteTrack(
   if (!tile) return;
 
   if (kind === 'video') {
+    delete tile.dataset['videoDeferred'];
+    tile.querySelector('.video-deferred-notice')?.remove();
     stopObservingTileSize(tileKey);
     const video = tile.querySelector('video');
     if (video) {
@@ -3978,9 +4064,14 @@ function removeRemoteTrack(
   }
 
   // Remove tile entirely if no active media remains
-  if (!tile.querySelector('video') && !tile.querySelector('audio')) {
+  if (
+    !tile.querySelector('video') &&
+    !tile.querySelector('audio') &&
+    !tile.dataset['videoDeferred']
+  ) {
     stopObservingTileSize(tileKey);
     mediaControls.detachTile(tile);
+    tileVisibility?.unobserve(tile);
     tile.remove();
     remoteTiles.delete(tileKey);
     updateVideoGridCount();
@@ -3993,12 +4084,14 @@ function handleParticipantLeft(participantId: string, participantName?: string):
   const tile = remoteTiles.get(participantId);
   if (tile) {
     stopObservingTileSize(participantId);
+    tileVisibility?.unobserve(tile);
     tile.remove();
     remoteTiles.delete(participantId);
   }
   // Also clean up screen share tile if present
   const screenTile = remoteTiles.get(`${participantId}:screen`);
   if (screenTile) {
+    tileVisibility?.unobserve(screenTile);
     screenTile.remove();
     remoteTiles.delete(`${participantId}:screen`);
   }

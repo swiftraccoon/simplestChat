@@ -10,6 +10,7 @@ const signalingModule = await loadTypeScript('src/signaling.ts', {
 });
 const { mediaErrorMessage } = await loadTypeScript('src/media-controls.ts', {
   modules: {
+    './receive-policy': await loadTypeScript('src/receive-policy.ts'),
     './media': {},
     './media-controls.css': {},
     './settings-dialog': {},
