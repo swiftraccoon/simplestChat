@@ -5,8 +5,8 @@ CREATE TABLE account_notification_preferences (
     user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     private_messages BOOLEAN NOT NULL DEFAULT TRUE,
     mentions BOOLEAN NOT NULL DEFAULT TRUE,
-    quiet_start SMALLINT,
-    quiet_end SMALLINT,
+    quiet_start BIGINT,
+    quiet_end BIGINT,
     quiet_timezone TEXT,
     CHECK ((quiet_start IS NULL AND quiet_end IS NULL AND quiet_timezone IS NULL)
         OR (quiet_start IS NOT NULL AND quiet_end IS NOT NULL AND quiet_timezone IS NOT NULL

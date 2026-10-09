@@ -22,8 +22,8 @@ const MAX_CONVERSATIONS: i64 = 100;
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct QuietHours {
-    start_minute: i16,
-    end_minute: i16,
+    start_minute: i64,
+    end_minute: i64,
     time_zone: String,
 }
 
@@ -62,8 +62,8 @@ pub struct NotificationPreferences {
 struct StoredPolicy {
     private_messages: bool,
     mentions: bool,
-    quiet_start: Option<i16>,
-    quiet_end: Option<i16>,
+    quiet_start: Option<i64>,
+    quiet_end: Option<i64>,
     quiet_timezone: Option<String>,
 }
 

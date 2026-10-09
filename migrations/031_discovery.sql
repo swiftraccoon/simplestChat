@@ -16,7 +16,8 @@ CREATE INDEX contacts_high ON contacts (high_id);
 CREATE INDEX contacts_requester ON contacts (requester_id, requested_at);
 CREATE TABLE saved_rooms (
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    room_id VARCHAR(128) NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+    room_id TEXT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE
+        CHECK (char_length(room_id) <= 128),
     favorite BOOLEAN NOT NULL DEFAULT false,
     last_visited TIMESTAMPTZ,
     PRIMARY KEY (user_id, room_id),
