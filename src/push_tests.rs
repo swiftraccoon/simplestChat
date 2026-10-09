@@ -138,6 +138,8 @@ impl IsolatedPushDatabase {
             CREATE TABLE push_test.chat_messages (LIKE public.chat_messages INCLUDING ALL);
             CREATE TABLE push_test.chat_read_cursors (LIKE public.chat_read_cursors INCLUDING ALL);
             CREATE TABLE push_test.push_keys (LIKE public.push_keys INCLUDING ALL);
+            CREATE TABLE push_test.account_notification_preferences (LIKE public.account_notification_preferences INCLUDING ALL);
+            CREATE TABLE push_test.conversation_notification_preferences (LIKE public.conversation_notification_preferences INCLUDING ALL);
             CREATE TABLE push_test.push_subscriptions (LIKE public.push_subscriptions INCLUDING ALL);")
             .execute(&mut admin).await.unwrap();
         let options = options.options([("search_path", "push_test")]);
@@ -415,5 +417,157 @@ async fn database_notifications_bound_retries_and_remove_expired_endpoints() {
         .await
         .unwrap();
     assert_eq!(count, 0);
+    db.close().await;
+}
+
+#[tokio::test]
+#[ignore = "requires a migrated disposable TEST_DATABASE_URL"]
+async fn database_notifications_obey_account_and_peer_policy_without_advancing_unread() {
+    let db = IsolatedPushDatabase::new().await;
+    let user = db.user().await;
+    let claims = db.session(user).await;
+    save_subscription(
+        &db.pool,
+        &claims,
+        "https://web.push.apple.com/isolated-policy",
+    )
+    .await
+    .unwrap();
+    let (message, _) = db.incoming(user).await;
+    let sender: Uuid = sqlx::query_scalar("SELECT sender_account FROM chat_messages WHERE id=$1")
+        .bind(message)
+        .fetch_one(&db.pool)
+        .await
+        .unwrap();
+    enqueue(&db.pool, user).await;
+    db.due().await;
+    let pending = claim_pending(&db.pool).await.unwrap().pop().unwrap();
+    assert!(still_unread(&db.pool, &pending).await.unwrap());
+    sqlx::query(
+        "INSERT INTO account_notification_preferences(user_id,private_messages) VALUES($1,FALSE)",
+    )
+    .bind(user)
+    .execute(&db.pool)
+    .await
+    .unwrap();
+    assert!(!still_unread(&db.pool, &pending).await.unwrap());
+    sqlx::query(
+        "UPDATE account_notification_preferences SET private_messages=TRUE WHERE user_id=$1",
+    )
+    .bind(user)
+    .execute(&db.pool)
+    .await
+    .unwrap();
+    sqlx::query("INSERT INTO conversation_notification_preferences(user_id,peer_id,muted) VALUES($1,$2,TRUE)").bind(user).bind(sender).execute(&db.pool).await.unwrap();
+    assert!(!still_unread(&db.pool, &pending).await.unwrap());
+    sqlx::query("UPDATE conversation_notification_preferences SET muted=FALSE,snoozed_until=now()+interval '1 hour'").execute(&db.pool).await.unwrap();
+    assert!(!still_unread(&db.pool, &pending).await.unwrap());
+    let after = Utc::now() + chrono::Duration::hours(2);
+    assert!(still_unread_at(&db.pool, &pending, after).await.unwrap());
+    sqlx::query(
+        "UPDATE conversation_notification_preferences SET snoozed_until=now()-interval '1 second'",
+    )
+    .execute(&db.pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "UPDATE users SET preferences=jsonb_build_object('allowPrivateMessages',FALSE) WHERE id=$1",
+    )
+    .bind(user)
+    .execute(&db.pool)
+    .await
+    .unwrap();
+    assert!(!still_unread(&db.pool, &pending).await.unwrap());
+    sqlx::query("UPDATE users SET preferences=jsonb_build_object('ignored',jsonb_build_array(jsonb_build_object('id',$2::text,'name','Muted peer'))) WHERE id=$1")
+        .bind(user).bind(sender).execute(&db.pool).await.unwrap();
+    assert!(!still_unread(&db.pool, &pending).await.unwrap());
+    sqlx::query("UPDATE users SET preferences='{}'::jsonb WHERE id=$1")
+        .bind(user)
+        .execute(&db.pool)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE conversation_notification_preferences SET muted=TRUE")
+        .execute(&db.pool)
+        .await
+        .unwrap();
+    db.incoming(user).await;
+    assert!(
+        still_unread(&db.pool, &pending).await.unwrap(),
+        "an unmuted sender still alerts when another conversation is muted"
+    );
+    let unread: i64 = sqlx::query_scalar("SELECT count(*) FROM chat_messages")
+        .fetch_one(&db.pool)
+        .await
+        .unwrap();
+    let read: i64 = sqlx::query_scalar("SELECT count(*) FROM chat_read_cursors")
+        .fetch_one(&db.pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        (unread, read),
+        (2, 0),
+        "policy never changes messages or read cursors"
+    );
+    db.close().await;
+}
+
+#[tokio::test]
+#[ignore = "requires a migrated disposable TEST_DATABASE_URL"]
+async fn database_notifications_quiet_hours_follow_midnight_and_daylight_saving() {
+    let db = IsolatedPushDatabase::new().await;
+    let user = db.user().await;
+    let claims = db.session(user).await;
+    save_subscription(
+        &db.pool,
+        &claims,
+        "https://web.push.apple.com/isolated-quiet",
+    )
+    .await
+    .unwrap();
+    db.incoming(user).await;
+    enqueue(&db.pool, user).await;
+    db.due().await;
+    let pending = claim_pending(&db.pool).await.unwrap().pop().unwrap();
+    sqlx::query("INSERT INTO account_notification_preferences(user_id,quiet_start,quiet_end,quiet_timezone) VALUES($1,1320,420,'America/New_York')")
+        .bind(user).execute(&db.pool).await.unwrap();
+    for (instant, allowed) in [
+        ("2026-07-01T01:59:59Z", true),
+        ("2026-07-01T02:00:00Z", false),
+        ("2026-07-01T04:00:00Z", false),
+        ("2026-07-01T10:59:59Z", false),
+        ("2026-07-01T11:00:00Z", true),
+        ("2026-01-01T11:59:59Z", false),
+        ("2026-01-01T12:00:00Z", true),
+    ] {
+        assert_eq!(
+            still_unread_at(&db.pool, &pending, instant.parse().unwrap())
+                .await
+                .unwrap(),
+            allowed,
+            "{instant}"
+        );
+    }
+    sqlx::query("UPDATE account_notification_preferences SET quiet_start=60,quiet_end=120")
+        .execute(&db.pool)
+        .await
+        .unwrap();
+    for (instant, allowed) in [
+        ("2026-11-01T04:59:59Z", true),
+        ("2026-11-01T05:00:00Z", false),
+        ("2026-11-01T05:59:59Z", false),
+        ("2026-11-01T06:00:00Z", false),
+        ("2026-11-01T06:59:59Z", false),
+        ("2026-11-01T07:00:00Z", true),
+        ("2026-03-08T06:59:59Z", false),
+        ("2026-03-08T07:00:00Z", true),
+    ] {
+        assert_eq!(
+            still_unread_at(&db.pool, &pending, instant.parse().unwrap())
+                .await
+                .unwrap(),
+            allowed,
+            "{instant}"
+        );
+    }
     db.close().await;
 }

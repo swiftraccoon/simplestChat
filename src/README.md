@@ -29,6 +29,7 @@ HTTP / WebSocket
 | One-use WebSocket authentication tickets | `auth/ws_tickets.rs` |
 | Membership, lobby, chat and reconnect state | `room/mod.rs`, `room/social.rs` |
 | Durable room history, PM inbox, read positions and chat expiry | `room/history.rs` |
+| Account notification rules, quiet hours and per-conversation overrides | `auth/notifications.rs` |
 | Optional session-owned PM push, retained VAPID identity and bounded delivery queue | `push.rs` |
 | Ordered persistence and uncertain-write handling | `room/control.rs` |
 | Persistent room/community API | `room/api.rs`, `room/community.rs`, `room/settings.rs` |
@@ -283,3 +284,11 @@ Native source patches and security checks are documented in
 [vendor/README.md](../vendor/README.md). Cargo audit alone does not inspect bundled
 C/C++ code. Preserve provenance, pinned OpenSSL and the native-version CI gates
 when changing dependencies.
+
+## Notification policy
+
+Migration 032 stores global notification policy and at most 100 conversation
+overrides per account. Quiet hours use a validated PostgreSQL time-zone name,
+start inclusive/end exclusive, including midnight and daylight-saving changes.
+Snoozes are limited to 30 days. Push eligibility rechecks current preferences,
+per-peer overrides, unread state and existing PM consent before dispatch.

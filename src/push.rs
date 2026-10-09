@@ -262,17 +262,39 @@ async fn claim_pending(pool: &PgPool) -> Result<Vec<Pending>, sqlx::Error> {
 }
 
 async fn still_unread(pool: &PgPool, pending: &Pending) -> Result<bool, sqlx::Error> {
+    still_unread_at(pool, pending, Utc::now()).await
+}
+
+// Binding one instant keeps quiet-hour, snooze and unread checks consistent,
+// including both occurrences of a repeated daylight-saving wall-clock minute.
+async fn still_unread_at(
+    pool: &PgPool,
+    pending: &Pending,
+    now: chrono::DateTime<Utc>,
+) -> Result<bool, sqlx::Error> {
     sqlx::query_scalar(
         "SELECT EXISTS(SELECT 1 FROM push_subscriptions p
          JOIN sessions s ON s.id=p.session_id AND s.user_id=p.user_id AND s.expires_at>clock_timestamp()
          JOIN users u ON u.id=p.user_id AND u.auth_version=p.auth_version
+         LEFT JOIN account_notification_preferences n ON n.user_id=p.user_id
+         CROSS JOIN LATERAL (SELECT (extract(hour FROM ($2::timestamptz AT TIME ZONE COALESCE(n.quiet_timezone,'UTC')))*60
+             + extract(minute FROM ($2::timestamptz AT TIME ZONE COALESCE(n.quiet_timezone,'UTC'))))::integer AS minute) local_time
          WHERE p.id=$1 AND p.pending_since>now()-INTERVAL '1 hour'
+         AND COALESCE(u.preferences->'allowPrivateMessages','true'::jsonb)<>'false'::jsonb
+         AND COALESCE(n.private_messages,TRUE)
+         AND (n.quiet_start IS NULL OR NOT CASE WHEN n.quiet_start<n.quiet_end
+             THEN local_time.minute>=n.quiet_start AND local_time.minute<n.quiet_end
+             ELSE local_time.minute>=n.quiet_start OR local_time.minute<n.quiet_end END)
          AND EXISTS(SELECT 1 FROM chat_messages m LEFT JOIN chat_read_cursors r
            ON r.user_id=p.user_id AND r.conversation=m.conversation
+           LEFT JOIN conversation_notification_preferences c ON c.user_id=p.user_id AND c.peer_id=m.sender_account
            WHERE m.recipient_account=p.user_id AND m.expires_at>now()
+           AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(u.preferences->'ignored')='array'
+             THEN u.preferences->'ignored' ELSE '[]'::jsonb END) ignored WHERE ignored->>'id'=m.sender_account::text)
+           AND NOT COALESCE(c.muted,FALSE) AND (c.snoozed_until IS NULL OR c.snoozed_until<=$2)
            AND m.body->>'removedAt' IS NULL
            AND (r.message_id IS NULL OR r.expires_at<=now() OR (m.sent_at,m.id)>(r.sent_at,r.message_id))))",
-    ).bind(pending.id).fetch_one(pool).await
+    ).bind(pending.id).bind(now).fetch_one(pool).await
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

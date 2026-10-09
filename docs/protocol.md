@@ -893,3 +893,23 @@ other devices retain their independent opt-in. Provider delivery is best effort,
 and a notification already accepted by a provider may arrive after a read or
 sign-out. The app does not promise immediate recall, offline chat access, or
 end-to-end encryption for stored messages.
+
+## Account notification policy
+
+`GET /api/auth/notification-preferences` returns `{privateMessages,mentions,
+quietHours,conversations}`. `quietHours` is null or `{startMinute,endMinute,
+timeZone}` (minutes 0–1439, unequal; IANA zone). PUT on that endpoint accepts the
+three global fields. PUT `/api/auth/notification-preferences/conversations/{peer}`
+accepts `{muted,snoozedUntil}`; the timestamp is null or a future RFC3339 instant
+within 30 days. False/null deletes the override. Both writes return the complete
+policy. There are at most 100 overrides per account; defaults allow PM/mention
+alerts with no quiet period. Device browser permission is separate.
+
+Conversation entries have `{peerId,muted,snoozedUntil}`. Quiet intervals include
+their start and exclude their end; midnight-crossing intervals and daylight-saving
+changes follow the saved zone. Suppressed alerts are discarded, not replayed when
+the quiet period ends. Browser policy refreshes on focus and every 30 seconds while
+visible; signed-in foreground alerts wait for the first successful load and pause
+if that snapshot is more than 90 seconds old. Messages and unread cursors are
+unaffected. Providers may still deliver a notification already accepted before a
+policy change.

@@ -6,6 +6,7 @@ pub mod discovery;
 pub mod invites;
 pub mod jwt;
 pub mod limiter;
+pub mod notifications;
 pub mod passkeys;
 pub mod password;
 pub mod routes;

@@ -699,6 +699,15 @@ impl SignalingServer {
             )
             .route("/saved-rooms", get(crate::auth::discovery::saved_rooms))
             .route("/saved-rooms/{id}", put(crate::auth::discovery::save_room))
+            .route(
+                "/notification-preferences",
+                get(crate::auth::notifications::get_preferences)
+                    .put(crate::auth::notifications::put_preferences),
+            )
+            .route(
+                "/notification-preferences/conversations/{peer}",
+                put(crate::auth::notifications::put_conversation),
+            )
             .route("/inbox", get(crate::room::history::inbox))
             .route("/inbox/unread", get(crate::room::history::unread_summary))
             .route(
