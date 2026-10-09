@@ -52,7 +52,7 @@ Login, passkeys and refresh remain owned by [AuthManager](../web/src/auth.ts).
 | `passkeyAction` | `POST /api/auth/passkeys/start` | Operation-bound fresh proof or the authorized action result |
 | `passkeyAuthorize` | `POST /api/auth/passkeys/authorize` | Authorized action result after fresh passkey proof |
 | `passkeyEnroll` | `POST /api/auth/passkeys/enroll` | `{ kind: "added" }` or `{ kind: "replaced" }` |
-| `rooms` | `GET /api/rooms` with directory query parameters | `RoomListItem[]` |
+| `rooms` | `GET /api/rooms` with directory query parameters | `RoomListItem[]`, live rooms busiest first, then dormant rooms newest first, across pages |
 | `ownRooms` | `GET /api/rooms/mine` | `RoomListItem[]` |
 | `createRoom` | `POST /api/rooms` | `RoomSettings` |
 | `updateRoomIdentity` | `PATCH /api/rooms/:id/identity` | `RoomListItem` |

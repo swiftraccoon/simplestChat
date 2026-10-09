@@ -185,7 +185,111 @@ pub async fn list_rooms(
         (StatusCode::SERVICE_UNAVAILABLE, "Database not configured").into_response()
     })?;
 
-    let rooms = if let Some(pattern) = search_pattern {
+    let live = server.room_manager().live_room_counts();
+    let rooms = fetch_directory_page(pool, &live, search_pattern.as_deref(), limit, offset)
+        .await
+        .map_err(|error| {
+            crate::db::record_error(&error);
+            warn!(%error, "Failed to list rooms");
+            (StatusCode::INTERNAL_SERVER_ERROR, "Unable to list rooms").into_response()
+        })?;
+
+    let items: Vec<RoomListItem> = rooms
+        .into_iter()
+        .map(|row| room_list_item(&server, row))
+        .collect();
+
+    Ok(Json(items))
+}
+
+/// Live rooms come first, busiest first; a room whose count is unknown (its
+/// lock was held) follows every counted room rather than looking empty.
+pub(crate) fn busiest_first(a: Option<usize>, b: Option<usize>) -> std::cmp::Ordering {
+    match (a, b) {
+        (Some(a), Some(b)) => b.cmp(&a),
+        (Some(_), None) => std::cmp::Ordering::Less,
+        (None, Some(_)) => std::cmp::Ordering::Greater,
+        (None, None) => std::cmp::Ordering::Equal,
+    }
+}
+
+/// How one page splits between the ordered live rooms and the dormant rows the
+/// database pages through after them.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct PageWindow {
+    pub live: std::ops::Range<usize>,
+    pub dormant_limit: i64,
+    pub dormant_offset: i64,
+}
+
+pub(crate) fn page_window(live_len: usize, limit: i64, offset: i64) -> PageWindow {
+    let limit = usize::try_from(limit).unwrap_or(0);
+    let offset = usize::try_from(offset).unwrap_or(0);
+    let start = offset.min(live_len);
+    let end = offset.saturating_add(limit).min(live_len);
+    PageWindow {
+        live: start..end,
+        dormant_limit: i64::try_from(limit - (end - start)).unwrap_or(i64::MAX),
+        dormant_offset: i64::try_from(offset.saturating_sub(live_len)).unwrap_or(i64::MAX),
+    }
+}
+
+/// One directory page: the live rooms first, busiest first, then every room
+/// nobody is in, newest first. `live` is the room manager's snapshot of rooms
+/// with people in them (public or not, listed or not: the queries filter) and
+/// `pattern` a prepared search pattern. The live set is small and bounded by
+/// `MAX_ROOMS`, so it is fetched whole and paged in memory; the dormant rows
+/// keep the indexed `created_at` order and exclude every live id.
+pub(crate) async fn fetch_directory_page(
+    pool: &sqlx::PgPool,
+    live: &[(String, Option<usize>)],
+    pattern: Option<&str>,
+    limit: i64,
+    offset: i64,
+) -> Result<Vec<RoomListRow>, sqlx::Error> {
+    let live_ids: Vec<String> = live.iter().map(|(id, _)| id.clone()).collect();
+    let mut live_rows = if live_ids.is_empty() {
+        Vec::new()
+    } else if let Some(pattern) = pattern {
+        sqlx::query_as::<_, RoomListRow>(
+            r#"SELECT id, display_name, topic, password_hash IS NOT NULL, moderated, description, image_url, secret, name_style, topic_style
+               FROM rooms
+               WHERE secret = false AND id = ANY($1)
+                 AND (display_name || E'\n' || COALESCE(topic, '')) ILIKE $2 ESCAPE E'\\'
+               ORDER BY created_at DESC, id DESC"#,
+        )
+        .bind(&live_ids)
+        .bind(pattern)
+        .fetch_all(pool)
+        .await?
+    } else {
+        sqlx::query_as::<_, RoomListRow>(
+            "SELECT id, display_name, topic, password_hash IS NOT NULL, moderated, description, image_url, secret, name_style, topic_style
+             FROM rooms WHERE secret = false AND id = ANY($1)
+             ORDER BY created_at DESC, id DESC",
+        )
+        .bind(&live_ids)
+        .fetch_all(pool)
+        .await?
+    };
+    let counts: std::collections::HashMap<&str, Option<usize>> = live
+        .iter()
+        .map(|(id, count)| (id.as_str(), *count))
+        .collect();
+    // Stable: rooms with the same count keep the newest-first database order.
+    live_rows.sort_by(|a, b| {
+        busiest_first(
+            counts.get(a.0.as_str()).copied().flatten(),
+            counts.get(b.0.as_str()).copied().flatten(),
+        )
+    });
+    let window = page_window(live_rows.len(), limit, offset);
+    let mut page: Vec<RoomListRow> = live_rows.drain(window.live).collect();
+    if window.dormant_limit == 0 {
+        return Ok(page);
+    }
+
+    let dormant = if let Some(pattern) = pattern {
         // The materialized search stage prevents ORDER BY/LIMIT from making
         // PostgreSQL walk the created_at index and test every row on a miss. It
         // carries only ids and sort keys: descriptions and images are fetched
@@ -195,6 +299,7 @@ pub async fn list_rooms(
                  SELECT id, created_at
                  FROM rooms
                  WHERE secret = false
+                   AND NOT (id = ANY($4))
                    AND (display_name || E'\n' || COALESCE(topic, ''))
                        ILIKE $1 ESCAPE E'\\'
              ),
@@ -209,33 +314,25 @@ pub async fn list_rooms(
              ORDER BY page.created_at DESC, page.id DESC"#,
         )
         .bind(pattern)
-        .bind(limit)
-        .bind(offset)
+        .bind(window.dormant_limit)
+        .bind(window.dormant_offset)
+        .bind(&live_ids)
         .fetch_all(pool)
-        .await
+        .await?
     } else {
         sqlx::query_as::<_, RoomListRow>(
             "SELECT id, display_name, topic, password_hash IS NOT NULL, moderated, description, image_url, secret, name_style, topic_style
-             FROM rooms WHERE secret = false
+             FROM rooms WHERE secret = false AND NOT (id = ANY($3))
              ORDER BY created_at DESC, id DESC LIMIT $1 OFFSET $2",
         )
-        .bind(limit)
-        .bind(offset)
+        .bind(window.dormant_limit)
+        .bind(window.dormant_offset)
+        .bind(&live_ids)
         .fetch_all(pool)
-        .await
-    }
-    .map_err(|error| {
-        crate::db::record_error(&error);
-        warn!(%error, "Failed to list rooms");
-        (StatusCode::INTERNAL_SERVER_ERROR, "Unable to list rooms").into_response()
-    })?;
-
-    let items: Vec<RoomListItem> = rooms
-        .into_iter()
-        .map(|row| room_list_item(&server, row))
-        .collect();
-
-    Ok(Json(items))
+        .await?
+    };
+    page.extend(dormant);
+    Ok(page)
 }
 
 /// POST /api/rooms
@@ -493,6 +590,157 @@ mod tests {
             q: None,
         };
         assert!(list_window(&zero_limit).is_err());
+    }
+
+    /// Live rooms lead every page in busiest-first order, then the dormant rooms
+    /// continue newest first, so "busiest first" survives Load more.
+    #[tokio::test]
+    #[ignore = "requires migrated disposable TEST_DATABASE_URL"]
+    async fn database_directory_pages_live_rooms_busiest_first_then_newest() {
+        use std::str::FromStr;
+        assert_eq!(
+            std::env::var("DISPOSABLE_TEST_DATABASE").as_deref(),
+            Ok("1")
+        );
+        let options = sqlx::postgres::PgConnectOptions::from_str(
+            &std::env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL"),
+        )
+        .expect("valid test PostgreSQL URL");
+        assert!(matches!(options.get_host(), "127.0.0.1" | "::1"));
+        assert!(
+            options
+                .get_database()
+                .is_some_and(|name| name.ends_with("_test"))
+        );
+        let pool = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(2)
+            .connect_with(options)
+            .await
+            .unwrap();
+        let owner = uuid::Uuid::new_v4();
+        let prefix = format!("directory-{}", &owner.to_string()[..8]);
+        sqlx::query("INSERT INTO users(id,email,display_name) VALUES($1,$2,'Directory owner')")
+            .bind(owner)
+            .bind(format!("{owner}@directory.invalid"))
+            .execute(&pool)
+            .await
+            .unwrap();
+        // Six public rooms created oldest to newest, plus a secret one.
+        let ids: Vec<String> = (0..6).map(|index| format!("{prefix}-{index}")).collect();
+        for id in &ids {
+            sqlx::query("INSERT INTO rooms(id,owner_id,display_name) VALUES($1,$2,$1)")
+                .bind(id)
+                .bind(owner)
+                .execute(&pool)
+                .await
+                .unwrap();
+        }
+        let secret = format!("{prefix}-secret");
+        sqlx::query("INSERT INTO rooms(id,owner_id,display_name,secret) VALUES($1,$2,$1,true)")
+            .bind(&secret)
+            .bind(owner)
+            .execute(&pool)
+            .await
+            .unwrap();
+        // Live: room 3 is busiest, room 1 next, room 0's count is unknown; the
+        // secret room and an ad-hoc room never list.
+        let live = vec![
+            (ids[1].clone(), Some(2)),
+            (ids[3].clone(), Some(5)),
+            (ids[0].clone(), None),
+            (secret.clone(), Some(9)),
+            ("ad-hoc-room-not-in-the-database".to_string(), Some(4)),
+        ];
+        let pattern = format!("%{prefix}%");
+        let page = |limit: i64, offset: i64| {
+            let pool = pool.clone();
+            let live = live.clone();
+            let pattern = pattern.clone();
+            async move {
+                fetch_directory_page(&pool, &live, Some(&pattern), limit, offset)
+                    .await
+                    .unwrap()
+                    .into_iter()
+                    .map(|row| row.0)
+                    .collect::<Vec<String>>()
+            }
+        };
+        let expected = [
+            vec![ids[3].clone(), ids[1].clone()],
+            vec![ids[0].clone(), ids[5].clone()],
+            vec![ids[4].clone(), ids[2].clone()],
+            vec![],
+        ];
+        let mut pages = Vec::new();
+        for offset in [0, 2, 4, 6] {
+            pages.push(page(2, offset).await);
+        }
+        let unfiltered = fetch_directory_page(&pool, &live, None, 3, 0)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|row| row.0)
+            .collect::<Vec<String>>();
+        sqlx::query("DELETE FROM rooms WHERE id LIKE $1")
+            .bind(format!("{prefix}%"))
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(owner)
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert_eq!(pages, expected);
+        assert_eq!(
+            unfiltered,
+            vec![ids[3].clone(), ids[1].clone(), ids[0].clone()],
+            "without a search the live rooms still lead the first page"
+        );
+    }
+
+    #[test]
+    fn busiest_first_orders_known_counts_descending_and_unknown_last() {
+        let mut counts = vec![Some(2), None, Some(7), Some(0), None, Some(7)];
+        counts.sort_by(|a, b| busiest_first(*a, *b));
+        assert_eq!(counts, vec![Some(7), Some(7), Some(2), Some(0), None, None]);
+    }
+
+    #[test]
+    fn page_window_takes_live_rooms_before_dormant_rows() {
+        // Three live rooms in pages of two: live+live, live+dormant, dormant+dormant.
+        assert_eq!(
+            page_window(3, 2, 0),
+            PageWindow {
+                live: 0..2,
+                dormant_limit: 0,
+                dormant_offset: 0
+            }
+        );
+        assert_eq!(
+            page_window(3, 2, 2),
+            PageWindow {
+                live: 2..3,
+                dormant_limit: 1,
+                dormant_offset: 0
+            }
+        );
+        assert_eq!(
+            page_window(3, 2, 4),
+            PageWindow {
+                live: 3..3,
+                dormant_limit: 2,
+                dormant_offset: 1
+            }
+        );
+        assert_eq!(
+            page_window(0, 20, 40),
+            PageWindow {
+                live: 0..0,
+                dormant_limit: 20,
+                dormant_offset: 40
+            }
+        );
     }
 
     #[test]

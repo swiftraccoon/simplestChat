@@ -6366,6 +6366,24 @@ impl RoomManager {
         lock.try_read().ok().map(|room| room.participants.len())
     }
 
+    /// Every live room with its readable participant count (`None` while a
+    /// writer holds the room), for directory ordering. Empty rooms are not live.
+    pub fn live_room_counts(&self) -> Vec<(String, Option<usize>)> {
+        let rooms = self.rooms.read().unwrap_or_else(|e| e.into_inner());
+        Self::live_counts(rooms.iter())
+    }
+
+    pub(crate) fn live_counts<'a>(
+        rooms: impl Iterator<Item = (&'a String, &'a Arc<TokioRwLock<Room>>)>,
+    ) -> Vec<(String, Option<usize>)> {
+        rooms
+            .filter_map(|(id, lock)| match Self::readable_participant_count(lock) {
+                Some(0) => None,
+                count => Some((id.clone(), count)),
+            })
+            .collect()
+    }
+
     pub(crate) fn readable_broadcaster_count(lock: &Arc<TokioRwLock<Room>>) -> Option<usize> {
         lock.try_read().ok().map(|room| {
             room.participants
@@ -6379,6 +6397,41 @@ impl RoomManager {
 #[cfg(test)]
 mod security_tests {
     use super::*;
+
+    #[tokio::test]
+    async fn live_counts_skip_empty_rooms_and_keep_locked_rooms_unknown() {
+        let make_room = |name: &str, members: usize| {
+            let mut room = Room::new(name.into(), "unused".into(), None, false, None);
+            for index in 0..members {
+                room.participants.insert(
+                    format!("member-{index}"),
+                    participant(
+                        "member",
+                        roles::Role::Guest,
+                        moderation::PunitiveState::default(),
+                        None,
+                    ),
+                );
+            }
+            Arc::new(TokioRwLock::new(room))
+        };
+        let rooms: HashMap<String, Arc<TokioRwLock<Room>>> = [
+            ("empty".to_string(), make_room("empty", 0)),
+            ("busy".to_string(), make_room("busy", 3)),
+            ("locked".to_string(), make_room("locked", 1)),
+        ]
+        .into_iter()
+        .collect();
+        let held = rooms["locked"].clone();
+        let guard = held.write().await;
+        let mut counts = RoomManager::live_counts(rooms.iter());
+        drop(guard);
+        counts.sort();
+        assert_eq!(
+            counts,
+            vec![("busy".to_string(), Some(3)), ("locked".to_string(), None)]
+        );
+    }
 
     #[tokio::test]
     async fn participant_snapshot_distinguishes_empty_partial_and_complete_counts() {
