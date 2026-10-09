@@ -2,6 +2,7 @@
 
 pub mod account;
 pub mod common_passwords;
+pub mod discovery;
 pub mod invites;
 pub mod jwt;
 pub mod limiter;

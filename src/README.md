@@ -83,6 +83,16 @@ server-side; room history requires current membership. Pages and searches are
 bounded. The separate five-minute chat cleanup removes expired messages, inbox
 rows and cursors while read predicates enforce expiry immediately.
 
+`auth/discovery.rs` stores explicitly accepted contact pairs and account room
+shortcuts (migration 031). An accepted contact may start an HTTP PM without a
+prior room conversation; private-message opt-out and ignore checks still apply.
+Requests use an exact shared account identifier, with no email/name lookup,
+100 active relationships per account and 30 new requests per day. Request and
+accept operations lock users in UUID order, then recheck the current session.
+Favorites and successful persisted-room admissions sync across account sessions;
+100 favorites and 50 additional recents are retained. Unlisted room details are
+filtered by current ownership/membership, not by remembered visits.
+
 `removeChatMessage` requires Moderator+ and a public message belonging to that
 room, including saved messages outside runtime replay. Its transaction removes
 saved text and quoted excerpts alongside a `message_removed` moderation event.

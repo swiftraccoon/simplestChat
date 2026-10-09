@@ -26,6 +26,12 @@ Login, passkeys and refresh remain owned by [AuthManager](../web/src/auth.ts).
 | `editPrivateMessage` | `PUT /api/auth/inbox/:peer/messages/:messageId`, JSON `{content, expectedRevision}` | Updated author-owned `ChatEntry` |
 | `sendPrivateMessage` | `POST /api/auth/inbox/:peer/messages`, JSON `{clientMessageId, content}` | `ChatEntry` |
 | `readPrivateMessages` | `PUT /api/auth/inbox/:peer/read`, JSON `{messageId}` | `{ readMessageId: string \| null }` |
+| `contacts` | `GET /api/auth/contacts` | `{accountId, contacts:[{accountId,accountName,status}]}`; status is `accepted`, `incoming` or `outgoing` |
+| `requestContact` | `POST /api/auth/contacts`, JSON `{accountId}` | `204`, no body; exact account UUID only |
+| `acceptContact` | `PUT /api/auth/contacts/:peer` | `204`, no body; accepts a live incoming request |
+| `removeContact` | `DELETE /api/auth/contacts/:peer` | `204`, no body; decline, cancel or remove |
+| `savedRooms` | `GET /api/auth/saved-rooms` | `{rooms:[{room:RoomListItem,favorite,lastVisited}]}` |
+| `saveRoom` | `PUT /api/auth/saved-rooms/:id`, JSON `{favorite}` | `204`, no body |
 | `updateProfile` | `PATCH /api/auth/profile` | `AccountProfile` |
 | `changePassword` | `POST /api/auth/password` | `204`, no body |
 | WebSocket ticket provider | `POST /api/auth/ws-ticket`, Bearer JWT and JSON `{}` | `{ ticket: string, expires_in: integer }` |
@@ -165,8 +171,8 @@ Unknown response fields are stripped before use. See the
 [HTTP decoders](../web/src/api-validation.ts), [account handlers](../src/auth/account.rs)
 and [room handlers](../src/room/api.rs).
 
-JSON endpoints reject empty or malformed successes. Only the five no-content
-methods above accept `204`, and they do not attempt JSON parsing. `ApiError`
+JSON endpoints reject empty or malformed successes. Methods documented as
+no-content accept `204` without attempting JSON parsing. `ApiError`
 retains an unsuccessful HTTP status for UI decisions; invalid successful data
 produces a fixed error without including the response body. A network failure
 or invalid response does not prove a mutation was rolled back. Do not retry a
@@ -542,8 +548,8 @@ Account-to-account PMs are retained for 90 days. Authenticated HTTP routes are
 inbox pages return `{conversations, nextCursor, retentionDays}`. Each conversation
 includes the peer identity/name, last message and an unread count capped at
 1,000. POST takes `{clientMessageId, content}` and PUT takes `{messageId}`.
-An HTTP send requires an existing account conversation started together in a
-room. Both room and HTTP account PM sends honor the two accounts' saved
+An HTTP send requires either an existing retained account conversation or an
+accepted contact relationship. Both room and HTTP account PM sends honor the two accounts' saved
 ignore/PM preferences under database row locks. Room-session preference changes
 also wait for in-flight durable sends before acknowledging, so an opt-out cannot
 overtake an accepted send. A known-success HTTP retry returns its existing receipt
@@ -552,6 +558,27 @@ peer is offline. Guest PMs remain ephemeral. Saved writes commit
 before room delivery/acknowledgement. An uncertain database commit quarantines
 the room and reports `messageRetryResult` with `storage_unconfirmed`, never a
 definite send rejection. Account identity scopes every inbox route; knowing another conversation's peer or message ID grants no access.
+
+Contacts require explicit acceptance by the recipient. Contact links use
+`#contact=<account-UUID>`; the browser scrubs the fragment and offers a separate
+request action after sign-in. These identifiers grant no authority and are not
+email or account-name search. Missing, opted-out and ignoring recipients receive
+the same `204` request response. Either account's PM opt-out/ignore prevents a new
+request or acceptance. Account rows are locked in UUID order before the current
+session is rechecked. Each account has at most 100 accepted contacts plus live
+pending requests and may issue at most 30 new requests per day. Pending requests
+expire after 14 days; declining, canceling or removing a relationship prevents
+another request for that pair for 30 days. Removing a contact does not delete
+retained messages or replace the independent ignore control.
+
+Saved rooms belong to an account, across its devices and sessions. Up to 100
+favorites and 50 additional recent rooms are retained. Recents are recorded only
+after a successful authenticated admission to a persisted room, never for an
+attempted join or ad-hoc room. Saved shortcuts do not bypass room admission.
+Unlisted room details appear only while the account currently owns the room or
+holds a room role; remembered access alone is insufficient. Account deletion and
+room deletion cascade their shortcuts. Every discovery route requires a current
+session and returns private, non-cacheable responses.
 
 Each participant has a chat look, `chatStyle`: `{ color, style }`. `color` is one
 of sixteen palette tokens (`CHAT_COLORS` in `src/signaling/protocol.rs`, mirrored

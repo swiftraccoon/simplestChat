@@ -999,9 +999,13 @@ pub async fn send_message(
     }
     let contact:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM chat_inbox WHERE user_id=$1 AND peer_id=$2 AND expires_at>now())")
         .bind(own).bind(peer).fetch_one(&mut *tx).await.map_err(routes::database_error)?;
+    let contact = contact
+        || crate::auth::discovery::accepted_contact(&mut tx, own, peer)
+            .await
+            .map_err(routes::database_error)?;
     if !contact {
         return Err(AuthError::InvalidInput(
-            "Start this conversation together in a room first",
+            "Add this person as a contact or start the conversation in a room",
         ));
     }
     // One account's inbox writes serialize with each other, bounding a burst

@@ -687,6 +687,18 @@ impl SignalingServer {
                     .layer(DefaultBodyLimit::max(32 * 1024)),
             )
             .route("/password", post(crate::auth::account::change_password))
+            .route(
+                "/contacts",
+                get(crate::auth::discovery::list_contacts)
+                    .post(crate::auth::discovery::create_contact),
+            )
+            .route(
+                "/contacts/{peer}",
+                put(crate::auth::discovery::accept_contact)
+                    .delete(crate::auth::discovery::remove_contact),
+            )
+            .route("/saved-rooms", get(crate::auth::discovery::saved_rooms))
+            .route("/saved-rooms/{id}", put(crate::auth::discovery::save_room))
             .route("/inbox", get(crate::room::history::inbox))
             .route("/inbox/unread", get(crate::room::history::unread_summary))
             .route(

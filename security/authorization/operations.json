@@ -727,6 +727,76 @@
       "checks": [
         "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions"
       ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/contacts",
+      "handler": "crate::auth::discovery::list_contacts",
+      "policy": "current-session",
+      "body": null,
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/contacts",
+      "handler": "crate::auth::discovery::create_contact",
+      "policy": "current-session",
+      "body": {
+        "accountId": "00000000-0000-4000-8000-000000000002"
+      },
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/auth/contacts/{peer}",
+      "handler": "crate::auth::discovery::accept_contact",
+      "policy": "current-session",
+      "body": null,
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/auth/contacts/{peer}",
+      "handler": "crate::auth::discovery::remove_contact",
+      "policy": "current-session",
+      "body": null,
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/saved-rooms",
+      "handler": "crate::auth::discovery::saved_rooms",
+      "policy": "current-session",
+      "body": null,
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/auth/saved-rooms/{id}",
+      "handler": "crate::auth::discovery::save_room",
+      "policy": "current-session",
+      "body": {
+        "favorite": true
+      },
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions"
+      ]
     }
   ],
   "websocket": [

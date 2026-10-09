@@ -5584,6 +5584,16 @@ impl RoomManager {
         Ok(())
     }
 
+    /// Call only after a successful admission and after releasing room locks.
+    pub(crate) fn note_room_visit(&self, room_id: &str, participant_id: &str, authenticated: bool) {
+        if authenticated
+            && let Some(pool) = self.db_pool.as_ref()
+            && let Ok(account) = uuid::Uuid::parse_str(participant_id)
+        {
+            crate::auth::discovery::note_room_visit(pool, account, room_id);
+        }
+    }
+
     pub async fn admit_from_lobby(
         &self,
         room_id: &str,
@@ -5731,6 +5741,9 @@ impl RoomManager {
             moderator_id, target_id, room_id
         );
         room.notify_lobby_status();
+        drop(room);
+        drop(_control);
+        self.note_room_visit(room_id, &entry.participant_id, entry.authenticated);
         Ok(())
     }
 

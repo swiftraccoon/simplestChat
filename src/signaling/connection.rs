@@ -2430,6 +2430,7 @@ async fn handle_client_message(
                         your_chat_style: chat_style,
                         room_settings,
                     })?;
+                    room_manager.note_room_visit(room_id, participant_id, is_authenticated);
                 }
                 JoinResult::Lobbied => {
                     // Set current_room_id so disconnect cleanup removes from lobby
