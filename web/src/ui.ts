@@ -422,7 +422,7 @@ export const api = {
   sendPrivateMessage: (
     token: string,
     peer: string,
-    data: { clientMessageId: string; content: string },
+    data: { clientMessageId: string; content: string; attachmentIds?: string[] },
     signal: AbortSignal,
   ) =>
     apiJson(

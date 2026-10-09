@@ -59,6 +59,7 @@ export type ClientMessage =
       clientMessageId?: string;
       sequence?: number;
       replyTo?: string;
+      attachmentIds?: string[];
     }
   | {
       type: 'privateMessage';
@@ -67,6 +68,7 @@ export type ClientMessage =
       clientMessageId: string;
       sequence?: number;
       replyTo?: string;
+      attachmentIds?: string[];
     }
   | {
       type: 'retryChatMessage';
@@ -76,6 +78,7 @@ export type ClientMessage =
       content: string;
       targetParticipantId?: string;
       replyTo?: string;
+      attachmentIds?: string[];
     }
   | SocialRequest
   // Moderation
@@ -315,6 +318,7 @@ export type SocialAction =
   | 'setChatStyle'
   | 'removeChatMessage'
   | 'editChatMessage'
+  | 'getAttachmentAccess'
   | 'getPinnedMessages'
   | 'setPinnedMessage'
   | 'reactToMessage'
@@ -338,6 +342,7 @@ export interface SocialRequests {
   setChatStyle: { chatStyle: ChatStyle };
   removeChatMessage: { messageId: string };
   editChatMessage: { messageId: string; content: string; expectedRevision: number };
+  getAttachmentAccess: { attachmentId: string };
   getPinnedMessages: undefined;
   setPinnedMessage: { messageId: string; pinned: boolean };
   reactToMessage: { messageId: string; emoji: string };
@@ -368,6 +373,7 @@ export interface SocialResponses {
   setChatStyle: { chatStyle: ChatStyle };
   removeChatMessage: { messageId: string; removedAt: string };
   editChatMessage: { message: ChatEntry };
+  getAttachmentAccess: { token: string; expiresAt: string };
   getPinnedMessages: { messages: ChatEntry[] };
   setPinnedMessage: { messages: ChatEntry[] };
   reactToMessage: { messageId: string; reactions: ChatReaction[] };
@@ -404,6 +410,13 @@ export type SocialRequestArguments<A extends SocialAction> = {
       : [action: K, data: SocialRequests[K]];
 }[A];
 
+export interface ChatAttachment {
+  id: string;
+  name: string;
+  contentType: 'image/png' | 'image/jpeg' | 'image/webp' | 'application/octet-stream';
+  size: number;
+}
+
 export interface ChatEntry {
   messageId: string;
   clientMessageId: string;
@@ -421,6 +434,7 @@ export interface ChatEntry {
   /** The message this one answers, as the server quoted it. */
   replyTo?: ChatReplyRef;
   reactions?: ChatReaction[];
+  attachments?: ChatAttachment[];
 }
 
 export interface ChatHistoryPage {

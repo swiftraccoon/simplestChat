@@ -8,6 +8,7 @@
 const { openRoomMenu } = require('./room-menu.cjs');
 const { installPwaFixture, checkPwa } = require('./pwa-checks.cjs');
 const { checkContactsBeforeRoom, checkSavedRoomsAcrossDevices } = require('./discovery-checks.cjs');
+const { privateAttachmentChecks, publicAttachmentChecks } = require('./attachment-checks.cjs');
 const { checkNotificationPreferences } = require('./notification-checks.cjs');
 const { participantHovercardChecks } = require('./participant-hovercard-checks.cjs');
 const assert = require('node:assert/strict');
@@ -253,19 +254,24 @@ async function connected(page) {
     .getByRole('navigation', { name: 'Conversations', exact: true })
     .waitFor({ state: 'visible' });
 }
-async function reconnectMediaIdentity(page) {
-  return page.evaluateHandle(() => {
+async function reconnectMediaIdentity(page, { allowIncomingVideoReplacement = false } = {}) {
+  return page.evaluateHandle((allowIncomingVideoReplacement) => {
     const registry = window.__communityPeers;
     if (!Array.isArray(registry) || registry.length === 0)
       throw new Error('Native peer observation unavailable');
     const captures = window.__communityCaptureRequests;
     if (!Number.isSafeInteger(captures) || captures < 0)
       throw new Error('Capture request observation unavailable');
+    const receivers = (peer) =>
+      peer
+        .getReceivers()
+        .map((receiver) => receiver.track)
+        .filter((track) => !allowIncomingVideoReplacement || track?.kind !== 'video');
     const peers = registry.map((peer) => ({
       peer,
       closed: peer.connectionState === 'closed',
       senders: peer.getSenders().map((sender) => sender.track),
-      receivers: peer.getReceivers().map((receiver) => receiver.track),
+      receivers: receivers(peer),
     }));
     const liveTracks = peers
       .flatMap(({ senders, receivers }) => [...senders, ...receivers])
@@ -295,10 +301,7 @@ async function reconnectMediaIdentity(page) {
               entry.senders,
               entry.peer.getSenders().map((sender) => sender.track),
             ) ||
-            !same(
-              entry.receivers,
-              entry.peer.getReceivers().map((receiver) => receiver.track),
-            )
+            !same(entry.receivers, receivers(entry.peer))
           )
             throw new Error('Signaling recovery replaced native media tracks');
         }
@@ -375,7 +378,7 @@ async function reconnectMediaIdentity(page) {
         };
       },
     };
-  });
+  }, allowIncomingVideoReplacement);
 }
 function mediaProgressDelta(before, after) {
   if (
@@ -570,7 +573,11 @@ async function offlineViewerControls(publisher, receiver) {
   const identities = [];
   try {
     identities.push(await reconnectMediaIdentity(publisher));
-    identities.push(await reconnectMediaIdentity(receiver));
+    // Explicitly hiding a broadcast retires its video consumer. Only this
+    // scenario permits replacing incoming video; audio, capture and peers stay.
+    identities.push(
+      await reconnectMediaIdentity(receiver, { allowIncomingVideoReplacement: true }),
+    );
     const before = await advancingReconnectMedia(receiver, identities[1], 3000);
     const controls = receiver.locator('.personal-media-controls').first();
     if (!(await controls.evaluate((element) => element.open)))
@@ -584,6 +591,9 @@ async function offlineViewerControls(publisher, receiver) {
         window.__communitySignalingReconnect.snapshot().counters.receivedConsumerPaused >=
         previous + 2,
       baseline.counters.receivedConsumerPaused,
+    );
+    await receiver.waitForFunction(
+      () => document.querySelectorAll('.video-tile:not(.local) video').length === 0,
     );
     const hidden = await receiver.evaluate(() => window.__communitySignalingReconnect.snapshot());
     const requested = await receiver.evaluate(() =>
@@ -626,6 +636,7 @@ async function offlineViewerControls(publisher, receiver) {
       { timeout: 10000 },
     );
     await connected(receiver);
+    await remotePlayback(receiver, 'video');
     // An accepted resume precedes renewed RTP. Unlike the continuous-media
     // reconnect check, this scenario deliberately paused both server consumers.
     await waitForMediaStart(receiver, identities[1]);
@@ -932,6 +943,13 @@ async function setRole(owner, name, role) {
       await register(owner, ownerEmail, 'E2E Owner');
       await register(member, memberEmail, 'E2E Member');
       await checkContactsBeforeRoom(owner, member, { base, header, close });
+      const outsider = await client('attachment-outsider');
+      await register(
+        outsider,
+        `${runId}-attachment-outsider@example.test`,
+        'E2E Attachment Outsider',
+      );
+      await privateAttachmentChecks(owner, member, outsider, { base, header, close, deadline });
       await owner.locator('#create-room-btn').click();
       await owner.locator('#cr-id').fill(runId);
       await owner.locator('#cr-name').fill('E2E Community Room');
@@ -1106,6 +1124,7 @@ async function setRole(owner, name, role) {
           .filter({ hasText: 'Messages are kept for 7 days.' })
           .waitFor({ state: 'visible' });
         await close(history);
+        await publicAttachmentChecks(owner, guest, { base, leave, join, send });
         await send(guest, 'Context before the search result');
         await send(guest, 'Saved browser history message');
         await send(guest, 'Context after the search result');

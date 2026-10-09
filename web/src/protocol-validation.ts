@@ -9,6 +9,7 @@ import type {
   ChatReplyRef,
   ProducerMetadata,
   ChatEntry,
+  ChatAttachment,
   ChatHistoryPage,
   RoomSettings,
   RoomSnapshot,
@@ -111,6 +112,30 @@ const participant = object<ParticipantInfo>({
   authenticated: optional(boolean),
   chatStyle: optional(chatStyle),
 });
+export const decodeAttachment = object<ChatAttachment>({
+  id: chatSessionId,
+  name: (value) => {
+    const name = text(value);
+    return name.length > 0 &&
+      Array.from(name).length <= 120 &&
+      !Array.from(name).some(
+        (character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127,
+      )
+      ? name
+      : invalid();
+  },
+  contentType: choice('image/png', 'image/jpeg', 'image/webp', 'application/octet-stream'),
+  size: (value) => {
+    const size = integer(5 * 1024 * 1024)(value);
+    return size > 0 ? size : invalid();
+  },
+});
+const attachments: Decoder<ChatAttachment[]> = (value) => {
+  const entries = list(decodeAttachment)(value);
+  return entries.length <= 4 && new Set(entries.map((entry) => entry.id)).size === entries.length
+    ? entries
+    : invalid();
+};
 const chat = object<ChatEntry>({
   messageId: text,
   clientMessageId: text,
@@ -123,6 +148,7 @@ const chat = object<ChatEntry>({
   chatStyle: optional(chatStyle),
   replyTo: optional(replyRef),
   reactions: optional(list(reaction)),
+  attachments: optional(attachments),
   removedAt: optional(text),
   editedAt: optional(text),
   revision: integer(4_294_967_295),
@@ -370,6 +396,22 @@ const socialDecoders: { [A in SocialAction]: Decoder<SocialResponses[A]> } = {
     removedAt: text,
   }),
   editChatMessage: object<{ message: ChatEntry }>({ message: chat }),
+  getAttachmentAccess: object<SocialResponses['getAttachmentAccess']>({
+    token: (value) => {
+      const token = text(value);
+      return token.length > 0 && token.length <= 4096 && /^[A-Za-z0-9_.-]+$/.test(token)
+        ? token
+        : invalid();
+    },
+    expiresAt: (value) => {
+      const expires = text(value);
+      return expires.length <= 40 &&
+        /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,9})?(?:Z|[+-]\d\d:\d\d)$/.test(expires) &&
+        Number.isFinite(Date.parse(expires))
+        ? expires
+        : invalid();
+    },
+  }),
   getPinnedMessages: object<{ messages: ChatEntry[] }>({ messages: pins }),
   setPinnedMessage: object<{ messages: ChatEntry[] }>({ messages: pins }),
   reactToMessage: object<{ messageId: string; reactions: ChatReaction[] }>({
@@ -431,6 +473,7 @@ const socialAction = choice(
   'setChatStyle',
   'removeChatMessage',
   'editChatMessage',
+  'getAttachmentAccess',
   'getPinnedMessages',
   'setPinnedMessage',
   'reactToMessage',
@@ -553,6 +596,7 @@ const messages = {
     chatStyle: optional(chatStyle),
     replyTo: optional(replyRef),
     reactions: optional(list(reaction)),
+    attachments: optional(attachments),
     removedAt: optional(text),
   }),
   privateMessageReceived: message('privateMessageReceived', { message: chat }),

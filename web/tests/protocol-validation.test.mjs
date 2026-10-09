@@ -167,6 +167,7 @@ const socialData = {
   changeNickname: { nickname: 'Person' },
   setChatStyle: { chatStyle: { color: 'violet', style: 'text' } },
   editChatMessage: { message: { ...chat, revision: 1, editedAt: '2026-10-08T00:00:00Z' } },
+  getAttachmentAccess: { token: 'signed.fixture.token', expiresAt: '2026-10-09T12:05:00Z' },
   getPinnedMessages: { messages: [chat] },
   setPinnedMessage: { messages: [chat] },
   removeChatMessage: { messageId: 'message', removedAt: '2026-10-07T00:00:00Z' },

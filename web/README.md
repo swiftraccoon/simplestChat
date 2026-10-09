@@ -74,6 +74,7 @@ For complete guest/account setup and LAN ICE addressing see
 | `src/media-lifecycle.ts` | Coalesced visibility, page-resume, online and hardware hints without new capture or room entry |
 | `src/media-controls.ts`, `audio-output.ts` | Private device preview, live hardware lists, speaker selection/test and viewer-local playback |
 | `src/receive-policy.ts` | Bounded incoming video selection, visible/pinned priority and data saver/audio-only preferences |
+| `src/attachments.ts` | Bounded paste/drop/picker uploads, progress/retry and gesture-opened previews/downloads |
 | `src/notification-preferences.ts`, `notification-validation.ts` | Account-synced notification rules, conversation mute/snooze and quiet hours |
 | `src/layer-cap.ts` | Simulcast layer a remote tile can use at its rendered size, with hysteresis |
 | `src/settings-dialog.ts` | Shared settings tabs and native-dialog dismissal |
@@ -349,6 +350,17 @@ get priority; offscreen videos are unsubscribed, and a hidden tab keeps only an
 explicit picture-in-picture video. Closing a consumer is acknowledged before a
 replacement is opened. Audio reception and publishing controls are independent.
 The receive choice is saved on this device.
+
+## Attachments
+
+Signed-in people can attach up to four files, each up to 5 MiB, by pasting,
+dropping or using the file picker in live chat and saved PM conversations.
+Uploads show progress, support retry/removal and must finish before sending.
+Switching conversation or account cancels pending selections; sent files travel
+with the message's existing delivery/retry identity. Names and sizes render as
+text. Raster previews and downloads start only after a click; access credentials
+stay in request headers. Closing/replacing a message view aborts its requests and
+revokes its object URLs. Across open views at most eight file blobs are retained.
 
 ## Notifications
 

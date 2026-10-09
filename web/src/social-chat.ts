@@ -1,6 +1,13 @@
 import type { TelemetryHandler, TelemetryOutcome } from './telemetry-types';
 import type { RoomClient } from './room';
-import type { ChatEntry, ChatStyle, ChatStyleKind, ServerMessage } from './protocol';
+import type {
+  ChatAttachment,
+  ChatEntry,
+  ChatStyle,
+  ChatStyleKind,
+  ServerMessage,
+} from './protocol';
+import { AttachmentComposer, renderAttachments } from './attachments';
 import { ChatStore, ConversationInputs, type ChatItem } from './chat-store';
 import { api, asyncButton, button, busy, el, field, modal } from './ui';
 import { appendLinkedText, appendEditedLabel, editMessageDialog } from './chat-message-ui';
@@ -97,10 +104,11 @@ type Options = {
     current: () => boolean,
   ) => void;
 };
-type MessageRow = { node: HTMLElement; fingerprint: string };
+type MessageRow = { node: HTMLElement; fingerprint: string; dispose: () => void };
 type ConversationButton = { node: HTMLButtonElement; name: HTMLElement; unread: HTMLElement };
 
 export class SocialChat {
+  private readonly attachments: AttachmentComposer;
   private readonly store = new ChatStore(300, 256 * 1024);
   private readonly composition = new ConversationInputs();
   private readonly messages = document.getElementById('chat-messages')!;
@@ -305,6 +313,15 @@ export class SocialChat {
       ?.addEventListener('click', () => queueMicrotask(() => this.render()));
     document.addEventListener('pointerdown', () => this.resumeSoundFromGesture());
     document.addEventListener('keydown', () => this.resumeSoundFromGesture());
+    this.attachments = new AttachmentComposer({
+      host: this.inputRow,
+      input: this.input,
+      getToken: () => this.options.getToken?.() ?? null,
+      current: () =>
+        this.activeRoom !== null &&
+        this.contextCurrent(this.activation, this.activeRoom, this.viewerKey),
+      notify: this.options.notify,
+    });
     this.render();
   }
 
@@ -418,6 +435,7 @@ export class SocialChat {
   }
 
   reset(): void {
+    this.attachments.reset();
     this.readController.abort();
     this.readController = new AbortController();
     if (this.readTimer !== null) clearTimeout(this.readTimer);
@@ -446,7 +464,10 @@ export class SocialChat {
     this.historyCursor = null;
     this.historyLoaded = false;
     this.historyLoading = false;
-    for (const row of this.rows.values()) row.node.remove();
+    for (const row of this.rows.values()) {
+      row.dispose();
+      row.node.remove();
+    }
     this.rows.clear();
     this.dividerKey = null;
     this.resumeKey = null;
@@ -476,6 +497,11 @@ export class SocialChat {
     this.audio?.close().catch(() => {});
     this.audio = null;
     this.render();
+  }
+
+  dispose(): void {
+    this.reset();
+    this.attachments.dispose();
   }
 
   handleEvent(message: ServerMessage): void {
@@ -835,7 +861,20 @@ export class SocialChat {
   private send(): void {
     const room = this.options.getRoom();
     const content = this.input.value.trim();
-    if (!room?.localParticipantId || !room.connected || !content || this.input.disabled) return;
+    if (
+      !room?.localParticipantId ||
+      !room.connected ||
+      (!content && !this.attachments.hasFiles) ||
+      this.input.disabled
+    )
+      return;
+    let attachments: ChatAttachment[];
+    try {
+      attachments = this.attachments.ready();
+    } catch (error) {
+      this.options.notify(error instanceof Error ? error.message : 'Attachments are not ready');
+      return;
+    }
     if (new TextEncoder().encode(content).length > 4096) {
       this.options.notify('Message is too long (maximum 4096 bytes)');
       return;
@@ -873,6 +912,7 @@ export class SocialChat {
         ...(recipientId !== undefined && { recipientId }),
         ...(recipientName !== undefined && { recipientName }),
         content,
+        ...(attachments.length && { attachments }),
         sentAt: new Date().toISOString(),
         revision: 0,
       },
@@ -890,8 +930,27 @@ export class SocialChat {
     }
     this.startPending(id);
     try {
-      if (recipientId) room.sendPrivate(recipientId, content, id, sequence, answering?.messageId);
-      else room.sendChat(content, id, sequence, answering?.messageId);
+      const attachmentIds = attachments.length
+        ? attachments.map((attachment) => attachment.id)
+        : undefined;
+      if (recipientId)
+        room.sendPrivate(
+          recipientId,
+          content,
+          id,
+          sequence,
+          answering?.messageId,
+          ...(attachmentIds ? ([attachmentIds] as const) : ([] as const)),
+        );
+      else
+        room.sendChat(
+          content,
+          id,
+          sequence,
+          answering?.messageId,
+          ...(attachmentIds ? ([attachmentIds] as const) : ([] as const)),
+        );
+      this.attachments.consume();
       this.composition.sent(this.store.active, content);
       this.input.value = '';
       this.cancelReply();
@@ -968,6 +1027,9 @@ export class SocialChat {
         content: message.content,
         ...(message.recipientId !== undefined && { targetParticipantId: message.recipientId }),
         ...(message.replyTo && { replyTo: message.replyTo.messageId }),
+        ...(message.attachments?.length && {
+          attachmentIds: message.attachments.map((attachment) => attachment.id),
+        }),
       });
     } catch {
       this.finishSend(message.clientMessageId, 'unknown');
@@ -1001,6 +1063,10 @@ export class SocialChat {
     this.input.value = message.content;
     this.composition.save(conversation, message.content);
     this.resizeInput();
+    if (message.attachments?.length)
+      this.options.notify(
+        'Attachments stay with the original message. Use Retry same message when available, or attach the files again for a new message.',
+      );
     this.input.focus();
     if (message.status === 'unknown')
       this.options.notify(
@@ -1084,6 +1150,7 @@ export class SocialChat {
     const keys = new Set(visible.map((message) => this.rowKey(message)));
     for (const [key, row] of this.rows) {
       if (!keys.has(key)) {
+        row.dispose();
         row.node.remove();
         this.rows.delete(key);
       }
@@ -1249,12 +1316,14 @@ export class SocialChat {
       message.removedAt,
       message.editedAt,
       message.revision,
+      message.attachments,
       this.canRemove(message),
       this.pins.some((pin) => pin.messageId === messageId),
     ]);
     const key = this.rowKey(message);
     const previous = this.rows.get(key);
     if (previous?.fingerprint === fingerprint) return previous.node;
+    previous?.dispose();
     const node = previous?.node ?? el('div');
     node.className = `chat-msg${look ? ` look-${look.style}` : ' system'}${mentioned ? ' mentioned' : ''}`;
     if (look) node.style.setProperty('--sender-color', color);
@@ -1284,6 +1353,24 @@ export class SocialChat {
       text.classList.add('muted');
     } else appendLinkedText(text, content, mentioned ? `@${nickname}` : undefined);
     node.append(text);
+    let dispose = (): void => {};
+    const room = this.activeRoom;
+    if (!message.removedAt && message.attachments?.length && room) {
+      const activation = this.activation;
+      const viewer = this.viewerKey;
+      const current = () =>
+        this.contextCurrent(activation, room, viewer) &&
+        this.rows.get(key)?.node === node &&
+        !message.removedAt;
+      dispose = renderAttachments(node, message.attachments, {
+        current,
+        authorization: async (attachmentId) => {
+          if (!current()) throw new Error('This conversation changed');
+          const grant = await room.requestSocial('getAttachmentAccess', { attachmentId });
+          return `Attachment ${grant.token}`;
+        },
+      });
+    }
     this.appendReactions(node, message);
     if (participantId && status === 'sent' && !message.removedAt) this.appendActions(node, message);
     const meta = el('time', undefined, 'msg-time');
@@ -1316,7 +1403,7 @@ export class SocialChat {
         node.append(state);
       }
     }
-    this.rows.set(key, { node, fingerprint });
+    this.rows.set(key, { node, fingerprint, dispose });
     return node;
   }
 
@@ -1474,7 +1561,7 @@ export class SocialChat {
       const entry = el('div', undefined, 'chat-pinned-message');
       entry.append(
         button(
-          `${pin.participantName}: ${pin.content}`,
+          `${pin.participantName}: ${pin.content || pin.attachments?.map((attachment) => attachment.name).join(', ') || 'Message'}`,
           () => this.showMessage(pin.messageId),
           'chat-pinned-link',
         ),
@@ -1878,6 +1965,7 @@ export class SocialChat {
   }
 
   private switchConversation(id: string, name?: string): void {
+    if (id !== this.store.active) this.attachments.reset();
     this.cancelReply();
     this.composition.save(this.store.active, this.input.value);
     const first = this.store.firstUnread(id);
@@ -1892,6 +1980,7 @@ export class SocialChat {
   private closePrivate(): void {
     const id = this.store.active;
     if (id === 'public') return;
+    this.attachments.reset();
     for (const message of this.store.messages) {
       if (this.store.conversation(message) === id) this.clearPending(message.clientMessageId);
     }

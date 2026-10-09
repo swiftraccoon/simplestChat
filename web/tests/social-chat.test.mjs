@@ -1,3 +1,4 @@
+import { attachmentFixture } from './attachment-fixture.mjs';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
@@ -20,6 +21,7 @@ const entry = (id, extra = {}) => ({
 
 async function fixture({ touch = false, touchPoints = 0 } = {}) {
   const f = await uiFixture();
+  const attachmentState = attachmentFixture();
   Object.defineProperties(f.Node.prototype, {
     options: {
       get() {
@@ -216,6 +218,7 @@ async function fixture({ touch = false, touchPoints = 0 } = {}) {
   const timers = new Map();
   const { SocialChat } = await loadTypeScript('src/social-chat.ts', {
     modules: {
+      './attachments': attachmentState.module,
       './chat-store': chatModule,
       './ui': f.ui,
       './avatar-colors': colorModule,
@@ -273,7 +276,18 @@ async function fixture({ touch = false, touchPoints = 0 } = {}) {
       anchor.addEventListener('click', () => state.actions.push([id, name]));
     },
   });
-  return { ...f, state, http, chat, tab, participants, documentListeners, timers, pointer };
+  return {
+    ...f,
+    attachmentState,
+    state,
+    http,
+    chat,
+    tab,
+    participants,
+    documentListeners,
+    timers,
+    pointer,
+  };
 }
 
 test('reading retained public chat advances a saved cursor once and cancels stale work', async () => {
@@ -2416,6 +2430,13 @@ test('opening a covered PM preserves unread until the conversation is visible', 
   assert.equal(f.chat.store.unread.get('alice'), undefined);
 });
 
+const fileAttachment = {
+  id: '11111111-1111-4111-8111-111111111111',
+  name: 'Photo.png',
+  contentType: 'image/png',
+  size: 123,
+};
+
 test('account notification rules gate both sounds and desktop notices without dropping messages', async () => {
   const f = await fixture();
   await f.chat.activate();
@@ -2460,4 +2481,63 @@ test('live account PM notification controls are scoped to the currently open pee
   assert.equal(mounts[0][2](), true);
   f.chat.switchConversation('public');
   assert.equal(mounts[0][2](), false);
+});
+
+test('attachment-only sends and unconfirmed retries preserve the original attachment identity', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  retrySession(f);
+  const composer = f.attachmentState.composers[0];
+  composer.files = [fileAttachment];
+  f.chat.send();
+  const original = f.chat.store.messages[0];
+  assert.equal(original.content, '');
+  assert.deepEqual(original.attachments, [fileAttachment]);
+  assert.deepEqual(f.state.sent[0].at(-1), [fileAttachment.id]);
+  assert.equal(composer.consumed, 1);
+  expireSend(f);
+  f.chat.retry(original);
+  assert.deepEqual(f.state.sent.at(-1)[1].attachmentIds, [fileAttachment.id]);
+  assert.equal(f.state.sent.at(-1)[1].clientMessageId, original.clientMessageId);
+});
+
+test('pending uploads prevent sending, and changing conversations discards pending files', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  const composer = f.attachmentState.composers[0];
+  composer.files = [fileAttachment];
+  composer.blocked = true;
+  f.chat.input.value = 'draft';
+  f.chat.send();
+  assert.equal(f.state.sent.length, 0);
+  assert.match(f.state.notifications.at(-1), /Wait for uploads/);
+  f.chat.switchConversation('alice', 'Alice');
+  assert.equal(composer.files.length, 0);
+  f.chat.switchConversation('public');
+  assert.equal(f.chat.input.value, 'draft', 'text drafts survive while pending files are released');
+});
+
+test('attachment renders use room-owned access grants and are disposed on removal and reset', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  f.state.handle = async () => ({ token: 'signed.grant', expiresAt: '2026-10-09T12:05:00Z' });
+  f.chat.receive(entry('file', { attachments: [fileAttachment] }));
+  const first = f.attachmentState.renders.at(-1);
+  assert.equal(await first.options.authorization(fileAttachment.id), 'Attachment signed.grant');
+  assert.deepEqual(f.state.requests.at(-1), {
+    action: 'getAttachmentAccess',
+    data: { attachmentId: fileAttachment.id },
+  });
+  f.chat.handleEvent({
+    type: 'chatMessageRemoved',
+    messageId: 'server-file',
+    removedAt: '2026-10-09T12:00:00Z',
+  });
+  assert.equal(first.disposed, true);
+  assert.deepEqual(f.chat.store.messages[0].attachments, []);
+  f.chat.receive(entry('next-file', { attachments: [fileAttachment] }));
+  const next = f.attachmentState.renders.at(-1);
+  f.chat.reset();
+  assert.equal(next.disposed, true);
+  assert.equal(next.options.current(), false);
 });

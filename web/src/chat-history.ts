@@ -1,4 +1,5 @@
-import type { ChatEntry, ChatHistoryPage } from './protocol';
+import type { ChatAttachment, ChatEntry, ChatHistoryPage } from './protocol';
+import { AttachmentComposer, renderAttachments } from './attachments';
 import { SavedPmDrafts } from './chat-store';
 import { mountContacts } from './discovery';
 import { appendLinkedText, appendEditedLabel, editMessageDialog } from './chat-message-ui';
@@ -20,10 +21,17 @@ type HistoryOptions = {
   ) => Promise<ChatEntry>;
   current: () => boolean;
   mountNotifications?: (container: HTMLElement, current: () => boolean) => void;
+  getToken?: () => string | null;
+  attachmentAuthorization?: (id: string) => Promise<string>;
   load: (params: URLSearchParams, signal: AbortSignal) => Promise<ChatHistoryPage>;
   markRead?: (id: string, signal: AbortSignal) => Promise<unknown>;
   remove?: (id: string) => Promise<{ removedAt: string }>;
-  send?: (content: string, id: string, signal: AbortSignal) => Promise<ChatEntry>;
+  send?: (
+    content: string,
+    id: string,
+    signal: AbortSignal,
+    attachmentIds: string[],
+  ) => Promise<ChatEntry>;
   retention?: { days: number; save: (days: number) => Promise<unknown> };
 };
 const inboxListeners = new Set<() => void>();
@@ -107,6 +115,12 @@ function openHistory(options: HistoryOptions): void {
   let operation = 0;
   let loading = false;
   let read = '';
+  let attachmentRows: (() => void)[] = [];
+  let attachments: AttachmentComposer | null = null;
+  const clearAttachmentRows = (): void => {
+    for (const dispose of attachmentRows) dispose();
+    attachmentRows = [];
+  };
   const removed = new Map<string, string>();
   const edits = new Map<string, ChatEntry>();
   const redact = (entry: ChatEntry): void => {
@@ -128,6 +142,7 @@ function openHistory(options: HistoryOptions): void {
       entry.removedAt = at;
       delete entry.replyTo;
       entry.reactions = [];
+      entry.attachments = [];
     }
     if (entry.replyTo && removed.has(entry.replyTo.messageId))
       entry.replyTo.excerpt = 'Message removed';
@@ -170,8 +185,17 @@ function openHistory(options: HistoryOptions): void {
   };
   const render = (bottom: boolean): void => {
     const scroll = list.scrollTop;
+    clearAttachmentRows();
     const nodes = (page?.messages ?? []).map((message) => {
       const row = messageNode(message);
+      if (!message.removedAt && message.attachments?.length && options.attachmentAuthorization) {
+        attachmentRows.push(
+          renderAttachments(row, message.attachments, {
+            current: () => current() && row.isConnected && !message.removedAt,
+            authorization: options.attachmentAuthorization,
+          }),
+        );
+      }
       if (message.messageId === page?.firstUnreadMessageId) {
         const divider = el('div', 'New messages', 'chat-divider');
         divider.setAttribute('role', 'separator');
@@ -287,6 +311,7 @@ function openHistory(options: HistoryOptions): void {
     try {
       const result = await options.load(params, controller.signal);
       if (!current() || version !== operation) return;
+      const previous = page === null ? null : JSON.stringify(page);
       page = result;
       page.messages.forEach(redact);
       if (requestedPosition.resume && !quiet) anchor = page.firstUnreadMessageId;
@@ -295,6 +320,10 @@ function openHistory(options: HistoryOptions): void {
       query = requestedQuery;
       if (!quiet) view.error.hidden = true;
       loading = false;
+      if (quiet && previous === JSON.stringify(page)) {
+        markRead();
+        return;
+      }
       render(bottom && !anchor);
     } catch (error) {
       if (version === operation) fail(error);
@@ -379,18 +408,42 @@ function openHistory(options: HistoryOptions): void {
     };
     composer.addEventListener('input', saveDraft);
     view.dialog.addEventListener('close', saveDraft, { once: true });
-    let attempt: { content: string; id: string } | null = null;
+    const attachmentHost = el('div', undefined, 'history-attachment-composer');
+    attachments = new AttachmentComposer({
+      host: attachmentHost,
+      input: composer,
+      getToken: () => (options.current() ? (options.getToken?.() ?? null) : null),
+      current,
+      notify: (message) => fail(new Error(message)),
+    });
+    const ownedAttachments = attachments;
+    let attempt: { content: string; id: string; attachmentIds: string[] } | null = null;
     const send = asyncButton(
       'Send',
       async () => {
         const content = composer.value.trim();
-        if (!content || !current() || !options.send || send.disabled) return;
-        if (!attempt || attempt.content !== content) attempt = { content, id: crypto.randomUUID() };
+        if (
+          (!content && !ownedAttachments.hasFiles) ||
+          !current() ||
+          !options.send ||
+          send.disabled
+        )
+          return;
+        const attached: ChatAttachment[] = ownedAttachments.ready();
+        const attachmentIds = attached.map((attachment) => attachment.id);
+        if (
+          !attempt ||
+          attempt.content !== content ||
+          JSON.stringify(attempt.attachmentIds) !== JSON.stringify(attachmentIds)
+        )
+          attempt = { content, id: crypto.randomUUID(), attachmentIds };
         const submitted = attempt;
         send.disabled = true;
+        composer.disabled = true;
         try {
-          await options.send(content, submitted.id, controller.signal);
+          await options.send(content, submitted.id, controller.signal, submitted.attachmentIds);
           if (!current()) return;
+          ownedAttachments.consume();
           if (composer.value.trim() === content) composer.value = '';
           saveDraft();
           notifyInboxChanged();
@@ -399,6 +452,7 @@ function openHistory(options: HistoryOptions): void {
           await load(null, false, '');
         } finally {
           send.disabled = false;
+          composer.disabled = false;
         }
       },
       fail,
@@ -416,7 +470,8 @@ function openHistory(options: HistoryOptions): void {
         send.click();
       }
     });
-    view.body.append(field('Private message', composer), send);
+    attachmentHost.append(send);
+    view.body.append(field('Private message', composer), attachmentHost);
   }
   const onRemoved = (id: string, at: string): void => {
     if (!current()) return;
@@ -459,6 +514,8 @@ function openHistory(options: HistoryOptions): void {
     'close',
     () => {
       controller.abort();
+      clearAttachmentRows();
+      attachments?.dispose();
       clearInterval(timer);
       removalListeners.delete(onRemoved);
       editListeners.delete(onEdited);
@@ -482,6 +539,11 @@ export function openRoomHistory(
   openHistory({
     title: 'Room history',
     viewerId: room.localParticipantId ?? '',
+    attachmentAuthorization: async (attachmentId) => {
+      if (!current()) throw new Error('This conversation changed');
+      const grant = await room.requestSocial('getAttachmentAccess', { attachmentId });
+      return `Attachment ${grant.token}`;
+    },
     ...(initialMessageId && { initialMessageId }),
     edit: async (message, content, expectedRevision) =>
       (
@@ -538,12 +600,15 @@ export function openPrivateInbox(options: {
       throw new Error('Sign in to read your messages');
     return value;
   };
+
   const openConversation = (peerId: string, peerName: string): void => {
     openHistory({
       title: `Messages with ${peerName}`,
       accountDialog: true,
       viewerId: account,
       draft: { account, peer: peerId },
+      getToken: options.getToken,
+      attachmentAuthorization: async () => `Bearer ${token()}`,
       mountNotifications: (container, current) =>
         options.mountConversationNotifications?.(container, peerId, current),
       edit: (message, content, expectedRevision, signal) =>
@@ -557,8 +622,13 @@ export function openPrivateInbox(options: {
       current: () => options.getAccountId() === account && !!options.getToken(),
       load: (params, signal) => api.privateHistory(token(), peerId, params, signal),
       markRead: (id, signal) => api.readPrivateMessages(token(), peerId, id, signal),
-      send: (content, id, signal) =>
-        api.sendPrivateMessage(token(), peerId, { content, clientMessageId: id }, signal),
+      send: (content, id, signal, attachmentIds) =>
+        api.sendPrivateMessage(
+          token(),
+          peerId,
+          { content, clientMessageId: id, ...(attachmentIds.length && { attachmentIds }) },
+          signal,
+        ),
     });
   };
   const contacts = mountContacts(view.body, {

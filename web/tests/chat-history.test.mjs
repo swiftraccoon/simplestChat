@@ -1,3 +1,4 @@
+import { attachmentFixture } from './attachment-fixture.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { loadContractModules, loadTypeScript } from './source-loader.mjs';
@@ -37,6 +38,7 @@ const inbox = (
 
 async function fixture(t) {
   const f = await uiFixture();
+  const attachmentState = attachmentFixture();
   const timers = new Map();
   let timerId = 0,
     attemptId = 0;
@@ -113,6 +115,7 @@ async function fixture(t) {
     modules: {
       './ui': { ...f.ui, api },
       './discovery': await loadDiscoveryFixture({ ...f, ui: { ...f.ui, api } }),
+      './attachments': attachmentState.module,
       './chat-store': await loadTypeScript('src/chat-store.ts'),
       './avatar-colors': await loadTypeScript('src/avatar-colors.ts'),
       './chat-message-ui': await loadTypeScript('src/chat-message-ui.ts', {
@@ -164,6 +167,7 @@ async function fixture(t) {
   return {
     ...f,
     ...module,
+    attachmentState,
     state,
     room,
     timers,
@@ -705,4 +709,53 @@ test('history edits update loaded text and quotes and defeat an older in-flight 
   assert.doesNotMatch(view.textContent, /Original/);
   assert.match(view.textContent, /Corrected.*Corrected/s);
   assert.match(view.textContent, /edited/);
+});
+
+const fileAttachment = {
+  id: '11111111-1111-4111-8111-111111111111',
+  name: 'Photo.png',
+  contentType: 'image/png',
+  size: 123,
+};
+
+test('saved PM attachment sends retain IDs across retry and disable editing only while pending', async (t) => {
+  const f = await fixture(t);
+  const view = await f.openConversation();
+  const composer = f.attachmentState.composers[0];
+  composer.files = [fileAttachment];
+  const pending = deferred();
+  f.state.send = () => pending.promise;
+  action(view, 'Send').click();
+  await flush();
+  assert.equal(view.querySelector('textarea').disabled, true);
+  const first = calls(f, 'send').at(-1).args[2];
+  assert.deepEqual(first.attachmentIds, [fileAttachment.id]);
+  assert.equal(first.content, '');
+  pending.reject(new Error('Connection lost'));
+  await flush();
+  assert.equal(view.querySelector('textarea').disabled, false);
+  assert.equal(composer.files.length, 1);
+  f.state.send = async () => message('saved');
+  action(view, 'Send').click();
+  await flush();
+  assert.deepEqual(calls(f, 'send').at(-1).args[2], first);
+  assert.equal(composer.consumed, 1);
+  view.close();
+  assert.equal(composer.disposed, true);
+});
+
+test('unchanged saved history retains an open attachment until message removal or dialog close', async (t) => {
+  const f = await fixture(t);
+  f.state.loadHistory = async () =>
+    history([{ ...message('file'), attachments: [fileAttachment] }]);
+  const view = await f.openConversation();
+  const rendered = f.attachmentState.renders[0];
+  assert.equal(await rendered.options.authorization(fileAttachment.id), 'Bearer token-a');
+  await f.tick();
+  assert.equal(rendered.disposed, false);
+  assert.equal(f.attachmentState.renders.length, 1);
+  f.notifyHistoryRemoval('file', '2026-10-09T12:00:00Z');
+  assert.equal(rendered.disposed, true);
+  assert.equal(f.attachmentState.renders.length, 1, 'removed content cannot render file controls');
+  view.close();
 });

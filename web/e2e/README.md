@@ -31,12 +31,12 @@ Do not rebuild `web/dist` during tests.
 
 Defaults and overrides:
 
-| Setting | Default |
-| --- | --- |
-| `TEST_SERVER_PORT` | HTTP `3119`, loopback only |
-| `TEST_MEDIA_PORT` | UDP `41010`, one media worker |
+| Setting              | Default                                               |
+| -------------------- | ----------------------------------------------------- |
+| `TEST_SERVER_PORT`   | HTTP `3119`, loopback only                            |
+| `TEST_MEDIA_PORT`    | UDP `41010`, one media worker                         |
 | `TEST_SERVER_BINARY` | `target/debug/simplestChat`; use an absolute override |
-| `TEST_ANNOUNCE_IP` | `127.0.0.1`; optional interface-owned IPv4 |
+| `TEST_ANNOUNCE_IP`   | `127.0.0.1`; optional interface-owned IPv4            |
 
 The helper exports `BASE_URL`, `COMMUNITY_E2E=1` and `TEST_DATABASE_URL`.
 `build/with-test-server.sh true` checks migration/startup only. To use an
@@ -89,6 +89,19 @@ notification delivery. Source tests separately execute the service worker's
 generic notification/click behavior and verify that it has no fetch/cache handler.
 Physical iOS/Android installation, lock-screen delivery and notification clicks
 remain manual device checks.
+
+The community suite also exercises accepted contacts before either account joins
+a room, favorites and notification preferences across separate signed-in browser
+contexts, and muted PM delivery without suppressing unread messages.
+`attachment-checks.cjs` uploads real bytes through paste, drop and the file input,
+checks a controlled transient failure and retry, decodes a recipient's PNG preview,
+and verifies download headers and access denial after room leave or message removal.
+The small-viewport file input check uses desktop Chromium; native mobile pickers
+and operating-system clipboard behavior remain manual checks. Ordinary signaling
+reconnect checks preserve native track identity. The explicit **Hide for me** /
+**Restore broadcast** scenario permits replacing the incoming video consumer,
+while requiring unchanged peers, sender tracks, audio and capture state plus
+renewed video decoding.
 
 ```sh
 AUTH_CROSS_TAB_E2E=1 E2E_BROWSER=firefox \

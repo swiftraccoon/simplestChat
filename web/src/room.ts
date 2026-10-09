@@ -709,6 +709,7 @@ export class RoomClient {
     clientMessageId = crypto.randomUUID(),
     sequence?: number,
     replyTo?: string,
+    attachmentIds?: string[],
   ): void {
     if (!this.connected) throw new Error('Reconnecting — wait before sending');
     if (!this.canChat) throw new Error('You are not allowed to chat');
@@ -718,6 +719,7 @@ export class RoomClient {
       clientMessageId,
       ...(sequence !== undefined && { sequence }),
       ...(replyTo !== undefined && { replyTo }),
+      ...(attachmentIds?.length && { attachmentIds }),
     });
   }
 
@@ -727,6 +729,7 @@ export class RoomClient {
     clientMessageId: string,
     sequence?: number,
     replyTo?: string,
+    attachmentIds?: string[],
   ): void {
     if (!this.connected) throw new Error('Reconnecting — wait before sending');
     if (!this.canChat) throw new Error('You are not allowed to chat');
@@ -737,6 +740,7 @@ export class RoomClient {
       clientMessageId,
       ...(sequence !== undefined && { sequence }),
       ...(replyTo !== undefined && { replyTo }),
+      ...(attachmentIds?.length && { attachmentIds }),
     });
   }
 

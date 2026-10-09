@@ -1607,6 +1607,7 @@ window.addEventListener('pagehide', (event) => {
   mediaLifecycle.dispose();
   pwa.dispose();
   notificationPreferences.dispose();
+  socialChat.dispose();
   savedRoomMount?.dispose();
   clearInterval(inboxRefresh);
   document.removeEventListener('visibilitychange', refreshSavedMessages);

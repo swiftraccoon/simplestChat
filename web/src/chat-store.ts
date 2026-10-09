@@ -235,7 +235,13 @@ export class ChatStore {
     while (
       this.editedMessages.size > this.maxMessages * 2 ||
       [...this.editedMessages.values()].reduce(
-        (total, message) => total + message.content.length,
+        (total, message) =>
+          total +
+          message.content.length +
+          (message.attachments ?? []).reduce(
+            (sum, file) => sum + file.name.length + file.id.length + file.contentType.length + 16,
+            0,
+          ),
         0,
       ) > this.maxCharacters
     )
@@ -283,7 +289,7 @@ export class ChatStore {
     if (entry.recipientId) return entry;
     const removedAt = this.removedMessages.get(entry.messageId) ?? entry.removedAt;
     if (removedAt) {
-      const redacted = { ...entry, removedAt, content: '', reactions: [] };
+      const redacted = { ...entry, removedAt, content: '', reactions: [], attachments: [] };
       delete redacted.replyTo;
       return redacted;
     }
@@ -385,6 +391,10 @@ export class ChatStore {
   private characters(item: ChatItem): number {
     return (
       item.content.length +
+      (item.attachments ?? []).reduce(
+        (total, file) => total + file.id.length + file.name.length + file.contentType.length + 16,
+        0,
+      ) +
       item.participantName.length +
       (item.recipientName?.length ?? 0) +
       item.messageId.length +
