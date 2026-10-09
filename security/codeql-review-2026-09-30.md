@@ -515,3 +515,17 @@ original rationale, owner and 2026-11-29 expiry remain unchanged.
 `observedRevision` retains the actual prior analysis; `sourceProvenanceRevision`
 records this source-only review. The next original CodeQL analysis must match
 these complete identities independently. No remote alert state changed.
+
+## October 9 attachment and account routes
+
+At source revision `730710cde76dbd2dded001cdc02215926d32653f`, the bounded upload route, account endpoints and
+strict download-CSP regression shift three existing findings. The complete flagged
+lines and their enclosing test functions are byte-identical to the prior reviewed
+`48ee485` source. Alert 35 moves from 1698 to 1742, alert 63 from 2063 to 2147,
+and alert 69 from 1689 to 1733; columns and rendered-message hashes are unchanged.
+All remain inside the existing `cfg(test)` module with the same fixed fixture
+inputs and assertion sinks. Complete-file SHA-256 is `7e63f473cfb5d46c49937e0a4d6f92323ba01e1f10df22d6cf85f97fec03f97f`.
+Canonical fingerprints and source provenance are rebound to that reviewed file;
+original analysis provenance, rationale, owner and 2026-11-29 expiry remain.
+This approves no new finding, remote dismissal or broader exclusion. The next
+original CodeQL analysis must independently match these exact identities.
