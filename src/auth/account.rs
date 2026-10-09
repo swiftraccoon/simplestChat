@@ -260,7 +260,7 @@ pub fn validate_text(value: &str, maximum: usize, multiline: bool) -> bool {
         })
 }
 
-fn image_dimensions(mime: &str, bytes: &[u8]) -> Option<(u32, u32)> {
+pub(crate) fn image_dimensions(mime: &str, bytes: &[u8]) -> Option<(u32, u32)> {
     match mime {
         "image/png"
             if bytes.len() >= 33

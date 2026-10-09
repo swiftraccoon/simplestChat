@@ -79,6 +79,8 @@ pub struct ReadResult {
 pub struct SendRequest {
     pub client_message_id: String,
     pub content: String,
+    #[serde(default)]
+    pub attachment_ids: Vec<Uuid>,
 }
 
 #[derive(Clone, Deserialize)]
@@ -93,7 +95,7 @@ pub(crate) fn apply_edit(
     message: &mut ChatEntry,
     request: &EditRequest,
 ) -> Result<(), &'static str> {
-    if request.content.trim().is_empty()
+    if (request.content.trim().is_empty() && message.attachments.is_empty())
         || request.content.len() > 4096
         || request
             .content
@@ -282,6 +284,7 @@ pub(crate) async fn persist_message(
     sender_authenticated: bool,
     retention_days: i32,
     message: &ChatEntry,
+    attachment_ids: &[Uuid],
 ) -> Result<ChatEntry, sqlx::Error> {
     let mut tx = pool.begin().await?;
     if let Some(recipient) = message.recipient_id.as_deref() {
@@ -304,6 +307,7 @@ pub(crate) async fn persist_message(
         sender_authenticated,
         retention_days,
         message,
+        attachment_ids,
     )
     .await?;
     tx.commit().await?;
@@ -325,6 +329,7 @@ async fn insert_message(
     sender_authenticated: bool,
     retention_days: i32,
     message: &ChatEntry,
+    attachment_ids: &[Uuid],
 ) -> Result<ChatEntry, sqlx::Error> {
     let sender: Uuid = message
         .participant_id
@@ -348,6 +353,31 @@ async fn insert_message(
         .execute(&mut *connection)
         .await?;
     let mut message = message.clone();
+    let existing:Option<SqlJson<ChatEntry>>=sqlx::query_scalar("SELECT body FROM chat_messages WHERE conversation=$1 AND sender_session=$2 AND client_message_id=$3")
+        .bind(&conversation).bind(sender_session).bind(&message.client_message_id).fetch_optional(&mut *connection).await?;
+    if let Some(existing) = existing {
+        if existing.0.removed_at.is_none()
+            && (existing
+                .0
+                .attachments
+                .iter()
+                .map(|file| file.id)
+                .collect::<Vec<_>>()
+                != attachment_ids
+                || (existing.0.edited_at.is_none()
+                    && (existing.0.content != message.content
+                        || existing.0.reply_to.as_ref().map(|reply| &reply.message_id)
+                            != message.reply_to.as_ref().map(|reply| &reply.message_id))))
+        {
+            return Err(invalid("Message ID was already used"));
+        }
+        return Ok(existing.0);
+    }
+    if !attachment_ids.is_empty() && !sender_authenticated {
+        return Err(invalid("Sign in to attach files"));
+    }
+    message.attachments =
+        crate::attachments::pending_metadata(connection, sender, attachment_ids).await?;
     if let Some(reply) = &mut message.reply_to {
         let original: Option<SqlJson<ChatEntry>> = sqlx::query_scalar(
             "SELECT body FROM chat_messages WHERE conversation=$1 AND id=$2 AND expires_at>now()",
@@ -387,6 +417,7 @@ async fn insert_message(
         .bind(recipient).bind(sender_session).bind(&message.client_message_id).bind(at).bind(expires)
         .bind(SqlJson(&message)).fetch_optional(&mut *connection).await?;
     let saved = if let Some(saved) = inserted {
+        crate::attachments::bind_durable(connection, attachment_ids, id, room, expires).await?;
         saved.0
     } else {
         let saved: SqlJson<ChatEntry> = sqlx::query_scalar(
@@ -592,9 +623,14 @@ pub(crate) async fn remove_public(
         .execute(&mut *connection)
         .await?;
     let row: Option<(SqlJson<ChatEntry>,bool)> = sqlx::query_as(
-        "UPDATE chat_messages SET body=(body-'replyTo') || jsonb_build_object('content','','reactions','[]'::jsonb,'removedAt',COALESCE(body->>'removedAt',$3))
+        "UPDATE chat_messages SET body=(body-'replyTo'-'attachments') || jsonb_build_object('content','','reactions','[]'::jsonb,'removedAt',COALESCE(body->>'removedAt',$3))
          WHERE room_id=$1 AND id=$2 AND expires_at>now() RETURNING body,sender_account IS NOT NULL")
         .bind(room).bind(id).bind(removed_at).fetch_optional(&mut *connection).await?;
+    sqlx::query("DELETE FROM attachments WHERE message_id=$1 AND room_id=$2")
+        .bind(id)
+        .bind(room)
+        .execute(&mut *connection)
+        .await?;
     {
         sqlx::query("UPDATE chat_messages SET body=jsonb_set(body,'{replyTo,excerpt}','\"Message removed\"'::jsonb)
             WHERE room_id=$1 AND body->'replyTo'->>'messageId'=$2")
@@ -826,6 +862,8 @@ pub(crate) async fn set_retention(pool: &PgPool, room: &str, days: i32) -> Resul
     // already made when a message was saved under a shorter retention period.
     sqlx::query("UPDATE chat_messages SET expires_at=LEAST(expires_at,sent_at+make_interval(days=>$2)) WHERE room_id=$1")
         .bind(room).bind(days).execute(&mut *tx).await?;
+    sqlx::query("UPDATE attachments a SET expires_at=LEAST(a.expires_at,m.expires_at) FROM chat_messages m WHERE a.message_id=m.id AND m.room_id=$1")
+        .bind(room).execute(&mut *tx).await?;
     if days == 0 {
         sqlx::query("DELETE FROM chat_read_cursors WHERE conversation=$1")
             .bind(public_conversation(room))
@@ -969,7 +1007,8 @@ pub async fn send_message(
     let own: Uuid = claims.sub.parse().map_err(|_| AuthError::InvalidToken)?;
     if own == peer
         || !crate::signaling::protocol::valid_correlation_id(&request.client_message_id)
-        || request.content.trim().is_empty()
+        || (request.content.trim().is_empty() && request.attachment_ids.is_empty())
+        || !crate::attachments::valid_ids(&request.attachment_ids)
         || request.content.len() > 4096
         || request
             .content
@@ -1018,7 +1057,15 @@ pub async fn send_message(
     let existing:Option<SqlJson<ChatEntry>>=sqlx::query_scalar("SELECT body FROM chat_messages WHERE conversation=$1 AND sender_session=$2 AND client_message_id=$3 AND expires_at>now()")
         .bind(&conversation).bind(own).bind(&request.client_message_id).fetch_optional(&mut *tx).await.map_err(routes::database_error)?;
     if let Some(existing) = existing {
-        if existing.0.edited_at.is_none() && existing.0.content != request.content {
+        if (existing.0.edited_at.is_none() && existing.0.content != request.content)
+            || existing
+                .0
+                .attachments
+                .iter()
+                .map(|file| file.id)
+                .collect::<Vec<_>>()
+                != request.attachment_ids
+        {
             return Err(AuthError::InvalidInput("Message ID was already used"));
         }
         return Ok((routes::no_store_headers(), Json(existing.0)));
@@ -1043,6 +1090,7 @@ pub async fn send_message(
         recipient_id: Some(peer.to_string()),
         recipient_name: Some(recipient.display_name.clone()),
         content: request.content,
+        attachments: Vec::new(),
         sent_at: Utc::now().to_rfc3339(),
         removed_at: None,
         revision: 0,
@@ -1051,9 +1099,17 @@ pub async fn send_message(
         reply_to: None,
         reactions: Vec::new(),
     };
-    let saved = insert_message(&mut tx, None, own, true, PM_RETENTION_DAYS, &message)
-        .await
-        .map_err(routes::database_error)?;
+    let saved = insert_message(
+        &mut tx,
+        None,
+        own,
+        true,
+        PM_RETENTION_DAYS,
+        &message,
+        &request.attachment_ids,
+    )
+    .await
+    .map_err(routes::database_error)?;
     tx.commit().await.map_err(routes::database_error)?;
     server.room_manager().deliver_inbox_message(&saved);
     crate::push::enqueue(pool, peer).await;
@@ -1114,13 +1170,14 @@ pub fn spawn_retention(pool: PgPool) -> tokio::task::JoinHandle<()> {
             interval.tick().await;
             let result=tokio::time::timeout(std::time::Duration::from_secs(15), async {
                 for _ in 0..16 {
+                    let attachments=crate::attachments::cleanup(&pool).await?;
                     let messages = sqlx::query("DELETE FROM chat_messages WHERE id IN (SELECT id FROM chat_messages WHERE expires_at<=now() ORDER BY expires_at LIMIT $1)")
                         .bind(CLEANUP_BATCH).execute(&pool).await?.rows_affected();
                     let inbox = sqlx::query("DELETE FROM chat_inbox WHERE (user_id,peer_id) IN (SELECT user_id,peer_id FROM chat_inbox WHERE expires_at<=now() ORDER BY expires_at LIMIT $1)")
                         .bind(CLEANUP_BATCH).execute(&pool).await?.rows_affected();
                     let cursors = sqlx::query("DELETE FROM chat_read_cursors WHERE (user_id,conversation) IN (SELECT user_id,conversation FROM chat_read_cursors WHERE expires_at<=now() ORDER BY expires_at LIMIT $1)")
                         .bind(CLEANUP_BATCH).execute(&pool).await?.rows_affected();
-                    if messages < CLEANUP_BATCH as u64 && inbox < CLEANUP_BATCH as u64 && cursors < CLEANUP_BATCH as u64 { break; }
+                    if attachments < CLEANUP_BATCH as u64 && messages < CLEANUP_BATCH as u64 && inbox < CLEANUP_BATCH as u64 && cursors < CLEANUP_BATCH as u64 { break; }
                 }
                 Ok::<_,sqlx::Error>(())
             }).await;
@@ -1180,6 +1237,7 @@ mod tests {
     }
     fn entry(content: &str) -> ChatEntry {
         ChatEntry {
+            attachments: Vec::new(),
             message_id: Uuid::new_v4().to_string(),
             client_message_id: Uuid::new_v4().to_string(),
             participant_id: Uuid::new_v4().to_string(),
@@ -1318,7 +1376,7 @@ mod tests {
                     excerpt: "Message 0".into(),
                 });
             }
-            persist_message(&pool, Some(&room), session, true, 7, &message)
+            persist_message(&pool, Some(&room), session, true, 7, &message, &[])
                 .await
                 .unwrap();
             messages.push(message);
@@ -1418,7 +1476,7 @@ mod tests {
         );
         // A retry of the original send returns its edited receipt, without redelivery or rollback.
         assert_eq!(
-            persist_message(&pool, Some(&room), session, true, 7, &messages[0])
+            persist_message(&pool, Some(&room), session, true, 7, &messages[0], &[])
                 .await
                 .unwrap()
                 .content,
@@ -1533,6 +1591,7 @@ mod tests {
         let session = Uuid::new_v4();
         let base = Utc::now() - chrono::Duration::seconds(100);
         let make = |n: i64, recipient: Option<Uuid>| ChatEntry {
+            attachments: Vec::new(),
             message_id: Uuid::new_v4().to_string(),
             client_message_id: format!("attempt-{n}"),
             participant_id: alice.to_string(),
@@ -1552,7 +1611,7 @@ mod tests {
         let second = make(2, None);
         let third = make(3, None);
         for message in [&first, &second, &third] {
-            persist_message(&pool, Some(&room), session, true, 7, message)
+            persist_message(&pool, Some(&room), session, true, 7, message, &[])
                 .await
                 .unwrap();
         }
@@ -1626,10 +1685,10 @@ mod tests {
                 .is_err()
         );
         let private = make(4, Some(bob));
-        let saved = persist_message(&pool, None, session, true, PM_RETENTION_DAYS, &private)
+        let saved = persist_message(&pool, None, session, true, PM_RETENTION_DAYS, &private, &[])
             .await
             .unwrap();
-        let retried = persist_message(&pool, None, session, true, PM_RETENTION_DAYS, &private)
+        let retried = persist_message(&pool, None, session, true, PM_RETENTION_DAYS, &private, &[])
             .await
             .unwrap();
         assert_eq!(
@@ -1639,9 +1698,17 @@ mod tests {
         let mut conflict = private.clone();
         conflict.content = "different".into();
         assert!(
-            persist_message(&pool, None, session, true, PM_RETENTION_DAYS, &conflict)
-                .await
-                .is_err()
+            persist_message(
+                &pool,
+                None,
+                session,
+                true,
+                PM_RETENTION_DAYS,
+                &conflict,
+                &[]
+            )
+            .await
+            .is_err()
         );
         for (user, preferences) in [
             (bob, serde_json::json!({"allowPrivateMessages":false})),
@@ -1672,6 +1739,7 @@ mod tests {
                 true,
                 PM_RETENTION_DAYS,
                 &make(5, Some(bob)),
+                &[],
             )
             .await;
             assert!(

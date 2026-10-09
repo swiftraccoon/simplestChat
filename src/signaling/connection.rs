@@ -680,6 +680,7 @@ fn diagnostic_operation(message: &ClientMessage) -> OperationKind {
         | ClientMessage::RemoveChatMessage { .. }
         | ClientMessage::EditChatMessage { .. }
         | ClientMessage::GetPinnedMessages { .. }
+        | ClientMessage::GetAttachmentAccess { .. }
         | ClientMessage::SetPinnedMessage { .. }
         | ClientMessage::GetRoomSnapshot { .. }
         | ClientMessage::GetChatHistory { .. }
@@ -1713,19 +1714,38 @@ async fn handle_connection_with_timing(
                         let result = operation
                             .scope(diagnostics::measure_result(
                                 Stage::Dispatch,
-                                handle_client_message(
-                                    &client_msg,
-                                    &participant_id,
-                                    &mut current_room_id,
-                                    &in_lobby,
-                                    &reply,
-                                    &room_manager,
-                                    &turn_config,
-                                    &mut reconnect_token,
-                                    &bwe_sender,
-                                    is_authenticated,
-                                    client_ip,
-                                ),
+                                async {
+                                    if let ClientMessage::GetAttachmentAccess { request_id, attachment_id } = &client_msg {
+                                        if in_lobby.load(Ordering::Acquire) {
+                                            anyhow::bail!("Cannot perform this action while waiting in lobby");
+                                        }
+                                        let room_id = current_room_id.as_deref().ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
+                                        let pool = db_pool.as_ref().ok_or_else(|| anyhow::anyhow!("Database unavailable"))?;
+                                        let access = crate::attachments::grant_access(
+                                            &room_manager, pool, room_id, &participant_id, &tx,
+                                            authenticated_user.as_ref(), *attachment_id,
+                                        ).await.map_err(|_| anyhow::anyhow!("Attachment unavailable"))?;
+                                        reply.send(&ServerMessage::SocialResponse {
+                                            request_id: request_id.clone(),
+                                            action: "getAttachmentAccess".to_owned(),
+                                            data: serde_json::to_value(access)?,
+                                        })
+                                    } else {
+                                        handle_client_message(
+                                            &client_msg,
+                                            &participant_id,
+                                            &mut current_room_id,
+                                            &in_lobby,
+                                            &reply,
+                                            &room_manager,
+                                            &turn_config,
+                                            &mut reconnect_token,
+                                            &bwe_sender,
+                                            is_authenticated,
+                                            client_ip,
+                                        ).await
+                                    }
+                                },
                             ))
                             .instrument(tracing::info_span!("signaling_operation", connection_id = diagnostic_connection_id, operation = ?diagnostic_operation(&client_msg)))
                             .await;
@@ -2834,6 +2854,11 @@ async fn handle_client_message(
                 .await?;
         }
 
+        // The socket owner handles grants with its current account claims.
+        ClientMessage::GetAttachmentAccess { .. } => {
+            anyhow::bail!("Attachment access requires the current socket credentials");
+        }
+
         // === Moderation ===
         ClientMessage::CloseCam {
             target_participant_id,
@@ -3452,6 +3477,7 @@ mod security_tests {
         assert!(!is_consumer_mutation(&ClientMessage::RequestVoice));
         assert!(!is_media_mutation(&ClientMessage::ChatMessage {
             content: "hello".to_string(),
+            attachment_ids: Vec::new(),
             client_message_id: None,
             sequence: None,
             reply_to: None,
@@ -3653,6 +3679,7 @@ mod security_tests {
         assert!(!is_admin_mutation(&ClientMessage::RequestVoice));
         assert!(!is_admin_mutation(&ClientMessage::ChatMessage {
             content: "hello".to_string(),
+            attachment_ids: Vec::new(),
             client_message_id: None,
             sequence: None,
             reply_to: None,

@@ -305,11 +305,15 @@ fn authorization_inventory_matches_actual_routes_handlers_and_message_variants()
     for row in &manifest.http {
         assert_eq!(
             row.unauthenticated_status.is_some(),
-            row.policy != "current-session" && row.policy != "guest-or-ticket"
+            !matches!(
+                row.policy.as_str(),
+                "current-session" | "current-session-or-room-grant" | "guest-or-ticket"
+            )
         );
         assert!(
             [
                 "current-session",
+                "current-session-or-room-grant",
                 "registration",
                 "credentials",
                 "refresh-cookie",
@@ -523,11 +527,12 @@ async fn authorization_database_every_authenticated_route_rejects_missing_or_non
     .await
     .unwrap();
     let mut sequence = 1;
-    for row in manifest()
-        .http
-        .iter()
-        .filter(|row| row.policy == "current-session")
-    {
+    for row in manifest().http.iter().filter(|row| {
+        matches!(
+            row.policy.as_str(),
+            "current-session" | "current-session-or-room-grant"
+        )
+    }) {
         for (label, token) in [
             ("missing", None),
             ("wrong-account session", Some(foreign.as_str())),
@@ -597,6 +602,7 @@ async fn authorization_database_inbox_offline_delivery_read_sync_and_consent() {
         recipient_id: Some(bob.to_string()),
         recipient_name: Some("Bob".into()),
         content: "First conversation together in a room".into(),
+        attachments: Vec::new(),
         sent_at: (chrono::Utc::now() - chrono::Duration::seconds(1)).to_rfc3339(),
         removed_at: None,
         revision: 0,
@@ -605,9 +611,17 @@ async fn authorization_database_inbox_offline_delivery_read_sync_and_consent() {
         reply_to: None,
         reactions: vec![],
     };
-    crate::room::history::persist_message(&fixture.pool, None, Uuid::new_v4(), true, 90, &initial)
-        .await
-        .unwrap();
+    crate::room::history::persist_message(
+        &fixture.pool,
+        None,
+        Uuid::new_v4(),
+        true,
+        90,
+        &initial,
+        &[],
+    )
+    .await
+    .unwrap();
     // Nobody joins a runtime room: the recipient is offline throughout this test.
     let payload =
         json!({"clientMessageId":"offline-reply","content":"A message while you are away"});
@@ -1066,6 +1080,7 @@ fn socket_boundary(message: &protocol::ClientMessage) -> &'static str {
         JoinRoom { .. } => "room-admission",
         LeaveRoom => "own-membership",
         GetRouterRtpCapabilities => "room-membership",
+        GetAttachmentAccess { .. } => "room-membership",
         CreateSendTransport => "room-membership",
         CreateRecvTransport => "room-membership",
         ConnectTransport { .. } => "room-membership",

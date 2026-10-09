@@ -412,6 +412,7 @@ impl ChatSchedule {
         );
         self.next = now + self.client.load.interval;
         Ok(Some(ClientMessage::ChatMessage {
+            attachment_ids: Vec::new(),
             content,
             client_message_id: Some(id),
             sequence: Some(self.sequence),
@@ -463,6 +464,7 @@ mod tests {
         };
         assert_eq!(content.len(), CONTENT_BYTES);
         let entry = ChatEntry {
+            attachments: Vec::new(),
             message_id: format!("server-{index}-{sequence}"),
             client_message_id: id.clone(),
             participant_id: format!("participant-{index}"),
@@ -484,6 +486,7 @@ mod tests {
                 message: entry.clone(),
             },
             ServerMessage::ChatReceived {
+                attachments: Vec::new(),
                 participant_id: entry.participant_id,
                 participant_name: entry.participant_name,
                 content: entry.content,

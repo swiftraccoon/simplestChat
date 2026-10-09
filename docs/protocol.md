@@ -894,6 +894,29 @@ and a notification already accepted by a provider may arrive after a read or
 sign-out. The app does not promise immediate recall, offline chat access, or
 end-to-end encryption for stored messages.
 
+## Attachments
+
+`POST /api/auth/attachments` accepts a binary body up to 5 MiB from a current
+account session. `X-File-Name` is the unpadded base64url encoding of a UTF-8 name
+(up to 255 bytes). The server returns `{id,name,contentType,size}`; it determines
+the content type. `DELETE /api/auth/attachments/{id}` removes an owned unclaimed
+upload. `GET` returns bytes with no-store, nosniff and sandbox response policy.
+
+Chat, private-message and retry requests accept `attachmentIds` (at most four
+unique UUIDs). The server replaces these with authoritative `attachments`
+metadata in the resulting `ChatEntry`; a message may contain files with empty
+text. A retry repeats the original text, reply and attachment IDs; an already
+edited or removed message returns its current receipt. Editing text retains the
+files; removal/expiry revokes them. Files never travel in WebSocket
+frames. HTTP PM sends use the same `attachmentIds` field.
+
+`getAttachmentAccess {requestId,attachmentId}` is a correlated social request
+returning `{token,expiresAt}`. Send that token as `Authorization: Attachment
+<TOKEN>` on the byte request; never put it in a URL. It grants one file for 30
+seconds, subject to current room/session/message authorization on each fetch.
+Current account bearer tokens instead permit owned pending files and retained
+PM files belonging to that account's conversation.
+
 ## Account notification policy
 
 `GET /api/auth/notification-preferences` returns `{privateMessages,mentions,

@@ -11,6 +11,7 @@
 //! [`auth`] and [`db`] provide optional persisted identity and settings.
 //! [`shutdown`] coordinates one-way drain; the binary owns runtime deadlines.
 
+pub mod attachments;
 pub mod auth;
 pub mod configuration;
 pub mod db;

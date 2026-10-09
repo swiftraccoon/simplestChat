@@ -30,6 +30,7 @@ HTTP / WebSocket
 | Membership, lobby, chat and reconnect state | `room/mod.rs`, `room/social.rs` |
 | Durable room history, PM inbox, read positions and chat expiry | `room/history.rs` |
 | Account notification rules, quiet hours and per-conversation overrides | `auth/notifications.rs` |
+| Bounded file storage, message ownership and short-lived live-room download grants | `attachments.rs` |
 | Optional session-owned PM push, retained VAPID identity and bounded delivery queue | `push.rs` |
 | Ordered persistence and uncertain-write handling | `room/control.rs` |
 | Persistent room/community API | `room/api.rs`, `room/community.rs`, `room/settings.rs` |
@@ -76,8 +77,9 @@ Migration 025 adds public-history retention to persisted rooms plus account PMs,
 inbox rows and read cursors; migration 026 validates the expanded moderation
 action constraint in a separate transaction. Public history defaults off; account PMs last 90
 days. Retained public messages and account-to-account PMs use room control to
-commit before delivery. Ephemeral chat validates and publishes under the room
-state lock without waiting for unrelated database writes. A private message
+commit before delivery. Ephemeral text chat validates and publishes under the room
+state lock without waiting for unrelated database writes. Ephemeral attachments
+claim their uploads under the room control gate before delivery. A private message
 involving a guest remains ephemeral. Inbox
 HTTP routes authorize the current account and derive the two-account conversation
 server-side; room history requires current membership. Pages and searches are
@@ -292,3 +294,23 @@ overrides per account. Quiet hours use a validated PostgreSQL time-zone name,
 start inclusive/end exclusive, including midnight and daylight-saving changes.
 Snoozes are limited to 30 days. Push eligibility rechecks current preferences,
 per-peer overrides, unread state and existing PM consent before dispatch.
+
+## Attachments
+
+Migration 033 stores attachment bytes in PostgreSQL, inside the existing backup
+and migration boundary. Limits are 5 MiB/file, four/message, 64 MiB or 1,000 files
+per account and 1 GiB or 20,000 files globally. Four upload permits bound body
+reads; four download permits stay owned until the streamed body ends or drops.
+Quota accounting includes expired bytes until physical cleanup. Pending files
+expire after an hour. Durable claims occur in the message transaction; message
+expiry/removal deletes the associated bytes. Ephemeral files require the original
+message to remain visible in a live room and expire after 24 hours. The existing
+five-minute retention worker deletes expired uploads in batches of 1,000.
+
+Only accounts upload. A current account token reads its own pending files or
+retained PM attachments. Live-room viewers, including guests, request a 30-second
+file-specific grant through their current socket. Each download rechecks live
+membership, media-session generation, message visibility, and any account session
+before returning bytes. No token is put in a URL. PNG/JPEG/WebP dimension checks
+bound previews to 4096 pixels per side and 16 million pixels; other files are
+served as downloads with nosniff and a sandbox CSP. Filenames are sanitized.

@@ -70,6 +70,7 @@ const PRINCIPAL_SKETCH_DEPTH: usize = 4;
 const PRINCIPAL_SKETCH_WIDTH: usize = 65_536;
 const PRINCIPAL_SKETCH_WIDTH_U64: u64 = 65_536;
 const HTTP_REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
+const HTTP_UPLOAD_REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 const HTTP_BODY_IDLE_TIMEOUT: Duration = Duration::from_secs(5);
 const WS_AUTH_PROTOCOL_PREFIX: &str = "ticket.";
 
@@ -688,6 +689,10 @@ impl SignalingServer {
             )
             .route("/password", post(crate::auth::account::change_password))
             .route(
+                "/attachments/{id}",
+                get(crate::attachments::download).delete(crate::attachments::delete_pending),
+            )
+            .route(
                 "/contacts",
                 get(crate::auth::discovery::list_contacts)
                     .post(crate::auth::discovery::create_contact),
@@ -768,6 +773,22 @@ impl SignalingServer {
                 HTTP_REQUEST_TIMEOUT,
             ));
 
+        // A binary upload has its own total deadline while retaining the same
+        // account guard and five-second idle-body limit. It must not be nested
+        // under the ordinary auth router's fifteen-second timeout.
+        let attachment_upload_routes = Router::new()
+            .route("/api/auth/attachments", post(crate::attachments::upload))
+            .layer(DefaultBodyLimit::max(5 * 1024 * 1024))
+            .layer(RequestBodyTimeoutLayer::new(HTTP_BODY_IDLE_TIMEOUT))
+            .layer(middleware::from_fn_with_state(
+                self.auth_guard.clone(),
+                guarded_api_request,
+            ))
+            .layer(TimeoutLayer::with_status_code(
+                StatusCode::REQUEST_TIMEOUT,
+                HTTP_UPLOAD_REQUEST_TIMEOUT,
+            ));
+
         let room_routes = Router::new()
             .route("/", get(crate::room::api::list_rooms))
             .route("/", post(crate::room::api::create_room))
@@ -825,6 +846,7 @@ impl SignalingServer {
                 HTTP_REQUEST_TIMEOUT,
             ));
         let routes = Router::new()
+            .merge(attachment_upload_routes)
             .merge(telemetry_routes)
             .route("/ws", get(ws_handler))
             .route("/health", get(health_handler))
@@ -1474,8 +1496,9 @@ async fn security_headers(request: Request<Body>, next: Next) -> Response {
         header::STRICT_TRANSPORT_SECURITY,
         HeaderValue::from_static("max-age=31536000; includeSubDomains"),
     );
-    headers.insert(
-        header::CONTENT_SECURITY_POLICY,
+    // Download handlers set a tighter sandbox policy for untrusted file bytes.
+    // The application policy supplies the default without replacing that boundary.
+    headers.entry(header::CONTENT_SECURITY_POLICY).or_insert_with(||
         HeaderValue::from_static(
             "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'",
         ),
@@ -1918,6 +1941,46 @@ mod security_tests {
         assert!(response.starts_with("http/1.1 404"));
         assert!(response.contains("x-content-type-options: nosniff\r\n"));
         assert!(response.contains("content-security-policy:"));
+    }
+
+    #[tokio::test]
+    async fn handler_download_sandbox_survives_global_http_security_headers() {
+        use tower::ServiceExt;
+        let router = with_static_fallback_and_security(Router::new().route(
+            "/owned-download-fixture",
+            get(|| async {
+                (
+                    [(
+                        header::CONTENT_SECURITY_POLICY,
+                        "default-src 'none'; sandbox",
+                    )],
+                    "owned fixture",
+                )
+            }),
+        ));
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .uri("/owned-download-fixture")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response.headers()[header::CONTENT_SECURITY_POLICY],
+            "default-src 'none'; sandbox"
+        );
+        assert_eq!(
+            response.headers()[header::X_CONTENT_TYPE_OPTIONS],
+            "nosniff"
+        );
+        assert_eq!(response.headers()[header::REFERRER_POLICY], "no-referrer");
+        let body = axum::body::to_bytes(response.into_body(), 1024)
+            .await
+            .unwrap();
+        assert_eq!(body, "owned fixture");
     }
 
     #[test]

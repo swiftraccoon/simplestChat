@@ -182,6 +182,8 @@ pub enum ClientMessage {
     ChatMessage {
         content: String,
         #[serde(default)]
+        attachment_ids: Vec<uuid::Uuid>,
+        #[serde(default)]
         client_message_id: Option<String>,
         #[serde(default)]
         sequence: Option<u64>,
@@ -193,6 +195,8 @@ pub enum ClientMessage {
     PrivateMessage {
         target_participant_id: String,
         content: String,
+        #[serde(default)]
+        attachment_ids: Vec<uuid::Uuid>,
         client_message_id: String,
         #[serde(default)]
         sequence: Option<u64>,
@@ -200,6 +204,11 @@ pub enum ClientMessage {
         reply_to: Option<String>,
     },
     RetryChatMessage(RetryChatMessage),
+    #[serde(rename_all = "camelCase")]
+    GetAttachmentAccess {
+        request_id: String,
+        attachment_id: uuid::Uuid,
+    },
     #[serde(rename_all = "camelCase")]
     GetChatHistory {
         request_id: String,
@@ -588,6 +597,8 @@ pub enum ServerMessage {
         participant_id: String,
         participant_name: String,
         content: String,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        attachments: Vec<ChatAttachment>,
         message_id: String,
         client_message_id: String,
         sent_at: String,
@@ -874,6 +885,8 @@ pub struct ChatEntry {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub recipient_name: Option<String>,
     pub content: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub attachments: Vec<ChatAttachment>,
     pub sent_at: String,
     /// Moderator removal erases content while retaining its place in the conversation.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -890,6 +903,15 @@ pub struct ChatEntry {
     pub reply_to: Option<ChatReplyRef>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub reactions: Vec<ChatReaction>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatAttachment {
+    pub id: uuid::Uuid,
+    pub name: String,
+    pub content_type: String,
+    pub size: i64,
 }
 
 /// The reactions people may add to a message.
@@ -939,6 +961,8 @@ pub struct RetryChatMessage {
     pub sequence: u64,
     pub chat_session_id: String,
     pub content: String,
+    #[serde(default)]
+    pub attachment_ids: Vec<uuid::Uuid>,
     pub target_participant_id: Option<String>,
     #[serde(default)]
     pub reply_to: Option<String>,

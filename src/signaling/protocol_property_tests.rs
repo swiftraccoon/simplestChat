@@ -36,6 +36,7 @@ fn boundary_properties_chat_text_and_unsigned_sequences_survive_json_escaping() 
             _ => rng.random(),
         };
         let message = ClientMessage::ChatMessage {
+            attachment_ids: Vec::new(),
             content: text.clone(),
             client_message_id: Some(format!("case-{case}")),
             sequence: Some(sequence),

@@ -3938,6 +3938,7 @@ mod chat_and_continuous_audio_tests {
             let ack = ServerMessage::MessageAck {
                 client_message_id: id.clone(),
                 message: ChatEntry {
+                    attachments: Vec::new(),
                     message_id: "server-owned-message".into(),
                     client_message_id: id,
                     participant_id: "owned-participant".into(),

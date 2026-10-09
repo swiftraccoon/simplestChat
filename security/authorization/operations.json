@@ -837,6 +837,39 @@
       "checks": [
         "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions"
       ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/attachments",
+      "handler": "crate::attachments::upload",
+      "policy": "current-session",
+      "body": null,
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/attachments/{id}",
+      "handler": "crate::attachments::download",
+      "policy": "current-session-or-room-grant",
+      "body": null,
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/auth/attachments/{id}",
+      "handler": "crate::attachments::delete_pending",
+      "policy": "current-session",
+      "body": null,
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions"
+      ]
     }
   ],
   "websocket": [
@@ -1683,6 +1716,21 @@
         "requestId": "policy-request",
         "messageId": "00000000-0000-4000-8000-000000000001",
         "pinned": true
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation"
+      ]
+    },
+    {
+      "variant": "GetAttachmentAccess",
+      "operation": "getAttachmentAccess",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "getAttachmentAccess",
+        "requestId": "policy-request",
+        "attachmentId": "00000000-0000-4000-8000-000000000001"
       },
       "checks": [
         "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",

@@ -473,6 +473,7 @@ mod tests {
             &sender.id,
             &sender.sender,
             ChatAttempt {
+                attachment_ids: Vec::new(),
                 content: "hello".into(),
                 client_message_id: Some(id.into()),
                 recipient_id: target.map(String::from),
@@ -854,6 +855,7 @@ mod tests {
         let (mut room, alice, _, carol, _) = fixture();
         for index in 0..400 {
             let message = ChatEntry {
+                attachments: Vec::new(),
                 message_id: Uuid::new_v4().to_string(),
                 client_message_id: index.to_string(),
                 participant_id: alice.id.clone(),
@@ -1063,6 +1065,7 @@ mod tests {
             &sender.id,
             &sender.sender,
             ChatAttempt {
+                attachment_ids: Vec::new(),
                 content: content.into(),
                 client_message_id: Some(id.into()),
                 recipient_id: target.map(String::from),
@@ -1754,6 +1757,7 @@ mod tests {
                 true,
                 7,
                 message,
+                &[],
             )
             .await
             .unwrap();
@@ -1765,6 +1769,7 @@ mod tests {
             true,
             90,
             &private,
+            &[],
         )
         .await
         .unwrap();
@@ -1780,6 +1785,7 @@ mod tests {
             true,
             7,
             &foreign,
+            &[],
         )
         .await
         .unwrap();
@@ -2303,6 +2309,7 @@ struct ChatReceipt {
 
 struct PreparedChat {
     message: ChatEntry,
+    attachment_ids: Vec<Uuid>,
     sender_session: Uuid,
     sender_authenticated: bool,
     recipient: Option<(String, Uuid, mpsc::Sender<crate::OutboundJson>)>,
@@ -2315,6 +2322,7 @@ struct PreparedChat {
 
 struct ChatAttempt {
     content: String,
+    attachment_ids: Vec<Uuid>,
     client_message_id: Option<String>,
     recipient_id: Option<String>,
     sequence: Option<u64>,
@@ -2471,6 +2479,7 @@ impl ClientMessage {
     pub(crate) fn social_budget(&self) -> SocialBudget {
         match self {
             Self::GetRoomSnapshot { .. }
+            | Self::GetAttachmentAccess { .. }
             | Self::GetPinnedMessages { .. }
             | Self::GetChatHistory { .. }
             | Self::MarkChatRead { .. }
@@ -2490,6 +2499,9 @@ impl ClientMessage {
     pub(crate) fn social_request(&self) -> Option<(&str, &'static str)> {
         match self {
             Self::SetChatPreferences { request_id, .. } => Some((request_id, "setChatPreferences")),
+            Self::GetAttachmentAccess { request_id, .. } => {
+                Some((request_id, "getAttachmentAccess"))
+            }
             Self::ChangeNickname { request_id, .. } => Some((request_id, "changeNickname")),
             Self::SetChatStyle { request_id, .. } => Some((request_id, "setChatStyle")),
             Self::EditChatMessage { request_id, .. } => Some((request_id, "editChatMessage")),
@@ -2630,6 +2642,7 @@ pub(super) fn redact_message(message: &mut ChatEntry, message_id: &str, removed_
     }
     if message.message_id == message_id {
         message.content.clear();
+        message.attachments.clear();
         message.reply_to = None;
         message.reactions.clear();
         message.removed_at = Some(removed_at.to_owned());
@@ -3219,6 +3232,51 @@ impl Room {
 }
 
 impl RoomManager {
+    /// Live membership and original-message visibility are checked for every
+    /// grant and every byte fetch, including reconnect/rejoin and removal.
+    pub(crate) async fn attachment_grant_context(
+        &self,
+        room_id: &str,
+        participant_id: &str,
+        expected_sender: Option<&mpsc::Sender<crate::OutboundJson>>,
+        media_session: Option<Uuid>,
+        attachment_id: Uuid,
+        location: &crate::attachments::AttachmentLocation,
+    ) -> Option<(Uuid, bool)> {
+        let room_lock = self.get_room(room_id).ok()?;
+        let room = room_lock.read().await;
+        if room.deleting {
+            return None;
+        }
+        let viewer = room.participants.get(participant_id)?;
+        if !viewer.social.connected
+            || viewer.sender.is_closed()
+            || expected_sender.is_some_and(|sender| !viewer.sender.same_channel(sender))
+            || media_session.is_some_and(|session| viewer.media_session_id != session)
+        {
+            return None;
+        }
+        let live = room.social.history.iter().any(|entry| {
+            visible(entry, viewer)
+                && entry.message.removed_at.is_none()
+                && entry
+                    .message
+                    .attachments
+                    .iter()
+                    .any(|file| file.id == attachment_id)
+                && entry.message.message_id.parse::<Uuid>().ok()
+                    == location.message_id.or(location.ephemeral_message_id)
+        });
+        let retained_public = location.message_id.is_some()
+            && location.room_id.as_deref() == Some(room_id)
+            && room.persisted
+            && room
+                .settings
+                .as_ref()
+                .is_some_and(|settings| settings.history_retention_days > 0);
+        (live || retained_public).then_some((viewer.media_session_id, viewer.authenticated))
+    }
+
     pub async fn relay_typing(
         &self,
         room_id: &str,
@@ -3241,11 +3299,13 @@ impl RoomManager {
         let attempt = match command {
             ClientMessage::ChatMessage {
                 content,
+                attachment_ids,
                 client_message_id,
                 sequence,
                 reply_to,
             } => ChatAttempt {
                 content: content.clone(),
+                attachment_ids: attachment_ids.clone(),
                 client_message_id: client_message_id.clone(),
                 recipient_id: None,
                 sequence: *sequence,
@@ -3254,12 +3314,14 @@ impl RoomManager {
             },
             ClientMessage::PrivateMessage {
                 content,
+                attachment_ids,
                 client_message_id,
                 target_participant_id,
                 sequence,
                 reply_to,
             } => ChatAttempt {
                 content: content.clone(),
+                attachment_ids: attachment_ids.clone(),
                 client_message_id: Some(client_message_id.clone()),
                 recipient_id: Some(target_participant_id.clone()),
                 sequence: *sequence,
@@ -3268,6 +3330,7 @@ impl RoomManager {
             },
             ClientMessage::RetryChatMessage(message) => ChatAttempt {
                 content: message.content.clone(),
+                attachment_ids: message.attachment_ids.clone(),
                 client_message_id: Some(message.client_message_id.clone()),
                 recipient_id: message.target_participant_id.clone(),
                 sequence: Some(message.sequence),
@@ -3305,7 +3368,7 @@ impl RoomManager {
                         .as_ref()
                         .is_some_and(|settings| settings.history_retention_days > 0)
             };
-        if !durable {
+        if !durable && attempt.attachment_ids.is_empty() {
             // Validate and publish ephemeral chat in this same state-lock turn.
             // It has no persistence phase that could race a consent change.
             return Self::process_chat_attempt(&mut room, sender_id, expected_sender, attempt);
@@ -3350,6 +3413,7 @@ impl RoomManager {
                             prepared.sender_authenticated,
                             retention_days,
                             &prepared.message,
+                            &prepared.attachment_ids,
                         ),
                     )
                     .await;
@@ -3366,6 +3430,46 @@ impl RoomManager {
                 };
                 prepared.receipt_bytes = serde_json::to_vec(&prepared.message)?.len();
                 prepared.durable = true;
+                room = room_lock.write().await;
+                room.ensure_live()?;
+                Self::participant_for_sender(&room, &sender_id, &expected_sender)?;
+            } else if !prepared.attachment_ids.is_empty() {
+                let pool = manager
+                    .db_pool
+                    .as_ref()
+                    .ok_or_else(|| rejected("Attachments unavailable"))?;
+                drop(room);
+                let attached = manager
+                    .persist_room(
+                        &room_id,
+                        &room_lock,
+                        crate::attachments::bind_ephemeral(
+                            pool,
+                            sender_id
+                                .parse()
+                                .map_err(|_| rejected("Sign in to attach files"))?,
+                            &prepared.attachment_ids,
+                            prepared
+                                .message
+                                .message_id
+                                .parse()
+                                .map_err(|_| rejected("Invalid message ID"))?,
+                            &room_id,
+                        ),
+                    )
+                    .await;
+                prepared.message.attachments = match attached {
+                    Ok(metadata) => metadata,
+                    Err(error) => {
+                        return chat_persistence_failure(
+                            &manager.metrics,
+                            &expected_sender,
+                            &prepared.message.client_message_id,
+                            error,
+                        );
+                    }
+                };
+                prepared.receipt_bytes = serde_json::to_vec(&prepared.message)?.len();
                 room = room_lock.write().await;
                 room.ensure_live()?;
                 Self::participant_for_sender(&room, &sender_id, &expected_sender)?;
@@ -3454,6 +3558,7 @@ impl RoomManager {
             expected_sender,
             ChatAttempt {
                 content,
+                attachment_ids: Vec::new(),
                 client_message_id,
                 recipient_id: recipient_id.map(String::from),
                 sequence: None,
@@ -3479,6 +3584,7 @@ impl RoomManager {
             expected_sender,
             ChatAttempt {
                 content,
+                attachment_ids: Vec::new(),
                 client_message_id,
                 recipient_id: recipient_id.map(String::from),
                 sequence: None,
@@ -3496,6 +3602,7 @@ impl RoomManager {
     ) -> Result<Option<PreparedChat>> {
         let ChatAttempt {
             content,
+            attachment_ids,
             client_message_id,
             recipient_id,
             sequence,
@@ -3504,13 +3611,16 @@ impl RoomManager {
         } = attempt;
         let reply_to = reply_to.as_deref();
         let recipient_id = recipient_id.as_deref();
-        if content.trim().is_empty()
+        if (content.trim().is_empty() && attachment_ids.is_empty())
             || content.len() > 4096
             || content
                 .chars()
                 .any(|c| c.is_control() && c != '\n' && c != '\t')
         {
             return Err(rejected("Message must contain 1–4096 bytes of text"));
+        }
+        if !crate::attachments::valid_ids(&attachment_ids) {
+            return Err(rejected("Attach at most four different files"));
         }
         let client_message_id = client_message_id.unwrap_or_else(|| Uuid::new_v4().to_string());
         if !valid_correlation_id(&client_message_id) {
@@ -3526,6 +3636,9 @@ impl RoomManager {
         let now = std::time::Instant::now();
         room.social.prune_receipts(now);
         let sender = Self::participant_for_sender(room, sender_id, expected_sender)?;
+        if !attachment_ids.is_empty() && !sender.authenticated {
+            return Err(rejected("Sign in to attach files"));
+        }
         let metrics = room.metrics.clone();
         let unknown = |reason| {
             send(
@@ -3552,6 +3665,14 @@ impl RoomManager {
                 && existing.message.edited_at.is_none()
                 && (existing.message.content != content
                     || replied_to(&existing.message) != reply_to))
+                || (existing.message.removed_at.is_none()
+                    && existing
+                        .message
+                        .attachments
+                        .iter()
+                        .map(|file| file.id)
+                        .collect::<Vec<_>>()
+                        != attachment_ids)
                 || existing.message.recipient_id.as_deref() != recipient_id
                 || existing.sequence != sequence
             {
@@ -3597,6 +3718,14 @@ impl RoomManager {
                 && existing.message.edited_at.is_none()
                 && (existing.message.content != content
                     || replied_to(&existing.message) != reply_to))
+                || (existing.message.removed_at.is_none()
+                    && existing
+                        .message
+                        .attachments
+                        .iter()
+                        .map(|file| file.id)
+                        .collect::<Vec<_>>()
+                        != attachment_ids)
                 || existing.message.recipient_id.as_deref() != recipient_id
             {
                 return Err(rejected("Message ID was already used"));
@@ -3632,6 +3761,7 @@ impl RoomManager {
             recipient_id: recipient_id.map(String::from),
             recipient_name: recipient.as_ref().map(|p| p.0.clone()),
             content,
+            attachments: Vec::new(),
             sent_at: chrono::Utc::now().to_rfc3339(),
             chat_style: sender_style,
             reply_to,
@@ -3667,6 +3797,7 @@ impl RoomManager {
         };
         Ok(Some(PreparedChat {
             message,
+            attachment_ids,
             sender_session,
             sender_authenticated,
             recipient,
@@ -3726,6 +3857,7 @@ impl RoomManager {
                 participant_id: message.participant_id.clone(),
                 participant_name: message.participant_name.clone(),
                 content: message.content.clone(),
+                attachments: message.attachments.clone(),
                 message_id: message.message_id.clone(),
                 client_message_id: message.client_message_id.clone(),
                 sent_at: message.sent_at.clone(),
@@ -4456,6 +4588,9 @@ impl RoomManager {
                                 )
                                 .await?;
                             }
+                            sqlx::query("DELETE FROM attachments WHERE room_id=$1 AND ephemeral_message_id=$2")
+                                .bind(room_id).bind(message_id.parse::<Uuid>().map_err(|_|sqlx::Error::RowNotFound)?)
+                                .execute(&mut *transaction).await?;
                             record_event(&mut transaction, room_id, &event, MAX_MODERATION_EVENTS)
                                 .await?;
                             transaction.commit().await
@@ -4464,6 +4599,16 @@ impl RoomManager {
                         room = room_lock.write().await;
                         room.ensure_live()?;
                     } else {
+                        if let Some(pool) = &pool {
+                            drop(room);
+                            self.persist_room(room_id,&room_lock,async {
+                                sqlx::query("DELETE FROM attachments WHERE room_id=$1 AND ephemeral_message_id=$2")
+                                    .bind(room_id).bind(message_id.parse::<Uuid>().map_err(|_|sqlx::Error::RowNotFound)?)
+                                    .execute(pool).await.map(|_|())
+                            }).await?;
+                            room = room_lock.write().await;
+                            room.ensure_live()?;
+                        }
                         room.social.record_moderation_event(event);
                     }
                 }
