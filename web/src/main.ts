@@ -1089,14 +1089,13 @@ function applyPanelPreferences(): void {
   const desktop = isDesktopLayout();
   const rosterCollapsed = desktop && panelPreferences.rosterCollapsed && getLayout() === 'classic';
   const chatCollapsed = desktop && panelPreferences.chatCollapsed;
-  roomScreen.style.setProperty(
-    '--roster-width',
-    `${rosterCollapsed ? 0 : Math.min(panelPreferences.rosterWidth, window.innerWidth * 0.3)}px`,
-  );
-  roomScreen.style.setProperty(
-    '--chat-width',
-    `${chatCollapsed ? 0 : Math.min(panelPreferences.chatWidth, window.innerWidth * 0.4)}px`,
-  );
+  const rosterWidth = `${rosterCollapsed ? 0 : Math.min(panelPreferences.rosterWidth, window.innerWidth * 0.3)}px`;
+  const chatWidth = `${chatCollapsed ? 0 : Math.min(panelPreferences.chatWidth, window.innerWidth * 0.4)}px`;
+  roomScreen.style.setProperty('--roster-width', rosterWidth);
+  roomScreen.style.setProperty('--chat-width', chatWidth);
+  // The header and room tools sit outside the room grid but align with its columns.
+  document.documentElement.style.setProperty('--roster-width', rosterWidth);
+  document.documentElement.style.setProperty('--chat-width', chatWidth);
   roomScreen.classList.toggle('roster-collapsed', rosterCollapsed);
   roomScreen.classList.toggle('chat-collapsed', chatCollapsed);
   rosterToggleBtn.querySelector('.tool-label')!.textContent = rosterCollapsed
@@ -1635,6 +1634,23 @@ signaling.setOnStatusChange((status) => {
   }
 });
 
+/** A room tile's ground, chosen from the warm palette by its id so it never changes between loads. */
+function roomTone(id: string): string {
+  const tones = [
+    '#2f3a2a',
+    '#3a2d2a',
+    '#3a3328',
+    '#3d3028',
+    '#313a2e',
+    '#2a2a2a',
+    '#3b2f2f',
+    '#24211f',
+  ];
+  let hash = 0;
+  for (const char of id) hash = (hash * 31 + (char.codePointAt(0) ?? 0)) >>> 0;
+  return tones[hash % tones.length] ?? tones[0]!;
+}
+
 const navigation = new RoomNavigation({
   interceptLocation: consumeInviteLocation,
   leave: leaveCurrentRoom,
@@ -1646,6 +1662,8 @@ const navigation = new RoomNavigation({
     }
     roomInput.value = id;
     updateJoinBtn();
+    for (const card of roomList.querySelectorAll<HTMLElement>('.room-card'))
+      card.classList.toggle('selected', card.dataset['roomId'] === id);
     if (document.activeElement?.closest('.room-card')) {
       if (!joinBtn.disabled) joinBtn.focus();
       else if (!nameInput.value.trim()) nameInput.focus();
@@ -1887,6 +1905,10 @@ async function loadRoomBrowser(append = false): Promise<void> {
       card.tabIndex = 0;
       card.setAttribute('role', 'button');
       card.setAttribute('aria-label', `Select room ${r.display_name}`);
+      card.dataset['roomId'] = r.id;
+      card.dataset['initial'] = [...r.display_name.trim()][0]?.toLocaleUpperCase() ?? '';
+      card.style.setProperty('--room-tone', roomTone(r.id));
+      card.classList.toggle('selected', r.id === roomInput.value.trim());
       card.addEventListener('keydown', (event) => {
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();

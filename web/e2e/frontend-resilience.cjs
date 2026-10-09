@@ -499,8 +499,15 @@ async function run() {
             (!rosterBounds?.width ||
               (Math.abs(rosterBounds.top - room.top) <= 1 &&
                 Math.abs(rosterBounds.bottom - room.bottom) <= 1))),
-        roomLabelCenteredBesideBrand:
-          !brand.width || Math.abs(label.y + label.height / 2 - (brand.y + brand.height / 2)) <= 1,
+        // On a desktop the header is the top of the people column, so the room name sits under
+        // the brand at the same left edge; phones keep the one-line bar.
+        roomLabelPlacedWithBrand:
+          !brand.width ||
+          (desktop
+            ? label.y >= brand.y + brand.height - 1 && Math.abs(label.x - brand.x) <= 1
+            : Math.abs(label.y + label.height / 2 - (brand.y + brand.height / 2)) <= 1),
+        headerTop: header.top,
+        desktop,
         buttons,
       };
     });
@@ -528,17 +535,19 @@ async function run() {
       'Desktop chat and people use the full room height',
     );
     assert.equal(
-      layout.roomLabelCenteredBesideBrand,
+      layout.roomLabelPlacedWithBrand,
       true,
-      'Room name is centered beside the brand',
+      'Room name sits under the brand on a desktop and beside it on a phone',
     );
     assert.ok(
       layout.headerHeight <= 96,
       `Compact header at ${viewport.width}: ${layout.headerHeight}`,
     );
     assert.ok(
-      Math.abs(layout.roomTop - layout.headerBottom) <= 1,
-      'Room starts immediately below the header',
+      layout.desktop
+        ? Math.abs(layout.roomTop - layout.headerTop) <= 1
+        : Math.abs(layout.roomTop - layout.headerBottom) <= 1,
+      'Room starts at the top beside the column header on a desktop and below the bar on a phone',
     );
     assert.ok(
       Math.abs(layout.roomBottom - viewport.height) <= 1,

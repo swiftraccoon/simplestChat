@@ -197,7 +197,10 @@ test('phone layouts collapse the chat panel to its tab bar without touching desk
         isMobilePanelCollapsed: () =>
           window.innerWidth <= 768 && panelPreferences.mobilePanelCollapsed,
         selectSidebarTab() {},
-        document: { getElementById: (id) => (id === 'sidebar' ? sidebar : null) },
+        document: {
+          getElementById: (id) => (id === 'sidebar' ? sidebar : null),
+          documentElement: { style: { setProperty() {} } },
+        },
       },
     },
   );
@@ -262,7 +265,10 @@ test('a landscape phone in the classic layout lists people in the sidebar tab', 
         isDesktopLayout: () => desktop,
         isMobilePanelCollapsed: () => false,
         selectSidebarTab() {},
-        document: { getElementById: (id) => (id === 'sidebar' ? {} : null) },
+        document: {
+          getElementById: (id) => (id === 'sidebar' ? {} : null),
+          documentElement: { style: { setProperty() {} } },
+        },
       },
     },
   );
@@ -706,3 +712,14 @@ for (const outcome of ['success', 'failure', 'replacement', 'blocked-storage']) 
     assert.match(source, /logoutBtn.addEventListener\('click', \(\) => \{\s*signOutAndForget\(\)/);
   });
 }
+
+test('room tiles get a stable tone from the room id, always from the warm palette', async () => {
+  const api = evaluateTypeScript(`${await functionSource('roomTone')} export { roomTone };`, {
+    globals: {},
+  });
+  const ids = ['lobby', 'reading-group', 'design-review', 'quiet-study', 'town-hall', 'x'];
+  const tones = ids.map((id) => api.roomTone(id));
+  for (const tone of tones) assert.match(tone, /^#[0-9a-f]{6}$/);
+  assert.equal(api.roomTone('lobby'), api.roomTone('lobby'));
+  assert.ok(new Set(tones).size > 1, 'different rooms spread across the palette');
+});

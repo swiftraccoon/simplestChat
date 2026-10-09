@@ -56,6 +56,22 @@ function productionAssets() {
       entry.name.endsWith('.css') ? 'text/css' : 'text/javascript',
     );
   }
+  // Icons and the manifest are production assets too: Firefox fetches the touch icon as a
+  // favicon candidate, and a request for any of them is never unexpected.
+  for (const [name, type] of [
+    ['icon-192.png', 'image/png'],
+    ['icon-512.png', 'image/png'],
+    ['manifest.webmanifest', 'application/manifest+json'],
+  ])
+    if (fs.existsSync(path.join(directory, name)))
+      add(`/${name}`, path.join(directory, name), type);
+  // Self-hosted fonts as well.
+  const fonts = path.join(directory, 'fonts');
+  if (fs.existsSync(fonts))
+    for (const entry of fs.readdirSync(fonts, { withFileTypes: true })) {
+      if (!entry.isFile() || !/^[A-Za-z0-9_-]+\.woff2$/.test(entry.name)) continue;
+      add(`/fonts/${entry.name}`, path.join(fonts, entry.name), 'font/woff2');
+    }
   assert.ok(assets.size >= 3, 'Build the production UI before running layout checks');
   return assets;
 }

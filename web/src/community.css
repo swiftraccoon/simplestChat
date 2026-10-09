@@ -443,15 +443,6 @@
   font-weight: 600;
   overflow-wrap: anywhere;
 }
-.room-card-id {
-  font:
-    0.7rem/1.4 ui-monospace,
-    SFMono-Regular,
-    Menlo,
-    monospace;
-  color: var(--text-dim);
-  overflow-wrap: anywhere;
-}
 /* A person's color (--sender-color, from the palette) names them in every look. */
 .chat-msg .sender {
   color: var(--sender-color, var(--accent));
@@ -500,7 +491,7 @@
   white-space: pre-wrap;
 }
 .chat-msg .delivery-error {
-  color: #fb7185;
+  color: var(--danger);
 }
 .chat-msg .delivery-error button {
   padding: 0.15rem 0;

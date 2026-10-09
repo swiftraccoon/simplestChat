@@ -351,17 +351,21 @@ async function run(env = process.env) {
 
     await check('newest-message button is keyboard-operable after real chat overflow', async () => {
       const content = 'Accessibility keyboard scrolling check. '.repeat(45).trim();
-      await page.locator('#chat-input').fill(content);
-      await page.locator('#chat-input').press('Enter');
-      await page.waitForFunction(
-        (text) =>
-          [...document.querySelectorAll('.chat-msg')].some(
-            (node) =>
-              node.querySelector('.msg-text')?.textContent === text &&
-              !node.dataset.messageId.startsWith('pending:'),
-          ),
-        content,
-      );
+      // Two long messages: the desktop chat column is tall enough that one 2,000-character
+      // message alone no longer overflows it by the margin this check needs.
+      for (const text of [content, `Second ${content}`.slice(0, 2000)]) {
+        await page.locator('#chat-input').fill(text);
+        await page.locator('#chat-input').press('Enter');
+        await page.waitForFunction(
+          (expected) =>
+            [...document.querySelectorAll('.chat-msg')].some(
+              (node) =>
+                node.querySelector('.msg-text')?.textContent === expected &&
+                !node.dataset.messageId.startsWith('pending:'),
+            ),
+          text,
+        );
+      }
       const messages = page.locator('#chat-messages');
       assert.equal(
         await messages.evaluate((node) => node.scrollHeight > node.clientHeight + 100),

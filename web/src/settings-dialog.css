@@ -8,9 +8,9 @@
   overflow: hidden;
   color: var(--text);
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: 0;
   border-radius: var(--radius-lg);
-  box-shadow: 0 24px 80px #0009;
+  box-shadow: var(--shadow-float);
 }
 .settings-dialog[open] {
   display: grid;

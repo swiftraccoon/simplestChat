@@ -137,8 +137,16 @@ trigger it; cancelled work cannot begin a retry, and late streams are stopped.
 Screen sharing distinguishes cancellation/permission failure from setup errors,
 and reports whether optional screen audio is included, unavailable or ended.
 
-The room uses one header; call controls sit below the video column so the desktop
-People and chat panels retain their full height. Conversation buttons above chat
+The visual system is one warm black ground (`--bg`) with surfaces that step up in
+the same hue and no accent hue: links and the primary action use the ink itself,
+and status colors (live, danger, warning) are the only saturated values. Panels
+are separated by tone, never by a line or shadow. Text is Outfit, self-hosted from
+`public/fonts/` (SIL OFL 1.1, latin subset) because the content security policy
+allows no other font source; the file is outside the bundle budget. The room uses
+one header: on a desktop it becomes the top of the people column (wordmark, room
+name, topic) while the People/Chat/More tools float over the stage's top band, and
+on phones it stays a bar. Call controls are bare circles under the video column so
+the desktop People and chat panels retain their full height. Conversation buttons above chat
 switch between Public chat and private messages, with unread counts and separate
 drafts. The composer grows to six lines on desktop and three at phone widths,
 then scrolls. On devices without touch input, Enter sends and Shift+Enter adds a
@@ -192,6 +200,12 @@ it without enlarging it or reserving a separate row. A compact viewing-controls
 button opens each remote tile's actions,
 including Pin, volume and fullscreen, without covering the tile with separate
 permanent buttons.
+
+The home page is a grid of portrait room tiles ordered busiest first by the
+server: live rooms by participant count (unknown counts after known ones), then
+rooms nobody is in, newest first, across Load more pages and searches. A tile
+shows the room image or a monogram of its name on a tone chosen from the room id.
+Selecting a tile fills the room field of the join bar; joining stays explicit.
 
 Favorite rooms and successful recent room joins are saved with the account and
 appear in the existing room picker and **My rooms**. Star a room to keep it among

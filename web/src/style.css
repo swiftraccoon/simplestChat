@@ -10,42 +10,73 @@
   display: none !important;
 }
 
+/* Outfit (SIL OFL 1.1, web/public/fonts/Outfit-OFL.txt), served from this origin: the CSP
+   allows no other font source. Latin subset only; other scripts fall back to the system. */
+@font-face {
+  font-family: 'Outfit';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/fonts/outfit-latin.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* One warm black for every screen. Surfaces step up in the same hue; nothing is separated by a
+   line, and there is no accent hue: links and the primary action use the ink itself. */
 :root {
   color-scheme: dark;
-  --bg: #0f0f0f;
-  --surface: #1a1a1a;
-  --surface-2: #252525;
-  --surface-3: #2a2a2a;
-  --border: #333;
-  /* Boundaries that identify a control (inputs, buttons, toggles) need 3:1 against the surface. */
-  --border-strong: #707070;
-  --text: #e8e8e8;
-  --text-dim: #a3a3a3;
-  /* Link text and white-text button fills need different contrast pairs. */
-  --accent: #60a5fa;
-  --accent-hover: #93c5fd;
-  --accent-fill: #2563eb;
-  --accent-fill-hover: #1d4ed8;
-  --on-accent: #fff;
-  --accent-glow: rgba(59, 130, 246, 0.3);
-  --danger: #f87171;
-  --danger-hover: #dc2626;
-  --success: #22c55e;
-  --warning: #f59e0b;
-  --status-ink: #0f0f0f;
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
+  --bg: #0b0a09;
+  --surface: #171513;
+  --surface-2: #1f1c19;
+  --surface-3: #2a2724;
+  --scrim: rgba(11, 10, 9, 0.65);
+  --border: #1f1c19;
+  /* Boundaries that still identify a control (toggles, underline fields) at 3:1 on the ground. */
+  --border-strong: rgba(243, 239, 233, 0.4);
+  --line: rgba(243, 239, 233, 0.4);
+  --text: #f3efe9;
+  --text-dim: #a8a39b;
+  --text-faint: #6f6a63;
+  --text-primary: var(--text);
+  --text-secondary: var(--text-dim);
+  --bg-hover: var(--surface-2);
+  --bg-secondary: var(--surface);
+  --accent: #f3efe9;
+  --accent-hover: #ffffff;
+  --accent-fill: #f3efe9;
+  --accent-fill-hover: #ffffff;
+  --on-accent: #0b0a09;
+  --accent-glow: rgba(243, 239, 233, 0.22);
+  --danger: #ff8f7a;
+  --danger-hover: #ff7a61;
+  --danger-tint: rgba(255, 143, 122, 0.22);
+  --success: #a3d9a5;
+  --success-tint: rgba(163, 217, 165, 0.18);
+  --warning: #e8c37a;
+  --warning-tint: rgba(232, 195, 122, 0.2);
+  --status-ink: #0b0a09;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
   --transition-fast: 150ms ease;
   --transition-normal: 250ms ease;
-  --shadow-panel: 0 2px 8px rgba(0, 0, 0, 0.3);
-  --shadow-glow: 0 0 12px var(--accent-glow);
+  --shadow-panel: none;
+  --shadow-float: 0 16px 48px rgba(0, 0, 0, 0.5);
 }
 
 html,
 body {
   height: 100%;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family:
+    'Outfit',
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
   background: var(--bg);
   color: var(--text);
 }
@@ -72,6 +103,7 @@ textarea::placeholder {
 }
 
 #app {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -91,9 +123,8 @@ header {
   flex-shrink: 0;
   align-items: center;
   justify-content: space-between;
-  padding: 0.6rem 1rem;
-  background: var(--surface);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  padding: 0.75rem 1.25rem;
+  background: transparent;
   z-index: 10;
 }
 
@@ -108,20 +139,20 @@ header {
 
 header h1 {
   flex-shrink: 0;
-  font-size: 1.1rem;
-  font-weight: 600;
+  font-size: 0.95rem;
+  font-weight: 500;
 }
 
 #home-link {
   display: inline-flex;
   align-items: center;
   min-height: 44px;
-  color: var(--text);
+  color: var(--text-dim);
   text-decoration: none;
 }
 
 #home-link:hover {
-  color: var(--accent);
+  color: var(--text);
 }
 
 #home-link:focus-visible,
@@ -134,12 +165,9 @@ header h1 {
 .room-label {
   max-width: 100%;
   overflow-wrap: anywhere;
-  font-size: 0.8rem;
-  color: var(--text-dim);
-  background: var(--surface-2);
-  padding: 0.15rem 0.6rem;
-  border-radius: 999px;
-  border: 1px solid var(--border);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
 }
 
 .header-right {
@@ -210,11 +238,22 @@ header h1 {
 }
 
 .status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
   font-size: 0.8rem;
   padding: 0.2rem 0.55rem;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-weight: 500;
-  border: 1px solid transparent;
+}
+
+/* A dot carries the state; only trouble earns a saturated fill. */
+.status::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
 }
 
 .status.disconnected {
@@ -222,11 +261,12 @@ header h1 {
   color: var(--status-ink);
 }
 
-/* The normal state stays quiet; only trouble earns a saturated fill. */
 .status.connected {
-  background: var(--surface-2);
   color: var(--text-dim);
-  border-color: var(--border-strong);
+}
+
+.status.connected::before {
+  background: var(--success);
 }
 
 .status.connecting {
@@ -236,14 +276,15 @@ header h1 {
 
 /* ========== Join Screen ========== */
 
+/* The home is a page, not a card: the directory grid fills it and the join bar stays at the
+   bottom of the view while the grid scrolls. */
 #join-screen {
-  /* Grow with the card on short screens so its top and bottom stay reachable. */
   flex: 1 0 auto;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   min-width: 0;
-  padding: 2rem 1rem;
+  padding: 0.25rem 1.5rem 1.5rem;
 }
 
 .join-card {
@@ -252,87 +293,89 @@ header h1 {
   align-items: stretch;
   flex-shrink: 0;
   min-width: 0;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 2.5rem 2rem 2rem;
-  box-shadow:
-    var(--shadow-panel),
-    0 0 40px rgba(0, 0, 0, 0.3);
+  gap: 1.25rem;
   width: 100%;
-  max-width: 40rem;
+  max-width: 80rem;
 }
 
-.join-brand {
-  font-size: 1.5rem;
-  font-weight: 700;
-  margin-bottom: 0.25rem;
-  background: linear-gradient(135deg, var(--accent), #818cf8);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
+/* The header already carries the wordmark. */
+.join-brand,
 .join-subtitle {
-  font-size: 0.85rem;
-  color: var(--text-dim);
-  margin-bottom: 1.75rem;
+  display: none;
 }
 
 .join-form {
+  position: sticky;
+  bottom: 1rem;
+  z-index: 2;
   display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
   width: 100%;
+  padding: 0.6rem 0.6rem 0.6rem 1.25rem;
+  box-sizing: border-box;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+}
+
+.join-form .field-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
 }
 
 .join-form input,
 .room-search-row input {
   min-width: 0;
-  padding: 0.65rem 0.9rem;
+  padding: 0.55rem 0.2rem;
   min-height: 44px;
-  background: var(--surface-2);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-md);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
   color: var(--text);
   font-size: 1rem;
   outline: none;
-  transition:
-    border-color var(--transition-fast),
-    box-shadow var(--transition-fast);
+  transition: border-color var(--transition-fast);
+}
+
+.join-form input {
+  flex: 1 1 10rem;
 }
 
 .join-form input:focus,
 .room-search-row input:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-glow);
+  border-bottom-color: var(--text);
+}
+
+.join-form input:focus-visible,
+.room-search-row input:focus-visible {
+  outline: none;
 }
 
 .join-form button {
-  padding: 0.7rem;
+  flex: 0 0 auto;
+  min-height: 44px;
+  padding: 0.6rem 1.5rem;
   background: var(--accent-fill);
   color: var(--on-accent);
   border: none;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-pill);
   font-size: 0.95rem;
   font-weight: 600;
   cursor: pointer;
-  transition:
-    background var(--transition-fast),
-    transform var(--transition-fast);
+  transition: background var(--transition-fast);
 }
 
 .join-form button:hover:not(:disabled) {
   background: var(--accent-fill-hover);
-  transform: translateY(-1px);
-}
-
-.join-form button:active:not(:disabled) {
-  transform: translateY(0);
 }
 
 .join-form button:disabled {
-  opacity: 0.55;
+  opacity: 0.45;
   cursor: not-allowed;
 }
 
@@ -372,6 +415,7 @@ header h1 {
 }
 
 #main-area {
+  position: relative;
   grid-column: 1;
   grid-row: 1;
   display: flex;
@@ -383,13 +427,14 @@ header h1 {
 
 /* ========== Video Grid ========== */
 
+/* Tiles sit 4px apart on the black. */
 #video-grid {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  padding: 8px;
+  gap: 4px;
+  padding: 4px;
   overflow-y: auto;
   scrollbar-gutter: stable;
   align-content: start;
@@ -406,20 +451,22 @@ header h1 {
 .tile-pin {
   position: absolute;
   z-index: 5;
-  top: 0.4rem;
-  left: 0.4rem;
-  padding: 0.35rem 0.6rem;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-md);
-  background: rgba(26, 26, 26, 0.9);
+  top: 0.6rem;
+  left: 0.6rem;
+  padding: 0.35rem 0.7rem;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--scrim);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   color: var(--text);
   font: inherit;
   font-size: 0.75rem;
+  font-weight: 500;
   cursor: pointer;
 }
 .tile-pin[aria-pressed='true'] {
-  border-color: var(--accent-fill);
-  background: var(--accent-fill);
+  background: var(--text);
   color: var(--on-accent);
 }
 /* With a pointer the pin appears on hover or focus, and stays while pinned. */
@@ -440,15 +487,11 @@ header h1 {
   flex: 0 0 auto;
   width: var(--video-tile-width, 160px);
   height: var(--video-tile-height, 90px);
-  background: var(--surface-2);
-  border-radius: var(--radius-lg);
+  background: var(--surface);
+  border-radius: var(--radius-md);
   overflow: hidden;
   transition: box-shadow var(--transition-normal);
   animation: fadeIn 300ms ease;
-}
-
-.video-tile:hover {
-  box-shadow: var(--shadow-panel);
 }
 
 .video-tile video {
@@ -458,14 +501,21 @@ header h1 {
   display: block;
 }
 
+/* The name sits in a small scrim chip instead of a gradient across the tile. */
 .video-tile .name-tag {
   position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  padding: 20px 10px 8px;
-  background: linear-gradient(transparent, rgba(0, 0, 0, 0.7));
-  color: white;
+  bottom: 0.7rem;
+  left: 0.7rem;
+  max-width: calc(100% - 1.4rem);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0.3rem 0.65rem;
+  border-radius: var(--radius-sm);
+  background: var(--scrim);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: var(--text);
   font-size: 0.8rem;
   font-weight: 500;
   pointer-events: none;
@@ -482,19 +532,15 @@ header h1 {
   background: var(--person-color, transparent);
 }
 
-/* Speaking indicator — glowing blue border */
+/* Speaking: a thin ring in the live color inside the tile. */
 .video-tile.speaking {
-  box-shadow:
-    0 0 0 3px var(--accent),
-    0 0 16px var(--accent-glow);
+  box-shadow: inset 0 0 0 2px var(--success);
 }
 
-/* Dominant speaker — thicker border + glow, wins over .speaking */
+/* Dominant speaker: a heavier ring, wins over .speaking */
 .video-tile.dominant-speaker,
 .video-tile.dominant-speaker.speaking {
-  box-shadow:
-    0 0 0 4px var(--accent),
-    0 0 20px var(--accent-glow);
+  box-shadow: inset 0 0 0 3px var(--success);
 }
 
 .video-tile:fullscreen {
@@ -507,9 +553,8 @@ header h1 {
 
 /* Screen share active button state */
 #screen-btn.active {
-  background: rgba(59, 130, 246, 0.15) !important;
-  border-color: var(--accent) !important;
-  color: var(--accent) !important;
+  background: var(--success-tint) !important;
+  color: var(--success) !important;
 }
 
 /* No-video state: show initial */
@@ -519,7 +564,7 @@ header h1 {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--surface-3);
+  background: var(--surface);
 }
 
 .video-tile .no-video-avatar .avatar-initial {
@@ -541,14 +586,13 @@ header h1 {
   grid-row: 1;
   display: flex;
   flex-direction: column;
-  background: var(--surface);
-  border-left: 1px solid var(--border);
+  background: transparent;
   overflow: hidden;
 }
 
 #sidebar-tabs {
   display: flex;
-  border-bottom: 1px solid var(--border);
+  padding: 0.5rem 0.5rem 0;
   flex-shrink: 0;
 }
 
@@ -564,7 +608,6 @@ header h1 {
   justify-content: center;
   background: none;
   border: none;
-  border-left: 1px solid var(--border);
   color: var(--text-dim);
   cursor: pointer;
 }
@@ -577,19 +620,18 @@ header h1 {
   transform: rotate(180deg);
 }
 
+/* Tabs are words: the open one in ink, the others dim. */
 #sidebar-tabs .tab {
-  flex: 1;
-  padding: 0.6rem 0.5rem;
+  flex: 0 1 auto;
+  min-height: 40px;
+  padding: 0.5rem 0.7rem;
   background: none;
   border: none;
   color: var(--text-dim);
-  font-size: 0.85rem;
-  font-weight: 500;
+  font-size: 0.9rem;
+  font-weight: 600;
   cursor: pointer;
-  border-bottom: 2px solid transparent;
-  transition:
-    color var(--transition-fast),
-    border-color var(--transition-fast);
+  transition: color var(--transition-fast);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -601,8 +643,7 @@ header h1 {
 }
 
 #sidebar-tabs .tab.active {
-  color: var(--accent);
-  border-bottom-color: var(--accent);
+  color: var(--text);
 }
 
 #sidebar-content {
@@ -644,10 +685,11 @@ header h1 {
   gap: 0.25rem;
 }
 
+/* One scrim chip per message on the black ground. */
 .chat-msg {
-  padding: 0.4rem 0.65rem;
-  border-radius: var(--radius-md);
-  background: var(--surface-2);
+  padding: 0.45rem 0.7rem;
+  border-radius: 8px;
+  background: var(--surface);
   animation: fadeInUp 200ms ease;
   max-width: 100%;
   word-wrap: break-word;
@@ -759,16 +801,16 @@ header h1 {
   padding: 0 4px;
 }
 
+/* The composer is an underline, not a box; its helpers are quiet icons beside it. */
 #chat-input-row {
   position: sticky;
   bottom: 0;
   z-index: 1;
-  background: var(--surface);
+  background: var(--bg);
   display: flex;
   align-items: flex-end;
-  gap: 6px;
-  padding: 0.5rem;
-  border-top: 1px solid var(--border);
+  gap: 4px;
+  padding: 0.4rem 0.75rem 0.75rem;
   flex-shrink: 0;
 }
 
@@ -779,28 +821,38 @@ header h1 {
   max-height: calc(8.4em + 1rem + 2px);
   resize: none;
   overflow-y: auto;
-  padding: 0.5rem 0.7rem;
-  background: var(--surface-2);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-md);
+  padding: 0.5rem 0.2rem;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
   color: var(--text);
   font-family: inherit;
   font-size: 0.9rem;
   line-height: 1.4;
   outline: none;
-  transition:
-    border-color var(--transition-fast),
-    box-shadow var(--transition-fast);
+  transition: border-color var(--transition-fast);
 }
 
 #chat-input:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-glow);
+  border-bottom-color: var(--text);
 }
 
 #chat-input-row .emoji-toggle {
   min-width: 44px;
   min-height: 38px;
+}
+
+#chat-input-row > button {
+  border: 0;
+  background: transparent;
+  color: var(--text-dim);
+  border-radius: var(--radius-pill);
+}
+
+#chat-input-row > button:hover {
+  background: var(--surface);
+  color: var(--text);
 }
 
 #chat-send-btn {
@@ -916,33 +968,38 @@ header h1 {
   color: var(--text-dim);
 }
 
-/* Speaking glow on participant bar */
+/* Speaking: the row lifts a step and the avatar gets a live ring. */
 #participant-list li.speaking {
-  background: rgba(59, 130, 246, 0.1);
-  box-shadow: inset 3px 0 0 var(--accent);
+  background: var(--surface);
+}
+
+#participant-list li.speaking .participant-avatar,
+#classic-users-panel .classic-user-list li.speaking .participant-avatar {
+  box-shadow: 0 0 0 2px var(--success);
 }
 
 /* ========== Call controls, confined to the video column ========== */
 
+/* Bare circles under the stage: no bar, no line, nothing covering a tile. */
 #controls {
   display: flex;
   flex-shrink: 0;
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  padding: 0.4375rem 0.6rem;
-  background: var(--surface);
-  border-top: 1px solid var(--border);
+  gap: 0.6rem;
+  padding: 0.375rem 0.6rem;
 }
 
 #controls button {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   flex-shrink: 0;
   border-radius: 50%;
-  border: 2px solid var(--border-strong);
-  background: var(--surface-2);
+  border: 0;
+  background: var(--scrim);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   color: var(--text);
   cursor: pointer;
   display: flex;
@@ -950,7 +1007,6 @@ header h1 {
   justify-content: center;
   transition:
     background var(--transition-fast),
-    border-color var(--transition-fast),
     color var(--transition-fast),
     transform var(--transition-fast);
   position: relative;
@@ -987,30 +1043,24 @@ header h1 {
   opacity: 1;
 }
 
-/* Mic & Cam active (on) */
+/* Mic & Cam on: the plain state. Off is the one that gets a color. */
 #controls button.active {
-  background: rgba(34, 197, 94, 0.15);
-  border-color: var(--success);
-  color: var(--success);
+  background: var(--scrim);
+  color: var(--text);
 }
 
-/* Mic & Cam muted (off) */
 #controls button.muted {
-  background: rgba(239, 68, 68, 0.15);
-  border-color: var(--danger);
+  background: var(--danger-tint);
   color: var(--danger);
 }
 
 /* Settings button */
 #settings-btn {
-  border-color: var(--border-strong) !important;
-  background: var(--surface-2) !important;
   color: var(--text-dim) !important;
 }
 
 #settings-btn:hover {
   color: var(--text) !important;
-  border-color: var(--text-dim) !important;
 }
 
 /* PTT active (transmitting) — pulsing green glow */
@@ -1021,14 +1071,10 @@ header h1 {
 @keyframes pttPulse {
   0%,
   100% {
-    box-shadow:
-      0 0 0 3px var(--success),
-      0 0 8px rgba(34, 197, 94, 0.3);
+    box-shadow: 0 0 0 3px var(--success);
   }
   50% {
-    box-shadow:
-      0 0 0 5px var(--success),
-      0 0 16px rgba(34, 197, 94, 0.5);
+    box-shadow: 0 0 0 5px var(--success-tint);
   }
 }
 
@@ -1050,14 +1096,12 @@ header h1 {
 
 /* Leave button */
 #leave-btn {
-  border-color: var(--danger) !important;
-  background: transparent !important;
   color: var(--danger) !important;
+  margin-left: 0.4rem;
 }
 
 #leave-btn:hover {
-  background: var(--danger) !important;
-  color: var(--status-ink) !important;
+  background: var(--danger-tint) !important;
 }
 
 /* ========== Settings Modal ========== */
@@ -1081,9 +1125,8 @@ header h1 {
 
 .modal-content {
   background: var(--surface);
-  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  box-shadow: 0 24px 80px #0009;
+  box-shadow: var(--shadow-float);
   width: 400px;
   max-width: calc(100vw - 2rem);
   max-height: calc(100dvh - 2rem);
@@ -1107,9 +1150,9 @@ header h1 {
 /* Every dialog closes with the same labelled button. */
 .modal-close {
   min-height: 40px;
-  padding: 0.45rem 0.8rem;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-md);
+  padding: 0.45rem 0.9rem;
+  border: 0;
+  border-radius: var(--radius-pill);
   background: var(--surface-2);
   color: var(--text);
   font: inherit;
@@ -1155,12 +1198,12 @@ header h1 {
   min-height: 44px;
   padding: 0.5rem 0.7rem;
   background: var(--surface-2);
-  border: 1px solid var(--border-strong);
+  border: 0;
   border-radius: var(--radius-md);
   color: var(--text);
   font-family: inherit;
   font-size: 0.9rem;
-  transition: border-color var(--transition-fast);
+  transition: background var(--transition-fast);
 }
 
 .setting-group select {
@@ -1168,7 +1211,7 @@ header h1 {
 }
 
 .setting-group :is(input, select, textarea):focus-visible {
-  border-color: var(--accent);
+  background: var(--surface-3);
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
@@ -1187,14 +1230,14 @@ header h1 {
   grid-column: 3;
 }
 
-/* Classic left panel — rendered as separate element in JS */
+/* Classic left panel, rendered as a separate element in JS. Its top clears the column
+   header (wordmark, room name, topic) that the shared header becomes in a room. */
 #classic-users-panel {
   display: none;
   grid-column: 1;
   grid-row: 1;
-  background: var(--surface);
-  border-right: 1px solid var(--border);
-  padding: 0.75rem 0.5rem;
+  background: transparent;
+  padding: 6.5rem 0.6rem 0.75rem;
   overflow-y: auto;
 }
 
@@ -1203,9 +1246,9 @@ header h1 {
 }
 
 .classic-user-list .participant-avatar {
-  width: 24px;
-  height: 24px;
-  font-size: 0.65rem;
+  width: 32px;
+  height: 32px;
+  font-size: 0.8rem;
 }
 
 #classic-users-panel .classic-user-list {
@@ -1218,20 +1261,19 @@ header h1 {
 #classic-users-panel .classic-user-list li {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.6rem;
   padding: 0.4rem 0.5rem;
   border-radius: var(--radius-md);
-  font-size: 0.82rem;
+  font-size: 0.9rem;
   transition: background var(--transition-fast);
 }
 
 #classic-users-panel .classic-user-list li:hover {
-  background: var(--surface-2);
+  background: var(--surface);
 }
 
 #classic-users-panel .classic-user-list li.speaking {
-  background: rgba(59, 130, 246, 0.1);
-  box-shadow: inset 3px 0 0 var(--accent);
+  background: var(--surface);
 }
 
 /* ========== Animations ========== */
@@ -1271,11 +1313,8 @@ header h1 {
   position: fixed;
   z-index: 200;
   background: var(--surface);
-  border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  box-shadow:
-    var(--shadow-panel),
-    0 8px 24px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow-float);
   min-width: 160px;
   padding: 4px 0;
   animation: fadeIn 100ms ease;
@@ -1303,7 +1342,7 @@ header h1 {
 }
 
 .mod-context-menu button.danger:hover {
-  background: rgba(239, 68, 68, 0.1);
+  background: var(--danger-tint);
 }
 
 /* ========== Lobby Screen ========== */
@@ -1320,12 +1359,8 @@ header h1 {
   flex-direction: column;
   align-items: center;
   background: var(--surface);
-  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: 2.5rem 2rem;
-  box-shadow:
-    var(--shadow-panel),
-    0 0 40px rgba(0, 0, 0, 0.3);
   width: 360px;
   max-width: calc(100vw - 2rem);
   text-align: center;
@@ -1369,8 +1404,8 @@ header h1 {
   margin-top: 1.25rem;
   padding: 0.55rem 1.5rem;
   background: var(--surface-2);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-md);
+  border: 0;
+  border-radius: var(--radius-pill);
   color: var(--text-dim);
   font-size: 0.85rem;
   cursor: pointer;
@@ -1409,14 +1444,13 @@ header h1 {
 }
 
 .toast {
-  background: var(--surface);
-  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
   border-radius: var(--radius-md);
   padding: 0.6rem 1rem;
   color: var(--text);
   font-size: 0.85rem;
   line-height: 1.4;
-  box-shadow: var(--shadow-panel);
+  box-shadow: var(--shadow-float);
   /* The script fades a toast out just before removing it, whatever its lifetime; a delayed
      animation would count as running for the whole lifetime and disturb settled-UI checks. */
   animation: toastIn 200ms ease;
@@ -1431,8 +1465,9 @@ header h1 {
 }
 
 .toast-error {
-  border-color: var(--danger);
-  border-left-width: 4px;
+  box-shadow:
+    inset 4px 0 0 var(--danger),
+    var(--shadow-float);
 }
 
 @keyframes toastIn {
@@ -1464,19 +1499,19 @@ header h1 {
 }
 
 .role-badge.role-owner {
-  color: #f59e0b;
+  color: var(--warning);
 }
 
 .role-badge.role-admin {
-  color: #ef4444;
+  color: var(--danger);
 }
 
 .role-badge.role-moderator {
-  color: #22c55e;
+  color: var(--success);
 }
 
 .role-badge.role-member {
-  color: var(--accent);
+  color: var(--text-dim);
 }
 
 /* ========== Room Settings Modal ========== */
@@ -1524,7 +1559,7 @@ header h1 {
 
 .setting-toggle input[type='checkbox']:checked::after {
   transform: translateX(18px);
-  background: white;
+  background: var(--on-accent);
 }
 
 .setting-toggle label {
@@ -1541,20 +1576,17 @@ header h1 {
 }
 
 #hand-btn.hand-raised {
-  background: rgba(245, 158, 11, 0.15) !important;
-  border-color: #f59e0b !important;
+  background: var(--warning-tint) !important;
+  color: var(--warning) !important;
 }
 
 /* Room settings button */
 #room-settings-btn {
-  border-color: var(--border-strong) !important;
-  background: var(--surface-2) !important;
   color: var(--text-dim) !important;
 }
 
 #room-settings-btn:hover {
   color: var(--text) !important;
-  border-color: var(--text-dim) !important;
 }
 
 /* ========== Responsive ========== */
@@ -1574,8 +1606,6 @@ header h1 {
   #sidebar {
     grid-column: 1 !important;
     grid-row: 2;
-    border-left: none;
-    border-top: 1px solid var(--border);
     max-height: 240px;
   }
 
@@ -1592,6 +1622,11 @@ header h1 {
   .video-tile {
     border-radius: var(--radius-md);
   }
+
+  /* A sticky join bar would cover the tall tiles of a one-column grid. */
+  .join-form {
+    position: static;
+  }
 }
 
 @media (max-width: 480px) {
@@ -1599,20 +1634,20 @@ header h1 {
     padding: 1rem 0.75rem;
   }
 
-  .join-card {
-    padding: 1.5rem 1rem;
-  }
-
   .room-label {
     display: none;
   }
 }
 
-/* --- Auth Bar --- */
+/* --- Auth Bar: a quiet row at the top-right of the page --- */
 .auth-bar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
   min-width: 0;
-  text-align: center;
-  margin-bottom: 1rem;
+  text-align: right;
 }
 
 .auth-bar .auth-link-btn {
@@ -1658,9 +1693,8 @@ header h1 {
 }
 
 .auth-error {
-  background: rgba(220, 53, 69, 0.15);
-  border: 1px solid rgba(220, 53, 69, 0.4);
-  color: #ff6b7a;
+  background: var(--danger-tint);
+  color: var(--danger);
   padding: 0.5rem 0.75rem;
   border-radius: 6px;
   font-size: 0.85rem;
@@ -1740,17 +1774,36 @@ header h1 {
   min-width: 0;
 }
 
+.room-browser-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.room-browser-title h2 {
+  font-size: 1.6rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.room-browser-title .field-hint {
+  margin: 0;
+}
+
 .room-browser-header {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 0.75rem;
+  align-items: flex-end;
+  gap: 0.75rem 1.25rem;
+  margin-bottom: 1rem;
 }
 
 .room-search-row {
   flex: 1 1 14rem;
   min-width: 0;
+  max-width: 24rem;
 }
 
 .room-search-row input {
@@ -1758,72 +1811,122 @@ header h1 {
 }
 
 #create-room-btn {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   min-height: 44px;
   white-space: nowrap;
-  padding: 0.5rem 1rem;
-  font-size: 0.85rem;
+  padding: 0.5rem 1.2rem;
+  font-size: 0.9rem;
 }
 
+/* Portrait tiles, busiest room first; the page scrolls, the grid does not. */
 .room-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  max-height: 300px;
-  overflow-y: auto;
-  margin-bottom: 0.75rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
 }
 
 .room-card {
+  position: relative;
   display: flex;
-  flex-wrap: wrap;
-  flex-shrink: 0;
-  align-items: center;
+  flex-direction: column;
+  justify-content: flex-end;
   width: 100%;
   min-width: 0;
-  gap: 0.75rem;
-  padding: 0.75rem;
-  background: var(--bg-secondary, #2a2a2a);
-  border: 1px solid var(--border, #333);
-  border-radius: 8px;
+  aspect-ratio: 3 / 4;
+  box-sizing: border-box;
+  gap: 0.3rem;
+  padding: 0.9rem;
+  background: var(--room-tone, var(--surface));
+  border-radius: var(--radius-md);
+  overflow: hidden;
   cursor: pointer;
-  transition: border-color 0.15s;
+  transition: box-shadow var(--transition-fast);
+}
+
+/* A room without a picture shows its initial as a large, quiet monogram. */
+.room-card[data-initial]:not(:has(.room-card-image))::before {
+  content: attr(data-initial);
+  position: absolute;
+  top: 0.6rem;
+  left: 0.85rem;
+  font-size: 3.5rem;
+  font-weight: 600;
+  line-height: 1;
+  color: rgba(243, 239, 233, 0.14);
+  pointer-events: none;
 }
 
 .room-card:hover {
-  border-color: var(--accent, #6c9fff);
+  box-shadow: inset 0 0 0 1px rgba(243, 239, 233, 0.35);
+}
+
+.room-card.selected {
+  box-shadow: inset 0 0 0 2px var(--text);
 }
 
 #room-browser .room-card:focus-visible {
-  /* Keep keyboard focus visible inside the directory's scrolling boundary. */
+  /* Keep keyboard focus visible inside the grid. */
   outline-offset: -3px;
 }
 
+.room-card > .room-card-image {
+  flex: 1 1 auto;
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+}
+
+.room-list .directory-room-row {
+  position: relative;
+  display: block;
+}
+
+.room-list .directory-room-row > .discovery-favorite {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+  z-index: 1;
+}
+
 .room-card-info {
-  flex: 1;
+  flex: 0 0 auto;
   min-width: 0;
 }
 
 .room-card-name {
-  font-weight: 500;
-  color: var(--text-primary, #e0e0e0);
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--text);
   display: flex;
   align-items: flex-start;
   gap: 0.5rem;
 }
 
 .room-card-name > span:first-child {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   min-width: 0;
+  overflow: hidden;
   overflow-wrap: anywhere;
 }
 
 .room-card-name > span + span {
   flex-shrink: 0;
+  color: var(--text-dim);
+}
+
+.room-card .room-card-id {
+  display: none;
 }
 
 .room-card-topic {
   font-size: 0.8rem;
-  color: var(--text-secondary, #b0b0b0);
+  color: var(--text-dim);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1831,52 +1934,40 @@ header h1 {
 
 .room-card-meta {
   display: flex;
-  /* Keep counts and badges below the title, including cards with thumbnails. */
-  flex: 1 1 100%;
+  flex: 0 0 auto;
   flex-wrap: wrap;
   min-width: 0;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.35rem 0.5rem;
   font-size: 0.75rem;
-  color: var(--text-secondary, #b0b0b0);
+  color: var(--text-dim);
 }
 
 .room-card-badge {
   display: inline-block;
-  padding: 0.1rem 0.4rem;
-  border-radius: 4px;
+  padding: 0.1rem 0.45rem;
+  border-radius: var(--radius-sm);
   font-size: 0.7rem;
   font-weight: 500;
-  background: rgba(108, 159, 255, 0.15);
-  color: var(--accent, #6c9fff);
+  background: rgba(243, 239, 233, 0.1);
+  color: var(--text);
 }
 
 .room-list-empty {
+  grid-column: 1 / -1;
   text-align: center;
   padding: 2rem;
-  color: var(--text-secondary, #b0b0b0);
+  color: var(--text-dim);
   font-size: 0.9rem;
 }
 
 #room-load-more {
-  width: 100%;
+  width: auto;
+  margin: 0 auto;
 }
 
-/* --- Divider --- */
-.divider {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin: 1rem 0;
-  color: var(--text-secondary, #b0b0b0);
-  font-size: 0.8rem;
-}
-
-.divider::before,
-.divider::after {
-  content: '';
-  flex: 1;
-  border-bottom: 1px solid var(--border, #333);
+#join-form-divider {
+  display: none;
 }
 
 /* --- Lobby Panel --- */
@@ -2018,12 +2109,13 @@ header h1 {
   overflow-wrap: anywhere;
 }
 
-/* One header, with the room name on the same line as the app name. */
+/* One header. On phones it is a bar with the room name beside the app name; on a desktop it
+   becomes the top of the people column (wordmark, room, topic stacked) and the room tools
+   float over the stage's top-right corner. */
 header.in-room {
   flex-wrap: nowrap;
   gap: 0.75rem;
   padding: 0.4rem 0.75rem;
-  border-bottom: 1px solid var(--border);
 }
 header.in-room:has(#room-more-btn[aria-expanded='true']) {
   z-index: 310;
@@ -2049,6 +2141,59 @@ header.in-room .room-topic {
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+@media (min-width: 769px) {
+  header.in-room {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 12;
+    width: max(200px, var(--roster-width, 220px));
+    box-sizing: border-box;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.1rem;
+    padding: 1rem 1.1rem 0.4rem;
+    pointer-events: none;
+  }
+  header.in-room:has(#room-more-btn[aria-expanded='true']) {
+    z-index: 310;
+  }
+  header.in-room .header-left,
+  header.in-room #room-tools {
+    pointer-events: auto;
+  }
+  header.in-room .header-left {
+    width: 100%;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.1rem;
+  }
+  header.in-room h1 {
+    font-size: 0.8rem;
+  }
+  header.in-room #home-link {
+    min-height: 0;
+  }
+  header.in-room .room-label {
+    max-width: 100%;
+    font-size: 1.05rem;
+    line-height: 1.25;
+  }
+  header.in-room .room-topic {
+    flex: 0 0 auto;
+    max-width: 100%;
+    font-size: 0.8rem;
+  }
+  header.in-room #room-tools {
+    position: fixed;
+    top: 12px;
+    right: calc(var(--chat-width, 320px) + 16px);
+  }
+  /* The tools float over the stage's top band, which the stage reserves outside its scrolling grid. */
+  header.in-room ~ #app-main #main-area {
+    padding-top: 60px;
+  }
+}
 #room-tools,
 .room-tools-right {
   display: flex;
@@ -2069,17 +2214,17 @@ header.in-room .room-topic {
 .participant-actions-button {
   font: inherit;
   font-size: 0.8rem;
-  border: 1px solid var(--border-strong);
-  color: var(--text);
-  background: var(--surface-2);
-  border-radius: var(--radius-sm);
+  border: 0;
+  color: var(--text-dim);
+  background: transparent;
+  border-radius: var(--radius-pill);
   padding: 0.4rem 0.6rem;
   cursor: pointer;
   text-decoration: none;
 }
 .participant-actions-button:hover {
-  background: var(--surface-3);
-  border-color: var(--text-dim);
+  background: var(--surface-2);
+  color: var(--text);
 }
 .tool-button:focus-visible,
 .room-more-menu button:focus-visible,
@@ -2089,19 +2234,22 @@ header.in-room .room-topic {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
-/* Quiet icon-and-label tools; a panel toggle looks pressed while its panel is open. */
+/* Tools float over the stage on scrims; a panel toggle looks pressed while its panel is open. */
 .tool-button {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  min-height: 36px;
-  padding: 0.35rem 0.75rem;
-  border: 1px solid transparent;
-  border-radius: 999px;
-  background: none;
-  color: var(--text-dim);
+  min-height: 40px;
+  padding: 0.4rem 0.9rem;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--scrim);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: var(--text);
   font: inherit;
   font-size: 0.85rem;
+  font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
   transition:
@@ -2110,7 +2258,7 @@ header.in-room .room-topic {
 }
 .tool-button:hover {
   color: var(--text);
-  background: var(--surface-2);
+  background: var(--surface-3);
 }
 .tool-button svg {
   flex-shrink: 0;
@@ -2118,9 +2266,8 @@ header.in-room .room-topic {
 #toggle-roster[aria-expanded='true'],
 #toggle-chat[aria-expanded='true'],
 #room-more-btn[aria-expanded='true'] {
-  color: var(--text);
-  background: var(--surface-2);
-  border-color: var(--border);
+  color: var(--on-accent);
+  background: var(--text);
 }
 #room-more-btn svg {
   width: 14px;
@@ -2161,10 +2308,9 @@ header.in-room .room-topic {
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 0.3rem;
-  background: var(--surface-2);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-md);
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-float);
 }
 .room-more-menu button,
 .room-more-menu .help-link {
@@ -2390,6 +2536,22 @@ header.in-room .room-topic {
 
 /* Landscape phones: chat beside the video, otherwise the video row collapses to a strip. */
 @media (max-width: 900px) and (max-height: 500px) and (orientation: landscape) {
+  /* No column header on a short screen: the header stays a bar above the room. */
+  header.in-room {
+    position: static;
+    width: auto;
+    flex-direction: row;
+    align-items: center;
+    padding: 0.4rem 0.75rem;
+    pointer-events: auto;
+  }
+  header.in-room .header-left {
+    flex-direction: row;
+    align-items: center;
+  }
+  header.in-room #room-tools {
+    position: static;
+  }
   #room-screen,
   #room-screen.layout-classic,
   #room-screen.mobile-panel-collapsed {

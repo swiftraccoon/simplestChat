@@ -15,7 +15,7 @@ not avoid the limit. The initial budgets leave room for small product changes:
 | Asset group | Uncompressed limit | Gzip limit |
 | ----------- | ------------------ | ---------- |
 | JavaScript  | 632 KiB            | 149 KiB    |
-| CSS         | 69 KiB             | 13.5 KiB   |
+| CSS         | 72 KiB             | 14 KiB     |
 | HTML        | 50 KiB             | 12.5 KiB   |
 
 Limits are defined in [bundle-budget.json](../web/bundle-budget.json). Gzip uses
@@ -62,6 +62,16 @@ and response decoders avoid separate implementations per screen; no binary
 file bytes or preview images are embedded in the bundle. The help page documents
 the new controls. Reviewed limits are now 632/149 KiB JavaScript, 69/13.5 KiB CSS
 and 50/12.5 KiB HTML. These measurements establish delivery size only.
+
+The October 9 visual system (one warm black ground, no accent hue, floating call
+controls, borderless people and chat columns, a portrait room-tile directory and
+a self-hosted Outfit face) replaced borders, shadows and gradients with tone
+steps. An isolated build of `9e5067e` measured CSS 69,861 bytes raw / 13,448
+gzip; the redesign build measures 71,101 / 13,977. The growth is the `@font-face`
+declaration, the desktop column-header rules and the tile grid; the font file
+itself (32 KB woff2, latin subset) is outside the budget. Dead rules (the join
+divider, the Latin-extended face, the slug monospace rule) were removed first.
+Reviewed CSS limits are now 72/14 KiB; JavaScript and HTML are unchanged.
 
 Participant hovercards added a shared, dependency-free card and keyboard/touch
 name controls. The CSS gzip budget increased from 12 to 12.5 KiB after removing

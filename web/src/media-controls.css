@@ -240,8 +240,9 @@
   height: 28px;
   font-size: 1.25rem;
   line-height: 1;
-  background: rgba(26, 26, 26, 0.9);
-  border: 1px solid var(--border-strong);
+  background: var(--scrim);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   border-radius: 50%;
 }
 .personal-media-controls summary:hover > span,
@@ -261,9 +262,8 @@
   gap: 0.45rem;
   background: var(--surface);
   color: var(--text);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-md);
-  box-shadow: 0 8px 30px rgb(0 0 0 / 35%);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-float);
   padding: 0.65rem;
   width: min(15rem, calc(100vw - 1rem));
   max-height: min(28rem, calc(100dvh - 1rem));
