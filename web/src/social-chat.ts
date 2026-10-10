@@ -9,7 +9,17 @@ import type {
 } from './protocol';
 import { AttachmentComposer, renderAttachments } from './attachments';
 import { ChatStore, ConversationInputs, type ChatItem } from './chat-store';
-import { api, asyncButton, button, busy, el, field, modal } from './ui';
+import { api, asyncButton, button, busy, el, modal } from './ui';
+import {
+  actionRow,
+  group,
+  markSaved,
+  note,
+  selectRow,
+  toggleRow,
+  type ScreenContext,
+  type SheetSection,
+} from './settings-sheet';
 import { appendLinkedText, appendEditedLabel, editMessageDialog } from './chat-message-ui';
 import { CHAT_PALETTE, chatColor } from './avatar-colors';
 import {
@@ -103,6 +113,10 @@ type Options = {
     peerId: string,
     current: () => boolean,
   ) => void;
+  /** Opens the settings sheet at a section; the chat options button uses it. */
+  openSettings?: (section: string, opener: HTMLElement | null) => void;
+  /** Account notification rules and app alerts, appended to the Notifications screen. */
+  mountAccountNotifications?: (container: HTMLElement, current: () => boolean) => void;
 };
 type MessageRow = { node: HTMLElement; fingerprint: string; dispose: () => void };
 type ConversationButton = { node: HTMLButtonElement; name: HTMLElement; unread: HTMLElement };
@@ -163,7 +177,6 @@ export class SocialChat {
   private preferenceOperation = 0;
   private preferenceBusy = false;
   private accountSync = 0;
-  private preferencesDialog: ReturnType<typeof modal> | null = null;
   private audio: AudioContext | null = null;
   private readonly desktopNotices = new Set<Notification>();
   private seenAtBottom = true;
@@ -207,7 +220,11 @@ export class SocialChat {
     this.conversations.setAttribute('aria-label', 'Conversations');
     this.closeButton.setAttribute('aria-label', 'Close PM');
     this.closeButton.title = 'Close PM';
-    const optionsButton = button('⋯', () => this.openPreferences(), 'chat-options-button');
+    const optionsButton = button(
+      '⋯',
+      () => this.options.openSettings?.('chat-look', optionsButton),
+      'chat-options-button',
+    );
     optionsButton.setAttribute('aria-label', 'Chat options');
     optionsButton.title = 'Chat options';
     toolbar.append(this.conversations, this.closeButton, this.pinsButton, optionsButton);
@@ -362,8 +379,6 @@ export class SocialChat {
       this.activation++;
       this.preferenceOperation++;
       this.preferenceBusy = false;
-      this.preferencesDialog?.close();
-      this.preferencesDialog = null;
       this.membershipVersion = room.membershipVersion;
       this.activationSynced = false;
       this.activationTask = null;
@@ -448,8 +463,6 @@ export class SocialChat {
     this.activationSynced = false;
     this.snapshotPublicIds = null;
     this.membershipVersion = -1;
-    this.preferencesDialog?.close();
-    this.preferencesDialog = null;
     this.closeDesktopNotices();
     for (const timer of this.pending.values()) clearTimeout(timer);
     for (const id of this.pendingStarted.keys()) this.finishSend(id, 'superseded');
@@ -2145,70 +2158,111 @@ export class SocialChat {
     });
   }
 
-  private openPreferences(): void {
-    const room = this.options.getRoom();
-    if (!room?.localParticipantId) return;
-    this.preferencesDialog?.close();
-    const activation = this.activation,
-      viewer = this.viewerKey;
-    const view = modal('Chat preferences');
-    this.preferencesDialog = view;
-    view.dialog.addEventListener(
-      'close',
-      () => {
-        if (this.preferencesDialog === view) this.preferencesDialog = null;
+  /** The settings sheet's chat sections; every control applies as it changes. */
+  sections(): SheetSection[] {
+    const available = (): boolean => Boolean(this.options.getRoom()?.localParticipantId);
+    return [
+      {
+        id: 'chat-look',
+        segment: 'you',
+        label: 'Chat look',
+        status: () => this.lookStatus(),
+        available,
+        screen: () => ({ title: 'Chat look', body: (context) => this.lookScreen(context) }),
       },
-      { once: true },
-    );
-    const current = (): boolean =>
-      this.preferencesDialog === view &&
-      view.dialog.open &&
-      this.contextCurrent(activation, room, viewer);
-    const peer = this.store.active;
-    if (
-      peer !== 'public' &&
-      this.options.getToken?.() &&
-      room.getParticipants().get(peer)?.authenticated
-    ) {
-      this.options.mountConversationNotifications?.(
-        view.body,
-        peer,
-        () => current() && this.store.active === peer,
-      );
-    }
-    if (room.roomSettings)
-      view.body.append(
-        button('Room history…', () => {
-          view.close();
-          openRoomHistory(
-            room,
-            () => this.contextCurrent(activation, room, viewer),
-            !!this.options.getToken?.(),
-          );
+      {
+        id: 'notifications',
+        segment: 'you',
+        label: 'Notifications',
+        status: () => this.notificationStatus(),
+        available,
+        screen: () => ({
+          title: 'Notifications',
+          body: (context) => this.notificationScreen(context),
         }),
-      );
-    const allow = el('input');
-    allow.type = 'checkbox';
-    allow.checked = this.preferences.allowPrivateMessages;
-    const sounds = el('input');
-    sounds.type = 'checkbox';
-    sounds.checked = this.preferences.sounds;
-    const large = el('input');
-    large.type = 'checkbox';
-    large.checked = this.preferences.largeText;
-    // Only where the browser can show desktop notices at all.
-    const notices = typeof Notification === 'undefined' ? null : el('input');
-    if (notices) {
-      notices.type = 'checkbox';
-      notices.dataset['preference'] = 'notifications';
-      notices.checked = this.preferences.notifications && Notification.permission === 'granted';
-    }
-    const previews = notices ? el('input') : null;
-    if (previews) {
-      previews.type = 'checkbox';
-      previews.dataset['preference'] = 'notificationPreviews';
-      previews.checked = this.preferences.notificationPreviews;
-    }
+      },
+      {
+        id: 'privacy',
+        segment: 'you',
+        label: 'Privacy',
+        status: () => this.privacyStatus(),
+        available,
+        screen: () => ({ title: 'Privacy', body: (context) => this.privacyScreen(context) }),
+      },
+    ];
+  }
+
+  private lookStatus(): string {
+    const look = this.options.getRoom()?.chatStyle ?? AUTOMATIC_LOOK;
+    const style = LOOKS.find((entry) => entry.kind === look.style)?.label ?? 'Stripe';
+    const color = look.color
+      ? look.color.charAt(0).toUpperCase() + look.color.slice(1)
+      : 'Automatic';
+    return `${color} · ${style}`;
+  }
+
+  private notificationStatus(): string {
+    const parts = [
+      this.preferences.sounds ? 'Sounds' : null,
+      this.preferences.notifications ? 'Alerts' : null,
+    ].filter(Boolean);
+    return parts.length ? parts.join(' · ') : 'Off';
+  }
+
+  private privacyStatus(): string {
+    const ignored = this.preferences.ignored.length + this.temporaryIgnored.size;
+    const messages = this.preferences.allowPrivateMessages ? 'PMs on' : 'PMs off';
+    return ignored ? `${messages} · ${ignored} ignored` : messages;
+  }
+
+  /** A screen's work stops when the sheet leaves it or the chat context changes. */
+  private screenContext(
+    context: ScreenContext,
+  ): { room: RoomClient; current: () => boolean; viewer: string } | null {
+    const room = this.options.getRoom();
+    if (!room?.localParticipantId) return null;
+    const activation = this.activation;
+    const viewer = this.viewerKey;
+    return {
+      room,
+      viewer,
+      current: () => context.current() && this.contextCurrent(activation, room, viewer),
+    };
+  }
+
+  private lookScreen(context: ScreenContext): HTMLElement {
+    const scope = this.screenContext(context);
+    const body = el('div', undefined, 'sheet-screen');
+    if (!scope) return body;
+    const { room, current, viewer } = scope;
+    const lookBlock = el('div', undefined, 'sheet-block chat-look-block');
+    let applying: Promise<void> = Promise.resolve();
+    const look = this.lookPicker(room, () => {
+      applying = applying.then(async () => {
+        if (!current()) return;
+        const chosen = look.chosen();
+        const before = room.chatStyle ?? AUTOMATIC_LOOK;
+        if (chosen.color === before.color && chosen.style === before.style) return;
+        try {
+          const applied = await room.setChatStyle(chosen);
+          if (!current()) return;
+          this.preferences = { ...this.preferences, look: applied };
+          this.savePreferences(viewer);
+          this.render();
+          markSaved(lookBlock);
+        } catch (error) {
+          if (current())
+            this.options.notify(error instanceof Error ? error.message : 'Unable to save the look');
+        }
+      });
+    });
+    lookBlock.append(el('span', '', 'sheet-row-saved'), ...look.nodes);
+    const large = toggleRow('Larger chat text', this.preferences.largeText, (value) => {
+      this.preferences = { ...this.preferences, largeText: value };
+      this.savePreferences(viewer);
+      this.render();
+      markSaved(large.row);
+    });
     // Each choice is shown as it looks, in the viewer's own time.
     const timestamps = el('select');
     timestamps.dataset['preference'] = 'timestamps';
@@ -2222,124 +2276,191 @@ export class SocialChat {
       timestamps.append(option);
     }
     timestamps.value = this.preferences.timestamps;
-    const look = this.lookPicker(room);
-    view.body.append(
-      ...look.nodes,
-      field('Allow incoming private messages', allow),
-      field('Message and PM sounds', sounds),
-      ...(notices ? [field('Desktop notifications for mentions and PMs', notices)] : []),
-      ...(previews
-        ? [
-            field('Show sender and message previews in desktop notifications', previews),
-            el(
-              'p',
-              'Previews may appear on your lock screen. Generic notices keep names and messages private.',
-              'setting-hint',
-            ),
-          ]
-        : []),
-      field('Larger chat text', large),
-      field('Timestamps', timestamps),
-    );
-    const save = asyncButton(
-      'Save preferences',
-      () =>
-        busy(save, view.error, async () => {
+    const timestampRow = selectRow('Timestamps', timestamps);
+    timestamps.addEventListener('change', () => {
+      if (!TIMESTAMP_FORMATS.includes(timestamps.value as TimestampFormat)) {
+        timestamps.value = this.preferences.timestamps;
+        return;
+      }
+      this.preferences = { ...this.preferences, timestamps: timestamps.value as TimestampFormat };
+      this.savePreferences(viewer);
+      this.render();
+      markSaved(timestampRow);
+    });
+    const rows: HTMLElement[] = [large.row, timestampRow];
+    if (room.roomSettings)
+      rows.push(
+        actionRow('Room history', () =>
+          openRoomHistory(room, current, Boolean(this.options.getToken?.())),
+        ),
+      );
+    body.append(lookBlock, group(null, rows));
+    return body;
+  }
+
+  private notificationScreen(context: ScreenContext): HTMLElement {
+    const scope = this.screenContext(context);
+    const body = el('div', undefined, 'sheet-screen');
+    if (!scope) return body;
+    const { room, current, viewer } = scope;
+    const sounds = toggleRow('Sounds', this.preferences.sounds, (value) => {
+      // Audio must start during the click that enabled it.
+      this.resumeSoundFromGesture(value);
+      if (!current()) return;
+      this.preferences = { ...this.preferences, sounds: value };
+      this.savePreferences(viewer);
+      if (value) this.playSound(550);
+      markSaved(sounds.row);
+    });
+    const rows: HTMLElement[] = [sounds.row];
+    // Only where the browser can show desktop notices at all.
+    if (typeof Notification !== 'undefined') {
+      const notices = toggleRow(
+        'Alerts on this device',
+        this.preferences.notifications && Notification.permission === 'granted',
+        (value) => {
+          // Permission must be requested during the click, before any wait.
+          const allowed = this.notificationPermission(value);
+          allowed
+            .then((granted) => {
+              if (!current()) return;
+              if (value && !granted) {
+                notices.input.checked = false;
+                this.options.notify(
+                  'Notifications are blocked for this site in your browser settings',
+                );
+              }
+              this.preferences = { ...this.preferences, notifications: granted };
+              if (!granted) this.closeDesktopNotices();
+              previews.row.hidden = !granted;
+              this.savePreferences(viewer);
+              markSaved(notices.row);
+            })
+            .catch(() => {});
+        },
+      );
+      notices.input.dataset['preference'] = 'notifications';
+      const previews = toggleRow(
+        'Show message text',
+        this.preferences.notificationPreviews,
+        (value) => {
           if (!current()) return;
-          const operation = this.beginPreferenceUpdate();
-          const chosen = look.chosen();
-          const before = room.chatStyle ?? AUTOMATIC_LOOK;
-          const lookChanged = chosen.color !== before.color || chosen.style !== before.style;
-          const next = {
-            ...this.preferences,
-            allowPrivateMessages: allow.checked,
-            sounds: sounds.checked,
-            notificationPreviews: previews?.checked === true,
-            largeText: large.checked,
-            timestamps: TIMESTAMP_FORMATS.includes(timestamps.value as TimestampFormat)
-              ? (timestamps.value as TimestampFormat)
-              : this.preferences.timestamps,
-          };
-          // Audio and notification permission must start during the click, before any wait.
-          this.resumeSoundFromGesture(sounds.checked);
-          const noticesAllowed = this.notificationPermission(notices?.checked === true);
-          try {
-            next.notifications = await noticesAllowed;
-            if (notices?.checked && !next.notifications)
-              this.options.notify(
-                'Notifications are blocked for this site in your browser settings',
-              );
-            await this.pushPreferences(room, next, new Map(this.temporaryIgnored));
-            if (
-              !this.contextCurrent(activation, room, viewer) ||
-              operation !== this.preferenceOperation
-            )
-              return;
-            if (!next.notifications || !next.notificationPreviews) this.closeDesktopNotices();
+          this.preferences = { ...this.preferences, notificationPreviews: value };
+          if (!value) this.closeDesktopNotices();
+          this.savePreferences(viewer);
+          markSaved(previews.row);
+        },
+      );
+      previews.input.dataset['preference'] = 'notificationPreviews';
+      previews.row.hidden = !notices.input.checked;
+      rows.push(notices.row, previews.row);
+    }
+    body.append(
+      group(null, rows),
+      note('Alerts with message text can show on a lock screen; without it they stay generic.'),
+    );
+    // The open private conversation's own mute and snooze come first.
+    const peer = this.store.active;
+    if (
+      peer !== 'public' &&
+      this.options.getToken?.() &&
+      room.getParticipants().get(peer)?.authenticated
+    )
+      this.options.mountConversationNotifications?.(
+        body,
+        peer,
+        () => current() && this.store.active === peer,
+      );
+    if (this.options.getToken?.()) this.options.mountAccountNotifications?.(body, current);
+    return body;
+  }
+
+  private privacyScreen(context: ScreenContext): HTMLElement {
+    const scope = this.screenContext(context);
+    const body = el('div', undefined, 'sheet-screen');
+    if (!scope) return body;
+    const { room, current, viewer } = scope;
+    const allow = toggleRow(
+      'Private messages from others',
+      this.preferences.allowPrivateMessages,
+      (value) => {
+        const previous = this.preferences.allowPrivateMessages;
+        let operation: number;
+        try {
+          operation = this.beginPreferenceUpdate();
+        } catch (error) {
+          allow.input.checked = previous;
+          this.options.notify(error instanceof Error ? error.message : 'Please wait');
+          return;
+        }
+        const next = { ...this.preferences, allowPrivateMessages: value };
+        this.pushPreferences(room, next, new Map(this.temporaryIgnored))
+          .then(() => {
+            if (!current() || operation !== this.preferenceOperation) return;
             this.preferences = next;
             this.savePreferences(viewer);
-            if (current() && next.sounds) this.playSound(550);
             this.render();
-            if (lookChanged) {
-              const applied = await room.setChatStyle(chosen);
-              if (!this.contextCurrent(activation, room, viewer)) return;
-              this.preferences = { ...this.preferences, look: applied };
-              this.savePreferences(viewer);
-              this.render();
-            }
-            if (current()) view.close();
-          } finally {
+            markSaved(allow.row);
+          })
+          .catch((error: unknown) => {
+            if (!current() || operation !== this.preferenceOperation) return;
+            allow.input.checked = previous;
+            this.options.notify(
+              error instanceof Error ? error.message : 'Unable to save preferences',
+            );
+          })
+          .finally(() => {
             if (operation === this.preferenceOperation) this.preferenceBusy = false;
-          }
-        }),
-      (error) => {
-        if (!current()) return;
-        view.error.textContent =
-          error instanceof Error ? error.message : 'Unable to save preferences';
-        view.error.hidden = false;
+          });
       },
-      'btn-primary',
     );
-    view.body.append(save, el('h3', 'Ignored people'));
     const ignored = [
       ...this.preferences.ignored,
       ...[...this.temporaryIgnored].map(([id, name]) => ({ id, name })),
     ];
-    if (!ignored.length)
-      view.body.append(el('p', 'No one is ignored. Use a person’s menu to ignore their messages.'));
+    const people: HTMLElement[] = [];
     for (const person of ignored) {
-      const row = el('div', undefined, 'community-row');
+      const row = el('div', undefined, 'sheet-row sheet-row-person');
       const restore = asyncButton(
         'Unignore',
-        () =>
-          busy(restore, view.error, async () => {
-            if (!current()) return;
-            await this.toggleIgnore(person.id, person.name, false);
-            if (current() && !this.isIgnored(person.id)) row.remove();
-          }),
-        (error) => {
+        async () => {
           if (!current()) return;
-          view.error.textContent =
-            error instanceof Error ? error.message : 'Unable to restore messages';
-          view.error.hidden = false;
+          await this.toggleIgnore(person.id, person.name, false);
+          if (current() && !this.isIgnored(person.id)) row.remove();
         },
+        (error) => {
+          if (current())
+            this.options.notify(
+              error instanceof Error ? error.message : 'Unable to restore messages',
+            );
+        },
+        'sheet-button',
       );
-      row.append(el('span', person.name), restore);
-      view.body.append(row);
+      row.append(el('span', person.name, 'sheet-row-label'), restore);
+      people.push(row);
     }
-    view.body.append(
-      el(
-        'p',
+    body.append(
+      group(null, [allow.row]),
+      group(
+        'Ignored people',
+        people.length
+          ? people
+          : [note('No one is ignored. Use a person’s menu to ignore their messages.')],
+      ),
+      note(
         this.accountToken(viewer)
-          ? 'These preferences and your ignore list are saved to your account and follow you to other devices. Guest ignores last only for this room session.'
-          : 'Preferences are saved in this browser. Guest ignores last only for this room session.',
-        'setting-hint',
+          ? 'Saved to your account, so they follow you to other devices. Guest ignores last for this room.'
+          : 'Saved in this browser. Guest ignores last for this room.',
       ),
     );
+    return body;
   }
 
   /** Swatches and styles for the local look, with a live preview row. */
-  private lookPicker(room: RoomClient): { nodes: HTMLElement[]; chosen: () => ChatStyle } {
+  private lookPicker(
+    room: RoomClient,
+    onChange?: () => void,
+  ): { nodes: HTMLElement[]; chosen: () => ChatStyle } {
     const current = room.chatStyle ?? AUTOMATIC_LOOK;
     const nickname = room.nickname;
     const preview = el('div');
@@ -2353,7 +2474,10 @@ export class SocialChat {
       node.name = name;
       node.value = value;
       node.checked = checked;
-      node.addEventListener('change', () => show());
+      node.addEventListener('change', () => {
+        show();
+        onChange?.();
+      });
       return node;
     };
     const swatch = (value: string, color: string): HTMLInputElement => {
@@ -2400,17 +2524,7 @@ export class SocialChat {
     };
     show();
     return {
-      nodes: [
-        el('h3', 'Your chat color'),
-        el(
-          'p',
-          'Everyone in the room sees your name, messages and video tag in this color.',
-          'setting-hint',
-        ),
-        colorGroup,
-        styleGroup,
-        preview,
-      ],
+      nodes: [colorGroup, styleGroup, preview],
       chosen,
     };
   }

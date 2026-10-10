@@ -138,6 +138,8 @@ async function fixture({ touch = false, touchPoints = 0 } = {}) {
     audioReject: false,
     notices: [],
     noticeAnswer: 'granted',
+    openedSettings: [],
+    mountedAccountNotifications: 0,
     pointerChange: () => {},
     resize: () => {},
   };
@@ -216,11 +218,16 @@ async function fixture({ touch = false, touchPoints = 0 } = {}) {
   }
   let messageId = 0;
   const timers = new Map();
+  const sheetModule = await loadTypeScript('src/settings-sheet.ts', {
+    modules: { './ui': f.ui, './settings-sheet.css': {} },
+    globals: { document: f.document, setTimeout: () => 1, clearTimeout: () => {} },
+  });
   const { SocialChat } = await loadTypeScript('src/social-chat.ts', {
     modules: {
       './attachments': attachmentState.module,
       './chat-store': chatModule,
       './ui': f.ui,
+      './settings-sheet': sheetModule,
       './avatar-colors': colorModule,
       './chat-history': {
         openRoomHistory(...args) {
@@ -275,8 +282,17 @@ async function fixture({ touch = false, touchPoints = 0 } = {}) {
     bindParticipantName(anchor, id, name) {
       anchor.addEventListener('click', () => state.actions.push([id, name]));
     },
+    openSettings: (section) => state.openedSettings.push(section),
+    mountAccountNotifications: () => state.mountedAccountNotifications++,
   });
+  const screenContext = { push() {}, pop() {}, close() {}, current: () => true };
+  const screen = async (id) => {
+    const section = chat.sections().find((entry) => entry.id === id);
+    assert.ok(section, `section ${id}`);
+    return section.screen().body(screenContext);
+  };
   return {
+    screen,
     ...f,
     attachmentState,
     state,
@@ -1303,7 +1319,7 @@ test('many conversation pills retain full accessible names and focus without reb
   assert.equal(settings.textContent, '⋯');
   assert.equal(settings.classList.contains('chat-options-button'), true);
   settings.click();
-  assert.equal(f.chat.preferencesDialog.dialog.open, true);
+  assert.deepEqual(f.state.openedSettings, ['chat-look']);
   f.chat.reset();
   assert.equal(f.chat.conversations.children.length, 1);
 });
@@ -1324,29 +1340,35 @@ test('saved sound preferences unlock on the next gesture and audio failure is no
   assert.equal(f.chat.store.messages.length, 1);
 });
 
-test('preferences dialog unlocks audio before awaiting, and leave prevents late save from reviving privacy state', async () => {
+test('a Sounds change resumes audio in its gesture, and leave prevents a late privacy save from reviving state', async () => {
   const f = await fixture();
   await f.chat.activate();
   const pending = deferred();
   f.state.handle = () => pending.promise;
-  f.chat.openPreferences();
-  const view = f.chat.preferencesDialog;
-  const controls = view.dialog.querySelectorAll('input').filter((node) => node.type === 'checkbox');
-  controls[0].checked = false;
-  controls[1].checked = true;
-  view.dialog
-    .querySelectorAll('button')
-    .find((node) => node.textContent === 'Save preferences')
-    .click();
+  const notifications = await f.screen('notifications');
+  const sounds = notifications.querySelectorAll('input').find((node) => node.type === 'checkbox');
+  sounds.checked = true;
+  sounds.emit('change');
   assert.equal(f.state.audioResumes, 1);
+  assert.equal(f.chat.preferences.sounds, true);
+  const privacy = await f.screen('privacy');
+  const allow = privacy.querySelectorAll('input').find((node) => node.type === 'checkbox');
+  allow.checked = false;
+  allow.emit('change');
   f.chat.reset();
   f.state.room = null;
   pending.resolve({});
   await flush();
-  assert.equal(view.dialog.open, false);
   assert.equal(f.chat.preferences.allowPrivateMessages, true);
-  assert.equal(f.chat.preferences.sounds, false);
-  assert.equal(f.state.storage.size, 0);
+  const stored = [...f.state.storage.values()].map((value) => JSON.parse(value));
+  assert.ok(
+    stored.some((entry) => entry.sounds === true),
+    'the sounds change applied at once',
+  );
+  assert.ok(
+    !stored.some((entry) => entry.allowPrivateMessages === false),
+    'the late privacy save never lands',
+  );
 });
 
 test('timestamps are visible by default and follow the chosen format', async () => {
@@ -1374,12 +1396,11 @@ test('timestamps are visible by default and follow the chosen format', async () 
   assert.equal(always(), false);
 });
 
-test('the preferences dialog offers every timestamp format and saves the chosen one', async () => {
+test('the Chat look screen offers every timestamp format and applies the chosen one', async () => {
   const f = await fixture();
   await f.chat.activate();
-  f.chat.openPreferences();
-  const view = f.chat.preferencesDialog;
-  const select = view.dialog
+  const body = await f.screen('chat-look');
+  const select = body
     .querySelectorAll('select')
     .find((node) => node.dataset.preference === 'timestamps');
   assert.deepEqual(
@@ -1388,12 +1409,10 @@ test('the preferences dialog offers every timestamp format and saves the chosen 
   );
   assert.equal(select.value, 'time');
   select.value = 'seconds';
-  view.dialog
-    .querySelectorAll('button')
-    .find((node) => node.textContent === 'Save preferences')
-    .click();
+  select.emit('change');
   await flush();
   assert.equal(f.chat.preferences.timestamps, 'seconds');
+  assert.equal(select.parentNode.querySelector('.sheet-row-saved').textContent, 'Saved');
 });
 
 test('the timestamp format is remembered with the chat preferences, and nonsense is ignored', async () => {
@@ -1525,14 +1544,12 @@ test('a mention of you is highlighted where it appears, and links stay whole', a
   assert.equal(disguised.textContent, 'see https://example.com/\u202Emoc.live\u202C now');
 });
 
-test('the preferences dialog previews a look and saves it for the room and the next join', async () => {
+test('the Chat look screen previews a look and applies it for the room and the next join', async () => {
   const f = await fixture();
   await f.chat.activate();
   f.state.room.chatStyle = { color: null, style: 'accent' };
-  f.chat.openPreferences();
-  const view = f.chat.preferencesDialog;
-  const radios = (name) =>
-    view.dialog.querySelectorAll('input').filter((node) => node.name === name);
+  const body = await f.screen('chat-look');
+  const radios = (name) => body.querySelectorAll('input').filter((node) => node.name === name);
   // Like a browser's radio group: checking one unchecks the rest.
   const choose = (name, value) => {
     for (const node of radios(name)) node.checked = node.value === value;
@@ -1549,36 +1566,29 @@ test('the preferences dialog previews a look and saves it for the room and the n
     radios('chat-look').map((node) => node.value),
     ['accent', 'text', 'bubble'],
   );
-  const preview = view.dialog.querySelector('.chat-msg');
+  const preview = body.querySelector('.chat-msg');
   assert.deepEqual(look(preview), { style: 'accent', color: chatColor('Local', null) });
   choose('chat-color', 'violet');
-  choose('chat-look', 'bubble');
-  assert.deepEqual(look(preview), { style: 'bubble', color: CHAT_PALETTE.violet });
-  view.dialog
-    .querySelectorAll('button')
-    .find((node) => node.textContent === 'Save preferences')
-    .click();
   await flush();
+  choose('chat-look', 'bubble');
+  await flush();
+  assert.deepEqual(look(preview), { style: 'bubble', color: CHAT_PALETTE.violet });
   assert.deepEqual(f.state.requests.at(-1), {
     action: 'setChatStyle',
     data: { chatStyle: { color: 'violet', style: 'bubble' } },
   });
   assert.deepEqual(f.state.room.chatStyle, { color: 'violet', style: 'bubble' });
   assert.deepEqual(f.chat.savedLook(), { color: 'violet', style: 'bubble' });
-  assert.equal(view.dialog.open, false);
 
-  // Saving other preferences leaves an unchanged look alone.
-  f.chat.openPreferences();
+  // Other chat look choices leave an unchanged look alone.
   const requests = f.state.requests.length;
-  f.chat.preferencesDialog.dialog
-    .querySelectorAll('button')
-    .find((node) => node.textContent === 'Save preferences')
-    .click();
+  const select = body
+    .querySelectorAll('select')
+    .find((node) => node.dataset.preference === 'timestamps');
+  select.value = 'hover';
+  select.emit('change');
   await flush();
-  assert.deepEqual(
-    f.state.requests.slice(requests).map((request) => request.action),
-    ['setChatPreferences'],
-  );
+  assert.deepEqual(f.state.requests.slice(requests), []);
 });
 
 test('a saved look is checked before a join offers it', async () => {
@@ -1671,15 +1681,12 @@ test('opted-in desktop notices announce mentions and private messages only while
   const f = await fixture();
   await f.chat.activate();
   const save = async (checked) => {
-    f.chat.openPreferences();
-    const view = f.chat.preferencesDialog;
-    view.dialog
+    const body = await f.screen('notifications');
+    const input = body
       .querySelectorAll('input')
-      .find((node) => node.dataset.preference === 'notifications').checked = checked;
-    view.dialog
-      .querySelectorAll('button')
-      .find((node) => node.textContent === 'Save preferences')
-      .click();
+      .find((node) => node.dataset.preference === 'notifications');
+    input.checked = checked;
+    input.emit('change');
     await flush();
   };
   await save(true);
@@ -1709,17 +1716,15 @@ test('opted-in desktop notices announce mentions and private messages only while
 test('notification previews require an explicit preference and stale notices cannot open a replacement session', async () => {
   const f = await fixture();
   await f.chat.activate();
-  f.chat.openPreferences();
-  const view = f.chat.preferencesDialog;
-  for (const preference of ['notifications', 'notificationPreviews'])
-    view.dialog
+  const body = await f.screen('notifications');
+  for (const preference of ['notifications', 'notificationPreviews']) {
+    const input = body
       .querySelectorAll('input')
-      .find((node) => node.dataset.preference === preference).checked = true;
-  view.dialog
-    .querySelectorAll('button')
-    .find((node) => node.textContent === 'Save preferences')
-    .click();
-  await flush();
+      .find((node) => node.dataset.preference === preference);
+    input.checked = true;
+    input.emit('change');
+    await flush();
+  }
   f.document.hidden = true;
   f.chat.receive(entry('preview', { content: '@Local hello' }));
   const notice = f.state.notices[0];
@@ -1746,17 +1751,15 @@ test('a browser that refuses notification permission leaves desktop notices off 
   const f = await fixture();
   f.state.noticeAnswer = 'denied';
   await f.chat.activate();
-  f.chat.openPreferences();
-  const view = f.chat.preferencesDialog;
-  view.dialog
+  const body = await f.screen('notifications');
+  const input = body
     .querySelectorAll('input')
-    .find((node) => node.dataset.preference === 'notifications').checked = true;
-  view.dialog
-    .querySelectorAll('button')
-    .find((node) => node.textContent === 'Save preferences')
-    .click();
+    .find((node) => node.dataset.preference === 'notifications');
+  input.checked = true;
+  input.emit('change');
   await flush();
   assert.equal(f.chat.preferences.notifications, false);
+  assert.equal(input.checked, false, 'a refused permission unchecks the row');
   assert.match(f.state.notifications.at(-1), /blocked for this site/);
 });
 
@@ -2475,7 +2478,7 @@ test('live account PM notification controls are scoped to the currently open pee
   const mounts = [];
   f.chat.options.mountConversationNotifications = (...args) => mounts.push(args);
   f.chat.openPrivate('alice', 'Alice');
-  f.chat.openPreferences();
+  await f.screen('notifications');
   assert.equal(mounts.length, 1);
   assert.equal(mounts[0][1], 'alice');
   assert.equal(mounts[0][2](), true);

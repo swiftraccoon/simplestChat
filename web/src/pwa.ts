@@ -201,9 +201,9 @@ export class PwaControls {
   }
 
   mountAccount(container: HTMLElement, current: () => boolean): void {
-    const section = el('section', undefined, 'community-dialog-body');
-    section.append(el('h3', 'App & notifications'));
-    const installHint = el('p', undefined, 'setting-hint');
+    const section = el('div', undefined, 'sheet-group');
+    section.append(el('div', 'App', 'sheet-group-title'));
+    const installHint = el('p', undefined, 'sheet-note');
     const install = button('Install app', () => {
       const prompt = this.installPrompt;
       if (!prompt || !current()) return;
@@ -224,12 +224,12 @@ export class PwaControls {
     };
     this.refreshInstall = refreshInstall;
     refreshInstall();
-    const status = el('p', 'Checking notifications…', 'setting-hint');
+    const status = el('p', 'Checking notifications…', 'sheet-status');
     status.setAttribute('role', 'status');
     const explanation = el(
       'p',
-      'Enable optional background PM alerts on this browser. Your account notification rules and conversation mutes also apply. Background notifications never show names or message text.',
-      'setting-hint',
+      'Background alerts for private messages on this browser. Your rules and mutes still apply; alerts never show names or message text.',
+      'sheet-note',
     );
     const account = this.options.getAccountId();
     const generation = this.generation;
@@ -351,7 +351,11 @@ export class PwaControls {
     this.refreshControls = () => {
       if (isCurrent()) toggle.disabled = this.busy || !worker || !publicKey;
     };
-    section.append(installHint, install, explanation, status, toggle);
+    install.className = 'sheet-button';
+    toggle.className = 'sheet-button';
+    const actions = el('div', undefined, 'sheet-actions');
+    actions.append(install, toggle);
+    section.append(installHint, explanation, actions, status);
     container.append(section);
     this.options.mountNotificationPreferences?.(container, isCurrent);
     if (!pushAvailable() || !this.registration) {
@@ -389,7 +393,7 @@ export class PwaControls {
       .catch(() => {
         if (isCurrent())
           status.textContent =
-            'Notification settings could not be loaded. Close Account and try again.';
+            'Notification settings could not be loaded. Reopen Settings and try again.';
       })
       .finally(() => clearTimeout(timer));
   }

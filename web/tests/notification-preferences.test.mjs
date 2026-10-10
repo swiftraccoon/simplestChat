@@ -151,8 +151,37 @@ async function fixture(initial = {}) {
       return state.now;
     }
   }
+  Object.defineProperty(dom.Node.prototype, 'classList', {
+    configurable: true,
+    get() {
+      const node = this;
+      const names = () => (node.className ?? '').split(/\s+/).filter(Boolean);
+      return {
+        add: (...values) => {
+          node.className = [...new Set([...names(), ...values])].join(' ');
+        },
+        remove: (...values) => {
+          node.className = names()
+            .filter((name) => !values.includes(name))
+            .join(' ');
+        },
+        contains: (value) => names().includes(value),
+      };
+    },
+  });
+  Object.defineProperty(dom.Node.prototype, 'dataset', {
+    configurable: true,
+    get() {
+      this._dataset ??= {};
+      return this._dataset;
+    },
+  });
+  const sheet = await loadTypeScript('src/settings-sheet.ts', {
+    modules: { './ui': ui, './settings-sheet.css': {} },
+    globals: { document, setTimeout: () => 1, clearTimeout: () => {} },
+  });
   const { NotificationPreferences } = await loadTypeScript('src/notification-preferences.ts', {
-    modules: { './ui': ui, './notification-validation': validation },
+    modules: { './ui': ui, './notification-validation': validation, './settings-sheet': sheet },
     globals: {
       document,
       window,
@@ -213,43 +242,59 @@ test('account switch aborts prior reads and rejects their late policy or save re
   await flush();
   const saveWait = deferred();
   f.state.save = () => saveWait.promise;
-  f.container
-    .querySelectorAll('button')
-    .find((node) => node.textContent === 'Save notification rules')
-    .click();
+  const mentions = f.container.querySelectorAll('input')[1];
+  mentions.checked = false;
+  mentions.emit('change');
   f.state.account = 'account-c';
   f.state.token = 'account-c-token';
   f.controller.reset();
   saveWait.resolve(defaults());
   await flush();
   assert.equal(f.controller.allows('private', peer), false);
-  assert.ok(!f.container.textContent.includes('Notification rules saved'));
+  assert.ok(!f.container.textContent.includes('Saved'));
   f.controller.dispose();
 });
 
-test('account controls persist named quiet hours without implicitly enabling browser notifications', async () => {
+test('account rows persist each change and named quiet hours without implicitly enabling browser notifications', async () => {
   const f = await fixture();
   f.controller.mountAccount(f.container, () => f.state.current);
   await flush();
   const inputs = f.container.querySelectorAll('input');
-  inputs[0].checked = false;
-  inputs[1].checked = false;
-  inputs[2].checked = true;
-  inputs[3].value = '22:00';
-  inputs[4].value = '07:00';
-  inputs[5].value = 'America/New_York';
-  f.container
-    .querySelectorAll('button')
-    .find((node) => node.textContent === 'Save notification rules')
-    .click();
-  await flush();
-  const save = f.calls.find(([kind]) => kind === 'save');
-  assert.deepEqual(save[2], {
+  const change = async (index, apply) => {
+    apply(inputs[index]);
+    inputs[index].emit('change');
+    await flush();
+  };
+  await change(0, (input) => {
+    input.checked = false;
+  });
+  await change(1, (input) => {
+    input.checked = false;
+  });
+  await change(2, (input) => {
+    input.checked = true;
+  });
+  await change(3, (input) => {
+    input.value = '22:00';
+  });
+  await change(4, (input) => {
+    input.value = '07:00';
+  });
+  await change(5, (input) => {
+    input.value = 'America/New_York';
+  });
+  const saves = f.calls.filter(([kind]) => kind === 'save');
+  assert.equal(saves.length, 6, 'every row applies on its own');
+  assert.deepEqual(saves.at(-1)[2], {
     privateMessages: false,
     mentions: false,
     quietHours: { startMinute: 1320, endMinute: 420, timeZone: 'America/New_York' },
   });
-  assert.ok(f.container.textContent.includes('Notification rules saved'));
+  assert.ok(f.container.textContent.includes('Saved'));
+  assert.equal(
+    f.calls.some(([kind]) => kind === 'error'),
+    false,
+  );
   f.controller.dispose();
 });
 

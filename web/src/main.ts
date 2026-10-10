@@ -491,8 +491,28 @@ const layoutSection: SheetSection = {
 let settingsReturnTab: 'chat' | 'users' | 'lobby' = 'chat';
 let settingsRestoreChat = false;
 let settingsRestorePanel = false;
+/** Account rules and app alerts on the home page, where no chat is open. */
+const homeNotificationsSection: SheetSection = {
+  id: 'notifications',
+  segment: 'you',
+  label: 'Notifications',
+  available: () => auth.isLoggedIn,
+  status: () => 'Rules and app alerts',
+  screen: () => ({
+    title: 'Notifications',
+    body: (context) => {
+      const body = document.createElement('div');
+      body.className = 'sheet-screen';
+      pwa.mountAccount(body, () => context.current());
+      return body;
+    },
+  }),
+};
 const settingsSheet = new SettingsSheet({
-  sections: () => (room ? [...mediaControls.sections(), layoutSection] : []),
+  sections: () =>
+    room
+      ? [...mediaControls.sections(), layoutSection, ...socialChat.sections()]
+      : [homeNotificationsSection],
   footer: () =>
     room
       ? [
@@ -1599,6 +1619,8 @@ const socialChat = new SocialChat({
   bindParticipantName: (anchor, id, name) => participantHovercard.bind(anchor, id, name),
   allowsNotification: (kind, peer) => notificationPreferences.allows(kind, peer),
   mountConversationNotifications,
+  openSettings: (section, opener) => settingsSheet.open({ section, opener }),
+  mountAccountNotifications: (container, current) => pwa.mountAccount(container, current),
 });
 const pwa = new PwaControls({
   getToken: () => auth.jwt,

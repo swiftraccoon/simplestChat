@@ -1,4 +1,5 @@
-import { api, button, el, field } from './ui';
+import { api, button, el } from './ui';
+import { fieldRow, group, markSaved, note, toggleRow } from './settings-sheet';
 import {
   notificationAllowed,
   type NotificationPreferences as PreferenceState,
@@ -143,11 +144,12 @@ export class NotificationPreferences {
     }
   }
 
+  /** Account rules as rows: each applies on its own change; a busy save queues the latest. */
   mountAccount(container: HTMLElement, current: () => boolean): void {
     if (this.account !== this.options.getAccountId()) this.reset();
-    const section = el('section', undefined, 'notification-preferences');
-    section.append(el('h3', 'Notification rules'));
-    const status = el('p', 'Loading notification rules…', 'setting-hint');
+    const section = el('div', undefined, 'sheet-group notification-preferences');
+    section.append(el('div', 'Alert me about', 'sheet-group-title'));
+    const status = el('p', 'Loading notification rules…', 'sheet-status');
     status.setAttribute('role', 'status');
     section.append(status);
     container.append(section);
@@ -159,87 +161,109 @@ export class NotificationPreferences {
         if (!active()) return;
         const state = this.state;
         if (!state) {
-          status.textContent = 'Rules could not be loaded. Reopen Account to try again.';
+          status.textContent = 'Rules could not be loaded. Reopen Settings to try again.';
           return;
         }
-        const privateMessages = el('input');
-        privateMessages.type = 'checkbox';
-        privateMessages.checked = state.privateMessages;
-        const mentions = el('input');
-        mentions.type = 'checkbox';
-        mentions.checked = state.mentions;
-        const quiet = el('input');
-        quiet.type = 'checkbox';
-        quiet.checked = state.quietHours !== null;
+        let policy: NotificationPolicy = {
+          privateMessages: state.privateMessages,
+          mentions: state.mentions,
+          quietHours: state.quietHours,
+        };
+        let quiet = {
+          startMinute: state.quietHours?.startMinute ?? 1320,
+          endMinute: state.quietHours?.endMinute ?? 420,
+          timeZone: state.quietHours?.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
+        };
+        let inFlight = false;
+        let queued: { row: HTMLElement; policy: NotificationPolicy } | null = null;
+        const persist = (row: HTMLElement, change: Partial<NotificationPolicy>): void => {
+          if (!active()) return;
+          policy = { ...policy, ...change };
+          if (inFlight) {
+            queued = { row, policy };
+            return;
+          }
+          inFlight = true;
+          const wanted = policy;
+          this.save(wanted)
+            .then((saved) => {
+              if (!active()) return;
+              status.textContent = saved ? '' : 'Rules were not saved. Try again.';
+              if (saved) markSaved(row);
+            })
+            .catch(() => {
+              if (active()) status.textContent = 'Rules could not be saved. Try again.';
+            })
+            .finally(() => {
+              inFlight = false;
+              const next = queued;
+              queued = null;
+              if (next && active()) persist(next.row, next.policy);
+            });
+        };
+        const privateMessages = toggleRow('Private messages', state.privateMessages, (value) =>
+          persist(privateMessages.row, { privateMessages: value }),
+        );
+        const mentions = toggleRow('Mentions', state.mentions, (value) =>
+          persist(mentions.row, { mentions: value }),
+        );
         const start = el('input');
         start.type = 'time';
-        start.value = timeValue(state.quietHours?.startMinute ?? 1320);
+        start.value = timeValue(quiet.startMinute);
         const end = el('input');
         end.type = 'time';
-        end.value = timeValue(state.quietHours?.endMinute ?? 420);
+        end.value = timeValue(quiet.endMinute);
         const zone = el('input');
         zone.type = 'text';
         zone.maxLength = 64;
-        zone.value = state.quietHours?.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+        zone.value = quiet.timeZone;
         zone.setAttribute('placeholder', 'America/New_York');
-        const times = el('div', undefined, 'notification-quiet-times');
-        times.append(field('From', start), field('Until', end), field('Time zone', zone));
-        const toggleQuiet = () => {
-          times.hidden = !quiet.checked;
-        };
-        quiet.addEventListener('change', toggleQuiet);
-        toggleQuiet();
-        const save = button('Save notification rules', () => {
-          if (!active()) return;
+        const times = group(null, [
+          fieldRow('From', start),
+          fieldRow('Until', end),
+          fieldRow('Time zone', zone),
+        ]);
+        times.classList.add('notification-quiet-times');
+        times.hidden = state.quietHours === null;
+        const quietToggle = toggleRow(
+          'Quiet hours every day',
+          state.quietHours !== null,
+          (value) => {
+            times.hidden = !value;
+            persist(quietToggle.row, { quietHours: value ? quiet : null });
+          },
+        );
+        const applyTimes = (row: HTMLElement): void => {
           const startMinute = timeMinute(start.value);
           const endMinute = timeMinute(end.value);
           const timeZone = zone.value.trim();
-          if (quiet.checked) {
-            if (startMinute < 0 || endMinute < 0 || startMinute === endMinute) {
-              status.textContent = 'Choose different valid start and end times.';
-              return;
-            }
-            try {
-              new Intl.DateTimeFormat('en', { timeZone });
-            } catch {
-              status.textContent = 'Choose an IANA time zone, such as America/New_York.';
-              return;
-            }
+          if (startMinute < 0 || endMinute < 0 || startMinute === endMinute) {
+            status.textContent = 'Choose different valid start and end times.';
+            return;
           }
-          save.disabled = true;
-          this.save({
-            privateMessages: privateMessages.checked,
-            mentions: mentions.checked,
-            quietHours: quiet.checked ? { startMinute, endMinute, timeZone } : null,
-          })
-            .then((saved) => {
-              if (active()) {
-                save.disabled = false;
-                status.textContent = saved
-                  ? 'Notification rules saved for your account.'
-                  : 'Rules were not saved. Try again.';
-              }
-            })
-            .catch(() => {
-              if (active()) {
-                save.disabled = false;
-                status.textContent = 'Rules could not be saved. Try again.';
-              }
-            });
-        });
-        status.textContent =
-          'Applies across devices to alert sounds, desktop notifications, and background PM notifications. Messages and unread counts are unchanged.';
+          try {
+            new Intl.DateTimeFormat('en', { timeZone });
+          } catch {
+            status.textContent = 'Choose an IANA time zone, such as America/New_York.';
+            return;
+          }
+          status.textContent = '';
+          quiet = { startMinute, endMinute, timeZone };
+          if (quietToggle.input.checked) persist(row, { quietHours: quiet });
+        };
+        for (const [input, row] of [
+          [start, times.children[0]],
+          [end, times.children[1]],
+          [zone, times.children[2]],
+        ] as const)
+          input.addEventListener('change', () => applyTimes(row as HTMLElement));
+        status.textContent = '';
         section.append(
-          field('Private-message alerts', privateMessages),
-          field('Mention alerts', mentions),
-          field('Quiet hours every day', quiet),
+          privateMessages.row,
+          mentions.row,
+          quietToggle.row,
           times,
-          el(
-            'p',
-            'Times use this time zone, including daylight-saving changes. Alerts suppressed while quiet are not replayed later.',
-            'setting-hint',
-          ),
-          save,
+          note('Applies on every device. Alerts suppressed while quiet are not replayed later.'),
         );
       })
       .catch(() => {
