@@ -1,6 +1,6 @@
 # Official multi-architecture image digests verified 2026-09-09. The package
 # refresh epoch also advances for security updates between base-digest reviews.
-ARG FEDORA_REFRESH_EPOCH=2026-09-30
+ARG FEDORA_REFRESH_EPOCH=2026-10-10
 
 # Node builds the frontend and projects image reviews; it is never deployed.
 # Pin the latest stable Current release and its verified multi-arch manifest.
