@@ -219,8 +219,17 @@ async function geometry(page) {
 function expectShape({ shape, viewport }, state, label) {
   const detail = (message) => `${label}: ${message} (${JSON.stringify(shape)})`;
   if (shape.tileWidth !== null) {
-    const minimum = viewport.width >= 1100 ? 320 : viewport.width > 600 ? 250 : 140;
-    assert.ok(shape.tileWidth >= minimum, detail(`tiles at least ${minimum}px wide`));
+    // About 1.5 to 1.8 times a phone's two-up tile: five columns at 1440, three at 768.
+    const [minimum, maximum] =
+      viewport.width === 1440
+        ? [256, 300]
+        : viewport.width === 768
+          ? [220, 260]
+          : [viewport.width > 600 ? 220 : 140, Infinity];
+    assert.ok(
+      shape.tileWidth >= minimum && shape.tileWidth <= maximum,
+      detail(`tiles between ${minimum}px and ${maximum}px wide`),
+    );
   }
   assert.ok(Math.abs(shape.gridLeft - shape.wordmarkLeft) <= 1, detail('grid on the gutter'));
   assert.ok(

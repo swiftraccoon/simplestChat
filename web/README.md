@@ -227,12 +227,12 @@ beside Help and is hidden inside a room. Tiles are ordered busiest first by the
 server: live rooms by participant count (unknown counts after known ones), then
 rooms nobody is in, newest first, across Load more pages and searches. A tile
 shows the room image or a monogram of its name on a tone chosen from the room id;
-tiles are about twice as wide as a phone's two-up tiles on desktops. An account's
-favorite and recent rooms open from a disclosure under the toolbar as a narrow
-list that keeps each star beside its room. Clicking a tile enters its room when a
-name is set (an account name, or one typed into the join bar); without a name it
-selects the room and asks for one first. The join bar itself serves rooms that
-are not listed.
+on desktops tiles are about 1.5 to 1.8 times a phone's two-up tiles, snapping to
+however many columns fit. An account's favorite and recent rooms open from a
+disclosure under the toolbar as a narrow list that keeps each star beside its
+room. Clicking a tile enters its room when a name is set (an account name, or
+one typed into the join bar); without a name it selects the room and asks for
+one first. The join bar itself serves rooms that are not listed.
 
 Favorite rooms and successful recent room joins are saved with the account and
 appear in the existing room picker and **My rooms**. Star a room to keep it among
