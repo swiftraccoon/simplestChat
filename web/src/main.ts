@@ -17,10 +17,15 @@ import { CallOutcomeTelemetry, MediaTelemetry, observeFirstVideoFrame } from './
 import { MediaControls, mediaErrorMessage } from './media-controls';
 import {
   SettingsSheet,
+  fieldRow,
   group,
   markSaved,
+  navRow,
   note,
   segmentRow,
+  toggleRow,
+  type ScreenContext,
+  type SheetScreen,
   type SheetSection,
 } from './settings-sheet';
 import { MediaLifecycle } from './media-lifecycle';
@@ -47,7 +52,6 @@ import {
   safeRasterUrl,
   validatePassword,
 } from './ui';
-import { configureSettingsDialog } from './settings-dialog';
 import { avatarColors, chatColor } from './avatar-colors';
 import { spatialLayerForRenderedWidth } from './layer-cap';
 import { type VideoDeferredReason } from './receive-policy';
@@ -163,24 +167,6 @@ const createRoomSubmit = document.getElementById('create-room-submit') as HTMLBu
 const createRoomError = document.getElementById('create-room-error')!;
 
 // Room settings modal
-const roomSettingsModal = document.getElementById('room-settings-modal') as HTMLDialogElement;
-const rsModerated = document.getElementById('rs-moderated') as HTMLInputElement;
-const rsLobby = document.getElementById('rs-lobby') as HTMLInputElement;
-const rsScreen = document.getElementById('rs-screen') as HTMLInputElement;
-const rsChat = document.getElementById('rs-chat') as HTMLInputElement;
-const rsGuests = document.getElementById('rs-guests') as HTMLInputElement;
-const rsGuestsBroadcast = document.getElementById('rs-guests-broadcast') as HTMLInputElement;
-const rsRequireReg = document.getElementById('rs-require-reg') as HTMLInputElement;
-const rsInviteOnly = document.getElementById('rs-invite-only') as HTMLInputElement;
-const rsSecret = document.getElementById('rs-secret') as HTMLInputElement;
-const rsVideo = document.getElementById('rs-video') as HTMLInputElement;
-const rsPtt = document.getElementById('rs-ptt') as HTMLInputElement;
-const rsMaxBroadcasters = document.getElementById('rs-max-broadcasters') as HTMLInputElement;
-const rsMaxParticipants = document.getElementById('rs-max-participants') as HTMLInputElement;
-const rsTopic = document.getElementById('rs-topic') as HTMLInputElement;
-const rsPassword = document.getElementById('rs-password') as HTMLInputElement;
-const rsPasswordRemove = document.getElementById('rs-password-remove') as HTMLButtonElement;
-const rsPasswordHint = document.getElementById('rs-password-hint')!;
 
 // Toast container
 const toastContainer = document.getElementById('toast-container')!;
@@ -488,6 +474,221 @@ const layoutSection: SheetSection = {
   }),
 };
 
+// Room settings screens share one confirm-and-retry flow with the live room.
+type BooleanRoomSetting = {
+  [K in keyof RoomSettingsPatch]-?: NonNullable<RoomSettingsPatch[K]> extends boolean ? K : never;
+}[keyof RoomSettingsPatch];
+let roomControls: Record<string, HTMLInputElement> = {};
+let roomScreenBody: HTMLElement | null = null;
+let roomScreenOpen = false;
+let roomSettingsStatus = el('p', '', 'sheet-status');
+let roomSettingsRetry = button('Retry change', () => {}, 'sheet-button');
+const roomPasswordState: {
+  hint: HTMLElement | null;
+  remove: HTMLButtonElement | null;
+  row: HTMLElement | null;
+} = { hint: null, remove: null, row: null };
+const roomAdmin = (): boolean => room?.role === 'owner' || room?.role === 'admin';
+
+function roomStatusLine(): HTMLElement[] {
+  roomSettingsStatus = el('p', '', 'sheet-status');
+  roomSettingsStatus.id = 'room-settings-result';
+  roomSettingsStatus.setAttribute('role', 'status');
+  roomSettingsStatus.hidden = true;
+  roomSettingsRetry = button('Retry change', () => {}, 'sheet-button');
+  roomSettingsRetry.hidden = true;
+  return [roomSettingsStatus, roomSettingsRetry];
+}
+
+function roomToggle(id: string, label: string, key: BooleanRoomSetting): HTMLElement {
+  const toggle = toggleRow(label, Boolean(room?.roomSettings?.[key]), () => {}, { id });
+  toggle.input.addEventListener(
+    'change',
+    asyncUiAction(() => {
+      const value = toggle.input.checked;
+      return applyRoomSetting((owner) => owner.updateRoomSettings({ [key]: value }));
+    }, 'Could not save the room setting'),
+  );
+  roomControls[id] = toggle.input;
+  return toggle.row;
+}
+
+function roomLimitRow(
+  id: string,
+  label: string,
+  key: 'maxBroadcasters' | 'maxParticipants',
+): HTMLElement {
+  const field = document.createElement('input');
+  field.type = 'number';
+  field.id = id;
+  field.min = '0';
+  field.step = '1';
+  field.placeholder = 'No room limit';
+  field.addEventListener(
+    'change',
+    asyncUiAction(async () => {
+      const value = roomLimit(field);
+      if (value === undefined) return;
+      await applyRoomSetting((owner) => owner.updateRoomSettings({ [key]: value }));
+    }, 'Could not update the limit'),
+  );
+  roomControls[id] = field;
+  return fieldRow(label, field);
+}
+
+/** A room screen owns the confirm-and-retry status until it is left. */
+function roomScreenShell(rows: HTMLElement[], extra: HTMLElement[] = []): HTMLElement {
+  const body = document.createElement('div');
+  body.className = 'sheet-screen';
+  roomScreenBody = body;
+  roomScreenOpen = true;
+  body.append(group(null, rows), ...extra, ...roomStatusLine());
+  syncRoomScreen();
+  return body;
+}
+
+function leaveRoomScreen(): void {
+  roomControls = {};
+  roomScreenBody = null;
+  roomScreenOpen = false;
+  roomPasswordState.hint = null;
+  roomPasswordState.remove = null;
+  roomPasswordState.row = null;
+}
+
+function roomPasswordScreen(): SheetScreen {
+  return {
+    title: 'Password',
+    body: () => {
+      const field = document.createElement('input');
+      field.type = 'password';
+      field.id = 'rs-password';
+      field.autocomplete = 'new-password';
+      field.placeholder = 'New password';
+      field.addEventListener(
+        'change',
+        asyncUiAction(async () => {
+          const password = field.value;
+          const passwordBytes = new TextEncoder().encode(password).length;
+          if (password && (passwordBytes < 8 || passwordBytes > 256)) {
+            showToast('Room password must be 8-256 bytes');
+            field.focus();
+            return;
+          }
+          await applyRoomSetting((owner) =>
+            owner.updateRoomSettings({ password: password || null }),
+          );
+        }, 'Could not update the room password'),
+      );
+      roomControls['rs-password'] = field;
+      const hint = note('');
+      roomPasswordState.hint = hint;
+      const remove = button('Remove password', () => {}, 'sheet-button danger');
+      remove.id = 'rs-password-remove';
+      remove.addEventListener(
+        'click',
+        asyncUiAction(removeRoomPassword, 'Could not remove the room password'),
+      );
+      roomPasswordState.remove = remove;
+      const actions = document.createElement('div');
+      actions.className = 'sheet-actions';
+      actions.append(remove);
+      const body = document.createElement('div');
+      body.className = 'sheet-screen';
+      roomScreenBody = body;
+      body.append(
+        group(null, [fieldRow('New password', field)]),
+        hint,
+        actions,
+        ...roomStatusLine(),
+      );
+      syncRoomScreen();
+      return body;
+    },
+    leave: () => {
+      delete roomControls['rs-password'];
+      roomPasswordState.hint = null;
+      roomPasswordState.remove = null;
+    },
+  };
+}
+
+const roomAccessSection: SheetSection = {
+  id: 'room-access',
+  segment: 'room',
+  label: 'Who can enter',
+  available: () => roomAdmin(),
+  status: () => {
+    const settings = room?.roomSettings;
+    if (!settings) return '';
+    return [
+      settings.requireRegistration ? 'Accounts' : settings.guestsAllowed ? 'Guests' : 'Members',
+      settings.inviteOnly ? 'Invite only' : null,
+      settings.secret ? 'Unlisted' : null,
+      settings.lobbyEnabled ? 'Waiting room' : null,
+    ]
+      .filter(Boolean)
+      .join(' · ');
+  },
+  screen: () => ({
+    title: 'Who can enter',
+    body: (context: ScreenContext) => {
+      const rows = [
+        roomToggle('rs-guests', 'Allow guests', 'guestsAllowed'),
+        roomToggle('rs-require-reg', 'Require an account', 'requireRegistration'),
+        roomToggle('rs-invite-only', 'Invite only', 'inviteOnly'),
+        roomToggle('rs-secret', 'Unlisted room', 'secret'),
+        roomToggle('rs-lobby', 'Waiting room', 'lobbyEnabled'),
+      ];
+      const passwordRow = navRow(
+        'Password',
+        room?.roomSettings?.passwordProtected ? 'Set' : 'None',
+        () => context.push(roomPasswordScreen(), passwordRow),
+      );
+      roomPasswordState.row = passwordRow;
+      rows.push(passwordRow);
+      return roomScreenShell(rows);
+    },
+    leave: leaveRoomScreen,
+  }),
+};
+
+const roomParticipationSection: SheetSection = {
+  id: 'room-participation',
+  segment: 'room',
+  label: 'Chat & broadcasting',
+  available: () => roomAdmin(),
+  status: () => {
+    const settings = room?.roomSettings;
+    if (!settings) return '';
+    return [
+      settings.moderated ? 'Moderated' : 'Open',
+      settings.allowChat ? null : 'Chat off',
+      settings.pushToTalk ? 'Hold to talk' : null,
+    ]
+      .filter(Boolean)
+      .join(' · ');
+  },
+  screen: () => ({
+    title: 'Chat & broadcasting',
+    body: () =>
+      roomScreenShell(
+        [
+          roomToggle('rs-guests-broadcast', 'Let guests broadcast', 'guestsCanBroadcast'),
+          roomToggle('rs-moderated', 'Moderated participation', 'moderated'),
+          roomToggle('rs-video', 'Allow cameras', 'allowVideo'),
+          roomToggle('rs-chat', 'Allow chat', 'allowChat'),
+          roomToggle('rs-screen', 'Allow screen sharing', 'allowScreenSharing'),
+          roomToggle('rs-ptt', 'Require push to talk', 'pushToTalk'),
+          roomLimitRow('rs-max-broadcasters', 'Broadcaster limit', 'maxBroadcasters'),
+          roomLimitRow('rs-max-participants', 'Participant limit', 'maxParticipants'),
+        ],
+        [note('A blank limit uses the server limit; 0 allows no one.')],
+      ),
+    leave: leaveRoomScreen,
+  }),
+};
+
 let settingsReturnTab: 'chat' | 'users' | 'lobby' = 'chat';
 let settingsRestoreChat = false;
 let settingsRestorePanel = false;
@@ -516,8 +717,11 @@ const settingsSheet = new SettingsSheet({
           layoutSection,
           ...socialChat.sections(),
           ...community.sections(),
+          roomAccessSection,
+          roomParticipationSection,
+          ...community.roomSections(),
         ]
-      : [homeNotificationsSection, ...community.sections()],
+      : [homeNotificationsSection, ...community.sections(), ...community.roomSections()],
   footer: () =>
     room
       ? [
@@ -554,6 +758,7 @@ const settingsSheet = new SettingsSheet({
     applyPanelPreferences();
     homeSettingsHost.hidden = true;
     joinScreen.classList.remove('settings-open');
+    community.closeRoomContext();
   },
 });
 let localTextMuted = false;
@@ -1067,29 +1272,43 @@ async function applyLobbyAction(id: string, action: 'admit' | 'deny'): Promise<v
   }
 }
 
-function populateRoomSettingsModal(): void {
+/** Mirrors the live room settings onto whichever room screen is showing. */
+function syncRoomScreen(): void {
   if (roomSettingsPending) return;
   const settings = room?.roomSettings;
   if (!settings) return;
-  rsModerated.checked = settings.moderated;
-  rsLobby.checked = settings.lobbyEnabled;
-  rsScreen.checked = settings.allowScreenSharing;
-  rsChat.checked = settings.allowChat;
-  rsGuests.checked = settings.guestsAllowed;
-  rsGuestsBroadcast.checked = settings.guestsCanBroadcast;
-  rsRequireReg.checked = settings.requireRegistration;
-  rsInviteOnly.checked = settings.inviteOnly;
-  rsSecret.checked = settings.secret;
-  rsVideo.checked = settings.allowVideo;
-  rsPtt.checked = settings.pushToTalk;
-  rsMaxBroadcasters.value = settings.maxBroadcasters?.toString() ?? '';
-  rsMaxParticipants.value = settings.maxParticipants?.toString() ?? '';
-  rsTopic.value = settings.topic ?? '';
-  rsPassword.value = '';
-  rsPasswordRemove.hidden = !settings.passwordProtected;
-  rsPasswordHint.textContent = settings.passwordProtected
-    ? 'A password is set. Enter a new one to replace it, or remove it below.'
-    : 'No password. Enter one to require it when joining.';
+  const checks: [string, boolean][] = [
+    ['rs-moderated', settings.moderated],
+    ['rs-lobby', settings.lobbyEnabled],
+    ['rs-screen', settings.allowScreenSharing],
+    ['rs-chat', settings.allowChat],
+    ['rs-guests', settings.guestsAllowed],
+    ['rs-guests-broadcast', settings.guestsCanBroadcast],
+    ['rs-require-reg', settings.requireRegistration],
+    ['rs-invite-only', settings.inviteOnly],
+    ['rs-secret', settings.secret],
+    ['rs-video', settings.allowVideo],
+    ['rs-ptt', settings.pushToTalk],
+  ];
+  for (const [id, value] of checks) {
+    const control = roomControls[id];
+    if (control) control.checked = value;
+  }
+  const broadcasters = roomControls['rs-max-broadcasters'];
+  if (broadcasters) broadcasters.value = settings.maxBroadcasters?.toString() ?? '';
+  const participants = roomControls['rs-max-participants'];
+  if (participants) participants.value = settings.maxParticipants?.toString() ?? '';
+  const password = roomControls['rs-password'];
+  if (password) password.value = '';
+  if (roomPasswordState.remove) roomPasswordState.remove.hidden = !settings.passwordProtected;
+  if (roomPasswordState.hint)
+    roomPasswordState.hint.textContent = settings.passwordProtected
+      ? 'A password is set. Enter a new one to replace it, or remove it.'
+      : 'No password. Enter one to require it when joining.';
+  if (roomPasswordState.row) {
+    const shown = roomPasswordState.row.querySelector<HTMLElement>('.sheet-row-status');
+    if (shown) shown.textContent = settings.passwordProtected ? 'Set' : 'None';
+  }
 }
 
 function removeRoomPassword(): Promise<void> {
@@ -2892,7 +3111,9 @@ joinBtn.addEventListener(
               : participantId.slice(0, 8));
           if (participantId === room?.localParticipantId) {
             showToast(`Your role has been changed to ${newRole}`);
-            if (newRole !== 'owner' && newRole !== 'admin') roomSettingsModal.close();
+            if (newRole !== 'owner' && newRole !== 'admin' && roomScreenOpen)
+              settingsSheet.close({ force: true });
+            settingsSheet.refresh();
             handBtn.classList.remove('hand-raised');
           } else {
             showToast(`${targetName} is now ${newRole}`);
@@ -2909,6 +3130,8 @@ joinBtn.addEventListener(
           socialChat.participantsChanged();
           updateRoomModeUI();
           applyRoomSettingsToUI();
+          syncRoomScreen();
+          settingsSheet.refresh();
           socialChat.refreshSavedChat();
           roomTopic.textContent = settings.topic ?? '';
           roomTopic.hidden = !settings.topic;
@@ -3242,8 +3465,7 @@ async function leaveRoomAndShowHome(): Promise<void> {
   joinBtn.textContent = 'Join Room';
   qualityIndicator.hidden = true;
   qualityIndicator.className = 'quality-dot';
-  settingsSheet.close();
-  roomSettingsModal.close();
+  settingsSheet.close({ force: true });
   document.getElementById('mod-menu')?.remove();
   updateJoinBtn();
   observeUiTask(loadRoomBrowser(), 'Could not refresh the room directory');
@@ -3716,48 +3938,25 @@ handBtn.addEventListener(
   }, 'Could not request voice'),
 );
 
-// --- Room Settings Modal ---
-configureSettingsDialog(roomSettingsModal);
-roomSettingsModal.addEventListener('close', () => {
-  rsPassword.value = '';
-});
+// --- Room settings (the sheet's This room screens) ---
 roomSettingsBtn.addEventListener('click', () => {
   if (roomSettingsPending) {
     showToast('A room change is still awaiting confirmation');
     return;
   }
-  populateRoomSettingsModal();
-  roomSettingsModal.showModal();
-});
-
-const roomSettingsStatus = el('p', '', 'settings-description');
-roomSettingsStatus.id = 'room-settings-result';
-roomSettingsStatus.setAttribute('role', 'status');
-roomSettingsStatus.hidden = true;
-roomSettingsModal.querySelector('.settings-dialog-body')!.prepend(roomSettingsStatus);
-const roomSettingsRetry = button('Retry change', () => {}, 'btn-secondary');
-roomSettingsRetry.hidden = true;
-roomSettingsStatus.after(roomSettingsRetry);
-roomSettingsModal.addEventListener('close', () => {
-  roomSettingsRetry.hidden = true;
-  roomSettingsRetry.onclick = null;
-  roomSettingsStatus.textContent = '';
-  roomSettingsStatus.hidden = true;
+  settingsSheet.open({ segment: 'room', opener: roomSettingsBtn });
 });
 
 function retireRoomSettingsAction(): void {
   roomSettingsAttempt++;
   roomSettingsPending = false;
-  roomSettingsModal.setAttribute('aria-busy', 'false');
-  for (const field of roomSettingsModal.querySelectorAll<
-    HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
-  >('input, select, textarea'))
-    field.disabled = false;
-  roomSettingsModal.close();
+  roomScreenBody?.setAttribute('aria-busy', 'false');
+  for (const field of Object.values(roomControls)) field.disabled = false;
   roomSettingsRetry.hidden = true;
   roomSettingsRetry.onclick = null;
   roomSettingsStatus.textContent = '';
   roomSettingsStatus.hidden = true;
+  if (roomScreenOpen) settingsSheet.close({ force: true });
 }
 
 async function applyRoomSetting(change: (owner: RoomClient) => Promise<void>): Promise<void> {
@@ -3767,46 +3966,40 @@ async function applyRoomSetting(change: (owner: RoomClient) => Promise<void>): P
   const attempt = ++roomSettingsAttempt;
   const current = () =>
     attempt === roomSettingsAttempt && room === owner && owner.membershipVersion === membership;
-  const fields = roomSettingsModal.querySelectorAll<
-    HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
-  >('input, select, textarea');
-  const drafts = Array.from(fields, (field) => ({
-    field,
-    value: field.value,
-    checked: field instanceof HTMLInputElement ? field.checked : undefined,
-  }));
+  const fields = Object.values(roomControls);
+  const drafts = fields.map((field) => ({ field, value: field.value, checked: field.checked }));
+  const status = roomSettingsStatus;
+  const retry = roomSettingsRetry;
   roomSettingsPending = true;
-  roomSettingsStatus.hidden = false;
-  roomSettingsStatus.textContent = 'Saving change…';
-  roomSettingsModal.setAttribute('aria-busy', 'true');
-  roomSettingsRetry.hidden = true;
-  roomSettingsRetry.onclick = null;
+  status.hidden = false;
+  status.textContent = 'Saving change…';
+  roomScreenBody?.setAttribute('aria-busy', 'true');
+  retry.hidden = true;
+  retry.onclick = null;
   for (const field of fields) field.disabled = true;
   let confirmed = false;
   try {
     await change(owner);
     confirmed = true;
-    if (current()) roomSettingsStatus.textContent = 'Change saved';
+    if (current()) status.textContent = 'Change saved';
   } catch (error) {
     if (current()) {
-      roomSettingsStatus.textContent =
-        error instanceof Error ? error.message : 'The change was not confirmed';
-      roomSettingsStatus.scrollIntoView({ block: 'nearest' });
+      status.textContent = error instanceof Error ? error.message : 'The change was not confirmed';
+      status.scrollIntoView({ block: 'nearest' });
     }
   } finally {
     if (current()) {
       roomSettingsPending = false;
-      roomSettingsModal.setAttribute('aria-busy', 'false');
+      roomScreenBody?.setAttribute('aria-busy', 'false');
       for (const field of fields) field.disabled = false;
-      populateRoomSettingsModal();
-      if (!confirmed && roomSettingsModal.open) {
+      syncRoomScreen();
+      if (!confirmed && roomScreenOpen) {
         for (const draft of drafts) {
           draft.field.value = draft.value;
-          if (draft.field instanceof HTMLInputElement && draft.checked !== undefined)
-            draft.field.checked = draft.checked;
+          draft.field.checked = draft.checked;
         }
-        roomSettingsRetry.hidden = false;
-        roomSettingsRetry.onclick = asyncUiAction(
+        retry.hidden = false;
+        retry.onclick = asyncUiAction(
           () => (current() ? applyRoomSetting(change) : Promise.resolve()),
           'Could not save the room setting',
         );
@@ -3814,60 +4007,6 @@ async function applyRoomSetting(change: (owner: RoomClient) => Promise<void>): P
     }
   }
 }
-
-// Room settings toggle handlers
-type BooleanRoomSetting = {
-  [K in keyof RoomSettingsPatch]-?: NonNullable<RoomSettingsPatch[K]> extends boolean ? K : never;
-}[keyof RoomSettingsPatch];
-const settingsToggles: [HTMLInputElement, BooleanRoomSetting][] = [
-  [rsModerated, 'moderated'],
-  [rsLobby, 'lobbyEnabled'],
-  [rsScreen, 'allowScreenSharing'],
-  [rsChat, 'allowChat'],
-  [rsGuests, 'guestsAllowed'],
-  [rsGuestsBroadcast, 'guestsCanBroadcast'],
-  [rsRequireReg, 'requireRegistration'],
-  [rsInviteOnly, 'inviteOnly'],
-  [rsSecret, 'secret'],
-  [rsVideo, 'allowVideo'],
-  [rsPtt, 'pushToTalk'],
-];
-
-for (const [el, key] of settingsToggles) {
-  el.addEventListener(
-    'change',
-    asyncUiAction(() => {
-      const value = el.checked;
-      return applyRoomSetting((owner) => owner.updateRoomSettings({ [key]: value }));
-    }, 'Could not save the room setting'),
-  );
-}
-
-rsTopic.addEventListener(
-  'change',
-  asyncUiAction(() => {
-    const topic = rsTopic.value.trim();
-    return applyRoomSetting((owner) => owner.setTopic(topic));
-  }, 'Could not save the topic'),
-);
-
-rsPassword.addEventListener(
-  'change',
-  asyncUiAction(async () => {
-    const password = rsPassword.value;
-    const passwordBytes = new TextEncoder().encode(password).length;
-    if (password && (passwordBytes < 8 || passwordBytes > 256)) {
-      showToast('Room password must be 8-256 bytes');
-      rsPassword.focus();
-      return;
-    }
-    await applyRoomSetting((owner) => owner.updateRoomSettings({ password: password || null }));
-  }, 'Could not update the room password'),
-);
-rsPasswordRemove.addEventListener(
-  'click',
-  asyncUiAction(removeRoomPassword, 'Could not remove the room password'),
-);
 
 /** Blank clears a limit; malformed or fractional input must never silently clear it. */
 function roomLimit(input: HTMLInputElement): number | null | undefined {
@@ -3891,24 +4030,6 @@ function roomLimit(input: HTMLInputElement): number | null | undefined {
   }
   return value;
 }
-
-rsMaxBroadcasters.addEventListener(
-  'change',
-  asyncUiAction(async () => {
-    const value = roomLimit(rsMaxBroadcasters);
-    if (value === undefined) return;
-    await applyRoomSetting((owner) => owner.updateRoomSettings({ maxBroadcasters: value }));
-  }, 'Could not update the broadcaster limit'),
-);
-
-rsMaxParticipants.addEventListener(
-  'change',
-  asyncUiAction(async () => {
-    const value = roomLimit(rsMaxParticipants);
-    if (value === undefined) return;
-    await applyRoomSetting((owner) => owner.updateRoomSettings({ maxParticipants: value }));
-  }, 'Could not update the participant limit'),
-);
 
 // --- Personal settings ---
 settingsBtn.addEventListener('click', () => {

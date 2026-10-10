@@ -24,6 +24,7 @@ import {
   actionRow,
   fieldRow,
   group,
+  markSaved,
   note,
   type SheetScreen,
   type SheetSection,
@@ -104,7 +105,9 @@ export class CommunityUI {
     });
   });
   private readonly nicknameButton = button('Nickname', () => this.openNickname());
-  private readonly manageButton = button('Manage room', () => this.openManagement());
+  private readonly manageButton = button('Manage room', () =>
+    this.options.openSettings?.('room-people', this.manageButton),
+  );
   private profiles = new Map<string, Promise<PublicProfile | null>>();
   private avatarVersions = new WeakMap<HTMLElement, number>();
   private rosterProfiles: Set<string> | null = null;
@@ -114,6 +117,8 @@ export class CommunityUI {
   private accountGeneration = 0;
   private accountIdentity = '';
   private accountSeen = false;
+  /** An owned room chosen from My rooms while no room is open. */
+  private editingRoom: RoomListItem | null = null;
   private identity = '';
 
   constructor(private readonly options: Options) {
@@ -830,11 +835,11 @@ export class CommunityUI {
           ),
         );
         row.append(
-          button('Edit room', () =>
-            this.editRoom(room, () => {
-              refresh().catch((error) => this.showError(view.error, error));
-            }),
-          ),
+          button('Edit room', () => {
+            view.close();
+            this.editingRoom = room;
+            this.options.openSettings?.('room-identity', null);
+          }),
         );
         row.append(
           asyncButton(
@@ -846,7 +851,13 @@ export class CommunityUI {
             (error) => this.showError(view.error, error),
           ),
         );
-        row.append(button('Invites…', () => this.roomInvites(room)));
+        row.append(
+          button('Invites…', () => {
+            view.close();
+            this.editingRoom = room;
+            this.options.openSettings?.('room-invitations', null);
+          }),
+        );
         row.append(
           createFavoriteButton(room.id, favorites.has(room.id), {
             getToken: () => this.options.auth.jwt,
@@ -921,78 +932,6 @@ export class CommunityUI {
     }
   }
 
-  /** Codes that grant a role in one of the account's rooms, made and revoked here. */
-  private roomInvites(room: RoomListItem): void {
-    const view = modal(`Invitations for ${room.display_name}`);
-    const surface: Surface = { body: view.body, error: view.error, isOpen: () => view.dialog.open };
-    const accountId = this.options.auth.userId;
-    const generation = this.accountGeneration;
-    const stillCurrent = (): boolean =>
-      view.dialog.open &&
-      generation === this.accountGeneration &&
-      this.options.auth.userId === accountId;
-    const role = el('select');
-    role.setAttribute('aria-label', 'Role granted');
-    for (const option of INVITE_ROLES) {
-      const node = el('option', option.label);
-      node.value = String(option.value);
-      role.append(node);
-    }
-    const uses = input('1', 'number', 3);
-    uses.min = '1';
-    uses.max = '100';
-    const days = input('7', 'number', 2);
-    days.min = '1';
-    days.max = '30';
-    const list = el('div');
-    const refresh = async (): Promise<void> => {
-      const invites = await api.roomInvites(this.options.auth.jwt, room.id);
-      if (!stillCurrent()) return;
-      list.replaceChildren();
-      if (!invites.length) list.append(el('p', 'No unused invitations.', 'setting-hint'));
-      for (const invite of invites)
-        list.append(
-          this.inviteRow(
-            invite,
-            surface,
-            () => refresh(),
-            () => api.revokeRoomInvite(this.options.auth.jwt, room.id, invite.id),
-          ),
-        );
-    };
-    const create = asyncButton(
-      'Create invitation',
-      () =>
-        busy(create, view.error, async () => {
-          if (!stillCurrent()) return;
-          const invite = await api.createRoomInvite(this.options.auth.jwt, room.id, {
-            role: Number(role.value),
-            uses: Number(uses.value) || 1,
-            days: Number(days.value) || 7,
-          });
-          if (!stillCurrent()) return;
-          this.showCreatedInvite(invite.code, surface, 'room');
-          await refresh();
-        }),
-      (error) => this.showError(view.error, error),
-      'btn-primary',
-    );
-    view.body.append(
-      el(
-        'p',
-        'Recipients review the room and offered role, then explicitly accept. Accepting never joins the room automatically and never lowers an existing role. A room keeps at most 20 unused invitations.',
-        'setting-hint',
-      ),
-      field('Role granted', role),
-      field('Uses', uses),
-      field('Valid for (days)', days),
-      create,
-      el('h3', 'Unused invitations'),
-      list,
-    );
-    refresh().catch((error) => this.showError(view.error, error));
-  }
-
   /** Secrets are available only in this creation response, never in management lists. */
   private showCreatedInvite(code: string, view: Surface, kind: 'room' | 'registration'): void {
     const panel = el('div', undefined, 'created-invitation');
@@ -1053,65 +992,6 @@ export class CommunityUI {
     return row;
   }
 
-  private editRoom(room: RoomListItem, done: () => void): void {
-    const view = modal(`Edit ${room.display_name}`);
-    const token = this.options.auth.jwt;
-    const generation = this.generation;
-    const name = input(room.display_name, 'text', 100);
-    const topic = input(room.topic ?? '', 'text', 500);
-    const nameAppearance = appearancePicker({
-      label: 'Room name appearance',
-      initial: room.name_style,
-      name: () => name.value,
-    });
-    const topicAppearance = appearancePicker({
-      label: 'Header description appearance',
-      initial: room.topic_style,
-      name: () => topic.value,
-    });
-    name.addEventListener('input', nameAppearance.refreshPreview);
-    topic.addEventListener('input', topicAppearance.refreshPreview);
-    const description = el('textarea');
-    description.value = room.description ?? '';
-    description.maxLength = 1024;
-    description.rows = 4;
-    const image = this.imagePicker(room.image_url ?? null, view.error, true);
-    view.body.append(
-      field('Room display name', name),
-      nameAppearance.element,
-      field('Header description', topic),
-      topicAppearance.element,
-      field('Description / room rules', description),
-      image.wrapper,
-      el(
-        'p',
-        'Room images are uploaded intentionally. Camera thumbnails are not captured or published.',
-        'setting-hint',
-      ),
-    );
-    const save = asyncButton(
-      'Save room',
-      () =>
-        busy(save, view.error, async () => {
-          if (!view.dialog.open || generation !== this.generation) return;
-          await api.updateRoomIdentity(room.id, token, {
-            display_name: name.value.trim(),
-            topic: topic.value.trim() || null,
-            description: description.value.trim(),
-            image_url: image.value(),
-            name_style: nameAppearance.chosen(),
-            topic_style: topicAppearance.chosen(),
-          });
-          view.close();
-          this.options.onRoomsChanged();
-          done();
-        }),
-      (error) => this.showError(view.error, error),
-      'btn-primary',
-    );
-    view.body.append(save);
-  }
-
   private deleteRoom(room: RoomListItem, done: () => void): void {
     const view = modal('Delete room');
     const token = this.options.auth.jwt;
@@ -1142,279 +1022,527 @@ export class CommunityUI {
     view.body.append(remove);
   }
 
-  private openManagement(): void {
-    const room = this.options.getRoom();
-    if (!room) return;
-    const view = modal('Manage room');
-    if (room.role === 'owner' && this.options.auth.isLoggedIn) {
-      const membership = room.membershipVersion;
-      const generation = this.generation;
-      const edit = asyncButton(
-        'Room appearance',
-        () =>
-          busy(edit, view.error, async () => {
-            const rooms = await api.ownRooms(this.options.auth.jwt);
-            if (
-              !view.dialog.open ||
-              this.generation !== generation ||
-              this.options.getRoom() !== room ||
-              room.membershipVersion !== membership ||
-              room.role !== 'owner'
-            )
-              return;
-            const owned = rooms.find((entry) => entry.id === room.currentRoomId);
-            if (!owned) throw new Error('This room is not in your owned rooms.');
-            view.close();
-            this.editRoom(owned, () => {});
-          }),
-        (error) => this.showError(view.error, error),
-      );
-      view.body.append(edit);
+  /** The sheet's This room screens: identity over HTTP, moderation over the room socket. */
+  roomSections(): SheetSection[] {
+    const live = () => this.options.getRoom();
+    const rank = () => ROLES.indexOf(live()?.role ?? 'guest');
+    const owner = () =>
+      live() ? live()?.role === 'owner' && this.options.auth.isLoggedIn : this.editingRoom !== null;
+    const moderator = () => Boolean(live()?.localParticipantId) && rank() >= 3;
+    const admin = () => Boolean(live()?.localParticipantId) && rank() >= 4;
+    const name = () =>
+      live() ? (live()?.roomSettings?.displayName ?? '') : (this.editingRoom?.display_name ?? '');
+    return [
+      {
+        id: 'room-identity',
+        segment: 'room',
+        label: 'Name & topic',
+        status: name,
+        available: owner,
+        screen: () => this.roomIdentityScreen(),
+      },
+      {
+        id: 'room-people',
+        segment: 'room',
+        label: 'People',
+        available: moderator,
+        screen: () => this.managementScreen('members', 'People'),
+      },
+      {
+        id: 'room-bans',
+        segment: 'room',
+        label: 'Bans',
+        available: admin,
+        screen: () => this.managementScreen('bans', 'Bans'),
+      },
+      {
+        id: 'room-reports',
+        segment: 'room',
+        label: 'Reports',
+        available: moderator,
+        screen: () => this.managementScreen('reports', 'Reports'),
+      },
+      {
+        id: 'room-history',
+        segment: 'room',
+        label: 'History',
+        available: moderator,
+        screen: () => this.managementScreen('history', 'History'),
+      },
+      {
+        id: 'room-invitations',
+        segment: 'room',
+        label: 'Invitations',
+        available: owner,
+        screen: () => this.invitationsScreen(),
+      },
+    ];
+  }
+
+  /** Forgets the room chosen from My rooms once the sheet closes. */
+  closeRoomContext(): void {
+    this.editingRoom = null;
+  }
+
+  /** The owned room a room screen edits: the live room's record, or the one chosen from My rooms. */
+  private async ownedRoom(): Promise<RoomListItem | null> {
+    const live = this.options.getRoom();
+    if (live?.currentRoomId) {
+      const rooms = await api.ownRooms(this.options.auth.jwt);
+      return rooms.find((entry) => entry.id === live.currentRoomId) ?? null;
     }
-    const tabs = el('div', undefined, 'community-row');
-    const content = el('div');
-    let current: 'members' | 'bans' | 'reports' | 'history' = 'members';
-    let offset = 0;
-    let revision = 0;
-    const render = async (): Promise<void> => {
-      const requested = ++revision;
-      view.error.hidden = true;
-      content.replaceChildren(el('p', 'Loading…'));
-      try {
-        const page =
-          current === 'members'
-            ? {
-                kind: 'members' as const,
-                data: await room.requestSocial('listRoomMembers', { offset }),
-              }
-            : current === 'bans'
-              ? {
-                  kind: 'bans' as const,
-                  data: await room.requestSocial('listRoomBans', { offset }),
-                }
-              : current === 'reports'
-                ? {
-                    kind: 'reports' as const,
-                    data: await room.requestSocial('listRoomReports', { offset }),
-                  }
-                : {
-                    kind: 'history' as const,
-                    data: await room.requestSocial('listModerationEvents', { offset }),
-                  };
-        if (revision !== requested || !view.dialog.open) return;
-        content.replaceChildren();
-        const list =
-          page.kind === 'members'
-            ? page.data.members
-            : page.kind === 'bans'
-              ? page.data.bans
-              : page.kind === 'reports'
-                ? page.data.reports
-                : page.data.events;
-        if (!list.length) content.append(el('p', `No ${current} on this page.`));
-        if (page.kind === 'members') {
-          for (const person of page.data.members) {
-            const row = el('div', undefined, 'management-entry');
-            row.append(
-              el(
-                'span',
-                `${person.displayName} · ${person.role} · ${person.online ? 'online' : 'offline'}`,
-              ),
-            );
-            const rank = ROLES.indexOf(room.role);
-            const targetRank = ROLES.indexOf(person.role);
-            if (
-              person.authenticated &&
-              rank > targetRank &&
-              person.userId !== room.localParticipantId
-            ) {
-              const role = el('select');
-              role.setAttribute('aria-label', `Role for ${person.displayName}`);
-              for (let index = 1; index < rank; index++) {
-                const option = el('option', ROLES[index]);
-                option.value = String(index);
-                role.append(option);
-              }
-              role.value = String(targetRank);
-              const save = asyncButton(
-                'Update role',
-                () =>
-                  busy(save, view.error, async () => {
-                    await room.requestSocial('setMemberRole', {
-                      targetUserId: person.userId,
-                      role: Number(role.value),
-                    });
-                    await render();
-                  }),
-                (error) => this.showError(view.error, error),
-              );
-              row.append(role, save);
+    return this.editingRoom;
+  }
+
+  private roomIdentityScreen(): SheetScreen {
+    return {
+      title: 'Name & topic',
+      body: async (context) => {
+        const body = el('div', undefined, 'sheet-screen');
+        const error = el('p', '', 'auth-error');
+        error.hidden = true;
+        error.setAttribute('role', 'alert');
+        const generation = this.generation;
+        const current = (): boolean => context.current() && generation === this.generation;
+        let item: RoomListItem | null = null;
+        try {
+          item = await this.ownedRoom();
+        } catch (failure) {
+          if (current()) {
+            this.showError(error, failure);
+            body.append(error);
+          }
+          return body;
+        }
+        if (!current()) return body;
+        if (!item) {
+          this.showError(error, new Error('This room is not in your owned rooms.'));
+          body.append(error);
+          return body;
+        }
+        const room = item;
+        const token = this.options.auth.jwt;
+        const name = input(room.display_name, 'text', 100);
+        const topic = input(room.topic ?? '', 'text', 500);
+        const description = el('textarea');
+        description.value = room.description ?? '';
+        description.maxLength = 1024;
+        description.rows = 4;
+        description.setAttribute('aria-label', 'Description');
+        const nameAppearance = appearancePicker({
+          label: 'Room name appearance',
+          initial: room.name_style,
+          name: () => name.value,
+        });
+        const topicAppearance = appearancePicker({
+          label: 'Header description appearance',
+          initial: room.topic_style,
+          name: () => topic.value,
+        });
+        name.addEventListener('input', nameAppearance.refreshPreview);
+        topic.addEventListener('input', topicAppearance.refreshPreview);
+        let saving: Promise<void> = Promise.resolve();
+        let image: { wrapper: HTMLElement; value: () => string | null } | null = null;
+        const save = (row: HTMLElement): void => {
+          saving = saving.then(async () => {
+            if (!current()) return;
+            try {
+              await api.updateRoomIdentity(room.id, token, {
+                display_name: name.value.trim(),
+                topic: topic.value.trim() || null,
+                description: description.value.trim(),
+                image_url: image?.value() ?? null,
+                name_style: nameAppearance.chosen(),
+                topic_style: topicAppearance.chosen(),
+              });
+              if (!current()) return;
+              error.hidden = true;
+              markSaved(row);
+              this.options.onRoomsChanged();
+            } catch (failure) {
+              if (current()) this.showError(error, failure);
             }
-            content.append(row);
-          }
-        } else if (page.kind === 'bans') {
-          for (const ban of page.data.bans) {
-            const row = el('div', undefined, 'management-entry');
-            row.append(
-              el('strong', ban.displayName),
-              el('p', ban.reason || 'No reason recorded'),
-              el(
-                'p',
-                ban.expiresAt
-                  ? `Expires ${new Date(ban.expiresAt).toLocaleString()}`
-                  : 'Until removed',
-              ),
-            );
-            const remove = asyncButton(
-              'Unban',
-              () =>
-                busy(remove, view.error, async () => {
-                  await room.requestSocial('removeRoomBan', { banId: ban.banId });
-                  await render();
-                }),
-              (error) => this.showError(view.error, error),
-            );
-            row.append(remove);
-            content.append(row);
-          }
-        } else if (page.kind === 'reports') {
-          for (const report of page.data.reports) {
-            const row = el('div', undefined, 'management-entry');
-            row.append(
-              el('strong', `${report.targetName} · ${report.status}`),
-              el('p', `${report.reporterName} · ${new Date(report.createdAt).toLocaleString()}`),
-              el('p', report.reason, 'profile-bio'),
-            );
-            if (report.status === 'open') {
-              for (const status of ['resolved', 'dismissed'] as const) {
-                const update = asyncButton(
-                  status === 'resolved' ? 'Mark resolved' : 'Dismiss report',
+          });
+        };
+        image = this.imagePicker(room.image_url ?? null, error, true, () => save(imageBlock));
+        const imageBlock = el('div', undefined, 'sheet-block');
+        imageBlock.append(el('span', '', 'sheet-row-saved'), image.wrapper);
+        const nameRow = fieldRow('Name', name);
+        name.addEventListener('change', () => save(nameRow));
+        const topicRow = fieldRow('Topic', topic);
+        topic.addEventListener('change', () => save(topicRow));
+        const descriptionBlock = el('div', undefined, 'sheet-block');
+        descriptionBlock.append(
+          el('span', '', 'sheet-row-saved'),
+          el('h3', 'Description'),
+          description,
+        );
+        description.addEventListener('change', () => save(descriptionBlock));
+        for (const picker of [nameAppearance, topicAppearance]) {
+          picker.element.append(el('span', '', 'sheet-row-saved'));
+          picker.element.addEventListener('change', () => save(picker.element));
+        }
+        body.append(
+          group(null, [nameRow, topicRow]),
+          descriptionBlock,
+          imageBlock,
+          nameAppearance.element,
+          topicAppearance.element,
+          group(null, [
+            actionRow('Delete room…', () => this.deleteRoom(room, () => context.close()), {
+              danger: true,
+            }),
+          ]),
+          error,
+        );
+        return body;
+      },
+    };
+  }
+
+  /** Members, bans, reports and history, one page at a time over the room socket. */
+  private managementScreen(
+    kind: 'members' | 'bans' | 'reports' | 'history',
+    title: string,
+  ): SheetScreen {
+    return {
+      title,
+      body: (context) => {
+        const body = el('div', undefined, 'sheet-screen');
+        const room = this.options.getRoom();
+        const error = el('p', '', 'auth-error');
+        error.hidden = true;
+        error.setAttribute('role', 'alert');
+        if (!room) return body;
+        const generation = this.generation;
+        const current = (): boolean =>
+          context.current() && generation === this.generation && this.options.getRoom() === room;
+        const content = el('div', undefined, 'management-list');
+        let offset = 0;
+        let revision = 0;
+        const render = async (): Promise<void> => {
+          const requested = ++revision;
+          error.hidden = true;
+          content.replaceChildren(el('p', 'Loading…', 'sheet-loading'));
+          try {
+            const page =
+              kind === 'members'
+                ? {
+                    kind: 'members' as const,
+                    data: await room.requestSocial('listRoomMembers', { offset }),
+                  }
+                : kind === 'bans'
+                  ? {
+                      kind: 'bans' as const,
+                      data: await room.requestSocial('listRoomBans', { offset }),
+                    }
+                  : kind === 'reports'
+                    ? {
+                        kind: 'reports' as const,
+                        data: await room.requestSocial('listRoomReports', { offset }),
+                      }
+                    : {
+                        kind: 'history' as const,
+                        data: await room.requestSocial('listModerationEvents', { offset }),
+                      };
+            if (revision !== requested || !current()) return;
+            content.replaceChildren();
+            const list =
+              page.kind === 'members'
+                ? page.data.members
+                : page.kind === 'bans'
+                  ? page.data.bans
+                  : page.kind === 'reports'
+                    ? page.data.reports
+                    : page.data.events;
+            if (!list.length) content.append(note(`No ${kind} on this page.`));
+            if (page.kind === 'members') {
+              for (const person of page.data.members) {
+                const row = el('div', undefined, 'management-entry');
+                row.append(
+                  el(
+                    'span',
+                    `${person.displayName} · ${person.role} · ${person.online ? 'online' : 'offline'}`,
+                  ),
+                );
+                const rank = ROLES.indexOf(room.role);
+                const targetRank = ROLES.indexOf(person.role);
+                if (
+                  person.authenticated &&
+                  rank > targetRank &&
+                  person.userId !== room.localParticipantId
+                ) {
+                  const role = el('select');
+                  role.setAttribute('aria-label', `Role for ${person.displayName}`);
+                  for (let index = 1; index < rank; index++) {
+                    const option = el('option', ROLES[index]);
+                    option.value = String(index);
+                    role.append(option);
+                  }
+                  role.value = String(targetRank);
+                  const save = asyncButton(
+                    'Update role',
+                    () =>
+                      busy(save, error, async () => {
+                        await room.requestSocial('setMemberRole', {
+                          targetUserId: person.userId,
+                          role: Number(role.value),
+                        });
+                        await render();
+                      }),
+                    (failure) => this.showError(error, failure),
+                    'sheet-button',
+                  );
+                  row.append(role, save);
+                }
+                content.append(row);
+              }
+            } else if (page.kind === 'bans') {
+              for (const ban of page.data.bans) {
+                const row = el('div', undefined, 'management-entry');
+                row.append(
+                  el('strong', ban.displayName),
+                  el('p', ban.reason || 'No reason recorded'),
+                  el(
+                    'p',
+                    ban.expiresAt
+                      ? `Expires ${new Date(ban.expiresAt).toLocaleString()}`
+                      : 'Until removed',
+                  ),
+                );
+                const remove = asyncButton(
+                  'Unban',
                   () =>
-                    busy(update, view.error, async () => {
-                      await room.requestSocial('resolveRoomReport', {
-                        reportId: report.reportId,
-                        status,
-                      });
+                    busy(remove, error, async () => {
+                      await room.requestSocial('removeRoomBan', { banId: ban.banId });
                       await render();
                     }),
-                  (error) => this.showError(view.error, error),
+                  (failure) => this.showError(error, failure),
+                  'sheet-button',
                 );
-                row.append(update);
+                row.append(remove);
+                content.append(row);
               }
-              // Acting on the report resolves it and links the outcome to it.
-              const kick = asyncButton(
-                'Kick',
-                () =>
-                  busy(kick, view.error, async () => {
-                    await room.kick(report.targetParticipantId, undefined, report.reportId);
-                    await render();
-                  }),
-                (error) => this.showError(view.error, error),
-                'btn-secondary danger',
-              );
-              const ban = button(
-                'Ban…',
-                () =>
-                  this.ban(report.targetParticipantId, report.targetName, {
-                    reportId: report.reportId,
-                    onDone: refresh,
-                  }),
-                'btn-secondary danger',
-              );
-              row.append(kick, ban);
-            } else if (report.outcome) {
-              row.append(
-                el(
-                  'p',
-                  `Led to: ${actionLabel(report.outcome.action)} · ${new Date(report.outcome.createdAt).toLocaleString()}`,
+            } else if (page.kind === 'reports') {
+              for (const report of page.data.reports) {
+                const row = el('div', undefined, 'management-entry');
+                row.append(
+                  el('strong', `${report.targetName} · ${report.status}`),
+                  el(
+                    'p',
+                    `${report.reporterName} · ${new Date(report.createdAt).toLocaleString()}`,
+                  ),
+                  el('p', report.reason, 'profile-bio'),
+                );
+                if (report.status === 'open') {
+                  for (const status of ['resolved', 'dismissed'] as const) {
+                    const update = asyncButton(
+                      status === 'resolved' ? 'Mark resolved' : 'Dismiss report',
+                      () =>
+                        busy(update, error, async () => {
+                          await room.requestSocial('resolveRoomReport', {
+                            reportId: report.reportId,
+                            status,
+                          });
+                          await render();
+                        }),
+                      (failure) => this.showError(error, failure),
+                      'sheet-button',
+                    );
+                    row.append(update);
+                  }
+                  // Acting on the report resolves it and links the outcome to it.
+                  const kick = asyncButton(
+                    'Kick',
+                    () =>
+                      busy(kick, error, async () => {
+                        await room.kick(report.targetParticipantId, undefined, report.reportId);
+                        await render();
+                      }),
+                    (failure) => this.showError(error, failure),
+                    'sheet-button danger',
+                  );
+                  const ban = button(
+                    'Ban…',
+                    () =>
+                      this.ban(report.targetParticipantId, report.targetName, {
+                        reportId: report.reportId,
+                        onDone: refresh,
+                      }),
+                    'sheet-button danger',
+                  );
+                  row.append(kick, ban);
+                } else if (report.outcome) {
+                  row.append(
+                    el(
+                      'p',
+                      `Led to: ${actionLabel(report.outcome.action)} · ${new Date(report.outcome.createdAt).toLocaleString()}`,
+                    ),
+                  );
+                }
+                content.append(row);
+              }
+            } else {
+              for (const event of page.data.events) {
+                const row = el('div', undefined, 'management-entry');
+                row.append(
+                  el('strong', `${event.targetName} · ${actionLabel(event.action)}`),
+                  el(
+                    'p',
+                    `${event.actorName} · ${new Date(event.createdAt).toLocaleString()}${event.reportId ? ' · from a report' : ''}`,
+                  ),
+                );
+                if (event.reason) row.append(el('p', event.reason, 'profile-bio'));
+                if (event.expiresAt)
+                  row.append(el('p', `Until ${new Date(event.expiresAt).toLocaleString()}`));
+                // Only the owner receives an address; it is theirs to read, never to show.
+                if (event.targetIp) row.append(el('p', `Address ${event.targetIp}`, 'sheet-note'));
+                content.append(row);
+              }
+            }
+            const pagination = el('div', undefined, 'sheet-actions');
+            if (offset)
+              pagination.append(
+                button(
+                  'Previous page',
+                  () => {
+                    offset = Math.max(0, offset - 100);
+                    refresh();
+                  },
+                  'sheet-button',
                 ),
               );
+            if (page.data.hasMore)
+              pagination.append(
+                button(
+                  'Next page',
+                  () => {
+                    offset += 100;
+                    refresh();
+                  },
+                  'sheet-button',
+                ),
+              );
+            if (pagination.children.length) content.append(pagination);
+          } catch (failure) {
+            if (revision === requested && current()) {
+              content.replaceChildren();
+              this.showError(error, failure);
             }
-            content.append(row);
           }
-        } else {
-          for (const event of page.data.events) {
-            const row = el('div', undefined, 'management-entry');
-            row.append(
-              el('strong', `${event.targetName} · ${actionLabel(event.action)}`),
-              el(
-                'p',
-                `${event.actorName} · ${new Date(event.createdAt).toLocaleString()}${event.reportId ? ' · from a report' : ''}`,
+        };
+        const refresh = (): void => {
+          render().catch((failure) => {
+            if (current()) this.showError(error, failure);
+          });
+        };
+        body.append(content, error);
+        refresh();
+        return body;
+      },
+    };
+  }
+
+  /** Codes that grant a role in one of the account's rooms, made and revoked here. */
+  private invitationsScreen(): SheetScreen {
+    return {
+      title: 'Invitations',
+      body: async (context) => {
+        const body = el('div', undefined, 'sheet-screen');
+        const error = el('p', '', 'auth-error');
+        error.hidden = true;
+        error.setAttribute('role', 'alert');
+        const stillCurrent = this.accountScope(() => context.current());
+        let room: RoomListItem | null = null;
+        try {
+          room = await this.ownedRoom();
+        } catch (failure) {
+          if (stillCurrent()) {
+            this.showError(error, failure);
+            body.append(error);
+          }
+          return body;
+        }
+        if (!stillCurrent()) return body;
+        if (!room) {
+          this.showError(error, new Error('This room is not in your owned rooms.'));
+          body.append(error);
+          return body;
+        }
+        const owned = room;
+        const surface: Surface = { body, error, isOpen: stillCurrent };
+        const role = el('select');
+        role.setAttribute('aria-label', 'Role granted');
+        for (const option of INVITE_ROLES) {
+          const node = el('option', option.label);
+          node.value = String(option.value);
+          role.append(node);
+        }
+        const uses = input('1', 'number', 3);
+        uses.min = '1';
+        uses.max = '100';
+        const days = input('7', 'number', 2);
+        days.min = '1';
+        days.max = '30';
+        const list = el('div', undefined, 'sheet-group');
+        const refresh = async (): Promise<void> => {
+          const invites = await api.roomInvites(this.options.auth.jwt, owned.id);
+          if (!stillCurrent()) return;
+          list.replaceChildren();
+          if (!invites.length) list.append(note('No unused invitations.'));
+          for (const invite of invites)
+            list.append(
+              this.inviteRow(
+                invite,
+                surface,
+                () => refresh(),
+                () => api.revokeRoomInvite(this.options.auth.jwt, owned.id, invite.id),
               ),
             );
-            if (event.reason) row.append(el('p', event.reason, 'profile-bio'));
-            if (event.expiresAt)
-              row.append(el('p', `Until ${new Date(event.expiresAt).toLocaleString()}`));
-            // Only the owner receives an address; it is theirs to read, never to show.
-            if (event.targetIp) row.append(el('p', `Address ${event.targetIp}`, 'setting-hint'));
-            content.append(row);
-          }
-        }
-        const pagination = el('div', undefined, 'community-row');
-        if (offset)
-          pagination.append(
-            button('Previous page', () => {
-              offset = Math.max(0, offset - 100);
-              refresh();
+        };
+        const create = asyncButton(
+          'Create invitation',
+          () =>
+            busy(create, error, async () => {
+              if (!stillCurrent()) return;
+              const invite = await api.createRoomInvite(this.options.auth.jwt, owned.id, {
+                role: Number(role.value),
+                uses: Number(uses.value) || 1,
+                days: Number(days.value) || 7,
+              });
+              if (!stillCurrent()) return;
+              this.showCreatedInvite(invite.code, surface, 'room');
+              await refresh();
             }),
-          );
-        if (page.data.hasMore)
-          pagination.append(
-            button('Next page', () => {
-              offset += 100;
-              refresh();
-            }),
-          );
-        content.append(pagination);
-      } catch (error) {
-        if (revision === requested) {
-          content.replaceChildren();
-          this.showError(view.error, error);
-        }
-      }
+          (failure) => this.showError(error, failure),
+          'btn-primary sheet-button',
+        );
+        body.append(
+          group(null, [
+            fieldRow('Role granted', role),
+            fieldRow('Uses', uses),
+            fieldRow('Valid for (days)', days),
+          ]),
+          note(
+            'Recipients review the room and the offered role, then accept; accepting never joins or lowers an existing role.',
+          ),
+          create,
+          group('Unused invitations', [list]),
+          error,
+        );
+        refresh().catch((failure) => {
+          if (stillCurrent()) this.showError(error, failure);
+        });
+        return body;
+      },
     };
-    const refresh = () => {
-      const generation = this.generation;
-      render().catch((error) => {
-        if (this.generation === generation && view.dialog.isConnected)
-          this.showError(view.error, error);
-      });
-    };
-    for (const section of ['members', 'bans', 'reports', 'history'] as const) {
-      if (section === 'bans' && ROLES.indexOf(room.role) < 4) continue;
-      tabs.append(
-        button(
-          section === 'members'
-            ? 'Members & roles'
-            : section === 'bans'
-              ? 'Bans'
-              : section === 'reports'
-                ? 'Reports'
-                : 'History',
-          () => {
-            current = section;
-            offset = 0;
-            refresh();
-          },
-        ),
-      );
-    }
-    view.body.append(
-      tabs,
-      el(
-        'p',
-        'Viewing/entry permission and broadcast permission are separate. Room Settings → Access controls who may enter; Guests Can Broadcast and moderated-room member roles control participation.',
-        'setting-hint',
-      ),
-      content,
-    );
-    refresh();
   }
 
   private imagePicker(
     initial: string | null,
     error: HTMLElement,
     room = false,
+    onChange?: () => void,
   ): { wrapper: HTMLElement; value: () => string | null } {
     let value = initial;
     let selection = 0;
@@ -1440,6 +1568,8 @@ export class CommunityUI {
           if (selection === generation) {
             value = result;
             show();
+            file.disabled = false;
+            onChange?.();
           }
         })
         .catch((failure) => this.showError(error, failure))
@@ -1455,6 +1585,7 @@ export class CommunityUI {
         value = null;
         file.value = '';
         show();
+        onChange?.();
       }),
     );
     return {

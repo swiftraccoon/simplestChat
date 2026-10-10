@@ -338,14 +338,15 @@ test('room settings show whether a password is set and can remove it explicitly'
   };
   const api = evaluateTypeScript(
     `let roomSettingsPending = false;
-     ${await functionSource('populateRoomSettingsModal')}
+     ${await functionSource('syncRoomScreen')}
      ${await functionSource('removeRoomPassword')}
-     export { populateRoomSettingsModal, removeRoomPassword };`,
+     export { syncRoomScreen, removeRoomPassword };`,
     {
       globals: {
-        ...fields,
-        rsPasswordRemove,
-        rsPasswordHint,
+        roomControls: Object.fromEntries(
+          Object.entries(fields).map(([name, node]) => [node.id ?? name, node]),
+        ),
+        roomPasswordState: { remove: rsPasswordRemove, hint: rsPasswordHint, row: null },
         room: { roomSettings: settings },
         applyRoomSetting: async (change) => {
           await change({ updateRoomSettings: async (patch) => patches.push(patch) });
@@ -353,11 +354,11 @@ test('room settings show whether a password is set and can remove it explicitly'
       },
     },
   );
-  api.populateRoomSettingsModal();
+  api.syncRoomScreen();
   assert.equal(rsPasswordRemove.hidden, false);
   assert.match(rsPasswordHint.textContent, /password is set/i);
   settings.passwordProtected = false;
-  api.populateRoomSettingsModal();
+  api.syncRoomScreen();
   assert.equal(rsPasswordRemove.hidden, true);
   assert.match(rsPasswordHint.textContent, /no password/i);
   await api.removeRoomPassword();

@@ -922,7 +922,7 @@ test('a profile save re-enables its control on completion while an uncertain sec
   assert.equal(save.disabled, false);
   assert.equal(profile.screen.canLeave(), true);
   profile.leave();
-  f.state.handle = async (path, ...args) =>
+  f.state.handle = async (path) =>
     path === '/api/auth/passkeys'
       ? { password_enabled: true, recovery_enabled: false, passkeys: [], maximum: 10 }
       : path === '/api/auth/sessions'

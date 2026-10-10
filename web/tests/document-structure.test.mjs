@@ -41,7 +41,9 @@ test('room chrome has homes for room actions, diagnostics and the phone panel to
 test('dialogs share one close affordance and one label style', () => {
   assert.doesNotMatch(html, /&times;/, 'close buttons are labelled, not a multiplication sign');
   assert.match(html, /id="login-close"[^>]*aria-label="Close sign in"/);
-  assert.match(html, /id="rs-password-remove"/);
+  assert.match(html, /id="settings-panel"/, 'the room column hosts the settings sheet');
+  assert.match(html, /id="home-settings-host"/, 'the home page hosts the settings sheet');
+  assert.doesNotMatch(html, /id="room-settings-modal"/, 'room settings live on the sheet');
   assert.doesNotMatch(
     html,
     />\s*Done\s*<\/button>/,

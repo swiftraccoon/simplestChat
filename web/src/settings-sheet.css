@@ -116,8 +116,8 @@
 
 .sheet-segments button[aria-pressed='true'],
 .sheet-segment button[aria-pressed='true'] {
-  background: var(--text);
-  color: var(--bg);
+  background: var(--accent-fill);
+  color: var(--on-accent);
 }
 
 .sheet-segment {
@@ -408,8 +408,8 @@ button.sheet-row:focus-visible {
 
 .sheet-actions .btn-primary,
 .sheet-button.btn-primary {
-  background: var(--text);
-  color: var(--bg);
+  background: var(--accent-fill);
+  color: var(--on-accent);
 }
 
 .sheet-status {

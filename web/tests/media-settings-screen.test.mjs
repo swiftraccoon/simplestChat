@@ -26,7 +26,10 @@ async function screenFixture(t, { videoEnabled = true } = {}) {
           const has = names().includes(value);
           const next = force ?? !has;
           if (next && !has) node.className = [...names(), value].join(' ');
-          if (!next && has) node.className = names().filter((n) => n !== value).join(' ');
+          if (!next && has)
+            node.className = names()
+              .filter((n) => n !== value)
+              .join(' ');
           return next;
         },
         contains: (value) => names().includes(value),
@@ -37,7 +40,8 @@ async function screenFixture(t, { videoEnabled = true } = {}) {
     document.activeElement = this;
   };
   Node.prototype.contains = function contains(node) {
-    for (let current = node; current; current = current.parentNode) if (current === this) return true;
+    for (let current = node; current; current = current.parentNode)
+      if (current === this) return true;
     return false;
   };
   Object.defineProperty(Node.prototype, 'dataset', {
@@ -182,7 +186,10 @@ test('the Camera & mic screen lists devices and applies a camera change at once'
   camera.value = 'camera-2';
   camera.emit('change');
   await flush();
-  assert.deepEqual(f.room.actions.map((action) => action[0]), ['save', 'camera']);
+  assert.deepEqual(
+    f.room.actions.map((action) => action[0]),
+    ['save', 'camera'],
+  );
   assert.equal(f.media.loadCapturePreferences().cameraDeviceId, 'camera-2');
   assert.equal(section.status(), 'Elgato · Default mic', 'the list status names the device');
   const row = camera.parentNode;
@@ -195,7 +202,10 @@ test('a failed device switch restores the select to the confirmed choice and rep
   f.room.switchCamera = async () => {
     throw new Error('Device unavailable');
   };
-  const screen = f.controls.sections().find((entry) => entry.id === 'camera').screen();
+  const screen = f.controls
+    .sections()
+    .find((entry) => entry.id === 'camera')
+    .screen();
   const body = await screen.body(f.context);
   await flush();
   const camera = selectNamed(body, 'cameraDeviceId');
@@ -211,7 +221,10 @@ test('a failed device switch restores the select to the confirmed choice and rep
 
 test('the Quality screen applies capture options one at a time', async (t) => {
   const f = await screenFixture(t);
-  const screen = f.controls.sections().find((entry) => entry.id === 'camera').screen();
+  const screen = f.controls
+    .sections()
+    .find((entry) => entry.id === 'camera')
+    .screen();
   const body = await screen.body(f.context);
   await flush();
   const quality = body
@@ -227,7 +240,10 @@ test('the Quality screen applies capture options one at a time', async (t) => {
   frameRate.emit('change');
   await flush();
   assert.equal(f.media.loadCapturePreferences().frameRate, 15);
-  assert.deepEqual(f.room.actions.map((action) => action[0]), ['save', 'camera']);
+  assert.deepEqual(
+    f.room.actions.map((action) => action[0]),
+    ['save', 'camera'],
+  );
   const noise = qualityBody
     .querySelectorAll('input')
     .find((node) => node.getAttribute('name') === 'noiseSuppression');

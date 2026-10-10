@@ -51,7 +51,7 @@ test('connection and unread status colors retain readable text in every state', 
 });
 
 test('primary fills stay separate from link-text colors in both shared stylesheets', async () => {
-  const settings = await readFile(new URL('../src/settings-dialog.css', import.meta.url), 'utf8');
+  const settings = await readFile(new URL('../src/settings-sheet.css', import.meta.url), 'utf8');
   for (const css of [stylesheet, settings]) {
     assert.doesNotMatch(css, /background:\s*var\(--accent(?:,|\))/);
     assert.doesNotMatch(css, /background:\s*var\(--accent-hover(?:,|\))/);
