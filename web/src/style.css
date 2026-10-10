@@ -2030,6 +2030,16 @@ header.in-room .auth-bar {
   }
 }
 
+/* An account's favorite and recent rooms: a narrow list whose star sits beside its room. */
+.directory-saved-rooms .discovery-row {
+  justify-content: flex-start;
+  max-width: 28rem;
+}
+
+.directory-saved-rooms .discovery-room-link {
+  flex: 0 1 auto;
+}
+
 @media (max-width: 600px) {
   .room-list {
     --tile-min: 10.5rem;

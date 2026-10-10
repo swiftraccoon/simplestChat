@@ -104,6 +104,7 @@ async function geometry(page) {
       '#room-list',
       '.room-card',
       '.room-list-empty',
+      '.directory-saved-rooms .discovery-row',
       '#create-room-btn',
       '.join-form',
       '#name-input',
@@ -162,6 +163,30 @@ async function geometry(page) {
         authBar && authBar.top >= headerBox.top - 1 && authBar.bottom <= headerBox.bottom + 1,
       ),
       dockBottom: rect('.join-form')?.bottom ?? null,
+      // A saved room's star stays beside its name: the widest row of the open picker and
+      // the largest distance from a room link to its star.
+      savedRowWidth: Math.max(
+        -1,
+        ...[...document.querySelectorAll('.directory-saved-rooms .discovery-row')]
+          .filter((node) => node.getClientRects().length)
+          .map((node) => box(node).width),
+      ),
+      savedStarGap: Math.max(
+        -1,
+        ...[...document.querySelectorAll('.directory-saved-rooms .discovery-row')]
+          .filter((node) => node.getClientRects().length)
+          .map((node) => {
+            // The link's box may stretch; its text extent is what a person sees.
+            const textRight = Math.max(
+              ...[...node.querySelector('.discovery-room-link').children].map((child) => {
+                const range = document.createRange();
+                range.selectNodeContents(child);
+                return range.getBoundingClientRect().right;
+              }),
+            );
+            return box(node.querySelector('.discovery-favorite')).left - textRight;
+          }),
+      ),
     };
     for (const room of document.querySelectorAll('.room-card')) {
       const children = [...room.children];
@@ -203,6 +228,11 @@ function expectShape({ shape, viewport }, state, label) {
     detail('grid spans the page'),
   );
   assert.equal(shape.authInHeader, true, detail('account state in the header'));
+  if (shape.savedRowWidth >= 0) {
+    assert.ok(shape.savedRowWidth <= 460, detail('a saved room row stays narrow'));
+    // Wrapped text leaves up to a word of slack before the star, and engines break differently.
+    assert.ok(shape.savedStarGap <= 120, detail('a saved room keeps its star beside its name'));
+  }
   if (viewport.width >= 1100) assert.equal(shape.toolbarSingleRow, true, detail('one toolbar row'));
   if (viewport.width > 600 && viewport.height >= 500 && ['populated', 'filtered'].includes(state))
     assert.ok(
@@ -349,7 +379,17 @@ async function run(env = process.env) {
               if (url.pathname === '/api/auth/saved-rooms' && request.method() === 'GET') {
                 assert.equal(signedIn, true, 'Guests must not request account room shortcuts');
                 assert.equal(request.headers().authorization, 'Bearer owned-layout-fixture');
-                return json(200, { rooms: [] });
+                // One short name whose star must sit beside it, one long name that wraps.
+                return json(200, {
+                  rooms: [
+                    {
+                      room: { ...rooms[0], display_name: 'Nature of Mind', topic: 'the path' },
+                      favorite: true,
+                      lastVisited: null,
+                    },
+                    { room: rooms[1], favorite: false, lastVisited: '2026-10-10T00:00:00Z' },
+                  ],
+                });
               }
               if (
                 url.pathname === '/api/auth/notification-preferences' &&
@@ -421,6 +461,14 @@ async function run(env = process.env) {
             .locator(signedIn ? '#auth-bar-user' : '#auth-bar-guest')
             .waitFor({ state: 'visible' });
           assert.equal(await page.locator('#create-room-btn').isVisible(), signedIn);
+          if (signedIn) {
+            // An account's saved rooms open under the toolbar and are measured with the rest.
+            report.activeStep = `${name}-saved-rooms-ready`;
+            await page.locator('.directory-saved-rooms summary').click();
+            await page.waitForFunction(
+              () => document.querySelectorAll('.directory-saved-rooms .discovery-row').length === 2,
+            );
+          }
           report.activeStep = `${name}-signaling-ready`;
           await page.locator('#connection-status.connected').waitFor({ state: 'visible' });
           assert.equal(signalingConnections, 1, 'Each layout context owns one mocked connection');
