@@ -392,9 +392,15 @@ async function run(env = process.env) {
           await page.locator('#room-load-more').click();
           await page.waitForFunction(() => document.querySelectorAll('.room-card').length === 21);
           await reachable(page.locator('.room-card').last());
-          await page.locator('.room-card').last().focus();
-          await page.keyboard.press('Enter');
-          assert.equal(await page.locator('#room-input').inputValue(), rooms[20].id);
+          if (signedIn) {
+            // A signed-in person's tile activation enters the room; layout runs stay on the
+            // home page, so the signed-in run selects through the join bar instead.
+            await page.locator('#room-input').fill(rooms[20].id);
+          } else {
+            await page.locator('.room-card').last().focus();
+            await page.keyboard.press('Enter');
+            assert.equal(await page.locator('#room-input').inputValue(), rooms[20].id);
+          }
           await page.locator('#name-input').fill('Layout Guest');
           for (const selector of ['#name-input', '#room-input', '#join-btn']) {
             await reachable(page.locator(selector));

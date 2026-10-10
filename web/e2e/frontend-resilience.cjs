@@ -109,6 +109,7 @@ async function run() {
     clock = false,
     hasTouch = false,
     holdProfiles = false,
+    directory = [],
   } = {}) {
     const context = await browser.newContext({
       viewport: { width: 1440, height: 900 },
@@ -321,7 +322,7 @@ async function run() {
         creations.push(route);
         return;
       }
-      if (url.pathname === '/api/rooms') return json([]);
+      if (url.pathname === '/api/rooms') return json(directory);
       if (url.pathname === '/api/auth/inbox/unread') {
         assert.equal(route.request().method(), 'GET');
         assert.match(route.request().headers().authorization, /^Bearer /);
@@ -574,8 +575,53 @@ async function run() {
     );
   }
 
+  /* A directory tile is the room itself: it enters once a name is known and only asks for
+     the name otherwise. */
+  async function tileJoinScenarios() {
+    const call = await fixture({
+      room: true,
+      directory: [
+        {
+          id: 'fixture-room',
+          display_name: 'Fixture room',
+          topic: 'Tile join check',
+          participant_count: 2,
+          password_protected: false,
+          moderated: false,
+          broadcaster_count: 1,
+          description: '',
+          image_url: null,
+          secret: false,
+          name_style: { color: null, style: 'accent' },
+          topic_style: { color: null, style: 'accent' },
+        },
+      ],
+    });
+    try {
+      const tile = call.page.locator('.room-card').first();
+      await tile.waitFor({ state: 'visible' });
+      await call.page.locator('#connection-status.connected').waitFor({ state: 'visible' });
+      await tile.click();
+      assert.equal(await call.page.locator('#room-input').inputValue(), 'fixture-room');
+      assert.equal(await call.page.locator('#room-screen').isVisible(), false);
+      // Without a name the tile selects the room and asks for a name; the selection settles
+      // through the navigation hash, so the focus move is awaited rather than read at once.
+      await call.page.waitForFunction(() => document.activeElement?.id === 'name-input');
+      assert.equal(await call.page.locator('#room-screen').isVisible(), false);
+      await call.page.locator('#name-input').fill('Layout guest');
+      await tile.click();
+      await call.page.locator('#room-screen').waitFor({ state: 'visible', timeout: 5000 });
+      report.checks.push(
+        'A directory tile enters its room once a name is set and only selects it without one',
+      );
+    } finally {
+      await call.context.close();
+    }
+  }
+
   async function scenarios() {
     await mediaScenarios();
+    await tileJoinScenarios();
     await hovercardProfileScenarios();
     const discovering = await fixture({
       signedIn: true,

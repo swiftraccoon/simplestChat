@@ -105,7 +105,8 @@ Viewer mute/volume/hide must not change what anybody else receives. Async media
 and account work can outlive a dialog or session; stale completion must not attach
 tracks or account data to a replacement session.
 
-Room links and browser history select a room; joining remains explicit. Invitations
+Room links and browser history select a room; joining from them remains explicit,
+while a directory tile joins directly once a name is known. Invitations
 use 32-symbol secrets in fragments (`#invite=` for rooms, `#register-invite=` for
 registration), scrubbed before room navigation. Room invitations require signed-in
 preview and explicit acceptance through JSON request bodies. Acceptance selects
@@ -205,7 +206,9 @@ The home page is a grid of portrait room tiles ordered busiest first by the
 server: live rooms by participant count (unknown counts after known ones), then
 rooms nobody is in, newest first, across Load more pages and searches. A tile
 shows the room image or a monogram of its name on a tone chosen from the room id.
-Selecting a tile fills the room field of the join bar; joining stays explicit.
+Clicking a tile enters its room when a name is set (an account name, or one typed
+into the join bar); without a name it selects the room and asks for one first.
+The join bar itself serves rooms that are not listed.
 
 Favorite rooms and successful recent room joins are saved with the account and
 appear in the existing room picker and **My rooms**. Star a room to keep it among

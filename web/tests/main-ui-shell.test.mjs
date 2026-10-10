@@ -723,3 +723,41 @@ test('room tiles get a stable tone from the room id, always from the warm palett
   assert.equal(api.roomTone('lobby'), api.roomTone('lobby'));
   assert.ok(new Set(tones).size > 1, 'different rooms spread across the palette');
 });
+
+test('a directory tile enters its room once a name is known and only selects it otherwise', async () => {
+  const calls = [];
+  const nameInput = {
+    value: '',
+    focused: 0,
+    focus() {
+      this.focused++;
+    },
+  };
+  const auth = { displayName: '' };
+  const { enterRoomFromDirectory } = evaluateTypeScript(
+    `${await functionSource('enterRoomFromDirectory')} export { enterRoomFromDirectory };`,
+    {
+      globals: {
+        auth,
+        nameInput,
+        navigation: {
+          requestJoin: (id) => calls.push(['join', id]),
+          selectRoom: (id) => calls.push(['select', id]),
+        },
+        updateJoinBtn() {},
+      },
+    },
+  );
+  enterRoomFromDirectory('reading-group');
+  assert.deepEqual(calls, [['select', 'reading-group']]);
+  assert.equal(nameInput.focused, 1, 'without a name the tile asks the join bar for one');
+  nameInput.value = ' Guest ';
+  enterRoomFromDirectory('reading-group');
+  assert.deepEqual(calls.at(-1), ['join', 'reading-group']);
+  auth.displayName = 'Owner';
+  nameInput.value = '';
+  enterRoomFromDirectory('lobby');
+  assert.equal(nameInput.value, 'Owner', 'an account name fills the join bar');
+  assert.deepEqual(calls.at(-1), ['join', 'lobby']);
+  assert.equal(nameInput.focused, 1, 'a known name needs no focus move');
+});

@@ -370,6 +370,18 @@ function openRoomFromDialog(id: string): void {
   if (auth.displayName && !nameInput.value.trim()) nameInput.value = auth.displayName;
   navigation.requestJoin(id);
 }
+/* A directory tile is the room itself: it enters once a name is known (the account's, or one
+   typed into the join bar) and otherwise selects the room and asks for the name first. */
+function enterRoomFromDirectory(id: string): void {
+  if (auth.displayName && !nameInput.value.trim()) nameInput.value = auth.displayName;
+  if (nameInput.value.trim()) {
+    navigation.requestJoin(id);
+  } else {
+    navigation.selectRoom(id);
+    nameInput.focus();
+  }
+  updateJoinBtn();
+}
 readInviteLink();
 
 auth.setOnChange((loggedIn, tokenRefresh) => {
@@ -1904,7 +1916,7 @@ async function loadRoomBrowser(append = false): Promise<void> {
       card.className = 'room-card';
       card.tabIndex = 0;
       card.setAttribute('role', 'button');
-      card.setAttribute('aria-label', `Select room ${r.display_name}`);
+      card.setAttribute('aria-label', `Enter ${r.display_name}`);
       card.dataset['roomId'] = r.id;
       card.dataset['initial'] = [...r.display_name.trim()][0]?.toLocaleUpperCase() ?? '';
       card.style.setProperty('--room-tone', roomTone(r.id));
@@ -1915,13 +1927,7 @@ async function loadRoomBrowser(append = false): Promise<void> {
           card.click();
         }
       });
-      card.addEventListener('click', () => {
-        navigation.selectRoom(r.id);
-        if (auth.displayName && !nameInput.value.trim()) {
-          nameInput.value = auth.displayName;
-        }
-        updateJoinBtn();
-      });
+      card.addEventListener('click', () => enterRoomFromDirectory(r.id));
 
       const info = document.createElement('div');
       info.className = 'room-card-info';
