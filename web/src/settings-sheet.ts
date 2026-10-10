@@ -16,6 +16,8 @@ export interface SheetScreen {
   body: (context: ScreenContext) => HTMLElement | Promise<HTMLElement>;
   /** Runs once when the screen is popped or the sheet closes. */
   leave?: () => void;
+  /** False while the screen owns work that must finish first; leaving is then refused. */
+  canLeave?: () => boolean;
 }
 
 export type SheetSegment = 'you' | 'room';
@@ -101,9 +103,13 @@ export class SettingsSheet {
   }
 
   /** Shows the root list, or one section's screen straight away. */
-  open(options: { section?: string; segment?: SheetSegment; opener?: HTMLElement | null } = {}): void {
-    if (this.openState) this.leaveAll();
-    else {
+  open(
+    options: { section?: string; segment?: SheetSegment; opener?: HTMLElement | null } = {},
+  ): void {
+    if (this.openState) {
+      if (!this.canLeaveAll()) return;
+      this.leaveAll();
+    } else {
       this.opener = options.opener ?? null;
       this.openState = true;
     }
@@ -126,8 +132,9 @@ export class SettingsSheet {
     }
   }
 
-  close(): void {
-    if (!this.openState) return;
+  /** `force` drops screens that would otherwise wait, as an identity change must. */
+  close(options: { force?: boolean } = {}): void {
+    if (!this.openState || (!options.force && !this.canLeaveAll())) return;
     this.leaveAll();
     this.openState = false;
     this.element.hidden = true;
@@ -154,8 +161,9 @@ export class SettingsSheet {
   }
 
   pop(): void {
-    const frame = this.stack.pop();
-    if (!frame) return;
+    const top = this.stack[this.stack.length - 1];
+    if (!top || top.screen.canLeave?.() === false) return;
+    const frame = this.stack.pop()!;
     this.generation++;
     frame.screen.leave?.();
     const parent = this.stack[this.stack.length - 1];
@@ -171,6 +179,10 @@ export class SettingsSheet {
       const row = section ? this.rowFor(section) : null;
       (row ?? this.title).focus();
     }
+  }
+
+  private canLeaveAll(): boolean {
+    return this.stack.every((frame) => frame.screen.canLeave?.() !== false);
   }
 
   private leaveAll(): void {
@@ -225,9 +237,7 @@ export class SettingsSheet {
     this.back.hidden = true;
     this.title.textContent = 'Settings';
     this.body.replaceChildren();
-    const sections = this.options
-      .sections()
-      .filter((section) => section.available?.() ?? true);
+    const sections = this.options.sections().filter((section) => section.available?.() ?? true);
     const segments = new Set(sections.map((section) => section.segment));
     if (segments.size > 1) {
       if (!segments.has(this.segment)) this.segment = segments.has('you') ? 'you' : 'room';
@@ -362,7 +372,10 @@ export function actionRow(
 ): HTMLButtonElement {
   const row = button('', activate, 'sheet-row sheet-row-action');
   if (options.danger) row.classList.add('danger');
-  row.append(el('span', label, 'sheet-row-label'), el('span', options.status ?? '', 'sheet-row-status'));
+  row.append(
+    el('span', label, 'sheet-row-label'),
+    el('span', options.status ?? '', 'sheet-row-status'),
+  );
   return row;
 }
 

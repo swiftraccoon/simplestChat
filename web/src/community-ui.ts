@@ -1,6 +1,6 @@
 import type { AuthManager } from './auth';
 import { openPrivateInbox, onInboxChanged } from './chat-history';
-import { mountAccountSecurity, type AccountSecurityFlow } from './account-security';
+import { AccountSecurityFlow, mountAccountSecurity } from './account-security';
 import { mountAccountSessions } from './account-sessions';
 import { mountSavedRooms, createFavoriteButton, offerContact } from './discovery';
 import { appearancePicker } from './appearance';
@@ -20,9 +20,20 @@ import {
   safeRasterUrl,
   validatePassword,
 } from './ui';
+import {
+  actionRow,
+  fieldRow,
+  group,
+  note,
+  type SheetScreen,
+  type SheetSection,
+} from './settings-sheet';
 
 interface Options {
-  mountAccountNotifications?: (container: HTMLElement, current: () => boolean) => void;
+  /** Opens the settings sheet at a section; the Account button uses it. */
+  openSettings?: (section: string, opener: HTMLElement | null) => void;
+  /** Called when the signed-in identity changes; account screens close. */
+  onAccountChanged?: () => void;
   mountConversationNotifications?: (
     container: HTMLElement,
     peerId: string,
@@ -63,6 +74,12 @@ const ACTION_LABELS: Record<string, string> = {
   report_dismissed: 'report dismissed',
 };
 const actionLabel = (action: string): string => ACTION_LABELS[action] ?? action.replace(/_/g, ' ');
+/** Where a list of invitations lives: a modal or a sheet screen. */
+interface Surface {
+  body: HTMLElement;
+  error: HTMLElement;
+  isOpen: () => boolean;
+}
 
 export class CommunityUI {
   private readonly messagesButton = button('Messages', () =>
@@ -76,13 +93,9 @@ export class CommunityUI {
   private inboxController = new AbortController();
   private inboxPending: Promise<void> | null = null;
   private inboxRefreshAgain = false;
-  private readonly accountButton = button('Account', () => {
-    const generation = this.generation;
-    this.openAccount().catch((error) => {
-      if (generation === this.generation)
-        this.options.notify(error instanceof Error ? error.message : 'Account unavailable');
-    });
-  });
+  private readonly accountButton = button('Account', () =>
+    this.options.openSettings?.('profile', this.accountButton),
+  );
   private readonly roomsButton = button('My rooms', () => {
     const generation = this.generation;
     this.openRooms().catch((error) => {
@@ -100,6 +113,7 @@ export class CommunityUI {
   private generation = 0;
   private accountGeneration = 0;
   private accountIdentity = '';
+  private accountSeen = false;
   private identity = '';
 
   constructor(private readonly options: Options) {
@@ -130,6 +144,9 @@ export class CommunityUI {
       this.inboxPending = null;
       this.messagesButton.textContent = 'Messages';
       this.messagesButton.setAttribute('aria-label', 'Messages');
+      // The first refresh learns the identity; later changes close account screens.
+      if (this.accountSeen) this.options.onAccountChanged?.();
+      this.accountSeen = true;
     }
     const identity = `${this.options.auth.userId ?? ''}:${room?.currentRoomId ?? ''}:${room?.localParticipantId ?? ''}`;
     if (identity !== this.identity) {
@@ -392,213 +409,322 @@ export class CommunityUI {
     return promise;
   }
 
-  private async openAccount(): Promise<void> {
-    let security: AccountSecurityFlow | null = null;
-    let sessions: ReturnType<typeof mountAccountSessions> | null = null;
-    const view = modal('Account', () => security?.canDismiss ?? true);
-    view.dialog.setAttribute('data-account-dialog', 'true');
-    const token = this.options.auth.jwt;
+  /** Account screens for the settings sheet; a pending mutation refuses to be left. */
+  sections(): SheetSection[] {
+    const available = (): boolean => this.options.auth.isLoggedIn;
+    return [
+      {
+        id: 'profile',
+        segment: 'you',
+        group: 'Account',
+        label: 'Profile',
+        status: () => this.options.auth.displayName ?? '',
+        available,
+        screen: () => this.profileScreen(),
+      },
+      {
+        id: 'security',
+        segment: 'you',
+        group: 'Account',
+        label: 'Sign-in & security',
+        available,
+        screen: () => this.securityScreen(),
+      },
+      {
+        id: 'invites',
+        segment: 'you',
+        group: 'Account',
+        label: 'Invites',
+        available,
+        screen: () => this.invitesScreen(),
+      },
+    ];
+  }
+
+  /** Binds a screen to the account that opened it. */
+  private accountScope(current: () => boolean): () => boolean {
     const accountId = this.options.auth.userId;
     const generation = this.accountGeneration;
-    const stillCurrent = (): boolean =>
-      generation === this.accountGeneration &&
-      this.options.auth.userId === accountId &&
-      view.dialog.open;
-    try {
-      const profile = await api.accountProfile(token);
-      if (!stillCurrent()) return;
-      const name = input(profile.display_name, 'text', 64);
-      const bio = el('textarea');
-      bio.value = profile.bio;
-      bio.maxLength = 1000;
-      bio.rows = 3;
-      const avatar = this.imagePicker(profile.avatar_url, view.error);
-      const appearance = appearancePicker({
-        label: 'Hovercard appearance',
-        initial: profile.profile_style,
-        name: () => name.value.trim(),
-        description: 'Customize your hovercard independently of your chat messages.',
-      });
-      name.addEventListener('input', appearance.refreshPreview);
-      view.body.append(
-        el('p', profile.email),
-        field('Account display name', name),
-        field('Bio', bio),
-        avatar.wrapper,
-        appearance.element,
-      );
-      const save = asyncButton(
-        'Save profile',
-        async () => {
-          if (!stillCurrent() || !security?.canStart) return;
-          const update = {
-            display_name: name.value.trim(),
-            bio: bio.value.trim(),
-            avatar_url: avatar.value(),
-            profile_style: appearance.chosen(),
-          };
-          await security.change(
-            (currentToken, signal) => api.updateProfile(currentToken, update, signal),
-            (updated) => {
-              this.profiles.delete(updated.id);
-              this.options.onProfileChanged(updated);
-              this.options.notify('Profile saved');
+    return () =>
+      current() && generation === this.accountGeneration && this.options.auth.userId === accountId;
+  }
+
+  private profileScreen(): SheetScreen {
+    let flow: AccountSecurityFlow | null = null;
+    return {
+      title: 'Profile',
+      canLeave: () => flow?.canDismiss ?? true,
+      leave: () => flow?.dispose(),
+      body: async (context) => {
+        const body = el('div', undefined, 'sheet-screen');
+        const error = el('p', '', 'auth-error');
+        error.hidden = true;
+        error.setAttribute('role', 'alert');
+        const stillCurrent = this.accountScope(() => context.current());
+        const token = this.options.auth.jwt;
+        try {
+          const profile = await api.accountProfile(token);
+          if (!stillCurrent()) return body;
+          const name = input(profile.display_name, 'text', 64);
+          const bio = el('textarea');
+          bio.value = profile.bio;
+          bio.maxLength = 1000;
+          bio.rows = 3;
+          bio.setAttribute('aria-label', 'Bio');
+          const avatar = this.imagePicker(profile.avatar_url, error);
+          const appearance = appearancePicker({
+            label: 'Hovercard appearance',
+            initial: profile.profile_style,
+            name: () => name.value.trim(),
+          });
+          name.addEventListener('input', appearance.refreshPreview);
+          const save = asyncButton(
+            'Save profile',
+            async () => {
+              if (!stillCurrent() || !flow?.canStart) return;
+              const update = {
+                display_name: name.value.trim(),
+                bio: bio.value.trim(),
+                avatar_url: avatar.value(),
+                profile_style: appearance.chosen(),
+              };
+              await flow.change(
+                (currentToken, signal) => api.updateProfile(currentToken, update, signal),
+                (updated) => {
+                  this.profiles.delete(updated.id);
+                  this.options.onProfileChanged(updated);
+                  this.options.notify('Profile saved');
+                },
+              );
             },
+            (failure) => this.showError(error, failure),
+            'btn-primary sheet-button',
           );
-        },
-        (error) => this.showError(view.error, error),
-        'btn-primary',
-      );
-      view.body.append(save);
-      let changePassword: HTMLButtonElement | null = null;
-      const passwordFields: HTMLInputElement[] = [];
-      security = mountAccountSecurity({
-        container: view.body,
-        dialog: view.dialog,
-        token: () => this.options.auth.jwt,
-        current: stillCurrent,
-        interactionChanged: (canStart) => {
-          save.disabled = !canStart;
-          if (changePassword) changePassword.disabled = !canStart;
-          if (!canStart) for (const secret of passwordFields) secret.value = '';
-          sessions?.refreshControls();
-        },
-        completed: (kind) => {
-          view.dialog.close();
-          const action = kind === 'replaced' ? 'Passkey replaced.' : 'Passkey removed.';
-          this.options.notify(
-            kind === 'replaced'
-              ? `${action} Sign in again with your new passkey.`
-              : `${action} Sign in again with a remaining sign-in method.`,
-          );
-          this.options.onSignedOut().catch(() => {
-            this.options.notify(`${action} Reload to finish signing out.`);
+          flow = new AccountSecurityFlow({
+            token: () => this.options.auth.jwt,
+            current: stillCurrent,
+            changed: () => {
+              save.disabled = !(flow?.canStart ?? false);
+              if (flow?.message) {
+                error.textContent = flow.message;
+                error.hidden = false;
+              }
+            },
+            completed: () => {},
           });
-        },
-      });
-      await security.load();
-      if (!stillCurrent()) return;
-      if (security.settings?.password_enabled) {
-        view.body.append(el('h3', 'Change password'));
-        view.body.append(el('p', 'Changing your password signs out all sessions.', 'setting-hint'));
-        const current = input('', 'password', 512);
-        current.autocomplete = 'current-password';
-        const password = input('', 'password', 512);
-        password.autocomplete = 'new-password';
-        const confirm = input('', 'password', 512);
-        confirm.autocomplete = 'new-password';
-        passwordFields.push(current, password, confirm);
-        view.body.append(
-          field('Current password', current),
-          field('New password', password),
-          field('Confirm new password', confirm),
-        );
-        const change = asyncButton(
-          'Change password',
-          async () => {
-            if (!stillCurrent() || !security?.canStart) return;
-            validatePassword(password.value, confirm.value);
-            const update = {
-              current_password: current.value,
-              new_password: password.value,
-            };
-            await security.change(
-              (currentToken, signal) => api.changePassword(currentToken, update, signal),
-              () => {
-                view.dialog.close();
-                this.options.notify('Password changed. Sign in again with your new password.');
-                this.options
-                  .onSignedOut()
-                  .catch(() =>
-                    this.options.notify('Password changed. Reload to finish signing out.'),
-                  );
+          const bioBlock = el('div', undefined, 'sheet-block');
+          bioBlock.append(el('h3', 'Bio'), bio);
+          body.append(
+            el('p', profile.email, 'sheet-note'),
+            avatar.wrapper,
+            group(null, [fieldRow('Name', name)]),
+            bioBlock,
+            appearance.element,
+            save,
+            error,
+          );
+        } catch (failure) {
+          if (stillCurrent()) {
+            this.showError(error, failure);
+            body.append(error);
+          }
+        }
+        return body;
+      },
+    };
+  }
+
+  private securityScreen(): SheetScreen {
+    let security: AccountSecurityFlow | null = null;
+    let released = false;
+    const leaves: (() => void)[] = [];
+    return {
+      title: 'Sign-in & security',
+      canLeave: () => released || (security?.canDismiss ?? true),
+      leave: () => {
+        for (const callback of leaves.splice(0)) callback();
+      },
+      body: async (context) => {
+        const body = el('div', undefined, 'sheet-screen');
+        const error = el('p', '', 'auth-error');
+        error.hidden = true;
+        error.setAttribute('role', 'alert');
+        const stillCurrent = this.accountScope(() => context.current());
+        const finish = (message: string): void => {
+          released = true;
+          context.close();
+          this.options.notify(message);
+        };
+        let sessions: ReturnType<typeof mountAccountSessions> | null = null;
+        let changePassword: HTMLButtonElement | null = null;
+        const passwordFields: HTMLInputElement[] = [];
+        try {
+          security = mountAccountSecurity({
+            container: body,
+            onLeave: (callback) => leaves.push(callback),
+            token: () => this.options.auth.jwt,
+            current: stillCurrent,
+            interactionChanged: (canStart) => {
+              if (changePassword) changePassword.disabled = !canStart;
+              if (!canStart) for (const secret of passwordFields) secret.value = '';
+              sessions?.refreshControls();
+            },
+            completed: (kind) => {
+              const action = kind === 'replaced' ? 'Passkey replaced.' : 'Passkey removed.';
+              finish(
+                kind === 'replaced'
+                  ? `${action} Sign in again with your new passkey.`
+                  : `${action} Sign in again with a remaining sign-in method.`,
+              );
+              this.options.onSignedOut().catch(() => {
+                this.options.notify(`${action} Reload to finish signing out.`);
+              });
+            },
+          });
+          await security.load();
+          if (!stillCurrent()) return body;
+          if (security.settings?.password_enabled) {
+            const current = input('', 'password', 512);
+            current.autocomplete = 'current-password';
+            const password = input('', 'password', 512);
+            password.autocomplete = 'new-password';
+            const confirm = input('', 'password', 512);
+            confirm.autocomplete = 'new-password';
+            passwordFields.push(current, password, confirm);
+            const change = asyncButton(
+              'Change password',
+              async () => {
+                if (!stillCurrent() || !security?.canStart) return;
+                validatePassword(password.value, confirm.value);
+                const update = {
+                  current_password: current.value,
+                  new_password: password.value,
+                };
+                await security.change(
+                  (currentToken, signal) => api.changePassword(currentToken, update, signal),
+                  () => {
+                    finish('Password changed. Sign in again with your new password.');
+                    this.options
+                      .onSignedOut()
+                      .catch(() =>
+                        this.options.notify('Password changed. Reload to finish signing out.'),
+                      );
+                  },
+                );
               },
+              (failure) => this.showError(error, failure),
+              'sheet-button',
             );
-          },
-          (error) => this.showError(view.error, error),
-        );
-        changePassword = change;
-        view.dialog.addEventListener(
-          'close',
-          () => {
-            current.value = '';
-            password.value = '';
-            confirm.value = '';
-          },
-          { once: true },
-        );
-        view.body.append(change);
-      }
-      sessions = mountAccountSessions({
-        container: view.body,
-        dialog: view.dialog,
-        security,
-        token: () => this.options.auth.jwt,
-        current: stillCurrent,
-        notify: this.options.notify,
-        signedOut: () => {
-          view.dialog.close();
-          this.options.notify('Session signed out.');
-          this.options.onSignedOut().catch(() => {
-            this.options.notify('Session signed out. Reload to finish signing out.');
+            changePassword = change;
+            leaves.push(() => {
+              current.value = '';
+              password.value = '';
+              confirm.value = '';
+            });
+            body.append(
+              group('Password', [
+                fieldRow('Current password', current),
+                fieldRow('New password', password),
+                fieldRow('Confirm new password', confirm),
+              ]),
+              note('Changing your password signs out every session.'),
+              change,
+            );
+          }
+          sessions = mountAccountSessions({
+            container: body,
+            onLeave: (callback) => leaves.push(callback),
+            security,
+            token: () => this.options.auth.jwt,
+            current: stillCurrent,
+            notify: this.options.notify,
+            signedOut: () => {
+              finish('Session signed out.');
+              this.options.onSignedOut().catch(() => {
+                this.options.notify('Session signed out. Reload to finish signing out.');
+              });
+            },
           });
-        },
-      });
-      this.options.mountAccountNotifications?.(view.body, stillCurrent);
-      // Registration invitations: the way in while registration is closed.
-      const invites = el('div');
-      const refreshInvites = async (): Promise<void> => {
-        const codes = await api.registrationInvites(token);
-        if (!stillCurrent()) return;
-        invites.replaceChildren();
-        if (!codes.length) invites.append(el('p', 'No unused invite codes.', 'setting-hint'));
-        for (const code of codes)
-          invites.append(
-            this.inviteRow(code, view, refreshInvites, () =>
-              api.revokeRegistrationInvite(token, code.id),
+          body.append(
+            group(null, [
+              actionRow(
+                'Sign out and forget this device',
+                () => {
+                  released = true;
+                  context.close();
+                  this.options.onForgetDevice();
+                },
+                { danger: true },
+              ),
+            ]),
+            note(
+              'Forgetting this device removes the saved name, devices, layout and chat preferences from this browser.',
             ),
+            error,
           );
-      };
-      const mint = asyncButton(
-        'New invite code',
-        () =>
-          busy(mint, view.error, async () => {
-            if (!stillCurrent()) return;
-            const invite = await api.createRegistrationInvite(this.options.auth.jwt);
-            if (!stillCurrent()) return;
-            this.showCreatedInvite(invite.code, view, 'registration');
-            await refreshInvites();
-          }),
-        (error) => this.showError(view.error, error),
-      );
-      view.body.append(
-        el('h3', 'Invite someone to register'),
-        el(
-          'p',
-          'While registration is closed, a code lets one person create an account. You can hold five unused codes; each lasts a week.',
-          'setting-hint',
-        ),
-        mint,
-        invites,
-      );
-      refreshInvites().catch((error) => {
-        if (stillCurrent()) this.showError(view.error, error);
-      });
-      view.body.append(
-        el('h3', 'This device'),
-        el(
-          'p',
-          'Signing out removes the saved name, devices, layout and chat preferences from this browser. Your account preferences remain on the server.',
-          'setting-hint',
-        ),
-        button('Sign out and forget this device', () => {
-          view.close();
-          this.options.onForgetDevice();
-        }),
-      );
-    } catch (error) {
-      if (stillCurrent()) this.showError(view.error, error);
-    }
+        } catch (failure) {
+          if (stillCurrent()) {
+            this.showError(error, failure);
+            body.append(error);
+          }
+        }
+        return body;
+      },
+    };
+  }
+
+  /** Registration invitations: the way in while registration is closed. */
+  private invitesScreen(): SheetScreen {
+    return {
+      title: 'Invites',
+      body: (context) => {
+        const body = el('div', undefined, 'sheet-screen');
+        const error = el('p', '', 'auth-error');
+        error.hidden = true;
+        error.setAttribute('role', 'alert');
+        const stillCurrent = this.accountScope(() => context.current());
+        const token = this.options.auth.jwt;
+        const surface: Surface = { body, error, isOpen: stillCurrent };
+        const invites = el('div', undefined, 'sheet-group');
+        const refreshInvites = async (): Promise<void> => {
+          const codes = await api.registrationInvites(token);
+          if (!stillCurrent()) return;
+          invites.replaceChildren();
+          if (!codes.length) invites.append(note('No unused invite codes.'));
+          for (const code of codes)
+            invites.append(
+              this.inviteRow(code, surface, refreshInvites, () =>
+                api.revokeRegistrationInvite(token, code.id),
+              ),
+            );
+        };
+        const mint = asyncButton(
+          'New invite code',
+          () =>
+            busy(mint, error, async () => {
+              if (!stillCurrent()) return;
+              const invite = await api.createRegistrationInvite(this.options.auth.jwt);
+              if (!stillCurrent()) return;
+              this.showCreatedInvite(invite.code, surface, 'registration');
+              await refreshInvites();
+            }),
+          (failure) => this.showError(error, failure),
+          'sheet-button',
+        );
+        body.append(
+          note(
+            'A code lets one person create an account while registration is closed. Hold up to five; each lasts a week.',
+          ),
+          mint,
+          invites,
+          error,
+        );
+        refreshInvites().catch((failure) => {
+          if (stillCurrent()) this.showError(error, failure);
+        });
+        return body;
+      },
+    };
   }
 
   private openRecovery(): void {
@@ -798,6 +924,7 @@ export class CommunityUI {
   /** Codes that grant a role in one of the account's rooms, made and revoked here. */
   private roomInvites(room: RoomListItem): void {
     const view = modal(`Invitations for ${room.display_name}`);
+    const surface: Surface = { body: view.body, error: view.error, isOpen: () => view.dialog.open };
     const accountId = this.options.auth.userId;
     const generation = this.accountGeneration;
     const stillCurrent = (): boolean =>
@@ -827,7 +954,7 @@ export class CommunityUI {
         list.append(
           this.inviteRow(
             invite,
-            view,
+            surface,
             () => refresh(),
             () => api.revokeRoomInvite(this.options.auth.jwt, room.id, invite.id),
           ),
@@ -844,7 +971,7 @@ export class CommunityUI {
             days: Number(days.value) || 7,
           });
           if (!stillCurrent()) return;
-          this.showCreatedInvite(invite.code, view, 'room');
+          this.showCreatedInvite(invite.code, surface, 'room');
           await refresh();
         }),
       (error) => this.showError(view.error, error),
@@ -867,11 +994,7 @@ export class CommunityUI {
   }
 
   /** Secrets are available only in this creation response, never in management lists. */
-  private showCreatedInvite(
-    code: string,
-    view: ReturnType<typeof modal>,
-    kind: 'room' | 'registration',
-  ): void {
+  private showCreatedInvite(code: string, view: Surface, kind: 'room' | 'registration'): void {
     const panel = el('div', undefined, 'created-invitation');
     const link = input(inviteLink(code, kind));
     link.readOnly = true;
@@ -888,7 +1011,7 @@ export class CommunityUI {
         'Copy link',
         () =>
           navigator.clipboard.writeText(link.value).then(() => {
-            if (view.dialog.open) this.options.notify('Invitation link copied');
+            if (view.isOpen()) this.options.notify('Invitation link copied');
           }),
         (error) => this.showError(view.error, error),
       ),
@@ -902,7 +1025,7 @@ export class CommunityUI {
   /** One invitation with its link and revocation; `revoke` runs against the right endpoint. */
   private inviteRow(
     invite: RegistrationInvite | RoomInvite,
-    view: ReturnType<typeof modal>,
+    view: Surface,
     refresh: () => Promise<void>,
     revoke: () => Promise<void>,
   ): HTMLElement {
@@ -919,7 +1042,7 @@ export class CommunityUI {
       'Revoke',
       () =>
         busy(remove, view.error, async () => {
-          if (!view.dialog.open) return;
+          if (!view.isOpen()) return;
           await revoke();
           await refresh();
         }),

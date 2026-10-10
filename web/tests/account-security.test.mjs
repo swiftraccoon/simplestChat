@@ -116,9 +116,13 @@ async function fixture(t, initial = settings(), mounted = false) {
   dialog.append(container);
   dom.document.body.append(dialog);
   dialog.showModal();
+  const leaves = [];
   const flow = mounted
-    ? mountAccountSecurity({ ...options, container, dialog })
+    ? mountAccountSecurity({ ...options, container, onLeave: (callback) => leaves.push(callback) })
     : new AccountSecurityFlow(options);
+  dialog.addEventListener('close', () => {
+    for (const callback of leaves.splice(0)) callback();
+  });
   t.after(() => flow.dispose());
   await flow.load();
   return {

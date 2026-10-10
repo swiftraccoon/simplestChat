@@ -511,8 +511,13 @@ const homeNotificationsSection: SheetSection = {
 const settingsSheet = new SettingsSheet({
   sections: () =>
     room
-      ? [...mediaControls.sections(), layoutSection, ...socialChat.sections()]
-      : [homeNotificationsSection],
+      ? [
+          ...mediaControls.sections(),
+          layoutSection,
+          ...socialChat.sections(),
+          ...community.sections(),
+        ]
+      : [homeNotificationsSection, ...community.sections()],
   footer: () =>
     room
       ? [
@@ -1638,7 +1643,8 @@ const pwa = new PwaControls({
   },
 });
 const community = new CommunityUI({
-  mountAccountNotifications: (container, current) => pwa.mountAccount(container, current),
+  openSettings: (section, opener) => settingsSheet.open({ section, opener }),
+  onAccountChanged: () => settingsSheet.close({ force: true }),
   mountConversationNotifications,
   auth,
   getRoom: () => room,

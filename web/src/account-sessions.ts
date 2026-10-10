@@ -4,7 +4,8 @@ import { api, button, el } from './ui';
 
 interface SessionOptions {
   container: HTMLElement;
-  dialog: HTMLDialogElement;
+  /** Registers cleanup for when the hosting screen is left. */
+  onLeave: (callback: () => void) => void;
   security: AccountSecurityFlow;
   token: () => string | null;
   current: () => boolean;
@@ -15,11 +16,11 @@ interface SessionOptions {
 /** Session management shares the Account dialog's mutation ownership, so a
  * late response cannot sign out another identity or overlap a passkey change. */
 export function mountAccountSessions(options: SessionOptions): { refreshControls: () => void } {
-  const section = el('section', undefined, 'community-dialog-body');
+  const section = el('section', undefined, 'sheet-block account-sessions');
   const heading = el('h3', 'Signed-in sessions');
   const status = el('p', 'Loading sessions…', 'setting-hint');
   status.setAttribute('role', 'status');
-  const entries = el('div', undefined, 'community-dialog-body');
+  const entries = el('div', undefined, 'account-session-list');
   const controller = new AbortController();
   let loading = false;
   let sessions: AccountSession[] = [];
@@ -27,7 +28,7 @@ export function mountAccountSessions(options: SessionOptions): { refreshControls
   const current = (): boolean => options.current() && !controller.signal.aborted;
   const reportFailure = (): void => {
     if (current())
-      status.textContent = 'Session controls could not be updated. Close Account and try again.';
+      status.textContent = 'Session controls could not be updated. Reopen Settings and try again.';
   };
   const refreshControls = (): void => {
     for (const control of controls) control.disabled = loading || !options.security.canStart;
@@ -115,7 +116,7 @@ export function mountAccountSessions(options: SessionOptions): { refreshControls
   actions.append(others, refresh);
   section.append(heading, status, actions, entries);
   options.container.append(section);
-  options.dialog.addEventListener('close', () => controller.abort(), { once: true });
+  options.onLeave(() => controller.abort());
   load().catch(reportFailure);
   return { refreshControls };
 }

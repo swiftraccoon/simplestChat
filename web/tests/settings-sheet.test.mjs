@@ -26,7 +26,10 @@ async function sheetFixture({ sections = [], footer = [], host } = {}) {
           const has = names().includes(value);
           const next = force ?? !has;
           if (next && !has) node.className = [...names(), value].join(' ');
-          if (!next && has) node.className = names().filter((n) => n !== value).join(' ');
+          if (!next && has)
+            node.className = names()
+              .filter((n) => n !== value)
+              .join(' ');
           return next;
         },
         contains: (value) => names().includes(value),
@@ -37,7 +40,8 @@ async function sheetFixture({ sections = [], footer = [], host } = {}) {
     document.activeElement = this;
   };
   Node.prototype.contains = function contains(node) {
-    for (let current = node; current; current = current.parentNode) if (current === this) return true;
+    for (let current = node; current; current = current.parentNode)
+      if (current === this) return true;
     return false;
   };
   Object.defineProperty(Node.prototype, 'dataset', {
@@ -72,7 +76,8 @@ async function sheetFixture({ sections = [], footer = [], host } = {}) {
   return { ...f, sheet, sheetModule, hostNode, log, timers };
 }
 
-const rows = (node) => node.querySelectorAll('button').filter((b) => b.className?.includes('sheet-row'));
+const rows = (node) =>
+  node.querySelectorAll('button').filter((b) => b.className?.includes('sheet-row'));
 const byLabel = (node, label) =>
   rows(node).find((row) => row.querySelector('.sheet-row-label')?.textContent === label);
 const heading = (sheet) => sheet.element.querySelector('h2');
@@ -82,8 +87,20 @@ test('opening lists every available section with its status and focuses the head
   let owner = false;
   const f = await sheetFixture({
     sections: [
-      { id: 'camera', segment: 'you', label: 'Camera & mic', status: () => cameraStatus, screen: () => ({ title: 'Camera & mic', body: () => f.document.createElement('div') }) },
-      { id: 'access', segment: 'room', label: 'Who can enter', available: () => owner, screen: () => ({ title: 'Who can enter', body: () => f.document.createElement('div') }) },
+      {
+        id: 'camera',
+        segment: 'you',
+        label: 'Camera & mic',
+        status: () => cameraStatus,
+        screen: () => ({ title: 'Camera & mic', body: () => f.document.createElement('div') }),
+      },
+      {
+        id: 'access',
+        segment: 'room',
+        label: 'Who can enter',
+        available: () => owner,
+        screen: () => ({ title: 'Who can enter', body: () => f.document.createElement('div') }),
+      },
     ],
     footer: [{ label: 'Diagnostics', activate: () => {} }],
   });
@@ -100,15 +117,28 @@ test('opening lists every available section with its status and focuses the head
     ['Camera & mic'],
     'an unavailable section has no row',
   );
-  assert.equal(byLabel(f.sheet.element, 'Camera & mic').querySelector('.sheet-row-status').textContent, 'FaceTime HD');
-  assert.equal(f.sheet.element.querySelector('.sheet-segments'), null, 'one segment needs no switch');
+  assert.equal(
+    byLabel(f.sheet.element, 'Camera & mic').querySelector('.sheet-row-status').textContent,
+    'FaceTime HD',
+  );
+  assert.equal(
+    f.sheet.element.querySelector('.sheet-segments'),
+    null,
+    'one segment needs no switch',
+  );
   assert.deepEqual(f.log, ['open']);
   owner = true;
   cameraStatus = 'Elgato';
   f.sheet.refresh();
   assert.ok(f.sheet.element.querySelector('.sheet-segments'), 'two segments show the switch');
-  assert.equal(byLabel(f.sheet.element, 'Camera & mic').querySelector('.sheet-row-status').textContent, 'Elgato');
-  assert.equal(f.sheet.element.querySelector('.sheet-footer').textContent.includes('Diagnostics'), true);
+  assert.equal(
+    byLabel(f.sheet.element, 'Camera & mic').querySelector('.sheet-row-status').textContent,
+    'Elgato',
+  );
+  assert.equal(
+    f.sheet.element.querySelector('.sheet-footer').textContent.includes('Diagnostics'),
+    true,
+  );
 });
 
 test('a row pushes its screen, Escape pops back to that row, and Escape at the root closes to the opener', async () => {
@@ -165,7 +195,11 @@ test('closing while a screen is open runs its cleanup once and reopening starts 
         id: 'layout',
         segment: 'you',
         label: 'Layout',
-        screen: () => ({ title: 'Layout', body: () => f.document.createElement('div'), leave: () => left.push('layout') }),
+        screen: () => ({
+          title: 'Layout',
+          body: () => f.document.createElement('div'),
+          leave: () => left.push('layout'),
+        }),
       },
     ],
   });
@@ -192,9 +226,10 @@ test('a slow screen shows a placeholder and drops a body that arrives after leav
         label: 'People',
         screen: () => ({
           title: 'People',
-          body: () => new Promise((resolve) => {
-            resolveBody = resolve;
-          }),
+          body: () =>
+            new Promise((resolve) => {
+              resolveBody = resolve;
+            }),
         }),
       },
     ],
@@ -260,20 +295,104 @@ test('row primitives apply on change and mark themselves saved for a moment', as
 test('the segment switch remembers the chosen segment across screens', async () => {
   const f = await sheetFixture({
     sections: [
-      { id: 'camera', segment: 'you', label: 'Camera & mic', screen: () => ({ title: 'Camera & mic', body: () => f.document.createElement('div') }) },
-      { id: 'access', segment: 'room', label: 'Who can enter', screen: () => ({ title: 'Who can enter', body: () => f.document.createElement('div') }) },
+      {
+        id: 'camera',
+        segment: 'you',
+        label: 'Camera & mic',
+        screen: () => ({ title: 'Camera & mic', body: () => f.document.createElement('div') }),
+      },
+      {
+        id: 'access',
+        segment: 'room',
+        label: 'Who can enter',
+        screen: () => ({ title: 'Who can enter', body: () => f.document.createElement('div') }),
+      },
     ],
   });
   f.sheet.open();
-  assert.deepEqual(rows(f.sheet.element).map((r) => r.querySelector('.sheet-row-label').textContent), ['Camera & mic']);
+  assert.deepEqual(
+    rows(f.sheet.element).map((r) => r.querySelector('.sheet-row-label').textContent),
+    ['Camera & mic'],
+  );
   const segments = f.sheet.element.querySelector('.sheet-segments').querySelectorAll('button');
   segments[1].click();
-  assert.deepEqual(rows(f.sheet.element).map((r) => r.querySelector('.sheet-row-label').textContent), ['Who can enter']);
+  assert.deepEqual(
+    rows(f.sheet.element).map((r) => r.querySelector('.sheet-row-label').textContent),
+    ['Who can enter'],
+  );
   byLabel(f.sheet.element, 'Who can enter').click();
   await flush();
   f.sheet.pop();
-  assert.deepEqual(rows(f.sheet.element).map((r) => r.querySelector('.sheet-row-label').textContent), ['Who can enter'], 'the room segment stays selected');
+  assert.deepEqual(
+    rows(f.sheet.element).map((r) => r.querySelector('.sheet-row-label').textContent),
+    ['Who can enter'],
+    'the room segment stays selected',
+  );
   f.sheet.close();
   f.sheet.open({ segment: 'you' });
-  assert.deepEqual(rows(f.sheet.element).map((r) => r.querySelector('.sheet-row-label').textContent), ['Camera & mic']);
+  assert.deepEqual(
+    rows(f.sheet.element).map((r) => r.querySelector('.sheet-row-label').textContent),
+    ['Camera & mic'],
+  );
+});
+
+test('a screen that cannot be left yet keeps the sheet open on Escape, Back and close', async () => {
+  let busy = true;
+  const left = [];
+  const f = await sheetFixture({
+    sections: [
+      {
+        id: 'security',
+        segment: 'you',
+        label: 'Sign-in & security',
+        screen: () => ({
+          title: 'Sign-in & security',
+          body: () => f.document.createElement('div'),
+          canLeave: () => !busy,
+          leave: () => left.push('security'),
+        }),
+      },
+    ],
+  });
+  f.sheet.open();
+  byLabel(f.sheet.element, 'Sign-in & security').click();
+  await flush();
+  f.sheet.element.emit('keydown', { key: 'Escape', preventDefault() {} });
+  f.sheet.close();
+  f.sheet.element.querySelector('.sheet-back').click();
+  assert.equal(heading(f.sheet).textContent, 'Sign-in & security', 'the screen stays');
+  assert.equal(f.sheet.isOpen, true);
+  assert.deepEqual(left, []);
+  busy = false;
+  f.sheet.close();
+  assert.equal(f.sheet.isOpen, false);
+  assert.deepEqual(left, ['security']);
+});
+
+test('an identity change forces the sheet closed even while a screen is busy', async () => {
+  const left = [];
+  const f = await sheetFixture({
+    sections: [
+      {
+        id: 'security',
+        segment: 'you',
+        label: 'Sign-in & security',
+        screen: () => ({
+          title: 'Sign-in & security',
+          body: () => f.document.createElement('div'),
+          canLeave: () => false,
+          leave: () => left.push('security'),
+        }),
+      },
+    ],
+  });
+  f.sheet.open();
+  byLabel(f.sheet.element, 'Sign-in & security').click();
+  await flush();
+  f.sheet.close();
+  assert.equal(f.sheet.isOpen, true, 'an ordinary close waits for the screen');
+  f.sheet.close({ force: true });
+  assert.equal(f.sheet.isOpen, false);
+  assert.equal(f.sheet.element.hidden, true);
+  assert.deepEqual(left, ['security'], 'the busy screen still runs its cleanup');
 });

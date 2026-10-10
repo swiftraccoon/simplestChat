@@ -477,7 +477,8 @@ export class AccountSecurityFlow {
 
 export function mountAccountSecurity(options: {
   container: HTMLElement;
-  dialog: HTMLDialogElement;
+  /** Registers cleanup for when the hosting screen is left. */
+  onLeave: (callback: () => void) => void;
   token: () => string | null;
   current: () => boolean;
   completed: (kind: 'removed' | 'replaced') => void;
@@ -727,15 +728,11 @@ export function mountAccountSecurity(options: {
     changed: render,
     completed: options.completed,
   });
-  options.dialog.addEventListener(
-    'close',
-    () => {
-      if (passwordInput) passwordInput.value = '';
-      if (recoveryInput) recoveryInput.value = '';
-      flow.dispose();
-    },
-    { once: true },
-  );
+  options.onLeave(() => {
+    if (passwordInput) passwordInput.value = '';
+    if (recoveryInput) recoveryInput.value = '';
+    flow.dispose();
+  });
   render();
   return flow;
 }

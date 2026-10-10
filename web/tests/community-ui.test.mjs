@@ -86,13 +86,59 @@ async function fixture() {
       },
     },
   });
+  Object.defineProperties(dom.Node.prototype, {
+    classList: {
+      configurable: true,
+      get() {
+        const node = this;
+        const names = () => (node.className ?? '').split(/\s+/).filter(Boolean);
+        return {
+          add: (...values) => {
+            node.className = [...new Set([...names(), ...values])].join(' ');
+          },
+          remove: (...values) => {
+            node.className = names()
+              .filter((name) => !values.includes(name))
+              .join(' ');
+          },
+          toggle(value, force) {
+            const has = names().includes(value);
+            const next = force ?? !has;
+            if (next && !has) node.className = [...names(), value].join(' ');
+            if (!next && has)
+              node.className = names()
+                .filter((n) => n !== value)
+                .join(' ');
+            return next;
+          },
+          contains: (value) => names().includes(value),
+        };
+      },
+    },
+    dataset: {
+      configurable: true,
+      get() {
+        this._dataset ??= {};
+        return this._dataset;
+      },
+    },
+  });
+  dom.Node.prototype.focus = function focus() {
+    dom.document.activeElement = this;
+  };
+  const sheet = await loadTypeScript('src/settings-sheet.ts', {
+    modules: { './ui': ui, './settings-sheet.css': {} },
+    globals: { document: dom.document, setTimeout: () => 1, clearTimeout: () => {} },
+  });
   const api = await loadTypeScript('src/community-ui.ts', {
     modules: {
       './ui': ui,
+      './settings-sheet': sheet,
       './discovery': await loadDiscoveryFixture({ ...dom, ui }),
       './appearance': await loadAppearanceFixture({ ...dom, ui }),
       './account-sessions': await loadTypeScript('src/account-sessions.ts', {
         modules: { './ui': ui },
+        globals: { document: dom.document },
       }),
       './chat-history': {
         openPrivateInbox() {},
@@ -125,7 +171,11 @@ async function fixture() {
       },
     },
   });
+  state.openedSettings = [];
+  state.accountChanges = 0;
   const community = new api.CommunityUI({
+    openSettings: (section) => state.openedSettings.push(section),
+    onAccountChanged: () => state.accountChanges++,
     auth,
     getRoom: () => state.room,
     notify: (value) => state.notifications.push(value),
@@ -155,7 +205,42 @@ function control(view, label) {
     .querySelectorAll('label')
     .find((node) => node.children[0].textContent === label);
   assert.ok(wrapper, `Expected ${label} field`);
-  return wrapper.children[1];
+  return wrapper.children.at(-1);
+}
+
+/** Opens one account screen the way the settings sheet does. */
+async function accountScreen(fixture, id, { settle = true } = {}) {
+  const section = fixture.community.sections().find((entry) => entry.id === id);
+  assert.ok(section, `Expected ${id} section`);
+  const screen = section.screen();
+  const context = {
+    open: true,
+    push() {},
+    pop() {},
+    close() {
+      context.open = false;
+    },
+    current: () => context.open,
+  };
+  const opening = screen.body(context);
+  const view = {
+    screen,
+    context,
+    opening,
+    body: null,
+    get open() {
+      return context.open;
+    },
+    leave() {
+      context.open = false;
+      screen.leave?.();
+    },
+  };
+  if (settle) {
+    view.body = await opening;
+    await flush();
+  }
+  return view;
 }
 
 function action(view, text) {
@@ -430,10 +515,7 @@ test('invalid uploads preserve the current image and display the validation fail
   assert.equal(file.disabled, false);
 });
 
-for (const [label, method] of [
-  ['Account', 'openAccount'],
-  ['My rooms', 'openRooms'],
-]) {
+for (const [label, method] of [['My rooms', 'openRooms']]) {
   test(`${label} click failures are handled in context and ignored after an identity change`, async () => {
     const f = await fixture();
     const first = deferred();
@@ -455,18 +537,15 @@ for (const [label, method] of [
   });
 }
 
-test('closed account dialogs do not receive late load failures', async () => {
+test('a left Profile screen does not receive late load failures', async () => {
   const f = await fixture();
   const pending = deferred();
   f.state.handle = () => pending.promise;
-  const opening = f.community.openAccount();
-  const view = dialog(f, 'Account');
-  const error = view.children[1];
-  view.close();
+  const view = await accountScreen(f, 'profile', { settle: false });
+  view.leave();
   pending.reject(new Error('Late account failure'));
-  await opening;
-  assert.equal(error.hidden, true);
-  assert.equal(error.textContent, '');
+  const body = await view.opening;
+  assert.equal(body.querySelector('.auth-error'), null);
 });
 
 test('passkey-only accounts retain invitations, sessions and forget-device controls', async () => {
@@ -481,35 +560,57 @@ test('passkey-only accounts retain invitations, sessions and forget-device contr
           maximum: 10,
         }
       : handle(path, ...args);
-  await f.community.openAccount();
-  await flush();
-  const view = dialog(f, 'Account');
+  const security = await accountScreen(f, 'security');
   assert.ok(
-    !view.querySelectorAll('button').some((node) => node.textContent === 'Change password'),
+    !security.body
+      .querySelectorAll('button')
+      .some((node) => node.textContent === 'Change password'),
   );
-  action(view, 'New invite code');
-  action(view, 'Sign out this session');
-  action(view, 'Sign out and forget this device').click();
+  action(security.body, 'Sign out this session');
+  action(security.body, 'Sign out and forget this device').click();
   assert.equal(f.state.forgotten, 1);
+  assert.equal(security.open, false);
+  const invites = await accountScreen(f, 'invites');
+  action(invites.body, 'New invite code');
 });
 
-test('session revocation uses refreshed credentials, owns account controls and signs out only its current identity', async () => {
+test('the Account button opens the sheet at Profile and the list names the account', async () => {
   const f = await fixture();
-  await f.community.openAccount();
-  await flush();
-  const view = dialog(f, 'Account');
+  f.header
+    .querySelectorAll('button')
+    .find((node) => node.textContent === 'Account')
+    .click();
+  assert.deepEqual(f.state.openedSettings, ['profile']);
+  const sections = f.community.sections();
+  assert.deepEqual(
+    sections.map((section) => [section.id, section.group]),
+    [
+      ['profile', 'Account'],
+      ['security', 'Account'],
+      ['invites', 'Account'],
+    ],
+  );
+  f.auth.isLoggedIn = false;
+  assert.equal(
+    sections.every((section) => section.available() === false),
+    true,
+  );
+});
+
+test('session revocation uses refreshed credentials, owns the screen and signs out only its current identity', async () => {
+  const f = await fixture();
+  const view = await accountScreen(f, 'security');
   const pending = deferred();
   f.state.handle = () => pending.promise;
   f.auth.jwt = 'refreshed-token';
-  const revoke = action(view, 'Sign out this session');
+  const revoke = action(view.body, 'Sign out this session');
   revoke.click();
   revoke.click();
   const calls = f.state.requests.filter((request) => request[2] === 'DELETE');
   assert.equal(calls.length, 1);
   assert.equal(calls[0][1], 'refreshed-token');
-  assert.equal(action(view, 'Save profile').disabled, true);
-  action(view, 'Close').click();
-  assert.equal(view.open, true);
+  assert.equal(action(view.body, 'Change password').disabled, true);
+  assert.equal(view.screen.canLeave(), false, 'a pending mutation refuses to leave');
   pending.resolve();
   await flush();
   assert.equal(f.state.signedOut, 1);
@@ -518,32 +619,30 @@ test('session revocation uses refreshed credentials, owns account controls and s
 
 test('a late revoke completion cannot affect a new account', async () => {
   const f = await fixture();
-  await f.community.openAccount();
-  await flush();
-  const view = dialog(f, 'Account');
+  const view = await accountScreen(f, 'security');
   const pending = deferred();
   f.state.handle = () => pending.promise;
-  action(view, 'Sign out this session').click();
+  action(view.body, 'Sign out this session').click();
   f.auth.userId = 'account-b';
   f.auth.jwt = 'token-b';
   f.community.refresh();
+  assert.equal(f.state.accountChanges, 1, 'an identity change closes the sheet');
+  view.leave();
   pending.resolve();
   await flush();
   assert.equal(f.state.signedOut, 0);
-  assert.equal(view.open, false);
   assert.ok(!f.state.notifications.includes('Session signed out.'));
 });
 
-test('closing Account cancels the session list and discards its late response', async () => {
+test('leaving Sign-in & security cancels the session list and discards its late response', async () => {
   const f = await fixture();
   const handle = f.state.handle;
   const pending = deferred();
   f.state.handle = (path, ...args) =>
     path === '/api/auth/sessions' ? pending.promise : handle(path, ...args);
-  await f.community.openAccount();
-  const view = dialog(f, 'Account');
+  const view = await accountScreen(f, 'security');
   const request = f.state.requests.find((request) => request[0] === '/api/auth/sessions');
-  action(view, 'Close').click();
+  view.leave();
   assert.equal(request[4].aborted, true);
   pending.resolve([
     {
@@ -556,8 +655,9 @@ test('closing Account cancels the session list and discards its late response', 
   ]);
   await flush();
   assert.equal(
-    view.querySelectorAll('button').filter((node) => node.textContent === 'Sign out this session')
-      .length,
+    view.body
+      .querySelectorAll('button')
+      .filter((node) => node.textContent === 'Sign out this session').length,
     0,
   );
 });
@@ -576,29 +676,26 @@ test('other-session sign-out keeps this session and refreshes the list', async (
       return [...result, { ...result[0], id: 'other-session', current: false }];
     return result;
   };
-  await f.community.openAccount();
-  await flush();
-  const view = dialog(f, 'Account');
-  action(view, 'Sign out other sessions').click();
+  const view = await accountScreen(f, 'security');
+  action(view.body, 'Sign out other sessions').click();
   await flush();
   assert.equal(removed, true);
   assert.equal(f.state.signedOut, 0);
   assert.equal(view.open, true);
-  assert.equal(action(view, 'Sign out other sessions').disabled, true);
+  assert.equal(action(view.body, 'Sign out other sessions').disabled, true);
   assert.equal(
-    view.querySelectorAll('button').filter((node) => node.textContent === 'Sign out session')
+    view.body.querySelectorAll('button').filter((node) => node.textContent === 'Sign out session')
       .length,
     0,
   );
 });
 
-test('Account saves the separate hovercard appearance and updates its live name preview', async () => {
+test('Profile saves the separate hovercard appearance and updates its live name preview', async () => {
   const f = await fixture();
   f.profile.profile_style = { color: 'teal', style: 'bubble' };
-  await f.community.openAccount();
-  const view = dialog(f, 'Account');
-  const picker = view.querySelector('.appearance-picker');
-  const name = control(view, 'Account display name');
+  const view = await accountScreen(f, 'profile');
+  const picker = view.body.querySelector('.appearance-picker');
+  const name = control(view.body, 'Name');
   name.value = 'Changed account name';
   name.emit('input');
   assert.equal(picker.querySelector('.appearance-preview').textContent, 'Changed account name');
@@ -610,7 +707,7 @@ test('Account saves the separate hovercard appearance and updates its live name 
       : radio.value === 'text';
   }
   radios.find((radio) => radio.value === 'violet').emit('change');
-  action(view, 'Save profile').click();
+  action(view.body, 'Save profile').click();
   await flush();
   const request = f.state.requests.find((entry) => entry[2] === 'PATCH');
   assert.deepEqual(request[3], {
@@ -634,15 +731,15 @@ test('reopening a hovercard fetches current profile appearance without retaining
   assert.equal(f.community.profiles.has('account-a'), false);
 });
 
-test('identity changes close account dialogs and reject actions from stale controls', async () => {
+test('identity changes close account screens and reject actions from stale controls', async () => {
   const f = await fixture();
-  await f.community.openAccount();
-  const view = dialog(f, 'Account');
-  const save = action(view, 'Save profile');
+  const view = await accountScreen(f, 'profile');
+  const save = action(view.body, 'Save profile');
   f.auth.userId = 'account-b';
   f.auth.jwt = 'token-b';
   f.community.refresh();
-  assert.equal(view.open, false);
+  assert.equal(f.state.accountChanges, 1);
+  view.leave();
   save.click();
   await flush();
   assert.equal(
@@ -674,24 +771,22 @@ test('an initial account response cannot render after an identity change', async
   const f = await fixture();
   const pending = deferred();
   f.state.handle = () => pending.promise;
-  const opening = f.community.openAccount();
-  const view = dialog(f, 'Account');
+  const view = await accountScreen(f, 'profile', { settle: false });
   f.auth.userId = 'account-b';
   f.auth.jwt = 'token-b';
   f.community.refresh();
   pending.resolve(f.profile);
-  await opening;
-  assert.equal(view.querySelectorAll('input').length, 0);
+  const body = await view.opening;
+  assert.equal(body.querySelectorAll('input').length, 0);
 });
 
-test('recovery key is shown once, copies exactly, and clears on dialog close', async () => {
+test('recovery key is shown once, copies exactly, and clears when the screen is left', async () => {
   const f = await fixture();
-  await f.community.openAccount();
-  const account = dialog(f, 'Account');
-  control(account, 'Current password for verification').value = 'current-password';
+  const account = await accountScreen(f, 'security');
+  control(account.body, 'Current password for verification').value = 'current-password';
   const result = { kind: 'recovery_key', recovery_key: 'sc-recovery-test-only' };
   f.state.handle = async () => result;
-  action(account, 'Generate recovery key').click();
+  action(account.body, 'Generate recovery key').click();
   await flush();
   assert.deepEqual(f.state.requests.at(-1), [
     '/api/auth/passkeys/start',
@@ -699,26 +794,24 @@ test('recovery key is shown once, copies exactly, and clears on dialog close', a
     'POST',
     { operation: { action: 'recovery_key' }, current_password: 'current-password' },
   ]);
-  const view = account;
-  const key = control(view, 'Recovery key');
+  const key = control(account.body, 'Recovery key');
   assert.equal(key.readOnly, true);
-  action(view, 'Copy recovery key').click();
+  action(account.body, 'Copy recovery key').click();
   await flush();
   assert.equal(f.state.copied, 'sc-recovery-test-only');
   assert.equal(
     f.created.filter((node) => node.type === 'password').every((node) => node.value === ''),
     true,
   );
-  view.close();
+  account.leave();
   assert.equal(key.value, '');
   assert.equal(result.recovery_key, '');
 });
 
 for (const kind of ['removed', 'replaced']) {
-  test(`confirmed passkey ${kind} closes Account and reports the matching sign-in guidance`, async () => {
+  test(`confirmed passkey ${kind} closes the screen and reports the matching sign-in guidance`, async () => {
     const f = await fixture();
-    await f.community.openAccount();
-    const account = dialog(f, 'Account');
+    const account = await accountScreen(f, 'security');
     f.state.securityCompleted(kind);
     await flush();
     assert.equal(account.open, false);
@@ -731,21 +824,21 @@ for (const kind of ['removed', 'replaced']) {
   });
 }
 
-for (const reason of ['close', 'identity change']) {
+for (const reason of ['leave', 'identity change']) {
   test(`a recovery-key response after ${reason} does not open another dialog`, async () => {
     const f = await fixture();
-    await f.community.openAccount();
-    const account = dialog(f, 'Account');
-    control(account, 'Current password for verification').value = 'current-password';
+    const account = await accountScreen(f, 'security');
+    control(account.body, 'Current password for verification').value = 'current-password';
     const pending = deferred();
     f.state.handle = () => pending.promise;
-    action(account, 'Generate recovery key').click();
+    action(account.body, 'Generate recovery key').click();
     await flush();
-    if (reason === 'close') account.close();
+    if (reason === 'leave') account.leave();
     else {
       f.auth.userId = 'account-b';
       f.auth.jwt = 'token-b';
       f.community.refresh();
+      account.leave();
     }
     const result = { kind: 'recovery_key', recovery_key: 'sc-recovery-test-only' };
     pending.resolve(result);
@@ -756,24 +849,23 @@ for (const reason of ['close', 'identity change']) {
 }
 
 for (const changedIdentity of [false, true]) {
-  test(`successful pending password change ${changedIdentity ? 'does not sign out a new identity' : 'blocks dismissal until the same account is signed out'}`, async () => {
+  test(`successful pending password change ${changedIdentity ? 'does not sign out a new identity' : 'blocks leaving until the same account is signed out'}`, async () => {
     const f = await fixture();
-    await f.community.openAccount();
-    const view = dialog(f, 'Account');
-    control(view, 'Current password').value = 'current-password';
-    control(view, 'New password').value = control(view, 'Confirm new password').value =
+    const view = await accountScreen(f, 'security');
+    control(view.body, 'Current password').value = 'current-password';
+    control(view.body, 'New password').value = control(view.body, 'Confirm new password').value =
       'new-long-password';
     const pending = deferred();
     f.state.handle = () => pending.promise;
-    action(view, 'Change password').click();
+    action(view.body, 'Change password').click();
     await flush();
     assert.equal(f.state.requests.at(-1)[1], 'token-a');
-    action(view, 'Close').click();
-    assert.equal(view.open, true, 'a submitted password mutation owns dismissal');
+    assert.equal(view.screen.canLeave(), false, 'a submitted password mutation owns leaving');
     if (changedIdentity) {
       f.auth.userId = 'account-b';
       f.auth.jwt = 'token-b';
       f.community.refresh();
+      view.leave();
     }
     pending.resolve(undefined);
     await flush();
@@ -786,74 +878,78 @@ test('room links preserve the current origin and path while removing unrelated q
   assert.equal(f.roomLink('friendly room'), 'http://localhost:3000/#friendly%20room');
 });
 
-test('password, profile and passkey changes share ownership and stale controls cannot submit concurrently', async () => {
+test('password and passkey changes share ownership and stale controls cannot submit concurrently', async () => {
   const f = await fixture();
-  await f.community.openAccount();
-  const account = dialog(f, 'Account');
-  const staleAdd = action(account, 'Add passkey');
-  const save = action(account, 'Save profile');
-  const change = action(account, 'Change password');
-  control(account, 'Current password').value = 'old-password';
-  control(account, 'New password').value = control(account, 'Confirm new password').value =
-    'new-long-password';
+  const account = await accountScreen(f, 'security');
+  const staleAdd = action(account.body, 'Add passkey');
+  const change = action(account.body, 'Change password');
+  control(account.body, 'Current password').value = 'old-password';
+  control(account.body, 'New password').value = control(
+    account.body,
+    'Confirm new password',
+  ).value = 'new-long-password';
   const pending = deferred();
   f.state.handle = () => pending.promise;
   change.click();
   staleAdd.click();
-  save.click();
   await flush();
   assert.equal(f.state.requests.filter((request) => request[2] === 'POST').length, 1);
   assert.equal(f.state.requests.at(-1)[0], '/api/auth/password');
-  assert.equal(save.disabled, true);
   assert.equal(change.disabled, true);
   f.auth.userId = 'account-b';
   f.community.refresh();
+  account.leave();
   pending.resolve();
   await flush();
   assert.equal(f.state.signedOut, 0);
 });
 
-test('profile completion cannot re-enable a control during a later uncertain account mutation', async () => {
+test('a profile save re-enables its control on completion while an uncertain security mutation keeps its screen locked', async () => {
   const f = await fixture();
-  await f.community.openAccount();
-  const account = dialog(f, 'Account');
-  const staleAdd = action(account, 'Add passkey');
-  const save = action(account, 'Save profile');
+  const profile = await accountScreen(f, 'profile');
+  const save = action(profile.body, 'Save profile');
   const pending = deferred();
   f.state.handle = () => pending.promise;
   save.click();
-  staleAdd.click();
+  save.click();
   await flush();
   assert.equal(f.state.requests.at(-1)[0], '/api/auth/profile');
   assert.equal(f.state.requests.at(-1)[2], 'PATCH');
-  assert.equal(
-    f.state.requests.filter((request) => request[2] === 'POST' || request[2] === 'PATCH').length,
-    1,
-    'the second mutation was refused',
-  );
+  assert.equal(f.state.requests.filter((request) => request[2] === 'PATCH').length, 1);
+  assert.equal(profile.screen.canLeave(), false);
   pending.resolve({ ...f.profile });
   await flush();
   assert.equal(save.disabled, false);
-  control(account, 'Current password for verification').value = 'old-password';
+  assert.equal(profile.screen.canLeave(), true);
+  profile.leave();
+  f.state.handle = async (path, ...args) =>
+    path === '/api/auth/passkeys'
+      ? { password_enabled: true, recovery_enabled: false, passkeys: [], maximum: 10 }
+      : path === '/api/auth/sessions'
+        ? []
+        : path === '/api/auth/invites'
+          ? []
+          : { ...f.profile };
+  const account = await accountScreen(f, 'security');
+  control(account.body, 'Current password for verification').value = 'old-password';
   f.state.handle = async () => {
     throw new Error('Lost mutation response');
   };
-  action(account, 'Generate recovery key').click();
+  action(account.body, 'Generate recovery key').click();
   await flush();
-  assert.equal(save.disabled, true);
-  assert.equal(action(account, 'Change password').disabled, true);
-  assert.match(account.textContent, /may have completed/);
+  assert.equal(action(account.body, 'Change password').disabled, true);
+  assert.equal(account.screen.canLeave(), false);
+  assert.match(account.body.textContent, /may have completed/);
 });
 
 for (const phase of ['pending', 'uncertain', 'recovery']) {
   test(`same-account room membership changes preserve ${phase} account ownership`, async () => {
     const f = await fixture();
-    await f.community.openAccount();
-    const account = dialog(f, 'Account');
-    control(account, 'Current password for verification').value = 'old-password';
+    const account = await accountScreen(f, 'security');
+    control(account.body, 'Current password for verification').value = 'old-password';
     const pending = deferred();
     f.state.handle = () => pending.promise;
-    action(account, 'Generate recovery key').click();
+    action(account.body, 'Generate recovery key').click();
     await flush();
     if (phase === 'uncertain') pending.reject(new Error('Response lost'));
     if (phase === 'recovery') pending.resolve({ kind: 'recovery_key', recovery_key: 'save-once' });
@@ -864,15 +960,16 @@ for (const phase of ['pending', 'uncertain', 'recovery']) {
       role: 'user',
     };
     f.community.refresh();
+    assert.equal(f.state.accountChanges, 0, 'a room change keeps the account screen');
     assert.equal(account.open, true);
-    if (phase === 'pending' || phase === 'uncertain') {
-      action(account, 'Close').click();
-      assert.equal(account.open, true);
-    } else assert.equal(control(account, 'Recovery key').value, 'save-once');
+    if (phase === 'pending' || phase === 'uncertain')
+      assert.equal(account.screen.canLeave(), false);
+    else assert.equal(control(account.body, 'Recovery key').value, 'save-once');
     f.auth.userId = 'account-b';
     f.auth.jwt = 'token-b';
     f.community.refresh();
-    assert.equal(account.open, false);
+    assert.equal(f.state.accountChanges, 1);
+    account.leave();
     if (phase === 'pending') pending.resolve({ kind: 'recovery_key', recovery_key: 'late-secret' });
     await flush();
     assert.ok(
@@ -895,6 +992,7 @@ test('room-scoped actions mount in the room tools while account actions stay in 
   const api = await loadTypeScript('src/community-ui.ts', {
     modules: {
       './ui': { ...dom.ui, api: { ...dom.ui.api, inboxUnread: async () => ({ unreadCount: 0 }) } },
+      './settings-sheet': {},
       './chat-history': { openPrivateInbox() {}, onInboxChanged() {} },
       './discovery': await loadDiscoveryFixture(dom),
       './account-security': security,
@@ -1072,8 +1170,9 @@ test('issued invitation secrets appear only in a one-time share panel; lists rev
   f.Node.prototype.focus = function () {};
   f.Node.prototype.select = function () {};
   const view = f.ui.modal('Invitation test');
+  const surface = { body: view.body, error: view.error, isOpen: () => view.dialog.open };
   const code = 'a'.repeat(32);
-  f.community.showCreatedInvite(code, view, 'room');
+  f.community.showCreatedInvite(code, surface, 'room');
   const panel = view.body.querySelector('.created-invitation');
   assert.equal(panel.querySelector('.invite-code').textContent, code);
   action(panel, 'Copy link').click();
@@ -1088,7 +1187,7 @@ test('issued invitation secrets appear only in a one-time share panel; lists rev
       created_at: '2026-09-30',
       role: 'member',
     },
-    view,
+    surface,
     async () => {},
     async () => {
       revoked++;
