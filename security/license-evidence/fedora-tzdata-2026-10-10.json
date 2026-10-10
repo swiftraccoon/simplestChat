@@ -1,0 +1,269 @@
+{
+  "canonical": {
+    "archiveSha256": "1f58122d39fa7124269ca26f9b3b77dc19a4fa34c9a0fd302bec4a5a0f6eeb96",
+    "artifactId": 11678000632,
+    "artifactUrl": "https://github.com/swiftraccoon/simplestChat/actions/runs/38072015598/artifacts/11678000632",
+    "artifactZipBytes": 1824381,
+    "artifactZipDigestMatchesGithubApi": true,
+    "artifactZipSha256": "c2100ac4d7b8ad2a44c11ae7198bb21659818e29a688513995a68838fd46c26b",
+    "binarySha256": "7655ed19b650cae40725f88ae9495d6dc6f085c6bb9827aaa7be28b0d5b6cbeb",
+    "binding": "outcome.json records runtimeLicenseEvidenceSha256, runtimeProofSha256 and sbomSha256 equal to the member hashes above; the Syft document is retained by its own hash.",
+    "ciRunId": 38072015598,
+    "ciRunUrl": "https://github.com/swiftraccoon/simplestChat/actions/runs/38072015598",
+    "imageCheckPassed": false,
+    "imageId": "sha256:8241bee0cd93101e719f3cee1fdffb869905f6928ae7b1132b710f6973b6e4d9",
+    "licenseBlockedBeforeReview": [
+      "pkg:rpm/fedora/tzdata@2026e-1.fc44?arch=noarch&distro=fedora-44&upstream=tzdata-2026e-1.fc44.src.rpm"
+    ],
+    "licenseCheckPassedBeforeReview": false,
+    "noticeCheckPassed": true,
+    "noticeSha256": "30193135021640abeb83217e6eb0a22b0d8adb9758a6601d9147da076f1c6d8e",
+    "outcomeSha256": "3ee066f5e44c4ad679aca2a8b61356822d1425a3919cb9c3153bcb001734f6ac",
+    "platform": "linux/amd64",
+    "recordedExceptionsSha256": "a3149e485c4037272aee8fe4ef3d657b32cd45484bf478fa946ece79f40c23ff",
+    "recordedPolicySha256": "cc30767f9babb12395a5b18276cd91790eed27880a41bb4c2331ea74cb27f6a2",
+    "recordedToolLockSha256": "4ae940993d8ebf0548a5863cd289ee5004fbb5efe5dcaaa5070f0bfbf88bd7c4",
+    "revision": "451dabc9e73bbd93425b50aae8e0564fa9dc62e7",
+    "runtimeProofPassed": true,
+    "runtimeProofSha256": "491c38b14c37d074bd157c43530644da7cccc187d3454e78039b0708585b4733",
+    "selectedImage": {
+      "architecture": "amd64",
+      "archiveConfigSha256": "8241bee0cd93101e719f3cee1fdffb869905f6928ae7b1132b710f6973b6e4d9",
+      "id": "sha256:8241bee0cd93101e719f3cee1fdffb869905f6928ae7b1132b710f6973b6e4d9",
+      "layers": [
+        "sha256:8fe4b47a217bc002f0c86b6150035f88b3931a8d54b12053ba2b9bca79d762f3",
+        "sha256:755beb962effd208a88d6153b754faa54db3952f496f52b38156e60367958578",
+        "sha256:acbf87ec5961a0186c8885889e100ae8f275f3329bf83d281819ef6a9fdd3922",
+        "sha256:08d9728ea3edb628b23d005fd3ec9b61f371c9e7f2ac937701b15c7b49c33a8d",
+        "sha256:6399392895f45fb90d5c96b86e8599bab7732b4405cc7781d829d151b9b27007",
+        "sha256:30ae17044381b8d034a8e4ecd9cedb45356ffa67712931c5c58a3e1bfe6dbfad",
+        "sha256:2b299d10714120e46214aec56d9387ef55375e7f148c837f0174521463e5178c",
+        "sha256:ffa0f54f9f3c7a607b5990c1b6e7d94cc9484fa368d7fcb942c46b46e195ef74",
+        "sha256:511c84898a92699ce0e6d85e129e82efb8a0b3f1fff1a8ffb05f46e918eb81bd",
+        "sha256:302960de58fc914860b225ce2bfc416cd580867597bafeb57596a49c36b138b9",
+        "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef"
+      ]
+    },
+    "spdxSha256": "18fcc4d7c5b005a4af561bdaf9ecc66c3951a9d24e9ede7a997e87ee52a49073",
+    "syftSha256": "fe030e138383ba1cc994353b89e91b90ddc5abccf81ae0c6ca3be89892d54046",
+    "vulnerabilityCheckPassed": true
+  },
+  "conditions": [
+    "Each active ledger entry uses the observed canonical PURL including architecture, epoch, version and source RPM, and one current declaration fingerprint. No architecture scope was synthesized.",
+    "Complete ordered declarations and every required notice/shared owner matched this image. Original raw record hashes retain scanner provenance; only validated location layer digests are normalized for raw-license review identity.",
+    "The existing ledger matches exact PURL plus declaration fingerprint; image and notice hashes in this evidence record the reviewed artifact, not additional automatically enforced matching fields. Changed notice, source or distribution context requires review even if a scanner emits the same PURL and declaration.",
+    "Retain required notices and source/compilation/redistribution conditions. Unused code and absent execution do not remove those obligations. This is technical scanner policy, not complete redistribution clearance.",
+    "Changed packages, sources, declarations, notices or expiry require fresh review. No wildcard, automatic renewal, alternate historical fingerprints or general license allowance."
+  ],
+  "declarations": {
+    "D01": {
+      "records": [
+        {
+          "locations": [
+            {
+              "accessPath": "/usr/lib/sysimage/rpm/rpmdb.sqlite",
+              "annotations": {
+                "evidence": "primary"
+              },
+              "layerID": "sha256:755beb962effd208a88d6153b754faa54db3952f496f52b38156e60367958578",
+              "path": "/usr/lib/sysimage/rpm/rpmdb.sqlite"
+            }
+          ],
+          "spdxExpression": "LicenseRef-Fedora-Public-Domain AND (GPL-2.0-only WITH ClassPath-exception-2.0)",
+          "type": "declared",
+          "urls": [],
+          "value": "LicenseRef-Fedora-Public-Domain AND (GPL-2.0-only WITH ClassPath-exception-2.0)"
+        }
+      ],
+      "recordsSha256": "4c20395acec617d1e252689db91e2ab69708ee7227c0a174b4833d2eb37f05a0",
+      "reviewFingerprint": "license:adb0ac3b20b5f933623670fd873e969dbac77eadd946649c0b7683e0c87b6f82"
+    }
+  },
+  "historicalEvidence": {
+    "disposition": "Historical bytes and observations remain unchanged; 25 unaffected exact reviews are retained (22 original entries and the three separately retained glibc release-9 entries) and the 2026c-2 scope is removed from active policy.",
+    "path": "security/license-evidence/fedora-runtime-2026-09-30.json",
+    "sha256": "c6b3ad4a9a7d65b1f4472d2204b18ccc2be409851bbab38900fb5e0e9b8796fa"
+  },
+  "noticeSets": {
+    "N01": {
+      "files": [
+        {
+          "bytes": 252,
+          "kind": "regular",
+          "matchesRpmDigest": true,
+          "path": "/usr/share/licenses/tzdata/LICENSE",
+          "resolvedPath": "/usr/share/licenses/tzdata/LICENSE",
+          "sha256": "0613408568889f5739e5ae252b722a2659c02002839ad970a63dc5e9174b27cf"
+        }
+      ],
+      "ownerPurl": "pkg:rpm/fedora/tzdata@2026e-1.fc44?arch=noarch&distro=fedora-44&upstream=tzdata-2026e-1.fc44.src.rpm"
+    }
+  },
+  "packages": [
+    {
+      "canonical": {
+        "architecture": "noarch",
+        "epoch": null,
+        "purl": "pkg:rpm/fedora/tzdata@2026e-1.fc44?arch=noarch&distro=fedora-44&upstream=tzdata-2026e-1.fc44.src.rpm",
+        "sourceRpm": "tzdata-2026e-1.fc44.src.rpm",
+        "spdxLicenseDeclared": "LicenseRef-Fedora-Public-Domain AND (GPL-2.0-only WITH ClassPath-exception-2.0)",
+        "spdxPackageId": "SPDXRef-Package-rpm-tzdata-7cf7b5098dfa0d75",
+        "version": "2026e-1.fc44"
+      },
+      "declaration": "D01",
+      "name": "tzdata",
+      "noticeSet": "N01",
+      "rationale": "Same complete declaration and fingerprint as the 2026c-2 review. The IANA tzdata/tzcode 2026e archives and the unchanged javazic archive match the exact Fedora manifest; the installed IANA LICENSE is byte-identical to the archive member and to the historical notice. The Java compiler still supplies the GPL-2.0-only WITH ClassPath-exception-2.0 source context; tzdata-java and Java payload paths remain absent from the runtime RPM inventory. No generated-output licensing conclusion is inferred.",
+      "sourceIds": [
+        "S001",
+        "S002",
+        "S003",
+        "S004",
+        "S005",
+        "S006",
+        "S007",
+        "S008",
+        "S009"
+      ]
+    }
+  ],
+  "review": {
+    "authority": "Agent technical scanner-policy assessment under the owner-authorized security rollout; exact package-scoped exceptions only, not complete redistribution clearance.",
+    "date": "2026-10-10",
+    "disposition": "Accept only the observed 2026e-1 package/declaration record with retained source and notice conditions; supersede the 2026c-2 scope without renewing the fixed expiry.",
+    "expires": "2026-11-29",
+    "owner": "swiftraccoon"
+  },
+  "schemaVersion": 1,
+  "scope": "Exact canonical linux/amd64 Fedora tzdata 2026e-1.fc44 license-source delta review",
+  "sourceAuthentication": [
+    "Read-only official Koji getBuild response binds successful exact NVR tzdata-2026e-1.fc44 to immutable Fedora dist-git commit 64d594762ddecc2a65d9d5b7ee635a396f0dcf26; Bodhi records the update as stable on 2026-10-08.",
+    "Source bytes were fetched from primary HTTPS endpoints (IANA and the Fedora lookaside) and hashed. Every exact Fedora manifest SHA-512 matches the downloaded archive. No downloaded code, package scripts or tests were executed.",
+    "No independent detached RPM or release-signature verification is claimed. HTTPS source provenance plus exact hashes and the successful build mapping support this bounded source comparison; this is not a reproducible-build proof."
+  ],
+  "sourceComparison": {
+    "archiveLicenseMembers": {
+      "LICENSE": {
+        "archive": "tzdata2026e.tar.gz",
+        "bytes": 252,
+        "matchesHistoricalNotice": true,
+        "matchesInstalledNotice": true,
+        "sha256": "0613408568889f5739e5ae252b722a2659c02002839ad970a63dc5e9174b27cf"
+      }
+    },
+    "fedoraNewCommit": "64d594762ddecc2a65d9d5b7ee635a396f0dcf26",
+    "fedoraOldCommit": "51f4bc555c69c04300c38945d13ed00657d7f150",
+    "specDelta": "Outside %changelog only the Version, tzdata_version, tzcode_version and Release lines change (2026c/2 to 2026e/1); two changelog entries (2026d-1, 2026e-1) are added. License line, Source entries, notice installation and subpackages are unchanged.",
+    "unchangedFedoraAuxiliarySources": [
+      "javazic-1.8-37392f2f5d59.tar.xz"
+    ],
+    "upstreamNewArchives": {
+      "tzcode2026e.tar.gz": "sha512 623af2d5…9815, 329138 bytes",
+      "tzdata2026e.tar.gz": "sha512 5be2f875…512be, 481989 bytes"
+    },
+    "upstreamOldArchives": {
+      "tzcode2026c.tar.gz": "ad1aadf26b9aaca487a4f780d7a8ebf1d7383472ce587b06cb63852d4eb030dbd190b537e393e75d5953031858",
+      "tzdata2026c.tar.gz": "e0b4b7044b66fbc27bc21d13d18063abcdf78ab58d5ba5fd64bd1a88d86e9d495f45add4d8e65bb6c40249f9c9"
+    },
+    "upstreamOldArchivesNote": "SHA-512 prefixes as printed from the reviewed 2026c-2 manifest; the full values are in that manifest (S008)."
+  },
+  "sources": {
+    "S001": {
+      "argument": "tzdata-2026e-1.fc44",
+      "buildId": 3114496,
+      "completionTime": "2026-10-06 19:24:49.646944+00:00",
+      "method": "XML-RPC getBuild (read-only)",
+      "pageUrl": "https://koji.fedoraproject.org/koji/buildinfo?buildID=3114496",
+      "responseBytes": 2893,
+      "responseSha256": "e58435c7baf454ae3e6bb1b932e1ab78a147936808ae871c4567eba0b46761ef",
+      "source": "git+https://src.fedoraproject.org/rpms/tzdata.git#64d594762ddecc2a65d9d5b7ee635a396f0dcf26",
+      "state": 1,
+      "url": "https://koji.fedoraproject.org/kojihub"
+    },
+    "S002": {
+      "builds": [
+        "tzdata-2026e-1.fc44"
+      ],
+      "dateStable": "2026-10-08 01:15:47",
+      "method": "HTTPS JSON (read-only)",
+      "responseBytes": 8842,
+      "responseSha256": "84e61420c63165ed170e57340b12ccc94e8e08aa4e400d9e33a4a46b439085ab",
+      "status": "stable",
+      "url": "https://bodhi.fedoraproject.org/updates/FEDORA-2026-7d957ce87d"
+    },
+    "S003": {
+      "algorithm": "SHA512",
+      "entries": {
+        "javazic-1.8-37392f2f5d59.tar.xz": "2ba718dfeed53a3bd6b44e3dfe96338a609e482e4e6d942e2a7e622fc6c52606cb323ac3a59739c463e34f70fff217c0a61f5b3d3c4958eff2801b1504ee4204",
+        "tzcode2026e.tar.gz": "623af2d5c611ce5d9f6d07ceeb09721db03ed90e8e74e027f96fc402eb948fc8a7e9aecac2611e41fb501bdc2592a78020375ad677d887beaacb2fd5da9b9815",
+        "tzdata2026e.tar.gz": "5be2f875f73b75e5783c474bf7a6c768e433cc90283f8fc6a75e3d05bd92aec97936e8a55ccca5e880b5dacc18ba65932bab0e783e1ed5d2af4a3a4df95512be"
+      },
+      "method": "HTTPS raw file",
+      "sha256": "47c96da3ee3f801aad572259c3a26d9480d2f9337e4983bc700eb5ac7b3feea9",
+      "url": "https://src.fedoraproject.org/rpms/tzdata/raw/64d594762ddecc2a65d9d5b7ee635a396f0dcf26/f/sources"
+    },
+    "S004": {
+      "licenseLine": "License: LicenseRef-Fedora-Public-Domain AND (GPL-2.0-only WITH ClassPath-exception-2.0)",
+      "lines": 1504,
+      "method": "HTTPS raw file",
+      "sha256": "5f7249ad94d17ab8b6663b8d6e930487cddaf04f08582b919d6e2c0e98b0b836",
+      "url": "https://src.fedoraproject.org/rpms/tzdata/raw/64d594762ddecc2a65d9d5b7ee635a396f0dcf26/f/tzdata.spec"
+    },
+    "S005": {
+      "bytes": 481989,
+      "matchesManifest": true,
+      "method": "HTTPS download",
+      "sha256": "b26882805f26aac59d5b222978e6580484b834ccdc98be89df2f05a6dc53a652",
+      "sha512": "5be2f875f73b75e5783c474bf7a6c768e433cc90283f8fc6a75e3d05bd92aec97936e8a55ccca5e880b5dacc18ba65932bab0e783e1ed5d2af4a3a4df95512be",
+      "url": "https://data.iana.org/time-zones/releases/tzdata2026e.tar.gz"
+    },
+    "S006": {
+      "bytes": 329138,
+      "matchesManifest": true,
+      "method": "HTTPS download",
+      "sha256": "cc3d27ca2a0d8399504551b920970d80af83bfb9c216e8082a15491921935d54",
+      "sha512": "623af2d5c611ce5d9f6d07ceeb09721db03ed90e8e74e027f96fc402eb948fc8a7e9aecac2611e41fb501bdc2592a78020375ad677d887beaacb2fd5da9b9815",
+      "url": "https://data.iana.org/time-zones/releases/tzcode2026e.tar.gz"
+    },
+    "S007": {
+      "bytes": 30924,
+      "matchesManifest": true,
+      "method": "HTTPS download (Fedora lookaside)",
+      "sha256": "4809b438f61e404dec1c857d56c8d60724312c19bd8b8cf720a1fbedf4f0766f",
+      "sha512": "2ba718dfeed53a3bd6b44e3dfe96338a609e482e4e6d942e2a7e622fc6c52606cb323ac3a59739c463e34f70fff217c0a61f5b3d3c4958eff2801b1504ee4204",
+      "unchangedSinceReviewedCommit": true,
+      "url": "https://src.fedoraproject.org/repo/pkgs/rpms/tzdata/javazic-1.8-37392f2f5d59.tar.xz/sha512/2ba718dfeed53a3bd6b44e3dfe96338a609e482e4e6d942e2a7e622fc6c52606cb323ac3a59739c463e34f70fff217c0a61f5b3d3c4958eff2801b1504ee4204/javazic-1.8-37392f2f5d59.tar.xz"
+    },
+    "S008": {
+      "method": "HTTPS raw file",
+      "purpose": "reviewed 2026c-2 manifest, for the javazic comparison",
+      "sha256": "3cc79855acd776012fb9bfdaa6d06970da61bf755c3eb2a6d8deae7f0e7bae5f",
+      "url": "https://src.fedoraproject.org/rpms/tzdata/raw/51f4bc555c69c04300c38945d13ed00657d7f150/f/sources"
+    },
+    "S009": {
+      "lines": 1493,
+      "method": "HTTPS raw file",
+      "purpose": "reviewed 2026c-2 spec, for the spec delta",
+      "sha256": "a51c24e0b2a7dbfb51c3b3a456fe2c7d7c8db998246605cbef786a97b672fe30",
+      "url": "https://src.fedoraproject.org/rpms/tzdata/raw/51f4bc555c69c04300c38945d13ed00657d7f150/f/tzdata.spec"
+    }
+  },
+  "status": "reviewed; exact one replacement ledger entry required; all other gates remain independent",
+  "supersedes": [
+    "pkg:rpm/fedora/tzdata@2026c-2.fc44?arch=noarch&distro=fedora-44&upstream=tzdata-2026c-2.fc44.src.rpm"
+  ],
+  "verification": {
+    "afterReviewPassed": true,
+    "beforeReviewBlockedScopes": [
+      "pkg:rpm/fedora/tzdata@2026e-1.fc44?arch=noarch&distro=fedora-44&upstream=tzdata-2026e-1.fc44.src.rpm"
+    ],
+    "declarationDifferenceFromHistorical": "Only the original provenance location layerID changes; the complete declaration, record fields and order otherwise match.",
+    "exactObservedPackageCount": 1,
+    "noticeBytesKindsAndResolutionMatchHistorical": true,
+    "noticeBytesMatchVerifiedSourceArchive": true,
+    "orderedDeclarationsMatchSyftAndReport": true,
+    "preservedOtherReviewCount": 25,
+    "regularNoticeDigestsMatchRpmMetadata": true,
+    "spdxPackageIdentitiesMatch": true
+  }
+}

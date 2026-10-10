@@ -1,5 +1,61 @@
 # Canonical runtime RPM license context review
 
+## Current tzdata 2026e assessment — 2026-10-10
+
+The canonical noarch package `tzdata` changed from `2026c-2.fc44` to
+`2026e-1.fc44` with the 2026-10-10 Fedora package refresh
+(`FEDORA_REFRESH_EPOCH`), observed in
+[CI run 38072015598](https://github.com/swiftraccoon/simplestChat/actions/runs/38072015598).
+Its **exact 2026e-1 PURL replaces the 2026c-2 scope** in the active ledger. The
+25 other assessments (22 original entries and the three glibc release-9 entries
+retained separately) remain unchanged. The
+[new evidence](license-evidence/fedora-tzdata-2026-10-10.json) records this
+separate source review; the original evidence remains byte-for-byte historical.
+Owner `swiftraccoon` and expiry **2026-11-29** remain unchanged.
+
+The package retains the complete declaration
+`LicenseRef-Fedora-Public-Domain AND (GPL-2.0-only WITH ClassPath-exception-2.0)`
+and fingerprint
+`license:adb0ac3b20b5f933623670fd873e969dbac77eadd946649c0b7683e0c87b6f82`. Only
+the Syft declaration's provenance layer digest changes. No term is removed from
+the declaration and no license is added to the global allowlist.
+
+### Exact source and notice comparison
+
+The official read-only Koji `getBuild` response identifies successful
+[build 3114496](https://koji.fedoraproject.org/koji/buildinfo?buildID=3114496),
+`tzdata-2026e-1.fc44`, completed 2026-10-06, and Fedora dist-git commit
+`64d594762ddecc2a65d9d5b7ee635a396f0dcf26`; Bodhi update `FEDORA-2026-7d957ce87d`
+reached stable on 2026-10-08. The
+[immutable spec](https://src.fedoraproject.org/rpms/tzdata/raw/64d594762ddecc2a65d9d5b7ee635a396f0dcf26/f/tzdata.spec)
+differs from the reviewed 2026c-2 spec (commit
+`51f4bc555c69c04300c38945d13ed00657d7f150`) only in its Version, release-version
+defines and Release lines plus two changelog entries; its License line, Source
+entries, notice installation and subpackages are unchanged. The commit's sources
+manifest binds `tzdata2026e.tar.gz`, `tzcode2026e.tar.gz` and the unchanged
+`javazic-1.8-37392f2f5d59.tar.xz` by SHA-512; all three were downloaded over
+HTTPS from IANA and the Fedora lookaside and match. The IANA archive's `LICENSE`
+member (252 bytes, SHA-256 `0613408568889f5739e5ae252b722a2659c02002839ad970a63dc5e9174b27cf`)
+is byte-identical to the installed `/usr/share/licenses/tzdata/LICENSE`, which
+matches its RPM digest and the 2026c-2 review. No downloaded code was executed.
+
+| Package | Context and retained evidence |
+| --- | --- |
+| tzdata | Same declaration and fingerprint as 2026c-2; exact IANA/code/javazic source hashes and the installed notice re-checked against the new commit. The Java compiler still supplies the GPL/ClassPath source context; `tzdata-java` and Java payload paths remain absent from the runtime RPM inventory. No generated-output licensing conclusion is inferred. |
+
+### Artifact binding and limits
+
+The evidence is [artifact 11678000632](https://github.com/swiftraccoon/simplestChat/actions/runs/38072015598/artifacts/11678000632)
+of that run (1,824,381 bytes; its SHA-256 matches GitHub's artifact digest). Its
+`outcome.json` binds the runtime notice report, runtime proof and SPDX document
+by hash, and the independent Syft report agrees on image ID, revision and the
+ordered declaration. That retained image check **failed**: its runtime proof and
+vulnerability verdict passed, while its license verdict blocked exactly this one
+changed scope before the review and none after it. This assessment does not
+relabel the retained run as successful or supply a signed passing-release
+attestation. Ledger matching remains exact **PURL plus fingerprint**; source and
+notice hashes record review evidence, not additional automatic matching fields.
+
 ## Current glibc release-9 assessment — 2026-10-01
 
 The three canonical amd64 packages `glibc`, `glibc-common` and
@@ -162,7 +218,7 @@ URLs, source revisions and byte hashes without workstation paths or raw file tex
 | readline | 8.3-4.fc44 | Manual has no invariant or cover texts; retain software COPYING/USAGE and the full declared aggregate. |
 | rootfiles | 9.0-6.fc44 | No dedicated notice. Six exact template payload hashes establish the reviewed content context for Fedora's named noncopyrightable classification. All six hashes match canonical SPDX; ghost entries are not verified content. |
 | setup | 2.15.0-28.fc44 | The installed COPYING explicitly supplies the package's public-domain statement. Exact notice bytes provide the evidence; no separate upstream tag is inferred. |
-| tzdata | 2026e-1.fc44 | Renewed 2026-10-10 for Koji build 3114496 (Fedora commit 64d594762ddecc2a65d9d5b7ee635a396f0dcf26): IANA tzdata/tzcode 2026e and the unchanged javazic archive match the recorded source hashes, and the installed notice is byte-identical to the 2026c-2 review. Exact IANA/code/javazic source hashes checked. The Java compiler supplies concrete GPL/ClassPath source context; the separate Java package and Java payload paths are absent from the observed runtime RPM inventory. No generated-output licensing conclusion is inferred. |
+| tzdata | 2026c-2.fc44 | Exact IANA/code/javazic source hashes checked. The Java compiler supplies concrete GPL/ClassPath source context; the separate Java package and Java payload paths are absent from the observed runtime RPM inventory. No generated-output licensing conclusion is inferred. |
 | util-linux-core | 2.41.5-1.fc44 | Specific tagged helpers supply public-domain context. Retain all ten notices and the complete aggregate; a copied notice alone does not establish that its corresponding component is shipped. |
 | vim-data, vim-minimal | 2:9.2.1129-1.fc44 | Exact manual and pinned Fedora Vim-specific review support only Open Publication documentation without section VI options. Software LICENSE is separately retained in vim-data and required for the same-source minimal package. |
 | libtool-ltdl | 2.5.4-10.fc44 | Exact raw LGPLv2+ declaration, pinned Fedora abbreviation review and 26,419-byte COPYING.LIB hash match the observed x86_64 package. Preserve its unparsed scanner record; no synthetic SPDX declaration is substituted. |

@@ -17,7 +17,10 @@ from security_tools import ToolError
 
 EVIDENCE = ROOT / "security/license-evidence/fedora-runtime-2026-09-30.json"
 GLIBC_EVIDENCE = ROOT / "security/license-evidence/fedora-glibc-2026-10-01.json"
+TZDATA_EVIDENCE = ROOT / "security/license-evidence/fedora-tzdata-2026-10-10.json"
 GLIBC_PACKAGES = {"glibc", "glibc-common", "glibc-minimal-langpack"}
+TZDATA_PACKAGES = {"tzdata"}
+SUPERSEDED_PACKAGES = GLIBC_PACKAGES | TZDATA_PACKAGES
 TODAY = date(2026, 9, 30)
 
 
@@ -41,11 +44,17 @@ def packages(value: JsonObject) -> list[JsonObject]:
 
 
 def current_packages() -> list[JsonObject]:
-    """Replace superseded observations with the separately retained release-9 evidence."""
+    """Replace superseded observations with the separately retained glibc and tzdata evidence."""
     retained = [
-        item for item in packages(evidence()) if string_value(item["name"]) not in GLIBC_PACKAGES
+        item
+        for item in packages(evidence())
+        if string_value(item["name"]) not in SUPERSEDED_PACKAGES
     ]
-    return [*retained, *packages(object_value(image.report(GLIBC_EVIDENCE)))]
+    return [
+        *retained,
+        *packages(object_value(image.report(GLIBC_EVIDENCE))),
+        *packages(object_value(image.report(TZDATA_EVIDENCE))),
+    ]
 
 
 class CanonicalRuntimeLicenseTests(unittest.TestCase):
@@ -122,6 +131,39 @@ class CanonicalRuntimeLicenseTests(unittest.TestCase):
         self.assertEqual(old_declaration["reviewFingerprint"], new_declaration["reviewFingerprint"])
         old_notices = object_value(object_value(evidence()["noticeSets"])["N02"])
         new_notices = object_value(object_value(updated["noticeSets"])["N02"])
+        self.assertEqual(old_notices["files"], new_notices["files"])
+        self.assertNotEqual(old_notices["ownerPurl"], new_notices["ownerPurl"])
+
+    def test_superseded_tzdata_scope_is_historical_evidence_only(self) -> None:
+        """The 2026e refresh does not accumulate a compatibility approval for 2026c."""
+        updated = object_value(image.report(TZDATA_EVIDENCE))
+        old = [
+            item for item in packages(evidence()) if string_value(item["name"]) in TZDATA_PACKAGES
+        ]
+        new = packages(updated)
+        self.assertEqual({string_value(item["name"]) for item in new}, TZDATA_PACKAGES)
+        self.assertEqual(len(new), 1)
+        self.assertEqual(
+            {string_value(scope) for scope in array_value(updated["supersedes"])},
+            {string_value(item["purl"]) for item in old},
+        )
+        current = reviews.read_exceptions(today=TODAY)
+        policy = image.load_policy(ROOT / "security/image-policy.json")
+        self.assertEqual(
+            len(array_value(image.license_verdict(old, policy, current)["blocked"])), 1
+        )
+        self.assertTrue(image.license_verdict(new, policy, current)["passed"])
+        historical = {
+            string_value(object_value(item)["name"]): object_value(item)
+            for item in array_value(evidence()["packages"])
+        }
+        old_key = string_value(historical["tzdata"]["declaration"])
+        old_declaration = object_value(object_value(evidence()["declarations"])[old_key])
+        new_declaration = object_value(object_value(updated["declarations"])["D01"])
+        self.assertEqual(old_declaration["reviewFingerprint"], new_declaration["reviewFingerprint"])
+        old_notice_key = string_value(historical["tzdata"]["noticeSet"])
+        old_notices = object_value(object_value(evidence()["noticeSets"])[old_notice_key])
+        new_notices = object_value(object_value(updated["noticeSets"])["N01"])
         self.assertEqual(old_notices["files"], new_notices["files"])
         self.assertNotEqual(old_notices["ownerPurl"], new_notices["ownerPurl"])
 
