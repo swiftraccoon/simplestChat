@@ -1950,12 +1950,15 @@ header.in-room .auth-bar {
   border-radius: var(--radius-sm);
 }
 
-.room-list .directory-room-row {
+/* In the grid and on the shelf a tile's star sits inside the tile's top-right corner. */
+.room-list .directory-room-row,
+.discovery-shelf-row > .directory-room-row {
   position: relative;
   display: block;
 }
 
-.room-list .directory-room-row > .discovery-favorite {
+.room-list .directory-room-row > .discovery-favorite,
+.discovery-shelf-row > .directory-room-row > .discovery-favorite {
   position: absolute;
   top: 0.5rem;
   right: 0.5rem;
@@ -2028,14 +2031,59 @@ header.in-room .auth-bar {
   }
 }
 
-/* An account's favorite and recent rooms: a narrow list whose star sits beside its room. */
-.directory-saved-rooms .discovery-row {
-  justify-content: flex-start;
-  max-width: 28rem;
+/* An account's favorite and recent rooms: one shelf of small tiles above the directory, which
+   scrolls sideways when it is long. */
+.discovery-shelf {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
 }
 
-.directory-saved-rooms .discovery-room-link {
-  flex: 0 1 auto;
+.discovery-shelf-title {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-dim);
+}
+
+.discovery-shelf-row {
+  display: flex;
+  gap: 0.75rem;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  padding-bottom: 0.25rem;
+  scrollbar-width: thin;
+}
+
+.discovery-shelf-row > .directory-room-row {
+  flex: 0 0 auto;
+  width: 8.5rem;
+  scroll-snap-align: start;
+}
+
+.discovery-shelf-row > .directory-room-row > .discovery-favorite {
+  top: 0.35rem;
+  right: 0.35rem;
+  min-height: 30px;
+  padding: 0.1rem 0.4rem;
+  font-size: 1.05rem;
+}
+
+.room-card-small {
+  aspect-ratio: 1 / 1;
+  gap: 0.15rem;
+  padding: 0.7rem;
+}
+
+.room-card-small[data-initial]:not(:has(.room-card-image))::before {
+  top: 0.45rem;
+  left: 0.6rem;
+  font-size: 2.6rem;
+}
+
+.room-card-small .room-card-name {
+  font-size: 0.9rem;
 }
 
 @media (max-width: 600px) {
@@ -2069,6 +2117,10 @@ header.in-room .auth-bar {
 
   .room-card-badge {
     font-size: 0.7rem;
+  }
+
+  .discovery-shelf-row > .directory-room-row {
+    width: 7.5rem;
   }
 }
 

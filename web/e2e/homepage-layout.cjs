@@ -104,7 +104,8 @@ async function geometry(page) {
       '#room-list',
       '.room-card',
       '.room-list-empty',
-      '.directory-saved-rooms .discovery-row',
+      '.discovery-shelf',
+      '.discovery-shelf .directory-room-row',
       '#create-room-btn',
       '.join-form',
       '#name-input',
@@ -154,7 +155,7 @@ async function geometry(page) {
       gridLeft: list?.left ?? null,
       gridRight: list?.right ?? null,
       wordmarkLeft: wordmark?.left ?? null,
-      tileWidth: rect('.room-card')?.width ?? null,
+      tileWidth: rect('#room-list .room-card')?.width ?? null,
       toolbarSingleRow: overlapsVertically(
         rect('.room-browser-title h2'),
         rect('#room-search-input'),
@@ -163,30 +164,20 @@ async function geometry(page) {
         authBar && authBar.top >= headerBox.top - 1 && authBar.bottom <= headerBox.bottom + 1,
       ),
       dockBottom: rect('.join-form')?.bottom ?? null,
-      // A saved room's star stays beside its name: the widest row of the open picker and
-      // the largest distance from a room link to its star.
-      savedRowWidth: Math.max(
-        -1,
-        ...[...document.querySelectorAll('.directory-saved-rooms .discovery-row')]
-          .filter((node) => node.getClientRects().length)
-          .map((node) => box(node).width),
-      ),
-      savedStarGap: Math.max(
-        -1,
-        ...[...document.querySelectorAll('.directory-saved-rooms .discovery-row')]
-          .filter((node) => node.getClientRects().length)
-          .map((node) => {
-            // The link's box may stretch; its text extent is what a person sees.
-            const textRight = Math.max(
-              ...[...node.querySelector('.discovery-room-link').children].map((child) => {
-                const range = document.createRange();
-                range.selectNodeContents(child);
-                return range.getBoundingClientRect().right;
-              }),
-            );
-            return box(node.querySelector('.discovery-favorite')).left - textRight;
-          }),
-      ),
+      // A saved room is a small tile on the shelf with its star inside the tile.
+      savedShelfRows: document.querySelectorAll('.discovery-shelf .directory-room-row').length,
+      shelfStarsInside: [
+        ...document.querySelectorAll('.discovery-shelf .directory-room-row'),
+      ].every((row) => {
+        const star = box(row.querySelector('.discovery-favorite'));
+        const tile = box(row.querySelector('.room-card'));
+        return (
+          star.left >= tile.left - 1 &&
+          star.right <= tile.right + 1 &&
+          star.top >= tile.top - 1 &&
+          star.bottom <= tile.bottom + 1
+        );
+      }),
     };
     for (const room of document.querySelectorAll('.room-card')) {
       const children = [...room.children];
@@ -197,8 +188,9 @@ async function geometry(page) {
       }
       const name = room.querySelector('.room-card-name');
       for (const child of name.children) inside(box(child), box(name), 'room name');
+      // Compact shelf tiles carry no metadata row.
       const meta = room.querySelector('.room-card-meta');
-      for (const child of meta.children) inside(box(child), box(meta), 'room metadata');
+      for (const child of meta?.children ?? []) inside(box(child), box(meta), 'room metadata');
     }
     for (const selector of ['#room-search-input', '#name-input', '#room-input']) {
       if (parseFloat(getComputedStyle(document.querySelector(selector)).fontSize) < 16)
@@ -237,11 +229,8 @@ function expectShape({ shape, viewport }, state, label) {
     detail('grid spans the page'),
   );
   assert.equal(shape.authInHeader, true, detail('account state in the header'));
-  if (shape.savedRowWidth >= 0) {
-    assert.ok(shape.savedRowWidth <= 460, detail('a saved room row stays narrow'));
-    // Wrapped text leaves up to a word of slack before the star, and engines break differently.
-    assert.ok(shape.savedStarGap <= 120, detail('a saved room keeps its star beside its name'));
-  }
+  if (shape.savedShelfRows > 0)
+    assert.equal(shape.shelfStarsInside, true, detail('a saved room keeps its star on its tile'));
   if (viewport.width >= 1100) assert.equal(shape.toolbarSingleRow, true, detail('one toolbar row'));
   if (viewport.width > 600 && viewport.height >= 500 && ['populated', 'filtered'].includes(state))
     assert.ok(
@@ -460,7 +449,9 @@ async function run(env = process.env) {
           report.activeStep = `${name}-navigation`;
           await page.goto(origin, { waitUntil: 'load' });
           report.activeStep = `${name}-directory-ready`;
-          await page.waitForFunction(() => document.querySelectorAll('.room-card').length === 20);
+          await page.waitForFunction(
+            () => document.querySelectorAll('#room-list .room-card').length === 20,
+          );
           report.activeStep = `${name}-thumbnails-ready`;
           await page.waitForFunction(() =>
             [...document.images].every((image) => image.complete && image.naturalWidth > 0),
@@ -471,11 +462,10 @@ async function run(env = process.env) {
             .waitFor({ state: 'visible' });
           assert.equal(await page.locator('#create-room-btn').isVisible(), signedIn);
           if (signedIn) {
-            // An account's saved rooms open under the toolbar and are measured with the rest.
+            // An account's saved rooms sit on the shelf under the toolbar, measured with the rest.
             report.activeStep = `${name}-saved-rooms-ready`;
-            await page.locator('.directory-saved-rooms summary').click();
             await page.waitForFunction(
-              () => document.querySelectorAll('.directory-saved-rooms .discovery-row').length === 2,
+              () => document.querySelectorAll('.discovery-shelf .directory-room-row').length === 2,
             );
           }
           report.activeStep = `${name}-signaling-ready`;
@@ -493,16 +483,18 @@ async function run(env = process.env) {
           };
           await page.screenshot({ path: path.join(artifacts, `${name}.png`), fullPage: true });
           await inspect('populated');
-          await reachable(page.locator('.room-card').last());
+          await reachable(page.locator('#room-list .room-card').last());
           await page.locator('#room-load-more').click();
-          await page.waitForFunction(() => document.querySelectorAll('.room-card').length === 21);
-          await reachable(page.locator('.room-card').last());
+          await page.waitForFunction(
+            () => document.querySelectorAll('#room-list .room-card').length === 21,
+          );
+          await reachable(page.locator('#room-list .room-card').last());
           if (signedIn) {
             // A signed-in person's tile activation enters the room; layout runs stay on the
             // home page, so the signed-in run selects through the join bar instead.
             await page.locator('#room-input').fill(rooms[20].id);
           } else {
-            await page.locator('.room-card').last().focus();
+            await page.locator('#room-list .room-card').last().focus();
             await page.keyboard.press('Enter');
             assert.equal(await page.locator('#room-input').inputValue(), rooms[20].id);
           }
@@ -527,7 +519,9 @@ async function run(env = process.env) {
           await inspect('unavailable');
           await reachable(page.getByRole('button', { name: 'Retry directory' }));
           await search.fill('featured');
-          await page.waitForFunction(() => document.querySelectorAll('.room-card').length === 1);
+          await page.waitForFunction(
+            () => document.querySelectorAll('#room-list .room-card').length === 1,
+          );
           await inspect('filtered');
           assert.equal(report.pageErrors, 0, 'No unhandled production UI errors');
           assert.equal(report.unexpectedRequests, 0, 'Every request must use an explicit fixture');

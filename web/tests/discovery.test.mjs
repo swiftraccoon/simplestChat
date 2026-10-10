@@ -186,6 +186,47 @@ test('saved rooms group favorites and recents and persist explicit toggles', asy
   mount.dispose();
 });
 
+test('a saved-rooms shelf renders each room through the caller, favorites first, and hides when empty', async () => {
+  const f = await fixture();
+  f.state.rooms = [
+    { room: room('recent'), favorite: false, lastVisited: '2026-10-09T10:00:00Z' },
+    { room: room(), favorite: true, lastVisited: null },
+  ];
+  const rendered = [];
+  const mount = f.module.mountSavedRooms(f.host, {
+    ...f.options,
+    renderRoom: (entry) => {
+      rendered.push(entry.room.id);
+      return f.ui.el('div', entry.room.display_name, 'room-card');
+    },
+  });
+  await flush();
+  assert.deepEqual(rendered, ['public', 'recent'], 'favorites come first');
+  assert.deepEqual(
+    f.host.querySelectorAll('h3').map((node) => node.textContent),
+    ['Favorites & recent'],
+    'one shelf title instead of group headings',
+  );
+  const rows = f.host.querySelectorAll('.directory-room-row');
+  assert.equal(rows.length, 2);
+  assert.equal(rows[0].querySelector('.room-card').textContent, 'Public room');
+  const star = rows[0]
+    .querySelectorAll('button')
+    .find((node) => node.getAttribute('aria-pressed') !== null);
+  assert.equal(star.getAttribute('aria-pressed'), 'true');
+  star.click();
+  await flush();
+  assert.deepEqual(f.state.calls[0].slice(0, 4), ['favorite', 'token', 'public', false]);
+  f.state.rooms = [];
+  await mount.refresh();
+  assert.equal(
+    f.host.querySelector('.discovery-saved-rooms').hidden,
+    true,
+    'nothing saved, nothing shown',
+  );
+  mount.dispose();
+});
+
 test('discovery decoders enforce account ownership, bounds, statuses, and unique room identities', async () => {
   const modules = await loadContractModules();
   const { decodeContacts, decodeSavedRooms } = modules['./discovery-validation'];

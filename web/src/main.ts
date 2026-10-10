@@ -60,7 +60,7 @@ import './community.css';
 import './participant-hovercard.css';
 import './notification-preferences.css';
 import './discovery.css';
-import type { CreateRoomRequest, RoomSettingsPatch } from './protocol';
+import type { CreateRoomRequest, RoomListItem, RoomSettingsPatch } from './protocol';
 import type { ServerCapabilities } from './api-validation';
 
 declare const __APP_REVISION__: string;
@@ -2021,7 +2021,7 @@ const navigation = new RoomNavigation({
     }
     roomInput.value = id;
     updateJoinBtn();
-    for (const card of roomList.querySelectorAll<HTMLElement>('.room-card'))
+    for (const card of roomBrowser.querySelectorAll<HTMLElement>('.room-card'))
       card.classList.toggle('selected', card.dataset['roomId'] === id);
     if (document.activeElement?.closest('.room-card')) {
       if (!joinBtn.disabled) joinBtn.focus();
@@ -2157,10 +2157,9 @@ let roomBrowserRequest = 0;
 let roomBrowserController: AbortController | null = null;
 let savedRoomMount: DiscoveryMount | null = null;
 let savedRoomAccount: string | null = null;
-const savedRoomPicker = el('details', undefined, 'directory-saved-rooms');
-savedRoomPicker.append(el('summary', 'Favorite & recent rooms'));
-const savedRoomContainer = el('div');
-savedRoomPicker.append(savedRoomContainer);
+// Favorite and recent rooms sit on a shelf of small tiles above the directory.
+const savedRoomPicker = el('div', undefined, 'directory-shelf');
+const savedRoomContainer = savedRoomPicker;
 roomList.before(savedRoomPicker);
 
 function refreshSavedRoomPicker(): void {
@@ -2178,7 +2177,7 @@ function refreshSavedRoomPicker(): void {
       getToken: () => auth.jwt,
       getAccountId: () => auth.userId,
       current: () => savedRoomAccount === account,
-      onJoin: (id) => navigation.selectRoom(id),
+      renderRoom: (entry) => buildRoomCard(entry.room, { compact: true }),
     });
 }
 const MIN_ROOM_SEARCH_TRIGRAM_LEN = 3;
@@ -2207,6 +2206,88 @@ function showRoomSearchMinimum(): void {
   message.className = 'room-list-empty';
   message.textContent = 'Enter at least 3 consecutive letters or numbers';
   roomList.appendChild(message);
+}
+
+/**
+ * A directory tile: image or monogram on the room's tone, name, topic and who is inside. A
+ * compact tile (the shelf) keeps only the picture and the name.
+ */
+function buildRoomCard(r: RoomListItem, { compact = false } = {}): HTMLElement {
+  const card = document.createElement('div');
+  card.className = compact ? 'room-card room-card-small' : 'room-card';
+  card.tabIndex = 0;
+  card.setAttribute('role', 'button');
+  card.setAttribute('aria-label', `Enter ${r.display_name}`);
+  card.dataset['roomId'] = r.id;
+  card.dataset['initial'] = [...r.display_name.trim()][0]?.toLocaleUpperCase() ?? '';
+  card.style.setProperty('--room-tone', roomTone(r.id));
+  card.classList.toggle('selected', r.id === roomInput.value.trim());
+  card.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      card.click();
+    }
+  });
+  card.addEventListener('click', () => enterRoomFromDirectory(r.id));
+
+  const info = document.createElement('div');
+  info.className = 'room-card-info';
+  if (safeRasterUrl(r.image_url)) {
+    const image = document.createElement('img');
+    image.src = r.image_url;
+    image.alt = '';
+    image.className = 'room-card-image';
+    card.append(image);
+  }
+
+  const nameRow = document.createElement('div');
+  nameRow.className = 'room-card-name';
+  const nameText = document.createElement('span');
+  nameText.textContent = r.display_name;
+  nameRow.appendChild(nameText);
+  if (r.password_protected) {
+    const lockSpan = document.createElement('span');
+    lockSpan.insertAdjacentHTML(
+      'afterbegin',
+      '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
+    );
+    nameRow.appendChild(lockSpan);
+  }
+  info.appendChild(nameRow);
+
+  if (compact) {
+    card.appendChild(info);
+    return card;
+  }
+  if (r.topic || r.description) {
+    const topic = document.createElement('div');
+    topic.className = 'room-card-topic';
+    topic.textContent = r.topic || r.description || '';
+    info.appendChild(topic);
+  }
+  if (r.topic && r.description) {
+    const description = document.createElement('p');
+    description.className = 'room-card-topic';
+    description.textContent = r.description;
+    description.title = r.description;
+    info.appendChild(description);
+  }
+
+  const meta = document.createElement('div');
+  meta.className = 'room-card-meta';
+  const count = document.createElement('span');
+  count.textContent = `${r.participant_count ?? '?'} online · ${r.broadcaster_count ?? '?'} broadcasting`;
+  meta.appendChild(count);
+  if (r.moderated) {
+    const badge = document.createElement('span');
+    badge.className = 'room-card-badge';
+    badge.textContent = 'Moderated';
+    meta.appendChild(badge);
+  }
+
+  card.appendChild(info);
+  card.appendChild(meta);
+  return card;
 }
 
 async function loadRoomBrowser(append = false): Promise<void> {
@@ -2259,76 +2340,7 @@ async function loadRoomBrowser(append = false): Promise<void> {
     }
 
     for (const r of rooms) {
-      const card = document.createElement('div');
-      card.className = 'room-card';
-      card.tabIndex = 0;
-      card.setAttribute('role', 'button');
-      card.setAttribute('aria-label', `Enter ${r.display_name}`);
-      card.dataset['roomId'] = r.id;
-      card.dataset['initial'] = [...r.display_name.trim()][0]?.toLocaleUpperCase() ?? '';
-      card.style.setProperty('--room-tone', roomTone(r.id));
-      card.classList.toggle('selected', r.id === roomInput.value.trim());
-      card.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          card.click();
-        }
-      });
-      card.addEventListener('click', () => enterRoomFromDirectory(r.id));
-
-      const info = document.createElement('div');
-      info.className = 'room-card-info';
-      if (safeRasterUrl(r.image_url)) {
-        const image = document.createElement('img');
-        image.src = r.image_url;
-        image.alt = '';
-        image.className = 'room-card-image';
-        card.append(image);
-      }
-
-      const nameRow = document.createElement('div');
-      nameRow.className = 'room-card-name';
-      const nameText = document.createElement('span');
-      nameText.textContent = r.display_name;
-      nameRow.appendChild(nameText);
-      if (r.password_protected) {
-        const lockSpan = document.createElement('span');
-        lockSpan.insertAdjacentHTML(
-          'afterbegin',
-          '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
-        );
-        nameRow.appendChild(lockSpan);
-      }
-      info.appendChild(nameRow);
-
-      if (r.topic || r.description) {
-        const topic = document.createElement('div');
-        topic.className = 'room-card-topic';
-        topic.textContent = r.topic || r.description || '';
-        info.appendChild(topic);
-      }
-      if (r.topic && r.description) {
-        const description = document.createElement('p');
-        description.className = 'room-card-topic';
-        description.textContent = r.description;
-        description.title = r.description;
-        info.appendChild(description);
-      }
-
-      const meta = document.createElement('div');
-      meta.className = 'room-card-meta';
-      const count = document.createElement('span');
-      count.textContent = `${r.participant_count ?? '?'} online · ${r.broadcaster_count ?? '?'} broadcasting`;
-      meta.appendChild(count);
-      if (r.moderated) {
-        const badge = document.createElement('span');
-        badge.className = 'room-card-badge';
-        badge.textContent = 'Moderated';
-        meta.appendChild(badge);
-      }
-
-      card.appendChild(info);
-      card.appendChild(meta);
+      const card = buildRoomCard(r);
       if (account) {
         const row = el('div', undefined, 'directory-room-row');
         const favorite = createFavoriteButton(r.id, favorites.has(r.id), {

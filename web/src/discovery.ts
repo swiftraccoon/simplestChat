@@ -301,16 +301,28 @@ export function createFavoriteButton(
   return control;
 }
 
+/**
+ * Favorite and recent rooms, favorites first. As a list (the default) each room is a link with
+ * its star beside it under Favorites and Recent rooms headings; with `renderRoom` the caller
+ * draws each room (a directory tile) and the mount lays them out as one shelf row that hides
+ * itself while nothing is saved.
+ */
 export function mountSavedRooms(
   host: HTMLElement,
   options: AccountOptions & {
-    onJoin: (roomId: string) => void;
+    onJoin?: (roomId: string) => void;
+    renderRoom?: (entry: SavedRoom) => HTMLElement;
   },
 ): DiscoveryMount {
   const context = accountContext(options);
-  const section = el('section', undefined, 'discovery-saved-rooms');
+  const shelf = Boolean(options.renderRoom);
+  const section = el(
+    'section',
+    undefined,
+    shelf ? 'discovery-saved-rooms discovery-shelf' : 'discovery-saved-rooms',
+  );
   section.setAttribute('aria-label', 'Favorite and recent rooms');
-  const list = el('div', undefined, 'discovery-list');
+  const list = el('div', undefined, shelf ? 'discovery-shelf-row' : 'discovery-list');
   const status = el('p', '', 'setting-hint');
   status.setAttribute('role', 'status');
   const fail = (reason: unknown): void => {
@@ -326,44 +338,51 @@ export function mountSavedRooms(
       if (!context.current()) return;
       status.textContent = '';
       list.replaceChildren();
-      for (const [heading, entries] of [
+      const groups = [
         ['Favorites', page.rooms.filter((room) => room.favorite)],
         ['Recent rooms', page.rooms.filter((room) => !room.favorite)],
-      ] as const) {
+      ] as const;
+      for (const [heading, entries] of groups) {
         if (!entries.length) continue;
-        list.append(el('h3', heading));
-        for (const entry of entries) list.append(roomRow(entry));
+        if (!shelf) list.append(el('h3', heading));
+        for (const entry of entries) list.append(shelf ? shelfRow(entry) : roomRow(entry));
       }
-      if (!page.rooms.length)
+      if (shelf) section.hidden = page.rooms.length === 0;
+      else if (!page.rooms.length)
         status.textContent = 'Favorite rooms and rooms you join appear here across your devices.';
     } finally {
       pending = false;
     }
   };
+  const favorite = (entry: SavedRoom): HTMLButtonElement =>
+    createFavoriteButton(entry.room.id, entry.favorite, {
+      ...options,
+      current: context.current,
+      onError: fail,
+      onChange: () => {
+        refresh().catch(fail);
+      },
+    });
   const roomRow = (entry: SavedRoom): HTMLElement => {
     const row = el('div', undefined, 'discovery-row');
     const join = button(
       '',
       () => {
-        if (context.current()) options.onJoin(entry.room.id);
+        if (context.current()) options.onJoin?.(entry.room.id);
       },
       'discovery-room-link',
     );
     join.append(el('strong', entry.room.display_name));
     if (entry.room.topic) join.append(el('span', entry.room.topic, 'setting-hint'));
-    row.append(
-      join,
-      createFavoriteButton(entry.room.id, entry.favorite, {
-        ...options,
-        current: context.current,
-        onError: fail,
-        onChange: () => {
-          refresh().catch(fail);
-        },
-      }),
-    );
+    row.append(join, favorite(entry));
     return row;
   };
+  const shelfRow = (entry: SavedRoom): HTMLElement => {
+    const row = el('div', undefined, 'directory-room-row');
+    row.append(options.renderRoom!(entry), favorite(entry));
+    return row;
+  };
+  if (shelf) section.append(el('h3', 'Favorites & recent', 'discovery-shelf-title'));
   section.append(list, status);
   host.append(section);
   refresh().catch(fail);

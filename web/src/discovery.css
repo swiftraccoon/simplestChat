@@ -73,16 +73,6 @@
   margin: 0.7rem 0 0.25rem;
   font-size: 0.9rem;
 }
-.directory-saved-rooms {
-  margin-block: 0.5rem;
-}
-.directory-saved-rooms > summary {
-  cursor: pointer;
-}
-.directory-saved-rooms .discovery-saved-rooms {
-  max-height: min(20rem, 40vh);
-  overflow-y: auto;
-}
 .directory-room-row {
   display: flex;
   gap: 0.4rem;
