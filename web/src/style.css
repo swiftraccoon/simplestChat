@@ -304,6 +304,7 @@ header h1 {
   display: none;
 }
 
+/* A compact bar: two short fields and the action, centered, never the page's width. */
 .join-form {
   position: sticky;
   bottom: 1rem;
@@ -311,8 +312,11 @@ header h1 {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: center;
+  align-self: center;
   gap: 0.5rem 1rem;
-  width: 100%;
+  width: auto;
+  max-width: 100%;
   padding: 0.6rem 0.6rem 0.6rem 1.25rem;
   box-sizing: border-box;
   background: var(--surface);
@@ -343,7 +347,9 @@ header h1 {
 }
 
 .join-form input {
-  flex: 1 1 10rem;
+  flex: 0 1 11rem;
+  width: 11rem;
+  min-width: 7rem;
 }
 
 .join-form input:focus,
