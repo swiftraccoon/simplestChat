@@ -176,7 +176,6 @@ function authUiFixture(capabilities, signedIn) {
       'signInBtn',
       'communityActions',
       'roomBrowser',
-      'joinFormDivider',
       'createRoomBtn',
       'authBarGuest',
       'authBarUser',
@@ -220,13 +219,7 @@ for (const signedIn of [false, true]) {
   test(`unknown capabilities keep optional actions hidden for a ${signedIn ? 'restored account' : 'guest'}`, () => {
     const f = authUiFixture(null, signedIn);
     f.updateAuthUI();
-    for (const name of [
-      'signInBtn',
-      'communityActions',
-      'roomBrowser',
-      'joinFormDivider',
-      'createRoomBtn',
-    ])
+    for (const name of ['signInBtn', 'communityActions', 'roomBrowser', 'createRoomBtn'])
       assert.equal(f.nodes[name].hidden, true, name);
     assert.deepEqual(f.effects, ['join-controls', 'community']);
     assert.equal(f.nodes.authBarUser.hidden, !signedIn);
@@ -241,20 +234,14 @@ test('known capabilities reveal only advertised account and directory actions', 
     false,
   );
   guestServer.updateAuthUI();
-  for (const name of [
-    'signInBtn',
-    'communityActions',
-    'roomBrowser',
-    'joinFormDivider',
-    'createRoomBtn',
-  ])
+  for (const name of ['signInBtn', 'communityActions', 'roomBrowser', 'createRoomBtn'])
     assert.equal(guestServer.nodes[name].hidden, true, name);
   assert.deepEqual(guestServer.effects, ['join-controls', 'community']);
 
   for (const signedIn of [false, true]) {
     const f = authUiFixture(supported, signedIn);
     f.updateAuthUI();
-    for (const name of ['signInBtn', 'communityActions', 'roomBrowser', 'joinFormDivider'])
+    for (const name of ['signInBtn', 'communityActions', 'roomBrowser'])
       assert.equal(f.nodes[name].hidden, false, name);
     assert.equal(f.nodes.createRoomBtn.hidden, !signedIn);
     assert.deepEqual(f.effects, ['directory', 'join-controls', 'community']);

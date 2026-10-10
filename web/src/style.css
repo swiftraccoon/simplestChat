@@ -1724,7 +1724,7 @@ header.in-room .auth-bar {
   gap: 0.5rem;
   min-width: 0;
   font-size: 0.9rem;
-  color: var(--text-secondary, #b0b0b0);
+  color: var(--text-secondary);
 }
 
 #auth-display-name {
@@ -1734,13 +1734,13 @@ header.in-room .auth-bar {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-weight: 500;
-  color: var(--text-primary, #e0e0e0);
+  color: var(--text-primary);
 }
 
 .auth-link-btn {
   background: none;
   border: none;
-  color: var(--accent, #6c9fff);
+  color: var(--accent);
   cursor: pointer;
   font-size: 0.85rem;
   padding: 0.25rem 0.5rem;
@@ -1749,7 +1749,7 @@ header.in-room .auth-bar {
 }
 
 .auth-link-btn:hover {
-  color: var(--accent-hover, #8bb4ff);
+  color: var(--accent-hover);
 }
 
 /* --- Auth Modals --- */
@@ -1774,7 +1774,7 @@ header.in-room .auth-bar {
   gap: 0.15rem;
   margin-top: 0.75rem;
   padding-top: 0.75rem;
-  border-top: 1px solid var(--border, #333);
+  border-top: 1px solid var(--border);
 }
 
 .auth-alt-actions .auth-link-btn {
@@ -1825,7 +1825,7 @@ header.in-room .auth-bar {
 }
 
 .btn-secondary:hover {
-  background: var(--bg-hover, #333);
+  background: var(--bg-hover);
 }
 
 .btn-full {
@@ -1991,10 +1991,6 @@ header.in-room .auth-bar {
   color: var(--text-dim);
 }
 
-.room-card .room-card-id {
-  display: none;
-}
-
 .room-card-topic {
   font-size: 0.85rem;
   color: var(--text-dim);
@@ -2105,7 +2101,7 @@ header.in-room .auth-bar {
   align-items: center;
   gap: 0.5rem;
   padding: 0.5rem;
-  border-bottom: 1px solid var(--border, #333);
+  border-bottom: 1px solid var(--border);
 }
 
 .lobby-entry-name {
@@ -2144,7 +2140,7 @@ header.in-room .auth-bar {
 
 /* --- Mod Menu Group --- */
 .mod-menu-group {
-  border-top: 1px solid var(--border, #333);
+  border-top: 1px solid var(--border);
   margin-top: 2px;
   padding-top: 2px;
 }
@@ -2152,7 +2148,7 @@ header.in-room .auth-bar {
 .mod-menu-label {
   padding: 4px 12px;
   font-size: 0.7rem;
-  color: var(--text-secondary, #b0b0b0);
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -2177,33 +2173,16 @@ header.in-room .auth-bar {
   cursor: pointer;
   font-size: 0.8rem;
   background: rgba(108, 159, 255, 0.2);
-  color: var(--accent, #6c9fff);
+  color: var(--accent);
 }
 .toast-actions button:hover {
   background: rgba(108, 159, 255, 0.35);
 }
 
-/* --- Settings Sections --- */
-.settings-section {
-  margin-bottom: 1rem;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid var(--border, #333);
-}
-.settings-section:last-child {
-  border-bottom: none;
-  margin-bottom: 0;
-}
-.settings-section-title {
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text-secondary, #b0b0b0);
-  margin-bottom: 0.5rem;
-}
 .setting-hint {
   display: block;
   font-size: 0.75rem;
-  color: var(--text-secondary, #b0b0b0);
+  color: var(--text-secondary);
   margin-top: 0.25rem;
 }
 
@@ -2775,12 +2754,6 @@ header.in-room .room-topic {
   padding: 0.65rem 0;
   border-bottom: 1px solid var(--border);
   overflow-wrap: anywhere;
-}
-.history-message-heading {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.5rem;
 }
 .history-message time,
 .inbox-conversation time {

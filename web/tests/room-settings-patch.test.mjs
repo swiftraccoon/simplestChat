@@ -108,8 +108,11 @@ test('lost acknowledgements refresh state without repeating a mutation and remai
     assert.equal(action, 'getRoomSnapshot');
     sent.push(action);
   };
-  await assert.rejects(room.setTopic('new topic'), /Current room state has been refreshed/);
-  assert.deepEqual(sent, [{ type: 'setTopic', topic: 'new topic' }, 'getRoomSnapshot']);
+  await assert.rejects(
+    room.updateRoomSettings({ chatEnabled: false }),
+    /Current room state has been refreshed/,
+  );
+  assert.deepEqual(sent, [{ type: 'updateRoomSettings', chatEnabled: false }, 'getRoomSnapshot']);
   assert.equal(room.pendingControls.size, 0);
 });
 

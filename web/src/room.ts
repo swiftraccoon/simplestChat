@@ -1204,10 +1204,6 @@ export class RoomClient {
     return this.requestControl({ type: 'updateRoomSettings', ...settings });
   }
 
-  setTopic(topic: string): Promise<void> {
-    return this.requestControl({ type: 'setTopic', topic });
-  }
-
   admitFromLobby(targetId: string): Promise<void> {
     return this.requestControl({ type: 'admitFromLobby', targetParticipantId: targetId });
   }

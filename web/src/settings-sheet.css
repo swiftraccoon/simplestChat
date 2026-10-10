@@ -376,7 +376,7 @@ button.sheet-row:focus-visible {
   min-height: 72px;
   padding: 8px 10px;
   border: 0;
-  border-radius: var(--radius-sm, 6px);
+  border-radius: var(--radius-sm);
   background: var(--sheet-row-strong);
   color: var(--text);
   font: inherit;

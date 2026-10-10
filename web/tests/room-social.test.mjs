@@ -226,7 +226,7 @@ for (const boundary of ['membership', 'connection']) {
       reconnect: () => (++requests === 1 ? first.promise : second.promise),
     });
     await f.room.join('room', 'Local');
-    const old = f.room.setTopic('old');
+    const old = f.room.updateRoomSettings({ chatEnabled: false });
     const oldRejected = assert.rejects(old, /session changed/);
     if (boundary === 'membership') {
       await f.room.leave();
@@ -236,11 +236,14 @@ for (const boundary of ['membership', 'connection']) {
       f.signaling.onConnectionLost();
       f.signaling.connected = true;
     }
-    const current = f.room.setTopic('current');
+    const current = f.room.updateRoomSettings({ chatEnabled: true });
     assert.equal(requests, 2, 'a stale action must not block the current owner');
     first.resolve({ type: 'roomControlApplied' });
     await oldRejected;
-    await assert.rejects(f.room.setTopic('duplicate'), /still awaiting confirmation/);
+    await assert.rejects(
+      f.room.updateRoomSettings({ chatEnabled: false }),
+      /still awaiting confirmation/,
+    );
     assert.equal(requests, 2, 'old cleanup must preserve the new pending token');
     second.resolve({ type: 'roomControlApplied' });
     await current;

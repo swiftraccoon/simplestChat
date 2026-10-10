@@ -125,7 +125,6 @@ const roomLoadMore = document.getElementById('room-load-more') as HTMLButtonElem
 const createRoomBtn = document.getElementById('create-room-btn')!;
 const serverMode = document.getElementById('server-mode')!;
 const capabilitiesRetry = document.getElementById('server-features-retry') as HTMLButtonElement;
-const joinFormDivider = document.getElementById('join-form-divider')!;
 
 // Login modal
 const loginModal = document.getElementById('login-modal') as HTMLDialogElement;
@@ -187,7 +186,6 @@ function updateAuthUI(): void {
   signInBtn.hidden = capabilities?.accounts !== true;
   document.getElementById('community-actions')!.hidden = capabilities?.accounts !== true;
   roomBrowser.hidden = capabilities?.roomDirectory !== true;
-  joinFormDivider.hidden = roomBrowser.hidden;
   createRoomBtn.hidden = !auth.isLoggedIn || capabilities?.roomCreation !== true;
   if (auth.isLoggedIn) {
     authBarGuest.hidden = true;
@@ -2302,10 +2300,6 @@ async function loadRoomBrowser(append = false): Promise<void> {
         nameRow.appendChild(lockSpan);
       }
       info.appendChild(nameRow);
-      const roomId = document.createElement('div');
-      roomId.className = 'room-card-id';
-      roomId.textContent = r.id;
-      info.appendChild(roomId);
 
       if (r.topic || r.description) {
         const topic = document.createElement('div');

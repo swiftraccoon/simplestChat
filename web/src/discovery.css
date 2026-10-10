@@ -59,7 +59,7 @@
   border-radius: 4px;
 }
 .discovery-room-link:hover {
-  background: var(--bg-hover, #333);
+  background: var(--bg-hover);
 }
 .discovery-favorite {
   font-size: 1.3rem;
