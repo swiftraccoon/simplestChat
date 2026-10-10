@@ -1,4 +1,5 @@
 import type { AuthManager } from './auth';
+import { avatarColors } from './avatar-colors';
 import { openPrivateInbox, onInboxChanged } from './chat-history';
 import { AccountSecurityFlow, mountAccountSecurity } from './account-security';
 import { mountAccountSessions } from './account-sessions';
@@ -256,6 +257,33 @@ export class CommunityUI {
       .catch(() => {
         // Avatars are optional decoration; preserve the existing initials/name.
         // Explicit profile visits report load failures inside their own dialog.
+      });
+  }
+
+  /**
+   * The account's own avatar in the header: its initial on the name's tone at once, then the
+   * profile's chosen color, or its picture when it has one.
+   */
+  decorateOwnAvatar(node: HTMLElement, id: string, name: string): void {
+    const initial = [...name.trim()][0]?.toLocaleUpperCase() ?? '';
+    node.textContent = initial;
+    node.dataset['initial'] = initial;
+    Object.assign(node.style, avatarColors(name));
+    const version = (this.avatarVersions.get(node) ?? 0) + 1;
+    this.avatarVersions.set(node, version);
+    this.profile(id)
+      .then((profile) => {
+        if (!node.isConnected || this.avatarVersions.get(node) !== version || !profile) return;
+        Object.assign(node.style, avatarColors(name, profile.profile_style.color));
+        if (!profile.avatar_url || !safeRasterUrl(profile.avatar_url)) return;
+        const image = el('img');
+        image.src = profile.avatar_url;
+        image.alt = '';
+        image.className = 'account-avatar';
+        node.replaceChildren(image);
+      })
+      .catch(() => {
+        // The initial on its tone stands in for a profile that cannot be read.
       });
   }
 

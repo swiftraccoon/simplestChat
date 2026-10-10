@@ -116,6 +116,7 @@ const lobbyEmpty = document.getElementById('lobby-empty')!;
 const authBarGuest = document.getElementById('auth-bar-guest')!;
 const authBarUser = document.getElementById('auth-bar-user')!;
 const authDisplayName = document.getElementById('auth-display-name')!;
+const authAvatar = document.getElementById('auth-avatar')!;
 const signInBtn = document.getElementById('sign-in-btn')!;
 const logoutBtn = document.getElementById('logout-btn')!;
 const roomBrowser = document.getElementById('room-browser')!;
@@ -191,6 +192,7 @@ function updateAuthUI(): void {
     authBarGuest.hidden = true;
     authBarUser.hidden = false;
     authDisplayName.textContent = auth.displayName ?? '';
+    community.decorateOwnAvatar(authAvatar, auth.userId ?? '', auth.displayName ?? '');
     // Pre-fill name input with auth display name
     if (auth.displayName && !nameInput.value.trim()) {
       nameInput.value = auth.displayName;
@@ -1607,6 +1609,7 @@ for (const [id, icon] of [
 document.getElementById('room-more-btn')!.insertAdjacentHTML('beforeend', icons.chevronDown());
 document.getElementById('shortcuts-btn')!.addEventListener('click', showKeyboardShortcuts);
 setupRoomMenu();
+setupAccountMenu();
 if (typeof ResizeObserver !== 'undefined') {
   const bars = new ResizeObserver(placeToasts);
   bars.observe(document.querySelector('header')!);
@@ -1619,12 +1622,17 @@ function placeToasts(): void {
   toastContainer.style.setProperty('--toast-top', `${top}px`);
 }
 
-/** "More" holds the room tools needed now and then; any choice, Escape or a click away closes it. */
-function setupRoomMenu(): void {
-  const toggle = document.getElementById('room-more-btn') as HTMLButtonElement;
-  const menu = document.getElementById('room-more-menu')!;
+/**
+ * A header menu: its button toggles it; any choice, Escape or a click away closes it. A menu
+ * laid out flat (data-flat, the account menu inside More) ignores every closing path.
+ */
+function setupMenu(toggleId: string, menuId: string): void {
+  const toggle = document.getElementById(toggleId) as HTMLButtonElement;
+  const menu = document.getElementById(menuId)!;
   const wrapper = toggle.parentElement!;
+  const popup = (): boolean => menu.dataset?.['flat'] !== 'true';
   const setOpen = (open: boolean): void => {
+    if (!popup()) return;
     menu.hidden = !open;
     toggle.setAttribute('aria-expanded', String(open));
     if (open) menu.querySelector<HTMLElement>('button:not([hidden]):not(:disabled)')?.focus();
@@ -1654,6 +1662,16 @@ function setupRoomMenu(): void {
   document.addEventListener('click', (event) => {
     if (!menu.hidden && !wrapper.contains(event.target as Node)) setOpen(false);
   });
+}
+
+/** "More" holds the room tools needed now and then. */
+function setupRoomMenu(): void {
+  setupMenu('room-more-btn', 'room-more-menu');
+}
+
+/** The avatar button opens the account's actions on the home page. */
+function setupAccountMenu(): void {
+  setupMenu('account-menu-btn', 'account-menu');
 }
 
 /** Every global shortcut in one place; the call buttons also name their own. */
@@ -1701,6 +1719,11 @@ function setRoomToolsVisible(visible: boolean): void {
   if (utilities.parentElement !== target) target.append(utilities);
   document.getElementById('room-more-menu')!.hidden = true;
   document.getElementById('room-more-btn')!.setAttribute('aria-expanded', 'false');
+  // In a room the account menu's items sit flat inside More; at home the avatar opens them.
+  const accountMenu = document.getElementById('account-menu')!;
+  accountMenu.dataset['flat'] = String(visible);
+  accountMenu.hidden = !visible;
+  document.getElementById('account-menu-btn')!.setAttribute('aria-expanded', String(visible));
 }
 
 /** Clipboard access can be refused; offer the link in a selectable field instead. */

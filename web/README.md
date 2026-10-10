@@ -222,8 +222,10 @@ the search, and Create Room for accounts), then a grid of portrait room tiles
 that fills the page's width on the header's own gutter, and a dock at the bottom
 edge holding the join bar and the page's tools. The dock stays at the bottom
 whether the grid is short or scrolls beneath it; on phones it follows the grid.
-Account state (Sign in, or the display name and Sign out) sits in the header
-beside Help and is hidden inside a room. Tiles are ordered busiest first by the
+Account state sits in the header beside Help: Sign in for guests, or for an
+account an avatar-and-name button that opens Account, Messages (with its unread
+count), My rooms and Sign out. Inside a room those items sit flat in the More
+menu and Sign out is not offered. Tiles are ordered busiest first by the
 server: live rooms by participant count (unknown counts after known ones), then
 rooms nobody is in, newest first, across Load more pages and searches. A tile
 shows the room image or a monogram of its name on a tone chosen from the room id;

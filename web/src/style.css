@@ -1709,7 +1709,7 @@ header h1 {
   min-width: 0;
 }
 
-header.in-room .auth-bar {
+header.in-room #auth-bar-guest {
   display: none;
 }
 
@@ -1718,13 +1718,45 @@ header.in-room .auth-bar {
   white-space: nowrap;
 }
 
-.auth-user-info {
-  display: flex;
+/* The account menu: an avatar-and-name button at home that opens the account's actions. */
+.account-menu {
+  position: relative;
+}
+
+.account-menu-btn {
+  display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  min-width: 0;
+  min-height: 44px;
+  padding: 0.25rem 0.6rem 0.25rem 0.3rem;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--text);
+  font: inherit;
   font-size: 0.9rem;
-  color: var(--text-secondary);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.account-menu-btn:hover,
+.account-menu-btn[aria-expanded='true'] {
+  background: var(--surface-2);
+}
+
+/* The initial on the account's tone; a loaded picture (img.account-avatar) fills the circle. */
+.account-menu-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--surface-3);
+  font-size: 0.85rem;
+  font-weight: 600;
 }
 
 #auth-display-name {
@@ -1733,8 +1765,64 @@ header.in-room .auth-bar {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-weight: 500;
-  color: var(--text-primary);
+}
+
+.account-menu-popup {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 310;
+  display: flex;
+  flex-direction: column;
+  min-width: 13rem;
+  padding: 0.3rem;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-float);
+}
+
+.account-menu-popup #community-actions {
+  display: contents;
+}
+
+.account-menu-popup button,
+.account-menu-popup #community-actions button {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.875rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.account-menu-popup button:hover {
+  background: var(--surface-3);
+}
+
+.account-menu-separator {
+  margin: 0.3rem 0.4rem;
+  border: none;
+  border-top: 1px solid var(--border);
+}
+
+/* Inside a room the account items are plain rows of the More menu, without the toggle or
+   Sign out. */
+.room-more-menu #auth-bar-user,
+.room-more-menu #account-menu {
+  display: contents;
+}
+
+.room-more-menu #account-menu-btn,
+.room-more-menu .account-menu-separator,
+.room-more-menu #logout-btn {
+  display: none;
 }
 
 .auth-link-btn {

@@ -136,6 +136,7 @@ async function fixture() {
       './settings-sheet': sheet,
       './discovery': await loadDiscoveryFixture({ ...dom, ui }),
       './appearance': await loadAppearanceFixture({ ...dom, ui }),
+      './avatar-colors': await loadTypeScript('src/avatar-colors.ts'),
       './account-sessions': await loadTypeScript('src/account-sessions.ts', {
         modules: { './ui': ui },
         globals: { document: dom.document },
@@ -443,6 +444,43 @@ test('profile text remains text and remote avatar URLs are not rendered', async 
   assert.equal(view.querySelectorAll('h3')[0].textContent, '<b>Alice</b>');
   assert.equal(view.querySelectorAll('p')[1].textContent, '<p>Biography</p>');
   assert.equal(view.querySelectorAll('img').length, 0);
+});
+
+test("the own avatar paints its initial on the name tone at once, then the profile's chosen color or picture", async () => {
+  const f = await fixture();
+  const { avatarColors } = await loadTypeScript('src/avatar-colors.ts');
+  const pending = deferred();
+  f.state.handle = () => pending.promise;
+  const avatar = f.ui.el('span');
+  f.document.body.append(avatar);
+  f.community.decorateOwnAvatar(avatar, 'account-a', 'alice example');
+  assert.equal(avatar.textContent, 'A');
+  assert.deepEqual(
+    { background: avatar.style.background, color: avatar.style.color },
+    avatarColors('alice example'),
+  );
+  pending.resolve({
+    ...f.profile,
+    avatar_url: null,
+    profile_style: { color: 'violet', style: 'accent' },
+  });
+  await flush();
+  assert.equal(avatar.textContent, 'A');
+  assert.deepEqual(
+    { background: avatar.style.background, color: avatar.style.color },
+    avatarColors('alice example', 'violet'),
+  );
+  assert.equal(f.state.requests.length, 1);
+  const pictured = f.ui.el('span');
+  f.document.body.append(pictured);
+  f.community.profiles.clear();
+  const picture = deferred();
+  f.state.handle = () => picture.promise;
+  f.community.decorateOwnAvatar(pictured, 'account-a', 'alice example');
+  picture.resolve({ ...f.profile, avatar_url: 'data:image/jpeg;base64,YQ==' });
+  await flush();
+  assert.equal(pictured.children[0].tagName, 'IMG');
+  assert.equal(pictured.children[0].className, 'account-avatar');
 });
 
 test('avatars decorate connected authenticated nodes only and retain text for guests', async () => {
@@ -1000,6 +1038,7 @@ test('room-scoped actions mount in the room tools while account actions stay in 
         modules: { './ui': dom.ui },
       }),
       './appearance': await loadAppearanceFixture(dom),
+      './avatar-colors': await loadTypeScript('src/avatar-colors.ts'),
     },
     globals: {
       document: dom.document,

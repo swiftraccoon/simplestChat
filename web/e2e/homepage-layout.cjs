@@ -129,9 +129,10 @@ async function geometry(page) {
       Math.min(first.right, second.right) - Math.max(first.left, second.left) > 1 &&
       Math.min(first.bottom, second.bottom) - Math.max(first.top, second.top) > 1;
     const header = document.querySelector('header');
-    const headerControls = [
-      ...header.querySelectorAll('a, button, .status, .quality-dot, #auth-display-name'),
-    ].filter((node) => node.getClientRects().length);
+    // The display name sits inside the account button, which the button's own box covers.
+    const headerControls = [...header.querySelectorAll('a, button, .status, .quality-dot')].filter(
+      (node) => node.getClientRects().length,
+    );
     for (let index = 0; index < headerControls.length; index++) {
       inside(box(headerControls[index]), box(header), 'header control');
       for (const sibling of headerControls.slice(index + 1))
@@ -400,6 +401,16 @@ async function run(env = process.env) {
                   mentions: true,
                   quietHours: null,
                   conversations: [],
+                });
+              }
+              if (url.pathname.startsWith('/api/auth/profiles/') && request.method() === 'GET') {
+                assert.equal(signedIn, true, 'Guests must not request account profiles');
+                return json(200, {
+                  id: 'layout-owner',
+                  display_name: 'Account'.repeat(12),
+                  avatar_url: null,
+                  bio: '',
+                  profile_style: { color: null, style: 'accent' },
                 });
               }
               if (url.pathname === '/api/auth/ws-ticket') {

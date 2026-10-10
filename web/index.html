@@ -41,16 +41,28 @@
             aria-label="Help (opens in a new tab)"
             >Help</a
           >
-          <div id="community-actions" hidden></div>
           <!-- Account state: shown when logged out -->
           <div id="auth-bar-guest" class="auth-bar">
             <button id="sign-in-btn" class="auth-link-btn" hidden>Sign in</button>
           </div>
-          <!-- Account state: shown when logged in -->
-          <div id="auth-bar-user" class="auth-bar" hidden>
-            <div class="auth-user-info">
-              <span id="auth-display-name"></span>
-              <button id="logout-btn" class="auth-link-btn">Sign out</button>
+          <!-- Account state: shown when logged in. The avatar opens the account's actions;
+               inside a room they sit flat in the More menu instead. -->
+          <div id="auth-bar-user" class="auth-bar account-menu" hidden>
+            <button
+              id="account-menu-btn"
+              class="account-menu-btn"
+              type="button"
+              aria-label="Account menu"
+              aria-expanded="false"
+              aria-controls="account-menu"
+            >
+              <span id="auth-avatar" class="account-menu-avatar" aria-hidden="true"></span>
+              <span id="auth-display-name" class="account-name"></span>
+            </button>
+            <div id="account-menu" class="account-menu-popup" hidden>
+              <div id="community-actions" hidden></div>
+              <hr class="account-menu-separator" />
+              <button id="logout-btn" type="button">Sign out</button>
             </div>
           </div>
           <span id="quality-indicator" class="quality-dot" hidden title="Connection quality"></span>

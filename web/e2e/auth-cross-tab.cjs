@@ -3,6 +3,7 @@
 const assert = require('node:assert/strict');
 const { browserOptions } = require('./browser-options.cjs');
 const { capabilities } = require('./capabilities-fixture.cjs');
+const { signOut } = require('./account-menu.cjs');
 const playwright = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const origin = new URL(process.env.BASE_URL || 'http://127.0.0.1:38179');
 if (
@@ -232,7 +233,7 @@ async function scenario(browser, storageOnly) {
     await first.waitForFunction(
       () => document.getElementById('auth-display-name').textContent === 'Second',
     );
-    await first.locator('#logout-btn').click();
+    await signOut(first);
     await second.locator('#sign-in-btn').waitFor({ state: 'visible' });
     assert.equal(
       (await context.cookies()).some((cookie) => cookie.name === 'fixture_refresh'),

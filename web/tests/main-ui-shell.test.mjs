@@ -491,82 +491,89 @@ test('a room ID is suggested from the display name until the ID is edited by han
   assert.equal(suggestRoomId('a'.repeat(200)).length, 64);
 });
 
-test('the More menu opens on its button, closes on a choice, Escape or a click away, and keeps focus sensible', async () => {
-  const state = { focused: null, documentClick: [] };
-  const node = (name, parent = null) => ({
-    name,
-    parent,
-    hidden: true,
-    attributes: {},
-    listeners: [],
-    setAttribute(key, value) {
-      this.attributes[key] = String(value);
-    },
-    getAttribute(key) {
-      return this.attributes[key] ?? null;
-    },
-    addEventListener(type, handler, capture) {
-      this.listeners.push({ type, handler, capture: capture === true });
-    },
-    focus() {
-      state.focused = this;
-    },
-    contains(other) {
-      for (let current = other; current; current = current.parent)
-        if (current === this) return true;
-      return false;
-    },
-    closest() {
-      return this.name.startsWith('item') ? this : null;
-    },
-  });
-  const wrapper = node('wrapper');
-  const toggle = node('toggle', wrapper);
-  toggle.parentElement = wrapper;
-  const menu = node('menu', wrapper);
-  const item = node('item', menu);
-  menu.querySelector = () => item;
-  const fire = (target, type, event = {}) => {
-    const path = [];
-    for (let current = target; current; current = current.parent) path.unshift(current);
-    const payload = { target, stopPropagation() {}, ...event };
-    for (const phase of [true, false])
-      for (const current of phase ? path : [...path].reverse())
-        for (const entry of current.listeners)
-          if (entry.type === type && entry.capture === phase) entry.handler(payload);
-    if (type === 'click') for (const handler of state.documentClick) handler(payload);
-  };
-  const { setupRoomMenu } = evaluateTypeScript(
-    `${await functionSource('setupRoomMenu')} export { setupRoomMenu };`,
-    {
-      globals: {
-        document: {
-          getElementById: (id) => ({ 'room-more-btn': toggle, 'room-more-menu': menu })[id],
-          addEventListener: (type, handler) =>
-            type === 'click' && state.documentClick.push(handler),
+for (const [label, setup, toggleId, menuId] of [
+  ['More', 'setupRoomMenu', 'room-more-btn', 'room-more-menu'],
+  ['account', 'setupAccountMenu', 'account-menu-btn', 'account-menu'],
+]) {
+  test(`the ${label} menu opens on its button, closes on a choice, Escape or a click away, and keeps focus sensible`, async () => {
+    const state = { focused: null, documentClick: [] };
+    const node = (name, parent = null) => ({
+      name,
+      parent,
+      hidden: true,
+      attributes: {},
+      listeners: [],
+      setAttribute(key, value) {
+        this.attributes[key] = String(value);
+      },
+      getAttribute(key) {
+        return this.attributes[key] ?? null;
+      },
+      addEventListener(type, handler, capture) {
+        this.listeners.push({ type, handler, capture: capture === true });
+      },
+      focus() {
+        state.focused = this;
+      },
+      contains(other) {
+        for (let current = other; current; current = current.parent)
+          if (current === this) return true;
+        return false;
+      },
+      closest() {
+        return this.name.startsWith('item') ? this : null;
+      },
+    });
+    const wrapper = node('wrapper');
+    const toggle = node('toggle', wrapper);
+    toggle.parentElement = wrapper;
+    const menu = node('menu', wrapper);
+    const item = node('item', menu);
+    menu.querySelector = () => item;
+    const fire = (target, type, event = {}) => {
+      const path = [];
+      for (let current = target; current; current = current.parent) path.unshift(current);
+      const payload = { target, stopPropagation() {}, ...event };
+      for (const phase of [true, false])
+        for (const current of phase ? path : [...path].reverse())
+          for (const entry of current.listeners)
+            if (entry.type === type && entry.capture === phase) entry.handler(payload);
+      if (type === 'click') for (const handler of state.documentClick) handler(payload);
+    };
+    const { [setup]: setupMenu } = evaluateTypeScript(
+      `${await functionSource('setupMenu')}
+    ${await functionSource(setup)}
+    export { ${setup} };`,
+      {
+        globals: {
+          document: {
+            getElementById: (id) => ({ [toggleId]: toggle, [menuId]: menu })[id],
+            addEventListener: (type, handler) =>
+              type === 'click' && state.documentClick.push(handler),
+          },
         },
       },
-    },
-  );
-  setupRoomMenu();
-  fire(toggle, 'click');
-  assert.equal(menu.hidden, false);
-  assert.equal(toggle.attributes['aria-expanded'], 'true');
-  assert.equal(state.focused, item, 'opening focuses the first choice');
-  fire(item, 'click');
-  assert.equal(menu.hidden, true, 'a choice closes the menu');
-  assert.equal(state.focused, toggle, 'a dialog the choice opens will return focus to More');
-  fire(toggle, 'click');
-  fire(item, 'keydown', { key: 'Escape' });
-  assert.equal(menu.hidden, true);
-  assert.equal(toggle.attributes['aria-expanded'], 'false');
-  fire(toggle, 'click');
-  fire(node('elsewhere'), 'click');
-  assert.equal(menu.hidden, true, 'a click elsewhere closes it');
-  fire(toggle, 'click');
-  fire(toggle, 'click');
-  assert.equal(menu.hidden, true, 'the button toggles it');
-});
+    );
+    setupMenu();
+    fire(toggle, 'click');
+    assert.equal(menu.hidden, false);
+    assert.equal(toggle.attributes['aria-expanded'], 'true');
+    assert.equal(state.focused, item, 'opening focuses the first choice');
+    fire(item, 'click');
+    assert.equal(menu.hidden, true, 'a choice closes the menu');
+    assert.equal(state.focused, toggle, 'a dialog the choice opens will return focus to More');
+    fire(toggle, 'click');
+    fire(item, 'keydown', { key: 'Escape' });
+    assert.equal(menu.hidden, true);
+    assert.equal(toggle.attributes['aria-expanded'], 'false');
+    fire(toggle, 'click');
+    fire(node('elsewhere'), 'click');
+    assert.equal(menu.hidden, true, 'a click elsewhere closes it');
+    fire(toggle, 'click');
+    fire(toggle, 'click');
+    assert.equal(menu.hidden, true, 'the button toggles it');
+  });
+}
 
 test('one pinned tile fills the stage, and a tile that is gone cannot stay pinned', async () => {
   const classes = () => {

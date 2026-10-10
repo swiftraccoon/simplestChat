@@ -7,6 +7,7 @@ const { productionAssets } = require('./homepage-layout.cjs');
 const { openRoomMenu } = require('./room-menu.cjs');
 const { closeOwnedBrowser } = require('./lifecycle-cleanup.cjs');
 const { mediaLayout } = require('./media-layout.cjs');
+const { signOut } = require('./account-menu.cjs');
 const {
   participantHovercardChecks,
   participantHovercardTouchChecks,
@@ -345,6 +346,15 @@ async function run() {
           largeText: false,
           timestamps: 'time',
           ignored: [],
+        });
+      // The header avatar reads the account's own public profile.
+      if (url.pathname.startsWith('/api/auth/profiles/'))
+        return json({
+          id: decodeURIComponent(url.pathname.slice('/api/auth/profiles/'.length)),
+          display_name: account?.display_name ?? 'Fixture account',
+          avatar_url: null,
+          bio: '',
+          profile_style: { color: null, style: 'accent' },
         });
       throw new Error(`Unexpected fixture path ${url.pathname}`);
     });
@@ -867,7 +877,7 @@ async function run() {
       ])
         localStorage.setItem(key, value);
     });
-    await signedOut.page.locator('#logout-btn').click();
+    await signOut(signedOut.page);
     await signedOut.page.locator('#sign-in-btn').waitFor({ state: 'visible' });
     await signedOut.page.waitForFunction(
       () =>

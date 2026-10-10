@@ -3,6 +3,7 @@
 const assert = require('node:assert/strict');
 const { sheetScreen, closeSheet } = require('./settings-sheet.cjs');
 const { sessionManagementChecks } = require('./account-session-checks.cjs');
+const { accountMenuButton } = require('./account-menu.cjs');
 const playwright = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 let failureStage = 'owned-browser-setup';
 
@@ -147,7 +148,7 @@ async function run() {
     await page.reload();
     // Passkeys live on the sheet's Sign-in & security screen.
     const openAccount = async () => {
-      await page.getByRole('button', { name: 'Account', exact: true }).click();
+      await (await accountMenuButton(page, 'Account')).click();
       const account = await sheetScreen(page, 'Sign-in & security');
       await account.getByRole('button', { name: 'Add passkey', exact: true }).waitFor();
       return account;
@@ -416,7 +417,7 @@ async function run() {
       'Password sign-in returns the same account',
     );
     await page.locator('#login-modal').waitFor({ state: 'hidden' });
-    await page.locator('#logout-btn').waitFor({ state: 'visible' });
+    await page.locator('#auth-bar-user').waitFor({ state: 'visible' });
     const noPasskeys = await request('/api/auth/passkeys', passwordSession.token);
     assert.equal(noPasskeys.password_enabled, true);
     assert.equal(noPasskeys.passkeys.length, 0, 'The real server deleted the selected credential');
@@ -595,7 +596,7 @@ async function run() {
       'Native sign-in uses the new credential',
     );
     await page.locator('#login-modal').waitFor({ state: 'hidden' });
-    await page.locator('#logout-btn').waitFor({ state: 'visible' });
+    await page.locator('#auth-bar-user').waitFor({ state: 'visible' });
     const afterReplacement = await request('/api/auth/passkeys', replacementSession.token);
     assert.equal(afterReplacement.password_enabled, false);
     assert.equal(afterReplacement.recovery_enabled, true);

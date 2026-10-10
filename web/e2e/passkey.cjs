@@ -2,6 +2,7 @@
  * remain in the disposable database/context and in memory; no secrets in reports.
  * This verifies native ceremonies, not OS or password-manager selection UX. */
 const assert = require('node:assert/strict');
+const { signOut } = require('./account-menu.cjs');
 const { once } = require('node:events');
 const { createServer } = require('node:http');
 const playwright = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
@@ -119,7 +120,7 @@ async function multipleAccounts(page, cdp, authenticatorId) {
       (name) => document.getElementById('auth-display-name').textContent === name,
       displayName,
     );
-    await page.locator('#logout-btn').click();
+    await signOut(page);
     await page.locator('#sign-in-btn').waitFor({ state: 'visible' });
   }
 
@@ -156,7 +157,7 @@ async function multipleAccounts(page, cdp, authenticatorId) {
       (name) => document.getElementById('auth-display-name').textContent === name,
       account.displayName,
     );
-    await page.locator('#logout-btn').click();
+    await signOut(page);
     await page.locator('#sign-in-btn').waitFor({ state: 'visible' });
   };
 
@@ -243,14 +244,14 @@ async function run() {
     assert.equal(registration.publicKey.authenticatorSelection.userVerification, 'required');
     assert.equal(registration.publicKey.authenticatorSelection.authenticatorAttachment, undefined);
     await page.locator('#register-modal').waitFor({ state: 'hidden' });
-    await page.locator('#logout-btn').waitFor({ state: 'visible' });
+    await page.locator('#auth-bar-user').waitFor({ state: 'visible' });
     const { credentials } = await cdp.send('WebAuthn.getCredentials', { authenticatorId });
     assert.equal(credentials.length, 1);
     const credential = credentials[0];
     assert.equal(credential.isResidentCredential, true);
     checks.push('resident-required-native-registration');
 
-    await page.locator('#logout-btn').click();
+    await signOut(page);
     await page.locator('#sign-in-btn').click();
     assert.equal(await page.locator('#login-email').inputValue(), '');
     const loginOptions = page.waitForResponse((response) =>
@@ -262,10 +263,10 @@ async function run() {
     assert.deepEqual(login.publicKey.allowCredentials, []);
     assert.equal(login.publicKey.userVerification, 'required');
     await page.locator('#login-modal').waitFor({ state: 'hidden' });
-    await page.locator('#logout-btn').waitFor({ state: 'visible' });
+    await page.locator('#auth-bar-user').waitFor({ state: 'visible' });
     assert.deepEqual(starts, [{}]);
     checks.push('usernameless-native-login-real-verification');
-    await page.locator('#logout-btn').click();
+    await signOut(page);
     await page.locator('#sign-in-btn').waitFor({ state: 'visible' });
 
     const legacyStatuses = await page.evaluate(async (knownEmail) => {

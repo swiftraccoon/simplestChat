@@ -184,14 +184,20 @@ function authUiFixture(capabilities, signedIn) {
   );
   const effects = [];
   const nameInput = { value: '' };
+  const authAvatar = { textContent: '', dataset: {}, style: {} };
   const { updateAuthUI } = evaluateTypeScript(
     `${functionSource('updateAuthUI')} export { updateAuthUI };`,
     {
       globals: {
         ...nodes,
         capabilities,
-        auth: { isLoggedIn: signedIn, displayName: signedIn ? 'Restored account' : null },
+        auth: {
+          isLoggedIn: signedIn,
+          displayName: signedIn ? 'Restored account' : null,
+          userId: signedIn ? 'restored' : null,
+        },
         nameInput,
+        authAvatar,
         document: {
           getElementById: (id) => {
             assert.equal(id, 'community-actions');
@@ -204,7 +210,10 @@ function authUiFixture(capabilities, signedIn) {
         },
         observeUiTask() {},
         updateJoinBtn: () => effects.push('join-controls'),
-        community: { refresh: () => effects.push('community') },
+        community: {
+          refresh: () => effects.push('community'),
+          decorateOwnAvatar: (node, id, name) => effects.push(`avatar:${id}:${name}`),
+        },
         participantHovercard: { refresh() {} },
         pwa: { accountChanged() {} },
         notificationPreferences: { refresh: async () => {} },
@@ -212,7 +221,7 @@ function authUiFixture(capabilities, signedIn) {
       },
     },
   );
-  return { updateAuthUI, nodes, effects, nameInput };
+  return { updateAuthUI, nodes, effects, nameInput, authAvatar };
 }
 
 for (const signedIn of [false, true]) {
@@ -221,7 +230,13 @@ for (const signedIn of [false, true]) {
     f.updateAuthUI();
     for (const name of ['signInBtn', 'communityActions', 'roomBrowser', 'createRoomBtn'])
       assert.equal(f.nodes[name].hidden, true, name);
-    assert.deepEqual(f.effects, ['join-controls', 'community']);
+    // A restored account decorates its avatar even before the server's features are known.
+    assert.deepEqual(
+      f.effects,
+      signedIn
+        ? ['avatar:restored:Restored account', 'join-controls', 'community']
+        : ['join-controls', 'community'],
+    );
     assert.equal(f.nodes.authBarUser.hidden, !signedIn);
     assert.equal(f.nodes.authBarGuest.hidden, signedIn);
     assert.equal(f.nameInput.value, signedIn ? 'Restored account' : '');
@@ -244,7 +259,12 @@ test('known capabilities reveal only advertised account and directory actions', 
     for (const name of ['signInBtn', 'communityActions', 'roomBrowser'])
       assert.equal(f.nodes[name].hidden, false, name);
     assert.equal(f.nodes.createRoomBtn.hidden, !signedIn);
-    assert.deepEqual(f.effects, ['directory', 'join-controls', 'community']);
+    assert.deepEqual(
+      f.effects,
+      signedIn
+        ? ['avatar:restored:Restored account', 'directory', 'join-controls', 'community']
+        : ['directory', 'join-controls', 'community'],
+    );
   }
 
   const creationDisabled = authUiFixture({ ...supported, roomCreation: false }, true);

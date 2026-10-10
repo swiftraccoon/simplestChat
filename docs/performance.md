@@ -15,7 +15,7 @@ not avoid the limit. The initial budgets leave room for small product changes:
 | Asset group | Uncompressed limit | Gzip limit |
 | ----------- | ------------------ | ---------- |
 | JavaScript  | 640 KiB            | 152 KiB    |
-| CSS         | 74 KiB             | 14.5 KiB   |
+| CSS         | 76 KiB             | 15 KiB     |
 | HTML        | 50 KiB             | 12.5 KiB   |
 
 Limits are defined in [bundle-budget.json](../web/bundle-budget.json). Gzip uses
@@ -74,6 +74,19 @@ the sheet core, the per-field room identity saves and the moderation screens tha
 replaced the tabbed management dialog, and the CSS the row, switch and segment
 styles after the dialog frame, tab and media-setup rules were removed. Reviewed
 limits are now 640/152 KiB JavaScript and 74/14.5 KiB CSS; HTML is unchanged.
+
+The October 10 home page work laid the directory out as a full-width page
+(one toolbar row, a tile grid on the header's gutter, a docked join bar), put
+favorite and recent rooms on a shelf of small tiles, and replaced the header's
+account row and separate account buttons with one avatar menu. Measured against
+the settings-sheet build above, this build measures JavaScript 652,267 bytes raw /
+154,351 gzip, CSS 75,778 / 14,866 and HTML 40,499 / 11,329. A Chromium coverage
+pass over the accessibility, community, room-control, media-continuity,
+UI-stress, homepage and resilience suites matched 663 of the stylesheet's 696
+rules; the 33 unmatched rules serve states those suites do not reach, and the
+only rules without a producer were removed together with stale custom-property
+fallbacks. The CSS growth is the shelf, the small tile variant and the account
+menu. Reviewed limits are now 76/15 KiB CSS; JavaScript and HTML are unchanged.
 
 The October 9 visual system (one warm black ground, no accent hue, floating call
 controls, borderless people and chat columns, a portrait room-tile directory and

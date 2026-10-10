@@ -3,6 +3,7 @@
 const assert = require('node:assert/strict');
 const { browserOptions } = require('./browser-options.cjs');
 const { capabilities } = require('./capabilities-fixture.cjs');
+const { signOut } = require('./account-menu.cjs');
 const playwright = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const origin = new URL(process.env.BASE_URL || 'http://127.0.0.1:38179');
 if (
@@ -169,7 +170,7 @@ async function run() {
       (await context.cookies()).find((cookie) => cookie.name === 'fixture_refresh').httpOnly,
       true,
     );
-    await page.locator('#logout-btn').click();
+    await signOut(page);
     await page.locator('#sign-in-btn').click();
     await page.locator('#login-email').fill('');
     await page.locator('#login-passkey-btn').click();

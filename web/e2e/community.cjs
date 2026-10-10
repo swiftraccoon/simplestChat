@@ -26,6 +26,7 @@ const { collectPeerDiagnostics } = require('./peer-diagnostics.cjs');
 const { installPeerEventTracing } = require('./peer-events.cjs');
 const { installSignalingReconnectObservation } = require('./signaling-reconnect.cjs');
 const { installRelayPolicy, waitForRelayPaths } = require('./turn-relay.cjs');
+const { openAccountMenu, accountMenuButton, signOut } = require('./account-menu.cjs');
 const turnRelay = process.env.TURN_E2E === '1';
 const options = browserOptions(process.env.E2E_BROWSER);
 const playwright = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
@@ -724,7 +725,10 @@ async function header(page, name) {
     name: name === 'Messages' ? /^Messages(?:, .* unread)?$/ : name,
     exact: name !== 'Messages',
   });
-  if (!(await target.isVisible())) await openRoomMenu(page);
+  if (!(await target.isVisible())) {
+    if (await page.locator('#room-screen').isVisible()) await openRoomMenu(page);
+    else await openAccountMenu(page);
+  }
   await target.click();
   // Account and room management open the settings sheet; the rest are dialogs.
   if (name === 'Account' || name === 'Manage room') {
@@ -738,11 +742,7 @@ async function header(page, name) {
 async function settingsScreen(page, label) {
   if (!(await sheet(page).isVisible())) {
     if (await page.locator('#room-screen').isVisible()) await page.locator('#settings-btn').click();
-    else
-      await page
-        .locator('#community-actions')
-        .getByRole('button', { name: 'Account', exact: true })
-        .click();
+    else (await accountMenuButton(page, 'Account')).click();
   }
   return sheetScreen(page, label);
 }
@@ -2578,7 +2578,7 @@ async function setRole(owner, name, role) {
       await account.getByRole('button', { name: 'Change password', exact: true }).click();
       await owner.locator('#sign-in-btn').waitFor({ state: 'visible' });
       await login(owner, ownerEmail, `${password}changed`);
-      await owner.locator('#logout-btn').click();
+      await signOut(owner);
       await owner.locator('#sign-in-btn').waitFor({ state: 'visible' });
     });
     await step('saved key recovery, one-time replay rejection and new-password login', async () => {
