@@ -532,8 +532,8 @@ async function main() {
       { timeout: 20000 },
     );
     assert.equal(
-      await publisher.getByRole('dialog', { name: 'Your settings', exact: true }).count(),
-      0,
+      await publisher.locator('#settings-sheet').isVisible(),
+      false,
       'camera activation does not require saving settings',
     );
     if (!callOutcomes) await publisher.locator('#mic-btn').click();

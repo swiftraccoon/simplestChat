@@ -297,8 +297,8 @@ async function inboundStats(page) {
     );
     const firstDecodedFrameMs = performance.now() - cameraStart;
     assert.equal(
-      await owner.getByRole('dialog', { name: 'Your settings', exact: true }).count(),
-      0,
+      await owner.locator('#settings-sheet').isVisible(),
+      false,
       'camera activation does not require saving settings',
     );
     const before = await inboundStats(member);

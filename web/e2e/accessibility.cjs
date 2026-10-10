@@ -1,5 +1,6 @@
 /** Opt-in accessibility smoke against owned disposable loopback services. */
 const { openRoomMenu } = require('./room-menu.cjs');
+const { sheet, sheetRow, sheetScreen } = require('./settings-sheet.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -389,39 +390,45 @@ async function run(env = process.env) {
       );
     });
 
+    const slug = (name) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
     const settings = async (prefix) => {
       const opener = page.locator('#settings-btn');
       await opener.focus();
       await opener.press('Enter');
-      const dialog = page.getByRole('dialog', { name: 'Your settings', exact: true });
-      await dialog.waitFor({ state: 'visible' });
-      for (const name of ['Audio & video', 'Appearance']) {
-        await dialog.getByRole('tab', { name, exact: true }).click();
-        await scan(page, `${prefix}-personal-${name}`, AxeBuilder);
-        if (prefix === 'desktop' && name === 'Audio & video')
+      const region = sheet(page);
+      await region.waitFor({ state: 'visible' });
+      await scan(page, `${prefix}-settings-list`, AxeBuilder);
+      for (const name of ['Camera & mic', 'Layout']) {
+        await sheetScreen(page, name);
+        await scan(page, `${prefix}-settings-${slug(name)}`, AxeBuilder);
+        if (prefix === 'desktop' && name === 'Camera & mic')
           await page.screenshot({ path: path.join(artifacts, 'personal-settings-desktop.png') });
-        if (prefix === 'mobile-320' && name === 'Audio & video')
+        if (prefix === 'mobile-320' && name === 'Camera & mic')
           await page.screenshot({ path: path.join(artifacts, 'personal-settings-mobile-320.png') });
       }
-      await dialog.getByRole('tab', { name: 'Audio & video', exact: true }).click();
-      await dialog.getByText('Advanced capture settings', { exact: true }).click();
-      await scan(page, `${prefix}-advanced-capture`, AxeBuilder);
+      await sheetScreen(page, 'Camera & mic');
+      await sheetRow(page, 'Quality').click();
+      await region.locator('[name=resolution]').waitFor({ state: 'visible' });
+      await scan(page, `${prefix}-settings-quality`, AxeBuilder);
       await check(`${prefix}-personal-Escape-restores-focus`, async () => {
-        await page.keyboard.press('Escape');
-        await dialog.waitFor({ state: 'hidden' });
+        // Quality, Camera & mic and the list, then the sheet itself.
+        for (let depth = 0; depth < 3; depth++) await page.keyboard.press('Escape');
+        await region.waitFor({ state: 'hidden' });
         assert.equal(await opener.evaluate((node) => node === document.activeElement), true);
       });
       const roomOpener = page.locator('#room-settings-btn');
       await roomOpener.focus();
       await roomOpener.press('Enter');
-      const room = page.getByRole('dialog', { name: 'Room settings', exact: true });
-      for (const name of ['Basics', 'Access', 'Participation']) {
-        await room.getByRole('tab', { name, exact: true }).click();
-        await scan(page, `${prefix}-room-${name}`, AxeBuilder);
+      await region.waitFor({ state: 'visible' });
+      await scan(page, `${prefix}-room-list`, AxeBuilder);
+      for (const name of ['Who can enter', 'Chat & broadcasting']) {
+        await sheetScreen(page, name);
+        await scan(page, `${prefix}-room-${slug(name)}`, AxeBuilder);
       }
       await check(`${prefix}-room-Escape-restores-focus`, async () => {
         await page.keyboard.press('Escape');
-        await room.waitFor({ state: 'hidden' });
+        await page.keyboard.press('Escape');
+        await region.waitFor({ state: 'hidden' });
         assert.equal(await roomOpener.evaluate((node) => node === document.activeElement), true);
       });
       await openRoomMenu(page);
@@ -430,14 +437,18 @@ async function run(env = process.env) {
         .getByRole('button', { name: 'Account', exact: true });
       await accountOpener.focus();
       await accountOpener.press('Enter');
-      const account = page.getByRole('dialog', { name: 'Account', exact: true });
-      await account
-        .getByLabel('Account display name', { exact: true })
+      await region.getByLabel('Name', { exact: true }).waitFor({ state: 'visible' });
+      await scan(page, `${prefix}-account-profile`, AxeBuilder);
+      await sheetScreen(page, 'Sign-in & security');
+      await region
+        .getByRole('button', { name: 'Sign out and forget this device', exact: true })
         .waitFor({ state: 'visible' });
-      await scan(page, `${prefix}-account`, AxeBuilder);
+      await scan(page, `${prefix}-account-security`, AxeBuilder);
       await check(`${prefix}-account-Escape-restores-focus`, async () => {
         await page.keyboard.press('Escape');
-        await account.waitFor({ state: 'hidden' });
+        await page.keyboard.press('Escape');
+        await region.waitFor({ state: 'hidden' });
+        // The Account item sits in the closed More menu, so focus returns to the menu toggle.
         assert.equal(
           await page.locator('#room-more-btn').evaluate((node) => node === document.activeElement),
           true,

@@ -1,5 +1,6 @@
 /** Owned loopback DOM tests with fully synthetic membership and control replies. */
 const assert = require('node:assert/strict');
+const { sheetRow, sheetScreen, closeSheet } = require('./settings-sheet.cjs');
 const { browserOptions } = require('./browser-options.cjs');
 const { capabilities } = require('./capabilities-fixture.cjs');
 const playwright = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
@@ -130,6 +131,8 @@ async function main() {
           if (request.type === 'setTopic') room.settings.topic = request.topic;
           if (request.type === 'updateRoomSettings' && 'password' in request)
             room.settings.passwordProtected = request.password !== null;
+          if (request.type === 'updateRoomSettings' && 'maxParticipants' in request)
+            room.settings.maxParticipants = request.maxParticipants;
           if (request.type === 'admitFromLobby' || request.type === 'denyFromLobby')
             room.lobby = room.lobby.filter(
               (entry) => entry.participantId !== request.targetParticipantId,
@@ -199,6 +202,8 @@ async function main() {
     await page.goto(origin.toString());
     await join('owned-room-a');
     await page.locator('#room-settings-btn').click();
+    await sheetScreen(page, 'Who can enter');
+    await sheetRow(page, 'Password').click();
     await change('#rs-password', 'Owned-test-password');
     await count(1);
     assert.equal(await page.locator('#rs-password').isDisabled(), true);
@@ -217,30 +222,38 @@ async function main() {
       () => document.getElementById('room-settings-result').textContent === 'Change saved',
     );
     assert.equal(await page.locator('#rs-password').inputValue(), '');
-    await change('#rs-topic', 'Retained topic draft');
+    // A participant limit is a socket-confirmed field like the password.
+    await sheetScreen(page, 'Chat & broadcasting');
+    await change('#rs-max-participants', '12');
     await count(3);
     await reply(2, false);
     await page.getByRole('button', { name: 'Retry change', exact: true }).waitFor();
-    assert.equal(await page.locator('#rs-topic').inputValue(), 'Retained topic draft');
+    assert.equal(await page.locator('#rs-max-participants').inputValue(), '12');
     await page.getByRole('button', { name: 'Retry change', exact: true }).click();
     await count(4);
     await reply(3, true);
     await page.waitForFunction(
       () => document.getElementById('room-settings-result').textContent === 'Change saved',
     );
+    assert.equal(
+      await page.locator('#rs-max-participants').inputValue(),
+      '12',
+      'the confirmed limit stays on the screen',
+    );
 
-    await change('#rs-topic', 'Old room draft');
+    await change('#rs-max-participants', '7');
     await count(5);
     await home();
     await join('owned-room-b');
     await page.locator('#room-settings-btn').click();
-    await change('#rs-topic', 'New room draft');
+    await sheetScreen(page, 'Chat & broadcasting');
+    await change('#rs-max-participants', '9');
     await count(6);
     await reply(4, false);
     await page.waitForTimeout(50);
-    assert.equal(await page.locator('#rs-topic').inputValue(), 'New room draft');
+    assert.equal(await page.locator('#rs-max-participants').inputValue(), '9');
     assert.equal(
-      await page.locator('#rs-topic').isDisabled(),
+      await page.locator('#rs-max-participants').isDisabled(),
       true,
       'old completion cannot unlock newer settings',
     );
@@ -249,7 +262,7 @@ async function main() {
     await page.waitForFunction(
       () => document.getElementById('room-settings-result').textContent === 'Change saved',
     );
-    await page.keyboard.press('Escape');
+    await closeSheet(page);
 
     await page.evaluate(() => window.__roomControlFixture.waiter('First waiter'));
     await page.locator('[data-tab="lobby"]').click();
@@ -293,7 +306,7 @@ async function main() {
         passed: true,
         checks: [
           'pending-room-controls-disabled',
-          'failed-password-topic-drafts-retained',
+          'failed-password-limit-drafts-retained',
           'explicit-control-retry',
           'stale-settings-response-fenced',
           'lobby-remains-until-ack',

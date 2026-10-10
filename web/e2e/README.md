@@ -81,7 +81,9 @@ constraints, open native fake capture, refresh device names and restore decoded
 video. These fixtures cover the retry and permission-driven UI, not an operating
 system permission prompt or a physical camera's supported formats.
 
-The community suite's `pwa-checks.cjs` helper covers Account notification
+Suites reach settings through `settings-sheet.cjs` (`sheetScreen` climbs to the
+sheet's list, switches segment when needed and opens one screen; `closeSheet`
+closes from the header). The community suite's `pwa-checks.cjs` helper covers Account notification
 enable/disable, permission requested only from the button gesture, opening the
 fixed Messages destination, and the served install manifest. Its push provider,
 subscription and permission APIs are controlled fixtures; it does not prove OS
@@ -189,7 +191,7 @@ the card, keyboard navigation, Escape, and Message/More actions use real room da
 Profile saves verify separate nickname/account-name labels and hovercard styling
 without changing chat or roster colors. Room owners save independent name and
 header-description appearances, which update other participants live and persist
-when reopened through Manage room's Room appearance shortcut.
+when the Name & topic screen is reopened from Manage room.
 Audio must be unmuted at positive volume with advancing playback. A separately
 simulated autoplay rejection checks the visible retry button.
 

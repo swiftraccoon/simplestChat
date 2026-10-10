@@ -1,6 +1,7 @@
 /** Owned loopback only. Native receive/capture recovery plus controlled device UI.
  * Device IDs and native identities stay inside isolated browser pages. */
 const { openRoomMenu } = require('./room-menu.cjs');
+const { sheetScreen, closeSheet } = require('./settings-sheet.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -184,11 +185,10 @@ async function join(browser, label) {
   return page;
 }
 
-async function settings(page) {
+/** Opens the sheet on one media screen; Camera & mic by default. */
+async function settings(page, screen = 'Camera & mic') {
   await page.locator('#settings-btn').click();
-  const dialog = page.getByRole('dialog', { name: 'Your settings', exact: true });
-  await dialog.waitFor({ state: 'visible' });
-  return dialog;
+  return sheetScreen(page, screen);
 }
 
 async function deviceUi(page) {
@@ -205,6 +205,7 @@ async function deviceUi(page) {
     .locator('[name=cameraDeviceId] option[value=fixture-camera]')
     .waitFor({ state: 'attached' });
   await dialog.locator('[name=cameraDeviceId]').selectOption('fixture-camera');
+  dialog = await sheetScreen(page, 'Speaker');
   await dialog.getByRole('button', { name: 'Choose another speaker', exact: true }).click();
   await page.waitForFunction(() =>
     document.querySelector('[data-output-status]').textContent.startsWith('Speaker selected'),
@@ -212,12 +213,13 @@ async function deviceUi(page) {
   assert.equal(await dialog.locator('[data-output-device]').inputValue(), 'fixture-speaker');
   await dialog.getByRole('button', { name: 'Test speaker', exact: true }).click();
   await page.waitForFunction(() => window.__mediaProduct.plays === 1);
-  await dialog.getByRole('tab', { name: 'Appearance', exact: true }).click();
+  // Leaving the Speaker screen stops its test tone.
+  await dialog.getByRole('button', { name: 'Back', exact: true }).click();
   assert.equal(
     await page.evaluate(() => window.__mediaProduct.tones.every((tone) => tone.paused)),
     true,
   );
-  await dialog.getByRole('tab', { name: 'Audio & video', exact: true }).click();
+  dialog = await sheetScreen(page, 'Speaker');
   await page.evaluate(() => {
     window.__mediaProduct.devices = [];
     navigator.mediaDevices.dispatchEvent(new Event('devicechange'));
@@ -227,7 +229,6 @@ async function deviceUi(page) {
       .querySelector('[data-output-status]')
       .textContent.startsWith('Selected speaker is not currently listed'),
   );
-  assert.equal(await dialog.locator('[name=cameraDeviceId]').inputValue(), 'fixture-camera');
   await page.evaluate(() => {
     window.__mediaProduct.chooserMode = 'cancel';
   });
@@ -235,8 +236,8 @@ async function deviceUi(page) {
   await page.waitForFunction(() =>
     document.querySelector('[data-output-status]').textContent.includes('cancelled or blocked'),
   );
+  // The select applies as soon as it changes.
   await dialog.locator('[data-output-device]').selectOption('');
-  await dialog.getByRole('button', { name: 'Use speaker', exact: true }).click();
   await page.waitForFunction(() =>
     document.querySelector('[data-output-status]').textContent.startsWith('Speaker selected'),
   );
@@ -244,15 +245,24 @@ async function deviceUi(page) {
     window.__mediaProduct.chooserMode = 'defer';
   });
   await dialog.getByRole('button', { name: 'Choose another speaker', exact: true }).click();
-  await dialog.getByRole('button', { name: 'Close your settings', exact: true }).click();
+  await closeSheet(page);
   await page.evaluate(() => window.__mediaProduct.completeChooser());
-  dialog = await settings(page);
+  dialog = await settings(page, 'Speaker');
   assert.equal(
     await dialog.locator('[data-output-device]').inputValue(),
     '',
-    'dismissed speaker choice must not change a reopened dialog',
+    'dismissed speaker choice must not change a reopened screen',
   );
-  await dialog.getByRole('button', { name: 'Close your settings', exact: true }).click();
+  dialog = await sheetScreen(page, 'Camera & mic');
+  assert.equal(
+    await dialog.locator('[name=cameraDeviceId]').inputValue(),
+    'fixture-camera',
+    'the chosen camera stays selected while it is unplugged',
+  );
+  // Choices apply at once, so hand the next stage the default camera again.
+  await dialog.locator('[name=cameraDeviceId]').selectOption('');
+  await dialog.locator('.sheet-row-saved', { hasText: 'Saved' }).first().waitFor();
+  await closeSheet(page);
   const result = await page.evaluate(() => ({
     captures: window.__mediaProduct.captures,
     screenCaptures: window.__mediaProduct.screenCaptures,
@@ -264,7 +274,8 @@ async function deviceUi(page) {
   assert.equal(result.screenCaptures, 0);
   assert.deepEqual(result.gestures, [true, true, true]);
   assert.equal(result.disposed, true);
-  assert.equal(result.revoked, 2);
+  // One test tone per visit to the Speaker screen, disposed on leaving it.
+  assert.equal(result.revoked, 3);
   report.checks.push({
     name: 'live-devices-output-gesture-cancel-and-cleanup',
     passed: true,
@@ -278,7 +289,7 @@ async function privatePermissionPreview(page) {
     window.__mediaProduct.revealInputs = true;
     window.__mediaProduct.rejectCameraQuality = true;
   });
-  let dialog = await settings(page);
+  const dialog = await settings(page);
   assert.equal(await dialog.locator('select[name=cameraDeviceId] option').count(), 1);
   assert.equal(await dialog.locator('select[name=microphoneDeviceId] option').count(), 1);
   assert.equal(await page.evaluate(() => window.__mediaProduct.captures), 0);
@@ -302,10 +313,6 @@ async function privatePermissionPreview(page) {
     .locator('select[name=cameraDeviceId] option[value=permission-videoinput]')
     .waitFor({ state: 'attached' });
   assert.equal(await dialog.locator('select[name=microphoneDeviceId] option').count(), 1);
-  assert.equal(
-    await dialog.getByRole('button', { name: 'Save settings', exact: true }).isEnabled(),
-    true,
-  );
   assert.deepEqual(await observation(), {
     requests: [
       { video: true, audio: false },
@@ -336,10 +343,6 @@ async function privatePermissionPreview(page) {
     .locator('select[name=microphoneDeviceId] option[value=permission-audioinput]')
     .waitFor({ state: 'attached' });
   assert.equal(await dialog.locator('select[name=cameraDeviceId] option').count(), 2);
-  assert.equal(
-    await dialog.getByRole('button', { name: 'Save settings', exact: true }).isEnabled(),
-    true,
-  );
   assert.deepEqual(await observation(), {
     requests: [
       { video: true, audio: false },
@@ -351,15 +354,16 @@ async function privatePermissionPreview(page) {
     cameraEnabled: false,
     microphoneEnabled: false,
   });
-  await dialog.getByRole('button', { name: 'Close your settings', exact: true }).click();
+  await closeSheet(page);
   await page.waitForFunction(() =>
     window.__mediaProduct.captureStreams.every((stream) =>
       stream.getTracks().every((track) => track.readyState === 'ended'),
     ),
   );
-  dialog = await settings(page);
+  await settings(page);
   assert.equal(await page.evaluate(() => window.__mediaProduct.captures), 3);
-  await dialog.getByRole('button', { name: 'Save settings', exact: true }).click();
+  // Reopening applies nothing: the devices revealed by the preview were kept at once.
+  await closeSheet(page);
   assert.deepEqual(await observation(), {
     requests: [
       { video: true, audio: false },
@@ -372,7 +376,7 @@ async function privatePermissionPreview(page) {
     microphoneEnabled: false,
   });
   report.checks.push({
-    name: 'private-preview-quality-fallback-reveals-devices-before-save',
+    name: 'private-preview-quality-fallback-reveals-devices-without-save',
     passed: true,
     captures: 3,
     cameraOnly: true,
@@ -490,30 +494,29 @@ async function lifecycleRecovery(viewer) {
       { kind: 'audiooutput', deviceId: 'fixture-speaker', label: 'Fixture speaker', groupId: '' },
     ];
   });
-  let dialog = await settings(viewer);
+  let dialog = await settings(viewer, 'Speaker');
   await dialog.getByRole('button', { name: 'Choose another speaker', exact: true }).click();
   await viewer.waitForFunction(() =>
     document.querySelector('[data-output-status]').textContent.startsWith('Speaker selected'),
   );
-  await dialog.getByRole('button', { name: 'Close your settings', exact: true }).click();
+  await closeSheet(viewer);
   await viewer.evaluate(() => {
     window.__mediaProduct.devices = [];
     navigator.mediaDevices.dispatchEvent(new Event('devicechange'));
   });
   await viewer
     .getByText(
-      'Your selected speaker is not currently listed. Reconnect it or choose a speaker in Your settings.',
+      'Your selected speaker is not currently listed. Reconnect it or choose a speaker in Settings.',
       { exact: true },
     )
     .waitFor();
-  dialog = await settings(viewer);
+  dialog = await settings(viewer, 'Speaker');
   assert.equal(await dialog.locator('[data-output-device]').inputValue(), 'fixture-speaker');
   await dialog.locator('[data-output-device]').selectOption('');
-  await dialog.getByRole('button', { name: 'Use speaker', exact: true }).click();
   await viewer.waitForFunction(() =>
     document.querySelector('[data-output-status]').textContent.startsWith('Speaker selected'),
   );
-  await dialog.getByRole('button', { name: 'Close your settings', exact: true }).click();
+  await closeSheet(viewer);
   assert.equal(await viewer.evaluate(() => window.__mediaProduct.captures), captured);
   report.checks.push({
     name: 'detached-speaker-notice-keeps-selected-output-until-user-changes-it',
@@ -585,7 +588,7 @@ async function main() {
     await publisher.locator('#cam-btn').click();
     await progressing(viewer, 'native-camera-decoding');
     assert.equal(
-      await publisher.getByRole('dialog', { name: 'Your settings', exact: true }).isVisible(),
+      await publisher.locator('#settings-sheet').isVisible(),
       false,
       'explicit camera activation does not require opening and saving Settings',
     );

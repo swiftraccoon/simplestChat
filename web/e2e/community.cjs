@@ -10,6 +10,7 @@ const { installPwaFixture, checkPwa } = require('./pwa-checks.cjs');
 const { checkContactsBeforeRoom, checkSavedRoomsAcrossDevices } = require('./discovery-checks.cjs');
 const { privateAttachmentChecks, publicAttachmentChecks } = require('./attachment-checks.cjs');
 const { checkNotificationPreferences } = require('./notification-checks.cjs');
+const { sheet, sheetRow, sheetScreen, closeSheet } = require('./settings-sheet.cjs');
 const { participantHovercardChecks } = require('./participant-hovercard-checks.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -725,7 +726,25 @@ async function header(page, name) {
   });
   if (!(await target.isVisible())) await openRoomMenu(page);
   await target.click();
+  // Account and room management open the settings sheet; the rest are dialogs.
+  if (name === 'Account' || name === 'Manage room') {
+    const region = sheet(page);
+    await region.waitFor({ state: 'visible' });
+    return region;
+  }
   return page.getByRole('dialog', { name, exact: true });
+}
+/** Opens the settings sheet on one screen, from a room or from the signed-in home page. */
+async function settingsScreen(page, label) {
+  if (!(await sheet(page).isVisible())) {
+    if (await page.locator('#room-screen').isVisible()) await page.locator('#settings-btn').click();
+    else
+      await page
+        .locator('#community-actions')
+        .getByRole('button', { name: 'Account', exact: true })
+        .click();
+  }
+  return sheetScreen(page, label);
 }
 /** Whether a room action is offered, read from the menu and leaving it closed. */
 async function roomMenuOffers(page, name) {
@@ -736,21 +755,33 @@ async function roomMenuOffers(page, name) {
     .waitFor({ state: 'visible' });
   await page.keyboard.press('Escape');
 }
+/** Dialogs close with Close; the settings sheet closes from its own header. */
 async function close(dialog) {
-  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+  await dialog
+    .getByRole('button', { name: /^Close( settings)?$/ })
+    .first()
+    .click();
   await dialog.waitFor({ state: 'hidden' });
 }
 async function preferences(page, allow) {
   await page.getByRole('button', { name: 'Chat options', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'Chat preferences', exact: true });
-  await dialog.getByLabel('Allow incoming private messages', { exact: true }).setChecked(allow);
-  await dialog.getByRole('button', { name: 'Save preferences', exact: true }).click();
-  await dialog.waitFor({ state: 'hidden' });
+  const privacy = await sheetScreen(page, 'Privacy');
+  const toggle = privacy.getByLabel('Private messages from others', { exact: true });
+  if ((await toggle.isChecked()) !== allow) {
+    const stored = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === '/api/auth/preferences' &&
+        response.request().method() === 'PUT',
+    );
+    await toggle.setChecked(allow);
+    await stored;
+  }
+  await closeSheet(page);
 }
 async function roomHistory(page) {
   await page.getByRole('button', { name: 'Chat options', exact: true }).click();
-  const preferences = page.getByRole('dialog', { name: 'Chat preferences', exact: true });
-  await preferences.getByRole('button', { name: 'Room history…', exact: true }).click();
+  const look = await sheetScreen(page, 'Chat look');
+  await look.getByRole('button', { name: 'Room history', exact: true }).click();
   const history = page.getByRole('dialog', { name: 'Room history', exact: true });
   await history.waitFor({ state: 'visible' });
   return history;
@@ -761,98 +792,38 @@ async function chatEnabled(page, value) {
     value,
   );
 }
+const ACCESS_CONTROLS = [
+  '#rs-guests',
+  '#rs-require-reg',
+  '#rs-invite-only',
+  '#rs-secret',
+  '#rs-lobby',
+];
 async function roomSetting(page, id, checked) {
   await page.locator('#room-settings-btn').click();
-  const dialog = page.getByRole('dialog', { name: 'Room settings', exact: true });
-  const tab = [
-    '#rs-guests',
-    '#rs-require-reg',
-    '#rs-invite-only',
-    '#rs-secret',
-    '#rs-lobby',
-  ].includes(id)
-    ? 'Access'
-    : ['#rs-topic', '#rs-password'].includes(id)
-      ? 'Basics'
-      : 'Participation';
-  await dialog.getByRole('tab', { name: tab, exact: true }).click();
-  const control = dialog.locator(id);
+  const region = await sheetScreen(
+    page,
+    ACCESS_CONTROLS.includes(id) ? 'Who can enter' : 'Chat & broadcasting',
+  );
+  const control = region.locator(id);
   const changed = (await control.isChecked()) !== checked;
   await control.setChecked(checked);
   if (changed) {
-    // A checkbox updates before its correlated server acknowledgement. Closing
-    // early can leave the next one-shot dialog open blocked by the pending save.
+    // A switch updates before its correlated server acknowledgement. Closing
+    // early would leave the next change blocked by the pending save.
     await page.waitForFunction(
-      () => document.getElementById('room-settings-modal').getAttribute('aria-busy') === 'false',
+      () =>
+        document.querySelector('#settings-sheet .sheet-screen')?.getAttribute('aria-busy') ===
+        'false',
     );
     assert.equal(
-      await dialog.locator('#room-settings-result').textContent(),
+      await region.locator('#room-settings-result').textContent(),
       'Change saved',
       `${id} must be acknowledged before the scenario continues`,
     );
   }
   assert.equal(await control.isChecked(), checked, `${id} must retain the requested value`);
-  await page.locator('#room-settings-close').click();
-  await dialog.waitFor({ state: 'hidden' });
-}
-async function keyboardTabs(dialog, names) {
-  const first = dialog.getByRole('tab', { name: names[0], exact: true });
-  await first.focus();
-  for (const [key, name] of [
-    ['End', names.at(-1)],
-    ['Home', names[0]],
-    ['ArrowRight', names[1]],
-    ['ArrowLeft', names[0]],
-  ]) {
-    await dialog.page().keyboard.press(key);
-    const selected = dialog.getByRole('tab', { name, exact: true });
-    assert.equal(await selected.getAttribute('aria-selected'), 'true', `${key} selects ${name}`);
-    assert.equal(
-      await selected.evaluate((tab) => tab === document.activeElement),
-      true,
-      `${key} moves focus`,
-    );
-    await dialog.getByRole('tabpanel', { name, exact: true }).waitFor({ state: 'visible' });
-    assert.equal(await dialog.getByRole('tab', { selected: true }).count(), 1, 'one selected tab');
-  }
-}
-async function modalFocus(dialog) {
-  assert.equal(
-    await dialog.evaluate((node) => node instanceof HTMLDialogElement && node.matches(':modal')),
-    true,
-  );
-  for (const backwards of [true, false]) {
-    await dialog.evaluate((node, backwards) => {
-      const controls = [
-        ...node.querySelectorAll('button, input, select, textarea, a[href], summary, [tabindex]'),
-      ].filter(
-        (control) => control.tabIndex >= 0 && !control.disabled && control.getClientRects().length,
-      );
-      controls[backwards ? 0 : controls.length - 1].focus();
-    }, backwards);
-    const key = backwards ? 'Shift+Tab' : 'Tab';
-    await dialog.page().keyboard.press(key);
-    if (!(await dialog.evaluate((node) => node.contains(document.activeElement)))) {
-      // Native Chromium visits browser chrome at either dialog boundary: the
-      // unfocused document reports BODY, then the next Tab returns to the modal.
-      assert.equal(
-        await dialog.evaluate(
-          (node) =>
-            document.activeElement === document.body &&
-            !document.hasFocus() &&
-            node.matches(':modal'),
-        ),
-        true,
-        'modal focus must never enter a background control',
-      );
-      await dialog.page().keyboard.press(key);
-    }
-    assert.equal(
-      await dialog.evaluate((node) => document.hasFocus() && node.contains(document.activeElement)),
-      true,
-      'keyboard traversal returns inside the modal without visiting background controls',
-    );
-  }
+  await closeSheet(page);
 }
 async function dialogFitsViewport(page, dialog, footer) {
   const fit = await dialog.evaluate((node) => {
@@ -968,11 +939,18 @@ async function setRole(owner, name, role) {
         const secondDevice = await client('owner-second-device');
         await login(secondDevice, ownerEmail, password);
         await checkSavedRoomsAcrossDevices(owner, secondDevice, { header, close });
-        await checkNotificationPreferences(owner, secondDevice, member, { header, close });
+        await checkNotificationPreferences(owner, secondDevice, member, {
+          header,
+          close,
+          settingsScreen,
+        });
       },
     );
     await step('optional app notifications require an explicit Account action', async () => {
-      await checkPwa(owner, { openAccount: () => header(owner, 'Account'), closeDialog: close });
+      await checkPwa(owner, {
+        openAccount: () => settingsScreen(owner, 'Notifications'),
+        closeDialog: close,
+      });
     });
     await step('direct join respects the entered name without renaming the account', async () => {
       await owner
@@ -981,7 +959,7 @@ async function setRole(owner, name, role) {
         .waitFor({ state: 'visible' });
       const account = await header(member, 'Account');
       assert.equal(
-        await account.getByLabel('Account display name', { exact: true }).inputValue(),
+        await account.getByLabel('Name', { exact: true }).inputValue(),
         'E2E Member',
         'the direct-join nickname leaves the account profile unchanged',
       );
@@ -1124,6 +1102,7 @@ async function setRole(owner, name, role) {
           .filter({ hasText: 'Messages are kept for 7 days.' })
           .waitFor({ state: 'visible' });
         await close(history);
+        await closeSheet(owner);
         await publicAttachmentChecks(owner, guest, { base, leave, join, send });
         await send(guest, 'Context before the search result');
         await send(guest, 'Saved browser history message');
@@ -1152,6 +1131,7 @@ async function setRole(owner, name, role) {
           .getByText('Context after the search result', { exact: true })
           .waitFor({ state: 'visible' });
         await close(history);
+        await closeSheet(guest);
         await owner.getByRole('button', { name: 'Earlier messages', exact: true }).click();
         assert.equal(
           await owner.getByRole('dialog', { name: 'Room history', exact: true }).count(),
@@ -1179,6 +1159,7 @@ async function setRole(owner, name, role) {
           .waitFor({ state: 'visible' });
         assert.equal(await history.locator('.history-message').count(), 0);
         await close(history);
+        await closeSheet(owner);
       },
     );
     await step('personal settings share one capture-free keyboard-accessible dialog', async () => {
@@ -1194,27 +1175,33 @@ async function setRole(owner, name, role) {
         'no duplicate toolbar setup',
       );
       for (const selector of ['#settings-btn', '#mic-setup-btn']) {
-        // Mic setup lives in More; the main settings button stays below the video.
+        // Mic setup lives in More and opens Camera & mic directly; the main settings
+        // button stays below the video and opens the list.
         const inMenu = selector === '#mic-setup-btn';
         if (inMenu) await openRoomMenu(guest);
         const opener = guest.locator(selector);
         const returnsTo = inMenu ? guest.locator('#room-more-btn') : opener;
         await opener.focus();
         await opener.press('Enter');
-        const dialog = guest.getByRole('dialog', { name: 'Your settings', exact: true });
-        await dialog.waitFor({ state: 'visible' });
-        assert.equal(await guest.locator('dialog[open]').count(), 1);
+        const region = sheet(guest);
+        await region.waitFor({ state: 'visible' });
+        assert.equal(await guest.locator('dialog[open]').count(), 0, 'the sheet is not modal');
+        const title = region.getByRole('heading', { level: 2 });
+        assert.equal(await title.textContent(), inMenu ? 'Camera & mic' : 'Settings');
         assert.equal(
-          await dialog
-            .locator('details')
-            .filter({ hasText: 'Advanced capture settings' })
-            .evaluate((node) => node.open),
-          false,
+          await title.evaluate((node) => node === document.activeElement),
+          true,
+          'opening moves focus to the sheet heading',
         );
-        await keyboardTabs(dialog, ['Audio & video', 'Appearance']);
-        await modalFocus(dialog);
+        if (inMenu) {
+          // Advanced capture options wait behind the Quality row.
+          assert.equal(await region.locator('[name=resolution]').count(), 0);
+          await sheetRow(guest, 'Quality').waitFor({ state: 'visible' });
+          await guest.keyboard.press('Escape');
+          assert.equal(await title.textContent(), 'Settings', 'Escape pops to the list');
+        }
         await guest.keyboard.press('Escape');
-        await dialog.waitFor({ state: 'hidden' });
+        await region.waitFor({ state: 'hidden' });
         assert.equal(
           await returnsTo.evaluate((node) => node === document.activeElement),
           true,
@@ -1222,23 +1209,25 @@ async function setRole(owner, name, role) {
         );
       }
       await guest.locator('#settings-btn').click();
-      let dialog = guest.getByRole('dialog', { name: 'Your settings', exact: true });
-      const originalMode = await dialog.locator('#mic-mode-select').inputValue();
+      let region = await sheetScreen(guest, 'Camera & mic');
+      const pressed = async (id) =>
+        (await region.locator(`#${id}`).getAttribute('aria-pressed')) === 'true';
+      const originalMode = (await pressed('talk-ptt')) ? 'ptt' : 'open';
       const nextMode = originalMode === 'open' ? 'ptt' : 'open';
-      await dialog.locator('#mic-mode-select').selectOption(nextMode);
+      await region.locator(`#talk-${nextMode}`).click();
       assert.equal(
         await guest.evaluate(() => localStorage.getItem('micMode')),
         nextMode,
-        'mic mode applies immediately',
+        'talk mode applies immediately',
       );
       await guest.screenshot({
         path: path.join(artifacts, 'settings-audio-desktop.png'),
         fullPage: true,
       });
-      await dialog.getByRole('tab', { name: 'Appearance', exact: true }).click();
-      const originalLayout = await dialog.locator('#layout-select').inputValue();
+      region = await sheetScreen(guest, 'Layout');
+      const originalLayout = (await pressed('layout-modern')) ? 'modern' : 'classic';
       const nextLayout = originalLayout === 'modern' ? 'classic' : 'modern';
-      await dialog.locator('#layout-select').selectOption(nextLayout);
+      await region.locator(`#layout-${nextLayout}`).click();
       assert.equal(
         await guest.evaluate(
           (value) =>
@@ -1253,17 +1242,15 @@ async function setRole(owner, name, role) {
         path: path.join(artifacts, 'settings-appearance-desktop.png'),
         fullPage: true,
       });
-      await guest.keyboard.press('Escape');
-      await dialog.waitFor({ state: 'hidden' });
+      await closeSheet(guest);
       await guest.locator('#settings-btn').click();
-      dialog = guest.getByRole('dialog', { name: 'Your settings', exact: true });
-      assert.equal(await dialog.locator('#mic-mode-select').inputValue(), nextMode);
-      await dialog.locator('#mic-mode-select').selectOption(originalMode);
-      await dialog.getByRole('tab', { name: 'Appearance', exact: true }).click();
-      assert.equal(await dialog.locator('#layout-select').inputValue(), nextLayout);
-      await dialog.locator('#layout-select').selectOption(originalLayout);
-      await guest.keyboard.press('Escape');
-      await dialog.waitFor({ state: 'hidden' });
+      region = await sheetScreen(guest, 'Camera & mic');
+      assert.equal(await pressed(`talk-${nextMode}`), true, 'the talk mode survives reopening');
+      await region.locator(`#talk-${originalMode}`).click();
+      region = await sheetScreen(guest, 'Layout');
+      assert.equal(await pressed(`layout-${nextLayout}`), true, 'the layout survives reopening');
+      await region.locator(`#layout-${originalLayout}`).click();
+      await closeSheet(guest);
       assert.equal(
         await guest.evaluate(() => window.__communityCaptureRequests),
         captures,
@@ -1271,29 +1258,40 @@ async function setRole(owner, name, role) {
       );
     });
     await step(
-      'room settings tabs expose the correct controls and restore keyboard focus',
+      'room settings screens expose the correct controls and restore keyboard focus',
       async () => {
         const opener = owner.locator('#room-settings-btn');
         await opener.focus();
         await opener.press('Enter');
-        const dialog = owner.getByRole('dialog', { name: 'Room settings', exact: true });
-        await keyboardTabs(dialog, ['Basics', 'Access', 'Participation']);
-        for (const [tab, controls] of [
-          ['Basics', ['#rs-topic', '#rs-password']],
-          ['Access', ['#rs-guests', '#rs-lobby']],
-          ['Participation', ['#rs-screen', '#rs-guests-broadcast', '#rs-max-participants']],
+        const region = sheet(owner);
+        await region.waitFor({ state: 'visible' });
+        assert.equal(
+          await region
+            .getByRole('group', { name: 'Settings for', exact: true })
+            .getByRole('button', { name: 'This room', exact: true })
+            .getAttribute('aria-pressed'),
+          'true',
+          'the room control opens the This room list',
+        );
+        for (const [label, controls] of [
+          ['Who can enter', ['#rs-guests', '#rs-lobby']],
+          ['Chat & broadcasting', ['#rs-screen', '#rs-guests-broadcast', '#rs-max-participants']],
         ]) {
-          await dialog.getByRole('tab', { name: tab, exact: true }).click();
+          await sheetScreen(owner, label);
           for (const selector of controls)
-            await dialog.locator(selector).waitFor({ state: 'visible' });
+            await region.locator(selector).waitFor({ state: 'visible' });
         }
+        await sheetScreen(owner, 'Who can enter');
+        await sheetRow(owner, 'Password').click();
+        await region.locator('#rs-password').waitFor({ state: 'visible' });
+        await region.locator('#rs-password-remove').waitFor({ state: 'attached' });
         await owner.screenshot({
           path: path.join(artifacts, 'room-settings-desktop.png'),
           fullPage: true,
         });
-        await modalFocus(dialog);
-        await owner.keyboard.press('Escape');
-        await dialog.waitFor({ state: 'hidden' });
+        // Escape climbs Password, Who can enter and the list, then closes.
+        for (let depth = 0; depth < 3; depth++) await owner.keyboard.press('Escape');
+        await region.waitFor({ state: 'hidden' });
         assert.equal(await opener.evaluate((node) => node === document.activeElement), true);
       },
     );
@@ -1306,39 +1304,23 @@ async function setRole(owner, name, role) {
         ]) {
           await owner.setViewportSize(viewport);
           await owner.locator('#settings-btn').click();
-          const settings = owner.getByRole('dialog', { name: 'Your settings', exact: true });
-          await settings
-            .locator('summary')
-            .filter({ hasText: /^Advanced capture settings$/ })
-            .click();
-          await dialogFitsViewport(
-            owner,
-            settings,
-            settings.getByRole('button', { name: 'Save settings', exact: true }),
-          );
+          const region = await sheetScreen(owner, 'Camera & mic');
+          await sheetRow(owner, 'Quality').click();
+          const level = region.locator('[name=autoGainControl]');
+          await level.waitFor({ state: 'visible' });
+          await dialogFitsViewport(owner, region, level);
           if (viewport.width === 390)
             await owner.screenshot({
               path: path.join(artifacts, 'settings-mobile.png'),
               fullPage: true,
             });
-          await settings.getByRole('tab', { name: 'Appearance', exact: true }).click();
-          await dialogFitsViewport(
-            owner,
-            settings,
-            settings.getByRole('button', { name: 'Save settings', exact: true }),
-          );
-          await owner.keyboard.press('Escape');
-          await settings.waitFor({ state: 'hidden' });
+          await sheetScreen(owner, 'Layout');
+          await dialogFitsViewport(owner, region, region.locator('#layout-modern'));
+          await closeSheet(owner);
           await owner.locator('#room-settings-btn').click();
-          const roomSettings = owner.getByRole('dialog', { name: 'Room settings', exact: true });
-          await roomSettings.getByRole('tab', { name: 'Participation', exact: true }).click();
-          await dialogFitsViewport(
-            owner,
-            roomSettings,
-            roomSettings.locator('#room-settings-close'),
-          );
-          await roomSettings.locator('#room-settings-close').click();
-          await roomSettings.waitFor({ state: 'hidden' });
+          await sheetScreen(owner, 'Chat & broadcasting');
+          await dialogFitsViewport(owner, region, region.locator('#rs-max-participants'));
+          await closeSheet(owner);
         }
       } finally {
         await owner.setViewportSize({ width: 1440, height: 1000 });
@@ -1524,11 +1506,19 @@ async function setRole(owner, name, role) {
       'a chat color reaches chat and the people list and stays with the account',
       async () => {
         await member.getByRole('button', { name: 'Chat options', exact: true }).click();
-        const dialog = member.getByRole('dialog', { name: 'Chat preferences', exact: true });
-        await dialog.getByRole('radio', { name: 'Violet', exact: true }).check();
-        await dialog.getByRole('radio', { name: 'Tinted bubble', exact: true }).check();
-        await dialog.getByRole('button', { name: 'Save preferences', exact: true }).click();
-        await dialog.waitFor({ state: 'hidden' });
+        const lookScreen = await sheetScreen(member, 'Chat look');
+        // Each choice applies at once and reports Saved once the room confirms it.
+        const saved = lookScreen.locator('.chat-look-block .sheet-row-saved');
+        const applyLook = async (name) => {
+          await saved.evaluate((node) => {
+            node.textContent = '';
+          });
+          await lookScreen.getByRole('radio', { name, exact: true }).check();
+          await saved.filter({ hasText: 'Saved' }).waitFor();
+        };
+        await applyLook('Violet');
+        await applyLook('Tinted bubble');
+        await closeSheet(member);
         const violet = '#a78bfa';
         const look = (page, text) =>
           page
@@ -1571,11 +1561,11 @@ async function setRole(owner, name, role) {
       await report.getByRole('button', { name: 'Send report', exact: true }).click();
       await report.waitFor({ state: 'hidden' });
       const manage = await header(owner, 'Manage room');
-      await manage.getByRole('button', { name: 'Reports', exact: true }).click();
+      await sheetScreen(owner, 'Reports');
       await visible(owner, 'Disposable browser test report');
       await manage.getByRole('button', { name: 'Mark resolved', exact: true }).click();
       await visible(owner, 'E2E Member · resolved');
-      await manage.getByRole('button', { name: 'History', exact: true }).click();
+      await sheetScreen(owner, 'History');
       await visible(owner, 'E2E Member · report resolved');
       await close(manage);
     });
@@ -1639,11 +1629,11 @@ async function setRole(owner, name, role) {
       await removed.getByRole('button', { name: 'Back to home', exact: true }).click();
       await removed.waitFor({ state: 'hidden' });
       const manage = await header(owner, 'Manage room');
-      await manage.getByRole('button', { name: 'Bans', exact: true }).click();
+      await sheetScreen(owner, 'Bans');
       await visible(owner, 'Disposable browser test ban');
       await manage.getByRole('button', { name: 'Unban', exact: true }).click();
       await visible(owner, 'No bans on this page.');
-      await manage.getByRole('button', { name: 'History', exact: true }).click();
+      await sheetScreen(owner, 'History');
       await visible(owner, 'E2E Member · unbanned');
       await visible(owner, 'E2E Member · banned');
       await visible(owner, 'Disposable browser test ban');
@@ -1655,9 +1645,9 @@ async function setRole(owner, name, role) {
       async () => {
         await openRoomMenu(guest);
         await guest.locator('#mic-setup-btn').click();
-        let setup = guest.getByRole('dialog', { name: 'Your settings', exact: true });
-        await setup.getByLabel('Camera preview', { exact: true }).check();
-        await setup.getByRole('button', { name: 'Start preview', exact: true }).click();
+        let setup = sheet(guest);
+        await setup.getByRole('heading', { level: 2, name: 'Camera & mic', exact: true }).waitFor();
+        await setup.getByRole('button', { name: 'Test camera', exact: true }).click();
         await guest.waitForFunction(
           () => document.querySelector('.media-preview-video')?.videoWidth > 0,
         );
@@ -1671,28 +1661,26 @@ async function setRole(owner, name, role) {
           .evaluateHandle((video) => video.srcObject.getTracks());
         const previewCaptures = await guest.evaluate(() => window.__communityCaptureRequests);
         try {
-          await setup.getByRole('tab', { name: 'Appearance', exact: true }).click();
+          await setup.getByRole('button', { name: 'Back', exact: true }).click();
           assert.equal(
             await previewTracks.evaluate(
               (tracks) =>
                 tracks.length > 0 && tracks.every((track) => track.readyState === 'ended'),
             ),
             true,
-            'leaving the preview tab stops its capture',
+            'leaving the screen stops its capture',
           );
-          await guest.waitForFunction(
-            () => !document.querySelector('.media-preview-video')?.srcObject,
-          );
-          await setup.getByRole('tab', { name: 'Audio & video', exact: true }).click();
+          assert.equal(await guest.locator('.media-preview-video').count(), 0);
+          setup = await sheetScreen(guest, 'Camera & mic');
           assert.equal(
             await guest.evaluate(() => window.__communityCaptureRequests),
             previewCaptures,
-            'returning to the preview tab does not recapture',
+            'returning to the screen does not recapture',
           );
         } finally {
           await previewTracks.dispose();
         }
-        await setup.getByRole('button', { name: 'Start preview', exact: true }).click();
+        await setup.getByRole('button', { name: 'Test camera', exact: true }).click();
         await guest.waitForFunction(
           () => document.querySelector('.media-preview-video')?.videoWidth > 0,
         );
@@ -1700,15 +1688,17 @@ async function setRole(owner, name, role) {
         await guest.waitForFunction(
           () => !document.querySelector('.media-preview-video')?.srcObject,
         );
-        const selectedDevices = {};
-        for (const name of ['cameraDeviceId', 'microphoneDeviceId']) {
-          await guest.waitForFunction(
+        const devicesListed = (name) =>
+          guest.waitForFunction(
             (name) =>
-              [...document.querySelector(`dialog[open] select[name="${name}"]`).options].some(
+              [...document.querySelector(`#settings-sheet select[name="${name}"]`).options].some(
                 (option) => option.value,
               ),
             name,
           );
+        const selectedDevices = {};
+        for (const name of ['cameraDeviceId', 'microphoneDeviceId']) {
+          await devicesListed(name);
           const select = setup.locator(`select[name="${name}"]`);
           selectedDevices[name] = await select.evaluate(
             (select) =>
@@ -1716,36 +1706,37 @@ async function setRole(owner, name, role) {
                 ?.value ?? [...select.options].find((option) => option.value).value,
           );
           await select.selectOption(selectedDevices[name]);
+          await select.locator('..').locator('.sheet-row-saved', { hasText: 'Saved' }).waitFor();
         }
         const capturesAfterPreview = await guest.evaluate(() => window.__communityCaptureRequests);
-        await setup.getByRole('button', { name: 'Save settings', exact: true }).click();
-        await setup.waitFor({ state: 'hidden' });
+        await closeSheet(guest);
         await guest.locator('#settings-btn').click();
-        setup = guest.getByRole('dialog', { name: 'Your settings', exact: true });
+        setup = await sheetScreen(guest, 'Camera & mic');
         for (const name of Object.keys(selectedDevices)) {
+          await devicesListed(name);
           assert.equal(
             await setup.locator(`select[name="${name}"]`).inputValue(),
             selectedDevices[name],
-            'saved device survives closing and reopening',
+            'a chosen device survives closing and reopening',
           );
           await setup.locator(`select[name="${name}"]`).selectOption('');
         }
-        await setup.getByRole('button', { name: 'Save settings', exact: true }).click();
-        await setup.waitFor({ state: 'hidden' });
+        await closeSheet(guest);
         await guest.locator('#settings-btn').click();
-        setup = guest.getByRole('dialog', { name: 'Your settings', exact: true });
-        for (const name of Object.keys(selectedDevices))
+        setup = await sheetScreen(guest, 'Camera & mic');
+        for (const name of Object.keys(selectedDevices)) {
+          await devicesListed(name);
           assert.equal(
             await setup.locator(`select[name="${name}"]`).inputValue(),
             '',
             'explicit default device survives reopening',
           );
-        await guest.keyboard.press('Escape');
-        await setup.waitFor({ state: 'hidden' });
+        }
+        await closeSheet(guest);
         assert.equal(
           await guest.evaluate(() => window.__communityCaptureRequests),
           capturesAfterPreview,
-          'saving preferences never starts inactive capture',
+          'choosing devices never starts inactive capture',
         );
         await guest.locator('#cam-btn').click();
         await remotePlayback(owner, 'video');
@@ -1952,8 +1943,8 @@ async function setRole(owner, name, role) {
         await probe.locator('#cam-btn').click();
         await probe.locator('#cam-btn:not(.muted)').waitFor({ state: 'visible' });
         assert.equal(
-          await probe.getByRole('dialog', { name: 'Your settings', exact: true }).count(),
-          0,
+          await probe.locator('#settings-sheet').isVisible(),
+          false,
           'first camera activation requests capture without a settings prerequisite',
         );
         assert.equal(await probe.evaluate(() => window.__communityCaptureRequests), 1);
@@ -2311,7 +2302,7 @@ async function setRole(owner, name, role) {
           .locator('.sender')
           .evaluate((node) => getComputedStyle(node).color);
         const account = await header(owner, 'Account');
-        await account.getByLabel('Account display name', { exact: true }).fill('E2E Profile Owner');
+        await account.getByLabel('Name', { exact: true }).fill('E2E Profile Owner');
         await account.getByLabel('Bio', { exact: true }).fill('Bio from the browser smoke.');
         const appearance = account.locator('.appearance-picker');
         await appearance.getByRole('radio', { name: 'Green', exact: true }).check();
@@ -2369,34 +2360,55 @@ async function setRole(owner, name, role) {
       async () => {
         const mine = await header(owner, 'My rooms');
         await mine.getByRole('button', { name: 'Edit room', exact: true }).click();
-        const edit = owner.getByRole('dialog', { name: 'Edit E2E Community Room', exact: true });
-        await edit.getByLabel('Room display name', { exact: true }).fill('E2E Edited Room');
+        // Edit room closes My rooms and opens the sheet on the room; each field saves as it changes.
+        await mine.waitFor({ state: 'hidden' });
+        const edit = await sheetScreen(owner, 'Name & topic');
+        const identitySaved = async (action) => {
+          const saved = owner.waitForResponse(
+            (response) =>
+              /\/api\/rooms\/[^/]+\/identity$/.test(new URL(response.url()).pathname) &&
+              response.request().method() === 'PATCH',
+          );
+          await action();
+          assert.equal((await saved).status(), 200);
+        };
+        const nameField = edit.getByLabel('Name', { exact: true });
+        await identitySaved(async () => {
+          await nameField.fill('E2E Edited Room');
+          await nameField.press('Tab');
+        });
         const topic = 'Edited live topic. ' + 'Everyone can read the full room topic. '.repeat(8);
-        await edit.getByLabel('Header description', { exact: true }).fill(topic);
+        const topicField = edit.getByLabel('Topic', { exact: true });
+        await identitySaved(async () => {
+          await topicField.fill(topic);
+          await topicField.press('Tab');
+        });
         const nameAppearance = edit
           .locator('.appearance-picker')
           .filter({ hasText: 'Room name appearance' });
-        await nameAppearance.getByRole('radio', { name: 'Violet', exact: true }).check();
-        await nameAppearance.getByRole('radio', { name: 'Colored text', exact: true }).check();
+        for (const choice of ['Violet', 'Colored text'])
+          await identitySaved(() =>
+            nameAppearance.getByRole('radio', { name: choice, exact: true }).check(),
+          );
         const topicAppearance = edit
           .locator('.appearance-picker')
           .filter({ hasText: 'Header description appearance' });
-        await topicAppearance.getByRole('radio', { name: 'Teal', exact: true }).check();
-        await topicAppearance
-          .getByRole('radio', { name: 'Tinted background', exact: true })
-          .check();
-        await edit
-          .getByLabel('Description / room rules', { exact: true })
-          .fill('Browser-tested room description');
-        await upload(owner, edit, true);
-        await edit.getByRole('button', { name: 'Save room', exact: true }).click();
-        await edit.waitFor({ state: 'hidden' });
+        for (const choice of ['Teal', 'Tinted background'])
+          await identitySaved(() =>
+            topicAppearance.getByRole('radio', { name: choice, exact: true }).check(),
+          );
+        const description = edit.getByLabel('Description', { exact: true });
+        await identitySaved(async () => {
+          await description.fill('Browser-tested room description');
+          await description.press('Tab');
+        });
+        await identitySaved(() => upload(owner, edit, true));
+        await closeSheet(owner);
         await visible(owner, 'E2E Edited Room');
-        await close(mine);
         await guest.locator('#room-topic').filter({ hasText: topic }).waitFor({ state: 'visible' });
-        assert.equal(
-          await guest.locator('#room-label').evaluate((node) => getComputedStyle(node).color),
-          'rgb(167, 139, 250)',
+        await guest.waitForFunction(
+          () =>
+            getComputedStyle(document.querySelector('#room-label')).color === 'rgb(167, 139, 250)',
         );
         assert.match(
           await guest
@@ -2423,9 +2435,8 @@ async function setRole(owner, name, role) {
           await guest.locator('#room-topic').evaluate((node) => node === document.activeElement),
           true,
         );
-        const manage = await header(owner, 'Manage room');
-        await manage.getByRole('button', { name: 'Room appearance', exact: true }).click();
-        const reopened = owner.getByRole('dialog', { name: 'Edit E2E Edited Room', exact: true });
+        await header(owner, 'Manage room');
+        const reopened = await sheetScreen(owner, 'Name & topic');
         const savedName = reopened
           .locator('.appearance-picker')
           .filter({ hasText: 'Room name appearance' });
@@ -2458,10 +2469,8 @@ async function setRole(owner, name, role) {
       async () => {
         const mine = await header(owner, 'My rooms');
         await mine.getByRole('button', { name: 'Invites…', exact: true }).click();
-        const invites = owner.getByRole('dialog', {
-          name: 'Invitations for E2E Edited Room',
-          exact: true,
-        });
+        await mine.waitFor({ state: 'hidden' });
+        const invites = await sheetScreen(owner, 'Invitations');
         await invites.getByLabel('Uses', { exact: true }).fill('2');
         await invites.getByRole('button', { name: 'Create invitation', exact: true }).click();
         const code = (await invites.locator('.invite-code').first().textContent()).trim();
@@ -2471,8 +2480,7 @@ async function setRole(owner, name, role) {
           .filter({ hasText: 'member · 2 uses left' })
           .first()
           .waitFor({ state: 'visible' });
-        await close(invites);
-        await close(mine);
+        await closeSheet(owner);
         const invitee = await client('invitee');
         const authResponses = [];
         invitee.on('response', (response) => {
@@ -2528,16 +2536,13 @@ async function setRole(owner, name, role) {
           await close(manage);
           const mine = await header(owner, 'My rooms');
           await mine.getByRole('button', { name: 'Invites…', exact: true }).click();
-          const invites = owner.getByRole('dialog', {
-            name: 'Invitations for E2E Edited Room',
-            exact: true,
-          });
+          await mine.waitFor({ state: 'hidden' });
+          const invites = await sheetScreen(owner, 'Invitations');
           await invites
             .locator('.management-entry')
             .filter({ hasText: 'member · 1 use left' })
             .waitFor({ state: 'visible' });
-          await close(invites);
-          await close(mine);
+          await closeSheet(owner);
         } catch (error) {
           console.log('invitee auth responses:', authResponses.join(' | '));
           throw error;
@@ -2547,7 +2552,8 @@ async function setRole(owner, name, role) {
     );
     let recoveryKey;
     await step('save-once recovery key and password change signs out current room', async () => {
-      const account = await header(owner, 'Account');
+      await header(owner, 'Account');
+      const account = await sheetScreen(owner, 'Sign-in & security');
       await account.getByLabel('Current password for verification', { exact: true }).fill(password);
       await account.getByRole('button', { name: 'Generate recovery key', exact: true }).click();
       const keyField = account.getByLabel('Recovery key', { exact: true });

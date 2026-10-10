@@ -544,14 +544,15 @@ async function run(env = process.env) {
     check((await input.inputValue()) === draft, 'typed_draft_lost');
     await page.locator('#settings-btn').focus();
     await page.locator('#settings-btn').press('Enter');
-    const dialog = page.getByRole('dialog', { name: 'Your settings', exact: true });
+    const dialog = page.locator('#settings-sheet');
     await dialog.waitFor({ state: 'visible' });
     const bounds = await dialog.boundingBox();
     check(
       bounds && bounds.x >= -1 && bounds.x + bounds.width <= client.viewport.width + 1,
       'settings_overflow',
     );
-    await dialog.getByRole('tab', { name: 'Appearance', exact: true }).click();
+    await dialog.locator('button.sheet-row-nav').filter({ hasText: 'Layout' }).click();
+    await page.keyboard.press('Escape');
     await page.keyboard.press('Escape');
     await dialog.waitFor({ state: 'hidden' });
     check(

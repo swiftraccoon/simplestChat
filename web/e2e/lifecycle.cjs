@@ -208,8 +208,8 @@ async function run(env = process.env) {
         { selector: button, enabled },
       );
       assert.equal(
-        await client.page.getByRole('dialog', { name: 'Your settings', exact: true }).count(),
-        0,
+        await client.page.locator('#settings-sheet').isVisible(),
+        false,
         'explicit capture does not require a settings dialog',
       );
     }

@@ -10,13 +10,20 @@ const responseFor = (page, method, conversation = false) =>
     );
   });
 
-async function rules(page, header) {
+/** The account rules live on the sheet's Notifications screen and save as each row changes. */
+async function rules(page, settingsScreen) {
   const loaded = responseFor(page, 'GET');
-  const dialog = await header(page, 'Account');
+  const dialog = await settingsScreen(page, 'Notifications');
   await loaded;
   const section = dialog.locator('.notification-preferences');
-  await section.getByRole('button', { name: 'Save notification rules', exact: true }).waitFor();
+  await section.getByLabel('Quiet hours every day', { exact: true }).waitFor();
   return { dialog, section };
+}
+/** Performs one change and returns the policy the server stored for it. */
+async function stored(page, action) {
+  const response = responseFor(page, 'PUT');
+  await action();
+  return (await response).json();
 }
 async function conversation(page, peer, header) {
   const inbox = await header(page, 'Messages');
@@ -29,46 +36,59 @@ async function conversation(page, peer, header) {
 }
 
 /** Actual account policy and PM storage, shared by two independent browser sessions. */
-async function checkNotificationPreferences(owner, secondDevice, member, { header, close }) {
-  const initial = await rules(owner, header);
-  await initial.section.getByLabel('Private-message alerts', { exact: true }).uncheck();
-  await initial.section.getByLabel('Mention alerts', { exact: true }).uncheck();
-  await initial.section.getByLabel('Quiet hours every day', { exact: true }).check();
-  await initial.section.getByLabel('From', { exact: true }).fill('22:00');
-  await initial.section.getByLabel('Until', { exact: true }).fill('07:00');
-  await initial.section.getByLabel('Time zone', { exact: true }).fill('America/New_York');
-  const stored = responseFor(owner, 'PUT');
-  await initial.section
-    .getByRole('button', { name: 'Save notification rules', exact: true })
-    .click();
-  const saved = await (await stored).json();
+async function checkNotificationPreferences(
+  owner,
+  secondDevice,
+  member,
+  { header, close, settingsScreen },
+) {
+  const initial = await rules(owner, settingsScreen);
+  const field = async (label, value) => {
+    const input = initial.section.getByLabel(label, { exact: true });
+    await input.fill(value);
+    await input.press('Tab');
+  };
+  await stored(owner, () =>
+    initial.section.getByLabel('Private messages', { exact: true }).uncheck(),
+  );
+  await stored(owner, () => initial.section.getByLabel('Mentions', { exact: true }).uncheck());
+  const enabled = await stored(owner, () =>
+    initial.section.getByLabel('Quiet hours every day', { exact: true }).check(),
+  );
+  assert.deepEqual(
+    [enabled.quietHours.startMinute, enabled.quietHours.endMinute],
+    [1320, 420],
+    'quiet hours start with a 22:00 to 07:00 window',
+  );
+  // Each value differs from the defaults (and from any machine's local zone), so every
+  // field change is a real change that the screen persists.
+  await stored(owner, () => field('From', '23:00'));
+  await stored(owner, () => field('Until', '06:00'));
+  const saved = await stored(owner, () => field('Time zone', 'Pacific/Auckland'));
   assert.deepEqual(saved.quietHours, {
-    startMinute: 1320,
-    endMinute: 420,
-    timeZone: 'America/New_York',
+    startMinute: 1380,
+    endMinute: 360,
+    timeZone: 'Pacific/Auckland',
   });
   await close(initial.dialog);
-  const shared = await rules(secondDevice, header);
+  const shared = await rules(secondDevice, settingsScreen);
   assert.equal(
-    await shared.section.getByLabel('Private-message alerts', { exact: true }).isChecked(),
+    await shared.section.getByLabel('Private messages', { exact: true }).isChecked(),
     false,
   );
-  assert.equal(
-    await shared.section.getByLabel('Mention alerts', { exact: true }).isChecked(),
-    false,
-  );
+  assert.equal(await shared.section.getByLabel('Mentions', { exact: true }).isChecked(), false);
   assert.equal(
     await shared.section.getByLabel('Quiet hours every day', { exact: true }).isChecked(),
     true,
   );
   assert.equal(
     await shared.section.getByLabel('Time zone', { exact: true }).inputValue(),
-    'America/New_York',
+    'Pacific/Auckland',
   );
   await close(shared.dialog);
-  const separate = await rules(member, header);
+  const separate = await rules(member, settingsScreen);
   assert.equal(
-    await separate.section.getByLabel('Private-message alerts', { exact: true }).isChecked(),
+    await separate.section.getByLabel('Private messages', { exact: true }).isChecked(),
     true,
   );
   assert.equal(
@@ -120,15 +140,15 @@ async function checkNotificationPreferences(owner, secondDevice, member, { heade
   assert.equal((await (await resumed).json()).conversations.length, 0);
   await close(reopened.dialog);
   await close(reopened.inbox);
-  const restored = await rules(owner, header);
-  await restored.section.getByLabel('Private-message alerts', { exact: true }).check();
-  await restored.section.getByLabel('Mention alerts', { exact: true }).check();
-  await restored.section.getByLabel('Quiet hours every day', { exact: true }).uncheck();
-  const reset = responseFor(owner, 'PUT');
-  await restored.section
-    .getByRole('button', { name: 'Save notification rules', exact: true })
-    .click();
-  assert.equal((await (await reset).json()).quietHours, null);
+  const restored = await rules(owner, settingsScreen);
+  await stored(owner, () =>
+    restored.section.getByLabel('Private messages', { exact: true }).check(),
+  );
+  await stored(owner, () => restored.section.getByLabel('Mentions', { exact: true }).check());
+  const reset = await stored(owner, () =>
+    restored.section.getByLabel('Quiet hours every day', { exact: true }).uncheck(),
+  );
+  assert.equal(reset.quietHours, null);
   await close(restored.dialog);
 }
 

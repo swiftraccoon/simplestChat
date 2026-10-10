@@ -1,6 +1,7 @@
 /** Exercise account management with native resident credentials on an owned local
  * server. Secrets stay in memory; reports contain fixed outcome labels only. */
 const assert = require('node:assert/strict');
+const { sheetScreen, closeSheet } = require('./settings-sheet.cjs');
 const { sessionManagementChecks } = require('./account-session-checks.cjs');
 const playwright = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 let failureStage = 'owned-browser-setup';
@@ -144,16 +145,14 @@ async function run() {
 
     failureStage = 'ui-passkey-only-account';
     await page.reload();
+    // Passkeys live on the sheet's Sign-in & security screen.
     const openAccount = async () => {
       await page.getByRole('button', { name: 'Account', exact: true }).click();
-      const account = page.getByRole('dialog', { name: 'Account', exact: true });
+      const account = await sheetScreen(page, 'Sign-in & security');
       await account.getByRole('button', { name: 'Add passkey', exact: true }).waitFor();
       return account;
     };
-    const closeAccount = async (account) => {
-      await account.getByRole('button', { name: 'Close', exact: true }).click();
-      await account.waitFor({ state: 'hidden' });
-    };
+    const closeAccount = () => closeSheet(page);
     const ceremonies = () => page.evaluate(() => [...window.__managementCeremonies]);
     let account = await openAccount();
     assert.equal(
@@ -162,7 +161,9 @@ async function run() {
     );
     assert.equal(await account.getByLabel('Current password', { exact: true }).count(), 0);
     assert.equal(await account.getByLabel('New password', { exact: true }).count(), 0);
+    await sheetScreen(page, 'Invites');
     await account.getByRole('button', { name: 'New invite code', exact: true }).waitFor();
+    await sheetScreen(page, 'Sign-in & security');
     await account
       .getByRole('button', { name: 'Sign out and forget this device', exact: true })
       .waitFor();
