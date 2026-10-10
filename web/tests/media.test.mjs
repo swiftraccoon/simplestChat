@@ -13,8 +13,7 @@ const { mediaErrorMessage } = await loadTypeScript('src/media-controls.ts', {
     './receive-policy': await loadTypeScript('src/receive-policy.ts'),
     './media': {},
     './media-controls.css': {},
-    './settings-dialog': {},
-    './settings-dialog.css': {},
+    './settings-sheet': {},
     './audio-output': {},
   },
 });

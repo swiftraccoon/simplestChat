@@ -8,8 +8,16 @@ import {
   type RemoteVideoQuality,
 } from './media';
 import './media-controls.css';
-import { configureSettingsDialog } from './settings-dialog';
-import './settings-dialog.css';
+import {
+  group,
+  markSaved,
+  navRow,
+  note,
+  selectRow,
+  toggleRow,
+  type ScreenContext,
+  type SheetSection,
+} from './settings-sheet';
 import { AudioOutput, SpeakerTest, observeMediaDevices, outputErrorMessage } from './audio-output';
 import {
   loadReceiveMode,
@@ -33,8 +41,8 @@ interface MediaControlsOptions {
   getRoom: () => MediaControlsRoom | null;
   notify: (message: string) => void;
   onPlaybackResult?: (element: HTMLMediaElement, blocked: boolean) => void;
-  appearanceControls?: HTMLElement;
-  microphoneControls?: HTMLElement;
+  /** A row the application owns inside Camera & mic, such as the talk mode. */
+  talkRow?: () => HTMLElement;
 }
 
 interface PersonalPlaybackPreferences {
@@ -68,6 +76,20 @@ interface FrameWatch {
 }
 
 const MASTER_VOLUME_KEY = 'simplestchat.masterVolume';
+
+function make(tag: string, className = '', text = ''): HTMLElement {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text) node.textContent = text;
+  return node;
+}
+
+function actionButton(label: string, onClick: () => void): HTMLButtonElement {
+  const node = make('button', '', label) as HTMLButtonElement;
+  node.type = 'button';
+  node.addEventListener('click', onClick);
+  return node;
+}
 let tileMenuSequence = 0;
 
 function readStored(key: string): string | null {
@@ -327,8 +349,9 @@ export class MediaControls {
   private playback = new Map<string, PersonalPlaybackPreferences>();
   private toolbars = new Set<HTMLElement>();
   private preview: MediaPreview | null = null;
-  private dialog: HTMLDialogElement | null = null;
-  private finishSetup: ((saved: boolean) => void) | null = null;
+  /** Identifies the settings screen whose preview and device observer are live. */
+  private setupToken: object | null = null;
+  private readonly deviceLabels = new Map<string, string>();
   private masterVolume = volumeValue(Number(readStored(MASTER_VOLUME_KEY) ?? 1));
   private speakerTest: SpeakerTest | null = null;
   private devices: ReturnType<typeof observeMediaDevices> | null = null;
@@ -377,7 +400,7 @@ export class MediaControls {
         if (!present && !this.outputWarning) {
           this.outputWarning = true;
           this.options.notify(
-            'Your selected speaker is not currently listed. Reconnect it or choose a speaker in Your settings.',
+            'Your selected speaker is not currently listed. Reconnect it or choose a speaker in Settings.',
           );
         } else if (present) this.outputWarning = false;
       })
@@ -446,218 +469,127 @@ export class MediaControls {
     this.toolbars.add(toolbar);
   }
 
-  /** Opens without capture. Saving may switch active devices, but never enables an inactive one. */
-  openSetup(mode: 'microphone' | 'settings' = 'settings'): Promise<boolean> {
-    this.closeSetup(false);
-    let preferences = loadCapturePreferences();
-    const dialog = document.createElement('dialog');
-    dialog.className = 'settings-dialog media-setup-dialog';
-    dialog.setAttribute('aria-labelledby', 'media-setup-title');
-    // Static copy chosen by the opening control; no user content enters this markup.
-    const intro =
-      mode === 'microphone'
-        ? 'Pick a microphone and try it privately. Saving never turns it on by itself.'
-        : 'Just for you, on this browser.';
-    dialog.innerHTML = `
-      <form method="dialog" class="settings-dialog-form">
-        <div class="settings-dialog-header"><div><h2 id="media-setup-title">Your settings</h2>
-          <p class="settings-description">${intro}</p></div>
-          <button type="button" data-dialog-close aria-label="Close your settings">Close</button></div>
-        <div class="settings-dialog-nav" role="tablist" aria-label="Your settings sections">
-          <button type="button" role="tab" id="media-devices-tab" data-settings-tab aria-controls="media-devices-panel">Audio &amp; video</button>
-          <button type="button" role="tab" id="media-appearance-tab" data-settings-tab aria-controls="media-appearance-panel">Appearance</button>
-        </div>
-        <div class="settings-dialog-body">
-          <section id="media-devices-panel" role="tabpanel" aria-labelledby="media-devices-tab">
-            <h3 class="settings-section-heading">Camera &amp; microphone</h3>
-            <p class="settings-description">Saving updates active devices. Devices that are off stay off.</p>
-            <div class="media-setup-fields">
-              <div class="media-device-field">
-                <label>Camera <select name="cameraDeviceId" aria-describedby="media-device-permission-hint"><option value="">Default camera</option></select></label>
-                <button type="button" data-action="test-camera">Test camera</button>
-              </div>
-              <div class="media-device-field">
-                <label>Microphone <select name="microphoneDeviceId" aria-describedby="media-device-permission-hint"><option value="">Default microphone</option></select></label>
-                <button type="button" data-action="test-microphone">Test microphone</button>
-              </div>
-            </div>
-            <p id="media-device-permission-hint" class="media-setup-hint">Device names may stay hidden until you allow access. Test a device to allow it and refresh its list now, without saving or broadcasting.</p>
-            <p class="media-preview-status" role="status">Tests and preview are private. Only you can see the camera or microphone level.</p>
-            <section class="media-speaker-panel" aria-label="Speaker settings">
-              <label>Speaker <select data-output-device><option value="">System default</option></select></label>
-              <div class="media-preview-actions"><button type="button" data-output-apply>Use speaker</button>
-                <button type="button" data-output-choose>Choose another speaker</button>
-                <button type="button" data-output-test>Test speaker</button></div>
-              <p data-output-status role="status" class="settings-description">Speaker changes apply immediately for this tab. The test plays a short tone.</p>
-            </section>
-            <div class="media-microphone-controls"></div>
-            <section class="media-preview-panel" aria-label="Private preview">
-              <div class="media-preview-heading"><h3 class="settings-section-heading">Try your devices</h3><span class="media-private-badge">Only you</span></div>
-              <video class="media-preview-video" autoplay muted playsinline hidden></video>
-              <div class="media-preview-options">
-                <label><input type="checkbox" name="previewCamera"> Camera preview</label>
-                <label><input type="checkbox" name="previewMicrophone" checked> Microphone preview</label>
-              </div>
-              <label class="media-meter-label">Microphone level <meter min="0" max="1" value="0" aria-label="Microphone input level"></meter></label>
-              <div class="media-preview-actions"><button type="button" data-action="preview">Start preview</button>
-                <button type="button" data-action="stop" disabled>Stop preview</button></div>
-            </section>
-            <details class="media-advanced"><summary>Advanced capture settings</summary>
-              <p class="settings-description">The defaults work well for most connections.</p>
-              <div class="media-setup-fields">
-                <label>Resolution <select name="resolution"><option value="360p">360p — less bandwidth</option><option value="720p">720p — balanced</option><option value="1080p">1080p — sharper video</option></select></label>
-                <label>Frame rate <select name="frameRate"><option value="15">15 fps</option><option value="30">30 fps</option><option value="60">60 fps</option></select></label>
-              </div>
-              <fieldset class="media-audio-options"><legend>Microphone processing</legend>
-                <label><input type="checkbox" name="echoCancellation"> Echo cancellation</label>
-                <label><input type="checkbox" name="noiseSuppression"> Noise suppression</label>
-                <label><input type="checkbox" name="autoGainControl"> Automatic level</label>
-              </fieldset>
-            </details>
-          </section>
-          <section id="media-appearance-panel" role="tabpanel" aria-labelledby="media-appearance-tab" hidden></section>
-        </div>
-        <div class="settings-dialog-footer">
-          <p class="settings-description">Camera and microphone changes apply on Save. Layout and talk mode save automatically.</p>
-          <button type="submit" value="save" class="btn-primary">Save settings</button>
-        </div>
-      </form>`;
-    if (this.options.microphoneControls)
-      dialog.querySelector('.media-microphone-controls')!.append(this.options.microphoneControls);
-    if (this.options.appearanceControls)
-      dialog.querySelector('#media-appearance-panel')!.append(this.options.appearanceControls);
-    else dialog.querySelector('#media-appearance-tab')!.remove();
-    const field = <T extends HTMLInputElement | HTMLSelectElement>(name: string) =>
-      dialog.querySelector<T>(`[name="${name}"]`)!;
-    field<HTMLInputElement>('previewCamera').checked = mode !== 'microphone';
-    for (const name of ['cameraDeviceId', 'microphoneDeviceId'] as const) {
-      if (preferences[name])
-        field<HTMLSelectElement>(name).add(new Option('Saved device', preferences[name]));
-      field<HTMLSelectElement>(name).value = preferences[name];
+  /** The settings sheet lists these screens; each applies a change as it is made. */
+  sections(): SheetSection[] {
+    return [
+      {
+        id: 'camera',
+        segment: 'you',
+        label: 'Camera & mic',
+        status: () => this.captureStatus(),
+        screen: () => ({
+          title: 'Camera & mic',
+          body: (context) => this.cameraScreen(context),
+          leave: () => this.leaveSetup(),
+        }),
+      },
+      {
+        id: 'speaker',
+        segment: 'you',
+        label: 'Speaker',
+        status: () => this.speakerStatus(),
+        screen: () => ({
+          title: 'Speaker',
+          body: (context) => this.speakerScreen(context),
+          leave: () => this.leaveSetup(),
+        }),
+      },
+    ];
+  }
+
+  private deviceName(id: string, kind: string): string {
+    return id ? (this.deviceLabels.get(id) ?? `Chosen ${kind}`) : `Default ${kind}`;
+  }
+
+  private captureStatus(): string {
+    const preferences = loadCapturePreferences();
+    return `${this.deviceName(preferences.cameraDeviceId, 'camera')} · ${this.deviceName(
+      preferences.microphoneDeviceId,
+      'mic',
+    )}`;
+  }
+
+  private speakerStatus(): string {
+    if (!this.output.supported) return 'System speaker';
+    return this.output.selected
+      ? (this.deviceLabels.get(this.output.selected) ?? 'Chosen speaker')
+      : 'System default';
+  }
+
+  private rememberDevices(devices: MediaDeviceInfo[]): void {
+    for (const device of devices)
+      if (device.deviceId && device.label) this.deviceLabels.set(device.deviceId, device.label);
+  }
+
+  /** Fills a select with one device kind, keeping a saved device that is not listed. */
+  private fillSelect(
+    select: HTMLSelectElement,
+    devices: MediaDeviceInfo[],
+    kind: MediaDeviceKind,
+    title: string,
+    defaultLabel: string,
+  ): void {
+    const selected = select.value;
+    select.replaceChildren(new Option(defaultLabel, ''));
+    const matching = devices.filter((device) => device.kind === kind && device.deviceId);
+    for (const [index, device] of matching.entries())
+      select.add(new Option(device.label || `${title} ${index + 1}`, device.deviceId));
+    if (selected && !matching.some((device) => device.deviceId === selected)) {
+      // Device names/IDs may be concealed until the user grants preview permission.
+      select.add(new Option(`Saved ${title} (not currently listed)`, selected));
     }
-    for (const name of ['resolution', 'frameRate'] as const)
-      field<HTMLSelectElement>(name).value = String(preferences[name]);
-    for (const name of ['echoCancellation', 'noiseSuppression', 'autoGainControl'] as const)
-      field<HTMLInputElement>(name).checked = preferences[name];
-    const status = dialog.querySelector<HTMLElement>('.media-preview-status')!;
-    const video = dialog.querySelector('video')!;
+    select.value = selected;
+  }
+
+  /** Opens without capture. A change may switch an active device, but never enables an inactive one. */
+  private cameraScreen(context: ScreenContext): HTMLElement {
+    this.leaveSetup();
+    const token = {};
+    this.setupToken = token;
+    const current = (): boolean => this.setupToken === token && context.current();
+    let preferences = loadCapturePreferences();
+
+    const previewBlock = make('div', 'sheet-block media-preview-panel');
+    const video = make('video', 'media-preview-video') as HTMLVideoElement;
+    video.autoplay = true;
     video.muted = true;
-    const meter = dialog.querySelector('meter')!;
-    const readPreferences = (): CapturePreferences =>
-      normalizeCapturePreferences({
-        cameraDeviceId: field<HTMLSelectElement>('cameraDeviceId').value,
-        microphoneDeviceId: field<HTMLSelectElement>('microphoneDeviceId').value,
-        resolution: field<HTMLSelectElement>('resolution').value,
-        frameRate: Number(field<HTMLSelectElement>('frameRate').value),
-        echoCancellation: field<HTMLInputElement>('echoCancellation').checked,
-        noiseSuppression: field<HTMLInputElement>('noiseSuppression').checked,
-        autoGainControl: field<HTMLInputElement>('autoGainControl').checked,
-      });
-    const output = dialog.querySelector<HTMLSelectElement>('[data-output-device]')!;
-    const outputStatus = dialog.querySelector<HTMLElement>('[data-output-status]')!;
-    const outputApply = dialog.querySelector<HTMLButtonElement>('[data-output-apply]')!;
-    const outputChoose = dialog.querySelector<HTMLButtonElement>('[data-output-choose]')!;
-    const outputTest = dialog.querySelector<HTMLButtonElement>('[data-output-test]')!;
-    const picker = navigator.mediaDevices as MediaDevices & {
-      selectAudioOutput?: () => Promise<MediaDeviceInfo>;
-    };
-    output.disabled = outputApply.disabled = !this.output.supported;
-    outputChoose.hidden = !this.output.supported || typeof picker?.selectAudioOutput !== 'function';
-    if (!this.output.supported)
-      outputStatus.textContent =
-        'This browser uses your system speaker. Change output in your system sound settings.';
-    if (this.output.selected) output.add(new Option('Selected speaker', this.output.selected));
-    output.value = this.output.selected;
-    let outputAction = 0;
-    const applyOutput = async (deviceId: string, action: number) => {
-      if (this.dialog !== dialog || action !== outputAction) return;
-      await this.output.change(deviceId);
-      if (this.dialog !== dialog || action !== outputAction) return;
-      this.outputWarning = false;
-      for (const id of this.playback.keys()) this.applyParticipant(id);
-      outputStatus.textContent = 'Speaker selected for this tab. Use Test speaker to check it.';
-    };
-    const outputActionStart = (choose: boolean) => {
-      const action = ++outputAction;
-      this.speakerTest?.stop();
-      outputApply.disabled = outputChoose.disabled = outputTest.disabled = true;
-      outputStatus.textContent = choose ? 'Choose a speaker in your browser…' : 'Changing speaker…';
-      // The picker is invoked before any await, preserving this button's gesture.
-      let selected: Promise<MediaDeviceInfo | null>;
-      try {
-        selected =
-          choose && picker.selectAudioOutput ? picker.selectAudioOutput() : Promise.resolve(null);
-      } catch (error) {
-        selected = Promise.reject(
-          error instanceof Error ? error : new Error('Speaker selection failed'),
-        );
-      }
-      selected
-        .then(async (device) => {
-          if (this.dialog !== dialog || action !== outputAction) return;
-          if (device) {
-            output.add(new Option(device.label || 'Selected speaker', device.deviceId));
-            output.value = device.deviceId;
-          }
-          await applyOutput(output.value, action);
-          this.devices?.refresh();
-        })
-        .catch((error) => {
-          if (this.dialog === dialog && action === outputAction)
-            outputStatus.textContent = outputErrorMessage(error);
-        })
-        .finally(() => {
-          if (this.dialog === dialog && action === outputAction)
-            outputApply.disabled = outputChoose.disabled = outputTest.disabled = false;
-        });
-    };
-    outputApply.addEventListener('click', () => outputActionStart(false));
-    outputChoose.addEventListener('click', () => outputActionStart(true));
-    outputTest.addEventListener('click', () => {
-      const test = this.speakerTest;
-      if (!test) return;
-      test
-        .play()
-        .then(() => {
-          if (this.dialog === dialog)
-            outputStatus.textContent =
-              'Test tone played. If you did not hear it, check your speaker selection and system volume.';
-        })
-        .catch((error) => {
-          if (this.dialog === dialog) outputStatus.textContent = outputErrorMessage(error);
-        });
-    });
-    const fillDevices = (devices: MediaDeviceInfo[]) => {
-      if (this.dialog !== dialog) return;
-      for (const [name, kind, title] of [
-        ['cameraDeviceId', 'videoinput', 'camera'],
-        ['microphoneDeviceId', 'audioinput', 'microphone'],
-      ] as const) {
-        const select = field<HTMLSelectElement>(name);
-        const selected = select.value;
-        select.replaceChildren(new Option(`Default ${title}`, ''));
-        const matching = devices.filter((device) => device.kind === kind && device.deviceId);
-        for (const [index, device] of matching.entries())
-          select.add(new Option(device.label || `${title} ${index + 1}`, device.deviceId));
-        if (selected && !matching.some((device) => device.deviceId === selected)) {
-          // Device names/IDs may be concealed until the user grants preview permission.
-          select.add(new Option(`Saved ${title} (not currently listed)`, selected));
-        }
-        select.value = selected;
-      }
-      const selected = output.value;
-      output.replaceChildren(new Option('System default', ''));
-      const speakers = devices.filter((device) => device.kind === 'audiooutput' && device.deviceId);
-      for (const [index, device] of speakers.entries())
-        output.add(new Option(device.label || `Speaker ${index + 1}`, device.deviceId));
-      if (selected && !speakers.some((device) => device.deviceId === selected)) {
-        output.add(new Option('Selected speaker (not currently listed)', selected));
-        if (selected === this.output.selected)
-          outputStatus.textContent =
-            'Selected speaker is not currently listed. Choose another output or use the system default.';
-      }
-      output.value = selected;
-    };
+    video.playsInline = true;
+    video.hidden = true;
+    const meter = make('meter', 'media-level') as HTMLMeterElement;
+    meter.min = 0;
+    meter.max = 1;
+    meter.value = 0;
+    meter.setAttribute('aria-label', 'Microphone input level');
+    const meterRow = make('div', 'media-meter-row');
+    meterRow.append(make('span', 'media-meter-label', 'Mic level'), meter);
+    const status = make('p', 'media-preview-status sheet-status', 'Previews stay on this device.');
+    status.setAttribute('role', 'status');
+    const cameraTest = actionButton('Test camera', () => startPreview(true, false));
+    const microphoneTest = actionButton('Test microphone', () => startPreview(false, true));
+    const stopButton = actionButton('Stop preview', () => stopPreview());
+    stopButton.disabled = true;
+    const actions = make('div', 'sheet-actions');
+    actions.append(cameraTest, microphoneTest, stopButton);
+    previewBlock.append(video, meterRow, actions, status);
+
+    const cameraSelect = make('select') as HTMLSelectElement;
+    cameraSelect.name = 'cameraDeviceId';
+    cameraSelect.setAttribute('name', 'cameraDeviceId');
+    const microphoneSelect = make('select') as HTMLSelectElement;
+    microphoneSelect.name = 'microphoneDeviceId';
+    microphoneSelect.setAttribute('name', 'microphoneDeviceId');
+    cameraSelect.add(new Option('Default camera', ''));
+    microphoneSelect.add(new Option('Default microphone', ''));
+    for (const [select, name, title] of [
+      [cameraSelect, 'cameraDeviceId', 'camera'],
+      [microphoneSelect, 'microphoneDeviceId', 'microphone'],
+    ] as const) {
+      if (preferences[name]) select.add(new Option(`Saved ${title}`, preferences[name]));
+      select.value = preferences[name];
+    }
+    const cameraRow = selectRow('Camera', cameraSelect);
+    const microphoneRow = selectRow('Microphone', microphoneSelect);
+
     const preview = new MediaPreview(
       (stream) => {
         video.srcObject = stream;
@@ -669,171 +601,381 @@ export class MediaControls {
       },
     );
     this.preview = preview;
-    this.dialog = dialog;
+    let previewAction = 0;
+    let applying = false;
+    const setBusy = (): void => {
+      const busy = applying || preview.pending;
+      cameraTest.disabled = microphoneTest.disabled = busy;
+      cameraSelect.disabled = microphoneSelect.disabled = busy;
+    };
+    const stopPreview = (): void => {
+      previewAction++;
+      preview.stop();
+      stopButton.disabled = true;
+      setBusy();
+      if (preview.pending)
+        status.textContent = 'Preview cancelled. Dismiss the browser permission prompt first.';
+    };
+    const startPreview = (camera: boolean, microphone: boolean): void => {
+      if (!current() || applying || preview.pending) return;
+      const action = ++previewAction;
+      const device = camera ? 'Camera' : 'Microphone';
+      const start = async (): Promise<void> => {
+        stopButton.disabled = false;
+        status.textContent = `${device}: waiting for browser permission…`;
+        try {
+          // Start within this click's turn, requesting only the chosen kind.
+          const capture = preview.start(preferences, camera, microphone);
+          setBusy();
+          const started = await capture;
+          if (!current() || action !== previewAction || !started) return;
+          status.textContent = camera
+            ? 'Camera preview is live. Only you see it.'
+            : 'Microphone test is live. Only you see the level; nothing plays back.';
+          this.devices?.refresh();
+        } catch (error) {
+          if (!current() || action !== previewAction) return;
+          stopButton.disabled = true;
+          status.textContent = mediaErrorMessage(error, device);
+        } finally {
+          if (current()) setBusy();
+        }
+      };
+      start().catch((error) => {
+        if (current() && action === previewAction)
+          status.textContent = mediaErrorMessage(error, device);
+      });
+    };
+
+    const readPreferences = (): CapturePreferences =>
+      normalizeCapturePreferences({
+        ...preferences,
+        cameraDeviceId: cameraSelect.value,
+        microphoneDeviceId: microphoneSelect.value,
+      });
+    const apply = async (
+      row: HTMLElement,
+      select: HTMLSelectElement,
+      name: 'cameraDeviceId' | 'microphoneDeviceId',
+    ): Promise<void> => {
+      if (applying) return;
+      stopPreview();
+      const next = readPreferences();
+      const activeRoom = this.options.getRoom();
+      const isCurrent = (): boolean => current() && this.options.getRoom() === activeRoom;
+      applying = true;
+      setBusy();
+      try {
+        if (!(await applyCaptureSettings(activeRoom, next, preferences, isCurrent))) return;
+        preferences = loadCapturePreferences();
+        status.textContent = '';
+        markSaved(row);
+      } catch (error) {
+        if (!isCurrent()) return;
+        // The confirmed baseline is what the select shows, so a retry stays possible.
+        preferences = loadCapturePreferences();
+        select.value = preferences[name];
+        status.textContent = mediaErrorMessage(error);
+      } finally {
+        if (current()) {
+          applying = false;
+          setBusy();
+        }
+      }
+    };
+    cameraSelect.addEventListener('change', () => {
+      apply(cameraRow, cameraSelect, 'cameraDeviceId').catch(() => {});
+    });
+    microphoneSelect.addEventListener('change', () => {
+      apply(microphoneRow, microphoneSelect, 'microphoneDeviceId').catch(() => {});
+    });
+
+    this.devices = observeMediaDevices(
+      (devices) => {
+        if (!current()) return;
+        this.rememberDevices(devices);
+        this.fillSelect(cameraSelect, devices, 'videoinput', 'camera', 'Default camera');
+        this.fillSelect(
+          microphoneSelect,
+          devices,
+          'audioinput',
+          'microphone',
+          'Default microphone',
+        );
+      },
+      () => {
+        if (current()) status.textContent = 'Device list unavailable. The defaults still work.';
+      },
+    );
+
+    const qualityStatus = (): string => {
+      const saved = loadCapturePreferences();
+      return `${saved.resolution} · ${saved.frameRate} fps`;
+    };
+    const qualityRow = navRow('Quality', qualityStatus(), () =>
+      context.push(
+        {
+          title: 'Quality',
+          body: (inner) =>
+            this.qualityScreen(inner, () => {
+              const shown = qualityRow.querySelector<HTMLElement>('.sheet-row-status');
+              if (shown) shown.textContent = qualityStatus();
+            }),
+        },
+        qualityRow,
+      ),
+    );
+    const rows: HTMLElement[] = [cameraRow, microphoneRow];
+    if (this.options.talkRow) rows.push(this.options.talkRow());
+    rows.push(qualityRow);
+    const body = make('div', 'media-setup');
+    body.append(
+      previewBlock,
+      group(null, rows),
+      note('Changes apply at once. A device that is off stays off.'),
+    );
+    return body;
+  }
+
+  /** Capture options that rarely change; each applies on its own. */
+  private qualityScreen(context: ScreenContext, changed: () => void): HTMLElement {
+    let preferences = loadCapturePreferences();
+    const status = make('p', 'sheet-status');
+    status.setAttribute('role', 'status');
+    const resolution = make('select') as HTMLSelectElement;
+    resolution.name = 'resolution';
+    resolution.setAttribute('name', 'resolution');
+    for (const [value, label] of [
+      ['360p', '360p'],
+      ['720p', '720p'],
+      ['1080p', '1080p'],
+    ])
+      resolution.add(new Option(label, value));
+    resolution.value = preferences.resolution;
+    const frameRate = make('select') as HTMLSelectElement;
+    frameRate.name = 'frameRate';
+    frameRate.setAttribute('name', 'frameRate');
+    for (const value of [15, 30, 60]) frameRate.add(new Option(`${value} fps`, String(value)));
+    frameRate.value = String(preferences.frameRate);
+    const resolutionRow = selectRow('Resolution', resolution);
+    const frameRow = selectRow('Frame rate', frameRate);
+    const toggles = {} as Record<
+      'echoCancellation' | 'noiseSuppression' | 'autoGainControl',
+      ReturnType<typeof toggleRow>
+    >;
+    const read = (): CapturePreferences =>
+      normalizeCapturePreferences({
+        ...preferences,
+        resolution: resolution.value,
+        frameRate: Number(frameRate.value),
+        echoCancellation: toggles.echoCancellation.input.checked,
+        noiseSuppression: toggles.noiseSuppression.input.checked,
+        autoGainControl: toggles.autoGainControl.input.checked,
+      });
+    const restore = (): void => {
+      resolution.value = preferences.resolution;
+      frameRate.value = String(preferences.frameRate);
+      for (const name of ['echoCancellation', 'noiseSuppression', 'autoGainControl'] as const)
+        toggles[name].input.checked = preferences[name];
+    };
+    let applying = false;
+    const apply = async (row: HTMLElement): Promise<void> => {
+      if (applying) {
+        restore();
+        return;
+      }
+      const next = read();
+      const activeRoom = this.options.getRoom();
+      const isCurrent = (): boolean => context.current() && this.options.getRoom() === activeRoom;
+      applying = true;
+      try {
+        if (!(await applyCaptureSettings(activeRoom, next, preferences, isCurrent))) return;
+        preferences = loadCapturePreferences();
+        status.textContent = '';
+        markSaved(row);
+        changed();
+      } catch (error) {
+        if (!isCurrent()) return;
+        preferences = loadCapturePreferences();
+        restore();
+        status.textContent = mediaErrorMessage(error);
+      } finally {
+        if (context.current()) applying = false;
+      }
+    };
+    for (const [name, label] of [
+      ['echoCancellation', 'Echo cancellation'],
+      ['noiseSuppression', 'Noise suppression'],
+      ['autoGainControl', 'Automatic level'],
+    ] as const) {
+      const toggle = toggleRow(label, preferences[name], () => {
+        apply(toggle.row).catch(() => {});
+      });
+      toggle.input.name = name;
+      toggle.input.setAttribute('name', name);
+      toggles[name] = toggle;
+    }
+    resolution.addEventListener('change', () => {
+      apply(resolutionRow).catch(() => {});
+    });
+    frameRate.addEventListener('change', () => {
+      apply(frameRow).catch(() => {});
+    });
+    return group(null, [
+      resolutionRow,
+      frameRow,
+      toggles.echoCancellation.row,
+      toggles.noiseSuppression.row,
+      toggles.autoGainControl.row,
+      note('Higher quality uses more bandwidth. The defaults suit most connections.'),
+      status,
+    ]);
+  }
+
+  /** Speaker choice applies to this tab at once; a test tone checks it. */
+  private speakerScreen(context: ScreenContext): HTMLElement {
+    this.leaveSetup();
+    const token = {};
+    this.setupToken = token;
+    const current = (): boolean => this.setupToken === token && context.current();
+    const output = make('select') as HTMLSelectElement;
+    output.setAttribute('data-output-device', '');
+    output.setAttribute('aria-label', 'Speaker');
+    output.add(new Option('System default', ''));
+    const outputStatus = make('p', 'sheet-status');
+    outputStatus.setAttribute('data-output-status', '');
+    outputStatus.setAttribute('role', 'status');
+    const row = selectRow('Speaker', output);
+    const picker = navigator.mediaDevices as MediaDevices & {
+      selectAudioOutput?: () => Promise<MediaDeviceInfo>;
+    };
+    const outputChoose = actionButton('Choose another speaker', () => outputActionStart());
+    const outputTest = actionButton('Test speaker', () => {
+      const test = this.speakerTest;
+      if (!test) return;
+      test
+        .play()
+        .then(() => {
+          if (current())
+            outputStatus.textContent =
+              'Test tone played. If you did not hear it, check the speaker and system volume.';
+        })
+        .catch((error) => {
+          if (current()) outputStatus.textContent = outputErrorMessage(error);
+        });
+    });
+    output.disabled = !this.output.supported;
+    outputChoose.hidden = !this.output.supported || typeof picker?.selectAudioOutput !== 'function';
+    if (!this.output.supported)
+      outputStatus.textContent =
+        'This browser uses your system speaker. Change output in your system sound settings.';
+    if (this.output.selected) output.add(new Option('Selected speaker', this.output.selected));
+    output.value = this.output.selected;
+    let outputAction = 0;
+    const applyOutput = async (deviceId: string, action: number): Promise<void> => {
+      if (!current() || action !== outputAction) return;
+      await this.output.change(deviceId);
+      if (!current() || action !== outputAction) return;
+      this.outputWarning = false;
+      for (const id of this.playback.keys()) this.applyParticipant(id);
+      outputStatus.textContent = 'Speaker selected for this tab. Use Test speaker to check it.';
+      markSaved(row);
+    };
+    output.addEventListener('change', () => {
+      const action = ++outputAction;
+      this.speakerTest?.stop();
+      applyOutput(output.value, action).catch((error) => {
+        if (current() && action === outputAction)
+          outputStatus.textContent = outputErrorMessage(error);
+      });
+    });
+    const outputActionStart = (): void => {
+      const action = ++outputAction;
+      this.speakerTest?.stop();
+      outputChoose.disabled = outputTest.disabled = output.disabled = true;
+      outputStatus.textContent = 'Choose a speaker in your browser…';
+      // The picker is invoked before any await, preserving this button's gesture.
+      let selected: Promise<MediaDeviceInfo | null>;
+      try {
+        selected = picker.selectAudioOutput ? picker.selectAudioOutput() : Promise.resolve(null);
+      } catch (error) {
+        selected = Promise.reject(
+          error instanceof Error ? error : new Error('Speaker selection failed'),
+        );
+      }
+      selected
+        .then(async (device) => {
+          if (!current() || action !== outputAction) return;
+          if (device) {
+            output.add(new Option(device.label || 'Selected speaker', device.deviceId));
+            output.value = device.deviceId;
+          }
+          await applyOutput(output.value, action);
+          this.devices?.refresh();
+        })
+        .catch((error) => {
+          if (current() && action === outputAction)
+            outputStatus.textContent = outputErrorMessage(error);
+        })
+        .finally(() => {
+          if (current() && action === outputAction) {
+            outputChoose.disabled = outputTest.disabled = false;
+            output.disabled = !this.output.supported;
+          }
+        });
+    };
+    this.devices = observeMediaDevices(
+      (devices) => {
+        if (!current()) return;
+        this.rememberDevices(devices);
+        const selected = output.value;
+        output.replaceChildren(new Option('System default', ''));
+        const speakers = devices.filter(
+          (device) => device.kind === 'audiooutput' && device.deviceId,
+        );
+        for (const [index, device] of speakers.entries())
+          output.add(new Option(device.label || `Speaker ${index + 1}`, device.deviceId));
+        if (selected && !speakers.some((device) => device.deviceId === selected)) {
+          output.add(new Option('Selected speaker (not currently listed)', selected));
+          if (selected === this.output.selected)
+            outputStatus.textContent =
+              'Selected speaker is not currently listed. Choose another output or use the system default.';
+        }
+        output.value = selected;
+      },
+      () => {
+        if (current()) outputStatus.textContent = 'Device list unavailable.';
+      },
+    );
     try {
       this.speakerTest = new SpeakerTest();
       outputTest.disabled = true;
       this.output
         .attach(this.speakerTest.element)
         .then(() => {
-          if (this.dialog === dialog) outputTest.disabled = false;
+          if (current()) outputTest.disabled = false;
         })
         .catch((error) => {
-          if (this.dialog === dialog) outputStatus.textContent = outputErrorMessage(error);
+          if (current()) outputStatus.textContent = outputErrorMessage(error);
         });
     } catch {
       outputTest.disabled = true;
       outputStatus.textContent = 'Speaker testing is unavailable in this browser.';
     }
-    this.devices = observeMediaDevices(fillDevices, () => {
-      if (this.dialog === dialog)
-        status.textContent = 'Device list unavailable. You can still try the default devices.';
-    });
-    const previewButton = dialog.querySelector<HTMLButtonElement>('[data-action="preview"]')!;
-    const cameraTest = dialog.querySelector<HTMLButtonElement>('[data-action="test-camera"]')!;
-    const microphoneTest = dialog.querySelector<HTMLButtonElement>(
-      '[data-action="test-microphone"]',
-    )!;
-    const startButtons = [previewButton, cameraTest, microphoneTest];
-    const stopButton = dialog.querySelector<HTMLButtonElement>('[data-action="stop"]')!;
-    const saveButton = dialog.querySelector<HTMLButtonElement>('[type="submit"]')!;
-    let previewAction = 0;
-    let saving = false;
-    const updateCaptureButtons = () => {
-      const busy = saving || preview.pending;
-      for (const button of startButtons) button.disabled = busy;
-      saveButton.disabled = busy;
-    };
-    const stopPreview = () => {
-      previewAction++;
-      preview.stop();
-      updateCaptureButtons();
-      stopButton.disabled = true;
-      status.textContent = preview.pending
-        ? 'Preview cancelled. Dismiss the browser permission prompt before testing again.'
-        : 'Preview stopped.';
-    };
-    stopButton.addEventListener('click', stopPreview);
-    dialog.addEventListener('settings-tab-change', (event) => {
-      if ((event as CustomEvent<string>).detail === 'media-appearance-panel') {
-        stopPreview();
-        this.speakerTest?.stop();
-      }
-    });
-    const startPreview = (camera: boolean, microphone: boolean) => {
-      if (this.dialog !== dialog || saving || preview.pending) return;
-      const action = ++previewAction;
-      field<HTMLInputElement>('previewCamera').checked = camera;
-      field<HTMLInputElement>('previewMicrophone').checked = microphone;
-      const device =
-        camera && microphone
-          ? 'Camera and microphone'
-          : camera
-            ? 'Camera'
-            : microphone
-              ? 'Microphone'
-              : 'Preview';
-      const start = async () => {
-        stopButton.disabled = false;
-        status.textContent = `${device}: waiting for browser permission…`;
-        try {
-          // Start within this click's turn, requesting only the chosen kinds.
-          const capture = preview.start(readPreferences(), camera, microphone);
-          updateCaptureButtons();
-          const started = await capture;
-          if (this.dialog !== dialog || action !== previewAction) return;
-          if (!started) return;
-          status.textContent = camera
-            ? microphone
-              ? 'Preview is private. Check the picture and microphone level below; no microphone sound plays through the speakers.'
-              : 'Camera preview is private. Check the picture below and choose a camera above.'
-            : 'Microphone test is private. Check the level below; your microphone is not played through the speakers.';
-          this.devices?.refresh();
-        } catch (error) {
-          if (this.dialog !== dialog || action !== previewAction) return;
-          stopButton.disabled = true;
-          status.textContent = mediaErrorMessage(error, device);
-        } finally {
-          if (this.dialog === dialog) updateCaptureButtons();
-        }
-      };
-      start().catch((error) => {
-        if (this.dialog === dialog && action === previewAction)
-          status.textContent = mediaErrorMessage(error, device);
-      });
-    };
-    cameraTest.addEventListener('click', () => startPreview(true, false));
-    microphoneTest.addEventListener('click', () => startPreview(false, true));
-    previewButton.addEventListener('click', () => {
-      startPreview(
-        field<HTMLInputElement>('previewCamera').checked,
-        field<HTMLInputElement>('previewMicrophone').checked,
-      );
-    });
-    dialog.querySelector('form')!.addEventListener('change', (event) => {
-      // Layout and microphone mode apply immediately, independently of capture drafts.
-      if (!(event.target instanceof Element) || !event.target.matches('[name]')) return;
-      stopPreview();
-      if (!preview.pending)
-        status.textContent = 'Settings changed. Test a device or start preview to try them.';
-    });
-    dialog.querySelector('form')!.addEventListener('submit', (event) => {
-      event.preventDefault();
-      if (saving || preview.pending) return;
-      const save = async () => {
-        const next = readPreferences();
-        const activeRoom = this.options.getRoom();
-        const isCurrent = () => this.dialog === dialog && this.options.getRoom() === activeRoom;
-        previewAction++;
-        preview.stop();
-        stopButton.disabled = true;
-        saving = true;
-        updateCaptureButtons();
-        saveButton.textContent = 'Saving…';
-        const captureFields = dialog.querySelectorAll<HTMLInputElement | HTMLSelectElement>(
-          'input[name], select[name]',
-        );
-        captureFields.forEach((control) => {
-          control.disabled = true;
-        });
-        try {
-          if (!(await applyCaptureSettings(activeRoom, next, preferences, isCurrent))) return;
-          this.closeSetup(true);
-        } catch (error) {
-          if (!isCurrent()) return;
-          preferences = loadCapturePreferences();
-          status.textContent = mediaErrorMessage(error);
-          dialog.querySelector<HTMLButtonElement>('#media-devices-tab')!.click();
-        } finally {
-          if (isCurrent()) {
-            saving = false;
-            updateCaptureButtons();
-            saveButton.textContent = 'Save settings';
-            captureFields.forEach((control) => {
-              control.disabled = false;
-            });
-          }
-        }
-      };
-      save().catch((error) => {
-        if (this.dialog === dialog) status.textContent = mediaErrorMessage(error);
-      });
-    });
-    configureSettingsDialog(dialog, () => this.closeSetup(false));
-    dialog.addEventListener('close', () => {
-      if (this.dialog === dialog) this.closeSetup(false);
-    });
-    document.body.append(dialog);
-    const result = new Promise<boolean>((resolve) => {
-      this.finishSetup = resolve;
-    });
-    try {
-      dialog.showModal();
-    } catch (error) {
-      this.closeSetup(false);
-      this.options.notify(mediaErrorMessage(error));
-    }
-    return result;
+    const actions = make('div', 'sheet-actions');
+    actions.append(outputChoose, outputTest);
+    return group(null, [row, actions, outputStatus]);
+  }
+
+  /** Stops the preview, the test tone and the device observer of the screen that was left. */
+  private leaveSetup(): void {
+    this.setupToken = null;
+    this.devices?.dispose();
+    this.devices = null;
+    this.speakerTest?.dispose();
+    this.speakerTest = null;
+    this.preview?.stop();
+    this.preview = null;
   }
 
   /** Call after each added/replaced remote audio/video element, including screen shares. */
@@ -1072,7 +1214,7 @@ export class MediaControls {
   reset(): void {
     this.lifecycleVersion++;
     this.outputWarning = false;
-    this.closeSetup(false);
+    this.leaveSetup();
     for (const id of this.playback.keys()) this.detachParticipant(id);
   }
 
@@ -1082,22 +1224,6 @@ export class MediaControls {
     this.reset();
     for (const toolbar of this.toolbars) toolbar.remove();
     this.toolbars.clear();
-  }
-
-  private closeSetup(saved: boolean): void {
-    this.devices?.dispose();
-    this.devices = null;
-    this.speakerTest?.dispose();
-    this.speakerTest = null;
-    this.preview?.stop();
-    this.preview = null;
-    const dialog = this.dialog;
-    this.dialog = null;
-    if (dialog?.open) dialog.close();
-    dialog?.remove();
-    const resolve = this.finishSetup;
-    this.finishSetup = null;
-    resolve?.(saved);
   }
 
   private setHidden(participantId: string, hidden: boolean): void {

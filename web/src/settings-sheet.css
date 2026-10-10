@@ -1,0 +1,453 @@
+/* The settings sheet: one list, single-purpose screens, rows that apply at once. */
+.settings-sheet {
+  --sheet-row: rgba(243, 239, 233, 0.045);
+  --sheet-row-strong: rgba(243, 239, 233, 0.08);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.sheet-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px 10px;
+  flex: none;
+}
+
+.sheet-title {
+  flex: 1;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.3;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sheet-title:focus-visible {
+  outline: 2px solid var(--line);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
+.sheet-back,
+.sheet-close {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--sheet-row-strong);
+  color: var(--text);
+  cursor: pointer;
+  position: relative;
+}
+
+.sheet-back::before,
+.sheet-close::before {
+  content: '';
+  position: absolute;
+  inset: 8px;
+  background: currentColor;
+  mask: center / contain no-repeat;
+}
+
+.sheet-back::before {
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 5l-7 7 7 7'/%3E%3C/svg%3E");
+}
+
+.sheet-close::before {
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M6 6l12 12M18 6L6 18'/%3E%3C/svg%3E");
+}
+
+.sheet-back:hover,
+.sheet-close:hover {
+  background: rgba(243, 239, 233, 0.14);
+}
+
+.sheet-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.sheet-subtitle,
+.sheet-note {
+  margin: 0;
+  padding: 0 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-faint);
+}
+
+.sheet-segments {
+  display: inline-flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: var(--radius-pill);
+  background: rgba(243, 239, 233, 0.06);
+  align-self: flex-start;
+}
+
+.sheet-segments button,
+.sheet-segment button {
+  height: 28px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.sheet-segments button[aria-pressed='true'],
+.sheet-segment button[aria-pressed='true'] {
+  background: var(--text);
+  color: var(--bg);
+}
+
+.sheet-segment {
+  display: inline-flex;
+  gap: 3px;
+  padding: 3px;
+  border-radius: var(--radius-pill);
+  background: rgba(243, 239, 233, 0.06);
+}
+
+.sheet-segment button {
+  height: 26px;
+  padding: 0 12px;
+  font-size: 12px;
+}
+
+.sheet-segment button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.sheet-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sheet-group-title {
+  font-size: 12px;
+  color: var(--text-faint);
+  padding: 6px 12px 2px;
+}
+
+.sheet-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 12px;
+  box-sizing: border-box;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--sheet-row);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+}
+
+button.sheet-row {
+  cursor: pointer;
+}
+
+button.sheet-row:hover {
+  background: var(--sheet-row-strong);
+}
+
+.sheet-row:focus-within,
+button.sheet-row:focus-visible {
+  outline: 2px solid var(--line);
+  outline-offset: -2px;
+}
+
+.sheet-row-label {
+  flex: 1 0 auto;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.sheet-row-status {
+  display: block;
+  flex: 0 1 auto;
+  max-width: 60%;
+  font-size: 13px;
+  color: var(--text-dim);
+  text-align: right;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sheet-row-nav::after {
+  content: '';
+  flex: none;
+  width: 14px;
+  height: 14px;
+  background: var(--text-faint);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 6l6 6-6 6'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+
+.sheet-row-saved {
+  flex: none;
+  font-size: 12px;
+  color: var(--success);
+}
+
+.sheet-row-saved:empty {
+  display: none;
+}
+
+.sheet-row.danger,
+.sheet-link.danger {
+  color: var(--danger);
+}
+
+.sheet-row select,
+.sheet-row input[type='text'],
+.sheet-row input[type='email'],
+.sheet-row input[type='password'],
+.sheet-row input[type='number'],
+.sheet-row input[type='time'],
+.sheet-row input[type='url'] {
+  flex: 0 1 60%;
+  min-width: 0;
+  padding: 6px 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 13px;
+  text-align: right;
+}
+
+.sheet-row select {
+  direction: rtl;
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 18px;
+}
+
+.sheet-row-select::after {
+  content: '';
+  position: absolute;
+  right: 12px;
+  width: 12px;
+  height: 12px;
+  background: var(--text-faint);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  pointer-events: none;
+}
+
+.sheet-row-select {
+  position: relative;
+}
+
+.sheet-row select option {
+  direction: ltr;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.sheet-row input:focus-visible,
+.sheet-row select:focus-visible {
+  outline: none;
+  color: var(--text);
+}
+
+.sheet-switch {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: none;
+  width: 40px;
+  height: 24px;
+  margin: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: rgba(243, 239, 233, 0.14);
+  position: relative;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.sheet-switch::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-pill);
+  background: var(--text-dim);
+  transition:
+    transform var(--transition-fast),
+    background var(--transition-fast);
+}
+
+.sheet-switch:checked {
+  background: var(--text);
+}
+
+.sheet-switch:checked::after {
+  background: var(--bg);
+  transform: translateX(16px);
+}
+
+.sheet-switch:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.sheet-switch:focus-visible {
+  outline: 2px solid var(--line);
+  outline-offset: 2px;
+}
+
+.sheet-footer {
+  margin-top: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  padding: 8px 12px 0;
+  font-size: 13px;
+}
+
+.sheet-link {
+  padding: 6px 0;
+  border: 0;
+  background: none;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.sheet-link:hover {
+  color: var(--text);
+}
+
+.sheet-loading {
+  margin: 0;
+  padding: 12px;
+  color: var(--text-dim);
+}
+
+.sheet-error {
+  color: var(--danger);
+}
+
+/* Free-form blocks inside a screen (previews, lists, forms) share the row surface. */
+.sheet-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: var(--sheet-row);
+}
+
+.sheet-block h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.sheet-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sheet-actions button,
+.sheet-button {
+  height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--sheet-row-strong);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.sheet-actions button:hover,
+.sheet-button:hover {
+  background: rgba(243, 239, 233, 0.14);
+}
+
+.sheet-actions button:disabled,
+.sheet-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.sheet-actions .btn-primary,
+.sheet-button.btn-primary {
+  background: var(--text);
+  color: var(--bg);
+}
+
+.sheet-status {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+
+.sheet-status:empty {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet-switch,
+  .sheet-switch::after {
+    transition: none;
+  }
+}
+
+/* Private preview inside Camera & mic. */
+.media-preview-panel .media-preview-video {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  object-fit: cover;
+}
+
+.media-meter-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.media-meter-row .media-level {
+  flex: 1;
+  height: 6px;
+}

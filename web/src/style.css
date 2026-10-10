@@ -2761,3 +2761,57 @@ header.in-room .room-topic {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ========== Settings sheet hosts ========== */
+
+/* In a room the sheet takes the side column; the tab bar waits underneath. */
+#sidebar.settings-open #sidebar-tabs {
+  display: none;
+}
+
+#settings-panel {
+  background: var(--bg);
+}
+
+/* On the home page the sheet docks beside the room grid. */
+#join-screen.settings-open {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+#home-settings-host {
+  position: sticky;
+  top: 0.75rem;
+  height: calc(100dvh - 5rem);
+  min-height: 480px;
+  min-width: 0;
+}
+
+@media (max-width: 768px) {
+  /* The sheet takes the whole phone screen; the stage waits behind it. */
+  #room-screen.settings-open,
+  #room-screen.settings-open.layout-classic,
+  #room-screen.settings-open.mobile-panel-collapsed {
+    grid-template-rows: 0 minmax(0, 1fr);
+  }
+  #room-screen.settings-open #main-area {
+    overflow: hidden;
+  }
+  #room-screen.settings-open #sidebar {
+    min-height: 0;
+  }
+  #join-screen.settings-open {
+    display: flex;
+  }
+  #home-settings-host {
+    position: fixed;
+    inset: 0;
+    height: auto;
+    min-height: 0;
+    z-index: 300;
+    background: var(--bg);
+    padding-top: env(safe-area-inset-top);
+  }
+}

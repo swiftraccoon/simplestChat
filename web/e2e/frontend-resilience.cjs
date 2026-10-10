@@ -1097,14 +1097,20 @@ async function run() {
     await assertRoomLayout(call.page, { width: 1440, height: 900 });
     await call.page.screenshot({ path: path.join(artifacts, 'room-1440x900.png') });
     await call.page.locator('#settings-btn').click();
-    await call.page.getByRole('dialog', { name: 'Your settings', exact: true }).waitFor();
+    const sheet = call.page.getByRole('region', { name: 'Settings', exact: true });
+    await sheet.waitFor({ state: 'visible' });
+    await sheet.getByRole('button', { name: 'Camera & mic' }).click();
+    await sheet.getByRole('heading', { name: 'Camera & mic' }).waitFor();
     await call.page.keyboard.press('Escape');
+    await sheet.getByRole('heading', { name: 'Settings' }).waitFor();
+    await call.page.keyboard.press('Escape');
+    await sheet.waitFor({ state: 'hidden' });
     assert.equal(
       await call.page.locator('#settings-btn').evaluate((node) => node === document.activeElement),
       true,
     );
     report.checks.push(
-      'Settings remain below the video and Escape returns focus to the settings button',
+      'Settings open in the side column, Escape steps back then closes, and focus returns to the settings button',
     );
     call.send({
       type: 'roomSettingsChanged',

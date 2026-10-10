@@ -15,6 +15,14 @@ import type { ScreenShareResult } from './media';
 import { ClientTelemetry } from './telemetry';
 import { CallOutcomeTelemetry, MediaTelemetry, observeFirstVideoFrame } from './media-telemetry';
 import { MediaControls, mediaErrorMessage } from './media-controls';
+import {
+  SettingsSheet,
+  group,
+  markSaved,
+  note,
+  segmentRow,
+  type SheetSection,
+} from './settings-sheet';
 import { MediaLifecycle } from './media-lifecycle';
 import { PwaControls } from './pwa';
 import { NotificationPreferences } from './notification-preferences';
@@ -181,13 +189,6 @@ const toastContainer = document.getElementById('toast-container')!;
 const sidebarTabs = document.querySelectorAll<HTMLButtonElement>('#sidebar-tabs .tab');
 const tabContents = document.querySelectorAll<HTMLDivElement>('#sidebar-content .tab-content');
 const sidebarCollapseBtn = document.getElementById('sidebar-collapse') as HTMLButtonElement;
-
-// Personal controls retain their values/listeners as they move into the shared dialog.
-const layoutSelect = document.getElementById('layout-select') as HTMLSelectElement;
-const micModeSelect = document.getElementById('mic-mode-select') as HTMLSelectElement;
-const appearanceControls = document.getElementById('appearance-controls')!;
-const microphoneControls = document.getElementById('microphone-controls')!;
-document.getElementById('personal-settings-controls')!.remove();
 
 // --- Auth ---
 let capabilities: ServerCapabilities | null = null;
@@ -417,10 +418,119 @@ const mediaControls = new MediaControls({
   getRoom: () => room,
   notify: (message) => showToast(message),
   onPlaybackResult: (element, blocked) => callTelemetry.playbackResult(element, blocked),
-  appearanceControls,
-  microphoneControls,
+  talkRow: () => buildTalkRow(),
 });
 mediaControls.mountToolbar(document.getElementById('room-volume-slot')!);
+
+// --- Settings sheet ---
+const settingsPanel = document.getElementById('settings-panel')!;
+const homeSettingsHost = document.getElementById('home-settings-host')!;
+const sidebarElement = document.getElementById('sidebar')!;
+let talkRow: ReturnType<typeof segmentRow> | null = null;
+let talkNote: HTMLElement | null = null;
+
+/** The talk mode row inside Camera & mic; a room that requires hold-to-talk locks it. */
+function buildTalkRow(): HTMLElement {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'sheet-group';
+  const row = segmentRow(
+    'Talk',
+    [
+      { value: 'open', label: 'Open mic', id: 'talk-open' },
+      { value: 'ptt', label: 'Hold to talk', id: 'talk-ptt' },
+    ],
+    micMode,
+    (value) => {
+      setMicMode(value as MicMode);
+      markSaved(row.row);
+    },
+  );
+  talkRow = row;
+  talkNote = note('This room requires hold to talk.');
+  wrapper.append(row.row, talkNote);
+  syncTalkRow();
+  return wrapper;
+}
+
+function syncTalkRow(): void {
+  if (!talkRow) return;
+  const locked = room?.roomSettings?.pushToTalk === true;
+  for (const choice of talkRow.buttons) choice.disabled = locked;
+  talkRow.set(micMode);
+  if (talkNote) talkNote.hidden = !locked;
+}
+
+const layoutSection: SheetSection = {
+  id: 'layout',
+  segment: 'you',
+  label: 'Layout',
+  status: () => (getLayout() === 'modern' ? 'Video & chat' : 'People, video & chat'),
+  screen: () => ({
+    title: 'Layout',
+    body: () => {
+      const choice = segmentRow(
+        'Layout',
+        [
+          { value: 'classic', label: 'People, video & chat', id: 'layout-classic' },
+          { value: 'modern', label: 'Video & chat', id: 'layout-modern' },
+        ],
+        getLayout(),
+        (value) => {
+          setLayout(value as 'modern' | 'classic');
+          markSaved(choice.row);
+        },
+      );
+      return group(null, [
+        choice.row,
+        note('Only your view changes. Video & chat gives the stage the people column.'),
+      ]);
+    },
+  }),
+};
+
+let settingsReturnTab: 'chat' | 'users' | 'lobby' = 'chat';
+let settingsRestoreChat = false;
+let settingsRestorePanel = false;
+const settingsSheet = new SettingsSheet({
+  sections: () => (room ? [...mediaControls.sections(), layoutSection] : []),
+  footer: () =>
+    room
+      ? [
+          { label: 'Keyboard shortcuts', activate: showKeyboardShortcuts },
+          { label: 'Diagnostics', activate: () => diagnosticsButton.click() },
+        ]
+      : [],
+  host: () => (room ? settingsPanel : homeSettingsHost),
+  onOpen: () => {
+    if (room) {
+      const active = Array.from(sidebarTabs).find((tab) => tab.classList.contains('active'))
+        ?.dataset['tab'];
+      settingsReturnTab = active === 'users' || active === 'lobby' ? active : 'chat';
+      selectSidebarTab('settings');
+      sidebarElement.classList.add('settings-open');
+      roomScreen.classList.add('settings-open');
+      settingsRestoreChat = isDesktopLayout() && panelPreferences.chatCollapsed;
+      if (settingsRestoreChat) panelPreferences.chatCollapsed = false;
+      settingsRestorePanel = !isDesktopLayout() && panelPreferences.mobilePanelCollapsed;
+      if (settingsRestorePanel) panelPreferences.mobilePanelCollapsed = false;
+      applyPanelPreferences();
+    } else {
+      homeSettingsHost.hidden = false;
+      joinScreen.classList.add('settings-open');
+    }
+  },
+  onClose: () => {
+    sidebarElement.classList.remove('settings-open');
+    roomScreen.classList.remove('settings-open');
+    selectSidebarTab(settingsReturnTab);
+    if (settingsRestoreChat) panelPreferences.chatCollapsed = true;
+    if (settingsRestorePanel) panelPreferences.mobilePanelCollapsed = true;
+    settingsRestoreChat = settingsRestorePanel = false;
+    applyPanelPreferences();
+    homeSettingsHost.hidden = true;
+    joinScreen.classList.remove('settings-open');
+  },
+});
 let localTextMuted = false;
 let roomRecovering = false;
 let cameraTogglePending = false;
@@ -831,10 +941,7 @@ function applyRoomSettingsToUI(): void {
   chatSendBtn.classList.toggle('disabled', Boolean(chatDisabled));
 
   setMicMode(settings?.pushToTalk ? 'ptt' : personalMicMode, false);
-  micModeSelect.disabled = settings?.pushToTalk === true;
-  micModeSelect.title = micModeSelect.disabled
-    ? 'This room requires push to talk'
-    : 'Your preferred microphone mode';
+  syncTalkRow();
 
   // Screen sharing: hide button when disabled
   if (settings?.allowScreenSharing === false) {
@@ -994,7 +1101,6 @@ function setLayout(layout: 'modern' | 'classic'): void {
   writeLocalPreference('layout', layout);
   roomScreen.classList.remove('layout-modern', 'layout-classic');
   roomScreen.classList.add(`layout-${layout}`);
-  layoutSelect.value = layout;
 
   // In classic mode, hide the Users tab from the sidebar (users are in the left panel)
   // and force the Chat tab active
@@ -1005,9 +1111,6 @@ function setLayout(layout: 'modern' | 'classic'): void {
   // Re-render participants for classic mode
   if (room) renderParticipants(room.getParticipants());
 }
-
-// Initialize layout
-layoutSelect.value = getLayout();
 
 // --- Sidebar Tabs ---
 /** On phones a tab press also reopens a panel that was collapsed to its tab bar. */
@@ -1090,7 +1193,7 @@ const panelPreferences: PanelPreferences = (() => {
   }
 })();
 
-function selectSidebarTab(tab: 'chat' | 'users' | 'lobby'): void {
+function selectSidebarTab(tab: 'chat' | 'users' | 'lobby' | 'settings'): void {
   sidebarTabs.forEach((button) => button.classList.toggle('active', button.dataset['tab'] === tab));
   tabContents.forEach((content) =>
     content.classList.toggle('active', content.id === `${tab}-panel`),
@@ -1221,10 +1324,9 @@ window.addEventListener('resize', () => {
   rosterOnDesktop = desktop;
   rosterInLandscapePhone = landscape;
 });
-document.getElementById('mic-setup-btn')!.addEventListener(
-  'click',
-  asyncUiAction(() => mediaControls.openSetup('microphone'), 'Could not open microphone settings'),
-);
+document.getElementById('mic-setup-btn')!.addEventListener('click', () => {
+  settingsSheet.open({ section: 'camera', opener: document.activeElement as HTMLElement | null });
+});
 document.getElementById('copy-room-link')!.addEventListener(
   'click',
   asyncUiAction(async () => {
@@ -3054,7 +3156,7 @@ async function leaveRoomAndShowHome(): Promise<void> {
   localTextMuted = false;
   roomRecovering = false;
   setMicMode(personalMicMode, false);
-  micModeSelect.disabled = false;
+  syncTalkRow();
 
   clearChildren(videoGrid);
   clearChildren(participantList);
@@ -3112,6 +3214,7 @@ async function leaveRoomAndShowHome(): Promise<void> {
   joinBtn.textContent = 'Join Room';
   qualityIndicator.hidden = true;
   qualityIndicator.className = 'quality-dot';
+  settingsSheet.close();
   roomSettingsModal.close();
   document.getElementById('mod-menu')?.remove();
   updateJoinBtn();
@@ -3780,21 +3883,13 @@ rsMaxParticipants.addEventListener(
 );
 
 // --- Personal settings ---
-settingsBtn.addEventListener(
-  'click',
-  asyncUiAction(() => mediaControls.openSetup('settings'), 'Could not open your settings'),
-);
-
-layoutSelect.addEventListener('change', () => {
-  setLayout(layoutSelect.value as 'modern' | 'classic');
+settingsBtn.addEventListener('click', () => {
+  settingsSheet.open({ opener: settingsBtn });
 });
-
-// Mic mode setting
-micModeSelect.value = micMode;
 
 function setMicMode(mode: MicMode, remember = true): void {
   if (remember && room?.roomSettings?.pushToTalk && mode !== 'ptt') {
-    micModeSelect.value = 'ptt';
+    talkRow?.set('ptt');
     showToast('This room requires push to talk');
     return;
   }
@@ -3805,7 +3900,7 @@ function setMicMode(mode: MicMode, remember = true): void {
   const effectiveMode = room?.roomSettings?.pushToTalk ? 'ptt' : mode;
   const changed = micMode !== effectiveMode;
   micMode = effectiveMode;
-  micModeSelect.value = effectiveMode;
+  talkRow?.set(effectiveMode);
 
   if (room && room.hasMedia) {
     if (effectiveMode === 'ptt' && (changed || (!pttHeld && room.audioEnabled))) {
@@ -3824,10 +3919,6 @@ function setMicMode(mode: MicMode, remember = true): void {
     updateMicButton(room.audioEnabled);
   }
 }
-
-micModeSelect.addEventListener('change', () => {
-  setMicMode(micModeSelect.value as MicMode);
-});
 
 // --- Update video grid count for adaptive sizing ---
 /** Pin one tile first and highlight it without resizing any cells. This viewer only. */

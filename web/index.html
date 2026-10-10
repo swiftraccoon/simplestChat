@@ -158,6 +158,7 @@
             </div>
             <div id="home-tools" class="home-tools"></div>
           </div>
+          <aside id="home-settings-host" class="home-settings-host" hidden></aside>
         </div>
 
         <div id="room-screen" class="layout-classic" tabindex="-1" hidden>
@@ -222,6 +223,7 @@
                 <ul id="lobby-list"></ul>
                 <div id="lobby-empty" class="room-list-empty">No one waiting</div>
               </div>
+              <div id="settings-panel" class="tab-content"></div>
             </div>
           </aside>
         </div>
@@ -691,36 +693,6 @@
           </div>
         </div>
       </dialog>
-
-      <!-- Moved into the shared personal-settings dialog when it opens. -->
-      <div id="personal-settings-controls" hidden>
-        <div id="appearance-controls">
-          <h3 class="settings-section-heading">Room layout</h3>
-          <p class="settings-description">
-            Layout changes apply immediately and only affect your view.
-          </p>
-          <div class="settings-field">
-            <label for="layout-select">Layout</label>
-            <select id="layout-select" aria-describedby="layout-description">
-              <option value="classic">People, video &amp; chat</option>
-              <option value="modern">Video &amp; chat</option>
-            </select>
-            <p id="layout-description" class="settings-description">
-              Keep the people list alongside the conversation, or give video more space.
-            </p>
-          </div>
-        </div>
-        <div id="microphone-controls" class="settings-field">
-          <label for="mic-mode-select">How you talk</label>
-          <select id="mic-mode-select" aria-describedby="mic-mode-description">
-            <option value="open">Toggle microphone on / off</option>
-            <option value="ptt">Hold to talk (Space / T)</option>
-          </select>
-          <p id="mic-mode-description" class="settings-description">
-            Applies immediately and never turns your microphone on. Some rooms require hold-to-talk.
-          </p>
-        </div>
-      </div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

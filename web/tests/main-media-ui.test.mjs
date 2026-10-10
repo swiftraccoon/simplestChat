@@ -10,8 +10,7 @@ const { mediaErrorMessage } = await loadTypeScript('src/media-controls.ts', {
     './receive-policy': await loadTypeScript('src/receive-policy.ts'),
     './media': {},
     './media-controls.css': {},
-    './settings-dialog': {},
-    './settings-dialog.css': {},
+    './settings-sheet': {},
     './audio-output': {},
   },
 });
@@ -402,7 +401,7 @@ test('room-required PTT does not overwrite the personal microphone mode', async 
           },
         },
         localStorage: { setItem: (...args) => saved.push(args) },
-        micModeSelect: { value: 'open' },
+        talkRow: null,
         updateMicButton() {},
         updateLocalTile() {},
         showToast() {},

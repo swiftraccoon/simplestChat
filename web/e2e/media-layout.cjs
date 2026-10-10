@@ -37,7 +37,7 @@ function browserFixture() {
       const require = (name) => {
         if (name === './audio-output') return audio;
         if (name === './receive-policy') return receivePolicy;
-        if (['./media', './settings-dialog', './media-controls.css', './settings-dialog.css'].includes(name)) return {};
+        if (['./media', './settings-sheet', './media-controls.css'].includes(name)) return {};
         throw new Error('Unexpected tile-control dependency: ' + name);
       };
       ${module('media-controls')}
@@ -222,10 +222,13 @@ async function mediaLayout(page, artifacts, report) {
   try {
     for (const mode of ['classic', 'modern']) {
       await page.locator('#settings-btn').click();
-      await page.getByRole('dialog', { name: 'Your settings', exact: true }).waitFor();
-      await page.getByRole('tab', { name: 'Appearance', exact: true }).click();
-      await page.locator('#layout-select').selectOption(mode);
+      const sheet = page.getByRole('region', { name: 'Settings', exact: true });
+      await sheet.waitFor({ state: 'visible' });
+      await sheet.getByRole('button', { name: 'Layout' }).click();
+      await page.locator(`#layout-${mode}`).click();
       await page.keyboard.press('Escape');
+      await page.keyboard.press('Escape');
+      await sheet.waitFor({ state: 'hidden' });
       for (const viewport of [
         { width: 1440, height: 900 },
         { width: 1280, height: 720 },

@@ -90,8 +90,7 @@ async function fixture(t) {
       './receive-policy': await loadTypeScript('src/receive-policy.ts'),
       './media': {},
       './media-controls.css': {},
-      './settings-dialog': {},
-      './settings-dialog.css': {},
+      './settings-sheet': {},
       './audio-output': await loadTypeScript('src/audio-output.ts'),
     },
     globals: {
