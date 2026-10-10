@@ -42,6 +42,17 @@
             >Help</a
           >
           <div id="community-actions" hidden></div>
+          <!-- Account state: shown when logged out -->
+          <div id="auth-bar-guest" class="auth-bar">
+            <button id="sign-in-btn" class="auth-link-btn" hidden>Sign in</button>
+          </div>
+          <!-- Account state: shown when logged in -->
+          <div id="auth-bar-user" class="auth-bar" hidden>
+            <div class="auth-user-info">
+              <span id="auth-display-name"></span>
+              <button id="logout-btn" class="auth-link-btn">Sign out</button>
+            </div>
+          </div>
           <span id="quality-indicator" class="quality-dot" hidden title="Connection quality"></span>
           <span id="connection-status" class="status disconnected">Disconnected</span>
         </div>
@@ -97,21 +108,6 @@
       <main id="app-main">
         <div id="join-screen">
           <div class="join-card">
-            <!-- Auth bar: shown when logged out -->
-            <div id="auth-bar-guest" class="auth-bar">
-              <div class="join-brand">simplestChat</div>
-              <div class="join-subtitle">Video chat, simplified</div>
-              <button id="sign-in-btn" class="auth-link-btn" hidden>Sign in</button>
-            </div>
-            <!-- Auth bar: shown when logged in -->
-            <div id="auth-bar-user" class="auth-bar" hidden>
-              <div class="join-brand">simplestChat</div>
-              <div class="auth-user-info">
-                <span id="auth-display-name"></span>
-                <button id="logout-btn" class="auth-link-btn">Sign out</button>
-              </div>
-            </div>
-
             <p id="server-mode" class="field-hint" role="status" hidden></p>
             <button id="server-features-retry" class="auth-link-btn" type="button" hidden>
               Retry server features
@@ -119,17 +115,17 @@
 
             <!-- Public rooms are discoverable without signing in. -->
             <div id="room-browser" hidden>
-              <div class="room-browser-title">
-                <h2>Rooms</h2>
-                <p class="field-hint">Busiest first</p>
-              </div>
               <div class="room-browser-header">
+                <div class="room-browser-title">
+                  <h2>Rooms</h2>
+                  <p class="field-hint">Busiest first</p>
+                </div>
                 <div class="room-search-row">
                   <label class="field-label" for="room-search-input">Search rooms</label>
                   <input
                     type="text"
                     id="room-search-input"
-                    placeholder="Room name or topic"
+                    placeholder="Search by name or topic"
                     aria-describedby="room-search-help"
                     minlength="3"
                     maxlength="128"
@@ -147,16 +143,20 @@
               <button id="room-load-more" class="btn-secondary" hidden>Load more</button>
             </div>
 
-            <!-- Manual join form (always visible) -->
-            <div class="join-form">
-              <div id="join-form-divider" class="divider" hidden><span>or join directly</span></div>
-              <label class="field-label" for="name-input">Your name</label>
-              <input type="text" id="name-input" placeholder="Your name" autocomplete="off" />
-              <label class="field-label" for="room-input">Room name</label>
-              <input type="text" id="room-input" placeholder="Room name" autocomplete="off" />
-              <button id="join-btn" disabled>Join Room</button>
+            <!-- The dock: the manual join form (always visible) and the page's tools. -->
+            <div class="home-dock">
+              <div class="join-form">
+                <div id="join-form-divider" class="divider" hidden>
+                  <span>or join directly</span>
+                </div>
+                <label class="field-label" for="name-input">Your name</label>
+                <input type="text" id="name-input" placeholder="Your name" autocomplete="off" />
+                <label class="field-label" for="room-input">Room name</label>
+                <input type="text" id="room-input" placeholder="Room name" autocomplete="off" />
+                <button id="join-btn" disabled>Join Room</button>
+              </div>
+              <div id="home-tools" class="home-tools"></div>
             </div>
-            <div id="home-tools" class="home-tools"></div>
           </div>
           <aside id="home-settings-host" class="home-settings-host" hidden></aside>
         </div>

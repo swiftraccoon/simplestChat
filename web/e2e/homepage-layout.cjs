@@ -104,8 +104,6 @@ async function geometry(page) {
       '#room-list',
       '.room-card',
       '.room-list-empty',
-      '.auth-bar',
-      '#auth-display-name',
       '#create-room-btn',
       '.join-form',
       '#name-input',
@@ -129,15 +127,42 @@ async function geometry(page) {
       Math.min(first.right, second.right) - Math.max(first.left, second.left) > 1 &&
       Math.min(first.bottom, second.bottom) - Math.max(first.top, second.top) > 1;
     const header = document.querySelector('header');
-    const headerControls = [...header.querySelectorAll('a, button, .status, .quality-dot')].filter(
-      (node) => node.getClientRects().length,
-    );
+    const headerControls = [
+      ...header.querySelectorAll('a, button, .status, .quality-dot, #auth-display-name'),
+    ].filter((node) => node.getClientRects().length);
     for (let index = 0; index < headerControls.length; index++) {
       inside(box(headerControls[index]), box(header), 'header control');
       for (const sibling of headerControls.slice(index + 1))
         if (intersects(box(headerControls[index]), box(sibling)))
           problem('header controls: overlap');
     }
+    // The page's shape: account state in the header, one toolbar row, a full-width grid on the
+    // header's gutter, tiles twice the old size and the join bar docked at the bottom edge.
+    const rect = (selector) => {
+      const node = document.querySelector(selector);
+      return node && node.getClientRects().length ? box(node) : null;
+    };
+    const overlapsVertically = (first, second) =>
+      Boolean(first && second && first.top < second.bottom && second.top < first.bottom);
+    const authBar = rect('#auth-bar-guest') || rect('#auth-bar-user');
+    const headerBox = box(header);
+    const list = rect('#room-list');
+    const wordmark = rect('#home-link');
+    const shape = {
+      clientWidth: document.documentElement.clientWidth,
+      gridLeft: list?.left ?? null,
+      gridRight: list?.right ?? null,
+      wordmarkLeft: wordmark?.left ?? null,
+      tileWidth: rect('.room-card')?.width ?? null,
+      toolbarSingleRow: overlapsVertically(
+        rect('.room-browser-title h2'),
+        rect('#room-search-input'),
+      ),
+      authInHeader: Boolean(
+        authBar && authBar.top >= headerBox.top - 1 && authBar.bottom <= headerBox.bottom + 1,
+      ),
+      dockBottom: rect('.join-form')?.bottom ?? null,
+    };
     for (const room of document.querySelectorAll('.room-card')) {
       const children = [...room.children];
       for (let index = 0; index < children.length; index++) {
@@ -160,8 +185,30 @@ async function geometry(page) {
       card: { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height },
       directoryWidth: box(document.querySelector('#room-browser')).width,
       mediaCalls: window.__homepageMediaCalls,
+      shape,
     };
   });
+}
+
+/** The layout invariants a rendered state must keep; `state` names the directory's content. */
+function expectShape({ shape, viewport }, state, label) {
+  const detail = (message) => `${label}: ${message} (${JSON.stringify(shape)})`;
+  if (shape.tileWidth !== null) {
+    const minimum = viewport.width >= 1100 ? 320 : viewport.width > 600 ? 250 : 140;
+    assert.ok(shape.tileWidth >= minimum, detail(`tiles at least ${minimum}px wide`));
+  }
+  assert.ok(Math.abs(shape.gridLeft - shape.wordmarkLeft) <= 1, detail('grid on the gutter'));
+  assert.ok(
+    shape.gridRight >= shape.clientWidth - shape.wordmarkLeft - 1,
+    detail('grid spans the page'),
+  );
+  assert.equal(shape.authInHeader, true, detail('account state in the header'));
+  if (viewport.width >= 1100) assert.equal(shape.toolbarSingleRow, true, detail('one toolbar row'));
+  if (viewport.width > 600 && viewport.height >= 500 && ['populated', 'filtered'].includes(state))
+    assert.ok(
+      shape.dockBottom <= viewport.height + 1 && shape.dockBottom >= viewport.height - 56,
+      detail('join bar docked at the bottom edge'),
+    );
 }
 
 async function reachable(locator) {
@@ -385,6 +432,7 @@ async function run(env = process.env) {
             save();
             assert.deepEqual(result.problems, [], `${report.activeStep}: layout containment`);
             assert.equal(result.mediaCalls, 0, 'Homepage must not access media devices');
+            expectShape(result, state, `${report.activeStep}: layout shape`);
           };
           await page.screenshot({ path: path.join(artifacts, `${name}.png`), fullPage: true });
           await inspect('populated');

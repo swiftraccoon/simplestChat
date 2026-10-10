@@ -217,13 +217,20 @@ button opens each remote tile's actions,
 including Pin, volume and fullscreen, without covering the tile with separate
 permanent buttons.
 
-The home page is a grid of portrait room tiles ordered busiest first by the
+The home page is a directory: one toolbar row (the Rooms title and its order,
+the search, and Create Room for accounts), then a grid of portrait room tiles
+that fills the page's width on the header's own gutter, and a dock at the bottom
+edge holding the join bar and the page's tools. The dock stays at the bottom
+whether the grid is short or scrolls beneath it; on phones it follows the grid.
+Account state (Sign in, or the display name and Sign out) sits in the header
+beside Help and is hidden inside a room. Tiles are ordered busiest first by the
 server: live rooms by participant count (unknown counts after known ones), then
 rooms nobody is in, newest first, across Load more pages and searches. A tile
-shows the room image or a monogram of its name on a tone chosen from the room id.
-Clicking a tile enters its room when a name is set (an account name, or one typed
-into the join bar); without a name it selects the room and asks for one first.
-The join bar itself serves rooms that are not listed.
+shows the room image or a monogram of its name on a tone chosen from the room id;
+tiles are about twice as wide as a phone's two-up tiles on desktops. Clicking a
+tile enters its room when a name is set (an account name, or one typed into the
+join bar); without a name it selects the room and asks for one first. The join
+bar itself serves rooms that are not listed.
 
 Favorite rooms and successful recent room joins are saved with the account and
 appear in the existing room picker and **My rooms**. Star a room to keep it among
