@@ -2215,41 +2215,39 @@ export class SocialChat {
     return ignored ? `${messages} · ${ignored} ignored` : messages;
   }
 
-  /** A screen's work stops when the sheet leaves it or the chat context changes. */
+  /** A screen's feedback stops when the sheet leaves it; its work stops when the chat context changes. */
   private screenContext(
     context: ScreenContext,
-  ): { room: RoomClient; current: () => boolean; viewer: string } | null {
+  ): { room: RoomClient; current: () => boolean; live: () => boolean; viewer: string } | null {
     const room = this.options.getRoom();
     if (!room?.localParticipantId) return null;
     const activation = this.activation;
     const viewer = this.viewerKey;
-    return {
-      room,
-      viewer,
-      current: () => context.current() && this.contextCurrent(activation, room, viewer),
-    };
+    const live = (): boolean => this.contextCurrent(activation, room, viewer);
+    return { room, viewer, live, current: () => context.current() && live() };
   }
 
   private lookScreen(context: ScreenContext): HTMLElement {
     const scope = this.screenContext(context);
     const body = el('div', undefined, 'sheet-screen');
     if (!scope) return body;
-    const { room, current, viewer } = scope;
+    const { room, current, viewer, live } = scope;
     const lookBlock = el('div', undefined, 'sheet-block chat-look-block');
     let applying: Promise<void> = Promise.resolve();
     const look = this.lookPicker(room, () => {
+      // A choice queues behind the one before it; leaving the screen must not drop it.
+      const chosen = look.chosen();
       applying = applying.then(async () => {
-        if (!current()) return;
-        const chosen = look.chosen();
+        if (!live()) return;
         const before = room.chatStyle ?? AUTOMATIC_LOOK;
         if (chosen.color === before.color && chosen.style === before.style) return;
         try {
           const applied = await room.setChatStyle(chosen);
-          if (!current()) return;
+          if (!live()) return;
           this.preferences = { ...this.preferences, look: applied };
           this.savePreferences(viewer);
           this.render();
-          markSaved(lookBlock);
+          if (current()) markSaved(lookBlock);
         } catch (error) {
           if (current())
             this.options.notify(error instanceof Error ? error.message : 'Unable to save the look');

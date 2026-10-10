@@ -285,10 +285,12 @@ async function fixture({ touch = false, touchPoints = 0 } = {}) {
     openSettings: (section) => state.openedSettings.push(section),
     mountAccountNotifications: () => state.mountedAccountNotifications++,
   });
-  const screenContext = { push() {}, pop() {}, close() {}, current: () => true };
+  const screenContext = { push() {}, pop() {}, close() {}, current: () => state.onScreen };
+  state.onScreen = true;
   const screen = async (id) => {
     const section = chat.sections().find((entry) => entry.id === id);
     assert.ok(section, `section ${id}`);
+    state.onScreen = true;
     return section.screen().body(screenContext);
   };
   return {
@@ -1589,6 +1591,36 @@ test('the Chat look screen previews a look and applies it for the room and the n
   select.emit('change');
   await flush();
   assert.deepEqual(f.state.requests.slice(requests), []);
+});
+
+test('a look chosen just before leaving the screen is still applied and remembered', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  f.state.room.chatStyle = { color: null, style: 'accent' };
+  const body = await f.screen('chat-look');
+  const radios = (name) => body.querySelectorAll('input').filter((node) => node.name === name);
+  const choose = (name, value) => {
+    for (const node of radios(name)) node.checked = node.value === value;
+    radios(name)
+      .find((node) => node.value === value)
+      .emit('change');
+  };
+  // The second choice queues behind the first request; the person then closes the sheet.
+  choose('chat-color', 'violet');
+  choose('chat-look', 'bubble');
+  f.state.onScreen = false;
+  await flush();
+  await flush();
+  assert.deepEqual(
+    f.state.requests.filter((request) => request.action === 'setChatStyle').map((r) => r.data),
+    [
+      { chatStyle: { color: 'violet', style: 'accent' } },
+      { chatStyle: { color: 'violet', style: 'bubble' } },
+    ],
+    'both choices reach the room',
+  );
+  assert.deepEqual(f.state.room.chatStyle, { color: 'violet', style: 'bubble' });
+  assert.deepEqual(f.chat.savedLook(), { color: 'violet', style: 'bubble' });
 });
 
 test('a saved look is checked before a join offers it', async () => {

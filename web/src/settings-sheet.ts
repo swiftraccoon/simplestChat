@@ -59,6 +59,24 @@ interface Frame {
 
 const SAVED_MS = 1800;
 const savedTimers = new WeakMap<HTMLElement, ReturnType<typeof setTimeout>>();
+let labelIds = 0;
+
+/** The row's label names its control by id, so the Saved mark beside it never joins the name. */
+function rowLabel(text: string, control: HTMLElement): HTMLElement {
+  const label = el('span', text, 'sheet-row-label');
+  label.id = `sheet-label-${++labelIds}`;
+  control.setAttribute('aria-labelledby', label.id);
+  return label;
+}
+
+/** Whether focus can land on the node right now: attached and laid out. */
+function focusable(node: HTMLElement | null): node is HTMLElement {
+  return Boolean(
+    node?.isConnected &&
+    !node.hidden &&
+    (typeof node.getClientRects !== 'function' || node.getClientRects().length > 0),
+  );
+}
 
 /** One settings surface: a root list and a stack of single-purpose screens. */
 export class SettingsSheet {
@@ -68,6 +86,8 @@ export class SettingsSheet {
   private readonly body: HTMLElement;
   private readonly stack: Frame[] = [];
   private opener: HTMLElement | null = null;
+  /** Where focus was when the sheet opened: the fallback when the opener is hidden by then. */
+  private restoreTo: HTMLElement | null = null;
   private segment: SheetSegment = 'you';
   private generation = 0;
   private openState = false;
@@ -111,6 +131,7 @@ export class SettingsSheet {
       this.leaveAll();
     } else {
       this.opener = options.opener ?? null;
+      this.restoreTo = document.activeElement as HTMLElement | null;
       this.openState = true;
     }
     const host = this.options.host();
@@ -141,8 +162,11 @@ export class SettingsSheet {
     this.body.replaceChildren();
     this.options.onClose?.();
     const opener = this.opener;
+    const fallback = this.restoreTo;
     this.opener = null;
-    opener?.focus();
+    this.restoreTo = null;
+    if (focusable(opener)) opener.focus();
+    else if (focusable(fallback)) fallback.focus();
   }
 
   /** Re-renders the root list so its status values are current. */
@@ -313,21 +337,21 @@ export function toggleRow(
   if (options.disabled) input.disabled = true;
   if (options.describedBy) input.setAttribute('aria-describedby', options.describedBy);
   input.addEventListener('change', () => onChange(input.checked));
-  row.append(el('span', label, 'sheet-row-label'), el('span', '', 'sheet-row-saved'), input);
+  row.append(rowLabel(label, input), el('span', '', 'sheet-row-saved'), input);
   return { row, input };
 }
 
 /** A row holding a select the caller filled; the caller listens for change. */
 export function selectRow(label: string, select: HTMLSelectElement): HTMLLabelElement {
   const row = el('label', undefined, 'sheet-row sheet-row-select');
-  row.append(el('span', label, 'sheet-row-label'), el('span', '', 'sheet-row-saved'), select);
+  row.append(rowLabel(label, select), el('span', '', 'sheet-row-saved'), select);
   return row;
 }
 
 /** A row holding one text-like input; the caller listens for change. */
 export function fieldRow(label: string, input: HTMLElement): HTMLLabelElement {
   const row = el('label', undefined, 'sheet-row sheet-row-field');
-  row.append(el('span', label, 'sheet-row-label'), el('span', '', 'sheet-row-saved'), input);
+  row.append(rowLabel(label, input), el('span', '', 'sheet-row-saved'), input);
   return row;
 }
 

@@ -3956,7 +3956,6 @@ function retireRoomSettingsAction(): void {
   roomSettingsRetry.onclick = null;
   roomSettingsStatus.textContent = '';
   roomSettingsStatus.hidden = true;
-  if (roomScreenOpen) settingsSheet.close({ force: true });
 }
 
 async function applyRoomSetting(change: (owner: RoomClient) => Promise<void>): Promise<void> {

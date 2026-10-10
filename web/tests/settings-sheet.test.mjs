@@ -163,6 +163,7 @@ test('a row pushes its screen, Escape pops back to that row, and Escape at the r
     ],
   });
   const opener = f.document.createElement('button');
+  f.document.body.append(opener);
   f.sheet.open({ opener });
   const row = byLabel(f.sheet.element, 'Speaker');
   row.click();
@@ -395,4 +396,61 @@ test('an identity change forces the sheet closed even while a screen is busy', a
   assert.equal(f.sheet.isOpen, false);
   assert.equal(f.sheet.element.hidden, true);
   assert.deepEqual(left, ['security'], 'the busy screen still runs its cleanup');
+});
+
+test('row inputs are named by their label alone, so a Saved mark never renames them', async () => {
+  const f = await sheetFixture();
+  const { fieldRow, toggleRow, selectRow, markSaved } = f.sheetModule;
+  const name = f.document.createElement('input');
+  const field = fieldRow('Name', name);
+  const toggle = toggleRow('Mentions', true, () => {});
+  const select = f.document.createElement('select');
+  const picked = selectRow('Speaker', select);
+  for (const [row, input, label] of [
+    [field, name, 'Name'],
+    [toggle.row, toggle.input, 'Mentions'],
+    [picked, select, 'Speaker'],
+  ]) {
+    const labelNode = row.querySelector('.sheet-row-label');
+    assert.ok(labelNode.id, `${label} gets an id for its input`);
+    assert.equal(input.getAttribute('aria-labelledby'), labelNode.id);
+    markSaved(row);
+    assert.equal(labelNode.textContent, label, 'the label text is untouched by the mark');
+    assert.equal(row.querySelector('.sheet-row-saved')?.textContent, 'Saved');
+  }
+  assert.notEqual(
+    field.querySelector('.sheet-row-label').id,
+    toggle.row.querySelector('.sheet-row-label').id,
+    'ids are unique per row',
+  );
+});
+
+test('closing falls back to the control that was active at opening when the opener cannot take focus', async () => {
+  const f = await sheetFixture({
+    sections: [
+      {
+        id: 'profile',
+        segment: 'you',
+        label: 'Profile',
+        screen: () => ({ title: 'Profile', body: () => f.document.createElement('div') }),
+      },
+    ],
+  });
+  // A menu focuses its toggle before an item runs, so the item itself is hidden by the time
+  // the sheet closes.
+  const toggle = f.document.createElement('button');
+  f.document.body.append(toggle);
+  toggle.focus();
+  const hiddenItem = f.document.createElement('button');
+  f.sheet.open({ section: 'profile', opener: hiddenItem });
+  await flush();
+  assert.equal(heading(f.sheet).textContent, 'Profile');
+  f.sheet.close();
+  assert.equal(f.document.activeElement, toggle, 'focus returns to the visible toggle');
+  const visibleOpener = f.document.createElement('button');
+  f.document.body.append(visibleOpener);
+  toggle.focus();
+  f.sheet.open({ opener: visibleOpener });
+  f.sheet.close();
+  assert.equal(f.document.activeElement, visibleOpener, 'a connected opener still wins');
 });
