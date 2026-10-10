@@ -77,7 +77,7 @@ For complete guest/account setup and LAN ICE addressing see
 | `src/attachments.ts` | Bounded paste/drop/picker uploads, progress/retry and gesture-opened previews/downloads |
 | `src/notification-preferences.ts`, `notification-validation.ts` | Account-synced notification rules, conversation mute/snooze and quiet hours |
 | `src/layer-cap.ts` | Simulcast layer a remote tile can use at its rendered size, with hysteresis |
-| `src/settings-dialog.ts` | Shared settings tabs and native-dialog dismissal |
+| `src/settings-sheet.ts` | The settings sheet: one list, single-purpose screens, rows that apply at once |
 | `src/social-chat.ts`, `chat-store.ts` | Room/PM conversations, composer, bounded replay, removal tombstones and preferences |
 | `src/chat-history.ts` | Saved room history, retention controls, account PM inbox, search and shared read positions |
 | `src/discovery.ts`, `discovery-validation.ts` | Accepted contacts, explicit contact links, account favorites and recent room shortcuts |
@@ -99,11 +99,20 @@ preserve the contract's nullable values. Add a decoder and valid/invalid tests
 when extending either boundary, not an assertion at the UI callsite.
 
 Joining does not capture or publish. Preview is local until explicit publication.
-Personal settings share one dialog: layout and talk mode apply immediately;
-device changes apply on Save, updating active capture without enabling inactive devices.
-Viewer mute/volume/hide must not change what anybody else receives. Async media
-and account work can outlive a dialog or session; stale completion must not attach
-tracks or account data to a replacement session.
+Settings is one non-modal sheet (`settings-sheet.ts`) hosted in the room's side
+column, docked beside the home page, or full-screen on phones. Its root list has a
+You segment (Camera & mic, Speaker, Layout, Chat look, Notifications, Privacy,
+Profile, Sign-in & security, Invites) and, for owners and admins, a This room segment
+(Who can enter, Chat & broadcasting, Name & topic, People, Bans, Reports, History,
+Invitations). Each row opens one screen; every control applies as it changes and
+shows a brief Saved mark, so only multi-field forms keep a button (Save profile,
+Change password, Create invitation). Escape pops a screen and closes at the root;
+closing returns focus to the opener, or to the control that was focused when the
+sheet opened if the opener now sits in a closed menu. Leaving a screen stops its
+preview, test tone and device observer; a changed identity closes the sheet even
+while a screen is busy. Viewer mute/volume/hide must not change what anybody else
+receives. Async media and account work can outlive a screen or session; stale
+completion must not attach tracks or account data to a replacement session.
 
 Room links and browser history select a room; joining from them remains explicit,
 while a directory tile joins directly once a name is known. Invitations
@@ -116,20 +125,26 @@ retain their explicit join intent until signaling and any departure finish. A ne
 destination, edited room ID or account change retires asynchronous invitation work
 and pending joins.
 Home, Leave and lobby Cancel clear the selected room URL. No URL change starts capture.
-Room settings retain failed edits and offer an explicit retry after checking
-current server state. A connected lobby moderator is availability information,
-not a promise of admission.
+Room settings on the sheet's This room screens apply over the room socket one
+change at a time: the screen is busy until the server confirms, a failed change
+keeps its draft and offers Retry change, and a completion that arrives after a
+newer attempt or a different room cannot unlock the screen. Name, topic,
+description, image and appearances save over HTTP as each field changes and
+reach current participants at once. A connected lobby moderator is availability
+information, not a promise of admission.
 
 Output selection is feature-detected and applies to owned playback elements.
 Output device selection remains tab-local; saved camera/microphone IDs and capture
 preferences use browser-local storage. Browsers without output routing use the
 system output. Speaker testing plays a short local tone and releases its URL/timer on
-completion or dialog departure. Device-list changes never request capture.
+completion or leaving the Speaker screen. Device-list changes never request capture.
 The camera and microphone controls request access directly when explicitly
-activated; opening Settings or joining a room does not capture. Settings offers
+activated; opening Settings or joining a room does not capture. Camera & mic offers
 separate private **Test camera** and **Test microphone** actions beside the
-selectors to grant access and refresh device names before saving preferences.
-Saving settings changes active devices but does not turn an inactive device on.
+selectors to grant access and refresh device names. Choosing a device applies at
+once: it switches an active camera or microphone (reverting the selector if the
+switch fails) but never turns an inactive device on. Resolution, frame rate and
+audio processing sit behind the Quality row.
 Camera publication, recapture and preview share `captureMedia`: a
 `NotReadableError` with requested resolution/frame-rate preferences permits one
 retry without those quality constraints. The retry preserves an exact selected
@@ -329,7 +344,8 @@ and the roster's actions button.
 
 Account settings save profile-card color and treatment separately from chat styling.
 Room owners can choose independent styles for the room name and header description
-(the topic) through My rooms → Edit room or Manage room → Room appearance. The
+(the topic) on the sheet's Name & topic screen, reached from My rooms → Edit room
+or from Manage room inside the room. The
 palette and accent/text/tinted-background choices have live previews. Saved room
 styles update the heading for current participants and survive reconnects. These
 public styles accept palette tokens, not arbitrary CSS.

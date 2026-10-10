@@ -81,8 +81,8 @@ To run a second instance, choose unused HTTP and media ports:
 PORT=3109 WEBRTC_SERVER_PORT_BASE=41000 build/run-local.sh --skip-web
 ```
 
-Joining a room does not start capture. Open **Your settings** or **Mic setup**
-for a private device preview. Use the camera or microphone button to broadcast.
+Joining a room does not start capture. Open **Settings → Camera & mic** (or
+**Mic setup** in the room's More menu) for a private device preview. Use the camera or microphone button to broadcast.
 
 ## Accounts and persistent rooms
 

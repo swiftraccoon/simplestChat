@@ -88,7 +88,7 @@
   padding: 0 12px;
   font-size: 12px;
   line-height: 1.5;
-  color: var(--text-faint);
+  color: var(--text-dim);
 }
 
 .sheet-segments {
@@ -147,7 +147,7 @@
 
 .sheet-group-title {
   font-size: 12px;
-  color: var(--text-faint);
+  color: var(--text-dim);
   padding: 6px 12px 2px;
 }
 
@@ -370,6 +370,26 @@ button.sheet-row:focus-visible {
   background: var(--sheet-row);
 }
 
+.sheet-block textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 72px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--radius-sm, 6px);
+  background: var(--sheet-row-strong);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.sheet-block textarea:focus-visible {
+  outline: 2px solid var(--line);
+  outline-offset: 1px;
+}
+
 .sheet-block h3 {
   margin: 0;
   font-size: 14px;
@@ -444,7 +464,7 @@ button.sheet-row:focus-visible {
   align-items: center;
   gap: 10px;
   font-size: 12px;
-  color: var(--text-faint);
+  color: var(--text-dim);
 }
 
 .media-meter-row .media-level {

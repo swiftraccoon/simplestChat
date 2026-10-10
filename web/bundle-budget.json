@@ -1,11 +1,11 @@
 {
   "javascript": {
-    "bytes": 647168,
-    "gzipBytes": 152576
+    "bytes": 655360,
+    "gzipBytes": 155648
   },
   "styles": {
-    "bytes": 73728,
-    "gzipBytes": 14336
+    "bytes": 75776,
+    "gzipBytes": 14848
   },
   "html": {
     "bytes": 51200,

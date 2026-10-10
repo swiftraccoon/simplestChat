@@ -14,8 +14,8 @@ not avoid the limit. The initial budgets leave room for small product changes:
 
 | Asset group | Uncompressed limit | Gzip limit |
 | ----------- | ------------------ | ---------- |
-| JavaScript  | 632 KiB            | 149 KiB    |
-| CSS         | 72 KiB             | 14 KiB     |
+| JavaScript  | 640 KiB            | 152 KiB    |
+| CSS         | 74 KiB             | 14.5 KiB   |
 | HTML        | 50 KiB             | 12.5 KiB   |
 
 Limits are defined in [bundle-budget.json](../web/bundle-budget.json). Gzip uses
@@ -62,6 +62,18 @@ and response decoders avoid separate implementations per screen; no binary
 file bytes or preview images are embedded in the bundle. The help page documents
 the new controls. Reviewed limits are now 632/149 KiB JavaScript, 69/13.5 KiB CSS
 and 50/12.5 KiB HTML. These measurements establish delivery size only.
+
+The October 10 settings sheet replaced seven modal dialogs (Your settings, Chat
+preferences, Account, Room settings, Manage room, Edit room and Invitations) with
+one non-modal sheet of single-purpose screens whose controls apply as they
+change. An isolated build of `47f98e0` measured JavaScript 641,218 bytes raw /
+150,859 gzip, CSS 71,156 / 13,986 and HTML 50,044 / 12,712; the sheet build
+measures 651,552 / 154,089, 73,155 / 14,434 and 39,823 / 11,119. The HTML shrinks
+because the room-settings dialog markup left `index.html`; the JavaScript carries
+the sheet core, the per-field room identity saves and the moderation screens that
+replaced the tabbed management dialog, and the CSS the row, switch and segment
+styles after the dialog frame, tab and media-setup rules were removed. Reviewed
+limits are now 640/152 KiB JavaScript and 74/14.5 KiB CSS; HTML is unchanged.
 
 The October 9 visual system (one warm black ground, no accent hue, floating call
 controls, borderless people and chat columns, a portrait room-tile directory and
