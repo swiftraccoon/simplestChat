@@ -15,7 +15,7 @@ not avoid the limit. The initial budgets leave room for small product changes:
 | Asset group | Uncompressed limit | Gzip limit |
 | ----------- | ------------------ | ---------- |
 | JavaScript  | 640 KiB            | 152 KiB    |
-| CSS         | 76 KiB             | 15 KiB     |
+| CSS         | 78 KiB             | 15 KiB     |
 | HTML        | 50 KiB             | 12.5 KiB   |
 
 Limits are defined in [bundle-budget.json](../web/bundle-budget.json). Gzip uses
@@ -86,7 +86,9 @@ UI-stress, homepage and resilience suites matched 663 of the stylesheet's 696
 rules; the 33 unmatched rules serve states those suites do not reach, and the
 only rules without a producer were removed together with stale custom-property
 fallbacks. The CSS growth is the shelf, the small tile variant and the account
-menu. Reviewed limits are now 76/15 KiB CSS; JavaScript and HTML are unchanged.
+menu. The follow-up that moved the directory toolbar into the title bar and turned the
+shelf into a collapsible rail measures 653,221 / 154,532, 77,255 / 15,245 and 41,456 / 11,537.
+Reviewed limits are now 78/15 KiB CSS; JavaScript and HTML are unchanged.
 
 The October 9 visual system (one warm black ground, no accent hue, floating call
 controls, borderless people and chat columns, a portrait room-tile directory and

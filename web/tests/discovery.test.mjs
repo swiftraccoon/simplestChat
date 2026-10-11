@@ -193,20 +193,19 @@ test('a saved-rooms shelf renders each room through the caller, favorites first,
     { room: room(), favorite: true, lastVisited: null },
   ];
   const rendered = [];
+  const emptiness = [];
   const mount = f.module.mountSavedRooms(f.host, {
     ...f.options,
     renderRoom: (entry) => {
       rendered.push(entry.room.id);
       return f.ui.el('div', entry.room.display_name, 'room-card');
     },
+    onEmpty: (empty) => emptiness.push(empty),
   });
   await flush();
   assert.deepEqual(rendered, ['public', 'recent'], 'favorites come first');
-  assert.deepEqual(
-    f.host.querySelectorAll('h3').map((node) => node.textContent),
-    ['Favorites & recent'],
-    'one shelf title instead of group headings',
-  );
+  assert.equal(f.host.querySelectorAll('h3').length, 0, 'the host titles a shelf itself');
+  assert.deepEqual(emptiness, [false]);
   const rows = f.host.querySelectorAll('.directory-room-row');
   assert.equal(rows.length, 2);
   assert.equal(rows[0].querySelector('.room-card').textContent, 'Public room');
@@ -224,6 +223,8 @@ test('a saved-rooms shelf renders each room through the caller, favorites first,
     true,
     'nothing saved, nothing shown',
   );
+  // The star toggle refreshed once more before the final, empty refresh.
+  assert.deepEqual(emptiness, [false, false, true]);
   mount.dispose();
 });
 

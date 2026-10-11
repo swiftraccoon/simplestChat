@@ -176,6 +176,7 @@ function authUiFixture(capabilities, signedIn) {
       'signInBtn',
       'communityActions',
       'roomBrowser',
+      'directoryToolbar',
       'createRoomBtn',
       'authBarGuest',
       'authBarUser',
@@ -228,7 +229,13 @@ for (const signedIn of [false, true]) {
   test(`unknown capabilities keep optional actions hidden for a ${signedIn ? 'restored account' : 'guest'}`, () => {
     const f = authUiFixture(null, signedIn);
     f.updateAuthUI();
-    for (const name of ['signInBtn', 'communityActions', 'roomBrowser', 'createRoomBtn'])
+    for (const name of [
+      'signInBtn',
+      'communityActions',
+      'roomBrowser',
+      'directoryToolbar',
+      'createRoomBtn',
+    ])
       assert.equal(f.nodes[name].hidden, true, name);
     // A restored account decorates its avatar even before the server's features are known.
     assert.deepEqual(
@@ -249,14 +256,20 @@ test('known capabilities reveal only advertised account and directory actions', 
     false,
   );
   guestServer.updateAuthUI();
-  for (const name of ['signInBtn', 'communityActions', 'roomBrowser', 'createRoomBtn'])
+  for (const name of [
+    'signInBtn',
+    'communityActions',
+    'roomBrowser',
+    'directoryToolbar',
+    'createRoomBtn',
+  ])
     assert.equal(guestServer.nodes[name].hidden, true, name);
   assert.deepEqual(guestServer.effects, ['join-controls', 'community']);
 
   for (const signedIn of [false, true]) {
     const f = authUiFixture(supported, signedIn);
     f.updateAuthUI();
-    for (const name of ['signInBtn', 'communityActions', 'roomBrowser'])
+    for (const name of ['signInBtn', 'communityActions', 'roomBrowser', 'directoryToolbar'])
       assert.equal(f.nodes[name].hidden, false, name);
     assert.equal(f.nodes.createRoomBtn.hidden, !signedIn);
     assert.deepEqual(

@@ -304,14 +304,15 @@ export function createFavoriteButton(
 /**
  * Favorite and recent rooms, favorites first. As a list (the default) each room is a link with
  * its star beside it under Favorites and Recent rooms headings; with `renderRoom` the caller
- * draws each room (a directory tile) and the mount lays them out as one shelf row that hides
- * itself while nothing is saved.
+ * draws each room (a directory tile) and the mount lays them out as one untitled shelf that
+ * hides itself while nothing is saved, telling the host through `onEmpty`.
  */
 export function mountSavedRooms(
   host: HTMLElement,
   options: AccountOptions & {
     onJoin?: (roomId: string) => void;
     renderRoom?: (entry: SavedRoom) => HTMLElement;
+    onEmpty?: (empty: boolean) => void;
   },
 ): DiscoveryMount {
   const context = accountContext(options);
@@ -347,8 +348,10 @@ export function mountSavedRooms(
         if (!shelf) list.append(el('h3', heading));
         for (const entry of entries) list.append(shelf ? shelfRow(entry) : roomRow(entry));
       }
-      if (shelf) section.hidden = page.rooms.length === 0;
-      else if (!page.rooms.length)
+      if (shelf) {
+        section.hidden = page.rooms.length === 0;
+        options.onEmpty?.(page.rooms.length === 0);
+      } else if (!page.rooms.length)
         status.textContent = 'Favorite rooms and rooms you join appear here across your devices.';
     } finally {
       pending = false;
@@ -382,7 +385,6 @@ export function mountSavedRooms(
     row.append(options.renderRoom!(entry), favorite(entry));
     return row;
   };
-  if (shelf) section.append(el('h3', 'Favorites & recent', 'discovery-shelf-title'));
   section.append(list, status);
   host.append(section);
   refresh().catch(fail);

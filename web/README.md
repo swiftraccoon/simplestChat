@@ -217,23 +217,25 @@ button opens each remote tile's actions,
 including Pin, volume and fullscreen, without covering the tile with separate
 permanent buttons.
 
-The home page is a directory: one toolbar row (the Rooms title and its order,
-the search, and Create Room for accounts), then a grid of portrait room tiles
-that fills the page's width on the header's own gutter, and a dock at the bottom
-edge holding the join bar and the page's tools. The dock stays at the bottom
-whether the grid is short or scrolls beneath it; on phones it follows the grid.
-Account state sits in the header beside Help: Sign in for guests, or for an
-account an avatar-and-name button that opens Account, Messages (with its unread
-count), My rooms and Sign out. Inside a room those items sit flat in the More
-menu and Sign out is not offered. Tiles are ordered busiest first by the
+The home page is a directory. The title bar carries the Rooms title, its order
+and the search beside the wordmark, with Create Room for accounts at its right
+beside Help and the account state: Sign in for guests, or an avatar-and-name
+button that opens Account, Messages (with its unread count), My rooms and Sign
+out. Inside a room those items sit flat in the More menu, Sign out is not
+offered, and the directory toolbar is hidden. Below the title bar a grid of
+portrait room tiles fills the page's width on the header's own gutter, and a
+dock at the bottom edge holds the join bar and the page's tools. The dock stays
+at the bottom whether the grid is short or scrolls beneath it; on phones it
+follows the grid. Tiles are ordered busiest first by the
 server: live rooms by participant count (unknown counts after known ones), then
 rooms nobody is in, newest first, across Load more pages and searches. A tile
 shows the room image or a monogram of its name on a tone chosen from the room id;
 on desktops tiles are about 1.5 to 1.8 times a phone's two-up tiles, snapping to
 however many columns fit. An account's favorite and recent rooms, favorites
-first, sit on a shelf of small square tiles between the toolbar and the grid,
-each with its star; the shelf scrolls sideways when it is long and is absent
-while nothing is saved. Clicking a tile, on the shelf or in the grid, enters
+first, stand in a rail of small square tiles at the left of the grid, each with
+its star; the rail collapses to a strip at the left edge on its toggle (the
+choice is kept on this device), lies across the top on phones, and is absent
+while nothing is saved. Clicking a tile, in the rail or in the grid, enters
 its room when a name is set (an account name, or one typed into the join bar);
 without a name it selects the room and asks for one first. The join bar itself
 serves rooms that are not listed.

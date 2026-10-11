@@ -31,8 +31,31 @@
             title="Read room topic"
             hidden
           ></button>
+          <!-- The directory's title, order and search live in the title bar on the home page. -->
+          <div id="directory-toolbar" class="directory-toolbar" hidden>
+            <div class="room-browser-title">
+              <h2>Rooms</h2>
+              <p class="field-hint">Busiest first</p>
+            </div>
+            <div class="room-search-row">
+              <label class="field-label" for="room-search-input">Search rooms</label>
+              <input
+                type="text"
+                id="room-search-input"
+                placeholder="Search by name or topic"
+                aria-describedby="room-search-help"
+                minlength="3"
+                maxlength="128"
+                autocomplete="off"
+              />
+              <p id="room-search-help" class="field-hint">Use 3+ consecutive letters or numbers.</p>
+            </div>
+          </div>
         </div>
         <div class="header-right">
+          <button id="create-room-btn" class="btn-primary" title="Create Room" hidden>
+            + Create Room
+          </button>
           <a
             class="help-link"
             href="/help.html"
@@ -125,34 +148,32 @@
               Retry server features
             </button>
 
-            <!-- Public rooms are discoverable without signing in. -->
-            <div id="room-browser" hidden>
-              <div class="room-browser-header">
-                <div class="room-browser-title">
-                  <h2>Rooms</h2>
-                  <p class="field-hint">Busiest first</p>
+            <div class="directory-body">
+              <!-- Favorite and recent rooms: a rail of small tiles that collapses to the edge. -->
+              <aside
+                id="directory-rail"
+                class="directory-rail"
+                aria-label="Favorite and recent rooms"
+                hidden
+              >
+                <div class="directory-rail-head">
+                  <h3 class="directory-rail-title">Favorites &amp; recent</h3>
+                  <button
+                    id="directory-rail-toggle"
+                    class="directory-rail-toggle"
+                    type="button"
+                    aria-expanded="true"
+                    aria-controls="directory-rail-body"
+                    aria-label="Hide favorites and recent rooms"
+                  ></button>
                 </div>
-                <div class="room-search-row">
-                  <label class="field-label" for="room-search-input">Search rooms</label>
-                  <input
-                    type="text"
-                    id="room-search-input"
-                    placeholder="Search by name or topic"
-                    aria-describedby="room-search-help"
-                    minlength="3"
-                    maxlength="128"
-                    autocomplete="off"
-                  />
-                  <p id="room-search-help" class="field-hint">
-                    Use 3+ consecutive letters or numbers.
-                  </p>
-                </div>
-                <button id="create-room-btn" class="btn-primary" title="Create Room" hidden>
-                  + Create Room
-                </button>
+                <div id="directory-rail-body" class="directory-rail-body"></div>
+              </aside>
+              <!-- Public rooms are discoverable without signing in. -->
+              <div id="room-browser" hidden>
+                <div id="room-list" class="room-list"></div>
+                <button id="room-load-more" class="btn-secondary" hidden>Load more</button>
               </div>
-              <div id="room-list" class="room-list"></div>
-              <button id="room-load-more" class="btn-secondary" hidden>Load more</button>
             </div>
 
             <!-- The dock: the manual join form (always visible) and the page's tools. -->

@@ -100,13 +100,11 @@ async function geometry(page) {
     inside(bounds, { left: 0, right: innerWidth }, 'join card');
     for (const selector of [
       '#room-browser',
-      '#room-search-input',
       '#room-list',
       '.room-card',
       '.room-list-empty',
-      '.discovery-shelf',
+      '#directory-rail',
       '.discovery-shelf .directory-room-row',
-      '#create-room-btn',
       '.join-form',
       '#name-input',
       '#room-input',
@@ -130,9 +128,9 @@ async function geometry(page) {
       Math.min(first.bottom, second.bottom) - Math.max(first.top, second.top) > 1;
     const header = document.querySelector('header');
     // The display name sits inside the account button, which the button's own box covers.
-    const headerControls = [...header.querySelectorAll('a, button, .status, .quality-dot')].filter(
-      (node) => node.getClientRects().length,
-    );
+    const headerControls = [
+      ...header.querySelectorAll('a, button, input, .status, .quality-dot'),
+    ].filter((node) => node.getClientRects().length);
     for (let index = 0; index < headerControls.length; index++) {
       inside(box(headerControls[index]), box(header), 'header control');
       for (const sibling of headerControls.slice(index + 1))
@@ -151,6 +149,8 @@ async function geometry(page) {
     const headerBox = box(header);
     const list = rect('#room-list');
     const wordmark = rect('#home-link');
+    const rail = rect('#directory-rail');
+    const railNode = document.getElementById('directory-rail');
     const shape = {
       clientWidth: document.documentElement.clientWidth,
       gridLeft: list?.left ?? null,
@@ -161,6 +161,26 @@ async function geometry(page) {
         rect('.room-browser-title h2'),
         rect('#room-search-input'),
       ),
+      // The directory's title, order and search sit in the title bar, Create Room at its right.
+      searchInHeader: Boolean(
+        rect('#room-search-input') &&
+        rect('#room-search-input').bottom <= headerBox.bottom + 1 &&
+        rect('#room-search-input').top >= headerBox.top - 1,
+      ),
+      createInHeader: rect('#create-room-btn')
+        ? rect('#create-room-btn').bottom <= headerBox.bottom + 1
+        : null,
+      // Create Room belongs to the title bar's right-hand group, which ends at the right edge.
+      createAtRight: rect('#create-room-btn')
+        ? rect('.header-right').right >= headerBox.right - 40 &&
+          rect('#create-room-btn').left >= rect('.header-right').left - 1
+        : null,
+      // The favorites rail: on the gutter, left of the grid, narrow when collapsed.
+      railLeft: rail?.left ?? null,
+      railRight: rail?.right ?? null,
+      railWidth: rail?.width ?? null,
+      railCollapsed: Boolean(railNode && railNode.classList.contains('collapsed')),
+      railTileWidth: rect('#directory-rail .room-card')?.width ?? null,
       authInHeader: Boolean(
         authBar && authBar.top >= headerBox.top - 1 && authBar.bottom <= headerBox.bottom + 1,
       ),
@@ -212,19 +232,37 @@ async function geometry(page) {
 function expectShape({ shape, viewport }, state, label) {
   const detail = (message) => `${label}: ${message} (${JSON.stringify(shape)})`;
   if (shape.tileWidth !== null) {
-    // About 1.5 to 1.8 times a phone's two-up tile: five columns at 1440, three at 768.
+    // About 1.5 to 1.9 times a phone's two-up tile: five columns at 1440 and three at 768 for a
+    // guest, one fewer beside an account's favorites rail, open or collapsed; never the old 2x.
     const [minimum, maximum] =
       viewport.width === 1440
-        ? [256, 300]
+        ? [256, 330]
         : viewport.width === 768
-          ? [220, 260]
+          ? [220, 345]
           : [viewport.width > 600 ? 220 : 140, Infinity];
     assert.ok(
       shape.tileWidth >= minimum && shape.tileWidth <= maximum,
       detail(`tiles between ${minimum}px and ${maximum}px wide`),
     );
   }
-  assert.ok(Math.abs(shape.gridLeft - shape.wordmarkLeft) <= 1, detail('grid on the gutter'));
+  if (shape.railLeft === null)
+    assert.ok(Math.abs(shape.gridLeft - shape.wordmarkLeft) <= 1, detail('grid on the gutter'));
+  else {
+    assert.ok(Math.abs(shape.railLeft - shape.wordmarkLeft) <= 1, detail('rail on the gutter'));
+    if (viewport.width > 600) {
+      assert.ok(shape.gridLeft >= shape.railRight - 1, detail('the grid starts after the rail'));
+      if (shape.railCollapsed)
+        assert.ok(shape.railWidth <= 48, detail('a collapsed rail is a strip at the left edge'));
+      else assert.ok(shape.railTileWidth <= 104, detail('rail tiles are small'));
+    }
+  }
+  assert.equal(shape.searchInHeader, true, detail('search in the title bar'));
+  if (shape.createInHeader !== null) {
+    assert.equal(shape.createInHeader, true, detail('Create Room in the title bar'));
+    // Phones wrap the title bar's right side; wider screens keep Create Room at the right.
+    if (viewport.width >= 768)
+      assert.equal(shape.createAtRight, true, detail("Create Room at the title bar's right"));
+  }
   assert.ok(
     shape.gridRight >= shape.clientWidth - shape.wordmarkLeft - 1,
     detail('grid spans the page'),
@@ -494,6 +532,23 @@ async function run(env = process.env) {
           };
           await page.screenshot({ path: path.join(artifacts, `${name}.png`), fullPage: true });
           await inspect('populated');
+          if (signedIn) {
+            const toggle = page.locator('#directory-rail-toggle');
+            await toggle.click();
+            await inspect('rail-collapsed');
+            await page.reload({ waitUntil: 'load' });
+            await page.waitForFunction(
+              () => document.querySelectorAll('#room-list .room-card').length === 20,
+            );
+            await page.waitForFunction(
+              () => document.querySelectorAll('.discovery-shelf .directory-room-row').length === 2,
+            );
+            await page.locator('#connection-status.connected').waitFor({ state: 'visible' });
+            assert.equal(await page.locator('#directory-rail.collapsed').count(), 1, 'remembered');
+            await inspect('rail-remembered');
+            await toggle.click();
+            await inspect('rail-expanded');
+          }
           await reachable(page.locator('#room-list .room-card').last());
           await page.locator('#room-load-more').click();
           await page.waitForFunction(

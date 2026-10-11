@@ -575,6 +575,54 @@ for (const [label, setup, toggleId, menuId] of [
   });
 }
 
+test('the favorites rail collapses to the left edge on its toggle and remembers the choice', async () => {
+  const stored = new Map([['simplestchat.directoryRail', 'collapsed']]);
+  const node = () => {
+    const self = {
+      hidden: false,
+      classes: new Set(),
+      attributes: {},
+      listeners: {},
+      setAttribute(key, value) {
+        self.attributes[key] = String(value);
+      },
+      addEventListener(type, handler) {
+        self.listeners[type] = handler;
+      },
+    };
+    self.classList = {
+      toggle: (name, on) => (on ? self.classes.add(name) : self.classes.delete(name)),
+    };
+    return self;
+  };
+  const rail = node();
+  const toggle = node();
+  const { setupDirectoryRail } = evaluateTypeScript(
+    `${await functionSource('setupDirectoryRail')} export { setupDirectoryRail };`,
+    {
+      globals: {
+        document: {
+          getElementById: (id) => ({ 'directory-rail': rail, 'directory-rail-toggle': toggle })[id],
+        },
+        readLocalPreference: (key) => stored.get(key) ?? null,
+        writeLocalPreference: (key, value) => stored.set(key, value),
+      },
+    },
+  );
+  setupDirectoryRail();
+  assert.equal(rail.classes.has('collapsed'), true, 'a remembered collapse applies at once');
+  assert.equal(toggle.attributes['aria-expanded'], 'false');
+  assert.equal(toggle.attributes['aria-label'], 'Show favorites and recent rooms');
+  toggle.listeners.click();
+  assert.equal(rail.classes.has('collapsed'), false);
+  assert.equal(toggle.attributes['aria-expanded'], 'true');
+  assert.equal(toggle.attributes['aria-label'], 'Hide favorites and recent rooms');
+  assert.equal(stored.get('simplestchat.directoryRail'), 'open');
+  toggle.listeners.click();
+  assert.equal(rail.classes.has('collapsed'), true);
+  assert.equal(stored.get('simplestchat.directoryRail'), 'collapsed');
+});
+
 test('one pinned tile fills the stage, and a tile that is gone cannot stay pinned', async () => {
   const classes = () => {
     const names = new Set();

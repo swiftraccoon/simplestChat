@@ -120,6 +120,7 @@ const authAvatar = document.getElementById('auth-avatar')!;
 const signInBtn = document.getElementById('sign-in-btn')!;
 const logoutBtn = document.getElementById('logout-btn')!;
 const roomBrowser = document.getElementById('room-browser')!;
+const directoryToolbar = document.getElementById('directory-toolbar')!;
 const roomSearchInput = document.getElementById('room-search-input') as HTMLInputElement;
 const roomList = document.getElementById('room-list')!;
 const roomLoadMore = document.getElementById('room-load-more') as HTMLButtonElement;
@@ -187,6 +188,7 @@ function updateAuthUI(): void {
   signInBtn.hidden = capabilities?.accounts !== true;
   document.getElementById('community-actions')!.hidden = capabilities?.accounts !== true;
   roomBrowser.hidden = capabilities?.roomDirectory !== true;
+  directoryToolbar.hidden = roomBrowser.hidden;
   createRoomBtn.hidden = !auth.isLoggedIn || capabilities?.roomCreation !== true;
   if (auth.isLoggedIn) {
     authBarGuest.hidden = true;
@@ -1610,6 +1612,7 @@ document.getElementById('room-more-btn')!.insertAdjacentHTML('beforeend', icons.
 document.getElementById('shortcuts-btn')!.addEventListener('click', showKeyboardShortcuts);
 setupRoomMenu();
 setupAccountMenu();
+setupDirectoryRail();
 if (typeof ResizeObserver !== 'undefined') {
   const bars = new ResizeObserver(placeToasts);
   bars.observe(document.querySelector('header')!);
@@ -2180,19 +2183,21 @@ let roomBrowserRequest = 0;
 let roomBrowserController: AbortController | null = null;
 let savedRoomMount: DiscoveryMount | null = null;
 let savedRoomAccount: string | null = null;
-// Favorite and recent rooms sit on a shelf of small tiles above the directory.
-const savedRoomPicker = el('div', undefined, 'directory-shelf');
-const savedRoomContainer = savedRoomPicker;
-roomList.before(savedRoomPicker);
+// Favorite and recent rooms stand in a rail of small tiles beside the directory.
+const savedRoomPicker = document.getElementById('directory-rail')!;
+const savedRoomContainer = document.getElementById('directory-rail-body')!;
+let savedRoomsEmpty = true;
 
 function refreshSavedRoomPicker(): void {
   const account = capabilities?.roomDirectory ? auth.userId : null;
-  savedRoomPicker.hidden = account === null;
   if (account !== savedRoomAccount) {
     savedRoomMount?.dispose();
     savedRoomMount = null;
     savedRoomAccount = account;
+    savedRoomsEmpty = true;
   }
+  // The rail appears once the account's saved rooms are known to exist.
+  savedRoomPicker.hidden = account === null || savedRoomsEmpty;
   if (!account) return;
   if (savedRoomMount) observeUiTask(savedRoomMount.refresh(), 'Could not refresh saved rooms');
   else
@@ -2201,7 +2206,32 @@ function refreshSavedRoomPicker(): void {
       getAccountId: () => auth.userId,
       current: () => savedRoomAccount === account,
       renderRoom: (entry) => buildRoomCard(entry.room, { compact: true }),
+      onEmpty: (empty) => {
+        savedRoomsEmpty = empty;
+        savedRoomPicker.hidden = empty;
+      },
     });
+}
+
+/** The favorites rail collapses to a strip at the left edge; the choice stays on this device. */
+function setupDirectoryRail(): void {
+  const rail = document.getElementById('directory-rail')!;
+  const toggle = document.getElementById('directory-rail-toggle')!;
+  let collapsed = readLocalPreference('simplestchat.directoryRail') === 'collapsed';
+  const apply = (): void => {
+    rail.classList.toggle('collapsed', collapsed);
+    toggle.setAttribute('aria-expanded', String(!collapsed));
+    toggle.setAttribute(
+      'aria-label',
+      collapsed ? 'Show favorites and recent rooms' : 'Hide favorites and recent rooms',
+    );
+  };
+  apply();
+  toggle.addEventListener('click', () => {
+    collapsed = !collapsed;
+    apply();
+    writeLocalPreference('simplestchat.directoryRail', collapsed ? 'collapsed' : 'open');
+  });
 }
 const MIN_ROOM_SEARCH_TRIGRAM_LEN = 3;
 
