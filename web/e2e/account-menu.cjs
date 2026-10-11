@@ -1,10 +1,11 @@
 /* Drives the signed-in header's account menu: an avatar button that opens Account, Messages,
    My rooms and Sign out on the home page. Inside a room those items sit flat in the More menu. */
 
-/** Opens the account menu when its button is shown and the menu is still closed. */
+/** Opens the account menu once its button appears; inside a room the items are already flat. */
 async function openAccountMenu(page) {
+  if (await page.locator('#room-screen').isVisible()) return;
   const toggle = page.locator('#account-menu-btn');
-  if (!(await toggle.isVisible())) return;
+  await toggle.waitFor({ state: 'visible' });
   if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
   await page.locator('#account-menu').waitFor({ state: 'visible' });
 }

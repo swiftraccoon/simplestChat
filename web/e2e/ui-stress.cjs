@@ -25,6 +25,7 @@ const {
 } = require('./ui-stress-metrics.cjs');
 const { serverCounts, handshakeGate } = require('./lifecycle-checks.cjs');
 const { closeOwnedBrowser } = require('./lifecycle-cleanup.cjs');
+const { openAccountMenu } = require('./account-menu.cjs');
 const {
   initializePerformanceReport,
   persistPerformanceReport,
@@ -517,7 +518,9 @@ async function run(env = process.env) {
   async function deleteOwnedRoom() {
     if (!roomCreated || roomDeleted) return;
     const page = clients[0].page;
-    await openRoomMenu(page);
+    // At home the account menu holds My rooms; in a room it sits flat in More.
+    await openAccountMenu(page);
+    if (await page.locator('#room-screen').isVisible()) await openRoomMenu(page);
     await page
       .locator('#community-actions')
       .getByRole('button', { name: 'My rooms', exact: true })
