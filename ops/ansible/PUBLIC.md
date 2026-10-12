@@ -339,6 +339,25 @@ copy of the TLS private key.
 
 ## Maintenance and data
 
+### Proxy configuration changes
+
+The proxy reads the maintained [Caddyfile](../../Caddyfile) through a read-only
+bind mount. After changing it, apply it to the running proxy without stopping
+anything:
+
+```sh
+cd ops/ansible
+.venv/bin/ansible-playbook -i inventory.local.yml --limit YOUR_HOST proxy-config.yml
+```
+
+The playbook validates the candidate with the exact pinned proxy image (offline,
+unprivileged, with a placeholder proxy secret), writes the live file in place
+(a renamed temporary file would leave the old inode mounted in the container),
+reloads Caddy through its loopback admin endpoint, and then checks that a
+response the proxy answers itself (`/metrics`, 404) carries the maintained
+content security policy. The policy is a default (`?Content-Security-Policy`):
+on application responses the backend's own policy is what browsers receive.
+
 Before base-host provisioning, image builds, private benchmarks, or public
 configuration changes, announce downtime and stop the entire public project:
 
@@ -414,6 +433,26 @@ maintenance operations. Local and encrypted offsite scheduling are separate
 opt-ins; neither restores data into the running application database.
 
 ## Host security updates and network assumptions
+
+### SSH access and link-local name resolution
+
+A fresh provider image usually leaves `PasswordAuthentication yes` in a cloud-init
+drop-in and answers LLMNR on every interface. Once the inventory's key login works,
+apply the maintained hardening:
+
+```sh
+cd ops/ansible
+.venv/bin/ansible-playbook -i inventory.local.yml --limit YOUR_HOST host-hardening.yml
+```
+
+It first proves a fresh key-only login from the controller, installs
+`/etc/ssh/sshd_config.d/00-simplestchat-hardening.conf` (`PasswordAuthentication no`,
+`KbdInteractiveAuthentication no`, `PubkeyAuthentication yes`, and `PermitRootLogin no`,
+or `prohibit-password` when the inventory itself connects as root), checks the
+daemon's effective settings with `sshd -T` before reloading it, proves the key login
+again afterwards, and turns off LLMNR and multicast DNS through a `systemd-resolved`
+drop-in. Existing sessions stay connected. Keep a second key or console access
+available before running it; a password is no longer a way in.
 
 Host package updates remain explicit: `site.yml` accepts one-run
 `-e scbench_upgrade_packages=true -e scbench_reboot=true` only after its public

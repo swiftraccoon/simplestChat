@@ -1,0 +1,135 @@
+---
+- name: Refuse SSH passwords and root logins and silence link-local name resolution
+  hosts: benchmark_hosts
+  become: true
+  gather_facts: true
+  serial: 1
+  vars:
+    # sshd keeps the first value it reads and sshd_config includes this
+    # directory before its own settings, so the name sorts ahead of provider
+    # drop-ins such as 50-cloud-init.conf.
+    schost_sshd_dropin: /etc/ssh/sshd_config.d/00-simplestchat-hardening.conf
+    schost_resolved_dropin: /etc/systemd/resolved.conf.d/simplestchat-link-local.conf
+    # An inventory that connects as root keeps key-only root login; any other
+    # operator account leaves root unable to log in over SSH at all.
+    schost_permit_root_login: >-
+      {{ 'prohibit-password' if (ansible_user | default('')) == 'root' else 'no' }}
+    # sshd -T prints the legacy spelling of prohibit-password.
+    schost_permit_root_login_effective: >-
+      {{ 'without-password' if schost_permit_root_login == 'prohibit-password' else schost_permit_root_login }}
+  pre_tasks:
+    - name: Require the canonical prepared public host
+      tags: [always]
+      ansible.builtin.assert:
+        that:
+          - scpub_enabled | bool
+          - scpub_config == '/etc/simplestchat-public'
+          - ansible_facts.os_family == 'Debian'
+          - ansible_facts.service_mgr == 'systemd'
+        fail_msg: Use the prepared Debian public host; this playbook changes its SSH daemon and resolver.
+
+    - name: Describe a fresh key-only login from the controller
+      ansible.builtin.set_fact:
+        schost_login_proof: >-
+          {{ ['ssh', '-o', 'BatchMode=yes', '-o', 'PasswordAuthentication=no',
+              '-o', 'KbdInteractiveAuthentication=no', '-o', 'IdentitiesOnly=yes',
+              '-o', 'ConnectTimeout=20', '-p', ansible_port | default(22) | string]
+             + (['-i', ansible_ssh_private_key_file] if ansible_ssh_private_key_file is defined else [])
+             + [(ansible_user | default(lookup('ansible.builtin.env', 'USER'))) ~ '@' ~ ansible_host, '/bin/true'] }}
+        cacheable: false
+
+    - name: Prove that key-only login works before passwords are refused
+      ansible.builtin.command:
+        argv: "{{ schost_login_proof }}"
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+  tasks:
+    - name: Install the SSH daemon drop-in that refuses passwords and root logins
+      ansible.builtin.copy:
+        dest: "{{ schost_sshd_dropin }}"
+        owner: root
+        group: root
+        mode: '0600'
+        content: |
+          # Managed by simplestChat ops/ansible/host-hardening.yml.
+          PasswordAuthentication no
+          KbdInteractiveAuthentication no
+          PermitRootLogin {{ schost_permit_root_login }}
+          PubkeyAuthentication yes
+      notify: Reload the SSH daemon
+
+    - name: Read the daemon's effective settings with the drop-in in place
+      ansible.builtin.command:
+        argv: [/usr/sbin/sshd, -T]
+      changed_when: false
+      register: schost_sshd_effective
+
+    - name: Require the effective settings before anything is reloaded
+      ansible.builtin.assert:
+        that:
+          - "'passwordauthentication no' in schost_sshd_effective.stdout_lines"
+          - "'kbdinteractiveauthentication no' in schost_sshd_effective.stdout_lines"
+          - "'pubkeyauthentication yes' in schost_sshd_effective.stdout_lines"
+          - "('permitrootlogin ' ~ schost_permit_root_login_effective) in schost_sshd_effective.stdout_lines"
+        fail_msg: An earlier file still sets these keywords; the daemon was not reloaded. Remove the conflicting drop-in and rerun.
+
+    - name: Reload the SSH daemon now; sessions already open stay connected
+      ansible.builtin.meta: flush_handlers
+
+    - name: Prove that key-only login still works after the reload
+      ansible.builtin.command:
+        argv: "{{ schost_login_proof }}"
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+    - name: Create the resolver drop-in directory
+      ansible.builtin.file:
+        path: /etc/systemd/resolved.conf.d
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Stop answering LLMNR and multicast DNS queries
+      ansible.builtin.copy:
+        dest: "{{ schost_resolved_dropin }}"
+        owner: root
+        group: root
+        mode: '0644'
+        content: |
+          # Managed by simplestChat ops/ansible/host-hardening.yml: a public host
+          # answers no link-local name queries (UDP/TCP 5355 and 5353).
+          [Resolve]
+          LLMNR=no
+          MulticastDNS=no
+      notify: Restart the stub resolver
+
+    - name: Restart the stub resolver now so the listeners close
+      ansible.builtin.meta: flush_handlers
+
+    - name: Read the resolver's protocols
+      ansible.builtin.command:
+        argv: [resolvectl, status]
+      changed_when: false
+      register: schost_resolver
+
+    - name: Require that no scope offers LLMNR or multicast DNS
+      ansible.builtin.assert:
+        that:
+          - "'+LLMNR' not in schost_resolver.stdout"
+          - "'+mDNS' not in schost_resolver.stdout"
+        fail_msg: The resolver still offers link-local name resolution.
+
+  handlers:
+    - name: Reload the SSH daemon
+      ansible.builtin.systemd_service:
+        name: ssh.service
+        state: reloaded
+
+    - name: Restart the stub resolver
+      ansible.builtin.systemd_service:
+        name: systemd-resolved.service
+        state: restarted

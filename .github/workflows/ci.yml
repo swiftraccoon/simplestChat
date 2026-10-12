@@ -93,6 +93,8 @@ jobs:
           ansible-playbook -i ops/ansible/inventory.example.yml ops/ansible/site.yml --syntax-check
           ansible-playbook -i ops/ansible/inventory.example.yml ops/ansible/public.yml --syntax-check
           ansible-playbook -i ops/ansible/inventory.example.yml ops/ansible/release.yml --syntax-check
+          ansible-playbook -i ops/ansible/inventory.example.yml ops/ansible/host-hardening.yml --syntax-check
+          ansible-playbook -i ops/ansible/inventory.example.yml ops/ansible/proxy-config.yml --syntax-check
           ansible-playbook -i ops/ansible/inventory.example.yml ops/ansible/reboot.yml --syntax-check
           ansible-playbook -i ops/ansible/inventory.example.yml ops/ansible/turn.yml --syntax-check
           ansible-playbook -i ops/ansible/inventory.example.yml ops/ansible/monitoring.yml --syntax-check

@@ -157,7 +157,7 @@ build/check-python.sh
 export PATH="$PWD/ops/ansible/.venv/bin:$PATH"
 export ANSIBLE_CONFIG="$PWD/ops/ansible/ansible.cfg"
 ansible-lint --offline --strict ops/ansible
-for playbook in site public release reboot; do
+for playbook in site public release reboot host-hardening proxy-config; do
   ansible-playbook -i ops/ansible/inventory.example.yml "ops/ansible/$playbook.yml" --syntax-check
 done
 shellcheck ops/ansible/files/*.sh

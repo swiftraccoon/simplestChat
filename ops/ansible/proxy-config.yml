@@ -1,0 +1,129 @@
+---
+- name: Apply the maintained Caddyfile to the running public proxy without downtime
+  hosts: benchmark_hosts
+  become: true
+  gather_facts: false
+  serial: 1
+  vars:
+    scproxy_container: simplestchat-public-caddy-1
+    scproxy_source: "{{ playbook_dir }}/../../Caddyfile"
+    scproxy_candidate: "{{ scpub_config }}/Caddyfile.candidate"
+    # The policy the proxy applies to responses it answers itself.
+    scproxy_policy: >-
+      {{ lookup('ansible.builtin.file', scproxy_source)
+         | regex_search('\?Content-Security-Policy "([^"]+)"', '\1') | first }}
+  pre_tasks:
+    - name: Require the canonical prepared public host and its pinned proxy image
+      tags: [always]
+      ansible.builtin.assert:
+        that:
+          - scpub_enabled | bool
+          - scpub_config == '/etc/simplestchat-public'
+          - scpub_caddy_image is match('^(?:docker[.]io/library/caddy|ghcr[.]io/swiftraccoon/simplestchat-caddy):[a-z0-9.-]+@sha256:[a-f0-9]{64}\Z')
+          - scproxy_policy | length > 0
+        fail_msg: Use the prepared public host with a digest-pinned proxy image and a default-only policy line.
+
+    - name: Require the live Caddyfile that public.yml installed
+      ansible.builtin.stat:
+        path: "{{ scpub_config }}/Caddyfile"
+        follow: false
+      register: scproxy_live
+
+    - name: Refuse to configure an unprepared host
+      ansible.builtin.assert:
+        that:
+          - scproxy_live.stat.isreg | default(false)
+          - scproxy_live.stat.uid == 0
+        fail_msg: Prepare and deploy the public service with public.yml before changing its proxy.
+
+  tasks:
+    - name: Stage the candidate beside the live file
+      ansible.builtin.copy:
+        src: "{{ scproxy_source }}"
+        dest: "{{ scproxy_candidate }}"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Validate the candidate with the exact pinned proxy image, offline
+      ansible.builtin.command:
+        argv:
+          - docker
+          - --host
+          - unix:///var/run/docker.sock
+          - run
+          - --rm
+          - --network
+          - none
+          - --read-only
+          - --cap-drop
+          - ALL
+          - --security-opt
+          - no-new-privileges:true
+          - --user
+          - '10001:10001'
+          - --env
+          - TRUSTED_PROXY_SECRET=validation-placeholder
+          - --volume
+          - "{{ scproxy_candidate }}:/etc/caddy/Caddyfile:ro"
+          - "{{ scpub_caddy_image }}"
+          - caddy
+          - validate
+          - --config
+          - /etc/caddy/Caddyfile
+          - --adapter
+          - caddyfile
+      changed_when: false
+
+    - name: Write the Caddyfile in place so the container's read-only bind mount sees it
+      ansible.builtin.copy:
+        src: "{{ scproxy_source }}"
+        dest: "{{ scpub_config }}/Caddyfile"
+        owner: root
+        group: root
+        mode: '0644'
+        # A renamed temporary file would keep the old inode mounted in the container.
+        unsafe_writes: true
+      notify: Reload the running proxy
+
+    - name: Reload the running proxy now
+      ansible.builtin.meta: flush_handlers
+
+    - name: Remove the candidate
+      ansible.builtin.file:
+        path: "{{ scproxy_candidate }}"
+        state: absent
+
+    - name: Read a response the proxy answers itself
+      ansible.builtin.uri:
+        url: "https://{{ scpub_domain }}/metrics"
+        method: GET
+        status_code: [404]
+        return_content: false
+        timeout: 15
+      register: scproxy_probe
+
+    - name: Require the maintained policy on the proxy's own responses
+      ansible.builtin.assert:
+        that:
+          - scproxy_probe.content_security_policy | default('') == scproxy_policy
+          - scproxy_probe.strict_transport_security | default('') == 'max-age=31536000'
+          - scproxy_probe.server is not defined
+        fail_msg: The running proxy does not serve the maintained header policy.
+
+  handlers:
+    - name: Reload the running proxy
+      ansible.builtin.command:
+        argv:
+          - docker
+          - --host
+          - unix:///var/run/docker.sock
+          - exec
+          - "{{ scproxy_container }}"
+          - caddy
+          - reload
+          - --config
+          - /etc/caddy/Caddyfile
+          - --adapter
+          - caddyfile
+      changed_when: true
