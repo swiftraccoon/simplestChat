@@ -270,12 +270,15 @@ pub async fn redeem_room_invite(
     if !live || uses_left == 0 {
         return Ok(None);
     }
-    let issuer_membership: Option<i16> =
-        sqlx::query_scalar("SELECT role FROM room_roles WHERE room_id = $1 AND user_id = $2")
-            .bind(&room_id)
-            .bind(created_by)
-            .fetch_optional(&mut *transaction)
-            .await?;
+    // Shared-locked so a demotion committing concurrently waits for this
+    // redemption or is seen by it, never slips between the read and the grant.
+    let issuer_membership: Option<i16> = sqlx::query_scalar(
+        "SELECT role FROM room_roles WHERE room_id = $1 AND user_id = $2 FOR SHARE",
+    )
+    .bind(&room_id)
+    .bind(created_by)
+    .fetch_optional(&mut *transaction)
+    .await?;
     let issuer = if created_by == owner_id {
         Role::Owner
     } else {
@@ -665,6 +668,14 @@ pub async fn list_memberships(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn issuer_rule_names_the_stored_role_values_it_compares() {
+        assert_eq!(Role::Member.to_db(), 1);
+        assert_eq!(Role::Moderator.to_db(), 2);
+        assert_eq!(Role::Admin.to_db(), 3);
+        assert!(issuer_still_authorized!().contains("rr.role >= 3 AND rr.role > i.role"));
+    }
 
     #[test]
     fn membership_query_accepts_only_the_optional_cursor() {
