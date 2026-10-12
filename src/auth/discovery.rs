@@ -350,9 +350,11 @@ pub async fn saved_rooms(
     let ids: Vec<&str> = entries.iter().map(|entry| entry.0.as_str()).collect();
     // Repeat visibility in the details query so a concurrent membership removal
     // cannot expose an unlisted room between these two bounded reads.
-    let rooms: Vec<RoomListRow> = sqlx::query_as(
-        "SELECT r.id,r.display_name,r.topic,r.password_hash IS NOT NULL,r.moderated,r.description,r.image_url,r.secret,r.name_style,r.topic_style
-         FROM rooms r WHERE r.id=ANY($1) AND (r.secret=false OR r.owner_id=$2 OR EXISTS(SELECT 1 FROM room_roles m WHERE m.room_id=r.id AND m.user_id=$2))")
+    let rooms: Vec<RoomListRow> = sqlx::query_as(concat!(
+        "SELECT r.id,r.display_name,r.topic,r.password_hash IS NOT NULL,r.moderated,r.description,",
+        crate::room::api::image_version!("r.image_url"),
+        ",r.secret,r.name_style,r.topic_style
+         FROM rooms r WHERE r.id=ANY($1) AND (r.secret=false OR r.owner_id=$2 OR EXISTS(SELECT 1 FROM room_roles m WHERE m.room_id=r.id AND m.user_id=$2))"))
         .bind(ids).bind(own).fetch_all(pool).await.map_err(routes::database_error)?;
     let mut details: std::collections::HashMap<String, RoomListRow> = rooms
         .into_iter()

@@ -13,6 +13,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use tracing::warn;
 
 /// Keep handler futures small without changing their HTTP error responses.
@@ -43,12 +44,44 @@ pub struct RoomListItem {
     /// `null` when the room's state lock was busy at listing time.
     pub broadcaster_count: Option<usize>,
     pub description: String,
+    /// A same-origin path naming the current image by a digest of its content
+    /// (`room_image_url`), or `null`; never the image bytes themselves.
     pub image_url: Option<String>,
     pub secret: bool,
     pub name_style: ChatStyle,
     pub topic_style: ChatStyle,
 }
 
+/// The SQL for a listing's image column: the first 16 hex characters of the
+/// SHA-256 of the stored data URL, or NULL. `room_image_version` computes the
+/// same digest in Rust; the image endpoint answers only with the exact current
+/// one, so a listing never carries image bytes and an unlisted room's image is
+/// reachable only through a listing the caller could see.
+macro_rules! image_version {
+    ($column:literal) => {
+        concat!(
+            "CASE WHEN ",
+            $column,
+            " IS NULL THEN NULL ELSE left(encode(sha256(convert_to(",
+            $column,
+            ", 'UTF8')), 'hex'), 16) END"
+        )
+    };
+}
+pub(crate) use image_version;
+
+/// The digest `image_version!` yields for a stored data URL.
+pub(crate) fn room_image_version(image: &str) -> String {
+    hex::encode(Sha256::digest(image.as_bytes()))[..16].to_owned()
+}
+
+/// The listing's `image_url`: `GET /api/rooms/:id/image?v=<version>`, which the
+/// browser may cache for a year because the digest changes with the image.
+pub(crate) fn room_image_url(room_id: &str, version: &str) -> String {
+    format!("/api/rooms/{room_id}/image?v={version}")
+}
+
+/// A listing row; the seventh column is the image version, not the image.
 pub(crate) type RoomListRow = (
     String,
     String,
@@ -63,6 +96,10 @@ pub(crate) type RoomListRow = (
 );
 
 pub(crate) fn room_list_item(server: &SignalingServer, row: RoomListRow) -> RoomListItem {
+    let image_url = row
+        .6
+        .as_deref()
+        .map(|version| room_image_url(&row.0, version));
     RoomListItem {
         participant_count: server.room_manager().participant_count_for_room(&row.0),
         broadcaster_count: server.room_manager().broadcaster_count_for_room(&row.0),
@@ -72,7 +109,7 @@ pub(crate) fn room_list_item(server: &SignalingServer, row: RoomListRow) -> Room
         password_protected: row.3,
         moderated: row.4,
         description: row.5,
-        image_url: row.6,
+        image_url,
         secret: row.7,
         name_style: row.8.0,
         topic_style: row.9.0,
@@ -251,23 +288,27 @@ pub(crate) async fn fetch_directory_page(
     let mut live_rows = if live_ids.is_empty() {
         Vec::new()
     } else if let Some(pattern) = pattern {
-        sqlx::query_as::<_, RoomListRow>(
-            r#"SELECT id, display_name, topic, password_hash IS NOT NULL, moderated, description, image_url, secret, name_style, topic_style
+        sqlx::query_as::<_, RoomListRow>(concat!(
+            r#"SELECT id, display_name, topic, password_hash IS NOT NULL, moderated, description, "#,
+            image_version!("image_url"),
+            r#", secret, name_style, topic_style
                FROM rooms
                WHERE secret = false AND id = ANY($1)
                  AND (display_name || E'\n' || COALESCE(topic, '')) ILIKE $2 ESCAPE E'\\'
-               ORDER BY created_at DESC, id DESC"#,
-        )
+               ORDER BY created_at DESC, id DESC"#
+        ))
         .bind(&live_ids)
         .bind(pattern)
         .fetch_all(pool)
         .await?
     } else {
-        sqlx::query_as::<_, RoomListRow>(
-            "SELECT id, display_name, topic, password_hash IS NOT NULL, moderated, description, image_url, secret, name_style, topic_style
+        sqlx::query_as::<_, RoomListRow>(concat!(
+            "SELECT id, display_name, topic, password_hash IS NOT NULL, moderated, description, ",
+            image_version!("image_url"),
+            ", secret, name_style, topic_style
              FROM rooms WHERE secret = false AND id = ANY($1)
-             ORDER BY created_at DESC, id DESC",
-        )
+             ORDER BY created_at DESC, id DESC"
+        ))
         .bind(&live_ids)
         .fetch_all(pool)
         .await?
@@ -294,7 +335,7 @@ pub(crate) async fn fetch_directory_page(
         // PostgreSQL walk the created_at index and test every row on a miss. It
         // carries only ids and sort keys: descriptions and images are fetched
         // for the selected page alone, so a broad term never spills wide rows.
-        sqlx::query_as::<_, RoomListRow>(
+        sqlx::query_as::<_, RoomListRow>(concat!(
             r#"WITH matching_rooms AS MATERIALIZED (
                  SELECT id, created_at
                  FROM rooms
@@ -309,10 +350,12 @@ pub(crate) async fn fetch_directory_page(
              )
              SELECT rooms.id, rooms.display_name, rooms.topic,
                     rooms.password_hash IS NOT NULL AS password_protected,
-                    rooms.moderated, rooms.description, rooms.image_url, rooms.secret, rooms.name_style, rooms.topic_style
+                    rooms.moderated, rooms.description, "#,
+            image_version!("rooms.image_url"),
+            r#", rooms.secret, rooms.name_style, rooms.topic_style
              FROM page JOIN rooms ON rooms.id = page.id
-             ORDER BY page.created_at DESC, page.id DESC"#,
-        )
+             ORDER BY page.created_at DESC, page.id DESC"#
+        ))
         .bind(pattern)
         .bind(window.dormant_limit)
         .bind(window.dormant_offset)
@@ -320,11 +363,13 @@ pub(crate) async fn fetch_directory_page(
         .fetch_all(pool)
         .await?
     } else {
-        sqlx::query_as::<_, RoomListRow>(
-            "SELECT id, display_name, topic, password_hash IS NOT NULL, moderated, description, image_url, secret, name_style, topic_style
+        sqlx::query_as::<_, RoomListRow>(concat!(
+            "SELECT id, display_name, topic, password_hash IS NOT NULL, moderated, description, ",
+            image_version!("image_url"),
+            ", secret, name_style, topic_style
              FROM rooms WHERE secret = false AND NOT (id = ANY($3))
-             ORDER BY created_at DESC, id DESC LIMIT $1 OFFSET $2",
-        )
+             ORDER BY created_at DESC, id DESC LIMIT $1 OFFSET $2"
+        ))
         .bind(window.dormant_limit)
         .bind(window.dormant_offset)
         .bind(&live_ids)
@@ -470,7 +515,7 @@ pub async fn owned_rooms(
         .sub
         .parse()
         .map_err(|_| AuthError::InvalidToken.into_response())?;
-    let rows = sqlx::query_as::<_, RoomListRow>("SELECT id, display_name, topic, password_hash IS NOT NULL, moderated, description, image_url, secret, name_style, topic_style FROM rooms WHERE owner_id = $1 ORDER BY created_at DESC LIMIT $2")
+    let rows = sqlx::query_as::<_, RoomListRow>(concat!("SELECT id, display_name, topic, password_hash IS NOT NULL, moderated, description, ", image_version!("image_url"), ", secret, name_style, topic_style FROM rooms WHERE owner_id = $1 ORDER BY created_at DESC LIMIT $2"))
         .bind(owner).bind(settings::MAX_PERSISTED_ROOMS_PER_OWNER).fetch_all(server.db_pool().ok_or_else(|| AuthError::NotConfigured.into_response())?)
         .await.map_err(room_database_error)?;
     let mut response_headers = HeaderMap::new();
@@ -486,6 +531,90 @@ pub async fn owned_rooms(
                 .collect(),
         ),
     ))
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RoomImageParams {
+    /// The current content digest; without it there is nothing to serve.
+    pub v: Option<String>,
+}
+
+fn not_found() -> RoomApiError {
+    (StatusCode::NOT_FOUND, "Room image not found")
+        .into_response()
+        .into()
+}
+
+/// The bytes and type behind a stored raster data URL, as `validate_image_data_url` admitted it.
+fn decode_room_image(image: &str) -> Option<(&'static str, Vec<u8>)> {
+    use base64::{Engine, engine::general_purpose::STANDARD};
+    let (header, data) = image.split_once(',')?;
+    let content_type = match header {
+        "data:image/png;base64" => "image/png",
+        "data:image/jpeg;base64" => "image/jpeg",
+        "data:image/webp;base64" => "image/webp",
+        _ => return None,
+    };
+    let bytes = STANDARD.decode(data).ok()?;
+    (!bytes.is_empty() && bytes.len() <= account::MAX_IMAGE_BYTES).then_some((content_type, bytes))
+}
+
+/// `GET /api/rooms/:id/image?v=<version>`: the image a listing's `image_url`
+/// names. The exact current digest is required, so the response may be cached
+/// for a year; any other digest, a room without an image or an unknown room is
+/// a 404. The bytes are served under the download sandbox policy, on the
+/// avatar budget rather than the room API allowance a directory page spends
+/// on its listing.
+pub async fn room_image(
+    State(server): State<SignalingServer>,
+    Path(id): Path<String>,
+    Query(params): Query<RoomImageParams>,
+) -> Result<Response, RoomApiError> {
+    let version = params.v.as_deref().unwrap_or_default();
+    if !settings::valid_room_id(&id)
+        || version.len() != 16
+        || !version
+            .bytes()
+            .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
+    {
+        return Err(not_found());
+    }
+    let _permit =
+        crate::auth::routes::acquire_auth_request(&server).map_err(IntoResponse::into_response)?;
+    let pool = server.db_pool().ok_or_else(|| {
+        (StatusCode::SERVICE_UNAVAILABLE, "Database not configured").into_response()
+    })?;
+    let stored: Option<Option<String>> =
+        sqlx::query_scalar("SELECT image_url FROM rooms WHERE id = $1")
+            .bind(&id)
+            .fetch_optional(pool)
+            .await
+            .map_err(room_database_error)?;
+    let Some(Some(image)) = stored else {
+        return Err(not_found());
+    };
+    if room_image_version(&image) != version {
+        return Err(not_found());
+    }
+    let (content_type, bytes) = decode_room_image(&image).ok_or_else(|| {
+        warn!(room_id = %id, "Stored room image is not a raster data URL");
+        not_found()
+    })?;
+    Ok((
+        StatusCode::OK,
+        [
+            (header::CONTENT_TYPE, content_type),
+            (header::CACHE_CONTROL, "public, max-age=31536000, immutable"),
+            (
+                header::CONTENT_SECURITY_POLICY,
+                "default-src 'none'; sandbox",
+            ),
+            (header::X_CONTENT_TYPE_OPTIONS, "nosniff"),
+        ],
+        bytes,
+    )
+        .into_response())
 }
 
 /// PATCH /api/rooms/:id/identity — ownership is rechecked by the database mutation.
@@ -517,16 +646,68 @@ pub async fn update_room_identity(
             .into_response()
             .into());
     }
-    let row = sqlx::query_as::<_, RoomListRow>("SELECT id, display_name, topic, password_hash IS NOT NULL, moderated, description, image_url, secret, name_style, topic_style FROM rooms WHERE id = $1 AND owner_id = $2")
-        .bind(&id).bind(owner).fetch_optional(server.db_pool().ok_or_else(|| AuthError::NotConfigured.into_response())?).await
-        .map_err(room_database_error)?
-        .ok_or_else(|| (StatusCode::NOT_FOUND, "Room not found").into_response())?;
+    let row = sqlx::query_as::<_, RoomListRow>(concat!(
+        "SELECT id, display_name, topic, password_hash IS NOT NULL, moderated, description, ",
+        image_version!("image_url"),
+        ", secret, name_style, topic_style FROM rooms WHERE id = $1 AND owner_id = $2"
+    ))
+    .bind(&id)
+    .bind(owner)
+    .fetch_optional(
+        server
+            .db_pool()
+            .ok_or_else(|| AuthError::NotConfigured.into_response())?,
+    )
+    .await
+    .map_err(room_database_error)?
+    .ok_or_else(|| (StatusCode::NOT_FOUND, "Room not found").into_response())?;
     Ok(Json(room_list_item(&server, row)))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn room_images_are_named_by_a_content_digest_and_decoded_as_stored() {
+        let image = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=";
+        let version = room_image_version(image);
+        assert_eq!(version.len(), 16);
+        assert!(version.bytes().all(|byte| byte.is_ascii_hexdigit()));
+        assert_ne!(version, room_image_version("data:image/png;base64,AAAA"));
+        assert_eq!(
+            room_image_url("lobby", &version),
+            format!("/api/rooms/lobby/image?v={version}")
+        );
+        let (content_type, bytes) = decode_room_image(image).unwrap();
+        assert_eq!(content_type, "image/png");
+        assert_eq!(&bytes[..8], b"\x89PNG\r\n\x1a\n");
+        for rejected in [
+            "data:image/svg+xml;base64,PHN2Zz4=",
+            "data:image/png;base64,",
+            "data:image/png;base64,not base64!",
+            "https://example.com/image.png",
+        ] {
+            assert!(decode_room_image(rejected).is_none(), "{rejected}");
+        }
+        for (uri, parsed_version) in [
+            (
+                format!("/api/rooms/lobby/image?v={version}"),
+                Some(Some(version.clone())),
+            ),
+            ("/api/rooms/lobby/image".to_owned(), Some(None)),
+            (
+                "/api/rooms/lobby/image?v=short".to_owned(),
+                Some(Some("short".to_owned())),
+            ),
+            (format!("/api/rooms/lobby/image?v={version}&extra=1"), None),
+        ] {
+            let parsed = Query::<RoomImageParams>::try_from_uri(&uri.parse().unwrap())
+                .ok()
+                .map(|Query(params)| params.v);
+            assert_eq!(parsed, parsed_version, "{uri}");
+        }
+    }
 
     #[tokio::test]
     async fn compact_api_error_preserves_http_response() {

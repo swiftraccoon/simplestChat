@@ -207,11 +207,18 @@ test('raster URL allowlist excludes remote, vector, malformed, and oversized ima
   const { ui } = await uiFixture();
   for (const type of ['png', 'jpeg', 'webp'])
     assert.equal(ui.safeRasterUrl(`data:image/${type};base64,YQ==`), true);
+  assert.equal(ui.safeRasterUrl('/api/rooms/lobby-2_b/image?v=0123456789abcdef'), true);
   for (const value of [
     null,
     {},
     '',
     'https://example.com/avatar.png',
+    'https://example.com/api/rooms/lobby/image?v=0123456789abcdef',
+    '/api/rooms/lobby/image',
+    '/api/rooms/lobby/image?v=0123456789ABCDEF',
+    '/api/rooms/lobby/image?v=0123456789abcdef&x=1',
+    '/api/rooms/../image?v=0123456789abcdef',
+    '//evil.example/api/rooms/lobby/image?v=0123456789abcdef',
     'data:image/svg+xml;base64,YQ==',
     'data:text/html;base64,YQ==',
     'data:image/png,YQ==',

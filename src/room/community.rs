@@ -14,11 +14,19 @@ pub struct RoomIdentityUpdate {
     pub display_name: String,
     pub topic: Option<String>,
     pub description: String,
-    pub image_url: Option<String>,
+    /// Omitted keeps the current image, `null` removes it, a data URL replaces it.
+    #[serde(default, deserialize_with = "deserialize_image_change")]
+    pub image_url: Option<Option<String>>,
     #[serde(deserialize_with = "deserialize_appearance_style")]
     pub name_style: ChatStyle,
     #[serde(deserialize_with = "deserialize_appearance_style")]
     pub topic_style: ChatStyle,
+}
+
+fn deserialize_image_change<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<Option<String>>, D::Error> {
+    Option::<String>::deserialize(deserializer).map(Some)
 }
 
 impl RoomIdentityUpdate {
@@ -45,7 +53,10 @@ impl RoomIdentityUpdate {
                 "Description must be at most 1024 bytes",
             ));
         }
-        validate_image_data_url(self.image_url.as_deref())
+        match &self.image_url {
+            Some(image) => validate_image_data_url(image.as_deref()),
+            None => Ok(()),
+        }
     }
 }
 
@@ -134,7 +145,6 @@ impl RoomManager {
                 let mut value = serde_json::to_value(&settings)
                     .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
                 value["description"] = serde_json::json!(identity.description);
-                value["imageUrl"] = serde_json::json!(identity.image_url);
                 Some((settings, value))
             } else {
                 // Authorize before any uncertain write can reserve this ID.
@@ -160,10 +170,11 @@ impl RoomManager {
                 sqlx::query("SET LOCAL lock_timeout = '5s'")
                     .execute(&mut *transaction)
                     .await?;
-                let updated = sqlx::query("UPDATE rooms SET display_name = $3, topic = $4, description = $5, image_url = $6, name_style = $7, topic_style = $8, updated_at = now() WHERE id = $1 AND owner_id = $2")
+                let updated = sqlx::query("UPDATE rooms SET display_name = $3, topic = $4, description = $5, image_url = CASE WHEN $9 THEN $6 ELSE image_url END, name_style = $7, topic_style = $8, updated_at = now() WHERE id = $1 AND owner_id = $2")
                     .bind(&room_id).bind(owner_id).bind(identity.display_name.trim()).bind(&identity.topic)
-                    .bind(&identity.description).bind(&identity.image_url)
-                    .bind(sqlx::types::Json(&identity.name_style)).bind(sqlx::types::Json(&identity.topic_style)).execute(&mut *transaction).await?;
+                    .bind(&identity.description).bind(identity.image_url.clone().flatten())
+                    .bind(sqlx::types::Json(&identity.name_style)).bind(sqlx::types::Json(&identity.topic_style))
+                    .bind(identity.image_url.is_some()).execute(&mut *transaction).await?;
                 if updated.rows_affected() == 0 {
                     // A live room already verified this owner under control.
                     // Its missing durable row cannot leave cached policy live.
@@ -252,8 +263,32 @@ mod tests {
         identity.topic = Some("x".repeat(513));
         assert!(identity.validate().is_err());
         identity.topic = None;
-        identity.image_url = Some("data:image/svg+xml;base64,PHN2Zz4=".into());
+        identity.image_url = Some(Some("data:image/svg+xml;base64,PHN2Zz4=".into()));
         assert!(identity.validate().is_err());
+        identity.image_url = Some(None);
+        assert!(identity.validate().is_ok());
+    }
+
+    #[test]
+    fn room_image_change_distinguishes_keep_remove_and_replace() {
+        let base = serde_json::json!({
+            "display_name": "Our room", "topic": null, "description": "",
+            "name_style": {"color": null, "style": "accent"},
+            "topic_style": {"color": null, "style": "accent"}
+        });
+        let keep: RoomIdentityUpdate = serde_json::from_value(base.clone()).unwrap();
+        assert_eq!(keep.image_url, None);
+        let mut remove = base.clone();
+        remove["image_url"] = serde_json::Value::Null;
+        let remove: RoomIdentityUpdate = serde_json::from_value(remove).unwrap();
+        assert_eq!(remove.image_url, Some(None));
+        let mut replace = base;
+        replace["image_url"] = serde_json::json!("data:image/png;base64,AAAA");
+        let replace: RoomIdentityUpdate = serde_json::from_value(replace).unwrap();
+        assert_eq!(
+            replace.image_url,
+            Some(Some("data:image/png;base64,AAAA".to_owned()))
+        );
     }
 
     #[test]

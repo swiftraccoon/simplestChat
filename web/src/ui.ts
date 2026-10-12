@@ -568,7 +568,8 @@ export const api = {
       display_name: string;
       topic: string | null;
       description: string;
-      image_url: string | null;
+      /** Omitted keeps the current image, null removes it, a data URL replaces it. */
+      image_url?: string | null | undefined;
       name_style: RoomListItem['name_style'];
       topic_style: RoomListItem['topic_style'];
     },
@@ -626,10 +627,13 @@ export async function rasterUpload(file: File, width = 192, height = 192): Promi
   }
 }
 
+/** A raster the browser may show: an inline PNG, JPEG or WebP data URL, or the
+ * same-origin room image path a listing names by its content digest. */
 export function safeRasterUrl(value: unknown): value is string {
   return (
     typeof value === 'string' &&
-    value.length <= 180_000 &&
-    /^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(value)
+    ((value.length <= 180_000 &&
+      /^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(value)) ||
+      /^\/api\/rooms\/[A-Za-z0-9_-]{1,128}\/image\?v=[0-9a-f]{16}$/.test(value))
   );
 }

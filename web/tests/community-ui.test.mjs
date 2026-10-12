@@ -520,6 +520,21 @@ test('closing a profile while it loads prevents detached content from being rend
   assert.equal(view.querySelectorAll('h3').length, 0);
 });
 
+test('a room image picker reports no change until an upload or a removal', async () => {
+  const f = await fixture();
+  const error = f.ui.el('p');
+  const initial = '/api/rooms/lobby/image?v=0123456789abcdef';
+  const picker = f.community.imagePicker(initial, error, true);
+  const preview = picker.wrapper.querySelectorAll('img')[0];
+  assert.equal(preview.hidden, false, 'the current image shows from its endpoint path');
+  assert.equal(preview.src, initial);
+  assert.equal(picker.value(), initial);
+  assert.equal(picker.change(), undefined, 'untouched: the server keeps the current image');
+  action(picker.wrapper, 'Remove image').click();
+  assert.equal(picker.change(), null, 'removed: the server clears the image');
+  assert.equal(preview.hidden, true);
+});
+
 test('image removal wins over a pending upload and cannot be undone by its late result', async () => {
   const f = await fixture();
   const pending = deferred();

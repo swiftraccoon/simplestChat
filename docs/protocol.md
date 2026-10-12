@@ -54,6 +54,7 @@ Login, passkeys and refresh remain owned by [AuthManager](../web/src/auth.ts).
 | `passkeyEnroll` | `POST /api/auth/passkeys/enroll` | `{ kind: "added" }` or `{ kind: "replaced" }` |
 | `rooms` | `GET /api/rooms` with directory query parameters | `RoomListItem[]`, live rooms busiest first, then dormant rooms newest first, across pages |
 | `ownRooms` | `GET /api/rooms/mine` | `RoomListItem[]` |
+| (`<img>`) | `GET /api/rooms/:id/image?v=<digest>` | The bytes a listing's `image_url` names; `404` without the exact current digest |
 | `createRoom` | `POST /api/rooms` | `RoomSettings` |
 | `updateRoomIdentity` | `PATCH /api/rooms/:id/identity` | `RoomListItem` |
 | `deleteRoom` | `DELETE /api/rooms/:id` | `204`, no body |
@@ -173,8 +174,18 @@ Both preview and acceptance use authenticated, bounded room-API admission and
 `Cache-Control: private, no-store` responses.
 
 Profile `avatar_url`, directory `topic` and directory `image_url` are required
-nullable fields; null is not a missing
-response. Directory counts, description and visibility flags are also required.
+nullable fields; null is not a missing response. A listing never carries image
+bytes: `image_url` is the same-origin path `/api/rooms/:id/image?v=<digest>`,
+where the digest is the first 16 hex characters of the SHA-256 of the stored
+image and changes with it. The endpoint answers only that exact digest, with
+`Cache-Control: public, max-age=31536000, immutable` and the download sandbox
+policy, so a browser caches each image once and an unlisted room's image is
+reachable only through a listing the caller could see. It is metered with
+public profiles, not with the room API allowance a directory page spends on its
+listing. `updateRoomIdentity` sends `image_url` only to change it: omitted keeps
+the current image, `null` removes it and a raster data URL (PNG, JPEG or WebP,
+at most 128 KiB and 2048 × 2048) replaces it.
+Directory counts, description and visibility flags are also required.
 Unknown response fields are stripped before use. See the
 [HTTP decoders](../web/src/api-validation.ts), [account handlers](../src/auth/account.rs)
 and [room handlers](../src/room/api.rs).

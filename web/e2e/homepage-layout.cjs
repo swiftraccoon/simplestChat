@@ -19,8 +19,12 @@ const viewports = [
   { width: 1440, height: 900 },
   { width: 667, height: 320 },
 ];
-const thumbnail =
-  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=';
+// Listings name an image by a same-origin path and a content digest; the bytes
+// come from that endpoint, never inline.
+const thumbnail = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=',
+  'base64',
+);
 const rooms = Array.from({ length: 21 }, (_, index) => ({
   id: `layout-room-${index}`,
   display_name: index % 2 ? 'A welcoming room with a lengthy descriptive name' : 'Room'.repeat(24),
@@ -32,7 +36,7 @@ const rooms = Array.from({ length: 21 }, (_, index) => ({
   name_style: { color: null, style: 'accent' },
   topic_style: { color: null, style: 'accent' },
   description: 'Description'.repeat(24),
-  image_url: index % 3 ? null : thumbnail,
+  image_url: index % 3 ? null : `/api/rooms/layout-room-${index}/image?v=0123456789abcdef`,
   secret: false,
 }));
 
@@ -407,6 +411,14 @@ async function run(env = process.env) {
                 });
               if (url.pathname === '/favicon.ico' && request.method() === 'GET')
                 return route.fulfill({ status: 204 });
+              if (/^\/api\/rooms\/[^/]+\/image$/.test(url.pathname) && request.method() === 'GET') {
+                assert.equal(
+                  url.search,
+                  '?v=0123456789abcdef',
+                  'images are fetched by their digest',
+                );
+                return route.fulfill({ status: 200, contentType: 'image/png', body: thumbnail });
+              }
               if (url.pathname === '/api/capabilities') return json(200, capabilities);
               if (url.pathname === '/api/auth/inbox/unread' && request.method() === 'GET') {
                 assert.equal(signedIn, true, 'Guests must not request account unread counts');

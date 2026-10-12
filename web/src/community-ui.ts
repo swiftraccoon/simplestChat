@@ -1170,7 +1170,7 @@ export class CommunityUI {
         name.addEventListener('input', nameAppearance.refreshPreview);
         topic.addEventListener('input', topicAppearance.refreshPreview);
         let saving: Promise<void> = Promise.resolve();
-        let image: { wrapper: HTMLElement; value: () => string | null } | null = null;
+        let image: { wrapper: HTMLElement; change: () => string | null | undefined } | null = null;
         const save = (row: HTMLElement): void => {
           saving = saving.then(async () => {
             if (!current()) return;
@@ -1179,7 +1179,7 @@ export class CommunityUI {
                 display_name: name.value.trim(),
                 topic: topic.value.trim() || null,
                 description: description.value.trim(),
-                image_url: image?.value() ?? null,
+                image_url: image?.change(),
                 name_style: nameAppearance.chosen(),
                 topic_style: topicAppearance.chosen(),
               });
@@ -1571,8 +1571,14 @@ export class CommunityUI {
     error: HTMLElement,
     room = false,
     onChange?: () => void,
-  ): { wrapper: HTMLElement; value: () => string | null } {
+  ): {
+    wrapper: HTMLElement;
+    value: () => string | null;
+    /** `undefined` until an upload or removal: the server keeps the current image. */
+    change: () => string | null | undefined;
+  } {
     let value = initial;
+    let touched = false;
     let selection = 0;
     const wrapper = el('div', undefined, 'image-picker');
     const preview = el('img');
@@ -1595,6 +1601,7 @@ export class CommunityUI {
         .then((result) => {
           if (selection === generation) {
             value = result;
+            touched = true;
             show();
             file.disabled = false;
             onChange?.();
@@ -1611,18 +1618,17 @@ export class CommunityUI {
       button('Remove image', () => {
         selection++;
         value = null;
+        touched = true;
         file.value = '';
         show();
         onChange?.();
       }),
     );
-    return {
-      wrapper,
-      value: () => {
-        if (file.disabled) throw new Error('Wait for the image to finish processing');
-        return value;
-      },
+    const current = (): string | null => {
+      if (file.disabled) throw new Error('Wait for the image to finish processing');
+      return value;
     };
+    return { wrapper, value: current, change: () => (touched ? current() : undefined) };
   }
 
   private showError(node: HTMLElement, error: unknown): void {

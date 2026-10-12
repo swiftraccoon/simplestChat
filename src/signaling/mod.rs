@@ -820,6 +820,19 @@ impl SignalingServer {
                 HTTP_REQUEST_TIMEOUT,
             ));
 
+        // A directory page's thumbnails share the avatar budget: they must never
+        // spend the room API allowance the listing itself needs.
+        let room_image_routes = Router::new()
+            .route("/{id}/image", get(crate::room::api::room_image))
+            .layer(middleware::from_fn_with_state(
+                self.profile_guard.clone(),
+                guarded_api_request,
+            ))
+            .layer(TimeoutLayer::with_status_code(
+                StatusCode::REQUEST_TIMEOUT,
+                HTTP_REQUEST_TIMEOUT,
+            ));
+
         let metrics = self.metrics.clone();
         let telemetry_routes = Router::new()
             .route("/api/telemetry", post(telemetry::ingest))
@@ -856,7 +869,7 @@ impl SignalingServer {
             .route("/diagnostics/media", get(media_diagnostics::handler))
             .nest("/api/auth/profiles", profile_routes)
             .nest("/api/auth", auth_routes)
-            .nest("/api/rooms", room_routes)
+            .nest("/api/rooms", room_routes.merge(room_image_routes))
             .layer(middleware::from_fn_with_state(
                 self.room_manager.drain_signal(),
                 drain_admission,

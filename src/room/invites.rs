@@ -372,14 +372,16 @@ pub async fn memberships(
     user_id: Uuid,
     after: Option<&str>,
 ) -> Result<MembershipBatch, sqlx::Error> {
-    let mut rows: Vec<MembershipRow> = sqlx::query_as(
+    let mut rows: Vec<MembershipRow> = sqlx::query_as(concat!(
         "SELECT r.id, r.display_name, r.topic, r.password_hash IS NOT NULL, r.moderated,
-                    r.description, r.image_url, r.secret, r.name_style, r.topic_style, rr.role
+                    r.description, ",
+        crate::room::api::image_version!("r.image_url"),
+        ", r.secret, r.name_style, r.topic_style, rr.role
              FROM room_roles rr JOIN rooms r ON r.id = rr.room_id
              WHERE rr.user_id = $1 AND r.owner_id <> $1
                AND ($3::text IS NULL OR r.id > $3)
-             ORDER BY r.id LIMIT $2",
-    )
+             ORDER BY r.id LIMIT $2"
+    ))
     .bind(user_id)
     .bind(MEMBERSHIP_PAGE_SIZE as i64 + 1)
     .bind(after)

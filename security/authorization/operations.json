@@ -372,6 +372,17 @@
       ]
     },
     {
+      "method": "GET",
+      "path": "/api/rooms/{id}/image",
+      "handler": "crate::room::api::room_image",
+      "policy": "public-directory",
+      "body": null,
+      "unauthenticated_status": 404,
+      "checks": [
+        "authorization_database_public_and_credential_routes_keep_their_declared_boundary"
+      ]
+    },
+    {
       "method": "POST",
       "path": "/api/rooms",
       "handler": "crate::room::api::create_room",
