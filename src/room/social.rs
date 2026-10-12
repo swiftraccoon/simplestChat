@@ -485,6 +485,45 @@ mod tests {
     }
 
     #[test]
+    fn chat_rejects_hidden_formatting_but_keeps_line_breaks_and_tabs() {
+        let (mut room, alice, _, _, _) = fixture();
+        let attempt = |content: &str| ChatAttempt {
+            attachment_ids: Vec::new(),
+            content: content.into(),
+            client_message_id: None,
+            recipient_id: None,
+            sequence: None,
+            retry_session: None,
+            reply_to: None,
+        };
+        RoomManager::process_chat_attempt(
+            &mut room,
+            &alice.id,
+            &alice.sender,
+            attempt("line one\nline\ttwo \u{200F}عربي 👩🏽\u{200D}💻"),
+        )
+        .unwrap();
+        for content in [
+            "moc.elpmaxe\u{202E}",
+            "https://ex\u{200B}ample.com",
+            "\u{2066}aside\u{2069}",
+            "\u{FEFF}bom",
+        ] {
+            let error = RoomManager::process_chat_attempt(
+                &mut room,
+                &alice.id,
+                &alice.sender,
+                attempt(content),
+            )
+            .unwrap_err();
+            assert!(
+                error.to_string().contains("hidden formatting"),
+                "{content:?}: {error}"
+            );
+        }
+    }
+
+    #[test]
     fn receipts_survive_history_eviction_and_reack_without_redelivery() {
         let (mut room, alice, _, _, mut receivers) = fixture();
         let session = alice.social.chat_session_id.to_string();
@@ -3611,13 +3650,11 @@ impl RoomManager {
         } = attempt;
         let reply_to = reply_to.as_deref();
         let recipient_id = recipient_id.as_deref();
-        if (content.trim().is_empty() && attachment_ids.is_empty())
-            || content.len() > 4096
-            || content
-                .chars()
-                .any(|c| c.is_control() && c != '\n' && c != '\t')
-        {
+        if (content.trim().is_empty() && attachment_ids.is_empty()) || content.len() > 4096 {
             return Err(rejected("Message must contain 1–4096 bytes of text"));
+        }
+        if !crate::labels::is_plain_text(&content) {
+            return Err(rejected("Message contains hidden formatting characters"));
         }
         if !crate::attachments::valid_ids(&attachment_ids) {
             return Err(rejected("Attach at most four different files"));

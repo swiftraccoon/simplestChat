@@ -36,6 +36,16 @@ fn is_hidden_format(character: char) -> bool {
     )
 }
 
+/// Message text keeps its line breaks and tabs; otherwise it is as plain as a
+/// label: no other control character and nothing that reorders or hides what
+/// is shown, so a pasted link reads the way it resolves.
+pub fn is_plain_text(text: &str) -> bool {
+    !text.chars().any(|character| {
+        (character.is_control() && character != '\n' && character != '\t')
+            || is_hidden_format(character)
+    })
+}
+
 /// A label that reads as it is: no control characters and no hidden formatting.
 pub fn is_plain(text: &str) -> bool {
     !comparison_key(text).is_empty()
@@ -51,7 +61,7 @@ pub fn is_reserved_name(name: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{comparison_key, is_plain, is_reserved_name};
+    use super::{comparison_key, is_plain, is_plain_text, is_reserved_name};
 
     #[test]
     fn plain_labels_keep_scripts_and_emoji_but_not_reordering_or_hidden_text() {
@@ -74,6 +84,29 @@ mod tests {
             "Sam\u{0007}",
         ] {
             assert!(!is_plain(label), "{label:?}");
+        }
+    }
+
+    #[test]
+    fn message_text_keeps_line_breaks_but_not_hidden_formatting() {
+        for text in [
+            "hello\nworld\tdone",
+            "",
+            "👩🏽\u{200D}💻 \u{200F}عربي",
+            "https://example.com/path?q=1",
+        ] {
+            assert!(is_plain_text(text), "{text:?}");
+        }
+        for text in [
+            "moc.elpmaxe\u{202E}",
+            "\u{2066}hidden\u{2069}",
+            "ex\u{200B}ample.com",
+            "\u{FEFF}",
+            "line\u{2028}break",
+            "bell\u{0007}",
+            "\r\n",
+        ] {
+            assert!(!is_plain_text(text), "{text:?}");
         }
     }
 

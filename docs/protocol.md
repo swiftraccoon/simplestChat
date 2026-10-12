@@ -491,6 +491,11 @@ Public `chatMessage` and `privateMessage` sends use a client-generated
 `ChatEntry`; recipients receive `chatReceived` or `privateMessageReceived`.
 Entries carry a server `messageId` and `sentAt`. A chat-related `socialError` can
 carry `clientMessageId`; administrative social failures use `requestId`.
+Message text (public, private and edited) is 1–4096 bytes and keeps line breaks
+and tabs; other control characters and the hidden formatting that labels reject
+(bidi embeddings, overrides and isolates, zero-width spaces, byte-order marks,
+line and paragraph separators) are refused, so a pasted link reads the way it
+resolves. Joiners and direction marks stay allowed.
 
 Social commands such as `getRoomSnapshot`, nickname changes and moderation-list
 queries carry `requestId`. `socialResponse` repeats that ID and the action with

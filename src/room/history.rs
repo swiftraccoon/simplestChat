@@ -97,12 +97,11 @@ pub(crate) fn apply_edit(
 ) -> Result<(), &'static str> {
     if (request.content.trim().is_empty() && message.attachments.is_empty())
         || request.content.len() > 4096
-        || request
-            .content
-            .chars()
-            .any(|c| c.is_control() && c != '\n' && c != '\t')
     {
         return Err("Message must contain 1–4096 bytes of text");
+    }
+    if !crate::labels::is_plain_text(&request.content) {
+        return Err("Message contains hidden formatting characters");
     }
     if message.removed_at.is_some() {
         return Err("That message has been removed");
@@ -1010,10 +1009,7 @@ pub async fn send_message(
         || (request.content.trim().is_empty() && request.attachment_ids.is_empty())
         || !crate::attachments::valid_ids(&request.attachment_ids)
         || request.content.len() > 4096
-        || request
-            .content
-            .chars()
-            .any(|c| c.is_control() && c != '\n' && c != '\t')
+        || !crate::labels::is_plain_text(&request.content)
     {
         return Err(AuthError::InvalidInput("Invalid private message"));
     }
@@ -1281,7 +1277,14 @@ mod tests {
             .is_err()
         );
         assert_eq!(message.content, "Corrected");
-        for invalid in ["".into(), " ".into(), "x".repeat(4097), "bad\0text".into()] {
+        for invalid in [
+            "".into(),
+            " ".into(),
+            "x".repeat(4097),
+            "bad\0text".into(),
+            "moc.elpmaxe\u{202E}".into(),
+            "ex\u{200B}ample".into(),
+        ] {
             assert!(
                 apply_edit(
                     &mut message,
