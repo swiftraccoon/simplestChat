@@ -776,15 +776,16 @@ registration still reports duplicate email addresses, so it is the remaining
 account-existence signal: each client address gets `REGISTRATIONS_PER_IP_PER_HOUR`
 answers an hour (default 5), successful or not, and the rest are refused with 429.
 
-Password sign-in and recovery-key redemption charge only failures. A client
-address that fails against one account three times waits one second before its
-next attempt, doubling with every further failure to five minutes; the account
-itself has a second schedule (free for ten failures from anywhere, then doubling
-to thirty seconds) so a spread of addresses is slowed without holding the owner
-out for longer than that. A correct password clears both, and both are forgotten
-an hour after the last failure. A refused attempt answers 429 with `Retry-After`.
-Knowing an email address therefore no longer lets a stranger lock its owner out;
-`AUTH_REQUESTS_PER_ACCOUNT_PER_MINUTE` now applies only to signed-in password checks.
+Password sign-in and recovery-key redemption charge only failures, keyed by the
+client address (an IPv6 /64) and the account together. A client address that
+fails against one account three times waits one second before its next attempt,
+doubling with every further failure to five minutes. A correct password clears
+that record, and a record is forgotten an hour after its last failure. A refused
+attempt answers 429 with `Retry-After`. There is no account-wide schedule: a
+stranger who knows an email address cannot lock its owner out, and guesses spread
+over many addresses are bounded only by each address's own delays, the per-address
+request limits and the password lane, not by a per-account counter.
+`AUTH_REQUESTS_PER_ACCOUNT_PER_MINUTE` applies only to signed-in password checks.
 
 New passkeys request `residentKey: required` and `requireResidentKey: true`, without
 restricting authenticator attachment or password-manager choice. The pinned
