@@ -26,14 +26,27 @@ pub fn comparison_key(text: &str) -> String {
         .to_owned()
 }
 
-/// Bidirectional embeddings, overrides and isolates, the zero-width space, the
-/// byte-order mark and the line and paragraph separators. Joiners and direction
-/// marks stay allowed: emoji sequences and right-to-left scripts need them.
+/// Every Unicode default-ignorable character (bidi embeddings, overrides and
+/// isolates, the zero-width space, word joiner and invisible operators, soft
+/// hyphen, Hangul fillers, the byte-order mark, deprecated and unassigned
+/// format characters) plus the line and paragraph separators, except what
+/// displayed text needs: the joiners and direction marks of emoji sequences
+/// and right-to-left scripts, variation selectors, Mongolian selectors and the
+/// tag characters of subdivision flags.
 fn is_hidden_format(character: char) -> bool {
-    matches!(
+    if matches!(character, '\u{2028}' | '\u{2029}') {
+        return true;
+    }
+    let needed = matches!(
         character,
-        '\u{200B}' | '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}' | '\u{2028}' | '\u{2029}' | '\u{FEFF}'
-    )
+        '\u{200C}'..='\u{200F}'
+            | '\u{061C}'
+            | '\u{180B}'..='\u{180F}'
+            | '\u{FE00}'..='\u{FE0F}'
+            | '\u{E0020}'..='\u{E007F}'
+            | '\u{E0100}'..='\u{E01EF}'
+    );
+    !needed && CodePointSetData::new::<DefaultIgnorableCodePoint>().contains(character)
 }
 
 /// Message text keeps its line breaks and tabs; otherwise it is as plain as a
@@ -72,6 +85,10 @@ mod tests {
             "👩🏽\u{200D}💻 Sam",
             "\u{200F}عربي",
             "Jo\u{200C}n",
+            "❤\u{FE0F} Sam",
+            "🏴\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F} Sam",
+            "\u{1820}\u{180B} Sam",
+            "\u{061C}عربي",
         ] {
             assert!(is_plain(label), "{label:?}");
         }
@@ -82,6 +99,15 @@ mod tests {
             "\u{FEFF}Sam",
             "Sam\u{2028}",
             "Sam\u{0007}",
+            "S\u{2060}am",
+            "S\u{00AD}am",
+            "S\u{034F}am",
+            "Sam\u{3164}",
+            "Sam\u{115F}",
+            "S\u{2062}am",
+            "S\u{206A}am",
+            "Sam\u{E0001}",
+            "Sam\u{1D173}",
         ] {
             assert!(!is_plain(label), "{label:?}");
         }
@@ -101,6 +127,8 @@ mod tests {
             "moc.elpmaxe\u{202E}",
             "\u{2066}hidden\u{2069}",
             "ex\u{200B}ample.com",
+            "ex\u{2060}ample.com",
+            "ex\u{00AD}ample.com",
             "\u{FEFF}",
             "line\u{2028}break",
             "bell\u{0007}",

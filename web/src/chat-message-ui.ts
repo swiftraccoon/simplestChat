@@ -4,8 +4,13 @@ import { asyncButton, button, el, field, modal } from './ui';
 /** Links stay whole; outside them, each occurrence of `mention` is marked, in any case. */
 export function appendLinkedText(parent: HTMLElement, text: string, mention?: string): void {
   const pattern = /https?:\/\/[^\s<>]+/g;
-  // Bidi controls, zero-width space and the BOM can make a link read as another.
-  const hidden = /[\u200B\u202A-\u202E\u2066-\u2069\u2028\u2029\uFEFF]/;
+  // Default-ignorable characters (the server's labels::is_hidden_format set:
+  // bidi controls, zero-width space, word joiner, soft hyphen, fillers, the BOM
+  // and unassigned format characters) can make a link read as another.
+  // The combining grapheme joiner sits outside the class: a combining mark in
+  // a class reads as a sequence with its neighbour.
+  const hidden =
+    /\u034F|[\u00AD\u115F\u1160\u17B4\u17B5\u200B\u2028\u2029\u202A-\u202E\u2060-\u206F\u3164\uFEFF\uFFA0\uFFF0-\uFFF8\u{1BCA0}-\u{1BCA3}\u{1D173}-\u{1D17A}\u{E0000}-\u{E001F}\u{E0080}-\u{E0FFF}]/u;
   let start = 0;
   for (const match of text.matchAll(pattern)) {
     const index = match.index;

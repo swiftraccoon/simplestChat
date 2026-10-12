@@ -513,9 +513,13 @@ Entries carry a server `messageId` and `sentAt`. A chat-related `socialError` ca
 carry `clientMessageId`; administrative social failures use `requestId`.
 Message text (public, private and edited) is 1–4096 bytes and keeps line breaks
 and tabs; other control characters and the hidden formatting that labels reject
-(bidi embeddings, overrides and isolates, zero-width spaces, byte-order marks,
-line and paragraph separators) are refused, so a pasted link reads the way it
-resolves. Joiners and direction marks stay allowed.
+are refused, so a pasted link reads the way it resolves. That set is every
+Unicode default-ignorable character (bidi embeddings, overrides and isolates,
+zero-width space, word joiner and the invisible operators, soft hyphen, Hangul
+fillers, byte-order mark, deprecated and unassigned format characters) plus the
+line and paragraph separators, except what displayed text needs: joiners and
+direction marks, variation selectors, Mongolian selectors and the tag characters
+of subdivision flags.
 
 Social commands such as `getRoomSnapshot`, nickname changes and moderation-list
 queries carry `requestId`. `socialResponse` repeats that ID and the action with
@@ -631,10 +635,13 @@ Comparison uses compatibility normalization (NFKC), full Unicode case folding,
 and removal of Unicode default-ignorable characters; displayed spelling is
 preserved. Thus canonical accents, width variants, case variants and inserted
 joiners cannot bypass duplicate or reserved-`You` checks. Empty visible labels,
-control characters, bidi overrides/isolates, zero-width spaces and byte-order
-marks are rejected consistently by creation and room-label updates. Joiners,
-variation selectors and direction marks remain usable in legitimate displayed
-scripts and emoji, but do not create distinct comparison identities.
+control characters and every default-ignorable character other than joiners,
+direction marks, variation selectors, Mongolian selectors and emoji tag characters
+(bidi overrides/isolates, zero-width space, word joiner, soft hyphen, fillers and
+byte-order marks among them) are rejected consistently by creation and room-label
+updates. Joiners, variation selectors and direction marks remain usable in
+legitimate displayed scripts and emoji, but do not create distinct comparison
+identities.
 
 Names are not authorization identifiers and this comparison does not promise to
 detect all cross-script confusables. The server-issued full participant UUID is
