@@ -141,6 +141,7 @@ class ProxyConfigPlaybook(unittest.TestCase):
             ["caddy", "validate", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"],
         )
         self.assertIn("none", argv[argv.index("--network") + 1])
+        self.assertEqual(argv[argv.index("--cap-add") + 1], "NET_BIND_SERVICE")
         self.assertIn("{{ scproxy_candidate }}:/etc/caddy/Caddyfile:ro", argv)
         self.assertIs(validate["changed_when"], expr2=False)
         write = tasks[2]
