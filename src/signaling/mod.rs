@@ -1539,7 +1539,9 @@ async fn security_headers(request: Request<Body>, next: Next) -> Response {
         .or_insert_with(|| HeaderValue::from_static(CONTENT_SECURITY_POLICY));
     headers.insert(
         header::HeaderName::from_static("permissions-policy"),
-        HeaderValue::from_static("camera=(self), microphone=(self), display-capture=(self)"),
+        HeaderValue::from_static(
+            "camera=(self), microphone=(self), display-capture=(self), geolocation=()",
+        ),
     );
     headers.insert(
         header::HeaderName::from_static("x-frame-options"),
@@ -1553,12 +1555,13 @@ async fn security_headers(request: Request<Body>, next: Next) -> Response {
         header::HeaderName::from_static("cross-origin-resource-policy"),
         HeaderValue::from_static("same-origin"),
     );
-    if response.status().is_success()
-        && response
-            .headers()
-            .get(header::CONTENT_TYPE)
-            .and_then(|value| value.to_str().ok())
-            .is_some_and(|content_type| content_type.starts_with("application/json"))
+    // Every JSON body, errors included, is account or policy state for one
+    // caller; nothing in it may be served from a cache.
+    if response
+        .headers()
+        .get(header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|content_type| content_type.starts_with("application/json"))
     {
         response
             .headers_mut()
