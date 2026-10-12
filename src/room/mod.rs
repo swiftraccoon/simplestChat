@@ -2250,12 +2250,7 @@ impl RoomManager {
         let Some((room_settings, password_hash)) = loaded else {
             return Ok(None);
         };
-        if room_settings.require_registration && !authenticated {
-            anyhow::bail!("This room requires registration");
-        }
-        if !room_settings.guests_allowed && !authenticated {
-            anyhow::bail!("Guests are not allowed in this room");
-        }
+        // The same order as the live path: a ban answers before policy.
         match measure_result(
             Stage::RoomPolicyLookup,
             moderation::is_banned(pool, room_id, user_uuid, client_ip, authenticated),
@@ -2268,6 +2263,12 @@ impl RoomManager {
                 warn!(room_id, %error, "Ban check failed");
                 anyhow::bail!("Room access could not be verified");
             }
+        }
+        if room_settings.require_registration && !authenticated {
+            anyhow::bail!("This room requires registration");
+        }
+        if !room_settings.guests_allowed && !authenticated {
+            anyhow::bail!("Guests are not allowed in this room");
         }
         if !room_settings.password_protected {
             return Ok(None);
