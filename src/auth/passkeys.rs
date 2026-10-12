@@ -464,6 +464,9 @@ async fn replace_credential(
         .execute(&mut **transaction)
         .await
         .map_err(routes::database_error)?;
+    crate::room::invites::revoke_issued_invites(&mut **transaction, user)
+        .await
+        .map_err(routes::database_error)?;
     Ok(next)
 }
 
@@ -500,6 +503,9 @@ async fn remove_credential(
     sqlx::query("DELETE FROM sessions WHERE user_id = $1")
         .bind(user)
         .execute(&mut **transaction)
+        .await
+        .map_err(routes::database_error)?;
+    crate::room::invites::revoke_issued_invites(&mut **transaction, user)
         .await
         .map_err(routes::database_error)?;
     Ok(next)

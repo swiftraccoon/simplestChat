@@ -135,7 +135,15 @@ registration while `REGISTRATION_ENABLED` is false and is spent either way
 minted by a room admin for a role below their own (`role` 2–4, `uses` 1–100,
 `days` 1–30; twenty unused per room) and redeemed by any signed-in account,
 which gains the role in `room_roles` without ever losing a higher one; the
-owner stays the owner. `redeemInvite` answers with the room and the role granted
+owner stays the owner. A code stays usable only while whoever minted it could
+mint it today: the owner, or an admin whose current role is still above the
+offered role. A demoted or removed issuer's codes disappear from the management
+list and previews and refuse redemption (promotion restores them), and a
+credential reset (password change, recovery-key redemption, passkey replacement
+or removal) deletes every invitation the account issued, room and registration
+codes alike, in the same transaction that revokes its sessions; memberships and
+accounts already granted stay. `redeemInvite`
+answers with the room and the role granted
 by that redemption. A successful account/code pair has a durable receipt: retrying
 with the same account returns the original result without spending another use or
 restoring a role that a moderator later removed. Receipts remain replayable until

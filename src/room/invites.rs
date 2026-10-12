@@ -25,6 +25,19 @@ use uuid::Uuid;
 
 /// Live (unused, unexpired) codes one room may hold.
 pub const MAX_LIVE_ROOM_INVITES: i64 = 20;
+
+/// A code stays usable only while whoever minted it could mint it today: the
+/// room's owner, or an admin whose current role is still above the offered
+/// role (the same rule `create` applies). A demoted or removed issuer's codes
+/// disappear from listings and previews and refuse redemption; promotion
+/// restores them. Expects the invitation aliased as `i`.
+macro_rules! issuer_still_authorized {
+    () => {
+        "(EXISTS (SELECT 1 FROM rooms r WHERE r.id = i.room_id AND r.owner_id = i.created_by)
+          OR EXISTS (SELECT 1 FROM room_roles rr WHERE rr.room_id = i.room_id
+                       AND rr.user_id = i.created_by AND rr.role >= 3 AND rr.role > i.role))"
+    };
+}
 pub const MAX_INVITE_USES: i32 = 100;
 pub const MAX_INVITE_DAYS: i32 = 30;
 const DEFAULT_INVITE_DAYS: i32 = 7;
@@ -123,10 +136,11 @@ pub async fn create_room_invite(
         .bind(room_id)
         .execute(&mut *transaction)
         .await?;
-    let live: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM invites
-         WHERE room_id = $1 AND uses_left > 0 AND expires_at > now()",
-    )
+    let live: i64 = sqlx::query_scalar(concat!(
+        "SELECT COUNT(*) FROM invites i
+         WHERE i.room_id = $1 AND i.uses_left > 0 AND i.expires_at > now() AND ",
+        issuer_still_authorized!()
+    ))
     .bind(room_id)
     .fetch_one(&mut *transaction)
     .await?;
@@ -157,14 +171,31 @@ pub async fn list_room_invites(
     pool: &PgPool,
     room_id: &str,
 ) -> Result<Vec<RoomInvite>, sqlx::Error> {
-    sqlx::query_as(
-        "SELECT id, role, uses_left, expires_at, created_at FROM invites
-         WHERE room_id = $1 AND uses_left > 0 AND expires_at > now()
-         ORDER BY created_at DESC, id",
-    )
+    sqlx::query_as(concat!(
+        "SELECT i.id, i.role, i.uses_left, i.expires_at, i.created_at FROM invites i
+         WHERE i.room_id = $1 AND i.uses_left > 0 AND i.expires_at > now() AND ",
+        issuer_still_authorized!(),
+        " ORDER BY i.created_at DESC, i.id"
+    ))
     .bind(room_id)
     .fetch_all(pool)
     .await
+}
+
+/// Delete every invitation an account issued, room and registration codes
+/// alike (their receipts cascade). A credential reset (password change,
+/// recovery, passkey replacement or removal) calls this in the same
+/// transaction that deletes the account's sessions: whatever a previous holder
+/// of the credentials set up to let themselves or others back in goes with them.
+pub(crate) async fn revoke_issued_invites(
+    executor: impl sqlx::PgExecutor<'_>,
+    created_by: Uuid,
+) -> Result<u64, sqlx::Error> {
+    Ok(sqlx::query("DELETE FROM invites WHERE created_by = $1")
+        .bind(created_by)
+        .execute(executor)
+        .await?
+        .rows_affected())
 }
 
 pub async fn revoke_room_invite(
@@ -239,6 +270,20 @@ pub async fn redeem_room_invite(
     if !live || uses_left == 0 {
         return Ok(None);
     }
+    let issuer_membership: Option<i16> =
+        sqlx::query_scalar("SELECT role FROM room_roles WHERE room_id = $1 AND user_id = $2")
+            .bind(&room_id)
+            .bind(created_by)
+            .fetch_optional(&mut *transaction)
+            .await?;
+    let issuer = if created_by == owner_id {
+        Role::Owner
+    } else {
+        issuer_membership.map_or(Role::User, Role::from_db)
+    };
+    if issuer < Role::Admin || issuer <= Role::from_db(role) {
+        return Ok(None);
+    }
     let granted = if owner_id == user_id {
         Role::Owner
     } else {
@@ -283,14 +328,16 @@ async fn preview_room_invite(
     code: &str,
     user_id: Uuid,
 ) -> Result<Option<(String, String, i16)>, sqlx::Error> {
-    sqlx::query_as(
+    sqlx::query_as(concat!(
         "SELECT i.room_id, r.display_name, i.role FROM invites i
          JOIN rooms r ON r.id = i.room_id
          LEFT JOIN invite_redemptions receipt ON receipt.invite_hash = i.code_hash AND receipt.user_id = $2
          WHERE i.code_hash = $1 AND i.kind = 'room'
-           AND ((i.uses_left > 0 AND i.expires_at > now())
-             OR (receipt.user_id IS NOT NULL AND i.expires_at > now() - make_interval(days => $3)))",
-    )
+           AND ((i.uses_left > 0 AND i.expires_at > now() AND ",
+        issuer_still_authorized!(),
+        ")
+             OR (receipt.user_id IS NOT NULL AND i.expires_at > now() - make_interval(days => $3)))"
+    ))
     .bind(invite_codes::digest(code))
     .bind(user_id)
     .bind(INVITE_RECEIPT_RETENTION_DAYS)
@@ -793,6 +840,81 @@ mod tests {
             !revoke_room_invite(&pool, &room_id, live.details.id)
                 .await
                 .unwrap()
+        );
+
+        // A code outlives its issuer's authority only on paper: Bob, promoted to
+        // admin, mints one; demoted, his code hides from the list and preview and
+        // refuses redemption; promoted again, it works; a credential reset deletes it.
+        let carol = Uuid::new_v4();
+        sqlx::query("INSERT INTO users(id,email,display_name) VALUES($1,$2,'Carol')")
+            .bind(carol)
+            .bind(format!("{carol}@invites.invalid"))
+            .execute(&pool)
+            .await
+            .unwrap();
+        roles::set_role(&pool, &room_id, &bob, Role::Admin, &owner)
+            .await
+            .unwrap();
+        let bobs = create_room_invite(&pool, &room_id, Role::Moderator, 3, 7, bob)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(list_room_invites(&pool, &room_id).await.unwrap().len(), 1);
+        roles::set_role(&pool, &room_id, &bob, Role::Moderator, &owner)
+            .await
+            .unwrap();
+        assert!(list_room_invites(&pool, &room_id).await.unwrap().is_empty());
+        assert!(
+            preview_room_invite(&pool, &bobs.code, carol)
+                .await
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            redeem_room_invite(&pool, &bobs.code, carol)
+                .await
+                .unwrap()
+                .is_none()
+        );
+        assert_eq!(
+            roles::resolve_role(&pool, &room_id, Some(&carol), &owner, true)
+                .await
+                .unwrap(),
+            Role::User
+        );
+        roles::set_role(&pool, &room_id, &bob, Role::Admin, &owner)
+            .await
+            .unwrap();
+        assert_eq!(
+            list_room_invites(&pool, &room_id).await.unwrap()[0].uses_left,
+            3
+        );
+        let (_, _, role) = redeem_room_invite(&pool, &bobs.code, carol)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(role, Role::Moderator);
+        // Carol keeps her membership and her receipt; Bob's reset voids the code for others.
+        assert_eq!(revoke_issued_invites(&pool, bob).await.unwrap(), 1);
+        assert!(list_room_invites(&pool, &room_id).await.unwrap().is_empty());
+        assert_eq!(
+            roles::resolve_role(&pool, &room_id, Some(&carol), &owner, true)
+                .await
+                .unwrap(),
+            Role::Moderator
+        );
+        let dave = Uuid::new_v4();
+        sqlx::query("INSERT INTO users(id,email,display_name) VALUES($1,$2,'Dave')")
+            .bind(dave)
+            .bind(format!("{dave}@invites.invalid"))
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert!(
+            redeem_room_invite(&pool, &bobs.code, dave)
+                .await
+                .unwrap()
+                .is_none()
         );
 
         // Concurrent retries of a single-use code both observe one committed receipt.

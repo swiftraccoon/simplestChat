@@ -506,6 +506,9 @@ pub async fn change_password(
         .execute(&mut *transaction)
         .await
         .map_err(routes::database_error)?;
+    crate::room::invites::revoke_issued_invites(&mut *transaction, id)
+        .await
+        .map_err(routes::database_error)?;
     transaction.commit().await.map_err(routes::database_error)?;
     server.revoke_account_sessions(claims.sub, claims.auth_version + 1);
     Ok((
@@ -590,6 +593,9 @@ async fn consume_recovery(
     sqlx::query("DELETE FROM sessions WHERE user_id = $1")
         .bind(id)
         .execute(&mut *transaction)
+        .await
+        .map_err(routes::database_error)?;
+    crate::room::invites::revoke_issued_invites(&mut *transaction, id)
         .await
         .map_err(routes::database_error)?;
     transaction.commit().await.map_err(routes::database_error)?;
