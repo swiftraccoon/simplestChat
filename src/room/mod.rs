@@ -16,6 +16,8 @@ mod control_tests;
 #[cfg(test)]
 mod departure_broadcast_tests;
 #[cfg(test)]
+mod dormant_join_tests;
+#[cfg(test)]
 mod settings_patch_tests;
 
 use crate::diagnostics::{Stage, measure, measure_result};
@@ -2176,6 +2178,125 @@ impl RoomManager {
         })
     }
 
+    /// Verifies a supplied room password on the blocking pool under the
+    /// password lane's permit; "Incorrect room password" when it does not match.
+    async fn verify_room_password(
+        &self,
+        room_id: &str,
+        supplied: String,
+        hash: String,
+    ) -> Result<()> {
+        let permit = measure_result(Stage::RoomPasswordPermitWait, async {
+            tokio::time::timeout(
+                PASSWORD_VERIFY_QUEUE_TIMEOUT,
+                self.password_verify_work.clone().acquire_owned(),
+            )
+            .await
+            .map_err(|_| anyhow::anyhow!("Password verification is busy; try again"))?
+            .map_err(|_| anyhow::anyhow!("Password verification is unavailable"))
+        })
+        .await?;
+        let verified = tokio::task::spawn_blocking(move || {
+            let _permit = permit;
+            crate::auth::password::verify_password(&supplied, &hash).unwrap_or(false)
+        })
+        .await
+        .map_err(|error| {
+            warn!(room_id, %error, "Password verification task failed");
+            anyhow::anyhow!("Password verification failed")
+        })?;
+        anyhow::ensure!(verified, "Incorrect room password");
+        Ok(())
+    }
+
+    /// A persisted room that is not live costs a router to join. Everything the
+    /// live admission below would refuse from durable state alone (a closed
+    /// guest or registration policy, a ban, a missing or wrong password) is
+    /// refused here first, so an unauthorized attempt never builds media state
+    /// or holds the creation lock. Ad-hoc and live rooms pass straight through;
+    /// the live checks still run on the room as created. Returns the hash a
+    /// supplied password was proved against, so the live gate can skip a second
+    /// Argon2 run when the hash is unchanged.
+    async fn dormant_room_precheck(
+        &self,
+        room_id: &str,
+        user_uuid: Option<uuid::Uuid>,
+        client_ip: Option<std::net::IpAddr>,
+        authenticated: bool,
+        password: Option<&str>,
+    ) -> Result<Option<String>> {
+        let Some(pool) = &self.db_pool else {
+            return Ok(None);
+        };
+        if !settings::valid_room_id(room_id)
+            || self
+                .rooms
+                .read()
+                .unwrap_or_else(|error| error.into_inner())
+                .contains_key(room_id)
+        {
+            return Ok(None);
+        }
+        let loaded = tokio::time::timeout(
+            ROOM_CREATION_TIMEOUT,
+            measure_result(Stage::RoomPolicyLookup, settings::load_room(pool, room_id)),
+        )
+        .await
+        .map_err(|_| anyhow::anyhow!("Room data is temporarily unavailable"))?
+        .map_err(|error| {
+            warn!(room_id, %error, "Failed to load room");
+            anyhow::anyhow!("Room data is temporarily unavailable")
+        })?;
+        let Some((room_settings, password_hash)) = loaded else {
+            return Ok(None);
+        };
+        if room_settings.require_registration && !authenticated {
+            anyhow::bail!("This room requires registration");
+        }
+        if !room_settings.guests_allowed && !authenticated {
+            anyhow::bail!("Guests are not allowed in this room");
+        }
+        match measure_result(
+            Stage::RoomPolicyLookup,
+            moderation::is_banned(pool, room_id, user_uuid, client_ip, authenticated),
+        )
+        .await
+        {
+            Ok(true) => anyhow::bail!("You are banned from this room"),
+            Ok(false) => {}
+            Err(error) => {
+                warn!(room_id, %error, "Ban check failed");
+                anyhow::bail!("Room access could not be verified");
+            }
+        }
+        if !room_settings.password_protected {
+            return Ok(None);
+        }
+        let role = measure_result(
+            Stage::RoomPolicyLookup,
+            roles::resolve_role(
+                pool,
+                room_id,
+                user_uuid.as_ref(),
+                &room_settings.owner_id,
+                authenticated,
+            ),
+        )
+        .await
+        .map_err(|error| {
+            warn!(room_id, %error, "Role lookup failed");
+            anyhow::anyhow!("Room access could not be verified")
+        })?;
+        if role >= roles::Role::Admin {
+            return Ok(None);
+        }
+        let hash = password_hash.ok_or_else(|| anyhow::anyhow!("Room password is unavailable"))?;
+        let supplied = password.ok_or(RoomPasswordRequired)?.to_owned();
+        self.verify_room_password(room_id, supplied, hash.clone())
+            .await?;
+        Ok(Some(hash))
+    }
+
     /// Gets or creates a room, creating a router if needed
     async fn get_or_create_room(&self, room_id: &str) -> Result<PendingRoomJoin> {
         anyhow::ensure!(!self.drain.is_draining(), "Server shutting down");
@@ -2533,6 +2654,21 @@ impl RoomManager {
             );
         }
 
+        let user_uuid = if authenticated {
+            Some(
+                participant_id
+                    .parse::<uuid::Uuid>()
+                    .map_err(|_| anyhow::anyhow!("Invalid authenticated participant identity"))?,
+            )
+        } else {
+            None
+        };
+        // A dormant persisted room is admitted from its durable record first,
+        // so a refused attempt never builds a router.
+        let prechecked_hash = self
+            .dormant_room_precheck(room_id, user_uuid, client_ip, authenticated, password)
+            .await?;
+
         let mut pending_join = self.get_or_create_room(room_id).await?;
         let room_lock = pending_join.room();
 
@@ -2591,16 +2727,6 @@ impl RoomManager {
                 room.policy_revision,
             )
         }; // read lock released
-
-        let user_uuid = if authenticated {
-            Some(
-                participant_id
-                    .parse::<uuid::Uuid>()
-                    .map_err(|_| anyhow::anyhow!("Invalid authenticated participant identity"))?,
-            )
-        } else {
-            None
-        };
 
         // Persistent ban check (registered users by id, guests by IP)
         if persisted {
@@ -2695,32 +2821,15 @@ impl RoomManager {
             moderation::PunitiveState::default()
         };
 
-        // Password gate: everyone below Admin must present the room password
+        // Password gate: everyone below Admin must present the room password.
+        // The dormant precheck may already have proved it against this very
+        // hash; a hash changed since then is verified again.
         if password_protected && !resolved_role.is_some_and(|r| r >= roles::Role::Admin) {
             let hash =
                 password_hash.ok_or_else(|| anyhow::anyhow!("Room password is unavailable"))?;
-            let supplied = password.ok_or(RoomPasswordRequired)?.to_owned();
-            let permit = measure_result(Stage::RoomPasswordPermitWait, async {
-                tokio::time::timeout(
-                    PASSWORD_VERIFY_QUEUE_TIMEOUT,
-                    self.password_verify_work.clone().acquire_owned(),
-                )
-                .await
-                .map_err(|_| anyhow::anyhow!("Password verification is busy; try again"))?
-                .map_err(|_| anyhow::anyhow!("Password verification is unavailable"))
-            })
-            .await?;
-            let verified = tokio::task::spawn_blocking(move || {
-                let _permit = permit;
-                crate::auth::password::verify_password(&supplied, &hash).unwrap_or(false)
-            })
-            .await
-            .map_err(|error| {
-                warn!(room_id, %error, "Password verification task failed");
-                anyhow::anyhow!("Password verification failed")
-            })?;
-            if !verified {
-                anyhow::bail!("Incorrect room password");
+            if prechecked_hash.as_deref() != Some(hash.as_str()) {
+                let supplied = password.ok_or(RoomPasswordRequired)?.to_owned();
+                self.verify_room_password(room_id, supplied, hash).await?;
             }
         }
 

@@ -305,6 +305,11 @@ impl ServerMetrics {
         self.inner.rooms_created_total.fetch_add(1, Relaxed);
     }
 
+    #[cfg(test)]
+    pub(crate) fn rooms_created_total(&self) -> u64 {
+        self.inner.rooms_created_total.load(Relaxed)
+    }
+
     pub fn inc_joins(&self) {
         self.inner.joins_total.fetch_add(1, Relaxed);
     }
