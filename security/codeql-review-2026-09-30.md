@@ -558,3 +558,16 @@ row the test creates and deletes, and it never names a deployed credential. The
 exception carries the same expiry as the other fixture passphrases. This
 approves no remote dismissal or broader exclusion. The next original CodeQL
 analysis must independently match these exact identities.
+
+## October 12 media lane and header alignment
+
+At source revision `7cbcaab7abbf37bef2cb49ef412154f21d0a2294`, the public media lane permit, its wait constant
+and the aligned permissions-policy and cache-control text in
+`src/signaling/mod.rs` shift three reviewed findings without touching their
+lines: alert 35 moves from 1758 to 1779, alert 63 from 2187 to 2208 and
+alert 69 from 1749 to 1770. The complete flagged lines and their enclosing
+test functions are byte-identical to the `60a2291` review (complete-file
+SHA-256 `864432e7029921a7ba33ba167921a738eb79e3843933389b943906fc457e093e`); columns and
+rendered-message hashes are unchanged. Canonical fingerprints and source
+provenance are rebound; rationale, owner and the 2026-11-29 expiry remain.
+This approves no new finding, remote dismissal or broader exclusion.
