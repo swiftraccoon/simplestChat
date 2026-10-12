@@ -447,12 +447,15 @@ cd ops/ansible
 
 It first proves a fresh key-only login from the controller, installs
 `/etc/ssh/sshd_config.d/00-simplestchat-hardening.conf` (`PasswordAuthentication no`,
-`KbdInteractiveAuthentication no`, `PubkeyAuthentication yes`, and `PermitRootLogin no`,
-or `prohibit-password` when the inventory itself connects as root), checks the
-daemon's effective settings with `sshd -T` before reloading it, proves the key login
-again afterwards, and turns off LLMNR and multicast DNS through a `systemd-resolved`
-drop-in. Existing sessions stay connected. Keep a second key or console access
-available before running it; a password is no longer a way in.
+`KbdInteractiveAuthentication no`, `PubkeyAuthentication yes`,
+`AuthenticationMethods publickey`, `MaxAuthTries 3`, `LoginGraceTime 20`,
+`AllowAgentForwarding no`, `X11Forwarding no`, `AllowUsers` limited to the inventory's
+operator account, and `PermitRootLogin no`, or `prohibit-password` when the inventory
+itself connects as root), checks the daemon's effective settings with `sshd -T` before
+reloading it, proves the key login again afterwards, and turns off LLMNR and multicast
+DNS through a `systemd-resolved` drop-in. Existing sessions stay connected. Keep a
+second key or console access available before running it; a password is no longer a
+way in, and another operator account needs `schost_allow_users` in inventory first.
 
 Host package updates remain explicit: `site.yml` accepts one-run
 `-e scbench_upgrade_packages=true -e scbench_reboot=true` only after its public

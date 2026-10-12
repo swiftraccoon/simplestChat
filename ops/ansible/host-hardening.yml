@@ -17,6 +17,9 @@
     # sshd -T prints the legacy spelling of prohibit-password.
     schost_permit_root_login_effective: >-
       {{ 'without-password' if schost_permit_root_login == 'prohibit-password' else schost_permit_root_login }}
+    # Only the inventory's operator account may log in; set schost_allow_users
+    # to a longer list in inventory before adding another operator account.
+    schost_allow_users: "{{ [ansible_user] if ansible_user is defined else [] }}"
   pre_tasks:
     - name: Require the canonical prepared public host
       tags: [always]
@@ -58,6 +61,12 @@
           KbdInteractiveAuthentication no
           PermitRootLogin {{ schost_permit_root_login }}
           PubkeyAuthentication yes
+          AuthenticationMethods publickey
+          MaxAuthTries 3
+          LoginGraceTime 20
+          AllowAgentForwarding no
+          X11Forwarding no
+          {% if schost_allow_users | length > 0 %}AllowUsers {{ schost_allow_users | join(' ') }}{% endif %}
       notify: Reload the SSH daemon
 
     - name: Read the daemon's effective settings with the drop-in in place
@@ -73,6 +82,12 @@
           - "'kbdinteractiveauthentication no' in schost_sshd_effective.stdout_lines"
           - "'pubkeyauthentication yes' in schost_sshd_effective.stdout_lines"
           - "('permitrootlogin ' ~ schost_permit_root_login_effective) in schost_sshd_effective.stdout_lines"
+          - "'authenticationmethods publickey' in schost_sshd_effective.stdout_lines"
+          - "'maxauthtries 3' in schost_sshd_effective.stdout_lines"
+          - "'logingracetime 20' in schost_sshd_effective.stdout_lines"
+          - "'allowagentforwarding no' in schost_sshd_effective.stdout_lines"
+          - "'x11forwarding no' in schost_sshd_effective.stdout_lines"
+          - "schost_allow_users | length == 0 or ('allowusers ' ~ (schost_allow_users | join(' '))) in schost_sshd_effective.stdout_lines"
         fail_msg: An earlier file still sets these keywords; the daemon was not reloaded. Remove the conflicting drop-in and rerun.
 
     - name: Reload the SSH daemon now; sessions already open stay connected

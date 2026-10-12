@@ -60,14 +60,28 @@ class HostHardeningPlaybook(unittest.TestCase):
             "KbdInteractiveAuthentication no",
             "PermitRootLogin {{ schost_permit_root_login }}",
             "PubkeyAuthentication yes",
+            "AuthenticationMethods publickey",
+            "MaxAuthTries 3",
+            "LoginGraceTime 20",
+            "AllowAgentForwarding no",
+            "X11Forwarding no",
         ):
             self.assertIn(line, content.splitlines())
+        self.assertIn("AllowUsers {{ schost_allow_users | join(' ') }}", content)
         self.assertEqual(
             strings(tasks[1], "ansible.builtin.command", "argv"), ["/usr/sbin/sshd", "-T"]
         )
         effective = strings(tasks[2], "ansible.builtin.assert", "that")
         self.assertTrue(any("'passwordauthentication no' in" in rule for rule in effective))
         self.assertTrue(any("permitrootlogin" in rule for rule in effective))
+        for keyword in (
+            "authenticationmethods publickey",
+            "maxauthtries 3",
+            "allowagentforwarding no",
+            "x11forwarding no",
+            "allowusers ",
+        ):
+            self.assertTrue(any(keyword in rule for rule in effective), keyword)
         self.assertEqual(dropin["notify"], "Reload the SSH daemon")
         self.assertEqual(
             tasks[3]["ansible.builtin.meta"],
