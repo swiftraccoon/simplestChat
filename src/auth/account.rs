@@ -420,7 +420,7 @@ pub async fn public_profile(
     State(server): State<SignalingServer>,
     Path(id): Path<Uuid>,
 ) -> Result<(HeaderMap, Json<PublicProfile>), AuthError> {
-    let _permit = routes::acquire_auth_request(&server)?;
+    let _permit = server.acquire_profile_request().await?;
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
     let profile = sqlx::query_as(
         "SELECT id, display_name, avatar_url, bio, profile_style FROM users WHERE id = $1",

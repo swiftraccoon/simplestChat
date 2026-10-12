@@ -537,8 +537,9 @@ fn decode_room_image(image: &str) -> Option<(&'static str, Vec<u8>)> {
 /// names. The stored version must match, so the response may be cached for a
 /// year; any other version, a room without an image or an unknown room is a
 /// 404 answered without reading the image. The bytes are served under the
-/// download sandbox policy, on the avatar budget rather than the room API
-/// allowance a directory page spends on its listing.
+/// download sandbox policy, from the public media lane (shared with avatars)
+/// rather than the sign-in lane or the room API allowance a directory page
+/// spends on its listing.
 pub async fn room_image(
     State(server): State<SignalingServer>,
     Path(id): Path<String>,
@@ -553,8 +554,10 @@ pub async fn room_image(
     {
         return Err(not_found());
     }
-    let _permit =
-        crate::auth::routes::acquire_auth_request(&server).map_err(IntoResponse::into_response)?;
+    let _permit = server
+        .acquire_profile_request()
+        .await
+        .map_err(IntoResponse::into_response)?;
     let pool = server.db_pool().ok_or_else(|| {
         (StatusCode::SERVICE_UNAVAILABLE, "Database not configured").into_response()
     })?;

@@ -50,6 +50,8 @@ const DEFAULT_ROOM_API_REQUESTS_PER_MINUTE: u32 = 120;
 /// Public profile reads (avatars for every participant a viewer sees) get their
 /// own address budget so a busy room cannot spend the sign-in and refresh one.
 const DEFAULT_PROFILE_REQUESTS_PER_MINUTE: u32 = 600;
+/// How long an avatar or room image request queues for the media lane.
+const PROFILE_PERMIT_WAIT: Duration = Duration::from_secs(5);
 const DEFAULT_ROOM_API_CONCURRENCY: usize = 32;
 const DEFAULT_ROOM_CREATIONS_PER_ACCOUNT_PER_MINUTE: u32 = 10;
 const DEFAULT_WS_HANDSHAKES_PER_MINUTE: u32 = 120;
@@ -621,6 +623,22 @@ impl SignalingServer {
 
     pub(crate) fn try_acquire_auth_request(&self) -> Option<tokio::sync::OwnedSemaphorePermit> {
         self.auth_guard.try_acquire_concurrency()
+    }
+
+    /// A permit from the public media lane (avatars and room images). A page's
+    /// burst of thumbnails waits briefly for one instead of failing, and never
+    /// spends the sign-in lane's permits.
+    pub(crate) async fn acquire_profile_request(
+        &self,
+    ) -> Result<tokio::sync::OwnedSemaphorePermit, crate::auth::types::AuthError> {
+        tokio::time::timeout(
+            PROFILE_PERMIT_WAIT,
+            self.profile_guard.concurrency.clone().acquire_owned(),
+        )
+        .await
+        .ok()
+        .and_then(Result::ok)
+        .ok_or(crate::auth::types::AuthError::ServiceBusy)
     }
 
     pub(crate) fn try_acquire_room_api_request(&self) -> Option<tokio::sync::OwnedSemaphorePermit> {
