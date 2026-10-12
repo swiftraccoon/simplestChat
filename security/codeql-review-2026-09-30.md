@@ -529,3 +529,32 @@ Canonical fingerprints and source provenance are rebound to that reviewed file;
 original analysis provenance, rationale, owner and 2026-11-29 expiry remain.
 This approves no new finding, remote dismissal or broader exclusion. The next
 original CodeQL analysis must independently match these exact identities.
+
+## October 12 security review follow-through
+
+At source revision `60a2291356c8484c849925c0e933d794a240ba85`, the security-review follow-through (a test-only
+metrics counter getter, the shared content-security-policy constant, the room
+image routes and the dormant-room admission precheck) shifts five existing
+findings and changes the rendered message of two more. The complete flagged
+lines and their enclosing test functions are byte-identical to the prior reviewed
+sources: alert 33 moves from `src/metrics.rs` 1153 to 1158 and alert 34 from
+1157 to 1162 (complete-file SHA-256 `105505f83cb51ecf698ee1c4a17b253c75369043e4244dea38bc58f045f4276c`);
+alert 35 moves from `src/signaling/mod.rs` 1742 to 1758, alert 63 from 2147 to
+2187 and alert 69 from 1733 to 1749 (complete-file SHA-256
+`02a06f401d0f964552da03548a1f7719bd2ba85fe623a7d43ef10d50bb793524`). Columns and rendered-message
+hashes are unchanged for those five. Alerts 36 and 37 keep their file
+(`2219caa33ed0862fffde8a9dccef20d3f37c7078e5cf870ca922e990a0027e28`), line and columns; only
+their rendered message changed, because the room password now reaches the join
+through `RoomManager::verify_room_password` and the data-flow labels name that
+helper. Canonical fingerprints and source provenance are rebound to these
+reviewed files; rationale, owner and the 2026-11-29 expiry remain.
+
+One new Critical finding is reviewed: `rust/hard-coded-cryptographic-value` at
+`src/room/dormant_join_tests.rs:99:99:57:79` (complete-file SHA-256
+`345d6a1be199505c6bc4d2808ef59f8b6f575d3f8fd0107c247a933ffdd996f7`). The value is the
+fixture passphrase of the ignored, worker-and-database dormant-room admission
+test; it is hashed with the production Argon2 helper for one disposable room
+row the test creates and deletes, and it never names a deployed credential. The
+exception carries the same expiry as the other fixture passphrases. This
+approves no remote dismissal or broader exclusion. The next original CodeQL
+analysis must independently match these exact identities.
