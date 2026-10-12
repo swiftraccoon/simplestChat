@@ -22,9 +22,14 @@
 	@private path /metrics /metrics/* /diagnostics /diagnostics/*
 	respond @private "Not Found" 404
 
+	# Deleting Server defers this block, so a plain Set replaces whatever the
+	# backend sent. The application owns the content security policy: it sends
+	# this same policy by default and a tighter one where a handler serves
+	# untrusted bytes (attachment downloads, room images). The ? prefix keeps
+	# the proxy's copy as the default for responses the proxy answers itself.
 	header {
 		Strict-Transport-Security "max-age=31536000"
-		Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; font-src 'self'; upgrade-insecure-requests"
+		?Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; font-src 'self'"
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "DENY"
 		Referrer-Policy "no-referrer"

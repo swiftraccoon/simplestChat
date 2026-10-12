@@ -54,7 +54,6 @@ CSP = {
     "media-src": "'self' blob:",
     "connect-src": "'self'",
     "font-src": "'self'",
-    "upgrade-insecure-requests": "",
 }
 FIXED_HEADERS = {
     "x-content-type-options": "nosniff",

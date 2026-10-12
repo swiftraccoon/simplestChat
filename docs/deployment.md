@@ -307,7 +307,12 @@ reloading Caddy:
 caddy validate --config Caddyfile
 ```
 
-Caddy provides TLS/security headers and blocks public `/metrics` access.
+Caddy terminates TLS, sets the transport and isolation headers and blocks public
+`/metrics` access. The content security policy is the application's: Caddy carries
+the same text only as a default (`?Content-Security-Policy`) for responses it
+answers itself, because a header block that deletes `Server` is deferred and a
+plain `Set` would replace the tighter sandbox policy that attachment downloads and
+room images send. Keep the two texts identical; a Rust test compares them.
 Configure Prometheus to scrape the loopback backend with bearer authentication:
 
 ```sh

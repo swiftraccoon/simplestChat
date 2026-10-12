@@ -49,7 +49,10 @@ test('Caddy retains browser isolation, transport security, and media permissions
     'Cross-Origin-Resource-Policy "same-origin"',
     '-Server',
   ]) assert.ok(configuration.split('\n').some(line => line.trim() === expected), expected);
-  assert.match(configuration, /^\s*Content-Security-Policy "default-src 'self'; .*frame-ancestors 'none'; .*connect-src 'self'; .*upgrade-insecure-requests"$/m);
+  const policy = configuration.match(/^\s*\?Content-Security-Policy "(.+)"$/m);
+  assert.ok(policy, 'The content security policy is a default (?): handler policies such as the download sandbox must reach the browser');
+  assert.match(policy[1], /^default-src 'self'; .*frame-ancestors 'none'; .*connect-src 'self'; font-src 'self'$/);
+  assert.equal((configuration.match(/Content-Security-Policy/g) ?? []).length, 1);
 });
 
 test('Caddy bounds request setup without imposing an upgraded WebSocket write deadline', () => {

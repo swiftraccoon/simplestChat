@@ -1481,6 +1481,11 @@ fn is_loopback_host(host: &str) -> bool {
         .is_ok_and(|address| address.is_loopback())
 }
 
+/// The application's own content security policy. The reverse proxy carries
+/// the same text as a default for responses it answers itself (`Caddyfile`),
+/// so a handler's tighter policy is what the browser receives.
+pub(crate) const CONTENT_SECURITY_POLICY: &str = "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; font-src 'self'";
+
 async fn security_headers(request: Request<Body>, next: Next) -> Response {
     let mut response = next.run(request).await;
     let headers = response.headers_mut();
@@ -1498,11 +1503,9 @@ async fn security_headers(request: Request<Body>, next: Next) -> Response {
     );
     // Download handlers set a tighter sandbox policy for untrusted file bytes.
     // The application policy supplies the default without replacing that boundary.
-    headers.entry(header::CONTENT_SECURITY_POLICY).or_insert_with(||
-        HeaderValue::from_static(
-            "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'",
-        ),
-    );
+    headers
+        .entry(header::CONTENT_SECURITY_POLICY)
+        .or_insert_with(|| HeaderValue::from_static(CONTENT_SECURITY_POLICY));
     headers.insert(
         header::HeaderName::from_static("permissions-policy"),
         HeaderValue::from_static("camera=(self), microphone=(self), display-capture=(self)"),
@@ -1940,7 +1943,31 @@ mod security_tests {
         let response = String::from_utf8(response).unwrap().to_ascii_lowercase();
         assert!(response.starts_with("http/1.1 404"));
         assert!(response.contains("x-content-type-options: nosniff\r\n"));
-        assert!(response.contains("content-security-policy:"));
+        assert!(response.contains(&format!(
+            "content-security-policy: {CONTENT_SECURITY_POLICY}\r\n"
+        )));
+    }
+
+    #[test]
+    fn the_proxy_defaults_to_the_applications_content_security_policy() {
+        // The Caddyfile may only supply the policy where the backend sent none
+        // (the `?` prefix); otherwise a handler's sandbox never reaches a browser.
+        let caddyfile = include_str!("../../Caddyfile");
+        let line = caddyfile
+            .lines()
+            .map(str::trim)
+            .find(|line| line.contains("Content-Security-Policy"))
+            .expect("the proxy carries a content security policy");
+        let value = line
+            .strip_prefix("?Content-Security-Policy \"")
+            .and_then(|rest| rest.strip_suffix('"'))
+            .expect("the proxy policy is a default, not a replacement");
+        assert_eq!(value, CONTENT_SECURITY_POLICY);
+        assert_eq!(
+            caddyfile.matches("Content-Security-Policy").count(),
+            1,
+            "one proxy policy line"
+        );
     }
 
     #[tokio::test]
