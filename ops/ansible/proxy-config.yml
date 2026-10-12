@@ -79,24 +79,65 @@
           - caddyfile
       changed_when: false
 
-    - name: Write the Caddyfile in place so the container's read-only bind mount sees it
-      ansible.builtin.copy:
-        src: "{{ scproxy_source }}"
-        dest: "{{ scpub_config }}/Caddyfile"
-        owner: root
-        group: root
-        mode: '0644'
-        # A renamed temporary file would keep the old inode mounted in the container.
-        unsafe_writes: true
-      notify: Reload the running proxy
+    - name: Compare the candidate with the live file
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        get_checksum: true
+        checksum_algorithm: sha256
+      loop:
+        - "{{ scproxy_candidate }}"
+        - "{{ scpub_config }}/Caddyfile"
+      register: scproxy_files
 
-    - name: Reload the running proxy now
-      ansible.builtin.meta: flush_handlers
+    # cp writes into the existing inode. A module that renames a temporary file
+    # into place would leave the container's read-only bind mount on the old one.
+    - name: Write the Caddyfile in place so the container's bind mount sees it
+      ansible.builtin.command:
+        argv:
+          - cp
+          - --no-preserve=mode,ownership,timestamps
+          - "{{ scproxy_candidate }}"
+          - "{{ scpub_config }}/Caddyfile"
+      when: scproxy_files.results[0].stat.checksum != scproxy_files.results[1].stat.checksum
+      changed_when: true
+      notify: Reload the running proxy
 
     - name: Remove the candidate
       ansible.builtin.file:
         path: "{{ scproxy_candidate }}"
         state: absent
+
+    - name: Read the file the running container actually mounts
+      ansible.builtin.command:
+        argv:
+          - docker
+          - --host
+          - unix:///var/run/docker.sock
+          - exec
+          - "{{ scproxy_container }}"
+          - sha256sum
+          - /etc/caddy/Caddyfile
+      changed_when: false
+      register: scproxy_mounted
+
+    # A file that was once replaced by rename (public.yml's copy, an editor)
+    # leaves the mount on an orphaned inode; only a restart re-resolves it.
+    - name: Restart the proxy once when its mount no longer names the live file
+      ansible.builtin.command:
+        argv:
+          - docker
+          - --host
+          - unix:///var/run/docker.sock
+          - restart
+          - --time
+          - '3'
+          - "{{ scproxy_container }}"
+      when: scproxy_mounted.stdout.split() | first != scproxy_files.results[1].stat.checksum
+      changed_when: true
+      register: scproxy_restarted
+
+    - name: Reload the running proxy now
+      ansible.builtin.meta: flush_handlers
 
     - name: Read a response the proxy answers itself
       ansible.builtin.uri:
@@ -106,6 +147,9 @@
         return_content: false
         timeout: 15
       register: scproxy_probe
+      retries: 10
+      delay: 2
+      until: scproxy_probe.status | default(0) == 404
 
     - name: Require the maintained policy on the proxy's own responses
       ansible.builtin.assert:

@@ -124,7 +124,7 @@ class ProxyConfigPlaybook(unittest.TestCase):
     """The Caddyfile is validated offline, written in place and reloaded, then probed."""
 
     def test_candidate_is_validated_before_the_in_place_write_and_reload(self) -> None:
-        """Validation precedes the in-place write; the reload is flushed before the probe."""
+        """Validation precedes the in-place write; a stale mount restarts; reload before probe."""
         proxy = play("proxy-config.yml")
         self.assertEqual(proxy["hosts"], "benchmark_hosts")
         self.assertIs(proxy["become"], expr2=True)
@@ -144,21 +144,31 @@ class ProxyConfigPlaybook(unittest.TestCase):
         self.assertEqual(argv[argv.index("--cap-add") + 1], "NET_BIND_SERVICE")
         self.assertIn("{{ scproxy_candidate }}:/etc/caddy/Caddyfile:ro", argv)
         self.assertIs(validate["changed_when"], expr2=False)
-        write = tasks[2]
-        self.assertEqual(at(write, "ansible.builtin.copy", "dest"), "{{ scpub_config }}/Caddyfile")
-        self.assertIs(at(write, "ansible.builtin.copy", "unsafe_writes"), expr2=True)
-        self.assertEqual(write["notify"], "Reload the running proxy")
+        write = tasks[3]
+        write_argv = strings(write, "ansible.builtin.command", "argv")
         self.assertEqual(
-            tasks[3]["ansible.builtin.meta"], "flush_handlers", "the reload runs before the probe"
+            write_argv[:2],
+            ["cp", "--no-preserve=mode,ownership,timestamps"],
+            "an in-place write keeps the mounted inode",
+        )
+        self.assertEqual(write_argv[-1], "{{ scpub_config }}/Caddyfile")
+        self.assertEqual(write["notify"], "Reload the running proxy")
+        restart = next(
+            task for task in tasks if string(task, "name").startswith("Restart the proxy once")
+        )
+        self.assertIn("restart", strings(restart, "ansible.builtin.command", "argv"))
+        self.assertIn("scproxy_mounted.stdout.split() | first !=", string(restart, "when"))
+        self.assertLess(tasks.index(restart), order.index("Reload the running proxy now"))
+        self.assertLess(
+            order.index("Reload the running proxy now"),
+            order.index("Read a response the proxy answers itself"),
         )
         reload = obj(proxy, "handlers", 0)
         self.assertEqual(string(reload, "name"), "Reload the running proxy")
         self.assertIn("reload", strings(reload, "ansible.builtin.command", "argv"))
         self.assertLess(
             order.index("Validate the candidate with the exact pinned proxy image, offline"),
-            order.index(
-                "Write the Caddyfile in place so the container's read-only bind mount sees it"
-            ),
+            order.index("Write the Caddyfile in place so the container's bind mount sees it"),
         )
         probe = tasks[-2]
         self.assertEqual(
