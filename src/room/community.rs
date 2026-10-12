@@ -170,7 +170,9 @@ impl RoomManager {
                 sqlx::query("SET LOCAL lock_timeout = '5s'")
                     .execute(&mut *transaction)
                     .await?;
-                let updated = sqlx::query("UPDATE rooms SET display_name = $3, topic = $4, description = $5, image_url = CASE WHEN $9 THEN $6 ELSE image_url END, name_style = $7, topic_style = $8, updated_at = now() WHERE id = $1 AND owner_id = $2")
+                // The image version is the stored digest the listings carry and the
+                // image endpoint requires; migration 034 defines the function.
+                let updated = sqlx::query("UPDATE rooms SET display_name = $3, topic = $4, description = $5, image_url = CASE WHEN $9 THEN $6 ELSE image_url END, image_version = CASE WHEN $9 THEN room_image_version(id, $6) ELSE image_version END, name_style = $7, topic_style = $8, updated_at = now() WHERE id = $1 AND owner_id = $2")
                     .bind(&room_id).bind(owner_id).bind(identity.display_name.trim()).bind(&identity.topic)
                     .bind(&identity.description).bind(identity.image_url.clone().flatten())
                     .bind(sqlx::types::Json(&identity.name_style)).bind(sqlx::types::Json(&identity.topic_style))

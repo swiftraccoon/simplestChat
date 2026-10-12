@@ -13,7 +13,6 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use tracing::warn;
 
 /// Keep handler futures small without changing their HTTP error responses.
@@ -52,31 +51,13 @@ pub struct RoomListItem {
     pub topic_style: ChatStyle,
 }
 
-/// The SQL for a listing's image column: the first 16 hex characters of the
-/// SHA-256 of the stored data URL, or NULL. `room_image_version` computes the
-/// same digest in Rust; the image endpoint answers only with the exact current
-/// one, so a listing never carries image bytes and an unlisted room's image is
-/// reachable only through a listing the caller could see.
-macro_rules! image_version {
-    ($column:literal) => {
-        concat!(
-            "CASE WHEN ",
-            $column,
-            " IS NULL THEN NULL ELSE left(encode(sha256(convert_to(",
-            $column,
-            ", 'UTF8')), 'hex'), 16) END"
-        )
-    };
-}
-pub(crate) use image_version;
-
-/// The digest `image_version!` yields for a stored data URL.
-pub(crate) fn room_image_version(image: &str) -> String {
-    hex::encode(Sha256::digest(image.as_bytes()))[..16].to_owned()
-}
-
 /// The listing's `image_url`: `GET /api/rooms/:id/image?v=<version>`, which the
-/// browser may cache for a year because the digest changes with the image.
+/// browser may cache for a year. The version is the stored `rooms.image_version`
+/// (migration 034, written by the identity update through the same SQL
+/// function): a digest of the room id and its image that changes with the
+/// image, and the image endpoint answers only the exact current one, so a
+/// listing never carries image bytes and an unlisted room's image is reachable
+/// only through a listing the caller could see.
 pub(crate) fn room_image_url(room_id: &str, version: &str) -> String {
     format!("/api/rooms/{room_id}/image?v={version}")
 }
@@ -288,27 +269,23 @@ pub(crate) async fn fetch_directory_page(
     let mut live_rows = if live_ids.is_empty() {
         Vec::new()
     } else if let Some(pattern) = pattern {
-        sqlx::query_as::<_, RoomListRow>(concat!(
-            r#"SELECT id, display_name, topic, password_hash IS NOT NULL, moderated, description, "#,
-            image_version!("image_url"),
-            r#", secret, name_style, topic_style
+        sqlx::query_as::<_, RoomListRow>(
+            r#"SELECT id, display_name, topic, password_hash IS NOT NULL, moderated, description, image_version, secret, name_style, topic_style
                FROM rooms
                WHERE secret = false AND id = ANY($1)
                  AND (display_name || E'\n' || COALESCE(topic, '')) ILIKE $2 ESCAPE E'\\'
-               ORDER BY created_at DESC, id DESC"#
-        ))
+               ORDER BY created_at DESC, id DESC"#,
+        )
         .bind(&live_ids)
         .bind(pattern)
         .fetch_all(pool)
         .await?
     } else {
-        sqlx::query_as::<_, RoomListRow>(concat!(
-            "SELECT id, display_name, topic, password_hash IS NOT NULL, moderated, description, ",
-            image_version!("image_url"),
-            ", secret, name_style, topic_style
+        sqlx::query_as::<_, RoomListRow>(
+            "SELECT id, display_name, topic, password_hash IS NOT NULL, moderated, description, image_version, secret, name_style, topic_style
              FROM rooms WHERE secret = false AND id = ANY($1)
-             ORDER BY created_at DESC, id DESC"
-        ))
+             ORDER BY created_at DESC, id DESC",
+        )
         .bind(&live_ids)
         .fetch_all(pool)
         .await?
@@ -335,7 +312,7 @@ pub(crate) async fn fetch_directory_page(
         // PostgreSQL walk the created_at index and test every row on a miss. It
         // carries only ids and sort keys: descriptions and images are fetched
         // for the selected page alone, so a broad term never spills wide rows.
-        sqlx::query_as::<_, RoomListRow>(concat!(
+        sqlx::query_as::<_, RoomListRow>(
             r#"WITH matching_rooms AS MATERIALIZED (
                  SELECT id, created_at
                  FROM rooms
@@ -350,12 +327,10 @@ pub(crate) async fn fetch_directory_page(
              )
              SELECT rooms.id, rooms.display_name, rooms.topic,
                     rooms.password_hash IS NOT NULL AS password_protected,
-                    rooms.moderated, rooms.description, "#,
-            image_version!("rooms.image_url"),
-            r#", rooms.secret, rooms.name_style, rooms.topic_style
+                    rooms.moderated, rooms.description, rooms.image_version, rooms.secret, rooms.name_style, rooms.topic_style
              FROM page JOIN rooms ON rooms.id = page.id
-             ORDER BY page.created_at DESC, page.id DESC"#
-        ))
+             ORDER BY page.created_at DESC, page.id DESC"#,
+        )
         .bind(pattern)
         .bind(window.dormant_limit)
         .bind(window.dormant_offset)
@@ -363,13 +338,11 @@ pub(crate) async fn fetch_directory_page(
         .fetch_all(pool)
         .await?
     } else {
-        sqlx::query_as::<_, RoomListRow>(concat!(
-            "SELECT id, display_name, topic, password_hash IS NOT NULL, moderated, description, ",
-            image_version!("image_url"),
-            ", secret, name_style, topic_style
+        sqlx::query_as::<_, RoomListRow>(
+            "SELECT id, display_name, topic, password_hash IS NOT NULL, moderated, description, image_version, secret, name_style, topic_style
              FROM rooms WHERE secret = false AND NOT (id = ANY($3))
-             ORDER BY created_at DESC, id DESC LIMIT $1 OFFSET $2"
-        ))
+             ORDER BY created_at DESC, id DESC LIMIT $1 OFFSET $2",
+        )
         .bind(window.dormant_limit)
         .bind(window.dormant_offset)
         .bind(&live_ids)
@@ -515,7 +488,7 @@ pub async fn owned_rooms(
         .sub
         .parse()
         .map_err(|_| AuthError::InvalidToken.into_response())?;
-    let rows = sqlx::query_as::<_, RoomListRow>(concat!("SELECT id, display_name, topic, password_hash IS NOT NULL, moderated, description, ", image_version!("image_url"), ", secret, name_style, topic_style FROM rooms WHERE owner_id = $1 ORDER BY created_at DESC LIMIT $2"))
+    let rows = sqlx::query_as::<_, RoomListRow>("SELECT id, display_name, topic, password_hash IS NOT NULL, moderated, description, image_version, secret, name_style, topic_style FROM rooms WHERE owner_id = $1 ORDER BY created_at DESC LIMIT $2")
         .bind(owner).bind(settings::MAX_PERSISTED_ROOMS_PER_OWNER).fetch_all(server.db_pool().ok_or_else(|| AuthError::NotConfigured.into_response())?)
         .await.map_err(room_database_error)?;
     let mut response_headers = HeaderMap::new();
@@ -561,11 +534,11 @@ fn decode_room_image(image: &str) -> Option<(&'static str, Vec<u8>)> {
 }
 
 /// `GET /api/rooms/:id/image?v=<version>`: the image a listing's `image_url`
-/// names. The exact current digest is required, so the response may be cached
-/// for a year; any other digest, a room without an image or an unknown room is
-/// a 404. The bytes are served under the download sandbox policy, on the
-/// avatar budget rather than the room API allowance a directory page spends
-/// on its listing.
+/// names. The stored version must match, so the response may be cached for a
+/// year; any other version, a room without an image or an unknown room is a
+/// 404 answered without reading the image. The bytes are served under the
+/// download sandbox policy, on the avatar budget rather than the room API
+/// allowance a directory page spends on its listing.
 pub async fn room_image(
     State(server): State<SignalingServer>,
     Path(id): Path<String>,
@@ -585,18 +558,16 @@ pub async fn room_image(
     let pool = server.db_pool().ok_or_else(|| {
         (StatusCode::SERVICE_UNAVAILABLE, "Database not configured").into_response()
     })?;
-    let stored: Option<Option<String>> =
-        sqlx::query_scalar("SELECT image_url FROM rooms WHERE id = $1")
+    let image: Option<String> =
+        sqlx::query_scalar("SELECT image_url FROM rooms WHERE id = $1 AND image_version = $2")
             .bind(&id)
+            .bind(version)
             .fetch_optional(pool)
             .await
             .map_err(room_database_error)?;
-    let Some(Some(image)) = stored else {
+    let Some(image) = image else {
         return Err(not_found());
     };
-    if room_image_version(&image) != version {
-        return Err(not_found());
-    }
     let (content_type, bytes) = decode_room_image(&image).ok_or_else(|| {
         warn!(room_id = %id, "Stored room image is not a raster data URL");
         not_found()
@@ -646,11 +617,7 @@ pub async fn update_room_identity(
             .into_response()
             .into());
     }
-    let row = sqlx::query_as::<_, RoomListRow>(concat!(
-        "SELECT id, display_name, topic, password_hash IS NOT NULL, moderated, description, ",
-        image_version!("image_url"),
-        ", secret, name_style, topic_style FROM rooms WHERE id = $1 AND owner_id = $2"
-    ))
+    let row = sqlx::query_as::<_, RoomListRow>("SELECT id, display_name, topic, password_hash IS NOT NULL, moderated, description, image_version, secret, name_style, topic_style FROM rooms WHERE id = $1 AND owner_id = $2")
     .bind(&id)
     .bind(owner)
     .fetch_optional(
@@ -669,16 +636,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn room_images_are_named_by_a_content_digest_and_decoded_as_stored() {
-        let image = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=";
-        let version = room_image_version(image);
-        assert_eq!(version.len(), 16);
-        assert!(version.bytes().all(|byte| byte.is_ascii_hexdigit()));
-        assert_ne!(version, room_image_version("data:image/png;base64,AAAA"));
+    fn room_image_urls_and_stored_data_urls_are_validated() {
+        let version = "0123456789abcdef";
         assert_eq!(
-            room_image_url("lobby", &version),
-            format!("/api/rooms/lobby/image?v={version}")
+            room_image_url("lobby", version),
+            "/api/rooms/lobby/image?v=0123456789abcdef"
         );
+        let image = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=";
         let (content_type, bytes) = decode_room_image(image).unwrap();
         assert_eq!(content_type, "image/png");
         assert_eq!(&bytes[..8], b"\x89PNG\r\n\x1a\n");
@@ -693,7 +657,7 @@ mod tests {
         for (uri, parsed_version) in [
             (
                 format!("/api/rooms/lobby/image?v={version}"),
-                Some(Some(version.clone())),
+                Some(Some(version.to_owned())),
             ),
             ("/api/rooms/lobby/image".to_owned(), Some(None)),
             (
@@ -862,6 +826,47 @@ mod tests {
             .into_iter()
             .map(|row| row.0)
             .collect::<Vec<String>>();
+        // The stored version is a digest of the room id and its image: it
+        // changes with the image, differs between rooms sharing a picture, and
+        // is what the listing carries in place of the bytes.
+        let image = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=";
+        for id in [&ids[2], &ids[4]] {
+            sqlx::query(
+                "UPDATE rooms SET image_url = $2, image_version = room_image_version(id, $2) WHERE id = $1",
+            )
+                .bind(id)
+                .bind(image)
+                .execute(&pool)
+                .await
+                .unwrap();
+        }
+        let versions: Vec<Option<String>> =
+            sqlx::query_scalar("SELECT image_version FROM rooms WHERE id = ANY($1) ORDER BY id")
+                .bind(vec![ids[2].clone(), ids[4].clone(), ids[5].clone()])
+                .fetch_all(&pool)
+                .await
+                .unwrap();
+        let listed: Vec<(String, Option<String>)> =
+            fetch_directory_page(&pool, &live, Some(&pattern), 6, 0)
+                .await
+                .unwrap()
+                .into_iter()
+                .map(|row| (row.0, row.6))
+                .collect();
+        sqlx::query(
+            "UPDATE rooms SET image_url = $2, image_version = room_image_version(id, $2) WHERE id = $1",
+        )
+            .bind(&ids[2])
+            .bind("data:image/png;base64,AAAA")
+            .execute(&pool)
+            .await
+            .unwrap();
+        let changed: Option<String> =
+            sqlx::query_scalar("SELECT image_version FROM rooms WHERE id = $1")
+                .bind(&ids[2])
+                .fetch_one(&pool)
+                .await
+                .unwrap();
         sqlx::query("DELETE FROM rooms WHERE id LIKE $1")
             .bind(format!("{prefix}%"))
             .execute(&pool)
@@ -877,6 +882,30 @@ mod tests {
             unfiltered,
             vec![ids[3].clone(), ids[1].clone(), ids[0].clone()],
             "without a search the live rooms still lead the first page"
+        );
+        let [two, four, five] = versions.as_slice() else {
+            panic!("three version rows");
+        };
+        for version in [two, four] {
+            let version = version.as_deref().expect("an image has a version");
+            assert_eq!(version.len(), 16);
+            assert!(version.bytes().all(|byte| byte.is_ascii_hexdigit()));
+        }
+        assert_ne!(two, four, "the same picture in two rooms gets two versions");
+        assert_eq!(five, &None, "no image, no version");
+        for (id, listed_version) in &listed {
+            let expected = if id == &ids[2] {
+                two
+            } else if id == &ids[4] {
+                four
+            } else {
+                &None
+            };
+            assert_eq!(listed_version, expected, "{id}");
+        }
+        assert!(
+            changed.is_some() && &changed != two,
+            "a new image gets a new version"
         );
     }
 

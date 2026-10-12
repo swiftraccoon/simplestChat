@@ -176,8 +176,9 @@ Both preview and acceptance use authenticated, bounded room-API admission and
 Profile `avatar_url`, directory `topic` and directory `image_url` are required
 nullable fields; null is not a missing response. A listing never carries image
 bytes: `image_url` is the same-origin path `/api/rooms/:id/image?v=<digest>`,
-where the digest is the first 16 hex characters of the SHA-256 of the stored
-image and changes with it. The endpoint answers only that exact digest, with
+where the digest is the stored `rooms.image_version` (written with the image), the first 16 hex characters
+of the SHA-256 of the room id and the stored image, so it changes with the image
+and differs between rooms sharing a picture. The endpoint answers only that exact digest, with
 `Cache-Control: public, max-age=31536000, immutable` and the download sandbox
 policy, so a browser caches each image once and an unlisted room's image is
 reachable only through a listing the caller could see. It is metered with
