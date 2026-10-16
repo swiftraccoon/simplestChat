@@ -33,7 +33,7 @@ async function unusedPort(protocol = 'tcp') {
   return port;
 }
 
-async function run(t, environment = {}, command = [process.execPath, '-e', 'process.exit(0)']) {
+async function run(t, environment = {}, command = [process.execPath, '-e', 'process.exit(0)'], { deadlineMs = 10000 } = {}) {
   const artifacts = await mkdtemp(path.join(os.tmpdir(), 'simplestchat-helper-test.'));
   t.after(() => rm(artifacts, { recursive: true, force: true }));
   const child = spawn('bash', [helper, ...command], {
@@ -53,7 +53,7 @@ async function run(t, environment = {}, command = [process.execPath, '-e', 'proc
   child.stdout.on('data', chunk => { output += chunk; });
   child.stderr.on('data', chunk => { output += chunk; });
   let timedOut = false;
-  const timer = setTimeout(() => { timedOut = true; child.kill('SIGTERM'); }, 10000);
+  const timer = setTimeout(() => { timedOut = true; child.kill('SIGTERM'); }, deadlineMs);
   const [status, signal] = await once(child, 'close');
   clearTimeout(timer);
   assert.equal(timedOut, false, `Helper timed out: ${output}`);
@@ -450,7 +450,10 @@ for (const [name, behavior, waitStatus, interpretation] of [
   ['forced termination', "process.on('SIGTERM', () => {});", 137, 'signal_or_high_exit_code'],
 ]) {
   test(`helper fails ${name} and retains the raw wait status`, async t => {
-    const result = await run(t, await shutdownFixture(t, behavior));
+    // Forced fixtures deliberately consume the helper's full five-second TERM
+    // window. Leave bounded room for child startup and report I/O on shared Macs.
+    const result = await run(t, await shutdownFixture(t, behavior), undefined,
+      { deadlineMs: name === 'forced termination' ? 20000 : 10000 });
     assert.equal(result.status, 1, result.output);
     const report = await shutdownReport(result);
     assert.equal(report.statusBeforeCleanup, 0);
@@ -471,7 +474,8 @@ for (const [name, behavior] of [
   ['forced termination', "process.on('SIGTERM', () => {});"],
 ]) {
   test(`helper preserves an existing command failure after ${name}`, async t => {
-    const result = await run(t, await shutdownFixture(t, behavior), [process.execPath, '-e', 'process.exit(23)']);
+    const result = await run(t, await shutdownFixture(t, behavior), [process.execPath, '-e', 'process.exit(23)'],
+      { deadlineMs: name === 'forced termination' ? 20000 : 10000 });
     assert.equal(result.status, 23, result.output);
     const report = await shutdownReport(result);
     assert.equal(report.statusBeforeCleanup, 23);
