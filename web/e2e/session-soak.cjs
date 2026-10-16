@@ -161,19 +161,33 @@ async function run(env = process.env) {
   }
   const status = (client) =>
     within(() => client.page.evaluate(() => window.__sessionSoak.status()));
-  const roster = (client) =>
-    within(() =>
-      client.page.evaluate(() =>
-        ['#participant-list', '#classic-users-panel .classic-user-list'].map((selector) =>
-          [...document.querySelectorAll(`${selector} > li[data-participant-id]`)]
+  async function roster(client) {
+    const page = client.page;
+    const classic = '#classic-users-panel .classic-user-list';
+    const tabbed = !(await page.locator(classic).isVisible());
+    const selector = tabbed ? '#participant-list' : classic;
+    const hidden = tabbed ? classic : '#participant-list';
+    if (tabbed) await page.locator('#sidebar-tabs [data-tab="users"]').click();
+    try {
+      await page.locator(selector).waitFor({ state: 'visible' });
+      check(
+        (await page.locator(`${hidden} > li[data-participant-id]`).count()) === 0,
+        'hidden_roster_retains_rows',
+      );
+      return await within(() =>
+        page.locator(`${selector} > li[data-participant-id]`).evaluateAll((elements) =>
+          elements
             .map((element) => ({
               id: element.dataset.participantId,
               role: element.querySelector('.role-badge')?.className || 'unbadged',
             }))
             .sort((left, right) => left.id.localeCompare(right.id)),
         ),
-      ),
-    );
+      );
+    } finally {
+      if (tabbed) await page.locator('#sidebar-tabs [data-tab="chat"]').click();
+    }
+  }
   async function connected(client) {
     await client.page.locator('#room-screen').waitFor({ state: 'visible' });
     await client.page.waitForFunction(
@@ -429,18 +443,14 @@ async function run(env = process.env) {
       await poll(
         'initial_roster_incomplete',
         () => roster(client),
-        (value) =>
-          value.every(
-            (list) => list.length === 2 && new Set(list.map((entry) => entry.id)).size === 2,
-          ),
+        (value) => value.length === 2 && new Set(value.map((entry) => entry.id)).size === 2,
       );
-      const lists = await roster(client);
-      check(JSON.stringify(lists[0]) === JSON.stringify(lists[1]), 'roster_views_disagree');
+      const entries = await roster(client);
       check(
-        lists[0].some((entry) => entry.role.includes('role-owner')),
+        entries.some((entry) => entry.role.includes('role-owner')),
         'owner_role_missing',
       );
-      client.initialRoster = JSON.stringify(lists);
+      client.initialRoster = JSON.stringify(entries);
       client.participantId = (await status(client)).participantId;
       await client.page.locator('#chat-input').fill(client.draft);
       // Initial room entry legitimately changes the same-document room hash.
