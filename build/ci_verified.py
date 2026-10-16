@@ -328,6 +328,13 @@ def rust_codeql_input(name: str) -> bool:
     )
 
 
+def independent_helper_or_guide(name: str) -> bool:
+    """Identify fresh JS helper tests and canonical guides outside Rust execution."""
+    return bool(re.fullmatch(r"build/tests/[^/]+\.test\.mjs", name)) or (
+        name.startswith("docs/") and name.endswith(".md")
+    )
+
+
 class Options(argparse.Namespace):
     """Validated fixed operations and explicit paths from the workflow."""
 
@@ -427,6 +434,9 @@ def cache_key(root: Path, scope: str) -> str:
         # Rust tests embed shared JSON fixtures from web/tests. Include all web
         # JSON configuration and data for Rust scopes; JS helper tests stay fresh.
         # Automation inspects frontend helpers, so it retains every tracked file.
+        # The unguarded helper suite executes direct build/tests/*.test.mjs
+        # afresh; canonical Markdown guides are not Rust execution inputs.
+        # Nested helper fixtures, shared data and executable code remain keyed.
         rust_data = scope in {"rust-lint", "rust-test", "backend", "codeql-rust"} and name.endswith(
             ".json"
         )
@@ -434,7 +444,7 @@ def cache_key(root: Path, scope: str) -> str:
             scope not in {"automation", "codeql-rust", "backend"}
             and name.startswith("web/")
             and not rust_data
-        ):
+        ) or (scope in {"rust-lint", "rust-test"} and independent_helper_or_guide(name)):
             continue
         path = root / name
         require(not path.is_symlink() and path.is_file(), "ci_cache_source_missing")

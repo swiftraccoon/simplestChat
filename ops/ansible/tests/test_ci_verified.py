@@ -112,6 +112,99 @@ class VerifiedCacheTests(unittest.TestCase):
         for scope in ("rust-test", "rust-lint", "backend", "codeql-rust"):
             self.assertNotEqual(cache.cache_key(self.root, scope), original[scope])
 
+    def test_frontend_helper_tests_and_guides_reuse_existing_rust_receipts(self) -> None:
+        """Independent frontend edits still execute their checks without rerunning Rust."""
+        independent = (
+            "build/tests/community-runner.test.mjs",
+            "docs/performance.md",
+            "web/e2e/community.cjs",
+        )
+        for name in independent:
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            _ = path.write_text("original\n")
+        self.git("add", ".")
+        originals = {scope: cache.cache_key(self.root, scope) for scope in cache.SCOPES}
+        for scope in ("rust-lint", "rust-test"):
+            cache.save(self.root, scope, originals[scope], self.root / "cache" / scope)
+
+        def assert_reused() -> None:
+            for scope, original in originals.items():
+                if scope == "automation":
+                    self.assertNotEqual(cache.cache_key(self.root, scope), original, scope)
+                else:
+                    self.assertEqual(cache.cache_key(self.root, scope), original, scope)
+            for scope in ("rust-lint", "rust-test"):
+                self.assertEqual(
+                    cache.verify(self.root, scope, originals[scope], self.root / "cache" / scope),
+                    "1" * 40,
+                )
+
+        for name in (*independent, "web/src/media.ts"):
+            _ = (self.root / name).write_text("changed independent input\n")
+        assert_reused()
+        self.git("update-index", "--chmod=+x", independent[0])
+        assert_reused()
+        additions = ("build/tests/new-helper.test.mjs", "docs/guides/new-guide.md")
+        for name in additions:
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            _ = path.write_text("new independent input\n")
+        self.git("add", *additions)
+        assert_reused()
+        self.git("rm", "--force", "--", *independent[:2], *additions)
+        assert_reused()
+
+    def test_rust_receipts_keep_sources_shared_data_and_runtime_inputs_bound(self) -> None:
+        """Similar filenames cannot hide a changed compiled or executed dependency."""
+        names = (
+            "Cargo.toml",
+            "Cargo.lock",
+            "rust-toolchain.toml",
+            ".cargo/config.toml",
+            "src/main.rs",
+            "vendor/worker.cpp",
+            "vendor/README.md",
+            "migrations/001_initial.sql",
+            "security/authorization/operations.json",
+            "web/tests/layer-cap-cases.json",
+            "build/shutdown-smoke.mjs",
+            "build/diagnostics-smoke.mjs",
+            "build/with-test-server.sh",
+            "build/tests/fixture-server.mjs",
+            "build/tests/nested/helper.test.mjs",
+            "build/tests/shared-fixture.json",
+            "docs/shared-fixture.json",
+            "docs/tool.rs",
+            "README.md",
+            "Caddyfile",
+            "build/ci_verified.py",
+            "build/security_tools.py",
+            ".github/workflows/ci.yml",
+            ".github/actions/native-toolchain/action.yml",
+        )
+        for name in names:
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            if not path.exists():
+                _ = path.write_text("original\n")
+        self.git("add", ".")
+        originals = {
+            scope: cache.cache_key(self.root, scope) for scope in ("rust-lint", "rust-test")
+        }
+        for scope, original in originals.items():
+            cache.save(self.root, scope, original, self.root / "cache" / scope)
+        for name in names:
+            path = self.root / name
+            original = path.read_text()
+            _ = path.write_text("changed actual input\n")
+            for scope, key in originals.items():
+                with self.subTest(name=name, scope=scope):
+                    self.assertNotEqual(cache.cache_key(self.root, scope), key)
+                    with self.assertRaisesRegex(ToolError, "ci_cache_inputs_changed"):
+                        _ = cache.verify(self.root, scope, key, self.root / "cache" / scope)
+            _ = path.write_text(original)
+
     def test_changed_source_policy_workflow_mode_and_deleted_inputs_invalidate(self) -> None:
         """Content and tracked executable modes both belong to every proof."""
         key = cache.cache_key(self.root, "native-asan")
@@ -396,7 +489,9 @@ class VerifiedCacheTests(unittest.TestCase):
 
     def test_runner_architecture_trust_and_hosted_image_generation_are_bound(self) -> None:
         """A local result cannot cross into hosted, another ISA, or trusted main."""
-        key = cache.cache_key(self.root, "rust-test")
+        originals = {
+            scope: cache.cache_key(self.root, scope) for scope in ("rust-lint", "rust-test")
+        }
         for updates in (
             {"LOCAL_CI_RUNNER_IMAGE": "docker.io/owned/runner@sha256:" + "b" * 64},
             {"GITHUB_EVENT_NAME": "pull_request"},
@@ -404,9 +499,11 @@ class VerifiedCacheTests(unittest.TestCase):
             {"ACT": "", "ImageOS": "ubuntu24", "ImageVersion": "20261003.1"},
         ):
             with patch.dict(os.environ, updates):
-                self.assertNotEqual(cache.cache_key(self.root, "rust-test"), key)
+                for scope, key in originals.items():
+                    self.assertNotEqual(cache.cache_key(self.root, scope), key)
         with patch.object(platform, "machine", return_value="other-architecture"):
-            self.assertNotEqual(cache.cache_key(self.root, "rust-test"), key)
+            for scope, key in originals.items():
+                self.assertNotEqual(cache.cache_key(self.root, scope), key)
         with (
             patch.dict(os.environ, {"LOCAL_CI_RUNNER_IMAGE": "owned/runner:latest"}),
             self.assertRaisesRegex(ToolError, "ci_cache_local_image"),
@@ -687,6 +784,9 @@ class VerifiedWorkflowTests(unittest.TestCase):
         for name in ("Audit Rust dependencies", "Check helper syntax, safety and cleanup"):
             step = next(step for step in lint if step.get("name") == name)
             self.assertNotIn("if", step)
+            if name == "Check helper syntax, safety and cleanup":
+                self.assertEqual(step["run"], "build/check.sh --helpers")
+        self.assertIn("node --test build/tests/*.test.mjs ", (ROOT / "build/check.sh").read_text())
         browser = objects(obj(jobs, "browser"), "steps")
         for step in browser:
             if "node web/e2e/" in string(step.get("run", "")):
