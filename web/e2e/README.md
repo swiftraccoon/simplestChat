@@ -49,6 +49,13 @@ COMMUNITY_E2E=1 BASE_URL=http://127.0.0.1:3119 npm --prefix web/e2e test
 `PLAYWRIGHT_MODULE` and `PLAYWRIGHT_BROWSERS_PATH` support isolated tool/browser
 installations.
 
+Community startup and invitation navigation wait for `DOMContentLoaded`, then
+at most ten seconds for the initialized conversation toolbar, loaded account
+capabilities and a connected signaling socket after authentication restoration.
+Background directory/account requests do not delay this readiness check. Startup
+does not reload the page to retry; page errors and all later interaction, auth
+and real-media assertions still fail the run.
+
 ## Account, navigation, chat and media continuity
 
 The following opt-in fixtures require the same owned loopback services and

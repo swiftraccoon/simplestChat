@@ -76,6 +76,22 @@ const report = {
       : 'ICE restarts use real legacy commands and native credential changes; no UDP failure or TURN relay is exercised.',
   ],
 };
+function communityStartupReady() {
+  return (
+    document.querySelector('.conversation-toolbar') !== null &&
+    document.querySelector('#sign-in-btn')?.hidden === false &&
+    document.querySelector('#connection-status')?.classList.contains('connected') === true
+  );
+}
+async function navigateCommunityPage(page, url) {
+  // The app may fetch directory/account updates while already interactive.
+  // Capabilities unhide Sign in; Connected is emitted only after auth restore
+  // and a real signaling connection. Global network idleness is not readiness.
+  await page.goto(url, { waitUntil: 'domcontentloaded' });
+  const item = clients.find((candidate) => candidate.page === page);
+  await item?.testNetwork?.ready();
+  await page.waitForFunction(communityStartupReady, null, { timeout: 10000 });
+}
 function saveReport() {
   report.webKitTestNetwork = {
     enabled: webKitTestNetwork,
@@ -228,15 +244,7 @@ async function client(label, mobile = false, configureContext, independentCaptur
       });
   });
   page.on('dialog', (dialog) => dialog.dismiss());
-  await page.goto(base, { waitUntil: 'networkidle' });
-  await entry.testNetwork?.ready();
-  try {
-    await page.locator('.conversation-toolbar').waitFor({ state: 'attached', timeout: 3000 });
-  } catch {
-    await page.reload({ waitUntil: 'networkidle' });
-    await entry.testNetwork?.ready();
-    await page.locator('.conversation-toolbar').waitFor({ state: 'attached' });
-  }
+  await navigateCommunityPage(page, base);
   assert.deepEqual(entry.errors, [], `${label} startup page errors`);
   return page;
 }
@@ -2571,7 +2579,7 @@ async function setRole(owner, name, role) {
         });
         await register(invitee, inviteeEmail, 'E2E Invitee');
         await paceJoins(invitee);
-        await invitee.goto(`${base}/#invite=${code}`);
+        await navigateCommunityPage(invitee, `${base}/#invite=${code}`);
         const review = invitee.getByRole('dialog', { name: 'Review room invitation', exact: true });
         await review
           .getByText(`Room: E2E Edited Room (${runId}). Offered role: member.`, { exact: true })
@@ -2589,7 +2597,7 @@ async function setRole(owner, name, role) {
         const manage = await header(owner, 'Manage room');
         await visible(owner, 'E2E Invitee · member · online');
         await close(manage);
-        await invitee.goto(`${base}/#invite=${code}`);
+        await navigateCommunityPage(invitee, `${base}/#invite=${code}`);
         try {
           const review = invitee.getByRole('dialog', {
             name: 'Review room invitation',

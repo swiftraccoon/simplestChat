@@ -10,6 +10,48 @@ import test from 'node:test';
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const runner = path.join(root, 'web/e2e/community.cjs');
 
+test('startup requires the initialized toolbar, authoritative capabilities and restored signaling', async () => {
+  const source = await readFile(runner, 'utf8');
+  const start = source.indexOf('function communityStartupReady(');
+  const end = source.indexOf('\nasync function navigateCommunityPage(', start);
+  const nodes = new Map();
+  const ready = runInNewContext(`${source.slice(start, end)}; communityStartupReady`, {
+    document: { querySelector: selector => nodes.get(selector) ?? null },
+  });
+  assert.equal(ready(), false);
+  nodes.set('.conversation-toolbar', {});
+  nodes.set('#sign-in-btn', { hidden: true });
+  nodes.set('#connection-status', { classList: { contains: () => false } });
+  assert.equal(ready(), false, 'static HTML does not establish loaded capabilities');
+  nodes.get('#sign-in-btn').hidden = false;
+  assert.equal(ready(), false, 'capabilities alone do not establish restored auth and signaling');
+  nodes.get('#connection-status').classList.contains = name => name === 'connected';
+  assert.equal(ready(), true);
+  nodes.delete('.conversation-toolbar');
+  assert.equal(ready(), false, 'initialized account/signaling state still requires the client UI');
+});
+
+test('initial and invitation navigation use bounded app readiness without network-idle waits or reload retries', async () => {
+  const source = await readFile(runner, 'utf8');
+  const start = source.indexOf('async function navigateCommunityPage(');
+  const end = source.indexOf('\nfunction saveReport(', start);
+  const calls = [], page = {
+    async goto(url, options) { calls.push(['navigation', url, options]); },
+    async waitForFunction(predicate, argument, options) { calls.push(['ready', predicate(), argument, options]); },
+  };
+  const navigate = runInNewContext(`${source.slice(start, end)}; navigateCommunityPage`, {
+    clients: [{ page, testNetwork: { async ready() { calls.push(['network']); } } }],
+    communityStartupReady: () => true,
+  });
+  await navigate(page, 'https://127.0.0.1:3120/');
+  await navigate(page, 'https://127.0.0.1:3120/#invite=owned-code');
+  assert.deepEqual(JSON.parse(JSON.stringify(calls)), [
+    ['navigation', 'https://127.0.0.1:3120/', { waitUntil: 'domcontentloaded' }], ['network'], ['ready', true, null, { timeout: 10000 }],
+    ['navigation', 'https://127.0.0.1:3120/#invite=owned-code', { waitUntil: 'domcontentloaded' }], ['network'], ['ready', true, null, { timeout: 10000 }],
+  ]);
+  assert.doesNotMatch(source, /waitUntil: 'networkidle'|page\.reload\(/);
+});
+
 test('community steps distinguish successful checks, unsupported simulations, and failures', async () => {
   // Exercise the actual reporter without browser or database side effects.
   const source = await readFile(runner, 'utf8');
