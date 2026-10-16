@@ -110,7 +110,7 @@ export async function startTestHttpsProxy({ backendPort, port, opensslBinary, si
     await close();
     throw error;
   }
-  return { server, close };
+  return { server, close, certificate: cert };
 }
 
 async function main() {

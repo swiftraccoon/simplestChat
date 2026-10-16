@@ -71,7 +71,7 @@ test('TLS proxy streams HTTP and raw WebSocket upgrades and removes its key befo
   assert.deepEqual(await readdir(temporary), [], 'certificate and private key must already be deleted');
   const origin = `https://127.0.0.1:${port}`;
   const response = await new Promise((resolve, reject) => {
-    const request = https.request(`${origin}/api/echo?owned=1`, { method: 'POST', rejectUnauthorized: false, headers: { origin } }, incoming => {
+    const request = https.request(`${origin}/api/echo?owned=1`, { method: 'POST', ca: proxy.certificate, headers: { origin } }, incoming => {
       let text = '';
       incoming.on('data', chunk => { text += chunk; });
       incoming.once('end', () => resolve({ status: incoming.statusCode, headers: incoming.headers, body: JSON.parse(text) }));
@@ -88,14 +88,14 @@ test('TLS proxy streams HTTP and raw WebSocket upgrades and removes its key befo
   t.after(() => process.removeListener('warning', warning));
   for (let request = 0; request < 15; request++) {
     await new Promise((resolve, reject) => {
-      https.get(`${origin}/api/reused-connection`, { rejectUnauthorized: false }, incoming => {
+      https.get(`${origin}/api/reused-connection`, { ca: proxy.certificate }, incoming => {
         incoming.resume();
         incoming.once('end', resolve);
       }).once('error', reject);
     });
   }
   assert.deepEqual(warnings, [], 'reused HTTP sockets must not accumulate cleanup listeners');
-  const socket = tls.connect({ host: '127.0.0.1', port, rejectUnauthorized: false });
+  const socket = tls.connect({ host: '127.0.0.1', port, ca: proxy.certificate });
   socket.on('error', () => {});
   await once(socket, 'secureConnect');
   const certificate = socket.getPeerX509Certificate();
