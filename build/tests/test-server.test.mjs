@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 import dgram from 'node:dgram';
 import { once } from 'node:events';
 import { existsSync } from 'node:fs';
-import { chmod, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, open, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
@@ -63,11 +63,16 @@ async function run(t, environment = {}, command = [process.execPath, '-e', 'proc
 
 async function shutdownReport(result) {
   const file = path.join(result.artifacts, 'server-shutdown.json');
-  assert.equal((await stat(file)).mode & 0o777, 0o600);
-  const report = JSON.parse(await readFile(file, 'utf8'));
-  assert.equal(report.schemaVersion, 1);
-  assert.ok(Date.parse(report.finishedAt));
-  return report;
+  const handle = await open(file, 'r');
+  try {
+    assert.equal((await handle.stat()).mode & 0o777, 0o600);
+    const report = JSON.parse(await handle.readFile('utf8'));
+    assert.equal(report.schemaVersion, 1);
+    assert.ok(Date.parse(report.finishedAt));
+    return report;
+  } finally {
+    await handle.close();
+  }
 }
 
 async function shutdownFixture(t, behavior) {
