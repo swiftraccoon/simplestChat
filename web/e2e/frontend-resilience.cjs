@@ -877,7 +877,9 @@ async function run() {
       ])
         localStorage.setItem(key, value);
     });
-    await signOut(signedOut.page);
+    // Sign-out clears the current document before reloading it. Read storage only
+    // after the replacement document loads, even if the old UI already looks signed out.
+    await Promise.all([signedOut.page.waitForEvent('domcontentloaded'), signOut(signedOut.page)]);
     await signedOut.page.locator('#sign-in-btn').waitFor({ state: 'visible' });
     await signedOut.page.waitForFunction(
       () =>
