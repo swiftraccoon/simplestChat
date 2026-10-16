@@ -18,6 +18,8 @@ and the Rust toolchain declared in `rust-toolchain.toml`. The shell entry point
 selects that Rust toolchain explicitly. It installs authenticated scanner binaries
 and a separate hashed Python environment under ignored `.cache/` directories,
 outside the Cargo target cache.
+The refreshed RustSec Git database uses `.cache/security-rustsec-db`; keeping its
+Git metadata outside `target/` prevents Rust cache pruning from breaking later audits.
 The first run needs network access to the pinned distributions and current
 advisory databases. Installation and database failures fail the check.
 

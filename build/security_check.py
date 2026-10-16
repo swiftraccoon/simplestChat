@@ -242,7 +242,7 @@ def dependency_checks(context: Context, tools: Path, reviews: Sequence[Exception
             "--file",
             str(context.root / "Cargo.lock"),
             "--db",
-            str(context.root / "target/security-rustsec-db"),
+            str(context.root / ".cache/security-rustsec-db"),
         ],
         accepted=(0, 1),
         timeout=300,
@@ -250,7 +250,13 @@ def dependency_checks(context: Context, tools: Path, reviews: Sequence[Exception
         env_updates={"CARGO_HOME": str(context.output / "cargo-audit-home")},
     )
     lock = findings.object_value(tomllib.loads((context.root / "Cargo.lock").read_text()))
-    reviewed = findings.cargo_findings(output, reviews, len(findings.list_value(lock["package"])))
+    try:
+        reviewed = findings.cargo_findings(
+            output, reviews, len(findings.list_value(lock["package"]))
+        )
+    except (json.JSONDecodeError, UnicodeDecodeError) as error:
+        message = "cargo_audit_invalid_report"
+        raise ToolError(message) from error
     require(
         context.checks[-1]["exitStatus"] == 0 or reviewed > 0, "cargo_unsuccessful_empty_report"
     )

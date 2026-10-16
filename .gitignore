@@ -4,6 +4,8 @@
 /.cache/ci-act/
 /.cache/security-environments/
 /.cache/security-tools/
+/.cache/security-rustsec-db/
+/.cache/security-rustsec-db..lock
 /reference/
 /results
 # Publish only shared guides; existing local plans stay private.

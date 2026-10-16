@@ -31,6 +31,11 @@ path. Interrupted installation does not publish a usable prefix. Installation
 does not merge new tools into an unrelated or incomplete prefix; an explicit
 `--directory` selects a separate installation.
 
+The current RustSec Git database also stays outside that cache, at
+`.cache/security-rustsec-db`, so pruning cannot leave an unusable advisory
+database directory. Cargo Audit still refreshes it on every invocation; a missing
+or malformed JSON report fails with `cargo_audit_invalid_report`.
+
 The host account, interpreter and checkout remain trusted. A writable local
 receipt is an integrity check for accidental changes and unexpected replacement,
 not a signature that protects against compromise of that same account. Review
