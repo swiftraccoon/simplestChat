@@ -125,6 +125,7 @@ jobs:
         id: community
         timeout-minutes: 8
         env:
+          TEST_BROWSER_HTTPS: '1'
           E2E_ARTIFACTS: ${{ runner.temp }}/browser-compatibility
         run: build/with-test-postgres.sh build/with-test-server.sh npm --prefix web/e2e test
 

@@ -1,5 +1,8 @@
 /** Options for fresh, isolated Playwright test browsers, never installed profiles. */
 function browserOptions(name = 'chromium') {
+  // The disposable HTTPS proxy uses a private one-day certificate. Keep this
+  // exception confined to an explicitly opted-in local test context.
+  const httpsOptions = process.env?.TEST_BROWSER_HTTPS === '1' ? { ignoreHTTPSErrors: true } : {};
   switch (name) {
     case 'chromium':
       return {
@@ -12,7 +15,7 @@ function browserOptions(name = 'chromium') {
             '--allow-loopback-in-peer-connection',
           ],
         },
-        contextOptions: { permissions: ['camera', 'microphone'] },
+        contextOptions: { ...httpsOptions, permissions: ['camera', 'microphone'] },
       };
     case 'firefox':
       return {
@@ -26,7 +29,7 @@ function browserOptions(name = 'chromium') {
           },
         },
         // Camera/microphone context grants are not supported by this engine.
-        contextOptions: {},
+        contextOptions: { ...httpsOptions },
       };
     case 'webkit':
       // Playwright 1.63.0's macOS embedder enables mock capture in its default
@@ -41,7 +44,7 @@ function browserOptions(name = 'chromium') {
       return {
         name,
         launchOptions: { headless: true },
-        contextOptions: { permissions: ['camera', 'microphone'] },
+        contextOptions: { ...httpsOptions, permissions: ['camera', 'microphone'] },
       };
     default:
       throw new Error('Unsupported E2E browser; expected chromium, firefox, or webkit.');

@@ -9,13 +9,22 @@ const source = await readFile(new URL('../../web/e2e/browser-options.cjs', impor
 
 // Test platform restrictions without changing the host process or launching any
 // browser. The helper intentionally requires neither Playwright nor a profile.
-function forPlatform(platform, arch = 'arm64') {
+function forPlatform(platform, arch = 'arm64', env = {}) {
   const module = { exports: {} };
-  vm.runInNewContext(source, { module, process: { platform, arch } }, { timeout: 1000 });
+  vm.runInNewContext(source, { module, process: { platform, arch, env } }, { timeout: 1000 });
   return module.exports.browserOptions;
 }
 
 const plain = value => JSON.parse(JSON.stringify(value));
+
+test('private HTTPS certificate exception requires the disposable proxy opt-in', () => {
+  for (const name of ['chromium', 'firefox', 'webkit']) {
+    for (const value of [undefined, '', '0', 'true']) {
+      assert.equal(forPlatform('darwin', 'arm64', { TEST_BROWSER_HTTPS: value })(name).contextOptions.ignoreHTTPSErrors, undefined);
+    }
+    assert.equal(forPlatform('darwin', 'arm64', { TEST_BROWSER_HTTPS: '1' })(name).contextOptions.ignoreHTTPSErrors, true);
+  }
+});
 
 test('browser options default to headless Chromium with fake capture and loopback only', () => {
   const expected = {

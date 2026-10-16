@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run a command against an owned HTTP-loopback server and a disposable database.
+# Run a command against an owned loopback server and a disposable database.
 # Example: DISPOSABLE_TEST_DATABASE=1 DATABASE_URL=postgres://.../chat_test \
 #   build/with-test-server.sh npm --prefix web/e2e test
 set -euo pipefail
@@ -24,6 +24,11 @@ server_workdir="${TEST_SERVER_WORKDIR:-${repo_root}}"
 test -f "${server_workdir}/Cargo.toml"
 test -d "${server_workdir}/migrations"
 test_port="${TEST_SERVER_PORT:-3119}"
+https_enabled="${TEST_BROWSER_HTTPS:-0}"
+if [[ "${https_enabled}" != 0 && "${https_enabled}" != 1 ]]; then
+  echo 'TEST_BROWSER_HTTPS must be 0 or 1.' >&2
+  exit 2
+fi
 media_port="${TEST_MEDIA_PORT:-41010}"
 turn_port="${TEST_TURN_PORT:-34790}"
 # An explicitly empty override is invalid, not a request for the default.
@@ -34,6 +39,18 @@ for port in "${test_port}" "${media_port}" "${turn_port}"; do
     exit 2
   fi
 done
+https_port="${TEST_HTTPS_PORT-$((test_port + 1))}"
+if [[ "${https_enabled}" == 1 ]]; then
+  if [[ ! "${https_port}" =~ ^[1-9][0-9]{3,4}$ ]] || ((https_port > 65535 || https_port == test_port)); then
+    echo 'TEST_HTTPS_PORT must be a distinct integer from 1000 through 65535.' >&2
+    exit 2
+  fi
+  openssl_binary="${OPENSSL_DIR:-${repo_root}/target/openssl-4.0.3}/bin/openssl"
+  if [[ "${openssl_binary}" != /* || ! -x "${openssl_binary}" ]]; then
+    echo 'TEST_BROWSER_HTTPS requires the checksum-pinned OpenSSL installation.' >&2
+    exit 2
+  fi
+fi
 if [[ "${TURN_E2E:-}" == 1 ]] && ! command -v turnserver >/dev/null; then
   echo 'TURN_E2E requires coturn (turnserver) on PATH.' >&2
   exit 2
@@ -44,14 +61,20 @@ if [[ "${TURN_E2E:-}" == 1 && "$(env -i PATH="${PATH}" turnserver --version)" !=
 fi
 test -x "${server_binary}"
 export BASE_URL="http://127.0.0.1:${test_port}"
+readiness_url="${BASE_URL}"
+browser_host=127.0.0.1
 if [[ "${PASSKEY_E2E:-}" == 1 ]]; then
   # WebAuthn relying party IDs are domains. Keep the owned HTTP bind on IPv4
   # loopback, but use localhost for both the browser origin and relying party.
   export BASE_URL="http://localhost:${test_port}"
+  browser_host=localhost
+fi
+if [[ "${https_enabled}" == 1 ]]; then
+  export BASE_URL="https://${browser_host}:${https_port}"
 fi
 # Probe both sockets; a non-HTTP listener must not be mistaken for a free port.
 # The server still owns the final bind and must remain alive after readiness.
-node --input-type=module - "${test_port}" "${media_port}" "${test_announce_ip}" "${TURN_E2E:-}" "${turn_port}" <<'JS'
+node --input-type=module - "${test_port}" "${media_port}" "${test_announce_ip}" "${TURN_E2E:-}" "${turn_port}" "${https_enabled}" "${https_port}" <<'JS'
 import net from 'node:net';
 import dgram from 'node:dgram';
 import os from 'node:os';
@@ -70,6 +93,7 @@ const tcp = net.createServer();
 const udp = dgram.createSocket('udp4');
 const turnTcp = net.createServer();
 const turnUdp = dgram.createSocket('udp4');
+const httpsTcp = net.createServer();
 try {
   await new Promise((resolve, reject) => {
     tcp.once('error', reject).listen(Number(process.argv[2]), '127.0.0.1', resolve);
@@ -85,6 +109,11 @@ try {
       turnUdp.once('error', reject).bind(Number(process.argv[6]), '127.0.0.1', resolve);
     });
   }
+  if (process.argv[7] === '1') {
+    await new Promise((resolve, reject) => {
+      httpsTcp.once('error', reject).listen(Number(process.argv[8]), '127.0.0.1', resolve);
+    });
+  }
 } catch (error) {
   console.error(`Refusing unavailable test ports: ${error.message}`);
   process.exitCode = 2;
@@ -93,6 +122,7 @@ try {
   try { udp.close(); } catch {}
   turnTcp.close();
   try { turnUdp.close(); } catch {}
+  httpsTcp.close();
 }
 JS
 export TEST_ANNOUNCE_IP="${test_announce_ip}"
@@ -103,6 +133,7 @@ export E2E_ARTIFACTS="${test_artifacts}"
 server_pid=''
 turn_pid=''
 turn_config=''
+https_pid=''
 cleanup() {
   test_status=$?
   trap - EXIT
@@ -112,6 +143,24 @@ cleanup() {
   kill_attempted=false
   kill_sent=false
   wait_status=''
+  if [[ -n "${https_pid}" ]]; then
+    kill -TERM "${https_pid}" 2>/dev/null || true
+    for ((attempt = 0; attempt < 50; attempt++)); do
+      kill -0 "${https_pid}" 2>/dev/null || break
+      sleep 0.1
+    done
+    if kill -0 "${https_pid}" 2>/dev/null; then
+      kill -KILL "${https_pid}" 2>/dev/null || true
+      echo 'Owned HTTPS proxy needed forced shutdown.' >&2
+      if ((test_status == 0)); then test_status=1; fi
+    fi
+    https_status=0
+    wait "${https_pid}" 2>/dev/null || https_status=$?
+    if ((https_status != 0)); then
+      echo 'Owned HTTPS proxy exited unsuccessfully.' >&2
+      if ((test_status == 0)); then test_status=1; fi
+    fi
+  fi
   if [[ -n "${server_pid}" ]]; then
     term_attempted=true
     if kill -TERM "${server_pid}" 2>/dev/null; then term_sent=true; fi
@@ -303,7 +352,7 @@ for ((attempt = 0; attempt < 120; attempt++)); do
     echo 'Test server exited before readiness.' >&2
     exit 1
   fi
-  if curl --fail --silent --max-time 2 "${BASE_URL}/api/rooms" >/dev/null; then
+  if curl --fail --silent --max-time 2 "${readiness_url}/api/rooms" >/dev/null; then
     kill -0 "${server_pid}" 2>/dev/null
     ready=1
     break
@@ -316,11 +365,38 @@ if [[ "${ready}" != 1 ]]; then
 fi
 kill -0 "${server_pid}" 2>/dev/null
 
+if [[ "${https_enabled}" == 1 ]]; then
+  env -i PATH="${PATH}" TMPDIR="${TMPDIR:-/tmp}" node build/test-https-proxy.mjs \
+    "${test_port}" "${https_port}" "${openssl_binary}" >"${test_artifacts}/https-proxy.log" 2>&1 &
+  https_pid=$!
+  https_ready=0
+  for ((attempt = 0; attempt < 80; attempt++)); do
+    if ! kill -0 "${https_pid}" 2>/dev/null; then
+      echo 'Owned HTTPS proxy exited before readiness.' >&2
+      exit 1
+    fi
+    if curl --insecure --fail --silent --max-time 2 "${BASE_URL}/api/rooms" >/dev/null; then
+      kill -0 "${https_pid}" 2>/dev/null
+      https_ready=1
+      break
+    fi
+    sleep 0.25
+  done
+  if [[ "${https_ready}" != 1 ]]; then
+    echo 'Owned HTTPS proxy failed readiness.' >&2
+    exit 1
+  fi
+fi
+
 export COMMUNITY_E2E=1
 export TEST_DATABASE_URL="${DATABASE_URL}"
 # Reports identify the actual selected binary/assets even when defaults were used.
 export TEST_SERVER_BINARY="${server_binary}" TEST_SERVER_WORKDIR="${server_workdir}"
 "$@"
+if [[ -n "${https_pid}" ]] && ! kill -0 "${https_pid}" 2>/dev/null; then
+  echo 'Owned HTTPS proxy exited while the test command was running.' >&2
+  exit 1
+fi
 if [[ -n "${turn_pid}" ]] && ! kill -0 "${turn_pid}" 2>/dev/null; then
   echo 'Owned TURN relay exited while the test command was running.' >&2
   exit 1

@@ -177,6 +177,11 @@ demand, select **Actions → Browser compatibility → Run workflow**. Chromium
 remains in the push/pull-request checks.
 
 Each job creates and stops its own loopback PostgreSQL cluster and server.
+`TEST_BROWSER_HTTPS=1` places an owned HTTPS/WebSocket proxy in front of that
+server so WebKit can retain the production `Secure` refresh cookie. The proxy
+uses a private one-day certificate; only opted-in test browser contexts ignore
+its certificate error. `TEST_HTTPS_PORT` defaults to `TEST_SERVER_PORT + 1`.
+Use the same opt-in when running the WebKit community suite locally.
 Reports, screenshots and logs are retained for seven days; database files are
 not uploaded. Firefox's unsupported capture-termination check remains an explicit
 skip in the report.

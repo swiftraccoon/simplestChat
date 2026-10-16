@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import dgram from 'node:dgram';
 import { once } from 'node:events';
-import { chmod, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { chmod, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
@@ -12,6 +13,10 @@ import test from 'node:test';
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
 const helper = path.join(repoRoot, 'build/with-test-server.sh');
 const fixture = fileURLToPath(new URL('./fixture-server.mjs', import.meta.url));
+const pinnedOpenSSL = process.env.OPENSSL_DIR || path.join(repoRoot, 'target/openssl-4.0.3');
+// Controller-only unit tests can supply the OS crypto fixture explicitly; the
+// browser wrapper itself always defaults to the checksum-pinned installation.
+const fixtureOpenSSL = existsSync(path.join(pinnedOpenSSL, 'bin/openssl')) ? pinnedOpenSSL : '/usr';
 
 async function unusedPort(protocol = 'tcp') {
   if (protocol === 'udp') {
@@ -152,6 +157,73 @@ test('passkey opt-in fixes relying party and origin to the owned localhost serve
     `]);
     assert.equal(result.status, 0, result.output);
   }
+});
+
+for (const status of [0, 23]) {
+  test(`HTTPS opt-in preserves the owned origin and cleans up after command status ${status}`, async t => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'simplestchat-https-helper.'));
+    t.after(() => rm(directory, { recursive: true, force: true }));
+    const temporary = path.join(directory, 'temporary');
+    await mkdir(temporary, { mode: 0o700 });
+    const backendPort = await unusedPort();
+    let securePort;
+    do { securePort = await unusedPort(); } while (securePort === backendPort);
+    const passkey = status === 23;
+    const hostname = passkey ? 'localhost' : '127.0.0.1';
+    const origin = `https://${hostname}:${securePort}`;
+    const server = path.join(directory, 'https-origin-server.mjs');
+    await writeFile(server, `#!/usr/bin/env node
+      import assert from 'node:assert/strict';
+      assert.equal(process.env.ALLOWED_ORIGINS, ${JSON.stringify(origin)});
+      assert.equal(process.env.WEBAUTHN_RP_ID, ${passkey ? "'localhost'" : 'undefined'});
+      assert.equal(process.env.WEBAUTHN_ORIGIN, ${passkey ? JSON.stringify(origin) : 'undefined'});
+      delete process.env.WEBAUTHN_ORIGIN;
+      await import(${JSON.stringify(pathToFileURL(fixture).href)});
+    `);
+    await chmod(server, 0o755);
+    const result = await run(t, {
+      TEST_BROWSER_HTTPS: '1', TEST_SERVER_PORT: String(backendPort),
+      TEST_HTTPS_PORT: String(securePort), TEST_SERVER_BINARY: server,
+      OPENSSL_DIR: fixtureOpenSSL,
+      PASSKEY_E2E: passkey ? '1' : '0', TMPDIR: temporary,
+      BASE_URL: 'https://must-not-inherit.invalid',
+    }, [process.execPath, '--input-type=module', '-e', `
+      import assert from 'node:assert/strict';
+      import https from 'node:https';
+      assert.equal(process.env.BASE_URL, ${JSON.stringify(origin)});
+      await new Promise((resolve, reject) => {
+        https.get(process.env.BASE_URL + '/api/rooms', { rejectUnauthorized: false }, response => {
+          assert.equal(response.statusCode, 200);
+          response.resume();
+          response.on('end', resolve);
+        }).on('error', reject);
+      });
+      process.exit(${status});
+    `]);
+    assert.equal(result.status, status, result.output);
+    assert.equal((await shutdownReport(result)).passed, true);
+    assert.deepEqual(await readdir(temporary), [], 'TLS material must be deleted');
+    assert.equal((await readdir(result.artifacts)).some(name => /\.(pem|key)$/.test(name)), false);
+    assert.match(await readFile(path.join(result.artifacts, 'https-proxy.log'), 'utf8'), /Test HTTPS proxy listening/);
+    const rebound = net.createServer().listen(securePort, '127.0.0.1');
+    await once(rebound, 'listening');
+    await new Promise(resolve => rebound.close(resolve));
+  });
+}
+
+test('HTTPS preflight rejects remote port overrides and preserves an occupied listener', async t => {
+  for (const port of ['', 'https://remote.invalid:443', '65536', '999']) {
+    const result = await run(t, { TEST_BROWSER_HTTPS: '1', TEST_HTTPS_PORT: port });
+    assert.equal(result.status, 2, result.output);
+  }
+  const listener = net.createServer().listen(0, '127.0.0.1');
+  await once(listener, 'listening');
+  t.after(() => new Promise(resolve => listener.close(resolve)));
+  const port = listener.address().port;
+  const result = await run(t, { TEST_BROWSER_HTTPS: '1', TEST_HTTPS_PORT: String(port), OPENSSL_DIR: fixtureOpenSSL });
+  assert.equal(result.status, 2, result.output);
+  assert.equal(listener.address().port, port);
+  await assert.rejects(readFile(path.join(result.artifacts, 'server.log')), { code: 'ENOENT' });
 });
 
 test('helper rejects empty, nonliteral, and unassigned media announcements before spawning', async t => {
