@@ -12,10 +12,6 @@
   max-height: 9rem;
   overflow: auto;
 }
-.attachment-tray[hidden],
-.message-attachment img[hidden] {
-  display: none;
-}
 .attachment-pending,
 .message-attachment {
   display: flex;

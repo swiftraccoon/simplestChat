@@ -93,7 +93,6 @@
   position: fixed;
   inset: auto;
   margin: 0;
-  box-sizing: border-box;
   flex-direction: column;
   gap: 0.45rem;
   background: var(--surface);
@@ -193,13 +192,6 @@
   color: var(--text);
   font-size: 0.8rem;
   text-align: center;
-}
-.video-stalled-notice[hidden],
-.personal-playback-blocked[hidden],
-.personal-media-hidden-notice[hidden],
-.media-preview-video[hidden],
-.personal-media-controls button[hidden] {
-  display: none;
 }
 @media (max-width: 480px) {
   .media-controls-toolbar {

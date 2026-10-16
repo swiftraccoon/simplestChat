@@ -31,6 +31,16 @@ startup latency, memory use, media quality or server capacity. Images, fonts,
 source maps and other non-JS/CSS/HTML files are not covered by these budgets.
 Measure runtime performance separately with the workflows below.
 
+The October 16 CSS audit measured the `20942e7` baseline at 77,272 bytes raw /
+15,255 gzip and the reduced styles at 75,565 / 15,030, including the help page.
+Equivalent explicit selectors preserve specificity while avoiding repeated
+vendor-prefixed `:is()` rules for the supported browser targets. The remaining
+removals are reset and hidden-state duplicates, identity aliases, declarations
+already overridden unconditionally, duplicate avatar dimensions and two
+unreferenced keyframes. Budgets stay unchanged; CSS gzip headroom grows from
+105 to 330 bytes. These delivery-size measurements do not establish a change in
+runtime performance.
+
 The October 2026 message-removal, account-session and saved-conversation screens
 use a shared history reader and existing UI helpers; no runtime dependency was
 added. An isolated build of `cbe87d2` measured JavaScript 555,224 bytes raw /

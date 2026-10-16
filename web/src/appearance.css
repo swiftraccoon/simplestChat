@@ -3,7 +3,8 @@
   padding-inline-start: 0.6rem;
 }
 .appearance-custom[data-appearance='text'],
-:is(.room-label, .room-topic).appearance-custom[data-appearance='text'] {
+.room-label.appearance-custom[data-appearance='text'],
+.room-topic.appearance-custom[data-appearance='text'] {
   color: var(--appearance-color);
 }
 .appearance-custom[data-appearance='bubble'] {

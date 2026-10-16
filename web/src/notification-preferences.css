@@ -10,9 +10,6 @@
 .notification-quiet-times > :last-child {
   grid-column: 1 / -1;
 }
-.notification-quiet-times[hidden] {
-  display: none;
-}
 .notification-conversation {
   font-size: 0.82rem;
 }

@@ -39,10 +39,6 @@
   --text: #f3efe9;
   --text-dim: #a8a39b;
   --text-faint: #6f6a63;
-  --text-primary: var(--text);
-  --text-secondary: var(--text-dim);
-  --bg-hover: var(--surface-2);
-  --bg-secondary: var(--surface);
   --accent: #f3efe9;
   --accent-hover: #ffffff;
   --accent-fill: #f3efe9;
@@ -466,10 +462,6 @@ header h1 {
 /* Focus lands here on entry so keyboard users start inside the room, without a full-screen ring. */
 #room-screen:focus-visible {
   outline: none;
-}
-
-#room-screen.layout-modern {
-  grid-template-columns: 1fr 320px;
 }
 
 #main-area {
@@ -1242,15 +1234,13 @@ header h1 {
   color: var(--text);
 }
 
-.setting-group
-  :is(
-    input[type='text'],
-    input[type='email'],
-    input[type='password'],
-    input[type='number'],
-    select,
-    textarea
-  ) {
+/* The repeated class preserves :is()'s maximum specificity without vendor selector copies. */
+.setting-group input[type='text'],
+.setting-group input[type='email'],
+.setting-group input[type='password'],
+.setting-group input[type='number'],
+.setting-group.setting-group select,
+.setting-group.setting-group textarea {
   width: 100%;
   min-width: 0;
   min-height: 44px;
@@ -1268,17 +1258,15 @@ header h1 {
   cursor: pointer;
 }
 
-.setting-group :is(input, select, textarea):focus-visible {
+.setting-group input:focus-visible,
+.setting-group select:focus-visible,
+.setting-group textarea:focus-visible {
   background: var(--surface-3);
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
 /* ========== Classic Layout ========== */
-
-#room-screen.layout-classic {
-  grid-template-columns: 220px 1fr 320px;
-}
 
 #room-screen.layout-classic #main-area {
   grid-column: 2;
@@ -1297,16 +1285,6 @@ header h1 {
   background: transparent;
   padding: 6.5rem 0.6rem 0.75rem;
   overflow-y: auto;
-}
-
-#room-screen.layout-classic #classic-users-panel {
-  display: block;
-}
-
-.classic-user-list .participant-avatar {
-  width: 32px;
-  height: 32px;
-  font-size: 0.8rem;
 }
 
 #classic-users-panel .classic-user-list {
@@ -1353,15 +1331,6 @@ header h1 {
   to {
     opacity: 1;
     transform: translateY(0);
-  }
-}
-
-@keyframes fadeOut {
-  from {
-    opacity: 1;
-  }
-  to {
-    opacity: 0;
   }
 }
 
@@ -1536,15 +1505,6 @@ header h1 {
   to {
     opacity: 1;
     transform: translateY(0);
-  }
-}
-
-@keyframes toastOut {
-  from {
-    opacity: 1;
-  }
-  to {
-    opacity: 0;
   }
 }
 
@@ -1917,7 +1877,7 @@ header.in-room #auth-bar-guest {
 }
 
 .btn-secondary:hover {
-  background: var(--bg-hover);
+  background: var(--surface-2);
 }
 
 .btn-full {
@@ -2408,7 +2368,7 @@ header.in-room .directory-toolbar {
 .mod-menu-label {
   padding: 4px 12px;
   font-size: 0.7rem;
-  color: var(--text-secondary);
+  color: var(--text-dim);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -2442,7 +2402,7 @@ header.in-room .directory-toolbar {
 .setting-hint {
   display: block;
   font-size: 0.75rem;
-  color: var(--text-secondary);
+  color: var(--text-dim);
   margin-top: 0.25rem;
 }
 
@@ -2510,7 +2470,6 @@ header.in-room .room-topic {
     left: 0;
     z-index: 12;
     width: max(200px, var(--roster-width, 220px));
-    box-sizing: border-box;
     flex-direction: column;
     align-items: flex-start;
     gap: 0.1rem;
@@ -2575,12 +2534,10 @@ header.in-room .room-topic {
 }
 .participant-actions-button {
   font: inherit;
-  font-size: 0.8rem;
   border: 0;
   color: var(--text-dim);
   background: transparent;
   border-radius: var(--radius-pill);
-  padding: 0.4rem 0.6rem;
   cursor: pointer;
   text-decoration: none;
 }
@@ -3018,7 +2975,7 @@ header.in-room .room-topic {
 .history-message time,
 .inbox-conversation time {
   font-size: 0.75rem;
-  color: var(--text-secondary);
+  color: var(--text-dim);
 }
 .history-message p {
   white-space: pre-wrap;
@@ -3056,7 +3013,7 @@ header.in-room .room-topic {
 .msg-edited {
   margin-left: 0.4rem;
   font-size: 0.65rem;
-  color: var(--text-secondary);
+  color: var(--text-dim);
 }
 .history-message.chat-msg {
   margin: 0.35rem 0;
