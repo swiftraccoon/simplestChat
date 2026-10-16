@@ -113,6 +113,27 @@ expires on 2026-11-29 and covers only this exact trigger feature and location.
 Changing the guards, checkout provenance, token scope or helper deletion
 boundary requires renewed assessment; no other trigger finding is suppressed.
 
+## Scheduled check notification trigger
+
+On 2026-10-15, the `dangerous-triggers` finding for
+`scheduled-check-alerts.yml#on` was reviewed against the complete workflow and
+`build/scheduled-check-alerts.mjs`. The completion trigger names seven maintained
+scheduled workflows and filters main. The job additionally requires this exact
+repository, its main branch and a scheduled or manually dispatched source run.
+Checkout selects trusted main with persisted credentials disabled. No triggering
+source, artifacts, logs or caches are downloaded or executed.
+
+The helper independently verifies the run's repository, source repository,
+workflow name/path, ID, attempt and commit through GitHub before using its outcome.
+It selects the latest completed result and requires every full-workflow job
+before closing an issue, preserving failures through diagnostic-only successes. The
+token can read contents and run metadata and write issues. Its fixed API routes
+can create or update only this repository's issues; an update requires the exact
+workflow marker on an issue authored by `github-actions[bot]`. Requests refuse
+redirects and have time and response-size bounds. No shell command contains
+trigger-provided text. Notification tests cover trust boundaries, out-of-order
+events, reruns, repeated failures, recovery, partial success and transport limits.
+
 ## Rust dependency health
 
 The audit distinguishes these health warnings from vulnerability-class results:

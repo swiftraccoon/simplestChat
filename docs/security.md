@@ -182,6 +182,16 @@ findings still need triage. The reusable
 workflow's `security_gate` input defaults to true, preserving CI's security
 categories and exact High/Critical review enforcement.
 
+`scheduled-check-alerts.yml` tracks failures of Security, infrastructure restore,
+Performance, Browser compatibility, CodeQL, Canary and Public availability.
+A failed scheduled or manual main run opens one GitHub issue assigned to
+`swiftraccoon`; repeated failures update it, and another failure after recovery
+reopens it. Configure GitHub notification delivery for issue assignments and
+subscriptions. A successful full workflow closes its issue. Cancelled runs,
+obsolete run attempts and partial diagnostic runs cannot close an incident.
+The notifier reads run metadata only and publishes run links, outcomes and commit
+identities; scanner findings, artifacts and logs remain outside issue bodies.
+
 Automated CodeQL covers first-party Actions, JavaScript/TypeScript, Python and
 Rust with `vendor/` outside the configured source-analysis scope. It has no
 native C/C++ job, including on scheduled and manually dispatched workflows.

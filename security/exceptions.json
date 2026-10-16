@@ -1750,6 +1750,16 @@
       "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 345d6a1be199505c6bc4d2808ef59f8b6f575d3f8fd0107c247a933ffdd996f7 at revision 60a2291356c8484c849925c0e933d794a240ba85. The cfg(test) boundary and complete local path were reviewed; the value only exercises the join password gate against test-owned state. No general test or Rust-query exclusion. Changed source/location requires another review.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#october-12-security-review-follow-through"
+    },
+    {
+      "scanner": "zizmor",
+      "fingerprint": "dangerous-triggers:2405d2ab1146d31ff0d07a538caf0d5ceeab0e358dcfcc1e3496ca0b5701e322",
+      "scope": ".github/workflows/scheduled-check-alerts.yml#on",
+      "owner": "swiftraccoon",
+      "rationale": "Completed main schedule/manual runs update their assigned workflow incident issues. The notifier executes only trusted default-branch code and consumes no triggering source, artifacts, logs or caches.",
+      "reachability": "Exact trigger and seven named workflows. Job gates enforce repository/main/schedule-or-dispatch before credential-free trusted-main checkout. Helper independently validates immutable run identity, rejects superseded events, checks complete successful jobs before recovery, and updates only bot-authored exact-marker issues through bounded fixed-origin API routes. Job permission is limited to contents/read, actions/read and issues/write.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md#scheduled-check-notification-trigger"
     }
   ]
 }

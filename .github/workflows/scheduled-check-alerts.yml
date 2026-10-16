@@ -1,0 +1,40 @@
+name: Scheduled check alerts
+
+on:
+  workflow_run:
+    workflows: [Security, Disposable infrastructure security, Performance, Browser compatibility, CodeQL, Canary, Public availability]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scheduled-check-alerts-${{ github.event.workflow_run.workflow_id }}
+  cancel-in-progress: false
+
+jobs:
+  notify:
+    name: Track scheduled failures and recoveries
+    if: >-
+      ${{ github.repository == 'swiftraccoon/simplestChat' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      github.event.workflow_run.head_branch == 'main' &&
+      (github.event.workflow_run.event == 'schedule' ||
+      github.event.workflow_run.event == 'workflow_dispatch') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    permissions:
+      contents: read
+      actions: read # Verify completed main runs and full-workflow recovery.
+      issues: write # Maintain only this repository's bot-authored incident issues.
+    steps:
+      # Use trusted default-branch code, never source or artifacts from the run.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: refs/heads/main
+      - name: Update the workflow's assigned incident issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node build/scheduled-check-alerts.mjs
