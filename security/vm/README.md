@@ -146,8 +146,16 @@ seed confirms this correction without changing the enrolled host key.
 
 Limits are 2 vCPUs, 3 GiB guest RAM, a 16 GiB overlay disk, 5 GiB process address
 space, 3,600 CPU seconds, 1,024 file descriptors and 512 processes. The controller
-has a 30-minute shared deadline, and an independent GNU timeout bounds QEMU to
-30 minutes even if the controller is lost. Core dumps are disabled. Input cloud
+also limits the main event loop's disk I/O worker pool to eight threads and sets
+`MALLOC_ARENA_MAX=2` only in the emulator process environment. QEMU's
+[default pool](https://www.qemu.org/docs/master/interop/qemu-qmp-ref.html#object-QMP-dispatchable-object-EventLoopBaseProperties)
+allows 64 workers; their stacks and glibc arena reservations share the same
+5 GiB address-space limit as the 3 GiB of guest RAM. Scheduled runs recorded
+intermittent `qemu_thread_create` resource exhaustion during cloud-init and
+SIGABRT after successful Ansible applications. These bounds reduce address-space
+pressure while retaining the guest RAM and process address-space limits.
+The controller has a 30-minute shared deadline, and an independent GNU timeout
+bounds QEMU to 30 minutes even if the controller is lost. Core dumps are disabled. Input cloud
 images and release archives are each limited to 2 GiB; each command/VM output
 stream is limited to 2 MiB, and there are at most 64 host commands. Prerequisite
 installation and provenance acquisition belong to the separately bounded CI job.
@@ -177,6 +185,11 @@ or signal observed before cleanup from the reaped cleanup return code, and recor
 a fixed drainer failure class and numeric I/O errno. Output failures discovered
 during the final drain still fail validation even when resource cleanup succeeds;
 an incomplete drain cannot publish success.
+
+Each completed Ansible command retains its strictly parsed numeric recap for the
+single generated host, including nonzero unreachable/failed counts before the
+command is rejected. Missing, duplicate or unexpected-host recaps fail validation;
+task names, module responses and SSH errors remain private.
 
 Failed guest actions return a separate failure receipt bound to the requested
 action and run identity. The controller accepts at most 16 KiB of duplicate-free

@@ -722,6 +722,8 @@ def qemu_command(work: Path, port: int, run_id: str) -> list[str]:
         "2",
         "-m",
         str(VM_MEMORY_MIB),
+        "-object",
+        "main-loop,id=ci-main-loop,thread-pool-max=8",
         "-display",
         "none",
         "-device",
@@ -791,7 +793,9 @@ class Guest:
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            env=host.env,
+            # Bound glibc's per-thread arena reservations as well as the AIO pool.
+            # Guest RAM shares RLIMIT_AS with QEMU's thread stacks and malloc arenas.
+            env={**host.env, "MALLOC_ARENA_MAX": "2"},
             cwd=ROOT,
             start_new_session=True,
         )
@@ -958,8 +962,8 @@ class Guest:
                     stream.close()
 
 
-def recap(data: bytes, *, unchanged: bool) -> dict[str, int]:
-    """Require one complete successful Ansible recap; skipped rescue/failures cannot pass."""
+def recap_counts(data: bytes) -> dict[str, int]:
+    """Extract only numeric counts for the exact single generated host, including failures."""
     matches = list(RECAP.finditer(data.decode()))
     require(len(matches) == 1, "vm_ansible_recap_missing_or_ambiguous")
     require(
@@ -967,7 +971,12 @@ def recap(data: bytes, *, unchanged: bool) -> dict[str, int]:
         "vm_ansible_unexpected_host",
     )
     names = ("ok", "changed", "unreachable", "failed", "skipped", "rescued", "ignored")
-    result: dict[str, int] = dict(zip(names, map(int, matches[0].groups()), strict=True))
+    return dict(zip(names, map(int, matches[0].groups()), strict=True))
+
+
+def recap(data: bytes, *, unchanged: bool) -> dict[str, int]:
+    """Require one complete successful Ansible recap; skipped rescue/failures cannot pass."""
+    result = recap_counts(data)
     require(
         result["ok"] > 0
         and all(result[name] == 0 for name in ("unreachable", "failed", "rescued", "ignored")),
@@ -1000,7 +1009,11 @@ def playbook(host: Host, inventory: Path, name: str, *, second: bool = False) ->
     ]
     if name == "site":
         args.extend(["--tags", "host,docker,benchmark"])
-    _, output = host.run(name + ("-second" if second else "-first"), args, timeout=600)
+    check_name = name + ("-second" if second else "-first")
+    status, output = host.run(check_name, args, timeout=600, accepted=(0, 1, 2, 4, 8, 99, 250, 255))
+    counts = recap_counts(output)
+    host.checks[-1]["ansibleRecap"] = counts
+    require(status == 0, "vm_command_failed_" + check_name)
     return recap(output, unchanged=second)
 
 

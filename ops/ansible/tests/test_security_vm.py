@@ -75,6 +75,7 @@ class RecordedHost(vm.Host):
         if name == "source-clean":
             return 0, b""
         if name.endswith(("-first", "-second")):
+            self.checks.append({"name": name, "exitStatus": 0})
             return 0, GOOD_RECAP
         message = "Unmodeled command"
         raise AssertionError(message)
@@ -235,6 +236,7 @@ class BoundaryTests(unittest.TestCase):
             ("-machine", "q35,accel=kvm"),
             ("-smp", "2"),
             ("-m", "3072"),
+            ("-object", "main-loop,id=ci-main-loop,thread-pool-max=8"),
             ("-display", "none"),
             ("-monitor", "none"),
         ):
@@ -325,6 +327,33 @@ class BoundaryTests(unittest.TestCase):
         self.assertEqual(host.calls[0][1][-2:], ["--tags", "host,docker,benchmark"])
         self.assertIn("ops/ansible/site.yml", host.calls[0][1])
         self.assertEqual(host.calls[0][1][host.calls[0][1].index("--limit") + 1], "vmfixture")
+
+    def test_failed_playbook_preserves_only_numeric_recap_before_rejection(self) -> None:
+        """An unreachable task is visible without publishing task names or SSH transcripts."""
+        host = RecordedHost(Path("/unused"), time.monotonic() + 30)
+        host.checks.append({"name": "site-first", "exitStatus": 4})
+        output = b"private-fixture-secret\n" + GOOD_RECAP.replace(
+            b"unreachable=0", b"unreachable=1"
+        )
+        with (
+            patch.object(RecordedHost, "run", return_value=(4, output)),
+            self.assertRaisesRegex(ToolError, "vm_command_failed_site-first"),
+        ):
+            _ = vm.playbook(host, Path("/owned/inventory.json"), "site")
+        counts = object_value(host.checks[-1]["ansibleRecap"])
+        self.assertEqual(counts["unreachable"], 1)
+        self.assertNotIn("private-fixture-secret", json.dumps(host.checks))
+
+    def test_ambiguous_playbook_recap_cannot_publish_counts_or_success(self) -> None:
+        """A failed command cannot select a favorable recap from ambiguous host output."""
+        host = RecordedHost(Path("/unused"), time.monotonic() + 30)
+        host.checks.append({"name": "site-first", "exitStatus": 4})
+        with (
+            patch.object(RecordedHost, "run", return_value=(4, GOOD_RECAP + GOOD_RECAP)),
+            self.assertRaisesRegex(ToolError, "vm_ansible_recap_missing_or_ambiguous"),
+        ):
+            _ = vm.playbook(host, Path("/owned/inventory.json"), "site")
+        self.assertNotIn("ansibleRecap", host.checks[-1])
 
     def test_guest_receipts_keep_only_validated_aggregate_evidence(self) -> None:
         """A matching action alone cannot conceal failed restore checks or unknown data."""
@@ -639,6 +668,30 @@ class StartupDiagnosticTests(unittest.TestCase):
 
 class LifecycleTests(unittest.TestCase):
     """Use only tiny owned Python processes to check exact cleanup and stream limits."""
+
+    def test_emulator_allocator_budget_excludes_ambient_arenas(self) -> None:
+        """Only the owned emulator gets the fixed allocator cap; host commands stay unchanged."""
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            patch.dict(os.environ, {"MALLOC_ARENA_MAX": "64"}),
+        ):
+            host = vm.Host(Path(temporary), time.monotonic() + 30)
+            guest = vm.Guest(
+                host,
+                [
+                    sys.executable,
+                    "-I",
+                    "-c",
+                    "import os; print(os.environ['MALLOC_ARENA_MAX'], flush=True)",
+                ],
+            )
+            try:
+                guest.thread.join(timeout=5)
+                self.assertFalse(guest.thread.is_alive())
+            finally:
+                guest.close()
+            self.assertEqual((host.output / "qemu.stdout").read_bytes(), b"2\n")
+            self.assertNotIn("MALLOC_ARENA_MAX", host.env)
 
     def test_guest_output_and_exact_group_cleanup_keep_the_leader_unreaped(self) -> None:
         """The drainer never reaps the leader before the canonical cleanup owns its PGID."""
