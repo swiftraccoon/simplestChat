@@ -121,6 +121,6 @@ test('WebKit mock-capture assumptions stay tied to the audited Playwright pin', 
   const specification = JSON.parse(await readFile(new URL('../../web/e2e/package.json', import.meta.url), 'utf8'));
   const lock = JSON.parse(await readFile(new URL('../../web/e2e/package-lock.json', import.meta.url), 'utf8'));
   const message = 'Re-audit bundled WebKit fake capture before changing the Playwright pin.';
-  assert.equal(specification.devDependencies.playwright, '1.63.0', message);
-  assert.equal(lock.packages['node_modules/playwright-core'].version, '1.63.0', message);
+  assert.equal(specification.devDependencies.playwright, '1.64.0', message);
+  assert.equal(lock.packages['node_modules/playwright-core'].version, '1.64.0', message);
 });

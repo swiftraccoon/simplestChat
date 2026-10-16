@@ -32,9 +32,9 @@ function browserOptions(name = 'chromium') {
         contextOptions: { ...httpsOptions },
       };
     case 'webkit':
-      // Playwright 1.63.0's macOS embedder enables mock capture in its default
+      // Playwright 1.64.0's macOS embedder enables mock capture in its default
       // configuration, copied into each isolated context; no custom args needed.
-      // https://github.com/microsoft/playwright/blob/v1.63.0/browser_patches/webkit/embedder/Playwright/mac/AppDelegate.m#L201-L225
+      // https://github.com/microsoft/playwright/blob/v1.64.0/browser_patches/webkit/embedder/Playwright/mac/AppDelegate.m#L201-L225
       // Other platforms remain blocked until their fake-capture path is audited.
       if (process.platform !== 'darwin') {
         throw new Error(
