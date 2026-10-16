@@ -129,7 +129,9 @@ async function client(label, mobile = false, configureContext, independentCaptur
   });
   await configureContext?.(context);
   const page = await context.newPage();
-  if (label === 'owner') await installPwaFixture(page);
+  // Every caller uses the same controlled push transport. Account rules still
+  // use the real server; native OS push delivery remains a manual device check.
+  await installPwaFixture(page);
   page.setDefaultTimeout(10000);
   const entry = { label, context, page, errors: [], frames: [], warnings: [] };
   clients.push(entry);
