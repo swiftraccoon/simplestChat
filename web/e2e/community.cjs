@@ -1690,6 +1690,41 @@ async function setRole(owner, name, role) {
         await guest.waitForFunction(
           () => !document.querySelector('.media-preview-video')?.srcObject,
         );
+        // Firefox and WebKit keep microphone identifiers private until that
+        // device kind is explicitly captured, independently of camera access.
+        await setup.getByRole('button', { name: 'Test microphone', exact: true }).click();
+        await setup
+          .getByText('Microphone test is live. Only you see the level; nothing plays back.', {
+            exact: true,
+          })
+          .waitFor();
+        const microphonePreviewTracks = await setup
+          .locator('.media-preview-video')
+          .evaluateHandle((video) => video.srcObject.getAudioTracks());
+        try {
+          assert.equal(
+            await microphonePreviewTracks.evaluate(
+              (tracks) => tracks.length > 0 && tracks.every((track) => track.readyState === 'live'),
+            ),
+            true,
+            'microphone preview captures a live local track',
+          );
+          assert.equal(
+            await owner.locator('.video-tile:not(.local) audio').count(),
+            0,
+            'microphone preview must not broadcast',
+          );
+          await setup.getByRole('button', { name: 'Stop preview', exact: true }).click();
+          assert.equal(
+            await microphonePreviewTracks.evaluate((tracks) =>
+              tracks.every((track) => track.readyState === 'ended'),
+            ),
+            true,
+            'stopping microphone preview ends its capture',
+          );
+        } finally {
+          await microphonePreviewTracks.dispose();
+        }
         const devicesListed = (name) =>
           guest.waitForFunction(
             (name) =>
