@@ -228,8 +228,8 @@ def current_platform() -> str:
 
 
 def default_directory(lock_digest: str, target_platform: str | None = None) -> Path:
-    """Keep different reviewed toolchain versions in separate ignored directories."""
-    return ROOT / "target/security-tools" / lock_digest / (target_platform or current_platform())
+    """Keep authenticated tools outside Cargo caches, whose cleanup removes their files."""
+    return ROOT / ".cache/security-tools" / lock_digest / (target_platform or current_platform())
 
 
 def download(asset: Asset) -> bytes:

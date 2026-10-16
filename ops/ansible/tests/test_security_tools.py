@@ -185,6 +185,22 @@ class InstallationTests(unittest.TestCase):
                 tools.install(["scanner"], self.directory, lock_path=self.lock), self.directory
             )
 
+    def test_default_install_ignores_a_pruned_cargo_target_prefix(self) -> None:
+        """A Rust cache restore cannot strand scanner installs in empty target directories."""
+        _, digest = tools.load_lock(self.lock)
+        platform = tools.current_platform()
+        pruned = self.root / "target/security-tools" / digest / platform
+        (pruned / "bin").mkdir(parents=True)
+        with (
+            patch.object(tools, "ROOT", self.root),
+            patch.object(tools, "download", return_value=self.archive),
+        ):
+            installed = tools.install(["scanner"], lock_path=self.lock)
+            path = tools.tool_path("scanner", lock_path=self.lock)
+        self.assertEqual(installed, self.root / ".cache/security-tools" / digest / platform)
+        self.assertEqual(path.read_bytes(), EXECUTABLE)
+        self.assertEqual(list(pruned.iterdir()), [pruned / "bin"])
+
     def test_tampered_executable_fails_reuse(self) -> None:
         """An executable modified after installation never reaches a scanner call."""
         _ = self.install()

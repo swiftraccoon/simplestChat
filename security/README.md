@@ -21,8 +21,11 @@ python3 build/security_tools.py path semgrep-core
 ```
 
 Tools are installed in a private directory below
-`target/security-tools/<lock-digest>/<platform>`. A receipt binds every installed
-executable and native companion library to the selected lock and archive.
+`.cache/security-tools/<lock-digest>/<platform>`, outside the Cargo target cache.
+The Rust cache action recursively prunes non-Cargo files under `target/`, leaving
+empty scanner prefixes that cannot pass receipt verification after restore.
+A receipt binds every installed executable and native companion library to the
+selected lock and archive.
 Resolution checks ownership, permissions and file hashes before returning a
 path. Interrupted installation does not publish a usable prefix. Installation
 does not merge new tools into an unrelated or incomplete prefix; an explicit

@@ -3,6 +3,7 @@
 /.cache/codeql-tools/
 /.cache/ci-act/
 /.cache/security-environments/
+/.cache/security-tools/
 /reference/
 /results
 # Publish only shared guides; existing local plans stay private.

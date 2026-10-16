@@ -16,7 +16,8 @@ remain enforced.
 Start from the repository root with Python 3.12 or newer, Git, ShellCheck, Node/npm
 and the Rust toolchain declared in `rust-toolchain.toml`. The shell entry point
 selects that Rust toolchain explicitly. It installs authenticated scanner binaries
-and a separate hashed Python environment under ignored `target/` directories.
+and a separate hashed Python environment under ignored `.cache/` directories,
+outside the Cargo target cache.
 The first run needs network access to the pinned distributions and current
 advisory databases. Installation and database failures fail the check.
 
