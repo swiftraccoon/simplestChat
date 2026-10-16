@@ -53,17 +53,16 @@ async function contactConversation(page, peerName, header) {
 
 async function privateAttachmentChecks(owner, member, outsider, { base, header, close, deadline }) {
   // This owned fixture credential stays in process memory and never enters artifacts.
-  const outsiderRequest = outsider.waitForRequest(
-    (request) => new URL(request.url()).pathname === '/api/auth/contacts',
-  );
-  const outsiderInbox = await header(outsider, 'Messages');
-  const outsiderAuthorization = (await outsiderRequest).headers().authorization;
+  const [outsiderRequest, outsiderInbox] = await Promise.all([
+    outsider.waitForRequest((request) => new URL(request.url()).pathname === '/api/auth/contacts'),
+    header(outsider, 'Messages'),
+  ]);
+  const outsiderAuthorization = outsiderRequest.headers().authorization;
   assert.ok(outsiderAuthorization?.startsWith('Bearer '));
   await close(outsiderInbox);
   const sender = await contactConversation(owner, 'E2E Member', header);
   const receiver = await contactConversation(member, 'E2E Owner', header);
   const bytes = await imageBytes(owner);
-  const upload = responseFor(owner, uploadPath, 'POST');
   let firstRoute;
   let observe;
   const intercepted = new Promise((resolve) => {
@@ -85,9 +84,11 @@ async function privateAttachmentChecks(owner, member, outsider, { base, header, 
       clipboardData.items.add(
         new File([new Uint8Array(value)], 'private-pasted.png', { type: 'image/png' }),
       );
-      input.dispatchEvent(
-        new ClipboardEvent('paste', { clipboardData, bubbles: true, cancelable: true }),
-      );
+      const paste = new ClipboardEvent('paste', { bubbles: true, cancelable: true });
+      // Firefox ignores clipboardData in synthetic ClipboardEvent constructor options.
+      // Supply the controlled clipboard payload on this event without using the OS clipboard.
+      Object.defineProperty(paste, 'clipboardData', { value: clipboardData });
+      input.dispatchEvent(paste);
     }, bytes);
   await deadline(intercepted, 10000);
   await sender.conversation
@@ -95,8 +96,11 @@ async function privateAttachmentChecks(owner, member, outsider, { base, header, 
     .filter({ hasText: /\d+%/ })
     .waitFor();
   await firstRoute.fulfill({ status: 503, json: { error: 'Owned transient upload fixture' } });
-  await sender.conversation.getByRole('button', { name: 'Retry', exact: true }).click();
-  const uploaded = await (await upload).json();
+  const [upload] = await Promise.all([
+    responseFor(owner, uploadPath, 'POST'),
+    sender.conversation.getByRole('button', { name: 'Retry', exact: true }).click(),
+  ]);
+  const uploaded = await upload.json();
   assert.equal(uploaded.contentType, 'image/png');
   await ready(sender.conversation);
   await sender.conversation

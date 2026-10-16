@@ -742,7 +742,7 @@ async function header(page, name) {
 async function settingsScreen(page, label) {
   if (!(await sheet(page).isVisible())) {
     if (await page.locator('#room-screen').isVisible()) await page.locator('#settings-btn').click();
-    else (await accountMenuButton(page, 'Account')).click();
+    else await (await accountMenuButton(page, 'Account')).click();
   }
   return sheetScreen(page, label);
 }

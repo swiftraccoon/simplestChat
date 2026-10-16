@@ -2,13 +2,15 @@ const assert = require('node:assert/strict');
 
 /** Real account storage and message delivery, before either account joins a room. */
 async function checkContactsBeforeRoom(owner, member, { base, header, close }) {
-  const memberResponse = member.waitForResponse(
-    (response) =>
-      new URL(response.url()).pathname === '/api/auth/contacts' &&
-      response.request().method() === 'GET',
-  );
-  const memberInbox = await header(member, 'Messages');
-  const { accountId } = await (await memberResponse).json();
+  const [memberResponse, memberInbox] = await Promise.all([
+    member.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === '/api/auth/contacts' &&
+        response.request().method() === 'GET',
+    ),
+    header(member, 'Messages'),
+  ]);
+  const { accountId } = await memberResponse.json();
   const ownerInbox = await header(owner, 'Messages');
   await ownerInbox.locator('.discovery-contacts > summary').click();
   await ownerInbox
