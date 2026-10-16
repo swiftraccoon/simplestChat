@@ -465,6 +465,7 @@ async function signalingReconnect(interrupted, publisher, receiver, direction) {
       (async () => {
         identities.push(await reconnectMediaIdentity(publisher));
         identities.push(await reconnectMediaIdentity(receiver));
+        await waitForMediaStart(receiver, identities[1]);
         evidence.before = await advancingReconnectMedia(receiver, identities[1], 3000);
         const baseline = await interrupted.evaluate(() =>
           window.__communitySignalingReconnect.snapshot(),
