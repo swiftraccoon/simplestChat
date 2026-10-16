@@ -127,6 +127,7 @@ jobs:
         timeout-minutes: 8
         env:
           TEST_BROWSER_HTTPS: '1'
+          WEBKIT_TEST_NETWORK: ${{ matrix.browser == 'webkit' && '1' || '' }}
           E2E_ARTIFACTS: ${{ runner.temp }}/browser-compatibility
         run: build/with-test-postgres.sh build/with-test-server.sh npm --prefix web/e2e test
 
@@ -135,6 +136,7 @@ jobs:
         timeout-minutes: 3
         env:
           ICE_ISOLATION_E2E: '1'
+          WEBKIT_TEST_NETWORK: ${{ matrix.browser == 'webkit' && '1' || '' }}
           E2E_ARTIFACTS: ${{ runner.temp }}/browser-compatibility/ice-isolation
         run: node web/e2e/ice-isolation.cjs
 

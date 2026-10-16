@@ -17,9 +17,11 @@ test('community steps distinguish successful checks, unsupported simulations, an
   const end = source.indexOf('\nasync function client(', start);
   assert.ok(start >= 0 && end > start, 'step reporter must remain available');
   const report = { steps: [] }, saved = [], messages = [];
+  let networkChecks = 0;
   const step = runInNewContext(`let activeStep; ${source.slice(start, end)}; step`, {
     report,
     saveReport() { saved.push(JSON.parse(JSON.stringify(report))); },
+    async testNetworkReady() { networkChecks++; },
     console: { log(message) { messages.push(message); } },
   });
   await step('native check', async () => {});
@@ -32,6 +34,48 @@ test('community steps distinguish successful checks, unsupported simulations, an
   ]);
   assert.equal(saved.length, 5, 'started checks and their outcomes must be persisted');
   assert.deepEqual(messages, ['PASS native check', 'SKIP unsupported simulation: No synthetic event delivery']);
+  assert.equal(networkChecks, 5, 'configuration is checked before each step and after completed work');
+});
+
+test('a failed owned test-network configuration cannot mark a community step passed or skipped', async () => {
+  const source = await readFile(runner, 'utf8');
+  const start = source.indexOf('async function step(');
+  const end = source.indexOf('\nasync function client(', start);
+  for (const failingCheck of [1, 2]) {
+    const report = { steps: [] }, messages = [];
+    let checks = 0, workRan = false;
+    const step = runInNewContext(`let activeStep; ${source.slice(start, end)}; step`, {
+      report, saveReport() {}, console: { log(value) { messages.push(value); } },
+      async testNetworkReady() { if (++checks === failingCheck) throw new Error('owned configuration failed'); },
+    });
+    await assert.rejects(step('configured native check', async () => { workRan = true; return { skip: 'unsupported simulation' }; }), /owned configuration failed/);
+    assert.equal(workRan, failingCheck === 2);
+    assert.deepEqual(JSON.parse(JSON.stringify(report.steps)), [{ name: 'configured native check', passed: false }]);
+    assert.deepEqual(messages, []);
+  }
+});
+
+test('only explicit successful retirement removes an owned client from network readiness checks', async () => {
+  const source = await readFile(runner, 'utf8');
+  const start = source.indexOf('async function testNetworkReady(');
+  const end = source.indexOf('\nasync function deadline(', start);
+  const calls = [], firstPage = {}, secondPage = {};
+  const clients = [
+    { page: firstPage, testNetwork: { async ready() { calls.push('first-ready'); }, async dispose() { calls.push('first-dispose'); } } },
+    { page: secondPage, testNetwork: { async ready() { calls.push('second-ready'); }, async dispose() { calls.push('second-dispose'); } } },
+  ];
+  const { testNetworkReady, retireTestNetwork } = runInNewContext(`${source.slice(start, end)}; ({testNetworkReady, retireTestNetwork})`, { clients, assert });
+  await retireTestNetwork(firstPage);
+  await testNetworkReady();
+  assert.deepEqual(calls, ['first-ready', 'first-dispose', 'second-ready']);
+  assert.equal(clients.length, 2, 'retired clients remain available as evidence and for owned browser cleanup');
+  assert.equal(clients[0].testNetworkRetired, true);
+  assert.equal(clients[1].testNetworkRetired, undefined);
+  clients[1].testNetwork.ready = async () => { throw new Error('unexpected session disposal'); };
+  await assert.rejects(testNetworkReady(), /unexpected session disposal/);
+  await assert.rejects(retireTestNetwork(secondPage), /unexpected session disposal/);
+  assert.equal(clients[1].testNetworkRetired, undefined);
+  await assert.rejects(retireTestNetwork({}), /only an owned community client/);
 });
 
 async function fixture(t, toolingSource) {

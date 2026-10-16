@@ -51,4 +51,13 @@ function browserOptions(name = 'chromium') {
   }
 }
 
-module.exports = { browserOptions };
+function webKitTestNetworkEnabled(name, env = process.env) {
+  const value = env.WEBKIT_TEST_NETWORK;
+  if (value === undefined || value === '' || value === '0') return false;
+  if (value !== '1' || name !== 'webkit') {
+    throw new Error('WEBKIT_TEST_NETWORK=1 is restricted to the owned WebKit test harness.');
+  }
+  return true;
+}
+
+module.exports = { browserOptions, webKitTestNetworkEnabled };

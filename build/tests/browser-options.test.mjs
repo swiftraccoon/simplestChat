@@ -4,7 +4,7 @@ import test from 'node:test';
 import vm from 'node:vm';
 import helper from '../../web/e2e/browser-options.cjs';
 
-const { browserOptions } = helper;
+const { browserOptions, webKitTestNetworkEnabled } = helper;
 const source = await readFile(new URL('../../web/e2e/browser-options.cjs', import.meta.url), 'utf8');
 
 // Test platform restrictions without changing the host process or launching any
@@ -16,6 +16,15 @@ function forPlatform(platform, arch = 'arm64', env = {}) {
 }
 
 const plain = value => JSON.parse(JSON.stringify(value));
+
+test('owned WebKit test network requires explicit opt-in and cannot affect other engines', () => {
+  for (const browser of ['chromium', 'firefox', 'webkit']) {
+    for (const value of [undefined, '', '0']) assert.equal(webKitTestNetworkEnabled(browser, { WEBKIT_TEST_NETWORK: value }), false);
+    for (const value of ['true', 'false', '2']) assert.throws(() => webKitTestNetworkEnabled(browser, { WEBKIT_TEST_NETWORK: value }), /restricted/);
+  }
+  assert.equal(webKitTestNetworkEnabled('webkit', { WEBKIT_TEST_NETWORK: '1' }), true);
+  for (const browser of ['chromium', 'firefox']) assert.throws(() => webKitTestNetworkEnabled(browser, { WEBKIT_TEST_NETWORK: '1' }), /restricted/);
+});
 
 test('private HTTPS certificate exception requires the disposable proxy opt-in', () => {
   for (const name of ['chromium', 'firefox', 'webkit']) {

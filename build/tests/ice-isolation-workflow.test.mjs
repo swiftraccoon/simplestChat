@@ -76,6 +76,7 @@ test('owned mDNS preflight and scoped after snapshot preserve diagnostics withou
 test('page-only filtering diagnostic runs separately and retains the unchanged WebKit baseline outcome', () => {
   const baseline = step('WebKit receive-only ICE');
   assert.doesNotMatch(baseline, /DIAGNOSTIC|FILTERING|continue-on-error/);
+  assert.doesNotMatch(baseline, /WEBKIT_TEST_NETWORK/);
   const candidate = step('WebKit with owned candidate filtering override');
   assert.ok(candidate.includes("if: ${{ !cancelled() && steps.tooling.outcome == 'success' }}"));
   assert.match(candidate, /timeout-minutes: 3/);
@@ -85,4 +86,16 @@ test('page-only filtering diagnostic runs separately and retains the unchanged W
   assert.ok(candidate.includes('E2E_ARTIFACTS: ${{ runner.temp }}/ice-isolation/webkit-filtering-disabled'));
   assert.doesNotMatch(candidate, /continue-on-error|\|\|\s*true|sudo|defaults|killall/);
   assert.ok(workflow.indexOf('name: WebKit receive-only ICE') < workflow.indexOf('name: WebKit with owned candidate filtering override'));
+});
+
+test('scheduled compatibility opts only WebKit into owned native test networking', () => {
+  const compatibilitySteps = compatibility.split(/(?=^      - (?:name|uses):)/m).slice(1);
+  const expected = ['Community and real-media browser regressions', 'Isolate native receive-only ICE gathering'];
+  const enabled = compatibilitySteps.filter(value => value.includes('WEBKIT_TEST_NETWORK:'));
+  assert.equal(enabled.length, 2);
+  for (const [index, value] of enabled.entries()) {
+    assert.ok(value.startsWith(`      - name: ${expected[index]}\n`));
+    assert.ok(value.includes("WEBKIT_TEST_NETWORK: ${{ matrix.browser == 'webkit' && '1' || '' }}"));
+    assert.doesNotMatch(value, /WEBKIT_ICE_DIAGNOSTIC|ICE_ISOLATION_WEBKIT_FILTERING|continue-on-error/);
+  }
 });

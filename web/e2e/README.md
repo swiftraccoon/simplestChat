@@ -310,6 +310,19 @@ baseline report. This comparison opens no capture device and retains the same
 native candidate-publication and gathering-completion assertions. It does not
 change the application, installed browser profiles, or OS privacy settings.
 
+Hosted WebKit compatibility uses `WEBKIT_TEST_NETWORK=1` for its disposable
+community and native ICE pages. A same-host comparison established that the
+default WebKit filtering path stalls while its page-only
+`ICECandidateFilteringEnabled=false` setting publishes native host candidates
+and completes; native mDNS registration succeeds on that host. The maintained
+helper is tied to the audited Playwright 1.64.0 implementation, applies the
+setting before navigation and before a replacement WebProcess resumes, and
+fails the run if configuration fails. Reports record the setting and number of
+native applications for each page. Offer/answer negotiation, candidate gathering,
+media capture, decoded receive, continuity and real ICE restart checks remain
+native and retain their assertions. This controlled network does not test the
+default WebKit host-address privacy policy; the manual baseline remains available.
+
 ## Accessibility
 
 With the same pinned browser tooling, built UI and disposable-service setup:

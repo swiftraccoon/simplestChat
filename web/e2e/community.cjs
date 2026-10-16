@@ -21,7 +21,7 @@ if (process.env.COMMUNITY_E2E !== '1')
 const base = process.env.BASE_URL || 'http://127.0.0.1:3109';
 if (!['localhost', '127.0.0.1', '[::1]'].includes(new URL(base).hostname))
   throw new Error('This smoke is restricted to local test servers.');
-const { browserOptions } = require('./browser-options.cjs');
+const { browserOptions, webKitTestNetworkEnabled } = require('./browser-options.cjs');
 const { collectPeerDiagnostics } = require('./peer-diagnostics.cjs');
 const { installPeerEventTracing } = require('./peer-events.cjs');
 const { installSignalingReconnectObservation } = require('./signaling-reconnect.cjs');
@@ -29,6 +29,7 @@ const { installRelayPolicy, waitForRelayPaths } = require('./turn-relay.cjs');
 const { openAccountMenu, accountMenuButton, signOut } = require('./account-menu.cjs');
 const turnRelay = process.env.TURN_E2E === '1';
 const options = browserOptions(process.env.E2E_BROWSER);
+const webKitTestNetwork = webKitTestNetworkEnabled(options.name);
 const playwright = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const artifacts =
   process.env.E2E_ARTIFACTS ||
@@ -76,11 +77,37 @@ const report = {
   ],
 };
 function saveReport() {
+  report.webKitTestNetwork = {
+    enabled: webKitTestNetwork,
+    pages: clients
+      .filter((item) => item.testNetwork)
+      .map((item) => ({
+        label: item.label,
+        setting: item.testNetwork.setting,
+        value: item.testNetwork.value,
+        playwrightVersion: item.testNetwork.playwrightVersion,
+        appliedCount: item.testNetwork.appliedCount(),
+        retired: item.testNetworkRetired === true,
+      })),
+  };
   fs.writeFileSync(
     path.join(artifacts, 'community-results.json'),
     `${JSON.stringify(report, null, 2)}\n`,
     { mode: 0o600 },
   );
+}
+async function testNetworkReady() {
+  await Promise.all(
+    clients.filter((item) => !item.testNetworkRetired).map((item) => item.testNetwork?.ready()),
+  );
+}
+async function retireTestNetwork(page) {
+  const item = clients.find((candidate) => candidate.page === page);
+  assert.ok(item, 'only an owned community client may retire its test network');
+  if (!item.testNetwork || item.testNetworkRetired) return;
+  await item.testNetwork.ready();
+  await item.testNetwork.dispose();
+  item.testNetworkRetired = true;
 }
 async function deadline(work, milliseconds = 5000) {
   let timer;
@@ -103,7 +130,9 @@ async function step(name, work) {
   const result = { name, passed: false };
   report.steps.push(result);
   saveReport();
+  await testNetworkReady();
   const outcome = await work();
+  await testNetworkReady();
   if (outcome?.skip) {
     result.skipped = true;
     result.reason = outcome.skip;
@@ -129,12 +158,18 @@ async function client(label, mobile = false, configureContext, independentCaptur
   });
   await configureContext?.(context);
   const page = await context.newPage();
+  const entry = { label, context, page, errors: [], frames: [], warnings: [] };
+  clients.push(entry);
+  if (webKitTestNetwork) {
+    const { installWebKitTestNetwork } = require('./webkit-test-network.cjs');
+    entry.testNetwork = await installWebKitTestNetwork(playwright, page, {
+      browserName: options.name,
+    });
+  }
   // Every caller uses the same controlled push transport. Account rules still
   // use the real server; native OS push delivery remains a manual device check.
   await installPwaFixture(page);
   page.setDefaultTimeout(10000);
-  const entry = { label, context, page, errors: [], frames: [], warnings: [] };
-  clients.push(entry);
   if (turnRelay) await page.addInitScript(installRelayPolicy);
   // Observe native peer connections for failure diagnostics; no SDP/media mocking.
   await page.addInitScript(installPeerEventTracing, {
@@ -194,10 +229,12 @@ async function client(label, mobile = false, configureContext, independentCaptur
   });
   page.on('dialog', (dialog) => dialog.dismiss());
   await page.goto(base, { waitUntil: 'networkidle' });
+  await entry.testNetwork?.ready();
   try {
     await page.locator('.conversation-toolbar').waitFor({ state: 'attached', timeout: 3000 });
   } catch {
     await page.reload({ waitUntil: 'networkidle' });
+    await entry.testNetwork?.ready();
     await page.locator('.conversation-toolbar').waitFor({ state: 'attached' });
   }
   assert.deepEqual(entry.errors, [], `${label} startup page errors`);
@@ -2157,6 +2194,7 @@ async function setRole(owner, name, role) {
               await before.dispose();
             }
             await leave(probe);
+            await retireTestNetwork(probe);
             await probe.context().close();
             await owner.locator('#cam-btn').click();
             await owner.locator('#mic-btn').click();
@@ -2212,6 +2250,7 @@ async function setRole(owner, name, role) {
             await identity.dispose();
           }
           await leave(probe);
+          await retireTestNetwork(probe);
           await probe.context().close();
           if (turnRelay) {
             await owner.locator('#cam-btn').click();
@@ -2585,6 +2624,7 @@ async function setRole(owner, name, role) {
           console.log('invitee auth responses:', authResponses.join(' | '));
           throw error;
         }
+        await retireTestNetwork(invitee);
         await invitee.close();
       },
     );
@@ -2719,6 +2759,7 @@ async function setRole(owner, name, role) {
       await guest.locator('#join-screen').waitFor({ state: 'visible' });
       await member.locator('#join-screen').waitFor({ state: 'visible' });
     });
+    await testNetworkReady();
     for (const item of clients) assert.deepEqual(item.errors, [], `${item.label} page errors`);
     report.complete = true;
     report.passed = true;
@@ -2772,6 +2813,23 @@ async function setRole(owner, name, role) {
           .locator('#leave-btn')
           .click()
           .catch(() => {});
+    }
+    const networkClosures = await Promise.allSettled(
+      clients.map(async (item) => {
+        if (item.testNetworkRetired) return;
+        try {
+          await item.testNetwork?.ready();
+        } finally {
+          await item.testNetwork?.dispose();
+        }
+      }),
+    );
+    const failedNetworkClose = networkClosures.find((result) => result.status === 'rejected');
+    if (failedNetworkClose) {
+      report.complete = false;
+      report.passed = false;
+      report.cleanupError = 'Owned WebKit test-network lifecycle failed.';
+      cleanupFailure = failedNetworkClose.reason;
     }
     const closures = await Promise.allSettled(
       [...(browser ? [browser] : []), ...additionalBrowsers].map(async (owned) => {

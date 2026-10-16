@@ -53,11 +53,17 @@ async function run() {
   const fs = require('node:fs');
   const os = require('node:os');
   const path = require('node:path');
-  const { browserOptions } = require('./browser-options.cjs');
+  const { browserOptions, webKitTestNetworkEnabled } = require('./browser-options.cjs');
   const { installPeerEventTracing } = require('./peer-events.cjs');
   const { collectPeerDiagnostics } = require('./peer-diagnostics.cjs');
   const options = browserOptions(process.env.E2E_BROWSER);
   const filteringSetting = diagnosticFilteringSetting(process.env, options.name);
+  const webKitTestNetwork = webKitTestNetworkEnabled(options.name);
+  if (webKitTestNetwork && filteringSetting !== null) {
+    throw new Error(
+      'Choose either the maintained WebKit test network or the filtering diagnostic.',
+    );
+  }
   const moduleName = process.env.PLAYWRIGHT_MODULE || 'playwright';
   const playwright = require(moduleName);
   const artifacts =
@@ -77,6 +83,7 @@ async function run() {
       filteringSetting === null
         ? null
         : { setting: 'ICECandidateFilteringEnabled', value: filteringSetting, diagnostic: true },
+    webKitTestNetwork: { enabled: webKitTestNetwork },
     capture: false,
     iceServers: [],
     gatheringDeadlineMs: 15000,
@@ -112,7 +119,7 @@ async function run() {
     const result = { name, passed: false, peerIndex: null, stage: 'launch' };
     report.cases.push(result);
     save();
-    let browser, context, page;
+    let browser, context, page, testNetwork;
     try {
       // A fresh process per role also keeps this check independent of community tests.
       browser = await playwright[options.name].launch(options.launchOptions);
@@ -131,11 +138,24 @@ async function run() {
           : route.abort(),
       );
       page = await context.newPage();
+      if (webKitTestNetwork) {
+        result.stage = 'webkit-test-network';
+        const { installWebKitTestNetwork } = require('./webkit-test-network.cjs');
+        testNetwork = await installWebKitTestNetwork(playwright, page, {
+          browserName: options.name,
+        });
+        result.testNetwork = {
+          setting: testNetwork.setting,
+          value: testNetwork.value,
+          playwrightVersion: testNetwork.playwrightVersion,
+        };
+      }
       await page.addInitScript(installPeerEventTracing, {
         announcedIp: process.env.TEST_ANNOUNCE_IP || null,
       });
       result.stage = 'navigation';
       await page.goto(origin, { waitUntil: 'load', timeout: 10000 });
+      await testNetwork?.ready();
       if (filteringSetting !== null) {
         result.stage = 'webkit-ice-diagnostic';
         const { configureWebKitIceDiagnostic } = require('./webkit-ice-diagnostic.cjs');
@@ -153,6 +173,7 @@ async function run() {
       await page.waitForFunction(receiveOnlyGatheringComplete, null, {
         timeout: report.gatheringDeadlineMs,
       });
+      await testNetwork?.ready();
       result.passed = true;
       result.stage = 'complete';
     } catch {
@@ -162,6 +183,19 @@ async function run() {
           ? 'ICE gathering did not publish a candidate and complete within 15000 ms'
           : `${result.stage} failed`;
     } finally {
+      if (testNetwork) {
+        result.testNetwork.appliedCount = testNetwork.appliedCount();
+        try {
+          try {
+            await testNetwork.ready();
+          } finally {
+            await testNetwork.dispose();
+          }
+        } catch {
+          result.cleanupError = 'Owned WebKit test-network lifecycle failed';
+          result.passed = false;
+        }
+      }
       if (page) {
         try {
           result.media = await deadline(page.evaluate(collectPeerDiagnostics), 5000);

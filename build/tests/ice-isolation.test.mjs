@@ -263,6 +263,7 @@ test('isolation CLI snapshots both successful roles privately and cleans fresh b
   assert.equal(report.complete, true); assert.equal(report.passed, true);
   assert.equal(report.browser, 'chromium'); assert.equal(report.browserVersion, 'fixture-browser');
   assert.equal(report.pageOverride, null);
+  assert.deepEqual(report.webKitTestNetwork, { enabled: false });
   assert.deepEqual(report.cases.map(value => [value.name, value.passed, value.peerIndex, value.stage]),
     [['offerer', true, 0, 'complete'], ['answerer', true, 0, 'complete']]);
   assert.ok(report.cases.every(value => value.media[0].iceGatheringState === 'complete'));
