@@ -295,6 +295,20 @@ including when that check fails.
 For a same-host comparison, run **Actions → ICE isolation → Run workflow**.
 It runs WebKit and Chromium on one hosted Mac without building the app, retaining
 both reports even when a probe fails. Each engine keeps its existing launch options.
+The manual workflow also reads the mDNSResponder service state, tests WebKit's
+native macOS mDNS registration API with an owned random `.local` name and a
+five-second deadline, and summarizes narrowly scoped WebKit/mDNS sandbox logs.
+The registration is removed when its service connection closes. Only fixed
+stages, numeric error counts and interface counts are retained; raw logs,
+addresses and host names are discarded. These mDNS diagnostics change no OS or
+browser settings.
+
+A separate WebKit comparison explicitly disables `ICECandidateFilteringEnabled`
+for each fresh owned test page using the pinned browser's Inspector protocol.
+Its requested and applied setting is recorded separately from the unchanged
+baseline report. This comparison opens no capture device and retains the same
+native candidate-publication and gathering-completion assertions. It does not
+change the application, installed browser profiles, or OS privacy settings.
 
 ## Accessibility
 

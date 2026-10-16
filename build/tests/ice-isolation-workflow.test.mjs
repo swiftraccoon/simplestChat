@@ -59,3 +59,30 @@ test('same-host ICE reports and OS provenance remain available after a probe fai
   assert.ok(upload.includes('path: ${{ runner.temp }}/ice-isolation\n'));
   assert.match(upload, /retention-days: 7/);
 });
+
+test('owned mDNS preflight and scoped after snapshot preserve diagnostics without changing browser probes', () => {
+  for (const [name, mode] of [['Inspect mDNS service and owned registration', 'preflight'], ['Summarize scoped mDNS and WebKit diagnostics', 'snapshot']]) {
+    const diagnostic = step(name);
+    assert.ok(diagnostic.includes("if: ${{ !cancelled() && steps.tooling.outcome == 'success' }}"));
+    assert.match(diagnostic, /timeout-minutes: 1/);
+    assert.match(diagnostic, /MDNS_DIAGNOSTIC_E2E: '1'/);
+    assert.ok(diagnostic.includes(`run: node build/test-mdns.mjs ${mode}`));
+    assert.doesNotMatch(diagnostic, /sudo|defaults|killall|capture|continue-on-error/);
+  }
+  assert.ok(workflow.indexOf('name: Inspect mDNS') < workflow.indexOf('name: WebKit receive-only ICE'));
+  assert.ok(workflow.indexOf('name: Summarize scoped') > workflow.indexOf('name: Chromium receive-only ICE'));
+});
+
+test('page-only filtering diagnostic runs separately and retains the unchanged WebKit baseline outcome', () => {
+  const baseline = step('WebKit receive-only ICE');
+  assert.doesNotMatch(baseline, /DIAGNOSTIC|FILTERING|continue-on-error/);
+  const candidate = step('WebKit with owned candidate filtering override');
+  assert.ok(candidate.includes("if: ${{ !cancelled() && steps.tooling.outcome == 'success' }}"));
+  assert.match(candidate, /timeout-minutes: 3/);
+  assert.match(candidate, /E2E_BROWSER: webkit/);
+  assert.match(candidate, /WEBKIT_ICE_DIAGNOSTIC: '1'/);
+  assert.match(candidate, /ICE_ISOLATION_WEBKIT_FILTERING: '0'/);
+  assert.ok(candidate.includes('E2E_ARTIFACTS: ${{ runner.temp }}/ice-isolation/webkit-filtering-disabled'));
+  assert.doesNotMatch(candidate, /continue-on-error|\|\|\s*true|sudo|defaults|killall/);
+  assert.ok(workflow.indexOf('name: WebKit receive-only ICE') < workflow.indexOf('name: WebKit with owned candidate filtering override'));
+});

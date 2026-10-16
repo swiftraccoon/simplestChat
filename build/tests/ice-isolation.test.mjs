@@ -8,7 +8,7 @@ import { runInNewContext } from 'node:vm';
 import test from 'node:test';
 import isolation from '../../web/e2e/ice-isolation.cjs';
 
-const { setupReceiveOnlyPeer, receiveOnlyGatheringComplete } = isolation;
+const { setupReceiveOnlyPeer, receiveOnlyGatheringComplete, diagnosticFilteringSetting } = isolation;
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const runner = path.join(root, 'web/e2e/ice-isolation.cjs');
 const plain = value => JSON.parse(JSON.stringify(value));
@@ -142,6 +142,19 @@ test('gathering completion requires both complete state and a nonempty candidate
   assert.equal(complete(), false);
 });
 
+test('filtering diagnostic defaults off and requires a WebKit-only explicit setting and opt-in', () => {
+  for (const browser of ['chromium', 'firefox', 'webkit']) assert.equal(diagnosticFilteringSetting({}, browser), null);
+  assert.equal(diagnosticFilteringSetting({ WEBKIT_ICE_DIAGNOSTIC: '1', ICE_ISOLATION_WEBKIT_FILTERING: '0' }, 'webkit'), false);
+  assert.equal(diagnosticFilteringSetting({ WEBKIT_ICE_DIAGNOSTIC: '1', ICE_ISOLATION_WEBKIT_FILTERING: '1' }, 'webkit'), true);
+  for (const env of [{ WEBKIT_ICE_DIAGNOSTIC: '1' }, { ICE_ISOLATION_WEBKIT_FILTERING: '0' },
+    ...['', 'true', 'false', '2'].map(value => ({ WEBKIT_ICE_DIAGNOSTIC: '1', ICE_ISOLATION_WEBKIT_FILTERING: value }))]) {
+    assert.throws(() => diagnosticFilteringSetting(env, 'webkit'), /requires its opt-in/);
+  }
+  for (const browser of ['chromium', 'firefox']) {
+    assert.throws(() => diagnosticFilteringSetting({ WEBKIT_ICE_DIAGNOSTIC: '1', ICE_ISOLATION_WEBKIT_FILTERING: '0' }, browser), /requires its opt-in/);
+  }
+});
+
 async function runnerFixture(t, settings = {}) {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'simplestchat-ice-runner-fixture.'));
   t.after(() => rm(directory, { recursive: true, force: true }));
@@ -249,6 +262,7 @@ test('isolation CLI snapshots both successful roles privately and cleans fresh b
   const report = await f.report();
   assert.equal(report.complete, true); assert.equal(report.passed, true);
   assert.equal(report.browser, 'chromium'); assert.equal(report.browserVersion, 'fixture-browser');
+  assert.equal(report.pageOverride, null);
   assert.deepEqual(report.cases.map(value => [value.name, value.passed, value.peerIndex, value.stage]),
     [['offerer', true, 0, 'complete'], ['answerer', true, 0, 'complete']]);
   assert.ok(report.cases.every(value => value.media[0].iceGatheringState === 'complete'));

@@ -34,6 +34,21 @@ function receiveOnlyGatheringComplete() {
   );
 }
 
+function diagnosticFilteringSetting(env, browserName) {
+  const value = env.ICE_ISOLATION_WEBKIT_FILTERING;
+  if (value === undefined && env.WEBKIT_ICE_DIAGNOSTIC === undefined) return null;
+  if (
+    env.WEBKIT_ICE_DIAGNOSTIC !== '1' ||
+    browserName !== 'webkit' ||
+    !['0', '1'].includes(value)
+  ) {
+    throw new Error(
+      'WebKit ICE diagnostic requires its opt-in, WebKit and an explicit 0 or 1 setting.',
+    );
+  }
+  return value === '1';
+}
+
 async function run() {
   const fs = require('node:fs');
   const os = require('node:os');
@@ -42,6 +57,7 @@ async function run() {
   const { installPeerEventTracing } = require('./peer-events.cjs');
   const { collectPeerDiagnostics } = require('./peer-diagnostics.cjs');
   const options = browserOptions(process.env.E2E_BROWSER);
+  const filteringSetting = diagnosticFilteringSetting(process.env, options.name);
   const moduleName = process.env.PLAYWRIGHT_MODULE || 'playwright';
   const playwright = require(moduleName);
   const artifacts =
@@ -57,6 +73,10 @@ async function run() {
     arch: process.arch,
     launchOptions: options.launchOptions,
     contextOptions: options.contextOptions,
+    pageOverride:
+      filteringSetting === null
+        ? null
+        : { setting: 'ICECandidateFilteringEnabled', value: filteringSetting, diagnostic: true },
     capture: false,
     iceServers: [],
     gatheringDeadlineMs: 15000,
@@ -116,6 +136,17 @@ async function run() {
       });
       result.stage = 'navigation';
       await page.goto(origin, { waitUntil: 'load', timeout: 10000 });
+      if (filteringSetting !== null) {
+        result.stage = 'webkit-ice-diagnostic';
+        const { configureWebKitIceDiagnostic } = require('./webkit-ice-diagnostic.cjs');
+        result.pageOverride = await deadline(
+          configureWebKitIceDiagnostic(playwright, page, {
+            browserName: options.name,
+            filteringEnabled: filteringSetting,
+          }),
+          5000,
+        );
+      }
       result.stage = 'negotiation';
       result.peerIndex = await deadline(page.evaluate(setupReceiveOnlyPeer, name), 10000);
       result.stage = 'gathering';
@@ -187,4 +218,8 @@ if (require.main === module) {
   }
 }
 
-module.exports = { setupReceiveOnlyPeer, receiveOnlyGatheringComplete };
+module.exports = {
+  setupReceiveOnlyPeer,
+  receiveOnlyGatheringComplete,
+  diagnosticFilteringSetting,
+};

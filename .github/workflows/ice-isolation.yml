@@ -48,12 +48,30 @@ jobs:
       - name: Record macOS version
         run: sw_vers
 
+      - name: Inspect mDNS service and owned registration
+        if: ${{ !cancelled() && steps.tooling.outcome == 'success' }}
+        timeout-minutes: 1
+        env:
+          MDNS_DIAGNOSTIC_E2E: '1'
+          E2E_ARTIFACTS: ${{ runner.temp }}/ice-isolation
+        run: node build/test-mdns.mjs preflight
+
       - name: WebKit receive-only ICE
         if: ${{ !cancelled() && steps.tooling.outcome == 'success' }}
         timeout-minutes: 3
         env:
           E2E_BROWSER: webkit
           E2E_ARTIFACTS: ${{ runner.temp }}/ice-isolation/webkit
+        run: node web/e2e/ice-isolation.cjs
+
+      - name: WebKit with owned candidate filtering override
+        if: ${{ !cancelled() && steps.tooling.outcome == 'success' }}
+        timeout-minutes: 3
+        env:
+          E2E_BROWSER: webkit
+          WEBKIT_ICE_DIAGNOSTIC: '1'
+          ICE_ISOLATION_WEBKIT_FILTERING: '0'
+          E2E_ARTIFACTS: ${{ runner.temp }}/ice-isolation/webkit-filtering-disabled
         run: node web/e2e/ice-isolation.cjs
 
       - name: Chromium receive-only ICE
@@ -63,6 +81,14 @@ jobs:
           E2E_BROWSER: chromium
           E2E_ARTIFACTS: ${{ runner.temp }}/ice-isolation/chromium
         run: node web/e2e/ice-isolation.cjs
+
+      - name: Summarize scoped mDNS and WebKit diagnostics
+        if: ${{ !cancelled() && steps.tooling.outcome == 'success' }}
+        timeout-minutes: 1
+        env:
+          MDNS_DIAGNOSTIC_E2E: '1'
+          E2E_ARTIFACTS: ${{ runner.temp }}/ice-isolation
+        run: node build/test-mdns.mjs snapshot
 
       - name: Preserve both browser reports
         if: ${{ !cancelled() }}
