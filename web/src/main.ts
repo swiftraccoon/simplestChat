@@ -1641,6 +1641,12 @@ function setupMenu(toggleId: string, menuId: string): void {
     if (open) menu.querySelector<HTMLElement>('button:not([hidden]):not(:disabled)')?.focus();
   };
   toggle.addEventListener('click', () => setOpen(toggle.getAttribute('aria-expanded') !== 'true'));
+  menu.addEventListener('mousedown', (event) => {
+    // Safari otherwise blurs the focused choice before click, hiding the menu
+    // through focusout before the pointer can activate a different choice.
+    if (event.button === 0 && (event.target as Element).closest('button, a'))
+      event.preventDefault();
+  });
   // Focus returns to the toggle before a choice runs, so a dialog it opens restores
   // focus there instead of to a menu item that is about to be hidden.
   menu.addEventListener(

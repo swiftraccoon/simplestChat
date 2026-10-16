@@ -559,6 +559,22 @@ for (const [label, setup, toggleId, menuId] of [
     assert.equal(menu.hidden, false);
     assert.equal(toggle.attributes['aria-expanded'], 'true');
     assert.equal(state.focused, item, 'opening focuses the first choice');
+    let prevented = false;
+    fire(item, 'mousedown', {
+      button: 0,
+      preventDefault() {
+        prevented = true;
+      },
+    });
+    assert.equal(prevented, true, 'primary pointer activation preserves focus until click');
+    prevented = false;
+    fire(item, 'mousedown', {
+      button: 2,
+      preventDefault() {
+        prevented = true;
+      },
+    });
+    assert.equal(prevented, false, 'secondary pointer actions retain their native behavior');
     fire(item, 'click');
     assert.equal(menu.hidden, true, 'a choice closes the menu');
     assert.equal(state.focused, toggle, 'a dialog the choice opens will return focus to More');
