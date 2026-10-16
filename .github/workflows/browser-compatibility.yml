@@ -81,11 +81,6 @@ jobs:
           node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"
           echo "$RUNNER_TEMP/simplestchat-npm-12.2.0/bin" >> "$GITHUB_PATH"
 
-      - name: Check test helpers
-        run: |
-          bash -n build/with-test-postgres.sh build/with-test-server.sh
-          node --test build/tests/*.test.mjs load_tests/benchmark-local.test.mjs
-
       - name: Configure native dependencies and media address
         run: |
           {
@@ -103,6 +98,12 @@ jobs:
       - name: Build checksum-pinned AWS-LC
         # AWS-LC's generated bindings use the selected Rust toolchain and libclang.
         run: build/install-aws-lc.sh "${AWS_LC_SYS_SYSTEM_DIR}"
+
+      - name: Check test helpers
+        # TLS fixtures need the authenticated OpenSSL CLI, not macOS LibreSSL.
+        run: |
+          bash -n build/with-test-postgres.sh build/with-test-server.sh
+          node --test build/tests/*.test.mjs load_tests/benchmark-local.test.mjs
 
       - name: Build server with both authenticated crypto libraries
         run: cargo build --locked --bin simplestChat
