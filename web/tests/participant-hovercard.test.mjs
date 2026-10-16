@@ -304,3 +304,23 @@ test('keyboard navigation resumes at the trigger when leaving either edge of the
     assert.equal(f.state.profiles.length, 1);
   }
 });
+
+test('Tab reaches every offered portal action even when the browser skips buttons', async () => {
+  const f = await fixture();
+  f.state.data.canMessage = true;
+  f.anchor.focus();
+  const actions = f.card.querySelectorAll('button');
+  assert.equal(actions.length, 2);
+  for (const shiftKey of [false, true]) {
+    actions[shiftKey ? 1 : 0].focus();
+    let prevented = false;
+    f.card.emit('keydown', {
+      key: 'Tab',
+      shiftKey,
+      preventDefault: () => (prevented = true),
+    });
+    assert.equal(prevented, true);
+    assert.equal(f.document.activeElement, actions[shiftKey ? 0 : 1]);
+    assert.equal(f.card.hidden, false);
+  }
+});

@@ -67,7 +67,16 @@ export class ParticipantHovercard {
       'keydown',
       (event) => {
         if (event.key !== 'Tab') return;
-        const actions = this.card.querySelectorAll<HTMLButtonElement>('button');
+        const actions = Array.from(this.card.querySelectorAll<HTMLButtonElement>('button'));
+        const index = actions.findIndex((action) => action === document.activeElement);
+        const next = actions[index + (event.shiftKey ? -1 : 1)];
+        if (index >= 0 && next) {
+          // Safari's default Tab order skips buttons. Once the trigger enters
+          // this portal, make each offered action reachable in both directions.
+          event.preventDefault();
+          next.focus();
+          return;
+        }
         const edge = event.shiftKey ? actions[0] : actions[actions.length - 1];
         if (document.activeElement !== edge && document.activeElement !== this.card) return;
         // The card is a portal: resume the trigger's document order at either edge.
