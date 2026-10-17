@@ -352,7 +352,8 @@ Mocked UI success does not establish native-device, mobile-browser or backend
 correctness. CI runs both the layout and lifecycle suites against built assets.
 
 For a silent UI review, set `E2E_ARTIFACTS` to a new directory and run
-`npm --prefix web/e2e run test:silent-ui` with `E2E_BROWSER=chromium` or `firefox`.
+`node web/e2e/silent-ui.cjs` from the repository root with
+`E2E_BROWSER=chromium` or `firefox`.
 It checks auth-error visibility, keyboard activation, dialog focus return and
 short-window reachability. Capture, peer creation, playback, Web Audio and speech
 APIs are blocked before application code runs; any attempted use fails the review.

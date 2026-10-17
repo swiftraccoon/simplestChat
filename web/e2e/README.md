@@ -164,7 +164,7 @@ After building `web/dist`, use a new private artifact directory:
 
 ```sh
 E2E_BROWSER=firefox E2E_ARTIFACTS="$PWD/results/silent-ui-firefox" \
-  npm --prefix web/e2e run test:silent-ui
+  node web/e2e/silent-ui.cjs
 ```
 
 Chromium and Firefox run the real production UI at desktop, 320px and short
