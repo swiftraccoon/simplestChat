@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { capabilities } = require('./capabilities-fixture.cjs');
+const { silentUiGuard, silentUiState } = require('./silent-ui-guard.cjs');
 const {
   closeOwnedBrowser,
   startFinalizationWatchdog,
@@ -226,7 +227,7 @@ async function geometry(page) {
       viewport: { width: innerWidth, height: innerHeight },
       card: { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height },
       directoryWidth: box(document.querySelector('#room-browser')).width,
-      mediaCalls: window.__homepageMediaCalls,
+      mediaCalls: window.__silentUiGuard?.attempts,
       shape,
     };
   });
@@ -355,27 +356,7 @@ async function run(env = process.env) {
             permissions: [],
             serviceWorkers: 'block',
           });
-          await context.addInitScript(() => {
-            window.__homepageMediaCalls = 0;
-            const deny = () => {
-              window.__homepageMediaCalls++;
-              return Promise.reject(
-                new DOMException('Media disabled by layout test', 'NotAllowedError'),
-              );
-            };
-            Object.defineProperty(navigator, 'mediaDevices', {
-              value: Object.freeze(
-                Object.assign(new EventTarget(), {
-                  getUserMedia: deny,
-                  getDisplayMedia: deny,
-                  enumerateDevices: deny,
-                }),
-              ),
-              configurable: false,
-            });
-            for (const method of ['getUserMedia', 'webkitGetUserMedia', 'mozGetUserMedia'])
-              Object.defineProperty(navigator, method, { value: deny, configurable: false });
-          });
+          await context.addInitScript(silentUiGuard);
           let signalingConnections = 0;
           let ticketRequests = 0;
           await context.routeWebSocket(/.*/, (socket) => {
@@ -407,6 +388,10 @@ async function run(env = process.env) {
                 return route.fulfill({
                   status: 200,
                   contentType: asset.contentType,
+                  headers: {
+                    'Permissions-Policy':
+                      'camera=(), microphone=(), display-capture=(), autoplay=()',
+                  },
                   body: asset.body,
                 });
               if (url.pathname === '/favicon.ico' && request.method() === 'GET')
@@ -536,6 +521,7 @@ async function run(env = process.env) {
           const inspect = async (state) => {
             report.activeStep = `${name}-${state}`;
             const result = await geometry(page);
+            await silentUiState(page);
             report.checks.push({ name: report.activeStep, ...result });
             save();
             assert.deepEqual(result.problems, [], `${report.activeStep}: layout containment`);
@@ -604,6 +590,7 @@ async function run(env = process.env) {
           assert.equal(report.pageErrors, 0, 'No unhandled production UI errors');
           assert.equal(report.unexpectedRequests, 0, 'Every request must use an explicit fixture');
           assert.equal(report.signalingMessages, 0, 'Layout checks must not join or publish');
+          await silentUiState(page);
           await context.close();
           page = null;
           console.log(`PASS homepage ${name}`);
