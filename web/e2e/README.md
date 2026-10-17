@@ -158,6 +158,28 @@ The printed private artifact directory retains asset hashes, rendered geometry,
 screenshots and browser cleanup results. `E2E_ARTIFACTS` may select a new directory;
 an existing directory is rejected. CI retains the separate `homepage-layout` report.
 
+## Silent UI review
+
+After building `web/dist`, use a new private artifact directory:
+
+```sh
+E2E_BROWSER=firefox E2E_ARTIFACTS="$PWD/results/silent-ui-firefox" \
+  npm --prefix web/e2e run test:silent-ui
+```
+
+Chromium and Firefox run the real production UI at desktop, 320px and short
+landscape sizes with explicit in-process HTTP/WS fixtures. No backend is started.
+Guards installed before application code block capture, device enumeration,
+peer creation, media playback, Web Audio and speech; a blocked call fails the run.
+The homepage layout suite uses these same guards.
+
+The review checks keyboard submission and cancellation, pending-auth ownership,
+visible validation errors without moving keyboard focus, viewport-contained
+dialogs, settings navigation and modal focus return. Screenshots, asset hashes,
+guard counts and owned-browser cleanup are retained. It does not establish
+physical-device or screen-reader behavior; native desktop keyboard policy still
+applies, and button activation begins from an explicitly focused control.
+
 ## Firefox and WebKit
 
 Chromium is the default. Install the other pinned engines and run each with a

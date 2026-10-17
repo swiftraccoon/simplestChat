@@ -2527,6 +2527,7 @@ function showAuthFailure(
     );
   } else node.textContent = message;
   node.hidden = false;
+  node.scrollIntoView({ block: 'nearest' });
 }
 
 function dismissAuth(): boolean {
@@ -2663,6 +2664,7 @@ registerSubmit.addEventListener(
       registerError.textContent =
         error instanceof Error ? error.message : 'Choose a valid password';
       registerError.hidden = false;
+      registerError.scrollIntoView({ block: 'nearest' });
       return;
     }
     const attempt = authFlow.begin(true);

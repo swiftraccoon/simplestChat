@@ -351,6 +351,13 @@ and the real-backend community/accessibility suites for integration behavior.
 Mocked UI success does not establish native-device, mobile-browser or backend
 correctness. CI runs both the layout and lifecycle suites against built assets.
 
+For a silent UI review, set `E2E_ARTIFACTS` to a new directory and run
+`npm --prefix web/e2e run test:silent-ui` with `E2E_BROWSER=chromium` or `firefox`.
+It checks auth-error visibility, keyboard activation, dialog focus return and
+short-window reachability. Capture, peer creation, playback, Web Audio and speech
+APIs are blocked before application code runs; any attempted use fails the review.
+See the [browser guide](../web/e2e/README.md#silent-ui-review) for scope and artifacts.
+
 ### Automated accessibility smoke
 
 After installing the browser tooling and building the UI:
