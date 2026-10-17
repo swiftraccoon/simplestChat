@@ -2,24 +2,34 @@
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import os
+import re
 import stat
 import sys
 import tempfile
-from datetime import UTC, datetime
+from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING, cast
+from urllib.parse import parse_qs, urlsplit
+from urllib.request import Request, urlopen
 
 from security_context import ROOT
-from security_tools import private_directory, require
+from security_tools import bounded_file, private_directory, require
 
 # isort: split
 from release_json import JsonObject, decode_json, object_value
 
+if TYPE_CHECKING:
+    from http.client import HTTPResponse
+
 # Match the scanner's four-GiB final database bound. Its separate online update
 # workspace also accommodates the old database until its replacement is ready.
 FILES = {"vulnerability.db": 4 * 1024**3 - 65536, "import.json": 65536}
+LATEST = "https://grype.anchore.io/databases/v6/latest.json"
+MAX_DESCRIPTOR = 65536
 
 
 def pin() -> str:
@@ -29,15 +39,67 @@ def pin() -> str:
     return hashlib.sha256(json.dumps(grype, sort_keys=True).encode()).hexdigest()
 
 
-def key() -> str:
-    """Refresh the immutable cache daily, with a separate trusted namespace."""
+def prefix() -> str:
+    """Separate immutable database generations by scanner pin and trust boundary."""
     trust = (
         "main"
         if os.environ.get("GITHUB_REF") == "refs/heads/main"
         and os.environ.get("GITHUB_EVENT_NAME") != "pull_request"
         else "untrusted"
     )
-    return f"grype-db-v1-{trust}-{pin()}-{datetime.now(UTC):%Y-%m-%d}"
+    return f"grype-db-v2-{trust}-{pin()}-"
+
+
+def generation(checksum: object) -> str:
+    """Use the archive's content identity only as a cache hint, never a verdict."""
+    require(
+        isinstance(checksum, str) and re.fullmatch(r"sha256:[a-f0-9]{64}", checksum),
+        "image_database_generation_checksum",
+    )
+    return prefix() + cast("str", checksum).removeprefix("sha256:")
+
+
+def descriptor_key(value: JsonObject) -> str:
+    """Accept the fixed v6 distribution descriptor without trusting its scan status."""
+    schema = value.get("schemaVersion")
+    require(
+        value.get("status") == "active"
+        and isinstance(schema, str)
+        and re.fullmatch(r"v6\.\d+\.\d+", schema),
+        "image_database_generation_descriptor",
+    )
+    return generation(value.get("checksum"))
+
+
+def key() -> str:
+    """Resolve the current archive generation, including updates within one UTC day."""
+    request = Request(LATEST, headers={"User-Agent": "simplestchat-grype-database-cache"})
+    with cast("HTTPResponse", urlopen(request, timeout=10)) as response:  # noqa: S310 -- Fixed public HTTPS endpoint.
+        require(response.url == LATEST, "image_database_generation_redirect")
+        content = response.read(MAX_DESCRIPTOR + 1)
+    require(0 < len(content) <= MAX_DESCRIPTOR, "image_database_generation_size")
+    return descriptor_key(object_value(decode_json(content)))
+
+
+def key_from_status(status: JsonObject) -> str:
+    """Publish under the actual online-validated archive after a possible rotation."""
+    source = status.get("from")
+    require(isinstance(source, str), "image_database_generation_source")
+    location = urlsplit(cast("str", source))
+    require(
+        location.scheme == "https"
+        and location.netloc == "grype.anchore.io"
+        and location.path.startswith("/databases/v6/")
+        and location.path.endswith(".tar.zst")
+        and not location.fragment,
+        "image_database_generation_source",
+    )
+    parameters = parse_qs(location.query, keep_blank_values=True, strict_parsing=True)
+    require(
+        set(parameters) == {"checksum"} and len(parameters["checksum"]) == 1,
+        "image_database_generation_source",
+    )
+    return generation(parameters["checksum"][0])
 
 
 def copy_checked(source: Path, destination: Path, limit: int) -> JsonObject:
@@ -113,5 +175,32 @@ def save(directory: Path, database: Path) -> None:
             _ = (stage / name).replace(directory / name)
 
 
+@dataclass
+class Options(argparse.Namespace):
+    """Select a current descriptor, a restore prefix, or a checked update's identity."""
+
+    prefix: bool = False
+    status: Path | None = None
+
+
+def main() -> int:
+    """Print one bounded cache selector without changing database data."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    selection = parser.add_mutually_exclusive_group()
+    _ = selection.add_argument("--prefix", action="store_true")
+    _ = selection.add_argument("--status", type=Path)
+    arguments = parser.parse_args(namespace=Options())
+    if arguments.prefix:
+        selected = prefix()
+    elif arguments.status is not None:
+        selected = key_from_status(
+            object_value(decode_json(bounded_file(arguments.status, MAX_DESCRIPTOR)))
+        )
+    else:
+        selected = key()
+    _ = sys.stdout.write(selected + "\n")
+    return 0
+
+
 if __name__ == "__main__":
-    _ = sys.stdout.write(key() + "\n")
+    raise SystemExit(main())

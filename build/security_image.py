@@ -481,7 +481,13 @@ def tool_bundle(directory: Path, output: Path, platform: str) -> Path:
     return bundle
 
 
-def prepare_sandbox(args: Options, output: Path, image_policy: JsonObject) -> Sandbox:
+def prepare_sandbox(
+    args: Options,
+    output: Path,
+    image_policy: JsonObject,
+    *,
+    cancelled: threading.Event | None = None,
+) -> Sandbox:
     """Use an explicit local engine and an empty registry-auth/config directory."""
     engine = engine_prefix(args.engine)
     config = output / "engine-config"
@@ -499,6 +505,8 @@ def prepare_sandbox(args: Options, output: Path, image_policy: JsonObject) -> Sa
     command_logs = output / "scanner-commands"
     command_logs.mkdir(mode=0o700)
     runner = release_build.Runner(output=command_logs)
+    cancellation = cancelled if cancelled is not None else threading.Event()
+    runner.healthy = lambda: not cancellation.is_set()
     base = string_value(image_policy["scannerBase"])
     sandbox = Sandbox(
         engine,
@@ -508,6 +516,7 @@ def prepare_sandbox(args: Options, output: Path, image_policy: JsonObject) -> Sa
         base,
         args.platform,
         runner,
+        cancelled=cancellation,
         database_cache=args.database_cache,
     )
     _ = sandbox.command(["pull", "--platform", args.platform, base], timeout=300)
@@ -587,6 +596,7 @@ def prepare_database(sandbox: Sandbox) -> JsonObject:
     policy.database_status(db_status, policy.load_policy(ROOT / "security/image-policy.json"))
     db_status["databaseSha256"] = digest(database / "cache/6/vulnerability.db")
     db_status["importReceiptSha256"] = digest(database / "cache/6/import.json")
+    policy.require(not sandbox.cancelled.is_set(), "image_scan_cancelled")
     write(sandbox.output / "database-status.json", db_status)
     if sandbox.database_cache is not None:
         security_image_cache.save(sandbox.database_cache, database)
@@ -1126,6 +1136,81 @@ class Options(argparse.Namespace):
     database_cache: Path | None = None
 
 
+def execute_database(args: Options) -> bool:
+    """Warm only checked database bytes on an engine independent of the image fixture."""
+    policy.require(
+        args.output.is_absolute()
+        and args.tools_directory.is_absolute()
+        and args.database_cache is not None
+        and args.database_cache.is_absolute(),
+        "image_database_preparation_paths",
+    )
+    args.output.mkdir(mode=0o700)
+    output = args.output.resolve(strict=True)
+    cancelled = threading.Event()
+    outcome: JsonObject = {"schemaVersion": 1, "passed": False}
+
+    def cancel(_number: int, _frame: FrameType | None) -> None:
+        cancelled.set()
+
+    previous = {number: signal.signal(number, cancel) for number in (signal.SIGINT, signal.SIGTERM)}
+    try:
+        args.tools_directory = security_tools.install(
+            TOOLS, args.tools_directory, target_platform=PLATFORMS[args.platform]
+        )
+        policy.require(not cancelled.is_set(), "image_scan_cancelled")
+        sandbox = prepare_sandbox(
+            args,
+            output,
+            policy.load_policy(ROOT / "security/image-policy.json"),
+            cancelled=cancelled,
+        )
+        sandbox.scanner_limit = 2
+        _ = scan_phase(sandbox, "database", lambda: prepare_database(sandbox))
+        policy.require(not cancelled.is_set(), "image_scan_cancelled")
+        outcome["databaseEvidenceSha256"] = digest(output / "database-status.json")
+        outcome["passed"] = True
+    except (
+        ValueError,
+        OSError,
+        KeyError,
+        release_build.BuildError,
+        security_tools.ToolError,
+    ) as error:
+        outcome["error"] = (
+            str(error) if isinstance(error, security_tools.ToolError) else type(error).__name__
+        )
+    finally:
+        outcome["cancelled"] = cancelled.is_set()
+        if cancelled.is_set():
+            outcome["passed"] = False
+        try:
+            write(output / "database-preparation.json", outcome)
+        finally:
+            for number, handler in previous.items():
+                _ = signal.signal(number, handler)
+    return outcome["passed"] is True and not cancelled.is_set()
+
+
+def database_main(argv: Sequence[str]) -> int:
+    """Expose a database-only operation with no image/archive or verdict input."""
+    parser = argparse.ArgumentParser(description="Prepare fresh checked Grype cache bytes only")
+    for name in ("output", "tools-directory", "database-cache"):
+        _ = parser.add_argument("--" + name, type=Path, required=True)
+    _ = parser.add_argument("--engine", choices=("docker", "podman"), default="docker")
+    _ = parser.add_argument("--platform", choices=tuple(PLATFORMS), default="linux/amd64")
+    args = parser.parse_args(argv, namespace=Options())
+    _ = os.umask(0o077)
+    try:
+        passed = execute_database(args)
+    except (ValueError, OSError, KeyError, release_build.BuildError, security_tools.ToolError):
+        passed = False
+    print(  # noqa: T201 -- Fixed CLI status, never database/scanner contents.
+        "Image database preparation " + ("passed" if passed else "failed")
+    )
+    return 0 if passed else 1
+
+
 def main() -> int:
     """Return failed when preparation, evidence coverage, policy or cleanup fails."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -1149,4 +1234,6 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(
+        database_main(sys.argv[2:]) if sys.argv[1:2] == ["prepare-database"] else main()
+    )

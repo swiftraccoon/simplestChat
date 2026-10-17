@@ -89,6 +89,21 @@ The tool never rebuilds an image to stand in for the requested ID. Case-insensit
 filesystems and noncanonical exports fail. See [image security](image-security.md)
 for detailed archive, scanner, database, license and ELF contracts.
 
+CI prepares fresh Grype database bytes in an independent required job while the
+production image builds and its disposable release fixture runs. Each job owns
+its own engine, including the local ACT runner. Cache generations bind the
+scanner pin, main-versus-untrusted namespace and upstream database archive
+checksum, so an intraday database update can publish new bytes. Publication uses
+the generation actually reported after validation, including when upstream
+rotates after the initial cache lookup. Only database bytes and their checked
+hash receipt are reused. The image job always performs its own online update,
+status/age/hash validation and fresh vulnerability scan. A late preparation or
+cache-publication race uses the normal cold update. An unavailable descriptor
+hint falls back to the checked scanner/trust cache prefix while the mandatory
+online updater still runs. The image build never waits for the preparation job.
+The speedup depends on when preparation finishes and whether its cache entry is
+available.
+
 ## Blocking source checks
 
 | Check | Enforced policy | Important boundary |

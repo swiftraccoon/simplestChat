@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import io
 import json
 import os
 import tempfile
 import unittest
 from pathlib import Path
+from typing import TYPE_CHECKING, cast
 from unittest.mock import patch
 
 from test_support import ROOT
@@ -19,7 +21,37 @@ from security_tools import ToolError
 from test_security_image_parallel import sandbox
 from test_security_image_runner import Engine
 
+if TYPE_CHECKING:
+    from urllib.request import Request
+
+    from release_json import JsonObject
+
 _ = ROOT
+
+
+def descriptor(checksum: str = "a" * 64) -> JsonObject:
+    """Represent the fixed v6 upstream distribution format without network calls."""
+    return {"status": "active", "schemaVersion": "v6.1.10", "checksum": "sha256:" + checksum}
+
+
+def status(checksum: str = "a" * 64) -> JsonObject:
+    """Describe the archive actually selected by the ordinary online updater."""
+    return {
+        "from": "https://grype.anchore.io/databases/v6/vulnerability-db_v6.1.10_example.tar.zst"
+        + "?checksum=sha256%3A"
+        + checksum
+    }
+
+
+class DescriptorResponse(io.BytesIO):
+    """Bounded HTTPS response fixture for the descriptor cache hint."""
+
+    url: str
+
+    def __init__(self, body: bytes, url: str = cache.LATEST) -> None:
+        """Expose only the response body and final URL used by the bounded reader."""
+        super().__init__(body)
+        self.url = url
 
 
 def database(root: Path) -> Path:
@@ -144,8 +176,71 @@ class DatabaseCacheTests(unittest.TestCase):
     def test_main_and_untrusted_download_cache_keys_never_overlap(self) -> None:
         """Executable scanner pins and the trust boundary remain part of every cache key."""
         with patch.dict(os.environ, GITHUB_REF="refs/heads/main", GITHUB_EVENT_NAME="push"):
-            trusted = cache.key()
+            trusted = cache.descriptor_key(descriptor())
         with patch.dict(os.environ, GITHUB_REF="refs/heads/main", GITHUB_EVENT_NAME="pull_request"):
-            untrusted = cache.key()
+            untrusted = cache.descriptor_key(descriptor())
         self.assertNotEqual(trusted, untrusted)
-        self.assertRegex(trusted, r"^grype-db-v1-main-[a-f0-9]{64}-\d{4}-\d{2}-\d{2}$")
+        self.assertRegex(trusted, r"^grype-db-v2-main-[a-f0-9]{64}-[a-f0-9]{64}$")
+        with patch.object(cache, "pin", return_value="b" * 64):
+            self.assertNotEqual(untrusted, cache.descriptor_key(descriptor()))
+
+    def test_same_day_rotation_and_post_update_identity_select_new_generations(self) -> None:
+        """An upstream rotation uses immutable content keys, including during preparation."""
+        first = cache.descriptor_key(descriptor())
+        second = cache.descriptor_key(descriptor("b" * 64))
+        self.assertNotEqual(first, second)
+        self.assertEqual(first, cache.key_from_status(status()))
+        self.assertEqual(second, cache.key_from_status(status("b" * 64)))
+        self.assertTrue(second.startswith(cache.prefix()))
+
+    def test_descriptor_and_updater_sources_reject_ambiguous_or_unbounded_identities(self) -> None:
+        """Only the reviewed schema and one SHA-256 checksum can select a generation."""
+        for field, value in (
+            ("status", "inactive"),
+            ("schemaVersion", "v7.0.0"),
+            ("schemaVersion", 6),
+            ("checksum", None),
+            ("checksum", "sha256:" + "g" * 64),
+            ("checksum", "sha256:" + "a" * 64 + "\n"),
+            ("checksum", "../../elsewhere"),
+        ):
+            changed = descriptor()
+            changed[field] = value
+            with self.subTest(field=field, value=value), self.assertRaises(ToolError):
+                _ = cache.descriptor_key(changed)
+        source = str(status()["from"])
+        for changed_source in (
+            source.replace("https:", "http:"),
+            source.replace("grype.anchore.io", "example.com"),
+            source.replace("/v6/", "/v7/"),
+            source.replace(".tar.zst", ".zip"),
+            source + "#fragment",
+            source + "&checksum=",
+            source + "&unexpected=value",
+            source.split("?", maxsplit=1)[0],
+            source.replace("sha256%3A", "md5%3A"),
+        ):
+            with self.subTest(source=changed_source), self.assertRaises((ToolError, ValueError)):
+                _ = cache.key_from_status({"from": changed_source})
+
+    def test_public_descriptor_is_fixed_origin_bounded_and_only_a_cache_hint(self) -> None:
+        """No redirect, oversized response, or malformed document becomes a cache key."""
+        payload = json.dumps(descriptor()).encode()
+        with patch.object(cache, "urlopen", return_value=DescriptorResponse(payload)) as request:
+            self.assertEqual(cache.key(), cache.descriptor_key(descriptor()))
+            actual_request = cast("Request", request.call_args.args[0])
+            self.assertEqual(actual_request.full_url, cache.LATEST)
+            self.assertEqual(request.call_args.kwargs, {"timeout": 10})
+        for body, url in (
+            (payload, "https://example.com/latest.json"),
+            (b" " * (cache.MAX_DESCRIPTOR + 1), cache.LATEST),
+            (b"", cache.LATEST),
+            (b"[]", cache.LATEST),
+            (b"not-json", cache.LATEST),
+        ):
+            with (
+                self.subTest(url=url, size=len(body)),
+                patch.object(cache, "urlopen", return_value=DescriptorResponse(body, url)),
+                self.assertRaises((ToolError, ValueError)),
+            ):
+                _ = cache.key()

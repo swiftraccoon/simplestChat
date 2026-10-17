@@ -75,6 +75,20 @@ class RetentionTests(unittest.TestCase):
         self.assertEqual(
             retention.family("grype-db-v1-main-" + "a" * 64 + "-2026-10-05"), ("grype-main", 2)
         )
+        self.assertEqual(
+            retention.family("grype-db-v2-main-" + "a" * 64 + "-" + "b" * 64),
+            ("grype-main", 2),
+        )
+        self.assertEqual(
+            retention.family("grype-db-v2-untrusted-" + "a" * 64 + "-" + "b" * 64),
+            ("grype-untrusted", 2),
+        )
+        for invalid in (
+            "grype-db-v2-main-" + "a" * 64 + "-2026-10-05",
+            "grype-db-v2-main-" + "a" * 64 + "-not-a-digest",
+            "grype-db-v2-other-" + "a" * 64 + "-" + "b" * 64,
+        ):
+            self.assertIsNone(retention.family(invalid))
         self.assertIsNone(retention.family("codeql-analyzed-v1-rust-not-a-digest"))
         self.assertIsNotNone(retention.family("native-compiled-v1-asan-main-arm64-" + "a" * 64))
 

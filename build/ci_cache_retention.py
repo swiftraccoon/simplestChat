@@ -53,7 +53,9 @@ def family(key: str) -> tuple[str, int] | None:
         # Migration only: every hosted v1 database here was produced on Linux
         # AMD64 main. v2 exposes this namespace so future ISAs remain separate.
         return "codeql-" + match[1] + "-main-linux-x86_64", 2
-    match = re.fullmatch(r"grype-db-v1-(main|untrusted)-" + DIGEST + r"-\d{4}-\d{2}-\d{2}", key)
+    match = re.fullmatch(r"grype-db-v2-(main|untrusted)-" + DIGEST + "-" + DIGEST, key)
+    if not match:
+        match = re.fullmatch(r"grype-db-v1-(main|untrusted)-" + DIGEST + r"-\d{4}-\d{2}-\d{2}", key)
     if match:
         # Grype's database is architecture-independent, including across CLI pins.
         return "grype-" + match[1], 2

@@ -32,6 +32,7 @@ GATES = {
     "native-dtls",
     "browser",
     "web",
+    "image-database",
     "deployment",
     "security",
     "codeql",
@@ -746,6 +747,108 @@ class SecurityWorkflowTests(unittest.TestCase):
             '--image-database-cache "${RUNNER_TEMP}/image-database-cache"', string(scan, "run")
         )
 
+    def test_database_preparation_overlaps_the_image_job_without_sharing_its_engine(self) -> None:
+        """A required independent job warms bytes; image freshness and scans remain mandatory."""
+        ci = workflow("ci.yml")
+        preparation = obj(ci, "jobs", "image-database")
+        deployment = obj(ci, "jobs", "deployment")
+        self.assertIn("image-database", strings(ci, "jobs", "required", "needs"))
+        for job in (preparation, deployment):
+            self.assertNotIn("needs", job)
+            self.assertNotIn("continue-on-error", job)
+        steps = objects(preparation, "steps")
+        docker = next(
+            step
+            for step in steps
+            if step.get("name") == "Start Docker inside the isolated local runner"
+        )
+        self.assertEqual(docker["run"], "build/ci-local-docker.sh")
+        self.assertEqual(docker["if"], "${{ env.ACT }}")
+        prepare = next(step for step in steps if step.get("id") == "prepared-image-database")
+        self.assertNotIn("if", prepare)
+        self.assertIn("python3 build/security_image.py prepare-database", string(prepare, "run"))
+        self.assertIn(
+            '--tools-directory "${RUNNER_TEMP}/image-database-preparation/tools"',
+            string(prepare, "run"),
+        )
+        self.assertNotIn("--artifact-dir", string(prepare, "run"))
+        self.assertNotIn("PRODUCTION_IMAGE", string(prepare, "run"))
+        image_steps = objects(deployment, "steps")
+        scan = next(step for step in image_steps if step.get("id") == "scanned-image-database")
+        fixture = next(
+            step
+            for step in image_steps
+            if step.get("name") == "App-only release and rollback on a disposable host"
+        )
+        self.assertNotIn("if", scan)
+        self.assertLess(image_steps.index(fixture), image_steps.index(scan))
+        for current, producer in ((steps, prepare), (image_steps, scan)):
+            fingerprint = next(
+                step for step in current if step.get("id") == "image-database-inputs"
+            )
+            self.assertIn(
+                "python3 build/security_image_cache.py --prefix", string(fingerprint, "run")
+            )
+            self.assertIn("--status ", string(producer, "run"))
+            save = next(
+                step
+                for step in current
+                if step.get("name") == "Save refreshed vulnerability database download bytes"
+            )
+            self.assertEqual(
+                save["if"],
+                "${{ success() && (steps.image-database.outputs.cache-hit != 'true' || "
+                + f"steps.{producer['id']}.outputs.key != "
+                + "steps.image-database-inputs.outputs.key) }}",
+            )
+            self.assertEqual(
+                at(save, "with", "key"), f"${{{{ steps.{producer['id']}.outputs.key }}}}"
+            )
+
+    def test_database_hint_failure_preserves_fresh_preparation_and_scan(self) -> None:
+        """Run the actual lookup wrappers through a descriptor hit and unavailable hint."""
+        prefix = "grype-db-v2-main-" + "a" * 64 + "-"
+        key = prefix + "b" * 64
+        stubs = r"""
+python3() {
+  [[ "$1" == build/security_image_cache.py ]] || return 2
+  if [[ "${2:-}" == --prefix ]]; then
+    printf '%s\n' "$FIXTURE_PREFIX"
+  elif [[ "$#" == 1 && "$FIXTURE_HINT" == available ]]; then
+    printf '%s\n' "$FIXTURE_KEY"
+  else
+    return 1
+  fi
+}
+"""
+        for job in ("image-database", "deployment"):
+            steps = objects(workflow("ci.yml"), "jobs", job, "steps")
+            fingerprint = next(step for step in steps if step.get("id") == "image-database-inputs")
+            for hint in ("available", "unavailable"):
+                with (
+                    self.subTest(job=job, hint=hint),
+                    tempfile.TemporaryDirectory(dir=ROOT / "results") as temporary,
+                ):
+                    output = Path(temporary) / "output"
+                    script = "set -euo pipefail\n" + stubs + string(fingerprint, "run")
+                    result = subprocess.run(  # noqa: S603 -- Exact maintained wrapper and inert fixture stubs.
+                        ["/bin/bash", "-c", script],
+                        env={
+                            "GITHUB_OUTPUT": str(output),
+                            "FIXTURE_PREFIX": prefix,
+                            "FIXTURE_KEY": key,
+                            "FIXTURE_HINT": hint,
+                        },
+                        check=True,
+                        capture_output=True,
+                        timeout=5,
+                    )
+                    expected = key if hint == "available" else prefix
+                    self.assertEqual(output.read_text(), f"key={expected}\nprefix={prefix}\n")
+                    self.assertEqual(
+                        b"Database cache hint unavailable" in result.stderr, hint == "unavailable"
+                    )
+
     def test_image_build_exports_layers_only_when_the_primary_cache_is_missing(self) -> None:
         """Run the actual build wrapper through cache hits, misses and a partial failed export."""
         (ROOT / "results").mkdir(exist_ok=True)
@@ -864,6 +967,7 @@ docker() {
         sources.extend(
             objects(job.get("steps", []))
             for job in (
+                obj(workflow("ci.yml"), "jobs", "image-database"),
                 obj(workflow("ci.yml"), "jobs", "deployment"),
                 obj(workflow("load-generator-image.yml"), "jobs", "image"),
             )
@@ -876,23 +980,43 @@ docker() {
                     continue
                 config = obj(step, "with")
                 if string(step, "uses").startswith("actions/cache/save@"):
-                    # A split save must inherit the exact validated restore key;
-                    # resolve it before checking the trust/architecture inputs.
-                    match = re.fullmatch(
-                        r"\$\{\{ steps\.([a-zA-Z0-9_-]+)\.outputs\.cache-primary-key \}\}",
+                    actual_key = re.fullmatch(
+                        r"\$\{\{ steps\.((?:prepared|scanned)-image-database)\.outputs\.key \}\}",
                         string(config, "key"),
                     )
-                    self.assertIsNotNone(match)
-                    if match is None:
-                        continue
-                    restore = next(step for step in steps if step.get("id") == match.group(1))
-                    self.assertTrue(string(restore, "uses").startswith("actions/cache/restore@"))
-                    self.assertEqual(config["path"], at(restore, "with", "path"))
-                    config = obj(restore, "with")
+                    if actual_key:
+                        # The online update may discover a generation newer than
+                        # the initial descriptor; publish its validated identity.
+                        producer = next(
+                            step for step in steps if step.get("id") == actual_key.group(1)
+                        )
+                        self.assertIn(
+                            "python3 build/security_image_cache.py", string(producer, "run")
+                        )
+                        self.assertIn("--status ", string(producer, "run"))
+                        restore = next(step for step in steps if step.get("id") == "image-database")
+                        self.assertEqual(config["path"], at(restore, "with", "path"))
+                        config = obj(restore, "with")
+                    else:
+                        # A split save must inherit the exact validated restore key;
+                        # resolve it before checking the trust/architecture inputs.
+                        match = re.fullmatch(
+                            r"\$\{\{ steps\.([a-zA-Z0-9_-]+)\.outputs\.cache-primary-key \}\}",
+                            string(config, "key"),
+                        )
+                        self.assertIsNotNone(match)
+                        if match is None:
+                            continue
+                        restore = next(step for step in steps if step.get("id") == match.group(1))
+                        self.assertTrue(
+                            string(restore, "uses").startswith("actions/cache/restore@")
+                        )
+                        self.assertEqual(config["path"], at(restore, "with", "path"))
+                        config = obj(restore, "with")
                 key = string(config.get("prefix-key", config.get("key", "")))
                 if key == "${{ steps.image-database-inputs.outputs.key }}":
                     # Database bytes have no CPU architecture. Their helper
-                    # tests bind scanner format, main/PR trust and daily update.
+                    # tests bind scanner format, main/PR trust and actual generation.
                     self.assertEqual(
                         config["restore-keys"], "${{ steps.image-database-inputs.outputs.prefix }}"
                     )

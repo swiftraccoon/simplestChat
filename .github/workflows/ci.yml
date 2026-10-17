@@ -929,6 +929,80 @@ jobs:
         # supply chain, so audit the complete lockfile rather than omitting dev.
         run: npm audit --audit-level=moderate
 
+  image-database:
+    name: Prepare fresh image vulnerability database
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Start Docker inside the isolated local runner
+        if: ${{ env.ACT }}
+        run: build/ci-local-docker.sh
+      - name: Fingerprint the vulnerability database download cache
+        id: image-database-inputs
+        run: |
+          prefix="$(python3 build/security_image_cache.py --prefix)"
+          if ! key="$(python3 build/security_image_cache.py)"; then
+            # A metadata hint cannot replace or block the real online updater.
+            printf '%s\n' 'Database cache hint unavailable; the online updater will check current upstream data.' >&2
+            key="$prefix"
+          fi
+          printf 'key=%s\n' "$key" >> "$GITHUB_OUTPUT"
+          printf 'prefix=%s\n' "$prefix" >> "$GITHUB_OUTPUT"
+      - name: Restore vulnerability database download bytes
+        id: image-database
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/image-database-cache
+          key: ${{ steps.image-database-inputs.outputs.key }}
+          restore-keys: ${{ steps.image-database-inputs.outputs.prefix }}
+      # This runner owns a different engine from the image/release fixture.
+      # Only data bytes are published. The image gate still updates and scans.
+      - name: Prepare fresh checked database bytes
+        id: prepared-image-database
+        timeout-minutes: 20
+        run: |
+          python3 build/security_image.py prepare-database \
+            --output "${RUNNER_TEMP}/image-database-preparation" \
+            --tools-directory "${RUNNER_TEMP}/image-database-preparation/tools" \
+            --database-cache "${RUNNER_TEMP}/image-database-cache"
+          key="$(python3 build/security_image_cache.py \
+            --status "${RUNNER_TEMP}/image-database-preparation/database-status.json")"
+          printf 'key=%s\n' "$key" >> "$GITHUB_OUTPUT"
+      - name: Save refreshed vulnerability database download bytes
+        if: ${{ success() && (steps.image-database.outputs.cache-hit != 'true' || steps.prepared-image-database.outputs.key != steps.image-database-inputs.outputs.key) }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/image-database-cache
+          key: ${{ steps.prepared-image-database.outputs.key }}
+      - name: Preserve local database preparation evidence
+        if: ${{ always() && env.ACT == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          source="${RUNNER_TEMP}/image-database-preparation"
+          [[ -d "${source}" && ! -L "${source}" ]] || exit 0
+          destination="${LOCAL_CI_EVIDENCE:?}/image-database"
+          umask 077
+          mkdir -m 700 "${destination}"
+          for file in "${source}/database-preparation.json" "${source}/database-status.json" "${source}"/scanner-result-*.json; do
+            [[ -f "${file}" && ! -L "${file}" ]] || continue
+            install -m 600 "${file}" "${destination}/${file##*/}"
+          done
+      - name: Preserve bounded database preparation evidence
+        if: ${{ always() && !env.ACT }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: image-database-preparation-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/image-database-preparation/database-preparation.json
+            ${{ runner.temp }}/image-database-preparation/database-status.json
+            ${{ runner.temp }}/image-database-preparation/scanner-result-*.json
+          if-no-files-found: warn
+          retention-days: 7
+
   deployment:
     name: Production image + deployment config
     runs-on: ubuntu-24.04
@@ -1233,9 +1307,14 @@ jobs:
       - name: Fingerprint the vulnerability database download cache
         id: image-database-inputs
         run: |
-          key="$(python3 build/security_image_cache.py)"
+          prefix="$(python3 build/security_image_cache.py --prefix)"
+          if ! key="$(python3 build/security_image_cache.py)"; then
+            # A metadata hint cannot replace or block the real online updater.
+            printf '%s\n' 'Database cache hint unavailable; the online updater will check current upstream data.' >&2
+            key="$prefix"
+          fi
           printf 'key=%s\n' "$key" >> "$GITHUB_OUTPUT"
-          printf 'prefix=%s\n' "${key%-????-??-??}-" >> "$GITHUB_OUTPUT"
+          printf 'prefix=%s\n' "$prefix" >> "$GITHUB_OUTPUT"
 
       - name: Restore vulnerability database download bytes
         id: image-database
@@ -1246,6 +1325,7 @@ jobs:
           restore-keys: ${{ steps.image-database-inputs.outputs.prefix }}
 
       - name: Scan the same exported production image
+        id: scanned-image-database
         timeout-minutes: 25
         run: |
           build/check-security.sh image "${PRODUCTION_IMAGE}" \
@@ -1253,15 +1333,18 @@ jobs:
             --image-tools "${RUNNER_TEMP}/release-checks/tools" \
             --image-database-cache "${RUNNER_TEMP}/image-database-cache" \
             --output "${RUNNER_TEMP}/production-security"
+          key="$(python3 build/security_image_cache.py \
+            --status "${RUNNER_TEMP}/production-security/image/database-status.json")"
+          printf 'key=%s\n' "$key" >> "$GITHUB_OUTPUT"
 
       # The scanner always checks upstream updates and current age/hash before
       # running the full image policy. This stores data, never scan success.
       - name: Save refreshed vulnerability database download bytes
-        if: ${{ success() && steps.image-database.outputs.cache-hit != 'true' }}
+        if: ${{ success() && (steps.image-database.outputs.cache-hit != 'true' || steps.scanned-image-database.outputs.key != steps.image-database-inputs.outputs.key) }}
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/image-database-cache
-          key: ${{ steps.image-database.outputs.cache-primary-key }}
+          key: ${{ steps.scanned-image-database.outputs.key }}
 
       - name: Retain the verified production release
         # Export precedes the root-owned fixture; publication requires every
@@ -1318,7 +1401,7 @@ jobs:
   required:
     name: Required security and correctness checks
     if: ${{ always() }}
-    needs: [automation, rust-lint, rust-test, native-dtls, browser, web, deployment, security, codeql]
+    needs: [automation, rust-lint, rust-test, native-dtls, browser, web, image-database, deployment, security, codeql]
     runs-on: ubuntu-24.04
     timeout-minutes: 7
     permissions:
@@ -1333,7 +1416,7 @@ jobs:
           import json
           import os
           results = json.loads(os.environ["GATE_RESULTS"])
-          expected = {"automation", "rust-lint", "rust-test", "native-dtls", "browser", "web", "deployment", "security", "codeql"}
+          expected = {"automation", "rust-lint", "rust-test", "native-dtls", "browser", "web", "image-database", "deployment", "security", "codeql"}
           if set(results) != expected or any(item["result"] != "success" for item in results.values()):
               raise SystemExit("A required security or correctness gate failed or did not run")
           PYTHON
