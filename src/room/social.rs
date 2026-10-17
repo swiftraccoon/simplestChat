@@ -1516,6 +1516,372 @@ mod tests {
         assert!(room.social.history[0].message.content.is_empty());
     }
 
+    struct InboxEditFixture {
+        manager: RoomManager,
+        room: Arc<TokioRwLock<Room>>,
+        alice: Participant,
+        bob: Participant,
+        receivers: Vec<mpsc::Receiver<crate::OutboundJson>>,
+        original: ChatEntry,
+        edited: ChatEntry,
+    }
+
+    /// Only chat state and channels are exercised. The coordinator's required
+    /// idle native worker never creates a router, transport or media producer.
+    async fn with_inbox_edit_fixture<F, Fut>(test: F)
+    where
+        F: FnOnce(InboxEditFixture) -> Fut,
+        Fut: std::future::Future<Output = ()>,
+    {
+        use futures_util::FutureExt as _;
+        let manager = RoomManager::new_for_connection_tests(ServerMetrics::new()).await;
+        let (mut room, alice, bob, _, mut receivers) = fixture();
+        reply(
+            &mut room,
+            &alice,
+            "editable-private",
+            Some(&bob.id),
+            "Original private text",
+            None,
+        )
+        .unwrap();
+        let original = room.social.history.back().unwrap().message.clone();
+        reply(
+            &mut room,
+            &bob,
+            "private-quote",
+            Some(&alice.id),
+            "Private reply",
+            Some(&original.message_id),
+        )
+        .unwrap();
+        let mut edited = original.clone();
+        history::apply_edit(
+            &mut edited,
+            &history::EditRequest {
+                content: "Corrected private text".into(),
+                expected_revision: 0,
+            },
+        )
+        .unwrap();
+        drain(&mut receivers);
+        let room_id = room.id.clone();
+        let room = Arc::new(TokioRwLock::new(room));
+        manager.rooms.write().unwrap().insert(room_id, room.clone());
+        let test = test(InboxEditFixture {
+            manager: manager.clone(),
+            room,
+            alice,
+            bob,
+            receivers,
+            original,
+            edited,
+        });
+        let outcome = std::panic::AssertUnwindSafe(tokio::time::timeout(
+            std::time::Duration::from_secs(20),
+            test,
+        ))
+        .catch_unwind()
+        .await;
+        let rooms = manager.shutdown().await;
+        let media = manager.media_server.shutdown().await;
+        match outcome {
+            Err(panic) => std::panic::resume_unwind(panic),
+            Ok(result) => result.expect("chat-only inbox edit fixture timed out"),
+        }
+        rooms.expect("chat-only room fixture cleanup failed");
+        media.expect("idle native worker cleanup failed");
+    }
+
+    #[tokio::test]
+    async fn inbox_edit_waits_for_busy_room_and_reconciles_private_runtime() {
+        with_inbox_edit_fixture(|mut fixture| async move {
+            let held = fixture.room.write().await;
+            let mut delivery = std::pin::pin!(fixture.manager.deliver_inbox_edit(&fixture.edited));
+            assert!(
+                futures_util::poll!(&mut delivery).is_pending(),
+                "a committed edit must wait for the busy room instead of dropping it"
+            );
+            drop(held);
+            tokio::time::timeout(std::time::Duration::from_secs(2), delivery)
+                .await
+                .expect("edit reconciliation must resume after contention ends");
+
+            let room = fixture.room.read().await;
+            assert_eq!(
+                room.social.history[0].message.message_id,
+                fixture.original.message_id
+            );
+            assert_eq!(
+                room.social.history[0].message.content,
+                fixture.edited.content
+            );
+            assert_eq!(room.social.history[0].message.revision, 1);
+            assert_eq!(
+                room.social.history[1]
+                    .message
+                    .reply_to
+                    .as_ref()
+                    .unwrap()
+                    .excerpt,
+                fixture.edited.content
+            );
+            assert_eq!(
+                room.social.receipts[0].message.content,
+                fixture.edited.content
+            );
+            let snapshot = fixture.manager.room_snapshot(&room, &fixture.bob);
+            assert_eq!(
+                fixture
+                    .manager
+                    .room_snapshot(&room, &fixture.alice)
+                    .messages
+                    .len(),
+                snapshot.messages.len()
+            );
+            assert_eq!(snapshot.messages[0].content, fixture.edited.content);
+            assert_eq!(
+                snapshot.messages[1].reply_to.as_ref().unwrap().excerpt,
+                fixture.edited.content
+            );
+            for receiver in &mut fixture.receivers[..2] {
+                let event: Value = serde_json::from_str(&receiver.try_recv().unwrap()).unwrap();
+                assert_eq!(event["type"], "chatMessageEdited");
+                assert_eq!(event["message"]["messageId"], fixture.edited.message_id);
+                assert_eq!(event["message"]["content"], fixture.edited.content);
+                assert!(receiver.try_recv().is_err(), "one edit event per party");
+            }
+            assert!(
+                fixture.receivers[2].try_recv().is_err(),
+                "private edits never reach another room participant"
+            );
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    async fn inbox_edit_survives_observer_cancellation_and_long_control_contention() {
+        with_inbox_edit_fixture(|mut fixture| async move {
+            struct ResumeTime;
+            impl Drop for ResumeTime {
+                fn drop(&mut self) {
+                    tokio::time::resume();
+                }
+            }
+            tokio::time::pause();
+            let _resume_time = ResumeTime;
+            let held = control::lock_room(&fixture.room).await;
+            {
+                let mut delivery =
+                    std::pin::pin!(fixture.manager.deliver_inbox_edit(&fixture.edited));
+                assert!(futures_util::poll!(&mut delivery).is_pending());
+            }
+            // Let owned completion queue, then outlast ordinary new-write admission.
+            tokio::task::yield_now().await;
+            tokio::time::advance(control::ADMISSION_TIMEOUT + std::time::Duration::from_secs(1))
+                .await;
+            assert!(fixture.receivers[1].try_recv().is_err());
+            assert_eq!(
+                fixture.room.read().await.social.history[0].message.revision,
+                0
+            );
+            drop(held);
+            let event = tokio::time::timeout(
+                std::time::Duration::from_secs(2),
+                fixture.receivers[1].recv(),
+            )
+            .await
+            .expect("committed completion must survive both cancellation and admission expiry")
+            .unwrap();
+            let event: Value = serde_json::from_str(&event).unwrap();
+            assert_eq!(event["message"]["content"], fixture.edited.content);
+            assert_eq!(
+                fixture.room.read().await.social.history[0].message.revision,
+                1
+            );
+            assert!(fixture.receivers[2].try_recv().is_err());
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    async fn inbox_edit_rechecks_recipient_consent_after_control_contention() {
+        with_inbox_edit_fixture(|mut fixture| async move {
+            let held = control::lock_room(&fixture.room).await;
+            let mut delivery = std::pin::pin!(fixture.manager.deliver_inbox_edit(&fixture.edited));
+            assert!(futures_util::poll!(&mut delivery).is_pending());
+            fixture
+                .room
+                .write()
+                .await
+                .participants
+                .get_mut(&fixture.bob.id)
+                .unwrap()
+                .social
+                .ignored
+                .insert(fixture.alice.id.clone());
+            drop(held);
+            tokio::time::timeout(std::time::Duration::from_secs(2), delivery)
+                .await
+                .expect("consent recheck must complete after control is released");
+            assert_eq!(
+                fixture.room.read().await.social.history[0].message.revision,
+                1
+            );
+            assert!(fixture.receivers[0].try_recv().is_ok());
+            assert!(
+                fixture.receivers[1].try_recv().is_err(),
+                "ignored sender gets no live delivery"
+            );
+            assert!(fixture.receivers[2].try_recv().is_err());
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    async fn inbox_edit_never_targets_a_replaced_or_deleting_room() {
+        with_inbox_edit_fixture(|mut fixture| async move {
+            for replace in [false, true] {
+                let held = control::lock_room(&fixture.room).await;
+                let mut delivery =
+                    std::pin::pin!(fixture.manager.deliver_inbox_edit(&fixture.edited));
+                assert!(futures_util::poll!(&mut delivery).is_pending());
+                let room_id = fixture.room.read().await.id.clone();
+                if replace {
+                    let (mut replacement, _, _, _, _) = self::fixture();
+                    replacement.id.clone_from(&room_id);
+                    // Same account IDs make an incorrect retarget observable.
+                    replacement
+                        .participants
+                        .insert(fixture.alice.id.clone(), fixture.alice.clone());
+                    fixture
+                        .manager
+                        .rooms
+                        .write()
+                        .unwrap()
+                        .insert(room_id.clone(), Arc::new(TokioRwLock::new(replacement)));
+                } else {
+                    fixture.room.write().await.deleting = true;
+                }
+                drop(held);
+                tokio::time::timeout(std::time::Duration::from_secs(2), delivery)
+                    .await
+                    .expect("retired room completion must finish without publishing");
+                assert_eq!(
+                    fixture.room.read().await.social.history[0].message.revision,
+                    0
+                );
+                assert!(
+                    fixture
+                        .receivers
+                        .iter_mut()
+                        .all(|receiver| receiver.try_recv().is_err())
+                );
+                fixture.room.write().await.deleting = false;
+                fixture
+                    .manager
+                    .rooms
+                    .write()
+                    .unwrap()
+                    .insert(room_id, fixture.room.clone());
+            }
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    async fn inbox_edit_drain_cancels_completion_without_waiting_for_room_control() {
+        with_inbox_edit_fixture(|mut fixture| async move {
+            let held = control::lock_room(&fixture.room).await;
+            let mut delivery = std::pin::pin!(fixture.manager.deliver_inbox_edit(&fixture.edited));
+            assert!(futures_util::poll!(&mut delivery).is_pending());
+            fixture.manager.drain.begin_draining();
+            tokio::time::timeout(std::time::Duration::from_secs(2), delivery)
+                .await
+                .expect("shutdown must cancel queued completion while the gate is held");
+            assert_eq!(
+                fixture.room.read().await.social.history[0].message.revision,
+                0
+            );
+            assert!(
+                fixture
+                    .receivers
+                    .iter_mut()
+                    .all(|receiver| receiver.try_recv().is_err())
+            );
+            drop(held);
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    async fn inbox_edit_reconciles_other_rooms_even_when_the_origin_response_fails() {
+        with_inbox_edit_fixture(|fixture| async move {
+            let _origin_receivers = fixture.receivers;
+            let (mut remote_bob, mut remote_events) = participant("Bob in another room");
+            remote_bob.id.clone_from(&fixture.bob.id);
+            let mut remote = Room::new(
+                "other-edit-room".into(),
+                "unused-router".into(),
+                None,
+                false,
+                None,
+            );
+            remote
+                .participants
+                .insert(remote_bob.id.clone(), remote_bob.clone());
+            remote.social.remember(
+                fixture.alice.media_session_id,
+                Some(remote_bob.media_session_id),
+                true,
+                fixture.original.clone(),
+            );
+            let remote = Arc::new(TokioRwLock::new(remote));
+            fixture
+                .manager
+                .rooms
+                .write()
+                .unwrap()
+                .insert("other-edit-room".into(), remote.clone());
+            while fixture.alice.sender.capacity() > 0 {
+                fixture
+                    .alice
+                    .sender
+                    .try_send(crate::OutboundJson::from("queued".to_owned()))
+                    .unwrap();
+            }
+            let room_id = fixture.room.read().await.id.clone();
+            let result = fixture
+                .manager
+                .handle_social_request(
+                    &room_id,
+                    &fixture.alice.id,
+                    &fixture.alice.sender,
+                    &ClientMessage::EditChatMessage {
+                        request_id: "edit-with-full-response-queue".into(),
+                        message_id: fixture.original.message_id.clone(),
+                        content: fixture.edited.content.clone(),
+                        expected_revision: 0,
+                    },
+                )
+                .await;
+            assert!(
+                result.is_err(),
+                "the final response cannot enter the full origin queue"
+            );
+            let event =
+                tokio::time::timeout(std::time::Duration::from_secs(2), remote_events.recv())
+                    .await
+                    .expect("an origin response failure must not lose the published edit")
+                    .unwrap();
+            let event: Value = serde_json::from_str(&event).unwrap();
+            assert_eq!(event["type"], "chatMessageEdited");
+            assert_eq!(event["message"]["content"], fixture.edited.content);
+            assert_eq!(remote.read().await.social.history[0].message.revision, 1);
+        })
+        .await;
+    }
+
     #[tokio::test]
     async fn message_removal_requires_moderation_and_never_targets_private_messages() {
         let (mut room, alice, mut moderator, _carol, mut receivers) = fixture();
@@ -3518,53 +3884,72 @@ impl RoomManager {
         .await
     }
 
-    /// Reconcile durable edits under each room's control gate, after releasing
-    /// the originating gate and database transaction. Never nest room gates.
-    pub(crate) async fn deliver_inbox_edit(&self, message: &ChatEntry) {
-        let Some(recipient) = message.recipient_id.as_deref() else {
-            return;
-        };
-        let Ok(encoded) = serde_json::to_string(&ServerMessage::ChatMessageEdited {
+    /// Own committed completion before another await can cancel the request.
+    /// Scheduling never acquires another room's gate while the origin holds one.
+    fn schedule_inbox_edit(&self, message: &ChatEntry) -> Option<tokio::task::JoinHandle<()>> {
+        use futures_util::StreamExt as _;
+        use tracing::Instrument as _;
+        let recipient = message.recipient_id.clone()?;
+        let encoded = serde_json::to_string(&ServerMessage::ChatMessageEdited {
             message: message.clone(),
-        }) else {
-            return;
-        };
+        })
+        .ok()?;
         let event = crate::OutboundJson::from(encoded);
         let rooms: Vec<_> = self
             .rooms
             .read()
             .unwrap_or_else(|e| e.into_inner())
             .iter()
-            .filter_map(|(id, lock)| {
-                lock.try_read().ok().and_then(|room| {
-                    (!room.deleting
-                        && (room.participants.contains_key(&message.participant_id)
-                            || room.participants.contains_key(recipient)))
-                    .then(|| id.clone())
-                })
-            })
+            .map(|(id, lock)| (id.clone(), lock.clone()))
             .collect();
-        use futures_util::StreamExt as _;
-        futures_util::stream::iter(rooms)
-            .for_each_concurrent(4, |id| {
-                let message = message.clone();
-                let event = event.clone();
-                async move {
-                    let _ = self
-                        .run_room_control(&id, move |manager, id, _control| async move {
-                            let lock = manager.get_room(&id)?;
+        let manager = self.clone();
+        let message = message.clone();
+        Some(tokio::spawn(
+            async move {
+                let completion =
+                    futures_util::stream::iter(rooms).for_each_concurrent(4, |(id, lock)| {
+                        let manager = &manager;
+                        let message = &message;
+                        let event = &event;
+                        let recipient = &recipient;
+                        async move {
+                            {
+                                let room = lock.read().await;
+                                if room.deleting
+                                    || (!room.participants.contains_key(&message.participant_id)
+                                        && !room.participants.contains_key(recipient))
+                                {
+                                    return;
+                                }
+                            }
+                            // This edit already committed. The admission deadline for
+                            // a new write must not discard its runtime completion.
+                            let _control = control::lock_room(&lock).await;
                             let mut room = lock.write().await;
-                            room.ensure_live()?;
-                            room.social.edit_message(&message);
-                            let recipient = message.recipient_id.as_deref().expect("private edit");
+                            let Ok(_admission) = manager.drain.admit() else {
+                                return;
+                            };
+                            let current_rooms =
+                                manager.rooms.read().unwrap_or_else(|e| e.into_inner());
+                            if room.deleting
+                                || !current_rooms
+                                    .get(&id)
+                                    .is_some_and(|current| Arc::ptr_eq(current, &lock))
+                                || (!room.participants.contains_key(&message.participant_id)
+                                    && !room.participants.contains_key(recipient))
+                            {
+                                return;
+                            }
+                            room.social.edit_message(message);
                             for person in room.participants.values().filter(|p| {
                                 p.authenticated
-                                    && (p.id == message.participant_id || p.id == recipient)
+                                    && (p.id == message.participant_id
+                                        || p.id == recipient.as_str())
                             }) {
-                                let peer = if person.id == recipient {
+                                let peer = if person.id == recipient.as_str() {
                                     message.participant_id.as_str()
                                 } else {
-                                    recipient
+                                    recipient.as_str()
                                 };
                                 if person.social.accepts_inbox_from(peer) {
                                     let _ = try_send_essential(
@@ -3574,12 +3959,26 @@ impl RoomManager {
                                     );
                                 }
                             }
-                            Ok(())
-                        })
-                        .await;
+                        }
+                    });
+                tokio::select! {
+                    biased;
+                    _ = manager.drain.wait() => {},
+                    () = completion => {},
                 }
-            })
-            .await;
+            }
+            .in_current_span(),
+        ))
+    }
+
+    /// Observe completion when the HTTP caller stays connected. Dropping this
+    /// observer detaches the owned task, preserving a committed edit's fan-out.
+    pub(crate) async fn deliver_inbox_edit(&self, message: &ChatEntry) {
+        if let Some(completion) = self.schedule_inbox_edit(message)
+            && let Err(error) = completion.await
+        {
+            warn!(%error, "Committed private edit reconciliation failed");
+        }
     }
 
     pub async fn send_social_chat(
@@ -3983,43 +4382,18 @@ impl RoomManager {
         let participant_id = participant_id.to_owned();
         let sender = expected_sender.clone();
         let command = command.clone();
-        let edited_id = if let ClientMessage::EditChatMessage { message_id, .. } = &command {
-            Some(message_id.clone())
-        } else {
-            None
-        };
-        let result = self
-            .run_room_control(room_id, move |manager, room_id, control| async move {
-                manager
-                    .handle_social_request_inner(
-                        &room_id,
-                        &participant_id,
-                        &sender,
-                        &command,
-                        Some(control),
-                    )
-                    .await
-            })
-            .await;
-        if result.is_ok()
-            && let Some(id) = edited_id
-            && let Ok(lock) = self.get_room(room_id)
-        {
-            let edited = {
-                let room = lock.read().await;
-                room.social
-                    .history
-                    .iter()
-                    .map(|entry| &entry.message)
-                    .chain(room.social.receipts.iter().map(|entry| &entry.message))
-                    .find(|message| message.message_id == id && message.recipient_id.is_some())
-                    .cloned()
-            };
-            if let Some(edited) = edited {
-                self.deliver_inbox_edit(&edited).await;
-            }
-        }
-        result
+        self.run_room_control(room_id, move |manager, room_id, control| async move {
+            manager
+                .handle_social_request_inner(
+                    &room_id,
+                    &participant_id,
+                    &sender,
+                    &command,
+                    Some(control),
+                )
+                .await
+        })
+        .await
     }
 
     fn room_snapshot(&self, room: &Room, actor: &Participant) -> RoomSnapshot {
@@ -4463,6 +4837,7 @@ impl RoomManager {
                     history::apply_edit(&mut edited, &request).map_err(rejected)?;
                 }
                 publish_edit(&mut room, &edited)?;
+                drop(self.schedule_inbox_edit(&edited));
                 json!({"message":edited})
             }
             ClientMessage::GetPinnedMessages { .. } | ClientMessage::SetPinnedMessage { .. } => {

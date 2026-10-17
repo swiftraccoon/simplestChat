@@ -703,6 +703,13 @@ PM consent, commits, then reconciles live room sockets. Clients compare revision
 when reconciling asynchronous history, events and receipts. An older body must
 never replace a newer edit or a removal tombstone.
 
+After a confirmed private edit, reconciliation owns its queued work even if the
+request is cancelled or its reply cannot be delivered. It waits for relevant room
+state and control rather than applying the admission timeout for a new write,
+processing at most four rooms concurrently. It rechecks the captured room
+incarnation before updating runtime history, quotes and receipts. Live events also
+honor current recipient consent. Room retirement and server drain stop queued work.
+
 `getPinnedMessages` takes `{requestId}` and returns `{messages}`.
 `setPinnedMessage` takes `{requestId, messageId, pinned}` and returns the same
 shape; mutations require Moderator+ and target public messages in the current
