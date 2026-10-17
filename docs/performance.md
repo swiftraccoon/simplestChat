@@ -41,6 +41,16 @@ unreferenced keyframes. Budgets stay unchanged; CSS gzip headroom grows from
 105 to 330 bytes. These delivery-size measurements do not establish a change in
 runtime performance.
 
+The subsequent JavaScript dependency audit measured the `a565e3d` baseline at
+653,736 bytes raw / 154,785 gzip. A scoped import facade for the two H264 helpers
+used by mediasoup-client reduces that to 651,219 / 154,317: 2,517 raw bytes and
+468 gzip bytes saved. The facade re-exports the original functions, allowing the
+bundler to eliminate unused convenience exports. Exact package versions and
+source hashes require a new review when the dependency contract changes. Browser
+handlers, codec validation and logging remain intact. With the same frontend
+revision used for both builds, gzip headroom grows from 863 to 1,331 bytes;
+budgets and browser targets stay unchanged. Runtime performance was not measured.
+
 The October 2026 message-removal, account-session and saved-conversation screens
 use a shared history reader and existing UI helpers; no runtime dependency was
 added. An isolated build of `cbe87d2` measured JavaScript 555,224 bytes raw /
