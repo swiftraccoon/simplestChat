@@ -1246,6 +1246,10 @@ async function setRole(owner, name, role) {
           close,
           memberId: contactAccounts.memberId,
         });
+        // This device's cross-device assertions are complete. Later room
+        // scenarios use their own devices and need no idle account listener.
+        await retireTestNetwork(otherMember);
+        await otherMember.context().close();
       },
     );
     await step('create room, retry a failed media chunk, and guest join', async () => {
