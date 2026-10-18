@@ -171,10 +171,12 @@ futures-lite and thiserror dependencies to their current major versions.
 `include/RTC/Producer.hpp`, `src/RTC/Producer.cpp`, `src/RTC/Transport.cpp`,
 `include/RTC/DtlsTransport.hpp`, `src/RTC/DtlsTransport.cpp`,
 `src/RTC/WebRtcTransport.cpp`, `test/src/RTC/TestDtlsTransport.cpp`,
+`test/src/RTC/TestTransportCongestionControlClient.cpp`,
 `include/RTC/RTP/RtpStreamRecv.hpp`, `include/RTC/MediaDiagnosticId.hpp`,
 `include/RTC/MediaDiagnostics.hpp`, `include/RTC/WebRtcServer.hpp`,
 `src/RTC/WebRtcServer.cpp`, `test/src/RTC/TestMediaDiagnostics.cpp`,
 `deps/libwebrtc/libwebrtc/modules/congestion_controller/rtp/transport_feedback_adapter.cc`,
+`deps/libwebrtc/libwebrtc/call/rtp_transport_controller_send.cc`,
 `subprojects/abseil-cpp.wrap`, `subprojects/flatbuffers.wrap`, `subprojects/libuv.wrap`,
 `subprojects/unordered-dense.wrap`, `subprojects/catch2.wrap`, the two files under
 each of `subprojects/packagefiles/abseil-cpp/` and
@@ -184,15 +186,24 @@ each of `subprojects/packagefiles/abseil-cpp/` and
 `Cargo.lock` and `subprojects/openssl.wrap`. It adds the two reviewed
 `python-invoke-requirements.txt` and `python-tools-requirements.txt` wheel locks.
 
-The C++ change in `TransportCongestionControlClient::SetDesiredBitrate`
-bounds the congestion controller's start bitrate by the configured minimum
-outgoing bitrate (`std::max(minBitrate, availableBitrate)`) instead of only
-the built-in 30 kbit/s floor. libwebrtc's `GoogCcNetworkController::
-ClampConstraints` already raises a start rate below the minimum, but logs an
-error each time; with the application's 100 kbit/s floor that line repeated
-on every bitrate update of a transport whose estimate had decayed to the
-floor (941 lines in one 100-client run). Behaviour is unchanged apart from the
-log line. Drop the change when upstream bounds the start bitrate itself.
+`TransportCongestionControlClient` supplies its starting rate only during
+controller initialization. Normal demand and limit updates supply minimum and
+maximum bounds without resetting the learned delay/loss estimate and throughput
+history. The reported `startBitrate` retains the actual initialization rate.
+This replaces the earlier patch that bounded each repeated start by the configured
+minimum to suppress clamp warnings; the configured floor, cap and probing policy
+remain unchanged.
+The wrapper also accepts authoritative target updates equal to the initialization
+rate, so a real recovery or raised minimum at that exact value is not discarded.
+
+`RtpTransportControllerSend::SetClientBitratePreferences` applies the returned
+`NetworkControlUpdate` through the same `PostUpdates` path as feedback and stream
+changes. Previously it discarded returned target-rate, pacing and probe work.
+Native `[bandwidth-constraints]` regressions exercise that bridge, controller
+state preservation, bound changes and synchronous observer reentry. The hosted
+presentation fixture separately checks real decoded recovery after verified
+network impairment removal. Remove these changes when an upstream release
+preserves learned state on ordinary updates and applies their returned work.
 
 libwebrtc's `TransportFeedbackAdapter` keeps one entry (about 150 bytes) per
 sent packet until the receiver's transport-cc feedback covers it or the entry
@@ -294,8 +305,9 @@ event in each of eight fixed family/history classes is logged immediately; a
 Server destruction flushes pending counts and removes its timer. No packet bytes
 or peer addresses enter these logs, and normal routed packets do no new lookup.
 
-`build/check-native-dtls.sh` compiles the `[dtls]` and `[media-diagnostics]`
-groups together in its private worker build. Fake-clock regressions cover timer
+`build/check-native-dtls.sh` compiles the `[dtls]`, `[media-diagnostics]` and
+`[bandwidth-constraints]` groups together in its private worker build.
+Fake-clock regressions cover timer
 expiry, padding exclusion, recovery and pause/resume behavior, missing activity,
 DTX timeout, owned tuple storage, expiry/reuse/capacity, explicit TCP non-attribution,
 finite-burst summaries and timer destruction. The helper also checks that a real

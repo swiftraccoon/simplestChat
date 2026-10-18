@@ -69,6 +69,7 @@ namespace RTC
 		// NOTE: The dependency takes a signed 32 bits bitrate, so it is clamped here.
 		bitrateConfig.start_bitrate_bps = static_cast<int>(
 		  std::min<int64_t>(this->initialAvailableBitrate, std::numeric_limits<int>::max()));
+		this->bitrates.startBitrate = bitrateConfig.start_bitrate_bps;
 
 		this->rtpTransportControllerSend =
 		  new webrtc::RtpTransportControllerSend(this, nullptr, this->controllerFactory, bitrateConfig);
@@ -356,16 +357,6 @@ namespace RTC
 		this->bitrates.minBitrate =
 		  std::max<int64_t>(this->minOutgoingBitrate, this->absoluteMinOutgoingBitrate);
 
-		// NOTE: Setting 'startBitrate' to 'availableBitrate' has proven to generate
-		// more stable values.
-		// simplestChat: bound it by the configured minimum (minBitrate above), not
-		// only by the built-in floor. libwebrtc clamps a start rate below the
-		// minimum anyway, but logs an error each time; with a configured floor
-		// above 30 kbit/s that line repeated on every bitrate update of a transport
-		// whose estimate had decayed to the floor.
-		this->bitrates.startBitrate =
-		  std::max<int64_t>(this->bitrates.minBitrate, this->bitrates.availableBitrate);
-
 		ApplyBitrateUpdates();
 	}
 
@@ -443,7 +434,9 @@ namespace RTC
 		constraints.at_time       = webrtc::Timestamp::ms(this->shared->GetTimeMs());
 		constraints.min_data_rate = webrtc::DataRate::bps(this->bitrates.minBitrate);
 		constraints.max_data_rate = webrtc::DataRate::bps(this->bitrates.maxBitrate);
-		constraints.starting_rate = webrtc::DataRate::bps(this->bitrates.startBitrate);
+		// InitializeController supplies the starting rate once. Reapplying it on
+		// demand updates resets learned delay/loss estimates and throughput history.
+		// An absent start preserves that state while still applying the new bounds.
 
 		this->rtpTransportControllerSend->SetClientBitratePreferences(constraints);
 	}
@@ -538,14 +531,6 @@ namespace RTC
 	void TransportCongestionControlClient::OnTargetTransferRate(webrtc::TargetTransferRate targetTransferRate)
 	{
 		MS_TRACE();
-
-		// NOTE: The same value as 'this->initialAvailableBitrate' is received
-		// periodically regardless of the real available bitrate. Skip such value
-		// except for the first time this event is called.
-		if (this->availableBitrateEventCalled && targetTransferRate.target_rate.bps() == this->initialAvailableBitrate)
-		{
-			return;
-		}
 
 		auto previousAvailableBitrate = this->bitrates.availableBitrate;
 

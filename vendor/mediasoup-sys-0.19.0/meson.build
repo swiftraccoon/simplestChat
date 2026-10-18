@@ -650,6 +650,7 @@ test_sources = [
 
 if not get_option('ms_use_builtin_bwe')
   test_sources += [
+    'test/src/RTC/TestTransportCongestionControlClient.cpp',
     'test/src/RTC/TestTransportCongestionControlServer.cpp',
   ]
 endif

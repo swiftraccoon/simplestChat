@@ -129,6 +129,11 @@
           "vendored_sha256": "c98640d063f4db4e6023c418593e048cc64a79caff77ff446d96bdb3de36c71b"
         },
         {
+          "path": "deps/libwebrtc/libwebrtc/call/rtp_transport_controller_send.cc",
+          "upstream_sha256": "719ff1911f238ce481a71341d64aa4d2035f9e677bf2479b1f2e0d08145ddcb1",
+          "vendored_sha256": "0a59b2c6473f362b30a2526f319912906633649ad038102fbd1ea5cadca4429e"
+        },
+        {
           "path": "deps/libwebrtc/libwebrtc/modules/congestion_controller/rtp/transport_feedback_adapter.cc",
           "upstream_sha256": "ffbabf72ce3ea1e13c5999149011116d6906e215ccf03f5c7c63aadd07758dca",
           "vendored_sha256": "075de86a878341df213898acb6151fb0f4383a9ea3da26e95262354cbce53c17"
@@ -171,7 +176,7 @@
         {
           "path": "meson.build",
           "upstream_sha256": "c5b7604af745a2b1fa00d39eb45f96c71443abea0e9b95597f9468ff5edd9959",
-          "vendored_sha256": "57ad7701843e15a7f22d26a42b4dc07d0314c3ed903c8639f961674518178472"
+          "vendored_sha256": "9aab35acd38f157d752636b4e5c173af86340ca4a5fb30261392178c34196171"
         },
         {
           "path": "python-invoke-requirements.txt",
@@ -211,7 +216,7 @@
         {
           "path": "src/RTC/TransportCongestionControlClient.cpp",
           "upstream_sha256": "f4bf4249c874e1ddc9877e56a1f4098de811d64e49f5e585c118670b5febf891",
-          "vendored_sha256": "f632b45cc0dc06afc5a4f65cdbfe9b1a6db027d722dad8a08dca97c70b2be2ad"
+          "vendored_sha256": "0d8a81783e094fa0c80a8e546cbef28cd0c96588ab123318f9fa6f0699c91f39"
         },
         {
           "path": "src/RTC/WebRtcServer.cpp",
@@ -312,6 +317,11 @@
           "path": "test/src/RTC/TestMediaDiagnostics.cpp",
           "upstream_sha256": null,
           "vendored_sha256": "fd541079b64e54041a7418187edbd56d0bfda452c07256d40b610369ca51279a"
+        },
+        {
+          "path": "test/src/RTC/TestTransportCongestionControlClient.cpp",
+          "upstream_sha256": null,
+          "vendored_sha256": "d6fe51591418c062f3778c2a042d87294a3f56d4e3bd088961226d508ac9c171"
         }
       ]
     },

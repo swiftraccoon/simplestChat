@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Test native DTLS and media diagnostic patches without changing Cargo's worker archive.
+# Test native DTLS, diagnostics and bandwidth patches in an isolated worker build.
 set -euo pipefail
 umask 077
 
@@ -65,7 +65,7 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 cp -R -- "${project_root}/vendor/mediasoup-sys-0.19.0" "${dtls_temp}/worker"
-# This gate runs only these two tag families. Keep every tagged test, the
+# This gate runs only these three tag families. Keep every tagged test, the
 # shared runner/helpers, and all production/mock sources, without compiling
 # hundreds of unrelated upstream test bodies that this gate never executes.
 # Modify only the disposable copy; Cargo's worker and the full upstream suite
@@ -76,7 +76,7 @@ import re
 import sys
 
 worker = pathlib.Path(sys.argv[1])
-tags = ("[dtls]", "[media-diagnostics]")
+tags = ("[dtls]", "[media-diagnostics]", "[bandwidth-constraints]")
 sources = {"test/src/tests.cpp", "test/src/testHelpers.cpp"}
 found = set()
 for source in (worker / "test/src").rglob("*.cpp"):
@@ -122,7 +122,7 @@ if expected not in diagnostics:
 PY
 SH
 bash -n "${dtls_temp}/run.sh"
-echo 'Building isolated native DTLS and media diagnostic regressions with pinned tools...'
+echo 'Building isolated native DTLS, diagnostics and bandwidth regressions with pinned tools...'
 
 # Do not inherit Python modules, pip configuration, Meson options or test tags.
 # The fixed source snapshot and reviewed wheel hashes define this test build.
@@ -136,7 +136,7 @@ env -i PATH="${PATH}" \
   CC="${dtls_cc}" CXX="${dtls_cxx}" \
   MEDIASOUP_OUT_DIR="${dtls_temp}/out" \
   MEDIASOUP_INSTALL_DIR="${dtls_temp}/install" BUILD_DIR="${dtls_temp}/build" \
-  MEDIASOUP_TEST_TAGS='[dtls],[media-diagnostics]' MS_TEST_LOG_LEVEL=warn MS_TEST_LOG_TAGS='dtls rtp ice score' \
+  MEDIASOUP_TEST_TAGS='[dtls],[media-diagnostics],[bandwidth-constraints]' MS_TEST_LOG_LEVEL=warn MS_TEST_LOG_TAGS='dtls rtp ice score' \
   bash "${dtls_temp}/run.sh" "${dtls_temp}" >"${dtls_temp}/build.log" 2>&1 &
 dtls_pid=$!
 set +m
@@ -145,3 +145,4 @@ dtls_pid=''
 tail -n 3 "${dtls_temp}/dtls.log"
 echo 'Authenticated orderly DTLS close emitted no warning/error logs.'
 echo 'RTP inactivity logs retain stream and media activity context.'
+echo 'Bandwidth constraint updates preserve controller state and reach the pacer.'

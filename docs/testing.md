@@ -258,13 +258,17 @@ PASSKEY_E2E=1 build/with-test-postgres.sh build/with-test-server.sh \
 ```
 
 Run `build/check-native-dtls.sh` after configuring the pinned OpenSSL installation
-to exercise the worker's DTLS closure reasons and media warning context. It builds
+to exercise the worker's DTLS closure reasons, media warning context and native
+bandwidth constraint handling. It builds
 a separate temporary worker test target, leaving Cargo's production archive untouched. Paired native
 transports cover orderly shutdown, fatal errors, fingerprint/SRTP failures and
 handshake timeout; the orderly-close case also checks warning-level output.
 Fake-clock media cases verify inactivity/activity timing, bounded private
 identities, tuple-history expiry/reuse and warning coalescing, including timer
 cleanup and a finite burst's delayed summary. They do not send network probes.
+The bandwidth cases exercise returned target/pacer/probe work, learned estimate
+preservation, bound changes and synchronous observer reentry. Real impaired
+presentation recovery remains a separate hosted browser check.
 CI runs the helper in its own job and records a passing verification under a cache key
 made from the vendored sources, the helper, the pinned OpenSSL installer and the pip
 constraints; a push that leaves those unchanged skips the nine-minute rebuild, and any

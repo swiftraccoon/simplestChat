@@ -124,7 +124,9 @@ void RtpTransportControllerSend::SetAllocatedSendBitrateLimits(
 
 void RtpTransportControllerSend::SetClientBitratePreferences(const TargetRateConstraints& constraints)
 {
-  controller_->OnTargetRateConstraints(constraints);
+  // Constraint changes can update the target, pacer and probe clusters just like
+  // feedback or stream changes. Apply the returned work instead of discarding it.
+  PostUpdates(controller_->OnTargetRateConstraints(constraints));
 }
 
 void RtpTransportControllerSend::SetPacingFactor(float pacing_factor) {

@@ -291,12 +291,14 @@ coverage. Disabled diagnostics and successful readiness do not take this snapsho
 
 ## Native bitrate-clamping messages
 
-The pinned media stack can log `start bitrate smaller than min bitrate` after
-a transport disconnects. simplestChat sets a 100,000 bps outgoing minimum;
-native disconnect handling can reset available bitrate to zero and propose its
-30,000 bps fallback as the next starting rate. The controller logs the mismatch,
-raises the starting rate to the minimum and continues. This is not a rejected
-API request or, by itself, evidence of lost media.
+Earlier media-controller builds could log `start bitrate smaller than min bitrate`
+after a transport disconnected. simplestChat sets a 100,000 bps outgoing minimum;
+native disconnect handling could reset available bitrate to zero and propose its
+30,000 bps fallback as the next starting rate. The controller logged the mismatch,
+raised the starting rate to the minimum and continued. This was not a rejected
+API request or, by itself, evidence of lost media. The maintained controller now
+supplies its starting rate once during initialization; ordinary demand updates
+preserve learned estimator state and update only minimum/maximum bounds.
 
 By default, the load generator closes peers without sending `leaveRoom`, exercising the
 30-second reconnect grace. Browser explicit leave is a different cleanup path.
