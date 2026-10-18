@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import {
-  authenticationVerdict, configuration, generatorArguments, generatorVerdict, measurementResources,
+  authenticationVerdict, configuration, databaseEnvironment, generatorArguments, generatorVerdict, measurementResources,
   parseCgroup, parseDatabaseProbe, parseHost, parseMetrics, retentionVerdict, serverProcessTree, sourceAddress,
 } from '../account-room-check.mjs';
 
@@ -46,6 +46,20 @@ test('retention verifies the exact acknowledged identities, owners and content, 
     assert.throws(() => retentionVerdict([{ ...rows[0], ...patch }, ...rows.slice(1)], inventory, accounts));
   assert.throws(() => retentionVerdict(rows.slice(1), inventory, accounts));
   assert.throws(() => retentionVerdict([rows[0], rows[0], ...rows.slice(2)], inventory, accounts));
+});
+
+test('database client defaults separate the database name and percent-decoded credentials from its URI', () => {
+  const env = databaseEnvironment('postgres://test%5Fowner:public%2Dfixture%21@127.0.0.1:5439/simplestchat_test?sslmode=disable', '/fixture/bin');
+  assert.equal(env.PGHOST, '127.0.0.1');
+  assert.equal(env.PGPORT, '5439');
+  assert.equal(env.PGDATABASE, 'simplestchat_test');
+  assert.equal(env.PGUSER, 'test_owner');
+  assert.equal(env.PGPASSWORD, 'public-fixture!');
+  assert.equal(env.PGSSLMODE, 'disable');
+  assert.equal(env.PGPASSFILE, '/dev/null');
+  assert.equal(databaseEnvironment('postgres://fixture@localhost/simplestchat_test', '/bin').PGPORT, '5432');
+  assert.equal(databaseEnvironment('postgres://fixture@[::1]:5432/simplestchat_test', '/bin').PGHOST, '::1');
+  assert.ok(!Object.values(env).some(value => value?.includes('postgres://')));
 });
 
 test('all thirty real accounts must refresh, renew their existing socket, and cross original expiry', () => {

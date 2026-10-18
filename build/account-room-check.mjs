@@ -247,13 +247,32 @@ async function request(config, index, path, body, token) {
   });
 }
 
+/** libpq environment defaults take individual values; PGDATABASE does not expand a URI. */
+export function databaseEnvironment(database, executablePath) {
+  const endpoint = new URL(database);
+  return { PATH: executablePath, LC_ALL: 'C',
+    PGHOST: endpoint.hostname.replace(/^\[|\]$/g, ''), PGPORT: endpoint.port || '5432',
+    PGDATABASE: endpoint.pathname.slice(1), PGUSER: decodeURIComponent(endpoint.username),
+    PGPASSWORD: decodeURIComponent(endpoint.password), PGSSLMODE: 'disable', PGPASSFILE: '/dev/null',
+    PGCONNECT_TIMEOUT: '3', PGOPTIONS: '-c statement_timeout=3000' };
+}
+
 async function databaseQuery(config, sql, timing = false) {
   const args = ['-X', '-qAt', '--set=ON_ERROR_STOP=1'];
   if (timing) args.push('--command', '\\timing on');
   args.push('--command', sql);
-  const { stdout } = await exec('psql', args, { timeout: 5000, maxBuffer: 1024 * 1024,
-    env: { PATH: process.env.PATH, LC_ALL: 'C', PGDATABASE: config.database, PGCONNECT_TIMEOUT: '3', PGOPTIONS: '-c statement_timeout=3000' } });
-  return timing ? parseDatabaseProbe(stdout) : JSON.parse(stdout);
+  let stdout;
+  try {
+    ({ stdout } = await exec('psql', args, { timeout: 5000, maxBuffer: 1024 * 1024,
+      env: databaseEnvironment(config.database, process.env.PATH) }));
+  } catch (error) {
+    // Never expose command stderr: libpq can include credential-bearing connection strings.
+    throw new Error(error.code === 'ENOENT' ? 'database_client_missing' :
+      Number.isInteger(error.code) ? `database_command_exit_${error.code}` : 'database_command_failed');
+  }
+  if (timing) return parseDatabaseProbe(stdout);
+  try { return JSON.parse(stdout); }
+  catch { throw new Error('invalid_database_json_response'); }
 }
 
 async function sample(config, child, units, cgroupPath, origin, metricsExpected) {
