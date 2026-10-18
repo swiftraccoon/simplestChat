@@ -12,6 +12,8 @@ from security_tools import ToolError, bounded_file, require, safe_name
 MAX_ITEMS = 32
 MAX_ENGINE_REPORTS = 2
 CORE_VARIANT_FIELDS = 2
+MAX_METADATA_DEPTH = 4
+MAX_METADATA_NODES = 64
 MAX_REPORT = 16 * 1024**2
 ERRORS = frozenset(
     {
@@ -95,9 +97,9 @@ def error_kind(value: JsonValue) -> str:
     return value if isinstance(value, str) and value in ENGINE_KINDS else "other"
 
 
-def engine_errors(directory: Path, paths: set[str]) -> list[JsonValue]:
-    """Expose fixed error kinds and inventoried coordinates, never raw messages."""
-    result: list[JsonValue] = []
+def engine_reports(directory: Path) -> list[JsonObject]:
+    """Read only the two bounded private standalone-core reports."""
+    result: list[JsonObject] = []
     files = list(directory.glob("*-engine.stdout"))
     if len(files) > MAX_ENGINE_REPORTS:
         return result
@@ -105,9 +107,18 @@ def engine_errors(directory: Path, paths: set[str]) -> list[JsonValue]:
         if not re.fullmatch(r"[0-9]{2}-(?:golden|source)-engine\.stdout", path.name):
             continue
         try:
-            raw = object_value(decode_json(bounded_file(path, MAX_REPORT, private=True)))
-            errors = array_value(raw["errors"])
+            result.append(object_value(decode_json(bounded_file(path, MAX_REPORT, private=True))))
         except (OSError, ValueError, KeyError, TypeError, ToolError):
+            continue
+    return result
+
+
+def engine_errors(reports: list[JsonObject], paths: set[str]) -> list[JsonValue]:
+    """Expose fixed error kinds and inventoried coordinates, never raw messages."""
+    result: list[JsonValue] = []
+    for raw in reports:
+        errors = raw.get("errors", [])
+        if not isinstance(errors, list):
             continue
         for error in errors:
             entry = error if isinstance(error, dict) else {}
@@ -122,6 +133,48 @@ def engine_errors(directory: Path, paths: set[str]) -> list[JsonValue]:
                     if type(line) is int and 0 < line <= scanner.MAX_LINE:
                         public["line"] = line
             result.append(public)
+            if len(result) > MAX_ITEMS:
+                return result
+    return result
+
+
+def timeout_coordinates(value: JsonValue, paths: set[str], identifiers: set[str]) -> JsonObject:
+    """Recognize exact known paths/rules inside bounded core timeout metadata."""
+    pending = [(value, 0)]
+    names: set[str] = set()
+    rules: set[str] = set()
+    for _ in range(MAX_METADATA_NODES):
+        if not pending:
+            break
+        entry, depth = pending.pop()
+        if isinstance(entry, str):
+            if entry in paths:
+                names.add(entry)
+            if entry in identifiers:
+                rules.add(entry)
+        elif depth < MAX_METADATA_DEPTH:
+            children = list(entry.values()) if isinstance(entry, dict) else entry
+            if isinstance(children, list):
+                pending.extend((child, depth + 1) for child in children[:MAX_METADATA_NODES])
+    result: JsonObject = {}
+    if len(names) == 1:
+        result["path"] = next(iter(names))
+    if len(rules) == 1:
+        result["rule"] = next(iter(rules))
+    return result
+
+
+def fixpoint_timeouts(reports: list[JsonObject], paths: set[str]) -> list[JsonValue]:
+    """Retain timeout coordinates without publishing function names or messages."""
+    result: list[JsonValue] = []
+    identifiers = scanner.rules(scanner.ROOT / scanner.RULES)
+    for raw in reports:
+        timing = raw.get("time")
+        entries: JsonValue = timing.get("fixpoint_timeouts", []) if isinstance(timing, dict) else []
+        if not isinstance(entries, list):
+            continue
+        for entry in entries[: MAX_ITEMS + 1]:
+            result.append(timeout_coordinates(entry, paths, identifiers))
             if len(result) > MAX_ITEMS:
                 return result
     return result
@@ -164,9 +217,13 @@ def diagnosis(status: int, data: bytes, directory: Path) -> JsonObject:
             result["error"] = (
                 code if isinstance(code, str) and code in ERRORS else "semgrep_check_failed"
             )
-            errors = engine_errors(directory, paths)
+            reports = engine_reports(directory)
+            errors = engine_errors(reports, paths)
             result["engineErrors"] = errors[:MAX_ITEMS]
             result["engineErrorsTruncated"] = len(errors) > MAX_ITEMS
+            timeouts = fixpoint_timeouts(reports, paths)
+            result["fixpointTimeouts"] = timeouts[:MAX_ITEMS]
+            result["fixpointTimeoutsTruncated"] = len(timeouts) > MAX_ITEMS
             return result
         require(
             set(raw) == set(FIELDS)

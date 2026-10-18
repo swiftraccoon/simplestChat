@@ -170,6 +170,50 @@ class SummaryTests(unittest.TestCase):
         )
         self.assertNotIn(SENTINEL, json.dumps(result))
 
+    def test_fixpoint_metadata_exposes_only_known_path_and_rule(self) -> None:
+        """Ignore metadata layout and private text while retaining exact allowlisted strings."""
+        self.write(
+            "04-source-engine.stdout",
+            {
+                "errors": [],
+                "time": {
+                    "fixpoint_timeouts": [
+                        ["src/example.py", RULE, SENTINEL],
+                        {"path": "src/example.py", "rule": RULE, "function": SENTINEL},
+                        {"path": "../private-source-sentinel.py", "rule": SENTINEL},
+                    ]
+                },
+            },
+        )
+        result = self.diagnose(1, {"passed": False, "error": "semgrep_fixpoint_timeout"})
+        self.assertEqual(
+            result["fixpointTimeouts"],
+            [
+                {"path": "src/example.py", "rule": RULE},
+                {"path": "src/example.py", "rule": RULE},
+                {},
+            ],
+        )
+        self.assertNotIn(SENTINEL, json.dumps(result))
+
+    def test_fixpoint_metadata_is_bounded_and_ambiguous_paths_are_omitted(self) -> None:
+        """Bound entries and recursive inspection; never select an ambiguous filename."""
+        self.write("source-manifest.json", {"src/example.py": "a" * 64, "src/other.py": "b" * 64})
+        self.write(
+            "04-source-engine.stdout",
+            json_value(
+                {
+                    "errors": [],
+                    "time": {"fixpoint_timeouts": [["src/example.py", "src/other.py", RULE]] * 100},
+                }
+            ),
+        )
+        result = self.diagnose(1, {"passed": False, "error": "semgrep_fixpoint_timeout"})
+        entries = array_value(result["fixpointTimeouts"])
+        self.assertEqual(len(entries), summary.MAX_ITEMS)
+        self.assertTrue(result["fixpointTimeoutsTruncated"] is True)
+        self.assertEqual(entries[0], {"rule": RULE})
+
     def test_malformed_or_inconsistent_results_fail_closed(self) -> None:
         """Exit codes, envelope truth and completeness must agree."""
         finding: JsonObject = {"rule": RULE, "path": "src/example.py", "line": 4}
