@@ -182,6 +182,16 @@
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md"
     },
     {
+      "scanner": "zizmor",
+      "fingerprint": "self-repository:7d65041123978cf420877842e3f127995a022f851b87c4b322a0a4ea398c9df6",
+      "scope": ".github/workflows/performance.yml#jobs/account-room/steps/1/uses",
+      "owner": "swiftraccoon",
+      "rationale": "The checksum-pinned actionlint 1.7.12 rejects GitHub's supported $/ self-repository syntax as a missing action ref. This exact call retains ./ so the maintained blocking workflow checks remain executable.",
+      "reachability": "Manual-only workflow_dispatch and only=account-room guards select this job. Credential-free checkout supplies the same-revision native-toolchain action, with no intervening source replacement or untrusted input to the action. Permissions remain contents/read; the experiment owns disposable loopback services and supplies no production deployment or signing credentials.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md#account-room-action-reference"
+    },
+    {
       "scanner": "cargo-audit",
       "fingerprint": "RUSTSEC-2024-0375",
       "scope": "atty@0.2.14",

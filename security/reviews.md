@@ -77,6 +77,31 @@ remains pinned to `6bed0761d98439e5a578e2877258200ad565ba87`; the version matche
 boundary described above. This additional exact record expires on 2026-11-29;
 it does not exempt extraction, query completion, cache validation or findings.
 
+## Account-room action reference
+
+On 2026-10-18, the new manual-only account-room experiment produced one
+low-severity `self-repository` finding at
+`performance.yml#jobs/account-room/steps/1/uses`. Its exact feature is
+`./.github/actions/native-toolchain`, with SHA-256
+`7d65041123978cf420877842e3f127995a022f851b87c4b322a0a4ea398c9df6`.
+
+[GitHub's July 30 announcement](https://github.blog/changelog/2026-07-30-reference-same-repository-actions-with-self-repository-syntax/)
+confirms that `$/` resolves an action from the running commit. Replacing this
+single call with `$/.github/actions/native-toolchain` removed the new finding
+under checksum-verified Zizmor 1.30.1, but checksum-verified actionlint 1.7.12
+rejected that reference as an action missing its ref. The supported syntax is
+therefore blocked by the maintained syntax checker. This review retains the
+existing `./` form at this one call site until that checker supports `$/`.
+
+The job requires both `workflow_dispatch` and `only=account-room`. Its pinned
+checkout disables persisted credentials and supplies the exact running source;
+no step replaces that checkout before the composite runs. The action receives
+only the fixed cache namespace. Job permissions inherit `contents: read`, and
+the workload creates isolated loopback accounts, PostgreSQL and media resources
+without production or signing credentials. The exact finding, feature hash and
+symbolic location expire on 2026-11-29. Other locations, changed action source
+references and all remaining workflow checks require their own assessment.
+
 ## Cache retention trigger
 
 On 2026-10-05, the high-severity `dangerous-triggers` finding for
