@@ -199,6 +199,51 @@ test('late account or screen results cannot render retired account controls', as
   assert.equal(f.state.calls.filter((call) => call.method === 'settings').length, 0);
 });
 
+test('Back can abort an initial administration read without rendering its late result', async () => {
+  const f = await fixture();
+  const response = deferred();
+  f.state.handle = (method) => (method === 'overview' ? response.promise : Promise.resolve());
+  const screen = f.sections.find((section) => section.id === 'room-access').screen();
+  const opening = screen.body({ current: () => true });
+  assert.equal(screen.canLeave(), true, 'loading room settings must not trap navigation');
+  const signal = f.state.calls.find((call) => call.method === 'overview').args.at(-1);
+  screen.leave();
+  assert.equal(signal.aborted, true);
+  response.resolve({ role: 'owner', settings: { ...f.state.settings } });
+  const body = await opening;
+  assert.equal(body.querySelectorAll('input').length, 0);
+  assert.equal(f.state.calls.filter((call) => call.method === 'settings').length, 0);
+});
+
+test('retry and reload reads remain dismissible and ignore results after leaving', async () => {
+  for (const label of ['Retry loading room', 'Reload room settings']) {
+    const f = await fixture();
+    if (label === 'Retry loading room')
+      f.state.handle = async () => {
+        throw new Error('Unavailable');
+      };
+    const { screen, body } = await f.open('room-access');
+    const response = deferred();
+    f.state.handle = (method) => (method === 'overview' ? response.promise : Promise.resolve());
+    action(body, label).click();
+    await flush();
+    assert.equal(screen.canLeave(), true, `${label} must not block Back`);
+    const signal = f.state.calls.at(-1).args.at(-1);
+    screen.leave();
+    assert.equal(signal.aborted, true);
+    response.resolve({ role: 'owner', settings: { ...f.state.settings, guestsAllowed: false } });
+    await flush();
+    if (label === 'Reload room settings')
+      assert.equal(
+        control(body, 'Allow guests').checked,
+        true,
+        'retired controls retain no late data',
+      );
+    else assert.equal(body.querySelectorAll('input').length, 0);
+    assert.equal(f.state.calls.filter((call) => call.method === 'settings').length, 0);
+  }
+});
+
 test('failed initial reads have a bounded explicit retry and permission loss hides edit controls', async () => {
   const f = await fixture();
   let failed = false;

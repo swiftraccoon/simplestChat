@@ -159,17 +159,18 @@ export function administrationSections(options: RoomAdministrationOptions): Shee
       body: HTMLElement,
       current: () => boolean,
       signal: AbortSignal,
-      run: (work: () => Promise<void>) => Promise<void>,
+      run: (work: () => Promise<void>, mutating?: boolean) => Promise<void>,
     ) => Promise<void>,
     minimum = 3,
   ): SheetScreen {
     const controller = new AbortController();
     let pending = false;
+    let blocksLeave = false;
     let uncertain = false;
     return {
       title,
       subtitle: `${view.settings.displayName} · ${options.roomId}`,
-      canLeave: () => !pending,
+      canLeave: () => !blocksLeave,
       leave: () => controller.abort(),
       body: async (context: ScreenContext) => {
         const body = el('div', undefined, 'sheet-screen');
@@ -179,9 +180,10 @@ export function administrationSections(options: RoomAdministrationOptions): Shee
         error.setAttribute('role', 'alert');
         const current = (): boolean =>
           !controller.signal.aborted && context.current() && options.current();
-        const run = async (work: () => Promise<void>): Promise<void> => {
+        const run = async (work: () => Promise<void>, mutating = true): Promise<void> => {
           if (pending || !current()) return;
           pending = true;
+          blocksLeave = mutating;
           error.hidden = true;
           body.setAttribute('aria-busy', 'true');
           const controls = [
@@ -212,6 +214,7 @@ export function administrationSections(options: RoomAdministrationOptions): Shee
             }
           } finally {
             pending = false;
+            blocksLeave = false;
             if (current()) {
               body.setAttribute('aria-busy', 'false');
               controls.forEach((control, index) => {
@@ -227,7 +230,7 @@ export function administrationSections(options: RoomAdministrationOptions): Shee
         };
         const retry = asyncButton(
           'Retry loading room',
-          () => run(load),
+          () => run(load, false),
           () => {},
           'sheet-button',
         );
@@ -250,7 +253,7 @@ export function administrationSections(options: RoomAdministrationOptions): Shee
         await run(async () => {
           retry.hidden = false;
           await load();
-        });
+        }, false);
         return body;
       },
     };
@@ -386,7 +389,7 @@ export function administrationSections(options: RoomAdministrationOptions): Shee
                     adopt(updated);
                     draw();
                   }
-                }),
+                }, false),
               () => {},
               'sheet-button',
             ),
@@ -752,7 +755,7 @@ export function administrationSections(options: RoomAdministrationOptions): Shee
                 'Previous page',
                 async () => {
                   offset = Math.max(0, offset - 100);
-                  await run(load);
+                  await run(load, false);
                 },
                 () => {},
                 'sheet-button',
@@ -764,7 +767,7 @@ export function administrationSections(options: RoomAdministrationOptions): Shee
                 'Next page',
                 async () => {
                   offset += 100;
-                  await run(load);
+                  await run(load, false);
                 },
                 () => {},
                 'sheet-button',
@@ -784,7 +787,7 @@ export function administrationSections(options: RoomAdministrationOptions): Shee
                     adopt(updated);
                     await load();
                   }
-                }),
+                }, false),
               () => {},
               'sheet-button',
             ),
