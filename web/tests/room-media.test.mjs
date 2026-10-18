@@ -296,6 +296,7 @@ async function incomingRefreshFixture(producerIds = ['camera', 'microphone']) {
     retired = [];
     closedConsumers = [];
     failedConsumes = new Set();
+    qualities = [];
     closed = false;
     async setup() {}
     async consume(producerId) {
@@ -320,6 +321,9 @@ async function incomingRefreshFixture(producerIds = ['camera', 'microphone']) {
     }
     closeLocalProducer() {
       return false;
+    }
+    setConsumerQualityByProducer(producerId, quality) {
+      this.qualities.push([producerId, quality]);
     }
     close() {
       this.closed = true;
@@ -369,7 +373,7 @@ async function incomingRefreshFixture(producerIds = ['camera', 'microphone']) {
               producers: producerIds.map((id) => ({
                 id,
                 kind: id === 'microphone' ? 'audio' : 'video',
-                source: id === 'microphone' ? 'microphone' : 'camera',
+                source: id === 'microphone' ? 'microphone' : id === 'screen' ? 'screen' : 'camera',
               })),
             },
           ],
@@ -405,6 +409,16 @@ test('incoming refresh replaces subscriptions while preserving local capture and
   assert.equal(capture.stopped, false);
   assert.equal(room.audioEnabled, false);
   assert.equal(room.videoEnabled, true);
+  await room.leave();
+});
+
+test('camera quality choices never lower a participant screen share', async () => {
+  const { room, managers } = await incomingRefreshFixture(['camera', 'screen']);
+  room.setRemoteVideoQuality('remote', 'low');
+  assert.deepEqual(managers[0].qualities, [['camera', 'low']]);
+  await room.refreshIncomingMedia();
+  assert.ok(managers[0].qualities.every(([producer]) => producer === 'camera'));
+  assert.ok(managers[0].consumers.has('screen'));
   await room.leave();
 });
 

@@ -1052,7 +1052,8 @@ export class RoomClient {
   setRemoteVideoQuality(participantId: string, quality: RemoteVideoQuality): void {
     this.videoQualities.set(participantId, quality);
     for (const [producerId, producer] of this.participants.get(participantId)?.producers ?? []) {
-      if (producer.kind === 'video') this.media?.setConsumerQualityByProducer(producerId, quality);
+      if (producer.kind === 'video' && producer.source !== 'screen')
+        this.media?.setConsumerQualityByProducer(producerId, quality);
     }
   }
 
@@ -1590,7 +1591,8 @@ export class RoomClient {
         if (this.hiddenParticipants.has(participantId))
           media.setConsumerHiddenByProducer(producerId, true);
         const quality = this.videoQualities.get(participantId);
-        if (quality && kind === 'video') media.setConsumerQualityByProducer(producerId, quality);
+        if (quality && kind === 'video' && source !== 'screen')
+          media.setConsumerQualityByProducer(producerId, quality);
         if (kind === 'video') {
           this.applyVideoSizeCap(participantId, producerId, source);
           this.deferredVideos.delete(producerId);
