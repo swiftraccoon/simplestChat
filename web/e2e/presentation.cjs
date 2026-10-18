@@ -8,6 +8,7 @@ const { browserOptions, webKitTestNetworkEnabled } = require('./browser-options.
 const { installPeerEventTracing } = require('./peer-events.cjs');
 const { openRoomMenu } = require('./room-menu.cjs');
 const { sheetScreen, closeSheet } = require('./settings-sheet.cjs');
+const { presentationWindow } = require('./presentation-window.cjs');
 const {
   text,
   glyphs,
@@ -183,17 +184,30 @@ async function sample(page) {
   });
   return { ...frame, ...counters };
 }
-async function readable(page, name, accepts = () => true, timeoutMs = 30000) {
-  const deadline = Date.now() + timeoutMs;
-  do {
-    const read = await sample(page);
-    report.lastObservation = { name, ...read };
-    if (read.text === text && accepts(read)) return read;
-    await page.waitForTimeout(650);
-  } while (Date.now() < deadline);
-  throw new Error(`Decoded presentation did not satisfy ${name}`);
-}
-async function progressing(page, name, before, after) {
+async function progressing(page, name, accepts, timeoutMs = 30000, windowMs = 3000) {
+  const window = await presentationWindow({
+    sample: () => sample(page),
+    accepts: (point) => point.text === text && accepts(point),
+    wait: (ms) => page.waitForTimeout(ms),
+    timeoutMs,
+    windowMs,
+    observe: (point) => {
+      report.lastObservation = { name, ...point };
+      report.observations ||= [];
+      report.observations.push({
+        name,
+        width: point.width,
+        height: point.height,
+        readableText: point.text === text,
+        screenFrames: point.screenFrames,
+        cameraFrames: point.cameraFrames,
+        audioSamples: point.audioSamples,
+      });
+      if (report.observations.length > 128) report.observations.shift();
+    },
+  });
+  const { before, after } = window;
+  assert.equal(before.text, text, `${name}: actual decoded text starts readable`);
   assert.equal(after.text, text, `${name}: actual decoded text remains readable`);
   assert.ok(after.screenFrames >= before.screenFrames + 2, `${name}: screen frames advance`);
   assert.ok(
@@ -225,9 +239,14 @@ async function progressing(page, name, before, after) {
     audioPackets: after.audioPackets - before.audioPackets,
     audioSamples: samples,
     concealedSamples: concealed,
+    before,
+    after,
+    durationMs: window.durationMs,
+    resolutionSamples: window.observations.map(({ width, height }) => ({ width, height })),
   });
   await page.screenshot({ path: path.join(artifacts, `${name}.png`) });
   save();
+  return after;
 }
 async function senderState(page) {
   return page.evaluate(async () => {
@@ -275,10 +294,7 @@ async function senderState(page) {
     await publisher.locator('#mic-btn').click();
     await profile(publisher, 'detail');
     await share(publisher);
-    await readable(viewer, 'initial-detail');
-    let before = await sample(viewer);
-    await viewer.waitForTimeout(3000);
-    await progressing(viewer, 'detail-text-voice-camera', before, await sample(viewer));
+    await progressing(viewer, 'detail-text-voice-camera', (read) => read.height === 1080);
     const detail = await senderState(publisher);
     const hardwareSingle =
       detail.screenCodec?.toLowerCase() === 'video/h264' && detail.screenSpatialStreams === 1;
@@ -300,14 +316,11 @@ async function senderState(page) {
     const captures = detail.captures;
     stage = 'data-saver';
     await receiveMode(viewer, 'data-saver');
-    await readable(
+    await progressing(
       viewer,
-      hardwareSingle ? 'bounded-hardware-single-stream' : 'native-lower-layer',
+      'data-saver-readable-text',
       (read) => hardwareSingle || read.height <= 270,
     );
-    before = await sample(viewer);
-    await viewer.waitForTimeout(3000);
-    await progressing(viewer, 'data-saver-readable-text', before, await sample(viewer));
     stage = 'explicit-audio-only';
     await receiveMode(viewer, 'audio-only');
     await viewer.waitForFunction(
@@ -329,36 +342,34 @@ async function senderState(page) {
     await share(publisher); // Explicit stop, then a new explicit share adopts the new profile.
     await profile(publisher, 'motion');
     await share(publisher);
-    const high = await readable(
+    const high = await progressing(
       viewer,
-      'motion-high-resolution',
-      (read) => read.height >= 1080,
+      'motion-readable-text',
+      (read) => read.height === 1080,
       45000,
     );
-    before = await sample(viewer);
-    await viewer.waitForTimeout(3000);
-    await progressing(viewer, 'motion-readable-text', before, await sample(viewer));
     if (impaired) {
       stage = 'constrained-downlink';
       impair('apply');
       // Allow the real estimator and worker to converge, then require progress
       // over an independent interval. Pixel reads alone could accept a freeze.
       await viewer.waitForTimeout(20000);
-      const low = await readable(
+      const low = await progressing(
         viewer,
-        'constrained-lower-resolution',
+        'constrained-text-voice-camera',
         (read) => read.height < high.height,
         30000,
+        4000,
       );
-      before = await sample(viewer);
-      await viewer.waitForTimeout(4000);
-      await progressing(viewer, 'constrained-text-voice-camera', before, await sample(viewer));
+      report.constrainedReference = { width: low.width, height: low.height };
       stage = 'network-recovery';
       impair('clear');
-      await readable(viewer, 'recovered-resolution', (read) => read.height > low.height, 45000);
-      before = await sample(viewer);
-      await viewer.waitForTimeout(3000);
-      await progressing(viewer, 'recovered-text-voice-camera', before, await sample(viewer));
+      await progressing(
+        viewer,
+        'recovered-text-voice-camera',
+        (read) => read.height === 1080 && read.height > low.height,
+        45000,
+      );
     }
     stage = 'stop-restores-camera';
     await share(publisher);
