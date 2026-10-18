@@ -131,6 +131,159 @@ function messageNode(message: ChatEntry): HTMLElement {
   return row;
 }
 
+type HistoryMessageActions = {
+  options: HistoryOptions;
+  current: () => boolean;
+  close: () => void;
+  signal: AbortSignal;
+  fail: (error: unknown) => void;
+  reactionVersion: (id: string) => number;
+  readReactionVersion: () => number;
+  refreshMessages: () => void;
+};
+
+/** Keep row actions independent from the reader's pagination and refresh lifecycle. */
+function appendHistoryMessageActions(
+  row: HTMLElement,
+  message: ChatEntry,
+  context: HistoryMessageActions,
+): void {
+  const {
+    options,
+    current,
+    close,
+    signal,
+    fail,
+    reactionVersion,
+    readReactionVersion,
+    refreshMessages,
+  } = context;
+  if (options.edit && message.participantId === options.viewerId && !message.removedAt) {
+    row.append(
+      button(
+        'Edit',
+        () =>
+          editMessageDialog(message, {
+            current,
+            save: (content, revision) => options.edit!(message, content, revision, signal),
+            changed: notifyHistoryEdit,
+          }),
+        'history-edit',
+      ),
+    );
+  }
+  if (options.reply && !message.removedAt) {
+    row.append(
+      button(
+        'Reply',
+        () => {
+          if (!current()) return;
+          if (!options.replyInPlace) close();
+          options.reply?.(message);
+        },
+        'history-reply',
+      ),
+    );
+  }
+  if (options.react && !message.removedAt) {
+    const controls = el('div', undefined, 'msg-reactions');
+    const react = async (emoji: string): Promise<void> => {
+      if (!current() || !options.react) return;
+      const version = reactionVersion(message.messageId);
+      const readVersion = readReactionVersion();
+      const buttons = controls.querySelectorAll<HTMLButtonElement>('button');
+      buttons.forEach((control) => {
+        control.disabled = true;
+      });
+      try {
+        const present = !(message.reactions ?? []).some(
+          (reaction) =>
+            reaction.emoji === emoji && reaction.participantIds.includes(options.viewerId),
+        );
+        const result = await options.react(message.messageId, emoji, present, signal);
+        if (
+          current() &&
+          result.messageId === message.messageId &&
+          version === reactionVersion(message.messageId) &&
+          readVersion === readReactionVersion()
+        )
+          notifyHistoryReaction(result.messageId, result.reactions);
+        else if (current() && readVersion !== readReactionVersion()) refreshMessages();
+      } finally {
+        if (current())
+          buttons.forEach((control) => {
+            control.disabled = false;
+          });
+      }
+    };
+    for (const reaction of message.reactions ?? []) {
+      const chip = asyncButton(
+        `${reaction.emoji} ${reaction.participantIds.length}`,
+        () => react(reaction.emoji),
+        fail,
+        'reaction-chip',
+      );
+      chip.setAttribute('aria-pressed', String(reaction.participantIds.includes(options.viewerId)));
+      controls.append(chip);
+    }
+    const picker = el('div', undefined, 'reaction-picker');
+    picker.hidden = true;
+    for (const emoji of CHAT_REACTIONS)
+      picker.append(
+        asyncButton(
+          emoji,
+          async () => {
+            picker.hidden = true;
+            await react(emoji);
+          },
+          fail,
+          'msg-action',
+        ),
+      );
+    controls.append(
+      button('React', () => {
+        picker.hidden = !picker.hidden;
+      }),
+      picker,
+    );
+    row.append(controls);
+  }
+  if (options.remove && !message.removedAt) {
+    row.append(
+      button(
+        'Remove',
+        () => {
+          const confirmation = modal('Remove message');
+          confirmation.body.append(
+            el('p', 'Remove this public message and its quoted text for everyone?'),
+          );
+          const remove = asyncButton(
+            'Remove message',
+            async () => {
+              if (!current() || !options.remove || remove.disabled) return;
+              remove.disabled = true;
+              try {
+                const result = await options.remove(message.messageId);
+                if (current()) notifyHistoryRemoval(message.messageId, result.removedAt);
+                confirmation.close();
+              } finally {
+                remove.disabled = false;
+              }
+            },
+            (error) => {
+              confirmation.error.textContent =
+                error instanceof Error ? error.message : 'Message could not be removed';
+              confirmation.error.hidden = false;
+            },
+          );
+          confirmation.body.append(remove);
+        },
+        'history-remove',
+      ),
+    );
+  }
+}
+
 /** A bounded page reader shared by room history and the account inbox. */
 function openHistory(options: HistoryOptions): void {
   const view = modal(options.title, undefined, options.navigation);
@@ -237,6 +390,16 @@ function openHistory(options: HistoryOptions): void {
         fail(error);
       });
   };
+  const messageActions: HistoryMessageActions = {
+    options,
+    current,
+    close: () => view.close(),
+    signal: controller.signal,
+    fail,
+    reactionVersion: (id) => reactionVersions.get(id) ?? 0,
+    readReactionVersion: () => reactionReadVersion,
+    refreshMessages: () => refreshMessages(),
+  };
   const render = (bottom: boolean): void => {
     const scroll = list.scrollTop;
     clearAttachmentRows();
@@ -267,139 +430,7 @@ function openHistory(options: HistoryOptions): void {
             'history-context',
           ),
         );
-      if (options.edit && message.participantId === options.viewerId && !message.removedAt) {
-        row.append(
-          button(
-            'Edit',
-            () =>
-              editMessageDialog(message, {
-                current,
-                save: (content, revision) =>
-                  options.edit!(message, content, revision, controller.signal),
-                changed: notifyHistoryEdit,
-              }),
-            'history-edit',
-          ),
-        );
-      }
-      if (options.reply && !message.removedAt) {
-        row.append(
-          button(
-            'Reply',
-            () => {
-              if (!current()) return;
-              if (!options.replyInPlace) view.close();
-              options.reply?.(message);
-            },
-            'history-reply',
-          ),
-        );
-      }
-      if (options.react && !message.removedAt) {
-        const controls = el('div', undefined, 'msg-reactions');
-        const react = async (emoji: string): Promise<void> => {
-          if (!current() || !options.react) return;
-          const version = reactionVersions.get(message.messageId) ?? 0;
-          const readVersion = reactionReadVersion;
-          const buttons = controls.querySelectorAll<HTMLButtonElement>('button');
-          buttons.forEach((control) => {
-            control.disabled = true;
-          });
-          try {
-            const present = !(message.reactions ?? []).some(
-              (reaction) =>
-                reaction.emoji === emoji && reaction.participantIds.includes(options.viewerId),
-            );
-            const result = await options.react(
-              message.messageId,
-              emoji,
-              present,
-              controller.signal,
-            );
-            if (
-              current() &&
-              result.messageId === message.messageId &&
-              version === (reactionVersions.get(message.messageId) ?? 0) &&
-              readVersion === reactionReadVersion
-            )
-              notifyHistoryReaction(result.messageId, result.reactions);
-            else if (current() && readVersion !== reactionReadVersion) refreshMessages();
-          } finally {
-            if (current())
-              buttons.forEach((control) => {
-                control.disabled = false;
-              });
-          }
-        };
-        for (const reaction of message.reactions ?? []) {
-          const chip = asyncButton(
-            `${reaction.emoji} ${reaction.participantIds.length}`,
-            () => react(reaction.emoji),
-            fail,
-            'reaction-chip',
-          );
-          chip.setAttribute(
-            'aria-pressed',
-            String(reaction.participantIds.includes(options.viewerId)),
-          );
-          controls.append(chip);
-        }
-        const picker = el('div', undefined, 'reaction-picker');
-        picker.hidden = true;
-        for (const emoji of CHAT_REACTIONS)
-          picker.append(
-            asyncButton(
-              emoji,
-              async () => {
-                picker.hidden = true;
-                await react(emoji);
-              },
-              fail,
-              'msg-action',
-            ),
-          );
-        controls.append(
-          button('React', () => {
-            picker.hidden = !picker.hidden;
-          }),
-          picker,
-        );
-        row.append(controls);
-      }
-      if (options.remove && !message.removedAt) {
-        row.append(
-          button(
-            'Remove',
-            () => {
-              const confirmation = modal('Remove message');
-              confirmation.body.append(
-                el('p', 'Remove this public message and its quoted text for everyone?'),
-              );
-              const remove = asyncButton(
-                'Remove message',
-                async () => {
-                  if (!current() || !options.remove || remove.disabled) return;
-                  remove.disabled = true;
-                  try {
-                    const result = await options.remove(message.messageId);
-                    if (current()) notifyHistoryRemoval(message.messageId, result.removedAt);
-                    confirmation.close();
-                  } finally {
-                    remove.disabled = false;
-                  }
-                },
-                (error) => {
-                  confirmation.error.textContent =
-                    error instanceof Error ? error.message : 'Message could not be removed';
-                  confirmation.error.hidden = false;
-                },
-              );
-              confirmation.body.append(remove);
-            },
-            'history-remove',
-          ),
-        );
-      }
+      appendHistoryMessageActions(row, message, messageActions);
       return row;
     });
     list.replaceChildren(...nodes);
