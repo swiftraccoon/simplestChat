@@ -90,9 +90,9 @@ test('page-only filtering diagnostic runs separately and retains the unchanged W
 
 test('scheduled compatibility opts only WebKit into owned native test networking', () => {
   const compatibilitySteps = compatibility.split(/(?=^      - (?:name|uses):)/m).slice(1);
-  const expected = ['Community and real-media browser regressions', 'Isolate native receive-only ICE gathering'];
+  const expected = ['Community and real-media browser regressions', 'Isolate native receive-only ICE gathering', 'Read presentations through native browser media'];
   const enabled = compatibilitySteps.filter(value => value.includes('WEBKIT_TEST_NETWORK:'));
-  assert.equal(enabled.length, 2);
+  assert.equal(enabled.length, expected.length);
   for (const [index, value] of enabled.entries()) {
     assert.ok(value.startsWith(`      - name: ${expected[index]}\n`));
     assert.ok(value.includes("WEBKIT_TEST_NETWORK: ${{ matrix.browser == 'webkit' && '1' || '' }}"));

@@ -25,6 +25,7 @@ import security_actions
 import security_dependency_licenses
 import security_findings as findings
 import security_openssl
+import security_semgrep_summary
 from security_context import MAX_REPORT, ROOT, Context, executable, json_object
 from security_policy import read_exceptions
 from security_secret_projection import project
@@ -427,9 +428,9 @@ def migration_checks(context: Context, tools: Path, migrations: Sequence[str]) -
         )
 
 
-def source_checks(context: Context, tools: Path, *, include_vendor: bool = False) -> None:
-    """Run tested repository rules and inspect new SQL plus rendered runtime restrictions."""
-    _ = context.run(
+def semgrep_checks(context: Context, *, include_vendor: bool = False) -> None:
+    """Retain bounded safe nested failure evidence without accepting a failed scan."""
+    status, output = context.run(
         "semgrep",
         [
             sys.executable,
@@ -442,7 +443,16 @@ def source_checks(context: Context, tools: Path, *, include_vendor: bool = False
             *(["--include-vendor"] if include_vendor else []),
         ],
         timeout=300,
+        accepted=(0, 1),
     )
+    diagnosis = security_semgrep_summary.diagnosis(status, output, context.output / "semgrep")
+    context.checks.append({"name": "semgrep-diagnosis", "exitStatus": status, **diagnosis})
+    require(status == 0 and diagnosis["passed"] is True, "semgrep_source_check_failed")
+
+
+def source_checks(context: Context, tools: Path, *, include_vendor: bool = False) -> None:
+    """Run tested repository rules and inspect new SQL plus rendered runtime restrictions."""
+    semgrep_checks(context, include_vendor=include_vendor)
     migrations = findings.new_migrations(context.root)
     migration_checks(context, tools, migrations)
     context.checks.append(
