@@ -61,8 +61,18 @@ and real-media assertions still fail the run.
 The following opt-in fixtures require the same owned loopback services and
 rebuilt assets. `auth-cross-tab.cjs` intercepts account APIs and signaling to test
 native shared cookies, BroadcastChannel/storage fallback and history in two tabs.
-It does not validate backend authentication. `room-control-confirmation.cjs`
-uses controlled replies to check pending controls, retained failed edits, and
+It does not validate backend authentication.
+
+The auth fixture also checks startup cookie restoration: a controlled `503`
+shows an unconfirmed sign-in with explicit **Retry saved sign-in**, a pending retry
+cannot be duplicated, and a successful retry restores the account without a reload or
+password submission. A final `401` establishes guest state. An older restoration
+response cannot replace a newer interactive sign-in. These are browser UI and
+request-ownership checks with intercepted responses, not proof of backend
+refresh-cookie rotation or identity validation.
+
+`room-control-confirmation.cjs` uses controlled replies to check pending controls,
+retained failed edits, and
 retired dialog ownership across room changes. `media-continuity.cjs` uses native
 WebRTC for camera off/on, explicit incoming-subscription repair, and signaling
 reconnect; Chromium also exercises page freeze/resume. Controlled lifecycle

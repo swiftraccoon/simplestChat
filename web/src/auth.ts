@@ -2,6 +2,8 @@ import type { AuthResponse, UserInfo } from './protocol';
 import type { TelemetryHandler, TelemetryOutcome } from './telemetry-types';
 
 type AuthChangeHandler = (loggedIn: boolean, tokenRefresh: boolean) => void;
+export type RestoreResult = 'restored' | 'unauthenticated' | 'unavailable' | 'superseded';
+export type RestoreState = 'idle' | 'checking' | RestoreResult;
 
 const RESTORE_DEADLINE_MS = 10_000;
 const SESSION_DEADLINE_MS = 20_000;
@@ -53,6 +55,8 @@ export class AuthManager {
   private refreshBudget: RefreshBudget | null = null;
   private scheduledRefresh: ScheduledRefresh | null = null;
   private onChange: AuthChangeHandler | null = null;
+  private _restoreState: RestoreState = 'idle';
+  private onRestoreStateChange: ((state: RestoreState) => void) | null = null;
   private registrationCeremonyId: string | null = null;
   private authenticationCeremonyId: string | null = null;
   private generation = 0;
@@ -125,8 +129,27 @@ export class AuthManager {
     this.onChange = handler;
   }
 
-  /** Try to restore session from refresh token cookie on page load */
-  async tryRestore(): Promise<boolean> {
+  get restoreState(): RestoreState {
+    return this._restoreState;
+  }
+
+  /** Observe saved-sign-in recovery without exposing cookies or credentials. */
+  setOnRestoreStateChange(handler: ((state: RestoreState) => void) | null): void {
+    this.onRestoreStateChange = handler;
+  }
+
+  private setRestoreState(state: RestoreState): void {
+    if (this._restoreState === state) return;
+    this._restoreState = state;
+    try {
+      this.onRestoreStateChange?.(state);
+    } catch {
+      /* Optional status rendering cannot interrupt authentication. */
+    }
+  }
+
+  /** Check the saved cookie on startup or an explicit user retry. Never auto-retry. */
+  async tryRestore(): Promise<RestoreResult> {
     return this.restoreSession(false);
   }
 
@@ -153,13 +176,15 @@ export class AuthManager {
     );
   }
 
-  private async restoreSession(shared: boolean): Promise<boolean> {
-    const generation = this.beginAuthentication();
+  private async restoreSession(shared: boolean): Promise<RestoreResult> {
+    const generation = this.beginAuthentication(true);
     const started = performance.now();
     const deadline = started + RESTORE_DEADLINE_MS;
     const wallDeadline = Date.now() + RESTORE_DEADLINE_MS;
     const controller = new AbortController();
     this.restoreController = controller;
+    this.setRestoreState('checking');
+    let result: RestoreResult = 'unavailable';
     let outcome: TelemetryOutcome = 'error';
     this.telemetry?.({ name: 'auth_restore', outcome: 'started' });
     const assertLive = (): void => {
@@ -171,7 +196,7 @@ export class AuthManager {
     try {
       // Race the entire operation, including Web Locks, JSON bodies and replay
       // delays. Abort alone is insufficient for a stalled/late platform promise.
-      const work = async (): Promise<boolean> => {
+      const work = async (): Promise<RestoreResult> => {
         const resp = await this.requestRefreshWithReplayConfirmation(
           generation,
           undefined,
@@ -184,9 +209,9 @@ export class AuthManager {
           if (shared) {
             if (resp.status === 401) this.uncertainSession = false;
             this.restoreController = null;
-            this.clearSession();
+            this.clearSession(generation);
           }
-          return false;
+          return resp.status === 401 ? 'unauthenticated' : 'unavailable';
         }
         const data = await readSession(resp);
         assertLive();
@@ -194,9 +219,9 @@ export class AuthManager {
         if (this.restoreController === controller) this.restoreController = null;
         this.setSession(data, shared);
         outcome = 'ok';
-        return true;
+        return 'restored';
       };
-      return await abortable(work(), controller.signal);
+      result = await abortable(work(), controller.signal);
     } catch {
       outcome =
         generation !== this.generation
@@ -204,8 +229,8 @@ export class AuthManager {
           : controller.signal.aborted || performance.now() >= deadline || Date.now() >= wallDeadline
             ? 'timeout'
             : 'error';
-      if (shared && generation === this.generation) this.clearSession();
-      return false;
+      if (shared && generation === this.generation) this.clearSession(generation);
+      result = outcome === 'superseded' ? 'superseded' : 'unavailable';
     } finally {
       clearTimeout(timer);
       if (this.restoreController === controller) this.restoreController = null;
@@ -213,6 +238,10 @@ export class AuthManager {
       this.telemetry?.({ name: 'auth_restore', outcome, durationMs: performance.now() - started });
       this.resumeRefresh(generation);
     }
+    if (generation !== this.generation) return 'superseded';
+    this.setRestoreState(result);
+    if (generation !== this.generation) return 'superseded';
+    return result;
   }
 
   /** `inviteCode` opens registration while it is closed to strangers. */
@@ -367,8 +396,9 @@ export class AuthManager {
 
   // Only the latest local authentication intent may adopt or retire identity.
   // This does not cancel server-side effects of requests already sent.
-  private beginAuthentication(): number {
+  private beginAuthentication(restoring = false): number {
     this.generation += 1;
+    const generation = this.generation;
     this.restoreController?.abort();
     this.restoreController = null;
     this.sessionController?.abort();
@@ -379,7 +409,8 @@ export class AuthManager {
     this.registrationCeremonyId = null;
     this.authenticationCeremonyId = null;
     this.challengeGeneration = null;
-    return this.generation;
+    if (!restoring && this._restoreState !== 'idle') this.setRestoreState('superseded');
+    return generation;
   }
 
   private assertCurrent(generation: number): void {
@@ -487,8 +518,11 @@ export class AuthManager {
     }
   }
 
-  private clearSession(): void {
-    this.beginAuthentication();
+  private clearSession(restoreGeneration?: number): void {
+    // A failed shared-cookie check owns this identity clearance and its final
+    // status. It is not a second intent; onChange may still supersede it.
+    if (restoreGeneration === undefined) this.beginAuthentication();
+    else this.assertCurrent(restoreGeneration);
     this._token = null;
     this._user = null;
     this.tokenExpiresAt = null;

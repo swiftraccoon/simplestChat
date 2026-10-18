@@ -7,7 +7,7 @@ import {
   type ConnectionQuality,
 } from './room';
 import * as icons from './icons';
-import { AuthManager, SessionOutcomeUnknownError } from './auth';
+import { AuthManager, SessionOutcomeUnknownError, type RestoreState } from './auth';
 import { AuthDialogFlow, type AuthDialogAttempt } from './auth-dialog';
 import { AccountSessionSync } from './account-session-sync';
 import { RoomNavigation } from './room-navigation';
@@ -127,6 +127,9 @@ const roomLoadMore = document.getElementById('room-load-more') as HTMLButtonElem
 const createRoomBtn = document.getElementById('create-room-btn')!;
 const serverMode = document.getElementById('server-mode')!;
 const capabilitiesRetry = document.getElementById('server-features-retry') as HTMLButtonElement;
+const authRestoreNotice = document.getElementById('auth-restore-notice')!;
+const authRestoreStatus = document.getElementById('auth-restore-status')!;
+const authRestoreRetry = document.getElementById('auth-restore-retry') as HTMLButtonElement;
 
 // Login modal
 const loginModal = document.getElementById('login-modal') as HTMLDialogElement;
@@ -210,6 +213,61 @@ function updateAuthUI(): void {
   observeUiTask(notificationPreferences.refresh(), 'Could not refresh notification rules');
   refreshSavedRoomPicker();
   participantHovercard.refresh();
+  updateRestoreUI();
+}
+
+/** A failed cookie check is unconfirmed sign-in, rather than confirmed sign-out. */
+function updateRestoreUI(): void {
+  const state = auth.restoreState;
+  const visible =
+    !auth.isLoggedIn &&
+    capabilities?.accounts !== false &&
+    (state === 'checking' || state === 'unavailable');
+  const returnFocus =
+    !visible &&
+    document.activeElement === authRestoreRetry &&
+    (auth.isLoggedIn || state === 'unauthenticated');
+  authRestoreNotice.hidden = !visible;
+  authRestoreRetry.disabled = state === 'checking' || !auth.canCheckSharedSession;
+  authRestoreStatus.textContent = visible
+    ? state === 'checking'
+      ? 'Checking saved sign-in…'
+      : 'Couldn’t check your saved sign-in. Check your connection and try again.'
+    : '';
+  if (returnFocus)
+    document.getElementById(auth.isLoggedIn ? 'account-menu-btn' : 'sign-in-btn')?.focus();
+}
+
+/** Runs synchronously inside the current restore's ownership notification. */
+function handleRestoreState(state: RestoreState): void {
+  if (state === 'checking' || state === 'unavailable' || state === 'superseded')
+    restoredAccount = false;
+  updateRestoreUI();
+  if (auth.restoreState !== state) return;
+  if (state === 'unavailable') {
+    // Guest rooms remain usable; account links wait for a verified cookie result.
+    signaling.connect();
+    return;
+  }
+  if (state !== 'restored' && state !== 'unauthenticated') return;
+  restoredAccount = true;
+  updateAuthUI();
+  if (auth.restoreState !== state) return;
+  reviewPendingContact();
+  if (state === 'unauthenticated') signaling.connect();
+  if (pendingInvite) observeUiTask(previewPendingInvite(), 'Invitation not reviewed');
+}
+
+/** Explicit retries share the same bounded cookie check as initial restoration. */
+function restoreSavedSignIn(): void {
+  if (
+    auth.isLoggedIn ||
+    auth.restoreState === 'checking' ||
+    !auth.canCheckSharedSession ||
+    capabilities?.accounts === false
+  )
+    return;
+  observeUiTask(auth.tryRestore(), 'Could not check saved sign-in.');
 }
 
 // Invitation secrets stay in the fragment and are removed before room navigation.
@@ -271,6 +329,7 @@ async function previewPendingInvite(): Promise<void> {
     showToast('Invitations are unavailable on this server.', 4000, 'error');
     return;
   }
+  if (!restoredAccount) return;
   if (pendingInviteKind === 'registration') {
     openAuthDialog(registerModal);
     return;
@@ -2138,18 +2197,10 @@ capabilitiesRetry.addEventListener(
 );
 observeUiTask(loadCapabilities(), 'Could not load server features');
 
-// Try to restore auth session from cookie, then connect WS
-observeUiTask(
-  auth.tryRestore().then(() => {
-    restoredAccount = true;
-    updateAuthUI();
-    reviewPendingContact();
-    signaling.connect(auth.jwt ?? undefined);
-    if (!pendingInvite) return;
-    observeUiTask(previewPendingInvite(), 'Invitation not reviewed');
-  }),
-  'Could not restore sign-in. Reload the page to retry.',
-);
+// Only current, verified outcomes release pending account-dependent navigation.
+auth.setOnRestoreStateChange(handleRestoreState);
+authRestoreRetry.addEventListener('click', restoreSavedSignIn);
+restoreSavedSignIn();
 
 // --- Join form ---
 function updateJoinBtn(): void {

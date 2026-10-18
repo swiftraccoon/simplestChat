@@ -298,6 +298,21 @@ this transient-failure allowance.
 New authentication actions retire pending refresh work but do not replenish the
 old session's budget; budget expiry also retires a still-pending login or logout.
 
+Initial cookie restoration reports `restored`, `unauthenticated`, `unavailable`
+or `superseded`, with `checking` while an attempt is pending. Each attempt has a
+ten-second deadline covering the refresh lock, response body and any exact-401
+replay confirmation. Only a final `401` confirms that the browser is signed out.
+A network failure, another unsuccessful HTTP status, timeout or invalid successful
+response leaves sign-in unconfirmed and displays **Retry saved sign-in**. Guest
+room use remains available, while account-dependent invitation and contact actions
+wait for a verified account or confirmed signed-out result. Retry starts one new bounded
+attempt; its control is disabled while pending, and transient startup failures
+have no automatic retry loop. The existing exact-401 replay confirmation above
+still applies. The browser never substitutes a cached account identity. A newer
+interactive authentication action or cross-tab reconciliation retires older
+restoration work; its late result cannot replace the current identity or restart
+signaling and navigation for the retired attempt.
+
 After an HTTP refresh, the browser sends `renewAuthentication` with a `requestId`
 and the new `token` on its existing authenticated socket. `authenticationRenewed`
 returns that request ID and `expiresAt` in Unix seconds; a rejected renewal returns
@@ -327,7 +342,11 @@ then reconcile identity from the shared HttpOnly session cookie. Hints contain n
 account IDs or credentials. Interactive cookie mutations and refresh share a
 Web Lock when available; epoch guards retire stale results when coordination is
 unavailable. A received hint retires pending dialogs before reconciliation; focus
-and visibility changes check for missed hints.
+and visibility changes check for missed hints. Shared-cookie checks publish the
+same `checking` and authoritative result states as startup restoration, pausing
+account-dependent links again. A failed shared check clears the old local identity;
+only its final `401` confirms sign-out, while transient failures offer the same
+explicit recovery control. A superseded check cannot publish over a newer identity.
 
 Open authenticated sockets revalidate account state every five seconds after the
 previous check completes. A database error or validation timeout permits retaining

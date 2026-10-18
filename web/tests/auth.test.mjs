@@ -319,7 +319,7 @@ for (const action of ['login', 'register', 'restore']) {
     const settled = action === 'restore' ? pending : assert.rejects(pending, superseded);
     f.auth.forgetSession();
     gate.resolve(response(session('retired')));
-    if (action === 'restore') assert.equal(await settled, false);
+    if (action === 'restore') assert.equal(await settled, 'superseded');
     else await settled;
     assert.equal(f.auth.isLoggedIn, false);
     assert.equal(f.auth.jwt, null);
@@ -354,7 +354,7 @@ test('a late restore cannot overwrite an interactive login', async (t) => {
   await flush();
   await f.login('new');
   body.resolve(session('old'));
-  assert.equal(await restore, false);
+  assert.equal(await restore, 'superseded');
   assert.equal(f.auth.userId, 'new');
 });
 
@@ -453,7 +453,7 @@ test('a refresh retired while waiting for its Web Lock does not fetch', async (t
   const restore = f.auth.tryRestore();
   f.auth.forgetSession();
   waiting.resolve();
-  assert.equal(await restore, false);
+  assert.equal(await restore, 'superseded');
   assert.deepEqual(names, ['simplestchat-refresh-v1']);
   assert.equal(f.requests.length, 0);
 });
@@ -475,7 +475,7 @@ test('exact Invalid token refresh rejection retries after the existing replay gr
   assert.equal(f.requests.length, 1);
   f.enqueue(response(session('restored')));
   await f.fire(REPLAY_MS);
-  assert.equal(await restore, true);
+  assert.equal(await restore, 'restored');
   assert.deepEqual(names, ['simplestchat-refresh-v1', 'simplestchat-refresh-v1']);
   assert.equal(f.auth.userId, 'restored');
 });
@@ -486,7 +486,7 @@ test('retirement during replay grace prevents a second refresh request', async (
   const restore = f.auth.tryRestore();
   await flush();
   f.auth.forgetSession();
-  assert.equal(await restore, false);
+  assert.equal(await restore, 'superseded');
   assert.equal(f.requests.length, 1);
   assert.equal(f.timers.size, 0);
 });
@@ -774,10 +774,218 @@ for (const malformed of [{ token: 'incomplete' }, null]) {
 test('initial restore does not gain scheduled-refresh retry behavior', async (t) => {
   const f = await fixture(t);
   f.enqueue(response(null, 503));
-  assert.equal(await f.auth.tryRestore(), false);
+  assert.equal(await f.auth.tryRestore(), 'unavailable');
   assert.equal(f.requests.length, 1);
   assert.equal(f.timers.size, 0);
   assert.deepEqual(f.changes, []);
+});
+
+for (const failure of ['503', 'network', 'timeout']) {
+  test(`saved sign-in reports ${failure} as unavailable and a manual retry restores the cookie session`, async (t) => {
+    const f = await fixture(t);
+    const pending = deferred();
+    f.enqueue(failure === '503' ? response(null, 503) : pending.promise);
+    const restore = f.auth.tryRestore();
+    await flush();
+    if (failure === 'network') pending.reject(new TypeError('Network unavailable'));
+    if (failure === 'timeout') await f.fire(10000);
+    assert.equal(await restore, 'unavailable');
+    assert.equal(f.auth.restoreState, 'unavailable');
+    assert.equal(f.auth.isLoggedIn, false);
+    assert.equal(f.requests.length, 1, 'unavailability never starts an automatic retry');
+    assert.equal(f.timers.size, 0);
+
+    f.enqueue(response(session('saved-account')));
+    assert.equal(await f.auth.tryRestore(), 'restored');
+    assert.equal(f.auth.restoreState, 'restored');
+    assert.equal(f.auth.userId, 'saved-account');
+    assert.deepEqual(
+      f.requests.map(({ url }) => url),
+      ['/api/auth/refresh', '/api/auth/refresh'],
+    );
+    pending.resolve(response(session('retired')));
+    await flush();
+    assert.equal(f.auth.userId, 'saved-account', 'a timed-out response cannot replace the retry');
+  });
+}
+
+test('an authoritative missing session is distinguishable from unavailable saved sign-in', async (t) => {
+  const f = await fixture(t);
+  f.enqueue(response({ error: 'No session' }, 401));
+  assert.equal(await f.auth.tryRestore(), 'unauthenticated');
+  assert.equal(f.auth.restoreState, 'unauthenticated');
+  assert.equal(f.auth.isLoggedIn, false);
+  assert.equal(f.requests.length, 1);
+  assert.equal(f.timers.size, 0);
+});
+
+for (const body of ['incomplete', 'invalid-json']) {
+  test(`an ${body} successful restore is unavailable rather than authoritative sign-out`, async (t) => {
+    const f = await fixture(t);
+    f.enqueue(
+      body === 'incomplete'
+        ? response({ token: 'unusable', user: {} })
+        : {
+            ...response(null),
+            json: async () => {
+              throw new SyntaxError('Invalid JSON');
+            },
+          },
+    );
+    assert.equal(await f.auth.tryRestore(), 'unavailable');
+    assert.equal(f.auth.restoreState, 'unavailable');
+    assert.equal(f.auth.isLoggedIn, false);
+    f.enqueue(response(session('saved-account')));
+    assert.equal(await f.auth.tryRestore(), 'restored');
+    assert.equal(f.auth.userId, 'saved-account');
+  });
+}
+
+test('interactive sign-in synchronously supersedes saved-session recovery and late bodies cannot restore its UI', async (t) => {
+  const f = await fixture(t);
+  const states = [];
+  f.auth.setOnRestoreStateChange((state) => states.push(state));
+  const body = deferred();
+  f.enqueue({ ...response(null), json: () => body.promise });
+  const restore = f.auth.tryRestore();
+  await flush();
+  f.enqueue(response(session('interactive')));
+  const login = f.auth.login('interactive@example.test', 'password');
+  assert.equal(f.auth.restoreState, 'superseded');
+  assert.deepEqual(states, ['checking', 'superseded']);
+  await login;
+  body.resolve(session('late-cookie'));
+  assert.equal(await restore, 'superseded');
+  assert.equal(f.auth.userId, 'interactive');
+  assert.deepEqual(states, ['checking', 'superseded']);
+});
+
+test('cross-tab authentication and passkey intent clear an unavailable recovery prompt synchronously', async (t) => {
+  const f = await fixture(t);
+  const states = [];
+  f.auth.setOnRestoreStateChange((state) => states.push(state));
+  f.enqueue(response(null, 503));
+  assert.equal(await f.auth.tryRestore(), 'unavailable');
+  f.auth.invalidateSharedSession();
+  assert.equal(f.auth.restoreState, 'superseded');
+  f.enqueue(response(session('other-tab')));
+  await f.auth.reconcileSharedSession();
+  assert.equal(f.auth.userId, 'other-tab');
+  assert.deepEqual(states, ['checking', 'unavailable', 'superseded', 'checking', 'restored']);
+
+  f.enqueue(response(null, 503));
+  assert.equal(await f.auth.tryRestore(), 'unavailable');
+  f.enqueue(response(passkeyOptions('login')));
+  const challenge = f.auth.passkeyLoginStart();
+  assert.equal(f.auth.restoreState, 'superseded');
+  await challenge;
+});
+
+test('restore observers cannot break authentication or hide a newer interactive identity', async (t) => {
+  const f = await fixture(t);
+  f.auth.setOnRestoreStateChange(() => {
+    throw new Error('Status rendering failed');
+  });
+  f.enqueue(response(session('saved-account')));
+  assert.equal(await f.auth.tryRestore(), 'restored');
+  assert.equal(f.auth.userId, 'saved-account');
+
+  let login;
+  f.auth.setOnRestoreStateChange((state) => {
+    if (state === 'checking') login = f.auth.login('interactive@example.test', 'password');
+  });
+  f.enqueue(response(session('interactive')));
+  assert.equal(await f.auth.tryRestore(), 'superseded');
+  await login;
+  assert.equal(f.auth.userId, 'interactive');
+  assert.equal(f.requests.length, 2, 'a retired restore never fetches after observer sign-in');
+});
+
+test('a restore outcome superseded by its observer cannot finish newer startup UI work', async (t) => {
+  const f = await fixture(t);
+  let login;
+  f.auth.setOnRestoreStateChange((state) => {
+    if (state === 'unavailable') login = f.auth.login('interactive@example.test', 'password');
+  });
+  f.enqueue(response(null, 503));
+  f.enqueue(response(session('interactive')));
+  assert.equal(await f.auth.tryRestore(), 'superseded');
+  await login;
+  assert.equal(f.auth.userId, 'interactive');
+  assert.equal(f.auth.restoreState, 'superseded');
+});
+
+for (const status of [503, 401]) {
+  test(`shared-cookie reconciliation publishes ${status === 401 ? 'authoritative sign-out' : 'unavailability'} while clearing old identity`, async (t) => {
+    const f = await fixture(t);
+    await f.login('old-account');
+    const states = [];
+    f.auth.setOnRestoreStateChange((state) => states.push(state));
+    f.enqueue(response({ error: status === 401 ? 'No session' : 'Unavailable' }, status));
+    assert.equal(await f.auth.reconcileSharedSession(), undefined);
+    assert.equal(f.auth.isLoggedIn, false);
+    assert.equal(f.auth.restoreState, status === 401 ? 'unauthenticated' : 'unavailable');
+    assert.deepEqual(states, ['checking', status === 401 ? 'unauthenticated' : 'unavailable']);
+    assert.deepEqual(f.changes, [
+      [true, false],
+      [false, false],
+    ]);
+    assert.equal(f.timers.size, 0);
+  });
+}
+
+test('shared authoritative sign-out completes saved-session checking after superseding startup', async (t) => {
+  const f = await fixture(t);
+  const states = [];
+  f.auth.setOnRestoreStateChange((state) => states.push(state));
+  const body = deferred();
+  f.enqueue({ ...response(null), json: () => body.promise });
+  const startup = f.auth.tryRestore();
+  await flush();
+  f.enqueue(response({ error: 'No session' }, 401));
+  await f.auth.reconcileSharedSession();
+  assert.equal(await startup, 'superseded');
+  assert.equal(f.auth.restoreState, 'unauthenticated');
+  assert.deepEqual(states, ['checking', 'unauthenticated']);
+  body.resolve(session('retired-startup'));
+  await flush();
+  assert.equal(f.auth.restoreState, 'unauthenticated');
+  assert.equal(f.auth.isLoggedIn, false);
+});
+
+test('a shared-cookie result arriving after interactive sign-in cannot publish stale recovery UI', async (t) => {
+  const f = await fixture(t);
+  const states = [];
+  f.auth.setOnRestoreStateChange((state) => states.push(state));
+  const body = deferred();
+  f.enqueue({ ...response(null), json: () => body.promise });
+  const shared = f.auth.reconcileSharedSession();
+  await flush();
+  await f.login('interactive');
+  body.resolve(session('retired-shared'));
+  await shared;
+  assert.equal(f.auth.userId, 'interactive');
+  assert.equal(f.auth.restoreState, 'superseded');
+  assert.deepEqual(states, ['checking', 'superseded']);
+});
+
+test('clearing identity during a shared check cannot publish over reentrant interactive sign-in', async (t) => {
+  const f = await fixture(t);
+  await f.login('old-account');
+  const states = [];
+  let login;
+  f.auth.setOnRestoreStateChange((state) => states.push(state));
+  f.auth.setOnChange((loggedIn) => {
+    if (!loggedIn) login = f.auth.login('interactive@example.test', 'password');
+  });
+  f.enqueue(response(null, 503));
+  f.enqueue(response(session('interactive')));
+  await f.auth.reconcileSharedSession();
+  await login;
+  f.auth.setOnChange(() => {});
+  assert.equal(f.auth.userId, 'interactive');
+  assert.equal(f.auth.restoreState, 'superseded');
+  assert.deepEqual(states, ['checking', 'superseded']);
 });
 
 test('scheduled refresh owns one abortable Web Lock wait and never fetches after expiry', async (t) => {
@@ -995,7 +1203,7 @@ for (const extensions of [
 }
 
 for (const stalledStage of ['fetch', 'body', 'rejection-body', 'lock']) {
-  test(`initial restore deadline covers ${stalledStage}, returns guest and refuses late adoption`, async (t) => {
+  test(`initial restore deadline covers ${stalledStage}, reports unavailable and refuses late adoption`, async (t) => {
     const pending = deferred();
     let lockCallback;
     let lockSignal;
@@ -1022,7 +1230,7 @@ for (const stalledStage of ['fetch', 'body', 'rejection-body', 'lock']) {
     const restore = f.auth.tryRestore();
     await flush();
     await f.fire(10000);
-    assert.equal(await restore, false);
+    assert.equal(await restore, 'unavailable');
     assert.equal(f.auth.isLoggedIn, false);
     assert.equal(events.at(-1).outcome, 'timeout');
     assert.equal(events.at(-1).durationMs, 10000);
@@ -1050,7 +1258,7 @@ test('restore checks wall deadline before accepting a late body even if watchdog
   await flush();
   f.moveWallClock(10000);
   pending.resolve(session('late'));
-  assert.equal(await restore, false);
+  assert.equal(await restore, 'unavailable');
   assert.equal(f.auth.isLoggedIn, false);
   assert.equal(f.timers.size, 0);
 });
@@ -1061,7 +1269,7 @@ test('telemetry callback failures cannot prevent restoring a valid session', asy
     throw new Error('collector failed');
   });
   f.enqueue(response(session('restored')));
-  assert.equal(await f.auth.tryRestore(), true);
+  assert.equal(await f.auth.tryRestore(), 'restored');
   assert.equal(f.auth.userId, 'restored');
 });
 
@@ -1117,7 +1325,7 @@ test('initial restore cannot fetch after a paused Web Lock resumes beyond the wa
   const restore = f.auth.tryRestore();
   f.moveWallClock(10000);
   waiting.resolve();
-  assert.equal(await restore, false);
+  assert.equal(await restore, 'unavailable');
   assert.equal(f.requests.length, 0);
   assert.equal(f.timers.size, 0);
 });
@@ -1130,7 +1338,7 @@ test('an initial rejected-refresh body completing after its wall deadline cannot
   await flush();
   f.moveWallClock(10000);
   pending.resolve({ error: 'Invalid token' });
-  assert.equal(await restore, false);
+  assert.equal(await restore, 'unavailable');
   assert.equal(f.requests.length, 1);
   assert.equal(f.timers.size, 0);
 });
@@ -1144,7 +1352,7 @@ test('dismissing an idle authentication dialog does not cancel a valid startup r
   const restore = f.auth.tryRestore();
   assert.equal(flow.dismiss(), true);
   pending.resolve(response(session('restored')));
-  assert.equal(await restore, true);
+  assert.equal(await restore, 'restored');
   assert.equal(f.auth.userId, 'restored');
 });
 

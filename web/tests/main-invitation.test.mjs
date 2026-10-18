@@ -32,9 +32,11 @@ async function fixture() {
      let pendingInviteKind = 'room';
      let inviteAccountEpoch = 0;
      let inviteView = null;
+     let restoredAccount = true;
      ${await functionSource('previewPendingInvite')}
      export { previewPendingInvite };
      export const view = () => inviteView;
+     export function accountChecked(value) { restoredAccount = value; }
      export function nextAccountEpoch() { inviteAccountEpoch++; }
      export function registration() { pendingInviteKind = 'registration'; }`,
     {
@@ -179,6 +181,26 @@ test('guests choose sign-in before review, and registration links only open thei
   assert.deepEqual(registration.previews, []);
   assert.deepEqual(registration.redemptions, []);
 });
+
+for (const registration of [false, true]) {
+  test(`${registration ? 'registration' : 'room'} invitation waits for a verified saved-sign-in result`, async () => {
+    const f = await fixture();
+    f.auth.isLoggedIn = false;
+    f.accountChecked(false);
+    if (registration) f.registration();
+    await f.previewPendingInvite();
+    assert.equal(f.view(), null);
+    assert.deepEqual(f.authDialogs, []);
+    assert.deepEqual(f.previews, []);
+    assert.deepEqual(f.redemptions, []);
+
+    f.accountChecked(true);
+    await f.previewPendingInvite();
+    if (registration) assert.deepEqual(f.authDialogs, ['register']);
+    else assert.match(f.view().body.textContent, /Sign in to review/);
+    assert.deepEqual(f.redemptions, []);
+  });
+}
 
 for (const [suffix, kind] of [
   [`#invite=${'a'.repeat(32)}`, 'room'],
