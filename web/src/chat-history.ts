@@ -284,6 +284,245 @@ function appendHistoryMessageActions(
   }
 }
 
+type HistoryReadContext = {
+  current: () => boolean;
+  visible: () => boolean;
+  ready: () => boolean;
+  atBottom: () => boolean;
+  page: () => ChatHistoryPage | null;
+  errorVersion: () => number;
+  clearError: () => void;
+  fail: (error: unknown) => void;
+  signal: AbortSignal;
+};
+
+/** Keep confirmed watermarks and read-attempt errors within one mounted reader. */
+function historyReadTracker(options: HistoryOptions, context: HistoryReadContext): () => void {
+  let read = '';
+  let readAttempt = 0;
+  let readFailure: { errorVersion: number; attempt: number } | null = null;
+  return () => {
+    const page = context.page();
+    if (
+      !context.current() ||
+      !context.visible() ||
+      !context.ready() ||
+      !options.markRead ||
+      !page?.retentionDays ||
+      !context.atBottom()
+    )
+      return;
+    const cursor = page.messages[page.messages.length - 1];
+    if (!cursor || cursor.messageId === read) return;
+    const latest = cursor.messageId;
+    read = latest;
+    const attempt = ++readAttempt;
+    const confirmed = (): void => {
+      if (
+        readFailure &&
+        readFailure.attempt <= attempt &&
+        readFailure.errorVersion === context.errorVersion()
+      ) {
+        context.clearError();
+        readFailure = null;
+      }
+      options.readConfirmed?.(cursor);
+    };
+    if (page.readMessageId === latest) {
+      // The authorized history response already confirms this watermark. A
+      // reopened view must not write it again and invalidate every device.
+      confirmed();
+      return;
+    }
+    options
+      .markRead(latest, context.signal)
+      .then(() => {
+        if (context.current()) {
+          confirmed();
+          notifyInboxChanged();
+        }
+      })
+      .catch((error: unknown) => {
+        if (!context.current() || attempt !== readAttempt) return;
+        if (read === latest) read = '';
+        context.fail(error);
+        readFailure = { errorVersion: context.errorVersion(), attempt };
+      });
+  };
+}
+
+type HistoryLiveContext = {
+  options: HistoryOptions;
+  dialog: HTMLDialogElement;
+  close: () => void;
+  current: () => boolean;
+  visible: () => boolean;
+  page: () => ChatHistoryPage | null;
+  loading: () => boolean;
+  resumeHasNewer: () => boolean;
+  deferRefresh: () => void;
+  reload: () => void;
+  hasError: () => boolean;
+  redact: (entry: ChatEntry) => void;
+  render: (bottom: boolean) => void;
+  teardown: () => void;
+  signal: AbortSignal;
+  removed: Map<string, string>;
+  edits: Map<string, ChatEntry>;
+  reactions: Map<string, ChatReaction[]>;
+  reactionVersions: Map<string, number>;
+};
+
+/** One subscription lifetime, including bounded live overlays and fallback reads. */
+function watchHistory(context: HistoryLiveContext): { refreshMessages: () => void } {
+  const { options, current, visible, removed, edits, reactions, reactionVersions } = context;
+  const onRemoved = (id: string, at: string): void => {
+    if (!current()) return;
+    removed.set(id, at);
+    // Never evict a tombstone while an older request could still restore its content.
+    if (removed.size > 300) {
+      context.close();
+      return;
+    }
+    const page = context.page();
+    if (!page) return;
+    page.messages.forEach(context.redact);
+    context.render(false);
+  };
+  const onEdited = (message: ChatEntry): void => {
+    if (!current() || removed.has(message.messageId)) return;
+    const previous = edits.get(message.messageId);
+    if (previous && previous.revision >= message.revision) return;
+    edits.set(message.messageId, message);
+    if (edits.size > 300) {
+      context.close();
+      return;
+    }
+    context.page()?.messages.forEach(context.redact);
+    context.render(false);
+  };
+  editListeners.add(onEdited);
+  removalListeners.add(onRemoved);
+  const stopReactions = onHistoryReaction((id, value) => {
+    if (!current() || removed.has(id)) return;
+    reactions.set(id, value);
+    reactionVersions.set(id, (reactionVersions.get(id) ?? 0) + 1);
+    if (reactionVersions.size > 300) {
+      context.close();
+      return;
+    }
+    context.page()?.messages.forEach(context.redact);
+    context.render(false);
+  });
+  const refreshMessages = (): void => {
+    if (!current() || !visible() || context.resumeHasNewer()) return;
+    if (context.loading()) {
+      context.deferRefresh();
+      return;
+    }
+    context.reload();
+  };
+  const stopInbox = onInboxChanged((message) => {
+    if (!options.privatePeerId || !message) return;
+    if (context.page()?.messages.some((entry) => entry.messageId === message.messageId)) return;
+    const pair = [options.viewerId, options.privatePeerId];
+    if (pair.includes(message.participantId) && pair.includes(message.recipientId ?? ''))
+      refreshMessages();
+  });
+  let accountDirty = false;
+  const refreshAccount = (): void => {
+    if (!accountDirty || !current() || !visible()) return;
+    accountDirty = false;
+    refreshMessages();
+  };
+  const stopUpdates = onAccountUpdate((update) => {
+    if (
+      !options.privatePeerId ||
+      update.account !== options.viewerId ||
+      (update.scope !== 'ready' && update.scope !== 'inbox') ||
+      (update.peerId && update.peerId !== options.privatePeerId)
+    )
+      return;
+    accountDirty = true;
+    refreshAccount();
+  });
+  window.addEventListener('focus', refreshAccount, { signal: context.signal });
+  document.addEventListener('visibilitychange', refreshAccount, { signal: context.signal });
+  document.addEventListener('close', () => queueMicrotask(refreshAccount), {
+    capture: true,
+    signal: context.signal,
+  });
+  const timer = setInterval(() => {
+    if (!options.current()) {
+      context.close();
+      return;
+    }
+    // Repeating resume after its cursor advances would silently skip to the next
+    // unread page. Keep that page stable until the reader chooses Newer messages.
+    refreshAccount();
+    if (
+      (!options.privatePeerId || context.hasError() || !accountUpdatesLive(options.viewerId)) &&
+      visible() &&
+      !context.loading() &&
+      !context.resumeHasNewer()
+    )
+      context.reload();
+  }, 15_000);
+  context.dialog.addEventListener(
+    'close',
+    () => {
+      context.teardown();
+      clearInterval(timer);
+      removalListeners.delete(onRemoved);
+      editListeners.delete(onEdited);
+      stopInbox();
+      stopReactions();
+      stopUpdates();
+    },
+    { once: true },
+  );
+  return { refreshMessages };
+}
+
+function mountHistoryRetention(
+  container: HTMLElement,
+  retention: NonNullable<HistoryOptions['retention']>,
+  context: { current: () => boolean; reload: () => Promise<void>; fail: (error: unknown) => void },
+): void {
+  const select = el('select');
+  for (const days of [0, 1, 7, 30, 90]) {
+    const option = el('option', days ? `${days} day${days === 1 ? '' : 's'}` : 'Off');
+    option.value = String(days);
+    select.append(option);
+  }
+  select.value = String(retention.days);
+  const save = asyncButton(
+    'Save retention',
+    async () => {
+      if (!context.current() || save.disabled) return;
+      save.disabled = true;
+      try {
+        await retention.save(Number(select.value));
+        if (context.current()) await context.reload();
+      } finally {
+        save.disabled = false;
+      }
+    },
+    context.fail,
+  );
+  const controls = el('div', undefined, 'history-retention');
+  controls.append(
+    field('Room history retention', select),
+    el(
+      'p',
+      'New people joining this room can read saved public messages. Turning history off deletes it; shortening retention deletes older messages.',
+      'setting-hint',
+    ),
+    save,
+  );
+  container.append(controls);
+}
+
 /** A bounded page reader shared by room history and the account inbox. */
 function openHistory(options: HistoryOptions): void {
   const view = modal(options.title, undefined, options.navigation);
@@ -311,7 +550,6 @@ function openHistory(options: HistoryOptions): void {
   let operation = 0;
   let loading = false;
   let refreshQueued = false;
-  let read = '';
   let attachmentRows: (() => void)[] = [];
   let disposeComposer: PmComposer | null = null;
   const clearAttachmentRows = (): void => {
@@ -325,8 +563,6 @@ function openHistory(options: HistoryOptions): void {
   let reactionReadVersion = 0;
   let failedLoadMessage: string | null = null;
   let errorVersion = 0;
-  let readAttempt = 0;
-  let readFailure: { errorVersion: number; attempt: number } | null = null;
   const redact = (entry: ChatEntry): void => {
     const updatedReactions = reactions.get(entry.messageId);
     if (updatedReactions) entry.reactions = updatedReactions;
@@ -364,56 +600,19 @@ function openHistory(options: HistoryOptions): void {
     const dialogs = document.querySelectorAll<HTMLDialogElement>('dialog[open]');
     return !document.hidden && dialogs[dialogs.length - 1] === view.dialog;
   };
-  const markRead = (): void => {
-    if (
-      !current() ||
-      !visible() ||
-      before ||
-      query ||
-      position.around ||
-      !options.markRead ||
-      !page?.retentionDays ||
-      loading
-    )
-      return;
-    if (list.scrollHeight - list.scrollTop - list.clientHeight > 48) return;
-    const cursor = page.messages[page.messages.length - 1];
-    if (!cursor || cursor.messageId === read) return;
-    const latest = cursor.messageId;
-    read = latest;
-    const attempt = ++readAttempt;
-    const confirmed = (): void => {
-      if (
-        readFailure &&
-        readFailure.attempt <= attempt &&
-        readFailure.errorVersion === errorVersion
-      ) {
-        view.error.hidden = true;
-        readFailure = null;
-      }
-      options.readConfirmed?.(cursor);
-    };
-    if (page.readMessageId === latest) {
-      // The authorized history response already confirms this watermark. A
-      // reopened view must not write it again and invalidate every device.
-      confirmed();
-      return;
-    }
-    options
-      .markRead(latest, controller.signal)
-      .then(() => {
-        if (current()) {
-          confirmed();
-          notifyInboxChanged();
-        }
-      })
-      .catch((error: unknown) => {
-        if (!current() || attempt !== readAttempt) return;
-        if (read === latest) read = '';
-        fail(error);
-        readFailure = { errorVersion, attempt };
-      });
-  };
+  const markRead = historyReadTracker(options, {
+    current,
+    visible,
+    ready: () => !before && !query && !position.around && !loading,
+    atBottom: () => list.scrollHeight - list.scrollTop - list.clientHeight <= 48,
+    page: () => page,
+    errorVersion: () => errorVersion,
+    clearError: () => {
+      view.error.hidden = true;
+    },
+    fail,
+    signal: controller.signal,
+  });
   const messageActions: HistoryMessageActions = {
     options,
     current,
@@ -567,41 +766,12 @@ function openHistory(options: HistoryOptions): void {
     load(null, false, value).catch(fail);
   });
   view.body.append(status, searchForm, list, pages);
-  if (options.retention) {
-    const retention = options.retention;
-    const select = el('select');
-    for (const days of [0, 1, 7, 30, 90]) {
-      const option = el('option', days ? `${days} day${days === 1 ? '' : 's'}` : 'Off');
-      option.value = String(days);
-      select.append(option);
-    }
-    select.value = String(retention.days);
-    const save = asyncButton(
-      'Save retention',
-      async () => {
-        if (!current() || save.disabled) return;
-        save.disabled = true;
-        try {
-          await retention.save(Number(select.value));
-          if (current()) await load(null);
-        } finally {
-          save.disabled = false;
-        }
-      },
+  if (options.retention)
+    mountHistoryRetention(view.body, options.retention, {
+      current,
+      reload: () => load(null),
       fail,
-    );
-    const controls = el('div', undefined, 'history-retention');
-    controls.append(
-      field('Room history retention', select),
-      el(
-        'p',
-        'New people joining this room can read saved public messages. Turning history off deletes it; shortening retention deletes older messages.',
-        'setting-hint',
-      ),
-      save,
-    );
-    view.body.append(controls);
-  }
+    });
   if (options.send && options.draft) {
     disposeComposer = mountPmComposer(view.body, {
       ...options.draft,
@@ -619,113 +789,37 @@ function openHistory(options: HistoryOptions): void {
     options.reply = (message) => disposeComposer?.reply(message);
     options.replyInPlace = true;
   }
-  const onRemoved = (id: string, at: string): void => {
-    if (!current()) return;
-    removed.set(id, at);
-    // Never evict a tombstone while an older request could still restore its content.
-    if (removed.size > 300) {
-      view.close();
-      return;
-    }
-    if (!page) return;
-    page.messages.forEach(redact);
-    render(false);
-  };
-  const onEdited = (message: ChatEntry): void => {
-    if (!current() || removed.has(message.messageId)) return;
-    const previous = edits.get(message.messageId);
-    if (previous && previous.revision >= message.revision) return;
-    edits.set(message.messageId, message);
-    if (edits.size > 300) {
-      view.close();
-      return;
-    }
-    page?.messages.forEach(redact);
-    render(false);
-  };
-  editListeners.add(onEdited);
-  removalListeners.add(onRemoved);
-  const stopReactions = onHistoryReaction((id, value) => {
-    if (!current() || removed.has(id)) return;
-    reactions.set(id, value);
-    reactionVersions.set(id, (reactionVersions.get(id) ?? 0) + 1);
-    if (reactionVersions.size > 300) {
-      view.close();
-      return;
-    }
-    page?.messages.forEach(redact);
-    render(false);
-  });
-  const refreshMessages = (): void => {
-    if (!current() || !visible() || (position.resume && page?.newerCursor)) return;
-    if (loading) {
-      refreshQueued = true;
-      return;
-    }
-    load(before, true, query, position.resume ? {} : position).catch(fail);
-  };
-  const stopInbox = onInboxChanged((message) => {
-    if (!options.privatePeerId || !message) return;
-    if (page?.messages.some((entry) => entry.messageId === message.messageId)) return;
-    const pair = [options.viewerId, options.privatePeerId];
-    if (pair.includes(message.participantId) && pair.includes(message.recipientId ?? ''))
-      refreshMessages();
-  });
-  let accountDirty = false;
-  const refreshAccount = (): void => {
-    if (!accountDirty || !current() || !visible()) return;
-    accountDirty = false;
-    refreshMessages();
-  };
-  const stopUpdates = onAccountUpdate((update) => {
-    if (
-      !options.privatePeerId ||
-      update.account !== options.viewerId ||
-      (update.scope !== 'ready' && update.scope !== 'inbox') ||
-      (update.peerId && update.peerId !== options.privatePeerId)
-    )
-      return;
-    accountDirty = true;
-    refreshAccount();
-  });
-  window.addEventListener('focus', refreshAccount, { signal: controller.signal });
-  document.addEventListener('visibilitychange', refreshAccount, { signal: controller.signal });
-  document.addEventListener('close', () => queueMicrotask(refreshAccount), {
-    capture: true,
-    signal: controller.signal,
-  });
   list.addEventListener('scroll', markRead);
-  const timer = setInterval(() => {
-    if (!options.current()) {
-      view.close();
-      return;
-    }
-    // Repeating resume after its cursor advances would silently skip to the next
-    // unread page. Keep that page stable until the reader chooses Newer messages.
-    refreshAccount();
-    if (
-      (!options.privatePeerId || !view.error.hidden || !accountUpdatesLive(options.viewerId)) &&
-      visible() &&
-      !loading &&
-      !(position.resume && page?.newerCursor)
-    )
+  const live = watchHistory({
+    options,
+    dialog: view.dialog,
+    close: () => view.close(),
+    current,
+    visible,
+    page: () => page,
+    loading: () => loading,
+    resumeHasNewer: () => Boolean(position.resume && page?.newerCursor),
+    deferRefresh: () => {
+      refreshQueued = true;
+    },
+    reload: () => {
       load(before, true, query, position.resume ? {} : position).catch(fail);
-  }, 15_000);
-  view.dialog.addEventListener(
-    'close',
-    () => {
+    },
+    hasError: () => !view.error.hidden,
+    redact,
+    render,
+    teardown: () => {
       controller.abort();
       clearAttachmentRows();
       disposeComposer?.();
-      clearInterval(timer);
-      removalListeners.delete(onRemoved);
-      editListeners.delete(onEdited);
-      stopInbox();
-      stopReactions();
-      stopUpdates();
     },
-    { once: true },
-  );
+    signal: controller.signal,
+    removed,
+    edits,
+    reactions,
+    reactionVersions,
+  });
+  const refreshMessages = live.refreshMessages;
   load(
     null,
     false,
