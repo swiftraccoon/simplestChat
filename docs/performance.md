@@ -323,6 +323,31 @@ against the CI database and stops PostgreSQL for eight seconds at the midpoint
 (revalidation runs every five seconds and a connection tolerates fifteen
 seconds of validator unavailability), so the bounded credential-uncertainty
 allowance is exercised by a real outage rather than a mocked validator.
+
+The manual-only `account-room` job measures one thirty-account operating point:
+twenty minutes of retained chat and synthetic camera/microphone RTP on the same
+authenticated sockets, including HTTP refresh and socket renewal across the
+original fifteen-minute access-token expiry. Dispatch it with
+`gh workflow run performance.yml --ref main -f only=account-room`. It uses an
+owned server and PostgreSQL service on a free Linux runner; it does not contact
+production or run media on the operator's laptop. The fixed Balanced receive
+policy asks each participant for all 29 remote microphones and nine videos
+(1,140 consumers total), with one rotating speaker and silent microphones using
+DTX. The server's production media/admission defaults remain in force.
+
+The `account-room` artifact contains the safe generator summary and per-client
+evidence, retained-message ID/sender/content-digest inventory, sampled server
+process-tree and generator CPU/RSS, host/cgroup headroom, protected application
+metrics, PostgreSQL query round trips and independent shutdown evidence.
+Passwords, cookies, tokens and raw generator logs are excluded. The report keeps
+completed failures as evidence and gates its verdict on complete membership,
+media/chat delivery, all thirty renewals, exact retained inventory and resource
+coverage/headroom. Database query probes exclude application pool acquisition;
+chat acknowledgement latency includes persistence and queuing. Egress is
+confirmed received RTP payload, with wire overhead reported only as an estimate.
+A successful run establishes this workload on its recorded host, without
+establishing a production maximum, browser decoding, WAN, TLS or TURN capacity.
+
 Layer selection is shared: mediasoup's transport distributes the estimated
 downlink bitrate across a viewer's simulcast consumers on every estimate
 change, and the server additionally caps each consumer's preferred layer
@@ -478,13 +503,15 @@ Measurements without a memory sample cannot establish a memory bound. The
 adviser does not account for every database, reconnect, proxy or relay workload;
 see the [scaling procedure and limits](deployment.md#capacity-planning-and-scaling).
 
-Under each measured ceiling the summary says what the failure above it ran
-into. In an all-publishing room that is usually not CPU: a browser shows up to
-32 video tiles, and even at the lowest layer (100 kbit/s) they need 3.2 Mbit/s,
-more than the server's 3 Mbit/s per-viewer cap, so beyond about 30 publishers
-the server's allocation starves some tiles while the workers idle ("video
-consumers lost media while ... viewers' estimates sat at the ... per-viewer
-cap"). A larger host does not raise that ceiling.
+Under each historical measured ceiling the summary says what the failure above
+it ran into. The 28-person grid reference used the older all-tile receive model:
+up to 32 videos at 100 kbit/s required 3.2 Mbit/s, beyond the server's 3 Mbit/s
+per-viewer cap, and some tiles lost media while workers idled. The shipped
+browser now bounds incoming video to nine, four or zero independently of audio.
+That historical reference and the adviser's calibration are not a measured
+ceiling for the current receive policy; a larger host alone also cannot fix a
+per-viewer bandwidth bound. Keep the old evidence tied to its recorded workload
+until new measurements justify replacing the calibration.
 
 The settings cover `SIMPLESTCHAT_CPUS`, `MEDIA_WORKERS`,
 `MAX_PARTICIPANTS_PER_ROOM`, `SIMPLESTCHAT_MEMORY_LIMIT` (twice the measured

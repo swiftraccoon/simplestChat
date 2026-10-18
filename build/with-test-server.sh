@@ -270,7 +270,7 @@ if [[ "${PASSKEY_E2E:-}" == 1 ]]; then
   test_metrics_environment+=("WEBAUTHN_RP_ID=localhost" "WEBAUTHN_ORIGIN=${BASE_URL}")
 fi
 unset TEST_METRICS_TOKEN TEST_SERVER_PID
-if [[ "${LIFECYCLE_E2E:-}" == 1 || "${UI_STRESS_E2E:-}" == 1 || "${SESSION_SOAK_E2E:-}" == 1 ]]; then
+if [[ "${LIFECYCLE_E2E:-}" == 1 || "${UI_STRESS_E2E:-}" == 1 || "${SESSION_SOAK_E2E:-}" == 1 || "${ACCOUNT_ROOM_E2E:-}" == 1 ]]; then
   TEST_METRICS_TOKEN="$(env -i PATH="${PATH}" node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("hex"))')"
   export TEST_METRICS_TOKEN
   test_metrics_environment+=("METRICS_TOKEN=${TEST_METRICS_TOKEN}")

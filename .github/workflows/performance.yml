@@ -1,8 +1,8 @@
 name: Performance
 
-# Weekly controlled comparison and a session soak with a database restart.
-# Both run on one hosted runner, so the numbers are relative to the baseline
-# measured in the same run and never a capacity claim; see docs/performance.md.
+# Weekly comparisons, impairment and session continuity; the thirty-account
+# operating point is manual only. Co-located hosted resources are not a
+# production capacity guarantee; see docs/performance.md.
 on:
   schedule:
     - cron: '17 5 * * 1'
@@ -23,10 +23,10 @@ on:
         type: choice
         options: ['1', '2']
       only:
-        description: Run one job instead of all three
+        description: Run one workload; account-room is an explicit manual experiment
         default: all
         type: choice
-        options: [all, compare, soak, impaired]
+        options: [all, compare, soak, impaired, account-room]
       field_trials:
         description: LIBWEBRTC_FIELD_TRIALS for the impaired job's server (empty keeps mediasoup's default)
         default: ''
@@ -332,4 +332,74 @@ jobs:
           name: session-soak-${{ github.run_id }}
           path: ${{ runner.temp }}/session-soak
           if-no-files-found: ignore
+          retention-days: 30
+
+  account-room:
+    name: Thirty authenticated participants with retained chat
+    # This experiment is an explicit operating point, outside scheduled and push gates.
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.only == 'account-room' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    services:
+      postgres:
+        image: docker.io/library/postgres:18.6-bookworm@sha256:3725f4e2499eef5134592b3b4ab79a543ed7f8e533b05b5b637af926630f6650
+        env:
+          POSTGRES_USER: test_owner
+          POSTGRES_PASSWORD: disposable-ci-password
+          POSTGRES_DB: simplestchat_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test_owner -d simplestchat_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      PIP_CONSTRAINT: ${{ github.workspace }}/build/pip-constraints.txt
+      OPENSSL_STATIC: "1"
+      DATABASE_URL: postgres://test_owner:disposable-ci-password@127.0.0.1:5432/simplestchat_test?sslmode=disable
+      TEST_DATABASE_URL: postgres://test_owner:disposable-ci-password@127.0.0.1:5432/simplestchat_test?sslmode=disable
+      DISPOSABLE_TEST_DATABASE: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/native-toolchain
+        with:
+          cache-key: rust-release-benchmark
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 26.10.0
+
+      - name: Require the hosted PostgreSQL query client
+        run: command -v psql
+
+      - name: Build the exact server and authenticated generator
+        run: cargo build --locked --release --features load-test --bins
+
+      - name: Measure the fixed thirty-account room for twenty minutes
+        timeout-minutes: 35
+        env:
+          ACCOUNT_ROOM_E2E: "1"
+          E2E_ARTIFACTS: ${{ runner.temp }}/account-room
+          SERVER_REVISION: ${{ github.sha }}
+          TEST_SERVER_BINARY: ${{ github.workspace }}/target/release/simplestChat
+          TEST_GENERATOR_BINARY: ${{ github.workspace }}/target/release/load_test
+        run: build/with-test-server.sh node build/account-room-check.mjs
+
+      - name: Preserve bounded account-room evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: account-room-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/account-room/account-room-report.json
+            ${{ runner.temp }}/account-room/resource-samples.ndjson
+            ${{ runner.temp }}/account-room/server-shutdown.json
+            ${{ runner.temp }}/account-room/generator/load_test_summary.json
+            ${{ runner.temp }}/account-room/generator/load_test_results.json
+            ${{ runner.temp }}/account-room/generator/chat_inventory.json
+          if-no-files-found: error
           retention-days: 30

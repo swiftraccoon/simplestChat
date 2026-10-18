@@ -792,6 +792,15 @@ for the budgets and their limits, and
 [production shape and impaired networks](performance.md#production-shape-and-impaired-networks)
 for the Podman capacity runs and the local impairment helpers.
 
+For the separate fixed thirty-account, twenty-minute media/chat measurement,
+dispatch `gh workflow run performance.yml --ref main -f only=account-room`.
+This job runs only on demand on an isolated GitHub-hosted Linux runner, with a
+fresh PostgreSQL service, and exercises real refresh on every media connection.
+It retains safe resource, delivery and database-inventory evidence, including
+completed failures. See [the measurement contract](performance.md#continuous-comparison)
+for its receive policy, validity gates and scope. It is outside the weekly jobs
+and the required CI suite.
+
 ## Media correctness and performance
 
 See [performance](performance.md) for the optional RTP generator and comparison
