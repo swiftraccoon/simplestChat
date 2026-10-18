@@ -1579,6 +1579,44 @@
       "observedRevision": "def5a4a0ed7949d34be3643744ae8b110473835a",
       "observedRunId": 36716564147,
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/102"
+    },
+    {
+      "rule": "rust/cleartext-transmission",
+      "toolVersion": "2.27.1",
+      "path": "load_tests/bin/load_test.rs",
+      "region": {
+        "start_line": 57,
+        "end_line": 57,
+        "start_column": 5,
+        "end_column": 47
+      },
+      "messageSha256": "fe430a4c332c479768c10c91d71d73a2823adf1c1a03b80ac8587d72df9f03dc",
+      "sourceSha256": "c89e9138ea807ffa092c14d535726affa80cffacc23c9edaefd5bb911475ba77",
+      "includedSources": {
+        "load_tests/clients/account_session.rs": "0f41f6d3b230ab5b25d4b3d55c632bccd47432b3231539101ac4641513130a84",
+        "load_tests/clients/browser_profile.rs": "e167b9503186666a0a4997e674c1d3b904d8331c267c599f6269e397796f2c0c",
+        "load_tests/clients/chat_load.rs": "91e0408e6c0b7a8a996830556a93612b0c5bf7892af898c0fccce96a4dffde1e",
+        "load_tests/clients/datagram_counter.rs": "38f4adb5408b951910e1f7118f5a16c6527d6a3da1b23f20fccc4b0391320a67",
+        "load_tests/clients/keyframe_tests.rs": "394eedaa73a7c4c11ee0e995b787843d6174ca2fc5c641e6ca09b95ee7b95ae4",
+        "load_tests/clients/measurement.rs": "d88ab75250cd87c16533379381d52855403ad9a62775dbf4414a4436a4741438",
+        "load_tests/clients/media_generator.rs": "fe0534ce030e5ffb856ab23257d9a868aaaa9f9bced50b4a140272d8f8d92777",
+        "load_tests/clients/metrics.rs": "8868ded40962afbe67186df24d54e28a1dbecf9c60c8465955f7c9b0f8b3d637",
+        "load_tests/clients/receiver_stall.rs": "1a770b1c6e145e7d296b85fe37037b647946d3d058cdf5f14167e1585ae76d8b",
+        "load_tests/clients/subscription_plan.rs": "77b6465a628e14b4cd6de4d014e886ca27c16634633b48402a4949929afc5bfa",
+        "load_tests/clients/subscriptions.rs": "35eaf748de8fe176d642671f715dac27097de9c20c3a5566b9bca3ae4080a457",
+        "load_tests/clients/webrtc_client.rs": "9bebd068a5b41ca69ed7703dec39b13d81d167161a7070e09165674b7b22a49b"
+      },
+      "scope": "load_tests/bin/load_test.rs:57:57:5:47",
+      "fingerprint": "codeql:c5ab569d37088053fc385a7863c99df0b53b6050339199be1f020146baea10c9",
+      "severity": "high",
+      "number": 953,
+      "state": "open",
+      "disposition": "false-positive",
+      "rationale": "The sensitive-name heuristic treats the entire local account Option and refresh receiver as account data; the reported sink is format!(self.origin) passed as the reqwest request URL. That value contains only the validated public loopback origin and fixed /api/auth/refresh path, without credentials, bearer token or cookie. The generator requires a plain literal loopback IPv4 endpoint for account workloads; the included account helper additionally rejects URL userinfo, query, fragment and paths other than /ws, disables redirects and proxies, and bounds requests. Separate fixture credentials are intentionally sent in body/header only to this disposable local server. This decision covers the reported public-URL taint in the owned experiment, not remote HTTP authentication. The identity includes every committed transitive literal include, so account_session.rs guard changes invalidate approval even when CodeQL maps the sink to the parent include! line.",
+      "observedRevision": "4c1fbfb50f054cb1403356e4506bac0b7cb2c91e",
+      "observedRunId": 39085371470,
+      "reviewed": "2026-10-18",
+      "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/953"
     }
   ]
 }

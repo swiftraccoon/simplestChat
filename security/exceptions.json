@@ -1770,6 +1770,16 @@
       "reachability": "Exact trigger and seven named workflows. Job gates enforce repository/main/schedule-or-dispatch before credential-free trusted-main checkout. Helper independently validates immutable run identity, rejects superseded events, checks complete successful jobs before recovery, and updates only bot-authored exact-marker issues through bounded fixed-origin API routes. Job permission is limited to contents/read, actions/read and issues/write.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md#scheduled-check-notification-trigger"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:c5ab569d37088053fc385a7863c99df0b53b6050339199be1f020146baea10c9",
+      "scope": "load_tests/bin/load_test.rs:57:57:5:47",
+      "owner": "swiftraccoon",
+      "rationale": "The sensitive-name heuristic treats the entire local account Option and refresh receiver as account data; the reported sink is format!(self.origin) passed as the reqwest request URL. That value contains only the validated public loopback origin and fixed /api/auth/refresh path, without credentials, bearer token or cookie. The generator requires a plain literal loopback IPv4 endpoint for account workloads; the included account helper additionally rejects URL userinfo, query, fragment and paths other than /ws, disables redirects and proxies, and bounds requests. Separate fixture credentials are intentionally sent in body/header only to this disposable local server. This decision covers the reported public-URL taint in the owned experiment, not remote HTTP authentication. The identity includes every committed transitive literal include, so account_session.rs guard changes invalidate approval even when CodeQL maps the sink to the parent include! line.",
+      "reachability": "Exact CodeQL 2.27.1 rule, message, region, complete parent source and 12-file transitive Rust include closure. Only the guarded load-test account fixture is approved; changed dependencies, source, location or query output require a fresh review. No query exclusion, alert dismissal or production source change.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md"
     }
   ]
 }

@@ -773,7 +773,7 @@ class CodeqlTriageTests(unittest.TestCase):
         entries = [object_value(item) for item in array_value(raw["alerts"])]
         self.assertEqual(
             {triage.positive(item["number"]) for item in entries},
-            set(range(1, INITIAL_ALERT_COUNT + 1)) | {102},
+            set(range(1, INITIAL_ALERT_COUNT + 1)) | {102, 953},
         )
         reviews = security_policy.read_exceptions(today=TODAY)
         for item in entries:

@@ -102,6 +102,43 @@ without production or signing credentials. The exact finding, feature hash and
 symbolic location expire on 2026-11-29. Other locations, changed action source
 references and all remaining workflow checks require their own assessment.
 
+## Account-room public-origin CodeQL flow
+
+On 2026-10-18, [alert 953](https://github.com/swiftraccoon/simplestChat/security/code-scanning/953)
+reported `rust/cleartext-transmission` under CodeQL 2.27.1. The recorded path
+starts at the whole local `account` container in `load_test.rs:3641`, enters
+`AccountSession::refresh`, and reaches `format!(self.origin)` as a request URL.
+The pinned query's account-name heuristic taints the container and receiver; it
+does not show a password, token or cookie flowing into that URL. This query
+has no loopback exemption.
+
+The request URL contains a validated public origin and the fixed
+`/api/auth/refresh` path. Account workloads require a plain literal loopback
+IPv4 WebSocket endpoint. The included account helper also rejects userinfo,
+query, fragment and paths other than `/ws`, and its HTTP client disables
+redirects and proxies. The manual hosted experiment creates its own local
+accounts and disposable server/database. Fixture passwords and cookies are
+intentionally transmitted in separate request bodies or headers over this
+loopback transport; this review approves the reported public-URL taint in that
+owned fixture and does not approve remote cleartext authentication.
+
+Rust extraction maps the sink to the parent `include!` at
+`load_tests/bin/load_test.rs:57`. A parent-file hash alone would fail to bind
+the actual helper's guards. CodeQL identities now also hash the complete,
+bounded closure of committed literal Rust includes. Both SARIF and stored
+alert checks use that identity. Unsupported dynamic includes, cycles, escaped
+paths, edited files and symlinks fail closed. A module-only committed edit
+changes the fingerprint and loses approval; a focused regression proves this
+for both gate paths. Existing reviewed Rust files have no include closure and
+retain their previous identities.
+
+The exact record in `codeql-review-2026-09-30.json` includes the parent hash
+and all 12 included-file hashes, including `account_session.rs`. Its new
+fingerprint is
+`codeql:c5ab569d37088053fc385a7863c99df0b53b6050339199be1f020146baea10c9`;
+the exact scope is `load_tests/bin/load_test.rs:57:57:5:47`. The review expires
+on 2026-11-29. It adds no query exclusion and authorizes no remote dismissal.
+
 ## Cache retention trigger
 
 On 2026-10-05, the high-severity `dangerous-triggers` finding for
