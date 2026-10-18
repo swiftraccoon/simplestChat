@@ -1275,6 +1275,43 @@ jobs:
           test "$(<"${RUNNER_TEMP}/release-container-controller.status")" = 0
           test -x "${RUNNER_TEMP}/release-container-controller/bin/python"
 
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 26.10.0
+          cache: npm
+          cache-dependency-path: web/e2e/package-lock.json
+
+      - name: Install checksum-pinned npm
+        working-directory: ${{ github.workspace }}
+        run: |
+          node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"
+          echo "$RUNNER_TEMP/simplestchat-npm-12.2.0/bin" >> "$GITHUB_PATH"
+
+      - name: Restore pinned rollover Chromium download bytes
+        id: rollover-chromium
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/rollover-playwright
+          key: rollover-chromium-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('web/e2e/package-lock.json') }}
+
+      - name: Install pinned rollover browser tooling
+        timeout-minutes: 5
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/rollover-playwright
+        run: |
+          npm --prefix web/e2e ci --ignore-scripts
+          # Reconcile the pinned revision and system dependencies even on cache hits.
+          # The application comes from the already-tested production image.
+          npm --prefix web/e2e exec -- playwright install --with-deps chromium
+          echo "PLAYWRIGHT_BROWSERS_PATH=$RUNNER_TEMP/rollover-playwright" >> "$GITHUB_ENV"
+
+      - name: Save pinned rollover Chromium download bytes
+        if: steps.rollover-chromium.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/rollover-playwright
+          key: ${{ steps.rollover-chromium.outputs.cache-primary-key }}
+
       - name: Verify the guest checker against pinned Compose JSON
         timeout-minutes: 2
         env:
@@ -1288,6 +1325,8 @@ jobs:
         run: |
           python3 -B build/ci_release_checks.py \
             --controller "${RUNNER_TEMP}/release-container-controller/bin/python" \
+            --node "$(command -v node)" \
+            --chromium "$(node -e 'process.stdout.write(require("./web/e2e/node_modules/playwright").chromium.executablePath())')" \
             --image "${PRODUCTION_IMAGE}" \
             --fixture-output "${RUNNER_TEMP}/release-container" \
             --output "${RUNNER_TEMP}/release-checks"

@@ -8,6 +8,7 @@ only fixture identity, network exposure, and local certificate selection differ.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -234,6 +235,15 @@ def render_fixture(
         caddy,
         "reverse_proxy {$CADDY_UPSTREAM:127.0.0.1:3000}",
         "reverse_proxy simplestchat:3000",
+    )
+    outputs["browser-assets-installed.json"] = (
+        json.dumps(
+            {
+                "schemaVersion": 1,
+                "caddyfileSha256": hashlib.sha256(outputs["Caddyfile"].encode()).hexdigest(),
+            }
+        )
+        + "\n"
     )
     outputs["images.json"] = (
         json.dumps(

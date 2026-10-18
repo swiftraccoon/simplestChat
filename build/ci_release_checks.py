@@ -88,7 +88,9 @@ def run_tasks(tasks: tuple[Task, Task], output: Path, cancelled: threading.Event
             raise
 
 
-def tasks(controller: Path, image: str, fixture_output: Path, output: Path) -> tuple[Task, Task]:
+def tasks(
+    controller: Path, image: str, fixture_output: Path, output: Path, browser: tuple[Path, Path]
+) -> tuple[Task, Task]:
     """Build the existing fixture command and a download-only pinned installer."""
     return (
         Task(
@@ -103,6 +105,10 @@ def tasks(controller: Path, image: str, fixture_output: Path, output: Path) -> t
                 image,
                 "--output",
                 str(fixture_output),
+                "--node",
+                str(browser[0]),
+                "--chromium",
+                str(browser[1]),
             ),
             # The fixture bounds execution to 480s and its cleanup to 100s.
             590,
@@ -136,6 +142,8 @@ class Options(argparse.Namespace):
     image: str = ""
     fixture_output: Path = Path()
     output: Path = Path()
+    node: Path = Path()
+    chromium: Path = Path()
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -145,6 +153,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     _ = parser.add_argument("--image", required=True)
     _ = parser.add_argument("--fixture-output", type=Path, required=True)
     _ = parser.add_argument("--output", type=Path, required=True)
+    _ = parser.add_argument("--node", type=Path, required=True)
+    _ = parser.add_argument("--chromium", type=Path, required=True)
     args = parser.parse_args(argv, namespace=Options())
     _ = os.umask(0o077)
     cancelled = threading.Event()
@@ -156,10 +166,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         require(re.fullmatch(r"sha256:[a-f0-9]{64}", args.image), "release_image_not_immutable")
         require(args.controller.is_absolute() and args.controller.is_file(), "invalid_controller")
+        require(
+            all(path.is_absolute() and path.is_file() for path in (args.node, args.chromium)),
+            "invalid_browser_tools",
+        )
         require(args.fixture_output.is_absolute() and args.output.is_absolute(), "relative_output")
         args.output.mkdir(mode=0o700)
         results = run_tasks(
-            tasks(args.controller, args.image, args.fixture_output, args.output),
+            tasks(
+                args.controller,
+                args.image,
+                args.fixture_output,
+                args.output,
+                (args.node, args.chromium),
+            ),
             args.output,
             cancelled,
         )

@@ -24,10 +24,13 @@ EXPORT = "Export the tested immutable production image"
 RELEASE = "Retain the verified production release"
 RUN_COMMAND = (
     "python3 -B build/ci_release_checks.py \\\n"
-    '  --controller "${RUNNER_TEMP}/release-container-controller/bin/python" \\\n'
-    '  --image "${PRODUCTION_IMAGE}" \\\n'
-    '  --fixture-output "${RUNNER_TEMP}/release-container" \\\n'
-    '  --output "${RUNNER_TEMP}/release-checks"\n'
+    + '  --controller "${RUNNER_TEMP}/release-container-controller/bin/python" \\\n'
+    + '  --node "$(command -v node)" \\\n'
+    + "  --chromium \"$(node -e 'process.stdout.write(require("
+    + '"./web/e2e/node_modules/playwright").chromium.executablePath())\')" \\\n'
+    + '  --image "${PRODUCTION_IMAGE}" \\\n'
+    + '  --fixture-output "${RUNNER_TEMP}/release-container" \\\n'
+    + '  --output "${RUNNER_TEMP}/release-checks"\n'
 )
 
 
@@ -418,6 +421,88 @@ docker() {
             "env", integration, "No deployment secrets or helper overrides enter the fixture"
         )
 
+    def test_pinned_rollover_browser_runs_after_image_build_without_an_extra_app_build(
+        self,
+    ) -> None:
+        """Cache only browser download bytes; pinned installation remains unconditional."""
+        setup = [
+            step
+            for step in self.steps
+            if string(step.get("uses", "")).startswith("actions/setup-node@")
+        ]
+        self.assertEqual(len(setup), 1)
+        self.assertEqual(
+            setup[0]["uses"], "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020"
+        )
+        self.assertEqual(
+            setup[0]["with"],
+            {
+                "node-version": "26.10.0",
+                "cache": "npm",
+                "cache-dependency-path": "web/e2e/package-lock.json",
+            },
+        )
+        npm = self.step("Install checksum-pinned npm")
+        self.assertIn(
+            'node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"',
+            string(npm, "run"),
+        )
+        restore = self.step("Restore pinned rollover Chromium download bytes")
+        tooling = self.step("Install pinned rollover browser tooling")
+        save = self.step("Save pinned rollover Chromium download bytes")
+        self.assertEqual(restore["id"], "rollover-chromium")
+        self.assertEqual(
+            restore["uses"], "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9"
+        )
+        self.assertEqual(
+            restore["with"],
+            {
+                "path": "${{ runner.temp }}/rollover-playwright",
+                "key": "rollover-chromium-v1-${{ runner.os }}-${{ runner.arch }}-"
+                + "${{ hashFiles('web/e2e/package-lock.json') }}",
+            },
+        )
+        self.assertEqual(tooling["timeout-minutes"], "5")
+        self.assertEqual(
+            tooling["env"], {"PLAYWRIGHT_BROWSERS_PATH": "${{ runner.temp }}/rollover-playwright"}
+        )
+        command = string(tooling, "run")
+        self.assertIn("npm --prefix web/e2e ci --ignore-scripts\n", command)
+        self.assertIn(
+            "npm --prefix web/e2e exec -- playwright install --with-deps chromium\n", command
+        )
+        self.assertIn(
+            'echo "PLAYWRIGHT_BROWSERS_PATH=$RUNNER_TEMP/rollover-playwright" >> "$GITHUB_ENV"',
+            command,
+        )
+        self.assertEqual(save["if"], "steps.rollover-chromium.outputs.cache-hit != 'true'")
+        self.assertEqual(
+            save["uses"], "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9"
+        )
+        self.assertEqual(
+            save["with"],
+            {
+                "path": "${{ runner.temp }}/rollover-playwright",
+                "key": "${{ steps.rollover-chromium.outputs.cache-primary-key }}",
+            },
+        )
+        ordered = [
+            self.step("Build production container"),
+            setup[0],
+            npm,
+            restore,
+            tooling,
+            save,
+            self.step(INTEGRATION),
+        ]
+        positions = [self.steps.index(step) for step in ordered]
+        self.assertEqual(positions, sorted(positions))
+        for step in (setup[0], npm, tooling):
+            self.assertNotIn("if", step)
+            self.assertNotIn("continue-on-error", step)
+        commands = "\n".join(string(step.get("run", "")) for step in self.steps)
+        self.assertNotIn("npm --prefix web run build", commands)
+
     def test_only_sanitized_report_is_retained_even_on_failure(self) -> None:
         """Verify only sanitized report is retained even on failure."""
         retention = self.step(RETENTION)
@@ -575,10 +660,10 @@ docker() {
         for step in self.steps:
             if "uses" in step:
                 # First-party GitHub actions only, pinned by commit: checkout,
-                # the Actions-cache layer store, and artifact retention.
+                # Node tooling, download/layer caches, and artifact retention.
                 self.assertRegex(
                     string(step, "uses"),
-                    r"^actions/(?:checkout|cache/(?:restore|save)|upload-artifact)@[a-f0-9]{40}$",
+                    r"^actions/(?:checkout|setup-node|cache/(?:restore|save)|upload-artifact)@[a-f0-9]{40}$",
                 )
             self.assertNotIn("permissions", step)
             self.assertNotIn("environment", step)

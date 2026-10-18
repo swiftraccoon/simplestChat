@@ -721,7 +721,8 @@ class SecurityWorkflowTests(unittest.TestCase):
             for step in steps
             if string(step.get("uses", "")).startswith("actions/cache")
             and not string(step.get("uses", "")).startswith("actions/cache/save@")
-            and step.get("id") != "image-database"
+            and step.get("name")
+            in {"Restore image layer cache", "Restore the production image layer cache"}
         ]
         self.assertEqual(len(caches), 2)
         for config in caches:
@@ -976,7 +977,12 @@ docker() {
             for step in steps:
                 if not string(step.get("uses", "")).startswith(
                     ("actions/cache", "Swatinem/rust-cache")
-                ):
+                ) or step.get("name") in {
+                    "Restore pinned rollover Chromium download bytes",
+                    "Save pinned rollover Chromium download bytes",
+                }:
+                    # The release-container policy separately binds these
+                    # dependency downloads and unconditional pinned installation.
                     continue
                 config = obj(step, "with")
                 if string(step, "uses").startswith("actions/cache/save@"):

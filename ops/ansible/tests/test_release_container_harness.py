@@ -6,6 +6,7 @@ import io
 import json
 import os
 import platform
+import re
 import signal
 import socket
 import stat
@@ -152,6 +153,9 @@ class FakeLifecycle:
 
     def setup(self) -> None:
         """Avoid every host preflight and fixture mutation."""
+
+    def exercise_browser_rollover(self) -> None:
+        """Leave browser behavior to its own mocked evidence tests."""
 
     def exercise(self) -> None:
         """Produce the one explicitly selected original execution result."""
@@ -437,6 +441,10 @@ class HarnessInputTests(HarnessTestCase):
             "simplestchat-ci:production",
             "--output",
             str(self.directory / "fresh-output"),
+            "--node",
+            sys.executable,
+            "--chromium",
+            sys.executable,
         ]
         for arguments in (valid[1:], valid[:1] + valid[3:], valid[:3]):
             with (
@@ -472,6 +480,10 @@ class HarnessInputTests(HarnessTestCase):
                         "--image=" + image,
                         "--output",
                         str(self.directory / "new"),
+                        "--node",
+                        sys.executable,
+                        "--chromium",
+                        sys.executable,
                     ]
                 )
         self.assertEqual(list(self.directory.iterdir()), [])
@@ -989,6 +1001,10 @@ class HarnessEvidenceTests(HarnessTestCase):
                             "simplestchat-ci:production",
                             "--output",
                             str(output),
+                            "--node",
+                            sys.executable,
+                            "--chromium",
+                            sys.executable,
                         ]
                     )
                 self.assertEqual(status, 0 if execution_passes and cleanup_passes else 1)
@@ -1519,6 +1535,27 @@ class HarnessDerivativeTests(HarnessTestCase):
         )
         self.assertEqual(len(calls), 4)
 
+    def test_legacy_baseline_omits_version_file_and_editions_have_distinct_deferred_chunks(
+        self,
+    ) -> None:
+        """Exercise retained proxy delivery and metadata independently of app support."""
+        harness = self.fixture()
+        baseline = harness.derivative("baseline")
+        directory = harness.private / "baseline"
+        dockerfile = (directory / "Dockerfile").read_text()
+        self.assertEqual(dockerfile.count("RUN "), 1)
+        self.assertIn("RUN rm -f /app/web/dist/app-version.json\nUSER 10001:10001\n", dockerfile)
+        self.assertFalse((directory / "app-version.json").exists())
+        chunks = [
+            path
+            for path in directory.iterdir()
+            if re.fullmatch(r"rollover-[a-f0-9]{16}\.js", path.name)
+        ]
+        self.assertEqual(len(chunks), 1)
+        self.assertIn(baseline["revision"], chunks[0].read_text())
+        self.assertIn(chunks[0].name, next(directory.glob("rollover-entry-*.js")).read_text())
+        self.assertNotIn("<script>", (directory / "asset-rollover.html").read_text())
+
     def test_changed_base_tag_is_refused_before_build_or_candidate_acceptance(self) -> None:
         """Refuse a replaced base tag before building or accepting a derived fixture image."""
         for before, after, expected_builds, message in (
@@ -1556,6 +1593,104 @@ class HarnessDerivativeTests(HarnessTestCase):
             "COPY --chown=10001:10001 --chmod=0755 failed-server /app/simplestChat\n",
             (directory / "Dockerfile").read_text(encoding="utf-8"),
         )
+
+
+class HarnessBrowserRolloverTests(HarnessTestCase):
+    """Browser evidence cannot hide capture, reload, missing fallback or cleanup failures."""
+
+    def fixture(self, result: JsonObject) -> harness_module.Harness:
+        """Supply only an exact mocked Node response without any child process."""
+        harness = self.harness()
+        harness.browser = (Path("/fixture/node"), Path("/fixture/chromium"))
+        harness.fixture_images["baseline"] = {"revision": "a" * 40}
+        harness.fixture_images["candidate"] = {"revision": "b" * 40}
+        harness.commands = FakeCommands()
+        service = patch.object(harness, "service", return_value={"id": "c" * 64})
+        _ = service.start()
+        self.addCleanup(service.stop)
+
+        def validate(*args: str, **kwargs: Unpack[CommandOptions]) -> TextResult:
+            self.assertEqual(
+                args,
+                (
+                    "exec",
+                    "--interactive",
+                    "--user",
+                    "10001:10001",
+                    "c" * 64,
+                    "caddy",
+                    "validate",
+                    "--config",
+                    "/dev/stdin",
+                    "--adapter",
+                    "caddyfile",
+                ),
+            )
+            self.assertEqual(
+                kwargs, {"input_path": harness_module.CONFIG / "Caddyfile", "timeout": 20}
+            )
+            return TextResult()
+
+        fake_commands(harness).docker.side_effect = validate
+
+        def invoke(args: list[str], **kwargs: Unpack[CommandOptions]) -> TextResult:
+            self.assertEqual(args[:2], ["/fixture/node", str(ROOT / "web/e2e/release-assets.cjs")])
+            self.assertEqual(args[3], "/fixture/chromium")
+            self.assertEqual(kwargs, {"timeout": 330})
+            _ = Path(args[4]).write_text(json.dumps(result))
+            return TextResult()
+
+        fake_commands(harness).run.side_effect = invoke
+        return harness
+
+    @staticmethod
+    def report() -> JsonObject:
+        """Model the explicit public browser acceptance contract."""
+        return {
+            "passed": True,
+            "editions": 2,
+            "oldTabAfterUpgrade": True,
+            "newTabAfterRollback": True,
+            "backendMissesVerified": 2,
+            "documentsUnchanged": True,
+            "captureCalls": 0,
+            "htmlUncached": True,
+            "selectedVersionVerified": True,
+        }
+
+    def test_complete_browser_report_still_requires_dependency_and_database_continuity(
+        self,
+    ) -> None:
+        """Only the exact report plus retained dependency proof can enter the public result."""
+        harness = self.fixture(self.report())
+        with (
+            patch.object(harness, "snapshot", return_value={}),
+            patch.object(harness, "continuity", return_value={}) as continuity,
+        ):
+            harness.exercise_browser_rollover()
+        continuity.assert_called_once_with({})
+        self.assertEqual(object_value(harness.report["cases"])["browserAssets"], self.report())
+
+    def test_missing_or_false_browser_acceptance_never_publishes_a_pass(self) -> None:
+        """Refuse extra fields, numeric booleans and any failed acceptance condition."""
+        for field, value in [
+            ("captureCalls", 1),
+            ("captureCalls", False),
+            ("backendMissesVerified", 0),
+            ("documentsUnchanged", False),
+            ("passed", 1),
+            ("private", "must not upload"),
+        ]:
+            report = self.report()
+            report[field] = value
+            harness = self.fixture(report)
+            with (
+                self.subTest(field=field, value=value),
+                patch.object(harness, "snapshot", return_value={}),
+                self.assertRaisesRegex(harness_module.CheckError, "proof incomplete"),
+            ):
+                harness.exercise_browser_rollover()
+            self.assertNotIn("browserAssets", object_value(harness.report["cases"]))
 
 
 if __name__ == "__main__":

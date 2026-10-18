@@ -46,6 +46,7 @@ FILES = {
     "runtime-grants.sql",
     "postgres-admin-password",
     "images.json",
+    "browser-assets-installed.json",
 }
 IDENTITY = fixture.FixtureIdentity(IMAGE, REVISION, TOKEN, POSTGRES, CADDY)
 
@@ -320,6 +321,7 @@ class ReleaseContainerFixtureTests(unittest.TestCase):
         with (
             patch.object(release, "CONFIG", self.config),
             patch.object(release, "ROOT", self.root),
+            patch.object(release, "ROOT_UID", self.config.stat().st_uid),
             patch.object(release, "DOCKER", [docker]),
         ):
             before = decode_json(

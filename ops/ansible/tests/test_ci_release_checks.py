@@ -106,7 +106,11 @@ class ReleaseOverlapTests(unittest.TestCase):
         output = ROOT / "results/unused-release-test"
         with patch.object(checks, "executable", return_value="/usr/bin/sudo"):
             fixture, tools = checks.tasks(
-                Path(sys.executable), "sha256:" + "a" * 64, output, output
+                Path(sys.executable),
+                "sha256:" + "a" * 64,
+                output,
+                output,
+                (Path("/fixture/node"), Path("/fixture/chromium")),
             )
         self.assertEqual(
             fixture.command[:4],
@@ -118,6 +122,9 @@ class ReleaseOverlapTests(unittest.TestCase):
             ),
         )
         self.assertIn("--disposable-host", fixture.command)
+        self.assertEqual(
+            fixture.command[-4:], ("--node", "/fixture/node", "--chromium", "/fixture/chromium")
+        )
         self.assertEqual(fixture.timeout, 590)
         self.assertEqual(
             tools.command,

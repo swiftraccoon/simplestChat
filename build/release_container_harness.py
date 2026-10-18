@@ -29,6 +29,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol, TypedDict, Unpack
 
+import release_assets
 import release_http_policy
 import release_public as release
 from release_artifact import sha256_file, validate_manifest, verify_archive
@@ -67,6 +68,7 @@ DELETE_CHARACTER = 127
 MAX_VALIDATOR_NAME = 128
 MAX_EXIT_STATUS = 255
 MAX_VALIDATOR_ERROR = 2048
+MAX_BROWSER_REPORT = 4096
 MAX_VALIDATOR_STDERR = 4096
 type Snapshot = dict[str, tuple[JsonValue, JsonValue, JsonValue, JsonValue]]
 
@@ -356,10 +358,11 @@ def assert_healthy_exit(value: JsonObject, *, deliberate_failure: bool = False) 
 class Harness:
     """Own the complete disposable-host fixture lifecycle and its original outcome."""
 
-    def __init__(self, output: Path, image: str) -> None:
+    def __init__(self, output: Path, image: str, browser: tuple[Path, Path] | None = None) -> None:
         """Initialize evidence without touching Docker, services, or fixture paths."""
         self.output: Path = output
         self.image: str = image
+        self.browser: tuple[Path, Path] | None = browser
         self.private: Path = output / "private"
         self.commands: CommandRunner = Commands(self.private)
         self.token: str = uuid.uuid4().hex
@@ -528,6 +531,37 @@ class Harness:
             f"FROM {self.base_tag}\nLABEL org.opencontainers.image.revision={revision}\n"
             + f"LABEL {LABEL}={self.token}\n"
         )
+        # Different immutable chunks and entry documents model two releases
+        # without rebuilding application code. Baseline deliberately lacks the
+        # version endpoint, so proxy metadata also exercises legacy rollback.
+        chunk = f"export const revision = '{revision}';\n"
+        chunk_name = "rollover-" + hashlib.sha256(chunk.encode()).hexdigest()[:16] + ".js"
+        write_new(directory / chunk_name, chunk)
+        entry = (
+            "globalThis.releaseRollover = {"
+            + f"revision:'{revision}',identity:crypto.randomUUID(),chunk:'/assets/{chunk_name}',"
+            + f"load:async()=> (await import('/assets/{chunk_name}')).revision"
+            + "};\n"
+        )
+        entry_name = "rollover-entry-" + hashlib.sha256(entry.encode()).hexdigest()[:16] + ".js"
+        write_new(directory / entry_name, entry)
+        write_new(
+            directory / "asset-rollover.html",
+            "<!doctype html><title>Release asset fixture</title>"
+            + f'<script src="/assets/{entry_name}"></script>',
+        )
+        dockerfile += (
+            f"COPY --chown=10001:10001 {chunk_name} /app/web/dist/assets/{chunk_name}\n"
+            + f"COPY --chown=10001:10001 {entry_name} /app/web/dist/assets/{entry_name}\n"
+            + "COPY --chown=10001:10001 asset-rollover.html /app/web/dist/asset-rollover.html\n"
+        )
+        if kind == "baseline":
+            dockerfile += "USER 0\nRUN rm -f /app/web/dist/app-version.json\nUSER 10001:10001\n"
+        else:
+            write_new(directory / "app-version.json", {"revision": revision})
+            dockerfile += (
+                "COPY --chown=10001:10001 app-version.json /app/web/dist/app-version.json\n"
+            )
         if kind == "failed":
             write_new(
                 directory / "failed-server", f"#!/bin/sh\necho '{FAILURE_MARKER}' >&2\nexit 42\n"
@@ -666,7 +700,7 @@ class Harness:
         self.ca_digest = sha256_file(self.ca_path)
         _ = self.commands.run(["/usr/sbin/update-ca-certificates"], timeout=30)
 
-    def setup(self) -> None:
+    def setup(self) -> None:  # noqa: PLR0915 - one owned bootstrap before any release can run.
         """Validate the disposable host before creating isolated images and fixed fixture paths."""
         host_preflight()
         require(
@@ -763,6 +797,8 @@ class Harness:
             ROOT,
             FixtureIdentity(baseline["image"], baseline["revision"], self.token, POSTGRES, CADDY),
         )
+        release_assets.initialize(ROOT / "browser-assets")
+        release_assets.select_version(ROOT / "browser-assets", baseline["revision"])
         for name in ("postgres-admin-password", "pg_hba.conf", "init-database.sql"):
             os.chown(CONFIG / name, 999, 999)
         os.chown(CONFIG / "Caddyfile", 10001, 10001)
@@ -812,8 +848,75 @@ class Harness:
         )
         self.ready()
         self.response_policy()
-        for kind in ("candidate", "failed"):
+        for kind in ("baseline", "candidate", "failed"):
             self.artifact(self.fixture_images[kind])
+
+    def exercise_browser_rollover(self) -> None:
+        """Keep two real tabs through image replacement and rollback via the stable proxy."""
+        require(self.browser is not None, "Explicit pinned Node and Chromium paths are required")
+        if self.browser is None:
+            message = "Missing browser tools"
+            raise CheckError(message)
+        # Exercise the exact pinned CLI/stdin validation path used by the
+        # initial proxy maintenance transition before replacing any app.
+        _ = self.commands.docker(
+            "exec",
+            "--interactive",
+            "--user",
+            "10001:10001",
+            string_value(self.service("caddy")["id"]),
+            "caddy",
+            "validate",
+            "--config",
+            "/dev/stdin",
+            "--adapter",
+            "caddyfile",
+            input_path=CONFIG / "Caddyfile",
+            timeout=20,
+        )
+        configuration = self.private / "asset-rollover.json"
+        result = self.private / "asset-rollover-result.json"
+        write_new(
+            configuration,
+            {
+                "original": self.fixture_images["baseline"]["revision"],
+                "candidate": self.fixture_images["candidate"]["revision"],
+            },
+        )
+        before = self.snapshot()
+        _ = self.commands.run(
+            [
+                str(self.browser[0]),
+                str(PROJECT / "web/e2e/release-assets.cjs"),
+                str(configuration),
+                str(self.browser[1]),
+                str(result),
+            ],
+            timeout=330,
+        )
+        require(
+            result.is_file() and result.stat().st_size <= MAX_BROWSER_REPORT,
+            "Browser rollover report missing or oversized",
+        )
+        report = object_value(decode_json(result.read_bytes()))
+        expected: JsonObject = {
+            "passed": True,
+            "editions": 2,
+            "oldTabAfterUpgrade": True,
+            "newTabAfterRollback": True,
+            "backendMissesVerified": 2,
+            "documentsUnchanged": True,
+            "captureCalls": 0,
+            "htmlUncached": True,
+            "selectedVersionVerified": True,
+        }
+        require(
+            report == expected
+            and all(type(report[key]) is type(value) for key, value in expected.items()),
+            "Browser rollover proof incomplete",
+        )
+        _ = self.continuity(before)
+        object_value(self.report["cases"])["browserAssets"] = report
 
     def validator_startup_diagnostic(self, attempt: Path, candidate: Mapping[str, str]) -> None:
         """Expose only the fixed, secret-free validator's verified startup state."""
@@ -1227,6 +1330,8 @@ class Options(argparse.Namespace):
     disposable_host: bool = False
     image: str = ""
     output: str = ""
+    node: str = ""
+    chromium: str = ""
 
 
 def options(arguments: Sequence[str] | None) -> Options:
@@ -1235,6 +1340,8 @@ def options(arguments: Sequence[str] | None) -> Options:
     _ = parser.add_argument("--disposable-host", action="store_true", required=True)
     _ = parser.add_argument("--image", required=True)
     _ = parser.add_argument("--output", required=True)
+    _ = parser.add_argument("--node", required=True)
+    _ = parser.add_argument("--chromium", required=True)
     result = Options()
     _ = parser.parse_args(arguments, namespace=result)
     if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9._/:@-]{0,255}", result.image):
@@ -1247,7 +1354,12 @@ def main(arguments: Sequence[str] | None = None) -> int:
     parsed = options(arguments)
     _ = os.umask(0o077)
     output = fresh_output(parsed.output)
-    harness = Harness(output, parsed.image)
+    browser = (Path(parsed.node), Path(parsed.chromium))
+    require(
+        all(path.is_absolute() and path.is_file() for path in browser),
+        "Browser tools must be explicit existing absolute files",
+    )
+    harness = Harness(output, parsed.image, browser)
     started = time.monotonic()
 
     def interrupted(_number: int, _frame: FrameType | None) -> None:
@@ -1259,6 +1371,7 @@ def main(arguments: Sequence[str] | None = None) -> int:
     _ = signal.alarm(480)
     try:
         harness.setup()
+        harness.exercise_browser_rollover()
         harness.exercise()
         harness.report["phase"] = "complete"
         harness.report["passed"] = True
