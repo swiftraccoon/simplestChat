@@ -17,6 +17,12 @@ const message = (id, content = `Message ${id}`) => ({
   sentAt: '2026-10-07T10:00:00Z',
   reactions: [],
 });
+const receipt = (data, id = 'confirmed') => ({
+  ...message(id, data.content),
+  clientMessageId: data.clientMessageId,
+  participantId: 'account',
+  recipientId: 'peer',
+});
 const history = (messages = [message('newest')], nextCursor = null) => ({
   messages,
   nextCursor,
@@ -36,7 +42,7 @@ const inbox = (
   retentionDays: 30,
 });
 
-async function fixture(t) {
+async function fixture(t, { storage = new Map() } = {}) {
   const f = await uiFixture();
   const attachmentState = attachmentFixture();
   const timers = new Map();
@@ -49,7 +55,6 @@ async function fixture(t) {
     listeners.get(name).add(listener);
   };
   f.document.removeEventListener = (name, listener) => listeners.get(name)?.delete(listener);
-  const storage = new Map();
   f.document.createTextNode = (text) => f.ui.el('text', text);
   Object.defineProperty(f.Node.prototype, 'style', {
     get() {
@@ -63,7 +68,7 @@ async function fixture(t) {
     calls: [],
     loadInbox: async () => inbox(),
     loadHistory: async () => history(),
-    send: async (_token, _peer, data) => message(data.clientMessageId, data.content),
+    send: async (_token, _peer, data) => receipt(data),
     markRead: async () => ({ readMessageId: 'newest' }),
     edit: async (_token, _peer, _id, data) => ({
       ...message(_id, data.content),
@@ -111,35 +116,43 @@ async function fixture(t) {
     sendPrivateMessage: invoke('send', (...args) => state.send(...args)),
     editPrivateMessage: invoke('edit', (...args) => state.edit(...args)),
   };
-  const module = await loadTypeScript('src/chat-history.ts', {
-    modules: {
-      './ui': { ...f.ui, api },
-      './discovery': await loadDiscoveryFixture({ ...f, ui: { ...f.ui, api } }),
-      './attachments': attachmentState.module,
-      './chat-store': await loadTypeScript('src/chat-store.ts'),
-      './avatar-colors': await loadTypeScript('src/avatar-colors.ts'),
-      './chat-message-ui': await loadTypeScript('src/chat-message-ui.ts', {
-        modules: { './ui': f.ui },
-        globals: { document: f.document },
-      }),
+  const globals = {
+    document: f.document,
+    localStorage: {
+      getItem: (key) => storage.get(key) ?? null,
+      setItem: (key, value) => storage.set(key, value),
     },
-    globals: {
-      document: f.document,
-      localStorage: {
-        getItem: (key) => storage.get(key) ?? null,
-        setItem: (key, value) => storage.set(key, value),
-      },
-      window: { matchMedia: () => ({ matches: false }) },
-      crypto: { randomUUID: () => `attempt-${++attemptId}` },
-      URLSearchParams,
-      setInterval: (callback, ms) => {
-        const id = ++timerId;
-        timers.set(id, { callback, ms });
-        return id;
-      },
-      clearInterval: (id) => timers.delete(id),
+    window: {
+      matchMedia: () => ({ matches: false }),
+      addEventListener() {},
+      removeEventListener() {},
     },
-  });
+    navigator: { locks: { request: async (_name, _options, work) => work() } },
+    crypto: { randomUUID: () => `attempt-${++attemptId}` },
+    URLSearchParams,
+    setInterval: (callback, ms) => {
+      const id = ++timerId;
+      timers.set(id, { callback, ms });
+      return id;
+    },
+    clearInterval: (id) => timers.delete(id),
+  };
+  const modules = {
+    './ui': { ...f.ui, api },
+    './discovery': await loadDiscoveryFixture({ ...f, ui: { ...f.ui, api } }),
+    './attachments': attachmentState.module,
+    './chat-store': await loadTypeScript('src/chat-store.ts'),
+    './avatar-colors': await loadTypeScript('src/avatar-colors.ts'),
+    './chat-message-ui': await loadTypeScript('src/chat-message-ui.ts', {
+      modules: { './ui': f.ui },
+      globals,
+    }),
+    './pm-send-attempts': await loadTypeScript('src/pm-send-attempts.ts', {
+      modules: await loadContractModules(),
+    }),
+  };
+  modules['./pm-composer'] = await loadTypeScript('src/pm-composer.ts', { modules, globals });
+  const module = await loadTypeScript('src/chat-history.ts', { modules, globals });
   const room = {
     role: 'owner',
     roomSettings: { historyRetentionDays: 30 },
@@ -426,14 +439,16 @@ test('PM send retries reuse the id after an uncertain response and preserve edit
   };
   action(view, 'Send').click();
   await flush();
-  assert.equal(composer.value, '  First message  ');
+  assert.equal(composer.value, '');
+  assert.match(view.textContent, /Unconfirmed send.*First message/s);
   const pending = deferred();
   f.state.send = () => pending.promise;
   f.state.token = 'refreshed-token';
-  action(view, 'Send').click();
-  action(view, 'Send').click();
+  action(view, 'Retry unconfirmed send').click();
+  action(view, 'Retry unconfirmed send').click();
+  await flush();
   composer.value = 'Draft for later';
-  pending.resolve(message('confirmed'));
+  pending.resolve(receipt(calls(f, 'send').at(-1).args[2]));
   await flush();
   assert.equal(calls(f, 'send').length, 2);
   assert.equal(
@@ -443,7 +458,7 @@ test('PM send retries reuse the id after an uncertain response and preserve edit
   assert.equal(calls(f, 'send')[1].args[0], 'refreshed-token');
   assert.equal(calls(f, 'send')[1].args[2].content, 'First message');
   assert.equal(composer.value, 'Draft for later');
-  f.state.send = async () => message('second');
+  f.state.send = async (_token, _peer, data) => receipt(data, 'second');
   action(view, 'Send').click();
   await flush();
   assert.notEqual(
@@ -655,6 +670,40 @@ test('reopening an inbox conversation keeps its unsent draft separate from anoth
   assert.equal(view.querySelector('textarea').value, '');
 });
 
+test('an unconfirmed PM survives closing and module reload without resending or replacing the next draft', async (t) => {
+  const storage = new Map();
+  const f = await fixture(t, { storage });
+  let view = await f.openConversation();
+  view.querySelector('textarea').value = 'Original once';
+  f.attachmentState.composers.at(-1).files = [fileAttachment];
+  f.state.send = async () => {
+    throw new Error('Response lost');
+  };
+  action(view, 'Send').click();
+  await flush();
+  const original = calls(f, 'send')[0].args[2];
+  view.querySelector('textarea').value = 'Next draft';
+  view.querySelector('textarea').emit('input');
+  view.close();
+  view = await f.openConversation();
+  assert.equal(view.querySelector('textarea').value, 'Next draft');
+  assert.match(view.textContent, /Unconfirmed send.*Original once.*Photo.png/s);
+  assert.equal(calls(f, 'send').length, 1);
+  for (const open of [...f.document.querySelectorAll('dialog')]) open.close();
+
+  const reloaded = await fixture(t, { storage });
+  view = await reloaded.openConversation();
+  assert.equal(calls(reloaded, 'send').length, 0);
+  assert.equal(view.querySelector('textarea').value, 'Next draft');
+  assert.match(view.textContent, /Unconfirmed send.*Original once.*Photo.png/s);
+  assert.equal(action(view, 'Send').disabled, true);
+  action(view, 'Retry unconfirmed send').click();
+  await flush();
+  assert.deepEqual(calls(reloaded, 'send')[0].args[2], original);
+  assert.equal(view.querySelector('textarea').value, 'Next draft');
+  assert.equal(view.querySelector('.pm-unconfirmed').hidden, true);
+});
+
 test('resume requests the first unread context and does not mark messages beneath the viewport read', async (t) => {
   const f = await fixture(t);
   f.state.loadHistory = async () => ({
@@ -734,14 +783,23 @@ test('saved PM attachment sends retain IDs across retry and disable editing only
   pending.reject(new Error('Connection lost'));
   await flush();
   assert.equal(view.querySelector('textarea').disabled, false);
-  assert.equal(composer.files.length, 1);
-  f.state.send = async () => message('saved');
-  action(view, 'Send').click();
+  assert.equal(composer.files.length, 0);
+  assert.match(view.textContent, /Unconfirmed send.*Photo.png/s);
+  f.state.send = async (_token, _peer, data) => receipt(data, 'saved');
+  action(view, 'Retry unconfirmed send').click();
   await flush();
   assert.deepEqual(calls(f, 'send').at(-1).args[2], first);
   assert.equal(composer.consumed, 1);
   view.close();
   assert.equal(composer.disposed, true);
+  assert.equal(composer.options.current(), false);
+  assert.equal(
+    composer.options.getToken(),
+    'token-a',
+    'close can still clean up unsent uploads for the same account',
+  );
+  f.state.account = 'replacement';
+  assert.equal(composer.options.getToken(), null);
 });
 
 test('unchanged saved history retains an open attachment until message removal or dialog close', async (t) => {

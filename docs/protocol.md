@@ -607,6 +607,28 @@ before room delivery/acknowledgement. An uncertain database commit quarantines
 the room and reports `messageRetryResult` with `storage_unconfirmed`, never a
 definite send rejection. Account identity scopes every inbox route; knowing another conversation's peer or message ID grants no access.
 
+Before an HTTP inbox send, the browser durably records the original
+`clientMessageId`, text, attachment metadata and creation time, scoped to the
+account and peer. A same-origin Web Lock serializes preparation, submission and
+confirmation across tabs. Missing lock support or unavailable/full site storage
+refuses submission before the message POST. One unconfirmed attempt per account/peer
+may exist; composing another draft does not replace it. Recovery storage holds at
+most 100 attempts and 64 KiB of serialized UTF-8 without evicting unresolved sends.
+The submitted text and files
+leave the ordinary composer after the record is saved, so closing its dialog does
+not delete uploads still belonging to the unconfirmed attempt.
+
+Closing or reloading preserves that record. Only explicit **Retry unconfirmed
+send** repeats its original ID, text and attachment IDs; opening history never
+replays or clears it. A successful send response clears only the matching attempt,
+preserving any newer draft. Retry is available for 24 hours from creation. Older
+records remain visible for review and cannot be replayed automatically or assigned
+a replacement ID; server receipt retention is finite. Dismissing an unconfirmed
+attempt requires acknowledgment that the message may already have arrived and
+does not retract it. These local records contain no cookies, bearer tokens or
+other credentials. **Sign out and forget this device** clears them with drafts;
+neither kind of local recovery data syncs to another device.
+
 Contacts require explicit acceptance by the recipient. Contact links use
 `#contact=<account-UUID>`; the browser scrubs the fragment and offers a separate
 request action after sign-in. These identifiers grant no authority and are not

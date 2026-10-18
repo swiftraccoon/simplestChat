@@ -1,6 +1,6 @@
-import type { ChatAttachment, ChatEntry, ChatHistoryPage } from './protocol';
-import { AttachmentComposer, renderAttachments } from './attachments';
-import { SavedPmDrafts } from './chat-store';
+import type { ChatEntry, ChatHistoryPage } from './protocol';
+import { renderAttachments } from './attachments';
+import { mountPmComposer } from './pm-composer';
 import { mountContacts } from './discovery';
 import { appendLinkedText, appendEditedLabel, editMessageDialog } from './chat-message-ui';
 import { chatColor } from './avatar-colors';
@@ -116,7 +116,7 @@ function openHistory(options: HistoryOptions): void {
   let loading = false;
   let read = '';
   let attachmentRows: (() => void)[] = [];
-  let attachments: AttachmentComposer | null = null;
+  let disposeComposer: (() => void) | null = null;
   const clearAttachmentRows = (): void => {
     for (const dispose of attachmentRows) dispose();
     attachmentRows = [];
@@ -395,83 +395,20 @@ function openHistory(options: HistoryOptions): void {
     );
     view.body.append(controls);
   }
-  if (options.send) {
-    const composer = el('textarea');
-    composer.rows = 3;
-    composer.maxLength = 2000;
-    composer.placeholder = 'Write a private message…';
-    const drafts = new SavedPmDrafts(localStorage);
-    if (options.draft) composer.value = drafts.get(options.draft.account, options.draft.peer);
-    const saveDraft = (): void => {
-      if (options.draft && options.current())
-        drafts.save(options.draft.account, options.draft.peer, composer.value);
-    };
-    composer.addEventListener('input', saveDraft);
-    view.dialog.addEventListener('close', saveDraft, { once: true });
-    const attachmentHost = el('div', undefined, 'history-attachment-composer');
-    attachments = new AttachmentComposer({
-      host: attachmentHost,
-      input: composer,
-      getToken: () => (options.current() ? (options.getToken?.() ?? null) : null),
-      current,
-      notify: (message) => fail(new Error(message)),
-    });
-    const ownedAttachments = attachments;
-    let attempt: { content: string; id: string; attachmentIds: string[] } | null = null;
-    const send = asyncButton(
-      'Send',
-      async () => {
-        const content = composer.value.trim();
-        if (
-          (!content && !ownedAttachments.hasFiles) ||
-          !current() ||
-          !options.send ||
-          send.disabled
-        )
-          return;
-        const attached: ChatAttachment[] = ownedAttachments.ready();
-        const attachmentIds = attached.map((attachment) => attachment.id);
-        if (
-          !attempt ||
-          attempt.content !== content ||
-          JSON.stringify(attempt.attachmentIds) !== JSON.stringify(attachmentIds)
-        )
-          attempt = { content, id: crypto.randomUUID(), attachmentIds };
-        const submitted = attempt;
-        send.disabled = true;
-        composer.disabled = true;
-        try {
-          await options.send(content, submitted.id, controller.signal, submitted.attachmentIds);
-          if (!current()) return;
-          ownedAttachments.consume();
-          if (composer.value.trim() === content) composer.value = '';
-          saveDraft();
-          notifyInboxChanged();
-          attempt = null;
-          search.value = '';
-          await load(null, false, '');
-        } finally {
-          send.disabled = false;
-          composer.disabled = false;
-        }
-      },
+  if (options.send && options.draft) {
+    disposeComposer = mountPmComposer(view.body, {
+      ...options.draft,
+      current: options.current,
+      getToken: () => options.getToken?.() ?? null,
+      signal: controller.signal,
+      send: options.send,
       fail,
-    );
-    send.className = 'btn-secondary history-send';
-    composer.addEventListener('keydown', (event) => {
-      if (
-        event.key === 'Enter' &&
-        !event.isComposing &&
-        (event.ctrlKey ||
-          event.metaKey ||
-          (!event.shiftKey && !window.matchMedia('(any-pointer: coarse)').matches))
-      ) {
-        event.preventDefault();
-        send.click();
-      }
+      confirmed: async () => {
+        notifyInboxChanged();
+        search.value = '';
+        await load(null, false, '');
+      },
     });
-    attachmentHost.append(send);
-    view.body.append(field('Private message', composer), attachmentHost);
   }
   const onRemoved = (id: string, at: string): void => {
     if (!current()) return;
@@ -515,7 +452,7 @@ function openHistory(options: HistoryOptions): void {
     () => {
       controller.abort();
       clearAttachmentRows();
-      attachments?.dispose();
+      disposeComposer?.();
       clearInterval(timer);
       removalListeners.delete(onRemoved);
       editListeners.delete(onEdited);

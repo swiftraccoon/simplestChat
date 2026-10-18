@@ -14,7 +14,7 @@ not avoid the limit. The initial budgets leave room for small product changes:
 
 | Asset group | Uncompressed limit | Gzip limit |
 | ----------- | ------------------ | ---------- |
-| JavaScript  | 640 KiB            | 152 KiB    |
+| JavaScript  | 648 KiB            | 154 KiB    |
 | CSS         | 78 KiB             | 15 KiB     |
 | HTML        | 50 KiB             | 12.5 KiB   |
 
@@ -30,6 +30,16 @@ These gates constrain delivery and parsing size; they do **not** establish
 startup latency, memory use, media quality or server capacity. Images, fonts,
 source maps and other non-JS/CSS/HTML files are not covered by these budgets.
 Measure runtime performance separately with the workflows below.
+
+The October 17 saved-PM recovery change measures JavaScript at 659,217 bytes raw /
+156,801 gzip, against the `0a2453e` baseline's 654,605 / 155,194: an increase of
+4,612 / 1,607 bytes. It preserves an unconfirmed send's original identity and
+payload across closing or reloading, so an explicit retry can confirm a committed
+message without creating another copy. The composer and validation helpers are
+shared, the old composer was removed, and no dependency was added. Reviewed
+JavaScript limits are 648/154 KiB, leaving 4,335 raw bytes and 895 gzip bytes of
+headroom; CSS and HTML limits stay unchanged. These are delivery-size measurements,
+not runtime-performance measurements.
 
 The October 16 CSS audit measured the `20942e7` baseline at 77,272 bytes raw /
 15,255 gzip and the reduced styles at 75,565 / 15,030, including the help page.

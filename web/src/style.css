@@ -2977,7 +2977,8 @@ header.in-room .room-topic {
   font-size: 0.75rem;
   color: var(--text-dim);
 }
-.history-message p {
+.history-message p,
+.pm-unconfirmed p {
   white-space: pre-wrap;
   margin: 0.35rem 0;
 }

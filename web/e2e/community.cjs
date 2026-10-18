@@ -13,6 +13,7 @@ const { checkNotificationPreferences } = require('./notification-checks.cjs');
 const { sheet, sheetRow, sheetScreen, closeSheet } = require('./settings-sheet.cjs');
 const { participantHovercardChecks } = require('./participant-hovercard-checks.cjs');
 const assert = require('node:assert/strict');
+const { execFile } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -140,6 +141,70 @@ async function deadline(work, milliseconds = 5000) {
   } finally {
     clearTimeout(timer);
   }
+}
+async function savedPrivateRowCount(sender, recipient, clientMessageId) {
+  assert.equal(process.env.DISPOSABLE_TEST_DATABASE, '1');
+  let database;
+  try {
+    database = new URL(process.env.TEST_DATABASE_URL);
+  } catch {
+    throw new Error('Saved PM verification requires an owned test database URL');
+  }
+  assert.ok(
+    ['postgres:', 'postgresql:'].includes(database.protocol) &&
+      ['localhost', '127.0.0.1', '[::1]'].includes(database.hostname) &&
+      /^\/[A-Za-z0-9_]+_test$/.test(database.pathname) &&
+      ['', '?sslmode=disable'].includes(database.search) &&
+      !database.hash,
+    'Saved PM verification is restricted to a loopback test database',
+  );
+  for (const id of [sender, recipient, clientMessageId])
+    assert.match(id, /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i);
+  const count = await new Promise((resolve, reject) => {
+    const child = execFile(
+      'psql',
+      [
+        '-X',
+        '--no-password',
+        '--tuples-only',
+        '--no-align',
+        '--quiet',
+        '--set=ON_ERROR_STOP=1',
+        `--set=sender=${sender}`,
+        `--set=recipient=${recipient}`,
+        `--set=attempt=${clientMessageId}`,
+        '--file=-',
+      ],
+      {
+        env: {
+          PATH: process.env.PATH,
+          LC_ALL: 'C',
+          PGHOST: database.hostname.replace(/^\[|\]$/g, ''),
+          PGPORT: database.port || '5432',
+          PGDATABASE: database.pathname.slice(1),
+          PGUSER: decodeURIComponent(database.username),
+          PGPASSWORD: decodeURIComponent(database.password),
+          PGSSLMODE: 'disable',
+          PGCONNECT_TIMEOUT: '5',
+          PGPASSFILE: '/dev/null',
+          PGSERVICEFILE: '/dev/null',
+          PGOPTIONS: '-c default_transaction_read_only=on -c statement_timeout=5000',
+        },
+        timeout: 10000,
+        maxBuffer: 1024,
+      },
+      (error, stdout) => {
+        if (error) reject(new Error('Owned saved PM row verification failed'));
+        else resolve(stdout.trim());
+      },
+    );
+    child.stdin.on('error', () => reject(new Error('Owned saved PM query input failed')));
+    child.stdin.end(
+      "SELECT count(*) FROM chat_messages WHERE room_id IS NULL AND sender_account=:'sender'::uuid AND recipient_account=:'recipient'::uuid AND client_message_id=:'attempt';\n",
+    );
+  });
+  assert.match(count, /^\d+$/);
+  return Number(count);
 }
 async function step(name, work) {
   activeStep = name;
@@ -955,6 +1020,7 @@ async function setRole(owner, name, role) {
     const owner = await client('owner');
     const member = await client('member');
     const guest = await client('guest');
+    let secondDevice;
     const ownerEmail = `${runId}-owner@example.test`;
     const memberEmail = `${runId}-member@example.test`;
     const inviteeEmail = `${runId}-invitee@example.test`;
@@ -984,7 +1050,7 @@ async function setRole(owner, name, role) {
     await step(
       'favorite rooms and accepted contacts follow an account to a second device',
       async () => {
-        const secondDevice = await client('owner-second-device');
+        secondDevice = await client('owner-second-device');
         await login(secondDevice, ownerEmail, password);
         await checkSavedRoomsAcrossDevices(owner, secondDevice, { header, close });
         await checkNotificationPreferences(owner, secondDevice, member, {
@@ -1479,6 +1545,158 @@ async function setRole(owner, name, role) {
       await close(conversation);
       await close(inbox);
     });
+    await step(
+      'saved PM response loss survives close, reopen and reload without duplicate delivery',
+      async () => {
+        assert.ok(secondDevice, 'the account has an existing unjoined second device');
+        const sender = secondDevice;
+        const text = `Unconfirmed saved PM ${runId}`;
+        const draft = `A separate saved PM draft ${runId}`;
+        let inbox = await header(sender, 'Messages');
+        const firstHistory = sender.waitForResponse(
+          (response) =>
+            response.request().method() === 'GET' &&
+            /^\/api\/auth\/inbox\/[^/]+\/messages$/.test(new URL(response.url()).pathname),
+        );
+        await inbox.locator('.inbox-conversation').filter({ hasText: 'E2E Member' }).click();
+        const endpoint = new URL((await firstHistory).url()).pathname;
+        const peer = endpoint.split('/')[4];
+        const conversation = sender.getByRole('dialog', {
+          name: 'Messages with E2E Member',
+          exact: true,
+        });
+        const composer = conversation.getByLabel('Private message', { exact: true });
+        const retry = conversation.getByRole('button', {
+          name: 'Retry unconfirmed send',
+          exact: true,
+        });
+        const attempts = [];
+        const receipts = [];
+        let committed;
+        const routePattern = `**${endpoint}`;
+        const intercept = async (route) => {
+          if (route.request().method() !== 'POST') return route.fallback();
+          const request = route.request().postDataJSON();
+          attempts.push(request.clientMessageId);
+          const firstAttempt = attempts.length === 1;
+          assert.ok(request.content === text, 'a retry preserves the submitted PM content');
+          const response = await route.fetch({ timeout: 10000, maxRetries: 0 });
+          assert.equal(response.status(), 200, 'the real backend accepts the saved PM');
+          const saved = await response.json();
+          receipts.push({ messageId: saved.messageId, clientMessageId: saved.clientMessageId });
+          assert.equal(saved.clientMessageId, request.clientMessageId);
+          assert.equal(saved.recipientId, peer);
+          if (firstAttempt) {
+            committed = {
+              messageId: saved.messageId,
+              clientMessageId: saved.clientMessageId,
+              sender: saved.participantId,
+            };
+            // The transaction and recipient delivery are real. Only delivery
+            // of the first HTTP response back to this browser is interrupted.
+            await route.abort('failed');
+          } else await route.fulfill({ response });
+        };
+        await sender.route(routePattern, intercept);
+        try {
+          await composer.fill(text);
+          await composer.press('Enter');
+          await retry.click({ trial: true });
+          assert.ok(committed, 'the backend committed before its response was dropped');
+          assert.equal(attempts.length, 1);
+          await conversation.getByText('Unconfirmed send', { exact: true }).waitFor();
+          assert.equal(await composer.inputValue(), '');
+          await composer.fill(draft);
+          assert.equal(
+            await conversation.getByRole('button', { name: 'Send', exact: true }).isDisabled(),
+            true,
+          );
+          await visible(member, text);
+          assert.equal(
+            await savedPrivateRowCount(committed.sender, peer, committed.clientMessageId),
+            1,
+            'the interrupted response follows a real single-row commit',
+          );
+
+          await close(conversation);
+          await inbox.locator('.inbox-conversation').filter({ hasText: 'E2E Member' }).click();
+          await conversation
+            .locator(`.history-message[data-message-id="${committed.messageId}"]`)
+            .waitFor();
+          await retry.click({ trial: true });
+          assert.equal(await composer.inputValue(), draft);
+          assert.equal(attempts.length, 1, 'reopening never resends an unconfirmed PM');
+          await close(conversation);
+          await close(inbox);
+
+          await sender.reload({ waitUntil: 'domcontentloaded' });
+          await testNetworkReady();
+          await sender.waitForFunction(
+            () =>
+              document.getElementById('auth-display-name').textContent === 'E2E Owner' &&
+              document.getElementById('connection-status').classList.contains('connected'),
+          );
+          assert.equal(await sender.locator('#room-screen').isVisible(), false);
+          assert.equal(await sender.evaluate(() => window.__communityCaptureRequests), 0);
+          inbox = await header(sender, 'Messages');
+          await inbox.locator('.inbox-conversation').filter({ hasText: 'E2E Member' }).click();
+          await conversation
+            .locator(`.history-message[data-message-id="${committed.messageId}"]`)
+            .waitFor();
+          await retry.click({ trial: true });
+          assert.equal(await composer.inputValue(), draft);
+          assert.equal(attempts.length, 1, 'reload never resends an unconfirmed PM');
+
+          const confirmedHistory = sender.waitForResponse(
+            (response) =>
+              response.request().method() === 'GET' &&
+              new URL(response.url()).pathname === endpoint,
+          );
+          await retry.click();
+          await retry.waitFor({ state: 'hidden' });
+          const history = await (await confirmedHistory).json();
+          assert.deepEqual(attempts, [committed.clientMessageId, committed.clientMessageId]);
+          assert.deepEqual(receipts, [
+            { messageId: committed.messageId, clientMessageId: committed.clientMessageId },
+            { messageId: committed.messageId, clientMessageId: committed.clientMessageId },
+          ]);
+          assert.equal(
+            history.messages.filter(
+              (message) => message.clientMessageId === committed.clientMessageId,
+            ).length,
+            1,
+          );
+          assert.equal(
+            await savedPrivateRowCount(committed.sender, peer, committed.clientMessageId),
+            1,
+            'explicit retry confirms the original row instead of inserting a duplicate',
+          );
+          assert.equal(
+            await conversation
+              .locator(`.history-message[data-message-id="${committed.messageId}"]`)
+              .count(),
+            1,
+          );
+          assert.equal(await composer.inputValue(), draft, 'confirmation preserves the new draft');
+          assert.equal(await guest.getByText(text, { exact: true }).count(), 0);
+          report.savedPmResponseLoss = {
+            passed: true,
+            requests: attempts.length,
+            clientMessageId: committed.clientMessageId,
+            messageId: committed.messageId,
+            storedRows: 1,
+            closeReopenWithoutResend: true,
+            reloadWithoutResend: true,
+            separateDraftPreserved: true,
+          };
+          await composer.fill('');
+          await close(conversation);
+          await close(inbox);
+        } finally {
+          await sender.unroute(routePattern, intercept);
+        }
+      },
+    );
     await step('private drafts and sent-input recall stay in their conversation', async () => {
       await publicChat(owner);
       await send(owner, 'Public recall fixture');

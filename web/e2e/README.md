@@ -112,6 +112,12 @@ remain manual device checks.
 The community suite also exercises accepted contacts before either account joins
 a room, favorites and notification preferences across separate signed-in browser
 contexts, and muted PM delivery without suppressing unread messages.
+Its saved-PM recovery check forwards a real POST to the disposable backend, then
+withholds the committed response. Closing/reopening and reloading preserve the
+unconfirmed attempt without an automatic POST. An explicit **Retry unconfirmed
+send** repeats its original ID and payload, preserves a separate new draft, and
+must leave one database row and one saved-history entry. Response loss is
+controlled; persistence and receipt deduplication use the actual backend.
 `attachment-checks.cjs` uploads real bytes through paste, drop and the file input,
 checks a controlled transient failure and retry, decodes a recipient's PNG preview,
 and verifies download headers and access denial after room leave or message removal.
