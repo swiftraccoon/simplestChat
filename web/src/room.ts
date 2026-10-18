@@ -4,6 +4,7 @@ import type {
   TelemetryHandler,
   TelemetryMediaSource,
 } from './telemetry-types';
+import type { CallHealthSource, CallHealthState } from './call-health';
 import type {
   ChatStyle,
   ClientMessage,
@@ -48,6 +49,78 @@ export interface Participant {
 }
 
 export type ConnectionQuality = 'good' | 'fair' | 'poor' | 'unknown';
+
+type ReceiveJob = {
+  kind: 'audio' | 'video';
+  run: () => Promise<void>;
+  finish: (error?: unknown) => void;
+};
+
+/** Browser negotiation is serial, but waiting voice precedes waiting video.
+ * Retiring a receiver releases waiters without awaiting its poisoned native queue. */
+class ReceiveScheduler {
+  private jobs: ReceiveJob[] = [];
+  private active: ReceiveJob | null = null;
+  private epoch = 0;
+  private scheduled = false;
+  private waiters: (() => void)[] = [];
+
+  enqueue(kind: 'audio' | 'video', run: () => Promise<void>): Promise<void> {
+    if (this.jobs.length >= 256)
+      return Promise.reject(new Error('Too many incoming media requests'));
+    const result = new Promise<void>((resolve, reject) => {
+      this.jobs.push({
+        kind,
+        run,
+        finish: (error) =>
+          error === undefined
+            ? resolve()
+            : reject(error instanceof Error ? error : new Error('Incoming media setup failed')),
+      });
+    });
+    if (!this.active && !this.scheduled) {
+      this.scheduled = true;
+      const epoch = this.epoch;
+      queueMicrotask(() => {
+        if (epoch !== this.epoch) return;
+        this.scheduled = false;
+        this.drain(epoch).catch(() => {});
+      });
+    }
+    return result;
+  }
+
+  idle(): Promise<void> {
+    if (!this.active && !this.jobs.length) return Promise.resolve();
+    return new Promise((resolve) => this.waiters.push(resolve));
+  }
+
+  reset(): void {
+    this.epoch++;
+    this.scheduled = false;
+    this.active?.finish();
+    this.active = null;
+    for (const job of this.jobs.splice(0)) job.finish();
+    for (const resolve of this.waiters.splice(0)) resolve();
+  }
+
+  private async drain(epoch: number): Promise<void> {
+    while (epoch === this.epoch && this.jobs.length) {
+      const voice = this.jobs.findIndex((job) => job.kind === 'audio');
+      const job = this.jobs.splice(voice < 0 ? 0 : voice, 1)[0]!;
+      this.active = job;
+      try {
+        await job.run();
+        job.finish();
+      } catch (error) {
+        job.finish(error);
+      }
+      if (epoch !== this.epoch) return;
+      this.active = null;
+    }
+    if (epoch === this.epoch) for (const resolve of this.waiters.splice(0)) resolve();
+  }
+}
 
 export class RoomPasswordRequiredError extends Error {
   constructor() {
@@ -214,7 +287,11 @@ export class RoomClient {
   private restarting = false;
   private membershipEstablished = false;
   private recoveryPromise: Promise<void> | null = null;
-  private consumeQueue: Promise<void> = Promise.resolve();
+  private readonly receiveScheduler = new ReceiveScheduler();
+  private receiveEpoch = 0;
+  private receiveRecovering = false;
+  private receiveFailed = false;
+  private receiveNeedsRepair = false;
   private incomingRefresh: Promise<void> | null = null;
   private pendingConsumes = new Map<string, Promise<void>>();
   // Producers known to be paused — prevents showing black tiles from race condition
@@ -283,6 +360,14 @@ export class RoomClient {
       this.speakerFollow.reset();
       this.recoveryPromise = null;
       this.rejectSocialRequests('Connection changed; please retry');
+      if (this.incomingRefresh) {
+        // An admitted receiver swap may complete after its reply is lost. Keep
+        // its retry intent, but let the resumed socket own a fresh room action.
+        this.receiveNeedsRepair = true;
+        this.receiveEpoch++;
+        this.receiveRecovering = false;
+        this.incomingRefresh = null;
+      }
       this.media?.suspendSignaling();
       if (this.media && !this.mediaReady) {
         // Partial native transport creation cannot be resumed as live media.
@@ -421,7 +506,12 @@ export class RoomClient {
     this.speakerFollow.reset();
     this.pendingConsumes.clear();
     this.failedConsumes.clear();
-    this.consumeQueue = Promise.resolve();
+    this.receiveEpoch++;
+    this.receiveScheduler.reset();
+    this.receiveRecovering = false;
+    this.receiveFailed = false;
+    this.receiveNeedsRepair = false;
+    this.incomingRefresh = null;
     this.receiveRevision++;
     this.receiveReconcile = null;
     this.selectedVideos.clear();
@@ -636,8 +726,24 @@ export class RoomClient {
         'A media change could not be confirmed. Try the control again.',
       );
     };
-    media.onTransportRebuildRequired = () => {
+    media.onTransportRebuildRequired = (direction) => {
       if (generation !== this.generation || this.media !== media) return;
+      if (direction === 'recv') {
+        this.receiveNeedsRepair = true;
+        if (!this.connected || this.recoveryPromise) return;
+        const connection = this.connectionGeneration;
+        this.refreshIncomingMedia().catch(() => {
+          if (
+            generation === this.generation &&
+            connection === this.connectionGeneration &&
+            this.media === media
+          )
+            this.events.onBackgroundError?.(
+              'Incoming media could not be repaired. Use Refresh incoming media to try again.',
+            );
+        });
+        return;
+      }
       this.mediaNeedsRebuild = true;
       this.closeMedia();
       this.events.onLocalMediaChanged();
@@ -823,6 +929,27 @@ export class RoomClient {
     return this.media?.telemetrySources(this.pausedProducers) ?? [];
   }
 
+  callHealthSources(): CallHealthSource[] {
+    return this.media?.callHealthSources(this.pausedProducers) ?? [];
+  }
+
+  callHealthState(): CallHealthState {
+    const state = this.telemetryCallState();
+    return {
+      ...state,
+      connected: this.connected,
+      receiveRecovering: this.receiveRecovering,
+      receiveFailed: this.receiveFailed,
+      ...(this.media?.callHealthTransportState() ?? {
+        microphone: 'off',
+        camera: 'off',
+        sharing: false,
+        sendState: 'unknown',
+        receiveState: 'unknown',
+      }),
+    };
+  }
+
   telemetryCallState(): TelemetryCallState {
     let expected = 0;
     let selected = 0;
@@ -1005,9 +1132,11 @@ export class RoomClient {
     const media = this.media;
     const generation = this.generation;
     const connection = this.connectionGeneration;
-    if (!media || !this.mediaReady) return;
+    if (!media || !this.mediaReady || this.receiveRecovering || this.receiveFailed) return;
+    const receiveEpoch = this.receiveEpoch;
     const current = () =>
       this.media === media &&
+      receiveEpoch === this.receiveEpoch &&
       this.generation === generation &&
       this.connectionGeneration === connection;
     let revision = this.receiveRevision;
@@ -1015,7 +1144,7 @@ export class RoomClient {
       .then(async () => {
         do {
           revision = this.receiveRevision;
-          await this.consumeQueue;
+          await this.receiveScheduler.idle();
           if (!current()) return;
           // Include paused and recently deselected producers: they may still own a
           // consumer or an unacknowledged close from a superseded consume.
@@ -1122,6 +1251,7 @@ export class RoomClient {
   }
 
   private async refreshIncomingSubscriptions(): Promise<void> {
+    const newlyLoaded = this.media === null;
     if (!this.media && this.connected) {
       const generation = this.generation;
       await this.setupMedia(generation);
@@ -1135,48 +1265,57 @@ export class RoomClient {
       );
     if (!media || !this.mediaReady || !this.connected)
       throw new Error('Wait for the room to reconnect before retrying incoming media');
+    if (newlyLoaded) {
+      await this.consumeExistingProducers();
+      return;
+    }
     const generation = this.generation;
     const connection = this.connectionGeneration;
+    const receiveEpoch = ++this.receiveEpoch;
+    const ownsReceive = () =>
+      this.media === media && this.receiveEpoch === receiveEpoch && this.generation === generation;
     const current = () =>
-      this.media === media &&
-      this.generation === generation &&
-      this.connectionGeneration === connection &&
-      this.connected;
-    await this.receiveReconcile;
-    await this.consumeQueue;
-    if (!current()) throw new Error('The room connection changed');
-    // Snapshot this action's bounded roster. Live Map iterators can otherwise
-    // keep visiting producers added while earlier retirement ACKs are pending.
-    const subscriptions = Array.from(this.participants.values()).flatMap((participant) =>
-      participant.id === this.localId
-        ? []
-        : Array.from(participant.producers, ([producerId, metadata]) => ({
-            participantId: participant.id,
+      ownsReceive() && this.connectionGeneration === connection && this.connected;
+    this.receiveRecovering = true;
+    this.receiveFailed = false;
+    this.receiveNeedsRepair = true;
+    this.receiveScheduler.reset();
+    this.receiveReconcile = null;
+    this.receiveRevision++;
+    this.pendingConsumes.clear();
+    this.failedConsumes.clear();
+    // Remove only current receiver tracks. Participant identity and all local
+    // sending, mute, volume, visibility and receive choices remain owned.
+    for (const participant of this.participants.values()) {
+      for (const [producerId, producer] of participant.producers) {
+        if (media.getConsumerTrackByProducer(producerId))
+          this.events.onRemoteTrackRemoved(
+            participant.id,
             producerId,
-            metadata,
-          })),
-    );
-    let failures = 0;
-    for (const { participantId, producerId, metadata } of subscriptions) {
-      if (!current()) throw new Error('The room connection changed');
-      if (this.participants.get(participantId)?.producers.get(producerId) !== metadata) continue;
-      if (metadata.kind === 'video' && !this.selectedVideos.has(producerId)) continue;
-      try {
-        await media.retireConsumerByProducer(producerId);
-        if (!current()) throw new Error('The room connection changed');
-        if (this.participants.get(participantId)?.producers.get(producerId) !== metadata) continue;
-        await this.consumeProducer(participantId, producerId, metadata.kind, metadata.source);
-        if (this.failedConsumes.has(producerId)) failures++;
-      } catch {
-        if (!current()) throw new Error('The room connection changed');
-        failures++;
+            producer.kind,
+            producer.source,
+          );
       }
     }
-    if (!current()) throw new Error('The room connection changed');
-    if (failures > 0)
-      throw new Error(
-        'Some incoming media could not be refreshed. Check your connection and try again.',
-      );
+    let replaced = false;
+    try {
+      await media.replaceReceiveTransport();
+      if (!current()) throw new Error('The room connection changed');
+      replaced = true;
+      this.receiveNeedsRepair = false;
+      this.receiveRecovering = false;
+      await this.consumeExistingProducers();
+      if (!current()) throw new Error('The room connection changed');
+      if (this.failedConsumes.size)
+        throw new Error(
+          'Some incoming media could not be refreshed. Check your connection and try again.',
+        );
+    } catch (error) {
+      if (current() && !replaced) this.receiveFailed = true;
+      throw error;
+    } finally {
+      if (ownsReceive()) this.receiveRecovering = false;
+    }
   }
 
   async startScreenShare(): Promise<ScreenShareResult> {
@@ -1407,6 +1546,17 @@ export class RoomClient {
         }
         if (!isCurrent()) return;
         this.media?.resumeSignaling();
+        if (this.receiveNeedsRepair) {
+          try {
+            await this.refreshIncomingMedia();
+          } catch {
+            if (!isCurrent()) return;
+            this.events.onBackgroundError?.(
+              'Incoming media could not be repaired. Use Refresh incoming media to try again.',
+            );
+          }
+        }
+        if (!isCurrent()) return;
         this.reportRecovery('connected', snapshotError);
         // Media transports survive independently — only signaling needed reconnection
       } else {
@@ -1493,15 +1643,16 @@ export class RoomClient {
   }
 
   private async consumeExistingProducers(): Promise<void> {
-    this.scheduleReceiveSelection();
-    const videos = this.receiveReconcile;
+    const voices: Promise<void>[] = [];
     for (const p of this.participants.values()) {
       for (const [producerId, producer] of p.producers) {
         if (producer.kind === 'audio')
-          await this.consumeProducer(p.id, producerId, producer.kind, producer.source);
+          voices.push(this.consumeProducer(p.id, producerId, producer.kind, producer.source));
       }
     }
-    await videos;
+    await Promise.all(voices);
+    this.scheduleReceiveSelection();
+    await this.receiveReconcile;
   }
 
   private async handlePostAdmission(msg: ServerMessage): Promise<void> {
@@ -1564,23 +1715,27 @@ export class RoomClient {
     const media = this.media;
     const generation = this.generation;
     const connection = this.connectionGeneration;
+    const receiveEpoch = this.receiveEpoch;
     const metadata = this.participants.get(participantId)?.producers.get(producerId);
-    if (!media || !this.mediaReady || !metadata) return Promise.resolve();
+    if (!media || !this.mediaReady || !metadata || this.receiveRecovering || this.receiveFailed)
+      return Promise.resolve();
     const current = (): boolean =>
       generation === this.generation &&
+      receiveEpoch === this.receiveEpoch &&
       connection === this.connectionGeneration &&
       this.media === media &&
       this.participants.get(participantId)?.producers.get(producerId) === metadata;
     // Keep receive setup and its UI updates ordered when several newProducer
     // events arrive together. Signaling replies are independently correlated.
-    const task = this.consumeQueue.then(async () => {
+    const task = this.receiveScheduler.enqueue(kind, async () => {
       if (!current()) return;
       if (kind === 'video' && !this.selectedVideos.has(producerId)) return;
       try {
         const track =
           media.getConsumerTrackByProducer?.(producerId) ?? (await media.consume(producerId));
         if (!current()) {
-          media.closeConsumerByProducer(producerId);
+          if (media.getConsumerTrackByProducer?.(producerId) === track)
+            media.closeConsumerByProducer(producerId);
           return;
         }
         if (kind === 'video' && !this.selectedVideos.has(producerId)) {
@@ -1620,7 +1775,6 @@ export class RoomClient {
         );
       }
     });
-    this.consumeQueue = task.catch(() => {});
     this.pendingConsumes.set(producerId, task);
     task.then(
       () => {

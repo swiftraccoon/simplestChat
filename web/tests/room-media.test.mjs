@@ -294,14 +294,29 @@ async function incomingRefreshFixture(producerIds = ['camera', 'microphone']) {
     consumers = new Map();
     consumed = [];
     retired = [];
+    replacements = 0;
+    receiverVersion = 0;
+    replacing = false;
     closedConsumers = [];
     failedConsumes = new Set();
     qualities = [];
     closed = false;
     async setup() {}
+    callHealthTransportState() {
+      return {
+        microphone: this.audioEnabled ? 'live' : 'off',
+        camera: this.videoEnabled ? 'live' : 'off',
+        sharing: false,
+        sendState: 'connected',
+        receiveState: this.replacing ? 'connecting' : 'connected',
+      };
+    }
     async consume(producerId) {
+      const version = this.receiverVersion;
       this.consumed.push(producerId);
+      if (this.replacing) throw new Error('Device/transport not ready');
       await this.beforeConsume?.(producerId);
+      if (version !== this.receiverVersion || this.closed) throw new Error('Media session closed');
       if (this.failedConsumes.has(producerId)) throw new Error('Subscription unavailable');
       const track = { producerId };
       this.consumers.set(producerId, track);
@@ -314,6 +329,18 @@ async function incomingRefreshFixture(producerIds = ['camera', 'microphone']) {
       this.retired.push(producerId);
       this.consumers.delete(producerId);
       await this.beforeRetire?.(producerId);
+    }
+    async replaceReceiveTransport() {
+      this.replacements++;
+      this.receiverVersion++;
+      this.replacing = true;
+      this.retired.push(...this.consumers.keys());
+      this.consumers.clear();
+      try {
+        await this.beforeReplace?.();
+      } finally {
+        this.replacing = false;
+      }
     }
     closeConsumerByProducer(producerId) {
       this.closedConsumers.push(producerId);
@@ -401,8 +428,9 @@ test('incoming refresh replaces subscriptions while preserving local capture and
   const media = managers[0];
   const capture = media.captureTrack;
   await room.refreshIncomingMedia();
-  assert.deepEqual(media.retired, ['camera', 'microphone']);
-  assert.deepEqual(media.consumed, ['microphone', 'camera', 'camera', 'microphone']);
+  assert.deepEqual([...media.retired].sort(), ['camera', 'microphone']);
+  assert.deepEqual(media.consumed, ['microphone', 'camera', 'microphone', 'camera']);
+  assert.equal(media.replacements, 1);
   assert.equal(tracks.length, 4);
   assert.equal(managers.length, 1, 'refresh must reuse the current media manager');
   assert.equal(media.captureTrack, capture);
@@ -422,15 +450,16 @@ test('camera quality choices never lower a participant screen share', async () =
   await room.leave();
 });
 
-test('concurrent incoming refresh clicks share the same pending retirement', async () => {
+test('concurrent incoming refresh clicks share the same pending receiver replacement', async () => {
   const { room, managers } = await incomingRefreshFixture(['camera']);
   const pending = deferred();
-  managers[0].beforeRetire = () => pending.promise;
+  managers[0].beforeReplace = () => pending.promise;
   const first = room.refreshIncomingMedia();
   const second = room.refreshIncomingMedia();
   assert.equal(first, second);
   await flush();
   assert.deepEqual(managers[0].retired, ['camera']);
+  assert.equal(managers[0].replacements, 1);
   pending.resolve();
   await first;
   assert.deepEqual(managers[0].consumed, ['camera', 'camera']);
@@ -438,11 +467,11 @@ test('concurrent incoming refresh clicks share the same pending retirement', asy
 });
 
 for (const transition of ['leave', 'replace membership', 'lose signaling']) {
-  test(`incoming refresh cannot resubscribe after ${transition} during retirement`, async () => {
+  test(`incoming refresh cannot resubscribe after ${transition} during replacement`, async () => {
     const { room, managers, signaling } = await incomingRefreshFixture(['camera']);
     const oldMedia = managers[0];
     const pending = deferred();
-    oldMedia.beforeRetire = () => pending.promise;
+    oldMedia.beforeReplace = () => pending.promise;
     const refresh = room.refreshIncomingMedia();
     const rejected = assert.rejects(refresh, /room connection changed/);
     await flush();
@@ -461,10 +490,10 @@ for (const transition of ['leave', 'replace membership', 'lose signaling']) {
   });
 }
 
-test('producer removal during retirement does not start another subscription', async () => {
+test('producer removal during replacement does not start another subscription', async () => {
   const { room, signaling, managers } = await incomingRefreshFixture(['camera']);
   const pending = deferred();
-  managers[0].beforeRetire = () => pending.promise;
+  managers[0].beforeReplace = () => pending.promise;
   const refresh = room.refreshIncomingMedia();
   await flush();
   signaling.onMessage({ type: 'producerClosed', producerId: 'camera' });
@@ -475,10 +504,10 @@ test('producer removal during retirement does not start another subscription', a
   await room.leave();
 });
 
-test('incoming refresh owns a finite roster and leaves newly arriving sources to normal consumption', async () => {
+test('incoming refresh reconciles newly arriving video once on the replacement receiver', async () => {
   const { room, signaling, managers } = await incomingRefreshFixture(['camera']);
   const pending = deferred();
-  managers[0].beforeRetire = () => pending.promise;
+  managers[0].beforeReplace = () => pending.promise;
   const refresh = room.refreshIncomingMedia();
   await flush();
   signaling.onMessage({
@@ -492,7 +521,63 @@ test('incoming refresh owns a finite roster and leaves newly arriving sources to
   pending.resolve();
   await refresh;
   assert.deepEqual(managers[0].retired, ['camera']);
+  assert.equal(managers[0].replacements, 1);
   assert.equal(managers[0].consumed.filter((id) => id === 'new-camera').length, 1);
+  await room.leave();
+});
+
+test('new voice arriving during receiver replacement waits for the fresh transport', async () => {
+  const { room, signaling, managers, unavailable } = await incomingRefreshFixture(['camera']);
+  const pending = deferred();
+  managers[0].beforeReplace = () => pending.promise;
+  const refresh = room.refreshIncomingMedia();
+  await flush();
+  signaling.onMessage({
+    type: 'newProducer',
+    participantId: 'remote',
+    producerId: 'new-voice',
+    kind: 'audio',
+    source: 'microphone',
+  });
+  await flush();
+  assert.equal(
+    managers[0].consumed.includes('new-voice'),
+    false,
+    'fresh voice must not attempt to use the deliberately retired receiver',
+  );
+  pending.resolve();
+  await refresh;
+  assert.equal(managers[0].consumed.filter((id) => id === 'new-voice').length, 1);
+  assert.equal(unavailable.length, 0);
+  await room.leave();
+});
+
+test('an old hung consume cannot block replacement or overwrite its fresh track later', async () => {
+  const { room, signaling, managers, tracks } = await incomingRefreshFixture(['camera']);
+  const old = deferred();
+  let block = true;
+  managers[0].beforeConsume = (id) => {
+    if (id === 'late-camera' && block) {
+      block = false;
+      return old.promise;
+    }
+  };
+  signaling.onMessage({
+    type: 'newProducer',
+    participantId: 'remote',
+    producerId: 'late-camera',
+    kind: 'video',
+    source: 'camera',
+  });
+  await flush();
+  await room.refreshIncomingMedia();
+  const fresh = managers[0].consumers.get('late-camera');
+  assert.ok(fresh, 'the fresh receiver does not wait for the superseded native promise');
+  const published = tracks.length;
+  old.resolve();
+  await flush();
+  assert.equal(managers[0].consumers.get('late-camera'), fresh);
+  assert.equal(tracks.length, published, 'the late old consume cannot publish another track');
   await room.leave();
 });
 
@@ -521,23 +606,30 @@ test('incoming refresh reports partial subscription failure while trying the rem
   const { room, managers, unavailable } = await incomingRefreshFixture();
   managers[0].failedConsumes.add('camera');
   await assert.rejects(room.refreshIncomingMedia(), /Some incoming media could not be refreshed/);
-  assert.deepEqual(managers[0].retired, ['camera', 'microphone']);
-  assert.deepEqual(managers[0].consumed, ['microphone', 'camera', 'camera', 'microphone']);
+  assert.deepEqual([...managers[0].retired].sort(), ['camera', 'microphone']);
+  assert.deepEqual(managers[0].consumed, ['microphone', 'camera', 'microphone', 'camera']);
   assert.equal(unavailable.length, 1);
   assert.equal(unavailable[0][4], 'Subscription unavailable');
   assert.ok(managers[0].consumers.has('microphone'));
   managers[0].failedConsumes.clear();
   await room.refreshIncomingMedia();
+  assert.equal(managers[0].replacements, 2);
+  assert.equal(room.callHealthState().receiveFailed, false);
   await room.leave();
 });
 
-test('incoming refresh reports a rejected retirement without starting its replacement', async () => {
+test('incoming refresh reports a rejected receiver replacement without consuming and permits explicit retry', async () => {
   const { room, managers } = await incomingRefreshFixture();
-  managers[0].beforeRetire = (producerId) => {
-    if (producerId === 'camera') throw new Error('Retirement not confirmed');
+  managers[0].beforeReplace = () => {
+    throw new Error('Replacement not confirmed');
   };
-  await assert.rejects(room.refreshIncomingMedia(), /Some incoming media could not be refreshed/);
-  assert.deepEqual(managers[0].consumed, ['microphone', 'camera', 'microphone']);
+  await assert.rejects(room.refreshIncomingMedia(), /Replacement not confirmed/);
+  assert.deepEqual(managers[0].consumed, ['microphone', 'camera']);
+  assert.equal(room.callHealthState().receiveFailed, true);
+  managers[0].beforeReplace = undefined;
+  await room.refreshIncomingMedia();
+  assert.equal(managers[0].replacements, 2);
+  assert.equal(room.callHealthState().receiveFailed, false);
   await room.leave();
 });
 

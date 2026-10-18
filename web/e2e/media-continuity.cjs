@@ -40,6 +40,7 @@ const report = {
     'Output chooser, sink routing and device lists use controlled native-API fixtures; actual browser/device support remains a manual check.',
     'Display capture uses an owned fake camera stream; native screen picker UI and system/tab audio availability are not simulated as proof.',
     'Signaling loss closes one owned native WebSocket; this does not simulate an OS network change or UDP outage.',
+    'One owned receiver negotiation is held indefinitely to test its deadline; sender negotiation and all subsequent receiver negotiation remain native.',
     'Hidden/visible/pageshow/devicechange hints are dispatched explicitly; the network outage uses browser request emulation, not Wi-Fi, cellular, Bluetooth, or OS lock/unlock.',
   ],
 };
@@ -152,6 +153,162 @@ function installDeviceFixtures() {
   };
 }
 
+/** One owned negotiation failure; all native identities stay inside the page. */
+function installReceiveRecoveryObservation() {
+  const nativeRemote = RTCPeerConnection.prototype.setRemoteDescription;
+  const nativeSend = WebSocket.prototype.send;
+  const counters = { joins: 0, leaves: 0, held: 0 };
+  let armed = false;
+  let heldPeer = null;
+  let heldAt = null;
+  let baseline = null;
+  const send = function (...args) {
+    const result = Reflect.apply(nativeSend, this, args);
+    if (typeof args[0] === 'string' && args[0].length <= 65536) {
+      try {
+        const type = JSON.parse(args[0])?.type;
+        if (type === 'joinRoom') counters.joins++;
+        if (type === 'leaveRoom') counters.leaves++;
+      } catch {
+        /* Observe fixed message kinds only. */
+      }
+    }
+    return result;
+  };
+  const remote = function (...args) {
+    if (
+      armed &&
+      args[0]?.type === 'offer' &&
+      window.__communityPeers.includes(this) &&
+      this.getSenders().every((sender) => !sender.track)
+    ) {
+      armed = false;
+      counters.held++;
+      heldPeer = this;
+      heldAt = performance.now();
+      return new Promise(() => {});
+    }
+    return Reflect.apply(nativeRemote, this, args);
+  };
+  RTCPeerConnection.prototype.setRemoteDescription = remote;
+  WebSocket.prototype.send = send;
+  const guard = () => {
+    if (
+      RTCPeerConnection.prototype.setRemoteDescription !== remote ||
+      WebSocket.prototype.send !== send ||
+      counters.joins > 100 ||
+      counters.leaves > 100 ||
+      counters.held > 1
+    )
+      throw new Error('Owned receiver observation was replaced or exceeded its bounds');
+  };
+  const liveTracks = (peer) =>
+    peer
+      .getSenders()
+      .map((sender) => sender.track)
+      .filter((track) => track && track.readyState === 'live');
+  window.__receiveRecoveryObservation = {
+    baseline() {
+      guard();
+      const peers = window.__communityPeers.filter((peer) => peer.connectionState === 'connected');
+      const sender = peers.find((peer) => liveTracks(peer).length >= 3);
+      const receiver = peers.find(
+        (peer) =>
+          !liveTracks(peer).length &&
+          peer.getReceivers().some((item) => item.track?.readyState === 'live'),
+      );
+      if (!sender || !receiver)
+        throw new Error('Expected active sender and receiver for owned recovery');
+      baseline = {
+        sender,
+        receiver,
+        tracks: liveTracks(sender),
+        captures: window.__mediaProduct.captures,
+        screenCaptures: window.__mediaProduct.screenCaptures,
+        joins: counters.joins,
+        leaves: counters.leaves,
+      };
+      return { sendingTracks: baseline.tracks.length };
+    },
+    arm() {
+      guard();
+      if (armed || counters.held || !baseline)
+        throw new Error('Owned receiver failure may be armed once');
+      armed = true;
+    },
+    snapshot() {
+      guard();
+      if (!baseline) throw new Error('Owned recovery baseline missing');
+      const currentTracks = liveTracks(baseline.sender);
+      const receivers = window.__communityPeers.filter(
+        (peer) =>
+          peer.connectionState === 'connected' &&
+          !liveTracks(peer).length &&
+          peer.getReceivers().some((item) => item.track?.readyState === 'live'),
+      );
+      return {
+        senderPreserved:
+          baseline.sender.connectionState === 'connected' &&
+          currentTracks.length === baseline.tracks.length &&
+          baseline.tracks.every(
+            (track) =>
+              currentTracks.includes(track) &&
+              track.readyState === 'live' &&
+              track.enabled &&
+              !track.muted,
+          ),
+        receiverReplaced:
+          baseline.receiver.connectionState === 'closed' &&
+          receivers.some((peer) => peer !== baseline.receiver),
+        capturesUnchanged:
+          baseline.captures === window.__mediaProduct.captures &&
+          baseline.screenCaptures === window.__mediaProduct.screenCaptures,
+        membershipUnchanged:
+          baseline.joins === counters.joins && baseline.leaves === counters.leaves,
+        heldCount: counters.held,
+        heldReceiverClosed: heldPeer ? heldPeer.connectionState === 'closed' : null,
+        heldAgeMs: heldAt === null ? null : Math.max(0, performance.now() - heldAt),
+      };
+    },
+  };
+}
+
+/** Native decode/playback counters only; no IDs, SDP or device data leave the page. */
+async function recoveryProgress() {
+  const camera = document
+    .querySelector('.video-tile:not(.screen-share):not(.local) video')
+    ?.srcObject?.getVideoTracks()[0];
+  const screen = document
+    .querySelector('.video-tile.screen-share:not(.local) video')
+    ?.srcObject?.getVideoTracks()[0];
+  const result = { cameraFrames: 0, screenFrames: 0, audioPackets: 0, audioPlaying: false };
+  for (const peer of window.__communityPeers) {
+    if (peer.connectionState !== 'connected') continue;
+    for (const receiver of peer.getReceivers()) {
+      if (receiver.track?.readyState !== 'live') continue;
+      const stats = await receiver.getStats();
+      for (const row of stats.values()) {
+        if (row.type !== 'inbound-rtp') continue;
+        if (receiver.track === camera && Number.isFinite(row.framesDecoded))
+          result.cameraFrames += row.framesDecoded;
+        if (receiver.track === screen && Number.isFinite(row.framesDecoded))
+          result.screenFrames += row.framesDecoded;
+        if (receiver.track.kind === 'audio' && Number.isFinite(row.packetsReceived))
+          result.audioPackets += row.packetsReceived;
+      }
+    }
+  }
+  result.audioPlaying = [...document.querySelectorAll('.video-tile:not(.local) audio')].some(
+    (audio) =>
+      !audio.paused &&
+      !audio.muted &&
+      audio.volume > 0 &&
+      audio.readyState >= 2 &&
+      audio.currentTime > 0,
+  );
+  return result;
+}
+
 async function join(browser, label) {
   const context = await browser.newContext({
     ...options.contextOptions,
@@ -169,6 +326,7 @@ async function join(browser, label) {
   });
   await page.addInitScript(installSignalingReconnectObservation);
   await page.addInitScript(installDeviceFixtures);
+  await page.addInitScript(installReceiveRecoveryObservation);
   await page.goto(origin.toString());
   await page.locator('#name-input').fill(label);
   await page.locator('#room-input').fill(roomName);
@@ -573,6 +731,142 @@ async function receiveBudget(viewer, publisher) {
   });
 }
 
+async function receiverReplacement(viewer, publisher) {
+  stage = 'bidirectional-receiver-refresh-setup';
+  await publisher.locator('#mic-btn').click();
+  await viewer.locator('#mic-btn').click();
+  await viewer.locator('#cam-btn').click();
+  await viewer.evaluate(() => {
+    window.__mediaProduct.screenMode = 'video';
+  });
+  await viewer.locator('#screen-btn').click();
+  await viewer.waitForFunction(() =>
+    document.querySelector('#screen-btn').classList.contains('active'),
+  );
+  await progressing(publisher, 'bidirectional-sending-native-decoding');
+  await viewer.waitForFunction(() =>
+    window.__communityPeers.some(
+      (peer) =>
+        peer.connectionState === 'connected' &&
+        peer
+          .getSenders()
+          .filter(
+            (sender) =>
+              sender.track?.readyState === 'live' && sender.track.enabled && !sender.track.muted,
+          ).length >= 3,
+    ),
+  );
+  await viewer.evaluate(() => window.__receiveRecoveryObservation.baseline());
+  const advancing = (before, after, screen) =>
+    after.cameraFrames >= before.cameraFrames + 3 &&
+    (!screen || after.screenFrames >= before.screenFrames + 3) &&
+    after.audioPackets > before.audioPackets &&
+    after.audioPlaying;
+  const verify = async (name, requireHeld) => {
+    const deadline = Date.now() + 20000;
+    const outgoingBefore = await publisher.evaluate(recoveryProgress);
+    let incomingBefore = await viewer.evaluate(recoveryProgress);
+    while (Date.now() < deadline) {
+      await viewer.waitForTimeout(600);
+      const identity = await viewer.evaluate(() => window.__receiveRecoveryObservation.snapshot());
+      assert.equal(
+        identity.senderPreserved,
+        true,
+        'receiver recovery preserves the sending PC and exact live local tracks',
+      );
+      assert.equal(identity.capturesUnchanged, true);
+      assert.equal(identity.membershipUnchanged, true);
+      const incoming = await viewer.evaluate(recoveryProgress);
+      const outgoing = await publisher.evaluate(recoveryProgress);
+      report.lastReceiverRecovery = { name, ...identity, incoming, outgoing };
+      if (
+        identity.receiverReplaced &&
+        (!requireHeld || (identity.heldCount === 1 && identity.heldReceiverClosed)) &&
+        advancing(incomingBefore, incoming, false) &&
+        advancing(outgoingBefore, outgoing, true)
+      ) {
+        report.checks.push({
+          name,
+          passed: true,
+          senderAndTracksPreserved: true,
+          noCaptureOrMembershipChange: true,
+          outgoingCameraFrames: outgoing.cameraFrames - outgoingBefore.cameraFrames,
+          outgoingScreenFrames: outgoing.screenFrames - outgoingBefore.screenFrames,
+          outgoingAudioPackets: outgoing.audioPackets - outgoingBefore.audioPackets,
+          incomingCameraFrames: incoming.cameraFrames - incomingBefore.cameraFrames,
+          incomingAudioPackets: incoming.audioPackets - incomingBefore.audioPackets,
+          heldCount: identity.heldCount,
+          heldAgeMs: identity.heldAgeMs,
+        });
+        return;
+      }
+      incomingBefore = incoming;
+    }
+    throw new Error(
+      'Owned receive-only recovery did not restore bidirectional native progress within its bound',
+    );
+  };
+  stage = 'explicit-receiver-replacement-preserves-sending';
+  assert.equal(
+    await viewer.evaluate(() => localStorage.getItem('reliabilityTelemetry') === 'true'),
+    false,
+  );
+  let telemetryUploads = 0;
+  const observeTelemetry = (request) => {
+    if (new URL(request.url()).pathname === '/api/telemetry') telemetryUploads++;
+  };
+  viewer.on('request', observeTelemetry);
+  await viewer.locator('#call-health-btn').click();
+  const health = viewer.getByRole('dialog', { name: 'Call health', exact: true });
+  assert.equal(await health.locator('[data-call-health]').count(), 3);
+  await viewer.waitForFunction(
+    () =>
+      ['sending', 'receiving'].every(
+        (direction) =>
+          document
+            .querySelector(`[data-call-health="${direction}"]`)
+            ?.getAttribute('data-health-level') === 'good',
+      ),
+    null,
+    { timeout: 10000 },
+  );
+  await health.getByRole('button', { name: 'Refresh incoming media', exact: true }).click();
+  await verify('explicit-receiver-replacement-preserves-outgoing-mic-camera-screen', false);
+  await health
+    .locator('[data-call-health="receiving"][data-health-level="good"]')
+    .waitFor({ state: 'visible' });
+  assert.equal(telemetryUploads, 0, 'local call health does not upload with sharing disabled');
+  viewer.off('request', observeTelemetry);
+  report.checks.push({
+    name: 'local-call-health-with-sharing-off-has-separate-live-evidence-and-explicit-repair',
+    passed: true,
+    independentSections: 3,
+    sharingEnabled: false,
+    telemetryUploads,
+  });
+  await health.getByRole('button', { name: 'Close', exact: true }).click();
+  await health.waitFor({ state: 'hidden' });
+  await viewer.evaluate(() => {
+    window.__receiveRecoveryObservation.baseline();
+    window.__receiveRecoveryObservation.arm();
+  });
+  stage = 'hung-receiver-negotiation-deadline';
+  // Only the remote publisher changes capture. The viewer's next receive-only
+  // offer is held indefinitely, leaving its sender entirely native and active.
+  await publisher.locator('#cam-btn').click();
+  await publisher.waitForFunction(
+    () => !document.querySelector('#cam-btn').classList.contains('active'),
+  );
+  await publisher.locator('#cam-btn').click();
+  await viewer.waitForFunction(
+    () => window.__receiveRecoveryObservation.snapshot().heldCount === 1,
+  );
+  await verify('hung-native-receive-negotiation-has-bounded-receive-only-recovery', true);
+  await openRoomMenu(viewer);
+  assert.equal(await viewer.locator('#refresh-incoming-media').isEnabled(), true);
+  await viewer.keyboard.press('Escape');
+}
+
 async function main() {
   const browser = await playwright[options.name].launch(options.launchOptions);
   try {
@@ -711,6 +1005,7 @@ async function main() {
       captureCounts,
       'receive recovery never restarts publisher capture',
     );
+    await receiverReplacement(viewer, publisher);
     stage = 'screen-outcomes';
     await publisher.locator('#screen-btn').click();
     await publisher.waitForFunction(() => window.__mediaProduct.screenCaptures === 1);

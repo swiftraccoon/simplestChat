@@ -185,6 +185,57 @@ header h1 {
   flex-shrink: 0;
 }
 
+.call-health-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 44px;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.call-health-button[hidden] {
+  display: none;
+}
+
+.call-health-button:focus-visible {
+  outline: 3px solid var(--text);
+  outline-offset: 3px;
+}
+
+.call-health-section {
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.call-health-section h3,
+.call-health-status {
+  margin: 0 0 0.4rem;
+}
+
+.call-health-section[data-health-level='warning'] .call-health-status {
+  color: var(--warning);
+}
+
+.call-health-section[data-health-level='problem'] .call-health-status {
+  color: var(--danger);
+}
+
+.call-health-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+
+.call-health-actions button {
+  min-height: 44px;
+}
+
 .help-link {
   display: inline-flex;
   align-items: center;

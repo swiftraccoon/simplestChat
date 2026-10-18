@@ -1,4 +1,5 @@
 import type { TelemetryMediaSource } from './telemetry-types';
+import type { CallHealthSource, CallHealthState } from './call-health';
 import type * as mediasoupClient from 'mediasoup-client';
 // The pinned package barrel also exports test fixtures; load only its shipped Device module.
 import { Device } from '../node_modules/mediasoup-client/lib/Device.js';
@@ -84,6 +85,11 @@ export class MediaManager {
   private device: mediasoupClient.Device | null = null;
   private sendTransport: mediasoupClient.types.Transport | null = null;
   private recvTransport: mediasoupClient.types.Transport | null = null;
+  private receiveVersion = 0;
+  private receiveAbort = new AbortController();
+  private receiveReplacement: Promise<void> | null = null;
+  private receiveReplacementFrom: string | null = null;
+  private readonly statsPending = new WeakMap<object, Promise<RTCStatsReport>>();
   private audioProducer: mediasoupClient.types.Producer | null = null;
   private audioVersion = 0;
   private audioRequested = false;
@@ -121,7 +127,7 @@ export class MediaManager {
   private unwatchScreenAudio: (() => void) | null = null;
   private onLocalCaptureStoppedCb: ((kind: 'audio' | 'video') => void) | null = null;
   private onControlErrorCb: (() => void) | null = null;
-  private onTransportRebuildRequiredCb: (() => void) | null = null;
+  private onTransportRebuildRequiredCb: ((direction: 'send' | 'recv') => void) | null = null;
   private onLocalVideoStalledCb: ((stalled: boolean) => void) | null = null;
   /** The camera producer's encoded frames when they last advanced, and when. */
   private cameraFlow: {
@@ -328,7 +334,9 @@ export class MediaManager {
                 transportId === this.recvTransport?.id
               ) {
                 console.warn(`[media] ICE restart failed for transport ${transportId}`);
-                this.onTransportRebuildRequiredCb?.();
+                this.onTransportRebuildRequiredCb?.(
+                  transportId === this.recvTransport?.id ? 'recv' : 'send',
+                );
               }
               return;
             }
@@ -358,7 +366,7 @@ export class MediaManager {
   }
 
   /** Failed native recovery needs fresh transports; the room owns rebuilding and capture consent. */
-  set onTransportRebuildRequired(callback: (() => void) | null) {
+  set onTransportRebuildRequired(callback: ((direction: 'send' | 'recv') => void) | null) {
     this.onTransportRebuildRequiredCb = callback;
   }
 
@@ -545,6 +553,17 @@ export class MediaManager {
     );
     assertCurrent();
 
+    this.adoptReceiveTransport(recvResponse, generation);
+  }
+
+  private adoptReceiveTransport(
+    recvResponse: Extract<import('./protocol').ServerMessage, { type: 'transportCreated' }>,
+    generation: number,
+  ): void {
+    const device = this.device;
+    const receiveVersion = this.receiveVersion;
+    if (!device || this.closed || generation !== this.lifecycle)
+      throw new Error('Media session closed');
     const recvTransport = device.createRecvTransport({
       id: recvResponse.transportId,
       iceParameters: recvResponse.iceParameters,
@@ -553,6 +572,15 @@ export class MediaManager {
       ...(recvResponse.iceServers !== undefined && { iceServers: recvResponse.iceServers }),
     });
     this.recvTransport = recvTransport;
+    const assertCurrent = () => {
+      if (
+        this.closed ||
+        generation !== this.lifecycle ||
+        receiveVersion !== this.receiveVersion ||
+        this.recvTransport !== recvTransport
+      )
+        throw new Error('Incoming media changed');
+    };
 
     recvTransport.on('connect', ({ dtlsParameters }, callback, errback) => {
       try {
@@ -576,6 +604,60 @@ export class MediaManager {
     this.setupIceRecovery(this.recvTransport);
 
     console.log('[media] recv transport created:', this.recvTransport.id);
+  }
+
+  /** The server owns an idempotent old-to-new swap. Retain the old identity after
+   * an uncertain reply so an explicit retry cannot replace a newer receiver. */
+  replaceReceiveTransport(): Promise<void> {
+    if (this.receiveReplacement) return this.receiveReplacement;
+    const generation = this.lifecycle;
+    const old = this.recvTransport;
+    const expected = this.receiveReplacementFrom ?? old?.id;
+    if (
+      this.closed ||
+      !this.device ||
+      !expected ||
+      this.signalingSuspended ||
+      !this.signaling.connected
+    )
+      return Promise.reject(new Error('Incoming media connection is not ready'));
+    this.receiveReplacementFrom = expected;
+    const version = ++this.receiveVersion;
+    this.clearReceiveTransport();
+    const task = this.signaling
+      .request({ type: 'replaceRecvTransport', transportId: expected }, 'transportCreated')
+      .then((response) => {
+        if (this.closed || generation !== this.lifecycle || version !== this.receiveVersion)
+          throw new Error('Incoming media changed');
+        this.adoptReceiveTransport(response, generation);
+        this.receiveReplacementFrom = null;
+      })
+      .finally(() => {
+        if (this.receiveReplacement === task) this.receiveReplacement = null;
+      });
+    this.receiveReplacement = task;
+    return task;
+  }
+
+  private clearReceiveTransport(): void {
+    this.receiveAbort.abort();
+    this.receiveAbort = new AbortController();
+    const transport = this.recvTransport;
+    this.recvTransport = null;
+    if (transport) {
+      clearTimeout(this.iceRestartTimers.get(transport.id));
+      this.iceRestartTimers.delete(transport.id);
+      this.pendingControls.delete(`ice:${transport.id}`);
+      this.inFlightControls.delete(`ice:${transport.id}`);
+    }
+    for (const id of Array.from(this.producerToConsumer.keys()))
+      this.closeConsumerByProducer(id, false);
+    for (const retirement of this.consumerRetirements.values()) {
+      this.pendingControls.delete(`consumer:${retirement.id}`);
+      this.inFlightControls.delete(`consumer:${retirement.id}`);
+    }
+    this.consumerRetirements.clear();
+    transport?.close();
   }
 
   /** Monitor transport connection state and request ICE restart on failure */
@@ -662,7 +744,7 @@ export class MediaManager {
       // A rejected restart may leave native ICE permanently failed, with no
       // further state event to retry. The same safe rebuild used by Firefox's
       // unsupported TURN updates retires those transports and stops capture.
-      this.onTransportRebuildRequiredCb?.();
+      this.onTransportRebuildRequiredCb?.(transport === this.recvTransport ? 'recv' : 'send');
       return;
     }
     if (isCurrent())
@@ -818,12 +900,14 @@ export class MediaManager {
     const device = this.device;
     const transport = this.recvTransport;
     const generation = this.lifecycle;
+    const receiveVersion = this.receiveVersion;
     if (this.closed || !device || !transport) {
       throw new Error('Device/transport not ready');
     }
     const isCurrent = () =>
       !this.closed &&
       generation === this.lifecycle &&
+      receiveVersion === this.receiveVersion &&
       this.device === device &&
       this.recvTransport === transport;
     const assertCurrent = () => {
@@ -843,12 +927,57 @@ export class MediaManager {
 
     let consumer: mediasoupClient.types.Consumer | undefined;
     try {
-      consumer = await transport.consume({
+      const pending = transport.consume({
         id: response.consumerId,
         producerId: response.producerId,
         kind: response.kind,
         rtpParameters: response.rtpParameters,
       });
+      let accepting = true;
+      let timedOut = false;
+      // A timed-out native negotiation can still finish. It owns only its old
+      // consumer, never the replacement's producer-to-consumer mapping.
+      pending
+        .then(
+          (late) => {
+            if (!accepting || !isCurrent()) late.close();
+          },
+          () => {},
+        )
+        .catch(() => {});
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const signal = this.receiveAbort.signal;
+      let aborted: (() => void) | undefined;
+      try {
+        consumer = await Promise.race([
+          pending,
+          new Promise<never>((_, reject) => {
+            timer = setTimeout(() => {
+              accepting = false;
+              timedOut = true;
+              reject(new Error('Incoming media setup timed out'));
+            }, 10_000);
+          }),
+          new Promise<never>((_, reject) => {
+            aborted = () =>
+              reject(new Error(this.closed ? 'Media session closed' : 'Incoming media changed'));
+            if (signal.aborted) aborted();
+            else signal.addEventListener('abort', aborted, { once: true });
+          }),
+        ]);
+      } catch (error) {
+        accepting = false;
+        if (timedOut && isCurrent()) {
+          this.receiveReplacementFrom ??= transport.id;
+          this.receiveVersion++;
+          this.clearReceiveTransport();
+          this.onTransportRebuildRequiredCb?.('recv');
+        }
+        throw error;
+      } finally {
+        clearTimeout(timer);
+        if (aborted) signal.removeEventListener('abort', aborted);
+      }
       assertCurrent();
       this.consumers.set(response.consumerId, consumer);
       this.producerToConsumer.set(producerId, response.consumerId);
@@ -956,10 +1085,83 @@ export class MediaManager {
           !consumer.paused &&
           !pausedProducers.has(producerId) &&
           consumer.track.readyState === 'live',
-        getStats: () => consumer.getStats(),
+        getStats: () => this.readStats(consumer),
       });
     }
     return result;
+  }
+
+  private readStats(native: { getStats: () => Promise<RTCStatsReport> }): Promise<RTCStatsReport> {
+    const previous = this.statsPending.get(native);
+    if (previous) return previous;
+    const pending = Promise.resolve().then(() => native.getStats());
+    this.statsPending.set(native, pending);
+    pending.then(
+      () => {
+        if (this.statsPending.get(native) === pending) this.statsPending.delete(native);
+      },
+      () => {
+        if (this.statsPending.get(native) === pending) this.statsPending.delete(native);
+      },
+    );
+    return pending;
+  }
+
+  callHealthSources(pausedProducers: ReadonlySet<string>): CallHealthSource[] {
+    const result: CallHealthSource[] = this.telemetrySources(pausedProducers).map((source) => ({
+      ...source,
+      direction: 'receiving',
+    }));
+    for (const producer of [
+      this.audioProducer,
+      this.videoProducer,
+      this.screenProducer,
+      this.screenAudioProducer,
+    ]) {
+      if (!producer) continue;
+      result.push({
+        key: producer,
+        direction: 'sending',
+        kind: producer.kind,
+        ...(producer.track ? { track: producer.track } : {}),
+        active: () =>
+          !this.closed &&
+          !this.signalingSuspended &&
+          !producer.closed &&
+          !producer.paused &&
+          [
+            this.audioProducer,
+            this.videoProducer,
+            this.screenProducer,
+            this.screenAudioProducer,
+          ].includes(producer) &&
+          producer.track?.readyState === 'live' &&
+          !producer.track.muted,
+        getStats: () => this.readStats(producer),
+      });
+    }
+    return result;
+  }
+
+  callHealthTransportState(): Pick<
+    CallHealthState,
+    'microphone' | 'camera' | 'sharing' | 'sendState' | 'receiveState'
+  > {
+    const capture = (
+      producer: mediasoupClient.types.Producer | null,
+    ): 'off' | 'live' | 'interrupted' =>
+      !producer || producer.closed || producer.paused
+        ? 'off'
+        : producer.track?.readyState === 'live' && !producer.track.muted
+          ? 'live'
+          : 'interrupted';
+    return {
+      microphone: capture(this.audioProducer),
+      camera: capture(this.videoProducer),
+      sharing: this.isScreenSharing,
+      sendState: this.sendTransport?.connectionState ?? 'unknown',
+      receiveState: this.recvTransport?.connectionState ?? 'unknown',
+    };
   }
 
   /** Get a consumer's track by its associated producer ID */
@@ -1456,6 +1658,8 @@ export class MediaManager {
 
   close(): void {
     this.closed = true;
+    this.receiveVersion++;
+    this.receiveAbort.abort();
     clearInterval(this.cameraTimer);
     this.pendingControls.clear();
     this.inFlightControls.clear();

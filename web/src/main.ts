@@ -17,6 +17,8 @@ import { RoomNavigation } from './room-navigation';
 import type { ScreenShareResult } from './media';
 import { ClientTelemetry } from './telemetry';
 import { CallOutcomeTelemetry, MediaTelemetry, observeFirstVideoFrame } from './media-telemetry';
+import { CallHealth, type CallHealthSnapshot } from './call-health';
+import { mountCallHealth } from './call-health-ui';
 import { AppUpdates } from './app-updates';
 import { MediaControls, mediaErrorMessage } from './media-controls';
 import { loadScreenPresentationMode, saveScreenPresentationMode } from './screen-presentation';
@@ -99,6 +101,12 @@ const screenBtn = document.getElementById('screen-btn')!;
 const settingsBtn = document.getElementById('settings-btn')!;
 const leaveBtn = document.getElementById('leave-btn')!;
 const qualityIndicator = document.getElementById('quality-indicator')!;
+const callHealthButton = button('Call health', openCallHealth, 'call-health-button');
+callHealthButton.id = 'call-health-btn';
+callHealthButton.hidden = true;
+qualityIndicator.before(callHealthButton);
+callHealthButton.prepend(qualityIndicator);
+qualityIndicator.setAttribute('aria-hidden', 'true');
 const scrollBottomBtn = document.getElementById('scroll-bottom-btn')!;
 const unreadBadge = document.getElementById('unread-badge')!;
 const handBtn = document.getElementById('hand-btn')!;
@@ -487,7 +495,10 @@ let roomPasswordView: { cancel: () => void } | null = null;
 const mediaControls = new MediaControls({
   getRoom: () => room,
   notify: (message) => showToast(message),
-  onPlaybackResult: (element, blocked) => callTelemetry.playbackResult(element, blocked),
+  onPlaybackResult: (element, blocked) => {
+    callTelemetry.playbackResult(element, blocked);
+    callHealth.playbackResult(element, blocked);
+  },
   talkRow: () => buildTalkRow(),
 });
 mediaControls.mountToolbar(document.getElementById('room-volume-slot')!);
@@ -2009,6 +2020,24 @@ const mediaTelemetry = new MediaTelemetry(
   callTelemetry,
   telemetry.recordMediaSample,
 );
+let callHealthView: ReturnType<typeof modal> | null = null;
+let updateCallHealthView: ((snapshot: CallHealthSnapshot) => void) | null = null;
+const callHealth = new CallHealth({
+  context: () =>
+    room
+      ? {
+          scope: room,
+          membership: room.membershipVersion,
+          state: room.callHealthState(),
+        }
+      : null,
+  sources: () => room?.callHealthSources() ?? [],
+  playback: () =>
+    [...remoteTiles.values()]
+      .filter((tile) => !tile.classList.contains('personal-media-hidden'))
+      .flatMap((tile) => [...tile.querySelectorAll<HTMLMediaElement>('audio, video')]),
+  changed: renderCallHealth,
+});
 let appUpdateNotice: HTMLElement | null = null;
 const appUpdates = new AppUpdates({
   revision: __APP_REVISION__,
@@ -2021,6 +2050,7 @@ window.addEventListener('pagehide', (event) => {
   navigation.dispose();
   accountSync.dispose();
   mediaTelemetry.dispose();
+  callHealth.dispose();
   appUpdates.dispose();
   callTelemetry.dispose();
   telemetry.dispose();
@@ -3636,6 +3666,8 @@ function applyJoinedRoomUI(): void {
   }
 
   qualityIndicator.hidden = false;
+  callHealthButton.hidden = false;
+  callHealth.sample();
   updateRoomModeUI();
   applyRoomSettingsToUI();
   observeUiTask(socialChat.activate(), 'Could not refresh room conversations');
@@ -3774,6 +3806,9 @@ async function leaveRoomAndShowHome(): Promise<void> {
   joinBtn.textContent = 'Join Room';
   qualityIndicator.hidden = true;
   qualityIndicator.className = 'quality-dot';
+  callHealthButton.hidden = true;
+  callHealthView?.close();
+  callHealth.sample();
   settingsSheet.close({ force: true });
   document.getElementById('mod-menu')?.remove();
   updateJoinBtn();
@@ -4802,15 +4837,67 @@ function appendSystemMessage(text: string): void {
   socialChat.system(text);
 }
 
-function renderConnectionQuality(quality: ConnectionQuality): void {
+function renderConnectionQuality(_quality: ConnectionQuality): void {
+  // A server bandwidth estimate alone cannot establish local call health.
+  callHealth.sample();
+}
+
+function renderCallHealth(snapshot: CallHealthSnapshot): void {
+  const quality = {
+    good: 'good',
+    warning: 'fair',
+    problem: 'poor',
+    unknown: 'unknown',
+    idle: 'unknown',
+  }[snapshot.level];
   qualityIndicator.className = `quality-dot quality-${quality}`;
-  const labels: Record<ConnectionQuality, string> = {
-    good: 'Good connection',
-    fair: 'Fair connection',
-    poor: 'Poor connection',
-    unknown: 'Checking connection...',
-  };
-  qualityIndicator.title = labels[quality];
+  qualityIndicator.title = 'Current local media evidence';
+  callHealthButton.title = `Sending: ${snapshot.sending.label}. Receiving: ${snapshot.receiving.label}. Playback: ${snapshot.playback.label}.`;
+  updateCallHealthView?.(snapshot);
+}
+
+function openCallHealth(): void {
+  if (!room || callHealthView?.dialog.open) return;
+  const owner = room;
+  const membership = owner.membershipVersion;
+  const view = modal('Call health');
+  callHealthView = view;
+  const current = (): boolean => room === owner && owner.membershipVersion === membership;
+  updateCallHealthView = mountCallHealth(view.body, {
+    retryPlayback: () => {
+      if (!current()) return;
+      mediaControls.resumePlayback();
+      callHealth.sample();
+    },
+    speaker: () => {
+      if (!current()) return;
+      view.close();
+      settingsSheet.open({ section: 'speaker', opener: callHealthButton });
+    },
+    capture: () => {
+      if (!current()) return;
+      view.close();
+      settingsSheet.open({ section: 'camera', opener: callHealthButton });
+    },
+    refreshIncoming: () => {
+      if (current() && !refreshMediaBtn.disabled) refreshMediaBtn.click();
+    },
+    canRefresh: () =>
+      current() &&
+      owner.connected &&
+      !owner.callHealthState().receiveRecovering &&
+      !refreshMediaBtn.disabled,
+  });
+  updateCallHealthView(callHealth.snapshot());
+  view.dialog.addEventListener(
+    'close',
+    () => {
+      if (callHealthView !== view) return;
+      callHealthView = null;
+      updateCallHealthView = null;
+    },
+    { once: true },
+  );
 }
 
 /** A release hint never reloads or removes media; its button rechecks current call ownership. */

@@ -44,6 +44,7 @@ async function harness(options = {}) {
     reconciled = [];
     suspensions = 0;
     resumptions = 0;
+    replacements = 0;
     constructor() {
       instances.push(this);
     }
@@ -55,6 +56,11 @@ async function harness(options = {}) {
     }
     resumeSignaling() {
       this.resumptions++;
+    }
+    async replaceReceiveTransport() {
+      this.replacements++;
+      this.tracks.clear();
+      await options.replaceReceive?.(this);
     }
     async consume(id) {
       const track = await (options.consume?.(id, this) ?? { id });
@@ -994,6 +1000,141 @@ test('media controls resume only after the retained session snapshot is reconcil
   assert.equal(media.closes, 0);
   await h.room.leave();
 });
+
+for (const stage of ['disconnected', 'snapshot']) {
+  test(`receiver repair requested while ${stage} waits for retained membership and preserves publishing`, async (t) => {
+    const errors = [];
+    const h = await harness({ events: { onBackgroundError: (message) => errors.push(message) } });
+    t.after(() => h.room.leave());
+    await h.room.join('room', 'Local');
+    const media = h.instances[0];
+    media.audioEnabled = media.videoEnabled = media.isScreenSharing = true;
+    h.signaling.connected = false;
+    h.signaling.onConnectionLost();
+    if (stage === 'disconnected') media.onTransportRebuildRequired('recv');
+    assert.equal(media.replacements, 0);
+    h.signaling.connected = true;
+    const recovery = h.room.attemptReconnect();
+    await flush();
+    if (stage === 'snapshot') media.onTransportRebuildRequired('recv');
+    assert.equal(media.replacements, 0, 'snapshot ownership must settle before receiver mutation');
+    h.respond(h.sent.at(-1), snapshot());
+    await recovery;
+    assert.equal(media.resumptions, 1);
+    assert.equal(media.replacements, 1);
+    assert.equal(media.closes, 0);
+    assert.deepEqual(
+      [h.room.audioEnabled, h.room.videoEnabled, h.room.isScreenSharing],
+      [true, true, true],
+    );
+    assert.equal(h.room.receiveRecovering, false);
+    assert.equal(h.room.receiveNeedsRepair, false);
+    assert.equal(h.sent.filter(({ type }) => type === 'joinRoom').length, 1);
+    assert.deepEqual(errors, []);
+  });
+}
+
+test('disconnect during receiver replacement allows current retry without stale cleanup changing its state', async (t) => {
+  const first = deferred();
+  const second = deferred();
+  const h = await harness({
+    replaceReceive: (media) => (media.replacements === 1 ? first.promise : second.promise),
+  });
+  t.after(() => h.room.leave());
+  await h.room.join('room', 'Local');
+  const media = h.instances[0];
+  media.audioEnabled = media.videoEnabled = media.isScreenSharing = true;
+  const oldRefresh = h.room.refreshIncomingMedia();
+  const rejected = assert.rejects(oldRefresh, /room connection changed/);
+  assert.equal(h.room.receiveRecovering, true);
+  h.signaling.connected = false;
+  h.signaling.onConnectionLost();
+  assert.equal(h.room.receiveRecovering, false, 'a disconnected action no longer owns health');
+  assert.equal(h.room.receiveNeedsRepair, true);
+  h.signaling.connected = true;
+  const recovery = h.room.attemptReconnect();
+  await flush();
+  h.respond(h.sent.at(-1), snapshot());
+  await flush();
+  assert.equal(media.replacements, 2);
+  assert.equal(h.room.receiveRecovering, true);
+  first.resolve();
+  await rejected;
+  assert.equal(h.room.receiveRecovering, true, 'old finally must not clear the current repair');
+  assert.equal(h.room.receiveNeedsRepair, true);
+  second.resolve();
+  await recovery;
+  assert.equal(h.room.receiveRecovering, false);
+  assert.equal(h.room.receiveNeedsRepair, false);
+  assert.equal(h.room.connected, true);
+  assert.equal(media.closes, 0);
+  assert.deepEqual(
+    [h.room.audioEnabled, h.room.videoEnabled, h.room.isScreenSharing],
+    [true, true, true],
+  );
+  assert.equal(h.sent.filter(({ type }) => type === 'joinRoom').length, 1);
+});
+
+test('failed deferred receiver repair reports incoming failure without rejoining or stopping publishing', async (t) => {
+  const errors = [];
+  const h = await harness({
+    replaceReceive: () => Promise.reject(new Error('Worker unavailable')),
+    events: { onBackgroundError: (message) => errors.push(message) },
+  });
+  t.after(() => h.room.leave());
+  await h.room.join('room', 'Local');
+  const media = h.instances[0];
+  media.audioEnabled = true;
+  h.signaling.connected = false;
+  h.signaling.onConnectionLost();
+  media.onTransportRebuildRequired('recv');
+  h.signaling.connected = true;
+  const recovery = h.room.attemptReconnect();
+  await flush();
+  h.respond(h.sent.at(-1), snapshot());
+  await recovery;
+  assert.equal(media.replacements, 1);
+  assert.equal(media.closes, 0);
+  assert.equal(h.room.audioEnabled, true);
+  assert.equal(h.room.connected, true);
+  assert.equal(h.room.receiveRecovering, false);
+  assert.equal(h.room.receiveFailed, true);
+  assert.equal(errors.length, 1);
+  assert.match(errors[0], /Incoming media could not be repaired/);
+  assert.equal(h.sent.filter(({ type }) => type === 'joinRoom').length, 1);
+});
+
+for (const boundary of ['leave', 'new membership']) {
+  test(`receiver repair intent and late completion cannot survive ${boundary}`, async (t) => {
+    const pending = deferred();
+    const h = await harness({ replaceReceive: () => pending.promise });
+    t.after(() => h.room.leave());
+    await h.room.join('room', 'Local');
+    const retired = h.instances[0];
+    const oldRefresh = h.room.refreshIncomingMedia();
+    const rejected = assert.rejects(oldRefresh, /room connection changed/);
+    h.signaling.connected = false;
+    h.signaling.onConnectionLost();
+    retired.onTransportRebuildRequired('recv');
+    assert.equal(h.room.receiveNeedsRepair, true);
+    await h.room.leave();
+    h.signaling.connected = true;
+    if (boundary === 'new membership') await h.room.join('different-room', 'Local');
+    retired.onTransportRebuildRequired('recv');
+    pending.resolve();
+    await rejected;
+    const recovery = h.room.attemptReconnect();
+    if (boundary === 'new membership') {
+      await flush();
+      h.respond(h.sent.at(-1), snapshot());
+      await recovery;
+      assert.equal(h.instances[1].replacements, 0);
+    } else await recovery;
+    assert.equal(h.room.receiveNeedsRepair, false);
+    assert.equal(h.room.receiveRecovering, false);
+    assert.equal(retired.replacements, 1);
+  });
+}
 
 for (const stage of ['reconnect', 'snapshot']) {
   test(`a second disconnect during ${stage} retires the old recovery without destroying live media`, async () => {

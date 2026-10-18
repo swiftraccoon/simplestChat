@@ -14,7 +14,7 @@ not avoid the limit. The initial budgets leave room for small product changes:
 
 | Asset group | Uncompressed limit | Gzip limit |
 | ----------- | ------------------ | ---------- |
-| JavaScript  | 704 KiB            | 170 KiB    |
+| JavaScript  | 720 KiB            | 176 KiB    |
 | CSS         | 78 KiB             | 15 KiB     |
 | HTML        | 50 KiB             | 12.5 KiB   |
 
@@ -30,6 +30,18 @@ These gates constrain delivery and parsing size; they do **not** establish
 startup latency, memory use, media quality or server capacity. Images, fonts,
 source maps and other non-JS/CSS/HTML files are not covered by these budgets.
 Measure runtime performance separately with the workflows below.
+
+The October 18 receive recovery, local Call health and explicit app-update changes
+measure JavaScript at 735,795 bytes raw / 178,765 gzip, against the unchanged
+`e7660f9` baseline's 714,961 / 173,013: an increase of 20,834 / 5,752 bytes.
+Both isolated builds use the same development revision marker. No dependency was
+added. Call health reuses the fixed media-counter reader and existing playback,
+settings and recovery controls; its bounded native statistics reads share pending
+work with optional reliability reporting. The update hint uses existing toast and
+button helpers. The call engine remains deferred. Reviewed JavaScript limits are
+720/176 KiB; CSS measures 76,378 / 15,166 and HTML 44,306 / 12,360, with their
+limits unchanged. These figures measure delivery size, not call quality, startup
+latency or runtime performance.
 
 The October 18 live-account, account-navigation and adaptive-presentation changes
 defer the call engine and mediasoup dependency until explicit room media setup.
