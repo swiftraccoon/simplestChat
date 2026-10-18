@@ -381,6 +381,163 @@ async fn authorization_database_account_updates_publish_committed_scoped_mutatio
 
 #[tokio::test]
 #[ignore = "requires DISPOSABLE_TEST_DATABASE=1 and TEST_DATABASE_URL"]
+async fn authorization_database_read_cursors_publish_only_committed_advances() {
+    let fixture = Fixture::new(3).await;
+    let sender = fixture.users[0];
+    let reader = fixture.users[1];
+    let contact = operation(
+        "POST",
+        "/api/auth/contacts".into(),
+        Some(json!({"accountId":reader})),
+    );
+    assert_eq!(
+        fixture
+            .request(&contact, Some(&fixture.tokens[0]), 31)
+            .await
+            .status(),
+        StatusCode::NO_CONTENT
+    );
+    let accept = operation("PUT", format!("/api/auth/contacts/{sender}"), None);
+    assert_eq!(
+        fixture
+            .request(&accept, Some(&fixture.tokens[1]), 31)
+            .await
+            .status(),
+        StatusCode::NO_CONTENT
+    );
+    let first = data(
+        &fixture,
+        0,
+        "POST",
+        format!("/api/auth/inbox/{reader}/messages"),
+        json!({"clientMessageId":"read-cursor-first","content":"First retained message"}),
+    )
+    .await;
+    let next = data(
+        &fixture,
+        0,
+        "POST",
+        format!("/api/auth/inbox/{reader}/messages"),
+        json!({"clientMessageId":"read-cursor-next","content":"Next retained message"}),
+    )
+    .await;
+    let first_id = first["messageId"].as_str().unwrap();
+    let next_id = next["messageId"].as_str().unwrap();
+    let mut first_device = Feed::open(&fixture, 1, 31).await;
+    let mut second_device = Feed::open(&fixture, 1, 31).await;
+    let mut author = Feed::open(&fixture, 0, 31).await;
+    let mut stranger = Feed::open(&fixture, 2, 31).await;
+    let path = format!("/api/auth/inbox/{sender}/read");
+    let initial = data(
+        &fixture,
+        1,
+        "PUT",
+        path.clone(),
+        json!({"messageId":first_id}),
+    )
+    .await;
+    assert_eq!(initial, json!({"readMessageId":first_id}));
+    first_device.change("inbox", Some(sender)).await;
+    second_device.change("inbox", Some(sender)).await;
+    // Reopening the same retained page still succeeds without waking every tab.
+    for _ in 0..3 {
+        assert_eq!(
+            data(
+                &fixture,
+                1,
+                "PUT",
+                path.clone(),
+                json!({"messageId":first_id}),
+            )
+            .await,
+            initial
+        );
+    }
+    first_device.quiet().await;
+    second_device.quiet().await;
+    // Two devices racing the same next cursor cause exactly one durable advance
+    // and one event per reader device, while both receive the canonical result.
+    let (left, right) = tokio::join!(
+        data(
+            &fixture,
+            1,
+            "PUT",
+            path.clone(),
+            json!({"messageId":next_id}),
+        ),
+        data(
+            &fixture,
+            1,
+            "PUT",
+            path.clone(),
+            json!({"messageId":next_id}),
+        )
+    );
+    assert_eq!(left, json!({"readMessageId":next_id}));
+    assert_eq!(right, left);
+    first_device.change("inbox", Some(sender)).await;
+    second_device.change("inbox", Some(sender)).await;
+    assert_eq!(
+        data(
+            &fixture,
+            1,
+            "PUT",
+            path.clone(),
+            json!({"messageId":first_id}),
+        )
+        .await,
+        left,
+        "an older device receives the newer cursor without rewinding it"
+    );
+    // Expiry is stored per retained row. A longer-lived older row may extend
+    // cursor retention, but must not wake every tab as a fresh read advance.
+    let retained_expiry: chrono::DateTime<chrono::Utc> = sqlx::query_scalar(
+        "UPDATE chat_messages SET expires_at=expires_at+interval '1 day' WHERE id=$1 RETURNING expires_at",
+    )
+    .bind(first_id.parse::<Uuid>().unwrap())
+    .fetch_one(&fixture.pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        data(
+            &fixture,
+            1,
+            "PUT",
+            path.clone(),
+            json!({"messageId":first_id}),
+        )
+        .await,
+        left
+    );
+    let (stored_id, stored_expiry): (Uuid, chrono::DateTime<chrono::Utc>) = sqlx::query_as(
+        "SELECT r.message_id,r.expires_at FROM chat_read_cursors r
+         JOIN chat_messages m ON m.conversation=r.conversation WHERE r.user_id=$1 AND m.id=$2",
+    )
+    .bind(reader)
+    .bind(next_id.parse::<Uuid>().unwrap())
+    .fetch_one(&fixture.pool)
+    .await
+    .unwrap();
+    assert_eq!(stored_id.to_string(), next_id);
+    assert_eq!(stored_expiry, retained_expiry);
+    let unavailable = operation("PUT", path, Some(json!({"messageId":Uuid::new_v4()})));
+    assert_eq!(
+        fixture
+            .request(&unavailable, Some(&fixture.tokens[1]), 31)
+            .await
+            .status(),
+        StatusCode::BAD_REQUEST
+    );
+    first_device.quiet().await;
+    second_device.quiet().await;
+    author.quiet().await;
+    stranger.quiet().await;
+    drop((first_device, second_device, author, stranger));
+    fixture.finish().await;
+}
+
+#[tokio::test]
+#[ignore = "requires DISPOSABLE_TEST_DATABASE=1 and TEST_DATABASE_URL"]
 async fn authorization_database_account_updates_bound_leases_and_close_on_revocation_expiry_lag_and_drain()
  {
     let mut fixture = Fixture::new(3).await;

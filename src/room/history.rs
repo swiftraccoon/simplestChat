@@ -75,6 +75,9 @@ pub struct ReadRequest {
 #[serde(rename_all = "camelCase")]
 pub struct ReadResult {
     pub read_message_id: String,
+    /// Internal commit receipt; a repeated or older read has no visible change.
+    #[serde(skip)]
+    advanced: bool,
 }
 
 #[derive(Deserialize)]
@@ -596,17 +599,53 @@ pub(crate) async fn mark_read(
     account: Uuid,
     message: Uuid,
 ) -> Result<ReadResult, sqlx::Error> {
+    let mut transaction = pool.begin().await?;
     let result: Option<Uuid> = sqlx::query_scalar(
         "INSERT INTO chat_read_cursors (user_id,conversation,message_id,sent_at,expires_at)
          SELECT $1,conversation,id,sent_at,expires_at FROM chat_messages
          WHERE conversation=$2 AND id=$3 AND expires_at>now()
          ON CONFLICT (user_id,conversation) DO UPDATE SET
-           message_id=CASE WHEN (chat_read_cursors.sent_at,chat_read_cursors.message_id)<(EXCLUDED.sent_at,EXCLUDED.message_id) THEN EXCLUDED.message_id ELSE chat_read_cursors.message_id END,
-           sent_at=GREATEST(chat_read_cursors.sent_at,EXCLUDED.sent_at),expires_at=GREATEST(chat_read_cursors.expires_at,EXCLUDED.expires_at)
+           message_id=EXCLUDED.message_id,sent_at=EXCLUDED.sent_at,
+           expires_at=GREATEST(chat_read_cursors.expires_at,EXCLUDED.expires_at)
+         WHERE (chat_read_cursors.sent_at,chat_read_cursors.message_id)<(EXCLUDED.sent_at,EXCLUDED.message_id)
          RETURNING message_id")
-        .bind(account).bind(conversation).bind(message).fetch_optional(pool).await?;
+        .bind(account).bind(conversation).bind(message).fetch_optional(&mut *transaction).await?;
+    // A rejected ON CONFLICT update still locks the existing cursor. Keep that
+    // lock through this fresh read and COMMIT so concurrent devices receive the
+    // authoritative cursor without reporting an unchanged row as a new event.
+    let read_message_id = match result {
+        Some(id) => id,
+        None => {
+            let (id, cursor_expiry, requested_expiry): (Uuid, DateTime<Utc>, DateTime<Utc>) =
+                sqlx::query_as(
+                    "SELECT r.message_id,r.expires_at,m.expires_at FROM chat_read_cursors r
+                     JOIN chat_messages m ON m.conversation=r.conversation
+                     WHERE r.user_id=$1 AND r.conversation=$2 AND m.id=$3 AND m.expires_at>now()",
+                )
+                .bind(account)
+                .bind(conversation)
+                .bind(message)
+                .fetch_one(&mut *transaction)
+                .await?;
+            // A retained older message may have a longer expiry. Preserve the
+            // original lifetime maximum without calling it a cursor advance.
+            if requested_expiry > cursor_expiry {
+                sqlx::query(
+                    "UPDATE chat_read_cursors SET expires_at=$3 WHERE user_id=$1 AND conversation=$2",
+                )
+                .bind(account)
+                .bind(conversation)
+                .bind(requested_expiry)
+                .execute(&mut *transaction)
+                .await?;
+            }
+            id
+        }
+    };
+    transaction.commit().await?;
     Ok(ReadResult {
-        read_message_id: result.ok_or(sqlx::Error::RowNotFound)?.to_string(),
+        read_message_id: read_message_id.to_string(),
+        advanced: result.is_some(),
     })
 }
 
@@ -1199,11 +1238,13 @@ pub async fn read(
             sqlx::Error::RowNotFound => AuthError::InvalidInput("Message unavailable"),
             other => routes::database_error(other),
         })?;
-        server.room_manager().account_updates().changed(
-            own,
-            crate::auth::updates::Scope::Inbox,
-            Some(peer),
-        );
+        if result.advanced {
+            server.room_manager().account_updates().changed(
+                own,
+                crate::auth::updates::Scope::Inbox,
+                Some(peer),
+            );
+        }
         Ok(result)
     })
     .await?;
@@ -1547,6 +1588,20 @@ pub fn spawn_retention(pool: PgPool) -> tokio::task::JoinHandle<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn read_commit_receipts_keep_the_existing_wire_contract() {
+        for advanced in [false, true] {
+            let result = ReadResult {
+                read_message_id: "00000000-0000-4000-8000-000000000005".into(),
+                advanced,
+            };
+            assert_eq!(
+                serde_json::to_value(result).unwrap(),
+                serde_json::json!({"readMessageId":"00000000-0000-4000-8000-000000000005"})
+            );
+        }
+    }
     #[test]
     fn malformed_saved_account_policy_never_allows_private_delivery() {
         let mut account = ChatAccount {
@@ -2363,12 +2418,18 @@ mod tests {
             found.messages[0].message_id, second.message_id,
             "search treats SQL wildcard characters literally"
         );
-        mark_read(&pool, &public, alice, third.message_id.parse().unwrap())
+        let advance = mark_read(&pool, &public, alice, third.message_id.parse().unwrap())
             .await
             .unwrap();
+        assert!(advance.advanced);
+        let repeat = mark_read(&pool, &public, alice, third.message_id.parse().unwrap())
+            .await
+            .unwrap();
+        assert!(!repeat.advanced);
         let read = mark_read(&pool, &public, alice, first.message_id.parse().unwrap())
             .await
             .unwrap();
+        assert!(!read.advanced);
         assert_eq!(
             read.read_message_id, third.message_id,
             "older device cannot rewind read cursor"

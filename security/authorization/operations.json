@@ -824,7 +824,8 @@
       "unauthenticated_status": null,
       "checks": [
         "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions",
-        "authorization_database_inbox_offline_delivery_read_sync_and_consent"
+        "authorization_database_inbox_offline_delivery_read_sync_and_consent",
+        "authorization_database_read_cursors_publish_only_committed_advances"
       ]
     },
     {
@@ -1073,7 +1074,8 @@
         "authorization_database_account_updates_publish_committed_scoped_mutations_without_room_join",
         "authorization_database_account_updates_bound_leases_and_close_on_revocation_expiry_lag_and_drain",
         "authorization_database_account_data_and_credentials_have_independent_budgets_and_stream_permits",
-        "authorization_database_account_updates_commit_completion_survives_abandoned_http_response"
+        "authorization_database_account_updates_commit_completion_survives_abandoned_http_response",
+        "authorization_database_read_cursors_publish_only_committed_advances"
       ]
     }
   ],
