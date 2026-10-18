@@ -906,9 +906,13 @@ async fn authorization_database_room_roles_and_owner_mutations_do_not_cross_room
                 },
                 "administration {suffix} as {role:?}"
             );
-            assert_eq!(
-                response.headers()[header::CACHE_CONTROL],
-                "private, no-store"
+            assert!(
+                response.headers()[header::CACHE_CONTROL]
+                    .to_str()
+                    .unwrap()
+                    .split(',')
+                    .any(|directive| directive.trim() == "no-store"),
+                "administration responses cannot be stored by a browser or shared cache"
             );
         }
         let elsewhere_read = operation(
