@@ -70,6 +70,139 @@ const preferences = {
   timestamps: 'seconds',
   ignored: [{ id: 'person', name: 'Person' }],
 };
+
+test('saved-room administration binds each action to its selected room and validates bounded pages', async () => {
+  const { ui, state } = await uiFixture();
+  const signal = new AbortController().signal;
+  const requests = [
+    ['administration', ['token', 'room /?', signal], 'GET', '', { role: 'owner', settings }],
+    [
+      'administrationSettings',
+      ['token', 'room /?', { allowChat: false }, signal],
+      'PATCH',
+      '/settings',
+      { role: 'owner', settings },
+    ],
+    [
+      'administrationMembers',
+      ['token', 'room /?', 100, signal],
+      'GET',
+      '/members?offset=100',
+      { members: [], hasMore: false },
+    ],
+    [
+      'administrationBans',
+      ['token', 'room /?', 0, signal],
+      'GET',
+      '/bans?offset=0',
+      { bans: [], hasMore: false },
+    ],
+    [
+      'administrationReports',
+      ['token', 'room /?', 0, signal],
+      'GET',
+      '/reports?offset=0',
+      { reports: [], hasMore: false },
+    ],
+    [
+      'administrationHistory',
+      ['token', 'room /?', 0, signal],
+      'GET',
+      '/history?offset=0',
+      { events: [], hasMore: false },
+    ],
+    [
+      'administrationLobby',
+      ['token', 'room /?', 0, signal],
+      'GET',
+      '/lobby?offset=0',
+      { lobby: [], hasMore: false },
+    ],
+    [
+      'administrationRole',
+      ['token', 'room /?', 'person /?', 2, signal],
+      'PUT',
+      '/members/person%20%2F%3F',
+      { updated: true },
+    ],
+    [
+      'administrationUnban',
+      ['token', 'room /?', 'ban /?', signal],
+      'DELETE',
+      '/bans/ban%20%2F%3F',
+      { removed: true },
+    ],
+    [
+      'administrationResolve',
+      ['token', 'room /?', 'report /?', 'resolved', signal],
+      'PUT',
+      '/reports/report%20%2F%3F',
+      { reportId: 'report /?', status: 'resolved' },
+    ],
+    [
+      'administrationModerate',
+      ['token', 'room /?', { action: 'kick', targetParticipantId: 'person' }, signal],
+      'POST',
+      '/moderation',
+      { updated: true },
+    ],
+    [
+      'administrationLobbyAction',
+      ['token', 'room /?', 'person /?', 'deny', 'Full', signal],
+      'POST',
+      '/lobby/person%20%2F%3F',
+      { updated: true },
+    ],
+    [
+      'administrationSanction',
+      [
+        'token',
+        'room /?',
+        { targetParticipantId: 'person', kind: 'camera', enabled: true },
+        signal,
+      ],
+      'POST',
+      '/sanctions',
+      { updated: true },
+    ],
+  ];
+  for (const [method, args, verb, suffix, response] of requests) {
+    state.response = {
+      ok: true,
+      status: 200,
+      json: async () => ({ ...response, private: 'secret' }),
+    };
+    const decoded = await ui.api[method](...args);
+    const [url, options] = state.requests.at(-1);
+    assert.equal(url, `/api/rooms/room%20%2F%3F/administration${suffix}`);
+    assert.equal(options.method, verb);
+    assert.equal(options.headers.Authorization, 'Bearer token');
+    assert.equal(Object.hasOwn(decoded, 'private'), false);
+  }
+  for (const body of [null, { role: 'user', settings }, { role: 'owner', settings: {} }]) {
+    state.response.json = async () => body;
+    await assert.rejects(ui.api.administration('token', 'room', signal), /invalid data/);
+  }
+  state.response.json = async () => ({
+    members: Array(101).fill({
+      userId: 'person',
+      displayName: 'Person',
+      role: 'user',
+      online: true,
+      authenticated: true,
+    }),
+    hasMore: false,
+  });
+  await assert.rejects(ui.api.administrationMembers('token', 'room', 0, signal), /invalid data/);
+  state.response.json = async () => ({
+    lobby: [
+      { participantId: 'person', displayName: 'Person', authenticated: false, role: 'imposter' },
+    ],
+    hasMore: false,
+  });
+  await assert.rejects(ui.api.administrationLobby('token', 'room', 0, signal), /invalid data/);
+});
+
 test('private reactions set explicit presence so repeating an uncertain request does not invert intent', async () => {
   const { ui, state } = await uiFixture();
   const response = {

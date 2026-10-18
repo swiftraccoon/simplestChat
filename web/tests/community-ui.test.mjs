@@ -50,6 +50,23 @@ async function fixture() {
   const ui = {
     ...dom.ui,
     api: {
+      ...dom.ui.api,
+      administration: (token, id, signal) =>
+        request(
+          `/api/rooms/${encodeURIComponent(id)}/administration`,
+          token,
+          'GET',
+          undefined,
+          signal,
+        ),
+      administrationMembers: (token, id, offset, signal) =>
+        request(
+          `/api/rooms/${encodeURIComponent(id)}/administration/members?offset=${offset}`,
+          token,
+          'GET',
+          undefined,
+          signal,
+        ),
       inboxUnread: (...args) => state.unread(...args),
       publicProfile: (id, token) => request(`/api/auth/profiles/${encodeURIComponent(id)}`, token),
       accountProfile: (token) => request('/api/auth/profile', token),
@@ -134,6 +151,13 @@ async function fixture() {
     modules: {
       './ui': ui,
       './settings-sheet': sheet,
+      './room-administration': await loadTypeScript('src/room-administration.ts', {
+        modules: { './ui': ui, './settings-sheet': sheet },
+        globals: { document: dom.document },
+      }),
+      './room-administration-api': await loadTypeScript('src/room-administration-api.ts', {
+        modules: { './ui': ui },
+      }),
       './discovery': await loadDiscoveryFixture({ ...dom, ui }),
       './appearance': await loadAppearanceFixture({ ...dom, ui }),
       './avatar-colors': await loadTypeScript('src/avatar-colors.ts'),
@@ -1046,6 +1070,12 @@ test('room-scoped actions mount in the room tools while account actions stay in 
     modules: {
       './ui': { ...dom.ui, api: { ...dom.ui.api, inboxUnread: async () => ({ unreadCount: 0 }) } },
       './settings-sheet': {},
+      './room-administration': {
+        administrationSections() {
+          return [];
+        },
+      },
+      './room-administration-api': { roomAdministrationApi: {} },
       './chat-history': { openPrivateInbox() {}, onInboxChanged() {} },
       './discovery': await loadDiscoveryFixture(dom),
       './account-security': security,
@@ -1204,6 +1234,120 @@ test('membership pages append unique rooms and keep the cursor on a failed read'
     ['page', 'first'],
     ['page', 'first'],
   ]);
+});
+
+test('My rooms manages the selected saved room while another call stays joined', async () => {
+  const f = await fixture();
+  const joined = {
+    currentRoomId: 'active-call',
+    role: 'user',
+    requestSocial() {
+      assert.fail('Saved-room administration must use its selected HTTP room');
+    },
+  };
+  f.state.room = joined;
+  f.ui.api.memberships = async () => ({ items: [], next_cursor: null });
+  const selected = { id: 'saved-room', display_name: 'Saved room', participant_count: 0 };
+  const overview = {
+    role: 'owner',
+    settings: {
+      id: 'saved-room',
+      displayName: 'Saved room',
+      guestsAllowed: true,
+      requireRegistration: false,
+      inviteOnly: false,
+      secret: false,
+      lobbyEnabled: false,
+      passwordProtected: false,
+    },
+  };
+  f.state.handle = async (path) => {
+    if (path === '/api/rooms/mine') return [selected];
+    if (path === '/api/rooms/saved-room/administration') return overview;
+    throw new Error(`Unexpected selected-room request: ${path}`);
+  };
+  await f.community.openRooms();
+  const rooms = dialog(f, 'My rooms');
+  action(rooms, 'Manage room').click();
+  await flush();
+  assert.equal(rooms.open, false);
+  assert.equal(f.community.hasRoomAdministration, true);
+  assert.deepEqual(f.state.openedSettings, ['room-access']);
+  const section = f.community.roomSections().find((entry) => entry.id === 'room-access');
+  const screen = section.screen();
+  assert.match(screen.subtitle, /Saved room · saved-room/);
+  const body = await screen.body({ current: () => true });
+  await flush();
+  assert.match(body.textContent, /Allow guests/);
+  assert.equal(f.state.room, joined);
+  assert.equal(
+    f.state.requests.filter(([path]) => path === '/api/rooms/saved-room/administration').length,
+    2,
+    'Each screen revalidates saved authorization',
+  );
+  screen.leave();
+  f.community.closeRoomContext();
+  assert.equal(f.community.hasRoomAdministration, false);
+  assert.equal(f.state.room, joined);
+});
+
+test('a late administration overview cannot reopen a closed My rooms dialog or replace accounts', async () => {
+  const f = await fixture();
+  f.ui.api.memberships = async () => ({ items: [], next_cursor: null });
+  const read = deferred();
+  f.state.handle = async (path) =>
+    path === '/api/rooms/mine'
+      ? [{ id: 'saved-room', display_name: 'Saved room', participant_count: 0 }]
+      : read.promise;
+  await f.community.openRooms();
+  const rooms = dialog(f, 'My rooms');
+  action(rooms, 'Manage room').click();
+  await flush();
+  rooms.close();
+  f.auth.userId = 'account-b';
+  read.resolve({ role: 'owner', settings: { id: 'saved-room' } });
+  await flush();
+  assert.equal(f.community.hasRoomAdministration, false);
+  assert.deepEqual(f.state.openedSettings, []);
+});
+
+test('Edit room keeps the room chosen from My rooms even while joined elsewhere', async () => {
+  const f = await fixture();
+  f.state.room = { currentRoomId: 'active-call', role: 'user', localParticipantId: 'account-a' };
+  const selected = {
+    id: 'saved-room',
+    display_name: 'Saved room',
+    topic: null,
+    description: '',
+    image_url: null,
+    name_style: { color: null, style: 'accent' },
+    topic_style: { color: null, style: 'accent' },
+  };
+  f.ui.api.memberships = async () => ({ items: [], next_cursor: null });
+  f.state.handle = async (path) => {
+    if (path === '/api/rooms/mine') return [selected];
+    if (path === '/api/rooms/saved-room/identity') return selected;
+    throw new Error(`Unexpected identity request: ${path}`);
+  };
+  await f.community.openRooms();
+  action(dialog(f, 'My rooms'), 'Edit room').click();
+  const section = f.community.roomSections().find((entry) => entry.id === 'room-identity');
+  assert.equal(
+    section.available(),
+    true,
+    'the other call’s role does not replace ownership of the selected room',
+  );
+  assert.equal(f.community.hasSelectedRoom, true);
+  const screen = section.screen();
+  assert.match(screen.subtitle, /Saved room · saved-room/);
+  const body = await screen.body({ current: () => true, close() {} });
+  const name = control(body, 'Name');
+  assert.equal(name.value, 'Saved room');
+  name.value = 'Renamed saved room';
+  name.emit('change');
+  await flush();
+  assert.equal(f.state.requests.at(-1)[0], '/api/rooms/saved-room/identity');
+  assert.equal(f.state.room.currentRoomId, 'active-call');
 });
 
 test('invitation links use only kind-specific fragments and discard the current query', async () => {

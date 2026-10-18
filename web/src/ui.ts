@@ -1,4 +1,9 @@
-import type { AccountProfile, CreateRoomRequest, RoomListItem } from './protocol';
+import type {
+  AccountProfile,
+  CreateRoomRequest,
+  RoomListItem,
+  RoomSettingsPatch,
+} from './protocol';
 import {
   type PreferencePatch,
   decodeAccountProfile,
@@ -34,6 +39,17 @@ import {
   type ConversationNotificationPolicy,
 } from './notification-validation';
 import { type Decoder, isRecord } from './validation';
+import {
+  decodeAdministration,
+  decodeAdministrationMembers,
+  decodeAdministrationBans,
+  decodeAdministrationReports,
+  decodeAdministrationHistory,
+  decodeAdministrationUpdated,
+  decodeAdministrationUnban,
+  decodeAdministrationResolution,
+  decodeAdministrationLobby,
+} from './room-administration-validation';
 
 /** Account password selection mirrors the server's NFC and Unicode-scalar policy. */
 export function validatePassword(password: string, confirmation: string): void {
@@ -318,6 +334,168 @@ async function apiNoContent(
 
 /** Endpoint-owned contracts: callers cannot select an arbitrary response type or decoder. */
 export const api = {
+  administration: (token: string, id: string, signal: AbortSignal) =>
+    apiJson(
+      decodeAdministration,
+      `/api/rooms/${encodeURIComponent(id)}/administration`,
+      token,
+      'GET',
+      undefined,
+      signal,
+    ),
+  administrationSettings: (
+    token: string,
+    id: string,
+    patch: RoomSettingsPatch,
+    signal: AbortSignal,
+  ) =>
+    apiJson(
+      decodeAdministration,
+      `/api/rooms/${encodeURIComponent(id)}/administration/settings`,
+      token,
+      'PATCH',
+      patch,
+      signal,
+    ),
+  administrationMembers: (token: string, id: string, offset: number, signal: AbortSignal) =>
+    apiJson(
+      decodeAdministrationMembers,
+      `/api/rooms/${encodeURIComponent(id)}/administration/members?offset=${offset}`,
+      token,
+      'GET',
+      undefined,
+      signal,
+    ),
+  administrationBans: (token: string, id: string, offset: number, signal: AbortSignal) =>
+    apiJson(
+      decodeAdministrationBans,
+      `/api/rooms/${encodeURIComponent(id)}/administration/bans?offset=${offset}`,
+      token,
+      'GET',
+      undefined,
+      signal,
+    ),
+  administrationReports: (token: string, id: string, offset: number, signal: AbortSignal) =>
+    apiJson(
+      decodeAdministrationReports,
+      `/api/rooms/${encodeURIComponent(id)}/administration/reports?offset=${offset}`,
+      token,
+      'GET',
+      undefined,
+      signal,
+    ),
+  administrationHistory: (token: string, id: string, offset: number, signal: AbortSignal) =>
+    apiJson(
+      decodeAdministrationHistory,
+      `/api/rooms/${encodeURIComponent(id)}/administration/history?offset=${offset}`,
+      token,
+      'GET',
+      undefined,
+      signal,
+    ),
+  administrationRole: (
+    token: string,
+    id: string,
+    target: string,
+    role: number,
+    signal: AbortSignal,
+  ) =>
+    apiJson(
+      decodeAdministrationUpdated,
+      `/api/rooms/${encodeURIComponent(id)}/administration/members/${encodeURIComponent(target)}`,
+      token,
+      'PUT',
+      { role },
+      signal,
+    ),
+  administrationUnban: (token: string, id: string, ban: string, signal: AbortSignal) =>
+    apiJson(
+      decodeAdministrationUnban,
+      `/api/rooms/${encodeURIComponent(id)}/administration/bans/${encodeURIComponent(ban)}`,
+      token,
+      'DELETE',
+      undefined,
+      signal,
+    ),
+  administrationResolve: (
+    token: string,
+    id: string,
+    report: string,
+    status: 'resolved' | 'dismissed',
+    signal: AbortSignal,
+  ) =>
+    apiJson(
+      decodeAdministrationResolution,
+      `/api/rooms/${encodeURIComponent(id)}/administration/reports/${encodeURIComponent(report)}`,
+      token,
+      'PUT',
+      { status },
+      signal,
+    ),
+  administrationModerate: (
+    token: string,
+    id: string,
+    request: {
+      action: 'kick' | 'ban';
+      targetParticipantId: string;
+      reason?: string;
+      durationSeconds?: number;
+      reportId?: string;
+    },
+    signal: AbortSignal,
+  ) =>
+    apiJson(
+      decodeAdministrationUpdated,
+      `/api/rooms/${encodeURIComponent(id)}/administration/moderation`,
+      token,
+      'POST',
+      request,
+      signal,
+    ),
+  administrationLobby: (token: string, id: string, offset: number, signal: AbortSignal) =>
+    apiJson(
+      decodeAdministrationLobby,
+      `/api/rooms/${encodeURIComponent(id)}/administration/lobby?offset=${offset}`,
+      token,
+      'GET',
+      undefined,
+      signal,
+    ),
+  administrationLobbyAction: (
+    token: string,
+    id: string,
+    target: string,
+    action: 'admit' | 'deny',
+    reason: string | undefined,
+    signal: AbortSignal,
+  ) =>
+    apiJson(
+      decodeAdministrationUpdated,
+      `/api/rooms/${encodeURIComponent(id)}/administration/lobby/${encodeURIComponent(target)}`,
+      token,
+      'POST',
+      { action, reason },
+      signal,
+    ),
+  administrationSanction: (
+    token: string,
+    id: string,
+    request: {
+      targetParticipantId: string;
+      kind: 'camera' | 'chat';
+      enabled: boolean;
+      reason?: string;
+    },
+    signal: AbortSignal,
+  ) =>
+    apiJson(
+      decodeAdministrationUpdated,
+      `/api/rooms/${encodeURIComponent(id)}/administration/sanctions`,
+      token,
+      'POST',
+      request,
+      signal,
+    ),
   contacts: (token: string, signal: AbortSignal) =>
     apiJson(decodeContacts, '/api/auth/contacts', token, 'GET', undefined, signal),
   requestContact: (token: string, accountId: string, signal: AbortSignal) =>

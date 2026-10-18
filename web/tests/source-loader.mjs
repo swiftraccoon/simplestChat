@@ -20,6 +20,10 @@ export async function loadContractModules() {
   modules['./protocol-validation'] = await loadTypeScript('src/protocol-validation.ts', {
     modules,
   });
+  modules['./room-administration-validation'] = await loadTypeScript(
+    'src/room-administration-validation.ts',
+    { modules },
+  );
   modules['./chat-history-validation'] = await loadTypeScript('src/chat-history-validation.ts', {
     modules,
   });

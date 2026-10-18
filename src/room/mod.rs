@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 // Room module - Room state management and participant tracking
+pub mod administration;
 pub mod api;
 pub mod community;
 mod control;
@@ -5721,14 +5722,30 @@ impl RoomManager {
     ) -> Result<()> {
         let room_lock = self.get_room(room_id)?;
         let _control = control::lock_room(&room_lock).await;
-        let mut room = room_lock.write().await;
-        let admission = self.drain.admit()?;
+        let room = room_lock.read().await;
 
         // Verify moderator exists and has permission
         let moderator = Self::participant_for_sender(&room, moderator_id, expected_sender)?;
         if !moderator.role.can_admit_lobby() {
             anyhow::bail!("Insufficient permissions to admit from lobby");
         }
+        drop(room);
+        self.admit_authorized_lobby(room_id, target_id, _control, || Ok(()))
+            .await
+    }
+
+    /// Complete admission under an existing control guard. The caller validates
+    /// its own actor; the final callback runs after all preference/state waits.
+    pub(super) async fn admit_authorized_lobby(
+        &self,
+        room_id: &str,
+        target_id: &str,
+        _control: tokio::sync::OwnedMutexGuard<()>,
+        authorize: impl FnOnce() -> Result<()>,
+    ) -> Result<()> {
+        let room_lock = self.get_room(room_id)?;
+        let mut room = room_lock.write().await;
+        room.ensure_live()?;
         if !room.lobby.contains_key(target_id) {
             anyhow::bail!("Participant not found in lobby");
         }
@@ -5760,6 +5777,8 @@ impl RoomManager {
             .membership_chat_preferences(authenticated, target_id)
             .await?;
         let mut room = room_lock.write().await;
+        authorize()?;
+        let admission = self.drain.admit()?;
         room.ensure_live()?;
         if room
             .lobby
@@ -5873,10 +5892,7 @@ impl RoomManager {
             },
         );
 
-        info!(
-            "admit_from_lobby: {} admitted {} to room {}",
-            moderator_id, target_id, room_id
-        );
+        info!("Admitted {} to room {}", target_id, room_id);
         room.notify_lobby_status();
         drop(room);
         drop(_control);
@@ -5897,13 +5913,30 @@ impl RoomManager {
     ) -> Result<()> {
         let room_lock = self.get_room(room_id)?;
         let _control = control::lock_room(&room_lock).await;
-        let mut room = room_lock.write().await;
+        let room = room_lock.read().await;
 
         // Verify moderator exists and has permission
         let moderator = Self::participant_for_sender(&room, moderator_id, expected_sender)?;
         if !moderator.role.can_admit_lobby() {
             anyhow::bail!("Insufficient permissions to deny from lobby");
         }
+        drop(room);
+        self.deny_authorized_lobby(room_id, target_id, reason, _control, || Ok(()))
+            .await
+    }
+
+    pub(super) async fn deny_authorized_lobby(
+        &self,
+        room_id: &str,
+        target_id: &str,
+        reason: Option<String>,
+        _control: tokio::sync::OwnedMutexGuard<()>,
+        authorize: impl FnOnce() -> Result<()>,
+    ) -> Result<()> {
+        let room_lock = self.get_room(room_id)?;
+        let mut room = room_lock.write().await;
+        room.ensure_live()?;
+        authorize()?;
         if !room.lobby.contains_key(target_id) {
             anyhow::bail!("Participant not found in lobby");
         }
@@ -5926,10 +5959,7 @@ impl RoomManager {
             );
         }
 
-        info!(
-            "deny_from_lobby: {} denied {} from room {}",
-            moderator_id, target_id, room_id
-        );
+        info!("Denied {} from room {}", target_id, room_id);
         Ok(())
     }
 

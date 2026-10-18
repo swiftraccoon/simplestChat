@@ -97,6 +97,16 @@ impl RoomManager {
         {
             return Ok(false);
         }
+        if manager
+            .identity_updates
+            .read()
+            .unwrap_or_else(|error| error.into_inner())
+            .contains(&room_id)
+        {
+            return Err(sqlx::Error::Protocol(
+                "Room identity is busy; try again".into(),
+            ));
+        }
         // Exclude creation of this one room for the update's duration. The
         // process-wide creation lock is released before any SQL so a database
         // stall here cannot block every other room's first join.

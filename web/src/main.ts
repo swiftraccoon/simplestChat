@@ -803,8 +803,7 @@ const settingsSheet = new SettingsSheet({
           layoutSection,
           ...socialChat.sections(),
           ...community.sections(),
-          roomAccessSection,
-          roomParticipationSection,
+          ...(!community.hasSelectedRoom ? [roomAccessSection, roomParticipationSection] : []),
           ...community.roomSections(),
         ]
       : [

@@ -242,6 +242,14 @@ Profile saves verify separate nickname/account-name labels and hovercard styling
 without changing chat or roster colors. Room owners save independent name and
 header-description appearances, which update other participants live and persist
 when the Name & topic screen is reopened from Manage room.
+The room-administration helper creates one uniquely named saved room, changes its
+settings from the owner's unjoined home page, and reopens them to verify persistence.
+It then admits receive-only participants to that room and manages it while the
+owner stays in a different call: chat changes reach only the selected room and a
+waiting participant is admitted from home. Instrumented administrative pages must
+send zero joins and preserve capture counts; the test participants also capture
+nothing. The helper removes only its generated room. This runs inside the owned
+hosted community fixture, never against a deployed service.
 Audio must be unmuted at positive volume with advancing playback. A separately
 simulated autoplay rejection checks the visible retry button.
 

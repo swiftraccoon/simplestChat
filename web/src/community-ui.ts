@@ -1,6 +1,8 @@
 import type { AuthManager } from './auth';
 import { avatarColors } from './avatar-colors';
 import { openPrivateInbox, onInboxChanged } from './chat-history';
+import { administrationSections, type RoomAdministrationView } from './room-administration';
+import { roomAdministrationApi } from './room-administration-api';
 import { AccountSecurityFlow, mountAccountSecurity } from './account-security';
 import { mountAccountSessions } from './account-sessions';
 import { mountSavedRooms, createFavoriteButton, offerContact } from './discovery';
@@ -129,6 +131,35 @@ export class CommunityUI {
   private accountSeen = false;
   /** An owned room chosen from My rooms while no room is open. */
   private editingRoom: RoomListItem | null = null;
+  private administration: {
+    roomId: string;
+    accountId: string;
+    view: RoomAdministrationView;
+  } | null = null;
+
+  get hasRoomAdministration(): boolean {
+    return (
+      this.administration !== null && this.administration.accountId === this.options.auth.userId
+    );
+  }
+
+  get hasSelectedRoom(): boolean {
+    return this.hasRoomAdministration || this.editingRoom !== null;
+  }
+
+  private async openAdministration(roomId: string, view: ReturnType<typeof modal>): Promise<void> {
+    const accountId = this.options.auth.userId;
+    const token = this.options.auth.jwt;
+    if (!accountId || !token) return;
+    const controller = new AbortController();
+    view.dialog.addEventListener('close', () => controller.abort(), { once: true });
+    const state = await roomAdministrationApi.overview(token, roomId, controller.signal);
+    if (!view.dialog.open || this.options.auth.userId !== accountId) return;
+    this.administration = { roomId, accountId, view: state };
+    view.close();
+    this.options.openSettings?.(state.role === 'moderator' ? 'room-members' : 'room-access', null);
+  }
+
   private identity = '';
 
   constructor(private readonly options: Options) {
@@ -152,6 +183,7 @@ export class CommunityUI {
     const accountIdentity = this.options.auth.userId ?? '';
     const accountChanged = accountIdentity !== this.accountIdentity;
     if (accountChanged) {
+      this.closeRoomContext();
       this.accountIdentity = accountIdentity;
       this.accountGeneration++;
       this.inboxController.abort();
@@ -872,8 +904,14 @@ export class CommunityUI {
           ),
         );
         row.append(
+          asyncButton(
+            'Manage room',
+            () => this.openAdministration(room.id, view),
+            (error) => this.showError(view.error, error),
+          ),
           button('Edit room', () => {
             view.close();
+            this.administration = null;
             this.editingRoom = room;
             this.options.openSettings?.('room-identity', null);
           }),
@@ -891,6 +929,7 @@ export class CommunityUI {
         row.append(
           button('Invites…', () => {
             view.close();
+            this.administration = null;
             this.editingRoom = room;
             this.options.openSettings?.('room-invitations', null);
           }),
@@ -946,6 +985,14 @@ export class CommunityUI {
               this.options.onJoinRoom(membership.id);
             }),
           );
+          if (['moderator', 'admin', 'owner'].includes(membership.role))
+            row.append(
+              asyncButton(
+                'Manage room',
+                () => this.openAdministration(membership.id, view),
+                (error) => this.showError(view.error, error),
+              ),
+            );
           membershipList.append(row);
         }
         if (!seen.size)
@@ -1061,7 +1108,28 @@ export class CommunityUI {
 
   /** The sheet's This room screens: identity over HTTP, moderation over the room socket. */
   roomSections(): SheetSection[] {
-    const live = () => this.options.getRoom();
+    const selection = this.administration;
+    if (selection && selection.accountId === this.options.auth.userId) {
+      return administrationSections({
+        roomId: selection.roomId,
+        accountId: selection.accountId,
+        initial: selection.view,
+        current: () =>
+          this.administration === selection && this.options.auth.userId === selection.accountId,
+        token: () => {
+          const token = this.options.auth.jwt;
+          if (!token || this.options.auth.userId !== selection.accountId)
+            throw new Error('The account changed');
+          return token;
+        },
+        api: roomAdministrationApi,
+        changed: (view) => {
+          if (this.administration === selection) selection.view = view;
+        },
+        notify: this.options.notify,
+      });
+    }
+    const live = () => (this.editingRoom ? null : this.options.getRoom());
     const rank = () => ROLES.indexOf(live()?.role ?? 'guest');
     const owner = () =>
       live() ? live()?.role === 'owner' && this.options.auth.isLoggedIn : this.editingRoom !== null;
@@ -1119,10 +1187,12 @@ export class CommunityUI {
   /** Forgets the room chosen from My rooms once the sheet closes. */
   closeRoomContext(): void {
     this.editingRoom = null;
+    this.administration = null;
   }
 
   /** The owned room a room screen edits: the live room's record, or the one chosen from My rooms. */
   private async ownedRoom(): Promise<RoomListItem | null> {
+    if (this.editingRoom) return this.editingRoom;
     const live = this.options.getRoom();
     if (live?.currentRoomId) {
       const rooms = await api.ownRooms(this.options.auth.jwt);
@@ -1134,6 +1204,9 @@ export class CommunityUI {
   private roomIdentityScreen(): SheetScreen {
     return {
       title: 'Name & topic',
+      ...(this.editingRoom
+        ? { subtitle: `${this.editingRoom.display_name} · ${this.editingRoom.id}` }
+        : {}),
       body: async (context) => {
         const body = el('div', undefined, 'sheet-screen');
         const error = el('p', '', 'auth-error');
@@ -1484,6 +1557,9 @@ export class CommunityUI {
   private invitationsScreen(): SheetScreen {
     return {
       title: 'Invitations',
+      ...(this.editingRoom
+        ? { subtitle: `${this.editingRoom.display_name} · ${this.editingRoom.id}` }
+        : {}),
       body: async (context) => {
         const body = el('div', undefined, 'sheet-screen');
         const error = el('p', '', 'auth-error');

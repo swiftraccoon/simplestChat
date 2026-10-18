@@ -831,6 +831,42 @@ impl SignalingServer {
                 patch(crate::room::api::update_room_identity)
                     .layer(DefaultBodyLimit::max(256 * 1024)),
             )
+            .route(
+                "/{id}/administration",
+                get(crate::room::administration::overview),
+            )
+            .route(
+                "/{id}/administration/settings",
+                patch(crate::room::administration::patch_settings),
+            )
+            .route(
+                "/{id}/administration/members/{target}",
+                put(crate::room::administration::set_role),
+            )
+            .route(
+                "/{id}/administration/bans/{ban}",
+                delete(crate::room::administration::remove_ban),
+            )
+            .route(
+                "/{id}/administration/reports/{report}",
+                put(crate::room::administration::resolve_report),
+            )
+            .route(
+                "/{id}/administration/moderation",
+                post(crate::room::administration::moderate),
+            )
+            .route(
+                "/{id}/administration/lobby/{participant}",
+                post(crate::room::administration::lobby_action),
+            )
+            .route(
+                "/{id}/administration/sanctions",
+                post(crate::room::administration::sanction),
+            )
+            .route(
+                "/{id}/administration/{section}",
+                get(crate::room::administration::list),
+            )
             .route("/{id}", delete(crate::room::api::delete_room))
             .layer(RequestBodyTimeoutLayer::new(HTTP_BODY_IDLE_TIMEOUT))
             .layer(middleware::from_fn_with_state(

@@ -469,6 +469,138 @@
       ]
     },
     {
+      "method": "GET",
+      "path": "/api/rooms/{id}/administration",
+      "handler": "crate::room::administration::overview",
+      "policy": "current-session",
+      "body": null,
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions",
+        "authorization_database_room_roles_and_owner_mutations_do_not_cross_rooms_or_accounts",
+        "account_administration_controls_dormant_and_live_rooms_without_membership"
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/rooms/{id}/administration/settings",
+      "handler": "crate::room::administration::patch_settings",
+      "policy": "current-session",
+      "body": {
+        "allowChat": false
+      },
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions",
+        "authorization_database_room_roles_and_owner_mutations_do_not_cross_rooms_or_accounts",
+        "account_administration_controls_dormant_and_live_rooms_without_membership"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/rooms/{id}/administration/members/{target}",
+      "handler": "crate::room::administration::set_role",
+      "policy": "current-session",
+      "body": {
+        "role": 2
+      },
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions",
+        "authorization_database_room_roles_and_owner_mutations_do_not_cross_rooms_or_accounts",
+        "account_administration_controls_dormant_and_live_rooms_without_membership"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/rooms/{id}/administration/bans/{ban}",
+      "handler": "crate::room::administration::remove_ban",
+      "policy": "current-session",
+      "body": null,
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions",
+        "authorization_database_room_roles_and_owner_mutations_do_not_cross_rooms_or_accounts",
+        "account_administration_controls_dormant_and_live_rooms_without_membership"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/rooms/{id}/administration/reports/{report}",
+      "handler": "crate::room::administration::resolve_report",
+      "policy": "current-session",
+      "body": {
+        "status": "dismissed"
+      },
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions",
+        "authorization_database_room_roles_and_owner_mutations_do_not_cross_rooms_or_accounts",
+        "account_administration_controls_dormant_and_live_rooms_without_membership"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/rooms/{id}/administration/moderation",
+      "handler": "crate::room::administration::moderate",
+      "policy": "current-session",
+      "body": {
+        "action": "kick",
+        "targetParticipantId": "00000000-0000-4000-8000-000000000006"
+      },
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions",
+        "authorization_database_room_roles_and_owner_mutations_do_not_cross_rooms_or_accounts",
+        "account_administration_controls_dormant_and_live_rooms_without_membership"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/rooms/{id}/administration/lobby/{participant}",
+      "handler": "crate::room::administration::lobby_action",
+      "policy": "current-session",
+      "body": {
+        "action": "deny"
+      },
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions",
+        "authorization_database_room_roles_and_owner_mutations_do_not_cross_rooms_or_accounts",
+        "account_administration_controls_dormant_and_live_rooms_without_membership"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/rooms/{id}/administration/sanctions",
+      "handler": "crate::room::administration::sanction",
+      "policy": "current-session",
+      "body": {
+        "targetParticipantId": "00000000-0000-4000-8000-000000000006",
+        "kind": "chat",
+        "enabled": true
+      },
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions",
+        "authorization_database_room_roles_and_owner_mutations_do_not_cross_rooms_or_accounts",
+        "account_administration_controls_dormant_and_live_rooms_without_membership"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/rooms/{id}/administration/{section}",
+      "handler": "crate::room::administration::list",
+      "policy": "current-session",
+      "body": null,
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions",
+        "authorization_database_room_roles_and_owner_mutations_do_not_cross_rooms_or_accounts",
+        "account_administration_controls_dormant_and_live_rooms_without_membership"
+      ]
+    },
+    {
       "method": "PATCH",
       "path": "/api/rooms/{id}/identity",
       "handler": "crate::room::api::update_room_identity",
@@ -1287,7 +1419,7 @@
         "type": "reactToMessage",
         "requestId": "policy-request",
         "messageId": "policy-message",
-        "emoji": "👍"
+        "emoji": "\ud83d\udc4d"
       },
       "checks": [
         "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",

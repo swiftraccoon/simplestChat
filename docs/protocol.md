@@ -59,6 +59,50 @@ Login, passkeys and refresh remain owned by [AuthManager](../web/src/auth.ts).
 | `createRoom` | `POST /api/rooms` | `RoomSettings` |
 | `updateRoomIdentity` | `PATCH /api/rooms/:id/identity` | `RoomListItem` |
 | `deleteRoom` | `DELETE /api/rooms/:id` | `204`, no body |
+| `administration` | `GET /api/rooms/:id/administration` | `{role, settings:RoomSettings}` |
+| `administrationSettings` | `PATCH /api/rooms/:id/administration/settings`, `RoomSettingsPatch` | `{role, settings:RoomSettings}` |
+| `administrationMembers`, `administrationBans`, `administrationReports`, `administrationHistory` | `GET /api/rooms/:id/administration/{members,bans,reports,history}?offset=N` | The corresponding social page shape, at most 100 entries and `hasMore` |
+| `administrationRole` | `PUT /api/rooms/:id/administration/members/:account`, JSON `{role}` | `{updated:true}` |
+| `administrationUnban` | `DELETE /api/rooms/:id/administration/bans/:ban` | `{removed:true}` |
+| `administrationResolve` | `PUT /api/rooms/:id/administration/reports/:report`, JSON `{status}` | `{reportId,status}` |
+| `administrationModerate` | `POST /api/rooms/:id/administration/moderation`, JSON `{action,targetParticipantId,reason?,durationSeconds?,reportId?}` | `{updated:true}` |
+| `administrationLobby` | `GET /api/rooms/:id/administration/lobby?offset=N` | `{lobby:[{participantId,displayName,authenticated,role}],hasMore}` |
+| `administrationLobbyAction` | `POST /api/rooms/:id/administration/lobby/:participant`, JSON `{action,reason?}` | `{updated:true}` |
+| `administrationSanction` | `POST /api/rooms/:id/administration/sanctions`, JSON `{targetParticipantId,kind,enabled,reason?}` | `{updated:true}` |
+
+Saved-room administration is account-authorized and does not require joining,
+creating a runtime room, media setup or capture. **My rooms → Manage room** selects
+the room independently of any current call. The screen names that selected room;
+edits to a different active room do not switch calls. An owner can still use the
+separate **Edit room** and **Invites** controls for identity and invitations.
+
+Moderator and higher roles can read People, Reports, History and Waiting room,
+change lower-ranked account roles to a lower rank than their own, resolve or dismiss
+reports, admit/deny waiting participants, kick/ban live participants and restrict or
+restore their camera/chat permissions. Settings and ban listing/removal require
+Admin or higher. The owner alone receives moderation-history target addresses.
+People merges the saved owner/membership roster with current accounts and guests;
+the other lists retain their existing room-scoped shapes. Pages use offsets from
+0 through 10,000. Kick/ban and sanctions require a current participant. Offline
+reports can still be resolved or dismissed. Ban duration is optional, from one
+second through ten years; omission means until removed. Reasons are at most
+256 bytes without control characters. Lobby actions are `admit` or `deny`;
+sanction kinds are `camera` or `chat`, with an explicit boolean `enabled`.
+Guest sanctions preserve the existing canonical-IP cohort and role hierarchy.
+Restoring permission never starts capture for the participant.
+
+Every operation rechecks the current account/session and saved room role under
+the users → sessions → room database lock order. JWT and refresh-session expiry
+are checked again after lock waits and before a mutation commits. Creation fencing
+and the live room control guard serialize HTTP changes with socket changes and
+the exact room generation. Admitted writes retain their request permit and own
+commit/publication after HTTP cancellation. Durable settings and sanctions publish
+only after commit, notify live clients and revoke affected producers. An uncertain
+write quarantines that runtime or dormant room ID rather than serving stale policy.
+Waiting-room admission keeps authorization locks through the shared final privacy
+lookup and checks expiry after the last wait before membership publication.
+Responses are private and uncached. The browser never retries writes automatically;
+an unconfirmed response requires an explicit reload/refresh before another change.
 
 Passkey management accepts operations `{action:"add"}`, `{action:"remove",id}`,
 `{action:"replace",id}` and `{action:"recovery_key"}`. Each requires a current

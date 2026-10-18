@@ -477,6 +477,11 @@ impl Fixture {
                 .replace("{id}", "00000000-0000-4000-8000-000000000001")
                 .replace("{peer}", "00000000-0000-4000-8000-000000000003")
                 .replace("{messageId}", "00000000-0000-4000-8000-000000000004")
+                .replace("{target}", "00000000-0000-4000-8000-000000000006")
+                .replace("{participant}", "00000000-0000-4000-8000-000000000006")
+                .replace("{ban}", "00000000-0000-4000-8000-000000000007")
+                .replace("{report}", "00000000-0000-4000-8000-000000000008")
+                .replace("{section}", "members")
                 .replace("{invite_id}", "00000000-0000-4000-8000-000000000002"),
         );
         if let Some(token) = token {
@@ -873,6 +878,98 @@ async fn authorization_database_room_roles_and_owner_mutations_do_not_cross_room
             .unwrap(),
             elsewhere
         );
+        // Saved-room administration uses the same account role without joining
+        // a socket, and never treats authority in one room as authority elsewhere.
+        for (suffix, allowed) in [
+            ("", [false, false, true, true, true]),
+            ("/members", [false, false, true, true, true]),
+            ("/lobby", [false, false, true, true, true]),
+            ("/reports", [false, false, true, true, true]),
+            ("/history", [false, false, true, true, true]),
+            ("/bans", [false, false, false, true, true]),
+        ] {
+            let read = operation(
+                "GET",
+                format!("/api/rooms/{room}/administration{suffix}"),
+                None,
+            );
+            let response = fixture
+                .request(&read, Some(&fixture.tokens[index]), sequence)
+                .await;
+            sequence += 1;
+            assert_eq!(
+                response.status(),
+                if allowed[index] {
+                    StatusCode::OK
+                } else {
+                    StatusCode::FORBIDDEN
+                },
+                "administration {suffix} as {role:?}"
+            );
+            assert_eq!(
+                response.headers()[header::CACHE_CONTROL],
+                "private, no-store"
+            );
+        }
+        let elsewhere_read = operation(
+            "GET",
+            format!("/api/rooms/{other_room}/administration"),
+            None,
+        );
+        assert_eq!(
+            fixture
+                .request(&elsewhere_read, Some(&fixture.tokens[index]), sequence)
+                .await
+                .status(),
+            if index == 0 {
+                StatusCode::OK
+            } else {
+                StatusCode::FORBIDDEN
+            },
+            "cross-room administration as {role:?}"
+        );
+        sequence += 1;
+        let patch = operation(
+            "PATCH",
+            format!("/api/rooms/{room}/administration/settings"),
+            Some(json!({"allowChat":false})),
+        );
+        assert_eq!(
+            fixture
+                .request(&patch, Some(&fixture.tokens[index]), sequence)
+                .await
+                .status(),
+            if index >= 3 {
+                StatusCode::OK
+            } else {
+                StatusCode::FORBIDDEN
+            },
+            "administration settings as {role:?}"
+        );
+        sequence += 1;
+        let chat: bool = sqlx::query_scalar("SELECT allow_chat FROM rooms WHERE id=$1")
+            .bind(&room)
+            .fetch_one(&fixture.pool)
+            .await
+            .unwrap();
+        assert_eq!(chat, index < 3, "denied settings leave saved policy intact");
+        let own_role = operation(
+            "PUT",
+            format!(
+                "/api/rooms/{room}/administration/members/{}",
+                fixture.users[index]
+            ),
+            Some(json!({"role":2})),
+        );
+        assert_eq!(
+            fixture
+                .request(&own_role, Some(&fixture.tokens[index]), sequence)
+                .await
+                .status(),
+            StatusCode::FORBIDDEN,
+            "an account cannot alter its own authority as {role:?}"
+        );
+        sequence += 1;
         let list = operation("GET", format!("/api/rooms/{room}/invites"), None);
         let response = fixture
             .request(&list, Some(&fixture.tokens[index]), sequence)
@@ -973,6 +1070,69 @@ async fn authorization_database_room_roles_and_owner_mutations_do_not_cross_room
             }
         );
     }
+    let foreign_ban = Uuid::new_v4();
+    let foreign_report = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO room_states(id,room_id,user_id,state,applied_by) VALUES($1,$2,$3,'banned',$3)",
+    )
+    .bind(foreign_ban)
+    .bind(&other_room)
+    .bind(fixture.users[0])
+    .execute(&fixture.pool)
+    .await
+    .unwrap();
+    sqlx::query("INSERT INTO room_reports(id,room_id,reporter_id,reporter_name,target_participant_id,target_name,reason) VALUES($1,$2,$3,'Reporter',$3,'Target','policy fixture')")
+        .bind(foreign_report).bind(&other_room).bind(fixture.users[0].to_string())
+        .execute(&fixture.pool).await.unwrap();
+    for denied in [
+        operation(
+            "PUT",
+            format!(
+                "/api/rooms/{room}/administration/members/{}",
+                fixture.users[0]
+            ),
+            Some(json!({"role":2})),
+        ),
+        operation(
+            "DELETE",
+            format!("/api/rooms/{room}/administration/bans/{foreign_ban}"),
+            None,
+        ),
+        operation(
+            "PUT",
+            format!("/api/rooms/{room}/administration/reports/{foreign_report}"),
+            Some(json!({"status":"dismissed"})),
+        ),
+    ] {
+        assert_eq!(
+            fixture
+                .request(&denied, Some(&fixture.tokens[4]), sequence)
+                .await
+                .status(),
+            StatusCode::NOT_FOUND,
+            "another room's record cannot be changed through an owned room"
+        );
+        sequence += 1;
+    }
+    let unchanged: bool = sqlx::query_scalar("SELECT EXISTS(SELECT FROM room_states WHERE id=$1 AND room_id=$3) AND EXISTS(SELECT FROM room_reports WHERE id=$2 AND room_id=$3 AND status='open')")
+        .bind(foreign_ban).bind(foreign_report).bind(&other_room)
+        .fetch_one(&fixture.pool).await.unwrap();
+    assert!(unchanged, "foreign bans and reports remain untouched");
+    let healthy = operation("GET", format!("/api/rooms/{room}/administration"), None);
+    assert_eq!(
+        fixture
+            .request(&healthy, Some(&fixture.tokens[4]), sequence)
+            .await
+            .status(),
+        StatusCode::OK,
+        "known absent records do not quarantine a healthy saved room"
+    );
+    sequence += 1;
+    assert_eq!(
+        fixture.server.room_manager().room_count().await,
+        0,
+        "HTTP administration never creates participant or media membership"
+    );
     // A real invitation ID from a different tenant does not authorize deletion,
     // even when the caller owns the URL's room and can manage its invitations.
     let invite = crate::room::invites::create_room_invite(

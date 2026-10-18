@@ -10,7 +10,10 @@ const { installPwaFixture, checkPwa } = require('./pwa-checks.cjs');
 const { checkContactsBeforeRoom, checkSavedRoomsAcrossDevices } = require('./discovery-checks.cjs');
 const { privateAttachmentChecks, publicAttachmentChecks } = require('./attachment-checks.cjs');
 const { checkNotificationPreferences } = require('./notification-checks.cjs');
-const { checkAccountPrivacyAcrossDevices } = require('./privacy-follow-checks.cjs');
+const {
+  checkAccountPrivacyAcrossDevices,
+} = require('./privacy-follow-checks.cjs');
+const { checkRoomAdministration } = require('./room-administration-checks.cjs');
 const { sheet, sheetRow, sheetScreen, closeSheet } = require('./settings-sheet.cjs');
 const { participantHovercardChecks } = require('./participant-hovercard-checks.cjs');
 const assert = require('node:assert/strict');
@@ -1087,6 +1090,18 @@ async function setRole(owner, name, role) {
         });
       },
     );
+    await step('home manages an owned room without moving the active call', async () => {
+      report.roomAdministration = await checkRoomAdministration(owner, secondDevice, {
+        base,
+        runId,
+        client,
+        header,
+        close,
+        connected,
+        paceJoins,
+        recordJoin,
+      });
+    });
     await step('optional app notifications require an explicit Account action', async () => {
       await checkPwa(owner, {
         openAccount: () => settingsScreen(owner, 'Notifications'),
