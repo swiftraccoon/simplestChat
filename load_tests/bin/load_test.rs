@@ -126,9 +126,9 @@ impl SubscriptionMode {
 
 /// The workload each synthetic client emulates. `synthetic` is the historical
 /// fixed-stream client every earlier result used; `browser` behaves like the
-/// web client (three simulcast layers, Opus DTX with rotating speakers, every
-/// remote producer up to the server's cap, tile-sized layer requests), so its
-/// capacity figures are the ones real rooms get.
+/// web client's static camera-room workload (simulcast, Opus DTX, bounded video
+/// reception and modeled tile-sized layer requests). Synthetic delivery does
+/// not establish browser encoding, decoding or visual quality.
 #[derive(Debug, Clone, Copy, PartialEq, serde::Serialize)]
 #[serde(tag = "name", rename_all = "camelCase")]
 enum Profile {
@@ -194,6 +194,7 @@ struct TestConfig {
     max_audio_consumers: usize,
     max_video_consumers: usize,
     warmup_secs: u64,
+    audio_limit_override: bool,
     deadline_grace_secs: u64,
     output_dir: std::path::PathBuf,
     run_label: String,
@@ -211,6 +212,38 @@ struct TestConfig {
 }
 
 impl TestConfig {
+    fn validate_browser_budget(&self) -> Result<()> {
+        if self.profile.browser().is_none() {
+            return Ok(());
+        }
+        let publishers = ((self.num_clients as f64 * self.publish_ratio).ceil() as usize)
+            .max(1)
+            .min(self.num_clients);
+        let remote = publishers
+            .div_ceil(self.num_rooms.max(1))
+            .saturating_sub(usize::from(publishers == self.num_clients));
+        anyhow::ensure!(
+            !self.media_config.audio_enabled
+                || self.audio_limit_override
+                || remote <= self.max_audio_consumers,
+            "Browser audio fanout exceeds its consumer budget; use an explicit custom --max-audio workload"
+        );
+        browser_profile::validate_consumer_budget(
+            remote,
+            if self.media_config.audio_enabled {
+                self.max_audio_consumers
+            } else {
+                0
+            },
+            if self.media_config.video_enabled {
+                self.max_video_consumers
+            } else {
+                0
+            },
+        )?;
+        Ok(())
+    }
+
     /// An opt-in, owned-loopback workload. Default FIFO/churn semantics do not
     /// change, and a failed planned peer must never be replaced by another one.
     fn planned_subscriptions(&self) -> Result<Option<SubscriptionPlan>> {
@@ -585,6 +618,7 @@ impl Default for TestConfig {
             max_audio_consumers: DEFAULT_MAX_AUDIO_CONSUMERS,
             max_video_consumers: DEFAULT_MAX_VIDEO_CONSUMERS,
             warmup_secs: 10,
+            audio_limit_override: false,
             deadline_grace_secs: 30,
             output_dir: ".".into(),
             run_label: String::new(),
@@ -641,7 +675,7 @@ async fn main() -> Result<()> {
                 i += 2;
             }
             "--profile" | "--capture" | "--speakers" | "--viewport-width" | "--pixel-ratio"
-            | "--layout" => {
+            | "--layout" | "--receive-mode" => {
                 browser.set(&args[i], &args[i + 1])?;
                 i += 2;
             }
@@ -844,10 +878,11 @@ async fn main() -> Result<()> {
 
     config.media_config.audio_enabled = audio_enabled;
     config.media_config.video_enabled = video_enabled;
+    config.audio_limit_override = max_audio_given;
     config.profile = browser.profile(quality_override.is_some() || fps_override.is_some())?;
-    if config.profile.browser().is_some() {
-        // Browsers consume every remote producer until the server's cap.
-        let (audio, video) = browser_profile::consumer_caps(audio_enabled, video_enabled);
+    if let Some(profile) = config.profile.browser() {
+        let (audio, video) =
+            browser_profile::consumer_caps(audio_enabled, video_enabled, profile.receive_mode);
         if !max_audio_given {
             config.max_audio_consumers = audio;
         }
@@ -867,6 +902,7 @@ struct BrowserOptions {
     viewport_width: Option<u32>,
     pixel_ratio: Option<f64>,
     layout: Option<browser_profile::Layout>,
+    receive_mode: Option<browser_profile::ReceiveMode>,
 }
 
 impl BrowserOptions {
@@ -907,6 +943,9 @@ impl BrowserOptions {
                 self.pixel_ratio = Some(ratio);
             }
             "--layout" => self.layout = Some(browser_profile::Layout::parse(value)?),
+            "--receive-mode" => {
+                self.receive_mode = Some(browser_profile::ReceiveMode::parse(value)?)
+            }
             other => anyhow::bail!("Unknown browser option: {other}"),
         }
         Ok(())
@@ -917,27 +956,31 @@ impl BrowserOptions {
             || self.speakers.is_some()
             || self.viewport_width.is_some()
             || self.pixel_ratio.is_some()
-            || self.layout.is_some();
+            || self.layout.is_some()
+            || self.receive_mode.is_some();
         match self.profile.as_deref() {
             Some("browser") => {
                 anyhow::ensure!(
                     !synthetic_media_given,
                     "--quality and --fps shape the synthetic stream; the browser profile publishes the web client's simulcast layers (use --capture)"
                 );
-                Ok(Profile::Browser(browser_profile::BrowserProfile::new(
-                    self.capture.unwrap_or(browser_profile::Capture::Hd),
-                    self.speakers.unwrap_or(1),
-                    browser_profile::Viewer {
-                        viewport_width: self.viewport_width.unwrap_or(1_440),
-                        pixel_ratio: self.pixel_ratio.unwrap_or(2.0),
-                        layout: self.layout.unwrap_or(browser_profile::Layout::Classic),
-                    },
-                )))
+                Ok(Profile::Browser(
+                    browser_profile::BrowserProfile::new(
+                        self.capture.unwrap_or(browser_profile::Capture::Hd),
+                        self.speakers.unwrap_or(1),
+                        browser_profile::Viewer {
+                            viewport_width: self.viewport_width.unwrap_or(1_440),
+                            pixel_ratio: self.pixel_ratio.unwrap_or(2.0),
+                            layout: self.layout.unwrap_or(browser_profile::Layout::Classic),
+                        },
+                    )
+                    .with_receive_mode(self.receive_mode.unwrap_or_default()),
+                ))
             }
             _ => {
                 anyhow::ensure!(
                     !browser_settings,
-                    "--capture, --speakers, --viewport-width, --pixel-ratio and --layout require --profile browser"
+                    "--capture, --speakers, --viewport-width, --pixel-ratio, --layout and --receive-mode require --profile browser"
                 );
                 Ok(Profile::Synthetic)
             }
@@ -1006,7 +1049,7 @@ fn validate_cli_value(args: &[String], index: usize) -> Result<()> {
                 .context("--subscription-seed must be an unsigned 32-bit integer")?;
         }
         "--profile" | "--capture" | "--speakers" | "--viewport-width" | "--pixel-ratio"
-        | "--layout" => {
+        | "--layout" | "--receive-mode" => {
             BrowserOptions::default().set(option, value)?;
         }
         "--source-addresses" => {
@@ -1094,6 +1137,7 @@ async fn run_load_test(config: TestConfig) -> Result<()> {
         config.publish_ratio.is_finite() && config.churn_rate.is_finite(),
         "Ratios must be finite"
     );
+    config.validate_browser_budget()?;
     let num_churners = config.churner_count()?;
     chat_load::validate(
         &config.server_url,
@@ -2186,10 +2230,10 @@ async fn run_client_inner(
     let max_audio = config.max_audio_consumers;
     let max_video = config.max_video_consumers;
     let planned_subscriptions = config.planned_subscriptions.clone();
-    let grid = config
-        .profile
-        .browser()
-        .map(|profile| browser_profile::BrowserGrid::new(profile.viewer, config.is_publisher));
+    let grid = config.profile.browser().map(|profile| {
+        browser_profile::BrowserGrid::new(profile.viewer, config.is_publisher)
+            .with_receive_mode(profile.receive_mode)
+    });
     let (departure_request, departure_receiver) = if config.departure == Departure::ExplicitLeave {
         let (request, receiver) = tokio::sync::oneshot::channel();
         (Some(request), Some(receiver))
@@ -4404,9 +4448,10 @@ fn print_usage() {
         "  --churn-rate <N>           Clients churning (disconnect/reconnect) per second (default: 0)"
     );
     println!("  --profile <NAME>           synthetic (default: one fixed stream, the historical");
-    println!("                             baseline) or browser (what the web client costs:");
-    println!("                             three simulcast layers, Opus DTX, every remote");
-    println!("                             producer up to 32+32, tile-sized layer requests)");
+    println!("                             baseline) or browser (modeled simulcast, Opus DTX,");
+    println!("                             all remote audio and bounded video reception)");
+    println!("  --receive-mode <MODE>      Browser receive policy: balanced (9 videos),");
+    println!("                             data-saver (4 lowest-layer videos), audio-only (0)");
     println!(
         "  --capture <720p|1080p>     Browser camera (default 720p: 100/300/900 kbit/s layers)"
     );
@@ -5536,6 +5581,42 @@ mod browser_profile_integration_tests {
     use super::*;
 
     #[test]
+    fn browser_budget_keeps_all_audio_within_the_shared_consumer_limit() {
+        let mut config = TestConfig {
+            num_clients: 30,
+            max_audio_consumers: 64,
+            max_video_consumers: 9,
+            profile: Profile::Browser(browser_profile::BrowserProfile::new(
+                browser_profile::Capture::Hd,
+                1,
+                browser_profile::Viewer {
+                    viewport_width: 1440,
+                    pixel_ratio: 2.0,
+                    layout: browser_profile::Layout::Classic,
+                },
+            )),
+            ..Default::default()
+        };
+        assert!(config.validate_browser_budget().is_ok());
+        config.num_clients = 56;
+        assert!(config.validate_browser_budget().is_ok());
+        config.num_clients = 57;
+        assert!(config.validate_browser_budget().is_err());
+        config.num_clients = 66;
+        config.max_video_consumers = 0;
+        assert!(
+            config.validate_browser_budget().is_err(),
+            "uncapped remote microphones must not silently disappear"
+        );
+        config.max_audio_consumers = 32;
+        config.audio_limit_override = true;
+        assert!(
+            config.validate_browser_budget().is_ok(),
+            "an explicitly custom workload is recorded as such"
+        );
+    }
+
+    #[test]
     fn runtime_lag_keeps_each_seconds_worst_wakeup() {
         let mut lag = Vec::new();
         record_runtime_lag(&mut lag, 0, 3);
@@ -5609,6 +5690,17 @@ mod browser_profile_integration_tests {
         assert_eq!(profile.viewer.viewport_width, 1_440);
         assert_eq!(profile.viewer.pixel_ratio, 2.0);
         assert_eq!(profile.viewer.layout, browser_profile::Layout::Classic);
+        assert_eq!(profile.receive_mode, browser_profile::ReceiveMode::Balanced);
+        options.set("--receive-mode", "data-saver").unwrap();
+        assert_eq!(
+            options
+                .profile(false)
+                .unwrap()
+                .browser()
+                .unwrap()
+                .receive_mode,
+            browser_profile::ReceiveMode::DataSaver
+        );
         assert!(options.profile(true).is_err(), "--quality/--fps conflict");
 
         let mut synthetic = BrowserOptions::default();
@@ -5628,6 +5720,7 @@ mod browser_profile_integration_tests {
         assert!(bad.set("--pixel-ratio", "0.5").is_err());
         assert!(bad.set("--layout", "grid").is_err());
         assert!(bad.set("--capture", "4k").is_err());
+        assert!(bad.set("--receive-mode", "unlimited").is_err());
     }
 
     #[test]

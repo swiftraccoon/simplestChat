@@ -11,7 +11,7 @@ For commands, options, and report definitions, see the
 | --- | --- |
 | `webrtc_client.rs` | `WebRtcSession`, peer connections, SDP, track readers, cleanup |
 | `media_generator.rs` | Synthetic Opus/VP8 RTP packets |
-| `browser_profile.rs` | Simulcast, speaking rotation, desktop grid and layer-cap model |
+| `browser_profile.rs` | Simulcast, speaking rotation, receive budgets, desktop grid and layer-cap model |
 | `chat_load.rs` | Scheduled public chat, acknowledgments and complete room fanout checks |
 | `datagram_counter.rs` | Actual UDP datagram counts for socket-drop measurements |
 | `metrics.rs` | Counters, signaling histograms, diagnostic collection |
@@ -40,6 +40,13 @@ limit. Do not silently drop excess identities or bypass the queue on live events
 Keep pending consumer metadata outside the native peer until its live SDP batch;
 a close before installation must cancel that work. Already-installed mappings
 are retained, so consumer caps do not bound cumulative local transceiver count.
+The browser profile keeps audio independent of its 9/4/0 incoming-video choice.
+Validate actual per-room demand against the shared 64-consumer default before
+starting; do not silently reduce the intended audio fanout to fit. Data saver
+requests layer zero. The receive mode belongs in the serialized workload identity;
+publication-only audio and receive-only audio are separate settings. Shared cases
+in `web/tests/browser-receive-policy-cases.json` bind these budgets to the actual
+web policy, without exercising capture or native media.
 
 Keep these invariants when changing the client:
 

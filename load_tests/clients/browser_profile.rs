@@ -1,9 +1,9 @@
 // Browser-faithful synthetic participants.
 //
 // A capacity figure is only as good as its workload. The web client publishes
-// three simulcast layers, consumes every remote producer up to the server's
-// per-participant cap, asks for the layer its tile can show and sends almost
-// nothing while its microphone hears silence (Opus DTX). The synthetic default
+// three simulcast layers, bounds incoming video independently of audio, asks
+// for the layer its tile can show and sends almost nothing while its microphone
+// hears silence (Opus DTX). The synthetic default
 // profile does none of this, so it measures a different, much cheaper room.
 // Every constant below names the web client code it mirrors: change both
 // together, and re-run the calibration when either moves.
@@ -157,6 +157,7 @@ pub fn layer_for_width(rendered_width: f64, pixel_ratio: f64, current: Option<u8
 #[derive(Debug)]
 pub struct BrowserGrid {
     viewer: Viewer,
+    receive_mode: ReceiveMode,
     own_tile: bool,
     owners: HashMap<String, String>,
     participants: HashSet<String>,
@@ -169,12 +170,18 @@ impl BrowserGrid {
     pub fn new(viewer: Viewer, own_tile: bool) -> Self {
         Self {
             viewer,
+            receive_mode: ReceiveMode::Balanced,
             own_tile,
             owners: HashMap::new(),
             participants: HashSet::new(),
             layers: BTreeMap::new(),
             consumed: HashMap::new(),
         }
+    }
+
+    pub fn with_receive_mode(mut self, receive_mode: ReceiveMode) -> Self {
+        self.receive_mode = receive_mode;
+        self
     }
 
     fn owner_of(&self, producer_id: &str) -> String {
@@ -202,7 +209,9 @@ impl BrowserGrid {
         let width = self.viewer.tile_width(tiles);
         let mut requests = Vec::new();
         for (consumer, current) in &mut self.layers {
-            let layer = layer_for_width(width, self.viewer.pixel_ratio, Some(*current));
+            let layer =
+                self.receive_mode
+                    .video_layer(width, self.viewer.pixel_ratio, Some(*current));
             if layer != *current {
                 *current = layer;
                 requests.push((consumer.clone(), layer));
@@ -210,7 +219,9 @@ impl BrowserGrid {
         }
         for (consumer, _, video) in batch {
             if *video && !self.layers.contains_key(consumer) {
-                let layer = layer_for_width(width, self.viewer.pixel_ratio, None);
+                let layer = self
+                    .receive_mode
+                    .video_layer(width, self.viewer.pixel_ratio, None);
                 self.layers.insert(consumer.clone(), layer);
                 requests.push((consumer.clone(), layer));
             }
@@ -376,6 +387,7 @@ pub struct BrowserProfile {
     pub capture: Capture,
     pub speakers_per_room: usize,
     pub viewer: Viewer,
+    pub receive_mode: ReceiveMode,
     pub layers: [SimulcastLayer; 3],
 }
 
@@ -385,7 +397,52 @@ impl BrowserProfile {
             capture,
             speakers_per_room,
             viewer,
+            receive_mode: ReceiveMode::Balanced,
             layers: camera_layers(capture),
+        }
+    }
+
+    pub fn with_receive_mode(mut self, receive_mode: ReceiveMode) -> Self {
+        self.receive_mode = receive_mode;
+        self
+    }
+}
+
+/// Incoming video policy from `web/src/receive-policy.ts`, independent of capture.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ReceiveMode {
+    #[default]
+    Balanced,
+    DataSaver,
+    AudioOnly,
+}
+
+impl ReceiveMode {
+    pub fn parse(value: &str) -> anyhow::Result<Self> {
+        match value {
+            "balanced" => Ok(Self::Balanced),
+            "data-saver" => Ok(Self::DataSaver),
+            "audio-only" => Ok(Self::AudioOnly),
+            other => anyhow::bail!(
+                "--receive-mode must be balanced, data-saver or audio-only, not {other}"
+            ),
+        }
+    }
+
+    pub const fn video_limit(self) -> usize {
+        match self {
+            Self::Balanced => 9,
+            Self::DataSaver => 4,
+            Self::AudioOnly => 0,
+        }
+    }
+
+    fn video_layer(self, width: f64, pixel_ratio: f64, current: Option<u8>) -> u8 {
+        if self == Self::DataSaver {
+            0
+        } else {
+            layer_for_width(width, pixel_ratio, current)
         }
     }
 }
@@ -393,18 +450,35 @@ impl BrowserProfile {
 /// The server's default per-participant consumer cap.
 pub const MAX_CONSUMERS_PER_PARTICIPANT: usize = 64;
 
-/// A browser's (audio, video) consumer caps: it consumes every remote producer
-/// until the server refuses, so half of the cap goes to each kind when rooms
-/// publish both and all of it to the one kind they publish otherwise.
-pub fn consumer_caps(audio: bool, video: bool) -> (usize, usize) {
-    match (audio, video) {
-        (true, true) => (
-            MAX_CONSUMERS_PER_PARTICIPANT / 2,
-            MAX_CONSUMERS_PER_PARTICIPANT / 2,
-        ),
-        (true, false) => (MAX_CONSUMERS_PER_PARTICIPANT, 0),
-        (false, _) => (0, MAX_CONSUMERS_PER_PARTICIPANT),
-    }
+/// Per-kind ceilings; validate the actual room demand against their shared cap.
+/// Receive-only audio mode leaves the room's publication settings unchanged.
+pub fn consumer_caps(audio: bool, video: bool, receive_mode: ReceiveMode) -> (usize, usize) {
+    (
+        if audio {
+            MAX_CONSUMERS_PER_PARTICIPANT
+        } else {
+            0
+        },
+        if video { receive_mode.video_limit() } else { 0 },
+    )
+}
+
+/// Refuse a workload whose intended subscriptions exceed the server's default
+/// combined cap, rather than silently omit audio or lower its receive setting.
+pub fn validate_consumer_budget(
+    remote_publishers: usize,
+    audio_cap: usize,
+    video_cap: usize,
+) -> anyhow::Result<usize> {
+    let audio = remote_publishers.min(audio_cap);
+    let video = remote_publishers.min(video_cap);
+    anyhow::ensure!(
+        audio <= MAX_CONSUMERS_PER_PARTICIPANT
+            && video <= MAX_CONSUMERS_PER_PARTICIPANT
+            && audio <= MAX_CONSUMERS_PER_PARTICIPANT - video,
+        "browser receive workload needs {audio} audio and {video} video consumers, exceeding the shared {MAX_CONSUMERS_PER_PARTICIPANT}-consumer limit"
+    );
+    Ok(audio + video)
 }
 
 #[cfg(test)]
@@ -546,10 +620,89 @@ mod tests {
     }
 
     #[test]
-    fn browsers_spend_the_consumer_cap_on_the_media_rooms_publish() {
-        assert_eq!(consumer_caps(true, true), (32, 32));
-        assert_eq!(consumer_caps(true, false), (64, 0));
-        assert_eq!(consumer_caps(false, true), (0, 64));
+    fn browser_receive_modes_bound_video_without_splitting_audio_capacity() {
+        assert_eq!(consumer_caps(true, true, ReceiveMode::Balanced), (64, 9));
+        assert_eq!(consumer_caps(true, true, ReceiveMode::DataSaver), (64, 4));
+        assert_eq!(consumer_caps(true, true, ReceiveMode::AudioOnly), (64, 0));
+        assert_eq!(consumer_caps(true, false, ReceiveMode::Balanced), (64, 0));
+        assert_eq!(consumer_caps(false, true, ReceiveMode::Balanced), (0, 9));
+        assert_eq!(consumer_caps(false, true, ReceiveMode::AudioOnly), (0, 0));
+    }
+
+    #[test]
+    fn browser_receive_modes_match_the_shared_web_policy() {
+        let shared: serde_json::Value = serde_json::from_str(include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/web/tests/browser-receive-policy-cases.json"
+        )))
+        .unwrap();
+        assert_eq!(
+            shared["consumerLimit"].as_u64().unwrap(),
+            MAX_CONSUMERS_PER_PARTICIPANT as u64
+        );
+        for (name, limit) in shared["videoLimits"].as_object().unwrap() {
+            let mode = ReceiveMode::parse(name).unwrap();
+            assert_eq!(mode.video_limit() as u64, limit.as_u64().unwrap());
+            assert_eq!(serde_json::to_value(mode).unwrap(), name.as_str());
+        }
+        for row in shared["roomCases"].as_array().unwrap() {
+            let mode = ReceiveMode::parse(row["mode"].as_str().unwrap()).unwrap();
+            let remote = usize::try_from(row["remotePublishers"].as_u64().unwrap()).unwrap();
+            let (audio, video) = consumer_caps(
+                row["audioPublished"].as_bool().unwrap(),
+                row["videoPublished"].as_bool().unwrap(),
+                mode,
+            );
+            let result = validate_consumer_budget(remote, audio, video);
+            assert_eq!(result.is_ok(), row["valid"].as_bool().unwrap(), "{row}");
+            if let Ok(total) = result {
+                assert_eq!(total as u64, row["consumers"].as_u64().unwrap(), "{row}");
+            }
+        }
+        assert_eq!(ReceiveMode::default(), ReceiveMode::Balanced);
+        assert!(ReceiveMode::parse("unlimited").is_err());
+        assert!(ReceiveMode::parse("audioOnly").is_err());
+    }
+
+    #[test]
+    fn browser_receive_budget_rejects_shared_cap_overflow_without_reducing_demand() {
+        assert_eq!(validate_consumer_budget(55, 64, 9).unwrap(), 64);
+        assert!(validate_consumer_budget(56, 64, 9).is_err());
+        assert_eq!(validate_consumer_budget(29, 12, 4).unwrap(), 16);
+        assert!(validate_consumer_budget(29, 64, 64).is_ok());
+        assert!(validate_consumer_budget(64, 64, 1).is_err());
+        assert!(validate_consumer_budget(usize::MAX, usize::MAX, usize::MAX).is_err());
+    }
+
+    #[test]
+    fn browser_receive_mode_is_recorded_without_changing_publishing_layers() {
+        let balanced = BrowserProfile::new(Capture::Hd, 1, laptop());
+        assert_eq!(balanced.receive_mode, ReceiveMode::Balanced);
+        for (mode, name) in [
+            (ReceiveMode::Balanced, "balanced"),
+            (ReceiveMode::DataSaver, "data-saver"),
+            (ReceiveMode::AudioOnly, "audio-only"),
+        ] {
+            let profile = balanced.with_receive_mode(mode);
+            assert_eq!(profile.layers, balanced.layers);
+            assert_eq!(profile.capture, balanced.capture);
+            assert_eq!(serde_json::to_value(profile).unwrap()["receiveMode"], name);
+        }
+    }
+
+    #[test]
+    fn data_saver_requests_the_lowest_layer_for_every_video() {
+        let mut grid = BrowserGrid::new(laptop(), true).with_receive_mode(ReceiveMode::DataSaver);
+        for peer in ["a", "b", "c", "d"] {
+            let producer = format!("{peer}-video");
+            let consumer = format!("{peer}-consumer");
+            grid.announce(&producer, peer);
+            assert_eq!(
+                grid.consume(&[(consumer.clone(), producer, true)]),
+                vec![(consumer, 0)]
+            );
+        }
+        assert!(grid.layers.values().all(|layer| *layer == 0));
     }
 
     fn laptop() -> Viewer {

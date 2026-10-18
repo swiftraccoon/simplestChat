@@ -86,6 +86,7 @@ docker run --rm --network host --user "$(id -u):$(id -g)" \
 | `--chat-interval-ms MS` | Optional public text message per media client every 1,000–600,000 ms, staggered within each room; disabled by default. Restricted to owned loopback servers, stable clients and at most five messages/s per room |
 | `--quality PRESET`, `--fps FPS` | `480p`/`720p`/`1080p`, 15/30/60 fps; defaults 480p/30 (synthetic profile only) |
 | `--profile NAME` | `synthetic` (default: fixed single-encoding streams) or `browser` (modeled browser media and subscriptions; see below). Historical reports must be interpreted using their recorded profile. |
+| `--receive-mode balanced\|data-saver\|audio-only` | Browser incoming-video choice; balanced receives up to nine videos, data saver four at the lowest layer, audio only none. This does not change what clients publish. |
 | `--capture 720p\|1080p` | Browser camera; 720p (100/300/900 kbit/s layers), 1080p raises the top layer to 2.5 Mbit/s |
 | `--speakers N` | Browser talkers per room at a time, rotating every 10 s; 1 |
 | `--viewport-width PX`, `--pixel-ratio F`, `--layout classic\|modern` | The screen each browser viewer has, which decides the simulcast layer it asks for; 1440, 2, classic |
@@ -165,17 +166,24 @@ recorded host and workload; they still need validation with real clients:
 - **Microphone**: Opus at 32 kbit/s while speaking and DTX otherwise (one
   frame per 400 ms, the web client's `opusDtx`), with `--speakers` talkers per
   room rotating every 10 s.
-- **Subscriptions**: every remote producer, existing ones included, up to the
-  server's default cap of 64 consumers: 32 audio and 32 video when rooms
-  publish both (`--audio-only` or `--video-only` rooms get all 64 for their
-  kind). `--max-audio` and `--max-video` still override them.
+- **Subscriptions**: all remote microphones, plus up to nine camera videos in
+  the default `--receive-mode balanced`, four in `data-saver`, or none in
+  `audio-only`. Receiving audio only still publishes the configured camera;
+  `--audio-only` instead changes the published media. Static room demand must
+  fit the server's shared 64-consumer default: 30 camera/microphone publishers
+  need 29 audio plus nine video consumers each; 56 balanced publishers fit
+  exactly, while 57 are refused before startup. The mode and effective caps
+  are recorded in the run configuration. Explicit `--max-audio` and
+  `--max-video` overrides describe a custom subscription workload and must stay
+  identical across comparisons.
 - **Layers**: each time a batch of consumers is resumed, the client approximates
   tile widths using the earlier count-based desktop grid: its own tile when it
   publishes and one per remote participant whose media it consumes. It asks for
   the layer the tile-size cap would
   (`web/src/layer-cap.ts`), re-evaluating earlier tiles with the same
-  hysteresis. This model does not include the browser's aspect-aware row fitting
-  or available stage height. A modeled webinar viewer sees one large presenter
+  hysteresis; data saver always requests the lowest layer. This model does not
+  include the browser's aspect-aware row fitting or available stage height.
+  A modeled webinar viewer sees one large presenter
   tile and asks for the top layer. A modeled 1440 px laptop at 2x in the classic layout gives a fresh tile the
   top layer with up to four tiles and the middle layer beyond, but a tile that
   appeared while the grid was smaller keeps the top layer in a room of five (it
@@ -186,10 +194,14 @@ recorded host and workload; they still need validation with real clients:
   1234) in transport-wide feedback, as Chrome does, so the server's estimate
   can climb to its cap and layer allocation behaves as it does for browsers.
 
-Not modelled: the audio-level header extension (speaking highlights), VP8
-temporal layers (encodings are L1T1), screen sharing, aspect-aware or
-height-constrained rows, pinned video layouts, mobile layouts, or device-specific
-capture and encoding behavior.
+The video budget models a static, foreground camera room with eligible visible
+tiles; it does not simulate visibility changes, hiding, picture-in-picture, pins,
+or screen-share priority. Not modelled: the audio-level header extension
+(speaking highlights), VP8 temporal layers (encodings are L1T1), screen sharing,
+aspect-aware or height-constrained rows, mobile layouts, or device-specific
+capture and encoding behavior. The shared receive-policy fixtures bind the video
+budgets to the shipped client; they do not establish browser decoding or a new
+measured capacity ceiling.
 
 ### Fixed subscription graphs
 

@@ -1,0 +1,109 @@
+{
+  "consumerLimit": 64,
+  "videoLimits": {
+    "balanced": 9,
+    "data-saver": 4,
+    "audio-only": 0
+  },
+  "roomCases": [
+    {
+      "name": "thirty publishers in balanced mode",
+      "remotePublishers": 29,
+      "audioPublished": true,
+      "videoPublished": true,
+      "mode": "balanced",
+      "consumers": 38,
+      "valid": true
+    },
+    {
+      "name": "thirty publishers in data saver",
+      "remotePublishers": 29,
+      "audioPublished": true,
+      "videoPublished": true,
+      "mode": "data-saver",
+      "consumers": 33,
+      "valid": true
+    },
+    {
+      "name": "receiving audio only still permits published cameras",
+      "remotePublishers": 29,
+      "audioPublished": true,
+      "videoPublished": true,
+      "mode": "audio-only",
+      "consumers": 29,
+      "valid": true
+    },
+    {
+      "name": "audio publication only is independent of receive mode",
+      "remotePublishers": 29,
+      "audioPublished": true,
+      "videoPublished": false,
+      "mode": "balanced",
+      "consumers": 29,
+      "valid": true
+    },
+    {
+      "name": "video publication only still bounds selected video",
+      "remotePublishers": 29,
+      "audioPublished": false,
+      "videoPublished": true,
+      "mode": "balanced",
+      "consumers": 9,
+      "valid": true
+    },
+    {
+      "name": "five publishers retain all four peers",
+      "remotePublishers": 4,
+      "audioPublished": true,
+      "videoPublished": true,
+      "mode": "balanced",
+      "consumers": 8,
+      "valid": true
+    },
+    {
+      "name": "fifty-six balanced publishers fit the shared limit",
+      "remotePublishers": 55,
+      "audioPublished": true,
+      "videoPublished": true,
+      "mode": "balanced",
+      "consumers": 64,
+      "valid": true
+    },
+    {
+      "name": "fifty-seven balanced publishers exceed the shared limit",
+      "remotePublishers": 56,
+      "audioPublished": true,
+      "videoPublished": true,
+      "mode": "balanced",
+      "consumers": 65,
+      "valid": false
+    },
+    {
+      "name": "data saver can use sixty microphones and four videos",
+      "remotePublishers": 60,
+      "audioPublished": true,
+      "videoPublished": true,
+      "mode": "data-saver",
+      "consumers": 64,
+      "valid": true
+    },
+    {
+      "name": "data saver also enforces the shared limit",
+      "remotePublishers": 61,
+      "audioPublished": true,
+      "videoPublished": true,
+      "mode": "data-saver",
+      "consumers": 65,
+      "valid": false
+    },
+    {
+      "name": "audio receive mode can use all sixty-four slots",
+      "remotePublishers": 64,
+      "audioPublished": true,
+      "videoPublished": true,
+      "mode": "audio-only",
+      "consumers": 64,
+      "valid": true
+    }
+  ]
+}
