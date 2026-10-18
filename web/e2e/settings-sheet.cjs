@@ -53,6 +53,24 @@ async function closeSheet(page) {
     entry: history.state?.simplestchatNavigation,
     session: history.state?.simplestchatNavigationSession,
   }));
+  const observation = await page.evaluateHandle(() => {
+    const region = document.getElementById('settings-sheet');
+    let transitions = 0;
+    const observer = new MutationObserver((records) => {
+      transitions = Math.min(8, transitions + records.length);
+    });
+    if (region) observer.observe(region, { attributes: true, attributeFilter: ['hidden'] });
+    return {
+      stop() {
+        transitions = Math.min(8, transitions + observer.takeRecords().length);
+        observer.disconnect();
+        return {
+          hiddenTransitions: transitions,
+          lastHidden: region ? region.hidden === true : null,
+        };
+      },
+    };
+  });
   let phase = 'click';
   try {
     await region.getByRole('button', { name: 'Close settings', exact: true }).click();
@@ -93,6 +111,10 @@ async function closeSheet(page) {
         const heading = region?.querySelector('h2')?.textContent;
         const section = params.get('section');
         const current = history.state;
+        const buttons = [...(region?.querySelectorAll('button') ?? [])];
+        const control = (label) => buttons.find((button) => button.textContent === label);
+        const visible = (node) => !!node && node.getClientRects().length > 0;
+        const add = control('Add passkey');
         return {
           sheetHidden: region ? region.hidden === true : null,
           sheetSection: Object.hasOwn(titles, heading) ? titles[heading] : 'other',
@@ -101,6 +123,12 @@ async function closeSheet(page) {
             : null,
           sameHistoryEntry: current?.simplestchatNavigation === previous.entry,
           sameHistorySession: current?.simplestchatNavigationSession === previous.session,
+          securityControls: {
+            addVisible: visible(add),
+            addEnabled: !!add && !add.disabled,
+            createVisible: visible(control('Create passkey')),
+            reloadVisible: visible(control('Reload to check account')),
+          },
           route: {
             view: ['settings', 'inbox', 'conversation'].includes(params.get('view'))
               ? params.get('view')
@@ -111,8 +139,14 @@ async function closeSheet(page) {
         };
       }, before)
       .catch(() => ({ unavailable: true }));
-    console.error(JSON.stringify({ kind: 'settings-close', phase, ...state }));
+    const transitions = await observation
+      .evaluate((value) => value.stop())
+      .catch(() => ({ unavailable: true }));
+    console.error(JSON.stringify({ kind: 'settings-close', phase, ...state, ...transitions }));
     throw error;
+  } finally {
+    await observation.evaluate((value) => value.stop()).catch(() => {});
+    await observation.dispose().catch(() => {});
   }
 }
 

@@ -5,7 +5,10 @@ import { runInNewContext } from 'node:vm';
 
 const source = await readFile(new URL('../e2e/settings-sheet.cjs', import.meta.url), 'utf8');
 
-function fixture(phase, { heading = 'Sign-in & security', unavailable = false } = {}) {
+function fixture(
+  phase,
+  { heading = 'Sign-in & security', unavailable = false, transitions = 0, controls = [] } = {},
+) {
   const failure = new Error('owned-secret-error');
   const logs = [];
   const history = {
@@ -14,6 +17,7 @@ function fixture(phase, { heading = 'Sign-in & security', unavailable = false } 
   const region = {
     hidden: false,
     querySelector: () => ({ textContent: heading }),
+    querySelectorAll: () => controls,
     getByRole: () => ({
       async click() {
         if (phase === 'click') throw failure;
@@ -34,10 +38,22 @@ function fixture(phase, { heading = 'Sign-in & security', unavailable = false } 
     },
     document: { getElementById: () => region },
     URLSearchParams,
+    MutationObserver: class {
+      records = Array.from({ length: transitions }, () => ({ private: 'owned-secret-mutation' }));
+      observe() {}
+      disconnect() {}
+      takeRecords() {
+        return this.records.splice(0);
+      }
+    },
   });
   let evaluations = 0;
   const page = {
     getByRole: () => region,
+    async evaluateHandle(callback) {
+      const value = callback();
+      return { evaluate: async (read) => read(value), dispose: async () => {} };
+    },
     async evaluate(callback, argument) {
       evaluations++;
       if (unavailable && evaluations > 1) throw new Error('owned-secret-unavailable');
@@ -63,7 +79,15 @@ test('settings close diagnostics distinguish click, hidden and history failures 
         historyEntry: 4,
         sameHistoryEntry: true,
         sameHistorySession: true,
+        securityControls: {
+          addVisible: false,
+          addEnabled: false,
+          createVisible: false,
+          reloadVisible: false,
+        },
         route: { view: 'settings', section: 'security', segment: 'you' },
+        hiddenTransitions: 0,
+        lastHidden: phase === 'history',
       },
     ]);
     assert.doesNotMatch(JSON.stringify(f.logs), /owned-secret/);
@@ -78,6 +102,34 @@ test('settings close diagnostics replace unknown headings and inaccessible page 
   const unavailable = fixture('click', { unavailable: true });
   await assert.rejects(unavailable.close(), (error) => error === unavailable.failure);
   assert.deepEqual(unavailable.logs, [
-    { kind: 'settings-close', phase: 'click', unavailable: true },
+    {
+      kind: 'settings-close',
+      phase: 'click',
+      unavailable: true,
+      hiddenTransitions: 0,
+      lastHidden: false,
+    },
   ]);
+});
+
+test('security control diagnostics and hidden transitions remain fixed booleans and a bounded count', async () => {
+  const f = fixture('hidden', {
+    transitions: 20,
+    controls: [
+      { textContent: 'Add passkey', disabled: false, getClientRects: () => [{}] },
+      { textContent: 'Create passkey', getClientRects: () => [] },
+      { textContent: 'Reload to check account', getClientRects: () => [{}] },
+      { textContent: 'owned-secret-button', value: 'owned-secret-input' },
+    ],
+  });
+  await assert.rejects(f.close(), (error) => error === f.failure);
+  assert.deepEqual(f.logs[0].securityControls, {
+    addVisible: true,
+    addEnabled: true,
+    createVisible: false,
+    reloadVisible: true,
+  });
+  assert.equal(f.logs[0].hiddenTransitions, 8);
+  assert.equal(f.logs[0].lastHidden, false);
+  assert.doesNotMatch(JSON.stringify(f.logs), /owned-secret/);
 });
