@@ -36,8 +36,8 @@ defer the call engine and mediasoup dependency until explicit room media setup.
 The eager entry falls from about 687 KB to 480 KB; the additional media chunk is
 about 231 KB. Capture preferences are shared rather than copied, and no package
 dependency was added. Total JavaScript, including every lazy chunk, increases
-to 713,150 bytes raw / 172,390 gzip from the preceding 688,692 / 164,719-byte
-build, an increase of 24,458 / 7,671 bytes.
+to 713,602 bytes raw / 172,585 gzip from the preceding 688,692 / 164,719-byte
+build, an increase of 24,910 / 7,866 bytes.
 The reviewed total budget increases from 688/166 KiB to 704/170 KiB; CSS and HTML
 limits remain unchanged. The gate still counts all emitted chunks, the service
 worker and help assets. These are delivery-size observations, not a startup
