@@ -447,6 +447,14 @@ image, using the real release helper and public deployment templates. It checks
 a successful replacement, failed candidate startup and rollback while requiring
 PostgreSQL and Caddy to stay running.
 
+The same hosted fixture holds two Chromium documents across upgrade and rollback.
+Each first imports its edition-specific deferred chunk only after the selected
+backend no longer has it. The check requires direct backend 404s, successful
+proxy delivery, uncached HTML and revision metadata after every image change,
+unchanged document identities and zero capture calls. The fixture uses synthetic
+public chunks with the production binary and pinned proxy; it does not run a
+historical application or proxy binary.
+
 After fixture readiness, the harness also checks five fixed anonymous HTTPS
 responses for proxy headers/CSP, public JSON cache policy, absent cookies,
 missing-authorization rejection, private endpoint omission and bounded content.
@@ -470,11 +478,17 @@ Run it only as root on a fresh, disposable Linux AMD64 or ARM64 host with a loca
 Docker Engine (API 1.48+), Compose, OpenSSL, curl, `nsenter`,
 `update-ca-certificates`, and the
 [controller Python environment](../ops/ansible/README.md). The production image
-remains Linux/AMD64; an ARM64 fixture host needs AMD64 emulation:
+remains Linux/AMD64; an ARM64 fixture host needs AMD64 emulation. Use the CI-pinned
+Node/npm installation, install `web/e2e` with `npm ci --ignore-scripts`, and install
+its pinned Chromium with `npm --prefix web/e2e exec -- playwright install --with-deps chromium`.
+Pass both executable paths explicitly across `sudo`:
 
 ```sh
+release_node="$(command -v node)"
+release_chromium="$(node -e 'process.stdout.write(require("./web/e2e/node_modules/playwright").chromium.executablePath())')"
 sudo ops/ansible/.venv/bin/python -B build/test-release-container.py \
   --disposable-host --image simplestchat-ci:production \
+  --node "$release_node" --chromium "$release_chromium" \
   --output /tmp/simplestchat-release-check
 ```
 
