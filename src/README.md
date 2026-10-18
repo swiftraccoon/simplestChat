@@ -26,6 +26,7 @@ HTTP / WebSocket
 | Wire contract | `signaling/protocol.rs` and [web/src/protocol.ts](../web/src/protocol.ts) |
 | Password/passkey auth and JWT validation | `auth/routes.rs`, `auth/password.rs`, `auth/webauthn.rs`, `auth/jwt.rs`, `auth/limiter.rs` (sign-in failure delays, registration window) |
 | Profiles, recovery and refresh sessions | `auth/account.rs`, `auth/session.rs` |
+| Atomic account privacy and fresh runtime publication | `auth/account.rs`, `room/privacy.rs` |
 | One-use WebSocket authentication tickets | `auth/ws_tickets.rs` |
 | Membership, lobby, chat and reconnect state | `room/mod.rs`, `room/social.rs` |
 | Durable room history, PM inbox, read positions and chat expiry | `room/history.rs` |
@@ -34,6 +35,7 @@ HTTP / WebSocket
 | Optional session-owned PM push, retained VAPID identity and bounded delivery queue | `push.rs` |
 | Ordered persistence and uncertain-write handling | `room/control.rs` |
 | Persistent room/community API | `room/api.rs`, `room/community.rs`, `room/settings.rs` |
+| Membership-independent room administration and authorization | `room/administration.rs` |
 | Roles, invitations and moderation retention | `room/roles.rs`, `room/invites.rs`, `room/moderation.rs` |
 | Native worker/router/transport lifecycle | `media/worker_manager.rs`, `router_manager.rs`, `transport_manager.rs` |
 | Media configuration and types | `media/config.rs`, `media/types.rs` |
@@ -72,6 +74,27 @@ recovery. Snapshot requests capture an owned, typed projection while holding a
 shared room read lock and serialize it after releasing that lock. Private-message
 visibility and moderator-only lobby entries are filtered during capture.
 
+Authenticated HTTP administration lets an authorized account manage a persisted
+room without joining it. Settings, roles, bans, reports, moderation history and
+live lobby controls use the same room policy and runtime publication rules as
+joined controls. Admission takes creation/identity coordination and room control
+before the users-then-sessions transaction locks and the durable room row; it
+rechecks current role and expiry after waits. Persistent mutations
+retain ownership through commit and runtime publication; uncertain results remain
+explicit rather than inviting an automatic replay. Camera/chat sanctions and
+lobby admission still target the current live membership.
+
+Account privacy PATCH operations merge explicit fields and ignore/unignore sets
+with current JSON under the canonical users-then-sessions locks. Malformed saved
+privacy fails closed. The owned save continues after HTTP disconnection and
+publishes through `room/privacy.rs`: at most eight concurrent room operations,
+with a fifteen-second overall synchronization deadline. Each room gate precedes
+a fresh database read, so delayed earlier completions cannot overwrite newer
+policy. Temporary guest ignores survive publication. Fresh authenticated joins
+and lobby admissions load account policy under that gate before insertion. A
+successful preference GET also verifies the issuing session and synchronizes
+active rooms, providing explicit recovery after a save whose outcome is unknown.
+
 Saved history is separate from the 300-entry / 256-KiB membership replay buffer.
 Migration 025 adds public-history retention to persisted rooms plus account PMs,
 inbox rows and read cursors; migration 026 validates the expanded moderation
@@ -85,6 +108,14 @@ HTTP routes authorize the current account and derive the two-account conversatio
 server-side; room history requires current membership. Pages and searches are
 bounded. The separate five-minute chat cleanup removes expired messages, inbox
 rows and cursors while read predicates enforce expiry immediately.
+
+Account PM entries carry an explicit account-conversation marker so the browser
+uses retained authority consistently from live and saved views. Saved replies
+resolve the quoted message within that conversation; durable retries preserve
+the quote target. Private reaction writes use explicit present/absent intent
+under the conversation lock, with current account policy and session checks.
+Retained public Reply/React resolve through saved history and current room
+membership instead of requiring the target in the bounded replay buffer.
 
 `auth/discovery.rs` stores explicitly accepted contact pairs and account room
 shortcuts (migration 031). An accepted contact may start an HTTP PM without a

@@ -66,20 +66,23 @@ For complete guest/account setup and LAN ICE addressing see
 | `src/appearance.ts` | Independent profile-card and room-heading appearance controls, previews and palette-only rendering |
 | `src/auth.ts`, `account-session-sync.ts`, `community-ui.ts` | Identity/session refresh and cross-tab reconciliation, profiles, recovery, room management |
 | `src/account-security.ts`, `account-sessions.ts` | Shared account-mutation ownership, passkey/recovery management and signed-in session controls |
+| `src/account-preferences.ts` | Account-owned privacy state, field PATCH intents, cross-device refresh and uncertain-save reconciliation, shared by home and room screens |
 | `src/pwa.ts`, `public/sw.js`, `public/manifest.webmanifest` | Installation, optional generic PM push alerts and account-scoped subscription ownership; no offline cache |
 | `src/signaling.ts`, `protocol.ts` | WebSocket lifecycle and typed server protocol |
 | `src/validation.ts`, `api-validation.ts`, `protocol-validation.ts` | Shared decoder primitives and HTTP/WebSocket response validation |
 | `src/room.ts`, `room-navigation.ts` | Membership, confirmed room controls, lobby status and explicit URL navigation |
+| `src/room-administration.ts`, `room-administration-api.ts`, `room-administration-validation.ts` | Shared room-management screens, authenticated HTTP controls and response validation outside room membership |
 | `src/media.ts` | Transports, capture, producers and consumers |
 | `src/media-lifecycle.ts` | Coalesced visibility, page-resume, online and hardware hints without new capture or room entry |
 | `src/media-controls.ts`, `audio-output.ts` | Private device preview, live hardware lists, speaker selection/test and viewer-local playback |
-| `src/receive-policy.ts` | Bounded incoming video selection, visible/pinned priority and data saver/audio-only preferences |
+| `src/receive-policy.ts` | Bounded incoming video selection, optional stable speaker following, visible/pinned priority and data saver/audio-only preferences |
 | `src/attachments.ts` | Bounded paste/drop/picker uploads, progress/retry and gesture-opened previews/downloads |
 | `src/notification-preferences.ts`, `notification-validation.ts` | Account-synced notification rules, conversation mute/snooze and quiet hours |
 | `src/layer-cap.ts` | Simulcast layer a remote tile can use at its rendered size, with hysteresis |
 | `src/settings-sheet.ts` | The settings sheet: one list, single-purpose screens, rows that apply at once |
 | `src/social-chat.ts`, `chat-store.ts` | Room/PM conversations, composer, bounded replay, removal tombstones and preferences |
 | `src/chat-history.ts` | Saved room history, retention controls, account PM inbox, search and shared read positions |
+| `src/pm-composer.ts`, `pm-send-attempts.ts`, `chat-reactions.ts` | Durable account-PM attempts and quoted replies, plus shared reaction controls |
 | `src/discovery.ts`, `discovery-validation.ts` | Accepted contacts, explicit contact links, account favorites and recent room shortcuts |
 | `src/*.css`, `index.html` | Layout, component styles and initial document |
 | `public/help.html`, `help.css` | Zero-JavaScript user help, copied into the production output |
@@ -194,6 +197,22 @@ PM drafts persist on this device, separately for each account and recipient;
 load inside the existing chat scroll area; once the live buffer is full, the same
 action opens the saved conversation at that older message. Session changes retire pending history
 work and clear its dialog data.
+
+A first HTTP account PM may also supply the current room as context. The server
+requires both accounts to be connected and admitted to that exact room, confirms
+the sender can chat, and checks both saved privacy policies before creating the
+conversation. An arbitrary account ID or guest identity supplies no such proof.
+Existing-conversation and accepted-contact sends need no room context; a confirmed
+retry still returns its original receipt after departure.
+
+Saved account PMs expose the same Reply, Edit and React actions from the room
+conversation and the inbox. The server's account-conversation marker routes these
+actions through the retained account API; guest PM actions remain bound to their
+room session. Replies name an original message in the same conversation and
+preserve that quote target in durable send recovery. Reaction requests express
+whether one emoji should be present, so repeating a request does not toggle it
+back. Earlier retained public messages use the saved room history authority for
+Reply and React instead of requiring the message to remain in membership replay.
 
 Authors can edit their messages from live chat or saved history. An **edited**
 indicator records changes; a revision check prevents an older open editor from
@@ -365,19 +384,35 @@ palette and accent/text/tinted-background choices have live previews. Saved room
 styles update the heading for current participants and survive reconnects. These
 public styles accept palette tokens, not arbitrary CSS.
 
+My rooms also opens shared management screens for a persisted room without
+joining it. Authorized owners, admins and moderators can inspect people, bans,
+reports, moderation history and the live waiting room; available actions follow
+their current role. Kick/ban and camera/chat restrictions require a currently
+admitted target. Admit/Deny works while the operator stays home or in another
+call. Restoring permission never starts the target's capture. Lists use bounded
+pages, and an uncertain mutation asks for explicit state refresh before retry.
+
 Chat timestamps are visible by default; an explicitly saved timestamp preference
 is retained. Join and leave notices include timestamps, including departures by
 people without a camera or microphone. Reconnect cleanup does not announce false
 departures. The highlighted ellipsis opens Chat options.
 
-Account chat preferences save one request at a time in this client, coalescing
-pending changes into the latest snapshot. Room rejoins wait for those saves
-before loading the account copy; delayed loads cannot replace newer local
-choices. Queued saves stay with their account across room and account changes.
-If a save's outcome cannot be confirmed, automatic account saves and reloads
-pause for that account while this browser retains its choices. The notice asks
-the viewer to reload and check the account state before saving again. Separate
-devices continue to use the account API's last-writer-wins behavior.
+Account privacy is available from the signed-in home page, saved conversations
+and room settings. `AccountPreferences` owns it independently of a room. Requests
+carry only explicit field changes or ignore/unignore set operations; the server
+merges them with current state under account/session locks. Concurrent appearance
+changes therefore preserve a newer ignore or private-message opt-out. Visible
+devices recheck on focus and every fifteen seconds; cross-tab change hints contain
+no preference data or credentials.
+
+An uncertain save preserves restrictive local intent and disables further changes.
+**Refresh privacy** explicitly reads current account state and synchronizes active
+room policy before enabling changes again; the client never automatically replays
+the mutation. Delayed reads and writes belong to their original account and cannot
+populate a replacement identity. A failed read leaves existing choices intact.
+Server room policy comes from PostgreSQL, including direct join and lobby
+admission, and a stale client command cannot re-enable saved account opt-outs.
+Guest ignores remain specific to their room membership.
 
 Ordinary sign-out revokes the session before clearing saved app data from this
 browser and reloading. A failed revocation preserves the active session; a late
@@ -409,6 +444,16 @@ unsubscribed, and a hidden tab keeps only an explicit picture-in-picture video.
 Closing a consumer is acknowledged before a replacement is opened. Audio
 reception and publishing controls are independent. The receive choice is saved
 on this device.
+
+**Follow speaker** is an optional choice in the room's More menu and starts off.
+An available remote camera gains priority after its speaker remains stable for
+1.5 seconds; established focus holds for at least five seconds before another
+speaker can replace it. Pins, picture-in-picture and visible shared screens keep
+priority. A focused camera can enter the receive set from outside the viewport,
+and its tile moves forward without changing any cell's dimensions. Hiding a
+person, Audio only and page visibility remain authoritative. Turning the choice
+off, losing signaling, or retiring its camera/membership cancels pending focus;
+the preference survives reload, while reconnect waits for fresh speaker signals.
 
 ## Attachments
 
