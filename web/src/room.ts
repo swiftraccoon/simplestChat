@@ -20,9 +20,12 @@ import type {
 } from './protocol';
 import { SignalingClient } from './signaling';
 import {
+  loadFollowSpeaker,
   loadReceiveMode,
   normalizeReceiveMode,
+  saveFollowSpeaker,
   selectIncomingVideos,
+  SpeakerFollow,
   videoTileKey,
   type ReceiveMode,
   type VideoDeferredReason,
@@ -95,6 +98,8 @@ export type RoomEventHandler = {
   onChatMessage: (participantId: string, participantName: string, content: string) => void;
   onConnectionQuality: (quality: ConnectionQuality) => void;
   onActiveSpeaker: (participantId: string) => void;
+  /** Stable, opt-in camera focus; this changes selection and ordering, never tile dimensions. */
+  onFollowedSpeakerChanged?: (participantId: string | null) => void;
   onAudioLevels: (levels: { participantId: string; volume: number }[]) => void;
   onModeration: (action: string, participantId: string, reason?: string) => void;
   onRoleChanged: (participantId: string, newRole: string) => void;
@@ -225,6 +230,12 @@ export class RoomClient {
   private videoQualities = new Map<string, RemoteVideoQuality>();
   private videoSizeCaps = new Map<string, number | null>();
   private receiveMode = loadReceiveMode();
+  private followSpeaker = loadFollowSpeaker();
+  private dominantSpeaker: string | null = null;
+  private speakerFollow = new SpeakerFollow((participantId) => {
+    this.events.onFollowedSpeakerChanged?.(participantId);
+    if (this.mediaReady && this.signaling.connected) this.scheduleReceiveSelection();
+  });
   private receivePageActive = true;
   private receiveVisibility = new Map<string, boolean>();
   private pinnedVideo: string | null = null;
@@ -267,6 +278,8 @@ export class RoomClient {
         this.beginCall('reconnect');
       }
       this.connectionGeneration++;
+      this.dominantSpeaker = null;
+      this.speakerFollow.reset();
       this.recoveryPromise = null;
       this.rejectSocialRequests('Connection changed; please retry');
       this.media?.suspendSignaling();
@@ -403,6 +416,8 @@ export class RoomClient {
     const media = this.media;
     this.media = null;
     this.mediaReady = false;
+    this.dominantSpeaker = null;
+    this.speakerFollow.reset();
     this.pendingConsumes.clear();
     this.failedConsumes.clear();
     this.consumeQueue = Promise.resolve();
@@ -830,11 +845,54 @@ export class RoomClient {
     for (const producerId of this.participants.get(participantId)?.producers.keys() ?? []) {
       this.media?.setConsumerHiddenByProducer(producerId, hidden);
     }
+    if (hidden) this.speakerFollow.forget(participantId);
+    this.updateSpeakerFollow();
     this.scheduleReceiveSelection();
+  }
+
+  get followsSpeaker(): boolean {
+    return this.followSpeaker;
+  }
+
+  setFollowSpeaker(enabled: boolean): void {
+    this.followSpeaker = enabled;
+    saveFollowSpeaker(enabled);
+    this.updateSpeakerFollow();
+    this.scheduleReceiveSelection();
+  }
+
+  private updateSpeakerFollow(): void {
+    if (!this.followSpeaker || !this.receivePageActive || this.receiveMode === 'audio-only') {
+      this.speakerFollow.reset();
+      return;
+    }
+    const focused = this.speakerFollow.participantId;
+    if (focused && !this.speakerCameraAvailable(focused)) this.speakerFollow.forget(focused);
+    this.speakerFollow.note(
+      this.dominantSpeaker && this.speakerCameraAvailable(this.dominantSpeaker)
+        ? this.dominantSpeaker
+        : null,
+    );
+  }
+
+  private speakerCameraAvailable(participantId: string): boolean {
+    const participant = this.participants.get(participantId);
+    return Boolean(
+      participant &&
+      participant.id !== this.localId &&
+      !this.hiddenParticipants.has(participant.id) &&
+      Array.from(participant.producers).some(
+        ([id, producer]) =>
+          producer.kind === 'video' &&
+          producer.source !== 'screen' &&
+          !this.pausedProducers.has(id),
+      ),
+    );
   }
 
   setReceiveMode(mode: ReceiveMode): void {
     this.receiveMode = normalizeReceiveMode(mode);
+    this.updateSpeakerFollow();
     for (const participant of this.participants.values()) {
       for (const [producerId, producer] of participant.producers) {
         if (producer.kind === 'video')
@@ -898,6 +956,8 @@ export class RoomClient {
         pinned: this.pinnedVideo === key,
         pictureInPicture: this.pictureInPictureVideo === key,
         hidden: this.hiddenParticipants.has(participant.id),
+        followedSpeaker:
+          producer.source !== 'screen' && this.speakerFollow.participantId === participant.id,
       })),
       this.receiveMode,
       this.receivePageActive,
@@ -1020,6 +1080,7 @@ export class RoomClient {
     this.media?.setPageActive(active);
     if (this.receivePageActive === active) return;
     this.receivePageActive = active;
+    this.updateSpeakerFollow();
     this.scheduleReceiveSelection();
   }
 
@@ -1646,6 +1707,8 @@ export class RoomClient {
         break;
       }
       case 'participantLeft': {
+        if (this.dominantSpeaker === msg.participantId) this.dominantSpeaker = null;
+        this.speakerFollow.forget(msg.participantId);
         this.hiddenParticipants.delete(msg.participantId);
         this.videoQualities.delete(msg.participantId);
         this.videoSizeCaps.delete(msg.participantId);
@@ -1676,6 +1739,7 @@ export class RoomClient {
           });
         }
         this.events.onParticipantsChanged(this.participants);
+        this.updateSpeakerFollow();
         if (msg.kind === 'video') this.scheduleReceiveSelection();
         else
           this.observeTask(
@@ -1701,6 +1765,7 @@ export class RoomClient {
           }
         }
         this.events.onParticipantsChanged(this.participants);
+        this.updateSpeakerFollow();
         this.scheduleReceiveSelection();
         break;
       }
@@ -1745,6 +1810,7 @@ export class RoomClient {
             break;
           }
         }
+        this.updateSpeakerFollow();
         this.scheduleReceiveSelection();
         break;
       }
@@ -1761,14 +1827,21 @@ export class RoomClient {
             break;
           }
         }
+        this.updateSpeakerFollow();
         this.scheduleReceiveSelection();
         break;
       }
       case 'activeSpeaker': {
+        this.dominantSpeaker = msg.participantId;
+        this.updateSpeakerFollow();
         this.events.onActiveSpeaker(msg.participantId);
         break;
       }
       case 'audioLevels': {
+        if (msg.levels.length === 0) {
+          this.dominantSpeaker = null;
+          this.speakerFollow.note(null);
+        }
         this.events.onAudioLevels(msg.levels);
         break;
       }
@@ -1790,6 +1863,7 @@ export class RoomClient {
           }
         }
         this.events.onParticipantsChanged(this.participants);
+        this.updateSpeakerFollow();
         this.scheduleReceiveSelection();
         break;
       }
@@ -1960,6 +2034,8 @@ export class RoomClient {
         }
       }
       if (!current) {
+        if (this.dominantSpeaker === id) this.dominantSpeaker = null;
+        this.speakerFollow.forget(id);
         this.participants.delete(id);
         this.hiddenParticipants.delete(id);
         this.videoQualities.delete(id);
@@ -2015,6 +2091,7 @@ export class RoomClient {
     if (oldCamBanned !== this.localCamBanned && this.localId)
       this.events.onModeration(this.localCamBanned ? 'camBanned' : 'camUnbanned', this.localId);
     if (this._roomSettings) this.events.onRoomSettingsChanged(this._roomSettings);
+    this.updateSpeakerFollow();
     this.scheduleReceiveSelection();
     for (const participant of this.participants.values()) {
       for (const [producerId, metadata] of participant.producers) {

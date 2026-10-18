@@ -12,8 +12,9 @@
   align-items: center;
   gap: 0.45rem;
   white-space: nowrap;
+  min-height: 44px;
 }
-.media-controls-toolbar input {
+.media-controls-toolbar input[type='range'] {
   width: 6rem;
 }
 /* Media controls share the app's tokens; they are not a second colour system. */

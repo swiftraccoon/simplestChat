@@ -13,6 +13,7 @@ function browserFixture() {
     'removeRemoteTrack',
     'updateVideoGridCount',
     'setPinnedTile',
+    'orderVideoTiles',
   ].map((name) => {
     const declaration = ast.statements.find(
       (node) => ts.isFunctionDeclaration(node) && node.name?.text === name,
@@ -50,6 +51,7 @@ function browserFixture() {
     previousGrid.replaceWith(videoGrid);
     const remoteTiles = new Map();
     let pinnedTileKey = null;
+    let followedSpeaker = null;
     let pictureInPictureVideo = null;
     const tileVisibility = null;
     const room = null;

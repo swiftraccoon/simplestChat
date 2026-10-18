@@ -8,6 +8,11 @@ const denied = () =>
 
 async function fixture(t) {
   const dom = createDOM();
+  dom.document.createTextNode = (text) => {
+    const node = dom.document.createElement('span');
+    node.textContent = text;
+    return node;
+  };
   const viewportEvents = new EventTarget();
   const viewportListeners = [];
   const window = {
@@ -69,6 +74,8 @@ async function fixture(t) {
   };
   const query = dom.Node.prototype.querySelectorAll;
   dom.Node.prototype.querySelectorAll = function (selector) {
+    if (selector === 'input[type="checkbox"]')
+      return query.call(this, 'input').filter((node) => node.type === 'checkbox');
     const control = selector.match(/^\[data-control="([^"]+)"\]$/)?.[1];
     if (!control) return query.call(this, selector);
     return this.children.flatMap((child) => [
@@ -85,9 +92,16 @@ async function fixture(t) {
       throw denied();
     },
   };
+  const stored = new Map();
+  const storage = {
+    getItem: (key) => stored.get(key) ?? null,
+    setItem: (key, value) => stored.set(key, value),
+  };
   const { MediaControls } = await loadTypeScript('src/media-controls.ts', {
     modules: {
-      './receive-policy': await loadTypeScript('src/receive-policy.ts'),
+      './receive-policy': await loadTypeScript('src/receive-policy.ts', {
+        globals: { localStorage: storage },
+      }),
       './media': {},
       './media-controls.css': {},
       './settings-sheet': {},
@@ -97,7 +111,7 @@ async function fixture(t) {
       document: dom.document,
       window,
       navigator: { mediaDevices: { enumerateDevices: () => state.enumerate() } },
-      localStorage: { getItem: () => null, setItem() {} },
+      localStorage: storage,
       Option: function (label, value) {
         const option = dom.document.createElement('option');
         option.textContent = label;
@@ -111,6 +125,7 @@ async function fixture(t) {
     getRoom: () => ({
       setRemoteMediaHidden: (...args) => state.roomCalls.push(['hidden', ...args]),
       setRemoteVideoQuality: (...args) => state.roomCalls.push(['quality', ...args]),
+      setFollowSpeaker: (...args) => state.roomCalls.push(['follow', ...args]),
     }),
   });
   t.after(() => controls.destroy());
@@ -145,7 +160,19 @@ async function fixture(t) {
   controls.attachTile(tile, 'alice', 'Alice');
   const notice = tile.querySelector('.personal-playback-blocked');
   const control = (name) => tile.querySelector(`[data-control="${name}"]`);
-  return { ...dom, controls, state, tile, audio, media, notice, control, pin, viewportListeners };
+  return {
+    ...dom,
+    controls,
+    state,
+    stored,
+    tile,
+    audio,
+    media,
+    notice,
+    control,
+    pin,
+    viewportListeners,
+  };
 }
 
 function openMenu(f, tile = f.tile) {
@@ -154,6 +181,34 @@ function openMenu(f, tile = f.tile) {
   summary.emit('click', { preventDefault() {} });
   return { disclosure, summary, panel: disclosure.querySelector('.personal-media-panel') };
 }
+
+test('Follow speaker starts off, persists explicit changes and keeps mounted controls synchronized', async (t) => {
+  const f = await fixture(t);
+  const hosts = [f.document.createElement('div'), f.document.createElement('div')];
+  for (const host of hosts) {
+    f.document.body.append(host);
+    f.controls.mountToolbar(host);
+  }
+  const checkboxes = hosts.map((host) => host.querySelector('input[type="checkbox"]'));
+  assert.ok(
+    checkboxes.every(
+      (control) => control.getAttribute('aria-label') === 'Follow speaker' && !control.checked,
+    ),
+  );
+  checkboxes[0].checked = true;
+  checkboxes[0].emit('change');
+  assert.equal(checkboxes[1].checked, true);
+  assert.equal(f.stored.get('simplestchat.followSpeaker'), 'true');
+  checkboxes[1].checked = false;
+  checkboxes[1].emit('change');
+  assert.equal(checkboxes[0].checked, false);
+  assert.equal(f.stored.get('simplestchat.followSpeaker'), 'false');
+  assert.deepEqual(f.state.roomCalls, [
+    ['follow', true],
+    ['follow', false],
+  ]);
+  assert.equal(f.stored.has('simplestchat.receiveMode'), false);
+});
 
 test('one compact named disclosure owns the existing pin and positions its panel beyond a tiny tile', async (t) => {
   const f = await fixture(t);

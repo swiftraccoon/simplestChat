@@ -144,7 +144,7 @@ test('stored receive mode is bounded and storage failure does not prevent joinin
   assert.equal(stored.loadReceiveMode(), 'data-saver');
 });
 
-async function fixture(t, count = 12, includeScreen = true) {
+async function fixture(t, count = 12, includeScreen = true, options = {}) {
   const state = {
     media: null,
     tracks: [],
@@ -153,6 +153,7 @@ async function fixture(t, count = 12, includeScreen = true) {
     consumed: [],
     retired: [],
     maximum: 0,
+    followed: [],
   };
   class Media {
     tracks = new Map();
@@ -200,6 +201,7 @@ async function fixture(t, count = 12, includeScreen = true) {
       this.hidden.set(id, hidden);
     }
     setPageActive() {}
+    suspendSignaling() {}
     close() {
       this.tracks.clear();
     }
@@ -212,7 +214,7 @@ async function fixture(t, count = 12, includeScreen = true) {
   }
   const { RoomClient } = await loadTypeScript('src/room.ts', {
     modules: {
-      './receive-policy': policy,
+      './receive-policy': options.policy ?? policy,
       './media': { MediaManager: Media },
     },
   });
@@ -223,7 +225,9 @@ async function fixture(t, count = 12, includeScreen = true) {
     },
     setOnReconnected() {},
     setOnReconnectFailed() {},
-    setOnConnectionLost() {},
+    setOnConnectionLost(handler) {
+      this.onConnectionLost = handler;
+    },
     completeRestartRecovery() {},
     send(message) {
       if (message.type === 'joinRoom')
@@ -257,11 +261,196 @@ async function fixture(t, count = 12, includeScreen = true) {
     onRemoteTrack: (...args) => state.tracks.push(args),
     onRemoteVideoDeferred: (...args) => state.deferred.push(args),
     onBackgroundError: (message) => state.errors.push(message),
+    onActiveSpeaker() {},
+    onAudioLevels() {},
+    onFollowedSpeakerChanged: (id) => state.followed.push(id),
+    onParticipantLeft() {},
   });
   t.after(() => room.leave());
   await room.join('room', 'Local');
   return { room, state, signaling, settle: () => room.receiveReconcile ?? Promise.resolve() };
 }
+
+function speakerClock() {
+  let now = 0;
+  let nextId = 0;
+  const timers = new Map();
+  return {
+    timers,
+    globals: {
+      performance: { now: () => now },
+      setTimeout(callback, delay) {
+        const id = ++nextId;
+        timers.set(id, { callback, at: now + delay });
+        return id;
+      },
+      clearTimeout: (id) => timers.delete(id),
+    },
+    advance(ms) {
+      const until = now + ms;
+      while (timers.size) {
+        const [id, timer] = [...timers].sort((left, right) => left[1].at - right[1].at)[0];
+        if (timer.at > until) break;
+        now = timer.at;
+        timers.delete(id);
+        timer.callback();
+      }
+      now = until;
+    },
+  };
+}
+
+test('Follow speaker promotes an offscreen camera after settling within the existing video budget', async (t) => {
+  const clock = speakerClock();
+  const speakerPolicy = await loadTypeScript('src/receive-policy.ts', { globals: clock.globals });
+  const { room, state, signaling, settle } = await fixture(t, 12, true, { policy: speakerPolicy });
+  await settle();
+  room.setRemoteVideoVisibility('p10', 'camera', false);
+  room.setFollowSpeaker(true);
+  signaling.onMessage({ type: 'activeSpeaker', participantId: 'p10' });
+  clock.advance(1_499);
+  await settle();
+  assert.equal(state.media.tracks.has('v10'), false);
+  clock.advance(1);
+  await settle();
+  assert.deepEqual(state.followed, ['p10']);
+  assert.equal(state.media.tracks.has('v10'), true);
+  assert.equal(state.media.tracks.has('v11'), true, 'the visible screen share remains selected');
+  assert.equal(state.maximum, 9, 'retire the old camera before consuming the speaker');
+  assert.equal(state.consumed.filter((id) => id.startsWith('a')).length, 12);
+  assert.deepEqual(state.errors, []);
+});
+
+test('Follow speaker stays opt-in and disabling it retires an offscreen focused camera', async (t) => {
+  const clock = speakerClock();
+  const speakerPolicy = await loadTypeScript('src/receive-policy.ts', { globals: clock.globals });
+  const { room, state, signaling, settle } = await fixture(t, 12, false, { policy: speakerPolicy });
+  signaling.onMessage({ type: 'activeSpeaker', participantId: 'p11' });
+  assert.equal(room.followsSpeaker, false);
+  assert.equal(clock.timers.size, 0);
+  room.setRemoteVideoVisibility('p11', 'camera', false);
+  room.setFollowSpeaker(true);
+  clock.advance(1_500);
+  await settle();
+  assert.equal(state.media.tracks.has('v11'), true);
+  room.setFollowSpeaker(false);
+  await settle();
+  assert.deepEqual(state.followed, ['p11', null]);
+  assert.equal(state.media.tracks.has('v11'), false);
+  assert.equal(clock.timers.size, 0);
+});
+
+test('speaker focus respects hidden cameras, audio-only and a hidden page', async (t) => {
+  const clock = speakerClock();
+  const speakerPolicy = await loadTypeScript('src/receive-policy.ts', { globals: clock.globals });
+  const { room, state, signaling, settle } = await fixture(t, 12, false, { policy: speakerPolicy });
+  room.setFollowSpeaker(true);
+  signaling.onMessage({ type: 'activeSpeaker', participantId: 'p11' });
+  clock.advance(1_500);
+  await settle();
+  room.setRemoteMediaHidden('p11', true);
+  await settle();
+  assert.equal(state.media.tracks.has('v11'), false);
+  assert.equal(clock.timers.size, 0);
+  room.setRemoteMediaHidden('p11', false);
+  room.setReceiveMode('audio-only');
+  clock.advance(5_000);
+  await settle();
+  assert.equal([...state.media.tracks.keys()].filter((id) => id.startsWith('v')).length, 0);
+  room.setReceiveMode('data-saver');
+  room.setMediaPageActive(false);
+  clock.advance(5_000);
+  await settle();
+  assert.equal(clock.timers.size, 0);
+  assert.equal([...state.media.tracks.keys()].filter((id) => id.startsWith('v')).length, 0);
+  room.setMediaPageActive(true);
+  clock.advance(1_500);
+  await settle();
+  assert.equal(state.media.tracks.has('v11'), true);
+  assert.equal([...state.media.tracks.keys()].filter((id) => id.startsWith('v')).length, 4);
+});
+
+test('departing speakers and teardown cancel focus timers without later subscriptions', async (t) => {
+  const clock = speakerClock();
+  const speakerPolicy = await loadTypeScript('src/receive-policy.ts', { globals: clock.globals });
+  const { room, state, signaling, settle } = await fixture(t, 12, false, { policy: speakerPolicy });
+  room.setFollowSpeaker(true);
+  signaling.onMessage({ type: 'activeSpeaker', participantId: 'p11' });
+  signaling.onMessage({ type: 'participantLeft', participantId: 'p11' });
+  clock.advance(5_000);
+  await settle();
+  assert.deepEqual(state.followed, []);
+  signaling.onMessage({ type: 'activeSpeaker', participantId: 'p10' });
+  assert.equal(clock.timers.size, 1);
+  await room.leave();
+  clock.advance(5_000);
+  assert.equal(clock.timers.size, 0);
+  assert.deepEqual(state.followed, []);
+});
+
+test('camera pause and closure clear focus while a fresh camera can be followed again', async (t) => {
+  const clock = speakerClock();
+  const speakerPolicy = await loadTypeScript('src/receive-policy.ts', { globals: clock.globals });
+  const { room, state, signaling, settle } = await fixture(t, 12, false, { policy: speakerPolicy });
+  room.setFollowSpeaker(true);
+  signaling.onMessage({ type: 'activeSpeaker', participantId: 'p11' });
+  clock.advance(1_500);
+  await settle();
+  signaling.onMessage({ type: 'producerPaused', producerId: 'v11' });
+  assert.deepEqual(state.followed, ['p11', null]);
+  assert.equal(clock.timers.size, 0);
+  signaling.onMessage({ type: 'producerResumed', producerId: 'v11' });
+  clock.advance(1_500);
+  await settle();
+  assert.deepEqual(state.followed, ['p11', null, 'p11']);
+  signaling.onMessage({ type: 'producerClosed', producerId: 'v11' });
+  assert.deepEqual(state.followed, ['p11', null, 'p11', null]);
+  assert.equal(clock.timers.size, 0);
+  signaling.onMessage({ type: 'activeSpeaker', participantId: 'local' });
+  signaling.onMessage({ type: 'activeSpeaker', participantId: 'unknown' });
+  clock.advance(5_000);
+  await settle();
+  assert.equal(clock.timers.size, 0, 'local or unknown speakers cannot nominate a remote camera');
+});
+
+test('moderation closure immediately retires a focused camera without waiting for a second event', async (t) => {
+  const clock = speakerClock();
+  const speakerPolicy = await loadTypeScript('src/receive-policy.ts', { globals: clock.globals });
+  const { room, state, signaling, settle } = await fixture(t, 12, false, { policy: speakerPolicy });
+  room.setFollowSpeaker(true);
+  signaling.onMessage({ type: 'activeSpeaker', participantId: 'p11' });
+  clock.advance(1_500);
+  await settle();
+  signaling.onMessage({ type: 'forceClosedProducer', producerId: 'v11' });
+  await settle();
+  assert.deepEqual(state.followed, ['p11', null]);
+  assert.equal(clock.timers.size, 0);
+  assert.equal(state.media.tracks.has('v11'), false);
+});
+
+test('signaling loss cancels pending focus and recovery waits for a fresh speaker event', async (t) => {
+  const clock = speakerClock();
+  const speakerPolicy = await loadTypeScript('src/receive-policy.ts', { globals: clock.globals });
+  const { room, state, signaling, settle } = await fixture(t, 12, false, { policy: speakerPolicy });
+  room.setFollowSpeaker(true);
+  signaling.onMessage({ type: 'activeSpeaker', participantId: 'p11' });
+  clock.advance(700);
+  signaling.connected = false;
+  signaling.onConnectionLost();
+  assert.equal(clock.timers.size, 0);
+  clock.advance(10_000);
+  await settle();
+  assert.deepEqual(state.followed, []);
+  assert.equal(room.followsSpeaker, true);
+  signaling.connected = true;
+  room.setMediaPageActive(false);
+  room.setMediaPageActive(true);
+  assert.equal(clock.timers.size, 0, 'old dominant-speaker state was retired');
+  signaling.onMessage({ type: 'activeSpeaker', participantId: 'p10' });
+  clock.advance(1_500);
+  await settle();
+  assert.deepEqual(state.followed, ['p10']);
+});
 
 for (const [mode, limit] of [
   ['balanced', 9],

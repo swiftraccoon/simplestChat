@@ -21,6 +21,8 @@ import {
 import { AudioOutput, SpeakerTest, observeMediaDevices, outputErrorMessage } from './audio-output';
 import {
   loadReceiveMode,
+  loadFollowSpeaker,
+  saveFollowSpeaker,
   normalizeReceiveMode,
   saveReceiveMode,
   type ReceiveMode,
@@ -35,6 +37,7 @@ interface MediaControlsRoom {
   setRemoteMediaHidden(participantId: string, hidden: boolean): void;
   setRemoteVideoQuality(participantId: string, quality: RemoteVideoQuality): void;
   setReceiveMode(mode: ReceiveMode): void;
+  setFollowSpeaker(enabled: boolean): void;
 }
 
 interface MediaControlsOptions {
@@ -465,6 +468,23 @@ export class MediaControls {
     });
     receiveLabel.append(receive);
     toolbar.append(receiveLabel);
+    const followLabel = document.createElement('label');
+    const follow = document.createElement('input');
+    follow.type = 'checkbox';
+    follow.setAttribute('aria-label', 'Follow speaker');
+    follow.checked = loadFollowSpeaker();
+    follow.title =
+      'Prefer the current speaker’s camera. Pins, shared screens and picture-in-picture take priority. Tile sizes stay fixed.';
+    follow.addEventListener('change', () => {
+      saveFollowSpeaker(follow.checked);
+      this.options.getRoom()?.setFollowSpeaker(follow.checked);
+      for (const mounted of this.toolbars) {
+        const control = mounted.querySelector<HTMLInputElement>('input[type="checkbox"]');
+        if (control) control.checked = follow.checked;
+      }
+    });
+    followLabel.append(follow, document.createTextNode('Follow speaker'));
+    toolbar.append(followLabel);
     container.append(toolbar);
     this.toolbars.add(toolbar);
   }

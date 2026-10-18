@@ -12,6 +12,7 @@ const { privateAttachmentChecks, publicAttachmentChecks } = require('./attachmen
 const { checkNotificationPreferences } = require('./notification-checks.cjs');
 const {
   checkAccountPrivacyAcrossDevices,
+  checkFollowSpeakerPreference,
 } = require('./privacy-follow-checks.cjs');
 const { checkRoomAdministration } = require('./room-administration-checks.cjs');
 const { sheet, sheetRow, sheetScreen, closeSheet } = require('./settings-sheet.cjs');
@@ -1090,6 +1091,9 @@ async function setRole(owner, name, role) {
         });
       },
     );
+    await step('Follow speaker is explicit, persistent and capture-free', async () => {
+      report.followSpeaker = await checkFollowSpeakerPreference(owner, { base });
+    });
     await step('home manages an owned room without moving the active call', async () => {
       report.roomAdministration = await checkRoomAdministration(owner, secondDevice, {
         base,

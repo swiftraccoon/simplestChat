@@ -655,7 +655,7 @@ test('one pinned tile fills the stage, and a tile that is gone cannot stay pinne
         this.attributes[key] = value;
       },
     };
-    return { pin, dataset: {}, classList: classes(), querySelector: () => pin };
+    return { pin, dataset: {}, style: {}, classList: classes(), querySelector: () => pin };
   };
   const remoteTiles = new Map([
     ['alice', tile()],
@@ -664,6 +664,8 @@ test('one pinned tile fills the stage, and a tile that is gone cannot stay pinne
   const videoGrid = { classList: classes() };
   const { setPinnedTile, pinned } = evaluateTypeScript(
     `let pinnedTileKey = null;
+    let followedSpeaker = null;
+    ${await functionSource('orderVideoTiles')}
     ${await functionSource('setPinnedTile')}
     export { setPinnedTile };
     export const pinned = () => pinnedTileKey;`,
@@ -680,6 +682,37 @@ test('one pinned tile fills the stage, and a tile that is gone cannot stay pinne
   setPinnedTile('gone');
   assert.equal(pinned(), null);
   assert.equal(videoGrid.classList.contains('has-pinned'), false);
+});
+
+test('following changes tile order while preserving shared screens, a manual pin and uniform dimensions', async () => {
+  const remoteTiles = new Map(
+    ['alice', 'bob', 'alice:screen', 'carol'].map((id) => [
+      id,
+      {
+        dataset: id.endsWith(':screen') ? { videoSource: 'screen' } : {},
+        style: { width: '160px', height: '90px' },
+      },
+    ]),
+  );
+  const { follow } = evaluateTypeScript(
+    `
+    let pinnedTileKey = 'carol'; let followedSpeaker = null;
+    ${await functionSource('orderVideoTiles')}
+    export const follow = (id) => { followedSpeaker = id; orderVideoTiles(); };
+  `,
+    { globals: { remoteTiles } },
+  );
+  follow('bob');
+  assert.equal(remoteTiles.get('carol').style.order, '-3');
+  assert.equal(remoteTiles.get('alice:screen').style.order, '-2');
+  assert.equal(remoteTiles.get('bob').style.order, '-1');
+  assert.equal(remoteTiles.get('alice').style.order, '');
+  for (const tile of remoteTiles.values())
+    assert.deepEqual([tile.style.width, tile.style.height], ['160px', '90px']);
+  follow(null);
+  assert.equal(remoteTiles.get('carol').style.order, '-3');
+  for (const id of ['alice', 'bob', 'alice:screen'])
+    assert.equal(remoteTiles.get(id).style.order, '');
 });
 
 test('forgetting this device clears every key the app wrote and nothing else', async () => {

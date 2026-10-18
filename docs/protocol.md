@@ -597,6 +597,31 @@ enabled; late unsupported-update results cannot rebuild a replaced session.
 `leaveRoom` has no dedicated acknowledgement. The browser immediately retires its
 membership and media, and the server removes the corresponding membership.
 
+### Incoming video and Follow speaker
+
+The browser selects at most nine incoming videos in Balanced mode, four in Data
+saver and none in Audio only. Cameras and screen shares share that limit;
+microphone subscriptions are separate. Deselected subscriptions are closed and
+their closure acknowledged before replacements are allocated. These viewer
+choices never capture, publish or moderate another participant.
+
+Follow speaker is an optional browser-local preference, off by default. The
+server's existing `activeSpeaker` event nominates a remote participant with an
+available camera. The nomination must remain stable for 1.5 seconds; once focused,
+that camera holds priority for at least five seconds before another stable
+speaker replaces it. Rapid nominations use one pending timer rather than a queue.
+Silence cancels a pending nomination while retaining the last established camera.
+
+Explicit picture-in-picture and pins lead, then visible screen shares, then the
+followed camera, then other cameras with stable existing ties. A followed camera
+can be selected outside the viewport while the page is visible. Explicit hiding,
+Audio only and a hidden page remain authoritative; picture-in-picture retains
+its existing hidden-page exception. Following changes selection and camera
+ordering, with uniform tile dimensions. Disabling the choice, hiding its camera,
+camera removal or pause, participant departure and membership/media teardown
+clear the affected focus or pending nomination. Signaling loss clears transient
+speaker state; reconnect keeps the preference and waits for fresh speaker events.
+
 ## Chat, social actions and replay
 
 Public `chatMessage` and `privateMessage` sends use a client-generated

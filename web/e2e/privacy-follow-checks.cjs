@@ -1,5 +1,6 @@
 /** Real owned account routes and UI; called only by the disposable community suite. */
 const assert = require('node:assert/strict');
+const { openRoomMenu } = require('./room-menu.cjs');
 
 const preferencePath = '/api/auth/preferences';
 const responseFor = (page, method) =>
@@ -143,4 +144,74 @@ async function checkAccountPrivacyAcrossDevices(
 
 /** The control works at phone size and survives a new same-origin document;
  * these actions cannot capture either device or create a room membership. */
-module.exports = { checkAccountPrivacyAcrossDevices };
+async function checkFollowSpeakerPreference(owner, { base }) {
+  const captures = await owner.evaluate(() => window.__communityCaptureRequests);
+  const viewport = owner.viewportSize();
+  let probe;
+  try {
+    await openRoomMenu(owner);
+    const follow = owner.getByRole('checkbox', { name: 'Follow speaker', exact: true });
+    assert.equal(await follow.isChecked(), false, 'following is optional and starts off');
+    await follow.check();
+    assert.equal(
+      await owner.evaluate(() => localStorage.getItem('simplestchat.followSpeaker')),
+      'true',
+    );
+    await owner.keyboard.press('Escape');
+    await owner.setViewportSize({ width: 390, height: 844 });
+    await openRoomMenu(owner);
+    await follow.focus();
+    await follow.scrollIntoViewIfNeeded();
+    const box = await follow.boundingBox();
+    assert.ok(
+      box && box.x >= 0 && box.y >= 0 && box.x + box.width <= 391 && box.y + box.height <= 845,
+    );
+    await follow.press('Space');
+    assert.equal(
+      await follow.isChecked(),
+      false,
+      'the phone-sized control works from the keyboard',
+    );
+    await follow.check();
+    await owner.keyboard.press('Escape');
+    probe = await owner.context().newPage();
+    let errors = 0;
+    probe.on('pageerror', () => errors++);
+    await probe.addInitScript(() => {
+      let captures = 0;
+      for (const name of ['getUserMedia', 'getDisplayMedia']) {
+        const capture = navigator.mediaDevices[name]?.bind(navigator.mediaDevices);
+        if (capture)
+          navigator.mediaDevices[name] = (...args) => {
+            captures++;
+            return capture(...args);
+          };
+      }
+      window.__followPreferenceCaptures = () => captures;
+    });
+    await probe.goto(new URL('/', base).href);
+    const persisted = probe.locator('#room-volume-slot input[aria-label="Follow speaker"]');
+    await persisted.waitFor({ state: 'attached' });
+    assert.equal(await persisted.isChecked(), true);
+    await probe.reload();
+    await persisted.waitFor({ state: 'attached' });
+    assert.equal(await persisted.isChecked(), true, 'a new document restores the opt-in');
+    assert.equal(await probe.evaluate(() => window.__followPreferenceCaptures()), 0);
+    assert.equal(
+      await probe.locator('#join-screen').isVisible(),
+      true,
+      'the new tab remains outside a room',
+    );
+    assert.equal(errors, 0);
+    assert.equal(await owner.evaluate(() => window.__communityCaptureRequests), captures);
+  } finally {
+    await probe?.close();
+    if (viewport) await owner.setViewportSize(viewport);
+    await openRoomMenu(owner);
+    await owner.getByRole('checkbox', { name: 'Follow speaker', exact: true }).uncheck();
+    await owner.keyboard.press('Escape');
+  }
+  return { defaultOff: true, phoneKeyboardControl: true, persisted: true, noCapture: true };
+}
+
+module.exports = { checkAccountPrivacyAcrossDevices, checkFollowSpeakerPreference };

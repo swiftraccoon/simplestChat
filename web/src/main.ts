@@ -916,6 +916,7 @@ const AUDIO_LEVEL_THRESHOLD = -50; // dB; only highlight above this
 // empty list on silence; the timer covers a lost silence report.
 const SPEAKING_HIGHLIGHT_TIMEOUT_MS = 2000;
 let currentDominantTile: HTMLDivElement | null = null;
+let followedSpeaker: string | null = null;
 const currentlySpeaking = new Set<HTMLElement>(); // tiles + list items with .speaking
 let speakingHighlightTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -3191,6 +3192,10 @@ joinBtn.addEventListener(
         },
         onConnectionQuality: renderConnectionQuality,
         onParticipantJoined: handleParticipantJoined,
+        onFollowedSpeakerChanged: (participantId) => {
+          followedSpeaker = participantId;
+          orderVideoTiles();
+        },
         onActiveSpeaker: (participantId) => {
           if (currentDominantTile) {
             currentDominantTile.classList.remove('dominant-speaker');
@@ -3582,6 +3587,7 @@ async function leaveRoomAndShowHome(): Promise<void> {
   setMicMode(personalMicMode, false);
   syncTalkRow();
 
+  followedSpeaker = null;
   clearChildren(videoGrid);
   clearChildren(participantList);
   clearChildren(chatMessages);
@@ -4255,11 +4261,26 @@ function setPinnedTile(key: string | null): void {
     }
   }
   videoGrid.classList.toggle('has-pinned', pinnedTileKey !== null);
+  orderVideoTiles();
   const tile = pinnedTileKey === null ? null : remoteTiles.get(pinnedTileKey);
   room?.setPinnedRemoteVideo(tile?.dataset['participantId'] ?? null, tile?.dataset['videoSource']);
 }
 
+function orderVideoTiles(): void {
+  for (const [key, tile] of remoteTiles) {
+    tile.style.order =
+      key === pinnedTileKey
+        ? '-3'
+        : followedSpeaker !== null && tile.dataset['videoSource'] === 'screen'
+          ? '-2'
+          : key === followedSpeaker
+            ? '-1'
+            : '';
+  }
+}
+
 function updateVideoGridCount(): void {
+  orderVideoTiles();
   if (pinnedTileKey !== null && !remoteTiles.has(pinnedTileKey)) setPinnedTile(null);
   const count = videoGrid.children.length;
   if (count <= 1) videoGrid.dataset['count'] = '1';
