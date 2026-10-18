@@ -9,7 +9,70 @@ function installBrowserPushFixture() {
     registration: null,
     permission: 'default',
     result: 'granted',
+    enabled: false,
+    http: { requests: 0, get: 0, put: 0, delete: 0, rejected: 0, native: 0 },
   });
+  const endpoint = 'https://push.example.test/owned-browser-fixture';
+  const nativeFetch = window.fetch.bind(window);
+  const count = (key) => {
+    evidence.http[key] = Math.min(evidence.http[key] + 1, 1000);
+  };
+  // Push delivery is a controlled fixture. WebKit returned a real backend 400
+  // for its fake endpoint despite the former page.route interception. Keep
+  // that endpoint inside this exact fetch boundary; the bypass cause is unknown.
+  window.fetch = async (input, init) => {
+    let url;
+    try {
+      url = new URL(input instanceof Request ? input.url : input, location.href);
+    } catch {
+      count('native');
+      return nativeFetch(input, init);
+    }
+    if (url.origin !== location.origin || url.pathname !== '/api/auth/push' || url.search !== '') {
+      count('native');
+      return nativeFetch(input, init);
+    }
+    const request = new Request(input instanceof Request ? input : url, init);
+    request.signal.throwIfAborted();
+    count('requests');
+    const reject = (status) => {
+      count('rejected');
+      return new Response(null, { status });
+    };
+    if (!/^Bearer \S+$/.test(request.headers.get('authorization') ?? '')) return reject(401);
+    if (request.method === 'GET') {
+      count('get');
+      return Response.json({ enabled: evidence.enabled, publicKey: `B${'A'.repeat(86)}` });
+    }
+    if (request.method === 'PUT') {
+      count('put');
+      let body;
+      try {
+        body = await request.json();
+      } catch {
+        return reject(400);
+      }
+      request.signal.throwIfAborted();
+      if (
+        !body ||
+        typeof body !== 'object' ||
+        Array.isArray(body) ||
+        Object.keys(body).length !== 1 ||
+        body.endpoint !== endpoint
+      )
+        return reject(400);
+      evidence.enabled = true;
+      return new Response(null, { status: 204 });
+    }
+    if (request.method === 'DELETE') {
+      count('delete');
+      if ((await request.text()) !== '') return reject(400);
+      request.signal.throwIfAborted();
+      evidence.enabled = false;
+      return new Response(null, { status: 204 });
+    }
+    return reject(405);
+  };
   const container = new EventTarget();
   let subscription = null;
   const registration = {
@@ -21,7 +84,7 @@ function installBrowserPushFixture() {
           throw new Error('Expected visible notifications and application key');
         evidence.subscriptions++;
         subscription = {
-          endpoint: 'https://push.example.test/owned-browser-fixture',
+          endpoint,
           unsubscribe: async () => {
             evidence.unsubscribed++;
             subscription = null;
@@ -54,25 +117,17 @@ function installBrowserPushFixture() {
 /** Install before navigation. Native Push/permission and HTTP delivery are controlled fixtures. */
 async function installPwaFixture(page) {
   await page.addInitScript(installBrowserPushFixture);
-  let enabled = false;
-  await page.route('**/api/auth/push', async (route) => {
-    const request = route.request();
-    assert.match(request.headers().authorization ?? '', /^Bearer /);
-    if (request.method() === 'GET') {
-      await route.fulfill({
-        json: { enabled, publicKey: `B${'A'.repeat(86)}` },
-      });
-    } else if (request.method() === 'PUT') {
-      assert.deepEqual(request.postDataJSON(), {
-        endpoint: 'https://push.example.test/owned-browser-fixture',
-      });
-      enabled = true;
-      await route.fulfill({ status: 204 });
-    } else if (request.method() === 'DELETE') {
-      enabled = false;
-      await route.fulfill({ status: 204 });
-    } else throw new Error('Unexpected push fixture method');
-  });
+}
+
+function collectPushFixtureEvidence() {
+  const fixture = window.__pushFixture;
+  if (!fixture) return null;
+  return {
+    permissionRequests: fixture.permissionRequests,
+    subscriptions: fixture.subscriptions,
+    unsubscribed: fixture.unsubscribed,
+    http: { ...fixture.http },
+  };
 }
 
 async function checkPwa(page, { openAccount, closeDialog }) {
@@ -94,17 +149,29 @@ async function checkPwa(page, { openAccount, closeDialog }) {
       gestures: window.__pushFixture.permissionGestures,
       subscriptions: window.__pushFixture.subscriptions,
       registration: window.__pushFixture.registration,
+      putRequests: window.__pushFixture.http.put,
+      rejected: window.__pushFixture.http.rejected,
     })),
     {
       permissionRequests: 1,
       gestures: [true],
       subscriptions: 1,
       registration: { url: '/sw.js', scope: '/', updateViaCache: 'none' },
+      putRequests: 1,
+      rejected: 0,
     },
   );
   await account.getByRole('button', { name: 'Disable notifications', exact: true }).click();
   await account.getByRole('button', { name: 'Enable notifications', exact: true }).waitFor();
   assert.equal(await page.evaluate(() => window.__pushFixture.unsubscribed), 1);
+  assert.deepEqual(
+    await page.evaluate(() => ({
+      put: window.__pushFixture.http.put,
+      delete: window.__pushFixture.http.delete,
+      rejected: window.__pushFixture.http.rejected,
+    })),
+    { put: 1, delete: 1, rejected: 0 },
+  );
   await closeDialog(account);
   await page.evaluate(() => {
     navigator.serviceWorker.dispatchEvent(
@@ -119,6 +186,15 @@ async function checkPwa(page, { openAccount, closeDialog }) {
   const value = await manifest.json();
   assert.equal(value.display, 'standalone');
   assert.deepEqual(value.icons.map((icon) => icon.sizes).sort(), ['192x192', '512x512']);
+  return {
+    transport: 'controlled same-origin push fetch',
+    ...(await page.evaluate(() => window.__pushFixture.http)),
+  };
 }
 
-module.exports = { installPwaFixture, checkPwa };
+module.exports = {
+  installBrowserPushFixture,
+  installPwaFixture,
+  checkPwa,
+  collectPushFixtureEvidence,
+};

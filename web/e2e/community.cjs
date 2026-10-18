@@ -6,7 +6,7 @@
  * PLAYWRIGHT_BROWSERS_PATH can point at an isolated browser installation.
  */
 const { openRoomMenu } = require('./room-menu.cjs');
-const { installPwaFixture, checkPwa } = require('./pwa-checks.cjs');
+const { installPwaFixture, checkPwa, collectPushFixtureEvidence } = require('./pwa-checks.cjs');
 const { checkContactsBeforeRoom, checkSavedRoomsAcrossDevices } = require('./discovery-checks.cjs');
 const { privateAttachmentChecks, publicAttachmentChecks } = require('./attachment-checks.cjs');
 const { checkNotificationPreferences } = require('./notification-checks.cjs');
@@ -230,7 +230,7 @@ async function navigateCommunityPage(page, url) {
 function saveReport() {
   report.httpWorkload = {
     observation:
-      'Client browser requests; direct fixture API calls and helper tabs use reserved headroom.',
+      'Native browser requests; controlled Push fetch is reported separately. Direct fixture API calls and helper tabs use reserved headroom.',
     windowMs: HTTP_WINDOW_MS,
     lanes: Object.fromEntries(
       [...httpLanes].map(([name, lane]) => [name, { limit: lane.limit, reserve: lane.reserve }]),
@@ -1326,7 +1326,7 @@ async function setRole(owner, name, role) {
       });
     });
     await step('optional app notifications require an explicit Account action', async () => {
-      await checkPwa(owner, {
+      report.pushFixture = await checkPwa(owner, {
         openAccount: () => settingsScreen(owner, 'Notifications'),
         closeDialog: close,
       });
@@ -3478,6 +3478,9 @@ async function setRole(owner, name, role) {
         pageErrors: item.errors,
         warnings: item.warnings,
         media,
+        pushFixture: await deadline(item.page.evaluate(collectPushFixtureEvidence)).catch(
+          () => null,
+        ),
       });
       saveReport();
     }
