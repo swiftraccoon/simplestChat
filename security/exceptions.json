@@ -593,31 +593,31 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:bd9aac209f3b7552eb49fb021cd6fdd4876792f6d0e913728db0f070d160e660",
-      "scope": "src/signaling/mod.rs:1779:1779:153:165",
+      "fingerprint": "codeql:b5c42660fdfdd26069b5d3ee9ab1b8b26f05be4a4ba475138dfbc08d741d7e0a",
+      "scope": "src/signaling/mod.rs:1819:1819:153:165",
       "owner": "swiftraccoon",
       "rationale": "The sink is a cfg(test) assertion diagnostic for a locally constructed metrics snapshot. The values are numeric counters/gauges; a password-named metric does not contain an account password. No credential or production log sink is involved.",
-      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 864432e7029921a7ba33ba167921a738eb79e3843933389b943906fc457e093e. The cfg(test) boundary and complete local path were re-reviewed at revision 7cbcaab7abbf37bef2cb49ef412154f21d0a2294; the flagged line and its enclosing test function are byte-identical to the prior reviewed source and only moved. No general test or Rust-query exclusion. Changed source/location requires another review.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 f3bcb5757eda885b8b0b8c9c369b9468ea9c996a76ca82bf6a3b0be6897bd3a6. The cfg(test) boundary and complete local path were re-reviewed at revision 673c93fb2d09b5cdc932de2871c5493b26eb5186; the flagged line and its enclosing test function are byte-identical to the prior reviewed source and only moved. No general test or Rust-query exclusion. Changed source/location requires another review.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-35"
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:d18a797e93b8fb4c6923956c365f3f07dd7c9929369d2bcc9d514e7beff6176f",
-      "scope": "src/signaling/connection_authorization_tests.rs:359:359:21:62",
+      "fingerprint": "codeql:49bbb4dd1bfc2eb9d7e6ee8b69b1beda452e54ed05e9c249d9f843e4d63cce27",
+      "scope": "src/signaling/connection_authorization_tests.rs:398:398:21:62",
       "owner": "swiftraccoon",
       "rationale": "The sink is an assertion diagnostic in the cfg(test)-only authorization dispatcher fixture. It formats local synthetic operation results and roles, not a production logger or account credential. The reviewed test calls use fixed fixture participants and messages.",
-      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 2219caa33ed0862fffde8a9dccef20d3f37c7078e5cf870ca922e990a0027e28. The file is unchanged since the 9eaabb7b5ab586ca694283afc1550055ef2c3136 re-review; at revision 60a2291356c8484c849925c0e933d794a240ba85 only the rendered message changed because the room password now reaches the join through RoomManager::verify_room_password, so the data-flow labels name that helper. The sink line, columns and cfg(test) boundary were re-reviewed; no general test or Rust-query exclusion. Changed source/location requires another review.",
+      "reachability": "Exact CodeQL 2.27.1 query, primary range/message and whole-file SHA256 49ff37b88717b33c2b05568a082b75075651cf76e0643af94d7e6a4ee63c7d42. At source revision 673c93fb2d09b5cdc932de2871c5493b26eb5186, an earlier nickname test gains real disposable-account setup and cleanup, shifting these dispatcher diagnostics by 39 lines. Both flagged lines and their enclosing authorization test functions are byte-identical to the prior reviewed source. Their rendered-message hashes are retained from actual analysis of revision 428576bda5f78167f169913940dcd9458539b5a4 in run 39096512724; only source identity and line locations are rebound by this static review. No new analysis, general test exclusion or remote dismissal is claimed. Changed source, location or query output requires another review.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-36"
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:44e832ee70762cb16000482ef464c5ce8ee64a9506cb6fd981df1af9bb065540",
-      "scope": "src/signaling/connection_authorization_tests.rs:406:406:17:51",
+      "fingerprint": "codeql:34fedc9555175b885bdeef63a9183e5330d848238fbeafe3ce58cf0f16daa567",
+      "scope": "src/signaling/connection_authorization_tests.rs:445:445:17:51",
       "owner": "swiftraccoon",
       "rationale": "The sink is an assertion diagnostic in the cfg(test)-only authorization dispatcher fixture. It formats local synthetic operation results and roles, not a production logger or account credential. The reviewed test calls use fixed fixture participants and messages.",
-      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 2219caa33ed0862fffde8a9dccef20d3f37c7078e5cf870ca922e990a0027e28. The file is unchanged since the 9eaabb7b5ab586ca694283afc1550055ef2c3136 re-review; at revision 60a2291356c8484c849925c0e933d794a240ba85 only the rendered message changed because the room password now reaches the join through RoomManager::verify_room_password, so the data-flow labels name that helper. The sink line, columns and cfg(test) boundary were re-reviewed; no general test or Rust-query exclusion. Changed source/location requires another review.",
+      "reachability": "Exact CodeQL 2.27.1 query, primary range/message and whole-file SHA256 49ff37b88717b33c2b05568a082b75075651cf76e0643af94d7e6a4ee63c7d42. At source revision 673c93fb2d09b5cdc932de2871c5493b26eb5186, an earlier nickname test gains real disposable-account setup and cleanup, shifting these dispatcher diagnostics by 39 lines. Both flagged lines and their enclosing authorization test functions are byte-identical to the prior reviewed source. Their rendered-message hashes are retained from actual analysis of revision 428576bda5f78167f169913940dcd9458539b5a4 in run 39096512724; only source identity and line locations are rebound by this static review. No new analysis, general test exclusion or remote dismissal is claimed. Changed source, location or query output requires another review.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-37"
     },
@@ -873,11 +873,11 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:af82b76316eff738da88f7bacd0c5e3211941883be4d7fc32f4fc297e68611bf",
-      "scope": "src/signaling/mod.rs:2208:2208:31:56",
+      "fingerprint": "codeql:d2b2cb7f30d62374ae5db0c2da8d1691cc2e3a8c5b008ce463a4b41bd95aef2f",
+      "scope": "src/signaling/mod.rs:2248:2248:31:56",
       "owner": "swiftraccoon",
       "rationale": "This fixed passphrase is inside the cfg(test) disposable-database registration enumeration-limiter test. It is used only with a unique fixture account and test-owned state, never a production identity.",
-      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 864432e7029921a7ba33ba167921a738eb79e3843933389b943906fc457e093e. The cfg(test) boundary and complete local path were re-reviewed at revision 7cbcaab7abbf37bef2cb49ef412154f21d0a2294; the flagged line and its enclosing test function are byte-identical to the prior reviewed source and only moved. No general test or Rust-query exclusion. Changed source/location requires another review.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 f3bcb5757eda885b8b0b8c9c369b9468ea9c996a76ca82bf6a3b0be6897bd3a6. The cfg(test) boundary and complete local path were re-reviewed at revision 673c93fb2d09b5cdc932de2871c5493b26eb5186; the flagged line and its enclosing test function are byte-identical to the prior reviewed source and only moved. No general test or Rust-query exclusion. Changed source/location requires another review.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-63"
     },
@@ -933,11 +933,11 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:0951c949341225b2fadebf489f320cb412d21de4781ae87560f3abeb85ecacae",
-      "scope": "src/signaling/mod.rs:1770:1770:79:91",
+      "fingerprint": "codeql:6ac87974bc3f6917159a62217edfbef75af1e82b76a1293b8811c3cc297f3bbe",
+      "scope": "src/signaling/mod.rs:1810:1810:79:91",
       "owner": "swiftraccoon",
       "rationale": "The sink is a cfg(test) assertion diagnostic for a response from the test-owned loopback HTTP server. The route returns fixed status/body bytes to test timeout and admission metrics; no external input or production logging path is used.",
-      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 864432e7029921a7ba33ba167921a738eb79e3843933389b943906fc457e093e. The cfg(test) boundary and complete local path were re-reviewed at revision 7cbcaab7abbf37bef2cb49ef412154f21d0a2294; the flagged line and its enclosing test function are byte-identical to the prior reviewed source and only moved. No general test or Rust-query exclusion. Changed source/location requires another review.",
+      "reachability": "Exact query, CodeQL version, primary range/message and whole-file SHA256 f3bcb5757eda885b8b0b8c9c369b9468ea9c996a76ca82bf6a3b0be6897bd3a6. The cfg(test) boundary and complete local path were re-reviewed at revision 673c93fb2d09b5cdc932de2871c5493b26eb5186; the flagged line and its enclosing test function are byte-identical to the prior reviewed source and only moved. No general test or Rust-query exclusion. Changed source/location requires another review.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-69"
     },
@@ -1773,11 +1773,11 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:c5ab569d37088053fc385a7863c99df0b53b6050339199be1f020146baea10c9",
+      "fingerprint": "codeql:74802ebd681ace190d6a54d6fa04bd7803b18c1f0580b0e5ce2ebb0530c73275",
       "scope": "load_tests/bin/load_test.rs:57:57:5:47",
       "owner": "swiftraccoon",
       "rationale": "The sensitive-name heuristic treats the entire local account Option and refresh receiver as account data; the reported sink is format!(self.origin) passed as the reqwest request URL. That value contains only the validated public loopback origin and fixed /api/auth/refresh path, without credentials, bearer token or cookie. The generator requires a plain literal loopback IPv4 endpoint for account workloads; the included account helper additionally rejects URL userinfo, query, fragment and paths other than /ws, disables redirects and proxies, and bounds requests. Separate fixture credentials are intentionally sent in body/header only to this disposable local server. This decision covers the reported public-URL taint in the owned experiment, not remote HTTP authentication. The identity includes every committed transitive literal include, so account_session.rs guard changes invalidate approval even when CodeQL maps the sink to the parent include! line.",
-      "reachability": "Exact CodeQL 2.27.1 rule, message, region, complete parent source and 12-file transitive Rust include closure. Only the guarded load-test account fixture is approved; changed dependencies, source, location or query output require a fresh review. No query exclusion, alert dismissal or production source change.",
+      "reachability": "Exact CodeQL 2.27.1 rule, message, region, complete parent source and 12-file transitive Rust include closure. Only the guarded load-test account fixture is approved; changed dependencies, source, location or query output require a fresh review. No query exclusion, alert dismissal or production source change. Source re-reviewed at revision 673c93fb2d09b5cdc932de2871c5493b26eb5186: the parent and chat_load.rs each add only account_conversation: None to one cfg(test) ChatEntry constructor. account_session.rs and the other ten included files are unchanged.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md"
     }

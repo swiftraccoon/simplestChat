@@ -571,3 +571,43 @@ SHA-256 `864432e7029921a7ba33ba167921a738eb79e3843933389b943906fc457e093e`); col
 rendered-message hashes are unchanged. Canonical fingerprints and source
 provenance are rebound; rationale, owner and the 2026-11-29 expiry remain.
 This approves no new finding, remote dismissal or broader exclusion.
+
+## October 18 account and room controls
+
+[Run 39096512724](https://github.com/swiftraccoon/simplestChat/actions/runs/39096512724)
+analyzed revision `428576bda5f78167f169913940dcd9458539b5a4` with CodeQL
+2.27.1. Its original Rust report contains three previously reviewed findings
+whose exact identities changed: the metrics assertion (35), registration test
+passphrase (63), and load-generator public-origin flow (953). The same report
+also retains the reviewed loopback assertion (69) as an advisory because its
+source identity moved. The report and invocation evidence remain unchanged.
+
+The complete flagged lines and enclosing `cfg(test)` functions for 35, 63 and
+69 are byte-identical to their previous review. Added routes move each by 40
+lines. Their complete source hash is
+`f3bcb5757eda885b8b0b8c9c369b9468ea9c996a76ca82bf6a3b0be6897bd3a6`.
+
+Source revision `673c93fb2d09b5cdc932de2871c5493b26eb5186` then repairs the
+earlier nickname fixture to create and clean up real disposable accounts. This
+changes `connection_authorization_tests.rs` to SHA-256
+`49ff37b88717b33c2b05568a082b75075651cf76e0643af94d7e6a4ee63c7d42`.
+The flagged lines and complete enclosing dispatcher tests for 36 and 37 remain
+byte-identical; only their positions move by 39 lines. Those two replacement
+identities are a source-only review, retaining the rendered-message digests
+observed in the original run. A new analysis must independently confirm them.
+
+| Alert | Previous reviewed line | Current reviewed line |
+| --- | --- | --- |
+| 35 | 1779 | 1819 |
+| 36 | 359 | 398 |
+| 37 | 406 | 445 |
+| 63 | 2208 | 2248 |
+| 69 | 1770 | 1810 |
+
+The separate [account-room public-origin review](reviews.md#account-room-public-origin-codeql-flow)
+records 953's complete parent/include refresh. The six records replace their
+superseded identities while keeping the original rationale, owner, exact
+columns, query, analyzer version and 2026-11-29 expiry. No exception matches any
+other changed Rust test file or its include dependencies. No query exclusion,
+new finding or remote dismissal is approved, and static policy replay does not
+claim a new CodeQL scan or a passing CI run.

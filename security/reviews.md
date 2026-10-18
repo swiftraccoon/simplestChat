@@ -139,6 +139,32 @@ fingerprint is
 the exact scope is `load_tests/bin/load_test.rs:57:57:5:47`. The review expires
 on 2026-11-29. It adds no query exclusion and authorizes no remote dismissal.
 
+### October 18 account-conversation source refresh
+
+CodeQL 2.27.1 run
+[39096512724](https://github.com/swiftraccoon/simplestChat/actions/runs/39096512724)
+analyzed `428576bda5f78167f169913940dcd9458539b5a4` and reported the same
+public-origin flow, rule, message digest and `57:57:5:47` primary range. The
+complete delta from the prior reviewed source adds only
+`account_conversation: None` to one `cfg(test)` `ChatEntry` constructor in
+`load_test.rs` and one in included `chat_load.rs`. The parent SHA-256 is now
+`ffd79270fa38b8e5a845b2cf3131ea2253af99d52eac8553e9dfba85d0fedeac`;
+`chat_load.rs` is
+`6c62b897f5d14bce4925118ca4edfa8ca073621ee7010c1fed596f436cb75442`.
+`account_session.rs`, its endpoint validation, credential handling and refresh
+request are byte-identical, as are the other ten included files. The actual
+reported URL still contains only the validated public loopback origin and
+fixed refresh path.
+
+The replacement fingerprint is
+`codeql:74802ebd681ace190d6a54d6fa04bd7803b18c1f0580b0e5ce2ebb0530c73275`.
+The review binds all 12 included-file hashes and source revision
+`673c93fb2d09b5cdc932de2871c5493b26eb5186`, preserves the original rationale,
+owner, scope and 2026-11-29 expiry, and removes the superseded fingerprint.
+This is an exact identity refresh of the previously reviewed owned fixture;
+it does not approve remote cleartext credentials or add a general test/query
+exclusion. Static policy replay is distinct from a new analyzer run.
+
 ## Cache retention trigger
 
 On 2026-10-05, the high-severity `dangerous-triggers` finding for
