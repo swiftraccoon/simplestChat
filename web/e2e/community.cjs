@@ -82,6 +82,113 @@ const report = {
       : 'ICE restarts use real legacy commands and native credential changes; no UDP failure or TURN relay is exercised.',
   ],
 };
+// All fixture accounts share one loopback address. Keep their combined workload
+// within the real server guards instead of weakening limits or retrying writes.
+// Limits match the clean environment in with-test-server.sh and router defaults.
+const HTTP_WINDOW_MS = 61_000;
+const MAX_HTTP_PACING_MS = 90_000;
+const httpLanes = new Map(
+  [
+    ['auth', 300, 100],
+    ['rooms', 120, 40],
+    ['profiles', 600, 100],
+    ['telemetry', 30, 10],
+  ].map(([name, limit, reserve]) => [name, { limit, reserve, requests: [] }]),
+);
+const httpCounts = new Map();
+const httpPacing = [];
+let httpObserved = 0;
+let httpWaitMs = 0;
+const httpPathParts = new Set(
+  (
+    'api auth rooms register login refresh logout sessions others profile profiles invites ' +
+    'preferences password recovery key redeem passkey passkeys start finish authorize enroll ' +
+    'ws-ticket attachments inbox messages reactions read unread contacts saved-rooms mine ' +
+    'memberships preview identity image administration settings members bans reports history ' +
+    'moderation lobby sanctions notification-preferences notifications push subscriptions telemetry'
+  ).split(' '),
+);
+function httpRoute(request) {
+  const url = new URL(request.url());
+  if (url.origin !== new URL(base).origin || !url.pathname.startsWith('/api/')) return null;
+  const path = url.pathname;
+  const lane =
+    path.startsWith('/api/auth/profiles/') || /^\/api\/rooms\/[^/]+\/image$/.test(path)
+      ? 'profiles'
+      : path.startsWith('/api/auth/')
+        ? 'auth'
+        : path === '/api/rooms' || path.startsWith('/api/rooms/')
+          ? 'rooms'
+          : path === '/api/telemetry'
+            ? 'telemetry'
+            : null;
+  if (!lane) return null;
+  const method = ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'].includes(
+    request.method(),
+  )
+    ? request.method()
+    : 'OTHER';
+  // Only fixed route words survive. Never retain query strings, account/room
+  // identifiers, emails, headers, request bodies or invitation credentials.
+  const template = path
+    .split('/')
+    .map((part) => (!part || httpPathParts.has(part) ? part : ':id'))
+    .join('/');
+  const candidate = `${method} ${template}`;
+  const key = httpCounts.has(candidate) || httpCounts.size < 128 ? candidate : 'OTHER /api/:other';
+  if (!httpCounts.has(key)) httpCounts.set(key, { lane, requests: 0, statuses: {}, failed: 0 });
+  return { lane, count: httpCounts.get(key) };
+}
+function observeHttpRequest(request) {
+  const route = httpRoute(request);
+  if (!route) return;
+  httpObserved++;
+  route.count.requests++;
+  const requests = httpLanes.get(route.lane).requests;
+  requests.push(Date.now());
+  if (requests.length > 2000) requests.shift();
+}
+function observeHttpResponse(response) {
+  const route = httpRoute(response.request());
+  if (!route) return;
+  const status = response.status();
+  route.count.statuses[status] = (route.count.statuses[status] ?? 0) + 1;
+}
+async function paceHttpRequests() {
+  let pacing;
+  for (;;) {
+    assert.ok(httpObserved <= 5000, 'the owned HTTP workload must stay bounded');
+    const now = Date.now();
+    const recent = {};
+    let wait = 0;
+    for (const [name, lane] of httpLanes) {
+      while (lane.requests.length && now - lane.requests[0] >= HTTP_WINDOW_MS)
+        lane.requests.shift();
+      recent[name] = lane.requests.length;
+      const target = lane.limit - lane.reserve;
+      if (lane.requests.length > target)
+        wait = Math.max(
+          wait,
+          lane.requests[lane.requests.length - target - 1] + HTTP_WINDOW_MS - now,
+        );
+    }
+    if (wait <= 0) return;
+    if (!pacing) {
+      pacing = { beforeStep: activeStep, recent, waitedMs: 0 };
+      httpPacing.push(pacing);
+      console.log(`PACE shared HTTP workload before ${activeStep}: ${JSON.stringify(recent)}`);
+    }
+    const delay = Math.min(wait, 30_000);
+    assert.ok(
+      httpWaitMs + delay <= MAX_HTTP_PACING_MS,
+      'HTTP scenario pacing exceeds its 90-second workload bound',
+    );
+    saveReport();
+    await new Promise((resolve) => setTimeout(resolve, delay));
+    pacing.waitedMs += delay;
+    httpWaitMs += delay;
+  }
+}
 function communityStartupReady() {
   return (
     document.querySelector('.conversation-toolbar') !== null &&
@@ -99,6 +206,20 @@ async function navigateCommunityPage(page, url) {
   await page.waitForFunction(communityStartupReady, null, { timeout: 10000 });
 }
 function saveReport() {
+  report.httpWorkload = {
+    observation:
+      'Client browser requests; direct fixture API calls and helper tabs use reserved headroom.',
+    windowMs: HTTP_WINDOW_MS,
+    lanes: Object.fromEntries(
+      [...httpLanes].map(([name, lane]) => [name, { limit: lane.limit, reserve: lane.reserve }]),
+    ),
+    observedRequests: httpObserved,
+    pacingMs: httpWaitMs,
+    pacing: httpPacing,
+    endpoints: Object.fromEntries(
+      [...httpCounts].sort(([left], [right]) => left.localeCompare(right)),
+    ),
+  };
   report.webKitTestNetwork = {
     enabled: webKitTestNetwork,
     pages: clients
@@ -215,9 +336,12 @@ async function step(name, work) {
   activeStep = name;
   const result = { name, passed: false };
   report.steps.push(result);
+  await paceHttpRequests();
+  const requestsBefore = httpObserved;
   saveReport();
   await testNetworkReady();
   const outcome = await work();
+  result.observedHttpRequests = httpObserved - requestsBefore;
   await testNetworkReady();
   if (outcome?.skip) {
     result.skipped = true;
@@ -246,6 +370,12 @@ async function client(label, mobile = false, configureContext, independentCaptur
   const page = await context.newPage();
   const entry = { label, context, page, errors: [], frames: [], warnings: [] };
   clients.push(entry);
+  page.on('request', observeHttpRequest);
+  page.on('response', observeHttpResponse);
+  page.on('requestfailed', (request) => {
+    const route = httpRoute(request);
+    if (route) route.count.failed++;
+  });
   if (webKitTestNetwork) {
     const { installWebKitTestNetwork } = require('./webkit-test-network.cjs');
     entry.testNetwork = await installWebKitTestNetwork(playwright, page, {
