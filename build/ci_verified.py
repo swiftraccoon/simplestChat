@@ -77,6 +77,7 @@ CODEQL_NATIVE_FILES = frozenset(
         "build/security_codeql_cargo.py",
         "build/security_codeql_local.py",
         "build/security_codeql_resources.py",
+        "build/security_codeql_rust_sources.py",
         "build/security_codeql_sources.py",
         "build/security_codeql_tools.py",
         "build/security_codeql_triage.py",
