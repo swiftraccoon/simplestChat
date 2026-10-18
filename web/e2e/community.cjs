@@ -1498,9 +1498,11 @@ async function setRole(owner, name, role) {
         exact: true,
       });
       await conversation
+        .locator('.history-messages')
         .getByText('Private owner hello', { exact: true })
         .waitFor({ state: 'visible' });
       await conversation
+        .locator('.history-messages')
         .getByText('Private member reply', { exact: true })
         .waitFor({ state: 'visible' });
       await conversation
@@ -1508,6 +1510,7 @@ async function setRole(owner, name, role) {
         .fill('Sent through saved inbox');
       await conversation.getByLabel('Private message', { exact: true }).press('Enter');
       await conversation
+        .locator('.history-messages')
         .getByText('Sent through saved inbox', { exact: true })
         .waitFor({ state: 'visible' });
       await visible(member, 'Sent through saved inbox');
@@ -1534,6 +1537,7 @@ async function setRole(owner, name, role) {
       await edit.getByRole('button', { name: 'Save changes', exact: true }).click();
       await edit.waitFor({ state: 'hidden' });
       await conversation
+        .locator('.history-messages')
         .getByText('Corrected saved private message', { exact: true })
         .waitFor({ state: 'visible' });
       await visible(member, 'Corrected saved private message');
@@ -1607,10 +1611,7 @@ async function setRole(owner, name, role) {
           await conversation.getByText('Unconfirmed send', { exact: true }).waitFor();
           assert.equal(await composer.inputValue(), '');
           await composer.fill(draft);
-          assert.equal(
-            await conversation.getByRole('button', { name: 'Send', exact: true }).isDisabled(),
-            true,
-          );
+          assert.equal(await conversation.locator('.history-send').isDisabled(), true);
           await visible(member, text);
           assert.equal(
             await savedPrivateRowCount(committed.sender, peer, committed.clientMessageId),

@@ -30,7 +30,10 @@ async function checkContactsBeforeRoom(owner, member, { base, header, close }) {
   const sent = owner.getByRole('dialog', { name: 'Messages with E2E Member', exact: true });
   await sent.getByLabel('Private message', { exact: true }).fill('Contact hello before any room');
   await sent.getByLabel('Private message', { exact: true }).press('Enter');
-  await sent.getByText('Contact hello before any room', { exact: true }).waitFor();
+  await sent
+    .locator('.history-messages')
+    .getByText('Contact hello before any room', { exact: true })
+    .waitFor();
   assert.equal(
     await owner.locator('#join-screen').isVisible(),
     true,
@@ -38,7 +41,10 @@ async function checkContactsBeforeRoom(owner, member, { base, header, close }) {
   );
   await incoming.getByRole('button', { name: 'Message', exact: true }).click();
   const received = member.getByRole('dialog', { name: 'Messages with E2E Owner', exact: true });
-  await received.getByText('Contact hello before any room', { exact: true }).waitFor();
+  await received
+    .locator('.history-messages')
+    .getByText('Contact hello before any room', { exact: true })
+    .waitFor();
   assert.equal(await member.locator('#join-screen').isVisible(), true);
   await close(received);
   await close(memberInbox);
