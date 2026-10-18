@@ -327,6 +327,17 @@ async fn queued_control_revalidates_sender_permissions_before_applying_a_topic()
 #[tokio::test]
 async fn chat_preference_ack_waits_for_inflight_durable_control() {
     with_fixture(|mut fixture| async move {
+        // This proves the room-control ordering of a session preference, while
+        // account preferences are authoritative in the database integration
+        // fixtures. A synthetic account without a database must fail closed.
+        fixture
+            .room
+            .write()
+            .await
+            .participants
+            .get_mut(&fixture.owner.id)
+            .unwrap()
+            .authenticated = false;
         let held = control::lock_room(&fixture.room).await;
         let command = crate::signaling::protocol::ClientMessage::SetChatPreferences {
             request_id: "disable-private".into(),

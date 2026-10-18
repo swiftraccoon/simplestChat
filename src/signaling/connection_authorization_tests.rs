@@ -8,66 +8,105 @@ use super::*;
 mod secret_canary_tests;
 
 #[tokio::test]
+#[ignore = "requires migrated disposable TEST_DATABASE_URL and mediasoup worker"]
 async fn authenticated_join_uses_requested_room_name_without_changing_identity() {
     use crate::room::roles::Role;
+    use futures_util::FutureExt;
+    use std::panic::AssertUnwindSafe;
 
+    let pool = super::heartbeat_tests::disposable_account_pool().await;
     let metrics = ServerMetrics::new();
-    let manager = Arc::new(RoomManager::new_for_connection_tests(metrics.clone()).await);
-    let mut participants = Vec::new();
-    for (index, settled_name) in ["Room nickname", "Room nickname (2)"]
-        .into_iter()
-        .enumerate()
-    {
-        let participant = Uuid::new_v4().to_string();
-        let (sender, mut receiver) = mpsc::channel(128);
-        let mut room = None;
-        let mut reconnect = String::new();
-        let lobby = Arc::new(AtomicBool::new(false));
-        let reply = ReplySender {
-            metrics: &metrics,
-            sender: &sender,
-            request_id: None,
-        };
-        let join = ClientMessage::JoinRoom {
-            room_id: "account-names".into(),
-            participant_name: "Room nickname".into(),
-            password: None,
-            chat_style: None,
-        };
-        handle_client_message(
-            &join,
-            &participant,
-            &mut room,
-            &lobby,
-            &reply,
-            &manager,
-            &None,
-            &mut reconnect,
-            &None,
-            true,
-            None,
+    let manager = Arc::new(
+        RoomManager::new_for_connection_tests_with_pool(metrics.clone(), Some(pool.clone())).await,
+    );
+    let mut accounts = Vec::new();
+    for _ in 0..2 {
+        let account: Uuid = sqlx::query_scalar(
+            "INSERT INTO users(email,display_name) VALUES($1,'Account profile name') RETURNING id",
         )
+        .bind(format!("{}@connection-names.invalid", Uuid::new_v4()))
+        .fetch_one(&pool)
         .await
         .unwrap();
-        assert_eq!(room.as_deref(), Some("account-names"));
-        let state = manager.room_for_connection_tests("account-names");
-        let state = state.read().await;
-        let joined = &state.participants[&participant];
-        assert_eq!(joined.id, participant);
-        assert_eq!(joined.name, settled_name);
-        assert!(joined.authenticated);
-        assert_eq!(
-            joined.role,
-            if index == 0 { Role::Owner } else { Role::User }
-        );
-        let response: serde_json::Value =
-            serde_json::from_str(&receiver.try_recv().unwrap()).unwrap();
-        assert_eq!(response["type"], "roomJoined");
-        assert_eq!(response["yourName"], settled_name);
-        assert_eq!(response["participantId"], participant);
-        participants.push((sender, receiver));
+        accounts.push(account);
     }
-    manager.drain_signal().begin_draining();
+    let room_id = format!("account-names-{}", Uuid::new_v4());
+    let outcome = AssertUnwindSafe(async {
+        let mut participants = Vec::new();
+        for (index, settled_name) in ["Room nickname", "Room nickname (2)"]
+            .into_iter()
+            .enumerate()
+        {
+            let participant = accounts[index].to_string();
+            let (sender, mut receiver) = mpsc::channel(128);
+            let mut room = None;
+            let mut reconnect = String::new();
+            let lobby = Arc::new(AtomicBool::new(false));
+            let reply = ReplySender {
+                metrics: &metrics,
+                sender: &sender,
+                request_id: None,
+            };
+            let join = ClientMessage::JoinRoom {
+                room_id: room_id.clone(),
+                participant_name: "Room nickname".into(),
+                password: None,
+                chat_style: None,
+            };
+            handle_client_message(
+                &join,
+                &participant,
+                &mut room,
+                &lobby,
+                &reply,
+                &manager,
+                &None,
+                &mut reconnect,
+                &None,
+                true,
+                None,
+            )
+            .await
+            .unwrap();
+            assert_eq!(room.as_deref(), Some(room_id.as_str()));
+            let state = manager.room_for_connection_tests(&room_id);
+            let state = state.read().await;
+            let joined = &state.participants[&participant];
+            assert_eq!(joined.id, participant);
+            assert_eq!(joined.name, settled_name);
+            assert!(joined.authenticated);
+            assert_eq!(
+                joined.role,
+                if index == 0 { Role::Owner } else { Role::User }
+            );
+            let response: serde_json::Value =
+                serde_json::from_str(&receiver.try_recv().unwrap()).unwrap();
+            assert_eq!(response["type"], "roomJoined");
+            assert_eq!(response["yourName"], settled_name);
+            assert_eq!(response["participantId"], participant);
+            participants.push((sender, receiver));
+        }
+        let profiles: Vec<String> =
+            sqlx::query_scalar("SELECT display_name FROM users WHERE id=ANY($1)")
+                .bind(&accounts)
+                .fetch_all(&pool)
+                .await
+                .unwrap();
+        assert_eq!(profiles, ["Account profile name", "Account profile name"]);
+    })
+    .catch_unwind()
+    .await;
+    manager.shutdown().await.unwrap();
+    manager.media_server().shutdown().await.unwrap();
+    sqlx::query("DELETE FROM users WHERE id=ANY($1)")
+        .bind(accounts)
+        .execute(&pool)
+        .await
+        .unwrap();
+    pool.close().await;
+    if let Err(panic) = outcome {
+        std::panic::resume_unwind(panic);
+    }
 }
 
 #[tokio::test]

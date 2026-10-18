@@ -10,6 +10,36 @@ use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, tungstenite::Message as
 const TEST_IDLE: Duration = Duration::from_millis(500);
 type Peer = WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>;
 
+pub(super) async fn disposable_account_pool() -> sqlx::PgPool {
+    use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+    use std::str::FromStr;
+    assert_eq!(
+        std::env::var("DISPOSABLE_TEST_DATABASE").as_deref(),
+        Ok("1")
+    );
+    let options = PgConnectOptions::from_str(
+        &std::env::var("TEST_DATABASE_URL").expect("migrated disposable TEST_DATABASE_URL"),
+    )
+    .unwrap();
+    assert!(matches!(options.get_host(), "127.0.0.1" | "::1"));
+    assert!(options.get_socket().is_none());
+    assert!(
+        options
+            .get_database()
+            .is_some_and(|name| name.ends_with("_test"))
+    );
+    PgPoolOptions::new()
+        .max_connections(4)
+        .acquire_timeout(Duration::from_secs(3))
+        .connect_with(options.options([
+            ("statement_timeout", "8s"),
+            ("lock_timeout", "6s"),
+            ("idle_in_transaction_session_timeout", "15s"),
+        ]))
+        .await
+        .unwrap()
+}
+
 pub(super) struct Fixture {
     peer: Peer,
     manager: Arc<RoomManager>,
@@ -43,7 +73,9 @@ impl Fixture {
         renewal_authenticator: Option<RenewalAuthenticator>,
     ) -> Self {
         let metrics = ServerMetrics::new();
-        let manager = Arc::new(RoomManager::new_for_connection_tests(metrics.clone()).await);
+        let manager = Arc::new(
+            RoomManager::new_for_connection_tests_with_pool(metrics.clone(), pool.clone()).await,
+        );
         let grace = GracePeriodMap::new();
         let (completed_tx, completed) = mpsc::channel(1);
         let (revocations, _) = broadcast::channel(4);
@@ -543,11 +575,7 @@ async fn renewal_transport_loss_and_drain_do_not_invalidate_credentials() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL pointing to a migrated disposable PostgreSQL database"]
 async fn authenticated_renewal_keeps_socket_and_membership_across_original_expiry() {
-    let pool = sqlx::postgres::PgPoolOptions::new()
-        .max_connections(2)
-        .connect(&std::env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL"))
-        .await
-        .unwrap();
+    let pool = disposable_account_pool().await;
     let email = format!("renewal-{}@example.test", Uuid::new_v4());
     let account_id: Uuid = sqlx::query_scalar(
         "INSERT INTO users (email, display_name, password_hash) VALUES ($1, 'Renewal fixture', 'unused-fixture-hash') RETURNING id",

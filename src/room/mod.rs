@@ -1511,10 +1511,20 @@ impl RoomManager {
     /// native port. This constructor does not exist in production builds.
     #[cfg(test)]
     pub(crate) async fn new_for_connection_tests(metrics: ServerMetrics) -> Self {
+        Self::new_for_connection_tests_with_pool(metrics, None).await
+    }
+
+    /// Authenticated connection fixtures use the same disposable database for
+    /// socket authorization and the room's canonical account privacy reads.
+    #[cfg(test)]
+    pub(crate) async fn new_for_connection_tests_with_pool(
+        metrics: ServerMetrics,
+        pool: Option<sqlx::PgPool>,
+    ) -> Self {
         let mut config = MediaConfig::default();
         config.worker_config.num_workers = 1;
         config.webrtc_server_port_base = 0;
-        let mut manager = Self::new(config, metrics, None).await.unwrap();
+        let mut manager = Self::new(config, metrics, pool).await.unwrap();
         manager.allow_ad_hoc_rooms = true;
         manager
     }
