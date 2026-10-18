@@ -53,6 +53,11 @@ mod browser_profile {
 mod chat_load {
     include!("../clients/chat_load.rs");
 }
+mod account_session {
+    include!("../clients/account_session.rs");
+}
+
+type AccountReports = Arc<std::sync::Mutex<HashMap<String, account_session::AccountReport>>>;
 
 #[cfg(test)]
 mod keyframe_tests {
@@ -147,6 +152,9 @@ impl Profile {
 
 #[derive(Debug, Clone)]
 struct ClientConfig {
+    account: Option<account_session::Credentials>,
+    account_reports: AccountReports,
+    account_owner: bool,
     server_url: String,
     room_id: String,
     participant_name: String,
@@ -182,6 +190,10 @@ struct ClientConfig {
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct TestConfig {
+    #[serde(skip)]
+    accounts: Option<Vec<account_session::Credentials>>,
+    #[serde(skip)]
+    account_reports: AccountReports,
     num_clients: usize,
     duration_secs: u64,
     ramp_up_secs: u64,
@@ -606,6 +618,8 @@ fn watchdog_wait(
 impl Default for TestConfig {
     fn default() -> Self {
         Self {
+            accounts: None,
+            account_reports: Arc::new(std::sync::Mutex::new(HashMap::new())),
             num_clients: 5,
             duration_secs: 30,
             ramp_up_secs: 5,
@@ -653,11 +667,16 @@ async fn main() -> Result<()> {
     let mut browser = BrowserOptions::default();
     let mut max_audio_given = false;
     let mut max_video_given = false;
+    let mut accounts_file = None;
 
     let mut i = 1;
     while i < args.len() {
         validate_cli_value(&args, i)?;
         match args[i].as_str() {
+            "--accounts-file" => {
+                accounts_file = Some(std::path::PathBuf::from(&args[i + 1]));
+                i += 2;
+            }
             "--diagnostics" => {
                 config.diagnostics = true;
                 i += 1;
@@ -890,6 +909,12 @@ async fn main() -> Result<()> {
             config.max_video_consumers = video;
         }
     }
+    if let Some(path) = accounts_file {
+        config.accounts = Some(account_session::Credentials::load(
+            &path,
+            config.num_clients,
+        )?);
+    }
     run_load_test(config).await
 }
 
@@ -1072,6 +1097,7 @@ fn validate_cli_value(args: &[String], index: usize) -> Result<()> {
             );
         }
         "--room"
+        | "--accounts-file"
         | "--output-dir"
         | "--run-label"
         | "--server-revision"
@@ -1138,6 +1164,18 @@ async fn run_load_test(config: TestConfig) -> Result<()> {
         "Ratios must be finite"
     );
     config.validate_browser_budget()?;
+    if config.accounts.is_some() {
+        anyhow::ensure!(
+            plain_ws_endpoint(&config.server_url)?.ip().is_loopback()
+                && config.churn_rate == 0.0
+                && config.num_rooms == 1
+                && config.departure == Departure::ExplicitLeave
+                && config.chat_interval_ms.is_some()
+                && config.profile.browser().is_some()
+                && config.duration_secs >= 1200,
+            "Account measurements require a loopback browser-profile room, explicit leave, chat and at least twenty minutes"
+        );
+    }
     let num_churners = config.churner_count()?;
     chat_load::validate(
         &config.server_url,
@@ -1308,6 +1346,9 @@ async fn run_load_test(config: TestConfig) -> Result<()> {
             });
 
         let client_config = ClientConfig {
+            account: config.accounts.as_ref().map(|accounts| accounts[i].clone()),
+            account_reports: Arc::clone(&config.account_reports),
+            account_owner: config.accounts.is_some() && i == 0,
             server_url: config.server_url.clone(),
             room_id,
             participant_name,
@@ -1392,6 +1433,14 @@ async fn run_load_test(config: TestConfig) -> Result<()> {
         failures,
         (&runtime_lag, chat.as_ref().map(|load| load.report())),
     )?;
+    if config.accounts.is_some()
+        && let Some(chat) = &chat
+    {
+        std::fs::write(
+            config.output_dir.join("chat_inventory.json"),
+            serde_json::to_vec_pretty(&chat.inventory())?,
+        )?;
+    }
     if !watchdog.finish() {
         // Write the immutable marker here as well: exiting must not race the
         // watchdog thread's own best-effort write.
@@ -1534,8 +1583,27 @@ fn write_results_sync(
     if let Some(chat) = &chat {
         failures.extend(chat.failure_reasons.iter().cloned());
     }
+    let authentication = config
+        .account_reports
+        .lock()
+        .map_err(|_| anyhow::anyhow!("Account report collection failed"))?;
+    if config.accounts.is_some() {
+        if authentication.len() != config.num_clients {
+            failures
+                .push("One or more account sessions did not produce completion evidence".into());
+        }
+        if authentication.values().any(|account| !account.passed) {
+            failures
+                .push("Account refresh, socket renewal or original expiry coverage failed".into());
+        }
+    }
     let passed = completed && failures.is_empty();
     let mut report = serde_json::to_value(&summary)?;
+    if config.accounts.is_some() {
+        let mut accounts: Vec<_> = authentication.values().collect();
+        accounts.sort_by(|left, right| left.account_id.cmp(&right.account_id));
+        report["authentication"] = serde_json::to_value(accounts)?;
+    }
     report["schemaVersion"] = serde_json::json!(2);
     report["runtimeLag"] = serde_json::json!({
         "periodMs": RUNTIME_LAG_PERIOD.as_millis() as u64,
@@ -1770,10 +1838,27 @@ async fn run_client_inner(
             .map(|plan| plan.targets.clone()),
     });
 
-    // Connect to WebSocket signaling server
+    let mut account = if let Some(credentials) = &config.account {
+        Some(
+            account_session::AccountSession::login(
+                &config.server_url,
+                credentials,
+                config.source_address,
+            )
+            .await?,
+        )
+    } else {
+        None
+    };
+    let upgrade = if let Some(session) = &mut account {
+        Some((session.ticket().await?, session.origin().to_owned()))
+    } else {
+        None
+    };
+    // Connect through the same one-use ticket transport as the browser.
     let (ws_stream, _) = tokio::time::timeout_at(
         config.deadline.into(),
-        connect_signaling(&config.server_url, config.source_address),
+        connect_signaling(&config.server_url, config.source_address, upgrade),
     )
     .await
     .map_err(|_| anyhow::anyhow!("No WebSocket connection before the session deadline"))?
@@ -1875,6 +1960,34 @@ async fn run_client_inner(
             return Err(anyhow::anyhow!("Unexpected message: {:?}", msg));
         }
     };
+
+    if let Some(session) = &account {
+        anyhow::ensure!(
+            _participant_id == session.account_id(),
+            "Authenticated room identity changed"
+        );
+    }
+    if config.account_owner {
+        let request_id = "account-room-retention".to_owned();
+        send_message(
+            &mut write,
+            ClientMessage::SetRoomHistory {
+                request_id: request_id.clone(),
+                retention_days: 7,
+            },
+        )
+        .await?;
+        match receive_response(&mut read, &mut buffered_events, config.deadline).await? {
+            ServerMessage::SocialResponse {
+                request_id: response_id,
+                action,
+                data,
+            } if response_id == request_id
+                && action == "setRoomHistory"
+                && data["retentionDays"] == 7 => {}
+            _ => anyhow::bail!("Retained room history was not confirmed"),
+        }
+    }
 
     // Get router RTP capabilities (timed)
     let t = Instant::now();
@@ -2256,6 +2369,8 @@ async fn run_client_inner(
             planned_subscriptions,
             grid,
             config.chat,
+            account,
+            config.account_reports,
         )
         .await;
     });
@@ -3466,6 +3581,8 @@ async fn receive_messages_loop(
     planned_subscriptions: Option<PlannedClientSubscriptions>,
     mut grid: Option<browser_profile::BrowserGrid>,
     chat: Option<chat_load::ChatClient>,
+    mut account: Option<account_session::AccountSession>,
+    account_reports: AccountReports,
 ) {
     let deadline = tokio::time::Instant::now() + timeout;
     let mut needs_renegotiation = false;
@@ -3504,12 +3621,35 @@ async fn receive_messages_loop(
     let mut next_subscription_work = tokio::time::Instant::now();
     let attempt = metrics.diagnostic_attempt();
     let mut chat_schedule = chat.clone().map(chat_load::ChatClient::schedule);
+    let mut account_active = true;
 
     while tokio::time::Instant::now() < deadline {
         let chat_next = chat_schedule
             .as_ref()
             .and_then(chat_load::ChatSchedule::next);
+        let account_next = account
+            .as_ref()
+            .filter(|_| account_active)
+            .map(account_session::AccountSession::next_refresh);
         let got_message = tokio::select! {
+            _ = async {
+                match account_next {
+                    Some(next) => tokio::time::sleep_until(next.into()).await,
+                    None => std::future::pending().await,
+                }
+            }, if account_next.is_some() => {
+                match account.as_mut().unwrap().refresh().await {
+                    Ok(message) => if send_message(&mut write, message).await.is_err() {
+                        metrics.record_error("Account socket renewal could not be sent".into());
+                        account_active = false;
+                    },
+                    Err(_) => {
+                        metrics.record_error("Account session refresh or renewal failed".into());
+                        account_active = false;
+                    }
+                }
+                true
+            }
             _ = async {
                 match chat_next {
                     Some(next) => tokio::time::sleep_until(next.into()).await,
@@ -3554,6 +3694,11 @@ async fn receive_messages_loop(
                     Some(Ok(Message::Text(text))) => {
                         match serde_json::from_str::<ServerMessage>(&text) {
                             Ok(server_msg) => {
+                                if let Some(session) = &mut account
+                                    && session.observe(&server_msg).is_err() {
+                                    metrics.record_error("Account socket renewal was not confirmed".into());
+                                    account_active = false;
+                                }
                                 observe_chat(chat.as_ref(), &server_msg, &metrics);
                                 handle_server_message(
                                     server_msg,
@@ -3716,6 +3861,11 @@ async fn receive_messages_loop(
                         match msg {
                             Some(Ok(Message::Text(text))) => {
                                 if let Ok(server_msg) = serde_json::from_str::<ServerMessage>(&text) {
+                                    if let Some(session) = &mut account
+                                        && session.observe(&server_msg).is_err() {
+                                        metrics.record_error("Account socket renewal was not confirmed".into());
+                                        account_active = false;
+                                    }
                                     observe_chat(chat.as_ref(), &server_msg, &metrics);
                                     handle_server_message(
                                         server_msg,
@@ -3832,6 +3982,11 @@ async fn receive_messages_loop(
                 renegotiation_since = Some(tokio::time::Instant::now());
             }
         }
+    }
+    if let Some(account) = account
+        && let Ok(mut reports) = account_reports.lock()
+    {
+        reports.insert(client_id, account.report());
     }
 }
 
@@ -3965,6 +4120,8 @@ mod chat_and_continuous_audio_tests {
                 None,
                 None,
                 Some(chat),
+                None,
+                Arc::new(std::sync::Mutex::new(HashMap::new())),
             ));
             let frame = server.next().await.context("No chat command")??;
             let Message::Text(text) = frame else {
@@ -4224,22 +4381,31 @@ type SignalingStream =
 async fn connect_signaling(
     server_url: &str,
     source_address: Option<std::net::Ipv4Addr>,
+    upgrade: Option<(String, String)>,
 ) -> Result<(
     SignalingStream,
     tokio_tungstenite::tungstenite::handshake::client::Response,
 )> {
+    use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+    let mut request = server_url.into_client_request()?;
+    if let Some((ticket, origin)) = upgrade {
+        request.headers_mut().insert("Origin", origin.parse()?);
+        request.headers_mut().insert(
+            "Sec-WebSocket-Protocol",
+            format!("simplestchat, ticket.{ticket}").parse()?,
+        );
+    }
     let Some(source) = source_address else {
-        return Ok(connect_async(server_url).await?);
+        return Ok(connect_async(request).await?);
     };
     let target = plain_ws_endpoint(server_url)?;
     let socket = tokio::net::TcpSocket::new_v4()?;
     socket.bind(std::net::SocketAddr::new(source.into(), 0))?;
     let stream = socket.connect(target).await?;
-    Ok(tokio_tungstenite::client_async(
-        server_url,
-        tokio_tungstenite::MaybeTlsStream::Plain(stream),
+    Ok(
+        tokio_tungstenite::client_async(request, tokio_tungstenite::MaybeTlsStream::Plain(stream))
+            .await?,
     )
-    .await?)
 }
 
 #[cfg(test)]
@@ -4331,6 +4497,7 @@ where
             ServerMessage::RoleChanged { .. } => {}
             ServerMessage::VoiceRequested { .. } => {}
             ServerMessage::RoomSettingsChanged { .. } => {}
+            ServerMessage::PinnedMessagesChanged { .. } => {}
             ServerMessage::TopicChanged { .. } => {}
             ServerMessage::LobbyWaiting { .. } => {}
             ServerMessage::LobbyJoin { .. } => {}
@@ -4338,6 +4505,52 @@ where
             ServerMessage::LobbyAdmitted => {}
             msg => return Ok(msg),
         }
+    }
+}
+
+#[cfg(test)]
+mod setup_response_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn retained_room_setup_waits_past_policy_and_pin_broadcasts() -> Result<()> {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
+        let endpoint = format!("ws://{}/ws", listener.local_addr()?);
+        let (client, server) = tokio::join!(connect_async(endpoint), async {
+            let (stream, _) = listener.accept().await?;
+            Ok::<_, anyhow::Error>(tokio_tungstenite::accept_async(stream).await?)
+        });
+        let (client, _) = client?;
+        let mut server = server?;
+        for message in [
+            ServerMessage::RoomSettingsChanged {
+                settings: serde_json::json!({"historyRetentionDays": 7}),
+            },
+            ServerMessage::PinnedMessagesChanged {
+                messages: Vec::new(),
+            },
+            ServerMessage::SocialResponse {
+                request_id: "retention".into(),
+                action: "setRoomHistory".into(),
+                data: serde_json::json!({"retentionDays": 7}),
+            },
+        ] {
+            server
+                .send(Message::Text(serde_json::to_string(&message)?.into()))
+                .await?;
+        }
+        let (_, mut read) = client.split();
+        let response = receive_response(
+            &mut read,
+            &mut Vec::new(),
+            Instant::now() + Duration::from_secs(2),
+        )
+        .await?;
+        assert!(
+            matches!(response, ServerMessage::SocialResponse { request_id, .. } if request_id == "retention")
+        );
+        server.close(None).await?;
+        Ok(())
     }
 }
 
@@ -4452,6 +4665,10 @@ fn print_usage() {
     println!("                             all remote audio and bounded video reception)");
     println!("  --receive-mode <MODE>      Browser receive policy: balanced (9 videos),");
     println!("                             data-saver (4 lowest-layer videos), audio-only (0)");
+    println!(
+        "  --accounts-file <PATH>     Private 0600 account cohort for a loopback, twenty-minute"
+    );
+    println!("                             retained-chat measurement with real session refresh");
     println!(
         "  --capture <720p|1080p>     Browser camera (default 720p: 100/300/900 kbit/s layers)"
     );
@@ -4685,6 +4902,8 @@ mod departure_tests {
                 None,
                 None,
                 None,
+                None,
+                Arc::new(std::sync::Mutex::new(HashMap::new())),
             ));
             request_explicit_leave(request, Duration::from_secs(1)).await?;
             // No server response is sent: the completion must be a write
@@ -4884,6 +5103,8 @@ mod incremental_receive_tests {
                 None,
                 None,
                 None,
+                None,
+                Arc::new(std::sync::Mutex::new(HashMap::new())),
             )))));
 
             let request = server.next().await.context("Missing Consume request")??;
@@ -5089,6 +5310,8 @@ mod subscription_loop_tests {
                 None,
                 None,
                 None,
+                None,
+                Arc::new(std::sync::Mutex::new(HashMap::new())),
             ));
             Ok(Self {
                 server,

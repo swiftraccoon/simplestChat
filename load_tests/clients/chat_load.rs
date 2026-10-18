@@ -69,6 +69,16 @@ pub struct ChatReport {
     pub failure_reasons: Vec<String>,
 }
 
+/// Exact retained-message comparison without publishing the fixture text.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatInventoryEntry {
+    message_id: String,
+    sender_account_id: String,
+    client_message_id: String,
+    content_sha256: String,
+}
+
 /// Restrict this additional workload to stable clients on an owned local server.
 /// The per-room rate leaves half the application's ten-message/second budget.
 pub fn validate(
@@ -141,6 +151,28 @@ impl ChatLoad {
             load: Arc::clone(self),
             index,
         }
+    }
+
+    pub fn inventory(&self) -> Vec<ChatInventoryEntry> {
+        use sha2::Digest;
+        let mut inventory = Vec::new();
+        for room in &self.rooms {
+            let room = room.lock().unwrap();
+            for (client_message_id, sent) in &room.messages {
+                if let (Some(message_id), Some(sender)) =
+                    (&sent.message_id, room.participants.get(&sent.sender))
+                {
+                    inventory.push(ChatInventoryEntry {
+                        message_id: message_id.clone(),
+                        sender_account_id: sender.clone(),
+                        client_message_id: client_message_id.clone(),
+                        content_sha256: hex::encode(sha2::Sha256::digest(sent.content.as_bytes())),
+                    });
+                }
+            }
+        }
+        inventory.sort_by(|left, right| left.message_id.cmp(&right.message_id));
+        inventory
     }
 
     fn room_size(&self, index: usize) -> usize {
@@ -476,8 +508,8 @@ mod tests {
             chat_style: ChatStyle::default(),
             reply_to: None,
             removed_at: None,
-                revision: 0,
-                edited_at: None,
+            revision: 0,
+            edited_at: None,
             reactions: Vec::new(),
         };
         (
@@ -573,6 +605,110 @@ mod tests {
                 (5, 5, 8)
             );
         }
+    }
+
+    #[test]
+    fn retained_inventory_binds_confirmed_identities_and_hashes_without_exporting_text() {
+        let start = Instant::now();
+        let load = ChatLoad::new(4, 2, 3_000, start, start + Duration::from_secs(5));
+        let accounts: Vec<_> = (0..4).map(|_| uuid::Uuid::new_v4().to_string()).collect();
+        for (index, account) in accounts.iter().enumerate() {
+            load.client(index).register(account).unwrap();
+        }
+        let mut expected = Vec::new();
+        for (index, server_id, digest) in [
+            (
+                0,
+                "server-z",
+                "5eb9e86ba36bad1743060972cf8b544d10a8c7e7323af16528d65945fe95d606",
+            ),
+            (
+                1,
+                "server-a",
+                "73f7bb5fa469af4ebae57428c87b20e947566c5c1360b2558b8654eb0b8a93b2",
+            ),
+            (
+                2,
+                "server-m",
+                "604b8f010df73f031c8786b3069361e3c65d8b1a7db08580edc5ff3b64fe136d",
+            ),
+        ] {
+            let client = load.client(index);
+            let mut schedule = client.clone().schedule();
+            let now = schedule.next().unwrap();
+            let (mut ack, mut fanout) = responses(schedule.prepare(now).unwrap().unwrap(), index);
+            let ServerMessage::MessageAck {
+                client_message_id,
+                message,
+            } = &mut ack
+            else {
+                panic!("Expected an acknowledgement");
+            };
+            message.message_id = server_id.to_owned();
+            message.participant_id.clone_from(&accounts[index]);
+            expected.push(serde_json::json!({
+                "messageId": server_id,
+                "senderAccountId": accounts[index],
+                "clientMessageId": client_message_id,
+                "contentSha256": digest,
+            }));
+            let ServerMessage::ChatReceived {
+                message_id,
+                participant_id,
+                ..
+            } = &mut fanout
+            else {
+                panic!("Expected a peer delivery");
+            };
+            *message_id = server_id.to_owned();
+            participant_id.clone_from(&accounts[index]);
+            let peer = load.client((index + 2) % 4);
+            if index == 1 {
+                peer.observe(&fanout, now).unwrap();
+                assert_eq!(
+                    load.inventory().len(),
+                    2,
+                    "peer delivery can establish the committed identity before its ACK"
+                );
+            }
+            client.observe(&ack, now).unwrap();
+            if index != 1 {
+                peer.observe(&fanout, now).unwrap();
+            }
+        }
+        let mut pending = load.client(3).schedule();
+        assert!(pending.prepare(pending.next().unwrap()).unwrap().is_some());
+        expected
+            .sort_by(|left, right| left["messageId"].as_str().cmp(&right["messageId"].as_str()));
+        let inventory = serde_json::to_value(load.inventory()).unwrap();
+        assert_eq!(inventory, serde_json::Value::Array(expected));
+        let serialized = serde_json::to_string(&inventory).unwrap();
+        assert!(!serialized.contains("Owned load-test text"));
+        for entry in inventory.as_array().unwrap() {
+            let mut fields: Vec<_> = entry
+                .as_object()
+                .unwrap()
+                .keys()
+                .map(String::as_str)
+                .collect();
+            fields.sort_unstable();
+            assert_eq!(
+                fields,
+                [
+                    "clientMessageId",
+                    "contentSha256",
+                    "messageId",
+                    "senderAccountId"
+                ]
+            );
+        }
+        let report = load.report();
+        assert_eq!(report.sent_messages, 4);
+        assert_eq!(report.acknowledgements, 3);
+        assert!(
+            !report.passed,
+            "an omitted unconfirmed send must still fail workload coverage"
+        );
     }
 
     #[test]

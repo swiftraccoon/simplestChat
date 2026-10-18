@@ -87,6 +87,7 @@ docker run --rm --network host --user "$(id -u):$(id -g)" \
 | `--quality PRESET`, `--fps FPS` | `480p`/`720p`/`1080p`, 15/30/60 fps; defaults 480p/30 (synthetic profile only) |
 | `--profile NAME` | `synthetic` (default: fixed single-encoding streams) or `browser` (modeled browser media and subscriptions; see below). Historical reports must be interpreted using their recorded profile. |
 | `--receive-mode balanced\|data-saver\|audio-only` | Browser incoming-video choice; balanced receives up to nine videos, data saver four at the lowest layer, audio only none. This does not change what clients publish. |
+| `--accounts-file PATH` | Opt-in authenticated cohort: private regular JSON file, Unix mode `0600`, one distinct `{email, password, accountId}` record per client. Restricted to an owned loopback browser-profile room with chat, explicit leave, no churn and at least twenty measured minutes. |
 | `--capture 720p\|1080p` | Browser camera; 720p (100/300/900 kbit/s layers), 1080p raises the top layer to 2.5 Mbit/s |
 | `--speakers N` | Browser talkers per room at a time, rotating every 10 s; 1 |
 | `--viewport-width PX`, `--pixel-ratio F`, `--layout classic\|modern` | The screen each browser viewer has, which decides the simulcast layer it asks for; 1440, 2, classic |
@@ -134,9 +135,10 @@ missing acknowledgements or deliveries, and acknowledgement/delivery latency
 over two seconds fail the run. Exact latency histograms appear under
 `signalingLatencies.operations.chat_ack` and `chat_delivery`. Delivery evidence
 is bounded to one million expected events; invalid rate, duration, churn or
-inventory combinations fail before connections open. These checks exercise
-guest signaling and synthetic RTP, not account/database capacity, rendered
-chat responsiveness or decoded speech quality.
+inventory combinations fail before connections open. Without `--accounts-file`,
+these checks exercise guest signaling and synthetic RTP. The authenticated
+hosted workload below adds account sessions and persisted chat; neither workload
+establishes rendered chat responsiveness or decoded speech quality.
 
 Browser-profile audio-only runs with multiple speakers covering every publisher
 also require each consumer to receive at least 95% of the expected 50 packets/s
@@ -202,6 +204,45 @@ aspect-aware or height-constrained rows, mobile layouts, or device-specific
 capture and encoding behavior. The shared receive-policy fixtures bind the video
 budgets to the shipped client; they do not establish browser decoding or a new
 measured capacity ceiling.
+
+### Authenticated hosted room
+
+The manual **Performance** workflow's `only=account-room` runs
+[`build/account-room-check.mjs`](../build/account-room-check.mjs) on hosted Linux
+with a disposable PostgreSQL database. It registers thirty accounts through HTTP,
+creates one saved registered-only room, enables seven-day public chat retention,
+and measures twenty minutes after a sixty-second ramp and thirty-second warmup.
+Each client publishes synthetic camera/microphone RTP, receives twenty-nine
+microphones and up to nine camera videos, and sends staggered public chat every
+thirty seconds. Production limits stay unchanged; the disposable helper uses its
+documented registration/auth budgets. This is one operating point on shared
+hosted resources.
+
+The private cohort file is at most 256 KiB; credentials, tokens and refresh
+cookies are excluded from reports. Clients log in, obtain one-use WebSocket
+tickets and verify that room admission retains the account identity. HTTP refresh
+rotates the cookie and renews authentication on the same socket. Success requires
+a confirmed socket renewal, the same session, and observation at least sixty
+seconds beyond the original access token's unmodified fifteen-minute expiry.
+The harness removes private credentials and its private generator log during
+cleanup. Default runs continue to use guests.
+
+Summary `authentication` has one entry per account: `accountId`, `passed`,
+`originalExpiryCrossed`, numeric Unix-second `originalExpiresAt` and
+`latestExpiresAt`, and numeric counts `httpRefreshes`, `socketRenewals`,
+`deferredRenewals` and `failures`. `refreshLatenciesMs` and `renewalLatenciesMs`
+are arrays of milliseconds. Missing completion evidence or a nonzero failure
+count fails the run. `chat_inventory.json` lists observed server message IDs,
+sender account IDs, client message IDs and content SHA-256 hashes. The harness
+compares that inventory with retained database rows and the complete sender
+cohort after explicit departure.
+
+The uploaded `account-room-report.json` combines generator, authentication,
+resource and retention verdicts; the artifact also retains the bounded summaries,
+resource samples, message inventory and independent server shutdown receipt.
+Synthetic RTP validates forwarding and delivery, while the browser profile models
+receive choices; this experiment does not run thirty browser encoders/decoders
+or establish a production capacity ceiling.
 
 ### Fixed subscription graphs
 
@@ -300,6 +341,9 @@ packet buckets. `load_test_summary.json` aggregates them (`schemaVersion: 2`):
   graph identity and ordered per-client targets. Per-attempt
   `coverage.plannedSubscriptions` records those targets, realized
   publisher/producer/consumer mappings, and the exact-graph pass result.
+- Account-cohort runs add `authentication` and `chat_inventory.json`, described
+  under [Authenticated hosted room](#authenticated-hosted-room). Authentication
+  failure counts are numbers, distinct from the run's `failureReasons` array.
 - `sendMediaReady` / `receiveMediaReady`: peer `Connected` timing for each attempt.
 - `signalingLatencies.operations`: P50/P95/P99 from merged exact millisecond
   histograms, not averages of client percentiles.

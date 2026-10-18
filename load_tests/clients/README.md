@@ -12,7 +12,8 @@ For commands, options, and report definitions, see the
 | `webrtc_client.rs` | `WebRtcSession`, peer connections, SDP, track readers, cleanup |
 | `media_generator.rs` | Synthetic Opus/VP8 RTP packets |
 | `browser_profile.rs` | Simulcast, speaking rotation, receive budgets, desktop grid and layer-cap model |
-| `chat_load.rs` | Scheduled public chat, acknowledgments and complete room fanout checks |
+| `account_session.rs` | Private cohort loading, HTTP login/refresh, one-use tickets, correlated socket renewal and original-expiry evidence |
+| `chat_load.rs` | Scheduled public chat, acknowledgments, complete room fanout and retained-message comparison inventory |
 | `datagram_counter.rs` | Actual UDP datagram counts for socket-drop measurements |
 | `metrics.rs` | Counters, signaling histograms, diagnostic collection |
 | `measurement.rs` | Shared interval, per-attempt readiness/coverage, consumer delivery checks |
@@ -47,6 +48,18 @@ requests layer zero. The receive mode belongs in the serialized workload identit
 publication-only audio and receive-only audio are separate settings. Shared cases
 in `web/tests/browser-receive-policy-cases.json` bind these budgets to the actual
 web policy, without exercising capture or native media.
+
+The optional authenticated cohort is restricted to one owned loopback room,
+stable clients, explicit leave, chat and at least twenty measured minutes.
+`account_session.rs` owns private credentials, cookies and tokens; it verifies
+the expected account and session, refresh-cookie rotation, correlated renewal
+acknowledgments and passage beyond the original access-token expiry. Every
+signaling read path must observe authentication replies, including consumer
+settling. The receiver records its account report when leaving the receive loop;
+missing reports fail the workload. Serialized `failures` is a numeric count.
+`chat_load.rs` owns the message-ID/sender/content-hash inventory used by the
+hosted controller to compare saved rows. Neither module changes the default
+guest workload or proves browser encoding/decoding quality.
 
 Keep these invariants when changing the client:
 
