@@ -140,7 +140,18 @@ jobs:
           E2E_ARTIFACTS: ${{ runner.temp }}/browser-compatibility/ice-isolation
         run: node web/e2e/ice-isolation.cjs
 
-      - name: Preserve browser and database diagnostics
+      - name: Read presentations through native browser media
+        if: ${{ !cancelled() && (steps.community.outcome == 'success' || steps.community.outcome == 'failure') }}
+        timeout-minutes: 4
+        env:
+          PRESENTATION_E2E: '1'
+          PRESENTATION_IMPAIRMENT: '0'
+          TEST_BROWSER_HTTPS: '1'
+          WEBKIT_TEST_NETWORK: ${{ matrix.browser == 'webkit' && '1' || '' }}
+          E2E_ARTIFACTS: ${{ runner.temp }}/browser-compatibility/presentation
+        run: build/with-test-postgres.sh build/with-test-server.sh node web/e2e/presentation.cjs
+
+      - name: Preserve browser, presentation and database diagnostics
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

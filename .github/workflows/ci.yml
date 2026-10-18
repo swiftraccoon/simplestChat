@@ -806,6 +806,28 @@ jobs:
           E2E_ARTIFACTS: ${{ runner.temp }}/chat-retry
         run: build/with-test-server.sh node web/e2e/chat-retry.cjs
 
+      - name: Read presentations through constrained and recovered browser media
+        if: matrix.group == 'media'
+        timeout-minutes: 6
+        env:
+          PRESENTATION_E2E: "1"
+          PRESENTATION_IMPAIRMENT: "1"
+        run: |
+          test_media_ip="$(node build/test-media-ip.mjs)"
+          for browser in chromium firefox; do
+            TEST_ANNOUNCE_IP="$test_media_ip" E2E_BROWSER="$browser" E2E_ARTIFACTS="${RUNNER_TEMP}/presentation-${browser}" \
+              build/with-test-server.sh node web/e2e/presentation.cjs
+          done
+
+      - name: Preserve presentation quality diagnostics
+        if: ${{ !cancelled() && matrix.group == 'media' && !env.ACT }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: presentation-quality
+          path: ${{ runner.temp }}/presentation-*
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Preserve product continuity diagnostics
         if: ${{ !cancelled() && matrix.group == 'accounts' && !env.ACT }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

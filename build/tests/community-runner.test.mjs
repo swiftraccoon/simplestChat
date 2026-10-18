@@ -214,7 +214,19 @@ function pageFailureTooling(diagnosticsFail = false) {
     };
     module.exports = { chromium: { async launch() { return {
       version() { return 'fixture-browser'; },
-      async newContext() { return { async newPage() { return page; } }; },
+      async newContext(options) {
+        // The cold-start measurement is a separate owned page before the
+        // diagnostic client. Stub it without executing any browser/native code.
+        if (options.viewport.width === 390) return {
+          async newCDPSession() { return { async send() {} }; },
+          async newPage() { return {
+            on() {}, async addInitScript() {}, async goto() {}, async waitForFunction() {},
+            async evaluate() { return { captureRequests: 0 }; },
+          }; },
+          async close() {},
+        };
+        return { async newPage() { return page; }, async close() {} };
+      },
       async close() {},
     }; } } };
   `;
@@ -341,3 +353,25 @@ for (const browser of ['chromium', 'firefox']) {
     assert.ok(Date.parse(report.finishedAt) >= Date.parse(report.startedAt));
   });
 }
+
+test('HTTP workload admission separates account data from credentials and scrubs dynamic identities', async () => {
+  const source = await readFile(runner, 'utf8');
+  const start = source.indexOf('const httpPathParts =');
+  const end = source.indexOf('\nfunction observeHttpRequest(', start);
+  const httpCounts = new Map();
+  const classify = runInNewContext(`${source.slice(start, end)}; httpRoute`, {
+    URL, base: 'https://owned.test', httpCounts,
+  });
+  const request = path => ({ url: () => `https://owned.test${path}`, method: () => 'GET' });
+  for (const route of ['profile', 'preferences', 'attachments', 'contacts', 'saved-rooms', 'notification-preferences', 'inbox', 'push', 'updates']) {
+    assert.equal(classify(request(`/api/auth/${route}`)).lane, 'account', route);
+    assert.equal(classify(request(`/api/auth/${route}/OWNED_PRIVATE_ID?token=OWNED_SECRET`)).lane, 'account', route);
+  }
+  for (const route of ['login', 'register', 'refresh', 'logout', 'sessions', 'password', 'recovery/key', 'passkeys/enroll', 'ws-ticket'])
+    assert.equal(classify(request(`/api/auth/${route}`)).lane, 'auth', route);
+  assert.equal(classify(request('/api/auth/profiles/OWNED_PRIVATE_ID')).lane, 'profiles');
+  assert.equal(classify(request('/api/rooms/OWNED_ROOM/image')).lane, 'profiles');
+  assert.equal(classify(request('/api/rooms/OWNED_ROOM/settings')).lane, 'rooms');
+  assert.equal(classify({ url: () => 'https://other.test/api/auth/updates', method: () => 'GET' }), null);
+  assert.doesNotMatch(JSON.stringify([...httpCounts.keys()]), /OWNED_|token=/);
+});
