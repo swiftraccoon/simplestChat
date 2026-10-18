@@ -696,3 +696,11 @@ retained. Source provenance and Git blobs identify the newly reviewed files.
 No query, path or test exclusion was added, and no remote alert was dismissed.
 This local analysis and SARIF replay do not claim hosted upload or ingestion;
 current CI must independently satisfy those checks.
+
+## Source re-review: bounded rollover failure diagnostics (2026-10-18)
+
+Fresh original CodeQL 2.27.1 analysis of `8d2f3df3a86ff92ab3bdfa92d257e25e701754f5` executes all 50 Python security queries and changes only alert 32's exact identity. The complete `write_new` function is unchanged from `f475b09`; the flagged exclusive-create call moves from line 138 to 179. Its default remains 0600. The only explicit 0644 outputs remain the fixture's public one-day CA certificate and sanitized CI report.
+
+The new failure report accepts only one at-most-1-KiB exact helper message and a fixed stage enum. Extra text, unknown stages, symlinks and oversized stderr yield `unavailable`. No child output, credentials or arbitrary error string enters this field. The changed callers, parser and public-report flow were reviewed; 49 Python mock and 40 Node tests pass.
+
+Alert 32 now binds complete-source SHA256 `2528215712cfc3f97bfb4b91c6811fa26f201f028be3077481e9409fc08f0eb0`, range `179:179:18:75`, and fingerprint `codeql:3d3c9cd34cb0d0ba6c43f2d09da9871fd5074edf1be557cc935c5bc0caa6fbe8`. Original query, message, observation history, owner, scope and 2026-11-29 expiry remain unchanged. The original SARIF is replayed against this exact replacement; no query or path exclusion or remote dismissal is authorized. Hosted ingestion remains a separate required check.

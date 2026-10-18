@@ -563,11 +563,11 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:5f3f6e7ce7af4fcdaa61b2ded45e5e9be28422140985199603bfefd2ed097d78",
-      "scope": "build/release_container_harness.py:138:138:18:75",
+      "fingerprint": "codeql:3d3c9cd34cb0d0ba6c43f2d09da9871fd5074edf1be557cc935c5bc0caa6fbe8",
+      "scope": "build/release_container_harness.py:179:179:18:75",
       "owner": "swiftraccoon",
-      "rationale": "write_new remains exclusive O_CREAT|O_EXCL creation with default mode 0600. All added rollover scripts, HTML, revision metadata and configuration use that default inside private owned fixture directories. Only the explicit mode 0644 public one-day fixture CA certificate and sanitized CI summary remain world readable. The added browserAssets summary is exact-schema and type checked; keys, raw command output, configuration and database dumps stay private. Re-reviewed against fresh local CodeQL 2.27.1 security analysis of 27d3f03044fd041fa9f58a66d0a162942a0c48c1 (all 50 Python queries), retaining the original scope and expiry.",
-      "reachability": "Exact query, CodeQL version, primary range/message and re-reviewed complete source SHA256 43423f31b39fc9f30a3114a4778d551c743bffa16820061011484a0f06f1952f. Fresh original SARIF for 27d3f03044fd041fa9f58a66d0a162942a0c48c1 independently supplies this identity. Changed bytes or findings require a fresh review; no path, test or query exclusion, automatic renewal or expiry extension.",
+      "rationale": "write_new remains exclusive O_CREAT|O_EXCL creation with default mode 0600; its complete function is unchanged from the preceding f475b0971c2c124c502526504b7ad8da73d11a56 review. Only the public one-day fixture CA certificate and sanitized CI summary explicitly use 0644. The added browserAssetFailureStage is accepted only from one bounded exact helper message and an explicit fixed enum; raw or unknown stderr is never published. Existing report schemas, private command output and configuration ownership remain enforced. Re-reviewed against fresh original CodeQL 2.27.1 security SARIF for 8d2f3df3a86ff92ab3bdfa92d257e25e701754f5 (all 50 Python queries); no scope or expiry change.",
+      "reachability": "Exact query, CodeQL version, primary range/message and reviewed complete source SHA256 2528215712cfc3f97bfb4b91c6811fa26f201f028be3077481e9409fc08f0eb0. Fresh original SARIF for 8d2f3df3a86ff92ab3bdfa92d257e25e701754f5 independently records this identity. Changed bytes or findings require fresh review; no path, test or query exclusion, automatic renewal or expiry extension.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-32"
     },
