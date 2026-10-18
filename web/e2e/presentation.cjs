@@ -1,7 +1,6 @@
 /** Real encoded presentation text, voice and camera on owned hosted services.
  * No native screen picker or physical/audio-output claim is made. */
 const assert = require('node:assert/strict');
-const { execFileSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 const { browserOptions, webKitTestNetworkEnabled } = require('./browser-options.cjs');
@@ -9,6 +8,7 @@ const { installPeerEventTracing } = require('./peer-events.cjs');
 const { openRoomMenu } = require('./room-menu.cjs');
 const { sheetScreen, closeSheet } = require('./settings-sheet.cjs');
 const { presentationWindow, presentationProgress } = require('./presentation-window.cjs');
+const { createPresentationImpairment } = require('./presentation-impairment.cjs');
 const {
   installPresentationSignalStats,
   presentationReceiverStats,
@@ -72,24 +72,9 @@ function save() {
     { mode: 0o600 },
   );
 }
-function impair(action) {
-  if (!impaired) return;
-  const output = execFileSync('sh', [path.join(__dirname, '../../build/impair.sh'), action], {
-    env: {
-      ...process.env,
-      IMPAIR_UDP_PORT: process.env.TEST_MEDIA_PORT || '41010',
-      IMPAIR_WORKERS: '1',
-      IMPAIR_DIRECTION: 'downlink',
-      IMPAIR_RATE_KBIT: '800',
-      IMPAIR_DELAY_MS: '30',
-      IMPAIR_LOSS: '0',
-      IMPAIR_JITTER_MS: '0',
-    },
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'inherit'],
-  });
-  fs.appendFileSync(path.join(artifacts, 'impairment.log'), `${action}\n${output}`);
-}
+const impair = impaired
+  ? createPresentationImpairment({ port: process.env.TEST_MEDIA_PORT || '41010', artifacts })
+  : () => {};
 async function join(label, room) {
   const context = await browser.newContext({
     ...options.contextOptions,
@@ -190,6 +175,9 @@ async function progressing(page, name, accepts, timeoutMs = 30000, windowMs = 30
         serverAvailableBitrate: point.serverAvailableBitrate,
         serverEstimateAgeMs: point.serverEstimateAgeMs,
         screenInbound: point.screenInbound,
+        remoteDescriptions: point.remoteDescriptions,
+        localDescriptions: point.localDescriptions,
+        probator: point.probator,
         sender: point.sender,
       });
       if (report.observations.length > 128) report.observations.shift();
