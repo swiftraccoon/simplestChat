@@ -787,6 +787,31 @@ test('simultaneous transport requests resolve by ID when replies arrive in rever
   assert.equal(timers.pendingCount, 0);
 });
 
+test('receive replacement retries keep the old receiver identity and reject late acknowledgements', async (t) => {
+  const { client, socket, timers } = await connectedClient(t);
+  const old = '00000000-0000-4000-8000-000000000001';
+  const failed = assert.rejects(
+    client.request({ type: 'replaceRecvTransport', transportId: old }, 'transportCreated', 10),
+    /Timeout/,
+  );
+  const first = socket.sent.at(-1);
+  timers.tick(10);
+  await failed;
+  const retry = client.request(
+    { type: 'replaceRecvTransport', transportId: old },
+    'transportCreated',
+  );
+  const second = socket.sent.at(-1);
+  assert.equal(first.transportId, old);
+  assert.equal(second.transportId, old);
+  assert.notEqual(first.requestId, second.requestId);
+  socket.receive(transportReply('replacement', first.requestId));
+  assert.equal(timers.pendingCount, 1, 'the late first reply cannot resolve the retry');
+  socket.receive(transportReply('replacement', second.requestId));
+  assert.equal((await retry).transportId, 'replacement');
+  assert.equal(timers.pendingCount, 0);
+});
+
 test('a correlated error rejects only its operation regardless of request order', async (t) => {
   const { client, socket, timers } = await connectedClient(t);
   const send = client.request({ type: 'createSendTransport' }, 'transportCreated');

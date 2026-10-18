@@ -9,6 +9,7 @@ pub mod history;
 pub mod invites;
 pub mod moderation;
 mod privacy;
+mod receive_replacement;
 pub mod roles;
 pub mod settings;
 pub mod social;
@@ -4065,7 +4066,7 @@ impl RoomManager {
         room_id: &str,
         participant_id: &str,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
-        bwe_sender: mpsc::Sender<u32>,
+        bwe_sender: mpsc::Sender<crate::media::types::ReceiveBandwidthEstimate>,
     ) -> Result<()> {
         let media_session_id = self
             .media_session_for_sender(room_id, participant_id, expected_sender)
@@ -4091,6 +4092,7 @@ impl RoomManager {
         room_id: &str,
         participant_id: &str,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
+        expected_transport: TransportId,
         spatial_layer: u8,
     ) -> Result<usize> {
         let media_session_id = self
@@ -4100,7 +4102,11 @@ impl RoomManager {
             Self::media_participant_id(room_id, participant_id, media_session_id);
         let transports = self.media_server.transport_manager();
         let pending = transports
-            .set_bandwidth_ceiling(&media_participant_id, spatial_layer)
+            .set_bandwidth_ceiling_for_transport(
+                &media_participant_id,
+                Some(expected_transport),
+                spatial_layer,
+            )
             .await
             .map_err(|e| anyhow::anyhow!(e))?;
         let mut written = 0;

@@ -16,6 +16,7 @@ export type ClientMessage =
   | { type: 'getRouterRtpCapabilities'; requestId?: string }
   | { type: 'createSendTransport'; requestId?: string }
   | { type: 'createRecvTransport'; requestId?: string }
+  | { type: 'replaceRecvTransport'; requestId?: string; transportId: string }
   | {
       type: 'connectTransport';
       requestId?: string;
@@ -252,6 +253,7 @@ export interface RequestResponses {
   getRouterRtpCapabilities: 'routerRtpCapabilities';
   createSendTransport: 'transportCreated';
   createRecvTransport: 'transportCreated';
+  replaceRecvTransport: 'transportCreated';
   connectTransport: 'transportConnected';
   produce: 'producerCreated';
   consume: 'consumerCreated';

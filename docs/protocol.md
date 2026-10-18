@@ -633,6 +633,24 @@ is a separate user decision, never automatic replay of a moderation mutation.
    `mediaControlApplied`; repeated closure is harmless and only the current
    session's consumer is affected.
 
+`replaceRecvTransport` takes `transportId`, the exact receiver being retired,
+and returns a correlated `transportCreated` with fresh ICE/DTLS parameters. It
+requires the current admitted member and socket. It never replaces a send
+transport, changes membership, closes a producer or enables capture. The server
+builds and configures the candidate before retiring receive consumers, layer
+ceilings and the old receive transport. Failed setup leaves the old receiver
+installed. The new receiver starts with no inherited bandwidth ceiling, and
+queued estimates from the retired receiver cannot change its layers or stats.
+
+An admitted replacement finishes in an owned server task if its caller loses
+the response. Retry the same old `transportId` with a fresh `requestId`: one
+bounded per-session receipt returns that same replacement while it remains the
+current usable receiver. Once another replacement supersedes it, older requests
+are rejected without closing the newer receiver. Ordinary `createRecvTransport`
+continues to reject an existing live receiver. After receiving replacement
+parameters, connect the new receiver and recreate only the selected incoming
+subscriptions, creating each browser consumer before resuming its server peer.
+
 Producer pause/resume/close events describe shared publishing state. Consumer
 pause/resume and preferred layers affect that receiver's subscription; local
 playback volume is not producer moderation. `restartIce` / `iceRestarted` update
@@ -640,11 +658,12 @@ an existing transport and are distinct from reconnecting signaling; `iceRestarte
 carries fresh `iceServers` because the TURN credentials minted at transport
 creation expire after `TURN_TTL`, and the browser installs them before it
 regathers candidates. An empty server list needs no configuration update.
-If the browser handler cannot update nonempty ICE-server settings (as with
-mediasoup-client's Firefox handler), the browser closes the old media manager
-and rejoins with fresh transports. It first reclaims the session if signaling
-is disconnected or recovery is pending. Capture remains off until explicitly
-enabled; late unsupported-update results cannot rebuild a replaced session.
+If a receive transport's restart fails, including a browser handler that cannot
+update nonempty ICE-server settings, the browser replaces only that receiver as
+described above. A failed send transport still requires a full media rebuild and
+rejoin. It first reclaims the session if signaling is disconnected or recovery
+is pending. After a full rebuild, capture remains off until explicitly enabled;
+late unsupported-update results cannot rebuild a replaced session.
 
 `leaveRoom` has no dedicated acknowledgement. The browser immediately retires its
 membership and media, and the server removes the corresponding membership.

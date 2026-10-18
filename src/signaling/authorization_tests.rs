@@ -1356,6 +1356,7 @@ fn socket_boundary(message: &protocol::ClientMessage) -> &'static str {
         GetAttachmentAccess { .. } => "room-membership",
         CreateSendTransport => "room-membership",
         CreateRecvTransport => "room-membership",
+        ReplaceRecvTransport { .. } => "room-membership",
         ConnectTransport { .. } => "room-membership",
         Produce { .. } => "room-membership",
         Consume { .. } => "room-membership",

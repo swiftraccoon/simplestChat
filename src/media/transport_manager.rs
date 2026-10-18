@@ -5,7 +5,8 @@
 use crate::diagnostics::{Stage, measure, measure_result};
 use crate::media::config::WebRtcTransportConfig;
 use crate::media::types::{
-    ConsumerLayerState, MediaError, MediaResult, ParticipantMedia, TransportInfo,
+    ConsumerLayerState, MediaError, MediaResult, ParticipantMedia, ReceiveBandwidthEstimate,
+    TransportInfo,
 };
 use crate::signaling::protocol::ServerMessage;
 use anyhow::Result;
@@ -22,6 +23,10 @@ use tokio::sync::Mutex as TokioMutex;
 use tokio::sync::mpsc;
 use tracing::{debug, info};
 use uuid::Uuid;
+
+#[cfg(test)]
+#[path = "receive_replacement_tests.rs"]
+mod receive_replacement_tests;
 
 fn max_producers_per_participant() -> usize {
     std::env::var("MAX_PRODUCERS_PER_PARTICIPANT")
@@ -181,6 +186,15 @@ pub struct TransportManager {
     bwe_trace_handlers: Arc<StdRwLock<HashMap<Uuid, Box<dyn Any + Send + Sync>>>>,
     /// `MediaConfig::key_frame_request_delay_ms`, applied to video producers.
     key_frame_request_delay: u32,
+}
+
+/// A placement selected before replacing the receiver. An unchanged placement
+/// retains its lease; a newly selected one is installed only after native setup.
+pub(crate) struct ReceiveReplacementPlacement {
+    pub router: Router,
+    pub webrtc_server: WebRtcServer,
+    pub lease: Option<crate::media::router_manager::ViewerLease>,
+    pub retain_existing_lease: bool,
 }
 
 impl Default for TransportManager {
@@ -398,6 +412,142 @@ impl TransportManager {
 
         // Keep the per-participant lock across creation so disconnect cleanup
         // cannot complete and leave this transport in a detached media state.
+        let transport = Self::build_recv_transport(router, webrtc_server, config).await?;
+
+        if !self.participant_is_current(&participant_id, &participant_lock) {
+            drop(transport);
+            return Err(MediaError::InvalidState(
+                "Participant media session closed while creating receive transport".to_string(),
+            ));
+        }
+
+        let transport_info = TransportInfo::from(&transport);
+        self.setup_transport_handlers(&transport, &participant_id, "recv");
+        self.clear_bwe_trace_handler(participant.generation);
+        participant.recv_transport = Some(transport);
+        participant.recv_connect_applied = None;
+        participant.recv_replacement = None;
+        participant.bandwidth_spatial_ceiling = None;
+
+        info!(
+            "Created receive transport {} for participant {}",
+            transport_info.id, participant_id
+        );
+        Ok(transport_info)
+    }
+
+    fn replay_recv_replacement(
+        participant: &ParticipantMedia,
+        expected: TransportId,
+    ) -> MediaResult<Option<TransportInfo>> {
+        let current = participant
+            .recv_transport
+            .as_ref()
+            .ok_or_else(|| MediaError::TransportError("Receive transport not found".to_string()))?;
+        if current.id() == expected {
+            return Ok(None);
+        }
+        if !current.closed() && participant.recv_replacement == Some((expected, current.id())) {
+            return Ok(Some(TransportInfo::from(current)));
+        }
+        Err(MediaError::InvalidState(
+            "Receive transport changed; replacement request is stale".to_string(),
+        ))
+    }
+
+    /// Check the expected receiver before any placement or native allocation.
+    pub(crate) async fn recv_replacement_replay(
+        &self,
+        participant_id: &str,
+        expected: TransportId,
+    ) -> MediaResult<Option<TransportInfo>> {
+        let participant_lock = self.get_participant_lock(participant_id)?;
+        let participant = participant_lock.lock().await;
+        if !self.participant_is_current(participant_id, &participant_lock) {
+            return Err(MediaError::InvalidState(
+                "Media session changed".to_string(),
+            ));
+        }
+        Self::replay_recv_replacement(&participant, expected)
+    }
+
+    /// Build before retiring the current receiver, then atomically swap only its
+    /// receive state. One old-to-new receipt makes a lost reply safely retryable.
+    pub(crate) async fn replace_recv_transport(
+        &self,
+        participant_id: &str,
+        expected: TransportId,
+        placement: ReceiveReplacementPlacement,
+        config: &WebRtcTransportConfig,
+        bwe_sender: Option<mpsc::Sender<ReceiveBandwidthEstimate>>,
+    ) -> MediaResult<TransportInfo> {
+        config
+            .validate()
+            .map_err(|error| MediaError::ConfigurationError(error.to_string()))?;
+        let participant_lock = self.get_participant_lock(participant_id)?;
+        let mut participant = measure(Stage::SessionLockWait, participant_lock.lock()).await;
+        if !self.participant_is_current(participant_id, &participant_lock) {
+            return Err(MediaError::InvalidState(
+                "Media session changed".to_string(),
+            ));
+        }
+        if let Some(replay) = Self::replay_recv_replacement(&participant, expected)? {
+            return Ok(replay);
+        }
+        let transport =
+            Self::build_recv_transport(&placement.router, placement.webrtc_server, config).await?;
+        let handler = match bwe_sender {
+            Some(sender) => Some(Self::bwe_trace_handler(&transport, sender).await?),
+            None => None,
+        };
+        if !self.participant_is_current(participant_id, &participant_lock) || transport.closed() {
+            return Err(MediaError::InvalidState(
+                "Media session changed".to_string(),
+            ));
+        }
+        let info = TransportInfo::from(&transport);
+        self.setup_transport_handlers(&transport, participant_id, "recv");
+        self.clear_bwe_trace_handler(participant.generation);
+        participant.consumers.clear();
+        participant.consumer_layers.clear();
+        participant.bandwidth_spatial_ceiling = None;
+        participant.recv_connect_applied = None;
+        participant.recv_replacement = Some((expected, transport.id()));
+        let retired = participant.recv_transport.replace(transport);
+        if let Some(lease) = placement.lease {
+            participant.viewer_lease = Some(Arc::new(lease));
+        } else if !placement.retain_existing_lease {
+            participant.viewer_lease = None;
+        }
+        if let Some(handler) = handler {
+            self.replace_bwe_trace_handler(participant.generation, handler);
+        }
+        drop(retired);
+        Ok(info)
+    }
+
+    /// No IPC: used to fence queued bandwidth events and cached stats.
+    pub(crate) async fn is_current_recv_transport(
+        &self,
+        participant_id: &str,
+        expected: TransportId,
+    ) -> bool {
+        let Ok(participant_lock) = self.get_participant_lock(participant_id) else {
+            return false;
+        };
+        let participant = participant_lock.lock().await;
+        self.participant_is_current(participant_id, &participant_lock)
+            && participant
+                .recv_transport
+                .as_ref()
+                .is_some_and(|transport| transport.id() == expected && !transport.closed())
+    }
+
+    async fn build_recv_transport(
+        router: &Router,
+        webrtc_server: WebRtcServer,
+        config: &WebRtcTransportConfig,
+    ) -> MediaResult<WebRtcTransport> {
         let mut transport_options = WebRtcTransportOptions::new_with_server(webrtc_server);
         transport_options.initial_available_outgoing_bitrate =
             u64::from(config.initial_available_outgoing_bitrate);
@@ -405,7 +555,7 @@ impl TransportManager {
         transport_options.enable_tcp = config.enable_tcp;
         transport_options.prefer_udp = config.prefer_udp;
         transport_options.prefer_tcp = config.prefer_tcp;
-        let transport = measure_result(Stage::MediaCreateTransport, async {
+        measure_result(Stage::MediaCreateTransport, async {
             let transport = router
                 .create_webrtc_transport(transport_options)
                 .await
@@ -432,26 +582,7 @@ impl TransportManager {
 
             Ok::<_, MediaError>(transport)
         })
-        .await?;
-
-        if !self.participant_is_current(&participant_id, &participant_lock) {
-            drop(transport);
-            return Err(MediaError::InvalidState(
-                "Participant media session closed while creating receive transport".to_string(),
-            ));
-        }
-
-        let transport_info = TransportInfo::from(&transport);
-        self.setup_transport_handlers(&transport, &participant_id, "recv");
-        self.clear_bwe_trace_handler(participant.generation);
-        participant.recv_transport = Some(transport);
-        participant.recv_connect_applied = None;
-
-        info!(
-            "Created receive transport {} for participant {}",
-            transport_info.id, participant_id
-        );
-        Ok(transport_info)
+        .await
     }
 
     /// Connects a transport by ID (determines send vs recv automatically).
@@ -881,8 +1012,28 @@ impl TransportManager {
         participant_id: &str,
         spatial_layer: u8,
     ) -> MediaResult<Vec<String>> {
+        self.set_bandwidth_ceiling_for_transport(participant_id, None, spatial_layer)
+            .await
+    }
+
+    pub(crate) async fn set_bandwidth_ceiling_for_transport(
+        &self,
+        participant_id: &str,
+        expected: Option<TransportId>,
+        spatial_layer: u8,
+    ) -> MediaResult<Vec<String>> {
         let participant_lock = self.get_participant_lock(participant_id)?;
         let mut participant = participant_lock.lock().await;
+        if let Some(expected) = expected
+            && !participant
+                .recv_transport
+                .as_ref()
+                .is_some_and(|transport| transport.id() == expected && !transport.closed())
+        {
+            return Err(MediaError::InvalidState(
+                "Receive transport changed".to_string(),
+            ));
+        }
         participant.bandwidth_spatial_ceiling = Some(spatial_layer);
         let mut pending: Vec<String> = participant
             .consumer_layers
@@ -991,7 +1142,7 @@ impl TransportManager {
     pub async fn subscribe_bwe_events(
         &self,
         participant_id: &str,
-        bwe_sender: mpsc::Sender<u32>,
+        bwe_sender: mpsc::Sender<ReceiveBandwidthEstimate>,
     ) -> MediaResult<()> {
         let participant_lock = self.get_participant_lock(participant_id)?;
         let participant = participant_lock.lock().await;
@@ -1001,7 +1152,20 @@ impl TransportManager {
             .as_ref()
             .ok_or_else(|| MediaError::TransportError("Recv transport not found".to_string()))?;
 
-        // Enable BWE trace events on the recv transport
+        let handler = Self::bwe_trace_handler(transport, bwe_sender).await?;
+        self.replace_bwe_trace_handler(participant.generation, handler);
+
+        info!(
+            "Subscribed to BWE events for participant {}",
+            participant_id
+        );
+        Ok(())
+    }
+
+    async fn bwe_trace_handler(
+        transport: &WebRtcTransport,
+        bwe_sender: mpsc::Sender<ReceiveBandwidthEstimate>,
+    ) -> MediaResult<Box<dyn Any + Send + Sync>> {
         transport
             .enable_trace_event(vec![TransportTraceEventType::Bwe])
             .await
@@ -1010,10 +1174,14 @@ impl TransportManager {
             })?;
 
         // Register callback to forward BWE events through the channel
+        let transport_id = transport.id();
         let handler = transport.on_trace(Arc::new(move |event: &TransportTraceEventData| {
             if let TransportTraceEventData::Bwe { info, .. } = event {
                 let bitrate = application_bitrate(info.available_bitrate);
-                let _ = bwe_sender.try_send(bitrate);
+                let _ = bwe_sender.try_send(ReceiveBandwidthEstimate {
+                    transport_id,
+                    bitrate,
+                });
                 debug!(
                     bwe_type = ?info.r#type,
                     available_bitrate = info.available_bitrate,
@@ -1028,13 +1196,7 @@ impl TransportManager {
                 );
             }
         }));
-        self.replace_bwe_trace_handler(participant.generation, Box::new(handler));
-
-        info!(
-            "Subscribed to BWE events for participant {}",
-            participant_id
-        );
-        Ok(())
+        Ok(Box::new(handler))
     }
 
     /// One media quality sample over every participant. Consumer and producer

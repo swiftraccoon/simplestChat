@@ -10,6 +10,7 @@ use crate::room::{JoinResult, RoomManager, RoomPasswordRequired, settings};
 use crate::turn::TurnConfig;
 use axum::extract::ws::{CloseFrame, Message, WebSocket, close_code};
 use futures_util::{Sink, SinkExt, Stream, StreamExt};
+use mediasoup::prelude::TransportId;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::RwLock as StdRwLock;
@@ -265,6 +266,7 @@ fn is_transport_mutation(message: &ClientMessage) -> bool {
         message,
         ClientMessage::CreateSendTransport
             | ClientMessage::CreateRecvTransport
+            | ClientMessage::ReplaceRecvTransport { .. }
             | ClientMessage::ConnectTransport { .. }
             | ClientMessage::RestartIce { .. }
     )
@@ -654,7 +656,9 @@ fn diagnostic_operation(message: &ClientMessage) -> OperationKind {
         ClientMessage::RenewAuthentication { .. } => OperationKind::RoomAction,
         ClientMessage::GetRouterRtpCapabilities => OperationKind::RouterCapabilities,
         ClientMessage::CreateSendTransport => OperationKind::CreateSendTransport,
-        ClientMessage::CreateRecvTransport => OperationKind::CreateRecvTransport,
+        ClientMessage::CreateRecvTransport | ClientMessage::ReplaceRecvTransport { .. } => {
+            OperationKind::CreateRecvTransport
+        }
         ClientMessage::ConnectTransport { .. } => OperationKind::ConnectTransport,
         ClientMessage::Produce { .. } => OperationKind::Produce,
         ClientMessage::Consume { .. } => OperationKind::Consume,
@@ -1058,7 +1062,7 @@ async fn handle_connection_with_timing(
     // the LobbyEntry so this task's guard opens without any local event.
     let in_lobby = Arc::new(AtomicBool::new(false));
     let mut stats_task: Option<OwnedTask> = None;
-    let mut bwe_sender: Option<mpsc::Sender<u32>> = None;
+    let mut bwe_sender: Option<mpsc::Sender<crate::media::types::ReceiveBandwidthEstimate>> = None;
 
     // Token bucket rate limiter state
     let max_frame_tokens_us = frame_capacity(consumer_mutation_capacity(
@@ -1658,7 +1662,9 @@ async fn handle_connection_with_timing(
                                     task.abort();
                                 }
 
-                                let (bwe_tx, bwe_rx) = mpsc::channel::<u32>(32);
+                                let (bwe_tx, bwe_rx) = mpsc::channel::<
+                                    crate::media::types::ReceiveBandwidthEstimate,
+                                >(32);
                                 // Try to subscribe immediately (recv transport may exist from previous session)
                                 if let Err(e) = room_manager
                                     .subscribe_bwe_events(
@@ -1824,7 +1830,8 @@ async fn handle_connection_with_timing(
                             && stats_task.is_none()
                         {
                             // Create BWE event channel (subscription happens later in CreateRecvTransport)
-                            let (bwe_tx, bwe_rx) = mpsc::channel::<u32>(32);
+                            let (bwe_tx, bwe_rx) =
+                                mpsc::channel::<crate::media::types::ReceiveBandwidthEstimate>(32);
                             bwe_sender = Some(bwe_tx);
 
                             stats_task = Some(spawn_stats_task(
@@ -2213,10 +2220,11 @@ fn spawn_stats_task(
     room_id: String,
     participant_id: String,
     sender: mpsc::Sender<crate::OutboundJson>,
-    mut bwe_rx: mpsc::Receiver<u32>,
+    mut bwe_rx: mpsc::Receiver<crate::media::types::ReceiveBandwidthEstimate>,
 ) -> OwnedTask {
     OwnedTask(tokio::spawn(async move {
         let drain = room_manager.drain_signal();
+        let mut last_transport: Option<TransportId> = None;
         let mut last_bitrate: u32 = 0;
         let mut last_sent_bitrate: u32 = 0;
         let mut layer_update = BandwidthTierUpdate::new(Instant::now());
@@ -2234,9 +2242,17 @@ fn spawn_stats_task(
                 // BWE event: bandwidth estimation changed
                 bwe = bwe_rx.recv() => {
                     match bwe {
-                        Some(bitrate) => {
-                            last_bitrate = bitrate;
-                            layer_update.observe(bitrate);
+                        Some(estimate) => {
+                            if !room_manager.is_current_recv_transport(
+                                &room_id, &participant_id, &sender, estimate.transport_id,
+                            ).await { continue; }
+                            if last_transport != Some(estimate.transport_id) {
+                                last_transport = Some(estimate.transport_id);
+                                last_sent_bitrate = 0;
+                                layer_update = BandwidthTierUpdate::new(Instant::now());
+                            }
+                            last_bitrate = estimate.bitrate;
+                            layer_update.observe(estimate.bitrate);
                         }
                         None => break, // Channel closed — participant disconnected
                     }
@@ -2255,12 +2271,13 @@ fn spawn_stats_task(
                         break;
                     }
                     if let Some(target_layer) = layer_update.begin_attempt(Instant::now()) {
+                        let Some(transport_id) = last_transport else { continue; };
                         let result = tokio::select! {
                             biased;
                             _ = drain.wait() => break,
                             _ = sender.closed() => break,
                             result = room_manager.set_bandwidth_ceiling(
-                                &room_id, &participant_id, &sender, target_layer
+                                &room_id, &participant_id, &sender, transport_id, target_layer
                             ) => result,
                         };
                         layer_update.complete_attempt(target_layer, result.is_ok());
@@ -2279,6 +2296,16 @@ fn spawn_stats_task(
 
                 // Timer: send ConnectionStats every ~10s using last-known bitrate (zero IPC)
                 _ = stats_interval.tick() => {
+                    let Some(transport_id) = last_transport else { continue; };
+                    if !room_manager.is_current_recv_transport(
+                        &room_id, &participant_id, &sender, transport_id,
+                    ).await {
+                        last_transport = None;
+                        last_bitrate = 0;
+                        last_sent_bitrate = 0;
+                        layer_update = BandwidthTierUpdate::new(Instant::now());
+                        continue;
+                    }
                     if last_bitrate > 0 && last_bitrate != last_sent_bitrate {
                         last_sent_bitrate = last_bitrate;
                         if let Ok(json) = serde_json::to_string(&ServerMessage::ConnectionStats {
@@ -2350,7 +2377,7 @@ async fn handle_client_message(
     room_manager: &Arc<RoomManager>,
     turn_config: &Option<Arc<TurnConfig>>,
     reconnect_token: &mut String,
-    bwe_sender: &Option<mpsc::Sender<u32>>,
+    bwe_sender: &Option<mpsc::Sender<crate::media::types::ReceiveBandwidthEstimate>>,
     is_authenticated: bool,
     client_ip: Option<std::net::IpAddr>,
 ) -> anyhow::Result<()> {
@@ -2564,6 +2591,28 @@ async fn handle_client_message(
             } else {
                 anyhow::bail!("Not in a room");
             }
+        }
+
+        ClientMessage::ReplaceRecvTransport { transport_id } => {
+            let room_id = current_room_id
+                .as_deref()
+                .ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
+            let transport_info = room_manager
+                .replace_recv_transport(
+                    room_id,
+                    participant_id,
+                    sender,
+                    transport_id,
+                    bwe_sender.clone(),
+                )
+                .await?;
+            reply.send(&ServerMessage::TransportCreated {
+                transport_id: transport_info.id,
+                ice_parameters: transport_info.ice_parameters,
+                ice_candidates: transport_info.ice_candidates,
+                dtls_parameters: transport_info.dtls_parameters,
+                ice_servers: make_ice_servers(turn_config),
+            })?;
         }
 
         ClientMessage::ConnectTransport {
@@ -3460,6 +3509,11 @@ mod security_tests {
         }));
         assert!(is_transport_mutation(&ClientMessage::CreateSendTransport));
         assert!(is_transport_mutation(&ClientMessage::CreateRecvTransport));
+        assert!(is_transport_mutation(
+            &ClientMessage::ReplaceRecvTransport {
+                transport_id: Uuid::new_v4().to_string(),
+            }
+        ));
         assert!(is_transport_mutation(&ClientMessage::RestartIce {
             transport_id: Uuid::new_v4().to_string(),
         }));

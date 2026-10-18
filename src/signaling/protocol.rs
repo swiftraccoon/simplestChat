@@ -107,6 +107,11 @@ pub enum ClientMessage {
     CreateSendTransport,
     /// Create WebRTC receive transport
     CreateRecvTransport,
+    /// Replace only this member's expected receive transport; retries replay its replacement.
+    #[serde(rename_all = "camelCase")]
+    ReplaceRecvTransport {
+        transport_id: String,
+    },
     /// Connect transport with DTLS parameters
     #[serde(rename_all = "camelCase")]
     ConnectTransport {

@@ -5,6 +5,24 @@ use rand::{RngExt, SeedableRng, rngs::StdRng};
 use serde_json::{Value, json};
 
 #[test]
+fn receive_replacement_requires_expected_transport_and_keeps_camel_case_wire_identity() {
+    let expected = "00000000-0000-4000-8000-000000000001";
+    let body = json!({"type":"replaceRecvTransport", "transportId":expected});
+    let decoded: ClientMessage = serde_json::from_value(body.clone()).unwrap();
+    assert!(
+        matches!(&decoded, ClientMessage::ReplaceRecvTransport { transport_id } if transport_id == expected)
+    );
+    assert_eq!(serde_json::to_value(decoded).unwrap(), body);
+    for invalid in [
+        json!({"type":"replaceRecvTransport"}),
+        json!({"type":"replaceRecvTransport", "transportId":null}),
+        json!({"type":"replaceRecvTransport", "transportId":123}),
+    ] {
+        assert!(serde_json::from_value::<ClientMessage>(invalid).is_err());
+    }
+}
+
+#[test]
 fn boundary_properties_every_operation_has_a_stable_serialized_roundtrip() {
     let inventory: Value = serde_json::from_str(include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),

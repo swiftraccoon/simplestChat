@@ -128,6 +128,13 @@ pub struct ConsumerLayerState {
     pub client: Option<ConsumerLayers>,
 }
 
+/// An estimate belongs to one receiver lifetime, not merely its participant.
+#[derive(Debug, Clone, Copy)]
+pub struct ReceiveBandwidthEstimate {
+    pub transport_id: TransportId,
+    pub bitrate: u32,
+}
+
 /// Participant media state
 #[derive(Debug, Clone)]
 pub struct ParticipantMedia {
@@ -142,6 +149,8 @@ pub struct ParticipantMedia {
     /// evidence that connect was applied. These IDs do not imply media readiness.
     pub(super) send_connect_applied: Option<TransportId>,
     pub(super) recv_connect_applied: Option<TransportId>,
+    /// Only the most recent replacement is replayable, while its target is current.
+    pub(super) recv_replacement: Option<(TransportId, TransportId)>,
     pub producers: HashMap<String, Producer>,
     pub consumers: HashMap<String, Consumer>,
     /// Spatial layer ceiling from the receive transport's bandwidth estimate;
@@ -164,6 +173,7 @@ impl ParticipantMedia {
             recv_transport: None,
             send_connect_applied: None,
             recv_connect_applied: None,
+            recv_replacement: None,
             producers: HashMap::new(),
             consumers: HashMap::new(),
             bandwidth_spatial_ceiling: None,
@@ -198,6 +208,9 @@ impl ParticipantMedia {
         }
         self.send_connect_applied = None;
         self.recv_connect_applied = None;
+        self.recv_replacement = None;
+        self.bandwidth_spatial_ceiling = None;
+        self.viewer_lease = None;
     }
 }
 

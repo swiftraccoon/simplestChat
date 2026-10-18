@@ -1160,6 +1160,21 @@
       ]
     },
     {
+      "variant": "ReplaceRecvTransport",
+      "operation": "replaceRecvTransport",
+      "boundary": "room-membership",
+      "lobby": "deny",
+      "body": {
+        "type": "replaceRecvTransport",
+        "transportId": "00000000-0000-4000-8000-000000000001"
+      },
+      "checks": [
+        "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
+        "authorization_dispatch_lobby_policy_covers_every_decoded_operation",
+        "receive_replacement_rejects_stale_sender_and_preserves_membership"
+      ]
+    },
+    {
       "variant": "ConnectTransport",
       "operation": "connectTransport",
       "boundary": "room-membership",

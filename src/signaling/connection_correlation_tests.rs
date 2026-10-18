@@ -5,6 +5,100 @@ use super::*;
 use serde_json::{Value, json};
 
 #[tokio::test]
+async fn correlated_receive_replacement_replays_lost_reply_without_republishing_voice() {
+    let mut fixture = Fixture::new().await;
+    fixture.join().await.unwrap();
+    let sent = fixture
+        .request(
+            json!({"type":"createSendTransport", "requestId":"send"}),
+            "transportCreated",
+        )
+        .await
+        .unwrap();
+    fixture
+        .request(
+            json!({"type":"connectTransport", "requestId":"connect-send",
+            "transportId":sent["transportId"], "dtlsParameters": {
+                "role":"client", "fingerprints":sent["dtlsParameters"]["fingerprints"]
+            }}),
+            "transportConnected",
+        )
+        .await
+        .unwrap();
+    let produced = fixture.request(json!({"type":"produce", "requestId":"voice",
+        "transportId":sent["transportId"], "kind":"audio", "source":"microphone",
+        "rtpParameters": {
+            "codecs":[{"mimeType":"audio/opus", "payloadType":111, "clockRate":48000, "channels":2}],
+            "headerExtensions":[], "encodings":[{"ssrc":345678}],
+            "rtcp":{"cname":"receive-replacement", "reducedSize":true}
+        }}), "producerCreated").await.unwrap();
+    let before = fixture
+        .request(
+            json!({"type":"getRoomSnapshot", "requestId":"before"}),
+            "socialResponse",
+        )
+        .await
+        .unwrap();
+    let old = fixture
+        .request(
+            json!({"type":"createRecvTransport", "requestId":"old"}),
+            "transportCreated",
+        )
+        .await
+        .unwrap();
+    let replacement = fixture
+        .request(
+            json!({"type":"replaceRecvTransport", "requestId":"replace",
+        "transportId":old["transportId"]}),
+            "transportCreated",
+        )
+        .await
+        .unwrap();
+    assert_eq!(replacement["requestId"], "replace");
+    assert_ne!(replacement["transportId"], old["transportId"]);
+    // Deliberately discard the first result's use: retry the same expected old
+    // resource with a fresh correlation ID, as after a lost acknowledgement.
+    let replay = fixture
+        .request(
+            json!({"type":"replaceRecvTransport", "requestId":"retry",
+        "transportId":old["transportId"]}),
+            "transportCreated",
+        )
+        .await
+        .unwrap();
+    assert_eq!(replay["requestId"], "retry");
+    assert_eq!(replay["transportId"], replacement["transportId"]);
+    assert_eq!(replay["iceParameters"], replacement["iceParameters"]);
+    let paused = fixture
+        .request(
+            json!({"type":"pauseProducer", "requestId":"same-voice",
+        "producerId":produced["producerId"]}),
+            "producerPaused",
+        )
+        .await
+        .unwrap();
+    assert_eq!(paused["producerId"], produced["producerId"]);
+    let snapshot = fixture
+        .request(
+            json!({"type":"getRoomSnapshot", "requestId":"snapshot"}),
+            "socialResponse",
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        snapshot["data"]["chatSessionId"],
+        before["data"]["chatSessionId"]
+    );
+    assert!(
+        snapshot["data"]["localProducerIds"]
+            .as_array()
+            .unwrap()
+            .contains(&produced["producerId"])
+    );
+    fixture.finish().await;
+}
+
+#[tokio::test]
 async fn correlated_media_replies_keep_notifications_outside_the_request_envelope() {
     let mut fixture = Fixture::new().await;
     let joined = fixture.join().await.unwrap();
