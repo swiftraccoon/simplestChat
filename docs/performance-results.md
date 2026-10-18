@@ -7,6 +7,81 @@ or the current test VPS. Use the [performance guide](performance.md) to run a
 new comparison and the [deployment guide](deployment.md#capacity-planning-and-scaling)
 for current sizing rules.
 
+## Thirty authenticated media participants with retained chat — 2026-10-17
+
+The [hosted account-room experiment](https://github.com/swiftraccoon/simplestChat/actions/runs/39085848521)
+passed a complete twenty-minute measurement at source
+`fb85dad6a61adf935576487e6ac30cd60f25ce47`. The measured interval was
+2026-10-18 01:27:14.569–01:47:14.569 UTC, after a sixty-second join ramp and
+thirty-second warmup. This was one fresh, registered-only room with thirty
+real accounts and a seven-day public-chat retention policy, served by one media worker
+and PostgreSQL 18.6 on an isolated Ubuntu GitHub runner. The runner exposed four
+logical CPUs, an AMD EPYC 7763 model and 15.6 GiB RAM; server, generator and
+database shared that host without separate process CPU quotas.
+
+All thirty clients published synthetic camera and microphone RTP. The Balanced
+receive policy selected 29 remote microphones and nine camera videos per client,
+with one rotating speaker and DTX on silent microphones. This replaces the
+generator's obsolete all-tile receive assumption for this workload; it does not
+reinterpret the historical all-tile measurements below.
+
+| Evidence | Observed result |
+| --- | --- |
+| Authenticated participants | 30/30, present in all 237 complete measured membership snapshots |
+| Media subscriptions | 870 audio + 270 video; every consumer received RTP in all 1,200 measured seconds, with no empty-second gaps |
+| Public chat | 1,198/1,198 acknowledgements and 34,742/34,742 peer deliveries; zero invalid observations |
+| Retained chat | All 1,198 message IDs, sender IDs, client message IDs and content hashes matched PostgreSQL; all 30 senders represented |
+| Real session continuation | 30 HTTP refreshes and 30 renewals on the existing sockets; zero failures or deferrals |
+| Chat acknowledgement / delivery P99 | 5 / 5 ms; maxima 8 / 9 ms |
+| HTTP refresh / socket-renewal P99 | 6 / 2 ms |
+| Mean server / generator CPU | 0.370 / 0.772 cores |
+| Peak reported media worker CPU (10-second windows) | 0.380 cores, below the 0.70 guard |
+| Peak server / generator RSS | 159.1 / 242.9 MiB |
+| Host busy / steal / cgroup throttling | 29.63% / 0% / 0% |
+| Generator maximum measured wake-up lag | 2 ms |
+| Database query probe P50 / P99 | 2.513 / 4.222 ms across 237 probes |
+| Sampled app pool use / database lock waits | At most 1 of 20 connections / zero sessions waiting on locks |
+| Confirmed received RTP payload | 12,366,268,920 bytes and 23,715,960 packets; 82.442 Mbit/s |
+| Estimated IPv4 media egress | 92.244 Mbit/s, adding 62 bytes per received packet |
+
+Each account made one connection attempt, with zero reconnects, and all sixty
+media transports retained their original IDs through completion. Accounts retained
+their identity and session through refresh-cookie rotation and correlated
+socket-renewal acknowledgements. The original access-token
+lifetime stayed fifteen minutes. At completion, every account was at least
+332 seconds beyond that original expiry; this exceeds the required sixty-second
+coverage. There were no failed connections, consumers, client errors, database
+errors or observed saturation. Generator and server exited cleanly without a
+forced kill, and private credentials and generator logs were removed.
+
+The CPU/RSS window had 2,368 successful samples spanning 1,199.497 seconds of the
+1,200-second interval, within the documented 1.5-second sampling allowance.
+Process CPU includes every thread, including embedded native media workers;
+the independent worker gauge measures its share of one core. Database probe
+timing starts after connecting and excludes application pool acquisition;
+chat acknowledgement latency includes persistence and queuing. The egress
+estimate is not a measured wire counter. Raw samples retain their sampler-relative
+clock, but its wall-clock origin was not exported; exact raw-window UTC
+realignment cannot be independently reconstructed. Headline resource figures
+come from the harness's internally aligned window.
+
+The [artifact](https://github.com/swiftraccoon/simplestChat/actions/runs/39085848521/artifacts/12120944828)
+contains the bounded report, resource samples, generator summary and per-client
+evidence, digest inventory and independent shutdown receipt. Its SHA-256 is
+`769c6a9f6a19f68b1a7f4e8a9d7b8b3869c522e4b2cf54d5bb71ca797ee7972e`;
+GitHub retains it until 2026-11-17. The report records full binary and harness
+digests. This is one observed passing point, with no loss injection or database
+outage. It establishes synthetic forwarding, retained chat and session continuity
+for this host and workload, not a production maximum, thirty browser decoders,
+physical-device behavior, WAN, TLS or TURN capacity. It does not justify raising
+production limits or replacing the capacity adviser's historical calibration.
+
+An earlier hosted attempt failed its database probe before registration or media
+started because the harness passed a URI as `PGDATABASE`. The corrected client
+field handling was verified with the real `psql` client against an owned TCP
+fixture before this complete run; that setup failure supplies no capacity result.
+No local audio, media or capture workload was run during this session.
+
 ## Thirty active microphones per room on an OVH VPS — 2026-09-30
 
 The automated private-host workflow passed its first live acceptance: the

@@ -347,6 +347,9 @@ chat acknowledgement latency includes persistence and queuing. Egress is
 confirmed received RTP payload, with wire overhead reported only as an estimate.
 A successful run establishes this workload on its recorded host, without
 establishing a production maximum, browser decoding, WAN, TLS or TURN capacity.
+The first complete thirty-account run passed on 2026-10-17; its delivery,
+refresh, database and resource evidence is recorded in
+[performance results](performance-results.md#thirty-authenticated-media-participants-with-retained-chat--2026-10-17).
 
 Layer selection is shared: mediasoup's transport distributes the estimated
 downlink bitrate across a viewer's simulcast consumers on every estimate
