@@ -985,6 +985,21 @@
       ]
     },
     {
+      "method": "PATCH",
+      "path": "/api/auth/notification-preferences",
+      "handler": "crate::auth::notifications::patch_preferences",
+      "policy": "current-session",
+      "body": {
+        "mentions": false
+      },
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions",
+        "authorization_database_notification_patch_merges_current_fields_and_preserves_quiet_hours",
+        "notification_patch_distinguishes_omitted_quiet_hours_from_explicit_clear"
+      ]
+    },
+    {
       "method": "PUT",
       "path": "/api/auth/notification-preferences",
       "handler": "crate::auth::notifications::put_preferences",

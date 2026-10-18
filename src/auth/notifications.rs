@@ -35,6 +35,27 @@ pub struct NotificationPolicy {
     quiet_hours: Option<QuietHours>,
 }
 
+fn present<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    T::deserialize(deserializer).map(Some)
+}
+
+/// Omitted fields preserve the latest committed value. Only explicit null
+/// clears quiet hours; a null boolean is never a missing preference.
+#[derive(Debug, Default, Deserialize)]
+#[serde(default, rename_all = "camelCase", deny_unknown_fields)]
+pub struct NotificationPatch {
+    #[serde(deserialize_with = "present")]
+    private_messages: Option<bool>,
+    #[serde(deserialize_with = "present")]
+    mentions: Option<bool>,
+    #[serde(deserialize_with = "present")]
+    quiet_hours: Option<Option<QuietHours>>,
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ConversationPolicy {
@@ -76,7 +97,20 @@ async fn preferences(pool: &PgPool, user: Uuid) -> Result<NotificationPreference
     .fetch_optional(pool)
     .await
     .map_err(routes::database_error)?;
-    let policy = match policy {
+    let policy = decode_policy(policy);
+    let conversations = sqlx::query_as(
+        "SELECT peer_id,muted,CASE WHEN snoozed_until>clock_timestamp() THEN snoozed_until ELSE NULL END AS snoozed_until
+         FROM conversation_notification_preferences WHERE user_id=$1
+         AND (muted OR snoozed_until>clock_timestamp()) ORDER BY peer_id LIMIT $2",
+    ).bind(user).bind(MAX_CONVERSATIONS).fetch_all(pool).await.map_err(routes::database_error)?;
+    Ok(NotificationPreferences {
+        policy,
+        conversations,
+    })
+}
+
+fn decode_policy(policy: Option<StoredPolicy>) -> NotificationPolicy {
+    match policy {
         Some(stored) => NotificationPolicy {
             private_messages: stored.private_messages,
             mentions: stored.mentions,
@@ -95,16 +129,7 @@ async fn preferences(pool: &PgPool, user: Uuid) -> Result<NotificationPreference
             mentions: true,
             quiet_hours: None,
         },
-    };
-    let conversations = sqlx::query_as(
-        "SELECT peer_id,muted,CASE WHEN snoozed_until>clock_timestamp() THEN snoozed_until ELSE NULL END AS snoozed_until
-         FROM conversation_notification_preferences WHERE user_id=$1
-         AND (muted OR snoozed_until>clock_timestamp()) ORDER BY peer_id LIMIT $2",
-    ).bind(user).bind(MAX_CONVERSATIONS).fetch_all(pool).await.map_err(routes::database_error)?;
-    Ok(NotificationPreferences {
-        policy,
-        conversations,
-    })
+    }
 }
 
 fn validate_quiet_hours(quiet: &QuietHours) -> Result<(), AuthError> {
@@ -133,16 +158,83 @@ async fn save_policy(
     claims: &Claims,
     policy: &NotificationPolicy,
 ) -> Result<Uuid, AuthError> {
+    super::account::ensure_unexpired_claim(claims)?;
+    let mut tx = pool.begin().await.map_err(routes::database_error)?;
+    let (user, _) = lock_current_session(&mut tx, claims).await?;
+    current_policy_session(&mut tx, claims, user).await?;
+    write_policy(&mut tx, user, policy).await?;
+    current_policy_session(&mut tx, claims, user).await?;
+    tx.commit().await.map_err(routes::database_error)?;
+    Ok(user)
+}
+
+async fn current_policy_session(
+    tx: &mut Transaction<'_, Postgres>,
+    claims: &Claims,
+    user: Uuid,
+) -> Result<(), AuthError> {
+    let live: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT FROM sessions WHERE id=$1 AND user_id=$2 AND expires_at>clock_timestamp())")
+        .bind(claims.sid).bind(user).fetch_one(&mut **tx).await.map_err(routes::database_error)?;
+    if !live {
+        return Err(AuthError::InvalidToken);
+    }
+    super::account::ensure_unexpired_claim(claims)
+}
+
+async fn patch_policy(
+    pool: &PgPool,
+    claims: &Claims,
+    patch: NotificationPatch,
+) -> Result<Uuid, AuthError> {
+    if patch.private_messages.is_none() && patch.mentions.is_none() && patch.quiet_hours.is_none() {
+        return Err(AuthError::InvalidInput(
+            "Choose a notification setting to change",
+        ));
+    }
+    super::account::ensure_unexpired_claim(claims)?;
+    let mut tx = pool.begin().await.map_err(routes::database_error)?;
+    // The account lock serializes creation of an absent policy as well as all
+    // PUT/PATCH writers; the retained row is read only after these locks wait.
+    let (user, _) = lock_current_session(&mut tx, claims).await?;
+    current_policy_session(&mut tx, claims, user).await?;
+    let stored: Option<StoredPolicy> = sqlx::query_as(
+        "SELECT private_messages,mentions,quiet_start,quiet_end,quiet_timezone
+         FROM account_notification_preferences WHERE user_id=$1 FOR UPDATE",
+    )
+    .bind(user)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(routes::database_error)?;
+    let mut policy = decode_policy(stored);
+    if let Some(value) = patch.private_messages {
+        policy.private_messages = value;
+    }
+    if let Some(value) = patch.mentions {
+        policy.mentions = value;
+    }
+    if let Some(value) = patch.quiet_hours {
+        policy.quiet_hours = value;
+    }
+    write_policy(&mut tx, user, &policy).await?;
+    current_policy_session(&mut tx, claims, user).await?;
+    tx.commit().await.map_err(routes::database_error)?;
+    Ok(user)
+}
+
+async fn write_policy(
+    tx: &mut Transaction<'_, Postgres>,
+    user: Uuid,
+    policy: &NotificationPolicy,
+) -> Result<(), AuthError> {
     if let Some(quiet) = &policy.quiet_hours {
         validate_quiet_hours(quiet)?;
     }
-    let mut tx = pool.begin().await.map_err(routes::database_error)?;
-    let (user, _) = lock_current_session(&mut tx, claims).await?;
     if let Some(quiet) = &policy.quiet_hours {
         let recognized: bool =
             sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM pg_timezone_names WHERE name=$1)")
                 .bind(&quiet.time_zone)
-                .fetch_one(&mut *tx)
+                .fetch_one(&mut **tx)
                 .await
                 .map_err(routes::database_error)?;
         if !recognized {
@@ -156,9 +248,8 @@ async fn save_policy(
         .bind(policy.quiet_hours.as_ref().map(|q|q.start_minute))
         .bind(policy.quiet_hours.as_ref().map(|q|q.end_minute))
         .bind(policy.quiet_hours.as_ref().map(|q|q.time_zone.as_str()))
-        .execute(&mut *tx).await.map_err(routes::database_error)?;
-    tx.commit().await.map_err(routes::database_error)?;
-    Ok(user)
+        .execute(&mut **tx).await.map_err(routes::database_error)?;
+    Ok(())
 }
 
 fn validate_snooze(policy: &ConversationPolicy, now: DateTime<Utc>) -> Result<(), AuthError> {
@@ -259,6 +350,27 @@ pub async fn put_preferences(
     Ok((routes::no_store_headers(), Json(result)))
 }
 
+pub async fn patch_preferences(
+    State(server): State<SignalingServer>,
+    headers: HeaderMap,
+    Json(patch): Json<NotificationPatch>,
+) -> Result<(HeaderMap, Json<NotificationPreferences>), AuthError> {
+    let permit = routes::acquire_account_request(&server)?;
+    let claims = authenticated_claims(&server, &headers).await?;
+    let result = super::updates::owned(permit, async move {
+        let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
+        let user = patch_policy(pool, &claims, patch).await?;
+        server.room_manager().account_updates().changed(
+            user,
+            super::updates::Scope::Notifications,
+            None,
+        );
+        preferences(pool, user).await
+    })
+    .await?;
+    Ok((routes::no_store_headers(), Json(result)))
+}
+
 pub async fn put_conversation(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
@@ -284,6 +396,26 @@ pub async fn put_conversation(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn notification_patch_distinguishes_omitted_quiet_hours_from_explicit_clear() {
+        let patch: NotificationPatch =
+            serde_json::from_value(serde_json::json!({"mentions":false})).unwrap();
+        assert_eq!(patch.mentions, Some(false));
+        assert!(patch.private_messages.is_none());
+        assert!(patch.quiet_hours.is_none());
+        let patch: NotificationPatch =
+            serde_json::from_value(serde_json::json!({"quietHours":null})).unwrap();
+        assert!(matches!(patch.quiet_hours, Some(None)));
+        for invalid in [
+            serde_json::json!({"privateMessages":null}),
+            serde_json::json!({"mentions":null}),
+            serde_json::json!({"unexpected":true}),
+            serde_json::json!({"quietHours":{"startMinute":0}}),
+        ] {
+            assert!(serde_json::from_value::<NotificationPatch>(invalid).is_err());
+        }
+    }
+
     #[test]
     fn quiet_hours_require_bounded_different_times_and_named_zone() {
         let mut quiet = QuietHours {

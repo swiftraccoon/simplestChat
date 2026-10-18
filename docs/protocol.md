@@ -1223,8 +1223,16 @@ PM files belonging to that account's conversation.
 
 `GET /api/auth/notification-preferences` returns `{privateMessages,mentions,
 quietHours,conversations}`. `quietHours` is null or `{startMinute,endMinute,
-timeZone}` (minutes 0–1439, unequal; IANA zone). PUT on that endpoint accepts the
-three global fields. PUT `/api/auth/notification-preferences/conversations/{peer}`
+timeZone}` (minutes 0–1439, unequal; IANA zone). PATCH on that endpoint accepts
+explicit global field intents: optional `privateMessages`, `mentions`, and
+`quietHours`. Omitted fields preserve the current saved value; only explicit
+`quietHours:null` clears the quiet interval. Null booleans, unknown fields and
+an empty patch are rejected. The transaction locks the account, issuing session
+and current policy before merging, then rechecks session/bearer expiry before
+commit. A stale mention edit cannot restore PM alerts disabled by another device.
+PUT retains its complete three-field replacement contract. Both return the full
+saved snapshot and publish a notification-policy invalidation only after commit.
+PUT `/api/auth/notification-preferences/conversations/{peer}`
 accepts `{muted,snoozedUntil}`; the timestamp is null or a future RFC3339 instant
 within 30 days. False/null deletes the override. Both writes return the complete
 policy. There are at most 100 overrides per account; defaults allow PM/mention
@@ -1233,8 +1241,9 @@ alerts with no quiet period. Device browser permission is separate.
 Conversation entries have `{peerId,muted,snoozedUntil}`. Quiet intervals include
 their start and exclude their end; midnight-crossing intervals and daylight-saving
 changes follow the saved zone. Suppressed alerts are discarded, not replayed when
-the quiet period ends. Browser policy refreshes on focus and every 30 seconds while
-visible; signed-in foreground alerts wait for the first successful load and pause
+the quiet period ends. Browser policy refreshes on live account changes and focus,
+with a 30-second visible fallback when its live snapshot is unavailable;
+signed-in foreground alerts wait for the first successful load and pause
 if that snapshot is more than 90 seconds old. Messages and unread cursors are
 unaffected. Providers may still deliver a notification already accepted before a
 policy change.

@@ -794,6 +794,7 @@ impl SignalingServer {
             .route(
                 "/notification-preferences",
                 get(crate::auth::notifications::get_preferences)
+                    .patch(crate::auth::notifications::patch_preferences)
                     .put(crate::auth::notifications::put_preferences),
             )
             .route(

@@ -95,6 +95,136 @@ async fn data(fixture: &Fixture, actor: usize, method: &str, path: String, body:
 
 #[tokio::test]
 #[ignore = "requires DISPOSABLE_TEST_DATABASE=1 and TEST_DATABASE_URL"]
+async fn authorization_database_notification_patch_merges_current_fields_and_preserves_quiet_hours()
+{
+    let fixture = Fixture::new(2).await;
+    let mut feed = Feed::open(&fixture, 0, 30).await;
+    let mut outsider = Feed::open(&fixture, 1, 30).await;
+    let second_session = session::create_session(
+        &fixture.pool,
+        &fixture.users[0],
+        &session::generate_refresh_token().unwrap(),
+    )
+    .await
+    .unwrap();
+    let second_token = fixture.token(fixture.users[0], second_session, 0);
+    let path = "/api/auth/notification-preferences";
+    let quiet = json!({"startMinute":1320,"endMinute":420,"timeZone":"America/New_York"});
+    // A remote device disables PM alerts while this device still has an older
+    // full snapshot. Its later mention intent must not restore remote fields.
+    data(
+        &fixture,
+        0,
+        "PUT",
+        path.into(),
+        json!({"privateMessages":false,"mentions":true,"quietHours":quiet}),
+    )
+    .await;
+    feed.change("notifications", None).await;
+    let mention = operation("PATCH", path.into(), Some(json!({"mentions":false})));
+    let response = fixture.request(&mention, Some(&second_token), 30).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let merged: Value = serde_json::from_slice(
+        &axum::body::to_bytes(response.into_body(), 32768)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(merged["privateMessages"], false);
+    assert_eq!(merged["mentions"], false);
+    assert_eq!(merged["quietHours"], quiet);
+    feed.change("notifications", None).await;
+    let cleared = data(
+        &fixture,
+        0,
+        "PATCH",
+        path.into(),
+        json!({"quietHours":null}),
+    )
+    .await;
+    assert_eq!(cleared["quietHours"], Value::Null);
+    assert_eq!(cleared["privateMessages"], false);
+    assert_eq!(cleared["mentions"], false);
+    feed.change("notifications", None).await;
+    let kept = data(&fixture, 0, "PATCH", path.into(), json!({"mentions":true})).await;
+    assert_eq!(kept["quietHours"], Value::Null);
+    assert_eq!(kept["privateMessages"], false);
+    feed.change("notifications", None).await;
+    data(
+        &fixture,
+        0,
+        "PUT",
+        path.into(),
+        json!({"privateMessages":true,"mentions":true,"quietHours":quiet}),
+    )
+    .await;
+    feed.change("notifications", None).await;
+    let pm = operation("PATCH", path.into(), Some(json!({"privateMessages":false})));
+    let (left, right) = tokio::join!(
+        fixture.request(&pm, Some(&fixture.tokens[0]), 30),
+        fixture.request(&mention, Some(&second_token), 30)
+    );
+    assert_eq!(left.status(), StatusCode::OK);
+    assert_eq!(right.status(), StatusCode::OK);
+    feed.change("notifications", None).await;
+    feed.change("notifications", None).await;
+    let response = fixture
+        .request(
+            &operation("GET", path.into(), None),
+            Some(&second_token),
+            30,
+        )
+        .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let latest: Value = serde_json::from_slice(
+        &axum::body::to_bytes(response.into_body(), 32768)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(latest["privateMessages"], false);
+    assert_eq!(latest["mentions"], false);
+    assert_eq!(latest["quietHours"], quiet);
+    for (body, status) in [
+        (json!({}), StatusCode::BAD_REQUEST),
+        (
+            json!({"privateMessages":null}),
+            StatusCode::UNPROCESSABLE_ENTITY,
+        ),
+        (
+            json!({"quietHours":{"startMinute":0,"endMinute":0,"timeZone":"UTC"}}),
+            StatusCode::BAD_REQUEST,
+        ),
+    ] {
+        let rejected = operation("PATCH", path.into(), Some(body));
+        assert_eq!(
+            fixture
+                .request(&rejected, Some(&second_token), 30)
+                .await
+                .status(),
+            status
+        );
+    }
+    sqlx::query("DELETE FROM sessions WHERE id=$1")
+        .bind(second_session)
+        .execute(&fixture.pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        fixture
+            .request(&mention, Some(&second_token), 30)
+            .await
+            .status(),
+        StatusCode::UNAUTHORIZED
+    );
+    feed.quiet().await;
+    outsider.quiet().await;
+    drop((feed, outsider));
+    fixture.finish().await;
+}
+
+#[tokio::test]
+#[ignore = "requires DISPOSABLE_TEST_DATABASE=1 and TEST_DATABASE_URL"]
 async fn authorization_database_account_updates_publish_committed_scoped_mutations_without_room_join()
  {
     let mut fixture = Fixture::new(3).await;
