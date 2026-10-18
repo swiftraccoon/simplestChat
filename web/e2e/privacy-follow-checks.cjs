@@ -1,5 +1,7 @@
 /** Real owned account routes and UI; called only by the disposable community suite. */
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const { openRoomMenu } = require('./room-menu.cjs');
 
 const preferencePath = '/api/auth/preferences';
@@ -15,6 +17,92 @@ async function stored(page, action) {
   const response = responseFor(page, 'PATCH');
   await action();
   return (await response).json();
+}
+
+/** Keep browser failures useful without retaining error text, URLs or credentials. */
+function followProbeFailure(error, phase) {
+  const names = [
+    'Error',
+    'TypeError',
+    'ReferenceError',
+    'SyntaxError',
+    'RangeError',
+    'AbortError',
+    'InvalidStateError',
+    'NotAllowedError',
+    'NotSupportedError',
+    'SecurityError',
+    'NetworkError',
+  ];
+  const name = names.includes(error?.name) ? error.name : 'OtherError';
+  const message = String(error?.message ?? '').slice(0, 2048);
+  let category = 'other';
+  if (/Follow capture observer was replaced/.test(message)) category = 'capture-observer-replaced';
+  else if (
+    /mediaDevices|Follow capture media devices unavailable/i.test(message) &&
+    /undefined|null|not an object|unavailable|can't find variable/i.test(message)
+  )
+    category = 'media-devices-unavailable';
+  else if (/read.?only|only getter|not writable|cannot assign|getter-only/i.test(message))
+    category = 'readonly-property';
+  else if (/module script|importing a module|dynamically imported|load.*module/i.test(message))
+    category = 'module-load';
+  else if (
+    /AbortError|InvalidStateError|NotAllowedError|NotSupportedError|SecurityError|NetworkError/.test(
+      name,
+    )
+  )
+    category = name;
+  else if (/load failed|network error|failed to fetch/i.test(message)) category = 'network-load';
+  const stack = String(error?.stack ?? '').slice(0, 8192);
+  const fixture = /privacy-follow-checks\.cjs:(\d{1,6}):(\d{1,7})(?!\d)/.exec(stack);
+  const asset =
+    /(?:^|\/)\b(index|media)(?:-[A-Za-z0-9_-]{1,64})?\.js:(\d{1,6}):(\d{1,7})(?!\d)/.exec(stack);
+  const initializer = /installFollowCaptureObservation[^\n]*?:(\d{1,6}):(\d{1,7})(?!\d)/.exec(
+    stack,
+  );
+  const frame = fixture
+    ? { source: 'privacy-follow-checks.cjs', line: Number(fixture[1]), column: Number(fixture[2]) }
+    : asset
+      ? { source: `${asset[1]}.js`, line: Number(asset[2]), column: Number(asset[3]) }
+      : initializer
+        ? {
+            source: 'follow-capture-init',
+            line: Number(initializer[1]),
+            column: Number(initializer[2]),
+          }
+        : null;
+  return { phase: ['goto', 'reload'].includes(phase) ? phase : 'unknown', name, category, frame };
+}
+
+/** Own the DOM wrapper as well as its methods; WebKit may collect unrooted wrappers. */
+function installFollowCaptureObservation() {
+  const devices = navigator.mediaDevices;
+  if (typeof devices?.getUserMedia !== 'function')
+    throw new Error('Follow capture media devices unavailable');
+  let captures = 0;
+  const methods = {};
+  for (const name of ['getUserMedia', 'getDisplayMedia']) {
+    const capture = devices[name]?.bind(devices);
+    if (capture) {
+      methods[name] = (...args) => {
+        captures++;
+        return capture(...args);
+      };
+      devices[name] = methods[name];
+    }
+  }
+  const observation = { devices, methods };
+  window.__followCaptureObservation = observation;
+  window.__followPreferenceCaptures = () => {
+    if (
+      window.__followCaptureObservation !== observation ||
+      navigator.mediaDevices !== devices ||
+      Object.entries(methods).some(([name, method]) => devices[name] !== method)
+    )
+      throw new Error('Follow capture observer was replaced');
+    return captures;
+  };
 }
 
 function privacyReady(checked) {
@@ -144,10 +232,13 @@ async function checkAccountPrivacyAcrossDevices(
 
 /** The control works at phone size and survives a new same-origin document;
  * these actions cannot capture either device or create a room membership. */
-async function checkFollowSpeakerPreference(owner, { base }) {
+async function checkFollowSpeakerPreference(owner, { base, artifacts }) {
   const captures = await owner.evaluate(() => window.__communityCaptureRequests);
   const viewport = owner.viewportSize();
   let probe;
+  let probePhase = 'goto';
+  let errors = 0;
+  const failures = [];
   try {
     await openRoomMenu(owner);
     const follow = owner.getByRole('checkbox', { name: 'Follow speaker', exact: true });
@@ -175,24 +266,17 @@ async function checkFollowSpeakerPreference(owner, { base }) {
     await follow.check();
     await owner.keyboard.press('Escape');
     probe = await owner.context().newPage();
-    let errors = 0;
-    probe.on('pageerror', () => errors++);
-    await probe.addInitScript(() => {
-      let captures = 0;
-      for (const name of ['getUserMedia', 'getDisplayMedia']) {
-        const capture = navigator.mediaDevices[name]?.bind(navigator.mediaDevices);
-        if (capture)
-          navigator.mediaDevices[name] = (...args) => {
-            captures++;
-            return capture(...args);
-          };
-      }
-      window.__followPreferenceCaptures = () => captures;
+    probe.on('pageerror', (error) => {
+      errors++;
+      if (failures.length < 8) failures.push(followProbeFailure(error, probePhase));
     });
+    await probe.addInitScript(installFollowCaptureObservation);
     await probe.goto(new URL('/', base).href);
     const persisted = probe.locator('#room-volume-slot input[aria-label="Follow speaker"]');
     await persisted.waitFor({ state: 'attached' });
     assert.equal(await persisted.isChecked(), true);
+    assert.equal(await probe.evaluate(() => window.__followPreferenceCaptures()), 0);
+    probePhase = 'reload';
     await probe.reload();
     await persisted.waitFor({ state: 'attached' });
     assert.equal(await persisted.isChecked(), true, 'a new document restores the opt-in');
@@ -202,9 +286,24 @@ async function checkFollowSpeakerPreference(owner, { base }) {
       true,
       'the new tab remains outside a room',
     );
-    assert.equal(errors, 0);
+    assert.equal(errors, 0, JSON.stringify({ kind: 'follow-probe-page-errors', errors, failures }));
     assert.equal(await owner.evaluate(() => window.__communityCaptureRequests), captures);
   } finally {
+    if (errors) {
+      const diagnostic = { kind: 'follow-probe-page-errors', errors, failures };
+      console.error(JSON.stringify(diagnostic));
+      if (artifacts) {
+        try {
+          fs.writeFileSync(
+            path.join(artifacts, 'follow-probe-errors.json'),
+            `${JSON.stringify(diagnostic, null, 2)}\n`,
+            { mode: 0o600 },
+          );
+        } catch {
+          console.error(JSON.stringify({ kind: 'follow-probe-artifact-write-failed' }));
+        }
+      }
+    }
     await probe?.close();
     if (viewport) await owner.setViewportSize(viewport);
     await openRoomMenu(owner);
@@ -214,4 +313,9 @@ async function checkFollowSpeakerPreference(owner, { base }) {
   return { defaultOff: true, phoneKeyboardControl: true, persisted: true, noCapture: true };
 }
 
-module.exports = { checkAccountPrivacyAcrossDevices, checkFollowSpeakerPreference };
+module.exports = {
+  checkAccountPrivacyAcrossDevices,
+  checkFollowSpeakerPreference,
+  followProbeFailure,
+  installFollowCaptureObservation,
+};

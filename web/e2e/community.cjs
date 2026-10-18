@@ -1311,7 +1311,7 @@ async function setRole(owner, name, role) {
       },
     );
     await step('Follow speaker is explicit, persistent and capture-free', async () => {
-      report.followSpeaker = await checkFollowSpeakerPreference(owner, { base });
+      report.followSpeaker = await checkFollowSpeakerPreference(owner, { base, artifacts });
     });
     await step('home manages an owned room without moving the active call', async () => {
       report.roomAdministration = await checkRoomAdministration(owner, secondDevice, {
