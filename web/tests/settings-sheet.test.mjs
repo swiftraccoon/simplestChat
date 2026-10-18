@@ -4,7 +4,14 @@ import { loadTypeScript } from './source-loader.mjs';
 import { flush, uiFixture } from './ui-fixture.mjs';
 
 /** The text-only DOM gains the few element APIs the sheet relies on. */
-async function sheetFixture({ sections = [], footer = [], host, onNavigate } = {}) {
+async function sheetFixture({
+  sections = [],
+  footer = [],
+  host,
+  onNavigate,
+  roomContext,
+  onClose,
+} = {}) {
   const f = await uiFixture();
   const { Node, document } = f;
   document.activeElement = null;
@@ -71,8 +78,12 @@ async function sheetFixture({ sections = [], footer = [], host, onNavigate } = {
     footer: () => footer,
     host: () => hostNode,
     onOpen: () => log.push('open'),
-    onClose: () => log.push('close'),
+    onClose: () => {
+      log.push('close');
+      onClose?.();
+    },
     onNavigate,
+    roomContext,
   });
   return { ...f, sheet, sheetModule, hostNode, log, timers };
 }
@@ -549,4 +560,41 @@ test('Forward rebuilds a section factory rather than reviving an aborted control
   f.sheet.close();
   snapshot.restore();
   assert.deepEqual(rendered, [false, false]);
+});
+
+test('a retired managed-room snapshot never opens the live room with the same section ID', async () => {
+  const navigation = [];
+  let scope = 'managed:B';
+  const builds = [];
+  const f = await sheetFixture({
+    roomContext: () => scope,
+    onClose: () => {
+      scope = 'live:A';
+    },
+    onNavigate: (state) => navigation.push(state),
+    sections: [
+      {
+        id: 'room-access',
+        segment: 'room',
+        label: 'Who can enter',
+        screen: () => {
+          builds.push(scope);
+          return { title: 'Who can enter', body: () => f.document.createElement('div') };
+        },
+      },
+    ],
+  });
+  f.sheet.open({ section: 'room-access' });
+  const saved = navigation.at(-1);
+  f.sheet.close();
+  saved.restore();
+  assert.equal(heading(f.sheet).textContent, 'Settings');
+  assert.equal(navigation.at(-1).section, undefined);
+  assert.deepEqual(builds, ['managed:B']);
+  scope = 'managed:C';
+  f.sheet.open({ section: 'room-access' });
+  saved.restore();
+  assert.equal(scope, 'live:A', 'a different selected room is cleared before the safe root');
+  assert.equal(heading(f.sheet).textContent, 'Settings');
+  assert.deepEqual(builds, ['managed:B', 'managed:C']);
 });

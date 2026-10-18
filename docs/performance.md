@@ -33,11 +33,11 @@ Measure runtime performance separately with the workflows below.
 
 The October 18 live-account, account-navigation and adaptive-presentation changes
 defer the call engine and mediasoup dependency until explicit room media setup.
-The eager entry falls from about 687 KB to 479 KB; the additional media chunk is
+The eager entry falls from about 687 KB to 480 KB; the additional media chunk is
 about 231 KB. Capture preferences are shared rather than copied, and no package
 dependency was added. Total JavaScript, including every lazy chunk, increases
-to 711,938 bytes raw / 171,983 gzip from the preceding 688,692 / 164,719-byte
-build, an increase of 23,246 / 7,264 bytes.
+to 712,901 bytes raw / 172,288 gzip from the preceding 688,692 / 164,719-byte
+build, an increase of 24,209 / 7,569 bytes.
 The reviewed total budget increases from 688/166 KiB to 704/170 KiB; CSS and HTML
 limits remain unchanged. The gate still counts all emitted chunks, the service
 worker and help assets. These are delivery-size observations, not a startup

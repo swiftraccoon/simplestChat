@@ -158,6 +158,14 @@ export class CommunityUI {
     return this.hasRoomAdministration || this.editingRoom !== null;
   }
 
+  /** Distinguishes a saved-room selection from the room whose call remains open. */
+  get settingsRoomContext(): string {
+    const selected = this.hasRoomAdministration
+      ? this.administration?.roomId
+      : this.editingRoom?.id;
+    return selected ? `managed:${selected}` : `live:${this.options.getRoom()?.currentRoomId ?? ''}`;
+  }
+
   private async openAdministration(roomId: string, view: ReturnType<typeof modal>): Promise<void> {
     const accountId = this.options.auth.userId;
     const token = this.options.auth.jwt;

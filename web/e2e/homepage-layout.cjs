@@ -405,6 +405,14 @@ async function run(env = process.env) {
                 return route.fulfill({ status: 200, contentType: 'image/png', body: thumbnail });
               }
               if (url.pathname === '/api/capabilities') return json(200, capabilities);
+              if (url.pathname === '/api/auth/updates') {
+                assert.equal(signedIn, true, 'Guests must not open account streams');
+                assert.equal(request.method(), 'GET');
+                assert.equal(request.headers().authorization, 'Bearer owned-layout-fixture');
+                // Layout uses HTTP snapshots; real SSE delivery has its own
+                // hosted integration scenario. Exercise bounded fallback here.
+                return route.fulfill({ status: 429, headers: { 'Retry-After': '60' } });
+              }
               if (url.pathname === '/api/auth/inbox/unread' && request.method() === 'GET') {
                 assert.equal(signedIn, true, 'Guests must not request account unread counts');
                 assert.equal(request.headers().authorization, 'Bearer owned-layout-fixture');

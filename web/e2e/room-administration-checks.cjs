@@ -154,6 +154,34 @@ async function checkRoomAdministration(
     await save(owner, region);
     await receiving.waitForFunction(() => !document.querySelector('#chat-input').disabled);
     region = await sheetScreen(owner, 'Who can enter');
+    await region.getByText(`${roomName} · ${roomId}`, { exact: true }).waitFor();
+    assert.equal(
+      new URLSearchParams(new URL(owner.url()).hash.slice(1)).has('section'),
+      false,
+      'a managed-room section cannot be serialized as a section of the current call',
+    );
+    await owner.goBack();
+    await sheet(owner).getByRole('heading', { name: 'Settings', exact: true }).waitFor();
+    await connected(owner);
+    await owner.goForward();
+    await sheet(owner).getByRole('heading', { name: 'Who can enter', exact: true }).waitFor();
+    await sheet(owner).getByText(`${roomName} · ${roomId}`, { exact: true }).waitFor();
+    await closeSheet(owner);
+    // Transient My rooms entries have no replayable action; advance through them
+    // until the settings destination is reached, without creating another room.
+    for (let depth = 0; depth < 4 && !(await sheet(owner).isVisible()); depth++)
+      await owner.goForward();
+    await sheet(owner).getByRole('heading', { name: 'Settings', exact: true }).waitFor();
+    assert.equal(
+      await sheet(owner).getByLabel('Waiting room', { exact: true }).count(),
+      0,
+      'Forward after retiring B must not open the call A controls with the same section ID',
+    );
+    assert.equal(new URLSearchParams(new URL(owner.url()).hash.slice(1)).has('section'), false);
+    await connected(owner);
+    await closeSheet(owner);
+    region = await manage(owner);
+    region = await sheetScreen(owner, 'Who can enter');
     await region.getByLabel('Waiting room', { exact: true }).check();
     await save(owner, region);
     await closeSheet(owner);
@@ -208,6 +236,7 @@ async function checkRoomAdministration(
       cleanupErrors,
       'Owned room administration cleanup or capture/join checks failed',
     );
+  return { savedRoomBackForward: true, retiredRoomContextSafeRoot: true };
 }
 
 module.exports = { checkRoomAdministration };

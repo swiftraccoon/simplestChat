@@ -170,6 +170,12 @@ async function run() {
                 return;
               }
               if (url.pathname === '/api/rooms') return json([]);
+              if (url.pathname === '/api/auth/updates') {
+                assert.equal(signedIn, true, 'Guests must not open account streams');
+                assert.equal(request.method(), 'GET');
+                assert.match(request.headers().authorization, /^Bearer /);
+                return route.fulfill({ status: 429, headers: { 'Retry-After': '60' } });
+              }
               if (url.pathname === '/api/auth/saved-rooms') return json({ rooms: [] });
               if (url.pathname === '/api/auth/inbox/unread') return json({ unreadCount: 0 });
               if (url.pathname === '/api/auth/preferences') {

@@ -841,6 +841,7 @@ const presentationSection: SheetSection = {
 };
 let stopSettingsNavigation: (() => void) | undefined;
 const settingsSheet = new SettingsSheet({
+  roomContext: () => community.settingsRoomContext,
   onBack: () => appNavigation.back(),
   onNavigate: (state, action) => {
     if (!state) {
@@ -853,7 +854,7 @@ const settingsSheet = new SettingsSheet({
         group: 'settings',
         destination: {
           kind: 'settings',
-          ...(state.section && { section: state.section }),
+          ...(!community.hasSelectedRoom && state.section && { section: state.section }),
           segment: state.segment,
         },
         ...(auth.userId && { accountId: auth.userId }),

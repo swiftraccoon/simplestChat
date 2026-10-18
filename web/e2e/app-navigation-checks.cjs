@@ -233,7 +233,11 @@ async function checkAccountNavigation(owner, { base, header, close, memberId }) 
     assert.equal(sends, 0);
     assert.equal(await owner.locator('#join-screen').isVisible(), true);
     await close(offer);
-    await owner.goto(`${base}/#contact=${memberId}`);
+    await owner.evaluate(
+      (url) => history.replaceState(null, '', url),
+      `${base}/#contact=${memberId}`,
+    );
+    await owner.reload({ waitUntil: 'domcontentloaded' });
     const coldOffer = owner.getByRole('dialog', { name: 'Add contact', exact: true });
     await coldOffer.getByRole('button', { name: 'Send request', exact: true }).waitFor();
     await close(coldOffer);

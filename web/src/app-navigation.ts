@@ -103,7 +103,9 @@ export class AppNavigation {
   private surfaces: Surface[] = [];
   private readonly snapshots = new Map<number, Snapshot>();
   private sequence = 0;
-  private readonly session = crypto.randomUUID();
+  private readonly session = Array.from(crypto.getRandomValues(new Uint32Array(4)), (value) =>
+    value.toString(16).padStart(8, '0'),
+  ).join('');
   private entry = 0;
   private position = 0;
   private changing = false;
@@ -225,6 +227,11 @@ export class AppNavigation {
         this.restoreSnapshot(snapshot);
         this.entry = id!;
         this.position = snapshot.position;
+        this.write(
+          snapshot.room,
+          [...this.surfaces].reverse().find((surface) => surface.destination)?.destination ?? null,
+          false,
+        );
       } else {
         this.dropSurfaces();
         this.pending = location;
@@ -263,6 +270,17 @@ export class AppNavigation {
     } finally {
       this.changing = false;
     }
+    // A cold settings URL occupies this document's baseline entry. Closing the
+    // entire sheet must return to its underlying page, not reopen that entry.
+    if (surface.group === 'settings' && surface.returnPosition === 0) {
+      for (const snapshot of this.snapshots.values()) {
+        if (
+          snapshot.position === 0 &&
+          snapshot.surfaces.some((entry) => entry.group === 'settings')
+        )
+          snapshot.surfaces = [];
+      }
+    }
     // The browser owns Forward. Close-button and Escape use the same Back entry.
     if (surface.returnPosition < this.position)
       window.history.go(surface.returnPosition - this.position);
@@ -273,7 +291,11 @@ export class AppNavigation {
     let shared = 0;
     while (shared < this.surfaces.length && this.surfaces[shared] === snapshot.surfaces[shared])
       shared++;
-    for (const surface of this.surfaces.splice(shared).reverse()) surface.close();
+    const keepsSettings = snapshot.surfaces.some((surface) => surface.group === 'settings');
+    for (const surface of this.surfaces.splice(shared).reverse()) {
+      if (keepsSettings && surface.group === 'settings') continue;
+      surface.close();
+    }
     for (const surface of snapshot.surfaces.slice(shared)) {
       if (surface.accountId && surface.accountId !== this.options.getAccountId()) continue;
       this.restoring = surface;

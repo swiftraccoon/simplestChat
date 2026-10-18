@@ -6,7 +6,12 @@ const accountA = '11111111-1111-4111-8111-111111111111';
 const accountB = '22222222-2222-4222-8222-222222222222';
 const peer = '33333333-3333-4333-8333-333333333333';
 
-async function fixture({ hash = '#call', ready = true, account = accountA } = {}) {
+async function fixture({
+  hash = '#call',
+  ready = true,
+  account = accountA,
+  cryptoApi = globalThis.crypto,
+} = {}) {
   const location = { pathname: '/', search: '', hash };
   const entries = [{ url: hash, state: null }];
   let cursor = 0;
@@ -38,7 +43,7 @@ async function fixture({ hash = '#call', ready = true, account = accountA } = {}
     },
   };
   const module = await loadTypeScript('src/app-navigation.ts', {
-    globals: { window: { location, history }, URLSearchParams },
+    globals: { window: { location, history }, URLSearchParams, crypto: cryptoApi },
   });
   function open(destination, { transient = false, group, restore } = {}) {
     const handle = { destination, closed: false };
@@ -61,7 +66,8 @@ async function fixture({ hash = '#call', ready = true, account = accountA } = {}
     getRoom: () => state.room,
     getAccountId: () => state.account,
     ready: () => state.ready,
-    restore: (destination) => open(destination),
+    restore: (destination) =>
+      open(destination, destination.kind === 'settings' ? { group: 'settings' } : {}),
     error: (message) => errors.push(message),
   });
   return {
@@ -189,7 +195,7 @@ test('closing settings skips its nested screens while browser Back restores each
   f.open(root, { group: 'settings', restore: () => f.open(root, { group: 'settings' }) });
   const section = f.open(privacy, { group: 'settings' });
   f.back();
-  assert.equal(section.closed, true);
+  assert.equal(section.closed, false, 'same-sheet traversal preserves the room context');
   assert.deepEqual(f.opened.at(-1).destination, root);
   f.forward();
   assert.deepEqual(f.opened.at(-1).destination, privacy);
@@ -248,4 +254,45 @@ test('a queued close cannot dismiss a newly opened settings surface', async () =
   assert.equal(f.location.hash, '#room=call&view=settings&section=privacy');
   settings.close();
   assert.equal(f.location.hash, '#call');
+});
+
+test('HTTP homepage navigation requires no secure-context randomUUID API', async () => {
+  const f = await fixture({ cryptoApi: { getRandomValues: (array) => array.fill(123) } });
+  f.open({ kind: 'inbox' });
+  f.back();
+  assert.equal(f.location.hash, '#call');
+});
+
+test('same-sheet Back and Forward rebuild screens without closing its managed-room context', async () => {
+  const f = await fixture();
+  const root = f.open({ kind: 'settings', segment: 'room' }, { group: 'settings' });
+  const section = f.open(
+    { kind: 'settings', section: 'room-access', segment: 'room' },
+    { group: 'settings' },
+  );
+  f.back();
+  assert.equal(
+    section.closed,
+    false,
+    'rebuilding a settings frame must not close the whole context',
+  );
+  f.forward();
+  assert.equal(root.closed, false);
+});
+
+test('cold settings followed by more sections closes to its page instead of reopening the cold sheet', async () => {
+  const f = await fixture({ hash: '#view=settings&section=security&segment=you' });
+  f.navigation.synchronize();
+  f.open({ kind: 'settings', segment: 'you' }, { group: 'settings' });
+  const section = f.open(
+    { kind: 'settings', section: 'security', segment: 'you' },
+    { group: 'settings' },
+  );
+  section.close();
+  assert.equal(f.location.hash, '');
+  assert.equal(section.closed, true);
+  const closedCount = f.opened.length;
+  f.forward();
+  assert.equal(f.opened.length, closedCount + 1, 'later entries remain Forward-restorable');
+  assert.equal(f.opened.at(-1).destination.kind, 'settings');
 });

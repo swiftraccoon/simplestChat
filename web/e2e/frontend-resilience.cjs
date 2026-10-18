@@ -326,6 +326,11 @@ async function run() {
         return;
       }
       if (url.pathname === '/api/rooms') return json(directory);
+      if (url.pathname === '/api/auth/updates') {
+        assert.equal(route.request().method(), 'GET');
+        assert.match(route.request().headers().authorization, /^Bearer /);
+        return route.fulfill({ status: 429, headers: { 'Retry-After': '60' } });
+      }
       if (url.pathname === '/api/auth/inbox/unread') {
         assert.equal(route.request().method(), 'GET');
         assert.match(route.request().headers().authorization, /^Bearer /);

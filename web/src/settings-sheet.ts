@@ -56,6 +56,7 @@ export interface SettingsSheetOptions {
   onClose?: () => void;
   onNavigate?: (navigation: SettingsNavigation | null, action: 'push' | 'pop') => void;
   onBack?: () => boolean;
+  roomContext?: () => string;
   segmentLabels?: { you: string; room: string };
 }
 
@@ -232,6 +233,8 @@ export class SettingsSheet {
     const screens = this.stack.map((frame) => frame.screen);
     const section = this.section;
     const segment = this.segment;
+    const roomContext =
+      segment === 'room' || section?.startsWith('room-') ? this.options.roomContext?.() : undefined;
     this.options.onNavigate?.(
       {
         ...(section && { section }),
@@ -242,12 +245,16 @@ export class SettingsSheet {
           try {
             // Section factories own abort controllers and account state. Rebuild
             // them after leaving instead of reviving their retired instances.
-            this.open({ segment, ...(section && { section }) });
+            const sameRoom =
+              roomContext === undefined || roomContext === this.options.roomContext?.();
+            if (!sameRoom) this.close();
+            this.open({ segment, ...(sameRoom && section && { section }) });
             const available =
-              !section ||
-              this.options
-                .sections()
-                .some((entry) => entry.id === section && (entry.available?.() ?? true));
+              sameRoom &&
+              (!section ||
+                this.options
+                  .sections()
+                  .some((entry) => entry.id === section && (entry.available?.() ?? true)));
             if (available) {
               for (const screen of screens.slice(section ? 1 : 0)) this.push(screen);
               this.section = section;
