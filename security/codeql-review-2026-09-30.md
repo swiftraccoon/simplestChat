@@ -656,3 +656,43 @@ findings. The 47 offline policy, triage and source-identity regression tests als
 pass. This is a static review and replay, not a new extraction or query run; the
 next original analysis must independently confirm the exact identities. No
 finding, test directory or query is newly excluded, and no remote alert changes.
+
+## Source re-review: retained browser assets and release proof (2026-10-18)
+
+Fresh local CodeQL 2.27.1 security analysis of
+`27d3f03044fd041fa9f58a66d0a162942a0c48c1` executed all 50 Python queries.
+Its original SARIF reproduced three existing reviewed findings with unchanged
+queries and rendered messages, shifted primary ranges and new complete-file
+identities. The flagged source bytes are identical to `e7660f9`; the changed
+callers and outputs were independently reviewed. The original SARIF passes the
+maintained triage helper after replacing only these three exact bindings.
+
+- Alert 32, `build/release_container_harness.py:138`: exclusive `O_CREAT|O_EXCL`
+  creation still defaults to mode 0600. New rollover HTML, scripts, metadata and
+  configuration use that default in private fixture directories. Only the public
+  one-day fixture CA and sanitized CI summary explicitly use mode 0644. The new
+  browser summary has an exact field and value-type schema; keys, raw output and
+  database dumps remain private.
+- Alert 27, `build/release_container_fixture.py:171-175`: the unchanged
+  `StrictUndefined` Jinja environment renders local dotenv, SQL, Compose and
+  PostgreSQL configuration. The added proxy capability receipt is JSON outside
+  Jinja. Browser fixture HTML is generated separately from bounded synthetic
+  revisions and content-hash names. HTML escaping would corrupt configuration.
+- Alert 31, `ops/ansible/tests/test_release_playbook.py:78`: the unchanged Jinja
+  environment compiles tracked Ansible assertions to booleans with fixture
+  values. Added receipt, ownership and upgrade-argument assertions have no HTML
+  or browser output sink.
+
+Exact replacement identities:
+
+| Alert | Complete source SHA256 | Finding fingerprint |
+| --- | --- | --- |
+| 32 | `43423f31b39fc9f30a3114a4778d551c743bffa16820061011484a0f06f1952f` | `codeql:5f3f6e7ce7af4fcdaa61b2ded45e5e9be28422140985199603bfefd2ed097d78` |
+| 27 | `072ef7e7851dc2d2232694d3f7f7224876391a4a8052977adce04309b0de24e8` | `codeql:5eb7c8f149fc0e6c44e5985d260562ed313c93a669d5a338f2d5a54020bc7f00` |
+| 31 | `da212cc2a423f6b5c8026f76ce52dc5057434c1bc0af989fdb1a458166799272` | `codeql:18f0e41dbcd270ad728f67f86570f03da11e214c61639f1166fc1663e1341529` |
+
+Original observation history, individual scope, owner and 2026-11-29 expiry are
+retained. Source provenance and Git blobs identify the newly reviewed files.
+No query, path or test exclusion was added, and no remote alert was dismissed.
+This local analysis and SARIF replay do not claim hosted upload or ingestion;
+current CI must independently satisfy those checks.
