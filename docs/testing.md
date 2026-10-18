@@ -267,7 +267,10 @@ Fake-clock media cases verify inactivity/activity timing, bounded private
 identities, tuple-history expiry/reuse and warning coalescing, including timer
 cleanup and a finite burst's delayed summary. They do not send network probes.
 The bandwidth cases exercise returned target/pacer/probe work, learned estimate
-preservation, bound changes and synchronous observer reentry. Real impaired
+preservation, bound changes, synchronous observer reentry and bounded discovery
+for unmet video demand. They cover offline/idle admission, repeated allocation
+changes, probe spacing, estimate preservation without feedback and bitrate caps.
+Real impaired
 presentation recovery remains a separate hosted browser check.
 CI runs the helper in its own job and records a passing verification under a cache key
 made from the vendored sources, the helper, the pinned OpenSSL installer and the pip

@@ -177,6 +177,7 @@ futures-lite and thiserror dependencies to their current major versions.
 `src/RTC/WebRtcServer.cpp`, `test/src/RTC/TestMediaDiagnostics.cpp`,
 `deps/libwebrtc/libwebrtc/modules/congestion_controller/rtp/transport_feedback_adapter.cc`,
 `deps/libwebrtc/libwebrtc/call/rtp_transport_controller_send.cc`,
+`deps/libwebrtc/libwebrtc/modules/congestion_controller/goog_cc/probe_controller.cc`,
 `subprojects/abseil-cpp.wrap`, `subprojects/flatbuffers.wrap`, `subprojects/libuv.wrap`,
 `subprojects/unordered-dense.wrap`, `subprojects/catch2.wrap`, the two files under
 each of `subprojects/packagefiles/abseil-cpp/` and
@@ -191,8 +192,7 @@ controller initialization. Normal demand and limit updates supply minimum and
 maximum bounds without resetting the learned delay/loss estimate and throughput
 history. The reported `startBitrate` retains the actual initialization rate.
 This replaces the earlier patch that bounded each repeated start by the configured
-minimum to suppress clamp warnings; the configured floor, cap and probing policy
-remain unchanged.
+minimum to suppress clamp warnings; the configured floor and cap remain unchanged.
 The wrapper also accepts authoritative target updates equal to the initialization
 rate, so a real recovery or raised minimum at that exact value is not discarded.
 
@@ -204,6 +204,24 @@ state preservation, bound changes and synchronous observer reentry. The hosted
 presentation fixture separately checks real decoded recovery after verified
 network impairment removal. Remove these changes when an upstream release
 preserves learned state on ordinary updates and applies their returned work.
+
+The worker reports active video demand, bounded by its existing maximum, as
+`max_total_allocated_bitrate`; it reports zero when raw video demand becomes zero,
+even while its smoothing trend decays. This value does not change pacing or
+audio floors. With periodic probing enabled, `ProbeController` also discovers
+capacity when this demand remains above its estimate outside ALR. It uses one
+existing 2× probe at most once per five seconds (or the longer configured ALR
+interval), while online and after earlier probing completes. This path does not
+start exponential continuation, reset estimates or bypass the acknowledged-rate
+limit. Allocation-change and increased-maximum probes share that admission
+interval so demand or budget drift cannot add bursts; their latest values remain
+available for the next tick. The fallback runs only outside ALR, preserving the
+ordinary ALR entry deadline.
+Existing ALR probing, transport caps and consumer forwarding ceilings remain in
+force. Actual feedback must establish additional capacity; failed probes do not
+raise the estimate. This addresses SFU forwarding at a low layer that never
+becomes quiet enough to enter ALR. Remove the extension when upstream supports
+equivalent bounded discovery for persistent unmet video demand.
 
 libwebrtc's `TransportFeedbackAdapter` keeps one entry (about 150 bytes) per
 sent packet until the receiver's transport-cc feedback covers it or the entry

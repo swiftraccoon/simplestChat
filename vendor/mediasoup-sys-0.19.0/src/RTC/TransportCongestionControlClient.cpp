@@ -5,6 +5,7 @@
 #include "RTC/TransportCongestionControlClient.hpp"
 #include "Logger.hpp"
 #include <libwebrtc/api/transport/network_types.h> // webrtc::TargetRateConstraints
+#include <algorithm>                               // std::clamp()
 #include <cmath>                                   // std::llround()
 #include <limits>                                  // std::numeric_limits
 
@@ -426,8 +427,15 @@ namespace RTC
 			return;
 		}
 
+		// Allocation is active video demand, not the transport's minimum capacity
+		// budget. In particular, a decaying trend must not keep demand after the
+		// final video consumer becomes inactive; audio does not enter this demand.
+		const auto allocatedBitrate = this->bitrates.desiredBitrate > 0
+		                                ? std::clamp<int64_t>(
+		                                    this->bitrates.effectiveDesiredBitrate, 0, this->bitrates.maxBitrate)
+		                                : 0;
 		this->rtpTransportControllerSend->SetAllocatedSendBitrateLimits(
-		  this->bitrates.minBitrate, this->bitrates.maxPaddingBitrate, this->bitrates.maxBitrate);
+		  this->bitrates.minBitrate, this->bitrates.maxPaddingBitrate, allocatedBitrate);
 
 		webrtc::TargetRateConstraints constraints;
 

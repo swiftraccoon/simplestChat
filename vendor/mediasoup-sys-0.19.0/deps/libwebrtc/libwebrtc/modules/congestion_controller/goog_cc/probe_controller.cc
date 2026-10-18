@@ -177,7 +177,12 @@ std::vector<ProbeClusterConfig> ProbeController::SetBitrates(
     case State::kProbingComplete:
       // If the new max bitrate is higher than both the old max bitrate and the
       // estimate then initiate probing.
-      if (estimated_bitrate_bps_ != 0 &&
+      if (network_available_ &&
+          (!enable_periodic_alr_probing_ ||
+           at_time_ms - time_last_probing_initiated_ms_ >=
+               std::max(config_.alr_probing_interval->ms(),
+                        kMinTimeBetweenAlrProbesMs)) &&
+          estimated_bitrate_bps_ != 0 &&
           old_max_bitrate_bps < max_bitrate_bps_ &&
           estimated_bitrate_bps_ < max_bitrate_bps_) {
         // The assumption is that if we jump more than 20% in the bandwidth
@@ -206,8 +211,16 @@ std::vector<ProbeClusterConfig> ProbeController::OnMaxTotalAllocatedBitrate(
   const bool in_alr = alr_start_time_ms_.has_value();
   const bool allow_allocation_probe =
       allocation_probing_only_in_alr_ ? in_alr : true;
+  // The SFU supplies changing real video demand. Share the periodic probe's
+  // admission interval so demand drift cannot create extra probe bursts.
+  const bool allocation_probe_due =
+      !enable_periodic_alr_probing_ ||
+      at_time_ms - time_last_probing_initiated_ms_ >=
+          std::max(config_.alr_probing_interval->ms(),
+                   kMinTimeBetweenAlrProbesMs);
 
-  if (state_ == State::kProbingComplete &&
+  if (network_available_ && allocation_probe_due &&
+      state_ == State::kProbingComplete &&
       max_total_allocated_bitrate != max_total_allocated_bitrate_ &&
       estimated_bitrate_bps_ != 0 &&
       (max_bitrate_bps_ <= 0 || estimated_bitrate_bps_ < max_bitrate_bps_) &&
@@ -408,6 +421,24 @@ std::vector<ProbeClusterConfig> ProbeController::Process(int64_t at_time_ms) {
                                true);
       }
     }
+  }
+
+  // A forwarding SFU can keep sending a low layer above the ALR threshold
+  // indefinitely, despite unmet video demand. Discover capacity with a bounded
+  // probe instead of resetting the estimate or removing its ACK-rate limit.
+  // Successful feedback remains authoritative; failed probes only retry at the
+  // shared interval, and cannot start exponential continuation from this path.
+  if (enable_periodic_alr_probing_ && network_available_ &&
+      !alr_start_time_ms_ &&
+      state_ == State::kProbingComplete && estimated_bitrate_bps_ > 0 &&
+      max_total_allocated_bitrate_ > estimated_bitrate_bps_ &&
+      at_time_ms - time_last_probing_initiated_ms_ >=
+          std::max(config_.alr_probing_interval->ms(),
+                   kMinTimeBetweenAlrProbesMs)) {
+    return InitiateProbing(at_time_ms,
+                          {static_cast<int64_t>(estimated_bitrate_bps_ *
+                                                config_.alr_probe_scale)},
+                          false);
   }
   return std::vector<ProbeClusterConfig>();
 }

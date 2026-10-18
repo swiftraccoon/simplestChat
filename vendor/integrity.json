@@ -134,6 +134,11 @@
           "vendored_sha256": "0a59b2c6473f362b30a2526f319912906633649ad038102fbd1ea5cadca4429e"
         },
         {
+          "path": "deps/libwebrtc/libwebrtc/modules/congestion_controller/goog_cc/probe_controller.cc",
+          "upstream_sha256": "0bf61c7522137e1dc0c2ff952cc533e6a7e56181e633bc6a72ba95371d3e7129",
+          "vendored_sha256": "40919d599e33552e84a351192b53c988a9170c5e504c5f60bcd9daac802fca53"
+        },
+        {
           "path": "deps/libwebrtc/libwebrtc/modules/congestion_controller/rtp/transport_feedback_adapter.cc",
           "upstream_sha256": "ffbabf72ce3ea1e13c5999149011116d6906e215ccf03f5c7c63aadd07758dca",
           "vendored_sha256": "075de86a878341df213898acb6151fb0f4383a9ea3da26e95262354cbce53c17"
@@ -216,7 +221,7 @@
         {
           "path": "src/RTC/TransportCongestionControlClient.cpp",
           "upstream_sha256": "f4bf4249c874e1ddc9877e56a1f4098de811d64e49f5e585c118670b5febf891",
-          "vendored_sha256": "0d8a81783e094fa0c80a8e546cbef28cd0c96588ab123318f9fa6f0699c91f39"
+          "vendored_sha256": "cdc34661aa1bb7a01c6086872b6c0a5ecf96d7790cbb5faf075c4da1cc1e92bc"
         },
         {
           "path": "src/RTC/WebRtcServer.cpp",
@@ -321,7 +326,7 @@
         {
           "path": "test/src/RTC/TestTransportCongestionControlClient.cpp",
           "upstream_sha256": null,
-          "vendored_sha256": "d6fe51591418c062f3778c2a042d87294a3f56d4e3bd088961226d508ac9c171"
+          "vendored_sha256": "b9d5c2e6bcd9bb5c4a2981a58f99e2b620fa93aaa5c5536a921dcbbaadfc91b5"
         }
       ]
     },
