@@ -32,13 +32,15 @@ function browserFixture() {
   const layout = module('video-layout');
   return `(() => {
     const audio = (() => { const exports = {}; ${module('audio-output')} return exports; })();
+    const capture = (() => { const exports = {}; ${module('capture-preferences')} return exports; })();
     const receivePolicy = (() => { const exports = {}; ${module('receive-policy')} return exports; })();
     const controls = (() => {
       const exports = {};
       const require = (name) => {
         if (name === './audio-output') return audio;
+        if (name === './capture-preferences') return capture;
         if (name === './receive-policy') return receivePolicy;
-        if (['./media', './settings-sheet', './media-controls.css'].includes(name)) return {};
+        if (['./settings-sheet', './media-controls.css'].includes(name)) return {};
         throw new Error('Unexpected tile-control dependency: ' + name);
       };
       ${module('media-controls')}
@@ -167,7 +169,8 @@ async function mediaLayout(page, artifacts, report) {
   report.mediaScope =
     'Built production page/CSS with current source tile rendering, layout and controls; canvas video, no SFU or device capture.';
   await page.locator('.toast').evaluateAll((nodes) => nodes.forEach((node) => node.click()));
-  await page.addScriptTag({ content: browserFixture() });
+  // Propagate initialization failures before trying to use the fixture API.
+  await page.evaluate(browserFixture());
   await page.evaluate(() => {
     for (let index = 1; index <= 3; index++) window.__mediaLayout.add(`Camera ${index}`, 640, 360);
     window.__mediaLayout.add('Portrait share', 360, 640, true);
