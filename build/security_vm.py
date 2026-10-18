@@ -102,6 +102,7 @@ GUEST_FAILURE_CONTEXTS = frozenset(
         "init-database.sql",
         "runtime-grants.sql",
         "images.json",
+        "browser-assets-installed.json",
         "simplestchat-benchmark.service",
         "simplestchat-image-build.service",
         "simplestchat",

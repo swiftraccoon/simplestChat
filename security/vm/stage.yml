@@ -61,6 +61,8 @@
         - release-public.py
         - release_public.py
         - release_artifact.py
+        - release_assets.py
+        - browser_assets.py
         - release_json.py
         - backup_public.py
         - restore_verify.py

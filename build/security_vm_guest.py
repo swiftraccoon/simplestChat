@@ -87,6 +87,7 @@ FILE_POLICIES = {
     "init-database.sql": (999, 0o400),
     "runtime-grants.sql": (0, 0o600),
     "images.json": (0, 0o600),
+    "browser-assets-installed.json": (0, 0o600),
 }
 COUNTS: JsonObject = {
     "users": 1,
@@ -154,6 +155,7 @@ FAILURE_CONTEXTS = frozenset(
         "init-database.sql",
         "runtime-grants.sql",
         "images.json",
+        "browser-assets-installed.json",
         "simplestchat-benchmark.service",
         "simplestchat-image-build.service",
         "simplestchat",
@@ -356,6 +358,7 @@ def guard(run_id: str) -> Selection:
         "runtime_profile",
         "release_public",
         "release_artifact",
+        "release_assets",
         "release_json",
         "backup_public",
         "restore_verify",

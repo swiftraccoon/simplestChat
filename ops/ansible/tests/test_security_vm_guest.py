@@ -177,9 +177,10 @@ class GuestGuardTests(unittest.TestCase):
                 "-c",
                 "import importlib, pathlib, sys; sys.path.insert(0, sys.argv[1]); "
                 + "[importlib.import_module(name) for name in "
-                + "('release_public', 'backup_public', 'restore_verify')]; "
-                + "assert pathlib.Path(sys.modules['runtime_profile'].__file__) "
-                + "== pathlib.Path(sys.argv[1]) / 'runtime_profile.py'",
+                + "('release_public', 'browser_assets', 'backup_public', 'restore_verify')]; "
+                + "assert all(pathlib.Path(sys.modules[name].__file__) "
+                + "== pathlib.Path(sys.argv[1]) / (name + '.py') "
+                + "for name in ('runtime_profile', 'release_assets', 'browser_assets'))",
                 str(directory),
             ]
             status, _output, error = bounded_process.run(
@@ -189,17 +190,24 @@ class GuestGuardTests(unittest.TestCase):
                 limits=bounded_process.Limits(timeout=5, stdout=65536, stderr=65536),
             )
             self.assertEqual(status, 0, error.decode())
-            (directory / "runtime_profile.py").unlink()
-            status, _output, error = bounded_process.run(
-                command,
-                cwd=directory,
-                env={},
-                limits=bounded_process.Limits(timeout=5, stdout=65536, stderr=65536),
-            )
-            self.assertNotEqual(status, 0)
-            self.assertIn(b"ModuleNotFoundError: No module named 'runtime_profile'", error)
+            for name in ("runtime_profile.py", "release_assets.py"):
+                with self.subTest(missing=name):
+                    dependency = directory / name
+                    content = dependency.read_bytes()
+                    dependency.unlink()
+                    status, _output, error = bounded_process.run(
+                        command,
+                        cwd=directory,
+                        env={},
+                        limits=bounded_process.Limits(timeout=5, stdout=65536, stderr=65536),
+                    )
+                    self.assertNotEqual(status, 0)
+                    self.assertIn(
+                        f"ModuleNotFoundError: No module named '{dependency.stem}'".encode(), error
+                    )
+                    _ = dependency.write_bytes(content)
 
-    def test_runtime_profile_permissions_are_checked_before_the_daemon(self) -> None:
+    def test_transitive_helper_permissions_are_checked_before_the_daemon(self) -> None:
         """The newly required installed dependency receives the same origin and mode checks."""
         library = ROOT / "ops/ansible/files"
 
@@ -210,30 +218,34 @@ class GuestGuardTests(unittest.TestCase):
                 return json.dumps(
                     {"schemaVersion": 1, "runId": RUN_ID, "revision": REVISION}
                 ).encode()
-            if path == library / "runtime_profile.py":
+            if path == library / dependency:
                 self.assertEqual(mode, 0o644)
-                reason = "fixture_runtime_profile_permissions"
+                reason = "fixture_transitive_helper_permissions"
                 raise release.ReleaseError(reason)
             return b"fixture helper"
 
-        with (
-            patch.object(os, "geteuid", return_value=0),
-            patch.object(platform, "system", return_value="Linux"),
-            patch.object(platform, "machine", return_value="x86_64"),
-            patch.object(
-                platform,
-                "freedesktop_os_release",
-                return_value={"ID": "debian", "VERSION_ID": "13"},
-            ),
-            patch.object(Path, "open", return_value=io.BytesIO(b"QEMU\n")),
-            patch.object(Path, "lstat") as inspect_path,
-            patch.object(guest, "directory"),
-            patch.object(guest, "LIBRARY", library),
-            patch.object(guest, "private_file", side_effect=read),
-            self.assertRaisesRegex(release.ReleaseError, "fixture_runtime_profile_permissions"),
-        ):
-            _ = guest.guard(RUN_ID)
-        inspect_path.assert_not_called()
+        for dependency in ("runtime_profile.py", "release_assets.py"):
+            with (
+                self.subTest(dependency=dependency),
+                patch.object(os, "geteuid", return_value=0),
+                patch.object(platform, "system", return_value="Linux"),
+                patch.object(platform, "machine", return_value="x86_64"),
+                patch.object(
+                    platform,
+                    "freedesktop_os_release",
+                    return_value={"ID": "debian", "VERSION_ID": "13"},
+                ),
+                patch.object(Path, "open", return_value=io.BytesIO(b"QEMU\n")),
+                patch.object(Path, "lstat") as inspect_path,
+                patch.object(guest, "directory"),
+                patch.object(guest, "LIBRARY", library),
+                patch.object(guest, "private_file", side_effect=read),
+                self.assertRaisesRegex(
+                    release.ReleaseError, "fixture_transitive_helper_permissions"
+                ),
+            ):
+                _ = guest.guard(RUN_ID)
+            inspect_path.assert_not_called()
 
     def test_selection_has_one_strict_schema_and_owner(self) -> None:
         """Booleans, duplicate fields, extra options and foreign runs cannot select a guest."""
@@ -476,6 +488,41 @@ class GuestDiagnosticTests(unittest.TestCase):
 
 class GuestAssertionTests(unittest.TestCase):
     """Check rejected service identities and sandbox drift without touching a daemon."""
+
+    def test_snapshot_checks_proxy_receipt_without_allowing_extra_config_files(self) -> None:
+        """The new installed capability stays root-private and exact-set validation remains."""
+        with tempfile.TemporaryDirectory() as temporary:
+            config = Path(temporary)
+            for name in guest.FILE_POLICIES:
+                _ = (config / name).write_bytes(b"fixture")
+            reads: list[tuple[str, int, int]] = []
+            secrets = 0
+
+            def read(path: Path, *, uid: int = 0, mode: int = 0o600) -> bytes:
+                nonlocal secrets
+                reads.append((path.name, uid, mode))
+                if path.name == "secrets.json":
+                    secrets += 1
+                    if secrets > 1:
+                        message = "fixture_reached_secret_validation"
+                        raise ValueError(message)
+                return b"fixture"
+
+            with (
+                patch.object(release, "CONFIG", config),
+                patch.object(guest, "directory", return_value={}),
+                patch.object(guest, "private_file", side_effect=read),
+            ):
+                with self.assertRaisesRegex(ValueError, "fixture_reached_secret_validation"):
+                    _ = guest.public_files()
+                self.assertIn(("browser-assets-installed.json", 0, 0o600), reads)
+                reads.clear()
+                _ = (config / "unexpected.json").write_bytes(b"foreign")
+                with self.assertRaisesRegex(
+                    release.ReleaseError, "Unexpected public configuration"
+                ):
+                    _ = guest.public_files()
+                self.assertEqual(reads, [])
 
     def test_snapshot_detects_changed_config_hashes_without_saving_secrets(self) -> None:
         """Two actual snapshot writes compare only protected hashes and metadata."""
