@@ -92,6 +92,7 @@ For complete guest/account setup and LAN ICE addressing see
 | `src/auth.ts`, `account-session-sync.ts`, `community-ui.ts`                                     | Identity/session refresh and cross-tab reconciliation, profiles, recovery, room management                                                |
 | `src/account-security.ts`, `account-sessions.ts`                                                | Shared account-mutation ownership, passkey/recovery management and signed-in session controls                                             |
 | `src/account-preferences.ts`                                                                    | Account-owned privacy state, field PATCH intents, cross-device refresh and uncertain-save reconciliation, shared by home and room screens |
+| `src/account-updates.ts`                                                                        | Authenticated account invalidations, bounded SSE decoding, visibility ownership and reconnect repair                                       |
 | `src/pwa.ts`, `public/sw.js`, `public/manifest.webmanifest`                                     | Installation, optional generic PM push alerts and account-scoped subscription ownership; no offline cache                                 |
 | `src/signaling.ts`, `protocol.ts`                                                               | WebSocket lifecycle and typed server protocol                                                                                             |
 | `src/validation.ts`, `api-validation.ts`, `protocol-validation.ts`                              | Shared decoder primitives and HTTP/WebSocket response validation                                                                          |
@@ -215,8 +216,12 @@ remain bounded room-session data. Start a conversation together in a room or use
 contacts can start a PM without entering a room. Existing conversations can
 continue while either person is offline, subject to PM opt-out and ignore preferences. Saved history pages hold
 at most 50 messages, and search examines the newest 10,000 retained messages per
-conversation. The account's read position is saved on the server; the open inbox
-refreshes periodically. The existing Messages button shows the account unread count.
+conversation. The account's read position is saved on the server. While the app is
+visible, an authenticated account stream invalidates inbox, contact, privacy and
+notification views even outside a room. Views read fresh HTTP snapshots after a
+change or reconnection; periodic polling repairs an unavailable stream. Hidden
+tabs close their streams and reconnect when visible. The Messages button shows
+the account unread count.
 Conversations resume around the first unread message; read positions advance only
 while the conversation is visible and scrolled to the end of the loaded page.
 Search results open with surrounding messages and older/newer navigation. Inbox
@@ -429,9 +434,10 @@ Account privacy is available from the signed-in home page, saved conversations
 and room settings. `AccountPreferences` owns it independently of a room. Requests
 carry only explicit field changes or ignore/unignore set operations; the server
 merges them with current state under account/session locks. Concurrent appearance
-changes therefore preserve a newer ignore or private-message opt-out. Visible
-devices recheck on focus and every fifteen seconds; cross-tab change hints contain
-no preference data or credentials.
+changes therefore preserve a newer ignore or private-message opt-out. Healthy
+account streams replace periodic preference polling once the view has reconciled;
+focus checks and polling repair disconnected or unreconciled views. Cross-tab
+change hints contain no preference data or credentials.
 
 An uncertain save preserves restrictive local intent and disables further changes.
 **Refresh privacy** explicitly reads current account state and synchronizes active
@@ -460,6 +466,18 @@ existing reconnect budget. Replacing the account/token, disconnecting or exhaust
 recovery cancels the owned preparation; late responses cannot open another identity's
 socket. Guests connect without a ticket. Authentication renewal on an established
 socket remains a correlated WebSocket frame, with its existing bounded retry policy.
+
+## Screen sharing
+
+**Your settings → Screen sharing** offers Details (the default, up to 15 fps) and
+Motion (up to 30 fps), both bounded to 1920×1080. The choice is saved on this
+device and applies the next time **Share screen** is chosen. Details favors
+readable slides and text. Supported layered encoders adapt to available bandwidth;
+the negotiated codec and actual encoder capabilities remain authoritative.
+While sharing, the camera uses its two lower layers when available to leave room
+for the presentation and voice; stopping or failing to start the share restores its
+normal layer budget without starting a device. Small tiles do not lower screen
+share quality, while explicit receive limits such as Data saver still apply.
 
 ## Incoming media
 
@@ -500,6 +518,8 @@ Notification rules in Account follow the account across devices. Private-message
 and mention switches, per-conversation mute/snooze, and named-time-zone quiet
 hours apply to foreground notices/sounds and server push eligibility. Browser
 notification permission remains an explicit choice on each device. Preferences
-refresh on focus and every 30 seconds while visible; unknown or over-90-second
-stale account policy suppresses alerts until refreshed. Quiet-hour alerts are
-not replayed afterward. Already accepted push delivery cannot be recalled.
+follow account-stream invalidations, with focus checks and a 30-second visible
+polling fallback when the stream is unavailable or the view needs reconciliation.
+Unknown or unreconciled policy suppresses alerts; a snapshot older than 90 seconds
+also suppresses alerts while disconnected. Quiet-hour alerts are not replayed
+afterward. Already accepted push delivery cannot be recalled.

@@ -31,6 +31,7 @@ HTTP / WebSocket
 | Membership, lobby, chat and reconnect state | `room/mod.rs`, `room/social.rs` |
 | Durable room history, PM inbox, read positions and chat expiry | `room/history.rs` |
 | Account notification rules, quiet hours and per-conversation overrides | `auth/notifications.rs` |
+| Bounded authenticated account invalidations outside rooms | `auth/updates.rs`, `auth/updates_tests.rs` |
 | Bounded file storage, message ownership and short-lived live-room download grants | `attachments.rs` |
 | Optional session-owned PM push, retained VAPID identity and bounded delivery queue | `push.rs` |
 | Ordered persistence and uncertain-write handling | `room/control.rs` |
@@ -94,6 +95,15 @@ policy. Temporary guest ignores survive publication. Fresh authenticated joins
 and lobby admissions load account policy under that gate before insertion. A
 successful preference GET also verifies the issuing session and synchronizes
 active rooms, providing explicit recovery after a save whose outcome is unknown.
+
+`GET /api/auth/updates` carries content-free account invalidations over SSE,
+authenticated by the ordinary Bearer header. A ready event and each reconnect
+require fresh HTTP snapshots; events are hints, not durable state. Confirmed
+mutations publish only after commit. Streams have per-account and global bounds,
+close lagging receivers, revalidate sessions and retire during drain. See
+[configuration](../docs/configuration.md#many-people-behind-one-address) for limits.
+The hub is process-local: multiple server replicas require shared invalidations
+before healthy streams can safely replace polling across replicas.
 
 Saved history is separate from the 300-entry / 256-KiB membership replay buffer.
 Migration 025 adds public-history retention to persisted rooms plus account PMs,
