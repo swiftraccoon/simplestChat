@@ -1,6 +1,8 @@
 /** Owned loopback frontend only: real tabs, cookies, Web Locks and account UI;
  * HTTP/signaling fixtures avoid creating accounts or joining real rooms. */
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const { browserOptions } = require('./browser-options.cjs');
 const { capabilities } = require('./capabilities-fixture.cjs');
 const { signOut } = require('./account-menu.cjs');
@@ -20,6 +22,8 @@ if (
 
 const options = browserOptions(process.env.E2E_BROWSER);
 const markerKey = 'simplestchat-account-change-v1';
+let activeCheck = 'launch';
+let activePhase = 'starting';
 
 function accountSession(name, revision) {
   const payload = Buffer.from(
@@ -31,7 +35,50 @@ function accountSession(name, revision) {
   };
 }
 
+function accountTabsFailure(error, check, phase, browser) {
+  const sourceLine = /auth-cross-tab\.cjs:(\d{1,5}):\d+/.exec(String(error?.stack ?? ''));
+  return {
+    kind: 'account-tabs-failure',
+    browser: ['chromium', 'firefox', 'webkit'].includes(browser) ? browser : 'unknown',
+    check: ['launch', 'restored', 'unauthenticated', 'superseded', 'broadcast', 'storage'].includes(
+      check,
+    )
+      ? check
+      : 'unknown',
+    phase: [
+      'starting',
+      'navigate',
+      'document-marker',
+      'sign-in',
+      'release-old-body',
+      'retry',
+      'pending-retry',
+      'complete-restore',
+      'room-selection',
+      'home-link',
+      'history-back-home',
+      'history-back-initial',
+      'history-forward',
+      'rapid-room-hashes',
+      'malformed-room-hash',
+      'same-account-refresh',
+      'changed-account-refresh',
+      'focus-reconcile',
+      'sign-out',
+      'evidence',
+    ].includes(phase)
+      ? phase
+      : 'unknown',
+    sourceLine: sourceLine ? Number(sourceLine[1]) : null,
+    failure: String(error?.message ?? '').includes('Execution context was destroyed')
+      ? 'execution-context-destroyed'
+      : 'check-failed',
+  };
+}
+
 async function startupRecovery(browser, result) {
+  activeCheck = result;
+  activePhase = 'starting';
   const context = await browser.newContext();
   const failures = [];
   let refreshes = 0;
@@ -173,9 +220,12 @@ async function startupRecovery(browser, result) {
     const page = await context.newPage();
     page.setDefaultTimeout(10000);
     page.on('pageerror', (error) => failures.push(error.message));
+    activePhase = 'navigate';
     await page.goto(origin.toString());
+    activePhase = 'document-marker';
     const documentMarker = await page.evaluate(() => window.__restoreEvidence.documentMarker);
     if (result === 'superseded') {
+      activePhase = 'sign-in';
       await page.waitForFunction(() => typeof window.__releaseOldRestoreBody === 'function');
       await page.locator('#sign-in-btn').click();
       await page.locator('#login-email').fill('Second@example.test');
@@ -186,6 +236,7 @@ async function startupRecovery(browser, result) {
           document.getElementById('auth-display-name').textContent === 'Second' &&
           window.__restoreEvidence.authenticatedOpens === 1,
       );
+      activePhase = 'release-old-body';
       await page.evaluate(async () => {
         window.__releaseOldRestoreBody();
         await new Promise(requestAnimationFrame);
@@ -195,6 +246,7 @@ async function startupRecovery(browser, result) {
       assert.equal(await page.locator('#auth-restore-notice').isVisible(), false);
       assert.equal(logins, 1);
     } else {
+      activePhase = 'retry';
       const status = page.locator('#auth-restore-status');
       const retry = page.locator('#auth-restore-retry');
       await page.waitForFunction(
@@ -225,6 +277,7 @@ async function startupRecovery(browser, result) {
         clearTimeout(timer);
       }
       assert.equal(await retry.isDisabled(), true);
+      activePhase = 'pending-retry';
       await page.evaluate(async () => {
         const retry = document.getElementById('auth-restore-retry');
         retry.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -238,6 +291,7 @@ async function startupRecovery(browser, result) {
         'pending Retry cannot submit another refresh',
       );
       assert.equal(refreshes, 2);
+      activePhase = 'complete-restore';
       await pending.fulfill(
         result === 'restored'
           ? { json: accountSession('First', ++revision) }
@@ -257,6 +311,7 @@ async function startupRecovery(browser, result) {
       }
       assert.equal(logins, 0, 'saved sign-in recovery requires no entered credentials');
     }
+    activePhase = 'evidence';
     const evidence = await page.evaluate(() => window.__restoreEvidence);
     assert.equal(evidence.captures, 0);
     assert.equal(evidence.joins, 0);
@@ -274,6 +329,8 @@ async function startupRecovery(browser, result) {
 }
 
 async function scenario(browser, storageOnly) {
+  activeCheck = storageOnly ? 'storage' : 'broadcast';
+  activePhase = 'starting';
   const context = await browser.newContext();
   const failures = [];
   let revision = 0;
@@ -404,6 +461,7 @@ async function scenario(browser, storageOnly) {
     });
     const first = await context.newPage();
     const second = await context.newPage();
+    activePhase = 'navigate';
     for (const page of [first, second]) {
       page.setDefaultTimeout(10000);
       page.on('pageerror', (error) => failures.push(error.message));
@@ -412,30 +470,38 @@ async function scenario(browser, storageOnly) {
     }
     const selected = async (value) =>
       first.waitForFunction((room) => document.getElementById('room-input').value === room, value);
+    activePhase = 'room-selection';
     await selected('room_A-2');
     await first.evaluate(() => {
       location.hash = 'room-b';
     });
     await selected('room-b');
+    activePhase = 'home-link';
     await first.locator('#home-link').click();
     await selected('');
     assert.equal(new URL(first.url()).hash, '');
+    activePhase = 'history-back-home';
     await first.goBack();
     await selected('room-b');
+    activePhase = 'history-back-initial';
     await first.goBack();
     await selected('room_A-2');
+    activePhase = 'history-forward';
     await first.goForward();
     await selected('room-b');
+    activePhase = 'rapid-room-hashes';
     await first.evaluate(() => {
       location.hash = 'room-c';
       location.hash = 'room-d';
     });
     await selected('room-d');
+    activePhase = 'malformed-room-hash';
     await first.evaluate(() => {
       location.hash = '%';
     });
     await first.waitForFunction(() => location.hash === '#room-d');
     await selected('room-d');
+    activePhase = 'sign-in';
     await first.locator('#sign-in-btn').click();
     await first.locator('#login-email').fill('First@example.test');
     await first.locator('#login-password').fill('Disposable-test-password');
@@ -448,6 +514,7 @@ async function scenario(browser, storageOnly) {
     // Measure renewal only after the initial authenticated connection is open.
     for (const page of [first, second])
       await page.waitForFunction(() => window.__crossTabEvidence.authenticatedOpens === 1);
+    activePhase = 'same-account-refresh';
     const before = await second.evaluate(() => ({ ...window.__crossTabEvidence }));
     const announce = async () =>
       first.evaluate(
@@ -476,6 +543,7 @@ async function scenario(browser, storageOnly) {
       'same account keeps the signaling connection',
     );
     assert.equal(same.closes, before.closes);
+    activePhase = 'changed-account-refresh';
     await context.addCookies([
       {
         name: 'fixture_refresh',
@@ -495,17 +563,20 @@ async function scenario(browser, storageOnly) {
     );
     const switched = await second.evaluate(() => ({ ...window.__crossTabEvidence }));
     assert.ok(switched.closes > same.closes, 'a changed account retires the previous socket');
+    activePhase = 'focus-reconcile';
     await first.bringToFront();
     await first.evaluate(() => window.dispatchEvent(new Event('focus')));
     await first.waitForFunction(
       () => document.getElementById('auth-display-name').textContent === 'Second',
     );
+    activePhase = 'sign-out';
     await signOut(first);
     await second.locator('#sign-in-btn').waitFor({ state: 'visible' });
     assert.equal(
       (await context.cookies()).some((cookie) => cookie.name === 'fixture_refresh'),
       false,
     );
+    activePhase = 'evidence';
     for (const page of [first, second]) {
       const evidence = await page.evaluate(() => window.__crossTabEvidence);
       assert.equal(evidence.captures, 0, 'account changes never start media capture');
@@ -562,6 +633,19 @@ async function main() {
   }
 }
 main().catch((error) => {
+  const diagnostic = accountTabsFailure(error, activeCheck, activePhase, options.name);
+  console.error(JSON.stringify(diagnostic));
+  if (process.env.E2E_ARTIFACTS) {
+    try {
+      fs.writeFileSync(
+        path.join(process.env.E2E_ARTIFACTS, 'account-tabs-failure.json'),
+        `${JSON.stringify(diagnostic, null, 2)}\n`,
+        { mode: 0o600 },
+      );
+    } catch {
+      // The original check failure remains authoritative if artifact writing fails.
+    }
+  }
   console.error(error.message);
   process.exitCode = 1;
 });
