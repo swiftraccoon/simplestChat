@@ -50,10 +50,54 @@ async function presentationReceiverStats() {
       ? Math.max(0, performance.now() - window.__presentationReceiveEstimate.observedAt)
       : null,
     screenInbound: [],
+    remoteDescriptions: [],
+    localDescriptions: [],
+    probator: { receiverIdentified: false, packetsReceived: null, bytesReceived: null },
+  };
+  const describe = (description) => {
+    const feedback = ['transport-cc', 'goog-remb', 'nack', 'nack pli', 'ccm fir'];
+    const extensionNames = {
+      'http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01':
+        'transport-wide-cc',
+      'http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time': 'abs-send-time',
+      'urn:ietf:params:rtp-hdrext:sdes:mid': 'mid',
+    };
+    const foundFeedback = new Set(),
+      foundExtensions = new Set();
+    const available = typeof description?.sdp === 'string' && description.sdp.length <= 262144;
+    let probator = false;
+    if (available)
+      for (const line of description.sdp.split(/\r?\n/)) {
+        const value = /^a=rtcp-fb:(?:\*|\d{1,3}) ([a-z-]+(?: [a-z-]+)?)$/.exec(line)?.[1];
+        if (feedback.includes(value)) foundFeedback.add(value);
+        const uri =
+          /^a=extmap:\d+(?:\/(?:sendonly|recvonly|sendrecv|inactive))? (\S+)(?: .*)?$/.exec(
+            line,
+          )?.[1];
+        if (Object.hasOwn(extensionNames, uri)) foundExtensions.add(extensionNames[uri]);
+        if (line === 'a=mid:probator') probator = true;
+      }
+    return {
+      available,
+      type: ['offer', 'answer', 'pranswer', 'rollback'].includes(description?.type)
+        ? description.type
+        : null,
+      feedback: feedback.filter((name) => foundFeedback.has(name)),
+      headerExtensions: ['transport-wide-cc', 'abs-send-time', 'mid'].filter((name) =>
+        foundExtensions.has(name),
+      ),
+      probator: available ? probator : null,
+    };
   };
   for (const peer of window.__communityPeers) {
     if (peer.connectionState !== 'connected') continue;
+    if (result.remoteDescriptions.length < 4)
+      result.remoteDescriptions.push(describe(peer.remoteDescription));
+    if (result.localDescriptions.length < 4)
+      result.localDescriptions.push(describe(peer.localDescription));
     const receivers = peer.getReceivers();
+    if (receivers.some((receiver) => receiver.track?.id === 'probator'))
+      result.probator.receiverIdentified = true;
     if (receivers.length) {
       // This optional diagnostic must not replace the receiver counters used
       // for assertions when an engine omits transport-wide stats.
@@ -63,7 +107,18 @@ async function presentationReceiverStats() {
           .filter((row) => row.type === 'transport')
           .map((row) => row.selectedCandidatePairId),
       );
-      for (const row of stats.values())
+      for (const row of stats.values()) {
+        // The pinned mediasoup client uses this fixed probation receiver/MID.
+        // Match internally only; never retain SDP, native identifiers or SSRCs.
+        if (
+          row.type === 'inbound-rtp' &&
+          (row.ssrc === 1234 || row.mid === 'probator' || row.trackIdentifier === 'probator')
+        ) {
+          result.probator.receiverIdentified = true;
+          for (const name of ['packetsReceived', 'bytesReceived'])
+            if (finite(row[name]) !== null)
+              result.probator[name] = (result.probator[name] ?? 0) + row[name];
+        }
         if (
           row.type === 'candidate-pair' &&
           row.state === 'succeeded' &&
@@ -74,6 +129,7 @@ async function presentationReceiverStats() {
             result.availableIncomingBitrate ?? 0,
             row.availableIncomingBitrate,
           );
+      }
     }
     for (const receiver of receivers) {
       const stats = await receiver.getStats();

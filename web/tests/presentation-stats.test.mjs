@@ -137,6 +137,151 @@ test('missing incoming estimates stay unknown without breaking required native a
   });
   assert.equal(result.availableIncomingBitrate, null);
   assert.equal(result.audioSamples, 480);
+  assert.deepEqual(result.probator, {
+    receiverIdentified: false,
+    packetsReceived: null,
+    bytesReceived: null,
+  });
+});
+
+test('receiver negotiation and probation diagnostics expose only fixed names and numeric counters', async () => {
+  const secret = 'private-native-description';
+  const remote = [
+    'v=0',
+    `a=ice-pwd:${secret}`,
+    `a=fingerprint:sha-256 ${secret}`,
+    `a=msid:${secret} ${secret}`,
+    'a=rtcp-fb:96 transport-cc',
+    'a=rtcp-fb:* goog-remb',
+    'a=rtcp-fb:96 nack pli',
+    `a=rtcp-fb:96 ${secret}`,
+    'a=extmap:4/sendonly http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01',
+    'a=extmap:2 http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time',
+    'a=extmap:3 urn:ietf:params:rtp-hdrext:sdes:mid',
+    `a=extmap:9 https://${secret}/extension`,
+    'm=video 7 UDP/TLS/RTP/SAVPF 127',
+    'a=mid:probator',
+    `a=ssrc:1234 cname:${secret}`,
+  ].join('\r\n');
+  const result = await evaluate(stats.presentationReceiverStats, {
+    window: {
+      __communityPeers: [
+        {
+          connectionState: 'connected',
+          remoteDescription: { type: 'offer', sdp: remote },
+          localDescription: {
+            type: 'answer',
+            sdp: [
+              `a=ice-pwd:${secret}`,
+              'a=rtcp-fb:96 goog-remb',
+              'a=extmap:2 http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time',
+              'a=mid:probator',
+            ].join('\r\n'),
+          },
+          getReceivers: () => [
+            { track: { kind: 'video', id: 'probator' }, getStats: async () => report() },
+          ],
+          getStats: async () =>
+            report(
+              {
+                type: 'inbound-rtp',
+                ssrc: 1234,
+                id: secret,
+                packetsReceived: 17,
+                bytesReceived: 501,
+              },
+              {
+                type: 'inbound-rtp',
+                ssrc: 5678,
+                id: secret,
+                packetsReceived: 900,
+                bytesReceived: 900,
+              },
+            ),
+        },
+      ],
+    },
+    document: { querySelector: () => null },
+  });
+  assert.deepEqual(result.remoteDescriptions, [
+    {
+      available: true,
+      type: 'offer',
+      feedback: ['transport-cc', 'goog-remb', 'nack pli'],
+      headerExtensions: ['transport-wide-cc', 'abs-send-time', 'mid'],
+      probator: true,
+    },
+  ]);
+  assert.deepEqual(result.probator, {
+    receiverIdentified: true,
+    packetsReceived: 17,
+    bytesReceived: 501,
+  });
+  assert.deepEqual(
+    result.localDescriptions,
+    [
+      {
+        available: true,
+        type: 'answer',
+        feedback: ['goog-remb'],
+        headerExtensions: ['abs-send-time'],
+        probator: true,
+      },
+    ],
+    'the local answer never inherits transport-cc offered only by the remote description',
+  );
+  assert.doesNotMatch(
+    JSON.stringify(result),
+    /private-native-description|ice-pwd|fingerprint|ssrc|1234|5678/,
+  );
+});
+
+test('unsupported probation fields stay unknown and oversized descriptions are never retained or parsed', async () => {
+  let calls = 0;
+  const peer = {
+    connectionState: 'connected',
+    remoteDescription: { type: 'private-type', sdp: `a=mid:probator\n${'x'.repeat(262144)}` },
+    getReceivers: () => [{ track: { kind: 'video' }, getStats: async () => report() }],
+    getStats: async () => {
+      calls++;
+      return report({
+        type: 'inbound-rtp',
+        mid: 'probator',
+        packetsReceived: -1,
+        bytesReceived: Infinity,
+      });
+    },
+  };
+  const result = await evaluate(stats.presentationReceiverStats, {
+    window: { __communityPeers: Array.from({ length: 5 }, () => peer) },
+    document: { querySelector: () => null },
+  });
+  assert.equal(
+    calls,
+    5,
+    'diagnostics reuse the existing one optional aggregate stats request per peer',
+  );
+  assert.equal(result.remoteDescriptions.length, 4);
+  assert.equal(result.localDescriptions.length, 4);
+  assert.deepEqual(result.remoteDescriptions[0], {
+    available: false,
+    type: null,
+    feedback: [],
+    headerExtensions: [],
+    probator: null,
+  });
+  assert.deepEqual(result.probator, {
+    receiverIdentified: true,
+    packetsReceived: null,
+    bytesReceived: null,
+  });
+  assert.deepEqual(result.localDescriptions[0], {
+    available: false,
+    type: null,
+    feedback: [],
+    headerExtensions: [],
+    probator: null,
+  });
 });
 
 test('sender diagnostics expose actual per-encoding progress without changing publication', async () => {
