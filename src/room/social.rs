@@ -5093,15 +5093,16 @@ impl RoomManager {
         // PM consent changes share control with durable sends, so their ACK
         // cannot overtake a send while it waits for its database commit.
         if matches!(command, ClientMessage::ChangeNickname { .. }) {
-            return self
-                .handle_social_request_inner(
-                    room_id,
-                    participant_id,
-                    expected_sender,
-                    command,
-                    None,
-                )
-                .await;
+            // Keep the large shared dispatcher's state off the signaling
+            // task's stack on this direct, non-owned call path.
+            return Box::pin(self.handle_social_request_inner(
+                room_id,
+                participant_id,
+                expected_sender,
+                command,
+                None,
+            ))
+            .await;
         }
 
         let participant_id = participant_id.to_owned();
