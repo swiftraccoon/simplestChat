@@ -63,6 +63,68 @@ test('observed visible tiles replace unobserved ones before retaining current ti
   assert.deepEqual([...selected], ['19', '0', '1', '2']);
 });
 
+test('visible screen shares replace unpinned cameras within both video budgets', () => {
+  const next = candidates.map((candidate) => ({
+    ...candidate,
+    source: candidate.id === '19' ? 'screen' : 'camera',
+  }));
+  const current = new Set(['0', '1', '2', '3', '4', '5', '6', '7', '8']);
+  assert.deepEqual(
+    [...policy.selectIncomingVideos(next, 'balanced', true, current)],
+    ['19', '0', '1', '2', '3', '4', '5', '6', '7'],
+  );
+  assert.deepEqual(
+    [...policy.selectIncomingVideos(next, 'data-saver', true, current)],
+    ['19', '0', '1', '2'],
+  );
+});
+
+test('picture-in-picture and explicit pins outrank screen shares, whose ties stay stable', () => {
+  const next = [
+    { id: 'first-share', source: 'screen', visible: true, pinned: false, hidden: false },
+    { id: 'retained-share', source: 'screen', visible: true, pinned: false, hidden: false },
+    { id: 'third-share', source: 'screen', visible: true, pinned: false, hidden: false },
+    { id: 'pinned-camera', source: 'camera', visible: false, pinned: true, hidden: false },
+    {
+      id: 'pip-camera',
+      source: 'camera',
+      visible: false,
+      pinned: false,
+      hidden: false,
+      pictureInPicture: true,
+    },
+  ];
+  const current = new Set(['retained-share', 'third-share']);
+  assert.deepEqual(
+    [...policy.selectIncomingVideos(next, 'data-saver', true, current)],
+    ['pip-camera', 'pinned-camera', 'retained-share', 'third-share'],
+  );
+  assert.deepEqual(
+    [...policy.selectIncomingVideos(next, 'balanced', false, current)],
+    ['pip-camera'],
+  );
+  assert.equal(policy.selectIncomingVideos(next, 'audio-only', true, current).size, 0);
+});
+
+test('screen-share priority keeps visibility and hiding rules', () => {
+  const next = [
+    { id: 'offscreen-share', source: 'screen', visible: false, pinned: false, hidden: false },
+    { id: 'hidden-share', source: 'screen', visible: true, pinned: true, hidden: true },
+    { id: 'new-share', source: 'screen', pinned: false, hidden: false },
+    ...candidates.slice(0, 4),
+  ];
+  assert.deepEqual(
+    [...policy.selectIncomingVideos(next, 'data-saver', true, new Set(['new-share']))],
+    ['0', '1', '2', '3'],
+    'an unobserved share must not displace a confirmed-visible camera',
+  );
+  next[2].visible = true;
+  assert.deepEqual(
+    [...policy.selectIncomingVideos(next, 'data-saver', true, new Set())],
+    ['new-share', '0', '1', '2'],
+  );
+});
+
 test('stored receive mode is bounded and storage failure does not prevent joining', async () => {
   assert.equal(policy.loadReceiveMode(), 'balanced');
   assert.equal(policy.normalizeReceiveMode('unlimited'), 'balanced');
@@ -82,7 +144,7 @@ test('stored receive mode is bounded and storage failure does not prevent joinin
   assert.equal(stored.loadReceiveMode(), 'data-saver');
 });
 
-async function fixture(t, count = 12) {
+async function fixture(t, count = 12, includeScreen = true) {
   const state = {
     media: null,
     tracks: [],
@@ -179,7 +241,7 @@ async function fixture(t, count = 12) {
                 {
                   id: `v${index}`,
                   kind: 'video',
-                  source: index === count - 1 ? 'screen' : 'camera',
+                  source: includeScreen && index === count - 1 ? 'screen' : 'camera',
                 },
                 { id: `a${index}`, kind: 'audio' },
               ],
@@ -201,15 +263,67 @@ async function fixture(t, count = 12) {
   return { room, state, signaling, settle: () => room.receiveReconcile ?? Promise.resolve() };
 }
 
+for (const [mode, limit] of [
+  ['balanced', 9],
+  ['data-saver', 4],
+]) {
+  test(`a new visible screen share replaces a camera after retirement in ${mode}`, async (t) => {
+    const { room, state, signaling, settle } = await fixture(t, limit, false);
+    room.setReceiveMode(mode);
+    for (let index = 0; index < limit; index++)
+      room.setRemoteVideoVisibility(`p${index}`, 'camera', true);
+    await settle();
+    const consumed = state.consumed.length;
+    const retired = deferred();
+    state.beforeRetire = () => retired.promise;
+    signaling.onMessage({
+      type: 'newProducer',
+      participantId: 'p0',
+      producerId: 'v-screen',
+      kind: 'video',
+      source: 'screen',
+    });
+    room.setRemoteVideoVisibility('p0', 'screen', true);
+    await flush();
+    assert.equal(state.consumed.length, consumed, 'the old consumer must be retired first');
+    assert.deepEqual(state.retired, [`v${limit - 1}`]);
+    retired.resolve();
+    await settle();
+    assert.ok(state.media.tracks.has('v-screen'), 'the new share receives without a pin');
+    assert.ok(!state.media.tracks.has(`v${limit - 1}`));
+    assert.equal(state.maximum, limit);
+    assert.deepEqual(
+      [...state.media.tracks.keys()].filter((id) => id.startsWith('a')),
+      Array.from({ length: limit }, (_, index) => `a${index}`),
+    );
+    assert.ok(
+      state.tracks.some(
+        ([participantId, , track, kind, source]) =>
+          participantId === 'p0' &&
+          track.id === 'v-screen' &&
+          kind === 'video' &&
+          source === 'screen',
+      ),
+    );
+    signaling.onMessage({ type: 'producerClosed', producerId: 'v-screen' });
+    await settle();
+    assert.ok(state.media.tracks.has(`v${limit - 1}`), 'closing the share restores the camera');
+    assert.equal(state.maximum, limit);
+    assert.deepEqual(state.errors, []);
+  });
+}
+
 test('room caps subscriptions, gives audio its own path, and includes screenshares in the same budget', async (t) => {
   const { room, state, settle } = await fixture(t);
   assert.equal(state.consumed.filter((id) => id.startsWith('v')).length, 9);
   assert.equal(state.consumed.filter((id) => id.startsWith('a')).length, 12);
   assert.equal(state.deferred.length, 3);
-  room.setPinnedRemoteVideo('p11', 'screen');
+  assert.ok(state.media.tracks.has('v11'), 'the existing share receives without a pin');
+  room.setPinnedRemoteVideo('p10');
   await settle();
   assert.equal(state.maximum, 9);
   assert.ok(state.media.tracks.has('v11'));
+  assert.ok(state.media.tracks.has('v10'));
   assert.equal(state.retired.length, 1);
   assert.equal(room.telemetryCallState().selected, 21);
 });
@@ -223,7 +337,7 @@ test('visible replacement waits for retirement confirmation before allocating it
   assert.equal(state.consumed.length, 21, 'no replacement before server ACK');
   retired.resolve();
   await settle();
-  assert.ok(state.media.tracks.has('v9'));
+  assert.ok(state.media.tracks.has('v8'));
   assert.ok(!state.media.tracks.has('v0'));
   assert.equal(state.maximum, 9);
   assert.deepEqual(

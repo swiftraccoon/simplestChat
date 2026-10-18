@@ -891,8 +891,9 @@ export class RoomClient {
           ),
     );
     this.selectedVideos = selectIncomingVideos(
-      videos.map(({ id, participant, key }) => ({
+      videos.map(({ id, participant, producer, key }) => ({
         id,
+        source: producer.source,
         visible: this.receiveVisibility.get(key),
         pinned: this.pinnedVideo === key,
         pictureInPicture: this.pictureInPictureVideo === key,

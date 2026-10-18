@@ -401,12 +401,14 @@ socket remains a correlated WebSocket frame, with its existing bounded retry pol
 ## Incoming media
 
 Receive settings offer Balanced (up to nine incoming videos), Data saver (up to
-four, lowest simulcast layer) and Audio only. Cameras and screen shares follow
-the same policy and retain identical tile dimensions. Visible and pinned tiles
-get priority; offscreen videos are unsubscribed, and a hidden tab keeps only an
-explicit picture-in-picture video. Closing a consumer is acknowledged before a
-replacement is opened. Audio reception and publishing controls are independent.
-The receive choice is saved on this device.
+four, lowest simulcast layer) and Audio only. Camera and screen-share tiles retain
+identical dimensions. Picture-in-picture and explicit pins take priority, then
+observed visibility. Among equally visible tiles, screen shares receive before
+cameras; existing subscriptions break remaining ties. Offscreen videos are
+unsubscribed, and a hidden tab keeps only an explicit picture-in-picture video.
+Closing a consumer is acknowledged before a replacement is opened. Audio
+reception and publishing controls are independent. The receive choice is saved
+on this device.
 
 ## Attachments
 

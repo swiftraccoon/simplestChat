@@ -35,13 +35,14 @@ export function videoTileKey(participantId: string, source?: string): string {
 
 export interface ReceiveCandidate {
   id: string;
+  source?: string | undefined;
   visible?: boolean | undefined;
   pinned: boolean;
   hidden: boolean;
   pictureInPicture?: boolean;
 }
 
-/** Stable ties retain subscriptions instead of rotating videos on every update. */
+/** Explicit viewer choices lead; equally visible shares precede cameras, then stable ties. */
 export function selectIncomingVideos(
   candidates: readonly ReceiveCandidate[],
   mode: ReceiveMode,
@@ -62,6 +63,7 @@ export function selectIncomingVideos(
           Number(Boolean(right.pictureInPicture)) - Number(Boolean(left.pictureInPicture)) ||
           Number(right.pinned) - Number(left.pinned) ||
           Number(right.visible === true) - Number(left.visible === true) ||
+          Number(right.source === 'screen') - Number(left.source === 'screen') ||
           Number(current.has(right.id)) - Number(current.has(left.id)),
       )
       .slice(0, VIDEO_RECEIVE_LIMITS[mode])
