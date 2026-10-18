@@ -575,6 +575,51 @@ for (const [label, setup, toggleId, menuId] of [
       },
     });
     assert.equal(prevented, false, 'secondary pointer actions retain their native behavior');
+    const checkboxLabel = node('checkbox-label', menu);
+    const checkbox = node('checkbox', checkboxLabel);
+    checkbox.checked = false;
+    checkbox.closest = (selector) =>
+      selector.includes('input[type="checkbox"]')
+        ? checkbox
+        : selector === 'label'
+          ? checkboxLabel
+          : null;
+    checkboxLabel.closest = (selector) => (selector === 'label' ? checkboxLabel : null);
+    checkboxLabel.querySelector = () => checkbox;
+    for (const target of [checkbox, checkboxLabel]) {
+      prevented = false;
+      fire(target, 'mousedown', {
+        button: 0,
+        preventDefault() {
+          prevented = true;
+        },
+      });
+      // Safari's native pointer focus transition would otherwise blur the first
+      // choice to the document before activating a checkbox or its label.
+      if (!prevented) fire(item, 'focusout', { relatedTarget: null });
+      if (!menu.hidden) {
+        fire(target, 'click');
+        checkbox.checked = !checkbox.checked;
+      }
+      assert.equal(
+        checkbox.checked,
+        target === checkbox,
+        'checkbox and label both activate without losing the menu',
+      );
+      assert.equal(menu.hidden, false);
+    }
+    const rangeLabel = node('range-label', menu);
+    const range = node('range', rangeLabel);
+    range.closest = (selector) => (selector === 'label' ? rangeLabel : null);
+    rangeLabel.querySelector = () => null;
+    prevented = false;
+    fire(range, 'mousedown', {
+      button: 0,
+      preventDefault() {
+        prevented = true;
+      },
+    });
+    assert.equal(prevented, false, 'range controls retain native focus and dragging');
     fire(item, 'click');
     assert.equal(menu.hidden, true, 'a choice closes the menu');
     assert.equal(state.focused, toggle, 'a dialog the choice opens will return focus to More');

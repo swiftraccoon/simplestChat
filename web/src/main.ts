@@ -1804,7 +1804,12 @@ function setupMenu(toggleId: string, menuId: string): void {
   menu.addEventListener('mousedown', (event) => {
     // Safari otherwise blurs the focused choice before click, hiding the menu
     // through focusout before the pointer can activate a different choice.
-    if (event.button === 0 && (event.target as Element).closest('button, a'))
+    const target = event.target as Element;
+    if (
+      event.button === 0 &&
+      (target.closest('button, a, input[type="checkbox"]') ||
+        target.closest('label')?.querySelector('input[type="checkbox"]'))
+    )
       event.preventDefault();
   });
   // Focus returns to the toggle before a choice runs, so a dialog it opens restores
