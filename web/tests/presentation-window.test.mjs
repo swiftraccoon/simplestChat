@@ -2,7 +2,16 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import windows from '../e2e/presentation-window.cjs';
 
-function fixture(heights, { windowMs = 1800, timeoutMs = 10000, matches = () => true } = {}) {
+function fixture(
+  heights,
+  {
+    windowMs = 1800,
+    timeoutMs = 10000,
+    matches = () => true,
+    counters = () => ({}),
+    progresses = () => true,
+  } = {},
+) {
   let now = 0,
     index = 0;
   const observed = [];
@@ -10,12 +19,17 @@ function fixture(heights, { windowMs = 1800, timeoutMs = 10000, matches = () => 
     now: () => now,
     run: () =>
       windows.presentationWindow({
-        sample: async () => ({
-          index,
-          height: heights[Math.min(index++, heights.length - 1)],
-          text: matches(index - 1) ? 'SLIDES 1234' : '?',
-        }),
+        sample: async () => {
+          const current = index++;
+          return {
+            index: current,
+            height: heights[Math.min(current, heights.length - 1)],
+            text: matches(current) ? 'SLIDES 1234' : '?',
+            ...counters(current),
+          };
+        },
         accepts: (point) => point.height === 1080 && point.text === 'SLIDES 1234',
+        progresses,
         wait: async (ms) => {
           now += ms;
         },
@@ -53,4 +67,59 @@ test('an initial qualifying sample does not bypass the independent progress inte
   await assert.rejects(f.run(), /No sustained readable presentation window/);
   assert.equal(f.now(), 1000);
   assert.equal(f.observed.length, 2);
+});
+
+function nativeCounters(index) {
+  return {
+    screenFrames: Math.floor(index / 3),
+    cameraFrames: index * 5,
+    audioPackets: index * 20,
+    audioSamples: index * 19200,
+    concealedSamples: 0,
+  };
+}
+
+test('a valid slow layer waits for actual progress inside the original deadline', async () => {
+  const f = fixture([1080], { counters: nativeCounters, progresses: windows.presentationProgress });
+  const result = await f.run();
+  assert.equal(result.before.index, 0);
+  assert.equal(result.after.index, 6);
+  assert.equal(result.durationMs, 3900, 'the same valid window extends beyond its minimum');
+  assert.equal(result.after.screenFrames - result.before.screenFrames, 2);
+});
+
+test('a readable frozen layer exhausts the unchanged deadline despite camera and voice progress', async () => {
+  const f = fixture([1080], {
+    timeoutMs: 4000,
+    counters: (index) => ({ ...nativeCounters(index), screenFrames: 12 }),
+    progresses: windows.presentationProgress,
+  });
+  await assert.rejects(f.run(), /No sustained readable presentation window/);
+  assert.equal(f.now(), 4000);
+});
+
+test('resolution loss discards earlier progress before accepting a sustained recovered window', async () => {
+  const f = fixture([1080, 1080, 270, 1080], {
+    counters: (index) => ({ ...nativeCounters(index), screenFrames: index }),
+    progresses: windows.presentationProgress,
+  });
+  const result = await f.run();
+  assert.equal(result.before.index, 3);
+  assert.equal(result.after.index, 6);
+  assert.ok(result.observations.every((point) => point.height === 1080));
+});
+
+test('voice, camera and concealment requirements remain part of window eligibility', () => {
+  const before = nativeCounters(0),
+    after = nativeCounters(6);
+  assert.equal(windows.presentationProgress(before, after), true);
+  for (const invalid of [
+    { ...after, cameraFrames: 1 },
+    { ...after, screenFrames: undefined, concealedSamples: null },
+    { ...after, audioPackets: 9 },
+    { ...after, audioSamples: null },
+    { ...after, audioSamples: 4799 },
+    { ...after, concealedSamples: after.audioSamples / 4 },
+  ])
+    assert.equal(windows.presentationProgress(before, invalid), false);
 });

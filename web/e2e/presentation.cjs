@@ -8,7 +8,7 @@ const { browserOptions, webKitTestNetworkEnabled } = require('./browser-options.
 const { installPeerEventTracing } = require('./peer-events.cjs');
 const { openRoomMenu } = require('./room-menu.cjs');
 const { sheetScreen, closeSheet } = require('./settings-sheet.cjs');
-const { presentationWindow } = require('./presentation-window.cjs');
+const { presentationWindow, presentationProgress } = require('./presentation-window.cjs');
 const {
   installPresentationSignalStats,
   presentationReceiverStats,
@@ -170,6 +170,7 @@ async function progressing(page, name, accepts, timeoutMs = 30000, windowMs = 30
       return { ...point, elapsedMs: Date.now() - startedAt, sender };
     },
     accepts: (point) => point.text === text && accepts(point),
+    progresses: presentationProgress,
     wait: (ms) => page.waitForTimeout(ms),
     timeoutMs,
     windowMs,
