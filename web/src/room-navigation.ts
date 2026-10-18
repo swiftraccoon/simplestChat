@@ -4,6 +4,7 @@ interface RoomNavigationOptions {
   pending: (pending: boolean) => void;
   error: (error: unknown) => void;
   tryJoin?: (id: string) => boolean;
+  readRoom?: () => string | null;
   /** Consume another supported fragment flow without selecting or joining a room. */
   interceptLocation?: (selectedRoom: string) => boolean;
 }
@@ -112,6 +113,7 @@ export class RoomNavigation {
   }
 
   private readHash(): string | null {
+    if (this.options.readRoom) return this.options.readRoom();
     const hash = window.location.hash.slice(1);
     // A valid encoded ID needs at most three characters per ASCII character.
     if (hash.length > 384) {
@@ -147,11 +149,12 @@ export class RoomNavigation {
   }
 
   private readonly onLocationChange = (): void => {
-    if (this.disposed || window.location.hash === this.observedHash) return;
+    if (this.disposed) return;
     if (this.options.interceptLocation?.(this.destination)) {
       this.observedHash = window.location.hash;
       return;
     }
+    if (window.location.hash === this.observedHash) return;
     this.cancelPendingJoin();
     this.observedHash = window.location.hash;
     const id = this.readHash();

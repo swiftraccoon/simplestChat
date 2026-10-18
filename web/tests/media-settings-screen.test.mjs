@@ -101,7 +101,7 @@ async function screenFixture(t, { videoEnabled = true } = {}) {
     }
   }
   const modules = await loadContractModules();
-  const media = await loadTypeScript('src/media.ts', {
+  const media = await loadTypeScript('src/capture-preferences.ts', {
     modules: { '../node_modules/mediasoup-client/lib/Device.js': {}, './signaling': {} },
     globals: { localStorage, navigator, console },
   });
@@ -112,7 +112,7 @@ async function screenFixture(t, { videoEnabled = true } = {}) {
   const api = await loadTypeScript('src/media-controls.ts', {
     modules: {
       './receive-policy': await loadTypeScript('src/receive-policy.ts'),
-      './media': media,
+      './capture-preferences': media,
       './media-controls.css': {},
       './settings-sheet': sheet,
       './audio-output': await loadTypeScript('src/audio-output.ts', {

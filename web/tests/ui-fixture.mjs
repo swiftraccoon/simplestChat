@@ -150,6 +150,7 @@ export function createDOM() {
   body.append(header, loginActions);
   const document = {
     body,
+    addEventListener: body.addEventListener.bind(body),
     createElement: (tag) => new Node(tag),
     getElementById: (id) => created.find((node) => node.id === id && node.isConnected) ?? null,
     querySelector: (selector) =>

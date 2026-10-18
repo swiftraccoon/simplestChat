@@ -21,7 +21,7 @@ async function rules(page, settingsScreen) {
 }
 /** Performs one change and returns the policy the server stored for it. */
 async function stored(page, action) {
-  const response = responseFor(page, 'PUT');
+  const response = responseFor(page, 'PATCH');
   await action();
   return (await response).json();
 }

@@ -1,4 +1,5 @@
 import type { AuthManager } from './auth';
+import { onAccountUpdate } from './account-updates';
 import { avatarColors } from './avatar-colors';
 import { openPrivateInbox, onInboxChanged } from './chat-history';
 import { administrationSections, type RoomAdministrationView } from './room-administration';
@@ -34,6 +35,7 @@ import {
 } from './settings-sheet';
 
 interface Options {
+  onOpenMessages?: () => void;
   /** Opens the settings sheet at a section; the Account button uses it. */
   openSettings?: (section: string, opener: HTMLElement | null) => void;
   /** Called when the signed-in identity changes; account screens close. */
@@ -92,7 +94,11 @@ interface Surface {
 }
 
 export class CommunityUI {
-  private readonly messagesButton = button('Messages', () =>
+  private readonly messagesButton = button('Messages', () => {
+    if (this.options.onOpenMessages) {
+      this.options.onOpenMessages();
+      return;
+    }
     openPrivateInbox({
       getRoomId: () => this.options.getRoom()?.currentRoomId ?? null,
       getToken: () => this.options.auth.jwt,
@@ -101,11 +107,16 @@ export class CommunityUI {
         this.options.mountConversationPrivacy?.(container, peerId, peerName, current),
       mountConversationNotifications: (container, peerId, current) =>
         this.options.mountConversationNotifications?.(container, peerId, current),
-    }),
-  );
+    });
+  });
   private inboxController = new AbortController();
   private inboxPending: Promise<void> | null = null;
   private inboxRefreshAgain = false;
+  private inboxFailed = false;
+
+  get messagesNeedRefresh(): boolean {
+    return this.inboxFailed;
+  }
   private readonly accountButton = button('Account', () =>
     this.options.openSettings?.('profile', this.accountButton),
   );
@@ -175,6 +186,13 @@ export class CommunityUI {
     onInboxChanged(() => {
       this.refreshMessages().catch(() => {});
     });
+    onAccountUpdate((update) => {
+      if (
+        update.account === this.options.auth.userId &&
+        (update.scope === 'ready' || update.scope === 'inbox')
+      )
+        this.refreshMessages().catch(() => {});
+    });
     this.refresh();
   }
 
@@ -189,6 +207,7 @@ export class CommunityUI {
       this.inboxController.abort();
       this.inboxController = new AbortController();
       this.inboxPending = null;
+      this.inboxFailed = false;
       this.messagesButton.textContent = 'Messages';
       this.messagesButton.setAttribute('aria-label', 'Messages');
       // The first refresh learns the identity; later changes close account screens.
@@ -228,6 +247,7 @@ export class CommunityUI {
       .inboxUnread(token, this.inboxController.signal)
       .then((result) => {
         if (generation !== this.accountGeneration || account !== this.options.auth.userId) return;
+        this.inboxFailed = false;
         this.messagesButton.textContent = result.unreadCount
           ? `Messages (${result.unreadCount >= 1000 ? '1,000+' : result.unreadCount})`
           : 'Messages';
@@ -240,6 +260,8 @@ export class CommunityUI {
       })
       .catch(() => {
         /* Keep the last confirmed count until the next refresh. */
+        if (generation === this.accountGeneration && account === this.options.auth.userId)
+          this.inboxFailed = true;
       })
       .finally(() => {
         if (this.inboxPending !== task) return;

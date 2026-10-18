@@ -11,7 +11,15 @@ async function checkContactsBeforeRoom(owner, member, { base, header, close }) {
     header(member, 'Messages'),
   ]);
   const { accountId } = await memberResponse.json();
-  const ownerInbox = await header(owner, 'Messages');
+  const [ownerResponse, ownerInbox] = await Promise.all([
+    owner.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === '/api/auth/contacts' &&
+        response.request().method() === 'GET',
+    ),
+    header(owner, 'Messages'),
+  ]);
+  const { accountId: ownerId } = await ownerResponse.json();
   await ownerInbox.locator('.discovery-contacts > summary').click();
   await ownerInbox
     .getByLabel('Contact link', { exact: true })
@@ -21,11 +29,9 @@ async function checkContactsBeforeRoom(owner, member, { base, header, close }) {
   await waiting.getByText('Waiting for acceptance', { exact: true }).waitFor();
   assert.equal(await waiting.getByRole('button', { name: 'Message', exact: true }).count(), 0);
   await memberInbox.locator('.discovery-contacts > summary').click();
-  await memberInbox.getByRole('button', { name: 'Refresh contacts', exact: true }).click();
   const incoming = memberInbox.locator('.discovery-row').filter({ hasText: 'E2E Owner' });
   await incoming.getByRole('button', { name: 'Accept', exact: true }).click();
   await incoming.getByRole('button', { name: 'Message', exact: true }).waitFor();
-  await ownerInbox.getByRole('button', { name: 'Refresh contacts', exact: true }).click();
   await waiting.getByRole('button', { name: 'Message', exact: true }).click();
   const sent = owner.getByRole('dialog', { name: 'Messages with E2E Member', exact: true });
   await sent.getByLabel('Private message', { exact: true }).fill('Contact hello before any room');
@@ -50,6 +56,7 @@ async function checkContactsBeforeRoom(owner, member, { base, header, close }) {
   await close(memberInbox);
   await close(sent);
   await close(ownerInbox);
+  return { ownerId, memberId: accountId };
 }
 
 /** The account's second browser session sees the same favorites and accepted contacts. */

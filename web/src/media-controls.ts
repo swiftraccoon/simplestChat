@@ -6,7 +6,7 @@ import {
   saveCapturePreferences,
   type CapturePreferences,
   type RemoteVideoQuality,
-} from './media';
+} from './capture-preferences';
 import './media-controls.css';
 import {
   group,

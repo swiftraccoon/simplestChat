@@ -1,3 +1,4 @@
+import { accountUpdatesFixture } from './account-updates-fixture.mjs';
 import { attachmentFixture } from './attachment-fixture.mjs';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -301,7 +302,11 @@ async function fixture({
     },
   });
   const { AccountPreferences } = await loadTypeScript('src/account-preferences.ts', {
-    modules: { './ui': f.ui, './settings-sheet': sheetModule },
+    modules: {
+      './account-updates': accountUpdatesFixture().module,
+      './ui': f.ui,
+      './settings-sheet': sheetModule,
+    },
     globals: {
       document: f.document,
       window: { addEventListener() {} },

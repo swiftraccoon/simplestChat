@@ -1,3 +1,4 @@
+import { accountUpdatesFixture } from './account-updates-fixture.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { loadTypeScript } from './source-loader.mjs';
@@ -149,6 +150,7 @@ async function fixture() {
   });
   const api = await loadTypeScript('src/community-ui.ts', {
     modules: {
+      './account-updates': accountUpdatesFixture().module,
       './ui': ui,
       './settings-sheet': sheet,
       './room-administration': await loadTypeScript('src/room-administration.ts', {
@@ -1068,6 +1070,7 @@ test('room-scoped actions mount in the room tools while account actions stay in 
   });
   const api = await loadTypeScript('src/community-ui.ts', {
     modules: {
+      './account-updates': accountUpdatesFixture().module,
       './ui': { ...dom.ui, api: { ...dom.ui.api, inboxUnread: async () => ({ unreadCount: 0 }) } },
       './settings-sheet': {},
       './room-administration': {

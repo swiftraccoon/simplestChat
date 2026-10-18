@@ -4,7 +4,7 @@ import { loadTypeScript } from './source-loader.mjs';
 import { flush, uiFixture } from './ui-fixture.mjs';
 
 /** The text-only DOM gains the few element APIs the sheet relies on. */
-async function sheetFixture({ sections = [], footer = [], host } = {}) {
+async function sheetFixture({ sections = [], footer = [], host, onNavigate } = {}) {
   const f = await uiFixture();
   const { Node, document } = f;
   document.activeElement = null;
@@ -72,6 +72,7 @@ async function sheetFixture({ sections = [], footer = [], host } = {}) {
     host: () => hostNode,
     onOpen: () => log.push('open'),
     onClose: () => log.push('close'),
+    onNavigate,
   });
   return { ...f, sheet, sheetModule, hostNode, log, timers };
 }
@@ -453,4 +454,99 @@ test('closing falls back to the control that was active at opening when the open
   f.sheet.open({ opener: visibleOpener });
   f.sheet.close();
   assert.equal(f.document.activeElement, visibleOpener, 'a connected opener still wins');
+});
+
+test('navigation snapshots restore a section and child screen while retiring old async work', async () => {
+  const navigation = [];
+  const contexts = [];
+  let cleanups = 0;
+  const f = await sheetFixture({
+    onNavigate: (state) => navigation.push(state),
+    sections: [
+      {
+        id: 'privacy',
+        segment: 'you',
+        label: 'Privacy',
+        screen: () => ({
+          title: 'Privacy',
+          body: (context) => {
+            contexts.push(context);
+            return f.document.createElement('div');
+          },
+          leave: () => {
+            cleanups++;
+          },
+        }),
+      },
+    ],
+  });
+  f.sheet.open({ section: 'privacy' });
+  assert.equal(navigation.length, 2);
+  assert.equal(navigation.at(-1).section, 'privacy');
+  const section = navigation.at(-1);
+  f.sheet.push({ title: 'Ignored account', body: () => f.document.createElement('div') });
+  const child = navigation.at(-1);
+  f.sheet.close();
+  assert.equal(navigation.at(-1), null);
+  assert.equal(contexts[0].current(), false);
+  section.restore();
+  assert.equal(heading(f.sheet).textContent, 'Privacy');
+  assert.equal(contexts.at(-1).current(), true);
+  child.restore();
+  assert.equal(heading(f.sheet).textContent, 'Ignored account');
+  assert.equal(cleanups, 2);
+});
+
+test('a restored section must still be available for the current account and room', async () => {
+  let builds = 0;
+  const f = await sheetFixture({
+    sections: [
+      {
+        id: 'room-members',
+        segment: 'room',
+        label: 'People',
+        available: () => false,
+        screen: () => {
+          builds++;
+          return { title: 'People', body: () => f.document.createElement('div') };
+        },
+      },
+    ],
+  });
+  f.sheet.open({ section: 'room-members' });
+  assert.equal(builds, 0);
+  assert.equal(heading(f.sheet).textContent, 'Settings');
+});
+
+test('Forward rebuilds a section factory rather than reviving an aborted controller', async () => {
+  const navigation = [];
+  const rendered = [];
+  const f = await sheetFixture({
+    onNavigate: (state) => navigation.push(state),
+    sections: [
+      {
+        id: 'security',
+        segment: 'you',
+        label: 'Security',
+        screen: () => {
+          let retired = false;
+          return {
+            title: 'Security',
+            leave: () => {
+              retired = true;
+            },
+            body: () => {
+              rendered.push(retired);
+              return f.document.createElement('div');
+            },
+          };
+        },
+      },
+    ],
+  });
+  f.sheet.open({ section: 'security' });
+  const snapshot = navigation.at(-1);
+  f.sheet.close();
+  snapshot.restore();
+  assert.deepEqual(rendered, [false, false]);
 });

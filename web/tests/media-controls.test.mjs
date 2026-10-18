@@ -63,7 +63,7 @@ async function fixture(t) {
     },
   };
   const captureConsole = { warn: (...values) => state.warnings.push(values) };
-  const media = await loadTypeScript('src/media.ts', {
+  const media = await loadTypeScript('src/capture-preferences.ts', {
     modules: {
       '../node_modules/mediasoup-client/lib/Device.js': {},
       './signaling': signalingModule,
@@ -101,7 +101,7 @@ async function fixture(t) {
   const api = await loadTypeScript('src/media-controls.ts', {
     modules: {
       './receive-policy': await loadTypeScript('src/receive-policy.ts'),
-      './media': media,
+      './capture-preferences': media,
       './media-controls.css': {},
       './settings-sheet': {},
       './audio-output': await loadTypeScript('src/audio-output.ts'),

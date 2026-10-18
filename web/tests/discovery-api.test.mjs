@@ -78,6 +78,17 @@ test('global and conversation rules return the complete validated current policy
   );
   assert.equal(f.state.requests.at(-1)[0], '/api/auth/notification-preferences');
   assert.deepEqual(JSON.parse(f.state.requests.at(-1)[1].body), global);
+  for (const patch of [{ mentions: false }, { quietHours: null }]) {
+    assert.deepEqual(
+      await f.ui.api.patchNotificationPreferences('token', patch, controller.signal),
+      policy,
+    );
+    const [url, options] = f.state.requests.at(-1);
+    assert.equal(url, '/api/auth/notification-preferences');
+    assert.equal(options.method, 'PATCH');
+    assert.deepEqual(JSON.parse(options.body), patch);
+    assert.equal(options.headers.Authorization, 'Bearer token');
+  }
   const conversation = { muted: true, snoozedUntil: null };
   assert.deepEqual(
     await f.ui.api.saveConversationNotifications(

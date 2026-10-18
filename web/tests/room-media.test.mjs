@@ -526,3 +526,103 @@ test('incoming refresh reports a rejected retirement without starting its replac
   assert.deepEqual(managers[0].consumed, ['microphone', 'camera', 'microphone']);
   await room.leave();
 });
+
+test('room construction defers the heavy media module and a retired import cannot allocate media', async () => {
+  let imports = 0;
+  let instances = 0;
+  const modules = { './receive-policy': await loadTypeScript('src/receive-policy.ts') };
+  Object.defineProperty(modules, './media', {
+    get() {
+      imports++;
+      return {
+        MediaManager: class {
+          constructor() {
+            instances++;
+          }
+          async setup() {}
+        },
+      };
+    },
+  });
+  const { RoomClient } = await loadTypeScript('src/room.ts', { modules });
+  assert.equal(imports, 0);
+  const signaling = {
+    setOnMessage() {},
+    setOnReconnected() {},
+    setOnReconnectFailed() {},
+    setOnConnectionLost() {},
+  };
+  const room = new RoomClient(signaling, {});
+  assert.equal(imports, 0, 'home/account use of the room module never loads mediasoup');
+  const setup = room.setupMedia(room.membershipVersion);
+  room.generation++;
+  await setup;
+  assert.equal(imports, 1);
+  assert.equal(instances, 0, 'leaving while the chunk loads retires its completion');
+});
+
+test('a failed deferred import leaves chat connected and an explicit incoming refresh retries without capture', async () => {
+  let imports = 0;
+  let setups = 0;
+  const errors = [];
+  const modules = { './receive-policy': await loadTypeScript('src/receive-policy.ts') };
+  Object.defineProperty(modules, './media', {
+    get() {
+      imports++;
+      if (imports === 1) throw new Error('Chunk unavailable after release');
+      return {
+        MediaManager: class {
+          async setup() {
+            setups++;
+          }
+        },
+      };
+    },
+  });
+  const { RoomClient } = await loadTypeScript('src/room.ts', { modules });
+  const signaling = {
+    connected: true,
+    setOnMessage() {},
+    setOnReconnected() {},
+    setOnReconnectFailed() {},
+    setOnConnectionLost() {},
+  };
+  const room = new RoomClient(signaling, { onBackgroundError: (message) => errors.push(message) });
+  room.localId = 'viewer';
+  await room.setupMedia(room.membershipVersion);
+  assert.equal(room.connected, true);
+  assert.equal(room.hasMedia, false);
+  assert.match(errors[0], /Chat remains available/);
+  assert.equal(imports, 1, 'there is no automatic reload or repeated import');
+  await room.refreshIncomingMedia();
+  assert.equal(room.hasMedia, true);
+  assert.equal(imports, 2);
+  assert.equal(setups, 1);
+});
+
+test('a browser-retained module failure keeps chat and gives explicit leave/reload guidance', async () => {
+  const errors = [];
+  const modules = { './receive-policy': await loadTypeScript('src/receive-policy.ts') };
+  Object.defineProperty(modules, './media', {
+    get() {
+      throw new Error('Retained module failure');
+    },
+  });
+  const { RoomClient } = await loadTypeScript('src/room.ts', { modules });
+  const room = new RoomClient(
+    {
+      connected: true,
+      setOnMessage() {},
+      setOnReconnected() {},
+      setOnReconnectFailed() {},
+      setOnConnectionLost() {},
+    },
+    { onBackgroundError: (message) => errors.push(message) },
+  );
+  room.localId = 'viewer';
+  await room.setupMedia(room.membershipVersion);
+  await assert.rejects(room.refreshIncomingMedia(), /Leave the call and reload/);
+  assert.equal(room.connected, true);
+  assert.equal(room.hasMedia, false);
+  assert.equal(errors.length, 2);
+});

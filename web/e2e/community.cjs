@@ -15,6 +15,13 @@ const {
   checkFollowSpeakerPreference,
 } = require('./privacy-follow-checks.cjs');
 const { checkRoomAdministration } = require('./room-administration-checks.cjs');
+const {
+  checkColdPhoneStartup,
+  checkHomepageAccountUpdates,
+  checkAccountNavigation,
+  rejectFirstMediaChunk,
+  checkInRoomBackNavigation,
+} = require('./app-navigation-checks.cjs');
 const { sheet, sheetRow, sheetScreen, closeSheet } = require('./settings-sheet.cjs');
 const { participantHovercardChecks } = require('./participant-hovercard-checks.cjs');
 const assert = require('node:assert/strict');
@@ -90,6 +97,7 @@ const MAX_HTTP_PACING_MS = 90_000;
 const httpLanes = new Map(
   [
     ['auth', 300, 100],
+    ['account', 300, 100],
     ['rooms', 120, 40],
     ['profiles', 600, 100],
     ['telemetry', 30, 10],
@@ -105,7 +113,7 @@ const httpPathParts = new Set(
     'preferences password recovery key redeem passkey passkeys start finish authorize enroll ' +
     'ws-ticket attachments inbox messages reactions read unread contacts saved-rooms mine ' +
     'memberships preview identity image administration settings members bans reports history ' +
-    'moderation lobby sanctions notification-preferences notifications push subscriptions telemetry'
+    'moderation lobby sanctions notification-preferences notifications push subscriptions updates telemetry'
   ).split(' '),
 );
 function httpRoute(request) {
@@ -115,13 +123,27 @@ function httpRoute(request) {
   const lane =
     path.startsWith('/api/auth/profiles/') || /^\/api\/rooms\/[^/]+\/image$/.test(path)
       ? 'profiles'
-      : path.startsWith('/api/auth/')
-        ? 'auth'
-        : path === '/api/rooms' || path.startsWith('/api/rooms/')
-          ? 'rooms'
-          : path === '/api/telemetry'
-            ? 'telemetry'
-            : null;
+      : [
+            'profile',
+            'preferences',
+            'attachments',
+            'contacts',
+            'saved-rooms',
+            'notification-preferences',
+            'inbox',
+            'push',
+            'updates',
+          ].some(
+            (prefix) => path === `/api/auth/${prefix}` || path.startsWith(`/api/auth/${prefix}/`),
+          )
+        ? 'account'
+        : path.startsWith('/api/auth/')
+          ? 'auth'
+          : path === '/api/rooms' || path.startsWith('/api/rooms/')
+            ? 'rooms'
+            : path === '/api/telemetry'
+              ? 'telemetry'
+              : null;
   if (!lane) return null;
   const method = ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'].includes(
     request.method(),
@@ -1019,11 +1041,23 @@ async function roomMenuOffers(page, name) {
 }
 /** Dialogs close with Close; the settings sheet closes from its own header. */
 async function close(dialog) {
+  const page = dialog.page();
+  const managed = await dialog.evaluate(
+    (node) => node.id === 'settings-sheet' || node.classList.contains('community-dialog'),
+  );
+  const previous = managed
+    ? await page.evaluate(() => history.state?.simplestchatNavigation)
+    : null;
   await dialog
     .getByRole('button', { name: /^Close( settings)?$/ })
     .first()
     .click();
   await dialog.waitFor({ state: 'hidden' });
+  if (typeof previous === 'number')
+    await page.waitForFunction(
+      (entry) => history.state?.simplestchatNavigation !== entry,
+      previous,
+    );
 }
 async function preferences(page, allow) {
   await page.getByRole('button', { name: 'Chat options', exact: true }).click();
@@ -1166,18 +1200,55 @@ async function setRole(owner, name, role) {
     console.log(
       `Browser: ${options.name} ${report.browserVersion}; Playwright ${report.playwrightVersion}`,
     );
+    await step('constrained cold phone homepage is ready without the call engine', async () => {
+      report.coldPhoneStartup = await checkColdPhoneStartup({
+        browser,
+        browserName: options.name,
+        contextOptions: options.contextOptions,
+        base,
+        ready: communityStartupReady,
+      });
+      if (report.coldPhoneStartup.skipped) return { skip: report.coldPhoneStartup.reason };
+    });
     const owner = await client('owner');
     const member = await client('member');
     const guest = await client('guest');
     let secondDevice;
     let outsider;
+    let contactAccounts;
     const ownerEmail = `${runId}-owner@example.test`;
     const memberEmail = `${runId}-member@example.test`;
     const inviteeEmail = `${runId}-invitee@example.test`;
-    await step('register owner/member, create room and guest join', async () => {
+    await step('register owner/member and accept contacts without a room', async () => {
       await register(owner, ownerEmail, 'E2E Owner');
       await register(member, memberEmail, 'E2E Member');
-      await checkContactsBeforeRoom(owner, member, { base, header, close });
+      contactAccounts = await checkContactsBeforeRoom(owner, member, { base, header, close });
+    });
+    await step(
+      'homepage account events and typed destinations remain live without joining',
+      async () => {
+        const otherMember = await client('member-home-second-device');
+        await login(otherMember, memberEmail, password);
+        report.homepageAccountUpdates = await checkHomepageAccountUpdates(
+          owner,
+          member,
+          otherMember,
+          {
+            header,
+            close,
+            settingsScreen,
+            ...contactAccounts,
+          },
+        );
+        report.accountNavigation = await checkAccountNavigation(owner, {
+          base,
+          header,
+          close,
+          memberId: contactAccounts.memberId,
+        });
+      },
+    );
+    await step('create room, retry a failed media chunk, and guest join', async () => {
       outsider = await client('attachment-outsider');
       await register(
         outsider,
@@ -1185,17 +1256,31 @@ async function setRole(owner, name, role) {
         'E2E Attachment Outsider',
       );
       await privateAttachmentChecks(owner, member, outsider, { base, header, close, deadline });
+      const retryMediaChunk = await rejectFirstMediaChunk(owner, {
+        join,
+        send,
+        visible,
+        ready: communityStartupReady,
+      });
       await owner.locator('#create-room-btn').click();
       await owner.locator('#cr-id').fill(runId);
       await owner.locator('#cr-name').fill('E2E Community Room');
       await owner.locator('#create-room-submit').click();
       recordJoin();
       await connected(owner);
+      report.deferredMediaRetry = await retryMediaChunk();
       await join(member, 'E2E Room Nickname');
       await join(guest, 'E2E Guest');
       await send(guest, 'Public hello');
       await visible(owner, 'Public hello');
       await visible(member, 'Public hello');
+    });
+    await step('browser Back and Forward pop account views while preserving the call', async () => {
+      report.inRoomNavigation = await checkInRoomBackNavigation(owner, {
+        header,
+        close,
+        settingsScreen,
+      });
     });
     await step(
       'favorite rooms and accepted contacts follow an account to a second device',

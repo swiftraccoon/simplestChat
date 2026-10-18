@@ -4,6 +4,16 @@ import type * as mediasoupClient from 'mediasoup-client';
 import { Device } from '../node_modules/mediasoup-client/lib/Device.js';
 import type { ClientMessage, RequestResponses } from './protocol';
 import { SignalingRequestTimeoutError, type SignalingClient } from './signaling';
+import {
+  loadScreenPresentationMode,
+  screenCaptureConstraints,
+  screenContentHint,
+  screenEncodingOptions,
+  supportsVp9ScreenSvc,
+  NORMAL_CAMERA_SPATIAL_LAYER,
+  PRESENTING_CAMERA_SPATIAL_LAYER,
+  PRESENTATION_AUDIO_BITRATE,
+} from './screen-presentation';
 
 type MediaControl = Extract<
   ClientMessage,
@@ -31,46 +41,19 @@ const CONTROL_RESPONSES: { [K in MediaControl['type']]: RequestResponses[K] } = 
   restartIce: 'iceRestarted',
 };
 
-export interface CapturePreferences {
-  cameraDeviceId: string;
-  microphoneDeviceId: string;
-  resolution: '360p' | '720p' | '1080p';
-  frameRate: 15 | 30 | 60;
-  echoCancellation: boolean;
-  autoGainControl: boolean;
-  noiseSuppression: boolean;
-}
+import {
+  captureConstraints,
+  captureMedia,
+  loadCapturePreferences,
+  saveCapturePreferences,
+  normalizeCapturePreferences,
+  type CapturePreferences,
+  type RemoteVideoQuality,
+  type ScreenShareAudio,
+  type ScreenShareResult,
+} from './capture-preferences';
+export * from './capture-preferences';
 
-export type RemoteVideoQuality = 'auto' | 'low' | 'medium' | 'high';
-
-export type ScreenShareAudio = 'off' | 'sharing' | 'not_provided' | 'failed' | 'ended';
-export type ScreenShareResult =
-  | { status: 'started'; audio: Exclude<ScreenShareAudio, 'off'> }
-  | {
-      status: 'not_started';
-      reason:
-        | 'cancelled_or_denied'
-        | 'unavailable'
-        | 'not_ready'
-        | 'busy'
-        | 'superseded'
-        | 'not_readable'
-        | 'no_source'
-        | 'invalid_state'
-        | 'failed';
-    };
-
-export const DEFAULT_CAPTURE_PREFERENCES: CapturePreferences = {
-  cameraDeviceId: '',
-  microphoneDeviceId: '',
-  resolution: '720p',
-  frameRate: 30,
-  echoCancellation: true,
-  autoGainControl: true,
-  noiseSuppression: true,
-};
-
-const CAPTURE_STORAGE_KEY = 'simplestchat.capturePreferences';
 /** A live camera that has encoded no frame for this long has stalled. */
 const CAMERA_STALL_MS = 10_000;
 const CAMERA_CHECK_MS = 5_000;
@@ -86,122 +69,6 @@ async function encodedFrames(producer: mediasoupClient.types.Producer): Promise<
     return frames;
   } catch {
     return null;
-  }
-}
-
-export function normalizeCapturePreferences(value: unknown): CapturePreferences {
-  const preferences = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
-  return {
-    cameraDeviceId:
-      typeof preferences['cameraDeviceId'] === 'string' ? preferences['cameraDeviceId'] : '',
-    microphoneDeviceId:
-      typeof preferences['microphoneDeviceId'] === 'string'
-        ? preferences['microphoneDeviceId']
-        : '',
-    resolution:
-      preferences['resolution'] === '360p' || preferences['resolution'] === '1080p'
-        ? preferences['resolution']
-        : '720p',
-    frameRate:
-      preferences['frameRate'] === 15 || preferences['frameRate'] === 60
-        ? preferences['frameRate']
-        : 30,
-    echoCancellation: preferences['echoCancellation'] !== false,
-    autoGainControl: preferences['autoGainControl'] !== false,
-    noiseSuppression: preferences['noiseSuppression'] !== false,
-  };
-}
-
-export function loadCapturePreferences(): CapturePreferences {
-  try {
-    return normalizeCapturePreferences(
-      JSON.parse(localStorage.getItem(CAPTURE_STORAGE_KEY) ?? 'null'),
-    );
-  } catch {
-    return { ...DEFAULT_CAPTURE_PREFERENCES };
-  }
-}
-
-export function saveCapturePreferences(preferences: CapturePreferences): void {
-  try {
-    localStorage.setItem(
-      CAPTURE_STORAGE_KEY,
-      JSON.stringify(normalizeCapturePreferences(preferences)),
-    );
-  } catch {
-    /* Storage may be unavailable. */
-  }
-}
-
-/** The preview and publisher use the same requested capture settings. */
-export function captureConstraints(
-  preferences: CapturePreferences,
-  kind: 'audio' | 'video',
-): MediaTrackConstraints {
-  if (kind === 'audio') {
-    return {
-      ...(preferences.microphoneDeviceId && {
-        deviceId: { exact: preferences.microphoneDeviceId },
-      }),
-      echoCancellation: preferences.echoCancellation,
-      autoGainControl: preferences.autoGainControl,
-      noiseSuppression: preferences.noiseSuppression,
-    };
-  }
-  const [width, height] =
-    preferences.resolution === '360p'
-      ? [640, 360]
-      : preferences.resolution === '1080p'
-        ? [1920, 1080]
-        : [1280, 720];
-  return {
-    ...(preferences.cameraDeviceId && { deviceId: { exact: preferences.cameraDeviceId } }),
-    width: { ideal: width },
-    height: { ideal: height },
-    frameRate: { ideal: preferences.frameRate },
-  };
-}
-
-/** Some cameras cannot start in the browser's preferred format, even with ideal constraints. */
-export async function captureMedia(
-  constraints: MediaStreamConstraints,
-  isCurrent: () => boolean,
-): Promise<MediaStream> {
-  try {
-    return await navigator.mediaDevices.getUserMedia(constraints);
-  } catch (error) {
-    const video = constraints.video;
-    if (
-      !isCurrent() ||
-      !error ||
-      typeof error !== 'object' ||
-      !('name' in error) ||
-      error.name !== 'NotReadableError' ||
-      !video ||
-      typeof video !== 'object' ||
-      !('width' in video || 'height' in video || 'frameRate' in video)
-    ) {
-      console.warn('[media] capture failed', error);
-      throw error;
-    }
-    // Retain the selected device and audio request; only relax camera quality.
-    const fallback = { ...video };
-    delete fallback.width;
-    delete fallback.height;
-    delete fallback.frameRate;
-    console.warn(
-      '[media] camera could not start at preferred quality; trying browser defaults',
-      error,
-    );
-    try {
-      return await navigator.mediaDevices.getUserMedia({
-        ...constraints,
-        video: Object.keys(fallback).length ? fallback : true,
-      });
-    } catch (fallbackError) {
-      console.warn('[media] camera capture failed with browser defaults', fallbackError);
-      throw fallbackError;
-    }
   }
 }
 
@@ -231,6 +98,8 @@ export class MediaManager {
   private screenAudioProducer: mediasoupClient.types.Producer | null = null;
   private screenVersion = 0;
   private screenStarting = false;
+  private screenBudgetActive = false;
+  private cameraPresentationPolicy: Promise<void> = Promise.resolve();
   private pendingScreenStream: MediaStream | null = null;
   private consumers = new Map<string, mediasoupClient.types.Consumer>();
   // Map producerId → consumerId for cleanup when producer closes
@@ -839,7 +708,11 @@ export class MediaManager {
         const producer = await transport.produce({
           track,
           appData: { source: 'microphone' },
-          codecOptions: { opusDtx: true, opusFec: true },
+          codecOptions: {
+            opusDtx: true,
+            opusFec: true,
+            opusMaxAverageBitrate: PRESENTATION_AUDIO_BITRATE,
+          },
         });
         if (!isCurrent() || track.readyState === 'ended') {
           producer.close();
@@ -911,6 +784,20 @@ export class MediaManager {
       }
       this.videoProducer = producer;
       this.watchLocalProducer(producer, 'video');
+      try {
+        if (this.screenBudgetActive) await this.syncCameraPresentationBudget();
+      } catch (error) {
+        if (this.videoProducer === producer) this.videoProducer = null;
+        producer.close();
+        this.sendControl({ type: 'closeProducer', producerId: producer.id });
+        throw error;
+      }
+      if (!isCurrent() || producer.closed || producer.track?.readyState === 'ended') {
+        if (this.videoProducer === producer) this.videoProducer = null;
+        producer.close();
+        this.sendControl({ type: 'closeProducer', producerId: producer.id });
+        return false;
+      }
       if (!this.localStream) this.localStream = new MediaStream();
       this.localStream.addTrack(videoTrack);
       videoTrack = undefined;
@@ -1364,6 +1251,31 @@ export class MediaManager {
     await this.unmuteAudio();
   }
 
+  /** Serialize native sender changes and read the latest intent when each runs.
+   * A late stop/restoration cannot undo a newer share's camera reservation.
+   * This only changes existing encodings; it never captures or resumes a track. */
+  private syncCameraPresentationBudget(): Promise<void> {
+    const task = this.cameraPresentationPolicy
+      .catch(() => {})
+      .then(async () => {
+        const producer = this.videoProducer;
+        if (this.closed || !producer || producer.closed) return;
+        try {
+          await producer.setMaxSpatialLayer(
+            this.screenBudgetActive ? PRESENTING_CAMERA_SPATIAL_LAYER : NORMAL_CAMERA_SPATIAL_LAYER,
+          );
+        } catch (error) {
+          if (!this.closed && !producer.closed && producer === this.videoProducer) throw error;
+        }
+      });
+    this.cameraPresentationPolicy = task;
+    return task;
+  }
+
+  private restoreCameraPresentationBudget(): void {
+    this.syncCameraPresentationBudget().catch(() => this.onControlErrorCb?.());
+  }
+
   /** Start screen sharing — creates screen video producer (and optional audio) */
   async startScreenShare(): Promise<ScreenShareResult> {
     const transport = this.sendTransport;
@@ -1373,6 +1285,7 @@ export class MediaManager {
     if (!navigator.mediaDevices?.getDisplayMedia)
       return { status: 'not_started', reason: 'unavailable' };
     const version = ++this.screenVersion;
+    const mode = loadScreenPresentationMode();
     this.screenStarting = true;
     const isCurrent = () => version === this.screenVersion && transport === this.sendTransport;
     let stream: MediaStream | undefined;
@@ -1380,7 +1293,7 @@ export class MediaManager {
     let unwatchCapture: (() => void) | undefined;
     try {
       try {
-        stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+        stream = await navigator.mediaDevices.getDisplayMedia(screenCaptureConstraints(mode));
       } catch (error) {
         if (!isCurrent()) return { status: 'not_started', reason: 'superseded' };
         const name = error instanceof Error ? error.name : '';
@@ -1411,8 +1324,17 @@ export class MediaManager {
       if (videoTrack.readyState === 'ended') onEnded();
       if (!isCurrent()) return { status: 'not_started', reason: 'superseded' };
 
+      videoTrack.contentHint = screenContentHint(mode);
+      this.screenBudgetActive = true;
+      await this.syncCameraPresentationBudget();
+      if (!isCurrent()) return { status: 'not_started', reason: 'superseded' };
+      const codecs = this.device?.sendRtpCapabilities?.codecs ?? [];
+      const vp9Svc = await supportsVp9ScreenSvc(codecs, mode);
+      if (!isCurrent()) return { status: 'not_started', reason: 'superseded' };
+
       const videoProducer = await transport.produce({
         track: videoTrack,
+        ...screenEncodingOptions(mode, codecs, vp9Svc),
         appData: { source: 'screen' },
       });
       if (!isCurrent()) {
@@ -1441,6 +1363,7 @@ export class MediaManager {
           try {
             const audioProducer = await transport.produce({
               track: audioTrack,
+              codecOptions: { opusMaxAverageBitrate: PRESENTATION_AUDIO_BITRATE, opusFec: true },
               appData: { source: 'screen-audio' },
             });
             if (!isCurrent() || !audioLive()) {
@@ -1478,6 +1401,10 @@ export class MediaManager {
       if (isCurrent()) {
         this.screenStarting = false;
         this.pendingScreenStream = null;
+        if (!started) {
+          this.screenBudgetActive = false;
+          this.restoreCameraPresentationBudget();
+        }
       }
     }
   }
@@ -1491,6 +1418,8 @@ export class MediaManager {
     const sap = this.screenAudioProducer;
     this.screenProducer = null;
     this.screenAudioProducer = null;
+    this.screenBudgetActive = false;
+    this.restoreCameraPresentationBudget();
     this.unwatchScreenAudio?.();
     this.unwatchScreenAudio = null;
     this.setScreenAudio('off');

@@ -102,7 +102,7 @@ async function fixture(t) {
       './receive-policy': await loadTypeScript('src/receive-policy.ts', {
         globals: { localStorage: storage },
       }),
-      './media': {},
+      './capture-preferences': {},
       './media-controls.css': {},
       './settings-sheet': {},
       './audio-output': await loadTypeScript('src/audio-output.ts'),

@@ -1,3 +1,4 @@
+import { accountUpdatesFixture } from './account-updates-fixture.mjs';
 import { attachmentFixture } from './attachment-fixture.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -153,7 +154,9 @@ async function fixture(t, { storage = new Map() } = {}) {
     },
     clearInterval: (id) => timers.delete(id),
   };
+  const updates = accountUpdatesFixture();
   const modules = {
+    './account-updates': updates.module,
     './ui': { ...f.ui, api },
     './discovery': await loadDiscoveryFixture({ ...f, ui: { ...f.ui, api } }),
     './attachments': attachmentState.module,
@@ -175,6 +178,7 @@ async function fixture(t, { storage = new Map() } = {}) {
     roomSettings: { historyRetentionDays: 30 },
     requestSocial: invoke('room', (...args) => state.room(...args)),
   };
+  f.updates = updates;
   const tick = async () => {
     for (const { callback } of [...timers.values()]) callback();
     await flush();
@@ -292,7 +296,7 @@ test('a PM reply keeps its target through response loss and reload without repla
   assert.doesNotMatch(reopened.textContent, /Unconfirmed send/);
 });
 
-test('PM reactions retry explicit presence and a later live list defeats an old response or page', async (t) => {
+test('PM reactions retry explicit presence and fence an older mutation response before authoritative refresh', async (t) => {
   const f = await fixture(t);
   const view = await f.openConversation();
   f.state.react = async () => {
@@ -324,8 +328,17 @@ test('PM reactions retry explicit presence and a later live list defeats an old 
   pending.resolve({ messageId: 'newest', reactions: [] });
   await flush();
   assert.ok(action(view, '❤️ 1'));
+  f.state.loadHistory = async () =>
+    history([{ ...message('newest'), reactions: [{ emoji: '❤️', participantIds: ['peer'] }] }]);
   await f.tick();
-  assert.ok(action(view, '❤️ 1'), 'a stale page cannot erase the live reaction list');
+  assert.ok(action(view, '❤️ 1'));
+  f.state.loadHistory = async () => history([{ ...message('newest'), reactions: [] }]);
+  f.updates.emit({ account: 'account', scope: 'inbox', peerId: 'peer' });
+  await flush();
+  assert.ok(
+    !view.textContent.includes('❤️ 1'),
+    'a newer authoritative read can remove a cached live reaction',
+  );
 });
 
 test('saved public history offers working reaction and reply actions without keeping its dialog open', async (t) => {
@@ -1065,4 +1078,39 @@ test('unchanged saved history retains an open attachment until message removal o
   assert.equal(rendered.disposed, true);
   assert.equal(f.attachmentState.renders.length, 1, 'removed content cannot render file controls');
   view.close();
+});
+
+test('an authoritative live refresh fences an older reaction response without restoring removed reactions', async (t) => {
+  const f = await fixture(t);
+  const view = await f.openConversation();
+  const mutation = deferred();
+  f.state.react = () => mutation.promise;
+  action(view, 'React').click();
+  action(view, '👍').click();
+  await flush();
+  // The PUT committed, but its response is held. Another device subsequently
+  // removed it, and the resulting invalidation already reconciled an empty list.
+  f.state.loadHistory = async () => history([{ ...message('newest'), reactions: [] }]);
+  f.updates.emit({ account: 'account', scope: 'inbox', peerId: 'peer' });
+  await flush();
+  mutation.resolve({
+    messageId: 'newest',
+    reactions: [{ emoji: '👍', participantIds: ['account'] }],
+  });
+  await flush();
+  assert.equal(view.querySelectorAll('.reaction-chip').length, 0);
+  assert.equal(calls(f, 'react').length, 1, 'reconciliation never replays the mutation');
+});
+
+test('a recovered quiet history read clears its earlier load error', async (t) => {
+  const f = await fixture(t);
+  const view = await f.openConversation();
+  f.state.loadHistory = async () => {
+    throw new Error('History network failed');
+  };
+  await f.tick();
+  assert.equal(view.querySelector('.auth-error').hidden, false);
+  f.state.loadHistory = async () => history();
+  await f.tick();
+  assert.equal(view.querySelector('.auth-error').hidden, true);
 });

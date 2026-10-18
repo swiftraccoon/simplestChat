@@ -1,6 +1,7 @@
 import type { ChatPreferences, PreferencePatch } from './api-validation';
 import { api, ApiOutcomeUnknownError, asyncButton, el } from './ui';
 import { group, note, toggleRow } from './settings-sheet';
+import { accountUpdatesLive, onAccountUpdate } from './account-updates';
 
 const CHANGE_KEY = 'simplestchat.preferences.changed';
 type Options = {
@@ -12,7 +13,8 @@ type Listener = (account: string | null, state: ChatPreferences | null) => void;
 
 /** Account-owned state exists independently of room membership. Writes carry only
  * explicit field/set intents; cross-tab hints contain no preferences or credentials.
- * Other devices reconcile visible views every fifteen seconds and on focus. */
+ * Other devices invalidate via the account stream, with focus and bounded polling
+ * repairing disconnected or failed reads. */
 export class AccountPreferences {
   private account: string | null = null;
   private state: ChatPreferences | null = null;
@@ -29,6 +31,8 @@ export class AccountPreferences {
   private readonly listeners = new Set<Listener>();
   private readonly timer: ReturnType<typeof setInterval>;
   private disposed = false;
+  private dirty = false;
+  private readonly stopUpdates: () => void;
 
   constructor(private readonly options: Options) {
     const refresh = (): void => {
@@ -43,7 +47,19 @@ export class AccountPreferences {
       },
       { signal: this.events.signal },
     );
-    this.timer = setInterval(refresh, 15_000);
+    this.timer = setInterval(() => {
+      if (this.failure || this.dirty || !accountUpdatesLive(this.options.getAccountId())) refresh();
+    }, 15_000);
+    this.stopUpdates = onAccountUpdate((update) => {
+      if (
+        update.account !== this.options.getAccountId() ||
+        (update.scope !== 'ready' && update.scope !== 'preferences')
+      )
+        return;
+      this.synchronize();
+      this.dirty = true;
+      refresh();
+    });
   }
 
   private synchronize(): void {
@@ -61,6 +77,7 @@ export class AccountPreferences {
     this.tail = Promise.resolve();
     this.uncertain = false;
     this.failure = '';
+    this.dirty = false;
     this.emit();
   }
 
@@ -95,6 +112,7 @@ export class AccountPreferences {
     if (this.disposed || !account || !token || this.saving || (this.uncertain && !explicit))
       return Promise.resolve();
     if (this.pending) return this.pending;
+    this.dirty = false;
     const epoch = this.epoch;
     const operation = this.operation;
     const task = api
@@ -114,7 +132,10 @@ export class AccountPreferences {
         throw error;
       })
       .finally(() => {
-        if (this.pending === task) this.pending = null;
+        if (this.pending === task) {
+          this.pending = null;
+          if (this.dirty) this.refresh().catch(() => {});
+        }
       });
     this.pending = task;
     return task;
@@ -190,6 +211,7 @@ export class AccountPreferences {
       if (this.current(account, epoch)) {
         this.saving = false;
         this.emit();
+        if (this.dirty) this.refresh().catch(() => {});
       }
     }
   }
@@ -297,6 +319,7 @@ export class AccountPreferences {
     this.disposed = true;
     this.controller.abort();
     this.events.abort();
+    this.stopUpdates();
     clearInterval(this.timer);
     this.listeners.clear();
   }

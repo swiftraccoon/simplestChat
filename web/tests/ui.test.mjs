@@ -286,3 +286,22 @@ test('new passwords count normalized Unicode scalars and enforce raw UTF-8 bound
     assert.throws(() => ui.validatePassword(password, password), /15 and 128 characters/);
   assert.throws(() => ui.validatePassword('a'.repeat(15), 'b'.repeat(15)), /do not match/);
 });
+
+test('the modal navigation seam identifies account destinations and retires its close callback', async () => {
+  const { ui } = await uiFixture();
+  const calls = [];
+  const route = { accountId: 'account', destination: { kind: 'inbox' } };
+  const remove = ui.setModalNavigation((dialog, canDismiss, navigation) => {
+    calls.push({ dialog, allowed: canDismiss(), navigation });
+    return () => calls.push('closed');
+  });
+  const view = ui.modal('Messages', undefined, route);
+  assert.equal(calls[0].dialog, view.dialog);
+  assert.equal(calls[0].allowed, true);
+  assert.equal(calls[0].navigation, route);
+  view.close();
+  assert.equal(calls[1], 'closed');
+  remove();
+  ui.modal('Unmanaged fixture').close();
+  assert.equal(calls.length, 2);
+});

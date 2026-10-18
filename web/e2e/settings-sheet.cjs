@@ -17,7 +17,17 @@ const sheetRow = (page, label) =>
 /** Returns to the root list from any depth; a screen that refuses to leave stops the climb. */
 async function toSheetRoot(page) {
   const back = sheet(page).getByRole('button', { name: 'Back', exact: true });
-  for (let depth = 0; depth < 4 && (await back.isVisible()); depth++) await back.click();
+  for (let depth = 0; depth < 4 && (await back.isVisible()); depth++) {
+    const title = await sheet(page).getByRole('heading', { level: 2 }).textContent();
+    await back.click();
+    await page.waitForFunction((previous) => {
+      const region = document.getElementById('settings-sheet');
+      return (
+        region.querySelector('h2')?.textContent !== previous ||
+        region.querySelector('.sheet-back')?.hidden
+      );
+    }, title);
+  }
 }
 
 /** Reaches one screen of the open sheet, switching segment when the row sits in the other one. */
@@ -39,8 +49,14 @@ async function sheetScreen(page, label) {
 /** Closes the sheet from its header and waits until it is gone. */
 async function closeSheet(page) {
   const region = sheet(page);
+  const previous = await page.evaluate(() => history.state?.simplestchatNavigation);
   await region.getByRole('button', { name: 'Close settings', exact: true }).click();
   await region.waitFor({ state: 'hidden' });
+  if (typeof previous === 'number')
+    await page.waitForFunction(
+      (entry) => history.state?.simplestchatNavigation !== entry,
+      previous,
+    );
 }
 
 module.exports = { sheet, sheetRow, toSheetRoot, sheetScreen, closeSheet };

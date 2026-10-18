@@ -30,12 +30,12 @@ import {
   type ReceiveMode,
   type VideoDeferredReason,
 } from './receive-policy';
-import {
+import type {
   MediaManager,
-  type CapturePreferences,
-  type RemoteVideoQuality,
-  type ScreenShareResult,
-  type ScreenShareAudio,
+  CapturePreferences,
+  RemoteVideoQuality,
+  ScreenShareResult,
+  ScreenShareAudio,
 } from './media';
 
 export interface Participant {
@@ -194,6 +194,7 @@ export class RoomClient {
   }
   private media: MediaManager | null = null;
   private mediaReady = false;
+  private mediaLoadFailed = false;
   private participants = new Map<string, Participant>();
   private localId: string | null = null;
   private roomId: string | null = null;
@@ -612,7 +613,21 @@ export class RoomClient {
   }
 
   private async setupMedia(generation: number): Promise<void> {
-    const media = new MediaManager(this.signaling);
+    let MediaManagerClass: typeof MediaManager;
+    try {
+      ({ MediaManager: MediaManagerClass } = await import('./media'));
+    } catch {
+      if (generation === this.generation) {
+        this.mediaLoadFailed = true;
+        this.events.onBackgroundError?.(
+          'Call media could not be loaded. Chat remains available. Use Refresh incoming media to try again, or reload after leaving the call.',
+        );
+      }
+      return;
+    }
+    if (generation !== this.generation) return;
+    this.mediaLoadFailed = false;
+    const media = new MediaManagerClass(this.signaling);
     this.media = media;
     this.mediaReady = false;
     media.onControlError = () => {
@@ -1106,7 +1121,17 @@ export class RoomClient {
   }
 
   private async refreshIncomingSubscriptions(): Promise<void> {
+    if (!this.media && this.connected) {
+      const generation = this.generation;
+      await this.setupMedia(generation);
+      if (generation !== this.generation || !this.connected)
+        throw new Error('The room connection changed');
+    }
     const media = this.media;
+    if (!media && this.mediaLoadFailed)
+      throw new Error(
+        'Call media could not be loaded. Leave the call and reload to get the current app version, then join again.',
+      );
     if (!media || !this.mediaReady || !this.connected)
       throw new Error('Wait for the room to reconnect before retrying incoming media');
     const generation = this.generation;

@@ -1,4 +1,5 @@
 import type { ChatEntry, ChatHistoryPage, ChatReaction } from './protocol';
+import { accountUpdatesLive, onAccountUpdate } from './account-updates';
 import { renderAttachments } from './attachments';
 import { mountPmComposer, type PmComposer } from './pm-composer';
 import { mountContacts } from './discovery';
@@ -11,6 +12,10 @@ import { api, asyncButton, button, el, field, input, modal } from './ui';
 type HistoryOptions = {
   title: string;
   accountDialog?: boolean;
+  navigation?: {
+    accountId: string;
+    destination: { kind: 'conversation'; peerId: string; peerName: string };
+  };
   viewerId: string;
   initialMessageId?: string;
   draft?: { account: string; peer: string };
@@ -128,7 +133,7 @@ function messageNode(message: ChatEntry): HTMLElement {
 
 /** A bounded page reader shared by room history and the account inbox. */
 function openHistory(options: HistoryOptions): void {
-  const view = modal(options.title);
+  const view = modal(options.title, undefined, options.navigation);
   if (options.accountDialog) view.dialog.setAttribute('data-account-dialog', 'true');
   const controller = new AbortController();
   const current = (): boolean => view.dialog.open && options.current();
@@ -164,6 +169,8 @@ function openHistory(options: HistoryOptions): void {
   const edits = new Map<string, ChatEntry>();
   const reactions = new Map<string, ChatReaction[]>();
   const reactionVersions = new Map<string, number>();
+  let reactionReadVersion = 0;
+  let failedLoadMessage: string | null = null;
   const redact = (entry: ChatEntry): void => {
     const updatedReactions = reactions.get(entry.messageId);
     if (updatedReactions) entry.reactions = updatedReactions;
@@ -293,6 +300,7 @@ function openHistory(options: HistoryOptions): void {
         const react = async (emoji: string): Promise<void> => {
           if (!current() || !options.react) return;
           const version = reactionVersions.get(message.messageId) ?? 0;
+          const readVersion = reactionReadVersion;
           const buttons = controls.querySelectorAll<HTMLButtonElement>('button');
           buttons.forEach((control) => {
             control.disabled = true;
@@ -311,9 +319,11 @@ function openHistory(options: HistoryOptions): void {
             if (
               current() &&
               result.messageId === message.messageId &&
-              version === (reactionVersions.get(message.messageId) ?? 0)
+              version === (reactionVersions.get(message.messageId) ?? 0) &&
+              readVersion === reactionReadVersion
             )
               notifyHistoryReaction(result.messageId, result.reactions);
+            else if (current() && readVersion !== reactionReadVersion) refreshMessages();
           } finally {
             if (current())
               buttons.forEach((control) => {
@@ -436,9 +446,15 @@ function openHistory(options: HistoryOptions): void {
     if (requestedPosition.after) params.set('after', requestedPosition.after);
     if (requestedPosition.around) params.set('around', requestedPosition.around);
     if (requestedPosition.resume) params.set('resume', 'true');
+    const observedReactions = new Map(reactionVersions);
     try {
       const result = await options.load(params, controller.signal);
       if (!current() || version !== operation) return;
+      reactionReadVersion++;
+      // A fresh HTTP snapshot supersedes cached reactions from before the read.
+      // Keep only live events that arrived while this request was in flight.
+      for (const [id, observed] of observedReactions)
+        if (reactionVersions.get(id) === observed) reactions.delete(id);
       const previous = page === null ? null : JSON.stringify(page);
       page = result;
       page.messages.forEach(redact);
@@ -446,7 +462,8 @@ function openHistory(options: HistoryOptions): void {
       position = requestedPosition;
       before = cursor;
       query = requestedQuery;
-      if (!quiet) view.error.hidden = true;
+      if (!quiet || view.error.textContent === failedLoadMessage) view.error.hidden = true;
+      failedLoadMessage = null;
       loading = false;
       if (quiet && previous === JSON.stringify(page)) {
         markRead();
@@ -454,7 +471,10 @@ function openHistory(options: HistoryOptions): void {
       }
       render(bottom && !anchor);
     } catch (error) {
-      if (version === operation) fail(error);
+      if (version === operation) {
+        fail(error);
+        failedLoadMessage = view.error.textContent;
+      }
     } finally {
       if (version === operation) {
         loading = false;
@@ -574,7 +594,7 @@ function openHistory(options: HistoryOptions): void {
     if (!current() || removed.has(id)) return;
     reactions.set(id, value);
     reactionVersions.set(id, (reactionVersions.get(id) ?? 0) + 1);
-    if (reactions.size > 300) {
+    if (reactionVersions.size > 300) {
       view.close();
       return;
     }
@@ -596,6 +616,29 @@ function openHistory(options: HistoryOptions): void {
     if (pair.includes(message.participantId) && pair.includes(message.recipientId ?? ''))
       refreshMessages();
   });
+  let accountDirty = false;
+  const refreshAccount = (): void => {
+    if (!accountDirty || !current() || !visible()) return;
+    accountDirty = false;
+    refreshMessages();
+  };
+  const stopUpdates = onAccountUpdate((update) => {
+    if (
+      !options.privatePeerId ||
+      update.account !== options.viewerId ||
+      (update.scope !== 'ready' && update.scope !== 'inbox') ||
+      (update.peerId && update.peerId !== options.privatePeerId)
+    )
+      return;
+    accountDirty = true;
+    refreshAccount();
+  });
+  window.addEventListener('focus', refreshAccount, { signal: controller.signal });
+  document.addEventListener('visibilitychange', refreshAccount, { signal: controller.signal });
+  document.addEventListener('close', () => queueMicrotask(refreshAccount), {
+    capture: true,
+    signal: controller.signal,
+  });
   list.addEventListener('scroll', markRead);
   const timer = setInterval(() => {
     if (!options.current()) {
@@ -604,7 +647,13 @@ function openHistory(options: HistoryOptions): void {
     }
     // Repeating resume after its cursor advances would silently skip to the next
     // unread page. Keep that page stable until the reader chooses Newer messages.
-    if (visible() && !loading && !(position.resume && page?.newerCursor))
+    refreshAccount();
+    if (
+      (!options.privatePeerId || !view.error.hidden || !accountUpdatesLive(options.viewerId)) &&
+      visible() &&
+      !loading &&
+      !(position.resume && page?.newerCursor)
+    )
       load(before, true, query, position.resume ? {} : position).catch(fail);
   }, 15_000);
   view.dialog.addEventListener(
@@ -618,6 +667,7 @@ function openHistory(options: HistoryOptions): void {
       editListeners.delete(onEdited);
       stopInbox();
       stopReactions();
+      stopUpdates();
     },
     { once: true },
   );
@@ -714,6 +764,7 @@ export function openPrivateConversation(
   openHistory({
     title: `Messages with ${peerName}`,
     accountDialog: true,
+    navigation: { accountId: account, destination: { kind: 'conversation', peerId, peerName } },
     viewerId: account,
     draft: { account, peer: peerId },
     privatePeerId: peerId,
@@ -760,7 +811,7 @@ export function openPrivateConversation(
 export function openPrivateInbox(options: PrivateConversationOptions): void {
   const account = options.getAccountId();
   if (!account || !options.getToken()) return;
-  const view = modal('Messages');
+  const view = modal('Messages', undefined, { accountId: account, destination: { kind: 'inbox' } });
   view.dialog.setAttribute('data-account-dialog', 'true');
   const controller = new AbortController();
   const current = (): boolean =>
@@ -784,6 +835,11 @@ export function openPrivateInbox(options: PrivateConversationOptions): void {
   let cursor: string | null = null;
   let next: string | null = null;
   let loading = false;
+  let dirty = false;
+  const visible = (): boolean => {
+    const dialogs = document.querySelectorAll<HTMLDialogElement>('dialog[open]');
+    return !document.hidden && dialogs[dialogs.length - 1] === view.dialog;
+  };
   const fail = (error: unknown): void => {
     if (!current()) return;
     view.error.textContent = error instanceof Error ? error.message : 'Messages unavailable';
@@ -791,6 +847,7 @@ export function openPrivateInbox(options: PrivateConversationOptions): void {
   };
   const load = async (before: string | null): Promise<void> => {
     if (!current() || loading) return;
+    dirty = false;
     loading = true;
     older.disabled = true;
     newest.disabled = true;
@@ -839,6 +896,7 @@ export function openPrivateInbox(options: PrivateConversationOptions): void {
       if (current()) {
         older.disabled = !next;
         newest.disabled = !cursor;
+        if (dirty && visible()) load(cursor).catch(fail);
       }
     }
   };
@@ -853,12 +911,29 @@ export function openPrivateInbox(options: PrivateConversationOptions): void {
   const pages = el('div', undefined, 'history-pagination');
   pages.append(older, newest);
   view.body.append(status, list, pages);
+  const refresh = (): void => {
+    if (current() && visible() && dirty) load(cursor).catch(fail);
+  };
+  const stopUpdates = onAccountUpdate((update) => {
+    if (update.account !== account || (update.scope !== 'ready' && update.scope !== 'inbox'))
+      return;
+    dirty = true;
+    refresh();
+  });
+  window.addEventListener('focus', refresh, { signal: controller.signal });
+  document.addEventListener('visibilitychange', refresh, { signal: controller.signal });
+  document.addEventListener('close', () => queueMicrotask(refresh), {
+    capture: true,
+    signal: controller.signal,
+  });
   const timer = setInterval(() => {
     if (!options.getToken() || options.getAccountId() !== account) {
       view.close();
       return;
     }
-    if (!document.hidden) {
+    refresh();
+    if (visible() && contacts.needsRefresh?.()) contacts.refresh().catch(fail);
+    if (visible() && (!view.error.hidden || !accountUpdatesLive(account))) {
       load(cursor).catch(fail);
       contacts.refresh().catch(fail);
     }
@@ -868,6 +943,7 @@ export function openPrivateInbox(options: PrivateConversationOptions): void {
     () => {
       controller.abort();
       contacts.dispose();
+      stopUpdates();
       clearInterval(timer);
     },
     { once: true },

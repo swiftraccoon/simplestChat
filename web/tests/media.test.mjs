@@ -8,10 +8,12 @@ import { evaluateTypeScript, loadContractModules, loadTypeScript } from './sourc
 const signalingModule = await loadTypeScript('src/signaling.ts', {
   modules: await loadContractModules(),
 });
+const captureModule = await loadTypeScript('src/capture-preferences.ts');
+const screenModule = await loadTypeScript('src/screen-presentation.ts');
 const { mediaErrorMessage } = await loadTypeScript('src/media-controls.ts', {
   modules: {
     './receive-policy': await loadTypeScript('src/receive-policy.ts'),
-    './media': {},
+    './capture-preferences': captureModule,
     './media-controls.css': {},
     './settings-sheet': {},
     './audio-output': {},
@@ -85,6 +87,10 @@ async function fixture(t) {
     capture: null,
     displayCapture: null,
     beforeProduce: null,
+    spatialChanges: [],
+    beforeSpatialChange: null,
+    displayRequests: [],
+    presentationMode: null,
     replace: null,
   };
   const newTrack = (kind) => {
@@ -92,42 +98,47 @@ async function fixture(t) {
     state.tracks.push(track);
     return track;
   };
+  const globals = {
+    localStorage: {
+      getItem(key) {
+        return key === 'simplestchat.screenPresentationMode' ? state.presentationMode : null;
+      },
+      setItem() {},
+    },
+    MediaStream: Stream,
+    navigator: {
+      mediaDevices: {
+        getUserMedia: (constraints) => {
+          state.captureCalls.push(constraints);
+          return state.capture
+            ? state.capture(constraints)
+            : Promise.resolve(new Stream([newTrack(constraints.audio ? 'audio' : 'video')]));
+        },
+        getDisplayMedia: async (constraints) => {
+          state.displayRequests.push(constraints);
+          return state.displayCapture
+            ? state.displayCapture()
+            : new Stream([newTrack('video'), newTrack('audio')]);
+        },
+      },
+    },
+    console: {
+      log(...values) {
+        state.logs.push(values);
+      },
+      warn(...values) {
+        state.warnings.push(values);
+      },
+    },
+  };
   const { MediaManager } = await loadTypeScript('src/media.ts', {
     modules: {
       '../node_modules/mediasoup-client/lib/Device.js': {},
       './signaling': signalingModule,
+      './capture-preferences': await loadTypeScript('src/capture-preferences.ts', { globals }),
+      './screen-presentation': await loadTypeScript('src/screen-presentation.ts', { globals }),
     },
-    globals: {
-      localStorage: {
-        getItem() {
-          return null;
-        },
-        setItem() {},
-      },
-      MediaStream: Stream,
-      navigator: {
-        mediaDevices: {
-          getUserMedia: (constraints) => {
-            state.captureCalls.push(constraints);
-            return state.capture
-              ? state.capture(constraints)
-              : Promise.resolve(new Stream([newTrack(constraints.audio ? 'audio' : 'video')]));
-          },
-          getDisplayMedia: async () =>
-            state.displayCapture
-              ? state.displayCapture()
-              : new Stream([newTrack('video'), newTrack('audio')]),
-        },
-      },
-      console: {
-        log(...values) {
-          state.logs.push(values);
-        },
-        warn(...values) {
-          state.warnings.push(values);
-        },
-      },
-    },
+    globals,
   });
   const signaling = {
     connected: true,
@@ -150,7 +161,7 @@ async function fixture(t) {
         id: `producer-${state.producers.length}`,
         localId: 'local',
         track: options.track,
-        rtpParameters: {},
+        rtpParameters: { encodings: options.encodings },
         stopTracks: true,
         disableTrackOnPause: true,
         zeroRtpOnPause: false,
@@ -162,6 +173,13 @@ async function fixture(t) {
           .then(() => state.replace?.(track))
           .then(resolve, reject);
       });
+      producer.on('@setmaxspatiallayer', (layer, resolve, reject) => {
+        state.spatialChanges.push({ producer: producer.id, layer });
+        Promise.resolve()
+          .then(() => state.beforeSpatialChange?.(producer, layer))
+          .then(resolve, reject);
+      });
+      producer.options = options;
       state.producers.push(producer);
       return producer;
     },
@@ -1927,6 +1945,130 @@ test('forced screen-video closure cannot resurrect a pending screen-audio produc
   assert.equal(media.isScreenSharing, true);
 });
 
+test('screen presentation layers and camera reservation preserve both audio sources and restore without capture', async (t) => {
+  const { media, state } = await fixture(t);
+  media.device = {
+    sendRtpCapabilities: { codecs: [{ mimeType: 'audio/opus' }, { mimeType: 'video/VP8' }] },
+  };
+  await media.unmuteAudio();
+  await media.unmuteVideo();
+  const microphone = media.audioProducer;
+  const camera = media.videoProducer;
+  const captures = state.captureCalls.length;
+  assert.equal((await media.startScreenShare()).status, 'started');
+  assert.equal(media.screenProducer.options.encodings.length, 3);
+  assert.equal(media.screenProducer.track.contentHint, 'detail');
+  assert.equal(camera.maxSpatialLayer, 1);
+  assert.equal(media.audioProducer, microphone);
+  assert.equal(microphone.paused, false);
+  assert.equal(microphone.options.codecOptions.opusMaxAverageBitrate, 64_000);
+  assert.equal(microphone.options.codecOptions.opusDtx, true);
+  assert.equal(microphone.options.codecOptions.opusFec, true);
+  assert.equal(media.screenAudioProducer.options.codecOptions.opusMaxAverageBitrate, 64_000);
+  assert.deepEqual(state.displayRequests[0], {
+    video: { width: { max: 1920 }, height: { max: 1080 }, frameRate: { ideal: 15, max: 15 } },
+    audio: true,
+  });
+  media.stopScreenShare();
+  await media.cameraPresentationPolicy;
+  assert.equal(camera.maxSpatialLayer, 2);
+  assert.equal(media.videoProducer, camera);
+  assert.equal(media.audioProducer, microphone);
+  assert.equal(
+    state.captureCalls.length,
+    captures,
+    'policy changes never request camera or microphone capture',
+  );
+  state.presentationMode = 'motion';
+  assert.equal((await media.startScreenShare()).status, 'started');
+  assert.equal(media.screenProducer.track.contentHint, 'motion');
+  assert.equal(media.screenProducer.options.encodings[2].maxFramerate, 30);
+  media.stopScreenShare();
+  await media.cameraPresentationPolicy;
+});
+
+test('failed screen publication restores the camera and later explicit camera activation respects a live presentation', async (t) => {
+  const { media, state } = await fixture(t);
+  await media.unmuteVideo();
+  const camera = media.videoProducer;
+  state.beforeProduce = (options) => {
+    if (options.appData.source === 'screen') throw new Error('Owned publication failure');
+  };
+  assert.deepEqual(await media.startScreenShare(), { status: 'not_started', reason: 'failed' });
+  await media.cameraPresentationPolicy;
+  assert.equal(camera.maxSpatialLayer, 2);
+  assert.equal(media.screenBudgetActive, false);
+  assert.ok(
+    state.tracks
+      .filter((track) => track !== camera.track)
+      .every((track) => track.readyState === 'ended'),
+  );
+  state.beforeProduce = null;
+  media.pauseVideo();
+  assert.equal((await media.startScreenShare()).status, 'started');
+  assert.equal(media.videoEnabled, false, 'sharing never resumes a paused camera');
+  await media.unmuteVideo();
+  assert.equal(camera.maxSpatialLayer, 1);
+  assert.equal(media.videoEnabled, true);
+  media.stopScreenShare();
+  await media.cameraPresentationPolicy;
+  assert.equal(camera.maxSpatialLayer, 2);
+});
+
+test('a stopped pending presentation cannot restore full camera bandwidth over its replacement', async (t) => {
+  const { media, state } = await fixture(t);
+  await media.unmuteVideo();
+  const camera = media.videoProducer;
+  const pending = deferred();
+  const started = deferred();
+  state.beforeSpatialChange = async (_producer, layer) => {
+    if (layer === 1) {
+      started.resolve();
+      await pending.promise;
+    }
+  };
+  const obsolete = media.startScreenShare();
+  await started.promise;
+  media.stopScreenShare();
+  const replacement = media.startScreenShare();
+  pending.resolve();
+  assert.deepEqual(await obsolete, { status: 'not_started', reason: 'superseded' });
+  assert.equal((await replacement).status, 'started');
+  assert.equal(camera.maxSpatialLayer, 1);
+  assert.ok(
+    state.spatialChanges.every((change) => change.layer === 1),
+    'obsolete restoration reads the newest reservation',
+  );
+  media.stopScreenShare();
+  await media.cameraPresentationPolicy;
+  assert.equal(camera.maxSpatialLayer, 2);
+});
+
+test('explicitly enabling a fresh camera during a share reserves it, and a failed reservation prevents screen publication', async (t) => {
+  const { media, state } = await fixture(t);
+  assert.equal((await media.startScreenShare()).status, 'started');
+  assert.equal(state.captureCalls.length, 0, 'sharing alone never acquires camera or microphone');
+  await media.unmuteVideo();
+  const camera = media.videoProducer;
+  assert.equal(camera.maxSpatialLayer, 1);
+  media.stopScreenShare();
+  await media.cameraPresentationPolicy;
+  assert.equal(camera.maxSpatialLayer, 2);
+  const publications = state.producers.length;
+  state.beforeSpatialChange = (_producer, layer) => {
+    if (layer === 1) throw new Error('Owned native sender refusal');
+  };
+  assert.deepEqual(await media.startScreenShare(), { status: 'not_started', reason: 'failed' });
+  await media.cameraPresentationPolicy;
+  assert.equal(
+    state.producers.length,
+    publications,
+    'a failed camera reservation cannot oversubscribe with a screen producer',
+  );
+  assert.equal(camera.maxSpatialLayer, 2);
+  assert.equal(media.videoEnabled, true);
+});
+
 test('ending screen capture during video publication cancels the whole pending share', async (t) => {
   const { state, media } = await fixture(t);
   const started = deferred(),
@@ -2222,7 +2364,11 @@ test('the microphone producer negotiates Opus DTX and in-band FEC', async (t) =>
   await startLocal(media, 'audio');
   assert.equal(options.length, 1);
   assert.deepEqual(options[0].appData, { source: 'microphone' });
-  assert.deepEqual(options[0].codecOptions, { opusDtx: true, opusFec: true });
+  assert.deepEqual(options[0].codecOptions, {
+    opusDtx: true,
+    opusFec: true,
+    opusMaxAverageBitrate: 64_000,
+  });
 });
 
 test('quality preferences respect available simulcast layers and skip single-layer video', async (t) => {
@@ -2359,6 +2505,8 @@ test('device setup uses normal handler selection and the server transport parame
     modules: {
       '../node_modules/mediasoup-client/lib/Device.js': { Device },
       './signaling': signalingModule,
+      './capture-preferences': captureModule,
+      './screen-presentation': screenModule,
     },
     globals: {
       localStorage: { getItem: () => null },
@@ -2444,6 +2592,8 @@ for (const stage of [
       modules: {
         '../node_modules/mediasoup-client/lib/Device.js': { Device },
         './signaling': signalingModule,
+        './capture-preferences': captureModule,
+        './screen-presentation': screenModule,
       },
       globals: {
         localStorage: {

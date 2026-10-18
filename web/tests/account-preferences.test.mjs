@@ -1,3 +1,4 @@
+import { accountUpdatesFixture } from './account-updates-fixture.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { loadTypeScript } from './source-loader.mjs';
@@ -63,8 +64,9 @@ async function fixture(t, server = backend()) {
     hidden: false,
     addEventListener: (name, fn) => events.set(name, fn),
   };
+  const updates = accountUpdatesFixture();
   const { AccountPreferences } = await loadTypeScript('src/account-preferences.ts', {
-    modules: { './ui': f.ui, './settings-sheet': sheet },
+    modules: { './account-updates': updates.module, './ui': f.ui, './settings-sheet': sheet },
     globals: {
       document,
       window: { addEventListener: (name, fn) => events.set(name, fn) },
@@ -83,7 +85,16 @@ async function fixture(t, server = backend()) {
     notify: (message) => state.notices.push(message),
   });
   t.after(() => preferences.dispose());
-  return { ...f, preferences, state, server, events, timers, preferencesDocument: document };
+  return {
+    ...f,
+    updates,
+    preferences,
+    state,
+    server,
+    events,
+    timers,
+    preferencesDocument: document,
+  };
 }
 
 test('a stale tab changes one field without undoing another tab’s ignore or PM opt-out', async (t) => {
@@ -262,4 +273,55 @@ test('visible polling, focus and storage hints reconcile other devices without s
   f.events.get('focus')();
   await flush();
   assert.equal(f.server.requests.length, reads + 1);
+});
+
+test('live invalidations queue behind an in-flight read and save without cross-account refreshes', async (t) => {
+  const f = await fixture(t);
+  await f.preferences.refresh();
+  f.updates.live.add('account-a');
+  const count = () => f.server.requests.filter(({ method }) => method === 'GET').length;
+  const baseline = count();
+  for (const timer of f.timers.values()) timer();
+  await flush();
+  assert.equal(count(), baseline, 'healthy stream suppresses periodic polling');
+  f.updates.emit({ account: 'account-b', scope: 'preferences' });
+  await flush();
+  assert.equal(count(), baseline);
+  const hold = deferred();
+  f.server.hold = hold;
+  const pending = f.preferences.refresh();
+  f.server.accounts.get('Bearer token-a').sounds = true;
+  f.updates.emit({ account: 'account-a', scope: 'preferences' });
+  f.server.hold = null;
+  hold.resolve();
+  await pending;
+  await flush();
+  assert.equal(f.preferences.snapshot.sounds, true);
+  assert.equal(count(), baseline + 2, 'invalidation during an old read produces one fresh read');
+  const saving = deferred();
+  f.server.hold = saving;
+  const write = f.preferences.change({ timestamps: 'seconds' });
+  await flush();
+  f.server.accounts.get('Bearer token-a').allowPrivateMessages = false;
+  f.updates.emit({ account: 'account-a', scope: 'preferences' });
+  f.server.hold = null;
+  saving.resolve();
+  await write;
+  await flush();
+  assert.equal(f.preferences.snapshot.allowPrivateMessages, false);
+  assert.equal(f.preferences.snapshot.timestamps, 'seconds');
+});
+
+test('live preferences cannot clear an uncertain write without an explicit authoritative refresh', async (t) => {
+  const f = await fixture(t);
+  await f.preferences.refresh();
+  f.server.status = 503;
+  await assert.rejects(f.preferences.change({ sounds: true }), f.ui.ApiOutcomeUnknownError);
+  const baseline = f.server.requests.length;
+  f.server.status = 200;
+  f.updates.emit({ account: 'account-a', scope: 'ready' });
+  await flush();
+  assert.equal(f.server.requests.length, baseline);
+  await f.preferences.refresh(true);
+  assert.equal(f.preferences.snapshot.sounds, true);
 });

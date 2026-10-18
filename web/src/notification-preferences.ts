@@ -1,5 +1,6 @@
 import { api, button, el } from './ui';
 import { fieldRow, group, markSaved, note, toggleRow } from './settings-sheet';
+import { accountUpdatesLive, onAccountUpdate } from './account-updates';
 import {
   notificationAllowed,
   type NotificationPreferences as PreferenceState,
@@ -37,6 +38,12 @@ export class NotificationPreferences {
   private readonly listeners = new AbortController();
   private readonly timer: ReturnType<typeof setInterval>;
   private disposed = false;
+  private dirty = false;
+  private reconciled = false;
+  private tail: Promise<void> = Promise.resolve();
+  private queued = 0;
+  private readonly views = new Set<() => boolean>();
+  private readonly stopUpdates: () => void;
 
   constructor(private readonly options: Options) {
     this.account = options.getAccountId();
@@ -45,7 +52,21 @@ export class NotificationPreferences {
     };
     window.addEventListener('focus', refresh, { signal: this.listeners.signal });
     document.addEventListener('visibilitychange', refresh, { signal: this.listeners.signal });
-    this.timer = setInterval(refresh, 30000);
+    this.timer = setInterval(() => {
+      this.updateViews();
+      if (!this.reconciled || !accountUpdatesLive(this.options.getAccountId())) refresh();
+    }, 30000);
+    this.stopUpdates = onAccountUpdate((update) => {
+      if (
+        update.account !== this.options.getAccountId() ||
+        (update.scope !== 'ready' && update.scope !== 'notifications')
+      )
+        return;
+      if (this.account !== update.account) this.reset();
+      this.dirty = true;
+      this.reconciled = false;
+      refresh();
+    });
   }
 
   reset(): void {
@@ -58,6 +79,11 @@ export class NotificationPreferences {
     this.saving = false;
     this.state = null;
     this.loadedAt = 0;
+    this.dirty = false;
+    this.reconciled = false;
+    this.tail = Promise.resolve();
+    this.queued = 0;
+    this.updateViews();
   }
 
   private current(account: string, epoch: number): boolean {
@@ -75,6 +101,7 @@ export class NotificationPreferences {
     const token = this.options.getToken();
     if (this.disposed || !account || !token || this.saving) return Promise.resolve();
     if (this.pending) return this.pending;
+    this.dirty = false;
     const epoch = this.epoch;
     const request = ++this.request;
     const task = api
@@ -83,6 +110,8 @@ export class NotificationPreferences {
         if (this.current(account, epoch) && request === this.request) {
           this.state = state;
           this.loadedAt = Date.now();
+          this.reconciled = !this.dirty;
+          this.updateViews();
         }
       })
       .catch(() => {
@@ -90,7 +119,10 @@ export class NotificationPreferences {
         // another account's policy or enable alerts before the first response.
       })
       .finally(() => {
-        if (this.pending === task) this.pending = null;
+        if (this.pending === task) {
+          this.pending = null;
+          if (this.dirty) this.refresh().catch(() => {});
+        }
       });
     this.pending = task;
     return task;
@@ -101,13 +133,46 @@ export class NotificationPreferences {
     if (!this.account) return true;
     return (
       this.state !== null &&
-      Date.now() - this.loadedAt < 90000 &&
+      !this.saving &&
+      this.queued === 0 &&
+      this.reconciled &&
+      !this.dirty &&
+      (Date.now() - this.loadedAt < 90000 || accountUpdatesLive(this.account)) &&
       notificationAllowed(this.state, kind, peerId)
     );
   }
 
-  private async save(
-    policy: NotificationPolicy | ConversationNotificationPolicy,
+  private updateViews(): void {
+    for (const update of this.views) if (!update()) this.views.delete(update);
+  }
+
+  private save(
+    policy: Partial<NotificationPolicy> | ConversationNotificationPolicy,
+    peerId?: string,
+  ): Promise<boolean> {
+    const account = this.account;
+    const epoch = this.epoch;
+    if (!account || !this.current(account, epoch)) return Promise.resolve(false);
+    if (this.queued >= 20) {
+      this.options.notify('Please wait for the current notification changes');
+      return Promise.resolve(false);
+    }
+    this.queued++;
+    const task = this.tail.then(() => {
+      if (!this.current(account, epoch)) return false;
+      return this.apply(policy, peerId);
+    });
+    this.tail = task.then(
+      () => {},
+      () => {},
+    );
+    return task.finally(() => {
+      if (this.current(account, epoch)) this.queued--;
+    });
+  }
+
+  private async apply(
+    policy: Partial<NotificationPolicy> | ConversationNotificationPolicy,
     peerId?: string,
   ): Promise<boolean> {
     const account = this.account;
@@ -116,6 +181,7 @@ export class NotificationPreferences {
     if (!account || !token || this.saving || !this.current(account, epoch)) return false;
     this.saving = true;
     ++this.request;
+    this.pending = null;
     try {
       const state = peerId
         ? await api.saveConversationNotifications(
@@ -124,227 +190,277 @@ export class NotificationPreferences {
             policy as ConversationNotificationPolicy,
             this.controller.signal,
           )
-        : await api.saveNotificationPreferences(
+        : await api.patchNotificationPreferences(
             token,
-            policy as NotificationPolicy,
+            policy as Partial<NotificationPolicy>,
             this.controller.signal,
           );
       if (!this.current(account, epoch)) return false;
       this.state = state;
       this.loadedAt = Date.now();
+      this.reconciled = !this.dirty;
+      this.updateViews();
       return true;
     } catch (error) {
-      if (this.current(account, epoch))
+      if (this.current(account, epoch)) {
+        this.dirty = true;
+        this.reconciled = false;
         this.options.notify(
           error instanceof Error ? error.message : 'Notification preferences could not be saved',
         );
+      }
       return false;
     } finally {
-      if (this.current(account, epoch)) this.saving = false;
+      if (this.current(account, epoch)) {
+        this.saving = false;
+        if (this.dirty) this.refresh().catch(() => {});
+      }
     }
   }
 
-  /** Account rules as rows: each applies on its own change; a busy save queues the latest. */
+  /** Each row owns only its explicit field intent. Snapshot updates reconcile
+   * other fields while queued local choices keep their visible value. */
   mountAccount(container: HTMLElement, current: () => boolean): void {
     if (this.account !== this.options.getAccountId()) this.reset();
     const section = el('div', undefined, 'sheet-group notification-preferences');
-    section.append(el('div', 'Alert me about', 'sheet-group-title'));
     const status = el('p', 'Loading notification rules…', 'sheet-status');
     status.setAttribute('role', 'status');
-    section.append(status);
+    section.append(el('div', 'Alert me about', 'sheet-group-title'), status);
     container.append(section);
     const account = this.options.getAccountId();
     const epoch = this.epoch;
     const active = () => current() && Boolean(account && this.current(account, epoch));
-    this.refresh()
-      .then(() => {
-        if (!active()) return;
-        const state = this.state;
-        if (!state) {
-          status.textContent = 'Rules could not be loaded. Reopen Settings to try again.';
-          return;
-        }
-        let policy: NotificationPolicy = {
-          privateMessages: state.privateMessages,
-          mentions: state.mentions,
-          quietHours: state.quietHours,
-        };
-        let quiet = {
-          startMinute: state.quietHours?.startMinute ?? 1320,
-          endMinute: state.quietHours?.endMinute ?? 420,
-          timeZone: state.quietHours?.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
-        };
-        let inFlight = false;
-        let queued: { row: HTMLElement; policy: NotificationPolicy } | null = null;
-        const persist = (row: HTMLElement, change: Partial<NotificationPolicy>): void => {
+    type Key = keyof NotificationPolicy;
+    const pending = new Map<Key, { version: number; value: NotificationPolicy[Key] }>();
+    let version = 0;
+    let loaded = false;
+    let failure = '';
+    let quiet = {
+      startMinute: 1320,
+      endMinute: 420,
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    };
+    const persist = (row: HTMLElement, change: Partial<NotificationPolicy>): void => {
+      if (!active()) return;
+      const revision = ++version;
+      const keys = Object.keys(change) as Key[];
+      for (const key of keys)
+        pending.set(key, { version: revision, value: change[key] as NotificationPolicy[Key] });
+      failure = '';
+      render();
+      this.save(change)
+        .then((saved) => {
           if (!active()) return;
-          policy = { ...policy, ...change };
-          if (inFlight) {
-            queued = { row, policy };
-            return;
-          }
-          inFlight = true;
-          const wanted = policy;
-          this.save(wanted)
-            .then((saved) => {
-              if (!active()) return;
-              status.textContent = saved ? '' : 'Rules were not saved. Try again.';
-              if (saved) markSaved(row);
-            })
-            .catch(() => {
-              if (active()) status.textContent = 'Rules could not be saved. Try again.';
-            })
-            .finally(() => {
-              inFlight = false;
-              const next = queued;
-              queued = null;
-              if (next && active()) persist(next.row, next.policy);
-            });
-        };
-        const privateMessages = toggleRow('Private messages', state.privateMessages, (value) =>
-          persist(privateMessages.row, { privateMessages: value }),
-        );
-        const mentions = toggleRow('Mentions', state.mentions, (value) =>
-          persist(mentions.row, { mentions: value }),
-        );
-        const start = el('input');
-        start.type = 'time';
-        start.value = timeValue(quiet.startMinute);
-        const end = el('input');
-        end.type = 'time';
-        end.value = timeValue(quiet.endMinute);
-        const zone = el('input');
-        zone.type = 'text';
-        zone.maxLength = 64;
-        zone.value = quiet.timeZone;
-        zone.setAttribute('placeholder', 'America/New_York');
-        const times = group(null, [
-          fieldRow('From', start),
-          fieldRow('Until', end),
-          fieldRow('Time zone', zone),
-        ]);
-        times.classList.add('notification-quiet-times');
-        times.hidden = state.quietHours === null;
-        const quietToggle = toggleRow(
-          'Quiet hours every day',
-          state.quietHours !== null,
-          (value) => {
-            times.hidden = !value;
-            persist(quietToggle.row, { quietHours: value ? quiet : null });
-          },
-        );
-        const applyTimes = (row: HTMLElement): void => {
-          const startMinute = timeMinute(start.value);
-          const endMinute = timeMinute(end.value);
-          const timeZone = zone.value.trim();
-          if (startMinute < 0 || endMinute < 0 || startMinute === endMinute) {
-            status.textContent = 'Choose different valid start and end times.';
-            return;
-          }
-          try {
-            new Intl.DateTimeFormat('en', { timeZone });
-          } catch {
-            status.textContent = 'Choose an IANA time zone, such as America/New_York.';
-            return;
-          }
-          status.textContent = '';
-          quiet = { startMinute, endMinute, timeZone };
-          if (quietToggle.input.checked) persist(row, { quietHours: quiet });
-        };
-        for (const [input, row] of [
-          [start, times.children[0]],
-          [end, times.children[1]],
-          [zone, times.children[2]],
-        ] as const)
-          input.addEventListener('change', () => applyTimes(row as HTMLElement));
-        status.textContent = '';
-        section.append(
-          privateMessages.row,
-          mentions.row,
-          quietToggle.row,
-          times,
-          note('Applies on every device. Alerts suppressed while quiet are not replayed later.'),
-        );
+          for (const key of keys) if (pending.get(key)?.version === revision) pending.delete(key);
+          failure = saved
+            ? ''
+            : 'Change was not confirmed. Check the current rules before trying again.';
+          if (saved && keys.every((key) => !pending.has(key))) markSaved(row);
+          render();
+        })
+        .catch(() => {
+          if (!active()) return;
+          for (const key of keys) if (pending.get(key)?.version === revision) pending.delete(key);
+          failure = 'Notification rules could not be saved. Try again.';
+          render();
+        });
+    };
+    const privateMessages = toggleRow('Private messages', false, (value) =>
+      persist(privateMessages.row, { privateMessages: value }),
+    );
+    const mentions = toggleRow('Mentions', false, (value) =>
+      persist(mentions.row, { mentions: value }),
+    );
+    const start = el('input');
+    start.type = 'time';
+    const end = el('input');
+    end.type = 'time';
+    const zone = el('input');
+    zone.type = 'text';
+    zone.maxLength = 64;
+    zone.setAttribute('placeholder', 'America/New_York');
+    const times = group(null, [
+      fieldRow('From', start),
+      fieldRow('Until', end),
+      fieldRow('Time zone', zone),
+    ]);
+    times.classList.add('notification-quiet-times');
+    const quietToggle = toggleRow('Quiet hours every day', false, (value) =>
+      persist(quietToggle.row, { quietHours: value ? { ...quiet } : null }),
+    );
+    const applyTimes = (row: HTMLElement): void => {
+      if (!active()) return;
+      const startMinute = timeMinute(start.value),
+        endMinute = timeMinute(end.value),
+        timeZone = zone.value.trim();
+      if (startMinute < 0 || endMinute < 0 || startMinute === endMinute) {
+        failure = 'Choose different valid start and end times.';
+        status.textContent = failure;
+        return;
+      }
+      try {
+        new Intl.DateTimeFormat('en', { timeZone });
+      } catch {
+        failure = 'Choose an IANA time zone, such as America/New_York.';
+        status.textContent = failure;
+        return;
+      }
+      failure = '';
+      quiet = { startMinute, endMinute, timeZone };
+      if (quietToggle.input.checked) persist(row, { quietHours: { ...quiet } });
+    };
+    for (const [input, row] of [
+      [start, times.children[0]],
+      [end, times.children[1]],
+      [zone, times.children[2]],
+    ] as const)
+      input.addEventListener('change', () => applyTimes(row as HTMLElement));
+    section.append(
+      privateMessages.row,
+      mentions.row,
+      quietToggle.row,
+      times,
+      note('Applies on every device. Alerts suppressed while quiet are not replayed later.'),
+    );
+    const render = (): boolean => {
+      if (!active()) return false;
+      const state = this.state;
+      for (const control of [
+        privateMessages.input,
+        mentions.input,
+        quietToggle.input,
+        start,
+        end,
+        zone,
+      ])
+        control.disabled = state === null;
+      if (!state) {
+        status.textContent = loaded
+          ? 'Notification rules could not be loaded. Reopen Settings to try again.'
+          : 'Loading notification rules…';
+        return true;
+      }
+      privateMessages.input.checked = pending.has('privateMessages')
+        ? pending.get('privateMessages')?.value === true
+        : state.privateMessages;
+      mentions.input.checked = pending.has('mentions')
+        ? pending.get('mentions')?.value === true
+        : state.mentions;
+      const configured = pending.has('quietHours')
+        ? (pending.get('quietHours')?.value as NotificationPolicy['quietHours'])
+        : state.quietHours;
+      quietToggle.input.checked = configured !== null;
+      times.hidden = configured === null;
+      if (configured) quiet = { ...configured };
+      if (document.activeElement !== start) start.value = timeValue(quiet.startMinute);
+      if (document.activeElement !== end) end.value = timeValue(quiet.endMinute);
+      if (document.activeElement !== zone) zone.value = quiet.timeZone;
+      status.textContent = pending.size ? 'Saving notification rules…' : failure;
+      return true;
+    };
+    this.updateViews();
+    this.views.add(render);
+    render();
+    this.refresh()
+      .finally(() => {
+        loaded = true;
+        render();
       })
-      .catch(() => {
-        if (active()) status.textContent = 'Notification rules could not be loaded.';
-      });
+      .catch(() => {});
   }
 
   mountConversation(container: HTMLElement, peerId: string, current: () => boolean): void {
     if (this.account !== this.options.getAccountId()) this.reset();
     const section = el('details', undefined, 'notification-conversation');
-    section.append(el('summary', 'Notifications'));
     const status = el('p', 'Loading…', 'setting-hint');
     status.setAttribute('role', 'status');
-    section.append(status);
+    const controls = el('div', undefined, 'notification-conversation-actions');
+    section.append(el('summary', 'Notifications'), status, controls);
     container.append(section);
     const account = this.options.getAccountId();
     const epoch = this.epoch;
     const active = () => current() && Boolean(account && this.current(account, epoch));
-    this.refresh()
-      .then(() => {
-        if (!active()) return;
-        if (!this.state) {
-          status.textContent =
-            'Notification rules could not be loaded. Reopen this conversation to try again.';
-          return;
-        }
-        const controls = el('div', undefined, 'notification-conversation-actions');
-        const render = () => {
-          if (!active()) return;
-          const preference = this.state?.conversations.find((entry) => entry.peerId === peerId);
-          const snoozed = Boolean(
-            preference?.snoozedUntil && Date.parse(preference.snoozedUntil) > Date.now(),
-          );
-          status.textContent = preference?.muted
+    let pending = false,
+      loaded = false,
+      failure = '';
+    const update = (policy: ConversationNotificationPolicy): void => {
+      if (!active() || pending) return;
+      pending = true;
+      failure = '';
+      render();
+      this.save(policy, peerId)
+        .then((saved) => {
+          if (active())
+            failure = saved
+              ? ''
+              : 'Change was not confirmed. Check the current rules before trying again.';
+        })
+        .catch(() => {
+          if (active()) failure = 'Notification rules could not be saved. Try again.';
+        })
+        .finally(() => {
+          pending = false;
+          render();
+        });
+    };
+    const render = (): boolean => {
+      if (!active()) return false;
+      if (!this.state) {
+        status.textContent = loaded
+          ? 'Notification rules could not be loaded. Reopen this conversation to try again.'
+          : 'Loading…';
+        return true;
+      }
+      const preference = this.state.conversations.find((entry) => entry.peerId === peerId);
+      const snoozed = Boolean(
+        preference?.snoozedUntil && Date.parse(preference.snoozedUntil) > Date.now(),
+      );
+      status.textContent = pending
+        ? 'Saving notification rule…'
+        : failure ||
+          (preference?.muted
             ? 'Muted. Messages still arrive.'
             : snoozed && preference?.snoozedUntil
               ? `Snoozed until ${new Date(preference.snoozedUntil).toLocaleString()}. Messages still arrive.`
-              : 'Uses your account notification rules.';
-          const update = (policy: ConversationNotificationPolicy) => {
-            if (!active()) return;
-            const buttons = controls.querySelectorAll('button');
-            buttons.forEach((item) => {
-              item.disabled = true;
-            });
-            this.save(policy, peerId)
-              .then(() => {
-                if (active()) render();
-              })
-              .catch(() => {
-                if (active()) render();
-              });
-          };
-          controls.replaceChildren(
-            button(preference?.muted ? 'Unmute' : 'Mute', () =>
-              update({ muted: !preference?.muted, snoozedUntil: null }),
-            ),
-            button('Snooze 1 hour', () =>
-              update({ muted: false, snoozedUntil: new Date(Date.now() + 3600000).toISOString() }),
-            ),
-            button('Snooze 8 hours', () =>
-              update({ muted: false, snoozedUntil: new Date(Date.now() + 28800000).toISOString() }),
-            ),
-          );
-          if (snoozed)
-            controls.append(
-              button('Resume alerts', () => update({ muted: false, snoozedUntil: null })),
-            );
-        };
-        render();
-        section.append(controls);
-      })
-      .catch(() => {
-        if (active()) status.textContent = 'Notification rules could not be loaded.';
+              : 'Uses your account notification rules.');
+      controls.replaceChildren(
+        button(preference?.muted ? 'Unmute' : 'Mute', () =>
+          update({ muted: !preference?.muted, snoozedUntil: null }),
+        ),
+        button('Snooze 1 hour', () =>
+          update({ muted: false, snoozedUntil: new Date(Date.now() + 3600000).toISOString() }),
+        ),
+        button('Snooze 8 hours', () =>
+          update({ muted: false, snoozedUntil: new Date(Date.now() + 28800000).toISOString() }),
+        ),
+      );
+      if (snoozed)
+        controls.append(
+          button('Resume alerts', () => update({ muted: false, snoozedUntil: null })),
+        );
+      controls.querySelectorAll('button').forEach((control) => {
+        control.disabled = pending;
       });
+      return true;
+    };
+    this.updateViews();
+    this.views.add(render);
+    render();
+    this.refresh()
+      .finally(() => {
+        loaded = true;
+        render();
+      })
+      .catch(() => {});
   }
 
   dispose(): void {
     this.disposed = true;
     this.controller.abort();
     this.listeners.abort();
+    this.stopUpdates();
     clearInterval(this.timer);
     this.state = null;
+    this.views.clear();
   }
 }

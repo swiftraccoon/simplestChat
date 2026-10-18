@@ -122,9 +122,31 @@ export function input(value = '', type = 'text', maxLength = 128): HTMLInputElem
   return node;
 }
 
+export type ModalDestination =
+  { kind: 'inbox' } | { kind: 'conversation'; peerId: string; peerName: string };
+export interface ModalNavigation {
+  accountId: string;
+  destination: ModalDestination;
+}
+type ModalNavigationHook = (
+  dialog: HTMLDialogElement,
+  canDismiss: () => boolean,
+  navigation?: ModalNavigation,
+) => (() => void) | void;
+let modalNavigationHook: ModalNavigationHook | undefined;
+
+/** The application owns history; individual dialogs keep their existing cleanup. */
+export function setModalNavigation(hook: ModalNavigationHook): () => void {
+  modalNavigationHook = hook;
+  return () => {
+    if (modalNavigationHook === hook) modalNavigationHook = undefined;
+  };
+}
+
 export function modal(
   title: string,
   canDismiss: () => boolean = () => true,
+  navigation?: ModalNavigation,
 ): {
   dialog: HTMLDialogElement;
   body: HTMLDivElement;
@@ -163,6 +185,8 @@ export function modal(
   });
   document.body.append(dialog);
   dialog.showModal();
+  const stopNavigation = modalNavigationHook?.(dialog, canDismiss, navigation);
+  if (stopNavigation) dialog.addEventListener('close', stopNavigation, { once: true });
   return { dialog, body, error, close };
 }
 
@@ -536,6 +560,19 @@ export const api = {
       token,
       'PUT',
       policy,
+      signal,
+    ),
+  patchNotificationPreferences: (
+    token: string,
+    patch: Partial<NotificationPolicy>,
+    signal: AbortSignal,
+  ) =>
+    apiJson(
+      decodeNotificationPreferences,
+      '/api/auth/notification-preferences',
+      token,
+      'PATCH',
+      patch,
       signal,
     ),
   saveConversationNotifications: (

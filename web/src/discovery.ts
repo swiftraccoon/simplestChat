@@ -1,5 +1,6 @@
 import { api, asyncButton, button, el, field, input, modal } from './ui';
 import { contactId, type Contact, type SavedRoom } from './discovery-validation';
+import { onAccountUpdate } from './account-updates';
 
 interface AccountOptions {
   getToken: () => string | null;
@@ -9,6 +10,7 @@ interface AccountOptions {
 export interface DiscoveryMount {
   refresh: () => Promise<void>;
   dispose: () => void;
+  needsRefresh?: () => boolean;
 }
 
 export function contactLink(id: string): string {
@@ -149,12 +151,20 @@ export function mountContacts(
   request.type = 'submit';
   form.append(field('Contact link', link), request);
   let pending = false;
+  let refreshAgain = false;
+  let failed = false;
   const refresh = async (): Promise<void> => {
-    if (!context.current() || pending) return;
+    if (!context.current()) return;
+    if (pending) {
+      refreshAgain = true;
+      return;
+    }
     pending = true;
+    refreshAgain = false;
     try {
       const page = await api.contacts(context.token(), context.signal);
       if (!context.current() || page.accountId !== options.getAccountId()) return;
+      failed = false;
       error.hidden = true;
       const incoming = page.contacts.filter((contact) => contact.status === 'incoming').length;
       summary.textContent = incoming
@@ -169,8 +179,12 @@ export function mountContacts(
             'setting-hint',
           ),
         );
+    } catch (error) {
+      failed = true;
+      throw error;
     } finally {
       pending = false;
+      if (refreshAgain && context.current()) refresh().catch(fail);
     }
   };
   const action = (label: string, contact: Contact, accept: boolean): HTMLButtonElement => {
@@ -246,11 +260,21 @@ export function mountContacts(
   actions.append(copy, reload);
   section.append(summary, actions, form, status, error, contacts);
   host.append(section);
+  const stopUpdates = onAccountUpdate((update) => {
+    if (
+      update.account === options.getAccountId() &&
+      context.current() &&
+      (update.scope === 'ready' || update.scope === 'contacts')
+    )
+      refresh().catch(fail);
+  });
   refresh().catch(fail);
   return {
     refresh,
+    needsRefresh: () => failed,
     dispose: () => {
       context.dispose();
+      stopUpdates();
       section.remove();
     },
   };

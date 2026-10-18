@@ -40,6 +40,13 @@ export interface SheetLink {
   danger?: boolean;
 }
 
+export interface SettingsNavigation {
+  section?: string;
+  segment: SheetSegment;
+  canLeave: () => boolean;
+  restore: () => void;
+}
+
 export interface SettingsSheetOptions {
   sections: () => SheetSection[];
   footer?: () => SheetLink[];
@@ -47,6 +54,8 @@ export interface SettingsSheetOptions {
   host: () => HTMLElement;
   onOpen?: () => void;
   onClose?: () => void;
+  onNavigate?: (navigation: SettingsNavigation | null, action: 'push' | 'pop') => void;
+  onBack?: () => boolean;
   segmentLabels?: { you: string; room: string };
 }
 
@@ -91,6 +100,8 @@ export class SettingsSheet {
   private segment: SheetSegment = 'you';
   private generation = 0;
   private openState = false;
+  private section: string | undefined;
+  private restoringNavigation = false;
 
   constructor(private readonly options: SettingsSheetOptions) {
     this.element = el('section', undefined, 'settings-sheet');
@@ -138,11 +149,15 @@ export class SettingsSheet {
     if (this.element.parentNode !== host) host.append(this.element);
     this.element.hidden = false;
     if (options.segment) this.segment = options.segment;
+    this.section = undefined;
     this.renderRoot();
     this.options.onOpen?.();
+    this.navigationChanged();
     this.title.focus();
     if (options.section) {
-      const section = this.options.sections().find((entry) => entry.id === options.section);
+      const section = this.options
+        .sections()
+        .find((entry) => entry.id === options.section && (entry.available?.() ?? true));
       if (section) {
         if (section.segment !== this.segment) {
           this.segment = section.segment;
@@ -161,6 +176,7 @@ export class SettingsSheet {
     this.element.hidden = true;
     this.body.replaceChildren();
     this.options.onClose?.();
+    if (!this.restoringNavigation) this.options.onNavigate?.(null, 'pop');
     const opener = this.opener;
     const fallback = this.restoreTo;
     this.opener = null;
@@ -179,14 +195,17 @@ export class SettingsSheet {
 
   push(screen: SheetScreen, opener: HTMLElement | null = null): void {
     const frame: Frame = { screen, opener, generation: ++this.generation, body: null };
+    if (!this.stack.length) this.section = opener?.dataset['section'];
     this.stack.push(frame);
     this.show(frame);
     this.title.focus();
+    this.navigationChanged();
   }
 
   pop(): void {
     const top = this.stack[this.stack.length - 1];
     if (!top || top.screen.canLeave?.() === false) return;
+    if (this.options.onBack?.()) return;
     const frame = this.stack.pop()!;
     this.generation++;
     frame.screen.leave?.();
@@ -194,15 +213,53 @@ export class SettingsSheet {
     if (parent) {
       this.show(parent);
       this.title.focus();
+      this.navigationChanged('pop');
       return;
     }
+    this.section = undefined;
     this.renderRoot();
+    this.navigationChanged('pop');
     if (frame.opener?.isConnected) frame.opener.focus();
     else {
       const section = frame.opener?.dataset['section'];
       const row = section ? this.rowFor(section) : null;
       (row ?? this.title).focus();
     }
+  }
+
+  private navigationChanged(action: 'push' | 'pop' = 'push'): void {
+    if (this.restoringNavigation || !this.openState) return;
+    const screens = this.stack.map((frame) => frame.screen);
+    const section = this.section;
+    const segment = this.segment;
+    this.options.onNavigate?.(
+      {
+        ...(section && { section }),
+        segment,
+        canLeave: () => this.canLeaveAll(),
+        restore: () => {
+          this.restoringNavigation = true;
+          try {
+            // Section factories own abort controllers and account state. Rebuild
+            // them after leaving instead of reviving their retired instances.
+            this.open({ segment, ...(section && { section }) });
+            const available =
+              !section ||
+              this.options
+                .sections()
+                .some((entry) => entry.id === section && (entry.available?.() ?? true));
+            if (available) {
+              for (const screen of screens.slice(section ? 1 : 0)) this.push(screen);
+              this.section = section;
+            }
+          } finally {
+            this.restoringNavigation = false;
+          }
+          this.navigationChanged();
+        },
+      },
+      action,
+    );
   }
 
   private canLeaveAll(): boolean {
@@ -273,6 +330,7 @@ export class SettingsSheet {
         const choice = button(labels[segment], () => {
           this.segment = segment;
           this.renderRoot();
+          this.navigationChanged();
         });
         choice.setAttribute('aria-pressed', String(segment === this.segment));
         switcher.append(choice);

@@ -14,7 +14,7 @@ not avoid the limit. The initial budgets leave room for small product changes:
 
 | Asset group | Uncompressed limit | Gzip limit |
 | ----------- | ------------------ | ---------- |
-| JavaScript  | 688 KiB            | 166 KiB    |
+| JavaScript  | 704 KiB            | 170 KiB    |
 | CSS         | 78 KiB             | 15 KiB     |
 | HTML        | 50 KiB             | 12.5 KiB   |
 
@@ -30,6 +30,21 @@ These gates constrain delivery and parsing size; they do **not** establish
 startup latency, memory use, media quality or server capacity. Images, fonts,
 source maps and other non-JS/CSS/HTML files are not covered by these budgets.
 Measure runtime performance separately with the workflows below.
+
+The October 18 live-account, account-navigation and adaptive-presentation changes
+defer the call engine and mediasoup dependency until explicit room media setup.
+The eager entry falls from about 687 KB to 479 KB; the additional media chunk is
+about 231 KB. Capture preferences are shared rather than copied, and no package
+dependency was added. Total JavaScript, including every lazy chunk, increases
+to 711,938 bytes raw / 171,983 gzip from the preceding 688,692 / 164,719-byte
+build, an increase of 23,246 / 7,264 bytes.
+The reviewed total budget increases from 688/166 KiB to 704/170 KiB; CSS and HTML
+limits remain unchanged. The gate still counts all emitted chunks, the service
+worker and help assets. These are delivery-size observations, not a startup
+latency comparison. The hosted community scenario separately records one cold
+390×844 Chromium document at 1.5 Mbps down, 750 kbps up, 40 ms latency and 4× CPU
+slowdown, requiring account/signaling readiness with no call-engine request or
+capture. It simulates a phone viewport and resources, not physical phone hardware.
 
 The October 18 account-privacy, conversation, room-administration and optional
 speaker-following changes measure JavaScript at 688,692 bytes raw / 164,719 gzip,

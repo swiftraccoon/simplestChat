@@ -219,6 +219,8 @@ function authUiFixture(capabilities, signedIn) {
         pwa: { accountChanged() {} },
         notificationPreferences: { refresh: async () => {} },
         accountPreferences: { refresh: async () => {} },
+        accountUpdates: { synchronize() {} },
+        appNavigation: { synchronize() {} },
         refreshSavedRoomPicker() {},
         updateRestoreUI() {},
       },

@@ -17,6 +17,31 @@ same pinned version. It verifies the installed package version and complete
 No handler or transport implementation is replaced. Dependency updates must
 verify the shipped module/types, media tests, and production bundle contents.
 
+The homepage and account surfaces load the application shell without the call engine.
+`room.ts` imports `MediaManager` dynamically only during explicit room setup;
+`capture-preferences.ts` contains the lightweight settings and capture helpers shared
+with the private preview UI. Opening account settings, Messages or a contact offer
+neither downloads mediasoup nor captures a device. A failed call-engine download
+keeps room chat connected. **Refresh incoming media** makes an explicit load attempt without starting a
+microphone, camera or screen share. Browsers can retain a failed module import;
+in that case the user must leave and reload before joining again. Static
+serving currently exposes the active release's assets only: an older tab may need
+to leave its call and reload if its deferred asset disappeared during deployment.
+The app never reloads an active call automatically.
+
+Account destinations use `#view=inbox`,
+`#view=conversation&peer=<account UUID>` and
+`#view=settings&section=<section ID>&segment=you|room`. A selected room is retained
+as `room=<room ID>` alongside the view; existing `#<room ID>` links still select a
+room. `app-navigation.ts` owns surface history and identity-scoped restoration;
+`room-navigation.ts` owns explicit room selection and departure. Browser Back pops
+nested dialogs or settings screens before leaving the call. Forward restores
+read surfaces; reload restores a supported section or conversation only after
+account restoration, retaining its saved composer draft without sending it.
+Contact and invitation fragments work on initial load and on arrival in an open
+app, and retain their explicit acceptance steps. Temporary confirmations are
+closed on Back and never replay an action on Forward.
+
 ## Build and develop
 
 ```sh
@@ -57,36 +82,39 @@ For complete guest/account setup and LAN ICE addressing see
 
 ## Module map
 
-| Module | Responsibility |
-| --- | --- |
-| `src/main.ts` | Application wiring, room shell and layout |
-| `src/video-layout.ts` | Uniform media cells sized to the available stage |
-| `src/ui.ts` | Text-safe controls, dialogs and named HTTP API methods |
-| `src/participant-hovercard.ts` | Shared participant cards for roster and chat names, profile loading ownership and pointer/keyboard/touch interaction |
-| `src/appearance.ts` | Independent profile-card and room-heading appearance controls, previews and palette-only rendering |
-| `src/auth.ts`, `account-session-sync.ts`, `community-ui.ts` | Identity/session refresh and cross-tab reconciliation, profiles, recovery, room management |
-| `src/account-security.ts`, `account-sessions.ts` | Shared account-mutation ownership, passkey/recovery management and signed-in session controls |
-| `src/account-preferences.ts` | Account-owned privacy state, field PATCH intents, cross-device refresh and uncertain-save reconciliation, shared by home and room screens |
-| `src/pwa.ts`, `public/sw.js`, `public/manifest.webmanifest` | Installation, optional generic PM push alerts and account-scoped subscription ownership; no offline cache |
-| `src/signaling.ts`, `protocol.ts` | WebSocket lifecycle and typed server protocol |
-| `src/validation.ts`, `api-validation.ts`, `protocol-validation.ts` | Shared decoder primitives and HTTP/WebSocket response validation |
-| `src/room.ts`, `room-navigation.ts` | Membership, confirmed room controls, lobby status and explicit URL navigation |
-| `src/room-administration.ts`, `room-administration-api.ts`, `room-administration-validation.ts` | Shared room-management screens, authenticated HTTP controls and response validation outside room membership |
-| `src/media.ts` | Transports, capture, producers and consumers |
-| `src/media-lifecycle.ts` | Coalesced visibility, page-resume, online and hardware hints without new capture or room entry |
-| `src/media-controls.ts`, `audio-output.ts` | Private device preview, live hardware lists, speaker selection/test and viewer-local playback |
-| `src/receive-policy.ts` | Bounded incoming video selection, optional stable speaker following, visible/pinned priority and data saver/audio-only preferences |
-| `src/attachments.ts` | Bounded paste/drop/picker uploads, progress/retry and gesture-opened previews/downloads |
-| `src/notification-preferences.ts`, `notification-validation.ts` | Account-synced notification rules, conversation mute/snooze and quiet hours |
-| `src/layer-cap.ts` | Simulcast layer a remote tile can use at its rendered size, with hysteresis |
-| `src/settings-sheet.ts` | The settings sheet: one list, single-purpose screens, rows that apply at once |
-| `src/social-chat.ts`, `chat-store.ts` | Room/PM conversations, composer, bounded replay, removal tombstones and preferences |
-| `src/chat-history.ts` | Saved room history, retention controls, account PM inbox, search and shared read positions |
-| `src/pm-composer.ts`, `pm-send-attempts.ts`, `chat-reactions.ts` | Durable account-PM attempts and quoted replies, plus shared reaction controls |
-| `src/discovery.ts`, `discovery-validation.ts` | Accepted contacts, explicit contact links, account favorites and recent room shortcuts |
-| `src/*.css`, `index.html` | Layout, component styles and initial document |
-| `public/help.html`, `help.css` | Zero-JavaScript user help, copied into the production output |
-| `scripts/check-bundle.mjs`, `bundle-budget.json` | Aggregate raw/gzip asset limits enforced by every production build |
+| Module                                                                                          | Responsibility                                                                                                                            |
+| ----------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/main.ts`                                                                                   | Application wiring, room shell and layout                                                                                                 |
+| `src/video-layout.ts`                                                                           | Uniform media cells sized to the available stage                                                                                          |
+| `src/ui.ts`                                                                                     | Text-safe controls, dialogs and named HTTP API methods                                                                                    |
+| `src/participant-hovercard.ts`                                                                  | Shared participant cards for roster and chat names, profile loading ownership and pointer/keyboard/touch interaction                      |
+| `src/appearance.ts`                                                                             | Independent profile-card and room-heading appearance controls, previews and palette-only rendering                                        |
+| `src/auth.ts`, `account-session-sync.ts`, `community-ui.ts`                                     | Identity/session refresh and cross-tab reconciliation, profiles, recovery, room management                                                |
+| `src/account-security.ts`, `account-sessions.ts`                                                | Shared account-mutation ownership, passkey/recovery management and signed-in session controls                                             |
+| `src/account-preferences.ts`                                                                    | Account-owned privacy state, field PATCH intents, cross-device refresh and uncertain-save reconciliation, shared by home and room screens |
+| `src/pwa.ts`, `public/sw.js`, `public/manifest.webmanifest`                                     | Installation, optional generic PM push alerts and account-scoped subscription ownership; no offline cache                                 |
+| `src/signaling.ts`, `protocol.ts`                                                               | WebSocket lifecycle and typed server protocol                                                                                             |
+| `src/validation.ts`, `api-validation.ts`, `protocol-validation.ts`                              | Shared decoder primitives and HTTP/WebSocket response validation                                                                          |
+| `src/room.ts`, `room-navigation.ts`                                                             | Membership, confirmed room controls, lobby status and explicit room selection/departure                                                   |
+| `src/app-navigation.ts`                                                                         | Typed account destinations, identity-scoped surface history and Back/Forward restoration                                                  |
+| `src/room-administration.ts`, `room-administration-api.ts`, `room-administration-validation.ts` | Shared room-management screens, authenticated HTTP controls and response validation outside room membership                               |
+| `src/media.ts`                                                                                  | Deferred call engine: transports, capture, producers and consumers                                                                        |
+| `src/capture-preferences.ts`                                                                    | Lightweight capture types, local settings and explicit preview capture helpers                                                            |
+| `src/screen-presentation.ts`                                                                    | Details/Motion preference and presentation constraints/encoding policy                                                                    |
+| `src/media-lifecycle.ts`                                                                        | Coalesced visibility, page-resume, online and hardware hints without new capture or room entry                                            |
+| `src/media-controls.ts`, `audio-output.ts`                                                      | Private device preview, live hardware lists, speaker selection/test and viewer-local playback                                             |
+| `src/receive-policy.ts`                                                                         | Bounded incoming video selection, optional stable speaker following, visible/pinned priority and data saver/audio-only preferences        |
+| `src/attachments.ts`                                                                            | Bounded paste/drop/picker uploads, progress/retry and gesture-opened previews/downloads                                                   |
+| `src/notification-preferences.ts`, `notification-validation.ts`                                 | Account-synced notification rules, conversation mute/snooze and quiet hours                                                               |
+| `src/layer-cap.ts`                                                                              | Simulcast layer a remote tile can use at its rendered size, with hysteresis                                                               |
+| `src/settings-sheet.ts`                                                                         | The settings sheet: one list, single-purpose screens, rows that apply at once                                                             |
+| `src/social-chat.ts`, `chat-store.ts`                                                           | Room/PM conversations, composer, bounded replay, removal tombstones and preferences                                                       |
+| `src/chat-history.ts`                                                                           | Saved room history, retention controls, account PM inbox, search and shared read positions                                                |
+| `src/pm-composer.ts`, `pm-send-attempts.ts`, `chat-reactions.ts`                                | Durable account-PM attempts and quoted replies, plus shared reaction controls                                                             |
+| `src/discovery.ts`, `discovery-validation.ts`                                                   | Accepted contacts, explicit contact links, account favorites and recent room shortcuts                                                    |
+| `src/*.css`, `index.html`                                                                       | Layout, component styles and initial document                                                                                             |
+| `public/help.html`, `help.css`                                                                  | Zero-JavaScript user help, copied into the production output                                                                              |
+| `scripts/check-bundle.mjs`, `bundle-budget.json`                                                | Aggregate raw/gzip asset limits enforced by every production build                                                                        |
 
 Rust signaling types in [src/signaling/protocol.rs](../src/signaling/protocol.rs)
 are the other half of the wire contract. Update both sides together, including

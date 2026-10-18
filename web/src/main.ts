@@ -11,11 +11,14 @@ import { AuthManager, SessionOutcomeUnknownError, type RestoreState } from './au
 import { AuthDialogFlow, type AuthDialogAttempt } from './auth-dialog';
 import { AccountSessionSync } from './account-session-sync';
 import { AccountPreferences } from './account-preferences';
+import { AccountUpdates, accountUpdatesLive } from './account-updates';
+import { AppNavigation, type AppDestination } from './app-navigation';
 import { RoomNavigation } from './room-navigation';
 import type { ScreenShareResult } from './media';
 import { ClientTelemetry } from './telemetry';
 import { CallOutcomeTelemetry, MediaTelemetry, observeFirstVideoFrame } from './media-telemetry';
 import { MediaControls, mediaErrorMessage } from './media-controls';
+import { loadScreenPresentationMode, saveScreenPresentationMode } from './screen-presentation';
 import {
   SettingsSheet,
   fieldRow,
@@ -24,6 +27,7 @@ import {
   navRow,
   note,
   segmentRow,
+  selectRow,
   toggleRow,
   type ScreenContext,
   type SheetScreen,
@@ -50,6 +54,7 @@ import {
   button,
   el,
   modal,
+  setModalNavigation,
   safeRasterUrl,
   validatePassword,
 } from './ui';
@@ -211,6 +216,8 @@ function updateAuthUI(): void {
   updateJoinBtn();
   community.refresh();
   pwa.accountChanged();
+  accountUpdates.synchronize();
+  appNavigation.synchronize();
   observeUiTask(accountPreferences.refresh(), 'Could not refresh privacy');
   observeUiTask(notificationPreferences.refresh(), 'Could not refresh notification rules');
   refreshSavedRoomPicker();
@@ -312,12 +319,24 @@ function readInviteLink(returnRoom = ''): void {
 /** Fragment links can arrive without reloading an already open application. */
 function consumeInviteLocation(selectedRoom: string): boolean {
   const fragment = new URLSearchParams(window.location.hash.slice(1));
+  if (fragment.has('contact')) {
+    pendingContactOffer = takeContactOffer();
+    appNavigation.preserveLocation();
+    navigation.cancelPendingJoin();
+    if (pendingContactOffer) reviewPendingContact();
+    else showToast('This contact link is not valid', 4000, 'error');
+    return true;
+  }
   if (!fragment.has('invite') && !fragment.has('register-invite')) return false;
-  inviteView?.close();
+  if (inviteView) {
+    appNavigation.retire(inviteView.dialog);
+    inviteView.close();
+  }
   inviteView = null;
   pendingInvite = null;
   navigation.cancelPendingJoin();
   readInviteLink(selectedRoom);
+  appNavigation.preserveLocation();
   observeUiTask(previewPendingInvite(), 'Invitation not reviewed');
   return true;
 }
@@ -462,6 +481,7 @@ auth.setOnChange((loggedIn, tokenRefresh) => {
 
 // --- State ---
 let room: RoomClient | null = null;
+let selectedRoomId = '';
 let roomPasswordView: { cancel: () => void } | null = null;
 const mediaControls = new MediaControls({
   getRoom: () => room,
@@ -795,11 +815,60 @@ const homePrivacySection: SheetSection = {
     };
   },
 };
+const presentationSection: SheetSection = {
+  id: 'screen-sharing',
+  segment: 'you',
+  label: 'Screen sharing',
+  status: () => (loadScreenPresentationMode() === 'motion' ? 'Motion' : 'Details'),
+  screen: () => ({
+    title: 'Screen sharing',
+    body: () => {
+      const select = document.createElement('select');
+      select.append(new Option('Details', 'detail'), new Option('Motion', 'motion'));
+      select.value = loadScreenPresentationMode();
+      select.addEventListener('change', () => {
+        saveScreenPresentationMode(select.value === 'motion' ? 'motion' : 'detail');
+        markSaved(select);
+      });
+      return group(null, [
+        note(
+          'Details favors readable slides and text. Motion favors moving video. Applies the next time you choose Share screen.',
+        ),
+        selectRow('Optimize for', select),
+      ]);
+    },
+  }),
+};
+let stopSettingsNavigation: (() => void) | undefined;
 const settingsSheet = new SettingsSheet({
+  onBack: () => appNavigation.back(),
+  onNavigate: (state, action) => {
+    if (!state) {
+      stopSettingsNavigation?.();
+      stopSettingsNavigation = undefined;
+      return;
+    }
+    stopSettingsNavigation = appNavigation.opened(
+      {
+        group: 'settings',
+        destination: {
+          kind: 'settings',
+          ...(state.section && { section: state.section }),
+          segment: state.segment,
+        },
+        ...(auth.userId && { accountId: auth.userId }),
+        canLeave: state.canLeave,
+        close: () => settingsSheet.close(),
+        restore: state.restore,
+      },
+      action === 'pop',
+    );
+  },
   sections: () =>
     room
       ? [
           ...mediaControls.sections(),
+          presentationSection,
           layoutSection,
           ...socialChat.sections(),
           ...community.sections(),
@@ -807,6 +876,7 @@ const settingsSheet = new SettingsSheet({
           ...community.roomSections(),
         ]
       : [
+          presentationSection,
           homePrivacySection,
           homeNotificationsSection,
           ...community.sections(),
@@ -1953,6 +2023,10 @@ const mountConversationNotifications = (
 ): void => {
   notificationPreferences.mountConversation(container, peerId, current);
 };
+const accountUpdates = new AccountUpdates({
+  getToken: () => auth.jwt,
+  getAccountId: () => auth.userId,
+});
 const accountPreferences = new AccountPreferences({
   getToken: () => auth.jwt,
   getAccountId: () => auth.userId,
@@ -1966,16 +2040,41 @@ const mountConversationPrivacy = (
 ): void => {
   accountPreferences.mountConversation(container, peerId, peerName, current);
 };
+function openAccountConversation(peerId: string, peerName: string): void {
+  openPrivateConversation(peerId, peerName, {
+    getToken: () => auth.jwt,
+    getAccountId: () => auth.userId,
+    getRoomId: () => room?.currentRoomId ?? null,
+    mountConversationNotifications,
+    mountConversationPrivacy,
+  });
+}
+function openAccountMessages(): void {
+  if (!auth.isLoggedIn) {
+    openAuthDialog(loginModal);
+    return;
+  }
+  openPrivateInbox({
+    getToken: () => auth.jwt,
+    getAccountId: () => auth.userId,
+    getRoomId: () => room?.currentRoomId ?? null,
+    mountConversationNotifications,
+    mountConversationPrivacy,
+  });
+}
+function restoreAppDestination(destination: AppDestination): void {
+  if (destination.kind === 'inbox') openAccountMessages();
+  else if (destination.kind === 'conversation')
+    openAccountConversation(destination.peerId, destination.peerName ?? 'Contact');
+  else
+    settingsSheet.open({
+      ...(destination.section && { section: destination.section }),
+      ...(destination.segment && { segment: destination.segment }),
+    });
+}
 const socialChat = new SocialChat({
   accountPreferences,
-  openAccountConversation: (id, name) =>
-    openPrivateConversation(id, name, {
-      getToken: () => auth.jwt,
-      getAccountId: () => auth.userId,
-      getRoomId: () => room?.currentRoomId ?? null,
-      mountConversationNotifications,
-      mountConversationPrivacy,
-    }),
+  openAccountConversation,
   telemetry: telemetry.record,
   getRoom: () => room,
   getViewerKey: () => auth.userId ?? 'guest',
@@ -1992,19 +2091,10 @@ const pwa = new PwaControls({
   getAccountId: () => auth.userId,
   mountNotificationPreferences: (container, current) =>
     notificationPreferences.mountAccount(container, current),
-  openMessages: () => {
-    if (auth.isLoggedIn)
-      openPrivateInbox({
-        getToken: () => auth.jwt,
-        getAccountId: () => auth.userId,
-        getRoomId: () => room?.currentRoomId ?? null,
-        mountConversationNotifications,
-        mountConversationPrivacy,
-      });
-    else openAuthDialog(loginModal);
-  },
+  openMessages: openAccountMessages,
 });
 const community = new CommunityUI({
+  onOpenMessages: openAccountMessages,
   openSettings: (section, opener) => settingsSheet.open({ section, opener }),
   onAccountChanged: () => settingsSheet.close({ force: true }),
   mountConversationNotifications,
@@ -2101,7 +2191,8 @@ const mediaLifecycle = new MediaLifecycle({
 });
 const refreshSavedMessages = () => {
   if (document.visibilityState === 'hidden') return;
-  community.refreshMessages().catch(() => {});
+  if (!accountUpdatesLive(auth.userId) || community.messagesNeedRefresh)
+    community.refreshMessages().catch(() => {});
   socialChat.refreshSavedChat();
 };
 const inboxRefresh = setInterval(refreshSavedMessages, 30_000);
@@ -2113,6 +2204,8 @@ window.addEventListener('pagehide', (event) => {
   notificationPreferences.dispose();
   socialChat.dispose();
   accountPreferences.dispose();
+  accountUpdates.dispose();
+  stopModalNavigation();
   savedRoomMount?.dispose();
   clearInterval(inboxRefresh);
   document.removeEventListener('visibilitychange', refreshSavedMessages);
@@ -2157,16 +2250,37 @@ function roomTone(id: string): string {
   return tones[hash % tones.length] ?? tones[0]!;
 }
 
+const appNavigation = new AppNavigation({
+  getRoom: () => room?.currentRoomId ?? selectedRoomId,
+  getAccountId: () => auth.userId,
+  ready: () => capabilities !== null && restoredAccount,
+  restore: restoreAppDestination,
+  error: (message) => showToast(message, 4000, 'error'),
+});
+const stopModalNavigation = setModalNavigation((dialog, canDismiss, route) =>
+  appNavigation.opened({
+    owner: dialog,
+    ...(route && { destination: route.destination, accountId: route.accountId }),
+    canLeave: canDismiss,
+    close: () => {
+      if (canDismiss()) dialog.close();
+    },
+  }),
+);
 const navigation = new RoomNavigation({
-  interceptLocation: consumeInviteLocation,
+  readRoom: () => appNavigation.readRoom(),
+  interceptLocation: (selectedRoom) =>
+    consumeInviteLocation(selectedRoom) || appNavigation.locationChanged(selectedRoom),
   leave: leaveCurrentRoom,
   select: (id) => {
+    selectedRoomId = id;
     roomSelectionVersion++;
     if (inviteView?.dialog.open) {
       inviteView.close();
       pendingInvite = null;
     }
     roomInput.value = id;
+    appNavigation.synchronize();
     updateJoinBtn();
     for (const card of roomBrowser.querySelectorAll<HTMLElement>('.room-card'))
       card.classList.toggle('selected', card.dataset['roomId'] === id);
@@ -3126,6 +3240,7 @@ joinBtn.addEventListener(
     )
       return;
 
+    selectedRoomId = roomId;
     writeLocalPreference('displayName', name);
 
     joinBtn.disabled = true;
@@ -4002,7 +4117,7 @@ const refreshMediaBtn = button(
   'Refresh incoming media',
   () => {
     const owner = room;
-    if (!owner?.hasMedia || refreshMediaBtn.disabled) return;
+    if (!owner?.connected || refreshMediaBtn.disabled) return;
     const membership = owner.membershipVersion;
     refreshMediaBtn.disabled = true;
     refreshMediaBtn.setAttribute('aria-busy', 'true');
