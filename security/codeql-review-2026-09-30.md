@@ -611,3 +611,48 @@ columns, query, analyzer version and 2026-11-29 expiry. No exception matches any
 other changed Rust test file or its include dependencies. No query exclusion,
 new finding or remote dismissal is approved, and static policy replay does not
 claim a new CodeQL scan or a passing CI run.
+
+## October 18 account-update source review
+
+Source revision `4481e7f0e33969fcc822fe33919834d3ab962279` adds authenticated
+account updates, a separate bounded account-data request lane, and atomic
+notification-policy field updates. The complete source delta and the existing
+findings' enclosing functions were reviewed.
+The metrics assertion fixtures (35 and 69), disposable registration fixture
+(63), and dummy-password-hash assertion (58) remain inside their existing
+`cfg(test)` modules. Each flagged line and complete enclosing test function is
+byte-identical to the successfully analyzed source
+`82157a895bc710a3c382e356dac6ab3ad6e662a7`.
+
+| Alert | Analyzed line | Reviewed line | Complete-file SHA-256 |
+| --- | --- | --- | --- |
+| 35 | 1819 | 1867 | `5fb0febf68f84262bd3cbf26cdd0ee9fb5238a663d16cadb9eb77c10542ea195` |
+| 58 | 930 | 938 | `bde57a165d04acd28fd7b944dc96aeb4c08c1e0b754351f6603989693508637c` |
+| 63 | 2248 | 2296 | `5fb0febf68f84262bd3cbf26cdd0ee9fb5238a663d16cadb9eb77c10542ea195` |
+| 69 | 1810 | 1858 | `5fb0febf68f84262bd3cbf26cdd0ee9fb5238a663d16cadb9eb77c10542ea195` |
+
+The account-data routing, guard, notification PATCH route and revocation hook
+move the signaling fixtures by 48 lines. The account-request permit helper moves
+the dummy-hash assertion by eight lines. Fixed fixture inputs, assertion sinks, query/tool versions,
+primary columns and rendered-message hashes are unchanged. These findings
+still do not expose an operational credential or a production logging path.
+`connection_authorization_tests.rs` and its two reviewed diagnostics are
+unchanged in this milestone.
+
+The retained original SARIF from successful run
+[39097391051](https://github.com/swiftraccoon/simplestChat/actions/runs/39097391051)
+analyzed revision `82157a895bc710a3c382e356dac6ab3ad6e662a7`; its SHA-256 remains
+`28b22429ffe4f73d4ed4d199b652202dc0222d1cce4b11f6e303163d0a1bb835`.
+Only these four existing review identities are rebound to the current committed
+source and line locations. Earlier `observedRevision` values, rationales,
+owners, review count and the 2026-11-29 expiry are preserved;
+`sourceProvenanceRevision` records this source-only review.
+
+The local replay at
+`results/three-items-20261018/codeql-source-review/verify.py` checks the unchanged
+test functions, exact locations/messages/source bytes, original invocation
+evidence and all retained reviews. It reports 0 blocked, 40 waived and 0 advisory
+findings. The 47 offline policy, triage and source-identity regression tests also
+pass. This is a static review and replay, not a new extraction or query run; the
+next original analysis must independently confirm the exact identities. No
+finding, test directory or query is newly excluded, and no remote alert changes.
