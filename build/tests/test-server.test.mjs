@@ -18,24 +18,47 @@ const pinnedOpenSSL = process.env.OPENSSL_DIR || path.join(repoRoot, 'target/ope
 // browser wrapper itself always defaults to the checksum-pinned installation.
 const fixtureOpenSSL = existsSync(path.join(pinnedOpenSSL, 'bin/openssl')) ? pinnedOpenSSL : '/usr';
 
-async function unusedPort(protocol = 'tcp') {
-  if (protocol === 'udp') {
-    const socket = dgram.createSocket('udp4').bind(0, '0.0.0.0');
-    await once(socket, 'listening');
-    const port = socket.address().port;
-    await new Promise(resolve => socket.close(resolve));
-    return port;
+async function unusedPort(protocol = 'tcp', excluded = []) {
+  const unavailable = new Set(excluded.map(Number));
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const sockets = [];
+    try {
+      const socket = protocol === 'udp' ? dgram.createSocket('udp4') : net.createServer();
+      sockets.push(socket);
+      if (protocol === 'udp') socket.bind(0, '0.0.0.0');
+      else socket.listen(0, '127.0.0.1');
+      await once(socket, 'listening');
+      const port = socket.address().port;
+      if (unavailable.has(port)) continue;
+      if (protocol === 'both') {
+        // TURN owns the same port for both protocols. Keep TCP leased while
+        // checking UDP so an unrelated UDP listener cannot make it look free.
+        const udp = dgram.createSocket('udp4');
+        sockets.push(udp);
+        udp.bind(port, '127.0.0.1');
+        await once(udp, 'listening');
+      }
+      return port;
+    } catch (error) {
+      // Retry only this fixture's unclaimed candidate before a child starts.
+      if (protocol !== 'both' || error.code !== 'EADDRINUSE') throw error;
+    } finally {
+      for (const socket of sockets.reverse()) {
+        await new Promise(resolve => {
+          try { socket.close(resolve); } catch { resolve(); }
+        });
+      }
+    }
   }
-  const server = net.createServer().listen(0, '127.0.0.1');
-  await once(server, 'listening');
-  const port = server.address().port;
-  await new Promise(resolve => server.close(resolve));
-  return port;
+  throw new Error('Could not reserve distinct fixture ports after 8 attempts');
 }
 
 async function run(t, environment = {}, command = [process.execPath, '-e', 'process.exit(0)'], { deadlineMs = 10000 } = {}) {
   const artifacts = await mkdtemp(path.join(os.tmpdir(), 'simplestchat-helper-test.'));
   t.after(() => rm(artifacts, { recursive: true, force: true }));
+  const turnPort = environment.TURN_E2E === '1' ? environment.TEST_TURN_PORT ?? '34790' : undefined;
+  const serverPort = environment.TEST_SERVER_PORT ?? await unusedPort('tcp', [turnPort, environment.TEST_HTTPS_PORT]);
+  const mediaPort = environment.TEST_MEDIA_PORT ?? await unusedPort('udp', [turnPort]);
   const child = spawn('bash', [helper, ...command], {
     cwd: repoRoot,
     env: {
@@ -43,8 +66,8 @@ async function run(t, environment = {}, command = [process.execPath, '-e', 'proc
       DISPOSABLE_TEST_DATABASE: '1',
       DATABASE_URL: 'postgres://test_owner@127.0.0.1:15434/simplestchat_test?sslmode=disable',
       TEST_SERVER_BINARY: fixture,
-      TEST_SERVER_PORT: String(await unusedPort()),
-      TEST_MEDIA_PORT: String(await unusedPort('udp')),
+      TEST_SERVER_PORT: String(serverPort),
+      TEST_MEDIA_PORT: String(mediaPort),
       E2E_ARTIFACTS: artifacts,
       ...environment,
     },
@@ -171,8 +194,7 @@ for (const status of [0, 23]) {
     const temporary = path.join(directory, 'temporary');
     await mkdir(temporary, { mode: 0o700 });
     const backendPort = await unusedPort();
-    let securePort;
-    do { securePort = await unusedPort(); } while (securePort === backendPort);
+    const securePort = await unusedPort('tcp', [backendPort]);
     const passkey = status === 23;
     const hostname = passkey ? 'localhost' : '127.0.0.1';
     const origin = `https://${hostname}:${securePort}`;
@@ -331,7 +353,7 @@ async function turnFixture(t) {
   `);
   await chmod(turn, 0o755);
   const server = path.join(directory, 'server.mjs');
-  const port = await unusedPort();
+  const port = await unusedPort('both');
   await writeFile(server, `#!/usr/bin/env node
     import assert from 'node:assert/strict';
     assert.equal(process.env.TURN_URLS, 'turn:127.0.0.1:${port}?transport=udp');
