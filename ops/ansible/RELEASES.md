@@ -18,6 +18,87 @@ host and CI. Older versions can omit service `env_file` values from configuratio
 hashes and reject unchanged containers. CI verifies the same version for both
 the runner user and the root-run release helper.
 
+## Browser assets across replacement and rollback
+
+The managed proxy serves the selected app first. If that app returns 404 for an
+exact fingerprinted public `/assets/<name>` GET or HEAD, Caddy may serve the
+verified retained file. This keeps an open tab's deferred JavaScript imports
+available through app replacement and rollback, including rollback to an app
+that predates retention. HTML always revalidates with `no-cache, no-store,
+must-revalidate`; `/app-version.json` is uncached selected-revision metadata.
+The browser offers an explicit update action and does not reload an active call.
+
+Install the stable proxy capability once on an existing site, during an explicitly
+selected maintenance window:
+
+```sh
+python3 build/deploy.py \
+  --inventory ops/ansible/inventory.local.yml \
+  --repository OWNER/REPOSITORY \
+  --origin https://chat.example.com \
+  --install-helpers --maintenance --browser-assets-upgrade
+```
+
+This flag stages the candidate Compose and Caddyfile, compares the Caddyfile with
+the exact release Git object, validates it using the already pinned running
+Caddy binary, and permits only the fixed readonly public-store mount in the
+resolved Compose change. The app and proxy stop for the normal maintenance
+launcher; PostgreSQL is retained. Initial provisioning already installs this
+capability. Later app-only releases retain the same proxy container. An old
+proxy profile rejects app-only deployment with an upgrade instruction rather
+than silently restarting Caddy. The signed ten-file release artifact format is
+unchanged, and no additional image build is needed.
+
+Before any interruption, the helper captures both selected and candidate assets
+from never-started, isolated containers of their verified content-addressed
+images. A bounded uncompressed `docker cp` tar reader accepts only flat
+fingerprinted JS, CSS, fonts and images, rejecting links, duplicate/traversal
+paths, HTML, JSON and source maps. Each public file is SHA256- and size-bound;
+different bytes at an existing immutable URL fail deployment. The root-owned
+store is `/srv/simplestchat-public/browser-assets`, mounted readonly only into
+Caddy. Its `public/assets` pointer is relative and resolves to a validated union
+inside that store. Account responses, credentials and private uploads never
+enter it. Existing selected assets are captured on the first upgrade too.
+
+Retention is bounded by four generations, 256 files per generation, 8 MiB per
+file and 32 MiB of stored generation bytes. Selected and rollback generations
+are preserved at publication or the release fails before stopping the app.
+Other generations may be evicted sooner than seven days when count or size
+limits are reached. The expiration timer runs each minute, removing expired
+assets even without another deployment, on the next successful serialized minute
+pass after the seven-day age limit. Active releases can delay that pass; host,
+timer or unfinished-operation failures can delay it further and require operator
+recovery. The age setting is not a strict serving deadline when cleanup is blocked.
+The small public union uses hard links to validated bytes rather than another
+full copy. Publication may temporarily retain both old and new bounded unions.
+
+The image selection boundary publishes the selected revision independently from
+candidate asset capture; rollback restores that metadata while retaining both
+editions' immutable files. Retention handles asset delivery, not arbitrary
+cross-version API or database compatibility, and tabs older than the retained
+set may still need the explicit update action.
+
+The helper settles content before changing the index and relative public
+pointer. These two renames are not a single filesystem transaction. Ordinary
+pre-switch failures clean only their own new files; a crash or storage failure
+can leave owned pending directories, old unions, or an index/pointer mismatch.
+Serving from the last switched union can continue, but validation deliberately
+blocks subsequent publication instead of adopting or deleting ambiguous state.
+Preserve the entire store, release attempt evidence, unfinished-operation journal
+and expiration service logs. Resolve any owned container/process first, then
+rebuild a fresh validated store from the explicitly selected and rollback image
+identities during maintenance, retaining the old store for inspection. Do not
+delete unknown directories or guess which index to trust. The expiry unit uses
+the same workload lock and refuses unfinished operations.
+
+Hosted release integration keeps an old Chromium document open through two
+different immutable fixture images, loads its deferred chunk after replacement,
+then loads the other edition's chunk after rollback. It proves direct backend
+404s and successful proxy delivery, unchanged document identity, uncached HTML,
+selected revision metadata, zero capture calls, and database/proxy continuity.
+The fixture changes only public test files and image labels, using the production
+binary and pinned proxy. This is hosted evidence; it is not a production probe.
+
 ## Routine update: use the image CI tested
 
 Run the focused checks relevant to the change, then push the clean committed
