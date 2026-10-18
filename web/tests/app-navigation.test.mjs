@@ -17,6 +17,7 @@ async function fixture({
   let cursor = 0;
   const errors = [];
   const opened = [];
+  const deferredCloses = [];
   const state = { ready, account, room: hash === '#call' ? 'call' : '', busy: false };
   const apply = (entry) => {
     location.hash = entry.url;
@@ -45,12 +46,13 @@ async function fixture({
   const module = await loadTypeScript('src/app-navigation.ts', {
     globals: { window: { location, history }, URLSearchParams, crypto: cryptoApi },
   });
-  function open(destination, { transient = false, group, restore } = {}) {
+  function open(destination, { transient = false, group, restore, deferClose = false } = {}) {
     const handle = { destination, closed: false };
     handle.close = () => {
       if (handle.closed) return;
       handle.closed = true;
-      stop();
+      if (deferClose) deferredCloses.push(stop);
+      else stop();
     };
     const stop = navigation.opened({
       ...(!transient && { destination, accountId: state.account }),
@@ -77,6 +79,7 @@ async function fixture({
     history,
     state,
     opened,
+    deferredCloses,
     errors,
     open,
     entries,
@@ -256,6 +259,24 @@ test('a queued close cannot dismiss a newly opened settings surface', async () =
   assert.equal(f.location.hash, '#call');
 });
 
+test('a deferred native close cannot retire the new registration restored by Forward', async () => {
+  const f = await fixture();
+  f.open({ kind: 'inbox' });
+  const original = f.open({ kind: 'conversation', peerId: peer }, { deferClose: true });
+  f.back();
+  assert.equal(original.closed, true);
+  assert.equal(f.deferredCloses.length, 1);
+  f.forward();
+  const restored = f.opened.at(-1);
+  const entry = f.history.state.simplestchatNavigation;
+  f.deferredCloses.shift()();
+  assert.equal(restored.closed, false);
+  assert.equal(f.location.hash, `#room=call&view=conversation&peer=${peer}`);
+  assert.equal(f.history.state.simplestchatNavigation, entry);
+  restored.close();
+  assert.equal(f.location.hash, '#room=call&view=inbox', 'the new registration still owns Close');
+});
+
 test('HTTP homepage navigation requires no secure-context randomUUID API', async () => {
   const f = await fixture({ cryptoApi: { getRandomValues: (array) => array.fill(123) } });
   f.open({ kind: 'inbox' });
@@ -295,4 +316,32 @@ test('cold settings followed by more sections closes to its page instead of reop
   f.forward();
   assert.equal(f.opened.length, closedCount + 1, 'later entries remain Forward-restorable');
   assert.equal(f.opened.at(-1).destination.kind, 'settings');
+});
+
+test('closing settings after account replacement retires a foreign document baseline before the second location event', async () => {
+  const f = await fixture({ hash: '', account: accountB });
+  const previousDocument = {
+    simplestchatNavigation: 41,
+    simplestchatNavigationSession: 'previous-document',
+    simplestchatAccount: accountA,
+  };
+  f.entries[0].state = previousDocument;
+  f.history.state = previousDocument;
+  f.open({ kind: 'settings', segment: 'you' }, { group: 'settings' });
+  f.open({ kind: 'settings', section: 'profile', segment: 'you' }, { group: 'settings' });
+  f.back();
+  const security = f.open(
+    { kind: 'settings', section: 'security', segment: 'you' },
+    { group: 'settings' },
+  );
+  security.close();
+  assert.equal(f.location.hash, '', 'the first popstate returns to the underlying page');
+  const opened = f.opened.length;
+  f.navigation.locationChanged('');
+  assert.equal(f.location.hash, '', 'the following hashchange must not revive the closed section');
+  assert.equal(
+    f.opened.length,
+    opened,
+    'account replacement never restores an old settings surface',
+  );
 });

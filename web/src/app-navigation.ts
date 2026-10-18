@@ -102,6 +102,7 @@ interface Options {
 export class AppNavigation {
   private surfaces: Surface[] = [];
   private readonly snapshots = new Map<number, Snapshot>();
+  private readonly registrations = new WeakMap<Surface, object>();
   private sequence = 0;
   private readonly session = Array.from(crypto.getRandomValues(new Uint32Array(4)), (value) =>
     value.toString(16).padStart(8, '0'),
@@ -134,6 +135,8 @@ export class AppNavigation {
           : this.position,
     };
     Object.assign(record, surface);
+    const registration = {};
+    this.registrations.set(record, registration);
     if (this.restoring) {
       this.surfaces.push(record);
       this.restoring = null;
@@ -146,7 +149,11 @@ export class AppNavigation {
       this.surfaces.push(record);
       if (!this.changing) this.save(!replace);
     }
-    return () => this.closed(record);
+    return () => {
+      // Forward can reuse a snapshot while its old native close event is queued.
+      // Only this particular opening may retire the restored surface.
+      if (this.registrations.get(record) === registration) this.closed(record);
+    };
   }
 
   /** Retire a replaced offer before its queued native close event can traverse history. */
@@ -212,7 +219,9 @@ export class AppNavigation {
     if (owner !== undefined && owner !== null && owner !== this.options.getAccountId()) {
       this.dropSurfaces();
       this.pending = null;
-      this.write(selectedRoom, null, false);
+      // A later hashchange must see a new empty snapshot, not reuse the current
+      // view's ID on this foreign-account baseline and reopen its old surfaces.
+      this.save(false);
       return true;
     }
     const id = this.stateId();
