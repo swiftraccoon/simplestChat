@@ -50,6 +50,12 @@ interface Options {
   onSignedOut: () => Promise<void>;
   /** Sign out and clear what this browser remembers; main.ts owns the storage. */
   onForgetDevice: () => void;
+  mountConversationPrivacy?: (
+    container: HTMLElement,
+    peerId: string,
+    peerName: string,
+    current: () => boolean,
+  ) => void;
   /** Leave any current room and join this one as the account. */
   onJoinRoom: (id: string) => void;
 }
@@ -88,6 +94,8 @@ export class CommunityUI {
     openPrivateInbox({
       getToken: () => this.options.auth.jwt,
       getAccountId: () => this.options.auth.userId,
+      mountConversationPrivacy: (container, peerId, peerName, current) =>
+        this.options.mountConversationPrivacy?.(container, peerId, peerName, current),
       mountConversationNotifications: (container, peerId, current) =>
         this.options.mountConversationNotifications?.(container, peerId, current),
     }),

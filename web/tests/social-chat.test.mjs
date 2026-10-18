@@ -274,10 +274,26 @@ async function fixture({ touch = false, touchPoints = 0, httpRequest } = {}) {
       clearTimeout: (id) => timers.delete(id),
     },
   });
+  const { AccountPreferences } = await loadTypeScript('src/account-preferences.ts', {
+    modules: { './ui': f.ui, './settings-sheet': sheetModule },
+    globals: {
+      document: f.document,
+      window: { addEventListener() {} },
+      localStorage: { setItem() {} },
+      setInterval: () => 1,
+      clearInterval() {},
+    },
+  });
+  const accountPreferences = new AccountPreferences({
+    getToken: () => state.token,
+    getAccountId: () => (state.viewer === 'guest' ? null : state.viewer),
+    notify: (text) => state.notifications.push(text),
+  });
   const chat = new SocialChat({
     getRoom: () => state.room,
     getViewerKey: () => state.viewer,
     getToken: () => state.token,
+    accountPreferences,
     notify: (text) => state.notifications.push(text),
     bindParticipantName(anchor, id, name) {
       anchor.addEventListener('click', () => state.actions.push([id, name]));
@@ -300,6 +316,7 @@ async function fixture({ touch = false, touchPoints = 0, httpRequest } = {}) {
     state,
     http,
     chat,
+    accountPreferences,
     tab,
     participants,
     documentListeners,
@@ -1938,342 +1955,8 @@ const savedPreferences = {
   sounds: true,
   largeText: true,
   timestamps: 'seconds',
-  ignored: [
-    { id: '7d3f4d5a-1c2b-4e6f-8a9b-0c1d2e3f4a5b', name: 'Saved ignore' },
-    { id: 'local', name: 'Never yourself' },
-  ],
+  ignored: [{ id: '7d3f4d5a-1c2b-4e6f-8a9b-0c1d2e3f4a5b', name: 'Saved ignore' }],
 };
-
-async function accountPreferenceFixture() {
-  const initial = {
-    allowPrivateMessages: true,
-    sounds: false,
-    largeText: false,
-    timestamps: 'time',
-    ignored: [],
-  };
-  const http = {
-    requests: [],
-    saved: new Map([
-      ['Bearer jwt-a', structuredClone(initial)],
-      ['Bearer jwt-b', { ...initial, timestamps: 'time12' }],
-    ]),
-    holdReads: false,
-  };
-  const f = await fixture({
-    httpRequest: (url, options) => {
-      assert.equal(url, '/api/auth/preferences');
-      const response = deferred();
-      const request = {
-        method: options.method,
-        authorization: options.headers.Authorization,
-        value: options.body ? JSON.parse(options.body) : null,
-        completed: false,
-        complete(value) {
-          assert.equal(this.completed, false);
-          this.completed = true;
-          if (this.method === 'PUT')
-            http.saved.set(this.authorization, structuredClone(this.value));
-          const saved = value ?? http.saved.get(this.authorization);
-          response.resolve({ ok: true, status: 200, json: async () => structuredClone(saved) });
-        },
-        fail(status = 400) {
-          assert.equal(this.completed, false);
-          this.completed = true;
-          response.resolve({ ok: false, status, text: async () => 'Unavailable' });
-        },
-      };
-      http.requests.push(request);
-      if (request.method === 'GET' && !http.holdReads) request.complete();
-      return response.promise;
-    },
-  });
-  f.state.token = 'jwt-a';
-  await f.chat.activate();
-  return {
-    ...f,
-    preferenceHttp: http,
-    writes: () => http.requests.filter((request) => request.method === 'PUT'),
-    reads: () => http.requests.filter((request) => request.method === 'GET'),
-  };
-}
-
-test('account preference saves serialize and coalesce newer privacy and ignore choices', async () => {
-  const f = await accountPreferenceFixture();
-  f.chat.setTimestampFormat('seconds');
-  const privacy = await f.screen('privacy');
-  const allow = privacy.querySelectorAll('input').find((node) => node.type === 'checkbox');
-  allow.checked = false;
-  allow.emit('change');
-  await flush();
-  const ignored = '7d3f4d5a-1c2b-4e6f-8a9b-0c1d2e3f4a5b';
-  await f.chat.toggleIgnore(ignored, 'Ignored account', true);
-  f.chat.setTimestampFormat('datetime');
-  await flush();
-  assert.equal(f.writes().length, 1, 'later snapshots wait for the in-flight account save');
-  assert.equal(f.writes()[0].value.allowPrivateMessages, true);
-  f.writes()[0].complete();
-  await flush();
-  assert.equal(f.writes().length, 2, 'intermediate choices coalesce into the latest snapshot');
-  assert.deepEqual(f.writes()[1].value, {
-    allowPrivateMessages: false,
-    sounds: false,
-    largeText: false,
-    timestamps: 'datetime',
-    ignored: [{ id: ignored, name: 'Ignored account' }],
-  });
-  f.writes()[1].complete();
-  await flush();
-  f.state.room.membershipVersion++;
-  await f.chat.activate();
-  assert.equal(f.chat.preferences.allowPrivateMessages, false);
-  assert.equal(f.chat.preferences.timestamps, 'datetime');
-  assert.equal(f.chat.isIgnored(ignored), true);
-  assert.deepEqual(
-    f.state.requests.filter((request) => request.action === 'setChatPreferences').at(-1).data,
-    {
-      allowPrivateMessages: false,
-      ignoredParticipantIds: [ignored],
-    },
-  );
-  assert.equal(f.state.audioCreates, 0);
-});
-
-test('a failed older account preference save still sends the newest queued choice', async () => {
-  const f = await accountPreferenceFixture();
-  f.chat.setTimestampFormat('seconds');
-  f.chat.setTimestampFormat('time12');
-  f.chat.setTimestampFormat('datetime');
-  assert.equal(f.writes().length, 1);
-  f.writes()[0].fail();
-  await flush();
-  assert.equal(f.writes().length, 2);
-  assert.equal(f.writes()[1].value.timestamps, 'datetime');
-  assert.deepEqual(
-    f.state.notifications,
-    [],
-    'a superseded save failure does not report the latest choice as failed',
-  );
-  f.writes()[1].complete();
-  await flush();
-  assert.equal(f.preferenceHttp.saved.get('Bearer jwt-a').timestamps, 'datetime');
-  f.chat.setTimestampFormat('time');
-  f.writes().at(-1).fail();
-  await flush();
-  assert.deepEqual(f.state.notifications, ['Chat preferences could not be saved to your account']);
-  assert.equal(
-    f.chat.preferences.timestamps,
-    'time',
-    'the latest local choice survives a save failure',
-  );
-});
-
-test('an unknown account preference save pauses later writes and reloads without reverting privacy', async () => {
-  const f = await accountPreferenceFixture();
-  f.chat.setTimestampFormat('seconds');
-  const privacy = await f.screen('privacy');
-  const allow = privacy.querySelectorAll('input').find((node) => node.type === 'checkbox');
-  allow.checked = false;
-  allow.emit('change');
-  await flush();
-  assert.equal(f.writes().length, 1);
-  f.writes()[0].fail(503);
-  await flush();
-  assert.equal(
-    f.writes().length,
-    1,
-    'an uncertain commit must not be overtaken by a later mutation',
-  );
-  assert.equal(f.state.notifications.length, 1);
-  assert.match(f.state.notifications[0], /not confirmed|unknown|uncertain|could not/i);
-  f.chat.setTimestampFormat('datetime');
-  f.state.room.membershipVersion++;
-  await f.chat.activate();
-  await flush();
-  assert.equal(f.writes().length, 1, 'later edits do not automatically retry an unknown commit');
-  assert.equal(
-    f.reads().length,
-    1,
-    'a saved copy with an unknown revision cannot replace local consent',
-  );
-  assert.equal(f.chat.preferences.allowPrivateMessages, false);
-  assert.equal(f.chat.preferences.timestamps, 'datetime');
-  assert.equal(f.state.notifications.length, 1, 'the uncertain save is reported once');
-});
-
-test('a new membership waits for all queued account preference saves before reloading', async (t) => {
-  for (const reset of [false, true]) {
-    await t.test(reset ? 'same-account leave and return' : 'renewed membership', async () => {
-      const f = await accountPreferenceFixture();
-      f.chat.setTimestampFormat('seconds');
-      f.chat.setTimestampFormat('datetime');
-      if (reset) f.chat.reset();
-      else f.state.room.membershipVersion++;
-      const activating = f.chat.activate();
-      await flush();
-      assert.equal(f.reads().length, 1, 'reloading must not read an older account snapshot');
-      f.writes()[0].complete();
-      await flush();
-      assert.equal(f.writes().length, 2);
-      assert.equal(f.reads().length, 1, 'the coalesced latest save also precedes the reload');
-      f.writes()[1].complete();
-      await activating;
-      assert.equal(f.reads().length, 2);
-      assert.equal(f.chat.preferences.timestamps, 'datetime');
-    });
-  }
-});
-
-test('a late account preference load cannot replace a newer local choice', async () => {
-  const f = await accountPreferenceFixture();
-  f.preferenceHttp.holdReads = true;
-  f.state.room.membershipVersion++;
-  const activating = f.chat.activate();
-  await flush();
-  const reading = f.reads().at(-1);
-  const old = structuredClone(f.preferenceHttp.saved.get('Bearer jwt-a'));
-  f.chat.setTimestampFormat('datetime');
-  reading.complete(old);
-  await activating;
-  assert.equal(f.chat.preferences.timestamps, 'datetime');
-  assert.equal(
-    JSON.parse(f.state.storage.get('simplestchat.chat.v1.account-a')).timestamps,
-    'datetime',
-  );
-  f.writes().at(-1).complete();
-  await flush();
-});
-
-test('account preference loads stay retired after reset and an account round trip', async () => {
-  const f = await accountPreferenceFixture();
-  f.preferenceHttp.holdReads = true;
-  f.state.room.membershipVersion++;
-  const oldActivation = f.chat.activate();
-  await flush();
-  const oldRead = f.reads().at(-1);
-  const old = structuredClone(f.preferenceHttp.saved.get('Bearer jwt-a'));
-  f.chat.reset();
-  f.state.viewer = 'account-b';
-  f.state.token = 'jwt-b';
-  const otherActivation = f.chat.activate();
-  await flush();
-  f.reads().at(-1).complete();
-  await otherActivation;
-  assert.equal(f.chat.preferences.timestamps, 'time12');
-  f.chat.reset();
-  f.state.viewer = 'account-a';
-  f.state.token = 'jwt-a';
-  const currentActivation = f.chat.activate();
-  await flush();
-  f.reads()
-    .at(-1)
-    .complete({ ...old, timestamps: 'seconds' });
-  await currentActivation;
-  oldRead.complete(old);
-  await oldActivation;
-  assert.equal(f.chat.preferences.timestamps, 'seconds');
-  assert.equal(
-    JSON.parse(f.state.storage.get('simplestchat.chat.v1.account-a')).timestamps,
-    'seconds',
-  );
-});
-
-test('queued account preference saves wait through an account switch and resume with their owner', async () => {
-  const f = await accountPreferenceFixture();
-  f.chat.setTimestampFormat('seconds');
-  f.chat.setTimestampFormat('datetime');
-  f.chat.reset();
-  f.state.viewer = 'account-b';
-  f.state.token = 'jwt-b';
-  await f.chat.activate();
-  f.chat.setTimestampFormat('time');
-  await flush();
-  const otherWrite = f.writes().find((request) => request.authorization === 'Bearer jwt-b');
-  assert.ok(otherWrite);
-  assert.equal(otherWrite.value.timestamps, 'time');
-  otherWrite.complete();
-  f.writes()[0].complete();
-  await flush();
-  assert.equal(
-    f.writes().filter((request) => request.authorization === 'Bearer jwt-a').length,
-    1,
-    'the queued snapshot must not dispatch while a different account is current',
-  );
-  assert.equal(f.preferenceHttp.saved.get('Bearer jwt-b').timestamps, 'time');
-  assert.equal(f.chat.preferences.timestamps, 'time');
-  f.chat.reset();
-  f.state.viewer = 'account-a';
-  f.state.token = 'jwt-a-refreshed';
-  const activating = f.chat.activate();
-  await flush();
-  const ownWrites = f.writes().filter((request) => request.authorization !== 'Bearer jwt-b');
-  assert.equal(ownWrites.length, 2);
-  assert.equal(ownWrites[1].authorization, 'Bearer jwt-a-refreshed');
-  assert.equal(ownWrites[1].value.timestamps, 'datetime');
-  assert.equal(f.reads().filter((request) => request.authorization === 'Bearer jwt-a').length, 1);
-  ownWrites[1].complete();
-  await activating;
-  assert.equal(f.chat.preferences.timestamps, 'datetime');
-  assert.equal(f.preferenceHttp.saved.get('Bearer jwt-b').timestamps, 'time');
-});
-
-test('an uncertain old-account save stays paused when its owner returns', async () => {
-  const f = await accountPreferenceFixture();
-  f.chat.setTimestampFormat('seconds');
-  const privacy = await f.screen('privacy');
-  const allow = privacy.querySelectorAll('input').find((node) => node.type === 'checkbox');
-  allow.checked = false;
-  allow.emit('change');
-  await flush();
-  f.chat.reset();
-  f.state.viewer = 'account-b';
-  f.state.token = 'jwt-b';
-  await f.chat.activate();
-  f.writes()[0].fail(503);
-  await flush();
-  assert.equal(f.chat.preferences.timestamps, 'time12');
-  assert.deepEqual(
-    f.state.notifications,
-    [],
-    'another account must not receive the old save error',
-  );
-  f.chat.setTimestampFormat('datetime');
-  const otherWrite = f.writes().at(-1);
-  assert.equal(otherWrite.authorization, 'Bearer jwt-b');
-  otherWrite.complete();
-  await flush();
-  f.chat.reset();
-  f.state.viewer = 'account-a';
-  f.state.token = 'jwt-a-refreshed';
-  await f.chat.activate();
-  assert.equal(f.chat.preferences.allowPrivateMessages, false);
-  assert.equal(f.chat.preferences.timestamps, 'seconds');
-  assert.equal(
-    f.writes().length,
-    2,
-    'returning with a fresh token does not retry an unknown commit',
-  );
-  assert.equal(f.reads().length, 2, 'only the initial loads for the two accounts were sent');
-  assert.equal(f.state.notifications.length, 1, 'the account sees its uncertain save on return');
-  f.state.room.membershipVersion++;
-  await f.chat.activate();
-  assert.equal(f.state.notifications.length, 1);
-  assert.equal(f.preferenceHttp.saved.get('Bearer jwt-b').timestamps, 'datetime');
-});
-
-test('disposing chat retires queued account preference writes after an in-flight save', async () => {
-  const f = await accountPreferenceFixture();
-  f.chat.setTimestampFormat('seconds');
-  f.chat.setTimestampFormat('datetime');
-  assert.equal(f.writes().length, 1);
-  f.chat.dispose();
-  f.writes()[0].complete();
-  await flush();
-  assert.equal(f.writes().length, 1, 'disposed UI must not dispatch its queued snapshot');
-  assert.equal(f.reads().length, 1);
-  assert.deepEqual(f.state.notifications, []);
-  assert.equal(f.state.audioCreates, 0);
-});
 
 test('an account viewer loads its saved preferences before the room hears its ignore list', async () => {
   const f = await fixture();
@@ -2290,12 +1973,12 @@ test('an account viewer loads its saved preferences before the room hears its ig
   assert.deepEqual(
     f.chat.preferences.ignored.map((entry) => entry.id),
     ['7d3f4d5a-1c2b-4e6f-8a9b-0c1d2e3f4a5b'],
-    'the viewer is never on its own list',
+    'account ignores follow the account snapshot',
   );
   const pushed = f.state.requests.find((request) => request.action === 'setChatPreferences');
   assert.deepEqual(pushed.data, {
     allowPrivateMessages: false,
-    ignoredParticipantIds: ['7d3f4d5a-1c2b-4e6f-8a9b-0c1d2e3f4a5b'],
+    ignoredParticipantIds: [],
   });
   const stored = JSON.parse(f.state.storage.get('simplestchat.chat.v1.account-a'));
   assert.equal(stored.timestamps, 'seconds', 'the browser copy follows the account');
@@ -2317,33 +2000,17 @@ test('guests and signed-out viewers never touch the account preference endpoints
   assert.equal(f.http.requests.length, 0);
 });
 
-test('a changed preference is written to the account, and only the newest failure is reported', async () => {
+test('a scalar chat choice sends only its explicit account PATCH intent', async () => {
   const f = await fixture();
   f.state.token = 'jwt';
   f.http.response = { ok: true, status: 200, json: async () => savedPreferences };
   await f.chat.activate();
   f.http.requests.length = 0;
   f.chat.setTimestampFormat('datetime');
+  await flush();
   assert.equal(f.http.requests[0][0], '/api/auth/preferences');
-  assert.equal(f.http.requests[0][1].method, 'PUT');
-  const body = JSON.parse(f.http.requests[0][1].body);
-  assert.equal(body.timestamps, 'datetime');
-  assert.deepEqual(Object.keys(body).sort(), [
-    'allowPrivateMessages',
-    'ignored',
-    'largeText',
-    'sounds',
-    'timestamps',
-  ]);
-  await new Promise((resolve) => setImmediate(resolve));
-  assert.equal(f.state.notifications.length, 0);
-  f.http.response = { ok: false, status: 400, text: async () => 'server fragment' };
-  f.chat.setTimestampFormat('time');
-  f.chat.setTimestampFormat('time12');
-  await new Promise((resolve) => setImmediate(resolve));
-  await new Promise((resolve) => setImmediate(resolve));
-  assert.deepEqual(f.state.notifications, ['Chat preferences could not be saved to your account']);
-  assert.equal(f.chat.preferences.timestamps, 'time12', 'the browser copy is kept regardless');
+  assert.equal(f.http.requests[0][1].method, 'PATCH');
+  assert.deepEqual(JSON.parse(f.http.requests[0][1].body), { timestamps: 'datetime' });
 });
 
 test('a failed preference load keeps the browser copy and says so once', async () => {

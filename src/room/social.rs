@@ -91,6 +91,7 @@ pub(crate) struct ParticipantSocial {
     joined_sequence: u64,
     allow_private_messages: bool,
     ignored: HashSet<String>,
+    guest_ignored: HashSet<String>,
     last_typing: Option<std::time::Instant>,
 }
 
@@ -2620,6 +2621,10 @@ mod tests {
                 .await
                 .is_err()
         );
+        sqlx::query("UPDATE users SET preferences=$2 WHERE id=$1")
+            .bind(owner.id.parse::<Uuid>().unwrap())
+            .bind(sqlx::types::Json(json!({"allowPrivateMessages": false, "ignored": [{"id": absent.id, "name": absent.name}]})))
+            .execute(&pool).await.unwrap();
         manager
             .handle_social_request(
                 &room_id,
@@ -2627,8 +2632,8 @@ mod tests {
                 &owner.sender,
                 &ClientMessage::SetChatPreferences {
                     request_id: "prefs".into(),
-                    allow_private_messages: false,
-                    ignored_participant_ids: vec![absent.id.clone()],
+                    allow_private_messages: true,
+                    ignored_participant_ids: vec![],
                 },
             )
             .await
@@ -2678,6 +2683,21 @@ mod tests {
     }
 }
 impl ParticipantSocial {
+    /// Account policy is authoritative; temporary guest identities remain owned
+    /// by this membership and cannot be used to smuggle an ignored account in.
+    pub(crate) fn apply_account_preferences(
+        &mut self,
+        preferences: &crate::auth::account::ChatPreferences,
+    ) {
+        self.allow_private_messages = preferences.allow_private_messages;
+        self.ignored = preferences
+            .ignored
+            .iter()
+            .map(|person| person.id.clone())
+            .collect();
+        self.ignored.extend(self.guest_ignored.iter().cloned());
+    }
+
     pub(super) fn accepts_inbox_from(&self, sender: &str) -> bool {
         self.connected && self.allow_private_messages && !self.ignored.contains(sender)
     }
@@ -2689,6 +2709,7 @@ impl ParticipantSocial {
             joined_sequence,
             allow_private_messages: true,
             ignored: HashSet::new(),
+            guest_ignored: HashSet::new(),
             last_typing: None,
         }
     }
@@ -4697,10 +4718,45 @@ impl RoomManager {
                         "Choose at most 100 valid participant identities to ignore",
                     ));
                 }
-                let actor = room.participants.get_mut(participant_id).unwrap();
-                actor.social.allow_private_messages = *allow_private_messages;
-                actor.social.ignored = ignored_participant_ids.iter().cloned().collect();
-                json!({"allowPrivateMessages":allow_private_messages,"ignoredParticipantIds":ignored_participant_ids})
+                if actor_authenticated {
+                    let pool = self
+                        .db_pool
+                        .as_ref()
+                        .ok_or_else(|| rejected("Account preferences unavailable"))?;
+                    let account = participant_id
+                        .parse()
+                        .map_err(|_| rejected("Invalid account"))?;
+                    drop(room);
+                    let preferences = tokio::time::timeout(
+                        control::PERSISTENCE_TIMEOUT,
+                        crate::auth::account::load_chat_preferences(pool, account),
+                    )
+                    .await
+                    .map_err(|_| rejected("Account preferences timed out"))??;
+                    room = room_lock.write().await;
+                    room.ensure_live()?;
+                    let actor =
+                        Self::participant_for_sender(&room, participant_id, expected_sender)?;
+                    let guests = ignored_participant_ids
+                        .iter()
+                        .filter(|id| {
+                            room.participants
+                                .get(*id)
+                                .is_some_and(|person| !person.authenticated)
+                                || actor.social.guest_ignored.contains(*id)
+                        })
+                        .cloned()
+                        .collect();
+                    let actor = room.participants.get_mut(participant_id).unwrap();
+                    actor.social.guest_ignored = guests;
+                    actor.social.apply_account_preferences(&preferences);
+                } else {
+                    let actor = room.participants.get_mut(participant_id).unwrap();
+                    actor.social.allow_private_messages = *allow_private_messages;
+                    actor.social.ignored = ignored_participant_ids.iter().cloned().collect();
+                }
+                let actor = room.participants.get(participant_id).unwrap();
+                json!({"allowPrivateMessages":actor.social.allow_private_messages,"ignoredParticipantIds":actor.social.ignored.iter().collect::<Vec<_>>()})
             }
             ClientMessage::ChangeNickname { nickname, .. } => {
                 let nickname = nickname.trim();

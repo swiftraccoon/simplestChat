@@ -24,6 +24,8 @@ pub enum AuthError {
     InviteRequired,
     InviteNotFound,
     ServiceBusy,
+    /// The durable preference change committed, but some live rooms remain unsynchronized.
+    PreferencesSynchronizationFailed,
     RegistrationDisabled,
     DatabaseError(String),
     WebAuthnError(String),
@@ -34,6 +36,7 @@ impl IntoResponse for AuthError {
     fn into_response(self) -> Response {
         let retry_after = match &self {
             AuthError::ServiceBusy => Some(1),
+            AuthError::PreferencesSynchronizationFailed => Some(1),
             AuthError::TooManyFailures(seconds) => Some(*seconds),
             _ => None,
         };
@@ -59,6 +62,10 @@ impl IntoResponse for AuthError {
             AuthError::TokenExpired => (StatusCode::UNAUTHORIZED, "Token expired"),
             AuthError::RateLimited => (StatusCode::TOO_MANY_REQUESTS, "Too many attempts"),
             AuthError::ServiceBusy => (StatusCode::SERVICE_UNAVAILABLE, "Service busy"),
+            AuthError::PreferencesSynchronizationFailed => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "Preferences were saved, but active rooms could not be updated. Retry to synchronize them.",
+            ),
             AuthError::RegistrationDisabled => (StatusCode::FORBIDDEN, "Registration is disabled"),
             AuthError::InviteRequired => (
                 StatusCode::FORBIDDEN,

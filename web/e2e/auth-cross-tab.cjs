@@ -153,6 +153,18 @@ async function startupRecovery(browser, result) {
           headers: { 'Set-Cookie': 'fixture_refresh=Second; HttpOnly; SameSite=Strict; Path=/' },
           json: accountSession('Second', ++revision),
         });
+      } else if (pathname === '/api/auth/preferences') {
+        assert.equal(route.request().method(), 'GET');
+        assert.match(route.request().headers().authorization, /^Bearer /);
+        await route.fulfill({
+          json: {
+            allowPrivateMessages: true,
+            sounds: false,
+            largeText: false,
+            timestamps: 'time',
+            ignored: [],
+          },
+        });
       } else if (pathname === '/api/auth/ws-ticket')
         await route.fulfill({ json: { ticket: 'a'.repeat(43), expires_in: 30 } });
       else if (pathname === '/api/telemetry') await route.fulfill({ status: 204 });
@@ -373,6 +385,18 @@ async function scenario(browser, storageOnly) {
           status: 204,
           headers: {
             'Set-Cookie': 'fixture_refresh=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0',
+          },
+        });
+      } else if (pathname === '/api/auth/preferences') {
+        assert.equal(request.method(), 'GET');
+        assert.match(request.headers().authorization, /^Bearer /);
+        await route.fulfill({
+          json: {
+            allowPrivateMessages: true,
+            sounds: false,
+            largeText: false,
+            timestamps: 'time',
+            ignored: [],
           },
         });
       } else if (pathname === '/api/telemetry') await route.fulfill({ status: 204 });

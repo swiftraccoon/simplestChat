@@ -341,7 +341,9 @@ async function run() {
         assert.match(route.request().headers().authorization, /^Bearer /);
         return json({ privateMessages: true, mentions: true, quietHours: null, conversations: [] });
       }
-      if (url.pathname === '/api/auth/preferences')
+      if (url.pathname === '/api/auth/preferences') {
+        assert.equal(route.request().method(), 'GET');
+        assert.match(route.request().headers().authorization, /^Bearer /);
         return json({
           allowPrivateMessages: true,
           sounds: false,
@@ -349,6 +351,7 @@ async function run() {
           timestamps: 'time',
           ignored: [],
         });
+      }
       // The header avatar reads the account's own public profile.
       if (url.pathname.startsWith('/api/auth/profiles/'))
         return json({

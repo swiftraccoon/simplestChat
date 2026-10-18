@@ -1,6 +1,6 @@
 import type { AccountProfile, CreateRoomRequest, RoomListItem } from './protocol';
 import {
-  type ChatPreferences,
+  type PreferencePatch,
   decodeAccountProfile,
   decodeAccountSessions,
   decodeServerCapabilities,
@@ -512,8 +512,8 @@ export const api = {
     data: { current_password: string; new_password: string },
     signal?: AbortSignal,
   ) => apiNoContent('/api/auth/password', token, 'POST', data, signal),
-  accountPreferences: (token: string | null) =>
-    apiJson(decodeChatPreferences, '/api/auth/preferences', token),
+  accountPreferences: (token: string | null, signal?: AbortSignal) =>
+    apiJson(decodeChatPreferences, '/api/auth/preferences', token, 'GET', undefined, signal),
   registrationInvites: (token: string | null) =>
     apiJson(decodeRegistrationInvites, '/api/auth/invites', token),
   createRegistrationInvite: (token: string | null) =>
@@ -550,8 +550,8 @@ export const api = {
     apiJson(decodeInviteRedemption, '/api/rooms/invites/preview', token, 'POST', { code }),
   redeemInvite: (token: string | null, code: string) =>
     apiJson(decodeInviteRedemption, '/api/rooms/invites/redeem', token, 'POST', { code }),
-  updatePreferences: (token: string | null, data: ChatPreferences) =>
-    apiJson(decodeChatPreferences, '/api/auth/preferences', token, 'PUT', data),
+  updatePreferences: (token: string | null, data: PreferencePatch, signal?: AbortSignal) =>
+    apiJson(decodeChatPreferences, '/api/auth/preferences', token, 'PATCH', data, signal),
   recoveryKey: (token: string | null, data: { current_password: string }) =>
     apiJson(decodeRecoveryKey, '/api/auth/recovery/key', token, 'POST', data),
   redeemRecovery: (data: { email: string; recovery_key: string; new_password: string }) =>

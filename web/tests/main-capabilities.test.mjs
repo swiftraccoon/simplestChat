@@ -218,6 +218,7 @@ function authUiFixture(capabilities, signedIn) {
         participantHovercard: { refresh() {} },
         pwa: { accountChanged() {} },
         notificationPreferences: { refresh: async () => {} },
+        accountPreferences: { refresh: async () => {} },
         refreshSavedRoomPicker() {},
         updateRestoreUI() {},
       },

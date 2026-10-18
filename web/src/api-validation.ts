@@ -192,6 +192,12 @@ export interface ChatPreferences {
   timestamps: string;
   ignored: { id: string; name: string }[];
 }
+export type PreferencePatch = Partial<
+  Pick<ChatPreferences, 'allowPrivateMessages' | 'sounds' | 'largeText' | 'timestamps'>
+> & {
+  ignore?: { id: string; name: string };
+  unignore?: string;
+};
 export const decodeChatPreferences = object<ChatPreferences>({
   allowPrivateMessages: boolean,
   sounds: boolean,

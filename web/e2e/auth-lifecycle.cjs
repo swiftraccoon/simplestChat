@@ -82,6 +82,20 @@ async function run() {
         await route.fulfill({ json: { ticket: 'a'.repeat(43), expires_in: 30 } });
         return;
       }
+      if (path === '/api/auth/preferences') {
+        assert.equal(route.request().method(), 'GET');
+        assert.match(route.request().headers().authorization, /^Bearer /);
+        await route.fulfill({
+          json: {
+            allowPrivateMessages: true,
+            sounds: false,
+            largeText: false,
+            timestamps: 'time',
+            ignored: [],
+          },
+        });
+        return;
+      }
       if (path === '/api/auth/login') {
         logins++;
         pendingLogin = route;

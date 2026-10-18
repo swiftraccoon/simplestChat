@@ -10,6 +10,7 @@ import * as icons from './icons';
 import { AuthManager, SessionOutcomeUnknownError, type RestoreState } from './auth';
 import { AuthDialogFlow, type AuthDialogAttempt } from './auth-dialog';
 import { AccountSessionSync } from './account-session-sync';
+import { AccountPreferences } from './account-preferences';
 import { RoomNavigation } from './room-navigation';
 import type { ScreenShareResult } from './media';
 import { ClientTelemetry } from './telemetry';
@@ -210,6 +211,7 @@ function updateAuthUI(): void {
   updateJoinBtn();
   community.refresh();
   pwa.accountChanged();
+  observeUiTask(accountPreferences.refresh(), 'Could not refresh privacy');
   observeUiTask(notificationPreferences.refresh(), 'Could not refresh notification rules');
   refreshSavedRoomPicker();
   participantHovercard.refresh();
@@ -770,6 +772,29 @@ const homeNotificationsSection: SheetSection = {
     },
   }),
 };
+const homePrivacySection: SheetSection = {
+  id: 'privacy',
+  segment: 'you',
+  label: 'Privacy',
+  available: () => auth.isLoggedIn,
+  status: () => 'Private messages and ignored accounts',
+  screen: () => {
+    let stop: (() => void) | undefined;
+    return {
+      title: 'Privacy',
+      body: (context) => {
+        const body = el('div', undefined, 'sheet-screen');
+        const account = auth.userId;
+        stop = accountPreferences.mountPrivacy(
+          body,
+          () => context.current() && auth.userId === account,
+        );
+        return body;
+      },
+      leave: () => stop?.(),
+    };
+  },
+};
 const settingsSheet = new SettingsSheet({
   sections: () =>
     room
@@ -782,7 +807,12 @@ const settingsSheet = new SettingsSheet({
           roomParticipationSection,
           ...community.roomSections(),
         ]
-      : [homeNotificationsSection, ...community.sections(), ...community.roomSections()],
+      : [
+          homePrivacySection,
+          homeNotificationsSection,
+          ...community.sections(),
+          ...community.roomSections(),
+        ],
   footer: () =>
     room
       ? [
@@ -1923,7 +1953,21 @@ const mountConversationNotifications = (
 ): void => {
   notificationPreferences.mountConversation(container, peerId, current);
 };
+const accountPreferences = new AccountPreferences({
+  getToken: () => auth.jwt,
+  getAccountId: () => auth.userId,
+  notify: (message) => showToast(message),
+});
+const mountConversationPrivacy = (
+  container: HTMLElement,
+  peerId: string,
+  peerName: string,
+  current: () => boolean,
+): void => {
+  accountPreferences.mountConversation(container, peerId, peerName, current);
+};
 const socialChat = new SocialChat({
+  accountPreferences,
   telemetry: telemetry.record,
   getRoom: () => room,
   getViewerKey: () => auth.userId ?? 'guest',
@@ -1946,6 +1990,7 @@ const pwa = new PwaControls({
         getToken: () => auth.jwt,
         getAccountId: () => auth.userId,
         mountConversationNotifications,
+        mountConversationPrivacy,
       });
     else openAuthDialog(loginModal);
   },
@@ -1954,6 +1999,7 @@ const community = new CommunityUI({
   openSettings: (section, opener) => settingsSheet.open({ section, opener }),
   onAccountChanged: () => settingsSheet.close({ force: true }),
   mountConversationNotifications,
+  mountConversationPrivacy,
   auth,
   getRoom: () => room,
   notify: (message) => showToast(message),
@@ -2057,6 +2103,7 @@ window.addEventListener('pagehide', (event) => {
   pwa.dispose();
   notificationPreferences.dispose();
   socialChat.dispose();
+  accountPreferences.dispose();
   savedRoomMount?.dispose();
   clearInterval(inboxRefresh);
   document.removeEventListener('visibilitychange', refreshSavedMessages);

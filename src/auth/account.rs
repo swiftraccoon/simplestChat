@@ -15,6 +15,7 @@
 
 use super::{
     jwt, routes, session,
+    sessions::lock_current_session,
     types::{AuthError, Claims},
 };
 use crate::signaling::protocol::{ChatStyle, deserialize_appearance_style};
@@ -73,7 +74,7 @@ pub struct UpdateProfileRequest {
 /// own shape (`Preferences` in web/src/social-chat.ts, camelCase). Desktop
 /// notification consent and the chat look stay where they are decided: the
 /// device and the profile.
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct ChatPreferences {
     pub allow_private_messages: bool,
@@ -95,10 +96,91 @@ impl Default for ChatPreferences {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct IgnoredPerson {
     pub id: String,
     pub name: String,
+}
+
+fn present<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    T::deserialize(deserializer).map(Some)
+}
+
+/// An explicit field intent, never a replacement of a client's stale snapshot.
+/// Ignore operations are set/remove rather than toggles, so repeating one is safe.
+#[derive(Default, Deserialize)]
+#[serde(default, rename_all = "camelCase", deny_unknown_fields)]
+pub struct PreferencePatch {
+    #[serde(deserialize_with = "present")]
+    allow_private_messages: Option<bool>,
+    #[serde(deserialize_with = "present")]
+    sounds: Option<bool>,
+    #[serde(deserialize_with = "present")]
+    large_text: Option<bool>,
+    #[serde(deserialize_with = "present")]
+    timestamps: Option<String>,
+    #[serde(deserialize_with = "present")]
+    ignore: Option<IgnoredPerson>,
+    #[serde(deserialize_with = "present")]
+    unignore: Option<Uuid>,
+}
+
+impl PreferencePatch {
+    fn apply(
+        self,
+        mut saved: ChatPreferences,
+        account: Uuid,
+    ) -> Result<ChatPreferences, AuthError> {
+        if self.ignore.is_some() && self.unignore.is_some() {
+            return Err(AuthError::InvalidInput("Choose one ignore operation"));
+        }
+        if self.allow_private_messages.is_none()
+            && self.sounds.is_none()
+            && self.large_text.is_none()
+            && self.timestamps.is_none()
+            && self.ignore.is_none()
+            && self.unignore.is_none()
+        {
+            return Err(AuthError::InvalidInput("Choose a preference to change"));
+        }
+        if let Some(value) = self.allow_private_messages {
+            saved.allow_private_messages = value;
+        }
+        if let Some(value) = self.sounds {
+            saved.sounds = value;
+        }
+        if let Some(value) = self.large_text {
+            saved.large_text = value;
+        }
+        if let Some(value) = self.timestamps {
+            saved.timestamps = value;
+        }
+        if let Some(person) = self.ignore {
+            // Canonical UUIDs prevent spelling variants from evading set semantics.
+            let id = Uuid::parse_str(&person.id)
+                .map_err(|_| AuthError::InvalidInput("Invalid account to ignore"))?;
+            saved.ignored.retain(|old| old.id != id.to_string());
+            saved.ignored.push(IgnoredPerson {
+                id: id.to_string(),
+                name: person.name,
+            });
+        }
+        if let Some(id) = self.unignore {
+            if id == account {
+                return Err(AuthError::InvalidInput(
+                    "Choose another account to unignore",
+                ));
+            }
+            saved.ignored.retain(|person| person.id != id.to_string());
+        }
+        validate_preferences(&saved, account)?;
+        Ok(saved)
+    }
 }
 
 const TIMESTAMP_FORMATS: [&str; 5] = ["hover", "time", "time12", "seconds", "datetime"];
@@ -132,12 +214,46 @@ fn validate_preferences(preferences: &ChatPreferences, own_id: Uuid) -> Result<(
     Ok(())
 }
 
-/// What the row holds, read leniently: an object another build wrote yields
-/// the defaults rather than an error, so a client is never locked out of its
-/// own settings.
-fn stored_preferences(value: Option<serde_json::Value>) -> Result<ChatPreferences, AuthError> {
+/// An unreadable saved policy must remain an error rather than turning a
+/// private-message opt-out or ignored account list into permissive defaults.
+fn stored_preferences(
+    value: Option<serde_json::Value>,
+    account: Uuid,
+) -> Result<ChatPreferences, AuthError> {
     let value = value.ok_or(AuthError::InvalidToken)?;
-    Ok(serde_json::from_value(value).unwrap_or_default())
+    decode_chat_preferences(value, account).map_err(routes::database_error)
+}
+
+pub(crate) fn decode_chat_preferences(
+    value: serde_json::Value,
+    account: Uuid,
+) -> Result<ChatPreferences, sqlx::Error> {
+    let invalid = || {
+        sqlx::Error::Decode(Box::new(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "Saved chat preferences could not be read",
+        )))
+    };
+    let mut preferences: ChatPreferences = serde_json::from_value(value).map_err(|_| invalid())?;
+    validate_preferences(&preferences, account).map_err(|_| invalid())?;
+    for person in &mut preferences.ignored {
+        person.id = Uuid::parse_str(&person.id)
+            .map_err(|_| invalid())?
+            .to_string();
+    }
+    Ok(preferences)
+}
+
+/// Read current account privacy for room publication and authenticated controls.
+pub(crate) async fn load_chat_preferences(
+    pool: &PgPool,
+    account: Uuid,
+) -> Result<ChatPreferences, sqlx::Error> {
+    let value = sqlx::query_scalar("SELECT preferences FROM users WHERE id=$1")
+        .bind(account)
+        .fetch_one(pool)
+        .await?;
+    decode_chat_preferences(value, account)
 }
 
 /// GET /api/auth/preferences
@@ -145,51 +261,158 @@ pub async fn get_preferences(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
 ) -> Result<(HeaderMap, Json<ChatPreferences>), AuthError> {
-    let _permit = routes::acquire_auth_request(&server)?;
+    let permit = routes::acquire_auth_request(&server)?;
     let claims = authenticated_claims(&server, &headers).await?;
-    let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
-    let id = Uuid::parse_str(&claims.sub).map_err(|_| AuthError::InvalidToken)?;
-    let stored: Option<serde_json::Value> =
-        sqlx::query_scalar("SELECT preferences FROM users WHERE id = $1 AND auth_version = $2")
-            .bind(id)
-            .bind(claims.auth_version)
-            .fetch_optional(pool)
+    let pool = server.db_pool().ok_or(AuthError::NotConfigured)?.clone();
+    let rooms = server.room_manager().clone();
+    // A successful explicit refresh also repairs a preceding save's incomplete
+    // room synchronization. No account setting is changed by this read.
+    let preferences = tokio::spawn(async move {
+        let _permit = permit;
+        let (id, preferences) = tokio::time::timeout(
+            std::time::Duration::from_secs(15),
+            current_preferences(&pool, &claims),
+        )
+        .await
+        .map_err(|_| AuthError::ServiceBusy)??;
+        rooms
+            .refresh_account_preferences(id)
             .await
-            .map_err(routes::database_error)?;
-    Ok((
-        routes::no_store_headers(),
-        Json(stored_preferences(stored)?),
-    ))
+            .map_err(|_| AuthError::ServiceBusy)?;
+        Ok::<_, AuthError>(preferences)
+    })
+    .await
+    .map_err(|_| AuthError::ServiceBusy)??;
+    Ok((routes::no_store_headers(), Json(preferences)))
 }
 
-/// PUT /api/auth/preferences: the whole object, last writer wins.
-pub async fn put_preferences(
+/// Merge one explicit intent with current account state under the user row lock.
+/// A concurrent appearance change cannot remove a newer ignore or PM opt-out.
+pub async fn patch_preferences(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
-    Json(request): Json<ChatPreferences>,
+    Json(request): Json<PreferencePatch>,
 ) -> Result<(HeaderMap, Json<ChatPreferences>), AuthError> {
-    let _permit = routes::acquire_auth_request(&server)?;
+    let permit = routes::acquire_auth_request(&server)?;
     let claims = authenticated_claims(&server, &headers).await?;
-    let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
-    let id = Uuid::parse_str(&claims.sub).map_err(|_| AuthError::InvalidToken)?;
-    validate_preferences(&request, id)?;
-    let value = serde_json::to_value(&request)
+    let pool = server.db_pool().ok_or(AuthError::NotConfigured)?.clone();
+    let rooms = server.room_manager().clone();
+    // Once admitted, both the transaction and publication outlive a lost HTTP
+    // response. Retain the permit until this bounded owned operation settles.
+    let preferences = tokio::spawn(async move {
+        let _permit = permit;
+        let write = tokio::time::timeout(
+            std::time::Duration::from_secs(15),
+            save_preferences(&pool, &claims, request),
+        )
+        .await
+        .unwrap_or(Err(AuthError::ServiceBusy));
+        let account = match &write {
+            Ok((id, _)) => Some(*id),
+            // A transport/COMMIT failure may have committed. Attempt a fresh
+            // publication even though the caller must still reconcile the save.
+            Err(AuthError::DatabaseError(_) | AuthError::ServiceBusy) => {
+                Uuid::parse_str(&claims.sub).ok()
+            }
+            Err(_) => None,
+        };
+        let synchronization = if let Some(account) = account {
+            rooms.refresh_account_preferences(account).await
+        } else {
+            Ok(())
+        };
+        let (_, preferences) = write?;
+        synchronization.map_err(|_| AuthError::PreferencesSynchronizationFailed)?;
+        Ok::<_, AuthError>(preferences)
+    })
+    .await
+    .map_err(|_| AuthError::ServiceBusy)??;
+    Ok((routes::no_store_headers(), Json(preferences)))
+}
+
+pub(crate) fn ensure_unexpired_claim(claims: &Claims) -> Result<(), AuthError> {
+    let expiration = i64::try_from(claims.exp).map_err(|_| AuthError::InvalidToken)?;
+    if expiration <= chrono::Utc::now().timestamp() {
+        return Err(AuthError::TokenExpired);
+    }
+    Ok(())
+}
+
+/// The session row is already locked. Its admission predicate may have been
+/// evaluated before a lock wait, so use a fresh clock after the wait and before
+/// committing the preference operation.
+async fn ensure_preference_session_current(
+    transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    id: Uuid,
+    claims: &Claims,
+) -> Result<(), AuthError> {
+    let live: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM sessions
+         WHERE id=$1 AND user_id=$2 AND expires_at>clock_timestamp())",
+    )
+    .bind(claims.sid)
+    .bind(id)
+    .fetch_one(&mut **transaction)
+    .await
+    .map_err(routes::database_error)?;
+    if !live {
+        return Err(AuthError::InvalidToken);
+    }
+    ensure_unexpired_claim(claims)
+}
+
+async fn current_preferences(
+    pool: &PgPool,
+    claims: &Claims,
+) -> Result<(Uuid, ChatPreferences), AuthError> {
+    ensure_unexpired_claim(claims)?;
+    let mut transaction = pool.begin().await.map_err(routes::database_error)?;
+    let (id, _) = lock_current_session(&mut transaction, claims).await?;
+    ensure_preference_session_current(&mut transaction, id, claims).await?;
+    let saved = sqlx::query_scalar("SELECT preferences FROM users WHERE id=$1")
+        .bind(id)
+        .fetch_optional(&mut *transaction)
+        .await
+        .map_err(routes::database_error)?;
+    let preferences = stored_preferences(saved, id)?;
+    ensure_preference_session_current(&mut transaction, id, claims).await?;
+    transaction.commit().await.map_err(routes::database_error)?;
+    Ok((id, preferences))
+}
+
+async fn save_preferences(
+    pool: &PgPool,
+    claims: &Claims,
+    request: PreferencePatch,
+) -> Result<(Uuid, ChatPreferences), AuthError> {
+    ensure_unexpired_claim(claims)?;
+    let mut transaction = pool.begin().await.map_err(routes::database_error)?;
+    let (id, _) = lock_current_session(&mut transaction, claims).await?;
+    ensure_preference_session_current(&mut transaction, id, claims).await?;
+    let saved = sqlx::query_scalar("SELECT preferences FROM users WHERE id=$1")
+        .bind(id)
+        .fetch_one(&mut *transaction)
+        .await
+        .map_err(routes::database_error)?;
+    let preferences = request.apply(
+        decode_chat_preferences(saved, id).map_err(routes::database_error)?,
+        id,
+    )?;
+    let value = serde_json::to_value(&preferences)
         .map_err(|_| AuthError::InvalidInput("Invalid preferences"))?;
-    let stored: Option<serde_json::Value> = sqlx::query_scalar(
+    sqlx::query(
         "UPDATE users SET preferences = $2, updated_at = now()
-         WHERE id = $1 AND auth_version = $3
-         RETURNING preferences",
+         WHERE id = $1 AND auth_version = $3",
     )
     .bind(id)
     .bind(&value)
     .bind(claims.auth_version)
-    .fetch_optional(pool)
+    .execute(&mut *transaction)
     .await
     .map_err(routes::database_error)?;
-    Ok((
-        routes::no_store_headers(),
-        Json(stored_preferences(stored)?),
-    ))
+    ensure_preference_session_current(&mut transaction, id, claims).await?;
+    transaction.commit().await.map_err(routes::database_error)?;
+    Ok((id, preferences))
 }
 
 #[derive(Deserialize)]
@@ -672,7 +895,7 @@ mod tests {
     }
 
     #[test]
-    fn preferences_are_validated_like_the_browser_and_read_leniently() {
+    fn preferences_are_validated_without_resetting_unreadable_privacy() {
         let own = Uuid::new_v4();
         let other = Uuid::new_v4();
         let mut preferences = ChatPreferences {
@@ -711,26 +934,455 @@ mod tests {
             .collect();
         assert!(validate_preferences(&preferences, own).is_err());
 
-        // Stored objects from other builds: unknown keys drop, wrong shapes
-        // yield the defaults, and a missing row means the token is stale.
-        let stored = stored_preferences(Some(serde_json::json!({
-            "sounds": true,
-            "timestamps": "time12",
-            "futureSetting": 3,
-        })))
+        // Unrelated keys do not change policy, but malformed saved values must
+        // not reset ignored accounts or opt-outs to permissive defaults.
+        let stored = stored_preferences(
+            Some(serde_json::json!({
+                "sounds": true,
+                "timestamps": "time12",
+                "futureSetting": 3,
+            })),
+            own,
+        )
         .unwrap();
         assert!(stored.sounds && stored.allow_private_messages);
         assert_eq!(stored.timestamps, "time12");
-        let stored = stored_preferences(Some(serde_json::json!({ "sounds": "yes" }))).unwrap();
-        assert!(!stored.sounds);
+        assert!(stored_preferences(Some(serde_json::json!({ "sounds": "yes" })), own).is_err());
         assert!(matches!(
-            stored_preferences(None),
+            stored_preferences(None, own),
             Err(AuthError::InvalidToken)
         ));
         let serialized = serde_json::to_value(ChatPreferences::default()).unwrap();
         assert_eq!(serialized["allowPrivateMessages"], true);
         assert_eq!(serialized["largeText"], false);
         assert_eq!(serialized["timestamps"], "time");
+    }
+
+    fn preference_patch(value: serde_json::Value) -> PreferencePatch {
+        serde_json::from_value(value).unwrap()
+    }
+
+    #[test]
+    fn preference_patches_reject_null_unknown_empty_and_ambiguous_intents() {
+        let own = Uuid::new_v4();
+        let peer = Uuid::new_v4();
+        for value in [
+            serde_json::json!({"unknown": true}),
+            serde_json::json!({"allowPrivateMessages": null}),
+            serde_json::json!({"sounds": null}),
+            serde_json::json!({"largeText": null}),
+            serde_json::json!({"timestamps": null}),
+            serde_json::json!({"ignore": null}),
+            serde_json::json!({"unignore": null}),
+            serde_json::json!({"ignored": []}),
+            serde_json::json!({"ignore": {"id": peer, "name": "Peer", "unknown": true}}),
+        ] {
+            assert!(serde_json::from_value::<PreferencePatch>(value).is_err());
+        }
+        for value in [
+            serde_json::json!({}),
+            serde_json::json!({"timestamps": "invalid"}),
+            serde_json::json!({"ignore": {"id": own, "name": "Me"}}),
+            serde_json::json!({"unignore": own}),
+            serde_json::json!({"ignore": {"id": peer, "name": "Peer"}, "unignore": peer}),
+        ] {
+            assert!(
+                preference_patch(value)
+                    .apply(ChatPreferences::default(), own)
+                    .is_err()
+            );
+        }
+    }
+
+    #[test]
+    fn repeated_ignore_and_unignore_are_sets_and_preserve_other_fields() {
+        let own = Uuid::new_v4();
+        let peer = Uuid::new_v4();
+        let mut saved = ChatPreferences {
+            allow_private_messages: false,
+            sounds: true,
+            ..Default::default()
+        };
+        for _ in 0..2 {
+            saved = preference_patch(serde_json::json!({"ignore": {"id": peer.to_string().to_uppercase(), "name": "Peer"}}))
+                .apply(saved, own).unwrap();
+            assert_eq!(saved.ignored.len(), 1);
+            assert_eq!(saved.ignored[0].id, peer.to_string());
+            assert!(!saved.allow_private_messages && saved.sounds);
+        }
+        for _ in 0..2 {
+            saved = preference_patch(serde_json::json!({"unignore": peer}))
+                .apply(saved, own)
+                .unwrap();
+            assert!(saved.ignored.is_empty());
+            assert!(!saved.allow_private_messages && saved.sounds);
+        }
+    }
+
+    #[test]
+    fn expired_and_unrepresentable_claims_cannot_write_preferences() {
+        let mut claims = Claims {
+            sub: Uuid::new_v4().to_string(),
+            name: "Privacy fixture".into(),
+            iss: "simplestChat".into(),
+            aud: "simplestChat".into(),
+            exp: 0,
+            auth_version: 0,
+            sid: Uuid::new_v4(),
+        };
+        assert!(matches!(
+            ensure_unexpired_claim(&claims),
+            Err(AuthError::TokenExpired)
+        ));
+        claims.exp = usize::MAX;
+        assert!(matches!(
+            ensure_unexpired_claim(&claims),
+            Err(AuthError::InvalidToken)
+        ));
+    }
+
+    async fn preference_pool() -> (PgPool, String) {
+        use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+        use std::str::FromStr;
+        assert_eq!(
+            std::env::var("DISPOSABLE_TEST_DATABASE").as_deref(),
+            Ok("1")
+        );
+        let options = PgConnectOptions::from_str(
+            &std::env::var("TEST_DATABASE_URL").expect("migrated disposable TEST_DATABASE_URL"),
+        )
+        .unwrap();
+        assert!(matches!(options.get_host(), "127.0.0.1" | "::1"));
+        assert!(options.get_socket().is_none());
+        assert!(
+            options
+                .get_database()
+                .is_some_and(|name| name.ends_with("_test"))
+        );
+        let application = format!("preference-patch-{}", Uuid::new_v4());
+        let pool = PgPoolOptions::new()
+            .max_connections(4)
+            .acquire_timeout(std::time::Duration::from_secs(3))
+            .connect_with(options.application_name(&application).options([
+                ("statement_timeout", "8s"),
+                ("lock_timeout", "6s"),
+                ("idle_in_transaction_session_timeout", "15s"),
+            ]))
+            .await
+            .unwrap();
+        (pool, application)
+    }
+
+    async fn preference_account(pool: &PgPool) -> Claims {
+        let account: Uuid = sqlx::query_scalar(
+            "INSERT INTO users(email,display_name) VALUES($1,'Privacy patch fixture') RETURNING id",
+        )
+        .bind(format!("{}@preference.invalid", Uuid::new_v4()))
+        .fetch_one(pool)
+        .await
+        .unwrap();
+        let sid =
+            session::create_session(pool, &account, &session::generate_refresh_token().unwrap())
+                .await
+                .unwrap();
+        Claims {
+            sub: account.to_string(),
+            name: "Privacy fixture".into(),
+            iss: "simplestChat".into(),
+            aud: "simplestChat".into(),
+            exp: usize::try_from(chrono::Utc::now().timestamp() + 3600).unwrap(),
+            auth_version: 0,
+            sid,
+        }
+    }
+
+    async fn wait_for_preference_lock(pool: &PgPool, application: &str) {
+        wait_for_preference_query_lock(pool, application, "SELECT auth_version FROM users%").await;
+    }
+
+    async fn wait_for_preference_query_lock(pool: &PgPool, application: &str, query: &str) {
+        tokio::time::timeout(std::time::Duration::from_secs(3), async {
+            loop {
+                let waiting: bool = sqlx::query_scalar(
+                    "SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database()
+                     AND application_name=$1 AND wait_event_type='Lock'
+                     AND query LIKE $2)",
+                )
+                .bind(application)
+                .bind(query)
+                .fetch_one(pool)
+                .await
+                .unwrap();
+                if waiting {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("the preference operation must reach its held authorization row lock");
+    }
+
+    #[tokio::test]
+    #[ignore = "requires migrated disposable TEST_DATABASE_URL"]
+    async fn database_preference_patches_merge_concurrent_fields_and_repeat_ignore_safely() {
+        let (pool, _) = preference_pool().await;
+        let claims = preference_account(&pool).await;
+        let peer_claims = preference_account(&pool).await;
+        let account = Uuid::parse_str(&claims.sub).unwrap();
+        let peer = Uuid::parse_str(&peer_claims.sub).unwrap();
+        let (privacy, appearance, ignored) = tokio::join!(
+            save_preferences(
+                &pool,
+                &claims,
+                preference_patch(serde_json::json!({"allowPrivateMessages": false}))
+            ),
+            save_preferences(
+                &pool,
+                &claims,
+                preference_patch(serde_json::json!({"largeText": true, "sounds": true}))
+            ),
+            save_preferences(
+                &pool,
+                &claims,
+                preference_patch(serde_json::json!({"ignore": {"id": peer, "name": "Peer"}}))
+            ),
+        );
+        privacy.unwrap();
+        appearance.unwrap();
+        ignored.unwrap();
+        let saved = load_chat_preferences(&pool, account).await.unwrap();
+        assert!(!saved.allow_private_messages && saved.large_text && saved.sounds);
+        assert_eq!(saved.ignored.len(), 1);
+        for _ in 0..2 {
+            save_preferences(&pool, &claims, preference_patch(serde_json::json!({"ignore": {"id": peer.to_string().to_uppercase(), "name": "Peer"}}))).await.unwrap();
+        }
+        assert_eq!(
+            load_chat_preferences(&pool, account)
+                .await
+                .unwrap()
+                .ignored
+                .len(),
+            1
+        );
+        for _ in 0..2 {
+            save_preferences(
+                &pool,
+                &claims,
+                preference_patch(serde_json::json!({"unignore": peer})),
+            )
+            .await
+            .unwrap();
+        }
+        let saved = load_chat_preferences(&pool, account).await.unwrap();
+        assert!(saved.ignored.is_empty());
+        assert!(!saved.allow_private_messages && saved.large_text && saved.sounds);
+        sqlx::query("DELETE FROM users WHERE id=ANY($1)")
+            .bind(vec![account, peer])
+            .execute(&pool)
+            .await
+            .unwrap();
+        pool.close().await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requires migrated disposable TEST_DATABASE_URL"]
+    async fn database_preference_write_rechecks_revocation_and_expiry_after_waiting_for_locks() {
+        let (pool, application) = preference_pool().await;
+        let mut claims = preference_account(&pool).await;
+        let account = Uuid::parse_str(&claims.sub).unwrap();
+        let mut blocker = pool.begin().await.unwrap();
+        sqlx::query("SELECT id FROM users WHERE id=$1 FOR UPDATE")
+            .bind(account)
+            .execute(&mut *blocker)
+            .await
+            .unwrap();
+        let request_pool = pool.clone();
+        let request_claims = claims.clone();
+        let queued = tokio::spawn(async move {
+            save_preferences(
+                &request_pool,
+                &request_claims,
+                preference_patch(serde_json::json!({"allowPrivateMessages": false})),
+            )
+            .await
+        });
+        wait_for_preference_lock(&pool, &application).await;
+        sqlx::query("DELETE FROM sessions WHERE id=$1")
+            .bind(claims.sid)
+            .execute(&mut *blocker)
+            .await
+            .unwrap();
+        blocker.commit().await.unwrap();
+        assert!(matches!(
+            queued.await.unwrap(),
+            Err(AuthError::InvalidToken)
+        ));
+        assert!(
+            load_chat_preferences(&pool, account)
+                .await
+                .unwrap()
+                .allow_private_messages
+        );
+
+        claims.sid =
+            session::create_session(&pool, &account, &session::generate_refresh_token().unwrap())
+                .await
+                .unwrap();
+        claims.exp = usize::try_from(chrono::Utc::now().timestamp() + 5).unwrap();
+        let mut blocker = pool.begin().await.unwrap();
+        sqlx::query("SELECT id FROM users WHERE id=$1 FOR UPDATE")
+            .bind(account)
+            .execute(&mut *blocker)
+            .await
+            .unwrap();
+        let request_pool = pool.clone();
+        let request_claims = claims.clone();
+        let queued = tokio::spawn(async move {
+            save_preferences(
+                &request_pool,
+                &request_claims,
+                preference_patch(serde_json::json!({"allowPrivateMessages": false})),
+            )
+            .await
+        });
+        wait_for_preference_lock(&pool, &application).await;
+        while usize::try_from(chrono::Utc::now().timestamp()).unwrap() < claims.exp {
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+        blocker.commit().await.unwrap();
+        assert!(matches!(
+            queued.await.unwrap(),
+            Err(AuthError::TokenExpired)
+        ));
+        assert!(
+            load_chat_preferences(&pool, account)
+                .await
+                .unwrap()
+                .allow_private_messages
+        );
+        sqlx::query("DELETE FROM users WHERE id=$1")
+            .bind(account)
+            .execute(&pool)
+            .await
+            .unwrap();
+        pool.close().await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requires migrated disposable TEST_DATABASE_URL"]
+    async fn database_preference_read_rechecks_revocation_after_waiting_for_locks() {
+        let (pool, application) = preference_pool().await;
+        let claims = preference_account(&pool).await;
+        let account = Uuid::parse_str(&claims.sub).unwrap();
+        let mut blocker = pool.begin().await.unwrap();
+        sqlx::query("SELECT id FROM users WHERE id=$1 FOR UPDATE")
+            .bind(account)
+            .execute(&mut *blocker)
+            .await
+            .unwrap();
+        let request_pool = pool.clone();
+        let request_claims = claims.clone();
+        let queued =
+            tokio::spawn(async move { current_preferences(&request_pool, &request_claims).await });
+        wait_for_preference_lock(&pool, &application).await;
+        sqlx::query("DELETE FROM sessions WHERE id=$1")
+            .bind(claims.sid)
+            .execute(&mut *blocker)
+            .await
+            .unwrap();
+        blocker.commit().await.unwrap();
+        assert!(matches!(
+            queued.await.unwrap(),
+            Err(AuthError::InvalidToken)
+        ));
+        sqlx::query("DELETE FROM users WHERE id=$1")
+            .bind(account)
+            .execute(&pool)
+            .await
+            .unwrap();
+        pool.close().await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requires migrated disposable TEST_DATABASE_URL"]
+    async fn database_preference_read_and_write_recheck_natural_session_expiry_after_session_lock_wait()
+     {
+        let (pool, application) = preference_pool().await;
+        for write in [false, true] {
+            let claims = preference_account(&pool).await;
+            let account = Uuid::parse_str(&claims.sub).unwrap();
+            sqlx::query(
+                "UPDATE sessions SET expires_at=clock_timestamp()+interval '3 seconds' WHERE id=$1",
+            )
+            .bind(claims.sid)
+            .execute(&pool)
+            .await
+            .unwrap();
+            let mut blocker = pool.begin().await.unwrap();
+            // Hold the unchanged session row: the waiting query can qualify it
+            // before expiry without seeing any subsequent row-version update.
+            sqlx::query("SELECT id FROM sessions WHERE id=$1 FOR UPDATE")
+                .bind(claims.sid)
+                .execute(&mut *blocker)
+                .await
+                .unwrap();
+            let request_pool = pool.clone();
+            let request_claims = claims.clone();
+            let queued = tokio::spawn(async move {
+                if write {
+                    save_preferences(
+                        &request_pool,
+                        &request_claims,
+                        preference_patch(serde_json::json!({"allowPrivateMessages": false})),
+                    )
+                    .await
+                } else {
+                    current_preferences(&request_pool, &request_claims).await
+                }
+            });
+            wait_for_preference_query_lock(
+                &pool,
+                &application,
+                "SELECT refresh_token_hash FROM sessions%",
+            )
+            .await;
+            tokio::time::timeout(std::time::Duration::from_secs(5), async {
+                loop {
+                    let expired: bool = sqlx::query_scalar(
+                        "SELECT expires_at<=clock_timestamp() FROM sessions WHERE id=$1",
+                    )
+                    .bind(claims.sid)
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap();
+                    if expired {
+                        break;
+                    }
+                    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+                }
+            })
+            .await
+            .expect("the locked issuing session must reach its natural expiry");
+            blocker.commit().await.unwrap();
+            assert!(
+                matches!(queued.await.unwrap(), Err(AuthError::InvalidToken)),
+                "{} must reject a session that expired during its row-lock wait",
+                if write { "PATCH" } else { "GET" },
+            );
+            assert!(
+                load_chat_preferences(&pool, account)
+                    .await
+                    .unwrap()
+                    .allow_private_messages
+            );
+            sqlx::query("DELETE FROM users WHERE id=$1")
+                .bind(account)
+                .execute(&pool)
+                .await
+                .unwrap();
+        }
+        pool.close().await;
     }
 
     #[test]

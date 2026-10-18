@@ -516,6 +516,12 @@ export function openRoomHistory(
 }
 
 export function openPrivateInbox(options: {
+  mountConversationPrivacy?: (
+    container: HTMLElement,
+    peerId: string,
+    peerName: string,
+    current: () => boolean,
+  ) => void;
   getToken: () => string | null;
   getAccountId: () => string | null;
   mountConversationNotifications?: (
@@ -546,8 +552,10 @@ export function openPrivateInbox(options: {
       draft: { account, peer: peerId },
       getToken: options.getToken,
       attachmentAuthorization: async () => `Bearer ${token()}`,
-      mountNotifications: (container, current) =>
-        options.mountConversationNotifications?.(container, peerId, current),
+      mountNotifications: (container, current) => {
+        options.mountConversationNotifications?.(container, peerId, current);
+        options.mountConversationPrivacy?.(container, peerId, peerName, current);
+      },
       edit: (message, content, expectedRevision, signal) =>
         api.editPrivateMessage(
           token(),

@@ -9,7 +9,9 @@ import type {
 } from './protocol';
 import { AttachmentComposer, renderAttachments } from './attachments';
 import { ChatStore, ConversationInputs, type ChatItem } from './chat-store';
-import { api, ApiOutcomeUnknownError, asyncButton, button, busy, el, modal } from './ui';
+import type { AccountPreferences } from './account-preferences';
+import type { ChatPreferences, PreferencePatch } from './api-validation';
+import { api, asyncButton, button, busy, el, modal } from './ui';
 import {
   actionRow,
   group,
@@ -53,30 +55,12 @@ type Preferences = {
   ignored: { id: string; name: string }[];
 };
 
-type AccountPreferenceWrite = {
-  token: string;
-  value: Pick<
-    Preferences,
-    'allowPrivateMessages' | 'sounds' | 'largeText' | 'timestamps' | 'ignored'
-  >;
-};
-
-/** One in-flight save and the latest pending intent per account, across room changes. */
-type AccountPreferenceSync = {
-  pending: AccountPreferenceWrite | null;
-  task: Promise<void> | null;
-  unsaved: boolean;
-  uncertain: boolean;
-  uncertaintyReported: boolean;
-};
-
 const LOOKS: readonly { kind: ChatStyleKind; label: string }[] = [
   { kind: 'accent', label: 'Stripe' },
   { kind: 'text', label: 'Colored text' },
   { kind: 'bubble', label: 'Tinted bubble' },
 ];
 const AUTOMATIC_LOOK: ChatStyle = { color: null, style: 'accent' };
-/** The reactions the server accepts (`REACTIONS` in protocol.rs), in its order. */
 export const CHAT_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🎉', '🔥', '👏'] as const;
 
 /** The start of a message on one line, as a reply quotes it. */
@@ -122,6 +106,7 @@ type Options = {
   getViewerKey: () => string;
   /** The account's bearer token, when the viewer has one: its preferences then follow it. */
   getToken?: () => string | null;
+  accountPreferences?: AccountPreferences;
   notify: (message: string) => void;
   bindParticipantName: (anchor: HTMLButtonElement, id: string, name: string) => void;
   allowsNotification?: (kind: 'private' | 'mention' | 'room', peerId?: string) => boolean;
@@ -193,8 +178,8 @@ export class SocialChat {
   private snapshotPublicIds: Set<string> | null = null;
   private preferenceOperation = 0;
   private preferenceBusy = false;
-  private accountSync = 0;
-  private readonly accountWrites = new Map<string, AccountPreferenceSync>();
+  private readonly stopAccountPreferences: (() => void) | undefined;
+  private accountPreferenceSnapshot = '';
   private disposed = false;
   private audio: AudioContext | null = null;
   private readonly desktopNotices = new Set<Notification>();
@@ -358,6 +343,10 @@ export class SocialChat {
         this.contextCurrent(this.activation, this.activeRoom, this.viewerKey),
       notify: this.options.notify,
     });
+    this.stopAccountPreferences = this.options.accountPreferences?.subscribe((account, saved) => {
+      if (saved && account === this.viewerKey && account === this.options.getViewerKey())
+        this.applyAccountPreferences(saved);
+    });
     this.render();
   }
 
@@ -414,7 +403,7 @@ export class SocialChat {
       const token = this.accountToken(viewerKey);
       if (token) {
         try {
-          await this.loadAccountPreferences(viewerKey, token, current);
+          await this.loadAccountPreferences(current);
         } catch {
           if (current())
             this.options.notify(
@@ -510,6 +499,7 @@ export class SocialChat {
     this.typing.clear();
     this.lastTypingSent = 0;
     this.renderTyping();
+    this.accountPreferenceSnapshot = '';
     this.scope = '';
     this.activeRoom = null;
     this.viewerKey = '';
@@ -533,8 +523,7 @@ export class SocialChat {
 
   dispose(): void {
     this.disposed = true;
-    for (const sync of this.accountWrites.values()) sync.pending = null;
-    this.accountWrites.clear();
+    this.stopAccountPreferences?.();
     this.reset();
     this.attachments.dispose();
   }
@@ -730,6 +719,15 @@ export class SocialChat {
   }
 
   async toggleIgnore(id: string, name: string, authenticated: boolean): Promise<void> {
+    const account = this.options.accountPreferences;
+    if (
+      account &&
+      this.options.getToken?.() &&
+      (authenticated || this.preferences.ignored.some((person) => person.id === id))
+    ) {
+      await account.change(this.isIgnored(id) ? { unignore: id } : { ignore: { id, name } });
+      return;
+    }
     const room = this.options.getRoom();
     if (!room?.localParticipantId) throw new Error('Join a room first');
     if (id === room.localParticipantId) throw new Error('You cannot ignore yourself');
@@ -2099,7 +2097,7 @@ export class SocialChat {
   setTimestampFormat(format: TimestampFormat): void {
     if (!TIMESTAMP_FORMATS.includes(format)) return;
     this.preferences = { ...this.preferences, timestamps: format };
-    this.savePreferences();
+    this.savePreferences(this.viewerKey, { timestamps: format });
     this.render();
   }
 
@@ -2118,50 +2116,38 @@ export class SocialChat {
   private preferenceKey(viewer = this.viewerKey): string {
     return `simplestchat.chat.v1.${viewer}`;
   }
-  private savePreferences(viewer = this.viewerKey): void {
+  private savePreferences(viewer = this.viewerKey, patch?: PreferencePatch): void {
     if (viewer !== this.viewerKey || viewer !== this.options.getViewerKey()) return;
     this.storePreferences(viewer);
-    this.syncAccountPreferences(viewer);
+    if (patch && this.options.getToken?.())
+      this.options.accountPreferences?.change(patch).catch((error: unknown) => {
+        if (!this.disposed && viewer === this.options.getViewerKey())
+          this.options.notify(
+            error instanceof Error ? error.message : 'Preferences could not be saved',
+          );
+      });
   }
   private storePreferences(viewer: string): void {
     try {
       localStorage.setItem(this.preferenceKey(viewer), JSON.stringify(this.preferences));
     } catch {
-      /* Private browsing/quota. */
+      /* Browser-local consent and guest preferences remain usable. */
     }
   }
-  /** The token of a signed-in viewer; guests keep everything in this browser. */
   private accountToken(viewer: string): string | null {
-    if (viewer === 'guest') return null;
-    return this.options.getToken?.() ?? null;
+    return viewer === 'guest' ? null : (this.options.getToken?.() ?? null);
   }
-  /** Replace the synced subset with the account's saved copy, when the viewer has one. */
-  private async loadAccountPreferences(
-    viewer: string,
-    token: string,
-    current: () => boolean,
-  ): Promise<void> {
-    const revision = this.accountSync;
-    const sync = this.accountWrites.get(viewer);
-    if (sync) {
-      // Returning to an account resumes its saved intent with that account's
-      // current token. An uncertain mutation must never be retried implicitly.
-      if (sync.pending && !sync.uncertain) {
-        sync.pending.token = token;
-        this.drainAccountPreferences(viewer, sync);
-      }
-      if (sync.task) await sync.task;
-      if (current()) this.reportUncertainPreferences(viewer, sync);
-      if (!current() || this.accountSync !== revision || sync.unsaved) return;
-    }
-    if (!current()) return;
-    const saved = await api.accountPreferences(token);
-    if (!current() || this.accountSync !== revision) return;
-    const ignored = new Map<string, { id: string; name: string }>();
-    for (const entry of saved.ignored) {
-      if (entry.id === this.store.localId || ignored.size >= 100) continue;
-      ignored.set(entry.id, { id: entry.id, name: entry.name.slice(0, 128) });
-    }
+  private async loadAccountPreferences(current: () => boolean): Promise<void> {
+    const account = this.options.accountPreferences;
+    if (!account) throw new Error('Account privacy is unavailable');
+    await account.refresh();
+    const saved = account.snapshot;
+    if (current() && saved) this.applyAccountPreferences(saved);
+  }
+  private applyAccountPreferences(saved: ChatPreferences): void {
+    const snapshot = JSON.stringify(saved);
+    if (snapshot === this.accountPreferenceSnapshot) return;
+    this.accountPreferenceSnapshot = snapshot;
     this.preferences = {
       ...this.preferences,
       allowPrivateMessages: saved.allowPrivateMessages,
@@ -2170,86 +2156,13 @@ export class SocialChat {
       timestamps: TIMESTAMP_FORMATS.includes(saved.timestamps as TimestampFormat)
         ? (saved.timestamps as TimestampFormat)
         : 'time',
-      ignored: [...ignored.values()],
+      ignored: saved.ignored.map((person) => ({ ...person })),
     };
-    this.storePreferences(viewer);
-  }
-  /** Serialize confirmed saves, coalescing pending choices without crossing account identities. */
-  private syncAccountPreferences(viewer: string): void {
-    const token = this.accountToken(viewer);
-    if (!token || this.disposed) return;
-    const { allowPrivateMessages, sounds, largeText, timestamps, ignored } = this.preferences;
-    const sync = this.accountWrites.get(viewer) ?? {
-      pending: null,
-      task: null,
-      unsaved: false,
-      uncertain: false,
-      uncertaintyReported: false,
-    };
-    this.accountSync++;
-    sync.pending = {
-      token,
-      value: {
-        allowPrivateMessages,
-        sounds,
-        largeText,
-        timestamps,
-        ignored: ignored.map((person) => ({ ...person })),
-      },
-    };
-    sync.unsaved = true;
-    this.accountWrites.set(viewer, sync);
-    this.reportUncertainPreferences(viewer, sync);
-    this.drainAccountPreferences(viewer, sync);
-  }
-
-  private reportUncertainPreferences(viewer: string, sync: AccountPreferenceSync): void {
-    if (
-      !sync.uncertain ||
-      sync.uncertaintyReported ||
-      this.disposed ||
-      this.viewerKey !== viewer ||
-      this.options.getViewerKey() !== viewer
-    )
-      return;
-    sync.uncertaintyReported = true;
-    this.options.notify(
-      'Chat preference saving could not be confirmed. This browser keeps your choices; reload to check your account before saving again.',
-    );
-  }
-
-  /** Keep local choices after failure; a transport error cannot establish commit order. */
-  private drainAccountPreferences(viewer: string, sync: AccountPreferenceSync): void {
-    if (sync.task || sync.uncertain || this.disposed) return;
-    const task = (async () => {
-      while (sync.pending && this.options.getViewerKey() === viewer && !this.disposed) {
-        const write = sync.pending;
-        sync.pending = null;
-        try {
-          await api.updatePreferences(write.token, write.value);
-          if (!sync.pending) sync.unsaved = false;
-        } catch (error) {
-          const visible = this.viewerKey === viewer && this.options.getViewerKey() === viewer;
-          if (error instanceof ApiOutcomeUnknownError) {
-            sync.uncertain = true;
-            this.reportUncertainPreferences(viewer, sync);
-            return;
-          }
-          if (visible && !this.disposed && !sync.pending)
-            this.options.notify('Chat preferences could not be saved to your account');
-        }
-      }
-    })();
-    sync.task = task;
-    task
-      .finally(() => {
-        sync.task = null;
-        if (!sync.unsaved && this.accountWrites.get(viewer) === sync)
-          this.accountWrites.delete(viewer);
-        else if (sync.pending && this.options.getViewerKey() === viewer)
-          this.drainAccountPreferences(viewer, sync);
-      })
-      .catch(() => {});
+    this.storePreferences(this.viewerKey);
+    this.render();
+    const room = this.options.getRoom();
+    if (room && room === this.activeRoom)
+      this.pushPreferences(room, this.preferences, this.temporaryIgnored).catch(() => {});
   }
   private async pushPreferences(
     room: RoomClient,
@@ -2258,7 +2171,9 @@ export class SocialChat {
   ): Promise<void> {
     await room.requestSocial('setChatPreferences', {
       allowPrivateMessages: preferences.allowPrivateMessages,
-      ignoredParticipantIds: [...preferences.ignored.map((entry) => entry.id), ...temporary.keys()],
+      ignoredParticipantIds: this.options.getToken?.()
+        ? [...temporary.keys()]
+        : [...preferences.ignored.map((entry) => entry.id), ...temporary.keys()],
     });
   }
 
@@ -2361,7 +2276,7 @@ export class SocialChat {
     lookBlock.append(el('span', '', 'sheet-row-saved'), ...look.nodes);
     const large = toggleRow('Larger chat text', this.preferences.largeText, (value) => {
       this.preferences = { ...this.preferences, largeText: value };
-      this.savePreferences(viewer);
+      this.savePreferences(viewer, { largeText: value });
       this.render();
       markSaved(large.row);
     });
@@ -2385,7 +2300,7 @@ export class SocialChat {
         return;
       }
       this.preferences = { ...this.preferences, timestamps: timestamps.value as TimestampFormat };
-      this.savePreferences(viewer);
+      this.savePreferences(viewer, { timestamps: timestamps.value });
       this.render();
       markSaved(timestampRow);
     });
@@ -2410,7 +2325,7 @@ export class SocialChat {
       this.resumeSoundFromGesture(value);
       if (!current()) return;
       this.preferences = { ...this.preferences, sounds: value };
-      this.savePreferences(viewer);
+      this.savePreferences(viewer, { sounds: value });
       if (value) this.playSound(550);
       markSaved(sounds.row);
     });
@@ -2478,6 +2393,15 @@ export class SocialChat {
   }
 
   private privacyScreen(context: ScreenContext): HTMLElement {
+    if (this.options.getToken?.() && this.options.accountPreferences) {
+      const body = el('div', undefined, 'sheet-screen');
+      const viewer = this.options.getViewerKey();
+      this.options.accountPreferences.mountPrivacy(
+        body,
+        () => context.current() && viewer === this.options.getViewerKey(),
+      );
+      return body;
+    }
     const scope = this.screenContext(context);
     const body = el('div', undefined, 'sheet-screen');
     if (!scope) return body;

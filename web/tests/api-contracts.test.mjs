@@ -131,9 +131,9 @@ const endpoints = [
   ],
   [
     'chat preferences update',
-    (api) => api.updatePreferences('token', preferences),
+    (api) => api.updatePreferences('token', { timestamps: 'seconds' }),
     '/api/auth/preferences',
-    'PUT',
+    'PATCH',
     preferences,
   ],
   [

@@ -71,20 +71,11 @@ fn ordered_pair(own: Uuid, peer: Uuid) -> (Uuid, Uuid) {
     if own < peer { (own, peer) } else { (peer, own) }
 }
 
-fn allows_contact(preferences: &serde_json::Value, peer: Uuid) -> bool {
+fn allows_contact(preferences: &serde_json::Value, own: Uuid, peer: Uuid) -> bool {
     let id = peer.to_string();
-    preferences
-        .get("allowPrivateMessages")
-        .and_then(serde_json::Value::as_bool)
-        .unwrap_or(true)
-        && !preferences
-            .get("ignored")
-            .and_then(serde_json::Value::as_array)
-            .is_some_and(|people| {
-                people.iter().any(|person| {
-                    person.get("id").and_then(serde_json::Value::as_str) == Some(id.as_str())
-                })
-            })
+    account::decode_chat_preferences(preferences.clone(), own).is_ok_and(|policy| {
+        policy.allow_private_messages && !policy.ignored.iter().any(|person| person.id == id)
+    })
 }
 
 /// Serialize caps and relationship changes by locking users in UUID order,
@@ -113,7 +104,7 @@ async fn lock_contact_accounts(
     Ok(people
         .iter()
         .find(|person| person.0 == peer)
-        .map(|target| allows_contact(&actor.2, peer) && allows_contact(&target.2, own)))
+        .map(|target| allows_contact(&actor.2, own, peer) && allows_contact(&target.2, peer, own)))
 }
 
 async fn require_session(

@@ -229,18 +229,31 @@
       "body": null,
       "unauthenticated_status": null,
       "checks": [
-        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions"
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions",
+        "queued_publication_reads_the_latest_policy_after_room_control",
+        "concurrent_publications_cannot_apply_an_old_snapshot_after_the_new_one",
+        "database_pending_join_and_lobby_admission_load_policy_after_a_concurrent_save",
+        "database_preference_read_and_write_recheck_natural_session_expiry_after_session_lock_wait",
+        "database_preference_read_rechecks_revocation_after_waiting_for_locks"
       ]
     },
     {
-      "method": "PUT",
+      "method": "PATCH",
       "path": "/api/auth/preferences",
-      "handler": "crate::auth::account::put_preferences",
+      "handler": "crate::auth::account::patch_preferences",
       "policy": "current-session",
-      "body": {},
+      "body": {
+        "allowPrivateMessages": false
+      },
       "unauthenticated_status": null,
       "checks": [
-        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions"
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions",
+        "database_preference_patches_merge_concurrent_fields_and_repeat_ignore_safely",
+        "database_preference_write_rechecks_revocation_and_expiry_after_waiting_for_locks",
+        "queued_publication_reads_the_latest_policy_after_room_control",
+        "concurrent_publications_cannot_apply_an_old_snapshot_after_the_new_one",
+        "database_pending_join_and_lobby_admission_load_policy_after_a_concurrent_save",
+        "database_preference_read_and_write_recheck_natural_session_expiry_after_session_lock_wait"
       ]
     },
     {
@@ -922,9 +935,7 @@
       "body": {
         "type": "leaveRoom"
       },
-      "checks": [
-        "leaving_room_stops_heartbeat_renewal"
-      ]
+      "checks": ["leaving_room_stops_heartbeat_renewal"]
     },
     {
       "variant": "GetRouterRtpCapabilities",
@@ -1257,7 +1268,7 @@
         "type": "reactToMessage",
         "requestId": "policy-request",
         "messageId": "policy-message",
-        "emoji": "\ud83d\udc4d"
+        "emoji": "👍"
       },
       "checks": [
         "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",

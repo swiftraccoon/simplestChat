@@ -702,7 +702,7 @@ impl SignalingServer {
             .route(
                 "/preferences",
                 get(crate::auth::account::get_preferences)
-                    .put(crate::auth::account::put_preferences)
+                    .patch(crate::auth::account::patch_preferences)
                     .layer(DefaultBodyLimit::max(32 * 1024)),
             )
             .route("/password", post(crate::auth::account::change_password))

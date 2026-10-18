@@ -36,7 +36,7 @@ Login, passkeys and refresh remain owned by [AuthManager](../web/src/auth.ts).
 | `changePassword` | `POST /api/auth/password` | `204`, no body |
 | WebSocket ticket provider | `POST /api/auth/ws-ticket`, Bearer JWT and JSON `{}` | `{ ticket: string, expires_in: integer }` |
 | `accountPreferences` | `GET /api/auth/preferences` | `ChatPreferences` |
-| `updatePreferences` | `PUT /api/auth/preferences` | `ChatPreferences` |
+| `updatePreferences` | `PATCH /api/auth/preferences` with explicit field/set intents | `ChatPreferences` |
 | `registrationInvites` | `GET /api/auth/invites` | `RegistrationInvite[]` |
 | `createRegistrationInvite` | `POST /api/auth/invites` | `RegistrationInvite` metadata plus one-time `code` |
 | `revokeRegistrationInvite` | `DELETE /api/auth/invites/:id` | `204`, no body |
@@ -105,14 +105,43 @@ Account/profile and directory fields use snake_case. `RoomSettings`, including
 the room-creation result, uses camelCase, and so does `ChatPreferences`: it is
 the browser's own chat preference object (private-message opt-in, sounds, text
 size, timestamp format and the ignore list) kept on the account so it follows a
-signed-in viewer to other devices. The server validates it like the browser does
-(a known timestamp format, at most 100 ignored account ids, never the viewer's
-own) and reads a stored object leniently, so a build that adds a field never
-locks a client out of its settings. Desktop notification consent stays on the
-device and the chat look on the profile. `PUT` replaces the whole object; the
-newest write wins. A guest, or a viewer without a token, keeps everything in
-the browser. The timestamp default is `time` (visible hours and minutes); stored
-timestamp choices, including `hover`, remain unchanged.
+signed-in viewer to other devices. The server validates a known timestamp format
+and at most 100 distinct ignored account UUIDs, never the viewer's own. Malformed
+saved policy is an error and never silently resets opt-outs or ignores to permissive
+defaults. Desktop notification consent stays on the device and the chat look on
+the profile. A guest, or a viewer without a token, keeps preferences in the browser.
+The timestamp default is `time` (visible hours and minutes).
+
+Preference PATCH accepts any explicit subset of `allowPrivateMessages`, `sounds`,
+`largeText` and `timestamps`, plus either `ignore:{id,name}` or `unignore:<account
+UUID>`. Omitted fields remain unchanged. Null values, unknown fields, an empty
+object, the viewer's own identity and conflicting ignore/unignore operations are
+rejected. Ignore is a set operation and unignore is a removal; repeating either
+is safe. The whole ignore array is never replaced by a client's snapshot.
+
+The server merges against current saved state while holding the canonical
+user-then-session locks and rechecks the issuing session and access-token expiry
+after waiting. The owned operation retains its request permit through commit and
+runtime publication even when the HTTP caller disconnects. Publication is bounded
+to eight room operations at once and fifteen seconds overall. Each room's control
+gate precedes a fresh database read, preventing delayed earlier completions from
+overwriting newer policy. Temporary guest ignores remain membership-local.
+
+Authenticated direct joins and lobby admissions load current account policy under
+that same room control gate before installing membership. A newly admitted account
+therefore honors saved private-message opt-out and ignores before its first client
+preference command. A stale authenticated `setChatPreferences` command cannot
+replace saved account policy; it derives that policy from PostgreSQL and accepts
+temporary guest ignores only for proven guest identities.
+
+A successful GET also verifies the current session and synchronizes active room
+policy, allowing explicit **Refresh privacy** to reconcile an uncertain save.
+Neither a failed read nor failed publication clears existing preferences. A save
+whose commit succeeded but room synchronization failed returns HTTP 503 explicitly
+reporting that partial outcome. The browser preserves restrictive unconfirmed
+intent, blocks further writes until explicit refresh, and never automatically
+replays an uncertain mutation. Signed-in privacy is available outside a room;
+other visible devices recheck on focus and every fifteen seconds.
 
 Invitations are 32-character random codes with 160 bits of entropy
 (`src/invite_codes.rs`). Stored rows contain only a SHA-256 digest and a separate

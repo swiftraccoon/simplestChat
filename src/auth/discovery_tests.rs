@@ -2,21 +2,32 @@ use super::*;
 
 #[test]
 fn contact_preferences_match_private_message_optout_and_ignore() {
+    let own = Uuid::new_v4();
     let peer = Uuid::new_v4();
-    assert!(allows_contact(&serde_json::json!({}), peer));
+    assert!(allows_contact(&serde_json::json!({}), own, peer));
     assert!(!allows_contact(
         &serde_json::json!({"allowPrivateMessages":false}),
+        own,
         peer
     ));
     assert!(!allows_contact(
         &serde_json::json!({"ignored":[{"id":peer,"name":"Someone"}]}),
+        own,
         peer
     ));
     assert!(allows_contact(
-        &serde_json::json!({"ignored":[{"id":Uuid::new_v4()}]}),
+        &serde_json::json!({"ignored":[{"id":Uuid::new_v4(),"name":"Someone else"}]}),
+        own,
         peer
     ));
-    let own = Uuid::new_v4();
+    for invalid in [
+        serde_json::json!({"allowPrivateMessages":"yes"}),
+        serde_json::json!({"ignored":null}),
+        serde_json::json!({"ignored":[{"id":peer}]}),
+        serde_json::json!({"ignored":[{"id":own,"name":"Self"}]}),
+    ] {
+        assert!(!allows_contact(&invalid, own, peer));
+    }
     assert_eq!(ordered_pair(own, peer), ordered_pair(peer, own));
 }
 
@@ -125,7 +136,7 @@ async fn database_discovery_contact_requests_respect_optout_ignore_and_expiry() 
     let bid = account_id(&bob).unwrap();
     for preferences in [
         serde_json::json!({"allowPrivateMessages":false}),
-        serde_json::json!({"ignored":[{"id":aid}]}),
+        serde_json::json!({"ignored":[{"id":aid,"name":"Alice"}]}),
     ] {
         sqlx::query("UPDATE users SET preferences=$2 WHERE id=$1")
             .bind(bid)
@@ -147,7 +158,7 @@ async fn database_discovery_contact_requests_respect_optout_ignore_and_expiry() 
     request_contact(&pool, &alice, bid).await.unwrap();
     sqlx::query("UPDATE users SET preferences=$2 WHERE id=$1")
         .bind(aid)
-        .bind(serde_json::json!({"ignored":[{"id":bid}]}))
+        .bind(serde_json::json!({"ignored":[{"id":bid,"name":"Bob"}]}))
         .execute(&pool)
         .await
         .unwrap();

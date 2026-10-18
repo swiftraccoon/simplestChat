@@ -225,20 +225,15 @@ struct ChatAccount {
 
 impl ChatAccount {
     fn allows_private_messages_from(&self, peer: Uuid) -> bool {
-        let peer = peer.to_string();
-        self.preferences
-            .get("allowPrivateMessages")
-            .and_then(serde_json::Value::as_bool)
-            .unwrap_or(true)
-            && !self
-                .preferences
-                .get("ignored")
-                .and_then(serde_json::Value::as_array)
-                .is_some_and(|people| {
-                    people.iter().any(|person| {
-                        person.get("id").and_then(serde_json::Value::as_str) == Some(peer.as_str())
-                    })
-                })
+        let Ok(preferences) = account::decode_chat_preferences(self.preferences.clone(), self.id)
+        else {
+            return false;
+        };
+        preferences.allow_private_messages
+            && !preferences
+                .ignored
+                .iter()
+                .any(|person| person.id == peer.to_string())
     }
 }
 
@@ -1187,6 +1182,31 @@ pub fn spawn_retention(pool: PgPool) -> tokio::task::JoinHandle<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn malformed_saved_account_policy_never_allows_private_delivery() {
+        let mut account = ChatAccount {
+            id: Uuid::new_v4(),
+            display_name: "Account".into(),
+            preferences: serde_json::json!({}),
+            chat_color: None,
+            chat_style: "accent".into(),
+            auth_version: 0,
+        };
+        let peer = Uuid::new_v4();
+        assert!(account.allows_private_messages_from(peer));
+        for policy in [
+            serde_json::json!({"allowPrivateMessages": "true"}),
+            serde_json::json!({"ignored": null}),
+            serde_json::json!({"ignored": [{"id": "invalid", "name": "Invalid"}]}),
+            serde_json::json!({"timestamps": "unknown"}),
+        ] {
+            account.preferences = policy;
+            assert!(!account.allows_private_messages_from(peer));
+        }
+        account.preferences = serde_json::json!({"ignored": [{"id": peer.to_string().to_uppercase(), "name": "Peer"}]});
+        assert!(!account.allows_private_messages_from(peer));
+    }
+
     #[test]
     fn history_queries_are_bounded_and_cursors_round_trip() {
         let at = Utc::now();

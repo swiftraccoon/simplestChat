@@ -10,6 +10,7 @@ const { installPwaFixture, checkPwa } = require('./pwa-checks.cjs');
 const { checkContactsBeforeRoom, checkSavedRoomsAcrossDevices } = require('./discovery-checks.cjs');
 const { privateAttachmentChecks, publicAttachmentChecks } = require('./attachment-checks.cjs');
 const { checkNotificationPreferences } = require('./notification-checks.cjs');
+const { checkAccountPrivacyAcrossDevices } = require('./privacy-follow-checks.cjs');
 const { sheet, sheetRow, sheetScreen, closeSheet } = require('./settings-sheet.cjs');
 const { participantHovercardChecks } = require('./participant-hovercard-checks.cjs');
 const assert = require('node:assert/strict');
@@ -884,7 +885,7 @@ async function preferences(page, allow) {
     const stored = page.waitForResponse(
       (response) =>
         new URL(response.url()).pathname === '/api/auth/preferences' &&
-        response.request().method() === 'PUT',
+        response.request().method() === 'PATCH',
     );
     await toggle.setChecked(allow);
     await stored;
@@ -1057,6 +1058,17 @@ async function setRole(owner, name, role) {
           header,
           close,
           settingsScreen,
+        });
+      },
+    );
+    await step(
+      'account privacy merges field changes and recovers a committed response loss',
+      async () => {
+        report.accountPrivacy = await checkAccountPrivacyAcrossDevices(owner, secondDevice, {
+          settingsScreen,
+          header,
+          close,
+          peerName: 'E2E Member',
         });
       },
     );

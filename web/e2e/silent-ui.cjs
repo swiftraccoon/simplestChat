@@ -172,6 +172,17 @@ async function run() {
               if (url.pathname === '/api/rooms') return json([]);
               if (url.pathname === '/api/auth/saved-rooms') return json({ rooms: [] });
               if (url.pathname === '/api/auth/inbox/unread') return json({ unreadCount: 0 });
+              if (url.pathname === '/api/auth/preferences') {
+                assert.equal(request.method(), 'GET');
+                assert.match(request.headers().authorization, /^Bearer /);
+                return json({
+                  allowPrivateMessages: true,
+                  sounds: false,
+                  largeText: false,
+                  timestamps: 'time',
+                  ignored: [],
+                });
+              }
               if (url.pathname === '/api/auth/notification-preferences')
                 return json({
                   privateMessages: false,

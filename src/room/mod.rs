@@ -7,6 +7,7 @@ mod control;
 pub mod history;
 pub mod invites;
 pub mod moderation;
+mod privacy;
 pub mod roles;
 pub mod settings;
 pub mod social;
@@ -2845,6 +2846,9 @@ impl RoomManager {
             tokio::time::timeout(control::ADMISSION_TIMEOUT, control::lock_room(&room_lock))
                 .await
                 .map_err(|_| anyhow::anyhow!("Room control is busy; try again"))?;
+        let account_preferences = self
+            .membership_chat_preferences(authenticated, &participant_id)
+            .await?;
         // Now acquire write lock for mutation
         let mut room = measure(Stage::RoomLockWait, room_lock.write()).await;
         // Only post-lock validation/commit/fan-out work belongs to this stage;
@@ -2967,9 +2971,13 @@ impl RoomManager {
                 return Ok(JoinResult::Lobbied);
             }
 
+            let mut social = social::ParticipantSocial::new(room.social.next_sequence);
+            if let Some(preferences) = &account_preferences {
+                social.apply_account_preferences(preferences);
+            }
             let participant = Participant {
                 id: participant_id.clone(),
-                social: social::ParticipantSocial::new(room.social.next_sequence),
+                social,
                 name: participant_name.clone(),
                 sender,
                 media_session_id,
@@ -5746,6 +5754,21 @@ impl RoomManager {
             anyhow::bail!("Room administration changes are rate limited");
         }
 
+        let authenticated = room.lobby.get(target_id).unwrap().authenticated;
+        drop(room);
+        let account_preferences = self
+            .membership_chat_preferences(authenticated, target_id)
+            .await?;
+        let mut room = room_lock.write().await;
+        room.ensure_live()?;
+        if room
+            .lobby
+            .get(target_id)
+            .is_none_or(|entry| entry.sender.is_closed())
+        {
+            anyhow::bail!("Participant has already disconnected");
+        }
+
         // Remove from lobby
         let entry = room
             .lobby
@@ -5777,9 +5800,13 @@ impl RoomManager {
         let (admitted_role, admitted_punitive) = lobby_admission_state(&room, &entry);
 
         // Insert into participants
+        let mut social = social::ParticipantSocial::new(room.social.next_sequence);
+        if let Some(preferences) = &account_preferences {
+            social.apply_account_preferences(preferences);
+        }
         let participant = Participant {
             id: entry.participant_id.clone(),
-            social: social::ParticipantSocial::new(room.social.next_sequence),
+            social,
             name: entry.name.clone(),
             sender: entry.sender.clone(),
             media_session_id: entry.media_session_id,
@@ -6659,10 +6686,10 @@ mod security_tests {
             ("Maya", "maya (2)", "MAYA (3)"),
             "a taken name gains the smallest free number, ignoring case and spaces"
         );
-        let (account, _tx4, _rx4) = join(uuid::Uuid::new_v4().to_string(), "Maya", true).await;
+        let (account, _tx4, _rx4) = join(uuid::Uuid::new_v4().to_string(), "Maya", false).await;
         assert_eq!(
             account, "Maya (4)",
-            "accounts also receive an unambiguous room label"
+            "UUID guest identities also receive an unambiguous room label"
         );
         let (variant, _tx7, _rx7) = join("g7".into(), "Ma\u{200D}ya", false).await;
         assert_eq!(variant, "Ma\u{200D}ya (5)");
@@ -7103,7 +7130,7 @@ mod security_tests {
                 user_id.clone(),
                 "User".into(),
                 first_tx.clone(),
-                true,
+                false,
                 Arc::new(AtomicBool::new(false)),
                 None,
                 "token-1",
@@ -7124,7 +7151,7 @@ mod security_tests {
                 user_id.clone(),
                 "User".into(),
                 second_tx.clone(),
-                true,
+                false,
                 Arc::new(AtomicBool::new(false)),
                 None,
                 "token-2",
