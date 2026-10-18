@@ -510,6 +510,7 @@ mod tests {
             removed_at: None,
             revision: 0,
             edited_at: None,
+            account_conversation: None,
             reactions: Vec::new(),
         };
         (

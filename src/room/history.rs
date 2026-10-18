@@ -3,7 +3,10 @@
 //! Visibility is checked before querying: public history requires live room
 //! membership; a PM conversation is always derived from the authenticated UUID.
 //! Expiry is enforced by every read, independently of background deletion.
-use crate::auth::{account, routes, types::AuthError};
+use crate::auth::{
+    account, routes,
+    types::{AuthError, Claims},
+};
 use crate::signaling::{SignalingServer, protocol::ChatEntry};
 use axum::{
     Json,
@@ -79,8 +82,24 @@ pub struct ReadResult {
 pub struct SendRequest {
     pub client_message_id: String,
     pub content: String,
+    pub reply_to: Option<Uuid>,
+    pub room_id: Option<String>,
     #[serde(default)]
     pub attachment_ids: Vec<Uuid>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SetReactionRequest {
+    pub emoji: String,
+    pub present: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReactionResult {
+    pub message_id: String,
+    pub reactions: Vec<crate::signaling::protocol::ChatReaction>,
 }
 
 #[derive(Clone, Deserialize)]
@@ -207,6 +226,13 @@ pub(crate) fn public_conversation(room: &str) -> String {
 fn private_conversation(a: Uuid, b: Uuid) -> String {
     let (a, b) = if a < b { (a, b) } else { (b, a) };
     format!("pm:{a}:{b}")
+}
+
+/// Conversation identity is derived by the server, never supplied in a message
+/// body. Return its capability from that authority on every durable read.
+fn conversation_message(mut message: ChatEntry, account: bool) -> ChatEntry {
+    message.account_conversation = account.then_some(true);
+    message
 }
 
 fn invalid(message: &'static str) -> sqlx::Error {
@@ -346,7 +372,7 @@ async fn insert_message(
         .bind(&conversation)
         .execute(&mut *connection)
         .await?;
-    let mut message = message.clone();
+    let mut message = conversation_message(message.clone(), recipient.is_some());
     let existing:Option<SqlJson<ChatEntry>>=sqlx::query_scalar("SELECT body FROM chat_messages WHERE conversation=$1 AND sender_session=$2 AND client_message_id=$3")
         .bind(&conversation).bind(sender_session).bind(&message.client_message_id).fetch_optional(&mut *connection).await?;
     if let Some(existing) = existing {
@@ -365,7 +391,7 @@ async fn insert_message(
         {
             return Err(invalid("Message ID was already used"));
         }
-        return Ok(existing.0);
+        return Ok(conversation_message(existing.0, recipient.is_some()));
     }
     if !attachment_ids.is_empty() && !sender_authenticated {
         return Err(invalid("Sign in to attach files"));
@@ -426,7 +452,7 @@ async fn insert_message(
         {
             return Err(invalid("Message ID was already used"));
         }
-        return Ok(saved.0);
+        return Ok(conversation_message(saved.0, recipient.is_some()));
     };
     if let Some(recipient) = recipient {
         let pairs = if sender < recipient {
@@ -552,7 +578,10 @@ pub(crate) async fn page(
         (None, None)
     };
     Ok(HistoryPage {
-        messages: rows.into_iter().map(|(_, _, entry)| entry.0).collect(),
+        messages: rows
+            .into_iter()
+            .map(|(_, _, entry)| conversation_message(entry.0, conversation.starts_with("pm:")))
+            .collect(),
         next_cursor,
         newer_cursor,
         first_unread_message_id: first_unread.map(|id| id.to_string()),
@@ -590,6 +619,46 @@ pub(crate) async fn save_reactions(
     sqlx::query("UPDATE chat_messages SET body=jsonb_set(body,'{reactions}',$2) WHERE id=$1 AND expires_at>now() AND body->>'removedAt' IS NULL")
         .bind(id).bind(SqlJson(reactions)).execute(pool).await?;
     Ok(())
+}
+
+/// Toggle against the authoritative retained public row, serialized with edits,
+/// quoted sends and removal. The admitted caller supplies its current ignore
+/// list; private conversations and expired/removed rows cannot enter this path.
+pub(crate) async fn react_public(
+    pool: &PgPool,
+    room: &str,
+    id: &str,
+    participant: &str,
+    ignored: &[String],
+    emoji: &str,
+) -> Result<Option<ChatEntry>, sqlx::Error> {
+    let id: Uuid = id.parse().map_err(|_| invalid("Invalid message ID"))?;
+    let mut tx = pool.begin().await?;
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1,29))")
+        .bind(public_conversation(room))
+        .execute(&mut *tx)
+        .await?;
+    let saved: Option<SqlJson<ChatEntry>> = sqlx::query_scalar(
+        "SELECT body FROM chat_messages WHERE room_id=$1 AND id=$2 AND expires_at>now()
+          AND body->>'removedAt' IS NULL AND NOT (body->>'participantId'=ANY($3)) FOR UPDATE",
+    )
+    .bind(room)
+    .bind(id)
+    .bind(ignored)
+    .fetch_optional(&mut *tx)
+    .await?;
+    let Some(SqlJson(mut message)) = saved else {
+        return Ok(None);
+    };
+    message.reactions =
+        super::social::toggle_reactions(&message.reactions, participant, emoji).map_err(invalid)?;
+    sqlx::query("UPDATE chat_messages SET body=jsonb_set(body,'{reactions}',$2) WHERE id=$1")
+        .bind(id)
+        .bind(SqlJson(&message.reactions))
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await?;
+    Ok(Some(message))
 }
 
 pub(crate) async fn lookup_public(
@@ -662,7 +731,7 @@ async fn edit_in_transaction(
     .bind(guest_session)
     .fetch_one(&mut *connection)
     .await?;
-    let mut edited = saved.0;
+    let mut edited = conversation_message(saved.0, conversation.starts_with("pm:"));
     let old_revision = edited.revision;
     apply_edit(&mut edited, request).map_err(invalid)?;
     if old_revision != edited.revision {
@@ -726,8 +795,32 @@ pub async fn edit_message(
     Path((peer, message)): Path<(Uuid, Uuid)>,
     Json(request): Json<EditRequest>,
 ) -> Result<(HeaderMap, Json<ChatEntry>), AuthError> {
-    let _permit = routes::acquire_auth_request(&server)?;
+    let permit = routes::acquire_auth_request(&server)?;
     let claims = account::authenticated_claims(&server, &headers).await?;
+    let saved = tokio::spawn(async move {
+        let _permit = permit;
+        let saved = tokio::time::timeout(
+            std::time::Duration::from_secs(15),
+            save_private_edit(&server, &claims, peer, message, request),
+        )
+        .await
+        .map_err(|_| AuthError::ServiceBusy)??;
+        server.room_manager().deliver_inbox_edit(&saved).await;
+        Ok::<_, AuthError>(saved)
+    })
+    .await
+    .map_err(|_| AuthError::ServiceBusy)??;
+    Ok((routes::no_store_headers(), Json(saved)))
+}
+
+async fn save_private_edit(
+    server: &SignalingServer,
+    claims: &Claims,
+    peer: Uuid,
+    message: Uuid,
+    request: EditRequest,
+) -> Result<ChatEntry, AuthError> {
+    account::ensure_unexpired_claim(claims)?;
     let own: Uuid = claims.sub.parse().map_err(|_| AuthError::InvalidToken)?;
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
     let mut tx = pool.begin().await.map_err(routes::database_error)?;
@@ -737,27 +830,23 @@ pub async fn edit_message(
     if sender.auth_version != claims.auth_version {
         return Err(AuthError::InvalidToken);
     }
-    let current:bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM sessions WHERE id=$1 AND user_id=$2 AND expires_at>clock_timestamp() FOR SHARE)")
-        .bind(claims.sid).bind(own).fetch_one(&mut *tx).await.map_err(routes::database_error)?;
-    if !current {
-        return Err(AuthError::InvalidToken);
-    }
+    validate_private_session(&mut tx, claims, own).await?;
     if !private_accounts_allow(&sender, &recipient) {
         return Err(AuthError::InvalidInput("Private message unavailable"));
     }
-    let edited = edit_in_transaction(
-        &mut tx,
-        &private_conversation(own, peer),
-        own,
-        None,
-        message,
-        &request,
-    )
-    .await
-    .map_err(edit_error)?;
+    let conversation = private_conversation(own, peer);
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1,29))")
+        .bind(&conversation)
+        .execute(&mut *tx)
+        .await
+        .map_err(routes::database_error)?;
+    validate_private_session(&mut tx, claims, own).await?;
+    let edited = edit_in_transaction(&mut tx, &conversation, own, None, message, &request)
+        .await
+        .map_err(edit_error)?;
+    validate_private_session(&mut tx, claims, own).await?;
     tx.commit().await.map_err(routes::database_error)?;
-    server.room_manager().deliver_inbox_edit(&edited).await;
-    Ok((routes::no_store_headers(), Json(edited)))
+    Ok(edited)
 }
 
 fn edit_error(error: sqlx::Error) -> AuthError {
@@ -768,6 +857,128 @@ fn edit_error(error: sqlx::Error) -> AuthError {
         }
         other => routes::database_error(other),
     }
+}
+
+/// Latest durable account message for owned cross-room reconciliation. Neither
+/// an arbitrary room ID nor a client-provided message body selects its scope.
+pub(crate) async fn private_message(
+    pool: &PgPool,
+    own: Uuid,
+    peer: Uuid,
+    message: Uuid,
+) -> Result<Option<ChatEntry>, sqlx::Error> {
+    let saved: Option<SqlJson<ChatEntry>> = sqlx::query_scalar(
+        "SELECT body FROM chat_messages WHERE conversation=$1 AND id=$2 AND expires_at>now() AND body->>'removedAt' IS NULL",
+    ).bind(private_conversation(own, peer)).bind(message).fetch_optional(pool).await?;
+    Ok(saved.map(|saved| conversation_message(saved.0, true)))
+}
+
+async fn set_private_reaction_in_transaction(
+    connection: &mut PgConnection,
+    conversation: &str,
+    message: Uuid,
+    actor: &str,
+    request: &SetReactionRequest,
+) -> Result<ChatEntry, sqlx::Error> {
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1,29))")
+        .bind(conversation)
+        .execute(&mut *connection)
+        .await?;
+    let saved: SqlJson<ChatEntry> = sqlx::query_scalar(
+        "SELECT body FROM chat_messages WHERE conversation=$1 AND id=$2 AND expires_at>now() AND body->>'removedAt' IS NULL FOR UPDATE",
+    ).bind(conversation).bind(message).fetch_one(&mut *connection).await?;
+    let mut message = conversation_message(saved.0, true);
+    message.reactions =
+        super::social::set_reaction(&message.reactions, actor, &request.emoji, request.present)
+            .map_err(invalid)?;
+    sqlx::query("UPDATE chat_messages SET body=jsonb_set(body,'{reactions}',$2) WHERE id=$1")
+        .bind(
+            message
+                .message_id
+                .parse::<Uuid>()
+                .map_err(|_| invalid("Invalid message ID"))?,
+        )
+        .bind(SqlJson(&message.reactions))
+        .execute(&mut *connection)
+        .await?;
+    Ok(message)
+}
+
+/// Explicit presence makes repeated requests safe after a lost response. Current
+/// account consent/session authority is held through the transaction commit.
+pub async fn set_private_reaction(
+    State(server): State<SignalingServer>,
+    headers: HeaderMap,
+    Path((peer, message)): Path<(Uuid, Uuid)>,
+    Json(request): Json<SetReactionRequest>,
+) -> Result<(HeaderMap, Json<ReactionResult>), AuthError> {
+    let permit = routes::acquire_auth_request(&server)?;
+    let claims = account::authenticated_claims(&server, &headers).await?;
+    let saved = tokio::spawn(async move {
+        let _permit = permit;
+        let saved = tokio::time::timeout(
+            std::time::Duration::from_secs(15),
+            save_private_reaction(&server, &claims, peer, message, request),
+        )
+        .await
+        .map_err(|_| AuthError::ServiceBusy)??;
+        server.room_manager().deliver_inbox_reactions(&saved).await;
+        Ok::<_, AuthError>(saved)
+    })
+    .await
+    .map_err(|_| AuthError::ServiceBusy)??;
+    Ok((
+        routes::no_store_headers(),
+        Json(ReactionResult {
+            message_id: saved.message_id,
+            reactions: saved.reactions,
+        }),
+    ))
+}
+
+async fn save_private_reaction(
+    server: &SignalingServer,
+    claims: &Claims,
+    peer: Uuid,
+    message: Uuid,
+    request: SetReactionRequest,
+) -> Result<ChatEntry, AuthError> {
+    account::ensure_unexpired_claim(claims)?;
+    let own: Uuid = claims.sub.parse().map_err(|_| AuthError::InvalidToken)?;
+    if own == peer || !crate::signaling::protocol::REACTIONS.contains(&request.emoji.as_str()) {
+        return Err(AuthError::InvalidInput("Private reaction unavailable"));
+    }
+    let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
+    let mut tx = pool.begin().await.map_err(routes::database_error)?;
+    let (sender, recipient) = lock_private_accounts(&mut tx, own, peer)
+        .await
+        .map_err(edit_error)?;
+    if sender.auth_version != claims.auth_version {
+        return Err(AuthError::InvalidToken);
+    }
+    validate_private_session(&mut tx, claims, own).await?;
+    if !private_accounts_allow(&sender, &recipient) {
+        return Err(AuthError::InvalidInput("Private reaction unavailable"));
+    }
+    let conversation = private_conversation(own, peer);
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1,29))")
+        .bind(&conversation)
+        .execute(&mut *tx)
+        .await
+        .map_err(routes::database_error)?;
+    validate_private_session(&mut tx, claims, own).await?;
+    let saved = set_private_reaction_in_transaction(
+        &mut tx,
+        &conversation,
+        message,
+        &own.to_string(),
+        &request,
+    )
+    .await
+    .map_err(edit_error)?;
+    validate_private_session(&mut tx, claims, own).await?;
+    tx.commit().await.map_err(routes::database_error)?;
+    Ok(saved)
 }
 
 pub(crate) async fn pinned_messages(
@@ -907,7 +1118,7 @@ pub async fn inbox(
                     |(peer_id, peer_name, _, _, message, unread_count)| Conversation {
                         peer_id,
                         peer_name,
-                        last_message: message.0,
+                        last_message: conversation_message(message.0, true),
                         unread_count,
                     },
                 )
@@ -996,8 +1207,60 @@ pub async fn send_message(
     Path(peer): Path<Uuid>,
     Json(request): Json<SendRequest>,
 ) -> Result<(HeaderMap, Json<ChatEntry>), AuthError> {
-    let _permit = routes::acquire_auth_request(&server)?;
+    let permit = routes::acquire_auth_request(&server)?;
     let claims = account::authenticated_claims(&server, &headers).await?;
+    let saved = tokio::spawn(async move {
+        let _permit = permit;
+        let (saved, created) = tokio::time::timeout(
+            std::time::Duration::from_secs(15),
+            save_private_message(&server, &claims, peer, request),
+        )
+        .await
+        .map_err(|_| AuthError::ServiceBusy)??;
+        if created {
+            server.room_manager().deliver_inbox_message(&saved);
+            if let Some(pool) = server.db_pool() {
+                crate::push::enqueue(pool, peer).await;
+            }
+        }
+        Ok::<_, AuthError>(saved)
+    })
+    .await
+    .map_err(|_| AuthError::ServiceBusy)??;
+    Ok((routes::no_store_headers(), Json(saved)))
+}
+
+async fn private_relationship(
+    connection: &mut PgConnection,
+    own: Uuid,
+    peer: Uuid,
+) -> Result<bool, sqlx::Error> {
+    let conversation: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM chat_inbox WHERE user_id=$1 AND peer_id=$2 AND expires_at>now())")
+        .bind(own).bind(peer).fetch_one(&mut *connection).await?;
+    Ok(conversation || crate::auth::discovery::accepted_contact(connection, own, peer).await?)
+}
+
+async fn validate_private_session(
+    connection: &mut PgConnection,
+    claims: &Claims,
+    own: Uuid,
+) -> Result<(), AuthError> {
+    account::ensure_unexpired_claim(claims)?;
+    let current: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM sessions WHERE id=$1 AND user_id=$2 AND expires_at>clock_timestamp() FOR SHARE)")
+        .bind(claims.sid).bind(own).fetch_one(connection).await.map_err(routes::database_error)?;
+    if !current {
+        return Err(AuthError::InvalidToken);
+    }
+    account::ensure_unexpired_claim(claims)
+}
+
+pub(super) async fn save_private_message(
+    server: &SignalingServer,
+    claims: &Claims,
+    peer: Uuid,
+    request: SendRequest,
+) -> Result<(ChatEntry, bool), AuthError> {
+    account::ensure_unexpired_claim(claims)?;
     let own: Uuid = claims.sub.parse().map_err(|_| AuthError::InvalidToken)?;
     if own == peer
         || !crate::signaling::protocol::valid_correlation_id(&request.client_message_id)
@@ -1009,6 +1272,28 @@ pub async fn send_message(
         return Err(AuthError::InvalidInput("Invalid private message"));
     }
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
+    // Read before taking any row lock. A first message acquires room control
+    // before users/sessions, matching room sends and avoiding a lock inversion.
+    let context = if let Some(id) = &request.room_id {
+        let related = {
+            let mut connection = pool.acquire().await.map_err(routes::database_error)?;
+            private_relationship(&mut connection, own, peer)
+                .await
+                .map_err(routes::database_error)?
+        };
+        if related {
+            None
+        } else {
+            Some(
+                server
+                    .room_manager()
+                    .private_creation_context(id, own, peer)
+                    .await?,
+            )
+        }
+    } else {
+        None
+    };
     let conversation = private_conversation(own, peer);
     let mut tx = pool.begin().await.map_err(routes::database_error)?;
     let (sender, recipient) = lock_private_accounts(&mut tx, own, peer)
@@ -1022,18 +1307,12 @@ pub async fn send_message(
     if sender.auth_version != claims.auth_version {
         return Err(AuthError::InvalidToken);
     }
-    let session:Option<Uuid>=sqlx::query_scalar("SELECT id FROM sessions WHERE id=$1 AND user_id=$2 AND expires_at>clock_timestamp() FOR SHARE")
-        .bind(claims.sid).bind(own).fetch_optional(&mut *tx).await.map_err(routes::database_error)?;
-    if session.is_none() {
-        return Err(AuthError::InvalidToken);
-    }
-    let contact:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM chat_inbox WHERE user_id=$1 AND peer_id=$2 AND expires_at>now())")
-        .bind(own).bind(peer).fetch_one(&mut *tx).await.map_err(routes::database_error)?;
-    let contact = contact
-        || crate::auth::discovery::accepted_contact(&mut tx, own, peer)
+    validate_private_session(&mut tx, claims, own).await?;
+    if context.is_none()
+        && !private_relationship(&mut tx, own, peer)
             .await
-            .map_err(routes::database_error)?;
-    if !contact {
+            .map_err(routes::database_error)?
+    {
         return Err(AuthError::InvalidInput(
             "Add this person as a contact or start the conversation in a room",
         ));
@@ -1045,10 +1324,26 @@ pub async fn send_message(
         .execute(&mut *tx)
         .await
         .map_err(routes::database_error)?;
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1,29))")
+        .bind(&conversation)
+        .execute(&mut *tx)
+        .await
+        .map_err(routes::database_error)?;
+    validate_private_session(&mut tx, claims, own).await?;
     let existing:Option<SqlJson<ChatEntry>>=sqlx::query_scalar("SELECT body FROM chat_messages WHERE conversation=$1 AND sender_session=$2 AND client_message_id=$3 AND expires_at>now()")
         .bind(&conversation).bind(own).bind(&request.client_message_id).fetch_optional(&mut *tx).await.map_err(routes::database_error)?;
     if let Some(existing) = existing {
         if (existing.0.edited_at.is_none() && existing.0.content != request.content)
+            || existing
+                .0
+                .reply_to
+                .as_ref()
+                .map(|reply| reply.message_id.as_str())
+                != request
+                    .reply_to
+                    .as_ref()
+                    .map(|id| id.to_string())
+                    .as_deref()
             || existing
                 .0
                 .attachments
@@ -1059,7 +1354,8 @@ pub async fn send_message(
         {
             return Err(AuthError::InvalidInput("Message ID was already used"));
         }
-        return Ok((routes::no_store_headers(), Json(existing.0)));
+        validate_private_session(&mut tx, claims, own).await?;
+        return Ok((conversation_message(existing.0, true), false));
     }
     if !private_accounts_allow(&sender, &recipient) {
         return Err(AuthError::InvalidInput("Private message unavailable"));
@@ -1069,6 +1365,19 @@ pub async fn send_message(
     if recent >= 30 {
         return Err(AuthError::RateLimited);
     }
+    let reply_to = if let Some(id) = request.reply_to {
+        let original: SqlJson<ChatEntry> = sqlx::query_scalar(
+            "SELECT body FROM chat_messages WHERE conversation=$1 AND id=$2 AND expires_at>now() AND body->>'removedAt' IS NULL",
+        ).bind(&conversation).bind(id).fetch_one(&mut *tx).await.map_err(edit_error)?;
+        Some(crate::signaling::protocol::ChatReplyRef {
+            message_id: id.to_string(),
+            participant_id: original.0.participant_id,
+            participant_name: original.0.participant_name,
+            excerpt: quote_excerpt(&original.0.content),
+        })
+    } else {
+        None
+    };
     let style = serde_json::from_value(
         serde_json::json!({"color":sender.chat_color,"style":sender.chat_style}),
     )
@@ -1079,6 +1388,7 @@ pub async fn send_message(
         participant_id: own.to_string(),
         participant_name: sender.display_name.clone(),
         recipient_id: Some(peer.to_string()),
+        account_conversation: Some(true),
         recipient_name: Some(recipient.display_name.clone()),
         content: request.content,
         attachments: Vec::new(),
@@ -1087,7 +1397,7 @@ pub async fn send_message(
         revision: 0,
         edited_at: None,
         chat_style: style,
-        reply_to: None,
+        reply_to,
         reactions: Vec::new(),
     };
     let saved = insert_message(
@@ -1101,13 +1411,52 @@ pub async fn send_message(
     )
     .await
     .map_err(routes::database_error)?;
+    validate_private_session(&mut tx, claims, own).await?;
     tx.commit().await.map_err(routes::database_error)?;
-    server.room_manager().deliver_inbox_message(&saved);
-    crate::push::enqueue(pool, peer).await;
-    Ok((routes::no_store_headers(), Json(saved)))
+    Ok((saved, true))
 }
 
 impl super::RoomManager {
+    /// First-account-PM authority comes from a concrete admitted room context.
+    /// Retaining its gate keeps membership and room chat permissions stable
+    /// while the caller subsequently acquires users, session and message locks.
+    async fn private_creation_context(
+        &self,
+        id: &str,
+        own: Uuid,
+        peer: Uuid,
+    ) -> Result<tokio::sync::OwnedMutexGuard<()>, AuthError> {
+        let unavailable = || AuthError::InvalidInput("Private message unavailable");
+        let room = self.get_room(id).map_err(|_| unavailable())?;
+        let control = tokio::time::timeout(
+            super::control::ADMISSION_TIMEOUT,
+            super::control::lock_room(&room),
+        )
+        .await
+        .map_err(|_| AuthError::ServiceBusy)?;
+        let state = room.read().await;
+        if state.ensure_live().is_err()
+            || self.drain.is_draining()
+            || !self
+                .rooms
+                .read()
+                .unwrap_or_else(|error| error.into_inner())
+                .get(id)
+                .is_some_and(|current| std::sync::Arc::ptr_eq(current, &room))
+        {
+            return Err(unavailable());
+        }
+        if !super::social::can_start_account_conversation(
+            &state,
+            &own.to_string(),
+            &peer.to_string(),
+        ) {
+            return Err(unavailable());
+        }
+        drop(state);
+        Ok(control)
+    }
+
     /// Inbox storage owns delivery; live room sockets get a bounded notification
     /// as well. A busy/disconnected socket reconciles from its durable inbox.
     pub(crate) fn deliver_inbox_message(&self, message: &ChatEntry) {
@@ -1136,16 +1485,22 @@ impl super::RoomManager {
             if room.deleting {
                 continue;
             }
-            let Some(participant) = room.participants.get(recipient) else {
-                continue;
-            };
-            if participant.authenticated
-                && participant
-                    .social
-                    .accepts_inbox_from(&message.participant_id)
-            {
-                let _ =
-                    super::try_send_essential(&self.metrics, &participant.sender, event.clone());
+            for participant in room.participants.values().filter(|person| {
+                person.authenticated
+                    && (person.id == recipient || person.id == message.participant_id)
+            }) {
+                let peer = if participant.id == recipient {
+                    message.participant_id.as_str()
+                } else {
+                    recipient
+                };
+                if participant.social.accepts_inbox_from(peer) {
+                    let _ = super::try_send_essential(
+                        &self.metrics,
+                        &participant.sender,
+                        event.clone(),
+                    );
+                }
             }
         }
     }
@@ -1259,6 +1614,7 @@ mod tests {
             participant_id: Uuid::new_v4().to_string(),
             participant_name: "Author".into(),
             recipient_id: None,
+            account_conversation: None,
             recipient_name: None,
             content: content.into(),
             sent_at: Utc::now().to_rfc3339(),
@@ -1355,6 +1711,310 @@ mod tests {
         ] {
             assert!(query.validate().is_err());
         }
+    }
+
+    #[tokio::test]
+    #[ignore = "requires a migrated disposable TEST_DATABASE_URL"]
+    async fn database_private_reactions_are_idempotent_and_conversation_scoped() {
+        let pool = PgPool::connect(&std::env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL"))
+            .await
+            .unwrap();
+        let author = Uuid::new_v4();
+        let peer = Uuid::new_v4();
+        for account in [author, peer] {
+            sqlx::query(
+                "INSERT INTO users(id,email,display_name) VALUES($1,$2,'Private reaction tester')",
+            )
+            .bind(account)
+            .bind(format!("{account}@privatereactions.invalid"))
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+        let mut original = entry("Private original");
+        original.participant_id = author.to_string();
+        original.recipient_id = Some(peer.to_string());
+        original.recipient_name = Some("Peer".into());
+        let original = persist_message(&pool, None, author, true, 90, &original, &[])
+            .await
+            .unwrap();
+        assert_eq!(original.account_conversation, Some(true));
+        let id = original.message_id.parse().unwrap();
+        let conversation = private_conversation(author, peer);
+        for _ in 0..2 {
+            let mut tx = pool.begin().await.unwrap();
+            let changed = set_private_reaction_in_transaction(
+                &mut tx,
+                &conversation,
+                id,
+                &author.to_string(),
+                &SetReactionRequest {
+                    emoji: "👍".into(),
+                    present: true,
+                },
+            )
+            .await
+            .unwrap();
+            tx.commit().await.unwrap();
+            assert_eq!(
+                changed.reactions[0].participant_ids,
+                vec![author.to_string()]
+            );
+        }
+        let mut tx = pool.begin().await.unwrap();
+        let changed = set_private_reaction_in_transaction(
+            &mut tx,
+            &conversation,
+            id,
+            &peer.to_string(),
+            &SetReactionRequest {
+                emoji: "👍".into(),
+                present: true,
+            },
+        )
+        .await
+        .unwrap();
+        tx.commit().await.unwrap();
+        assert_eq!(changed.reactions[0].participant_ids.len(), 2);
+        for _ in 0..2 {
+            let mut tx = pool.begin().await.unwrap();
+            let changed = set_private_reaction_in_transaction(
+                &mut tx,
+                &conversation,
+                id,
+                &author.to_string(),
+                &SetReactionRequest {
+                    emoji: "👍".into(),
+                    present: false,
+                },
+            )
+            .await
+            .unwrap();
+            tx.commit().await.unwrap();
+            assert_eq!(changed.reactions[0].participant_ids, vec![peer.to_string()]);
+        }
+        let mut tx = pool.begin().await.unwrap();
+        assert!(
+            set_private_reaction_in_transaction(
+                &mut tx,
+                &private_conversation(author, Uuid::new_v4()),
+                id,
+                &author.to_string(),
+                &SetReactionRequest {
+                    emoji: "👍".into(),
+                    present: true
+                }
+            )
+            .await
+            .is_err()
+        );
+        tx.rollback().await.unwrap();
+        let current = private_message(&pool, author, peer, id)
+            .await
+            .unwrap()
+            .unwrap();
+        let edited = edit_saved(
+            &pool,
+            None,
+            author,
+            None,
+            &current,
+            &EditRequest {
+                content: "Corrected private original".into(),
+                expected_revision: 0,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(edited.reactions[0].participant_ids, vec![peer.to_string()]);
+        sqlx::query("UPDATE chat_messages SET body=body-'accountConversation' WHERE id=$1")
+            .bind(id)
+            .execute(&pool)
+            .await
+            .unwrap();
+        let page = page(
+            &pool,
+            &conversation,
+            Some(author),
+            90,
+            &HistoryQuery::default(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            page.messages[0].account_conversation,
+            Some(true),
+            "capability derives from durable conversation authority"
+        );
+        sqlx::query("UPDATE chat_messages SET expires_at=now()-interval '1 second' WHERE id=$1")
+            .bind(id)
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert!(
+            private_message(&pool, author, peer, id)
+                .await
+                .unwrap()
+                .is_none()
+        );
+        let mut tx = pool.begin().await.unwrap();
+        assert!(
+            set_private_reaction_in_transaction(
+                &mut tx,
+                &conversation,
+                id,
+                &author.to_string(),
+                &SetReactionRequest {
+                    emoji: "👍".into(),
+                    present: true
+                }
+            )
+            .await
+            .is_err()
+        );
+        tx.rollback().await.unwrap();
+        sqlx::query("DELETE FROM users WHERE id=ANY($1)")
+            .bind(vec![author, peer])
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    #[ignore = "requires a migrated disposable TEST_DATABASE_URL"]
+    async fn database_saved_public_reactions_serialize_and_preserve_authoritative_edits() {
+        let pool = PgPool::connect(&std::env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL"))
+            .await
+            .unwrap();
+        let author = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO users(id,email,display_name) VALUES($1,$2,'Saved reaction tester')",
+        )
+        .bind(author)
+        .bind(format!("{author}@reactions.invalid"))
+        .execute(&pool)
+        .await
+        .unwrap();
+        let room = format!("reaction-{}", Uuid::new_v4());
+        sqlx::query(
+            "INSERT INTO rooms(id,owner_id,display_name,history_retention_days) VALUES($1,$2,$1,7)",
+        )
+        .bind(&room)
+        .bind(author)
+        .execute(&pool)
+        .await
+        .unwrap();
+        let mut original = entry("Original retained question");
+        original.participant_id = author.to_string();
+        persist_message(&pool, Some(&room), Uuid::new_v4(), true, 7, &original, &[])
+            .await
+            .unwrap();
+        let first = Uuid::new_v4().to_string();
+        let second = Uuid::new_v4().to_string();
+        let (a, b) = tokio::join!(
+            react_public(&pool, &room, &original.message_id, &first, &[], "👍"),
+            react_public(&pool, &room, &original.message_id, &second, &[], "👍"),
+        );
+        assert!(a.unwrap().is_some());
+        assert!(b.unwrap().is_some());
+        let (saved, _) = lookup_public(&pool, &room, &original.message_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            saved.reactions[0].participant_ids.len(),
+            2,
+            "concurrent toggles cannot replace one another"
+        );
+        let corrected = edit_saved(
+            &pool,
+            Some(&room),
+            author,
+            None,
+            &saved,
+            &EditRequest {
+                content: "Corrected retained question".into(),
+                expected_revision: 0,
+            },
+        )
+        .await
+        .unwrap();
+        let toggled = react_public(&pool, &room, &original.message_id, &first, &[], "👍")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(toggled.content, corrected.content);
+        assert_eq!(toggled.revision, corrected.revision);
+        assert_eq!(toggled.reactions[0].participant_ids, vec![second]);
+        assert!(
+            react_public(
+                &pool,
+                "another-room",
+                &original.message_id,
+                &first,
+                &[],
+                "👍"
+            )
+            .await
+            .unwrap()
+            .is_none()
+        );
+        assert!(
+            react_public(
+                &pool,
+                &room,
+                &original.message_id,
+                &first,
+                &[author.to_string()],
+                "👍"
+            )
+            .await
+            .unwrap()
+            .is_none()
+        );
+        assert!(
+            react_public(&pool, &room, &original.message_id, &first, &[], "🍕")
+                .await
+                .is_err()
+        );
+        let mut tx = pool.begin().await.unwrap();
+        remove_public(
+            &mut tx,
+            &room,
+            &original.message_id,
+            &Utc::now().to_rfc3339(),
+        )
+        .await
+        .unwrap();
+        tx.commit().await.unwrap();
+        assert!(
+            react_public(&pool, &room, &original.message_id, &first, &[], "👍")
+                .await
+                .unwrap()
+                .is_none()
+        );
+        let mut expired = entry("Expired question");
+        expired.participant_id = author.to_string();
+        expired.sent_at = (Utc::now() - chrono::Duration::days(8)).to_rfc3339();
+        persist_message(&pool, Some(&room), Uuid::new_v4(), true, 7, &expired, &[])
+            .await
+            .unwrap();
+        assert!(
+            react_public(&pool, &room, &expired.message_id, &first, &[], "👍")
+                .await
+                .unwrap()
+                .is_none()
+        );
+        sqlx::query("DELETE FROM rooms WHERE id=$1")
+            .bind(&room)
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("DELETE FROM users WHERE id=$1")
+            .bind(author)
+            .execute(&pool)
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
@@ -1620,6 +2280,7 @@ mod tests {
             participant_id: alice.to_string(),
             participant_name: "Alice".into(),
             recipient_id: recipient.map(|id| id.to_string()),
+            account_conversation: None,
             recipient_name: recipient.map(|_| "Bob".into()),
             content: format!("Message needle%_{n}"),
             sent_at: (base + chrono::Duration::seconds(n)).to_rfc3339(),

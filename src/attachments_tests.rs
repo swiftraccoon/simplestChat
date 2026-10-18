@@ -123,6 +123,7 @@ impl Database {
             edited_at: None,
             chat_style: Default::default(),
             reply_to: None,
+            account_conversation: None,
             reactions: Vec::new(),
         }
     }

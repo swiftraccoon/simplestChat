@@ -748,6 +748,10 @@ impl SignalingServer {
                 "/inbox/{peer}/messages/{messageId}",
                 put(crate::room::history::edit_message),
             )
+            .route(
+                "/inbox/{peer}/messages/{messageId}/reactions",
+                put(crate::room::history::set_private_reaction),
+            )
             .route("/ws-ticket", post(crate::auth::ws_tickets::issue))
             .route(
                 "/recovery/key",

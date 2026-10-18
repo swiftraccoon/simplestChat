@@ -4153,6 +4153,7 @@ mod chat_and_continuous_audio_tests {
                     removed_at: None,
                     revision: 0,
                     edited_at: None,
+                    account_conversation: None,
                     reactions: Vec::new(),
                 },
             };

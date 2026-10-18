@@ -825,6 +825,20 @@ async function send(page, text) {
   await page.locator('#chat-input').fill(text);
   await submitMessage(page);
 }
+function privateConversation(page, name) {
+  return page.getByRole('dialog', { name: `Messages with ${name}`, exact: true });
+}
+async function sendPrivate(conversation, text) {
+  const composer = conversation.getByLabel('Private message', { exact: true });
+  await composer.fill(text);
+  await composer.press('Enter');
+}
+async function dismissUnconfirmed(page, conversation) {
+  await conversation.getByRole('button', { name: 'Dismiss unconfirmed send', exact: true }).click();
+  const confirmation = page.getByRole('dialog', { name: 'Dismiss unconfirmed send?', exact: true });
+  await confirmation.getByRole('button', { name: 'Dismiss', exact: true }).click();
+  await confirmation.waitFor({ state: 'hidden' });
+}
 async function publicChat(page) {
   await page.locator('.conversation-tab[data-conversation-id="public"]').click();
 }
@@ -1022,6 +1036,7 @@ async function setRole(owner, name, role) {
     const member = await client('member');
     const guest = await client('guest');
     let secondDevice;
+    let outsider;
     const ownerEmail = `${runId}-owner@example.test`;
     const memberEmail = `${runId}-member@example.test`;
     const inviteeEmail = `${runId}-invitee@example.test`;
@@ -1029,7 +1044,7 @@ async function setRole(owner, name, role) {
       await register(owner, ownerEmail, 'E2E Owner');
       await register(member, memberEmail, 'E2E Member');
       await checkContactsBeforeRoom(owner, member, { base, header, close });
-      const outsider = await client('attachment-outsider');
+      outsider = await client('attachment-outsider');
       await register(
         outsider,
         `${runId}-attachment-outsider@example.test`,
@@ -1107,6 +1122,27 @@ async function setRole(owner, name, role) {
     await step('participant hovercards work from roster and chat names', async () => {
       await participantHovercardChecks(owner, { name: 'E2E Guest', message: 'Public hello' });
     });
+    await step(
+      'a roster account starts its first saved conversation from the current room',
+      async () => {
+        await join(outsider, 'E2E Attachment Outsider');
+        await action(owner, 'E2E Attachment Outsider', 'Private message');
+        const conversation = privateConversation(owner, 'E2E Attachment Outsider');
+        const accepted = owner.waitForResponse(
+          (response) =>
+            response.request().method() === 'POST' &&
+            /^\/api\/auth\/inbox\/[^/]+\/messages$/.test(new URL(response.url()).pathname),
+        );
+        await sendPrivate(conversation, 'First PM from a shared room');
+        const response = await accepted;
+        assert.equal(response.status(), 200);
+        assert.equal(response.request().postDataJSON().roomId, runId);
+        assert.equal((await response.json()).accountConversation, true);
+        await conversation.getByText('First PM from a shared room', { exact: true }).waitFor();
+        await close(conversation);
+        await leave(outsider);
+      },
+    );
     await step(
       'authors edit public messages and moderators pin them in the compact chat controls',
       async () => {
@@ -1229,7 +1265,44 @@ async function setRole(owner, name, role) {
           .waitFor({ state: 'visible' });
         await close(history);
         await closeSheet(owner);
+        await send(owner, 'Prejoin saved action fixture');
         await publicAttachmentChecks(owner, guest, { base, leave, join, send });
+        assert.equal(
+          await guest
+            .locator('#chat-messages .chat-msg')
+            .filter({ hasText: 'Prejoin saved action fixture' })
+            .count(),
+          0,
+          'the new guest membership cannot replay an older public row',
+        );
+        history = await roomHistory(guest);
+        const prejoin = history.locator('.history-message').filter({
+          has: guest.locator('.msg-text').filter({ hasText: /^Prejoin saved action fixture$/ }),
+        });
+        await prejoin.waitFor();
+        const prejoinId = await prejoin.getAttribute('data-message-id');
+        assert.ok(prejoinId);
+        await prejoin.getByRole('button', { name: 'React', exact: true }).click();
+        await prejoin.getByRole('button', { name: '👍', exact: true }).click();
+        await prejoin.getByRole('button', { name: '👍 1', exact: true }).waitFor();
+        await close(history);
+        await closeSheet(guest);
+        history = await roomHistory(guest);
+        const restored = history.locator(`.history-message[data-message-id="${prejoinId}"]`);
+        await restored.getByRole('button', { name: '👍 1', exact: true }).waitFor();
+        await restored.getByRole('button', { name: 'Reply', exact: true }).click();
+        await history.waitFor({ state: 'hidden' });
+        await sheet(guest).waitFor({ state: 'hidden' });
+        await send(guest, 'Reply to a saved prejoin public message');
+        const answered = owner.locator('#chat-messages .chat-msg').filter({
+          has: owner
+            .locator('.msg-text')
+            .filter({ hasText: /^Reply to a saved prejoin public message$/ }),
+        });
+        await answered
+          .locator('.msg-reply')
+          .filter({ hasText: 'Prejoin saved action fixture' })
+          .waitFor();
         await send(guest, 'Context before the search result');
         await send(guest, 'Saved browser history message');
         await send(guest, 'Context after the search result');
@@ -1461,7 +1534,8 @@ async function setRole(owner, name, role) {
       'private conversations, unread, acknowledgements and recipient isolation',
       async () => {
         await action(owner, 'E2E Member', 'Private message');
-        await send(owner, 'Private owner hello');
+        const sent = privateConversation(owner, 'E2E Member');
+        await sendPrivate(sent, 'Private owner hello');
         await member.waitForFunction(() =>
           [...document.querySelectorAll('.conversation-tab')].some(
             (node) =>
@@ -1478,28 +1552,37 @@ async function setRole(owner, name, role) {
         assert.ok(ownerId);
         const conversation = member.locator(`.conversation-tab[data-conversation-id="${ownerId}"]`);
         await conversation.click();
-        assert.equal(await conversation.getAttribute('aria-pressed'), 'true');
-        assert.equal(await conversation.getAttribute('aria-label'), 'E2E Owner');
+        const received = privateConversation(member, 'E2E Owner');
+        await received.waitFor({ state: 'visible' });
+        assert.equal(
+          await member
+            .locator('.conversation-tab[data-conversation-id="public"]')
+            .getAttribute('aria-pressed'),
+          'true',
+          'the shared account dialog preserves the underlying public conversation',
+        );
         await visible(member, 'Private owner hello');
         await visible(owner, 'Private owner hello');
         assert.equal(
-          await owner
-            .locator('.chat-msg')
+          await sent
+            .locator('.history-message')
             .filter({ hasText: 'Private owner hello' })
-            .getByRole('button', { name: 'Remove message', exact: true })
+            .getByRole('button', { name: 'Remove', exact: true })
             .count(),
           0,
         );
         assert.equal(
-          await owner
+          await sent
             .locator('.msg-text')
             .filter({ hasText: /^Private owner hello$/ })
             .count(),
           1,
         );
         assert.equal(await guest.getByText('Private owner hello', { exact: true }).count(), 0);
-        await send(member, 'Private member reply');
-        await visible(owner, 'Private member reply');
+        await sendPrivate(received, 'Private member reply');
+        await sent.getByText('Private member reply', { exact: true }).waitFor();
+        await close(sent);
+        await close(received);
       },
     );
     await step('account inbox reads retained PMs and sends through its composer', async () => {
@@ -1525,7 +1608,9 @@ async function setRole(owner, name, role) {
         .locator('.history-messages')
         .getByText('Sent through saved inbox', { exact: true })
         .waitFor({ state: 'visible' });
-      await visible(member, 'Sent through saved inbox');
+      await action(member, 'E2E Owner', 'Private message');
+      const received = privateConversation(member, 'E2E Owner');
+      await received.getByText('Sent through saved inbox', { exact: true }).waitFor();
       assert.equal(await guest.getByText('Sent through saved inbox', { exact: true }).count(), 0);
       assert.equal(
         await conversation.getByRole('button', { name: 'Remove', exact: true }).count(),
@@ -1552,7 +1637,7 @@ async function setRole(owner, name, role) {
         .locator('.history-messages')
         .getByText('Corrected saved private message', { exact: true })
         .waitFor({ state: 'visible' });
-      await visible(member, 'Corrected saved private message');
+      await received.getByText('Corrected saved private message', { exact: true }).waitFor();
       assert.equal(
         await guest.getByText('Corrected saved private message', { exact: true }).count(),
         0,
@@ -1560,6 +1645,7 @@ async function setRole(owner, name, role) {
       await conversation.getByLabel('Private message', { exact: true }).fill('');
       await close(conversation);
       await close(inbox);
+      await close(received);
     });
     await step(
       'saved PM response loss survives close, reopen and reload without duplicate delivery',
@@ -1582,6 +1668,12 @@ async function setRole(owner, name, role) {
           exact: true,
         });
         const composer = conversation.getByLabel('Private message', { exact: true });
+        const original = conversation.locator('.history-message').filter({
+          has: sender.locator('.msg-text').filter({ hasText: /^Private owner hello$/ }),
+        });
+        await original.waitFor();
+        const replyTarget = await original.getAttribute('data-message-id');
+        assert.ok(replyTarget);
         const retry = conversation.getByRole('button', {
           name: 'Retry unconfirmed send',
           exact: true,
@@ -1596,12 +1688,18 @@ async function setRole(owner, name, role) {
           attempts.push(request.clientMessageId);
           const firstAttempt = attempts.length === 1;
           assert.ok(request.content === text, 'a retry preserves the submitted PM content');
+          assert.equal(
+            request.replyTo,
+            replyTarget,
+            'a retry preserves its submitted reply target',
+          );
           const response = await route.fetch({ timeout: 10000, maxRetries: 0 });
           assert.equal(response.status(), 200, 'the real backend accepts the saved PM');
           const saved = await response.json();
           receipts.push({ messageId: saved.messageId, clientMessageId: saved.clientMessageId });
           assert.equal(saved.clientMessageId, request.clientMessageId);
           assert.equal(saved.recipientId, peer);
+          assert.equal(saved.replyTo.messageId, replyTarget);
           if (firstAttempt) {
             committed = {
               messageId: saved.messageId,
@@ -1615,6 +1713,7 @@ async function setRole(owner, name, role) {
         };
         await sender.route(routePattern, intercept);
         try {
+          await original.getByRole('button', { name: 'Reply', exact: true }).click();
           await composer.fill(text);
           await composer.press('Enter');
           await retry.click({ trial: true });
@@ -1624,7 +1723,9 @@ async function setRole(owner, name, role) {
           assert.equal(await composer.inputValue(), '');
           await composer.fill(draft);
           assert.equal(await conversation.locator('.history-send').isDisabled(), true);
-          await visible(member, text);
+          await action(member, 'E2E Owner', 'Private message');
+          const received = privateConversation(member, 'E2E Owner');
+          await received.getByText(text, { exact: true }).waitFor();
           assert.equal(
             await savedPrivateRowCount(committed.sender, peer, committed.clientMessageId),
             1,
@@ -1638,6 +1739,9 @@ async function setRole(owner, name, role) {
             .waitFor();
           await retry.click({ trial: true });
           assert.equal(await composer.inputValue(), draft);
+          await conversation
+            .getByText('Replying to E2E Owner: Private owner hello', { exact: true })
+            .waitFor();
           assert.equal(attempts.length, 1, 'reopening never resends an unconfirmed PM');
           await close(conversation);
           await close(inbox);
@@ -1701,10 +1805,53 @@ async function setRole(owner, name, role) {
             closeReopenWithoutResend: true,
             reloadWithoutResend: true,
             separateDraftPreserved: true,
+            replyTargetPreserved: true,
           };
+          const reactionPath = `${endpoint}/${committed.messageId}/reactions`;
+          const reactionAttempts = [];
+          const setReaction = async (route) => {
+            const body = route.request().postDataJSON();
+            reactionAttempts.push(body);
+            assert.deepEqual(body, { emoji: '👍', present: true });
+            const response = await route.fetch({ timeout: 10000, maxRetries: 0 });
+            assert.equal(response.status(), 200);
+            const result = await response.json();
+            assert.equal(result.messageId, committed.messageId);
+            assert.deepEqual(result.reactions, [
+              { emoji: '👍', participantIds: [committed.sender] },
+            ]);
+            if (reactionAttempts.length === 1) await route.abort('failed');
+            else await route.fulfill({ response });
+          };
+          await sender.route(`**${reactionPath}`, setReaction);
+          try {
+            const row = conversation.locator(
+              `.history-message[data-message-id="${committed.messageId}"]`,
+            );
+            await row.getByRole('button', { name: 'React', exact: true }).click();
+            await row.getByRole('button', { name: '👍', exact: true }).click();
+            await conversation.locator('.auth-error').waitFor({ state: 'visible' });
+            await row.getByRole('button', { name: 'React', exact: true }).click();
+            await row.getByRole('button', { name: '👍', exact: true }).click();
+            await row.getByRole('button', { name: '👍 1', exact: true }).waitFor();
+            assert.equal(reactionAttempts.length, 2);
+            await received
+              .locator(`.history-message[data-message-id="${committed.messageId}"]`)
+              .getByRole('button', { name: '👍 1', exact: true })
+              .waitFor();
+            report.savedPmReactionResponseLoss = {
+              passed: true,
+              requests: 2,
+              explicitPresence: true,
+              retainedParticipantCount: 1,
+            };
+          } finally {
+            await sender.unroute(`**${reactionPath}`, setReaction);
+          }
           await composer.fill('');
           await close(conversation);
           await close(inbox);
+          await close(received);
         } finally {
           await sender.unroute(routePattern, intercept);
         }
@@ -1713,44 +1860,74 @@ async function setRole(owner, name, role) {
     await step('private drafts and sent-input recall stay in their conversation', async () => {
       await publicChat(owner);
       await send(owner, 'Public recall fixture');
+      await owner.locator('#chat-input').fill('Unsent public draft');
       await action(owner, 'E2E Member', 'Private message');
-      await owner.locator('#chat-input').fill('Unsent private draft');
-      await publicChat(owner);
-      assert.equal(await owner.locator('#chat-input').inputValue(), '');
+      let conversation = privateConversation(owner, 'E2E Member');
+      await conversation
+        .getByLabel('Private message', { exact: true })
+        .fill('Unsent private draft');
+      await close(conversation);
+      assert.equal(await owner.locator('#chat-input').inputValue(), 'Unsent public draft');
+      await owner.locator('#chat-input').fill('');
       await owner.locator('#chat-input').press('ArrowUp');
       // Public recall contains the earlier public send, never the private send or draft.
       assert.equal(await owner.locator('#chat-input').inputValue(), 'Public recall fixture');
       await action(owner, 'E2E Member', 'Private message');
-      assert.equal(await owner.locator('#chat-input').inputValue(), 'Unsent private draft');
+      conversation = privateConversation(owner, 'E2E Member');
+      assert.equal(
+        await conversation.getByLabel('Private message', { exact: true }).inputValue(),
+        'Unsent private draft',
+      );
+      await conversation.getByLabel('Private message', { exact: true }).fill('');
+      await close(conversation);
       await owner.locator('#chat-input').fill('');
     });
     await step('PM opt-out returns explicit delivery failure', async () => {
       await preferences(member, false);
-      await send(owner, 'Blocked by opt-out');
-      await owner
-        .locator('.chat-msg')
-        .filter({ hasText: 'Blocked by opt-out' })
-        .locator('.delivery-error')
-        .waitFor({ state: 'visible' });
+      await action(owner, 'E2E Member', 'Private message');
+      const conversation = privateConversation(owner, 'E2E Member');
+      await sendPrivate(conversation, 'Blocked by opt-out');
+      await conversation
+        .locator('.auth-error')
+        .filter({ hasText: 'Private message unavailable' })
+        .waitFor();
       assert.equal(await member.getByText('Blocked by opt-out', { exact: true }).count(), 0);
+      await dismissUnconfirmed(owner, conversation);
+      await close(conversation);
       await preferences(member, true);
     });
     await step('ignore/unignore hides public messages and blocks private delivery', async () => {
+      const ignored = member.waitForResponse(
+        (response) =>
+          new URL(response.url()).pathname === '/api/auth/preferences' &&
+          response.request().method() === 'PATCH' &&
+          response.ok(),
+      );
       await action(member, 'E2E Owner', 'Ignore messages');
+      await ignored;
       await publicChat(owner);
       await publicChat(member);
       await send(owner, 'Ignored public text');
       await visible(guest, 'Ignored public text');
       assert.equal(await member.getByText('Ignored public text', { exact: true }).count(), 0);
       await action(owner, 'E2E Member', 'Private message');
-      await send(owner, 'Ignored private text');
-      await owner
-        .locator('.chat-msg')
-        .filter({ hasText: 'Ignored private text' })
-        .locator('.delivery-error')
+      const conversation = privateConversation(owner, 'E2E Member');
+      await sendPrivate(conversation, 'Ignored private text');
+      await conversation
+        .locator('.auth-error')
+        .filter({ hasText: 'Private message unavailable' })
         .waitFor();
       assert.equal(await member.getByText('Ignored private text', { exact: true }).count(), 0);
+      await dismissUnconfirmed(owner, conversation);
+      await close(conversation);
+      const unignored = member.waitForResponse(
+        (response) =>
+          new URL(response.url()).pathname === '/api/auth/preferences' &&
+          response.request().method() === 'PATCH' &&
+          response.ok(),
+      );
       await action(member, 'E2E Owner', 'Unignore messages');
+      await unignored;
       await publicChat(owner);
       await send(owner, 'Visible after unignore');
       await visible(member, 'Visible after unignore');
@@ -1872,19 +2049,21 @@ async function setRole(owner, name, role) {
       await chatEnabled(member, true);
     });
     await step(
-      'offline private recipient disables compose; close removes conversation',
+      'a saved account conversation remains usable after its peer leaves the room',
       async () => {
         await action(owner, 'E2E Member', 'Private message');
+        const conversation = privateConversation(owner, 'E2E Member');
         await leave(member);
-        await owner.waitForFunction(() =>
-          document
-            .querySelector('.conversation-tab[aria-pressed="true"]')
-            ?.getAttribute('aria-label')
-            ?.includes('offline'),
-        );
-        await chatEnabled(owner, false);
+        await sendPrivate(conversation, 'Saved PM after leaving the room');
+        await conversation.getByText('Saved PM after leaving the room', { exact: true }).waitFor();
+        const inbox = await header(member, 'Messages');
+        await inbox.locator('.inbox-conversation').filter({ hasText: 'E2E Owner' }).click();
+        const received = privateConversation(member, 'E2E Owner');
+        await received.getByText('Saved PM after leaving the room', { exact: true }).waitFor();
+        await close(received);
+        await close(inbox);
+        await close(conversation);
         await setRole(owner, 'E2E Member', 3);
-        await owner.getByRole('button', { name: 'Close PM', exact: true }).click();
         await chatEnabled(owner, true);
         await join(member, 'E2E Member');
         await roomMenuOffers(member, 'Manage room');

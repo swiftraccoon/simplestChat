@@ -38,7 +38,7 @@ import {
   takeContactOffer,
   type DiscoveryMount,
 } from './discovery';
-import { openPrivateInbox } from './chat-history';
+import { openPrivateInbox, openPrivateConversation } from './chat-history';
 import { SocialChat } from './social-chat';
 import { CommunityUI } from './community-ui';
 import { ParticipantHovercard } from './participant-hovercard';
@@ -1968,6 +1968,14 @@ const mountConversationPrivacy = (
 };
 const socialChat = new SocialChat({
   accountPreferences,
+  openAccountConversation: (id, name) =>
+    openPrivateConversation(id, name, {
+      getToken: () => auth.jwt,
+      getAccountId: () => auth.userId,
+      getRoomId: () => room?.currentRoomId ?? null,
+      mountConversationNotifications,
+      mountConversationPrivacy,
+    }),
   telemetry: telemetry.record,
   getRoom: () => room,
   getViewerKey: () => auth.userId ?? 'guest',
@@ -1989,6 +1997,7 @@ const pwa = new PwaControls({
       openPrivateInbox({
         getToken: () => auth.jwt,
         getAccountId: () => auth.userId,
+        getRoomId: () => room?.currentRoomId ?? null,
         mountConversationNotifications,
         mountConversationPrivacy,
       });

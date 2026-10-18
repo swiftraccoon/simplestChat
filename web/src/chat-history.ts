@@ -1,9 +1,10 @@
-import type { ChatEntry, ChatHistoryPage } from './protocol';
+import type { ChatEntry, ChatHistoryPage, ChatReaction } from './protocol';
 import { renderAttachments } from './attachments';
-import { mountPmComposer } from './pm-composer';
+import { mountPmComposer, type PmComposer } from './pm-composer';
 import { mountContacts } from './discovery';
 import { appendLinkedText, appendEditedLabel, editMessageDialog } from './chat-message-ui';
 import { chatColor } from './avatar-colors';
+import { CHAT_REACTIONS } from './chat-reactions';
 import type { RoomClient } from './room';
 import { api, asyncButton, button, el, field, input, modal } from './ui';
 
@@ -22,27 +23,37 @@ type HistoryOptions = {
   current: () => boolean;
   mountNotifications?: (container: HTMLElement, current: () => boolean) => void;
   getToken?: () => string | null;
+  privatePeerId?: string;
   attachmentAuthorization?: (id: string) => Promise<string>;
   load: (params: URLSearchParams, signal: AbortSignal) => Promise<ChatHistoryPage>;
   markRead?: (id: string, signal: AbortSignal) => Promise<unknown>;
+  reply?: (message: ChatEntry) => void;
+  replyInPlace?: boolean;
+  react?: (
+    id: string,
+    emoji: string,
+    present: boolean,
+    signal: AbortSignal,
+  ) => Promise<{ messageId: string; reactions: ChatReaction[] }>;
   remove?: (id: string) => Promise<{ removedAt: string }>;
   send?: (
     content: string,
     id: string,
     signal: AbortSignal,
     attachmentIds: string[],
+    replyTo?: string,
   ) => Promise<ChatEntry>;
   retention?: { days: number; save: (days: number) => Promise<unknown> };
 };
-const inboxListeners = new Set<() => void>();
-export function onInboxChanged(listener: () => void): () => void {
+const inboxListeners = new Set<(message?: ChatEntry) => void>();
+export function onInboxChanged(listener: (message?: ChatEntry) => void): () => void {
   inboxListeners.add(listener);
   return () => {
     inboxListeners.delete(listener);
   };
 }
-export function notifyInboxChanged(): void {
-  for (const listener of inboxListeners) listener();
+export function notifyInboxChanged(message?: ChatEntry): void {
+  for (const listener of inboxListeners) listener(message);
 }
 const editListeners = new Set<(message: ChatEntry) => void>();
 export function onHistoryEdit(listener: (message: ChatEntry) => void): () => void {
@@ -55,6 +66,20 @@ export function notifyHistoryEdit(message: ChatEntry): void {
   for (const listener of editListeners) listener(message);
 }
 const removalListeners = new Set<(id: string, at: string) => void>();
+const reactionListeners = new Set<(id: string, reactions: ChatReaction[]) => void>();
+
+export function onHistoryReaction(
+  listener: (id: string, reactions: ChatReaction[]) => void,
+): () => void {
+  reactionListeners.add(listener);
+  return () => {
+    reactionListeners.delete(listener);
+  };
+}
+
+export function notifyHistoryReaction(id: string, reactions: ChatReaction[]): void {
+  for (const listener of reactionListeners) listener(id, reactions);
+}
 
 /** Remove content from an open history view as soon as the live event arrives. */
 export function notifyHistoryRemoval(id: string, at: string): void {
@@ -114,16 +139,21 @@ function openHistory(options: HistoryOptions): void {
   let anchor: string | null = options.initialMessageId ?? null;
   let operation = 0;
   let loading = false;
+  let refreshQueued = false;
   let read = '';
   let attachmentRows: (() => void)[] = [];
-  let disposeComposer: (() => void) | null = null;
+  let disposeComposer: PmComposer | null = null;
   const clearAttachmentRows = (): void => {
     for (const dispose of attachmentRows) dispose();
     attachmentRows = [];
   };
   const removed = new Map<string, string>();
   const edits = new Map<string, ChatEntry>();
+  const reactions = new Map<string, ChatReaction[]>();
+  const reactionVersions = new Map<string, number>();
   const redact = (entry: ChatEntry): void => {
+    const updatedReactions = reactions.get(entry.messageId);
+    if (updatedReactions) entry.reactions = updatedReactions;
     const edit = edits.get(entry.messageId);
     if (edit && edit.revision > entry.revision)
       Object.assign(entry, {
@@ -228,6 +258,87 @@ function openHistory(options: HistoryOptions): void {
           ),
         );
       }
+      if (options.reply && !message.removedAt) {
+        row.append(
+          button(
+            'Reply',
+            () => {
+              if (!current()) return;
+              if (!options.replyInPlace) view.close();
+              options.reply?.(message);
+            },
+            'history-reply',
+          ),
+        );
+      }
+      if (options.react && !message.removedAt) {
+        const controls = el('div', undefined, 'msg-reactions');
+        const react = async (emoji: string): Promise<void> => {
+          if (!current() || !options.react) return;
+          const version = reactionVersions.get(message.messageId) ?? 0;
+          const buttons = controls.querySelectorAll<HTMLButtonElement>('button');
+          buttons.forEach((control) => {
+            control.disabled = true;
+          });
+          try {
+            const present = !(message.reactions ?? []).some(
+              (reaction) =>
+                reaction.emoji === emoji && reaction.participantIds.includes(options.viewerId),
+            );
+            const result = await options.react(
+              message.messageId,
+              emoji,
+              present,
+              controller.signal,
+            );
+            if (
+              current() &&
+              result.messageId === message.messageId &&
+              version === (reactionVersions.get(message.messageId) ?? 0)
+            )
+              notifyHistoryReaction(result.messageId, result.reactions);
+          } finally {
+            if (current())
+              buttons.forEach((control) => {
+                control.disabled = false;
+              });
+          }
+        };
+        for (const reaction of message.reactions ?? []) {
+          const chip = asyncButton(
+            `${reaction.emoji} ${reaction.participantIds.length}`,
+            () => react(reaction.emoji),
+            fail,
+            'reaction-chip',
+          );
+          chip.setAttribute(
+            'aria-pressed',
+            String(reaction.participantIds.includes(options.viewerId)),
+          );
+          controls.append(chip);
+        }
+        const picker = el('div', undefined, 'reaction-picker');
+        picker.hidden = true;
+        for (const emoji of CHAT_REACTIONS)
+          picker.append(
+            asyncButton(
+              emoji,
+              async () => {
+                picker.hidden = true;
+                await react(emoji);
+              },
+              fail,
+              'msg-action',
+            ),
+          );
+        controls.append(
+          button('React', () => {
+            picker.hidden = !picker.hidden;
+          }),
+          picker,
+        );
+        row.append(controls);
+      }
       if (options.remove && !message.removedAt) {
         row.append(
           button(
@@ -331,6 +442,10 @@ function openHistory(options: HistoryOptions): void {
       if (version === operation) {
         loading = false;
         if (current()) updatePagination();
+        if (refreshQueued) {
+          refreshQueued = false;
+          refreshMessages();
+        }
       }
     }
   };
@@ -403,12 +518,14 @@ function openHistory(options: HistoryOptions): void {
       signal: controller.signal,
       send: options.send,
       fail,
-      confirmed: async () => {
-        notifyInboxChanged();
+      confirmed: async (message) => {
         search.value = '';
         await load(null, false, '');
+        notifyInboxChanged(message);
       },
     });
+    options.reply = (message) => disposeComposer?.reply(message);
+    options.replyInPlace = true;
   }
   const onRemoved = (id: string, at: string): void => {
     if (!current()) return;
@@ -436,6 +553,32 @@ function openHistory(options: HistoryOptions): void {
   };
   editListeners.add(onEdited);
   removalListeners.add(onRemoved);
+  const stopReactions = onHistoryReaction((id, value) => {
+    if (!current() || removed.has(id)) return;
+    reactions.set(id, value);
+    reactionVersions.set(id, (reactionVersions.get(id) ?? 0) + 1);
+    if (reactions.size > 300) {
+      view.close();
+      return;
+    }
+    page?.messages.forEach(redact);
+    render(false);
+  });
+  const refreshMessages = (): void => {
+    if (!current() || !visible() || (position.resume && page?.newerCursor)) return;
+    if (loading) {
+      refreshQueued = true;
+      return;
+    }
+    load(before, true, query, position.resume ? {} : position).catch(fail);
+  };
+  const stopInbox = onInboxChanged((message) => {
+    if (!options.privatePeerId || !message) return;
+    if (page?.messages.some((entry) => entry.messageId === message.messageId)) return;
+    const pair = [options.viewerId, options.privatePeerId];
+    if (pair.includes(message.participantId) && pair.includes(message.recipientId ?? ''))
+      refreshMessages();
+  });
   list.addEventListener('scroll', markRead);
   const timer = setInterval(() => {
     if (!options.current()) {
@@ -456,6 +599,8 @@ function openHistory(options: HistoryOptions): void {
       clearInterval(timer);
       removalListeners.delete(onRemoved);
       editListeners.delete(onEdited);
+      stopInbox();
+      stopReactions();
     },
     { once: true },
   );
@@ -472,6 +617,7 @@ export function openRoomHistory(
   current: () => boolean,
   signedIn: boolean,
   initialMessageId?: string,
+  reply?: (message: ChatEntry) => void,
 ): void {
   openHistory({
     title: 'Room history',
@@ -482,6 +628,8 @@ export function openRoomHistory(
       return `Attachment ${grant.token}`;
     },
     ...(initialMessageId && { initialMessageId }),
+    ...(reply && { reply }),
+    react: (messageId, emoji) => room.requestSocial('reactToMessage', { messageId, emoji }),
     edit: async (message, content, expectedRevision) =>
       (
         await room.requestSocial('editChatMessage', {
@@ -515,21 +663,81 @@ export function openRoomHistory(
   });
 }
 
-export function openPrivateInbox(options: {
+export interface PrivateConversationOptions {
+  getToken: () => string | null;
+  getAccountId: () => string | null;
+  getRoomId?: () => string | null;
+  mountConversationNotifications?: (
+    container: HTMLElement,
+    peerId: string,
+    current: () => boolean,
+  ) => void;
   mountConversationPrivacy?: (
     container: HTMLElement,
     peerId: string,
     peerName: string,
     current: () => boolean,
   ) => void;
-  getToken: () => string | null;
-  getAccountId: () => string | null;
-  mountConversationNotifications?: (
-    container: HTMLElement,
-    peerId: string,
-    current: () => boolean,
-  ) => void;
-}): void {
+}
+
+/** Account conversations use the same durable composer from every entry point. */
+export function openPrivateConversation(
+  peerId: string,
+  peerName: string,
+  options: PrivateConversationOptions,
+): void {
+  const account = options.getAccountId();
+  if (!account || !options.getToken()) return;
+  const token = (): string => {
+    const value = options.getToken();
+    if (!value || options.getAccountId() !== account)
+      throw new Error('Sign in to read your messages');
+    return value;
+  };
+  openHistory({
+    title: `Messages with ${peerName}`,
+    accountDialog: true,
+    viewerId: account,
+    draft: { account, peer: peerId },
+    privatePeerId: peerId,
+    getToken: options.getToken,
+    attachmentAuthorization: async () => `Bearer ${token()}`,
+    mountNotifications: (container, current) => {
+      options.mountConversationNotifications?.(container, peerId, current);
+      options.mountConversationPrivacy?.(container, peerId, peerName, current);
+    },
+    edit: (message, content, expectedRevision, signal) =>
+      api.editPrivateMessage(
+        token(),
+        peerId,
+        message.messageId,
+        { content, expectedRevision },
+        signal,
+      ),
+    current: () => options.getAccountId() === account && !!options.getToken(),
+    load: (params, signal) => api.privateHistory(token(), peerId, params, signal),
+    markRead: (id, signal) => api.readPrivateMessages(token(), peerId, id, signal),
+    react: (id, emoji, present, signal) =>
+      api.setPrivateReaction(token(), peerId, id, { emoji, present }, signal),
+    send: (content, id, signal, attachmentIds, replyTo) => {
+      const roomId = options.getRoomId?.();
+      return api.sendPrivateMessage(
+        token(),
+        peerId,
+        {
+          content,
+          clientMessageId: id,
+          ...(attachmentIds.length && { attachmentIds }),
+          ...(replyTo && { replyTo }),
+          ...(roomId && { roomId }),
+        },
+        signal,
+      );
+    },
+  });
+}
+
+export function openPrivateInbox(options: PrivateConversationOptions): void {
   const account = options.getAccountId();
   if (!account || !options.getToken()) return;
   const view = modal('Messages');
@@ -543,39 +751,8 @@ export function openPrivateInbox(options: {
       throw new Error('Sign in to read your messages');
     return value;
   };
-
-  const openConversation = (peerId: string, peerName: string): void => {
-    openHistory({
-      title: `Messages with ${peerName}`,
-      accountDialog: true,
-      viewerId: account,
-      draft: { account, peer: peerId },
-      getToken: options.getToken,
-      attachmentAuthorization: async () => `Bearer ${token()}`,
-      mountNotifications: (container, current) => {
-        options.mountConversationNotifications?.(container, peerId, current);
-        options.mountConversationPrivacy?.(container, peerId, peerName, current);
-      },
-      edit: (message, content, expectedRevision, signal) =>
-        api.editPrivateMessage(
-          token(),
-          peerId,
-          message.messageId,
-          { content, expectedRevision },
-          signal,
-        ),
-      current: () => options.getAccountId() === account && !!options.getToken(),
-      load: (params, signal) => api.privateHistory(token(), peerId, params, signal),
-      markRead: (id, signal) => api.readPrivateMessages(token(), peerId, id, signal),
-      send: (content, id, signal, attachmentIds) =>
-        api.sendPrivateMessage(
-          token(),
-          peerId,
-          { content, clientMessageId: id, ...(attachmentIds.length && { attachmentIds }) },
-          signal,
-        ),
-    });
-  };
+  const openConversation = (peerId: string, peerName: string): void =>
+    openPrivateConversation(peerId, peerName, options);
   const contacts = mountContacts(view.body, {
     ...options,
     current,

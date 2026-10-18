@@ -24,11 +24,14 @@ import {
 } from './settings-sheet';
 import { appendLinkedText, appendEditedLabel, editMessageDialog } from './chat-message-ui';
 import { CHAT_PALETTE, chatColor } from './avatar-colors';
+import { CHAT_REACTIONS } from './chat-reactions';
 import {
   openRoomHistory,
   notifyHistoryRemoval,
   notifyHistoryEdit,
   onHistoryEdit,
+  notifyHistoryReaction,
+  onHistoryReaction,
   notifyInboxChanged,
 } from './chat-history';
 
@@ -61,7 +64,7 @@ const LOOKS: readonly { kind: ChatStyleKind; label: string }[] = [
   { kind: 'bubble', label: 'Tinted bubble' },
 ];
 const AUTOMATIC_LOOK: ChatStyle = { color: null, style: 'accent' };
-export const CHAT_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🎉', '🔥', '👏'] as const;
+export { CHAT_REACTIONS } from './chat-reactions';
 
 /** The start of a message on one line, as a reply quotes it. */
 function excerpt(text: string): string {
@@ -107,6 +110,8 @@ type Options = {
   /** The account's bearer token, when the viewer has one: its preferences then follow it. */
   getToken?: () => string | null;
   accountPreferences?: AccountPreferences;
+  /** Account PMs share the durable inbox surface regardless of room presence. */
+  openAccountConversation?: (id: string, name: string) => void;
   notify: (message: string) => void;
   bindParticipantName: (anchor: HTMLButtonElement, id: string, name: string) => void;
   allowsNotification?: (kind: 'private' | 'mention' | 'room', peerId?: string) => boolean;
@@ -135,6 +140,7 @@ export class SocialChat {
   private touchComposer = false;
   private readonly conversations = el('nav', undefined, 'conversation-list');
   private readonly conversationButtons = new Map<string, ConversationButton>();
+  private readonly accountPeers = new Set<string>();
   private visibleConversation = '';
   private readonly conversationStatus = el('span', '', 'conversation-status');
   /** Who is composing in the visible conversation, until each notice expires. */
@@ -179,6 +185,7 @@ export class SocialChat {
   private preferenceOperation = 0;
   private preferenceBusy = false;
   private readonly stopAccountPreferences: (() => void) | undefined;
+  private readonly stopHistoryReaction: () => void;
   private accountPreferenceSnapshot = '';
   private disposed = false;
   private audio: AudioContext | null = null;
@@ -193,7 +200,7 @@ export class SocialChat {
   private mentionOptions: { name: string; chatStyle?: ChatStyle }[] = [];
   private mentionActive = 0;
   // The message the next send answers, shown above the message box until sent or cancelled.
-  private replyingTo: ChatItem | null = null;
+  private replyingTo: ChatEntry | null = null;
   private readonly historyStart = el('div', undefined, 'chat-history-start');
   private readonly olderButton = button(
     'Earlier messages',
@@ -234,6 +241,9 @@ export class SocialChat {
     toolbar.append(this.conversations, this.closeButton, this.pinsButton, optionsButton);
     this.pinsButton.hidden = true;
     this.historyStart.append(this.pinsList, this.olderButton);
+    this.stopHistoryReaction = onHistoryReaction((id, reactions) => {
+      if (this.store.setReactions(id, reactions)) this.render();
+    });
     onHistoryEdit((message) => {
       if (this.store.editMessage(message)) this.render();
       if (this.replyingTo?.messageId === message.messageId) {
@@ -479,6 +489,7 @@ export class SocialChat {
     this.chatSessionId = null;
     this.chatSequence = 0;
     this.store.reset();
+    this.accountPeers.clear();
     this.pins = [];
     this.pinsVersion++;
     this.pinsExpanded = false;
@@ -524,6 +535,7 @@ export class SocialChat {
   dispose(): void {
     this.disposed = true;
     this.stopAccountPreferences?.();
+    this.stopHistoryReaction();
     this.reset();
     this.attachments.dispose();
   }
@@ -551,7 +563,7 @@ export class SocialChat {
     if (message.type === 'chatReceived') this.receive(message);
     else if (message.type === 'privateMessageReceived') {
       this.receive(message.message);
-      notifyInboxChanged();
+      notifyInboxChanged(message.message);
     } else if (message.type === 'messageAck') this.receive(message.message);
     else if (message.type === 'socialError' && message.clientMessageId) {
       // The reply has the original message ID, not a retry-attempt ID. Once
@@ -636,7 +648,7 @@ export class SocialChat {
       if (this.replyingTo?.messageId === message.messageId) this.cancelReply();
       this.render();
     } else if (message.type === 'messageReactions') {
-      if (this.store.setReactions(message.messageId, message.reactions)) this.render();
+      notifyHistoryReaction(message.messageId, message.reactions);
     } else if (message.type === 'nicknameChanged') {
       if (this.store.names.has(message.participantId))
         this.store.names.set(message.participantId, message.nickname);
@@ -702,6 +714,7 @@ export class SocialChat {
 
   openPrivate(id: string, name: string): void {
     if (id === this.store.localId) return;
+    if (this.openAccountConversation(id, name)) return;
     if (this.store.names.size >= 100 && !this.store.names.has(id)) {
       this.options.notify('Close an existing conversation first');
       return;
@@ -710,6 +723,18 @@ export class SocialChat {
     document.querySelector<HTMLButtonElement>('[data-tab="chat"]')?.click();
     this.render();
     this.input.focus();
+  }
+
+  private openAccountConversation(id: string, name?: string): boolean {
+    if (
+      !this.options.getToken?.() ||
+      !this.options.openAccountConversation ||
+      (!this.accountPeers.has(id) &&
+        !this.options.getRoom()?.getParticipants().get(id)?.authenticated)
+    )
+      return false;
+    this.options.openAccountConversation(id, name ?? this.store.names.get(id) ?? 'Account');
+    return true;
   }
 
   isIgnored(id: string): boolean {
@@ -782,6 +807,16 @@ export class SocialChat {
 
   private ingest(message: ChatEntry, replay: boolean): boolean {
     if (!this.store.localId || this.isIgnored(message.participantId)) return false;
+    if (
+      message.accountConversation &&
+      message.recipientId &&
+      this.accountPeers.size < 100 &&
+      (message.participantId === this.store.localId || message.recipientId === this.store.localId)
+    ) {
+      const peer =
+        message.participantId === this.store.localId ? message.recipientId : message.participantId;
+      this.accountPeers.add(peer);
+    }
     if (
       message.recipientId &&
       message.participantId !== this.store.localId &&
@@ -1732,7 +1767,7 @@ export class SocialChat {
   }
 
   /** Answer a message: the next send quotes it. */
-  private startReply(message: ChatItem): void {
+  private startReply(message: ChatEntry): void {
     this.replyingTo = message;
     const cancel = button('✕', () => this.cancelReply(), 'reply-bar-cancel');
     cancel.setAttribute('aria-label', 'Cancel reply');
@@ -1766,6 +1801,10 @@ export class SocialChat {
           () => this.contextCurrent(activation, room, viewer),
           !!this.options.getToken?.(),
           messageId,
+          (message) => {
+            this.switchConversation('public');
+            this.startReply(message);
+          },
         );
       } else this.options.notify('That message is no longer in this chat');
       return;
@@ -1830,7 +1869,10 @@ export class SocialChat {
         this.conversations.append(node);
       }
       const privateChat = id !== 'public';
-      const offline = privateChat && !this.options.getRoom()?.getParticipants().has(id);
+      const offline =
+        privateChat &&
+        !this.accountPeers.has(id) &&
+        !this.options.getRoom()?.getParticipants().has(id);
       const label = `${name}${offline ? ' · offline' : ''}`;
       if (entry.name.textContent !== label) entry.name.textContent = label;
       const unread = this.store.unread.get(id) ?? 0;
@@ -1998,6 +2040,7 @@ export class SocialChat {
   }
 
   private switchConversation(id: string, name?: string): void {
+    if (id !== 'public' && this.openAccountConversation(id, name)) return;
     if (id !== this.store.active) this.attachments.reset();
     this.cancelReply();
     this.composition.save(this.store.active, this.input.value);
@@ -2308,7 +2351,17 @@ export class SocialChat {
     if (room.roomSettings)
       rows.push(
         actionRow('Room history', () =>
-          openRoomHistory(room, current, Boolean(this.options.getToken?.())),
+          openRoomHistory(
+            room,
+            current,
+            Boolean(this.options.getToken?.()),
+            undefined,
+            (message) => {
+              context.close();
+              this.switchConversation('public');
+              this.startReply(message);
+            },
+          ),
         ),
       );
     body.append(lookBlock, group(null, rows));

@@ -70,6 +70,30 @@ const preferences = {
   timestamps: 'seconds',
   ignored: [{ id: 'person', name: 'Person' }],
 };
+test('private reactions set explicit presence so repeating an uncertain request does not invert intent', async () => {
+  const { ui, state } = await uiFixture();
+  const response = {
+    messageId: 'message',
+    reactions: [{ emoji: '👍', participantIds: ['account'] }],
+  };
+  state.response = { ok: true, status: 200, json: async () => response };
+  for (let attempt = 0; attempt < 2; attempt++) {
+    assert.deepEqual(
+      await ui.api.setPrivateReaction(
+        'token',
+        'peer /?',
+        'message /?',
+        { emoji: '👍', present: true },
+        new AbortController().signal,
+      ),
+      response,
+    );
+    const [url, options] = state.requests.at(-1);
+    assert.equal(url, '/api/auth/inbox/peer%20%2F%3F/messages/message%20%2F%3F/reactions');
+    assert.equal(options.method, 'PUT');
+    assert.deepEqual(JSON.parse(options.body), { emoji: '👍', present: true });
+  }
+});
 const endpoints = [
   [
     'public profile',

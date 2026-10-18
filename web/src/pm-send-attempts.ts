@@ -1,4 +1,4 @@
-import type { ChatAttachment } from './protocol';
+import type { ChatAttachment, ChatReplyRef } from './protocol';
 import { decodeAttachment } from './protocol-validation';
 import { integer, invalid, record, text } from './validation';
 
@@ -12,6 +12,7 @@ export interface PmSendPayload {
   id: string;
   content: string;
   attachments: ChatAttachment[];
+  replyTo?: ChatReplyRef;
 }
 export interface PmSendAttempt extends PmSendPayload {
   createdAt: number;
@@ -34,7 +35,7 @@ function decode(value: unknown): PmSendAttempt {
   const content = text(source['content']);
   const files = source['attachments'];
   if (
-    Object.keys(source).length !== 4 ||
+    Object.keys(source).length !== (source['replyTo'] === undefined ? 4 : 5) ||
     !/^[A-Za-z0-9_-]{1,64}$/.test(id) ||
     content.length > 2000 ||
     bytes(content) > 4096 ||
@@ -51,7 +52,31 @@ function decode(value: unknown): PmSendAttempt {
     new Set(attachments.map((file) => file.id)).size !== attachments.length
   )
     invalid();
-  return { id, content, attachments, createdAt: integer()(source['createdAt']) };
+  let replyTo: ChatReplyRef | undefined;
+  if (source['replyTo'] !== undefined) {
+    const reply = record(source['replyTo']);
+    const messageId = text(reply['messageId']);
+    const participantId = identity(reply['participantId']);
+    const participantName = text(reply['participantName']);
+    const excerpt = text(reply['excerpt']);
+    if (
+      Object.keys(reply).length !== 4 ||
+      !/^[A-Za-z0-9_-]{1,64}$/.test(messageId) ||
+      !participantName ||
+      bytes(participantName) > 512 ||
+      [...excerpt].length > 141 ||
+      bytes(excerpt) > 564
+    )
+      invalid();
+    replyTo = { messageId, participantId, participantName, excerpt };
+  }
+  return {
+    id,
+    content,
+    attachments,
+    ...(replyTo && { replyTo }),
+    createdAt: integer()(source['createdAt']),
+  };
 }
 
 /** Caller holds PM_SEND_LOCK across begin/POST/clear. localStorage is not a CAS.

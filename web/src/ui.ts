@@ -20,7 +20,12 @@ import {
   decodePasskeySettings,
   type PasskeyOperation,
 } from './api-validation';
-import { decodeRoomSettings, decodeChatHistory, decodeChatEntry } from './protocol-validation';
+import {
+  decodeRoomSettings,
+  decodeChatHistory,
+  decodeChatEntry,
+  decodeSocialData,
+} from './protocol-validation';
 import { decodeInbox, decodeChatRead, decodeInboxUnread } from './chat-history-validation';
 import { decodeContacts, decodeSavedRooms } from './discovery-validation';
 import {
@@ -422,7 +427,13 @@ export const api = {
   sendPrivateMessage: (
     token: string,
     peer: string,
-    data: { clientMessageId: string; content: string; attachmentIds?: string[] },
+    data: {
+      clientMessageId: string;
+      content: string;
+      attachmentIds?: string[];
+      replyTo?: string;
+      roomId?: string;
+    },
     signal: AbortSignal,
   ) =>
     apiJson(
@@ -430,6 +441,21 @@ export const api = {
       `/api/auth/inbox/${encodeURIComponent(peer)}/messages`,
       token,
       'POST',
+      data,
+      signal,
+    ),
+  setPrivateReaction: (
+    token: string,
+    peer: string,
+    messageId: string,
+    data: { emoji: string; present: boolean },
+    signal: AbortSignal,
+  ) =>
+    apiJson(
+      (value) => decodeSocialData('reactToMessage', value),
+      `/api/auth/inbox/${encodeURIComponent(peer)}/messages/${encodeURIComponent(messageId)}/reactions`,
+      token,
+      'PUT',
       data,
       signal,
     ),

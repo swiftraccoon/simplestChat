@@ -92,6 +92,7 @@ interface Surface {
 export class CommunityUI {
   private readonly messagesButton = button('Messages', () =>
     openPrivateInbox({
+      getRoomId: () => this.options.getRoom()?.currentRoomId ?? null,
       getToken: () => this.options.auth.jwt,
       getAccountId: () => this.options.auth.userId,
       mountConversationPrivacy: (container, peerId, peerName, current) =>

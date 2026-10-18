@@ -19,7 +19,12 @@ const entry = (id, extra = {}) => ({
   ...extra,
 });
 
-async function fixture({ touch = false, touchPoints = 0, httpRequest } = {}) {
+async function fixture({
+  touch = false,
+  touchPoints = 0,
+  httpRequest,
+  accountMessages = false,
+} = {}) {
   const f = await uiFixture(httpRequest ? { fetch: httpRequest } : {});
   const attachmentState = attachmentFixture();
   Object.defineProperties(f.Node.prototype, {
@@ -139,7 +144,10 @@ async function fixture({ touch = false, touchPoints = 0, httpRequest } = {}) {
     notices: [],
     noticeAnswer: 'granted',
     openedSettings: [],
+    openedAccountMessages: [],
+    inboxChanges: [],
     mountedAccountNotifications: 0,
+    closedScreens: 0,
     pointerChange: () => {},
     resize: () => {},
   };
@@ -229,6 +237,7 @@ async function fixture({ touch = false, touchPoints = 0, httpRequest } = {}) {
       './ui': f.ui,
       './settings-sheet': sheetModule,
       './avatar-colors': colorModule,
+      './chat-reactions': await loadTypeScript('src/chat-reactions.ts'),
       './chat-history': {
         openRoomHistory(...args) {
           state.openedHistory.push(args);
@@ -240,7 +249,18 @@ async function fixture({ touch = false, touchPoints = 0, httpRequest } = {}) {
         onHistoryEdit(listener) {
           state.editedListener = listener;
         },
-        notifyInboxChanged() {},
+        onHistoryReaction(listener) {
+          state.reactionListener = listener;
+          return () => {
+            state.reactionListener = null;
+          };
+        },
+        notifyHistoryReaction(id, reactions) {
+          state.reactionListener?.(id, reactions);
+        },
+        notifyInboxChanged(message) {
+          state.inboxChanges.push(message);
+        },
       },
       './chat-message-ui': await loadTypeScript('src/chat-message-ui.ts', {
         modules: { './ui': f.ui },
@@ -294,6 +314,9 @@ async function fixture({ touch = false, touchPoints = 0, httpRequest } = {}) {
     getViewerKey: () => state.viewer,
     getToken: () => state.token,
     accountPreferences,
+    ...(accountMessages && {
+      openAccountConversation: (id, name) => state.openedAccountMessages.push([id, name]),
+    }),
     notify: (text) => state.notifications.push(text),
     bindParticipantName(anchor, id, name) {
       anchor.addEventListener('click', () => state.actions.push([id, name]));
@@ -301,7 +324,15 @@ async function fixture({ touch = false, touchPoints = 0, httpRequest } = {}) {
     openSettings: (section) => state.openedSettings.push(section),
     mountAccountNotifications: () => state.mountedAccountNotifications++,
   });
-  const screenContext = { push() {}, pop() {}, close() {}, current: () => state.onScreen };
+  const screenContext = {
+    push() {},
+    pop() {},
+    close() {
+      state.closedScreens++;
+      state.onScreen = false;
+    },
+    current: () => state.onScreen,
+  };
   state.onScreen = true;
   const screen = async (id) => {
     const section = chat.sections().find((entry) => entry.id === id);
@@ -1123,6 +1154,77 @@ test('disconnected and offline conversations cannot create pending messages', as
   assert.equal(f.state.sent.length, 0);
 });
 
+test('account PM entry points use the shared durable conversation while preserving the room draft', async () => {
+  const f = await fixture({ accountMessages: true });
+  await f.chat.activate();
+  f.state.token = 'account-token';
+  f.participants.get('alice').authenticated = true;
+  f.chat.input.value = 'Room draft';
+  f.chat.openPrivate('alice', 'Alice');
+  assert.deepEqual(f.state.openedAccountMessages, [['alice', 'Alice']]);
+  assert.equal(f.chat.store.active, 'public');
+  assert.equal(f.chat.input.value, 'Room draft');
+  assert.equal(f.state.sent.length, 0);
+  f.participants.delete('alice');
+  const incoming = entry('account-arrival', { recipientId: 'local', accountConversation: true });
+  f.chat.handleEvent({ type: 'privateMessageReceived', message: incoming });
+  assert.deepEqual(
+    f.state.inboxChanges.at(-1),
+    incoming,
+    'the open durable view receives an immediate refresh hint',
+  );
+  const account = f.chat.conversationButtons.get('alice').node;
+  assert.equal(account.textContent, 'Alice1', 'an account in another room is not labelled offline');
+  account.click();
+  assert.deepEqual(f.state.openedAccountMessages.at(-1), ['alice', 'Alice']);
+  assert.equal(f.chat.store.active, 'public');
+  assert.equal(f.chat.input.value, 'Room draft');
+});
+
+test('an absent guest PM retains its session boundary and never becomes an account conversation', async () => {
+  const f = await fixture({ accountMessages: true });
+  await f.chat.activate();
+  f.state.token = 'account-token';
+  f.participants.delete('alice');
+  f.chat.handleEvent({
+    type: 'privateMessageReceived',
+    message: entry('guest-arrival', { recipientId: 'local' }),
+  });
+  const guest = f.chat.conversationButtons.get('alice').node;
+  assert.match(guest.textContent, /offline/);
+  guest.click();
+  assert.deepEqual(f.state.openedAccountMessages, []);
+  assert.equal(f.chat.store.active, 'alice');
+  assert.equal(f.chat.input.disabled, true);
+  f.chat.input.value = 'Cannot send to a departed guest';
+  f.chat.send();
+  assert.equal(f.state.sent.length, 0);
+});
+
+test('snapshot account-conversation capability is retired with its viewer and membership state', async () => {
+  const f = await fixture({ accountMessages: true });
+  await f.chat.activate();
+  f.state.token = 'account-token';
+  f.participants.delete('alice');
+  f.chat.handleEvent(
+    snapshot([entry('saved-account', { recipientId: 'local', accountConversation: true })]),
+  );
+  f.chat.conversationButtons.get('alice').node.click();
+  assert.equal(f.state.openedAccountMessages.length, 1);
+  f.chat.reset();
+  f.state.viewer = 'replacement-account';
+  f.state.token = null;
+  await f.chat.activate();
+  f.state.token = 'replacement-token';
+  f.chat.handleEvent({
+    type: 'privateMessageReceived',
+    message: entry('new-guest', { recipientId: 'local' }),
+  });
+  f.chat.conversationButtons.get('alice').node.click();
+  assert.equal(f.state.openedAccountMessages.length, 1);
+  assert.equal(f.chat.input.disabled, true);
+});
+
 test('closing a pending PM clears timers and a late acknowledgement cannot reopen it', async () => {
   const f = await fixture();
   await f.chat.activate();
@@ -1432,6 +1534,29 @@ test('the Chat look screen offers every timestamp format and applies the chosen 
   await flush();
   assert.equal(f.chat.preferences.timestamps, 'seconds');
   assert.equal(select.parentNode.querySelector('.sheet-row-saved').textContent, 'Saved');
+});
+
+test('replying to saved public history closes settings and returns a guest PM to public chat', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  f.state.room.roomSettings = { historyRetentionDays: 7 };
+  f.chat.openPrivate('alice', 'Alice');
+  const body = await f.screen('chat-look');
+  const history = body
+    .querySelectorAll('button')
+    .find((node) => node.textContent.includes('Room history'));
+  assert.ok(history);
+  history.click();
+  assert.equal(f.state.openedHistory.length, 1);
+  const original = entry('public-before-join');
+  f.state.openedHistory[0][4](original);
+  assert.equal(f.state.closedScreens, 1);
+  assert.equal(f.chat.store.active, 'public');
+  f.chat.input.value = 'Answer from saved history';
+  f.chat.send();
+  await flush();
+  assert.equal(f.state.sent.at(-1)[0], 'public');
+  assert.equal(f.state.sent.at(-1)[4], original.messageId);
 });
 
 test('the timestamp format is remembered with the chat preferences, and nonsense is ignored', async () => {
@@ -1814,7 +1939,7 @@ test('a browser that refuses notification permission leaves desktop notices off 
 
 test('the offered reactions are exactly the server\u2019s, in its order', async () => {
   const rust = await readFile(new URL('../../src/signaling/protocol.rs', import.meta.url), 'utf8');
-  const web = await readFile(new URL('../src/social-chat.ts', import.meta.url), 'utf8');
+  const web = await readFile(new URL('../src/chat-reactions.ts', import.meta.url), 'utf8');
   const quoted = (source, pattern) =>
     [...pattern.exec(source)[1].matchAll(/["']([^"']+)["']/g)].map((match) => match[1]);
   assert.deepEqual(

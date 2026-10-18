@@ -77,6 +77,43 @@ test('begin retains one immutable unresolved payload and preserves its creation 
   }
 });
 
+test('a reply keeps its target and bounded quote metadata across reload and conflicting drafts', async () => {
+  const f = fixture();
+  const replyTo = {
+    messageId: 'original-message',
+    participantId: 'peer',
+    participantName: 'Peer',
+    excerpt: 'Original question',
+  };
+  const original = { ...payload(), replyTo };
+  const saved = f.store.begin('account', 'peer', original);
+  assert.equal(saved.kind, 'pending');
+  replyTo.excerpt = 'Changed after submission';
+  const { PmSendAttempts: Reloaded } = await load();
+  const reloaded = new Reloaded(f.storage, () => DAY + 1);
+  assert.equal(reloaded.read('account', 'peer').attempt.replyTo.excerpt, 'Original question');
+  assert.equal(reloaded.begin('account', 'peer', payload()).kind, 'conflict');
+  assert.equal(
+    reloaded.begin('account', 'peer', {
+      ...original,
+      replyTo: { ...replyTo, messageId: 'another-target' },
+    }).kind,
+    'conflict',
+  );
+  for (const malformed of [
+    null,
+    { ...replyTo, excerpt: '界'.repeat(142) },
+    { ...replyTo, messageId: '' },
+    { ...replyTo, extra: true },
+  ]) {
+    const next = fixture();
+    assert.equal(
+      next.store.begin('account', 'peer', { ...payload(), replyTo: malformed }).kind,
+      'unavailable',
+    );
+  }
+});
+
 test('serialized callers read current storage and an old receipt cannot clear a newer attempt', () => {
   const f = fixture();
   const older = f.store;

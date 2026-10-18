@@ -884,6 +884,9 @@ pub struct ChatEntry {
     pub recipient_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub recipient_name: Option<String>,
+    /// True only for a retained conversation between two accounts, across rooms.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub account_conversation: Option<bool>,
     pub content: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub attachments: Vec<ChatAttachment>,

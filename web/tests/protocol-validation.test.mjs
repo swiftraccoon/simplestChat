@@ -84,6 +84,22 @@ const chat = {
   },
   reactions: [{ emoji: '🎉', participantIds: ['participant'] }],
 };
+
+test('only the server’s explicit true marker identifies a durable account conversation', () => {
+  const message = {
+    type: 'chatReceived',
+    ...chat,
+    recipientId: 'recipient',
+    accountConversation: true,
+  };
+  assert.equal(decode(message).accountConversation, true);
+  for (const marker of [false, 'true', 1, {}]) {
+    assert.throws(() => decode({ ...message, accountConversation: marker }), invalid);
+  }
+  const guest = { ...message };
+  delete guest.accountConversation;
+  assert.equal(decode(guest).accountConversation, undefined);
+});
 const settings = {
   nameStyle: { color: null, style: 'accent' },
   historyRetentionDays: 0,

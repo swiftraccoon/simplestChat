@@ -1,4 +1,4 @@
-import type { ChatEntry } from './protocol';
+import type { ChatEntry, ChatReplyRef } from './protocol';
 import { AttachmentComposer } from './attachments';
 import { SavedPmDrafts } from './chat-store';
 import {
@@ -15,17 +15,24 @@ type Options = {
   current: () => boolean;
   getToken: () => string | null;
   signal: AbortSignal;
-  send: (content: string, id: string, signal: AbortSignal, files: string[]) => Promise<ChatEntry>;
-  confirmed: () => Promise<void>;
+  send: (
+    content: string,
+    id: string,
+    signal: AbortSignal,
+    files: string[],
+    replyTo?: string,
+  ) => Promise<ChatEntry>;
+  confirmed: (message: ChatEntry) => Promise<void>;
   fail: (error: unknown) => void;
 };
 const listeners = new Set<() => void>();
 const changed = (): void => {
   for (const listener of listeners) listener();
 };
+export type PmComposer = (() => void) & { reply: (message: ChatEntry) => void };
 
 /** A submitted payload belongs to its durable receipt, separately from the next draft. */
-export function mountPmComposer(host: HTMLElement, options: Options): () => void {
+export function mountPmComposer(host: HTMLElement, options: Options): PmComposer {
   // Accessing localStorage itself can throw in restricted browser contexts.
   const storage = {
     getItem: (key: string) => localStorage.getItem(key),
@@ -44,6 +51,14 @@ export function mountPmComposer(host: HTMLElement, options: Options): () => void
   };
   composer.addEventListener('input', saveDraft);
   const recovery = el('div', undefined, 'pm-unconfirmed');
+  const replyBar = el('div', undefined, 'reply-bar');
+  replyBar.hidden = true;
+  let replyTo: ChatReplyRef | undefined;
+  const clearReply = (): void => {
+    replyTo = undefined;
+    replyBar.hidden = true;
+    replyBar.replaceChildren();
+  };
   const attachmentHost = el('div', undefined, 'history-attachment-composer');
   const attachments = new AttachmentComposer({
     host: attachmentHost,
@@ -65,23 +80,26 @@ export function mountPmComposer(host: HTMLElement, options: Options): () => void
     });
   };
 
-  const deliver = async (attempt: PmSendAttempt, signal: AbortSignal): Promise<void> => {
+  const deliver = async (attempt: PmSendAttempt, signal: AbortSignal): Promise<ChatEntry> => {
     const receipt = await options.send(
       attempt.content,
       attempt.id,
       signal,
       attempt.attachments.map((file) => file.id),
+      attempt.replyTo?.messageId,
     );
     if (
       receipt.clientMessageId !== attempt.id ||
       receipt.participantId !== options.account ||
-      receipt.recipientId !== options.peer
+      receipt.recipientId !== options.peer ||
+      receipt.replyTo?.messageId !== attempt.replyTo?.messageId
     )
       throw new Error('The original send was not confirmed. Check saved messages before retrying.');
-    if (!options.current()) return;
+    if (!options.current()) return receipt;
     if (!attempts.clear(options.account, options.peer, attempt.id))
       throw new Error('The message was confirmed, but its recovery item could not be cleared.');
     changed();
+    return receipt;
   };
 
   const submit = async (retryId?: string): Promise<void> => {
@@ -92,7 +110,7 @@ export function mountPmComposer(host: HTMLElement, options: Options): () => void
     sending = true;
     composer.disabled = true;
     refresh();
-    let confirmed = false;
+    let confirmed: ChatEntry | undefined;
     try {
       await locked(async (signal) => {
         let state = attempts.read(options.account, options.peer);
@@ -103,6 +121,7 @@ export function mountPmComposer(host: HTMLElement, options: Options): () => void
             id: crypto.randomUUID(),
             content,
             attachments: files,
+            ...(replyTo && { replyTo }),
           });
           if (state.kind === 'unavailable' || state.kind === 'full')
             throw new Error(
@@ -117,12 +136,12 @@ export function mountPmComposer(host: HTMLElement, options: Options): () => void
           attachments.consume();
           composer.value = '';
           saveDraft();
+          clearReply();
           changed();
         }
-        await deliver(state.attempt, signal);
-        confirmed = true;
+        confirmed = await deliver(state.attempt, signal);
       });
-      if (confirmed && active()) await options.confirmed();
+      if (confirmed && active()) await options.confirmed(confirmed);
     } finally {
       sending = false;
       composer.disabled = false;
@@ -149,6 +168,10 @@ export function mountPmComposer(host: HTMLElement, options: Options): () => void
     const status = el('p', 'Unconfirmed send');
     status.setAttribute('role', 'status');
     recovery.append(status, el('p', attempt.content));
+    if (attempt.replyTo)
+      recovery.append(
+        el('p', `Replying to ${attempt.replyTo.participantName}: ${attempt.replyTo.excerpt}`),
+      );
     for (const file of attempt.attachments) recovery.append(el('p', file.name));
     if (state.kind === 'expired')
       recovery.append(
@@ -202,13 +225,33 @@ export function mountPmComposer(host: HTMLElement, options: Options): () => void
   listeners.add(refresh);
   window.addEventListener('storage', storageChanged);
   attachmentHost.append(send);
-  host.append(recovery, field('Private message', composer), attachmentHost);
+  host.append(recovery, replyBar, field('Private message', composer), attachmentHost);
   refresh();
-  return (): void => {
+  const dispose = (): void => {
     saveDraft();
     confirmation?.close();
     listeners.delete(refresh);
     window.removeEventListener('storage', storageChanged);
     attachments.dispose();
   };
+  return Object.assign(dispose, {
+    reply: (message: ChatEntry): void => {
+      if (!active() || message.removedAt) return;
+      const flat = message.content.split(/\s+/).join(' ').trim();
+      const chars = [...flat];
+      replyTo = {
+        messageId: message.messageId,
+        participantId: message.participantId,
+        participantName: message.participantName,
+        excerpt: chars.length > 140 ? `${chars.slice(0, 140).join('').trimEnd()}…` : flat,
+      };
+      const cancel = button('Cancel reply', clearReply, 'reply-bar-cancel');
+      replyBar.replaceChildren(
+        el('span', `Replying to ${replyTo.participantName}: ${replyTo.excerpt}`),
+        cancel,
+      );
+      replyBar.hidden = false;
+      composer.focus();
+    },
+  });
 }

@@ -22,6 +22,14 @@ const receipt = (data, id = 'confirmed') => ({
   clientMessageId: data.clientMessageId,
   participantId: 'account',
   recipientId: 'peer',
+  ...(data.replyTo && {
+    replyTo: {
+      messageId: data.replyTo,
+      participantId: 'peer',
+      participantName: 'Peer',
+      excerpt: 'Quoted question',
+    },
+  }),
 });
 const history = (messages = [message('newest')], nextCursor = null) => ({
   messages,
@@ -56,6 +64,9 @@ async function fixture(t, { storage = new Map() } = {}) {
   };
   f.document.removeEventListener = (name, listener) => listeners.get(name)?.delete(listener);
   f.document.createTextNode = (text) => f.ui.el('text', text);
+  f.Node.prototype.focus = function () {
+    f.document.activeElement = this;
+  };
   Object.defineProperty(f.Node.prototype, 'style', {
     get() {
       return { setProperty() {} };
@@ -74,6 +85,10 @@ async function fixture(t, { storage = new Map() } = {}) {
       ...message(_id, data.content),
       revision: data.expectedRevision + 1,
       editedAt: '2026-10-08T00:00:00Z',
+    }),
+    react: async (_token, _peer, id, { emoji, present }) => ({
+      messageId: id,
+      reactions: present ? [{ emoji, participantIds: ['account'] }] : [],
     }),
     room: async (method) =>
       method === 'getChatHistory'
@@ -115,6 +130,7 @@ async function fixture(t, { storage = new Map() } = {}) {
     readPrivateMessages: invoke('read', (...args) => state.markRead(...args)),
     sendPrivateMessage: invoke('send', (...args) => state.send(...args)),
     editPrivateMessage: invoke('edit', (...args) => state.edit(...args)),
+    setPrivateReaction: invoke('react', (...args) => state.react(...args)),
   };
   const globals = {
     document: f.document,
@@ -143,6 +159,7 @@ async function fixture(t, { storage = new Map() } = {}) {
     './attachments': attachmentState.module,
     './chat-store': await loadTypeScript('src/chat-store.ts'),
     './avatar-colors': await loadTypeScript('src/avatar-colors.ts'),
+    './chat-reactions': await loadTypeScript('src/chat-reactions.ts'),
     './chat-message-ui': await loadTypeScript('src/chat-message-ui.ts', {
       modules: { './ui': f.ui },
       globals,
@@ -211,6 +228,198 @@ function search(view, value) {
 const rows = (view) =>
   view.querySelectorAll('article').map((node) => node.getAttribute('data-message-id'));
 const calls = (f, method) => f.state.calls.filter((call) => call.method === method);
+
+test('a direct account PM and the inbox share durable attempts and the next draft', async (t) => {
+  const f = await fixture(t);
+  f.openPrivateConversation('peer', 'Peer', {
+    getToken: () => f.state.token,
+    getAccountId: () => f.state.account,
+  });
+  await flush();
+  const direct = dialog(f, 'Messages with Peer');
+  assert.equal(calls(f, 'inbox').length, 0, 'direct messaging does not need an inbox parent');
+  const composer = direct.querySelector('textarea');
+  composer.value = 'Original account send';
+  f.state.send = async () => {
+    throw new Error('Response lost');
+  };
+  action(direct, 'Send').click();
+  await flush();
+  const original = calls(f, 'send')[0].args[2];
+  composer.value = 'A separate next draft';
+  composer.emit('input');
+  direct.close();
+  const reopened = await f.openConversation();
+  assert.equal(reopened.querySelector('textarea').value, 'A separate next draft');
+  assert.match(reopened.textContent, /Unconfirmed send.*Original account send/s);
+  f.state.send = async (_token, _peer, data) => receipt(data);
+  action(reopened, 'Retry unconfirmed send').click();
+  await flush();
+  assert.deepEqual(calls(f, 'send')[1].args[2], original);
+  assert.equal(reopened.querySelector('textarea').value, 'A separate next draft');
+});
+
+test('a PM reply keeps its target through response loss and reload without replacing the next draft', async (t) => {
+  const f = await fixture(t);
+  f.state.loadHistory = async () => history([message('original', 'Quoted question')]);
+  const view = await f.openConversation();
+  action(view, 'Reply').click();
+  assert.equal(view.open, true, 'a private reply uses the current durable composer');
+  assert.match(view.querySelector('.reply-bar').textContent, /Peer: Quoted question/);
+  const composer = view.querySelector('textarea');
+  composer.value = 'Answer once';
+  f.state.send = async () => {
+    throw new Error('Response lost');
+  };
+  action(view, 'Send').click();
+  await flush();
+  const original = calls(f, 'send')[0].args[2];
+  assert.equal(original.replyTo, 'original');
+  assert.equal(view.querySelector('.reply-bar').hidden, true);
+  composer.value = 'Separate next draft';
+  composer.emit('input');
+  view.close();
+  const reopened = await f.openConversation();
+  assert.match(
+    reopened.textContent,
+    /Unconfirmed send.*Answer once.*Replying to Peer: Quoted question/s,
+  );
+  f.state.send = async (_token, _peer, data) => receipt(data);
+  action(reopened, 'Retry unconfirmed send').click();
+  await flush();
+  assert.deepEqual(calls(f, 'send')[1].args[2], original);
+  assert.equal(reopened.querySelector('textarea').value, 'Separate next draft');
+  assert.doesNotMatch(reopened.textContent, /Unconfirmed send/);
+});
+
+test('PM reactions retry explicit presence and a later live list defeats an old response or page', async (t) => {
+  const f = await fixture(t);
+  const view = await f.openConversation();
+  f.state.react = async () => {
+    throw new Error('Response lost');
+  };
+  action(view, 'React').click();
+  action(view, '👍').click();
+  await flush();
+  assert.equal(calls(f, 'react')[0].args[3].present, true);
+  f.state.react = async (_token, _peer, id, { emoji, present }) => ({
+    messageId: id,
+    reactions: present ? [{ emoji, participantIds: ['account'] }] : [],
+  });
+  action(view, 'React').click();
+  action(view, '👍').click();
+  await flush();
+  assert.equal(
+    calls(f, 'react')[1].args[3].present,
+    true,
+    'an unknown add cannot turn into a remove on retry',
+  );
+  assert.ok(action(view, '👍 1'));
+  const pending = deferred();
+  f.state.react = () => pending.promise;
+  action(view, '👍 1').click();
+  await flush();
+  assert.equal(calls(f, 'react')[2].args[3].present, false);
+  f.notifyHistoryReaction('newest', [{ emoji: '❤️', participantIds: ['peer'] }]);
+  pending.resolve({ messageId: 'newest', reactions: [] });
+  await flush();
+  assert.ok(action(view, '❤️ 1'));
+  await f.tick();
+  assert.ok(action(view, '❤️ 1'), 'a stale page cannot erase the live reaction list');
+});
+
+test('saved public history offers working reaction and reply actions without keeping its dialog open', async (t) => {
+  const f = await fixture(t);
+  const original = { ...message('saved-question'), recipientId: undefined };
+  let reply;
+  f.state.room = async (method, data) =>
+    method === 'getChatHistory'
+      ? history([structuredClone(original)])
+      : method === 'reactToMessage'
+        ? {
+            messageId: data.messageId,
+            reactions: [{ emoji: data.emoji, participantIds: ['account'] }],
+          }
+        : {};
+  f.openRoomHistory(
+    f.room,
+    () => f.state.current,
+    true,
+    undefined,
+    (message) => {
+      reply = message;
+    },
+  );
+  await flush();
+  const view = dialog(f, 'Room history');
+  action(view, 'React').click();
+  action(view, '🎉').click();
+  await flush();
+  assert.equal(
+    calls(f, 'room').find((call) => call.args[0] === 'reactToMessage').args[1].messageId,
+    original.messageId,
+  );
+  assert.ok(action(view, '🎉 1'));
+  action(view, 'Reply').click();
+  assert.equal(view.open, false);
+  assert.equal(reply.messageId, original.messageId);
+});
+
+test('an incoming PM refreshes its open account conversation immediately and keeps its draft', async (t) => {
+  const f = await fixture(t);
+  const view = await f.openConversation();
+  const composer = view.querySelector('textarea');
+  composer.value = 'Still composing';
+  const initial = calls(f, 'history').length;
+  f.state.loadHistory = async () => history([message('newest'), message('incoming')]);
+  f.notifyInboxChanged({ ...message('other-conversation'), participantId: 'someone-else' });
+  f.notifyInboxChanged();
+  await flush();
+  assert.equal(
+    calls(f, 'history').length,
+    initial,
+    'badge/read changes and another peer do not reload this view',
+  );
+  f.notifyInboxChanged(message('incoming'));
+  await flush();
+  assert.deepEqual(rows(view), ['newest', 'incoming']);
+  assert.equal(composer.value, 'Still composing');
+  assert.equal(calls(f, 'history').length, initial + 1);
+  view.close();
+  f.notifyInboxChanged(message('after-close'));
+  await flush();
+  assert.equal(calls(f, 'history').length, initial + 1);
+});
+
+test('incoming PM refresh waits for a loading page and never advances an unread catch-up page', async (t) => {
+  const f = await fixture(t);
+  const pending = deferred();
+  f.state.loadHistory = () => pending.promise;
+  f.openPrivateConversation('peer', 'Peer', {
+    getToken: () => f.state.token,
+    getAccountId: () => f.state.account,
+  });
+  await flush();
+  f.notifyInboxChanged(message('incoming'));
+  f.state.loadHistory = async () => history([message('incoming')]);
+  pending.resolve(history([message('initial')]));
+  await flush();
+  const view = dialog(f, 'Messages with Peer');
+  assert.deepEqual(rows(view), ['incoming']);
+  assert.equal(calls(f, 'history').length, 2);
+  view.close();
+  f.state.loadHistory = async () => ({
+    ...history([message('first-unread')]),
+    firstUnreadMessageId: 'first-unread',
+    newerCursor: 'next-unread-page',
+  });
+  const catchup = await f.openConversation();
+  const count = calls(f, 'history').length;
+  f.notifyInboxChanged(message('newest-arrival'));
+  await flush();
+  assert.equal(calls(f, 'history').length, count);
+  assert.deepEqual(rows(catchup), ['first-unread']);
+});
 
 test('inbox and history preserve server ordering and page without accumulating unbounded DOM', async (t) => {
   const f = await fixture(t);

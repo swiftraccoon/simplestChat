@@ -418,6 +418,8 @@ export interface ChatAttachment {
 }
 
 export interface ChatEntry {
+  /** A server-authorized retained two-account conversation, independent of room membership. */
+  accountConversation?: true;
   messageId: string;
   clientMessageId: string;
   participantId: string;

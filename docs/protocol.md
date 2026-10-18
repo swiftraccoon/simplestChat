@@ -24,7 +24,8 @@ Login, passkeys and refresh remain owned by [AuthManager](../web/src/auth.ts).
 | `privateHistory` | `GET /api/auth/inbox/:peer/messages` with optional `before`, `after`, `around`, `resume`, `q`, `limit` | `ChatHistoryPage` |
 | `inboxUnread` | `GET /api/auth/inbox/unread` | `{ unreadCount }`, capped at 1,000 |
 | `editPrivateMessage` | `PUT /api/auth/inbox/:peer/messages/:messageId`, JSON `{content, expectedRevision}` | Updated author-owned `ChatEntry` |
-| `sendPrivateMessage` | `POST /api/auth/inbox/:peer/messages`, JSON `{clientMessageId, content}` | `ChatEntry` |
+| `sendPrivateMessage` | `POST /api/auth/inbox/:peer/messages`, JSON `{clientMessageId, content, attachmentIds?, replyTo?, roomId?}` | `ChatEntry` |
+| `setPrivateReaction` | `PUT /api/auth/inbox/:peer/messages/:messageId/reactions`, JSON `{emoji, present}` | `{messageId, reactions}` |
 | `readPrivateMessages` | `PUT /api/auth/inbox/:peer/read`, JSON `{messageId}` | `{ readMessageId: string \| null }` |
 | `contacts` | `GET /api/auth/contacts` | `{accountId, contacts:[{accountId,accountName,status}]}`; status is `accepted`, `incoming` or `outgoing` |
 | `requestContact` | `POST /api/auth/contacts`, JSON `{accountId}` | `204`, no body; exact account UUID only |
@@ -557,7 +558,10 @@ membership and media, and the server removes the corresponding membership.
 Public `chatMessage` and `privateMessage` sends use a client-generated
 `clientMessageId`. The sender receives `messageAck` containing the authoritative
 `ChatEntry`; recipients receive `chatReceived` or `privateMessageReceived`.
-Entries carry a server `messageId` and `sentAt`. A chat-related `socialError` can
+Entries carry a server `messageId` and `sentAt`. A two-account saved PM additionally
+carries `accountConversation: true`; public and guest-session messages omit it.
+The server derives this capability from the authenticated participants or saved
+conversation, never from a UUID's format. A chat-related `socialError` can
 carry `clientMessageId`; administrative social failures use `requestId`.
 Message text (public, private and edited) is 1–4096 bytes and keeps line breaks
 and tabs; other control characters and the hidden formatting that labels reject
@@ -624,9 +628,16 @@ Account-to-account PMs are retained for 90 days. Authenticated HTTP routes are
 `PUT /api/auth/inbox/:peer/read`. Message pages have the same history shape;
 inbox pages return `{conversations, nextCursor, retentionDays}`. Each conversation
 includes the peer identity/name, last message and an unread count capped at
-1,000. POST takes `{clientMessageId, content}` and PUT takes `{messageId}`.
-An HTTP send requires either an existing retained account conversation or an
-accepted contact relationship. Both room and HTTP account PM sends honor the two accounts' saved
+1,000. POST takes `{clientMessageId, content, attachmentIds?, replyTo?, roomId?}`;
+the read PUT takes `{messageId}`. An HTTP send requires an existing retained
+account conversation, an accepted contact relationship, or an explicit current
+`roomId` in which both authenticated accounts are connected and admitted. The
+last case establishes a first conversation under that exact room's control gate,
+including sender chat permission and text sanctions, before acquiring account and
+session locks. A supplied room ID alone grants no authority; departed, waiting and
+guest participants cannot establish a saved conversation. Existing conversations
+and exact committed retries remain usable after either participant leaves.
+Both room and HTTP account PM sends honor the two accounts' saved
 ignore/PM preferences under database row locks. Room-session preference changes
 also wait for in-flight durable sends before acknowledging, so an opt-out cannot
 overtake an accepted send. A known-success HTTP retry returns its existing receipt
@@ -636,8 +647,17 @@ before room delivery/acknowledgement. An uncertain database commit quarantines
 the room and reports `messageRetryResult` with `storage_unconfirmed`, never a
 definite send rejection. Account identity scopes every inbox route; knowing another conversation's peer or message ID grants no access.
 
+The browser uses one saved-conversation dialog for account PMs opened from the
+roster, incoming conversation tabs, contacts or the inbox, including an absent
+peer identified by the server's account capability. Its composer, drafts, send
+recovery, replies and reactions share the same implementation. Incoming messages
+refresh an open latest-page dialog promptly without changing a separate draft or
+advancing an unread catch-up page. Guest PMs retain their room-session composer
+and require the original session boundary.
+
 Before an HTTP inbox send, the browser durably records the original
-`clientMessageId`, text, attachment metadata and creation time, scoped to the
+`clientMessageId`, text, attachment metadata, optional reply target and quoted
+metadata, and creation time, scoped to the
 account and peer. A same-origin Web Lock serializes preparation, submission and
 confirmation across tabs. Missing lock support or unavailable/full site storage
 refuses submission before the message POST. One unconfirmed attempt per account/peer
@@ -648,7 +668,7 @@ leave the ordinary composer after the record is saved, so closing its dialog doe
 not delete uploads still belonging to the unconfirmed attempt.
 
 Closing or reloading preserves that record. Only explicit **Retry unconfirmed
-send** repeats its original ID, text and attachment IDs; opening history never
+send** repeats its original ID, text, attachment IDs and reply target; opening history never
 replays or clears it. A successful send response clears only the matching attempt,
 preserving any newer draft. Retry is available for 24 hours from creation. Older
 records remain visible for review and cannot be replayed automatically or assigned
@@ -729,16 +749,33 @@ quote outlives the original's eviction and cannot be forged. The original must
 still be retained, visible to the sender and in the same conversation (public
 with public, or the same private pair), else the send is rejected. A retry must
 repeat the same `replyTo`; a differing one is a conflict like differing text.
+For public room messages, configured saved history supplies this authority even
+after runtime replay eviction or when the message predates the sender's join.
+The current room membership, ignore policy, retention and removal rules still
+apply. HTTP account sends accept the same `replyTo` message ID and derive the
+quote from the retained private conversation under its persistence lock.
 
 `reactToMessage` (`messageId`, `emoji`) toggles the sender's reaction on a
 retained message it can see; `emoji` must be one of `REACTIONS` in
 `src/signaling/protocol.rs` (mirrored by `CHAT_REACTIONS` in
-`web/src/social-chat.ts`). The response and a `messageReactions` broadcast to
+`web/src/chat-reactions.ts`). The response and a `messageReactions` broadcast to
 everyone who can see the message carry the message's full reaction list, oldest
 first, as `{ emoji, participantIds }`. A message holds at most 64 reaction
 records, and reactions count toward the history byte budget. Reactions are not
-part of delivery receipts. Reactions on saved messages are persisted; adding a
-reaction through room chat still requires the message in current runtime replay.
+part of delivery receipts. Public room reactions can target authorized saved
+messages outside runtime replay, including prejoin messages. Mutations serialize
+with edits, removal and quoted sends; the database's current list is authoritative.
+Publication updates existing replay and pin copies without reinserting old text.
+
+Saved account PM reactions use
+`PUT /api/auth/inbox/:peer/messages/:messageId/reactions` with `{emoji, present}`.
+This sets the caller's membership explicitly rather than toggling it, so retrying
+after a lost response is idempotent. The target must belong to that retained,
+unremoved private conversation, and both accounts' current consent and the
+caller's live session are checked under the same ordered locks as a PM write.
+After commit, owned reconciliation publishes the latest persisted list to both
+accounts' live rooms. Delayed receipts or history reads cannot replace a newer
+live list in an open conversation.
 
 `removeChatMessage` takes `{requestId, messageId}` and requires Moderator+.
 It targets only public messages from the current room, including saved messages

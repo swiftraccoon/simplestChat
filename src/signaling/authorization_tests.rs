@@ -383,10 +383,17 @@ impl Fixture {
             std::env::var("DISPOSABLE_TEST_DATABASE").as_deref(),
             Ok("1")
         );
-        let pool =
-            PgPool::connect(&std::env::var("TEST_DATABASE_URL").expect("disposable database"))
-                .await
-                .unwrap();
+        let options = std::env::var("TEST_DATABASE_URL")
+            .expect("disposable database")
+            .parse::<sqlx::postgres::PgConnectOptions>()
+            .unwrap()
+            .options([("statement_timeout", "5s"), ("lock_timeout", "5s")]);
+        let pool = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(6)
+            .acquire_timeout(Duration::from_secs(5))
+            .connect_with(options)
+            .await
+            .unwrap();
         sqlx::migrate::Migrator::new(
             std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("migrations")
@@ -609,6 +616,7 @@ async fn authorization_database_inbox_offline_delivery_read_sync_and_consent() {
         edited_at: None,
         chat_style: Default::default(),
         reply_to: None,
+        account_conversation: None,
         reactions: vec![],
     };
     crate::room::history::persist_message(
@@ -635,6 +643,32 @@ async fn authorization_database_inbox_offline_delivery_read_sync_and_consent() {
     assert_eq!(
         saved["messageId"], retry["messageId"],
         "HTTP retry is idempotent"
+    );
+    let react = operation(
+        "PUT",
+        format!(
+            "/api/auth/inbox/{alice}/messages/{}/reactions",
+            saved["messageId"].as_str().unwrap()
+        ),
+        Some(json!({"emoji":"👍","present":true})),
+    );
+    for sequence in [101, 102] {
+        let receipt = data(
+            fixture
+                .request(&react, Some(&fixture.tokens[1]), sequence)
+                .await,
+        )
+        .await;
+        assert_eq!(receipt["messageId"], saved["messageId"]);
+        assert_eq!(receipt["reactions"][0]["participantIds"], json!([bob]));
+    }
+    assert_eq!(
+        fixture
+            .request(&react, Some(&fixture.tokens[2]), 103)
+            .await
+            .status(),
+        StatusCode::BAD_REQUEST,
+        "a retained message id cannot authorize another account conversation"
     );
     let conflict = operation(
         "POST",
@@ -755,6 +789,14 @@ async fn authorization_database_inbox_offline_delivery_read_sync_and_consent() {
                 .status(),
             StatusCode::BAD_REQUEST,
             "account consent and either side's ignore list are enforced"
+        );
+        assert_eq!(
+            fixture
+                .request(&react, Some(&fixture.tokens[1]), index + 40)
+                .await
+                .status(),
+            StatusCode::BAD_REQUEST,
+            "private reaction writes also require current mutual account consent"
         );
     }
     let count: i64 =

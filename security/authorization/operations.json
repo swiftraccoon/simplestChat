@@ -670,12 +670,15 @@
       "policy": "current-session",
       "body": {
         "clientMessageId": "policy-message",
-        "content": "Policy private message"
+        "content": "Policy private message",
+        "roomId": "policy-room"
       },
       "unauthenticated_status": null,
       "checks": [
         "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions",
-        "authorization_database_inbox_offline_delivery_read_sync_and_consent"
+        "authorization_database_inbox_offline_delivery_read_sync_and_consent",
+        "first_account_conversation_requires_admitted_account_peers_and_room_chat_authority",
+        "database_first_account_pm_uses_room_authority_and_retries_after_departure"
       ]
     },
     {
@@ -715,6 +718,22 @@
       "unauthenticated_status": null,
       "checks": [
         "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/auth/inbox/{peer}/messages/{messageId}/reactions",
+      "handler": "crate::room::history::set_private_reaction",
+      "policy": "current-session",
+      "body": {
+        "emoji": "👍",
+        "present": true
+      },
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions",
+        "authorization_database_inbox_offline_delivery_read_sync_and_consent",
+        "database_private_reactions_are_idempotent_and_conversation_scoped"
       ]
     },
     {
