@@ -2049,20 +2049,53 @@ async function setRole(owner, name, role) {
           };
           const reactionPath = `${endpoint}/${committed.messageId}/reactions`;
           const reactionAttempts = [];
-          const setReaction = async (route) => {
-            const body = route.request().postDataJSON();
-            reactionAttempts.push(body);
-            assert.deepEqual(body, { emoji: '👍', present: true });
-            const response = await route.fetch({ timeout: 10000, maxRetries: 0 });
-            assert.equal(response.status(), 200);
-            const result = await response.json();
-            assert.equal(result.messageId, committed.messageId);
-            assert.deepEqual(result.reactions, [
-              { emoji: '👍', participantIds: [committed.sender] },
-            ]);
-            if (reactionAttempts.length === 1) await route.abort('failed');
-            else await route.fulfill({ response });
+          let reactionFailure;
+          let releaseCanonical;
+          let canonicalStarted;
+          let heldCanonicalReads = 0;
+          const canonicalGate = new Promise((resolve) => {
+            releaseCanonical = resolve;
+          });
+          const canonicalRequested = new Promise((resolve) => {
+            canonicalStarted = resolve;
+          });
+          const historyRoute = (url) =>
+            url.origin === new URL(base).origin && url.pathname === endpoint;
+          const holdCanonical = async (route) => {
+            if (route.request().method() !== 'GET') return route.fallback();
+            heldCanonicalReads++;
+            canonicalStarted();
+            await canonicalGate;
+            // A newer invalidation can retire a held read. The subsequent UI
+            // and recipient assertions still require authoritative results.
+            await route.continue().catch(() => {});
           };
+          const setReaction = async (route) => {
+            try {
+              const body = route.request().postDataJSON();
+              reactionAttempts.push(body);
+              assert.deepEqual(body, { emoji: '👍', present: true });
+              const response = await route.fetch({ timeout: 10000, maxRetries: 0 });
+              assert.equal(response.status(), 200);
+              const result = await response.json();
+              assert.equal(result.messageId, committed.messageId);
+              assert.deepEqual(result.reactions, [
+                { emoji: '👍', participantIds: [committed.sender] },
+              ]);
+              if (reactionAttempts.length === 1) await route.abort('failed');
+              else {
+                await route.fulfill({ response });
+                releaseCanonical();
+              }
+            } catch (error) {
+              reactionFailure = error;
+              await route.abort('failed').catch(() => {});
+            }
+          };
+          // This subcase loses both the mutation receipt and its independent
+          // history confirmation until the explicit retry. With a confirmed
+          // live reaction, a second click would correctly request removal.
+          await sender.route(historyRoute, holdCanonical);
           await sender.route(`**${reactionPath}`, setReaction);
           try {
             const row = conversation.locator(
@@ -2071,9 +2104,12 @@ async function setRole(owner, name, role) {
             await row.getByRole('button', { name: 'React', exact: true }).click();
             await row.getByRole('button', { name: '👍', exact: true }).click();
             await conversation.locator('.auth-error').waitFor({ state: 'visible' });
+            await deadline(canonicalRequested);
+            assert.ifError(reactionFailure);
             await row.getByRole('button', { name: 'React', exact: true }).click();
             await row.getByRole('button', { name: '👍', exact: true }).click();
             await row.getByRole('button', { name: '👍 1', exact: true }).waitFor();
+            assert.ifError(reactionFailure);
             assert.equal(reactionAttempts.length, 2);
             await received
               .locator(`.history-message[data-message-id="${committed.messageId}"]`)
@@ -2084,9 +2120,14 @@ async function setRole(owner, name, role) {
               requests: 2,
               explicitPresence: true,
               retainedParticipantCount: 1,
+              canonicalReadsWithheld: heldCanonicalReads,
             };
+          } catch (error) {
+            throw reactionFailure ?? error;
           } finally {
+            releaseCanonical();
             await sender.unroute(`**${reactionPath}`, setReaction);
+            await sender.unroute(historyRoute, holdCanonical);
           }
           await composer.fill('');
           await close(conversation);
