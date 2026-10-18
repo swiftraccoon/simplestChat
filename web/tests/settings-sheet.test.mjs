@@ -11,6 +11,7 @@ async function sheetFixture({
   onNavigate,
   roomContext,
   onClose,
+  onBack,
 } = {}) {
   const f = await uiFixture();
   const { Node, document } = f;
@@ -84,6 +85,7 @@ async function sheetFixture({
     },
     onNavigate,
     roomContext,
+    onBack,
   });
   return { ...f, sheet, sheetModule, hostNode, log, timers };
 }
@@ -597,4 +599,88 @@ test('a retired managed-room snapshot never opens the live room with the same se
   assert.equal(scope, 'live:A', 'a different selected room is cleared before the safe root');
   assert.equal(heading(f.sheet).textContent, 'Settings');
   assert.deepEqual(builds, ['managed:B', 'managed:C']);
+});
+
+test('source-integrated cold settings Account to Profile to Back to Security then Close remains closed', async () => {
+  const location = {
+    pathname: '/',
+    search: '',
+    hash: '#view=settings&section=security&segment=you',
+  };
+  const entries = [{ hash: location.hash, state: null }];
+  let cursor = 0;
+  const history = {
+    state: null,
+    pushState(state, _title, url) {
+      entries.splice(cursor + 1);
+      entries.push({ hash: new URL(url, 'https://test.invalid').hash, state });
+      cursor++;
+      this.state = state;
+      location.hash = entries[cursor].hash;
+    },
+    replaceState(state, _title, url) {
+      entries[cursor] = { hash: new URL(url, 'https://test.invalid').hash, state };
+      this.state = state;
+      location.hash = entries[cursor].hash;
+    },
+    go(delta) {
+      cursor = Math.max(0, Math.min(entries.length - 1, cursor + delta));
+      this.state = entries[cursor].state;
+      location.hash = entries[cursor].hash;
+      navigation.locationChanged('');
+    },
+  };
+  let stop;
+  const f = await sheetFixture({
+    sections: ['profile', 'security'].map((id) => ({
+      id,
+      segment: 'you',
+      label: id,
+      screen: () => ({ title: id, body: () => f.document.createElement('div') }),
+    })),
+    onBack: () => navigation.back(),
+    onNavigate: (state, action) => {
+      if (!state) {
+        stop?.();
+        stop = undefined;
+        return;
+      }
+      stop = navigation.opened(
+        {
+          group: 'settings',
+          accountId: 'account',
+          destination: {
+            kind: 'settings',
+            ...(state.section && { section: state.section }),
+            segment: state.segment,
+          },
+          canLeave: state.canLeave,
+          close: () => f.sheet.close(),
+          restore: state.restore,
+        },
+        action === 'pop',
+      );
+    },
+  });
+  const { AppNavigation } = await loadTypeScript('src/app-navigation.ts', {
+    globals: { window: { location, history }, URLSearchParams },
+  });
+  const navigation = new AppNavigation({
+    getRoom: () => '',
+    getAccountId: () => 'account',
+    ready: () => true,
+    restore: (destination) =>
+      f.sheet.open({ section: destination.section, segment: destination.segment }),
+    error: (message) => assert.fail(message),
+  });
+  navigation.synchronize();
+  assert.equal(heading(f.sheet).textContent, 'security');
+  f.sheet.open({ section: 'profile' });
+  f.sheet.pop();
+  assert.equal(heading(f.sheet).textContent, 'Settings');
+  byLabel(f.sheet.element, 'security').click();
+  assert.equal(heading(f.sheet).textContent, 'security');
+  f.sheet.close();
+  assert.equal(f.sheet.isOpen, false);
+  assert.equal(location.hash, '');
 });

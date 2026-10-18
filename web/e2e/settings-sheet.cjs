@@ -49,14 +49,71 @@ async function sheetScreen(page, label) {
 /** Closes the sheet from its header and waits until it is gone. */
 async function closeSheet(page) {
   const region = sheet(page);
-  const previous = await page.evaluate(() => history.state?.simplestchatNavigation);
-  await region.getByRole('button', { name: 'Close settings', exact: true }).click();
-  await region.waitFor({ state: 'hidden' });
-  if (typeof previous === 'number')
-    await page.waitForFunction(
-      (entry) => history.state?.simplestchatNavigation !== entry,
-      previous,
-    );
+  const before = await page.evaluate(() => ({
+    entry: history.state?.simplestchatNavigation,
+    session: history.state?.simplestchatNavigationSession,
+  }));
+  let phase = 'click';
+  try {
+    await region.getByRole('button', { name: 'Close settings', exact: true }).click();
+    phase = 'hidden';
+    await region.waitFor({ state: 'hidden' });
+    phase = 'history';
+    if (typeof before.entry === 'number')
+      await page.waitForFunction(
+        (entry) => history.state?.simplestchatNavigation !== entry,
+        before.entry,
+      );
+  } catch (error) {
+    // The account suite contains real secrets. Emit fixed labels and structural
+    // navigation state only; never pass through DOM, input values or errors.
+    const state = await page
+      .evaluate((previous) => {
+        const titles = {
+          Settings: 'root',
+          Profile: 'profile',
+          'Sign-in & security': 'security',
+          Invites: 'invites',
+          Privacy: 'privacy',
+          Notifications: 'notifications',
+          'Camera & mic': 'camera',
+          Quality: 'quality',
+          'Screen sharing': 'screen-sharing',
+          'Chat look': 'chat-look',
+          'Who can enter': 'room-access',
+          'Chat & broadcasting': 'room-participation',
+          People: 'room-people',
+          Bans: 'room-bans',
+          Reports: 'room-reports',
+          History: 'room-history',
+          'Waiting room': 'room-lobby',
+        };
+        const params = new URLSearchParams(location.hash.slice(1));
+        const region = document.getElementById('settings-sheet');
+        const heading = region?.querySelector('h2')?.textContent;
+        const section = params.get('section');
+        const current = history.state;
+        return {
+          sheetHidden: region ? region.hidden === true : null,
+          sheetSection: Object.hasOwn(titles, heading) ? titles[heading] : 'other',
+          historyEntry: Number.isSafeInteger(current?.simplestchatNavigation)
+            ? current.simplestchatNavigation
+            : null,
+          sameHistoryEntry: current?.simplestchatNavigation === previous.entry,
+          sameHistorySession: current?.simplestchatNavigationSession === previous.session,
+          route: {
+            view: ['settings', 'inbox', 'conversation'].includes(params.get('view'))
+              ? params.get('view')
+              : null,
+            section: Object.values(titles).includes(section) ? section : null,
+            segment: ['you', 'room'].includes(params.get('segment')) ? params.get('segment') : null,
+          },
+        };
+      }, before)
+      .catch(() => ({ unavailable: true }));
+    console.error(JSON.stringify({ kind: 'settings-close', phase, ...state }));
+    throw error;
+  }
 }
 
 module.exports = { sheet, sheetRow, toSheetRoot, sheetScreen, closeSheet };
