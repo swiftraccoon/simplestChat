@@ -10,6 +10,7 @@ import shutil
 import stat
 import tempfile
 import unittest
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import patch
 
@@ -289,20 +290,47 @@ class RuntimeSecurityTests(unittest.TestCase):
             )
 
     def test_expired_changed_source_and_changed_profile_reviews_fail(self) -> None:
-        """Review records are fixed inputs, never derived or refreshed during the gate."""
+        """Fixed synthetic review objects reject drift without renewing production policy."""
         with tempfile.TemporaryDirectory() as temporary:
             fixture = Fixture(Path(temporary))
-            review = object_value(decode_json((fixture.root / runtime.REVIEW).read_text()))
+            # Production reviews intentionally remain bound to their reviewed
+            # revision. A new metadata file must not make this unit fixture
+            # silently refresh that assessment or mix two different revisions.
+            objects = {
+                name: f"fixed reviewed fixture object: {name}\n".encode()
+                for name in (*runtime.SOURCE_FILES, runtime.PROFILE, runtime.NSS)
+            }
+            trees = {name: f"{index + 1:040x}" for index, name in enumerate(runtime.SOURCE_TREES)}
+            for name, body in objects.items():
+                _ = (fixture.root / name).write_bytes(body)
+            review: JsonObject = {
+                "schemaVersion": 1,
+                "reviewedOn": "2026-10-17",
+                "expires": "2026-11-29",
+                "scope": "managed-default-server-dtls",
+                "assessment": "Synthetic source identity fixture; not a production assessment.",
+                "trees": dict(trees),
+                "files": {name: runtime.sha256(objects[name]) for name in runtime.SOURCE_FILES},
+                "profileFiles": {
+                    name: runtime.sha256(objects[name]) for name in (runtime.PROFILE, runtime.NSS)
+                },
+            }
+            _ = (fixture.root / runtime.REVIEW).write_text(json.dumps(review))
 
             def git_bytes(_root: Path, arguments: list[str], _limit: int) -> bytes:
                 if arguments[0] == "rev-parse":
-                    return (
-                        "\n".join(str(obj(review, "trees")[name]) for name in runtime.SOURCE_TREES)
-                        + "\n"
-                    ).encode()
-                return (fixture.root / arguments[1].split(":", 1)[1]).read_bytes()
+                    return ("\n".join(trees[name] for name in runtime.SOURCE_TREES) + "\n").encode()
+                return objects[arguments[1].split(":", 1)[1]]
 
-            with patch.object(runtime, "git_bytes", side_effect=git_bytes):
+            class ReviewClock:
+                @staticmethod
+                def now(_zone: object) -> datetime:
+                    return datetime(2026, 10, 18, tzinfo=UTC)
+
+            with (
+                patch.object(runtime, "git_bytes", side_effect=git_bytes),
+                patch.object(runtime, "datetime", ReviewClock),
+            ):
                 self.assertEqual(
                     runtime.source_review(fixture.root, REVISION)["expires"], "2026-11-29"
                 )
@@ -313,14 +341,20 @@ class RuntimeSecurityTests(unittest.TestCase):
                     _ = runtime.source_review(fixture.root, REVISION)
                 review = original
                 _ = (fixture.root / runtime.REVIEW).write_text(json.dumps(review))
-                _ = (fixture.root / runtime.PROFILE).write_text("changed")
+                source = runtime.SOURCE_FILES[0]
+                before = objects[source]
+                objects[source] = b"changed source object\n"
                 with self.assertRaisesRegex(ToolError, "runtime_source_file_changed"):
                     _ = runtime.source_review(fixture.root, REVISION)
-            with (
-                patch.object(runtime, "git_bytes", return_value=b"changed\n"),
-                self.assertRaisesRegex(ToolError, "runtime_source_tree_changed"),
-            ):
-                _ = runtime.source_review(fixture.root, REVISION)
+                objects[source] = before
+                _ = (fixture.root / runtime.PROFILE).write_text("changed profile")
+                with self.assertRaisesRegex(ToolError, "runtime_profile_changed"):
+                    _ = runtime.source_review(fixture.root, REVISION)
+                with (
+                    patch.object(runtime, "git_bytes", return_value=b"changed\n"),
+                    self.assertRaisesRegex(ToolError, "runtime_source_tree_changed"),
+                ):
+                    _ = runtime.source_review(fixture.root, REVISION)
 
     def test_failed_proof_retains_original_affected_evidence(self) -> None:
         """A denied disposition cannot erase the pre-disposition scanner/advisory result."""
