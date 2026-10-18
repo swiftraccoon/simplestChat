@@ -192,7 +192,10 @@ function pageFailureTooling(diagnosticsFail = false) {
       }]; },
       async getStats() { return new Map([['T01', { id: 'T01', type: 'transport', iceState: 'new', dtlsState: 'new', bytesReceived: 0, bytesSent: 0 }]]); },
     };
-    const window = { RTCPeerConnection: class { constructor() { return peer; } } };
+    const window = {
+      async fetch() { throw new Error('fixture must not fetch'); },
+      RTCPeerConnection: class { constructor() { return peer; } },
+    };
     const Notification = class {};
     const navigator = { mediaDevices: { getUserMedia() { throw new Error('fixture must not capture'); } } };
     const page = {
