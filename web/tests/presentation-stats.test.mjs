@@ -59,6 +59,7 @@ test('receiver diagnostics retain native layer/counters and only the selected in
         framesDecoded: 71,
         bytesReceived: 1200,
         packetsReceived: 12,
+        packetsLost: 3,
       }),
       receiver(camera, { type: 'inbound-rtp', framesDecoded: 88 }),
       receiver(audio, {
@@ -109,6 +110,7 @@ test('receiver diagnostics retain native layer/counters and only the selected in
       framesPerSecond: null,
       bytesReceived: 1200,
       packetsReceived: 12,
+      packetsLost: 3,
     },
   ]);
   assert.ok(!JSON.stringify(result).includes('private-native-id'));
@@ -141,6 +143,7 @@ test('missing incoming estimates stay unknown without breaking required native a
     receiverIdentified: false,
     packetsReceived: null,
     bytesReceived: null,
+    packetsLost: null,
   });
 });
 
@@ -189,6 +192,7 @@ test('receiver negotiation and probation diagnostics expose only fixed names and
                 id: secret,
                 packetsReceived: 17,
                 bytesReceived: 501,
+                packetsLost: 2,
               },
               {
                 type: 'inbound-rtp',
@@ -216,6 +220,7 @@ test('receiver negotiation and probation diagnostics expose only fixed names and
     receiverIdentified: true,
     packetsReceived: 17,
     bytesReceived: 501,
+    packetsLost: 2,
   });
   assert.deepEqual(
     result.localDescriptions,
@@ -249,6 +254,7 @@ test('unsupported probation fields stay unknown and oversized descriptions are n
         mid: 'probator',
         packetsReceived: -1,
         bytesReceived: Infinity,
+        packetsLost: -1,
       });
     },
   };
@@ -274,6 +280,7 @@ test('unsupported probation fields stay unknown and oversized descriptions are n
     receiverIdentified: true,
     packetsReceived: null,
     bytesReceived: null,
+    packetsLost: null,
   });
   assert.deepEqual(result.localDescriptions[0], {
     available: false,

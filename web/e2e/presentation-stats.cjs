@@ -38,6 +38,7 @@ async function presentationReceiverStats() {
     .querySelector('.video-tile:not(.screen-share):not(.local) video')
     ?.srcObject?.getVideoTracks()[0];
   const finite = (value) => (Number.isFinite(value) && value >= 0 ? value : null);
+  const lossCount = (value) => (Number.isSafeInteger(value) && value >= 0 ? value : null);
   const result = {
     screenFrames: 0,
     cameraFrames: 0,
@@ -52,7 +53,12 @@ async function presentationReceiverStats() {
     screenInbound: [],
     remoteDescriptions: [],
     localDescriptions: [],
-    probator: { receiverIdentified: false, packetsReceived: null, bytesReceived: null },
+    probator: {
+      receiverIdentified: false,
+      packetsReceived: null,
+      bytesReceived: null,
+      packetsLost: null,
+    },
   };
   const describe = (description) => {
     const feedback = ['transport-cc', 'goog-remb', 'nack', 'nack pli', 'ccm fir'];
@@ -115,8 +121,8 @@ async function presentationReceiverStats() {
           (row.ssrc === 1234 || row.mid === 'probator' || row.trackIdentifier === 'probator')
         ) {
           result.probator.receiverIdentified = true;
-          for (const name of ['packetsReceived', 'bytesReceived'])
-            if (finite(row[name]) !== null)
+          for (const name of ['packetsReceived', 'bytesReceived', 'packetsLost'])
+            if ((name === 'packetsLost' ? lossCount(row[name]) : finite(row[name])) !== null)
               result.probator[name] = (result.probator[name] ?? 0) + row[name];
         }
         if (
@@ -152,6 +158,7 @@ async function presentationReceiverStats() {
                 framesPerSecond: finite(row.framesPerSecond),
                 bytesReceived: finite(row.bytesReceived),
                 packetsReceived: finite(row.packetsReceived),
+                packetsLost: lossCount(row.packetsLost),
               });
           }
           if (receiver.track === camera) result.cameraFrames += row.framesDecoded;

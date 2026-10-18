@@ -1118,7 +1118,8 @@ impl TransportManager {
                     rtx_send_bitrate = stat.rtx_send_bitrate,
                     probation_bytes_sent = stat.probation_bytes_sent,
                     probation_send_bitrate = stat.probation_send_bitrate,
-                    available_outgoing_bitrate = ?stat.available_outgoing_bitrate,
+                    available_outgoing_bitrate = stat.available_outgoing_bitrate,
+                    rtp_packet_loss_sent = stat.rtp_packet_loss_sent,
                     "Receive transport bandwidth sample"
                 );
                 Some(TransportReading {
