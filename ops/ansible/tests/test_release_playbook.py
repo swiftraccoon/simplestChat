@@ -1,6 +1,7 @@
 """Release wiring and real Compose rendering; never contact a Docker daemon."""
 
 import hashlib
+import json
 import re
 import shutil
 import subprocess
@@ -22,6 +23,7 @@ from test_support import array, at, obj, objects, string, strings, yaml_value
 import release_preflight
 import release_public as RELEASE  # noqa: N812 - name the helper under test.
 import test_public_templates as TEMPLATES  # noqa: N812 - shared fixture module.
+from release_artifact import sha256_file
 from release_json import JsonObject, decode_json, json_value
 
 # The optional Compose check renders local fixture files without daemon access.
@@ -484,10 +486,18 @@ class ReleasePlaybookTests(unittest.TestCase):
             _ = (config / "compose.base.yml").write_bytes(
                 (PROJECT / "docker-compose.yml").read_bytes()
             )
+            _ = (config / "Caddyfile").write_bytes((PROJECT / "Caddyfile").read_bytes())
+            receipt = {
+                "schemaVersion": 1,
+                "caddyfileSha256": sha256_file(config / "Caddyfile"),
+            }
+            _ = (config / "browser-assets-installed.json").write_text(json.dumps(receipt))
+            (config / "browser-assets-installed.json").chmod(0o600)
             runner = RELEASE.Runner(attempt)
             with (
                 patch.object(RELEASE, "CONFIG", config),
                 patch.object(RELEASE, "ROOT", root / "data"),
+                patch.object(RELEASE, "ROOT_UID", config.stat().st_uid),
                 patch.object(RELEASE, "DOCKER", [docker]),
             ):
                 before = obj(
@@ -603,7 +613,7 @@ class MaintenancePlaybookTests(unittest.TestCase):
         self.assertIn("--property=TimeoutStopSec=240", argv)
         self.assertIn("--wait", argv)
         self.assertEqual(
-            argv[-7:],
+            argv[-8:],
             [
                 "/usr/bin/python3",
                 "-B",
@@ -612,6 +622,8 @@ class MaintenancePlaybookTests(unittest.TestCase):
                 "{{ scpub_release_revision }}",
                 "--candidate-env",
                 "{{ scpub_config }}/app.env.candidate",
+                "{{ '--browser-assets-upgrade' if scpub_browser_assets_upgrade "
+                + "| default(false) | bool else '--no-browser-assets-upgrade' }}",
             ],
         )
         self.assertTrue(argv[1].startswith("--unit=simplestchat-maintenance-"))

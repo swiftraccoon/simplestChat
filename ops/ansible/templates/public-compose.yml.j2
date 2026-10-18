@@ -118,6 +118,7 @@ services:
       - "{{ scpub_config }}/Caddyfile:/etc/caddy/Caddyfile:ro"
       - "{{ scpub_root }}/caddy-data:/data"
       - "{{ scpub_root }}/caddy-config:/config"
+      - "{{ scpub_root }}/browser-assets:/run/simplestchat-browser-assets:ro"
     depends_on:
       - simplestchat
     restart: unless-stopped

@@ -130,6 +130,7 @@ class FixtureRunner:
         self.launcher_exit: int = 0
         self.launcher_runs: int = 0
         self.validation_exit: bytes = b"0"
+        self.proxy_validation_fails: bool = False
         self.validation_images: dict[str, str] = {}
         self.database: JsonObject = self._container("2", "sha256:" + "2" * 64, health=True)
         self.proxy: JsonObject = self._container("3", "sha256:" + "3" * 64)
@@ -177,6 +178,9 @@ class FixtureRunner:
     def run(self, args: Sequence[str], **kwargs: Unpack[public.CommandOptions]) -> bytes:
         """Model readiness requests, the maintenance launcher and their selected failures."""
         self.calls.append(("run", tuple(args), dict(kwargs)))
+        if args[0] == "/usr/bin/git":
+            assert args[-2:] == ["show", f"{REVISION}:Caddyfile"]
+            return (self.config / "committed-Caddyfile.fixture").read_bytes()
         if list(args) == [public.LAUNCHER]:
             # The launcher migrates, applies grants and starts everything it finds selected.
             self.launcher_runs += 1
@@ -210,7 +214,7 @@ class FixtureRunner:
             raise public.ReleaseError(message)
         return b'{"status":"ready"}'
 
-    def compose(  # noqa: C901, PLR0911, PLR0912 - explicit fixture command allowlist; no permissive fallback.
+    def compose(  # noqa: C901, PLR0911, PLR0912, PLR0915 - explicit fixture command allowlist; no permissive fallback.
         self,
         *args: str,
         filename: Path | None = None,
@@ -274,6 +278,8 @@ class FixtureRunner:
                 )
             obj(rendered, "services", "migrate")["environment"] = {"RUN_MIGRATIONS": "true"}
             source = selected_file.read_text()
+            if "/run/simplestchat-browser-assets" in source:
+                obj(rendered, "services", "caddy")["volumes"] = [public.browser_asset_mount()]
             if "    logging: *bounded-logging" in source:
                 obj(rendered, "services", "simplestchat")["logging"] = public.LOCAL_LOGGING
             if "      driver: journald" in source:
@@ -328,7 +334,7 @@ class FixtureRunner:
         message = f"Unexpected Compose command: {args}"
         raise AssertionError(message)
 
-    def docker(self, *args: str, **kwargs: Unpack[public.CommandOptions]) -> bytes:  # noqa: C901, PLR0911, PLR0912 - explicit fake command allowlist matches each release phase.
+    def docker(self, *args: str, **kwargs: Unpack[public.CommandOptions]) -> bytes:  # noqa: C901, PLR0911, PLR0912, PLR0915 - explicit fake command allowlist matches each release phase.
         """Model isolated validation and read-only backup operations, never migrations."""
         self.calls.append(("docker", args, dict(kwargs)))
         if args[0] == "inspect" and args[-1] == "1" * 64:
@@ -376,6 +382,19 @@ class FixtureRunner:
             container = "4" * 64
             self.validation_images[container] = args[args.index("--entrypoint") + 2]
             return container.encode()
+        if args[0] == "cp":
+            assert args[1] == "4" * 64 + ":/app/web/dist/assets"
+            assert args[2] == "-"
+            output = kwargs.get("output_path")
+            assert output is not None
+            image = self.validation_images["4" * 64]
+            name = "media-previous123.js" if image == OLD_IMAGE else "media-current123.js"
+            with tarfile.open(output, "w") as archive:
+                member = tarfile.TarInfo("assets/" + name)
+                content = image.encode()
+                member.size = len(content)
+                archive.addfile(member, io.BytesIO(content))
+            return b""
         if args[0] in ("start", "wait", "logs", "rm", "inspect", "stop", "kill"):
             container = args[-1]
             assert container in self.validation_images, f"Unknown validation container: {args}"
@@ -396,6 +415,25 @@ class FixtureRunner:
                 ).encode()
             return b""
         if args[0] == "exec":
+            if "caddy" in args:
+                assert args == (
+                    "exec",
+                    "--interactive",
+                    "--user",
+                    "10001:10001",
+                    "3" * 64,
+                    "caddy",
+                    "validate",
+                    "--config",
+                    "/dev/stdin",
+                    "--adapter",
+                    "caddyfile",
+                )
+                assert kwargs.get("input_path") == self.config / "Caddyfile.candidate"
+                if self.proxy_validation_fails:
+                    message = "fixture proxy validation failed"
+                    raise public.ReleaseError(message)
+                return b"valid configuration"
             if "psql" in args:
                 if "SELECT pg_database_size(current_database())" in args:
                     return b"8388608\n"
@@ -668,6 +706,17 @@ class PublicReleaseTests(unittest.TestCase):
             f'  migrate:\n    image: "{OLD_IMAGE}"\n'
         )
         _ = (self.config / "compose.public.yml").write_text(compose)
+        with (self.config / "compose.public.yml").open("a") as output:
+            _ = output.write(
+                "  caddy:\n    volumes:\n"
+                + f'      - "{self.root}/browser-assets:/run/simplestchat-browser-assets:ro"\n'
+            )
+        _ = (self.config / "Caddyfile").write_text("fixture public asset proxy\n")
+        _ = (self.config / "browser-assets-installed.json").write_text(
+            json.dumps(
+                {"schemaVersion": 1, "caddyfileSha256": sha256_file(self.config / "Caddyfile")}
+            )
+        )
         _ = (self.config / "app.env").write_text(
             f"SIMPLESTCHAT_IMAGE={OLD_IMAGE}\nRUN_MIGRATIONS=false\n"
             + "METRICS_TOKEN=fixture-metrics-token-with-at-least-32-bytes\n"
@@ -678,6 +727,7 @@ class PublicReleaseTests(unittest.TestCase):
         self.runner = FixtureRunner(self.attempt, self.config)
         self.patches = [
             patch.object(public, "ROOT", self.root),
+            patch.object(public, "ROOT_UID", self.root.stat().st_uid),
             patch.object(public, "CONFIG", self.config),
             patch.object(public, "WORK", self.work),
             patch.object(public, "protected"),
@@ -920,6 +970,108 @@ class PublicReleaseTests(unittest.TestCase):
         for kind, args, _ in self.runner.calls:
             if kind == "docker" and "pg_restore" in args:
                 self.assertIn("--list", args, "maintenance never restores the live database")
+
+    def test_explicit_proxy_upgrade_can_keep_the_same_selected_application_image(self) -> None:
+        """A valid one-time proxy change does not require an artificial app.env change."""
+        self.asset_upgrade_fixture()
+        staged = self.stage()
+        for name in ("compose.public.yml", "compose.public.yml.candidate", "app.env"):
+            path = self.config / name
+            _ = path.write_text(path.read_text().replace(OLD_IMAGE, NEW_IMAGE))
+        _ = (self.config / "images.json").write_text(
+            json.dumps({"revision": REVISION, "serverImage": NEW_IMAGE})
+        )
+        self.runner.app_image = NEW_IMAGE
+        report: JsonObject = {}
+        with patch.object(public, "SOURCES", self.root / "sources"):
+            plan = public.prepare_maintenance(
+                self.runner, self.manifest, staged, report, browser_assets_upgrade=True
+            )
+        self.assertEqual(plan.new_image, NEW_IMAGE)
+        self.assertTrue(report["browserAssetProxyUpgraded"])
+
+    def asset_upgrade_fixture(self) -> None:
+        """Prepare distinct old and reviewed candidate proxy configurations."""
+        modern = (self.config / "compose.public.yml").read_text()
+        _ = (self.config / "compose.public.yml.candidate").write_text(modern)
+        legacy = modern.split("  caddy:\n", 1)[0] + "  caddy:\n"
+        _ = (self.config / "compose.public.yml").write_text(legacy)
+        _ = (self.config / "Caddyfile").write_text("legacy fixture proxy\n")
+        _ = (self.config / "Caddyfile.candidate").write_text("reviewed fixture proxy\n")
+        _ = (self.config / "committed-Caddyfile.fixture").write_text("reviewed fixture proxy\n")
+        (self.root / "sources" / REVISION / ".git").mkdir(parents=True)
+
+    def test_legacy_app_only_release_requires_explicit_proxy_upgrade_before_stop(self) -> None:
+        """Installing helpers cannot silently recreate the stable proxy."""
+        self.asset_upgrade_fixture()
+        with self.assertRaisesRegex(public.ReleaseError, "browser-assets-upgrade"):
+            self.execute()
+        self.assertEqual(self.maintenance_calls(), [])
+        self.assertFalse(
+            any(kind == "docker" and args[0] == "cp" for kind, args, _ in self.runner.calls)
+        )
+
+    def test_explicit_proxy_upgrade_is_source_bound_validated_and_installed_after_stop(
+        self,
+    ) -> None:
+        """The only new execution capability is the readonly public store mount."""
+        self.asset_upgrade_fixture()
+        staged = self.stage()
+        report: JsonObject = {}
+        with patch.object(public, "SOURCES", self.root / "sources"):
+            _ = public.prepare_maintenance(
+                self.runner, self.manifest, staged, report, browser_assets_upgrade=True
+            )
+        self.assertTrue(report["browserAssetProxyUpgraded"])
+        self.assertEqual((self.config / "Caddyfile").read_text(), "reviewed fixture proxy\n")
+        self.assertEqual((self.attempt / "before-Caddyfile").read_text(), "legacy fixture proxy\n")
+        configuration = json_object(self.runner.compose("config", "--format", "json"))
+        self.assertTrue(public.validate_browser_proxy(configuration))
+        self.assertTrue(
+            any(
+                kind == "docker" and "caddy" in args and "validate" in args
+                for kind, args, _ in self.runner.calls
+            )
+        )
+        self.assertTrue(
+            any(kind == "docker" and args[0] == "cp" for kind, args, _ in self.runner.calls)
+        )
+
+    def test_proxy_upgrade_rejects_unreviewed_config_and_failed_validation_before_stop(
+        self,
+    ) -> None:
+        """Source or execution validation failures never create an interruption."""
+        self.asset_upgrade_fixture()
+        staged = self.stage()
+        _ = (self.config / "Caddyfile.candidate").write_text("unreviewed\n")
+        with (
+            patch.object(public, "SOURCES", self.root / "sources"),
+            self.assertRaisesRegex(public.ReleaseError, "exact release source"),
+        ):
+            _ = public.prepare_maintenance(
+                self.runner, self.manifest, staged, {}, browser_assets_upgrade=True
+            )
+        self.assertEqual(self.maintenance_calls(), [])
+        _ = (self.config / "Caddyfile.candidate").write_text("reviewed fixture proxy\n")
+        self.runner.preview_change = True
+        with (
+            patch.object(public, "SOURCES", self.root / "sources"),
+            self.assertRaisesRegex(public.ReleaseError, "beyond the reviewed"),
+        ):
+            _ = public.prepare_maintenance(
+                self.runner, self.manifest, staged, {}, browser_assets_upgrade=True
+            )
+        self.assertEqual(self.maintenance_calls(), [])
+        self.runner.preview_change = False
+        self.runner.proxy_validation_fails = True
+        with (
+            patch.object(public, "SOURCES", self.root / "sources"),
+            self.assertRaisesRegex(public.ReleaseError, "proxy validation failed"),
+        ):
+            _ = public.prepare_maintenance(
+                self.runner, self.manifest, staged, {}, browser_assets_upgrade=True
+            )
+        self.assertEqual(self.maintenance_calls(), [])
 
     def execute_maintenance(self, candidate: Path) -> None:
         """Run the maintenance action with a re-rendered app.env candidate."""

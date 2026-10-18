@@ -19,14 +19,35 @@ test('Caddy denies the root and descendant paths of private operational endpoint
   assert.deepEqual(matcher[1].split(/\s+/).sort(),
     ['/metrics', '/metrics/*', '/diagnostics', '/diagnostics/*'].sort());
   assert.match(configuration, /^\s*respond @private "Not Found" 404$/m);
-  assert.doesNotMatch(configuration, /^\s*(?:order|rewrite|uri|route|handle|handle_path)\b/m,
-    'Routing changes require revalidating that the private denial runs before the upstream');
+  assert.ok(configuration.indexOf('respond @private') < configuration.indexOf('reverse_proxy'),
+    'Private endpoints are denied before the upstream can return a static fallback');
+  assert.doesNotMatch(configuration, /^\s*(?:order|rewrite|uri|route|handle_path)\b/m);
+});
+
+test('retained public bytes can answer only exact GET or HEAD asset misses', () => {
+  assert.match(configuration, /@missing status 404\s+handle_response @missing/);
+  assert.match(configuration, /handle @retained_asset \{\s+root \* \/run\/simplestchat-browser-assets\/public/);
+  assert.match(configuration, /handle @retained_version \{[\s\S]*?header Cache-Control "no-store"/);
+  assert.match(configuration, /handle \{\s+copy_response\s+\}/);
+  assert.equal((configuration.match(/^\s*file_server$/gm) ?? []).length, 2);
+  const match = configuration.match(/@retained_asset \{\s+method GET HEAD\s+path_regexp retained (.+)/);
+  assert.ok(match);
+  const allowed = new RegExp(match[1]);
+  for (const name of ['/assets/media-abc12345.js', '/assets/index-ab_CD123.css']) assert.match(name, allowed);
+  for (const name of ['/api/auth/profile', '/metrics', '/assets/../index.html', '/assets/nested/media-abc12345.js', '/assets/source-abc12345.js.map', '/assets/plain.js']) assert.doesNotMatch(name, allowed);
+  assert.match(configuration, /@retained_asset \{[\s\S]*?file \{\s+root \/run\/simplestchat-browser-assets\/public\s+try_files \{path\}/);
+  assert.match(configuration, /@retained_version \{\s+method GET HEAD\s+path \/app-version\.json\s+file/);
 });
 
 test('Caddy replaces untrusted proxy-authentication headers with the configured secret', () => {
   const headers = configuration.match(/^\s*header_up\b.*$/gm) ?? [];
   assert.deepEqual(headers.map(line => line.trim()),
     ['header_up X-SimplestChat-Proxy {$TRUSTED_PROXY_SECRET}']);
+});
+
+test('Caddy keeps HTML fresh without overriding asset or API cache policies', () => {
+  assert.match(configuration, /header Cache-Control "no-cache, no-store, must-revalidate" \{\s+match header Content-Type text\/html\*\s+\}/);
+  assert.match(configuration, /header Cache-Control "public, max-age=60, immutable"/);
 });
 
 test('Caddy leaves admin access at its loopback-only default without remote proxy trust', () => {

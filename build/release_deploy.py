@@ -57,6 +57,7 @@ class DeployOptions(argparse.Namespace):
     quiet_seconds: int = 600
     install_helpers: bool = False
     maintenance: bool = False
+    browser_assets_upgrade: bool = False
     ansible_playbook: str | None = None
     force: bool = False
     artifact_dir: str | None = None
@@ -117,7 +118,16 @@ def options(argv: list[str] | None = None) -> DeployOptions:
     _ = parser.add_argument(
         "--ansible-playbook", help="Controller executable; defaults to local .venv, then PATH"
     )
+    _ = parser.add_argument(
+        "--browser-assets-upgrade",
+        action="store_true",
+        help="With --maintenance, install the bounded public asset proxy capability once",
+    )
     args = parser.parse_args(argv, namespace=DeployOptions())
+    require(
+        not args.browser_assets_upgrade or args.maintenance,
+        "browser_assets_upgrade_requires_maintenance",
+    )
     require(args.force or args.artifact_dir is None, "artifact_directory_requires_force")
     if args.artifact_dir is not None:
         artifact = Path(args.artifact_dir).expanduser().absolute()
@@ -552,7 +562,10 @@ def execute(args: DeployOptions, root: Path = ROOT) -> JsonObject:  # noqa: PLR0
         if args.maintenance:
             # Staged while live; the launcher now migrates, grants and restarts.
             report.update(phase="maintenance", remoteOutcome="inspect_if_interrupted")
-            run_playbook(runner, target, "maintenance.yml", {"scpub_release_revision": revision})
+            maintenance_extra: JsonObject = {"scpub_release_revision": revision}
+            if args.browser_assets_upgrade:
+                maintenance_extra["scpub_browser_assets_upgrade"] = True
+            run_playbook(runner, target, "maintenance.yml", maintenance_extra)
         report.update(deployed=True, remoteOutcome="release_succeeded", phase="public_smoke")
         if not args.public_chat_smoke:
             report["phase"] = "anonymous_verification"

@@ -93,6 +93,8 @@
               'bounded_process.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/bounded_process.py', rstrip=false) | hash('sha256'),
               'release_public.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/release_public.py', rstrip=false) | hash('sha256'),
               'release_artifact.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/release_artifact.py', rstrip=false) | hash('sha256'),
+              'release_assets.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/release_assets.py', rstrip=false) | hash('sha256'),
+              'browser_assets.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/browser_assets.py', rstrip=false) | hash('sha256'),
               'release_json.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/release_json.py', rstrip=false) | hash('sha256'),
               'runtime_profile.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/runtime_profile.py', rstrip=false) | hash('sha256'),
               'reboot-public.py': lookup('ansible.builtin.file', playbook_dir ~ '/files/reboot-public.py', rstrip=false) | hash('sha256'),
@@ -139,6 +141,8 @@
         - release-public.py
         - release_public.py
         - release_artifact.py
+        - release_assets.py
+        - browser_assets.py
         - release_json.py
         - reboot-public.py
         - reboot_public.py

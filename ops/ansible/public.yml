@@ -347,9 +347,14 @@
         - release-public.py
         - release_public.py
         - release_artifact.py
+        - release_assets.py
+        - browser_assets.py
         - release_json.py
         - reboot-public.py
         - reboot_public.py
+
+    - name: Prepare bounded public asset storage and expiration before startup
+      ansible.builtin.import_tasks: tasks/browser-assets.yml
 
     - name: Create private prebuilt release storage
       ansible.builtin.file:

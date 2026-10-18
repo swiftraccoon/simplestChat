@@ -1,0 +1,39 @@
+---
+- name: Initialize the bounded public browser asset store before startup
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/python3
+      - -B
+      - /usr/local/libexec/simplestchat-public/browser_assets.py
+      - initialize
+      - --revision
+      - "{{ scpub_browser_assets_revision | default(scbench_revision) }}"
+  changed_when: true
+  when: not ansible_check_mode
+
+- name: Record the installed reviewed proxy capability on initial provisioning
+  ansible.builtin.copy:
+    content: >-
+      {{ {'schemaVersion': 1, 'caddyfileSha256': lookup('ansible.builtin.file', playbook_dir ~ '/../../Caddyfile', rstrip=false) | hash('sha256')} | to_json }}
+    dest: "{{ scpub_config }}/browser-assets-installed.json"
+    owner: root
+    group: root
+    mode: '0600'
+  when: scpub_browser_assets_record_installed | default(true) | bool
+
+- name: Install bounded public asset expiration service and timer
+  ansible.builtin.template:
+    src: "browser-assets.{{ item }}.j2"
+    dest: "/etc/systemd/system/simplestchat-browser-assets.{{ item }}"
+    owner: root
+    group: root
+    mode: '0644'
+  loop: [service, timer]
+
+- name: Enable public asset expiration between deployments
+  ansible.builtin.systemd_service:
+    name: simplestchat-browser-assets.timer
+    daemon_reload: true
+    enabled: true
+    state: started
+  when: not ansible_check_mode

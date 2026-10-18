@@ -39,12 +39,52 @@
 		-Server
 	}
 
+	# HTML must revalidate across upgrades and rollbacks, including older apps.
+	# Match response headers so hashed assets and API cache policies are preserved.
+	header Cache-Control "no-cache, no-store, must-revalidate" {
+		match header Content-Type text/html*
+	}
+
 	# Do not enable access logging: WebSocket URLs can contain credentials.
 	encode zstd gzip
+	# Only validated public files can answer an upstream miss. This directory is
+	# a readonly, bounded release store, independent of the selected app image.
+	@retained_asset {
+		method GET HEAD
+		path_regexp retained ^/assets/[A-Za-z0-9_-]+-[A-Za-z0-9_-]{6,64}\.(js|css|woff2?|svg|png|jpe?g|webp|avif|ico)$
+		file {
+			root /run/simplestchat-browser-assets/public
+			try_files {path}
+		}
+	}
+	@retained_version {
+		method GET HEAD
+		path /app-version.json
+		file {
+			root /run/simplestchat-browser-assets/public
+			try_files {path}
+		}
+	}
 	reverse_proxy {$CADDY_UPSTREAM:127.0.0.1:3000} {
 		# Authenticates this proxy across Docker's bridge. Caddy's header_up
 		# replaces any client-supplied value. Set the same >=32-byte secret on
 		# Caddy and the application; never write it into this file.
 		header_up X-SimplestChat-Proxy {$TRUSTED_PROXY_SECRET}
+		@missing status 404
+		handle_response @missing {
+			handle @retained_asset {
+				root * /run/simplestchat-browser-assets/public
+				header Cache-Control "public, max-age=60, immutable"
+				file_server
+			}
+			handle @retained_version {
+				root * /run/simplestchat-browser-assets/public
+				header Cache-Control "no-store"
+				file_server
+			}
+			handle {
+				copy_response
+			}
+		}
 	}
 }

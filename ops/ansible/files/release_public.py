@@ -35,6 +35,7 @@ from types import FrameType
 from typing import NoReturn, Protocol, TypedDict, Unpack
 
 import bounded_process
+import release_assets
 import runtime_profile
 from release_artifact import ArtifactError, Manifest, sha256_file, validate_manifest, verify_archive
 from release_json import JsonObject, JsonValue, array_value, decode_json, object_value, string_value
@@ -162,6 +163,7 @@ class ReleaseOptions:
     revision: str
     quiet_seconds: int = 0
     candidate_env: Path | None = None
+    browser_assets_upgrade: bool = False
 
 
 class _ArgumentValues(argparse.Namespace):
@@ -169,6 +171,7 @@ class _ArgumentValues(argparse.Namespace):
     revision: str = ""
     quiet_seconds: int = 0
     candidate_env: str | None = None
+    browser_assets_upgrade: bool = False
 
 
 class ReleaseError(RuntimeError):
@@ -599,6 +602,95 @@ def packaged_migrations(runner: RunnerProtocol, image: str) -> dict[str, str]:
     return result
 
 
+def retain_browser_assets(runner: RunnerProtocol, images: dict[str, str]) -> JsonObject:
+    """Capture exact public bytes before interruption, including a legacy selected image."""
+    captures: dict[str, dict[str, bytes]] = {}
+    for revision, image in images.items():
+        _ = image_identity(runner, image, revision)
+        name = "scpub-release-assets-" + uuid.uuid4().hex
+        journal(runner, finalized=False, phase="capture_browser_assets")
+        atomic(runner.attempt / "asset-container-name.txt", name)
+        container = ""
+        failure: BaseException | None = None
+        try:
+            container = (
+                runner.docker(
+                    "create",
+                    "--name",
+                    name,
+                    "--init",
+                    "--network",
+                    "none",
+                    "--pull",
+                    "never",
+                    "--read-only",
+                    "--user",
+                    "10001:10001",
+                    "--cap-drop",
+                    "ALL",
+                    "--security-opt",
+                    "no-new-privileges",
+                    "--memory",
+                    "128m",
+                    "--cpus",
+                    "0.5",
+                    "--pids-limit",
+                    "32",
+                    "--log-driver",
+                    "local",
+                    "--log-opt",
+                    "max-size=1m",
+                    "--log-opt",
+                    "max-file=1",
+                    "--log-opt",
+                    "compress=false",
+                    "--entrypoint",
+                    "/usr/bin/timeout",
+                    image,
+                    "--signal=TERM",
+                    "--kill-after=2s",
+                    "10s",
+                    "/bin/sh",
+                    "-c",
+                    "exit 0",
+                )
+                .decode()
+                .strip()
+            )
+            require(re.fullmatch(r"[a-f0-9]{64}", container), "Uncertain asset container creation")
+            archive = runner.attempt / ("assets-" + revision + ".tar")
+            _ = runner.docker(
+                "cp",
+                f"{container}:/app/web/dist/assets",
+                "-",
+                output_path=archive,
+                output_limit=release_assets.MAX_TAR,
+                timeout=30,
+            )
+            captures[revision] = release_assets.read_capture(archive)
+        except BaseException as error:
+            failure = error
+            raise
+        finally:
+            # Never start the container, even to inspect its contents. Remove by
+            # recorded owned name after uncertain creation, not an untrusted ID.
+            try:
+                _ = runner.docker(
+                    "rm", container if re.fullmatch(r"[a-f0-9]{64}", container) else name
+                )
+            except BaseException:
+                if failure is None:
+                    raise
+                # Leave the unfinished journal and owned name for recovery.
+    receipt = release_assets.publish(
+        ROOT / "browser-assets", captures, int(time.time()), owner=ROOT_UID
+    )
+    public_receipt: JsonObject = dict(receipt)
+    atomic(runner.attempt / "browser-assets.json", public_receipt)
+    journal(runner, finalized=True, phase="browser_assets_retained")
+    return dict(receipt)
+
+
 def journal(runner: AttemptContext, finalized: bool, phase: str) -> None:  # noqa: FBT001 - preserve the established positional helper API.
     """Durably record the operation's current ownership and settlement state."""
     atomic(
@@ -912,12 +1004,60 @@ def journal_selection(compose: str, before: JsonObject) -> tuple[str, bool]:
     ) + separator + dependencies, True
 
 
-def candidate_selection(
+def browser_asset_mount() -> JsonObject:
+    """Return the sole additional managed proxy capability."""
+    return {
+        "type": "bind",
+        "source": str(ROOT / "browser-assets"),
+        "target": release_assets.CONTAINER_PATH,
+        "read_only": True,
+        "bind": {"create_host_path": True},
+    }
+
+
+def validate_browser_proxy(config: JsonObject, *, legacy_allowed: bool = False) -> bool:
+    """Reject app-only replacement until stable proxy retention was explicitly installed."""
+    proxy = object_value(object_value(config["services"])["caddy"])
+    mounts = array_value(proxy.get("volumes", []))
+    selected = [
+        object_value(item)
+        for item in mounts
+        if object_value(item).get("target") == release_assets.CONTAINER_PATH
+    ]
+    if not selected:
+        require(
+            legacy_allowed,
+            "Browser assets need --maintenance --browser-assets-upgrade before app-only releases",
+        )
+        return False
+    require(len(selected) == 1, "Ambiguous browser asset proxy mount")
+    mount = selected[0]
+    expected = browser_asset_mount()
+    require(
+        mount == expected
+        or mount == {key: value for key, value in expected.items() if key != "bind"},
+        "Browser asset proxy mount differs from reviewed readonly store",
+    )
+    receipt = CONFIG / "browser-assets-installed.json"
+    protected(receipt, limit=512)
+    value = object_value(decode_json(receipt.read_bytes()))
+    require(
+        set(value) == {"schemaVersion", "caddyfileSha256"}
+        and value["schemaVersion"] == 1
+        and value["caddyfileSha256"] == sha256_file(CONFIG / "Caddyfile"),
+        "Browser asset proxy configuration changed; use explicit maintenance",
+    )
+    return True
+
+
+def candidate_selection(  # noqa: PLR0913, PLR0915 - compare the entire resolved selection within one replacement boundary.
     runner: RunnerProtocol,
     new_image: str,
     old: JsonObject,
     turn: TurnConfiguration | None = None,
     reviewed_environment: str | None = None,
+    *,
+    browser_assets_upgrade: bool = False,
 ) -> tuple[bytes, bytes]:
     """Allow image selection and, explicitly, TURN or a reviewed app.env re-rendering."""
     original = (CONFIG / "compose.public.yml").read_text()
@@ -927,7 +1067,15 @@ def candidate_selection(
     runtime_profile.validate_compose(
         before, ROOT / "postgres-socket", string_value(old["serverImage"])
     )
+    installed_assets = validate_browser_proxy(before, legacy_allowed=browser_assets_upgrade)
+    require(
+        not browser_assets_upgrade or not installed_assets,
+        "Browser asset proxy is already installed",
+    )
     compose, journal_changed = journal_selection(original, before)
+    if browser_assets_upgrade:
+        protected(CONFIG / "compose.public.yml.candidate", limit=1024 * 1024)
+        compose = (CONFIG / "compose.public.yml.candidate").read_text()
     needle = f'image: "{old["serverImage"]}"'
     require(
         compose.count(needle) == IMAGE_SELECTIONS,
@@ -1007,6 +1155,9 @@ def candidate_selection(
     )
     runtime_profile.validate_compose(after, ROOT / "postgres-socket", new_image)
     expected = deepcopy(base)
+    if browser_assets_upgrade:
+        proxy = object_value(object_value(expected["services"])["caddy"])
+        array_value(proxy.setdefault("volumes", [])).append(browser_asset_mount())
     if journal_changed:
         object_value(object_value(expected["services"])["simplestchat"])["logging"] = (
             JOURNAL_LOGGING
@@ -1252,6 +1403,9 @@ def deploy(  # noqa: PLR0913, PLR0915 - explicit opt-in settings; keep replaceme
         "Candidate migration mismatch",
     )
     preview, preview_env = candidate_selection(runner, new_image, old, turn)
+    report["browserAssets"] = retain_browser_assets(
+        runner, {old_revision: old_image, manifest["revision"]: new_image}
+    )
     config = object_value(decode_json(runner.compose("config", "--format", "json")))
     environment = object_value(
         object_value(object_value(config["services"])["simplestchat"])["environment"]
@@ -1321,6 +1475,7 @@ def deploy(  # noqa: PLR0913, PLR0915 - explicit opt-in settings; keep replaceme
         atomic(
             CONFIG / "images.json", dict(old, revision=manifest["revision"], serverImage=new_image)
         )
+        release_assets.select_version(ROOT / "browser-assets", manifest["revision"], owner=ROOT_UID)
         _ = runner.compose(
             "up",
             "--detach",
@@ -1366,6 +1521,7 @@ def deploy(  # noqa: PLR0913, PLR0915 - explicit opt-in settings; keep replaceme
                     atomic(
                         CONFIG / filename, (runner.attempt / ("before-" + filename)).read_bytes()
                     )
+                release_assets.select_version(ROOT / "browser-assets", old_revision, owner=ROOT_UID)
                 _ = runner.compose(
                     "up",
                     "--detach",
@@ -1404,12 +1560,14 @@ class MaintenancePlan:
     migrations: dict[str, str]
 
 
-def prepare_maintenance(  # noqa: PLR0915 - the preflight, the backup and the stop stay one reviewed sequence.
+def prepare_maintenance(  # noqa: PLR0913, PLR0915 - explicit upgrade admission, backup and stop stay one reviewed sequence.
     runner: RunnerProtocol,
     manifest: Manifest,
     staged: JsonObject,
     report: JsonObject,
     candidate_env: Path | None = None,
+    *,
+    browser_assets_upgrade: bool = False,
 ) -> MaintenancePlan:
     """Back up, stop the app then the proxy, and select the candidate for the launcher.
 
@@ -1434,6 +1592,16 @@ def prepare_maintenance(  # noqa: PLR0915 - the preflight, the backup and the st
         (source / ".git").is_dir(),
         "The launcher needs the revision's clean source checkout; run maintenance.yml",
     )
+    if browser_assets_upgrade:
+        candidate_proxy = CONFIG / "Caddyfile.candidate"
+        protected(candidate_proxy, limit=1024 * 1024)
+        committed_proxy = runner.run(
+            ["/usr/bin/git", "-C", str(source), "show", f"{manifest['revision']}:Caddyfile"]
+        )
+        require(
+            candidate_proxy.read_bytes() == committed_proxy,
+            "Candidate Caddyfile differs from exact release source",
+        )
     app, database, proxy = (
         runner.container(service) for service in ("simplestchat", "postgres", "caddy")
     )
@@ -1467,11 +1635,36 @@ def prepare_maintenance(  # noqa: PLR0915 - the preflight, the backup and the st
         None if candidate_env is None else reviewed_candidate_environment(candidate_env, report)
     )
     require(
-        old["serverImage"] != new_image or bool(report.get("environmentChanges")),
+        old["serverImage"] != new_image
+        or bool(report.get("environmentChanges"))
+        or browser_assets_upgrade,
         "This image is already selected and no reviewed configuration changes were supplied",
     )
     preview, preview_env = candidate_selection(
-        runner, new_image, old, reviewed_environment=reviewed_environment
+        runner,
+        new_image,
+        old,
+        reviewed_environment=reviewed_environment,
+        browser_assets_upgrade=browser_assets_upgrade,
+    )
+    if browser_assets_upgrade:
+        _ = runner.docker(
+            "exec",
+            "--interactive",
+            "--user",
+            "10001:10001",
+            string_value(proxy["id"]),
+            "caddy",
+            "validate",
+            "--config",
+            "/dev/stdin",
+            "--adapter",
+            "caddyfile",
+            input_path=CONFIG / "Caddyfile.candidate",
+            timeout=20,
+        )
+    report["browserAssets"] = retain_browser_assets(
+        runner, {old_revision: old_image, manifest["revision"]: new_image}
     )
     config = object_value(decode_json(runner.compose("config", "--format", "json")))
     environment = object_value(
@@ -1528,6 +1721,8 @@ def prepare_maintenance(  # noqa: PLR0915 - the preflight, the backup and the st
     journal(runner, finalized=True, phase="backed_up")
     for filename in SELECTION:
         _ = shutil.copyfile(CONFIG / filename, runner.attempt / ("before-" + filename))
+    if browser_assets_upgrade:
+        _ = shutil.copyfile(CONFIG / "Caddyfile", runner.attempt / "before-Caddyfile")
     journal(runner, finalized=False, phase="maintenance_stop")
     report["phase"] = "maintenance_stop"
     observe_replacement_rooms(runner, report)
@@ -1539,6 +1734,15 @@ def prepare_maintenance(  # noqa: PLR0915 - the preflight, the backup and the st
     atomic(CONFIG / "compose.public.yml", preview)
     atomic(CONFIG / "app.env", preview_env)
     atomic(CONFIG / "images.json", dict(old, revision=manifest["revision"], serverImage=new_image))
+    release_assets.select_version(ROOT / "browser-assets", manifest["revision"], owner=ROOT_UID)
+    if browser_assets_upgrade:
+        atomic(CONFIG / "Caddyfile", (CONFIG / "Caddyfile.candidate").read_bytes())
+        (CONFIG / "Caddyfile").chmod(0o644)
+        atomic(
+            CONFIG / "browser-assets-installed.json",
+            {"schemaVersion": 1, "caddyfileSha256": sha256_file(CONFIG / "Caddyfile")},
+        )
+        report["browserAssetProxyUpgraded"] = True
     if candidate_env is not None:
         # Consumed: the next maintenance renders its own.
         candidate_env.unlink()
@@ -1604,16 +1808,27 @@ def main() -> None:  # noqa: PLR0915 - one transaction per action, with the main
         "--candidate-env",
         help="maintain: install this re-rendered app.env (identity lines unchanged) with the image",
     )
+    _ = parser.add_argument(
+        "--browser-assets-upgrade",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="maintain: install the reviewed stable public asset proxy and readonly mount once",
+    )
     raw = parser.parse_args(namespace=_ArgumentValues())
     arguments = ReleaseOptions(
         action=raw.action,
         revision=raw.revision,
         quiet_seconds=raw.quiet_seconds,
         candidate_env=None if raw.candidate_env is None else Path(raw.candidate_env),
+        browser_assets_upgrade=raw.browser_assets_upgrade,
     )
     require(
         arguments.candidate_env is None or arguments.action == "maintain",
         "--candidate-env applies to maintain",
+    )
+    require(
+        not arguments.browser_assets_upgrade or arguments.action == "maintain",
+        "--browser-assets-upgrade applies to maintain",
     )
     require(os.geteuid() == 0, "Run as root on the prepared public host")
     require(re.fullmatch(r"[a-f0-9]{40}", arguments.revision), "Use the exact release commit")
@@ -1659,7 +1874,12 @@ def main() -> None:  # noqa: PLR0915 - one transaction per action, with the main
             elif arguments.action == "maintain":
                 report["phase"] = "preflight"
                 plan = prepare_maintenance(
-                    runner, manifest, staged, report, candidate_env=arguments.candidate_env
+                    runner,
+                    manifest,
+                    staged,
+                    report,
+                    candidate_env=arguments.candidate_env,
+                    browser_assets_upgrade=arguments.browser_assets_upgrade,
                 )
             else:
                 report["phase"] = "complete"

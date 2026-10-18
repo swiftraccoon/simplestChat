@@ -30,6 +30,8 @@ BASE_HELPERS = {
     "release-public.py",
     "release_public.py",
     "release_artifact.py",
+    "release_assets.py",
+    "browser_assets.py",
     "release_json.py",
     "runtime_profile.py",
     "reboot-public.py",
