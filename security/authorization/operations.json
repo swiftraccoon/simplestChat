@@ -858,7 +858,7 @@
       "handler": "crate::room::history::set_private_reaction",
       "policy": "current-session",
       "body": {
-        "emoji": "👍",
+        "emoji": "\ud83d\udc4d",
         "present": true
       },
       "unauthenticated_status": null,
@@ -1044,6 +1044,21 @@
       "unauthenticated_status": null,
       "checks": [
         "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/updates",
+      "handler": "crate::auth::updates::stream",
+      "policy": "current-session",
+      "body": null,
+      "unauthenticated_status": null,
+      "checks": [
+        "authorization_database_every_authenticated_route_rejects_missing_or_noncurrent_sessions",
+        "authorization_database_account_updates_publish_committed_scoped_mutations_without_room_join",
+        "authorization_database_account_updates_bound_leases_and_close_on_revocation_expiry_lag_and_drain",
+        "authorization_database_account_data_and_credentials_have_independent_budgets_and_stream_permits",
+        "authorization_database_account_updates_commit_completion_survives_abandoned_http_response"
       ]
     }
   ],

@@ -149,7 +149,7 @@ pub async fn upload(
     request: Request,
 ) -> Result<(HeaderMap, Json<ChatAttachment>), AuthError> {
     let _upload = UPLOADS.try_acquire().map_err(|_| AuthError::ServiceBusy)?;
-    let _permit = routes::acquire_auth_request(&server)?;
+    let _permit = routes::acquire_account_request(&server)?;
     let claims = authenticated_claims(&server, request.headers()).await?;
     let name = filename(
         request
@@ -180,7 +180,7 @@ pub async fn delete_pending(
     headers: HeaderMap,
     Path(id): Path<Uuid>,
 ) -> Result<(HeaderMap, StatusCode), AuthError> {
-    let _permit = routes::acquire_auth_request(&server)?;
+    let _permit = routes::acquire_account_request(&server)?;
     let claims = authenticated_claims(&server, &headers).await?;
     let mut tx = server
         .db_pool()
@@ -420,7 +420,7 @@ pub async fn download(
         .clone()
         .try_acquire_owned()
         .map_err(|_| AuthError::ServiceBusy)?;
-    let _permit = routes::acquire_auth_request(&server)?;
+    let _permit = routes::acquire_account_request(&server)?;
     allowed(&server, &headers, id).await?;
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
     let (name,content_type,data):(String,String,Vec<u8>)=sqlx::query_as("SELECT name,content_type,data FROM attachments WHERE id=$1 AND expires_at>clock_timestamp()")

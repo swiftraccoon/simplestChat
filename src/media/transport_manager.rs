@@ -59,6 +59,35 @@ fn consumer_pause_transition_needed(currently_paused: bool, requested_paused: bo
     currently_paused != requested_paused
 }
 
+/// Set only from the room's validated producer registry, never request appData.
+/// This remains attached to a consumer even when its producer is piped from
+/// another worker, whose local producer metadata need not contain the source.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ConsumerMediaSource {
+    ScreenVideo,
+    Other,
+}
+
+impl ConsumerMediaSource {
+    pub(crate) fn from_room_source(kind: MediaKind, source: Option<&str>) -> Self {
+        if kind == MediaKind::Video && source == Some("screen") {
+            Self::ScreenVideo
+        } else {
+            Self::Other
+        }
+    }
+}
+
+fn consumer_video_priority(kind: MediaKind, app_data: &AppData) -> u8 {
+    if kind == MediaKind::Video
+        && app_data.downcast_ref::<ConsumerMediaSource>() == Some(&ConsumerMediaSource::ScreenVideo)
+    {
+        4
+    } else {
+        1
+    }
+}
+
 fn consumer_layers_transition_needed(
     current_layers: Option<ConsumerLayers>,
     requested_layers: ConsumerLayers,
@@ -623,6 +652,17 @@ impl TransportManager {
         let consumer = measure_result(Stage::MediaConsume, transport.consume(consumer_options))
             .await
             .map_err(|e| MediaError::ConsumerError(format!("Failed to create consumer: {e}")))?;
+
+        // Priority divides this viewer's estimated video bandwidth. Audio is
+        // independent, and all existing explicit and bandwidth layer ceilings
+        // still apply. Configure before publishing/counting the consumer so a
+        // failed native request cannot leave an untracked active subscription.
+        let priority = consumer_video_priority(consumer.kind(), consumer.app_data());
+        if priority != 1 {
+            consumer.set_priority(priority).await.map_err(|error| {
+                MediaError::ConsumerError(format!("Failed to prioritize presentation: {error}"))
+            })?;
+        }
 
         let consumer_id = consumer.id().to_string();
 
@@ -1460,6 +1500,30 @@ impl TransportManager {
 #[cfg(test)]
 mod tests {
     #[test]
+    fn presentation_priority_requires_canonical_video_source() {
+        use super::*;
+        let screen = AppData::new(ConsumerMediaSource::from_room_source(
+            MediaKind::Video,
+            Some("screen"),
+        ));
+        assert_eq!(consumer_video_priority(MediaKind::Video, &screen), 4);
+        assert_eq!(consumer_video_priority(MediaKind::Audio, &screen), 1);
+        for source in [None, Some("camera"), Some("screen-audio"), Some("Screen")] {
+            let data = AppData::new(ConsumerMediaSource::from_room_source(
+                MediaKind::Video,
+                source,
+            ));
+            assert_eq!(consumer_video_priority(MediaKind::Video, &data), 1);
+        }
+        assert_eq!(
+            consumer_video_priority(MediaKind::Video, &AppData::default()),
+            1
+        );
+        let untrusted = AppData::new(serde_json::json!({"source": "screen", "priority": 255}));
+        assert_eq!(consumer_video_priority(MediaKind::Video, &untrusted), 1);
+    }
+
+    #[test]
     fn worker_bitrate_preserves_values_and_saturates_without_wrapping() {
         for bitrate in [0, 200_000, 600_000, u64::from(u32::MAX)] {
             assert_eq!(u64::from(super::application_bitrate(bitrate)), bitrate);
@@ -2006,6 +2070,8 @@ mod tests {
         let audio_id = audio.id().to_string();
         let video_id = video.id().to_string();
         assert_eq!(video.r#type(), ConsumerType::Simulcast);
+        assert_eq!(video.priority(), 1);
+        assert_eq!(audio.priority(), 1);
         let top = ConsumerLayers {
             spatial_layer: 2,
             temporal_layer: Some(2),
@@ -2129,12 +2195,17 @@ mod tests {
                 &pid,
                 video_producer.id(),
                 capabilities,
-                AppData::default(),
+                AppData::new(ConsumerMediaSource::ScreenVideo),
                 None,
                 None,
             )
             .await
             .unwrap();
+        assert_eq!(
+            late.priority(),
+            4,
+            "canonical screen source receives video bandwidth priority"
+        );
         assert_eq!(
             late.preferred_layers(),
             Some(ConsumerLayers {

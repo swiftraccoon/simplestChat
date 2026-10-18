@@ -15,15 +15,17 @@
 | `WEBAUTHN_RP_ID` | (none) | Passkey relying-party ID (domain); configure together with `WEBAUTHN_ORIGIN`, or leave both unset to disable passkeys |
 | `WEBAUTHN_ORIGIN` | (none) | Expected HTTPS origin for passkey ceremonies (e.g. `https://chat.example.com`), without a path; HTTP loopback origins are allowed for development |
 | `ALLOWED_ORIGINS` | same host only | Exact WebSocket origin allowlist; required for non-loopback binds, such as Compose |
-| `MAX_CONNECTIONS` | `10000` | Separate ceilings on concurrent WebSocket permits and retained reconnect-grace sessions; each can reach this count, so their combined retained state can approach twice the setting |
+| `MAX_CONNECTIONS` | `10000` | Independent ceilings on concurrent WebSocket permits, retained reconnect-grace sessions, and account-update streams; each can reach this count, so combined retained state can approach three times the setting. Account-update streams also cap each account at eight |
 | `MAX_CONNECTIONS_PER_IP` | `50` | Max concurrent WebSocket connections accepted from one client IP |
 | `JOIN_ATTEMPTS_PER_IP_PER_MINUTE` | `30` | Room joins one client IP may start per minute across all rooms (1–100000) |
 | `JOIN_ATTEMPTS_PER_ROOM_IP_PER_MINUTE` | `10` | Room joins one client IP may start per minute into one room (1–100000) |
 | `WS_HANDSHAKES_PER_MINUTE` | `120` | Per-client IP (IPv6 `/64`) rate limit for WebSocket upgrade attempts |
-| `AUTH_REQUESTS_PER_MINUTE` | `60` | Per-IP rate limit for authentication endpoints |
+| `AUTH_REQUESTS_PER_MINUTE` | `60` | Per-IP rate limit for sign-in, refresh, credential/session management, registration and WebSocket tickets |
+| `ACCOUNT_REQUESTS_PER_MINUTE` | `300` | Independent per-IP rate limit for authenticated application data: inbox, contacts, own profile, preferences, saved rooms, push subscriptions and attachments; includes account-update stream opening only |
 | `PROFILE_REQUESTS_PER_MINUTE` | `600` | Per-IP rate limit for public profile reads (`/api/auth/profiles/:id`, used by avatars and freshly opened participant cards) and room images (`/api/rooms/:id/image`), kept apart from the sign-in, refresh and room API budgets |
 | `AUTH_REQUESTS_PER_ACCOUNT_PER_MINUTE` | `20` | Per-account limit on signed-in password checks (password change, recovery key, passkey management) and WebSocket-ticket issuance |
-| `AUTH_MAX_CONCURRENCY` | `16` | Global cap on concurrent expensive authentication operations |
+| `AUTH_MAX_CONCURRENCY` | `16` | Global cap on concurrent authentication operations |
+| `ACCOUNT_MAX_CONCURRENCY` | `32` | Independent global cap on concurrent authenticated application-data operations; account-update stream opening releases its permit before the response body |
 | `REGISTRATION_ENABLED` | `false` | Allow new password/passkey accounts; must be explicitly enabled on every bind address |
 | `REGISTRATIONS_PER_IP_PER_HOUR` | `5` | Shared password/passkey signup budget, including taken-email answers, per client IP (IPv6 `/64`) per hour |
 | `MODERATION_ADDRESS_RETENTION_DAYS` | `30` | Days a sanction's address stays on a moderation history entry (1–3650) before the six-hourly sweep clears it |
@@ -156,9 +158,27 @@ A school, an office or a venue reaches the server from one public address, and
 the per-address limits count all of them together: `MAX_CONNECTIONS_PER_IP`
 (50 sockets), `WS_HANDSHAKES_PER_MINUTE` (120), `JOIN_ATTEMPTS_PER_IP_PER_MINUTE`
 (30) and `JOIN_ATTEMPTS_PER_ROOM_IP_PER_MINUTE` (10), `AUTH_REQUESTS_PER_MINUTE`
-(60), `PROFILE_REQUESTS_PER_MINUTE` (600), `ROOM_API_REQUESTS_PER_MINUTE` (120)
+(60), `ACCOUNT_REQUESTS_PER_MINUTE` (300), `PROFILE_REQUESTS_PER_MINUTE` (600), `ROOM_API_REQUESTS_PER_MINUTE` (120)
 and `REGISTRATIONS_PER_IP_PER_HOUR` (5). Raise them together for such a
 deployment; the per-worker CPU guard, not these counts, protects the host.
+
+Account application data has a separate finite rate and concurrency lane from
+credentials. A private-message send can involve the send itself, history refresh,
+read marker and unread badge (roughly three to five requests); thirty sends per
+account per minute can therefore mean 90–150 application requests per account,
+or 180–300 for two peers behind one address. Healthy account-update streams
+replace periodic polling and coalesce invalidations across each view. The
+300-request application budget supports that work without spending the unchanged
+60-request authentication or 20-request per-account credential/ticket budgets.
+Uploads retain their separate four-operation lane, five-MiB body bound and upload
+deadline. Account streams use queues of 64 notices, at most eight streams per
+account, and their own `MAX_CONNECTIONS` ceiling; slow receivers must reconnect
+and resync rather than accumulate an unbounded backlog. A five-minute absolute
+stream lifetime forces a fresh durable resync after uncertain or missed commit
+notifications. Each stream validates its session every five seconds (up to
+2,000 small reads/second at the default 10,000-stream ceiling, or 40/second at a
+200-stream deployment ceiling); each validation also has a five-second deadline.
+Size the stream ceiling and database pool for the host's actual capacity.
 
 ## Health and readiness
 

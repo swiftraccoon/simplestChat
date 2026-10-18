@@ -46,6 +46,8 @@ pub(crate) struct ClientIp(pub(crate) IpAddr);
 const DEFAULT_AUTH_REQUESTS_PER_MINUTE: u32 = 60;
 const DEFAULT_AUTH_REQUESTS_PER_ACCOUNT_PER_MINUTE: u32 = 20;
 const DEFAULT_AUTH_CONCURRENCY: usize = 16;
+const DEFAULT_ACCOUNT_REQUESTS_PER_MINUTE: u32 = 300;
+const DEFAULT_ACCOUNT_CONCURRENCY: usize = 32;
 const DEFAULT_ROOM_API_REQUESTS_PER_MINUTE: u32 = 120;
 /// Public profile reads (avatars for every participant a viewer sees) get their
 /// own address budget so a busy room cannot spend the sign-in and refresh one.
@@ -304,6 +306,7 @@ pub struct SignalingServer {
     ip_connection_limiter: IpConnectionLimiter,
     ws_handshake_guard: AuthGuard,
     auth_guard: AuthGuard,
+    account_guard: AuthGuard,
     profile_guard: AuthGuard,
     password_work: Arc<Semaphore>,
     max_password_work: usize,
@@ -386,6 +389,12 @@ impl SignalingServer {
             DEFAULT_REGISTRATIONS_PER_IP_PER_HOUR,
         )?;
         let auth_concurrency = env_usize("AUTH_MAX_CONCURRENCY", DEFAULT_AUTH_CONCURRENCY)?;
+        let account_requests_per_minute = env_u32(
+            "ACCOUNT_REQUESTS_PER_MINUTE",
+            DEFAULT_ACCOUNT_REQUESTS_PER_MINUTE,
+        )?;
+        let account_concurrency =
+            env_usize("ACCOUNT_MAX_CONCURRENCY", DEFAULT_ACCOUNT_CONCURRENCY)?;
         let password_workers = password_lane_capacity(
             std::env::var_os("MAX_PASSWORD_WORKERS")
                 .map(|_| crate::configuration::read_usize("MAX_PASSWORD_WORKERS", 2, 1, 32))
@@ -459,6 +468,13 @@ impl SignalingServer {
             auth_guard: AuthGuard::new(
                 auth_requests_per_minute,
                 auth_concurrency,
+                trusted_proxy_secret.clone(),
+                allowed_origins.clone(),
+                metrics.clone(),
+            ),
+            account_guard: AuthGuard::new(
+                account_requests_per_minute,
+                account_concurrency,
                 trusted_proxy_secret.clone(),
                 allowed_origins.clone(),
                 metrics.clone(),
@@ -625,6 +641,10 @@ impl SignalingServer {
         self.auth_guard.try_acquire_concurrency()
     }
 
+    pub(crate) fn try_acquire_account_request(&self) -> Option<tokio::sync::OwnedSemaphorePermit> {
+        self.account_guard.try_acquire_concurrency()
+    }
+
     /// A permit from the public media lane (avatars and room images). A page's
     /// burst of thumbnails waits briefly for one instead of failing, and never
     /// spends the sign-in lane's permits.
@@ -656,6 +676,9 @@ impl SignalingServer {
     /// Notify active sockets and release media retained for reconnect. Version
     /// matching leaves a newer login intact if a notification is delivered late.
     pub(crate) fn revoke_account_sessions(&self, user_id: String, minimum_version: i64) {
+        if let Ok(account) = user_id.parse() {
+            self.room_manager.account_updates().revalidate(account);
+        }
         let _ = self
             .auth_revocations
             .send((user_id.clone(), minimum_version));
@@ -689,23 +712,69 @@ impl SignalingServer {
             )
             .route("/sessions/{id}", delete(crate::auth::sessions::revoke))
             .route(
+                "/invites",
+                get(crate::auth::invites::list).post(crate::auth::invites::create),
+            )
+            .route("/invites/{id}", delete(crate::auth::invites::revoke))
+            .route("/password", post(crate::auth::account::change_password))
+            .route("/ws-ticket", post(crate::auth::ws_tickets::issue))
+            .route(
+                "/recovery/key",
+                post(crate::auth::account::create_recovery_key),
+            )
+            .route(
+                "/recovery/redeem",
+                post(crate::auth::account::redeem_recovery),
+            )
+            .route(
+                "/passkey/register/start",
+                post(crate::auth::routes::passkey_register_start),
+            )
+            .route(
+                "/passkey/register/finish",
+                post(crate::auth::routes::passkey_register_finish),
+            )
+            .route(
+                "/passkey/login/start",
+                post(crate::auth::routes::passkey_login_start),
+            )
+            .route(
+                "/passkey/login/finish",
+                post(crate::auth::routes::passkey_login_finish),
+            )
+            .route("/passkeys", get(crate::auth::passkeys::list))
+            .route("/passkeys/start", post(crate::auth::passkeys::start))
+            .route(
+                "/passkeys/authorize",
+                post(crate::auth::passkeys::authorize),
+            )
+            .route("/passkeys/enroll", post(crate::auth::passkeys::enroll))
+            .layer(DefaultBodyLimit::max(16 * 1024))
+            .layer(RequestBodyTimeoutLayer::new(HTTP_BODY_IDLE_TIMEOUT))
+            .layer(middleware::from_fn_with_state(
+                self.auth_guard.clone(),
+                guarded_api_request,
+            ))
+            .layer(TimeoutLayer::with_status_code(
+                StatusCode::REQUEST_TIMEOUT,
+                HTTP_REQUEST_TIMEOUT,
+            ));
+
+        // Account application traffic has a finite independent budget so inbox
+        // updates and multiple tabs cannot consume sign-in/refresh capacity.
+        let account_routes = Router::new()
+            .route(
                 "/profile",
                 get(crate::auth::account::get_profile)
                     .patch(crate::auth::account::update_profile)
                     .layer(DefaultBodyLimit::max(256 * 1024)),
             )
             .route(
-                "/invites",
-                get(crate::auth::invites::list).post(crate::auth::invites::create),
-            )
-            .route("/invites/{id}", delete(crate::auth::invites::revoke))
-            .route(
                 "/preferences",
                 get(crate::auth::account::get_preferences)
                     .patch(crate::auth::account::patch_preferences)
                     .layer(DefaultBodyLimit::max(32 * 1024)),
             )
-            .route("/password", post(crate::auth::account::change_password))
             .route(
                 "/attachments/{id}",
                 get(crate::attachments::download).delete(crate::attachments::delete_pending),
@@ -752,47 +821,24 @@ impl SignalingServer {
                 "/inbox/{peer}/messages/{messageId}/reactions",
                 put(crate::room::history::set_private_reaction),
             )
-            .route("/ws-ticket", post(crate::auth::ws_tickets::issue))
-            .route(
-                "/recovery/key",
-                post(crate::auth::account::create_recovery_key),
-            )
-            .route(
-                "/recovery/redeem",
-                post(crate::auth::account::redeem_recovery),
-            )
-            .route(
-                "/passkey/register/start",
-                post(crate::auth::routes::passkey_register_start),
-            )
-            .route(
-                "/passkey/register/finish",
-                post(crate::auth::routes::passkey_register_finish),
-            )
-            .route(
-                "/passkey/login/start",
-                post(crate::auth::routes::passkey_login_start),
-            )
-            .route(
-                "/passkey/login/finish",
-                post(crate::auth::routes::passkey_login_finish),
-            )
-            .route("/passkeys", get(crate::auth::passkeys::list))
-            .route("/passkeys/start", post(crate::auth::passkeys::start))
-            .route(
-                "/passkeys/authorize",
-                post(crate::auth::passkeys::authorize),
-            )
-            .route("/passkeys/enroll", post(crate::auth::passkeys::enroll))
             .layer(DefaultBodyLimit::max(16 * 1024))
             .layer(RequestBodyTimeoutLayer::new(HTTP_BODY_IDLE_TIMEOUT))
             .layer(middleware::from_fn_with_state(
-                self.auth_guard.clone(),
+                self.account_guard.clone(),
                 guarded_api_request,
             ))
             .layer(TimeoutLayer::with_status_code(
                 StatusCode::REQUEST_TIMEOUT,
                 HTTP_REQUEST_TIMEOUT,
+            ));
+
+        // Opening consumes an account-data admission only until headers. The
+        // body has its own bounded lease and must outlive the HTTP timeout.
+        let account_update_routes = Router::new()
+            .route("/api/auth/updates", get(crate::auth::updates::stream))
+            .layer(middleware::from_fn_with_state(
+                self.account_guard.clone(),
+                guarded_api_request,
             ));
 
         // A binary upload has its own total deadline while retaining the same
@@ -803,7 +849,7 @@ impl SignalingServer {
             .layer(DefaultBodyLimit::max(5 * 1024 * 1024))
             .layer(RequestBodyTimeoutLayer::new(HTTP_BODY_IDLE_TIMEOUT))
             .layer(middleware::from_fn_with_state(
-                self.auth_guard.clone(),
+                self.account_guard.clone(),
                 guarded_api_request,
             ))
             .layer(TimeoutLayer::with_status_code(
@@ -918,6 +964,7 @@ impl SignalingServer {
             ));
         let routes = Router::new()
             .merge(attachment_upload_routes)
+            .merge(account_update_routes)
             .merge(telemetry_routes)
             .route("/ws", get(ws_handler))
             .route("/health", get(health_handler))
@@ -926,7 +973,7 @@ impl SignalingServer {
             .route("/metrics", get(metrics_handler))
             .route("/diagnostics/media", get(media_diagnostics::handler))
             .nest("/api/auth/profiles", profile_routes)
-            .nest("/api/auth", auth_routes)
+            .nest("/api/auth", auth_routes.merge(account_routes))
             .nest("/api/rooms", room_routes.merge(room_image_routes))
             .layer(middleware::from_fn_with_state(
                 self.room_manager.drain_signal(),

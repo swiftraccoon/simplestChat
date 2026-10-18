@@ -261,7 +261,7 @@ pub async fn get_preferences(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
 ) -> Result<(HeaderMap, Json<ChatPreferences>), AuthError> {
-    let permit = routes::acquire_auth_request(&server)?;
+    let permit = routes::acquire_account_request(&server)?;
     let claims = authenticated_claims(&server, &headers).await?;
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?.clone();
     let rooms = server.room_manager().clone();
@@ -293,7 +293,7 @@ pub async fn patch_preferences(
     headers: HeaderMap,
     Json(request): Json<PreferencePatch>,
 ) -> Result<(HeaderMap, Json<ChatPreferences>), AuthError> {
-    let permit = routes::acquire_auth_request(&server)?;
+    let permit = routes::acquire_account_request(&server)?;
     let claims = authenticated_claims(&server, &headers).await?;
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?.clone();
     let rooms = server.room_manager().clone();
@@ -307,6 +307,11 @@ pub async fn patch_preferences(
         )
         .await
         .unwrap_or(Err(AuthError::ServiceBusy));
+        if let Ok((id, _)) = &write {
+            rooms
+                .account_updates()
+                .changed(*id, super::updates::Scope::Preferences, None);
+        }
         let account = match &write {
             Ok((id, _)) => Some(*id),
             // A transport/COMMIT failure may have committed. Attempt a fresh
@@ -604,7 +609,7 @@ pub async fn get_profile(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
 ) -> Result<(HeaderMap, Json<AccountProfile>), AuthError> {
-    let _permit = routes::acquire_auth_request(&server)?;
+    let _permit = routes::acquire_account_request(&server)?;
     let claims = authenticated_claims(&server, &headers).await?;
     let profile = load_profile(
         server.db_pool().ok_or(AuthError::NotConfigured)?,
@@ -619,7 +624,7 @@ pub async fn update_profile(
     headers: HeaderMap,
     Json(request): Json<UpdateProfileRequest>,
 ) -> Result<(HeaderMap, Json<AccountProfile>), AuthError> {
-    let _permit = routes::acquire_auth_request(&server)?;
+    let _permit = routes::acquire_account_request(&server)?;
     let claims = authenticated_claims(&server, &headers).await?;
     routes::validate_display_name(&request.display_name).map_err(|_| profile_error())?;
     if !validate_text(&request.bio, 1024, true) {

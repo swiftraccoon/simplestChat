@@ -18,6 +18,9 @@ mod appearance_tests;
 #[path = "auth_session_tests.rs"]
 mod auth_session_tests;
 
+#[path = "account_updates_tests.rs"]
+mod account_updates_tests;
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub(super) struct Manifest {

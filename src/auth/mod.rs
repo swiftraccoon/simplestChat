@@ -13,6 +13,7 @@ pub mod routes;
 pub mod session;
 pub mod sessions;
 pub mod types;
+pub(crate) mod updates;
 pub mod webauthn;
 
 pub(crate) mod ws_tickets;

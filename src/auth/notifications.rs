@@ -231,7 +231,7 @@ pub async fn get_preferences(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
 ) -> Result<(HeaderMap, Json<NotificationPreferences>), AuthError> {
-    let _permit = routes::acquire_auth_request(&server)?;
+    let _permit = routes::acquire_account_request(&server)?;
     let claims = authenticated_claims(&server, &headers).await?;
     let user = Uuid::parse_str(&claims.sub).map_err(|_| AuthError::InvalidToken)?;
     let result = preferences(server.db_pool().ok_or(AuthError::NotConfigured)?, user).await?;
@@ -243,14 +243,20 @@ pub async fn put_preferences(
     headers: HeaderMap,
     Json(policy): Json<NotificationPolicy>,
 ) -> Result<(HeaderMap, Json<NotificationPreferences>), AuthError> {
-    let _permit = routes::acquire_auth_request(&server)?;
+    let permit = routes::acquire_account_request(&server)?;
     let claims = authenticated_claims(&server, &headers).await?;
-    let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
-    let user = save_policy(pool, &claims, &policy).await?;
-    Ok((
-        routes::no_store_headers(),
-        Json(preferences(pool, user).await?),
-    ))
+    let result = super::updates::owned(permit, async move {
+        let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
+        let user = save_policy(pool, &claims, &policy).await?;
+        server.room_manager().account_updates().changed(
+            user,
+            super::updates::Scope::Notifications,
+            None,
+        );
+        preferences(pool, user).await
+    })
+    .await?;
+    Ok((routes::no_store_headers(), Json(result)))
 }
 
 pub async fn put_conversation(
@@ -259,14 +265,20 @@ pub async fn put_conversation(
     Path(peer): Path<Uuid>,
     Json(policy): Json<ConversationPolicy>,
 ) -> Result<(HeaderMap, Json<NotificationPreferences>), AuthError> {
-    let _permit = routes::acquire_auth_request(&server)?;
+    let permit = routes::acquire_account_request(&server)?;
     let claims = authenticated_claims(&server, &headers).await?;
-    let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
-    let user = save_conversation(pool, &claims, peer, &policy).await?;
-    Ok((
-        routes::no_store_headers(),
-        Json(preferences(pool, user).await?),
-    ))
+    let result = super::updates::owned(permit, async move {
+        let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
+        let user = save_conversation(pool, &claims, peer, &policy).await?;
+        server.room_manager().account_updates().changed(
+            user,
+            super::updates::Scope::Notifications,
+            Some(peer),
+        );
+        preferences(pool, user).await
+    })
+    .await?;
+    Ok((routes::no_store_headers(), Json(result)))
 }
 
 #[cfg(test)]

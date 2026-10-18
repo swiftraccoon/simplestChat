@@ -256,6 +256,14 @@ pub(crate) fn acquire_auth_request(
         .ok_or(AuthError::ServiceBusy)
 }
 
+pub(crate) fn acquire_account_request(
+    server: &SignalingServer,
+) -> Result<tokio::sync::OwnedSemaphorePermit, AuthError> {
+    server
+        .try_acquire_account_request()
+        .ok_or(AuthError::ServiceBusy)
+}
+
 /// POST /api/auth/register
 pub(crate) async fn register(
     State(server): State<SignalingServer>,

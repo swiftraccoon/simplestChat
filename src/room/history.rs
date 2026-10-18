@@ -795,7 +795,7 @@ pub async fn edit_message(
     Path((peer, message)): Path<(Uuid, Uuid)>,
     Json(request): Json<EditRequest>,
 ) -> Result<(HeaderMap, Json<ChatEntry>), AuthError> {
-    let permit = routes::acquire_auth_request(&server)?;
+    let permit = routes::acquire_account_request(&server)?;
     let claims = account::authenticated_claims(&server, &headers).await?;
     let saved = tokio::spawn(async move {
         let _permit = permit;
@@ -912,7 +912,7 @@ pub async fn set_private_reaction(
     Path((peer, message)): Path<(Uuid, Uuid)>,
     Json(request): Json<SetReactionRequest>,
 ) -> Result<(HeaderMap, Json<ReactionResult>), AuthError> {
-    let permit = routes::acquire_auth_request(&server)?;
+    let permit = routes::acquire_account_request(&server)?;
     let claims = account::authenticated_claims(&server, &headers).await?;
     let saved = tokio::spawn(async move {
         let _permit = permit;
@@ -1083,7 +1083,7 @@ pub async fn inbox(
     headers: HeaderMap,
     Query(query): Query<HistoryQuery>,
 ) -> Result<(HeaderMap, Json<InboxPage>), AuthError> {
-    let _permit = routes::acquire_auth_request(&server)?;
+    let _permit = routes::acquire_account_request(&server)?;
     let claims = account::authenticated_claims(&server, &headers).await?;
     let own: Uuid = claims.sub.parse().map_err(|_| AuthError::InvalidToken)?;
     query.validate().map_err(AuthError::InvalidInput)?;
@@ -1139,7 +1139,7 @@ pub async fn unread_summary(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
 ) -> Result<(HeaderMap, Json<UnreadSummary>), AuthError> {
-    let _permit = routes::acquire_auth_request(&server)?;
+    let _permit = routes::acquire_account_request(&server)?;
     let claims = account::authenticated_claims(&server, &headers).await?;
     let own: Uuid = claims.sub.parse().map_err(|_| AuthError::InvalidToken)?;
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
@@ -1160,7 +1160,7 @@ pub async fn messages(
     Path(peer): Path<Uuid>,
     Query(query): Query<HistoryQuery>,
 ) -> Result<(HeaderMap, Json<HistoryPage>), AuthError> {
-    let _permit = routes::acquire_auth_request(&server)?;
+    let _permit = routes::acquire_account_request(&server)?;
     let claims = account::authenticated_claims(&server, &headers).await?;
     let own: Uuid = claims.sub.parse().map_err(|_| AuthError::InvalidToken)?;
     query.validate().map_err(AuthError::InvalidInput)?;
@@ -1183,21 +1183,30 @@ pub async fn read(
     Path(peer): Path<Uuid>,
     Json(request): Json<ReadRequest>,
 ) -> Result<(HeaderMap, Json<ReadResult>), AuthError> {
-    let _permit = routes::acquire_auth_request(&server)?;
+    let permit = routes::acquire_account_request(&server)?;
     let claims = account::authenticated_claims(&server, &headers).await?;
     let own: Uuid = claims.sub.parse().map_err(|_| AuthError::InvalidToken)?;
-    let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
-    let result = mark_read(
-        pool,
-        &private_conversation(own, peer),
-        own,
-        request.message_id,
-    )
-    .await
-    .map_err(|error| match error {
-        sqlx::Error::RowNotFound => AuthError::InvalidInput("Message unavailable"),
-        other => routes::database_error(other),
-    })?;
+    let result = crate::auth::updates::owned(permit, async move {
+        let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
+        let result = mark_read(
+            pool,
+            &private_conversation(own, peer),
+            own,
+            request.message_id,
+        )
+        .await
+        .map_err(|error| match error {
+            sqlx::Error::RowNotFound => AuthError::InvalidInput("Message unavailable"),
+            other => routes::database_error(other),
+        })?;
+        server.room_manager().account_updates().changed(
+            own,
+            crate::auth::updates::Scope::Inbox,
+            Some(peer),
+        );
+        Ok(result)
+    })
+    .await?;
     Ok((routes::no_store_headers(), Json(result)))
 }
 
@@ -1207,7 +1216,7 @@ pub async fn send_message(
     Path(peer): Path<Uuid>,
     Json(request): Json<SendRequest>,
 ) -> Result<(HeaderMap, Json<ChatEntry>), AuthError> {
-    let permit = routes::acquire_auth_request(&server)?;
+    let permit = routes::acquire_account_request(&server)?;
     let claims = account::authenticated_claims(&server, &headers).await?;
     let saved = tokio::spawn(async move {
         let _permit = permit;
@@ -1460,6 +1469,7 @@ impl super::RoomManager {
     /// Inbox storage owns delivery; live room sockets get a bounded notification
     /// as well. A busy/disconnected socket reconciles from its durable inbox.
     pub(crate) fn deliver_inbox_message(&self, message: &ChatEntry) {
+        self.account_updates().private_message(message);
         let Some(recipient) = message.recipient_id.as_deref() else {
             return;
         };

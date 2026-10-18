@@ -130,7 +130,7 @@ pub async fn status(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
 ) -> Result<(HeaderMap, Json<PushStatus>), AuthError> {
-    let _permit = routes::acquire_auth_request(&server)?;
+    let _permit = routes::acquire_account_request(&server)?;
     let claims = authenticated_claims(&server, &headers).await?;
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
     let key = load_key(pool)
@@ -196,7 +196,7 @@ pub async fn subscribe(
     headers: HeaderMap,
     Json(body): Json<SubscriptionRequest>,
 ) -> Result<(HeaderMap, StatusCode), AuthError> {
-    let _permit = routes::acquire_auth_request(&server)?;
+    let _permit = routes::acquire_account_request(&server)?;
     let claims = authenticated_claims(&server, &headers).await?;
     save_subscription(
         server.db_pool().ok_or(AuthError::NotConfigured)?,
@@ -223,7 +223,7 @@ pub async fn unsubscribe(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
 ) -> Result<(HeaderMap, StatusCode), AuthError> {
-    let _permit = routes::acquire_auth_request(&server)?;
+    let _permit = routes::acquire_account_request(&server)?;
     let claims = authenticated_claims(&server, &headers).await?;
     delete_subscription(server.db_pool().ok_or(AuthError::NotConfigured)?, &claims).await?;
     Ok((routes::no_store_headers(), StatusCode::NO_CONTENT))

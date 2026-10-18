@@ -122,7 +122,7 @@ pub async fn list_contacts(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
 ) -> Result<(HeaderMap, Json<ContactsPage>), AuthError> {
-    let _permit = routes::acquire_auth_request(&server)?;
+    let _permit = routes::acquire_account_request(&server)?;
     let claims = account::authenticated_claims(&server, &headers).await?;
     let own = account_id(&claims)?;
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
@@ -155,7 +155,7 @@ pub async fn list_contacts(
     ))
 }
 
-async fn request_contact(pool: &PgPool, claims: &Claims, peer: Uuid) -> Result<(), AuthError> {
+async fn request_contact(pool: &PgPool, claims: &Claims, peer: Uuid) -> Result<bool, AuthError> {
     let own = account_id(claims)?;
     if own == peer {
         return Err(AuthError::InvalidInput("Choose another account"));
@@ -164,7 +164,7 @@ async fn request_contact(pool: &PgPool, claims: &Claims, peer: Uuid) -> Result<(
     let allowed = lock_contact_accounts(&mut tx, claims, peer).await?;
     // Missing, opted-out and ignoring accounts have the same response.
     if allowed != Some(true) {
-        return Ok(());
+        return Ok(false);
     }
     let (low, high) = ordered_pair(own, peer);
     sqlx::query("DELETE FROM contacts WHERE (low_id=$1 OR high_id=$1) AND status<>'accepted' AND updated_at<now()-interval '30 days'")
@@ -184,7 +184,7 @@ async fn request_contact(pool: &PgPool, claims: &Claims, peer: Uuid) -> Result<(
     if existing.is_some_and(|(status, updated)| {
         status == "accepted" || updated > Utc::now() - chrono::Duration::days(30)
     }) {
-        return Ok(());
+        return Ok(false);
     }
     let counts: Vec<(Uuid, i64)> = sqlx::query_as(
         "SELECT u.id,(SELECT count(*) FROM contacts c WHERE (c.low_id=u.id OR c.high_id=u.id)
@@ -200,12 +200,13 @@ async fn request_contact(pool: &PgPool, claims: &Claims, peer: Uuid) -> Result<(
         ));
     }
     if counts.iter().any(|(_, count)| *count >= MAX_CONTACTS) {
-        return Ok(());
+        return Ok(false);
     }
     sqlx::query("INSERT INTO contacts (low_id,high_id,requester_id,status) VALUES ($1,$2,$3,'pending')
          ON CONFLICT (low_id,high_id) DO UPDATE SET requester_id=$3,status='pending',requested_at=now(),updated_at=now()")
         .bind(low).bind(high).bind(own).execute(&mut *tx).await.map_err(routes::database_error)?;
-    tx.commit().await.map_err(routes::database_error)
+    tx.commit().await.map_err(routes::database_error)?;
+    Ok(true)
 }
 
 pub async fn create_contact(
@@ -213,13 +214,22 @@ pub async fn create_contact(
     headers: HeaderMap,
     Json(request): Json<ContactRequest>,
 ) -> Result<(HeaderMap, StatusCode), AuthError> {
-    let _permit = routes::acquire_auth_request(&server)?;
+    let permit = routes::acquire_account_request(&server)?;
     let claims = account::authenticated_claims(&server, &headers).await?;
-    request_contact(
-        server.db_pool().ok_or(AuthError::NotConfigured)?,
-        &claims,
-        request.account_id,
-    )
+    let own = account_id(&claims)?;
+    let peer = request.account_id;
+    super::updates::owned(permit, async move {
+        let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
+        let changed = request_contact(pool, &claims, peer).await?;
+        if changed {
+            server.room_manager().account_updates().pair(
+                own,
+                peer,
+                super::updates::Scope::Contacts,
+            );
+        }
+        Ok(())
+    })
     .await?;
     Ok((routes::no_store_headers(), StatusCode::NO_CONTENT))
 }
@@ -229,12 +239,12 @@ async fn change_contact(
     claims: &Claims,
     peer: Uuid,
     accept: bool,
-) -> Result<(), AuthError> {
+) -> Result<bool, AuthError> {
     let own = account_id(claims)?;
     let mut tx = pool.begin().await.map_err(routes::database_error)?;
     let allowed = lock_contact_accounts(&mut tx, claims, peer).await?;
     let (low, high) = ordered_pair(own, peer);
-    if accept {
+    let changed = if accept {
         if allowed != Some(true) {
             return Err(AuthError::InvalidInput("Contact request unavailable"));
         }
@@ -244,11 +254,13 @@ async fn change_contact(
         if changed.rows_affected() == 0 {
             return Err(AuthError::InvalidInput("Contact request unavailable"));
         }
+        true
     } else {
         sqlx::query("UPDATE contacts SET status='declined',updated_at=now() WHERE low_id=$1 AND high_id=$2 AND status<>'declined'")
-            .bind(low).bind(high).execute(&mut *tx).await.map_err(routes::database_error)?;
-    }
-    tx.commit().await.map_err(routes::database_error)
+            .bind(low).bind(high).execute(&mut *tx).await.map_err(routes::database_error)?.rows_affected() > 0
+    };
+    tx.commit().await.map_err(routes::database_error)?;
+    Ok(changed)
 }
 
 pub async fn accept_contact(
@@ -256,14 +268,21 @@ pub async fn accept_contact(
     headers: HeaderMap,
     Path(peer): Path<Uuid>,
 ) -> Result<(HeaderMap, StatusCode), AuthError> {
-    let _permit = routes::acquire_auth_request(&server)?;
+    let permit = routes::acquire_account_request(&server)?;
     let claims = account::authenticated_claims(&server, &headers).await?;
-    change_contact(
-        server.db_pool().ok_or(AuthError::NotConfigured)?,
-        &claims,
-        peer,
-        true,
-    )
+    let own = account_id(&claims)?;
+    super::updates::owned(permit, async move {
+        let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
+        let changed = change_contact(pool, &claims, peer, true).await?;
+        if changed {
+            server.room_manager().account_updates().pair(
+                own,
+                peer,
+                super::updates::Scope::Contacts,
+            );
+        }
+        Ok(())
+    })
     .await?;
     Ok((routes::no_store_headers(), StatusCode::NO_CONTENT))
 }
@@ -273,14 +292,21 @@ pub async fn remove_contact(
     headers: HeaderMap,
     Path(peer): Path<Uuid>,
 ) -> Result<(HeaderMap, StatusCode), AuthError> {
-    let _permit = routes::acquire_auth_request(&server)?;
+    let permit = routes::acquire_account_request(&server)?;
     let claims = account::authenticated_claims(&server, &headers).await?;
-    change_contact(
-        server.db_pool().ok_or(AuthError::NotConfigured)?,
-        &claims,
-        peer,
-        false,
-    )
+    let own = account_id(&claims)?;
+    super::updates::owned(permit, async move {
+        let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
+        let changed = change_contact(pool, &claims, peer, false).await?;
+        if changed {
+            server.room_manager().account_updates().pair(
+                own,
+                peer,
+                super::updates::Scope::Contacts,
+            );
+        }
+        Ok(())
+    })
     .await?;
     Ok((routes::no_store_headers(), StatusCode::NO_CONTENT))
 }
@@ -331,7 +357,7 @@ pub async fn saved_rooms(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
 ) -> Result<(HeaderMap, Json<SavedRoomsPage>), AuthError> {
-    let _permit = routes::acquire_auth_request(&server)?;
+    let _permit = routes::acquire_account_request(&server)?;
     let claims = account::authenticated_claims(&server, &headers).await?;
     let own = account_id(&claims)?;
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
@@ -443,7 +469,7 @@ pub async fn save_room(
     Path(room): Path<String>,
     Json(request): Json<SaveRoomRequest>,
 ) -> Result<(HeaderMap, StatusCode), AuthError> {
-    let _permit = routes::acquire_auth_request(&server)?;
+    let _permit = routes::acquire_account_request(&server)?;
     let claims = account::authenticated_claims(&server, &headers).await?;
     if room.is_empty() || room.len() > 128 {
         return Err(AuthError::InvalidInput("Room unavailable"));

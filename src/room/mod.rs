@@ -1268,6 +1268,7 @@ pub struct RoomManager {
     drain: DrainSignal,
     metrics: ServerMetrics,
     db_pool: Option<sqlx::PgPool>,
+    account_updates: crate::auth::updates::Hub,
     /// Serializes room creation — two clients joining a brand-new room
     /// concurrently would otherwise both call create_router and one would
     /// fail with "Router already exists". Creation is rare (once per room),
@@ -1471,6 +1472,7 @@ impl RoomManager {
             drain: DrainSignal::default(),
             metrics,
             db_pool,
+            account_updates: crate::auth::updates::Hub::configured()?,
             room_creation_lock: Arc::new(tokio::sync::Mutex::new(())),
             deleting_rooms: Arc::new(StdRwLock::new(HashMap::new())),
             identity_updates: Arc::new(StdRwLock::new(HashSet::new())),
@@ -1499,6 +1501,10 @@ impl RoomManager {
     /// Whether this process permits creation of non-persisted rooms.
     pub fn allow_ad_hoc_rooms(&self) -> bool {
         self.allow_ad_hoc_rooms
+    }
+
+    pub(crate) fn account_updates(&self) -> &crate::auth::updates::Hub {
+        &self.account_updates
     }
 
     /// Gets the media server for direct access (e.g., find_producer_paused)
@@ -3632,20 +3638,26 @@ impl RoomManager {
             .media_session_for_sender(room_id, participant_id, expected_sender)
             .await
             .map_err(|error| crate::media::types::MediaError::ConsumerError(error.to_string()))?;
-        {
+        let consumer_source = {
             let room_lock = self.get_room(room_id).map_err(|error| {
                 crate::media::types::MediaError::ConsumerError(error.to_string())
             })?;
             let room = room_lock.read().await;
-            if !room
+            let metadata = room
                 .producer_to_participant
-                .contains_key(&producer_id.to_string())
-            {
-                return Err(crate::media::types::MediaError::ConsumerError(
-                    "Producer is not in this room".to_string(),
-                ));
-            }
-        }
+                .get(&producer_id.to_string())
+                .and_then(|owner| room.participants.get(owner))
+                .and_then(|owner| owner.producers.get(&producer_id.to_string()))
+                .ok_or_else(|| {
+                    crate::media::types::MediaError::ConsumerError(
+                        "Producer is not in this room".to_string(),
+                    )
+                })?;
+            crate::media::transport_manager::ConsumerMediaSource::from_room_source(
+                metadata.0,
+                metadata.1.as_deref(),
+            )
+        };
         let _ipc_reservation = self
             .reserve_media_control_ipc_for_sender(room_id, participant_id, expected_sender)
             .await
@@ -3673,7 +3685,7 @@ impl RoomManager {
                 &media_participant_id,
                 producer_id,
                 rtp_capabilities,
-                AppData::default(),
+                AppData::new(consumer_source),
                 notification_sender,
                 consumer_counter,
             )

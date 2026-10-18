@@ -131,6 +131,9 @@ pub async fn revoke(
         routes::refresh_token_from_headers(&headers),
     )
     .await?;
+    if let Ok(account) = claims.sub.parse() {
+        server.room_manager().account_updates().revalidate(account);
+    }
     let headers = if clear_cookie {
         routes::clear_refresh_cookie_headers()
     } else {
@@ -153,6 +156,9 @@ pub async fn revoke_others(
         None,
     )
     .await?;
+    if let Ok(account) = claims.sub.parse() {
+        server.room_manager().account_updates().revalidate(account);
+    }
     Ok((routes::no_store_headers(), StatusCode::NO_CONTENT))
 }
 

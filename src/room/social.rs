@@ -4462,7 +4462,10 @@ impl RoomManager {
                     )
                     .await;
                 prepared.message = match persisted {
-                    Ok(message) => message,
+                    Ok(message) => {
+                        manager.account_updates().private_message(&message);
+                        message
+                    }
                     Err(error) => {
                         return chat_persistence_failure(
                             &manager.metrics,
@@ -4668,6 +4671,7 @@ impl RoomManager {
     /// Observe completion when the HTTP caller stays connected. Dropping this
     /// observer detaches the owned task, preserving a committed edit's fan-out.
     pub(crate) async fn deliver_inbox_edit(&self, message: &ChatEntry) {
+        self.account_updates().private_message(message);
         if let Some(completion) = self.schedule_inbox_edit(message)
             && let Err(error) = completion.await
         {
@@ -4678,6 +4682,7 @@ impl RoomManager {
     /// The mutation is already committed; the owned completion survives its
     /// caller disappearing and reconciles each room from current durable state.
     pub(crate) async fn deliver_inbox_reactions(&self, message: &ChatEntry) {
+        self.account_updates().private_message(message);
         if let Some(completion) = self.schedule_inbox_update(message, true)
             && let Err(error) = completion.await
         {
@@ -5591,6 +5596,7 @@ impl RoomManager {
                                 error.into()
                             }
                         })?;
+                    self.account_updates().private_message(&edited);
                     room = room_lock.write().await;
                     room.ensure_live()?;
                     Self::participant_for_sender(&room, participant_id, expected_sender)?;
@@ -5860,6 +5866,12 @@ impl RoomManager {
                     }
                 }
                 let reactions = prepare_reaction(&room, participant_id, message_id, emoji)?;
+                let private_message = room
+                    .social
+                    .history
+                    .iter()
+                    .find(|entry| entry.message.message_id == *message_id)
+                    .map(|entry| entry.message.clone());
                 if !saved_public && let Some(pool) = &self.db_pool {
                     drop(room);
                     self.persist_room(
@@ -5868,6 +5880,9 @@ impl RoomManager {
                         history::save_reactions(pool, message_id, &reactions),
                     )
                     .await?;
+                    if let Some(message) = &private_message {
+                        self.account_updates().private_message(message);
+                    }
                     room = room_lock.write().await;
                     room.ensure_live()?;
                     Self::participant_for_sender(&room, participant_id, expected_sender)?;

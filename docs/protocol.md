@@ -188,7 +188,57 @@ whose commit succeeded but room synchronization failed returns HTTP 503 explicit
 reporting that partial outcome. The browser preserves restrictive unconfirmed
 intent, blocks further writes until explicit refresh, and never automatically
 replays an uncertain mutation. Signed-in privacy is available outside a room;
-other visible devices recheck on focus and every fifteen seconds.
+other visible devices resync on account updates and focus, with periodic checks when the live account stream is unavailable.
+
+### Live account updates
+
+`GET /api/auth/updates` accepts the current session-bound bearer in the
+`Authorization` header and returns `text/event-stream`, with no-store headers and
+proxy buffering disabled. It works from home without a room socket or media
+capture. The initial event is `event: ready` with `data: {"type":"ready"}`.
+Subsequent `event: change` frames contain
+`{"type":"change","scope":"inbox","peerId":"<account UUID>"}`. Scopes are
+`inbox`, `contacts`, `preferences`, and `notifications`; `peerId` is present for a
+specific conversation/contact and absent for account-wide preferences.
+Notifications contain no message content, profile names or credentials.
+
+Every ready event requires a fresh read from durable HTTP APIs. There are no
+replay IDs, retained event history or mutation replays: reconnect, queue lag, an
+uncertain HTTP result and focus recovery reconcile durable state. A healthy
+browser stream suppresses periodic inbox/contact/preference polling, coalesces
+view refreshes, and resyncs when it reconnects. Account and token changes abort
+the previous stream before its events can update another account's UI.
+
+Only successful committed PM sends, edits, reactions and read markers, contact
+changes, saved chat preferences, and notification-policy changes publish these
+invalidations. PM/contact changes reach both accounts and each account's visible
+devices; read markers and preferences reach the owning account. Rejected writes
+publish nothing. Committed completion retains its bounded request permit after
+an abandoned HTTP response. The stream conveys invalidation; existing HTTP
+session, visibility, consent and mutation policies remain authoritative.
+
+The stream has an independent lease: eight connections per account, a separate
+process-wide `MAX_CONNECTIONS` ceiling, and a queue of 64 notices per account.
+A lagging receiver closes and must reconnect/resync. Heartbeat comments arrive
+every fifteen seconds. JWT expiry ends a stream without a grace period; account
+version and the issuing session are revalidated at most every five seconds,
+with each database validation bounded to five seconds. Known account/session
+revocations force revalidation before a queued change can be sent. Failed
+validation and process drain close the stream. Every connection also closes at
+an absolute five-minute lifetime, even when healthy. This bounds the wait until
+a new ready/resync after a COMMIT whose acknowledgement was lost or timed out;
+that uncertain outcome can have committed without publishing an invalidation.
+With an available service the first reconnect waits roughly 0.8–1.2 seconds,
+then durable HTTP resync completes the repair. Network failures, expired
+credentials and rate-limit waits can extend recovery. No event-delivery or
+five-minute end-to-end recovery guarantee is implied. Opening alone uses the account
+application rate/concurrency lane; the body holds no ordinary request permit
+and has no fifteen-second HTTP handler deadline.
+
+Invalidation fan-out is process-local, matching the deployed single application
+process. A restart disconnects clients, whose next ready event resyncs from the
+database. Running several independent application replicas would require a
+shared invalidation transport before suppressing their periodic fallback polls.
 
 Invitations are 32-character random codes with 160 bits of entropy
 (`src/invite_codes.rs`). Stored rows contain only a SHA-256 digest and a separate
@@ -598,6 +648,36 @@ enabled; late unsupported-update results cannot rebuild a replaced session.
 
 `leaveRoom` has no dedicated acknowledgement. The browser immediately retires its
 membership and media, and the server removes the corresponding membership.
+
+### Presentation delivery
+
+Screen sharing starts only after an explicit user action. The browser saves an
+`Optimize for` preference under Screen sharing: Details (default, up to 15 fps,
+`detail` content hint) or Motion (up to 30 fps, `motion` hint). Changes apply to
+the next share; they never open a picker, recapture or enable a camera. Display
+video is bounded to 1920×1080, preserving the chosen source's aspect ratio.
+
+The negotiated default codec is retained. VP8/H264 use three spatial encodings
+from quarter to full resolution, with a combined 2.2 Mbit/s ceiling. A default
+VP9 codec uses `L3T3_KEY` only after an affirmative, smooth WebRTC encoder query;
+unavailable, rejected or one-second timed-out queries use a bounded single
+stream. H264 hardware may also emit one stream. Actual received RTP parameters
+determine whether preferred-layer requests are useful.
+
+While presenting, the existing camera's largest spatial encoding is disabled:
+its two lower streams total at most 400 kbit/s. Microphone and optional display
+audio each have a 64 kbit/s Opus ceiling, leaving the combined nominal encoding
+budget at 2.728 Mbit/s under the existing 3 Mbit/s transport cap. The microphone
+retains DTX and FEC. Stopping, failed publication and superseded shares restore
+the camera's normal ceiling without capture or resume; queued changes read the
+latest sharing intent before changing an existing sender.
+
+The server gives screen-video consumers priority four relative to camera
+priority one when dividing estimated video bandwidth. It derives the source
+from the room's validated producer registry, including cross-worker pipes;
+client `appData` cannot claim this priority. Audio remains independent. Manual
+quality, tile-size and bandwidth ceilings, receive modes, hiding and pins keep
+their existing authority, and presentation does not resize the tile grid.
 
 ### Incoming video and Follow speaker
 
