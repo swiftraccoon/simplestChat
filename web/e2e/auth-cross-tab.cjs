@@ -39,6 +39,7 @@ async function scenario(browser, storageOnly) {
       ({ storageOnly, markerKey }) => {
         window.__crossTabEvidence = {
           connections: 0,
+          authenticatedOpens: 0,
           closes: 0,
           renewals: 0,
           captures: 0,
@@ -66,11 +67,17 @@ async function scenario(browser, storageOnly) {
           static OPEN = 1;
           static CONNECTING = 0;
           readyState = 0;
-          constructor() {
+          constructor(_url, protocols) {
             window.__crossTabEvidence.connections++;
             setTimeout(() => {
+              if (this.readyState !== FixtureSocket.CONNECTING) return;
               this.readyState = 1;
               this.onopen?.();
+              if (
+                this.readyState === FixtureSocket.OPEN &&
+                protocols.some((protocol) => protocol.startsWith('ticket.'))
+              )
+                window.__crossTabEvidence.authenticatedOpens++;
             }, 0);
           }
           close() {
@@ -181,6 +188,10 @@ async function scenario(browser, storageOnly) {
       await page.waitForFunction(
         () => document.getElementById('auth-display-name').textContent === 'First',
       );
+    // Account UI updates before the asynchronous ticket handshake completes.
+    // Measure renewal only after the initial authenticated connection is open.
+    for (const page of [first, second])
+      await page.waitForFunction(() => window.__crossTabEvidence.authenticatedOpens === 1);
     const before = await second.evaluate(() => ({ ...window.__crossTabEvidence }));
     const announce = async () =>
       first.evaluate(
