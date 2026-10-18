@@ -1010,12 +1010,22 @@ impl TransportManager {
             })?;
 
         // Register callback to forward BWE events through the channel
-        let pid = participant_id.to_string();
         let handler = transport.on_trace(Arc::new(move |event: &TransportTraceEventData| {
             if let TransportTraceEventData::Bwe { info, .. } = event {
                 let bitrate = application_bitrate(info.available_bitrate);
                 let _ = bwe_sender.try_send(bitrate);
-                debug!("BWE event for {}: available_bitrate={}", pid, bitrate);
+                debug!(
+                    bwe_type = ?info.r#type,
+                    available_bitrate = info.available_bitrate,
+                    application_bitrate = bitrate,
+                    desired_bitrate = info.desired_bitrate,
+                    effective_desired_bitrate = info.effective_desired_bitrate,
+                    min_bitrate = info.min_bitrate,
+                    max_bitrate = info.max_bitrate,
+                    start_bitrate = info.start_bitrate,
+                    max_padding_bitrate = info.max_padding_bitrate,
+                    "Receive bandwidth estimate"
+                );
             }
         }));
         self.replace_bwe_trace_handler(participant.generation, Box::new(handler));
@@ -1096,6 +1106,21 @@ impl TransportManager {
             async move {
                 let stats = transport.get_stats().await.ok()?;
                 let stat = stats.first()?;
+                // Reuse this sampler's existing bounded IPC request. Absolute
+                // counters permit probe deltas without per-packet trace events
+                // or retaining transport/participant identifiers.
+                debug!(
+                    timestamp_ms = stat.timestamp,
+                    send_bitrate = stat.send_bitrate,
+                    rtp_bytes_sent = stat.rtp_bytes_sent,
+                    rtp_send_bitrate = stat.rtp_send_bitrate,
+                    rtx_bytes_sent = stat.rtx_bytes_sent,
+                    rtx_send_bitrate = stat.rtx_send_bitrate,
+                    probation_bytes_sent = stat.probation_bytes_sent,
+                    probation_send_bitrate = stat.probation_send_bitrate,
+                    available_outgoing_bitrate = ?stat.available_outgoing_bitrate,
+                    "Receive transport bandwidth sample"
+                );
                 Some(TransportReading {
                     loss_sent: stat.rtp_packet_loss_sent,
                     available_outgoing_bitrate: stat
