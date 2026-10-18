@@ -10,6 +10,11 @@ const { openRoomMenu } = require('./room-menu.cjs');
 const { sheetScreen, closeSheet } = require('./settings-sheet.cjs');
 const { presentationWindow } = require('./presentation-window.cjs');
 const {
+  installPresentationSignalStats,
+  presentationReceiverStats,
+  presentationSenderStats,
+} = require('./presentation-stats.cjs');
+const {
   text,
   glyphs,
   installPresentationCapture,
@@ -104,6 +109,7 @@ async function join(label, room) {
   await page.addInitScript(installPeerEventTracing, {
     announcedIp: process.env.TEST_ANNOUNCE_IP || null,
   });
+  await page.addInitScript(installPresentationSignalStats);
   await page.addInitScript(installPresentationCapture, { glyphs, text });
   await page.goto(origin.toString());
   await page.locator('#name-input').fill(label);
@@ -145,48 +151,24 @@ async function receiveMode(page, mode) {
 }
 async function sample(page) {
   const frame = await page.evaluate(decodePresentationFrame, { glyphs, text });
-  const counters = await page.evaluate(async () => {
-    const screen = document
-      .querySelector('.video-tile.screen-share:not(.local) video')
-      ?.srcObject?.getVideoTracks()[0];
-    const camera = document
-      .querySelector('.video-tile:not(.screen-share):not(.local) video')
-      ?.srcObject?.getVideoTracks()[0];
-    const result = {
-      screenFrames: 0,
-      cameraFrames: 0,
-      audioPackets: 0,
-      audioSamples: null,
-      concealedSamples: null,
-    };
-    for (const peer of window.__communityPeers) {
-      if (peer.connectionState !== 'connected') continue;
-      for (const receiver of peer.getReceivers()) {
-        const stats = await receiver.getStats();
-        for (const row of stats.values()) {
-          if (row.type !== 'inbound-rtp') continue;
-          if (receiver.track.kind === 'video' && typeof row.framesDecoded === 'number') {
-            if (receiver.track === screen) result.screenFrames += row.framesDecoded;
-            if (receiver.track === camera) result.cameraFrames += row.framesDecoded;
-          }
-          if (receiver.track.kind === 'audio') {
-            result.audioPackets += row.packetsReceived || 0;
-            const samples = row.totalSamplesReceived ?? row.jitterBufferEmittedCount;
-            if (typeof samples === 'number')
-              result.audioSamples = (result.audioSamples ?? 0) + samples;
-            if (typeof row.concealedSamples === 'number')
-              result.concealedSamples = (result.concealedSamples ?? 0) + row.concealedSamples;
-          }
-        }
-      }
-    }
-    return result;
-  });
+  const counters = await page.evaluate(presentationReceiverStats);
   return { ...frame, ...counters };
 }
-async function progressing(page, name, accepts, timeoutMs = 30000, windowMs = 3000) {
+async function progressing(page, name, accepts, timeoutMs = 30000, windowMs = 3000, publisher) {
+  const startedAt = Date.now();
+  let lastSenderAt = -Infinity,
+    sender = null;
   const window = await presentationWindow({
-    sample: () => sample(page),
+    sample: async () => {
+      const point = await sample(page);
+      // Passive bounded diagnostics, including unsuccessful startup/recovery.
+      // Sampling never changes encodings, requests layers or resets a peer.
+      if (publisher && Date.now() - lastSenderAt >= 2000) {
+        lastSenderAt = Date.now();
+        sender = { elapsedMs: lastSenderAt - startedAt, ...(await senderState(publisher)) };
+      }
+      return { ...point, elapsedMs: Date.now() - startedAt, sender };
+    },
     accepts: (point) => point.text === text && accepts(point),
     wait: (ms) => page.waitForTimeout(ms),
     timeoutMs,
@@ -202,6 +184,12 @@ async function progressing(page, name, accepts, timeoutMs = 30000, windowMs = 30
         screenFrames: point.screenFrames,
         cameraFrames: point.cameraFrames,
         audioSamples: point.audioSamples,
+        elapsedMs: point.elapsedMs,
+        availableIncomingBitrate: point.availableIncomingBitrate,
+        serverAvailableBitrate: point.serverAvailableBitrate,
+        serverEstimateAgeMs: point.serverEstimateAgeMs,
+        screenInbound: point.screenInbound,
+        sender: point.sender,
       });
       if (report.observations.length > 128) report.observations.shift();
     },
@@ -249,39 +237,7 @@ async function progressing(page, name, accepts, timeoutMs = 30000, windowMs = 30
   return after;
 }
 async function senderState(page) {
-  return page.evaluate(async () => {
-    const result = {
-      screen: [],
-      camera: [],
-      screenCodec: null,
-      screenSpatialStreams: 0,
-      captures: window.__presentation.captures,
-      displays: window.__presentation.displays,
-    };
-    for (const peer of window.__communityPeers)
-      for (const sender of peer.getSenders()) {
-        if (sender.track?.kind !== 'video') continue;
-        const source = window.__presentation.tracks.includes(sender.track) ? 'screen' : 'camera';
-        if (source === 'screen')
-          result.screenCodec =
-            sender
-              .getParameters()
-              .codecs.find((codec) => !codec.mimeType.toLowerCase().endsWith('/rtx'))?.mimeType ||
-            null;
-        if (source === 'screen') {
-          const stats = await sender.getStats();
-          for (const row of stats.values())
-            if (row.type === 'outbound-rtp' && row.framesEncoded > 0) result.screenSpatialStreams++;
-        }
-        result[source] = sender.getParameters().encodings.map((encoding) => ({
-          active: encoding.active !== false,
-          maxBitrate: encoding.maxBitrate ?? null,
-          maxFramerate: encoding.maxFramerate ?? null,
-          scalabilityMode: encoding.scalabilityMode ?? null,
-        }));
-      }
-    return result;
-  });
+  return page.evaluate(presentationSenderStats);
 }
 (async () => {
   try {
@@ -294,7 +250,14 @@ async function senderState(page) {
     await publisher.locator('#mic-btn').click();
     await profile(publisher, 'detail');
     await share(publisher);
-    await progressing(viewer, 'detail-text-voice-camera', (read) => read.height === 1080);
+    await progressing(
+      viewer,
+      'detail-text-voice-camera',
+      (read) => read.height === 1080,
+      30000,
+      3000,
+      publisher,
+    );
     const detail = await senderState(publisher);
     const hardwareSingle =
       detail.screenCodec?.toLowerCase() === 'video/h264' && detail.screenSpatialStreams === 1;
@@ -347,6 +310,8 @@ async function senderState(page) {
       'motion-readable-text',
       (read) => read.height === 1080,
       45000,
+      3000,
+      publisher,
     );
     if (impaired) {
       stage = 'constrained-downlink';
@@ -360,6 +325,7 @@ async function senderState(page) {
         (read) => read.height < high.height,
         30000,
         4000,
+        publisher,
       );
       report.constrainedReference = { width: low.width, height: low.height };
       stage = 'network-recovery';
@@ -369,6 +335,8 @@ async function senderState(page) {
         'recovered-text-voice-camera',
         (read) => read.height === 1080 && read.height > low.height,
         45000,
+        3000,
+        publisher,
       );
     }
     stage = 'stop-restores-camera';
