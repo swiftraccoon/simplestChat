@@ -3,12 +3,57 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { runInNewContext } from 'node:vm';
 import tracing from '../e2e/signaling-reconnect.cjs';
+import menus from '../e2e/room-menu.cjs';
 
 const source = await readFile(new URL('../e2e/media-continuity.cjs', import.meta.url), 'utf8');
 const start = source.indexOf('function installReceiveRecoveryObservation(');
 const end = source.indexOf('\n/** Native decode/playback counters', start);
 assert.ok(start >= 0 && end > start);
 const installSource = source.slice(start, end);
+
+for (const initiallyOpen of [false, true]) {
+  test(`Call health uses the visible More control when initially ${initiallyOpen ? 'open' : 'closed'}`, async () => {
+    let open = initiallyOpen;
+    let toggles = 0;
+    let clicks = 0;
+    const dialog = {};
+    const page = {
+      locator(selector) {
+        if (selector === '#room-more-btn')
+          return {
+            isVisible: () => true,
+            getAttribute: () => String(open),
+            click() {
+              toggles++;
+              open = !open;
+            },
+          };
+        assert.equal(selector, '#call-health-btn');
+        return {
+          click() {
+            assert.equal(open, true, 'the real control cannot be clicked inside hidden More');
+            clicks++;
+          },
+        };
+      },
+      getByRole(role, options) {
+        assert.equal(role, 'dialog');
+        assert.equal(options.name, 'Call health');
+        assert.equal(options.exact, true);
+        return dialog;
+      },
+    };
+    const helperStart = source.indexOf('async function openCallHealth(');
+    const helperEnd = source.indexOf('\nasync function receiverReplacement(', helperStart);
+    assert.ok(helperStart >= 0 && helperEnd > helperStart);
+    const openHealth = runInNewContext(`${source.slice(helperStart, helperEnd)}; openCallHealth`, {
+      openRoomMenu: menus.openRoomMenu,
+    });
+    assert.equal(await openHealth(page), dialog);
+    assert.equal(toggles, initiallyOpen ? 0 : 1);
+    assert.equal(clicks, 1);
+  });
+}
 
 function fixture(reconnectFirst = true) {
   const nativeCalls = [];

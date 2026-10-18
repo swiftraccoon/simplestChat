@@ -731,6 +731,12 @@ async function receiveBudget(viewer, publisher) {
   });
 }
 
+async function openCallHealth(page) {
+  await openRoomMenu(page);
+  await page.locator('#call-health-btn').click();
+  return page.getByRole('dialog', { name: 'Call health', exact: true });
+}
+
 async function receiverReplacement(viewer, publisher) {
   stage = 'bidirectional-receiver-refresh-setup';
   await publisher.locator('#mic-btn').click();
@@ -806,7 +812,7 @@ async function receiverReplacement(viewer, publisher) {
       'Owned receive-only recovery did not restore bidirectional native progress within its bound',
     );
   };
-  stage = 'explicit-receiver-replacement-preserves-sending';
+  stage = 'call-health-open';
   assert.equal(
     await viewer.evaluate(() => localStorage.getItem('reliabilityTelemetry') === 'true'),
     false,
@@ -816,8 +822,8 @@ async function receiverReplacement(viewer, publisher) {
     if (new URL(request.url()).pathname === '/api/telemetry') telemetryUploads++;
   };
   viewer.on('request', observeTelemetry);
-  await viewer.locator('#call-health-btn').click();
-  const health = viewer.getByRole('dialog', { name: 'Call health', exact: true });
+  const health = await openCallHealth(viewer);
+  stage = 'call-health-current-evidence';
   assert.equal(await health.locator('[data-call-health]').count(), 3);
   await viewer.waitForFunction(
     () =>
@@ -830,6 +836,7 @@ async function receiverReplacement(viewer, publisher) {
     null,
     { timeout: 10000 },
   );
+  stage = 'explicit-receiver-replacement-preserves-sending';
   await health.getByRole('button', { name: 'Refresh incoming media', exact: true }).click();
   await verify('explicit-receiver-replacement-preserves-outgoing-mic-camera-screen', false);
   await health
