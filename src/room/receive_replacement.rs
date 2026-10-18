@@ -211,32 +211,56 @@ mod tests {
         f.finish().await;
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "current_thread")]
     async fn receive_replacement_owned_completion_survives_lost_caller_and_replays_same_receiver() {
         let f = Fixture::new().await;
-        let control = f
-            .manager
-            .get_room(&f.room)
-            .unwrap()
-            .read()
-            .await
-            .control
-            .clone();
-        let mut request = Box::pin(f.manager.replace_recv_transport(
-            &f.room,
-            &f.member,
-            &f.sender,
-            &f.received.id,
-            None,
+        let room = f.manager.get_room(&f.room).unwrap();
+        let control = room.read().await.control.clone();
+        // All admission locks are free. Disable cooperative-budget yields so
+        // Pending means the admitted operation is waiting on its owned task,
+        // rather than yielding before it has acquired room control.
+        let mut request = Box::pin(tokio::task::unconstrained(
+            f.manager
+                .replace_recv_transport(&f.room, &f.member, &f.sender, &f.received.id, None),
         ));
         assert!(futures_util::poll!(&mut request).is_pending());
+        // spawn does not poll its task inline. On this current-thread runtime,
+        // try_write installs the action barrier before any executor yield.
+        let blocked = room.try_write().expect("admission released room state");
+        let media_id = RoomManager::media_participant_id(
+            &f.room,
+            &f.member,
+            blocked.participants[&f.member].media_session_id,
+        );
         assert!(
             control.try_lock().is_err(),
             "the operation has entered owned admission"
         );
-        // Admission has spawned the owned operation. Dropping its waiter must
-        // not abandon native setup between creation and its replay receipt.
+        // The admitted task is blocked on room state. Drop only its waiter,
+        // then release it and wait for control as the completion barrier.
         drop(request);
+        drop(blocked);
+        drop(
+            tokio::time::timeout(std::time::Duration::from_secs(5), control.lock())
+                .await
+                .expect("cancelled caller's owned replacement completes"),
+        );
+        let completed = f
+            .manager
+            .media_server
+            .transport_manager()
+            .get_participant(&media_id)
+            .await
+            .unwrap()
+            .recv_transport
+            .as_ref()
+            .unwrap()
+            .id()
+            .to_string();
+        assert_ne!(
+            completed, f.received.id,
+            "the cancelled caller completes its swap before any replay request"
+        );
         let replacement = f
             .manager
             .replace_recv_transport(&f.room, &f.member, &f.sender, &f.received.id, None)
@@ -248,6 +272,7 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(replacement.id, replay.id);
+        assert_eq!(replacement.id, completed);
         assert_ne!(replacement.id, f.received.id);
         assert!(
             f.manager
