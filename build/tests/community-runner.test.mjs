@@ -58,25 +58,29 @@ test('community steps distinguish successful checks, unsupported simulations, an
   const start = source.indexOf('async function step(');
   const end = source.indexOf('\nasync function client(', start);
   assert.ok(start >= 0 && end > start, 'step reporter must remain available');
-  const report = { steps: [] }, saved = [], messages = [];
+  const report = { steps: [] }, saved = [], messages = [], phases = [];
   let networkChecks = 0;
-  const step = runInNewContext(`let activeStep; ${source.slice(start, end)}; step`, {
+  const fixture = {
     report,
+    httpObserved: 7,
     saveReport() { saved.push(JSON.parse(JSON.stringify(report))); },
-    async testNetworkReady() { networkChecks++; },
+    async paceHttpRequests() { phases.push('pace'); fixture.httpObserved += 2; },
+    async testNetworkReady() { phases.push('ready'); networkChecks++; },
     console: { log(message) { messages.push(message); } },
-  });
-  await step('native check', async () => {});
-  await step('unsupported simulation', async () => ({ skip: 'No synthetic event delivery' }));
-  await assert.rejects(step('broken check', async () => { throw new Error('owned failure'); }), /owned failure/);
+  };
+  const step = runInNewContext(`let activeStep; ${source.slice(start, end)}; step`, fixture);
+  await step('native check', async () => { phases.push('work'); fixture.httpObserved += 3; });
+  await step('unsupported simulation', async () => { phases.push('work'); fixture.httpObserved++; return { skip: 'No synthetic event delivery' }; });
+  await assert.rejects(step('broken check', async () => { phases.push('work'); throw new Error('owned failure'); }), /owned failure/);
   assert.deepEqual(JSON.parse(JSON.stringify(report.steps)), [
-    { name: 'native check', passed: true },
-    { name: 'unsupported simulation', passed: false, skipped: true, reason: 'No synthetic event delivery' },
+    { name: 'native check', passed: true, observedHttpRequests: 3 },
+    { name: 'unsupported simulation', passed: false, observedHttpRequests: 1, skipped: true, reason: 'No synthetic event delivery' },
     { name: 'broken check', passed: false },
   ]);
   assert.equal(saved.length, 5, 'started checks and their outcomes must be persisted');
   assert.deepEqual(messages, ['PASS native check', 'SKIP unsupported simulation: No synthetic event delivery']);
   assert.equal(networkChecks, 5, 'configuration is checked before each step and after completed work');
+  assert.deepEqual(phases, ['pace', 'ready', 'work', 'ready', 'pace', 'ready', 'work', 'ready', 'pace', 'ready', 'work'], 'pacing precedes configuration and work; per-step counts exclude requests observed while pacing');
 });
 
 test('a failed owned test-network configuration cannot mark a community step passed or skipped', async () => {
@@ -84,17 +88,41 @@ test('a failed owned test-network configuration cannot mark a community step pas
   const start = source.indexOf('async function step(');
   const end = source.indexOf('\nasync function client(', start);
   for (const failingCheck of [1, 2]) {
-    const report = { steps: [] }, messages = [];
+    const report = { steps: [] }, messages = [], phases = [];
     let checks = 0, workRan = false;
-    const step = runInNewContext(`let activeStep; ${source.slice(start, end)}; step`, {
+    const fixture = {
+      httpObserved: 0,
       report, saveReport() {}, console: { log(value) { messages.push(value); } },
-      async testNetworkReady() { if (++checks === failingCheck) throw new Error('owned configuration failed'); },
-    });
-    await assert.rejects(step('configured native check', async () => { workRan = true; return { skip: 'unsupported simulation' }; }), /owned configuration failed/);
+      async paceHttpRequests() { phases.push('pace'); },
+      async testNetworkReady() { phases.push('ready'); if (++checks === failingCheck) throw new Error('owned configuration failed'); },
+    };
+    const step = runInNewContext(`let activeStep; ${source.slice(start, end)}; step`, fixture);
+    await assert.rejects(step('configured native check', async () => { phases.push('work'); fixture.httpObserved += 2; workRan = true; return { skip: 'unsupported simulation' }; }), /owned configuration failed/);
     assert.equal(workRan, failingCheck === 2);
-    assert.deepEqual(JSON.parse(JSON.stringify(report.steps)), [{ name: 'configured native check', passed: false }]);
+    assert.deepEqual(JSON.parse(JSON.stringify(report.steps)), [{ name: 'configured native check', passed: false, ...(failingCheck === 2 && { observedHttpRequests: 2 }) }]);
     assert.deepEqual(messages, []);
+    assert.deepEqual(phases, failingCheck === 1 ? ['pace', 'ready'] : ['pace', 'ready', 'work', 'ready']);
   }
+});
+
+test('a failed HTTP request budget prevents community work and a passing report', async () => {
+  const source = await readFile(runner, 'utf8');
+  const start = source.indexOf('async function step(');
+  const end = source.indexOf('\nasync function client(', start);
+  const report = { steps: [] }, messages = [];
+  let networkChecks = 0, workRan = false, counterReads = 0;
+  const step = runInNewContext(`let activeStep; ${source.slice(start, end)}; step`, {
+    report, saveReport() {}, console: { log(value) { messages.push(value); } },
+    get httpObserved() { counterReads++; return 0; },
+    async paceHttpRequests() { throw new Error('owned request budget unavailable'); },
+    async testNetworkReady() { networkChecks++; },
+  });
+  await assert.rejects(step('budgeted native check', async () => { workRan = true; }), /owned request budget unavailable/);
+  assert.equal(workRan, false);
+  assert.equal(networkChecks, 0, 'work and its configuration checks remain behind request admission');
+  assert.equal(counterReads, 0, 'no per-step observation starts before request admission');
+  assert.deepEqual(JSON.parse(JSON.stringify(report.steps)), [{ name: 'budgeted native check', passed: false }]);
+  assert.deepEqual(messages, []);
 });
 
 test('only explicit successful retirement removes an owned client from network readiness checks', async () => {
