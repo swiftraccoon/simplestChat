@@ -370,6 +370,15 @@ is retained. Join and leave notices include timestamps, including departures by
 people without a camera or microphone. Reconnect cleanup does not announce false
 departures. The highlighted ellipsis opens Chat options.
 
+Account chat preferences save one request at a time in this client, coalescing
+pending changes into the latest snapshot. Room rejoins wait for those saves
+before loading the account copy; delayed loads cannot replace newer local
+choices. Queued saves stay with their account across room and account changes.
+If a save's outcome cannot be confirmed, automatic account saves and reloads
+pause for that account while this browser retains its choices. The notice asks
+the viewer to reload and check the account state before saving again. Separate
+devices continue to use the account API's last-writer-wins behavior.
+
 Ordinary sign-out revokes the session before clearing saved app data from this
 browser and reloading. A failed revocation preserves the active session; a late
 completion cannot clear a replacement identity. Blocked storage cleanup is reported.
