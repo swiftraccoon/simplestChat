@@ -4,7 +4,19 @@ import { mediasoupRuntime } from './scripts/mediasoup-runtime.mjs';
 const revision = process.env['FRONTEND_REVISION'] ?? process.env['GITHUB_SHA'] ?? '';
 
 export default defineConfig({
-  plugins: [mediasoupRuntime()],
+  plugins: [
+    mediasoupRuntime(),
+    {
+      name: 'public-app-version',
+      generateBundle() {
+        this.emitFile({
+          type: 'asset',
+          fileName: 'app-version.json',
+          source: JSON.stringify({ revision: /^[a-f0-9]{40}$/.test(revision) ? revision : null }),
+        });
+      },
+    },
+  ],
   define: {
     __APP_REVISION__: JSON.stringify(/^[a-f0-9]{40}$/.test(revision) ? revision : 'development'),
   },

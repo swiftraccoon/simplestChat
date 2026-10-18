@@ -67,6 +67,7 @@ function productionAssets() {
     ['icon-192.png', 'image/png'],
     ['icon-512.png', 'image/png'],
     ['manifest.webmanifest', 'application/manifest+json'],
+    ['app-version.json', 'application/json'],
   ])
     if (fs.existsSync(path.join(directory, name)))
       add(`/${name}`, path.join(directory, name), type);

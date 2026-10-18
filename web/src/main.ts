@@ -17,6 +17,7 @@ import { RoomNavigation } from './room-navigation';
 import type { ScreenShareResult } from './media';
 import { ClientTelemetry } from './telemetry';
 import { CallOutcomeTelemetry, MediaTelemetry, observeFirstVideoFrame } from './media-telemetry';
+import { AppUpdates } from './app-updates';
 import { MediaControls, mediaErrorMessage } from './media-controls';
 import { loadScreenPresentationMode, saveScreenPresentationMode } from './screen-presentation';
 import {
@@ -2008,11 +2009,19 @@ const mediaTelemetry = new MediaTelemetry(
   callTelemetry,
   telemetry.recordMediaSample,
 );
+let appUpdateNotice: HTMLElement | null = null;
+const appUpdates = new AppUpdates({
+  revision: __APP_REVISION__,
+  inCall: () => room !== null || departureInProgress !== null || navigationPending,
+  available: renderAppUpdateAvailable,
+  reload: () => location.reload(),
+});
 window.addEventListener('pagehide', (event) => {
   if (event.persisted) return;
   navigation.dispose();
   accountSync.dispose();
   mediaTelemetry.dispose();
+  appUpdates.dispose();
   callTelemetry.dispose();
   telemetry.dispose();
   participantHovercard.destroy();
@@ -4802,6 +4811,31 @@ function renderConnectionQuality(quality: ConnectionQuality): void {
     unknown: 'Checking connection...',
   };
   qualityIndicator.title = labels[quality];
+}
+
+/** A release hint never reloads or removes media; its button rechecks current call ownership. */
+function renderAppUpdateAvailable(available: boolean): void {
+  if (!available) {
+    appUpdateNotice?.remove();
+    appUpdateNotice = null;
+    return;
+  }
+  if (appUpdateNotice?.isConnected) return;
+  const notice = el('div', undefined, 'toast toast-action');
+  notice.id = 'app-update-notice';
+  const message = el('p', 'An app update is ready. Update when you are outside a call.');
+  message.setAttribute('role', 'status');
+  const actions = el('div', undefined, 'toast-actions');
+  actions.append(
+    button('Update app', () => {
+      if (!appUpdates.reloadWhenIdle())
+        message.textContent =
+          'Leave the call when you are ready, then choose Update app. Your call will continue until you leave it.';
+    }),
+  );
+  notice.append(message, actions);
+  toastContainer.append(notice);
+  appUpdateNotice = notice;
 }
 
 // --- Keyboard Shortcuts ---
