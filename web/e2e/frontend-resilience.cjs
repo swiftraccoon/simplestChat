@@ -144,6 +144,7 @@ async function run() {
     const featureWaiters = new Map();
     const featureSeen = Promise.withResolvers();
     const refreshRequests = [];
+    const refreshSeen = Promise.withResolvers();
     const previews = [];
     const socketGate = Promise.withResolvers();
     const socketSeen = Promise.withResolvers();
@@ -313,6 +314,7 @@ async function run() {
       }
       if (url.pathname === '/api/auth/refresh') {
         refreshRequests.push(route);
+        refreshSeen.resolve();
         if (holdRestore) return;
         return json(
           account ? { token: 'owned-fixture', user: account } : { error: 'No saved session' },
@@ -365,7 +367,7 @@ async function run() {
       report.pageErrors++;
     });
     await page.goto(invite ? `${origin}/#invite=${'a'.repeat(32)}` : origin);
-    if (holdRestore) await featureSeen.promise;
+    if (holdRestore) await Promise.all([featureSeen.promise, refreshSeen.promise]);
     else if (holdTicket) await ticketSeen.promise;
     else if (holdSocket) await socketSeen.promise;
     else await page.getByText('Connected', { exact: true }).waitFor();
@@ -666,7 +668,13 @@ async function run() {
     await discovering.context.close();
 
     const restoring = await fixture({ signedIn: true, holdRestore: true, invite: true });
-    await restoring.page.getByRole('dialog', { name: 'Room invitation', exact: true }).waitFor();
+    await restoring.page.locator('#auth-restore-status').waitFor({ state: 'visible' });
+    assert.equal(await restoring.page.locator('#auth-restore-retry').isDisabled(), true);
+    assert.equal(
+      await restoring.page.getByRole('dialog', { name: 'Room invitation', exact: true }).count(),
+      0,
+    );
+    assert.equal(await restoring.page.locator('#register-modal').isVisible(), false);
     assert.equal(restoring.previews.length, 0);
     await restoring.finishRestore();
     await restoring.page.getByRole('dialog', { name: 'Review room invitation' }).waitFor();
@@ -678,7 +686,7 @@ async function run() {
       false,
     );
     report.checks.push(
-      'Discovery before session restoration previews the invitation once for the restored identity and never accepts or joins',
+      'Discovery defers invitation prompts until session restoration, then previews once for the verified identity without accepting or joining',
     );
     await restoring.context.close();
 
