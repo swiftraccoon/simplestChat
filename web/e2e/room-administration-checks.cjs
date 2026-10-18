@@ -6,12 +6,15 @@ async function observeAdministration(page) {
     const original = WebSocket.prototype.send;
     const observation = {
       joins: 0,
+      leaves: 0,
       captures: window.__communityCaptureRequests,
       original,
       send(data) {
         if (typeof data === 'string') {
           try {
-            if (JSON.parse(data).type === 'joinRoom') observation.joins++;
+            const type = JSON.parse(data).type;
+            if (type === 'joinRoom') observation.joins++;
+            if (type === 'leaveRoom') observation.leaves++;
           } catch {}
         }
         return original.call(this, data);
@@ -29,6 +32,7 @@ async function finishObservation(page) {
       throw new Error('Administration observation was replaced');
     const result = {
       joins: observed.joins,
+      leaves: observed.leaves,
       capturesBefore: observed.captures,
       capturesAfter: window.__communityCaptureRequests,
     };
@@ -37,6 +41,7 @@ async function finishObservation(page) {
     return result;
   });
   assert.equal(result.joins, 0, 'administration never joins another call');
+  assert.equal(result.leaves, 0, 'administration never leaves the current call');
   assert.equal(
     result.capturesAfter,
     result.capturesBefore,
@@ -102,6 +107,12 @@ async function checkRoomAdministration(
     else await connected(page);
     return page;
   };
+  const stillConnected = async () => {
+    await owner.locator('#room-screen').waitFor({ state: 'visible' });
+    await owner.waitForFunction(
+      () => document.querySelector('#connection-status').textContent === 'Connected',
+    );
+  };
   try {
     // Obtain the account header from its normal owned-room read. It remains in
     // this function only and never enters an artifact, assertion or diagnostic.
@@ -162,7 +173,7 @@ async function checkRoomAdministration(
     );
     await owner.goBack();
     await sheet(owner).getByRole('heading', { name: 'Settings', exact: true }).waitFor();
-    await connected(owner);
+    await stillConnected();
     await owner.goForward();
     await sheet(owner).getByRole('heading', { name: 'Who can enter', exact: true }).waitFor();
     await sheet(owner).getByText(`${roomName} · ${roomId}`, { exact: true }).waitFor();
@@ -178,7 +189,7 @@ async function checkRoomAdministration(
       'Forward after retiring B must not open the call A controls with the same section ID',
     );
     assert.equal(new URLSearchParams(new URL(owner.url()).hash.slice(1)).has('section'), false);
-    await connected(owner);
+    await stillConnected();
     await closeSheet(owner);
     region = await manage(owner);
     region = await sheetScreen(owner, 'Who can enter');
