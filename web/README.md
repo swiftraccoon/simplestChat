@@ -24,10 +24,19 @@ with the private preview UI. Opening account settings, Messages or a contact off
 neither downloads mediasoup nor captures a device. A failed call-engine download
 keeps room chat connected. **Refresh incoming media** makes an explicit load attempt without starting a
 microphone, camera or screen share. Browsers can retain a failed module import;
-in that case the user must leave and reload before joining again. Static
-serving currently exposes the active release's assets only: an older tab may need
-to leave its call and reload if its deferred asset disappeared during deployment.
-The app never reloads an active call automatically.
+in that case the user must leave and reload before joining again. Managed releases
+retain a bounded set of fingerprinted assets through the proxy so deferred imports
+can survive upgrades and rollbacks. Retention has an age and generation limit;
+it does not promise indefinite compatibility between old clients and a new server.
+An available update is an explicit action outside a call; it never reloads a call.
+
+**Refresh incoming media** replaces only the receive transport and selected subscriptions.
+It leaves the sender, capture tracks, membership and viewing choices intact. Native
+consumer setup has a ten-second deadline; an expired operation retires its receiver
+and cannot block the replacement's voice-first negotiation queue. **Call health**
+shows separate sending, receiving and playback evidence, even with reliability
+sharing off. Unsupported or stale statistics stay unknown, and quiet audio or a
+still picture alone cannot establish a failure.
 
 Account destinations use `#view=inbox`,
 `#view=conversation&peer=<account UUID>` and
@@ -92,7 +101,7 @@ For complete guest/account setup and LAN ICE addressing see
 | `src/auth.ts`, `account-session-sync.ts`, `community-ui.ts`                                     | Identity/session refresh and cross-tab reconciliation, profiles, recovery, room management                                                |
 | `src/account-security.ts`, `account-sessions.ts`                                                | Shared account-mutation ownership, passkey/recovery management and signed-in session controls                                             |
 | `src/account-preferences.ts`                                                                    | Account-owned privacy state, field PATCH intents, cross-device refresh and uncertain-save reconciliation, shared by home and room screens |
-| `src/account-updates.ts`                                                                        | Authenticated account invalidations, bounded SSE decoding, visibility ownership and reconnect repair                                       |
+| `src/account-updates.ts`                                                                        | Authenticated account invalidations, bounded SSE decoding, visibility ownership and reconnect repair                                      |
 | `src/pwa.ts`, `public/sw.js`, `public/manifest.webmanifest`                                     | Installation, optional generic PM push alerts and account-scoped subscription ownership; no offline cache                                 |
 | `src/signaling.ts`, `protocol.ts`                                                               | WebSocket lifecycle and typed server protocol                                                                                             |
 | `src/validation.ts`, `api-validation.ts`, `protocol-validation.ts`                              | Shared decoder primitives and HTTP/WebSocket response validation                                                                          |
@@ -100,6 +109,8 @@ For complete guest/account setup and LAN ICE addressing see
 | `src/app-navigation.ts`                                                                         | Typed account destinations, identity-scoped surface history and Back/Forward restoration                                                  |
 | `src/room-administration.ts`, `room-administration-api.ts`, `room-administration-validation.ts` | Shared room-management screens, authenticated HTTP controls and response validation outside room membership                               |
 | `src/media.ts`                                                                                  | Deferred call engine: transports, capture, producers and consumers                                                                        |
+| `src/call-health.ts`, `src/call-health-ui.ts`                                                   | Bounded local media evidence and explicit playback, device and receive recovery actions                                                   |
+| `src/app-updates.ts`                                                                            | Public revision hint with an explicit reload outside calls                                                                                |
 | `src/capture-preferences.ts`                                                                    | Lightweight capture types, local settings and explicit preview capture helpers                                                            |
 | `src/screen-presentation.ts`                                                                    | Details/Motion preference and presentation constraints/encoding policy                                                                    |
 | `src/media-lifecycle.ts`                                                                        | Coalesced visibility, page-resume, online and hardware hints without new capture or room entry                                            |
