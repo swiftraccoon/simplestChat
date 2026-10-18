@@ -1636,7 +1636,7 @@ class HarnessBrowserRolloverTests(HarnessTestCase):
         def invoke(args: list[str], **kwargs: Unpack[CommandOptions]) -> TextResult:
             self.assertEqual(args[:2], ["/fixture/node", str(ROOT / "web/e2e/release-assets.cjs")])
             self.assertEqual(args[3], "/fixture/chromium")
-            self.assertEqual(kwargs, {"timeout": 330})
+            self.assertEqual(kwargs, {"timeout": 330, "success": False})
             _ = Path(args[4]).write_text(json.dumps(result))
             return TextResult()
 
@@ -1691,6 +1691,56 @@ class HarnessBrowserRolloverTests(HarnessTestCase):
             ):
                 harness.exercise_browser_rollover()
             self.assertNotIn("browserAssets", object_value(harness.report["cases"]))
+
+    def test_node_failure_retains_only_a_fixed_stage_and_never_publishes_success(self) -> None:
+        """A failed hosted proof must identify its boundary without exposing stderr."""
+        harness = self.fixture(self.report())
+        stderr = self.directory / "node.stderr"
+        _ = stderr.write_bytes(b"Release asset rollover browser check failed: load-old\n")
+
+        def failed(_args: list[str], **_kwargs: Unpack[CommandOptions]) -> TextResult:
+            return TextResult(code=1, error=stderr)
+
+        fake_commands(harness).run.side_effect = failed
+        with (
+            patch.object(harness, "snapshot", return_value={}),
+            self.assertRaisesRegex(harness_module.CheckError, "fixed stage"),
+        ):
+            harness.exercise_browser_rollover()
+        self.assertEqual(harness.report["browserAssetFailureStage"], "load-old")
+        self.assertEqual(harness.report["phase"], "browser_asset_rollover")
+        self.assertNotIn("browserAssets", object_value(harness.report["cases"]))
+        self.assertNotIn("Release asset rollover browser check failed", json.dumps(harness.report))
+
+    def test_diagnostic_parser_accepts_only_fixed_bounded_helper_messages(self) -> None:
+        """Raw browser errors, fake stages and extra secret text cannot enter artifacts."""
+        stderr = self.directory / "bounded.stderr"
+        for stage in harness_module.ROLLOVER_STAGES:
+            _ = stderr.write_text("Release asset rollover browser check failed: " + stage + "\n")
+            self.assertEqual(harness_module.browser_failure_stage(stderr), stage)
+        for data in [
+            b"PRIVATE_TOKEN_AND_BROWSER_ERROR",
+            b"Release asset rollover browser check failed: private-token\n",
+            b"Release asset rollover browser check failed: load-old\nPRIVATE_TOKEN\n",
+            b"PRIVATE_TOKEN\nRelease asset rollover browser check failed: load-old\n",
+            b"x" * (harness_module.MAX_BROWSER_ERROR + 1),
+        ]:
+            _ = stderr.write_bytes(data)
+            self.assertEqual(harness_module.browser_failure_stage(stderr), "unavailable")
+        pointer = self.directory / "stderr-link"
+        pointer.symlink_to(stderr)
+        self.assertEqual(harness_module.browser_failure_stage(pointer), "unavailable")
+        self.assertEqual(
+            harness_module.browser_failure_stage(self.directory / "missing"), "unavailable"
+        )
+
+    def test_diagnostic_stage_inventory_matches_the_owned_browser_helper(self) -> None:
+        """Adding a browser boundary requires an intentional sanitized inventory update."""
+        source = (ROOT / "web/e2e/release-assets.cjs").read_text()
+        observed = set(re.findall(r"atStage\('([a-z-]+)'", source))
+        observed.update(re.findall(r"new RolloverError\('([a-z-]+)'", source))
+        observed.add("setup-or-cleanup")
+        self.assertEqual(observed, harness_module.ROLLOVER_STAGES)
 
 
 if __name__ == "__main__":

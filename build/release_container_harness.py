@@ -69,6 +69,47 @@ MAX_VALIDATOR_NAME = 128
 MAX_EXIT_STATUS = 255
 MAX_VALIDATOR_ERROR = 2048
 MAX_BROWSER_REPORT = 4096
+MAX_BROWSER_ERROR = 1024
+ROLLOVER_STAGES = frozenset(
+    {
+        "backend-release",
+        "backend-request",
+        "backend-status",
+        "browser-context",
+        "browser-launch",
+        "browser-module",
+        "capture-guard",
+        "cleanup",
+        "configuration",
+        "deferred-import",
+        "deferred-revision",
+        "deferred-status",
+        "deploy-candidate",
+        "deploy-command",
+        "deploy-result",
+        "document-cache",
+        "document-capture",
+        "document-chunk",
+        "document-identity",
+        "document-navigation",
+        "document-page",
+        "document-revision",
+        "document-state",
+        "document-status",
+        "identity",
+        "load-new",
+        "load-old",
+        "open-candidate",
+        "open-original",
+        "report-write",
+        "rollback",
+        "setup-or-cleanup",
+        "version-cache",
+        "version-request",
+        "version-state",
+        "version-status",
+    }
+)
 MAX_VALIDATOR_STDERR = 4096
 type Snapshot = dict[str, tuple[JsonValue, JsonValue, JsonValue, JsonValue]]
 
@@ -138,6 +179,24 @@ def write_new(path: Path, value: JsonValue, mode: int = 0o600) -> None:
     descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, mode)
     with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
         _ = stream.write(data)
+
+
+def browser_failure_stage(path: Path) -> str:
+    """Expose only the helper's fixed enum, never private child or browser output."""
+    try:
+        if path.is_symlink() or not path.is_file() or path.stat().st_size > MAX_BROWSER_ERROR:
+            return "unavailable"
+        with path.open("rb") as stream:
+            data = stream.read(MAX_BROWSER_ERROR + 1)
+        if len(data) > MAX_BROWSER_ERROR:
+            return "unavailable"
+        match = re.fullmatch(rb"Release asset rollover browser check failed: ([a-z-]+)\n?", data)
+        if match is None:
+            return "unavailable"
+        stage = match[1].decode("ascii")
+    except OSError:
+        return "unavailable"
+    return stage if stage in ROLLOVER_STAGES else "unavailable"
 
 
 def create_data_directory(path: Path, uid: int, mode: int) -> None:
@@ -853,6 +912,7 @@ class Harness:
 
     def exercise_browser_rollover(self) -> None:
         """Keep two real tabs through image replacement and rollback via the stable proxy."""
+        self.report["phase"] = "browser_asset_rollover"
         require(self.browser is not None, "Explicit pinned Node and Chromium paths are required")
         if self.browser is None:
             message = "Missing browser tools"
@@ -884,7 +944,7 @@ class Harness:
             },
         )
         before = self.snapshot()
-        _ = self.commands.run(
+        command = self.commands.run(
             [
                 str(self.browser[0]),
                 str(PROJECT / "web/e2e/release-assets.cjs"),
@@ -893,7 +953,12 @@ class Harness:
                 str(result),
             ],
             timeout=330,
+            success=False,
         )
+        if command.code != 0:
+            self.report["browserAssetFailureStage"] = browser_failure_stage(command.error)
+            message = "Browser rollover command failed; inspect fixed stage and private evidence"
+            raise CheckError(message)
         require(
             result.is_file() and result.stat().st_size <= MAX_BROWSER_REPORT,
             "Browser rollover report missing or oversized",

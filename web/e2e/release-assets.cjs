@@ -16,7 +16,8 @@ class RolloverError extends Error {
 async function atStage(stage, work) {
   try {
     return await work();
-  } catch {
+  } catch (error) {
+    if (error instanceof RolloverError) throw error;
     throw new RolloverError(stage);
   }
 }
@@ -64,78 +65,106 @@ function denyCapture() {
 }
 
 async function browserDriver(browser, execute = promisify(execFile)) {
-  const context = await browser.newContext({ ignoreHTTPSErrors: true });
-  await context.addInitScript(denyCapture);
+  const context = await atStage('browser-context', () =>
+    browser.newContext({ ignoreHTTPSErrors: true }),
+  );
+  await atStage('capture-guard', () => context.addInitScript(denyCapture));
   const selectedVersion = async (revision) => {
-    const selected = await context.request.get('https://localhost/app-version.json');
-    assert.equal(selected.status(), 200);
-    assert.match(selected.headers()['cache-control'] || '', /no-store/);
-    assert.deepEqual(await selected.json(), { revision });
+    const selected = await atStage('version-request', () =>
+      context.request.get('https://localhost/app-version.json'),
+    );
+    await atStage('version-status', () => assert.equal(selected.status(), 200));
+    await atStage('version-cache', () =>
+      assert.match(selected.headers()['cache-control'] || '', /no-store/),
+    );
+    await atStage('version-state', async () =>
+      assert.deepEqual(await selected.json(), { revision }),
+    );
   };
   const deploy = async (revision) => {
     assert(revisionPattern.test(revision));
-    const { stdout } = await execute(
-      '/usr/bin/python3',
-      [
-        '-B',
-        path.resolve(__dirname, '../../ops/ansible/files/release-public.py'),
-        'deploy',
-        revision,
-      ],
-      { timeout: 150_000, maxBuffer: 2 * 1024 * 1024, killSignal: 'SIGTERM', windowsHide: true },
+    const { stdout } = await atStage('deploy-command', () =>
+      execute(
+        '/usr/bin/python3',
+        [
+          '-B',
+          path.resolve(__dirname, '../../ops/ansible/files/release-public.py'),
+          'deploy',
+          revision,
+        ],
+        { timeout: 150_000, maxBuffer: 2 * 1024 * 1024, killSignal: 'SIGTERM', windowsHide: true },
+      ),
     );
-    const result = JSON.parse(stdout.trim());
-    assert.equal(result.passed, true);
-    assert.equal(result.revision, revision);
+    await atStage('deploy-result', () => {
+      const result = JSON.parse(stdout.trim());
+      assert.equal(result.passed, true);
+      assert.equal(result.revision, revision);
+    });
     await selectedVersion(revision);
   };
   return {
     deploy,
     async open(revision) {
-      const page = await context.newPage();
-      const response = await page.goto('https://localhost/asset-rollover.html');
-      assert(response && response.ok());
-      assert.match(response.headers()['cache-control'] || '', /no-store/);
-      const document = await page.evaluate(() => ({
-        revision: globalThis.releaseRollover.revision,
-        identity: globalThis.releaseRollover.identity,
-        chunk: globalThis.releaseRollover.chunk,
-      }));
-      assert.equal(document.revision, revision);
-      assert.match(document.chunk, /^\/assets\/rollover-[a-f0-9]{16}\.js$/);
+      const page = await atStage('document-page', () => context.newPage());
+      const response = await atStage('document-navigation', () =>
+        page.goto('https://localhost/asset-rollover.html'),
+      );
+      await atStage('document-status', () => assert(response && response.ok()));
+      await atStage('document-cache', () =>
+        assert.match(response.headers()['cache-control'] || '', /no-store/),
+      );
+      const document = await atStage('document-state', () =>
+        page.evaluate(() => ({
+          revision: globalThis.releaseRollover.revision,
+          identity: globalThis.releaseRollover.identity,
+          chunk: globalThis.releaseRollover.chunk,
+        })),
+      );
+      await atStage('document-revision', () => assert.equal(document.revision, revision));
+      await atStage('document-chunk', () =>
+        assert.match(document.chunk, /^\/assets\/rollover-[a-f0-9]{16}\.js$/),
+      );
       await selectedVersion(revision);
       const unchanged = async () => {
-        const state = await page.evaluate(() => ({
-          identity: globalThis.releaseRollover.identity,
-          revision: globalThis.releaseRollover.revision,
-          captureCalls: globalThis.__releaseCaptureCalls,
-        }));
-        assert.equal(state.identity, document.identity);
-        assert.equal(state.revision, revision);
-        assert.equal(state.captureCalls, 0);
+        const state = await atStage('document-state', () =>
+          page.evaluate(() => ({
+            identity: globalThis.releaseRollover.identity,
+            revision: globalThis.releaseRollover.revision,
+            captureCalls: globalThis.__releaseCaptureCalls,
+          })),
+        );
+        await atStage('document-identity', () => {
+          assert.equal(state.identity, document.identity);
+          assert.equal(state.revision, revision);
+        });
+        await atStage('document-capture', () => assert.equal(state.captureCalls, 0));
       };
       return {
         unchanged,
         async loadAfterReplacement() {
           // The selected app has no retained store. Prove that delivery came
           // through the stable proxy after the actual backend returned 404.
-          const miss = await fetch('http://127.0.0.1:3000' + document.chunk, {
-            redirect: 'error',
-            signal: AbortSignal.timeout(5000),
-          });
-          try {
-            assert.equal(miss.status, 404);
-          } finally {
-            await miss.body?.cancel();
-          }
-          const [received, loaded] = await Promise.all([
-            page.waitForResponse((result) => new URL(result.url()).pathname === document.chunk, {
-              timeout: 10_000,
+          const miss = await atStage('backend-request', () =>
+            fetch('http://127.0.0.1:3000' + document.chunk, {
+              redirect: 'error',
+              signal: AbortSignal.timeout(5000),
             }),
-            page.evaluate(() => globalThis.releaseRollover.load()),
-          ]);
-          assert.equal(loaded, revision);
-          assert.equal(received.status(), 200);
+          );
+          try {
+            await atStage('backend-status', () => assert.equal(miss.status, 404));
+          } finally {
+            await atStage('backend-release', () => miss.body?.cancel());
+          }
+          const [received, loaded] = await atStage('deferred-import', () =>
+            Promise.all([
+              page.waitForResponse((result) => new URL(result.url()).pathname === document.chunk, {
+                timeout: 10_000,
+              }),
+              page.evaluate(() => globalThis.releaseRollover.load()),
+            ]),
+          );
+          await atStage('deferred-revision', () => assert.equal(loaded, revision));
+          await atStage('deferred-status', () => assert.equal(received.status(), 200));
           await unchanged();
         },
       };
@@ -154,22 +183,29 @@ async function closeBrowser(browser, driver) {
 
 async function main() {
   const [configurationFile, chromiumExecutable, output] = process.argv.slice(2);
-  assert(configurationFile && chromiumExecutable && output);
-  assert(
-    path.isAbsolute(configurationFile) &&
-      path.isAbsolute(chromiumExecutable) &&
-      path.isAbsolute(output),
+  const configuration = await atStage('configuration', async () => {
+    assert(configurationFile && chromiumExecutable && output);
+    assert(
+      path.isAbsolute(configurationFile) &&
+        path.isAbsolute(chromiumExecutable) &&
+        path.isAbsolute(output),
+    );
+    const value = JSON.parse(await readFile(configurationFile, 'utf8'));
+    assert.deepEqual(Object.keys(value).sort(), ['candidate', 'original']);
+    return value;
+  });
+  const { chromium } = await atStage('browser-module', () => require('playwright'));
+  const browser = await atStage('browser-launch', () =>
+    chromium.launch({ executablePath: chromiumExecutable, headless: true }),
   );
-  const configuration = JSON.parse(await readFile(configurationFile, 'utf8'));
-  assert.deepEqual(Object.keys(configuration).sort(), ['candidate', 'original']);
-  const { chromium } = require('playwright');
-  const browser = await chromium.launch({ executablePath: chromiumExecutable, headless: true });
   let driver;
   const failures = [];
   try {
     driver = await browserDriver(browser);
     const report = await checkRollover(driver, configuration.original, configuration.candidate);
-    await writeFile(output, JSON.stringify(report) + '\n', { flag: 'wx', mode: 0o600 });
+    await atStage('report-write', () =>
+      writeFile(output, JSON.stringify(report) + '\n', { flag: 'wx', mode: 0o600 }),
+    );
   } catch (error) {
     failures.push(error);
   }

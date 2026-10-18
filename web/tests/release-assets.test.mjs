@@ -110,28 +110,30 @@ async function browserFixture(t, options = {}) {
     releaseRollover: {
       revision: original,
       identity: 'original-document',
-      chunk,
+      chunk: options.chunk ?? chunk,
       async load() {
         events.push('import');
         imports++;
         if (options.loadError) throw new Error('private native import error');
         response.resolve({ status: () => options.proxyStatus ?? 200 });
-        return original;
+        return options.loadedRevision ?? original;
       },
     },
   };
   vm.createContext(state);
   const page = {
     async goto(url) {
+      if (options.navigationError) throw new Error('private browser navigation details');
       events.push('navigate');
       assert.equal(url, 'https://localhost/asset-rollover.html');
       vm.runInContext(`(${init.toString()})()`, state);
       return {
-        ok: () => true,
+        ok: () => options.documentOk ?? true,
         headers: () => ({ 'cache-control': options.htmlCache ?? 'no-store' }),
       };
     },
     evaluate(fn) {
+      if (options.stateError) return Promise.reject(new Error('private document contents'));
       return Promise.resolve().then(() => vm.runInContext(`(${fn.toString()})()`, state));
     },
     waitForResponse(predicate, settings) {
@@ -151,6 +153,7 @@ async function browserFixture(t, options = {}) {
     },
     request: {
       async get(url) {
+        if (options.versionError) throw new Error('private version response');
         assert.equal(url, 'https://localhost/app-version.json');
         versions.push(deployed);
         return {
@@ -186,11 +189,13 @@ async function browserFixture(t, options = {}) {
   const driver = await rollover.browserDriver(
     {
       async newContext(settings) {
+        if (options.contextError) throw new Error('private browser context details');
         assert.deepEqual(settings, { ignoreHTTPSErrors: true });
         return context;
       },
     },
     async (executable, args, settings) => {
+      if (options.deployError) throw new Error('private child command output');
       assert.equal(executable, '/usr/bin/python3');
       assert.equal(args[0], '-B');
       assert.match(args[1], /\/ops\/ansible\/files\/release-public\.py$/);
@@ -203,7 +208,9 @@ async function browserFixture(t, options = {}) {
       });
       deployed = args[3];
       deployments++;
-      return { stdout: JSON.stringify({ passed: true, revision: deployed }) };
+      return {
+        stdout: options.deployOutput ?? JSON.stringify({ passed: true, revision: deployed }),
+      };
     },
   );
   return { driver, state, events, versions, imports: () => imports, cancelled: () => cancelled };
@@ -237,7 +244,10 @@ test('a missing proxy response cannot be counted as a successful import', async 
 test('an import failure owns the pending response rejection during cleanup', async (t) => {
   const f = await browserFixture(t, { loadError: true });
   const page = await f.driver.open(original);
-  await assert.rejects(page.loadAfterReplacement(), /private native import error/);
+  await assert.rejects(
+    page.loadAfterReplacement(),
+    (error) => error instanceof rollover.RolloverError && error.stage === 'deferred-import',
+  );
   await f.driver.close();
   await flush();
   assert.deepEqual(f.events.slice(-3), ['response-listener', 'import', 'close']);
@@ -306,3 +316,46 @@ for (const broken of ['context', 'browser']) {
     assert.deepEqual(calls.sort(), ['browser', 'context']);
   });
 }
+
+for (const [options, stage] of [
+  [{ navigationError: true }, 'document-navigation'],
+  [{ documentOk: false }, 'document-status'],
+  [{ htmlCache: 'public' }, 'document-cache'],
+  [{ stateError: true }, 'document-state'],
+  [{ chunk: '/private/secret.js' }, 'document-chunk'],
+  [{ versionError: true }, 'version-request'],
+  [{ versionStatus: 404 }, 'version-status'],
+  [{ versionCache: 'public' }, 'version-cache'],
+  [{ selectedRevision: candidate }, 'version-state'],
+  [{ deployError: true }, 'deploy-command'],
+  [{ deployOutput: 'private child stdout' }, 'deploy-result'],
+  [{ backendStatus: 200 }, 'backend-status'],
+  [{ loadError: true }, 'deferred-import'],
+  [{ loadedRevision: candidate }, 'deferred-revision'],
+  [{ proxyStatus: 404 }, 'deferred-status'],
+]) {
+  test(`the exact ${stage} failure survives the outer phase without leaking private details`, async (t) => {
+    const f = await browserFixture(t, options);
+    await assert.rejects(rollover.checkRollover(f.driver, original, candidate), (error) => {
+      assert(error instanceof rollover.RolloverError);
+      assert.equal(error.stage, stage);
+      assert.equal(error.message, 'Release asset rollover check failed');
+      assert.equal(error.cause, undefined);
+      assert.doesNotMatch(JSON.stringify(error), /private|secret|stdout|contents|details/);
+      return true;
+    });
+    if (f.events.includes('response-listener')) {
+      await f.driver.close();
+      await flush();
+    }
+  });
+}
+
+test('browser setup failures retain a fixed content-free stage', async (t) => {
+  await assert.rejects(browserFixture(t, { contextError: true }), (error) => {
+    assert(error instanceof rollover.RolloverError);
+    assert.equal(error.stage, 'browser-context');
+    assert.doesNotMatch(JSON.stringify(error), /private|details/);
+    return true;
+  });
+});
