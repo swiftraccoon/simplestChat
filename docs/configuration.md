@@ -29,7 +29,7 @@
 | `MODERATION_ADDRESS_RETENTION_DAYS` | `30` | Days a sanction's address stays on a moderation history entry (1–3650) before the six-hourly sweep clears it |
 | `MODERATION_HISTORY_RETENTION_DAYS` | `365` | Days a history entry, a closed report or an expired sanction row stays (1–3650, at least the address period); open reports and live sanctions are never swept |
 | `MAX_USERS` | `100000` | Global database-backed account cap enforced transactionally |
-| `ROOM_API_REQUESTS_PER_MINUTE` | `120` | Per-IP rate limit for room-management HTTP endpoints |
+| `ROOM_API_REQUESTS_PER_MINUTE` | `120` | Per-IP rate limit for room-management HTTP endpoints, including saved-room administration reads and writes; these use the room budget independently of the account credential budget |
 | `ROOM_API_MAX_CONCURRENCY` | `32` | Global cap on concurrent room-management HTTP requests |
 | `ROOM_CREATIONS_PER_ACCOUNT_PER_MINUTE` | `10` | Per-account persisted-room creation limit |
 | `TRUSTED_PROXY_SECRET` | (none) | Shared proxy-authentication secret of at least 32 bytes; required for accurate client IPs through a container bridge |

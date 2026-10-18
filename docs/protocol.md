@@ -101,6 +101,8 @@ only after commit, notify live clients and revoke affected producers. An uncerta
 write quarantines that runtime or dormant room ID rather than serving stale policy.
 Waiting-room admission keeps authorization locks through the shared final privacy
 lookup and checks expiry after the last wait before membership publication.
+Administration reads and writes use the room HTTP rate and concurrency budgets;
+they do not spend the per-account credential-check and WebSocket-ticket budget.
 Responses are private and uncached. The browser never retries writes automatically;
 an unconfirmed response requires an explicit reload/refresh before another change.
 

@@ -1284,9 +1284,6 @@ async fn admit(
     let claims = account::authenticated_claims(server, headers)
         .await
         .map_err(IntoResponse::into_response)?;
-    if !server.allow_auth_principal(&claims.sub) {
-        return Err(AuthError::RateLimited.into_response().into());
-    }
     Context::admit(server.room_manager().clone(), id, claims).await
 }
 

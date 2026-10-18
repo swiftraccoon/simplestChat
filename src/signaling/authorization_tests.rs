@@ -820,7 +820,10 @@ async fn authorization_database_inbox_offline_delivery_read_sync_and_consent() {
 #[tokio::test]
 #[ignore = "requires DISPOSABLE_TEST_DATABASE=1 and TEST_DATABASE_URL"]
 async fn authorization_database_room_roles_and_owner_mutations_do_not_cross_rooms_or_accounts() {
-    let fixture = Fixture::new(5).await;
+    let mut fixture = Fixture::new(5).await;
+    // Make the credential budget deterministic and exhaust it through the real
+    // ticket route. Room administration must still use its own HTTP admission.
+    fixture.server.principal_auth_limiter = PrincipalRateLimiter::new(1);
     let room = format!("policy-{}", Uuid::new_v4());
     let other_room = format!("policy-{}", Uuid::new_v4());
     for (id, owner) in [(&room, fixture.users[4]), (&other_room, fixture.users[0])] {
@@ -842,6 +845,21 @@ async fn authorization_database_room_roles_and_owner_mutations_do_not_cross_room
         .await
         .unwrap();
     }
+    let mut sequence = 1;
+    let ticket = operation("POST", "/api/auth/ws-ticket".into(), Some(json!({})));
+    for token in &fixture.tokens {
+        for status in [StatusCode::OK, StatusCode::TOO_MANY_REQUESTS] {
+            assert_eq!(
+                fixture
+                    .request(&ticket, Some(token), sequence)
+                    .await
+                    .status(),
+                status,
+                "the account credential budget is exhausted through HTTP"
+            );
+            sequence += 1;
+        }
+    }
     let expected = [
         Role::User,
         Role::Member,
@@ -849,7 +867,6 @@ async fn authorization_database_room_roles_and_owner_mutations_do_not_cross_room
         Role::Admin,
         Role::Owner,
     ];
-    let mut sequence = 1;
     for (index, role) in expected.into_iter().enumerate() {
         assert_eq!(
             roles::resolve_role(
@@ -1217,6 +1234,53 @@ async fn authorization_database_room_roles_and_owner_mutations_do_not_cross_room
     )
     .unwrap();
     assert_eq!(data["id"], fixture.users[3].to_string());
+    sequence += 2;
+    assert_eq!(
+        fixture
+            .request(&ticket, Some(&fixture.tokens[4]), sequence)
+            .await
+            .status(),
+        StatusCode::TOO_MANY_REQUESTS,
+        "successful room reads and writes do not reset the credential budget"
+    );
+    sequence += 1;
+    sqlx::query("UPDATE sessions SET expires_at=clock_timestamp()-interval '1 second' WHERE id=$1")
+        .bind(fixture.sessions[4])
+        .execute(&fixture.pool)
+        .await
+        .unwrap();
+    for denied in [
+        operation("GET", format!("/api/rooms/{room}/administration"), None),
+        operation(
+            "GET",
+            format!("/api/rooms/{room}/administration/members"),
+            None,
+        ),
+        operation(
+            "PATCH",
+            format!("/api/rooms/{room}/administration/settings"),
+            Some(json!({"allowChat":true})),
+        ),
+        ticket,
+    ] {
+        assert_eq!(
+            fixture
+                .request(&denied, Some(&fixture.tokens[4]), sequence)
+                .await
+                .status(),
+            StatusCode::UNAUTHORIZED,
+            "an expired owner session remains unauthorized: {} {}",
+            denied.method,
+            denied.path
+        );
+        sequence += 1;
+    }
+    let chat: bool = sqlx::query_scalar("SELECT allow_chat FROM rooms WHERE id=$1")
+        .bind(&room)
+        .fetch_one(&fixture.pool)
+        .await
+        .unwrap();
+    assert!(!chat, "expired administration cannot change saved policy");
     fixture.finish().await;
 }
 
