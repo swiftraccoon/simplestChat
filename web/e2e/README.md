@@ -153,6 +153,31 @@ counts verify that DOM deduplication is not hiding a repeated delivery. These
 fixtures retain bounded results, never credentials or private message transcripts.
 They do not run against production.
 
+## Live account navigation and readable screen sharing
+
+The community scenario checks account updates before joining a room, cross-device
+privacy and notification changes, and inbox updates through the authenticated
+account stream. `app-navigation-checks.cjs` exercises Back/Forward, cold account
+links and deferred call-engine recovery while preserving room chat and capture
+ownership. Its Chromium phone profile records account readiness under throttled
+network/CPU conditions without requesting the call-engine chunk.
+
+`presentation.cjs` sends a controlled 1920×1080 canvas through native WebRTC and
+reads its text from decoded remote video. It checks Details and Motion profiles,
+data saver, simultaneous camera/voice progress, audio-only reception and camera
+restoration without automatic capture. The CI media group applies an 800-kbit/s,
+30-ms Linux downlink profile, then requires sustained 1080p recovery within
+45 seconds. Compatibility runs exercise the same baseline without network shaping.
+Neither run proves a native screen picker, physical display audio or speaker audibility.
+
+`presentation-results.json` retains bounded frame, encoding, bitrate, loss and
+probation observations, plus fixed-name negotiation summaries without raw SDP.
+`impairment-state.json` records verified shaping installation and removal; a
+successful cleanup command alone cannot establish a restored network. Presentation
+server logs include passive native bandwidth/probing counters under a fixed test-only
+debug profile. Keep failed phase observations and cleanup evidence together when
+diagnosing recovery.
+
 ## Homepage layout without a backend
 
 After building `web/dist` and installing the browser tooling above:
