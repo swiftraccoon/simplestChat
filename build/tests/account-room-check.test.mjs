@@ -128,6 +128,16 @@ test('resource evidence rejects missing coverage, observed saturation, contentio
   assert.equal(report.passed, true);
   assert.equal(report.server.cpuPercentOfOneCore, 20);
   assert.equal(report.database.p99Ms, 0.5);
+  const embedded = resourceSamples();
+  for (const row of embedded) {
+    row.server.processes = [row.server.processes[0]];
+    row.server.childCount = 0;
+  }
+  assert.equal(measurementResources(embedded, 0, 1200000).passed, true,
+    'mediasoup workers are embedded threads, already included in the process CPU/RSS');
+  const noWorkerMetric = resourceSamples();
+  for (const row of noWorkerMetric) delete row.metrics['simplestchat_media_worker_cpu{worker="0"}'];
+  assert.throws(() => measurementResources(noWorkerMetric, 0, 1200000), /worker_cpu/);
   assert.throws(() => measurementResources(samples.slice(20), 0, 1200000));
   for (const patch of [{ 'simplestchat_media_worker_cpu{worker="0"}': 0.8 }, { simplestchat_memory_saturated: 1 }, { simplestchat_participants_active: 29 },
     { 'simplestchat_database_errors_total{kind="pool_timeout"}': 1 }]) {

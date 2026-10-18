@@ -145,7 +145,7 @@ export function parseCgroup(stat, maximum) {
     quotaCores: quota === 'max' ? null : Number(quota) / Number(period) };
 }
 
-/** Linux process CPU/RSS excludes child processes; follow every owned thread's children. */
+/** Process CPU includes all threads (including embedded mediasoup); also include owned children. */
 export async function serverProcessTree(rootPid, units, io = { readFile, readdir }) {
   const pending = [rootPid], observed = new Set(), processes = [];
   while (pending.length) {
@@ -175,12 +175,12 @@ export async function serverProcessTree(rootPid, units, io = { readFile, readdir
 export function measurementResources(samples, start, end) {
   const window = samples.filter(s => s.elapsedMs >= start && s.elapsedMs <= end);
   const identities = new Set(window.filter(s => s.server).map(s => JSON.stringify(s.server.processes)));
-  requireValue(identities.size === 1 && window.some(s => s.server?.processes?.length > 1), 'unstable_or_missing_native_worker_process_tree');
+  requireValue(identities.size === 1 && window.some(s => s.server?.processes?.length >= 1), 'unstable_or_missing_server_process_tree');
   const server = resourceSummary(samples, 'server', start, end);
   const generator = resourceSummary(samples, 'generator', start, end);
   server.processes = window.find(s => s.server).server.processes;
   server.childCount = window.find(s => s.server).server.childCount;
-  server.scope = 'Rust main process and all owned descendants; RSS sums process resident pages including shared mappings';
+  server.scope = 'Server process including every thread (embedded native workers), plus owned descendants; RSS sums process resident pages including shared mappings';
   const hosts = window.filter(s => s.host);
   requireValue(hosts.length >= 2 && hosts.length >= window.length * 0.9, 'incomplete_host_resource_coverage');
   const first = hosts[0].host, last = hosts.at(-1).host;
