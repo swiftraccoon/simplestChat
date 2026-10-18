@@ -324,6 +324,9 @@ function openHistory(options: HistoryOptions): void {
   const reactionVersions = new Map<string, number>();
   let reactionReadVersion = 0;
   let failedLoadMessage: string | null = null;
+  let errorVersion = 0;
+  let readAttempt = 0;
+  let readFailure: { errorVersion: number; attempt: number } | null = null;
   const redact = (entry: ChatEntry): void => {
     const updatedReactions = reactions.get(entry.messageId);
     if (updatedReactions) entry.reactions = updatedReactions;
@@ -352,6 +355,7 @@ function openHistory(options: HistoryOptions): void {
   };
   const fail = (error: unknown): void => {
     if (!current()) return;
+    errorVersion++;
     view.error.textContent =
       error instanceof Error ? error.message : 'Messages could not be loaded';
     view.error.hidden = false;
@@ -377,17 +381,37 @@ function openHistory(options: HistoryOptions): void {
     if (!cursor || cursor.messageId === read) return;
     const latest = cursor.messageId;
     read = latest;
+    const attempt = ++readAttempt;
+    const confirmed = (): void => {
+      if (
+        readFailure &&
+        readFailure.attempt <= attempt &&
+        readFailure.errorVersion === errorVersion
+      ) {
+        view.error.hidden = true;
+        readFailure = null;
+      }
+      options.readConfirmed?.(cursor);
+    };
+    if (page.readMessageId === latest) {
+      // The authorized history response already confirms this watermark. A
+      // reopened view must not write it again and invalidate every device.
+      confirmed();
+      return;
+    }
     options
       .markRead(latest, controller.signal)
       .then(() => {
         if (current()) {
-          options.readConfirmed?.(cursor);
+          confirmed();
           notifyInboxChanged();
         }
       })
       .catch((error: unknown) => {
+        if (!current() || attempt !== readAttempt) return;
         if (read === latest) read = '';
         fail(error);
+        readFailure = { errorVersion, attempt };
       });
   };
   const messageActions: HistoryMessageActions = {

@@ -611,6 +611,119 @@ test('a failed private read never publishes an account watermark', async (t) => 
   assert.equal(view.querySelector('.auth-error').textContent, 'Read not saved');
 });
 
+test('reopening already-read private history confirms its visible watermark without writes or inbox invalidations', async (t) => {
+  const f = await fixture(t);
+  const cursor = message('server-read');
+  f.state.loadHistory = async () => ({ ...history([cursor]), readMessageId: cursor.messageId });
+  const confirmations = [];
+  let invalidations = 0;
+  t.after(f.onPrivateRead((...event) => confirmations.push(event)));
+  t.after(f.onInboxChanged(() => invalidations++));
+  const first = await f.openConversation();
+  assert.equal(calls(f, 'read').length, 0);
+  assert.deepEqual(confirmations, [['account', 'peer', cursor]]);
+  await f.tick();
+  assert.equal(confirmations.length, 1, 'quiet reads do not repeat the same local confirmation');
+  first.close();
+  await f.openConversation();
+  assert.equal(confirmations.length, 2, 'a new reader still confirms its authorized loaded cursor');
+  assert.equal(calls(f, 'read').length, 0);
+  assert.equal(invalidations, 0, 'a confirmed no-op never fans out another inbox refresh');
+});
+
+test('a newer visible private cursor still writes and waits for confirmation after a previously read page', async (t) => {
+  const f = await fixture(t);
+  const previous = message('server-read');
+  f.state.loadHistory = async () => ({ ...history([previous]), readMessageId: previous.messageId });
+  const confirmations = [];
+  t.after(f.onPrivateRead((...event) => confirmations.push(event)));
+  await f.openConversation();
+  const cursor = message('newer-unread');
+  const pending = deferred();
+  f.state.markRead = () => pending.promise;
+  f.state.loadHistory = async () => ({
+    ...history([previous, cursor]),
+    readMessageId: previous.messageId,
+  });
+  await f.tick();
+  assert.equal(calls(f, 'read').length, 1);
+  assert.equal(calls(f, 'read')[0].args[2], cursor.messageId);
+  assert.equal(confirmations.length, 1, 'the older server marker cannot confirm a newer message');
+  pending.resolve({ readMessageId: cursor.messageId });
+  await flush();
+  assert.deepEqual(confirmations.at(-1), ['account', 'peer', cursor]);
+});
+
+test('a failed read is retried until an authoritative history response confirms the same cursor', async (t) => {
+  const f = await fixture(t);
+  const cursor = message('unconfirmed-read');
+  f.state.loadHistory = async () => history([cursor]);
+  f.state.markRead = async () => {
+    throw new Error('Lost read response');
+  };
+  const confirmations = [];
+  t.after(f.onPrivateRead((...event) => confirmations.push(event)));
+  const view = await f.openConversation();
+  await f.tick();
+  assert.equal(
+    calls(f, 'read').length,
+    2,
+    'an unconfirmed attempt cannot suppress explicit repair',
+  );
+  assert.equal(confirmations.length, 0);
+  f.state.loadHistory = async () => ({ ...history([cursor]), readMessageId: cursor.messageId });
+  await f.tick();
+  assert.equal(calls(f, 'read').length, 2, 'a fresh confirmed read needs no third mutation');
+  assert.deepEqual(confirmations, [['account', 'peer', cursor]]);
+  assert.equal(
+    view.querySelector('.auth-error').hidden,
+    true,
+    'the confirmed repair clears its owned read error',
+  );
+});
+
+test('confirmed read repair preserves a newer unrelated mutation error even with the same text', async (t) => {
+  const f = await fixture(t);
+  const cursor = message('unconfirmed-read');
+  f.state.loadHistory = async () => history([cursor]);
+  f.state.markRead = async () => {
+    throw new Error('Response lost');
+  };
+  const view = await f.openConversation();
+  f.state.react = async () => {
+    throw new Error('Response lost');
+  };
+  action(view, 'React').click();
+  action(view, '👍').click();
+  await flush();
+  f.state.loadHistory = async () => ({ ...history([cursor]), readMessageId: cursor.messageId });
+  await f.tick();
+  assert.equal(calls(f, 'read').length, 1, 'the confirmed history response needs no retry');
+  assert.equal(calls(f, 'react').length, 1, 'reconciliation never replays the unrelated mutation');
+  assert.equal(view.querySelector('.auth-error').hidden, false);
+  assert.equal(view.querySelector('.auth-error').textContent, 'Response lost');
+});
+
+test('a late failed read cannot replace a newer confirmed cursor with a stale error', async (t) => {
+  const f = await fixture(t);
+  const first = message('first-pending');
+  const newer = message('newer-confirmed');
+  const pending = deferred();
+  f.state.loadHistory = async () => history([first]);
+  f.state.markRead = async (_token, _peer, id) =>
+    id === first.messageId ? pending.promise : { readMessageId: id };
+  const confirmations = [];
+  t.after(f.onPrivateRead((...event) => confirmations.push(event)));
+  const view = await f.openConversation();
+  f.state.loadHistory = async () => history([first, newer]);
+  await f.tick();
+  assert.deepEqual(confirmations, [['account', 'peer', newer]]);
+  pending.reject(new Error('Obsolete read failed'));
+  await flush();
+  assert.equal(view.querySelector('.auth-error').hidden, true);
+  assert.deepEqual(confirmations, [['account', 'peer', newer]]);
+});
+
 test('disabled room history never sends a persistent read marker', async (t) => {
   const f = await fixture(t);
   f.state.room = async () => ({ ...history([message('ephemeral')]), retentionDays: 0 });
