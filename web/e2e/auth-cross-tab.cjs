@@ -36,7 +36,6 @@ async function startupRecovery(browser, result) {
   const failures = [];
   let refreshes = 0;
   let logins = 0;
-  let loads = 0;
   let revision = 0;
   let observeRetry;
   const retryRequest = new Promise((resolve) => {
@@ -55,6 +54,7 @@ async function startupRecovery(browser, result) {
     await context.addInitScript(
       ({ deferBody }) => {
         window.__restoreEvidence = {
+          documentMarker: Array.from(crypto.getRandomValues(new Uint32Array(4))).join(':'),
           refreshes: 0,
           authenticatedOpens: 0,
           captures: 0,
@@ -161,8 +161,8 @@ async function startupRecovery(browser, result) {
     const page = await context.newPage();
     page.setDefaultTimeout(10000);
     page.on('pageerror', (error) => failures.push(error.message));
-    page.on('load', () => loads++);
     await page.goto(origin.toString());
+    const documentMarker = await page.evaluate(() => window.__restoreEvidence.documentMarker);
     if (result === 'superseded') {
       await page.waitForFunction(() => typeof window.__releaseOldRestoreBody === 'function');
       await page.locator('#sign-in-btn').click();
@@ -250,7 +250,11 @@ async function startupRecovery(browser, result) {
     assert.equal(evidence.joins, 0);
     assert.equal(evidence.refreshes, result === 'superseded' ? 1 : 2);
     assert.equal(evidence.releasedBodies, result === 'superseded' ? 1 : 0);
-    assert.equal(loads, 1, 'saved sign-in recovery never reloads the page');
+    assert.equal(
+      evidence.documentMarker,
+      documentMarker,
+      'saved sign-in recovery never replaces the document',
+    );
     assert.deepEqual(failures, []);
   } finally {
     await context.close();
