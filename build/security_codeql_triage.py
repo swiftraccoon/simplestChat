@@ -25,8 +25,9 @@ from urllib.parse import unquote, urlencode
 
 import security_codeql_tools
 import security_policy
+from security_codeql_rust_sources import included_sources
 from security_codeql_sources import NativeSources
-from security_source_scope import require_local_vendor
+from security_source_scope import require_local_vendor, vendor_path
 from security_tools import ToolError, bounded_file, require, write_private
 
 # isort: split
@@ -132,6 +133,10 @@ def finding(  # noqa: PLR0913 -- Independent source, query and location evidence
         "messageSha256": hashlib.sha256(rendered.encode()).hexdigest(),
         **(native if native is not None else {"sourceSha256": source_hash(root, revision, name)}),
     }
+    if native is None and name.endswith(".rs") and not vendor_path(name):
+        included = included_sources(root, revision, name)
+        if included:
+            identity["includedSources"] = dict(included)
     scope = name + ":" + ":".join(str(region[key]) for key in REGION)
     return {**identity, "scope": scope, "fingerprint": "codeql:" + digest(identity)}
 

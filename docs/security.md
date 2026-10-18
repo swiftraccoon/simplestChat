@@ -258,6 +258,11 @@ job even when the scanner process itself succeeds. Each exception binds the
 query, analyzer version, primary range, rendered-message digest and complete
 source identity. Generated native files require authenticated upstream archive
 and maintained-overlay evidence. Missing or incomplete analysis fails the gate.
+For first-party Rust, that identity also binds the bounded transitive closure of
+committed literal `include!` sources, since extraction can locate an included
+expression at its parent macro. A module-only edit invalidates its review even
+when the parent is unchanged. Unsupported dynamic includes, root escapes,
+symlinks, cycles and exceeded traversal limits fail closed.
 
 The required aggregate also runs `build/security_codeql_triage.py health` against
 GitHub's stored analysis records. For each of the four automated security categories, the
