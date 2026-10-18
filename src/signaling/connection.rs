@@ -30,6 +30,9 @@ use credentials::{
     CredentialContinuity, CredentialStatus, account_credentials_current,
     account_credentials_current_owned,
 };
+#[path = "connection_bandwidth.rs"]
+mod bandwidth;
+use bandwidth::BandwidthTierUpdate;
 
 /// Bounded channel capacity per client.
 /// At 100 msg/s rate limit, 64 slots = 640ms of burst buffer.
@@ -2216,57 +2219,61 @@ fn spawn_stats_task(
         let drain = room_manager.drain_signal();
         let mut last_bitrate: u32 = 0;
         let mut last_sent_bitrate: u32 = 0;
-        let mut last_tier: Option<u8> = None;
-
-        // Minimum interval between layer updates (debounce rapid BWE fluctuations)
-        let mut last_layer_update = Instant::now();
-        let debounce = Duration::from_secs(2);
+        let mut layer_update = BandwidthTierUpdate::new(Instant::now());
 
         // ConnectionStats interval — no IPC call, just uses last-known bitrate
         let mut stats_interval = tokio::time::interval(Duration::from_secs(10));
         stats_interval.tick().await; // Skip first immediate tick
 
         loop {
+            let layer_deadline = layer_update.deadline();
             tokio::select! {
                 biased;
                 _ = drain.wait() => break,
+                _ = sender.closed() => break,
                 // BWE event: bandwidth estimation changed
                 bwe = bwe_rx.recv() => {
                     match bwe {
                         Some(bitrate) => {
                             last_bitrate = bitrate;
-
-                            // Keep these tiers: mediasoup steps layers down only as the
-                            // estimate falls below each layer's measured bitrate, and
-                            // removing them slowed downgrades from about 1 s to 19–31 s.
-                            let target_layer = if bitrate < 200_000 {
-                                0u8
-                            } else if bitrate < 600_000 {
-                                1u8
-                            } else {
-                                2u8
-                            };
-
-                            // Only update layers on tier change, with debounce
-                            if last_tier != Some(target_layer) && last_layer_update.elapsed() >= debounce {
-                                last_tier = Some(target_layer);
-                                last_layer_update = Instant::now();
-                                match room_manager
-                                    .set_bandwidth_ceiling(&room_id, &participant_id, &sender, target_layer)
-                                    .await
-                                {
-                                    Ok(written) => debug!(
-                                        "Bandwidth tier {} for {}: {} consumer layer requests",
-                                        target_layer, participant_id, written
-                                    ),
-                                    Err(e) => debug!(
-                                        "Failed to apply bandwidth tier for {}: {}",
-                                        participant_id, e
-                                    ),
-                                }
-                            }
+                            layer_update.observe(bitrate);
                         }
                         None => break, // Channel closed — participant disconnected
+                    }
+                }
+
+                // The newest tier must eventually apply even if its only event
+                // arrived inside the two-second interval. Failed/partial writes
+                // remain pending, with at most one retry per interval.
+                _ = async {
+                    match layer_deadline {
+                        Some(deadline) => tokio::time::sleep_until(deadline.into()).await,
+                        None => std::future::pending::<()>().await,
+                    }
+                } => {
+                    if bwe_rx.is_closed() {
+                        break;
+                    }
+                    if let Some(target_layer) = layer_update.begin_attempt(Instant::now()) {
+                        let result = tokio::select! {
+                            biased;
+                            _ = drain.wait() => break,
+                            _ = sender.closed() => break,
+                            result = room_manager.set_bandwidth_ceiling(
+                                &room_id, &participant_id, &sender, target_layer
+                            ) => result,
+                        };
+                        layer_update.complete_attempt(target_layer, result.is_ok());
+                        match result {
+                            Ok(written) => debug!(
+                                "Bandwidth tier {} for {}: {} consumer layer requests",
+                                target_layer, participant_id, written
+                            ),
+                            Err(e) => debug!(
+                                "Failed to apply bandwidth tier for {}: {}",
+                                participant_id, e
+                            ),
+                        }
                     }
                 }
 
