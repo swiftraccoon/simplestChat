@@ -345,6 +345,32 @@ export class ChatStore {
     this.refreshUnread();
   }
 
+  /** A confirmed saved-history cursor never consumes newer room unread entries. */
+  markReadThrough(id: string, cursor: ChatEntry): boolean {
+    if (!this.accepts(cursor) || this.conversation(cursor) !== id) return false;
+    const cursorTime = Date.parse(cursor.sentAt);
+    // PostgreSQL orders below the millisecond that Date.parse preserves. UTC
+    // offsets are already normalized; keep the database's microsecond precision.
+    const fraction = (at: string): string =>
+      (at.match(/\.(\d+)(?:Z|[+-]\d{2}:\d{2})$/)?.[1] ?? '').slice(3, 6).padEnd(3, '0');
+    const cursorFraction = fraction(cursor.sentAt);
+    let changed = false;
+    for (const item of this.messages) {
+      if (this.conversation(item) !== id) continue;
+      const time = Date.parse(item.sentAt);
+      const part = fraction(item.sentAt);
+      if (
+        time < cursorTime ||
+        (time === cursorTime &&
+          (part < cursorFraction ||
+            (part === cursorFraction && item.messageId <= cursor.messageId)))
+      )
+        changed = this.unreadMessages.delete(this.key(item)) || changed;
+    }
+    if (changed) this.refreshUnread();
+    return changed;
+  }
+
   markUnread(entry: ChatEntry): void {
     if (!entry.participantId || entry.participantId === this.localId) return;
     if (this.messages.some((item) => this.key(item) === this.key(entry)))

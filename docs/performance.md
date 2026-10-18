@@ -32,15 +32,15 @@ source maps and other non-JS/CSS/HTML files are not covered by these budgets.
 Measure runtime performance separately with the workflows below.
 
 The October 18 account-privacy, conversation, room-administration and optional
-speaker-following changes measure JavaScript at 687,745 bytes raw / 164,446 gzip,
-against the `37097a7` baseline's 659,217 / 156,801: an increase of 28,528 / 7,645
+speaker-following changes measure JavaScript at 688,692 bytes raw / 164,719 gzip,
+against the `37097a7` baseline's 659,217 / 156,801: an increase of 29,475 / 7,918
 bytes. Account preferences use one controller, retained and room-started account
 messages share a composer, and administration reuses the existing controls and
 response decoders. No dependency was added. The additional code provides field
-PATCH intents, durable reply/reaction recovery, administration without joining,
+PATCH intents, durable reply/reaction recovery and confirmed read positions, administration without joining,
 and bounded speaker selection. Reviewed JavaScript limits are 688/166 KiB,
-leaving 16,767 raw bytes and 5,538 gzip bytes of headroom. CSS measures 75,607 /
-15,051 and HTML 43,752 / 12,205; their limits stay unchanged. These figures
+leaving 15,820 raw bytes and 5,265 gzip bytes of headroom. CSS measures 75,607 /
+15,051 and HTML 43,752 / 12,203; their limits stay unchanged. These figures
 measure delivery size, not startup latency or runtime performance.
 
 The October 17 saved-PM recovery change measures JavaScript at 659,217 bytes raw /

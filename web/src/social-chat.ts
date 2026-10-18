@@ -32,6 +32,7 @@ import {
   onHistoryEdit,
   notifyHistoryReaction,
   onHistoryReaction,
+  onPrivateRead,
   notifyInboxChanged,
 } from './chat-history';
 
@@ -186,6 +187,7 @@ export class SocialChat {
   private preferenceBusy = false;
   private readonly stopAccountPreferences: (() => void) | undefined;
   private readonly stopHistoryReaction: () => void;
+  private readonly stopPrivateRead: () => void;
   private accountPreferenceSnapshot = '';
   private disposed = false;
   private audio: AudioContext | null = null;
@@ -243,6 +245,18 @@ export class SocialChat {
     this.historyStart.append(this.pinsList, this.olderButton);
     this.stopHistoryReaction = onHistoryReaction((id, reactions) => {
       if (this.store.setReactions(id, reactions)) this.render();
+    });
+    this.stopPrivateRead = onPrivateRead((account, peer, cursor) => {
+      const room = this.activeRoom;
+      if (
+        !room ||
+        !this.options.getToken?.() ||
+        account !== this.store.localId ||
+        cursor.accountConversation !== true ||
+        !this.contextCurrent(this.activation, room, account)
+      )
+        return;
+      if (this.store.markReadThrough(peer, cursor)) this.render();
     });
     onHistoryEdit((message) => {
       if (this.store.editMessage(message)) this.render();
@@ -536,6 +550,7 @@ export class SocialChat {
     this.disposed = true;
     this.stopAccountPreferences?.();
     this.stopHistoryReaction();
+    this.stopPrivateRead();
     this.reset();
     this.attachments.dispose();
   }

@@ -27,6 +27,7 @@ type HistoryOptions = {
   attachmentAuthorization?: (id: string) => Promise<string>;
   load: (params: URLSearchParams, signal: AbortSignal) => Promise<ChatHistoryPage>;
   markRead?: (id: string, signal: AbortSignal) => Promise<unknown>;
+  readConfirmed?: (cursor: ChatEntry) => void;
   reply?: (message: ChatEntry) => void;
   replyInPlace?: boolean;
   react?: (
@@ -46,6 +47,18 @@ type HistoryOptions = {
   retention?: { days: number; save: (days: number) => Promise<unknown> };
 };
 const inboxListeners = new Set<(message?: ChatEntry) => void>();
+const privateReadListeners = new Set<(account: string, peer: string, cursor: ChatEntry) => void>();
+
+/** Only a successful account-history read publishes this cursor. */
+export function onPrivateRead(
+  listener: (account: string, peer: string, cursor: ChatEntry) => void,
+): () => void {
+  privateReadListeners.add(listener);
+  return () => {
+    privateReadListeners.delete(listener);
+  };
+}
+
 export function onInboxChanged(listener: (message?: ChatEntry) => void): () => void {
   inboxListeners.add(listener);
   return () => {
@@ -200,13 +213,17 @@ function openHistory(options: HistoryOptions): void {
     )
       return;
     if (list.scrollHeight - list.scrollTop - list.clientHeight > 48) return;
-    const latest = page.messages[page.messages.length - 1]?.messageId;
-    if (!latest || latest === read) return;
+    const cursor = page.messages[page.messages.length - 1];
+    if (!cursor || cursor.messageId === read) return;
+    const latest = cursor.messageId;
     read = latest;
     options
       .markRead(latest, controller.signal)
       .then(() => {
-        if (current()) notifyInboxChanged();
+        if (current()) {
+          options.readConfirmed?.(cursor);
+          notifyInboxChanged();
+        }
       })
       .catch((error: unknown) => {
         if (read === latest) read = '';
@@ -717,6 +734,9 @@ export function openPrivateConversation(
     current: () => options.getAccountId() === account && !!options.getToken(),
     load: (params, signal) => api.privateHistory(token(), peerId, params, signal),
     markRead: (id, signal) => api.readPrivateMessages(token(), peerId, id, signal),
+    readConfirmed: (cursor) => {
+      for (const listener of privateReadListeners) listener(account, peerId, cursor);
+    },
     react: (id, emoji, present, signal) =>
       api.setPrivateReaction(token(), peerId, id, { emoji, present }, signal),
     send: (content, id, signal, attachmentIds, replyTo) => {

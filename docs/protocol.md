@@ -724,6 +724,11 @@ refresh an open latest-page dialog promptly without changing a separate draft or
 advancing an unread catch-up page. Guest PMs retain their room-session composer
 and require the original session boundary.
 
+A confirmed account-history read updates the matching room conversation's local
+unread entries only through that cursor. Comparisons preserve PostgreSQL
+microsecond precision and message-ID ordering. Later unread messages, other peers
+and other accounts remain untouched; failed reads publish no local confirmation.
+
 Before an HTTP inbox send, the browser durably records the original
 `clientMessageId`, text, attachment metadata, optional reply target and quoted
 metadata, and creation time, scoped to the

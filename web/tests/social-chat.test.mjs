@@ -255,6 +255,12 @@ async function fixture({
             state.reactionListener = null;
           };
         },
+        onPrivateRead(listener) {
+          state.privateReadListener = listener;
+          return () => {
+            state.privateReadListener = null;
+          };
+        },
         notifyHistoryReaction(id, reactions) {
           state.reactionListener?.(id, reactions);
         },
@@ -1179,6 +1185,52 @@ test('account PM entry points use the shared durable conversation while preservi
   assert.deepEqual(f.state.openedAccountMessages.at(-1), ['alice', 'Alice']);
   assert.equal(f.chat.store.active, 'public');
   assert.equal(f.chat.input.value, 'Room draft');
+});
+
+test('confirmed account-history reads clear only the current membership through their cursor', async () => {
+  const f = await fixture({ accountMessages: true });
+  f.state.viewer = 'local';
+  await f.chat.activate();
+  f.state.token = 'account-token';
+  const older = entry('saved-older', { recipientId: 'local', accountConversation: true });
+  const newer = entry('saved-newer', {
+    recipientId: 'local',
+    accountConversation: true,
+    sentAt: '2026-01-02T00:00:00Z',
+  });
+  f.chat.receive(older);
+  f.chat.receive(newer);
+  assert.equal(f.chat.store.unread.get('alice'), 2);
+  f.state.privateReadListener('another-account', 'alice', newer);
+  f.state.privateReadListener('local', 'another-peer', newer);
+  f.state.privateReadListener('local', 'alice', { ...newer, accountConversation: undefined });
+  assert.equal(f.chat.store.unread.get('alice'), 2, 'foreign or session-only cursors are inert');
+  f.state.privateReadListener('local', 'alice', older);
+  assert.equal(f.chat.store.unread.get('alice'), 1);
+  assert.equal(f.chat.conversationButtons.get('alice').node.textContent, 'Alice1');
+  f.state.room.membershipVersion++;
+  f.state.privateReadListener('local', 'alice', newer);
+  assert.equal(
+    f.chat.store.unread.get('alice'),
+    1,
+    'an unactivated replacement membership is fenced',
+  );
+  f.state.viewer = 'replacement-account';
+  f.state.room.localParticipantId = 'replacement-account';
+  await f.chat.activate();
+  const replacement = { ...newer, recipientId: 'replacement-account' };
+  f.chat.receive(replacement);
+  f.state.privateReadListener('local', 'alice', newer);
+  assert.equal(
+    f.chat.store.unread.get('alice'),
+    1,
+    'the old account cannot read replacement state',
+  );
+  f.state.privateReadListener('replacement-account', 'alice', replacement);
+  assert.equal(f.chat.store.unread.has('alice'), false);
+  assert.equal(f.chat.conversationButtons.get('alice').node.textContent, 'Alice');
+  f.chat.dispose();
+  assert.equal(f.state.privateReadListener, null);
 });
 
 test('an absent guest PM retains its session boundary and never becomes an account conversation', async () => {

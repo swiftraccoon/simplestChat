@@ -558,6 +558,46 @@ test('PMs remain unread while hidden, scrolled away, or covered by another modal
   assert.equal(calls(f, 'read').at(-1).args[2], 'new-under-overlay');
 });
 
+test('private read events publish only a successfully confirmed visible account cursor', async (t) => {
+  const f = await fixture(t);
+  const events = [];
+  const stop = f.onPrivateRead((...event) => events.push(event));
+  t.after(stop);
+  const pending = deferred();
+  f.state.markRead = () => pending.promise;
+  const cursor = { ...message('catchup-cursor'), accountConversation: true };
+  f.state.loadHistory = async () => ({ ...history([cursor]), newerCursor: 'later-page' });
+  const view = await f.openConversation();
+  assert.equal(calls(f, 'read').length, 1);
+  assert.deepEqual(events, [], 'loading the page does not confirm its read watermark');
+  pending.resolve({ readMessageId: cursor.messageId });
+  await flush();
+  assert.deepEqual(events, [['account', 'peer', cursor]]);
+  view.close();
+  const stale = deferred();
+  f.state.markRead = () => stale.promise;
+  f.state.loadHistory = async () => history([{ ...cursor, messageId: 'later-cursor' }]);
+  await f.openConversation();
+  f.state.account = 'replacement-account';
+  stale.resolve({ readMessageId: 'later-cursor' });
+  await flush();
+  assert.equal(events.length, 1, 'retiring the account fences a delayed read completion');
+});
+
+test('a failed private read never publishes an account watermark', async (t) => {
+  const f = await fixture(t);
+  const events = [];
+  const stop = f.onPrivateRead((...event) => events.push(event));
+  t.after(stop);
+  f.state.markRead = async () => {
+    throw new Error('Read not saved');
+  };
+  const view = await f.openConversation();
+  assert.equal(calls(f, 'read').length, 1);
+  assert.deepEqual(events, []);
+  assert.equal(view.querySelector('.auth-error').textContent, 'Read not saved');
+});
+
 test('disabled room history never sends a persistent read marker', async (t) => {
   const f = await fixture(t);
   f.state.room = async () => ({ ...history([message('ephemeral')]), retentionDays: 0 });

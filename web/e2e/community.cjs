@@ -1581,6 +1581,8 @@ async function setRole(owner, name, role) {
           'the shared account dialog preserves the underlying public conversation',
         );
         await visible(member, 'Private owner hello');
+        await conversation.locator('.conversation-unread').waitFor({ state: 'hidden' });
+        assert.equal(await conversation.getAttribute('aria-label'), 'E2E Owner');
         await visible(owner, 'Private owner hello');
         assert.equal(
           await sent

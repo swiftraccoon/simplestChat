@@ -86,6 +86,60 @@ test('replay merges chronologically and unseen entries, not duplicates, contribu
   assert.equal(value.unread.size, 0);
 });
 
+test('a confirmed read cursor clears only its conversation through that exact chronological position', () => {
+  const value = store();
+  const older = entry('older', { recipientId: 'local', sentAt: '2026-01-01T00:00:00Z' });
+  const cursor = entry('cursor', { recipientId: 'local', sentAt: '2026-01-01T00:00:01Z' });
+  const newer = entry('newer', { recipientId: 'local', sentAt: '2026-01-01T00:00:02Z' });
+  const other = entry('other', { participantId: 'bob', recipientId: 'local' });
+  for (const message of [older, cursor, newer, other]) value.receive(message);
+  assert.equal(value.markReadThrough('alice', cursor), true);
+  assert.equal(value.unread.get('alice'), 1, 'a later arrival stays unread');
+  assert.equal(value.firstUnread('alice').messageId, newer.messageId);
+  assert.equal(value.unread.get('bob'), 1);
+  assert.equal(value.markReadThrough('bob', newer), false, 'a cursor cannot cross peers');
+  assert.equal(
+    value.markReadThrough('alice', { ...newer, recipientId: 'different-account' }),
+    false,
+  );
+  assert.equal(value.markReadThrough('alice', { ...newer, sentAt: 'invalid' }), false);
+  assert.equal(value.markReadThrough('alice', cursor), false, 'duplicate confirmation is inert');
+  assert.equal(value.markReadThrough('alice', newer), true);
+  assert.equal(value.unread.has('alice'), false);
+  assert.equal(value.unread.get('bob'), 1);
+});
+
+test('read cursors preserve PostgreSQL submillisecond and UUID ordering across UTC offsets', () => {
+  const value = store();
+  const messages = [
+    entry('z', { recipientId: 'local', sentAt: '2026-01-01T00:00:00.123100Z' }),
+    entry('a', { recipientId: 'local', sentAt: '2025-12-31T19:00:00.123200-05:00' }),
+    entry('b', { recipientId: 'local', sentAt: '2026-01-01T00:00:00.123200+00:00' }),
+    entry('0', { recipientId: 'local', sentAt: '2026-01-01T00:00:00.123201Z' }),
+  ];
+  for (const message of messages) value.receive(message);
+  assert.equal(value.markReadThrough('alice', messages[1]), true);
+  assert.equal(value.unread.get('alice'), 2);
+  assert.equal(value.firstUnread('alice').messageId, 'server-b');
+  assert.equal(
+    value.markReadThrough('alice', { ...messages[3], messageId: 'server-absent' }),
+    true,
+  );
+  assert.equal(value.unread.has('alice'), false, 'a saved cursor need not exist in runtime replay');
+  const sameMicrosecond = store();
+  const laterId = entry('z', { recipientId: 'local', sentAt: '2026-01-01T00:00:00.123456001Z' });
+  const earlierId = entry('a', { recipientId: 'local', sentAt: '2026-01-01T00:00:00.123456999Z' });
+  sameMicrosecond.receive(laterId);
+  sameMicrosecond.receive(earlierId);
+  sameMicrosecond.markReadThrough('alice', earlierId);
+  assert.equal(
+    sameMicrosecond.unread.get('alice'),
+    1,
+    'database precision uses UUID order within one microsecond',
+  );
+  assert.equal(sameMicrosecond.firstUnread('alice').messageId, laterId.messageId);
+});
+
 test('message count and character bounds also apply to ACK replacement and failures', () => {
   const value = store(2, 500);
   for (let id = 0; id < 3; id++) value.receive(entry(id, { recipientId: 'local' }));
