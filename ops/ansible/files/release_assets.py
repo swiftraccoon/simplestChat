@@ -21,7 +21,14 @@ if TYPE_CHECKING:
     from pathlib import Path
 from typing import TypedDict
 
-from release_json import JsonValue, array_value, decode_json, object_value, string_value
+from release_json import (
+    JsonValue,
+    array_value,
+    decode_json,
+    integer_value,
+    object_value,
+    string_value,
+)
 
 MAX_FILE = 8 * 1024 * 1024
 MAX_TOTAL = 32 * 1024 * 1024
@@ -156,6 +163,23 @@ def read_generation(root: Path, value: JsonValue, owner: int) -> Generation:
     return {"revision": revision, "createdAt": created, "expiresAt": expires, "assets": assets}
 
 
+def validate_read_budget(entries: list[JsonValue]) -> None:
+    """Admit the entire declared payload budget before opening any asset file."""
+    total = 0
+    for entry in entries:
+        generation = object_value(entry)
+        require("assets" in generation, "asset_generation_fields")
+        files = object_value(generation["assets"])
+        require(0 < len(files) <= MAX_FILES, "asset_generation_count")
+        for item in files.values():
+            metadata = object_value(item)
+            require("size" in metadata, "asset_record_fields")
+            declared = metadata["size"]
+            require(type(declared) is int and 0 < declared <= MAX_FILE, "asset_record")
+            total += integer_value(declared)
+            require(total <= MAX_TOTAL, "asset_index_total")
+
+
 def read_store(root: Path, owner: int) -> list[Generation]:
     """Reject foreign state instead of adopting or deleting it."""
     protected(root, owner, directory=True)
@@ -172,6 +196,7 @@ def read_store(root: Path, owner: int) -> list[Generation]:
     )
     entries = array_value(value["generations"])
     require(len(entries) <= MAX_GENERATIONS, "asset_index_generations")
+    validate_read_budget(entries)
     generations = [read_generation(root, entry, owner) for entry in entries]
     revisions = {entry["revision"] for entry in generations}
     require(len(revisions) == len(generations), "asset_index_duplicate")

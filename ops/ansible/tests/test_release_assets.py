@@ -219,7 +219,7 @@ class AssetsTests(unittest.TestCase):
         self.assertEqual(assets.read_store(self.root, self.owner), [])
 
     def test_index_records_exact_sha_size_and_public_modes(self) -> None:
-        """The Rust reader and proxy receive only auditable immutable public bytes."""
+        """The proxy receives only auditable immutable public bytes."""
         self.publish("a" * 40)
         value = object_value(decode_json((self.root / "index.json").read_bytes()))
         generation = object_value(array_value(value["generations"])[0])
@@ -229,6 +229,32 @@ class AssetsTests(unittest.TestCase):
         )
         self.assertEqual(self.root.stat().st_mode & 0o777, 0o755)
         self.assertEqual((self.root / "index.json").stat().st_mode & 0o777, 0o644)
+
+    def test_aggregate_metadata_budget_rejects_before_any_asset_payload_read(self) -> None:
+        """A corrupt owned index cannot make validation hash gigabytes before refusal."""
+        _ = assets.publish(
+            self.root,
+            {"a" * 40: {NAME: CONTENT}, "b" * 40: {"media-current123.js": CONTENT}},
+            NOW,
+            owner=self.owner,
+        )
+        original = Path.read_bytes
+        reads: list[Path] = []
+
+        def guarded_read(path: Path) -> bytes:
+            reads.append(path)
+            if path == self.root / "index.json":
+                return original(path)
+            message = "Asset payload opened before aggregate admission"
+            raise AssertionError(message)
+
+        with (
+            patch.object(assets, "MAX_TOTAL", len(CONTENT) * 2 - 1),
+            patch.object(Path, "read_bytes", guarded_read),
+            self.assertRaisesRegex(assets.AssetError, "asset_index_total"),
+        ):
+            _ = assets.read_store(self.root, self.owner)
+        self.assertEqual(reads, [self.root / "index.json"])
 
     def test_proxy_union_is_relative_verified_and_selected_version_is_separate(self) -> None:
         """Staging cannot announce a candidate; selecting and rolling back can."""
