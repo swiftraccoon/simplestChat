@@ -326,7 +326,7 @@
         {
           "path": "test/src/RTC/TestTransportCongestionControlClient.cpp",
           "upstream_sha256": null,
-          "vendored_sha256": "b9d5c2e6bcd9bb5c4a2981a58f99e2b620fa93aaa5c5536a921dcbbaadfc91b5"
+          "vendored_sha256": "8f85eb9fc58d9b5e3e0a8123044079441847eb9410ed856aa26e141d5c4b0d3a"
         }
       ]
     },

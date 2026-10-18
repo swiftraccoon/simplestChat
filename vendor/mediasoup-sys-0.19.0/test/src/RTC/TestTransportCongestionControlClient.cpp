@@ -161,7 +161,8 @@ namespace
 	};
 
 	RecoveryResult ModelRecovery(
-	  bool legacyAlrGrowth, int64_t initialRate, int64_t acknowledgedAndSentRate, int64_t allocatedDemand = 0)
+	  bool legacyAlrGrowth, int64_t initialRate, int64_t acknowledgedRate,
+	  int64_t trackedSentRate, int64_t allocatedDemand = 0)
 	{
 		RecoveryConfig config(legacyAlrGrowth);
 		webrtc::AimdRateControl aimd(&config, /*send_side*/ true);
@@ -183,14 +184,14 @@ namespace
 			const bool wasInAlr = alr.GetApplicationLimitedRegionStartTime().has_value();
 			aimd.SetInApplicationLimitedRegion(wasInAlr);
 			webrtc::RateControlInput normal(
-			  webrtc::BandwidthUsage::kBwNormal, webrtc::DataRate::bps(acknowledgedAndSentRate));
+			  webrtc::BandwidthUsage::kBwNormal, webrtc::DataRate::bps(acknowledgedRate));
 			const auto estimate = aimd.Update(&normal, webrtc::Timestamp::ms(atMs));
 			result.estimate = estimate.bps();
 			result.maximumEstimate = std::max(result.maximumEstimate, result.estimate);
 			alr.SetEstimatedBitrate(static_cast<int>(result.estimate));
 			// Preserve fractional bytes: this is a known, constant tracked send
 			// rate, not an inference that every reported RTP byte was ALR tracked.
-			unsentFraction += acknowledgedAndSentRate * 50;
+			unsentFraction += trackedSentRate * 50;
 			alr.OnBytesSent(static_cast<size_t>(unsentFraction / 8000), atMs);
 			unsentFraction %= 8000;
 			const bool inAlr = alr.GetApplicationLimitedRegionStartTime().has_value();
@@ -394,12 +395,17 @@ TEST_CASE("the client accepts a real target equal to its initial rate", "[bandwi
 
 TEST_CASE("ACK limited growth can prevent ALR and its periodic recovery probes", "[bandwidth-constraints]")
 {
-	for (const auto [initial, throughput] :
-	     std::array<std::pair<int64_t, int64_t>, 2>{ { { 216000, 287000 }, { 281000, 334000 } } })
+	// Controlled mismatches reproduce the mechanism; hosted observations do not
+	// expose the internal ACK rate or prove every RTP byte is ALR tracked.
+	for (const auto [initial, acknowledged, trackedSent] :
+	     std::array<std::array<int64_t, 3>, 2>{ { { 216000, 140000, 287000 }, { 281000, 167000, 334000 } } })
 	{
-		INFO("initial=" << initial << ", tracked sent/ACK=" << throughput);
-		const auto current = ModelRecovery(false, initial, throughput);
-		REQUIRE(current.estimate == throughput * 3 / 2 + 10000);
+		INFO("initial=" << initial << ", ACK=" << acknowledged << ", tracked sent=" << trackedSent);
+		const auto current = ModelRecovery(false, initial, acknowledged, trackedSent);
+		// A normal signal does not force down an already higher initial rate;
+		// it only prevents growth beyond the ACK-based increase ceiling.
+		const auto ceiling = std::max(initial, acknowledged * 3 / 2 + 10000);
+		REQUIRE(current.estimate == ceiling);
 		REQUIRE(current.maximumEstimate == current.estimate);
 		REQUIRE_FALSE(current.firstAlrAt.has_value());
 		REQUIRE(current.periodicProbes == 0);
@@ -407,7 +413,7 @@ TEST_CASE("ACK limited growth can prevent ALR and its periodic recovery probes",
 		// Diagnostic comparison only: this legacy switch removes the ACK cap.
 		// Upstream WebRTC bug10542 later rejected that unbounded growth; this
 		// test demonstrates the deadzone, not a production recommendation.
-		const auto legacy = ModelRecovery(true, initial, throughput);
+		const auto legacy = ModelRecovery(true, initial, acknowledged, trackedSent);
 		REQUIRE(legacy.firstAlrAt.has_value());
 		REQUIRE(legacy.firstProbeAt.has_value());
 		REQUIRE(*legacy.firstProbeAt >= *legacy.firstAlrAt + 5000);
@@ -415,6 +421,24 @@ TEST_CASE("ACK limited growth can prevent ALR and its periodic recovery probes",
 		REQUIRE(legacy.estimate == legacy.alrEstimate);
 		REQUIRE(legacy.estimate > current.estimate);
 		REQUIRE(legacy.maximumEstimate < 3000000);
+	}
+}
+
+TEST_CASE("the default-on screenshare ALR profile detects matched tracked and ACK rates", "[bandwidth-constraints]")
+{
+	for (const auto [initial, throughput] :
+	     std::array<std::pair<int64_t, int64_t>, 2>{ { { 216000, 287000 }, { 281000, 334000 } } })
+	{
+		INFO("initial=" << initial << ", tracked sent/ACK=" << throughput);
+		const auto result = ModelRecovery(false, initial, throughput, throughput);
+		// AlrExperimentSettings enables its 80%/40% screenshare profile when
+		// no experiment value is provided. The detector header's 65% default
+		// therefore does not describe this worker's effective configuration.
+		REQUIRE(result.firstAlrAt.has_value());
+		REQUIRE(result.firstProbeAt.has_value());
+		REQUIRE(*result.firstProbeAt >= *result.firstAlrAt + 5000);
+		REQUIRE(result.periodicProbes > 0);
+		REQUIRE(result.estimate == throughput * 3 / 2 + 10000);
 	}
 }
 
@@ -483,18 +507,18 @@ TEST_CASE("unmet allocation retries native probes without reseeding the estimate
 
 TEST_CASE("explicit demand probes escape starvation while retaining the ACK ceiling", "[bandwidth-constraints]")
 {
-	for (const auto [initial, throughput] :
-	     std::array<std::pair<int64_t, int64_t>, 2>{ { { 216000, 287000 }, { 281000, 334000 } } })
+	for (const auto [initial, acknowledged, trackedSent] :
+	     std::array<std::array<int64_t, 3>, 2>{ { { 216000, 140000, 287000 }, { 281000, 167000, 334000 } } })
 	{
-		INFO("initial=" << initial << ", tracked sent/ACK=" << throughput);
-		const auto result = ModelRecovery(false, initial, throughput, 2400000);
+		INFO("initial=" << initial << ", ACK=" << acknowledged << ", tracked sent=" << trackedSent);
+		const auto result = ModelRecovery(false, initial, acknowledged, trackedSent, 2400000);
 		REQUIRE_FALSE(result.firstAlrAt.has_value());
 		REQUIRE(result.firstProbeAt.has_value());
 		REQUIRE(*result.firstProbeAt == 6000);
 		REQUIRE(result.periodicProbes > 0);
 		// These modeled probes receive no successful capacity feedback. Merely
-		// scheduling them must not raise the estimate above its real ACK ceiling.
-		REQUIRE(result.estimate == throughput * 3 / 2 + 10000);
+		// scheduling them must not grow beyond the initial rate or ACK growth ceiling.
+		REQUIRE(result.estimate == std::max(initial, acknowledged * 3 / 2 + 10000));
 	}
 }
 
