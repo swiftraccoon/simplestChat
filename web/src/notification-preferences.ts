@@ -40,6 +40,7 @@ export class NotificationPreferences {
   private disposed = false;
   private dirty = false;
   private reconciled = false;
+  private readFailed = false;
   private tail: Promise<void> = Promise.resolve();
   private queued = 0;
   private readonly views = new Set<() => boolean>();
@@ -50,11 +51,24 @@ export class NotificationPreferences {
     const refresh = () => {
       if (!document.hidden) this.refresh().catch(() => {});
     };
-    window.addEventListener('focus', refresh, { signal: this.listeners.signal });
-    document.addEventListener('visibilitychange', refresh, { signal: this.listeners.signal });
+    const repair = () => {
+      if (
+        this.account === this.options.getAccountId() &&
+        this.state &&
+        this.reconciled &&
+        !this.dirty &&
+        !this.readFailed &&
+        accountUpdatesLive(this.account)
+      )
+        return;
+      refresh();
+    };
+    window.addEventListener('focus', repair, { signal: this.listeners.signal });
+    document.addEventListener('visibilitychange', repair, { signal: this.listeners.signal });
     this.timer = setInterval(() => {
       this.updateViews();
-      if (!this.reconciled || !accountUpdatesLive(this.options.getAccountId())) refresh();
+      if (this.readFailed || !this.reconciled || !accountUpdatesLive(this.options.getAccountId()))
+        refresh();
     }, 30000);
     this.stopUpdates = onAccountUpdate((update) => {
       if (
@@ -81,6 +95,7 @@ export class NotificationPreferences {
     this.loadedAt = 0;
     this.dirty = false;
     this.reconciled = false;
+    this.readFailed = false;
     this.tail = Promise.resolve();
     this.queued = 0;
     this.updateViews();
@@ -109,6 +124,7 @@ export class NotificationPreferences {
       .then((state) => {
         if (this.current(account, epoch) && request === this.request) {
           this.state = state;
+          this.readFailed = false;
           this.loadedAt = Date.now();
           this.reconciled = !this.dirty;
           this.updateViews();
@@ -117,6 +133,7 @@ export class NotificationPreferences {
       .catch(() => {
         // Retain this account's last policy on transient failures; never borrow
         // another account's policy or enable alerts before the first response.
+        if (this.current(account, epoch) && request === this.request) this.readFailed = true;
       })
       .finally(() => {
         if (this.pending === task) {
@@ -197,6 +214,7 @@ export class NotificationPreferences {
           );
       if (!this.current(account, epoch)) return false;
       this.state = state;
+      this.readFailed = false;
       this.loadedAt = Date.now();
       this.reconciled = !this.dirty;
       this.updateViews();

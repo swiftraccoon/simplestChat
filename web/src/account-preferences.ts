@@ -38,8 +38,20 @@ export class AccountPreferences {
     const refresh = (): void => {
       if (!document.hidden) this.refresh().catch(() => {});
     };
-    window.addEventListener('focus', refresh, { signal: this.events.signal });
-    document.addEventListener('visibilitychange', refresh, { signal: this.events.signal });
+    const repair = (): void => {
+      if (
+        this.account === this.options.getAccountId() &&
+        this.state &&
+        !this.dirty &&
+        !this.failure &&
+        !this.uncertain &&
+        accountUpdatesLive(this.account)
+      )
+        return;
+      refresh();
+    };
+    window.addEventListener('focus', repair, { signal: this.events.signal });
+    document.addEventListener('visibilitychange', repair, { signal: this.events.signal });
     window.addEventListener(
       'storage',
       (event) => {

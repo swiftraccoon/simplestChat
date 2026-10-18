@@ -275,6 +275,52 @@ test('visible polling, focus and storage hints reconcile other devices without s
   assert.equal(f.server.requests.length, reads + 1);
 });
 
+test('a clean live preference snapshot skips passive focus reads but preserves hints and explicit reconciliation', async (t) => {
+  const f = await fixture(t);
+  f.updates.live.add('account-a');
+  f.events.get('focus')();
+  await flush();
+  assert.equal(
+    f.server.requests.length,
+    1,
+    'a healthy feed does not substitute for an unknown snapshot',
+  );
+  f.events.get('focus')();
+  f.events.get('visibilitychange')();
+  await flush();
+  assert.equal(f.server.requests.length, 1);
+  f.events.get('storage')({ key: 'simplestchat.preferences.changed' });
+  await flush();
+  assert.equal(
+    f.server.requests.length,
+    2,
+    'credential-free cross-tab hints remain authoritative invalidations',
+  );
+  await f.preferences.refresh(true);
+  assert.equal(f.server.requests.length, 3, 'explicit Refresh remains available while live');
+  f.updates.emit({ account: 'account-a', scope: 'ready' });
+  await flush();
+  assert.equal(f.server.requests.length, 4, 'reconnect ready always reconciles the scope');
+  f.updates.live.clear();
+  f.events.get('visibilitychange')();
+  await flush();
+  assert.equal(f.server.requests.length, 5, 'a visible document repairs before stream readiness');
+});
+
+test('a failed preference read is repaired on focus even with a healthy account feed', async (t) => {
+  const f = await fixture(t);
+  await f.preferences.refresh();
+  f.updates.live.add('account-a');
+  f.server.status = 503;
+  await assert.rejects(f.preferences.refresh());
+  f.server.status = 200;
+  f.server.accounts.get('Bearer token-a').sounds = true;
+  f.events.get('focus')();
+  await flush();
+  assert.equal(f.server.requests.length, 3);
+  assert.equal(f.preferences.snapshot.sounds, true);
+});
+
 test('live invalidations queue behind an in-flight read and save without cross-account refreshes', async (t) => {
   const f = await fixture(t);
   await f.preferences.refresh();

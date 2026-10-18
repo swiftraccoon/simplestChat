@@ -1,5 +1,5 @@
 import type { AuthManager } from './auth';
-import { onAccountUpdate } from './account-updates';
+import { accountUpdatesLive, onAccountUpdate } from './account-updates';
 import { avatarColors } from './avatar-colors';
 import { openPrivateInbox, onInboxChanged } from './chat-history';
 import { administrationSections, type RoomAdministrationView } from './room-administration';
@@ -192,6 +192,7 @@ export class CommunityUI {
     const recovery = button('Recover with a saved key', () => this.openRecovery(), 'auth-link-btn');
     document.querySelector('#login-modal .auth-alt-actions')!.append(recovery);
     onInboxChanged(() => {
+      if (accountUpdatesLive(this.options.auth.userId) && !this.inboxFailed) return;
       this.refreshMessages().catch(() => {});
     });
     onAccountUpdate((update) => {

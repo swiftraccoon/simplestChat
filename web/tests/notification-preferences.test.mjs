@@ -107,6 +107,7 @@ async function fixture(initial = {}) {
     ...initial,
   };
   const document = Object.assign(new EventTarget(), dom.document, { hidden: false });
+  document.addEventListener = EventTarget.prototype.addEventListener;
   const window = new EventTarget();
   const timers = new Map();
   let timer = 0;
@@ -381,6 +382,60 @@ test('live rules remain fresh without polls and invalidation gates alerts until 
     for (const timer of f.timers.values()) timer();
     await flush();
     assert.equal(loads(), 4, 'disconnection restores bounded polling');
+  } finally {
+    f.controller.dispose();
+  }
+});
+
+test('clean live notification rules skip passive focus reads without suppressing reconnect or explicit refresh', async () => {
+  const f = await fixture();
+  try {
+    const loads = () => f.calls.filter(([kind]) => kind === 'load').length;
+    f.updates.live.add('account-a');
+    f.window.dispatchEvent(new Event('focus'));
+    await flush();
+    assert.equal(loads(), 1, 'unknown rules load even while the stream is healthy');
+    f.window.dispatchEvent(new Event('focus'));
+    f.document.dispatchEvent(new Event('visibilitychange'));
+    await flush();
+    assert.equal(loads(), 1);
+    await f.controller.refresh();
+    assert.equal(loads(), 2, 'explicit reads remain available');
+    f.updates.emit({ account: 'account-a', scope: 'ready' });
+    await flush();
+    assert.equal(loads(), 3);
+    f.updates.live.clear();
+    f.document.dispatchEvent(new Event('visibilitychange'));
+    await flush();
+    assert.equal(loads(), 4, 'visibility repairs while the resumed stream is not ready');
+  } finally {
+    f.controller.dispose();
+  }
+});
+
+test('a failed notification read still repairs on focus and polling with a healthy stream', async () => {
+  const f = await fixture();
+  try {
+    await f.controller.refresh();
+    f.updates.live.add('account-a');
+    f.state.load = async () => {
+      throw new Error('Temporary read failure');
+    };
+    await f.controller.refresh();
+    f.state.load = async () => ({ ...defaults(), mentions: false });
+    f.window.dispatchEvent(new Event('focus'));
+    await flush();
+    assert.equal(f.controller.allows('mention'), false);
+    assert.equal(f.calls.filter(([kind]) => kind === 'load').length, 3);
+    f.state.load = async () => {
+      throw new Error('Another read failure');
+    };
+    await f.controller.refresh();
+    f.state.load = async () => defaults();
+    for (const callback of f.timers.values()) callback();
+    await flush();
+    assert.equal(f.calls.filter(([kind]) => kind === 'load').length, 5);
+    assert.equal(f.controller.allows('mention'), true);
   } finally {
     f.controller.dispose();
   }

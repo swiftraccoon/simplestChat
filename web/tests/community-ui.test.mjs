@@ -148,9 +148,10 @@ async function fixture() {
     modules: { './ui': ui, './settings-sheet.css': {} },
     globals: { document: dom.document, setTimeout: () => 1, clearTimeout: () => {} },
   });
+  const updates = accountUpdatesFixture();
   const api = await loadTypeScript('src/community-ui.ts', {
     modules: {
-      './account-updates': accountUpdatesFixture().module,
+      './account-updates': updates.module,
       './ui': ui,
       './settings-sheet': sheet,
       './room-administration': await loadTypeScript('src/room-administration.ts', {
@@ -216,7 +217,7 @@ async function fixture() {
       state.forgotten++;
     },
   });
-  return { ...dom, ...api, ui, auth, state, profile, community };
+  return { ...dom, ...api, ui, auth, state, profile, community, updates };
 }
 
 function dialog(fixture, title) {
@@ -1431,4 +1432,72 @@ test('Messages badge follows confirmed unread counts and fences a replaced accou
   f.state.inboxListener();
   await flush();
   assert.equal(button.textContent, 'Messages');
+});
+
+test('a healthy account feed handles unread invalidation once without duplicate legacy reads', async () => {
+  const f = await fixture();
+  await flush();
+  f.updates.live.add(f.auth.userId);
+  const pending = deferred();
+  let reads = 0;
+  f.state.unread = () => {
+    reads++;
+    return pending.promise;
+  };
+  f.state.inboxListener();
+  assert.equal(reads, 0, 'legacy socket/local notification relies on the healthy durable feed');
+  f.updates.emit({ account: f.auth.userId, scope: 'inbox' });
+  f.state.inboxListener();
+  assert.equal(reads, 1, 'the same committed change cannot queue a second unread GET');
+  pending.resolve({ unreadCount: 3 });
+  await flush();
+  assert.equal(reads, 1);
+  assert.equal(f.community.messagesNeedRefresh, false);
+});
+
+test('legacy unread invalidation remains immediate without a healthy current-account feed', async () => {
+  const f = await fixture();
+  await flush();
+  f.updates.live.add('another-account');
+  const tokens = [];
+  f.state.unread = async (token) => {
+    tokens.push(token);
+    return { unreadCount: 1 };
+  };
+  f.state.inboxListener();
+  assert.deepEqual(tokens, ['token-a']);
+  await flush();
+  f.updates.live.add('account-a');
+  f.auth.userId = 'account-b';
+  f.auth.jwt = 'token-b';
+  f.state.inboxListener();
+  assert.deepEqual(
+    tokens,
+    ['token-a', 'token-b'],
+    'an old account feed cannot suppress the new account fallback',
+  );
+  await flush();
+});
+
+test('a prior unread failure permits legacy repair even while the account feed stays healthy', async () => {
+  const f = await fixture();
+  await flush();
+  f.updates.live.add(f.auth.userId);
+  f.state.unread = async () => {
+    throw new Error('Unread unavailable');
+  };
+  await f.community.refreshMessages();
+  assert.equal(f.community.messagesNeedRefresh, true);
+  let reads = 0;
+  f.state.unread = async () => {
+    reads++;
+    return { unreadCount: 4 };
+  };
+  f.state.inboxListener();
+  assert.equal(reads, 1, 'a healthy stream cannot conceal a failed authoritative unread read');
+  await flush();
+  assert.equal(f.community.messagesNeedRefresh, false);
+  f.state.inboxListener();
+  await flush();
+  assert.equal(reads, 1, 'successful repair restores healthy-feed deduplication');
 });
