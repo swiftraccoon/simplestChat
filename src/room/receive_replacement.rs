@@ -10,7 +10,7 @@ impl RoomManager {
     /// An admitted operation finishes in its owned task even when its reply is
     /// lost. The expected receiver ID is both a precondition and a bounded retry
     /// identity; it never authorizes replacing another receiver or participant.
-    pub async fn replace_recv_transport(
+    pub(crate) async fn replace_recv_transport(
         &self,
         room_id: &str,
         participant_id: &str,

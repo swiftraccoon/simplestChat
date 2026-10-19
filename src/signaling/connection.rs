@@ -24,7 +24,7 @@ use uuid::Uuid;
 
 #[path = "connection_authentication.rs"]
 mod authentication;
-pub use authentication::RenewalAuthenticator;
+pub(crate) use authentication::RenewalAuthenticator;
 use authentication::{RenewalBudget, RenewalOutcome, renew_authentication, unix_seconds};
 #[path = "connection_credentials.rs"]
 mod credentials;
@@ -410,7 +410,7 @@ type GraceEntries = HashMap<(String, String, String), GraceEntry>;
 
 /// Shared map of participants in grace period (disconnected but not yet removed)
 #[derive(Clone)]
-pub struct GracePeriodMap {
+pub(crate) struct GracePeriodMap {
     inner: Arc<StdRwLock<GraceEntries>>,
     max_entries: usize,
     closed: Arc<AtomicBool>,
@@ -423,11 +423,11 @@ impl Default for GracePeriodMap {
 }
 
 impl GracePeriodMap {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self::with_capacity(10_000)
     }
 
-    pub fn with_capacity(max_entries: usize) -> Self {
+    pub(crate) fn with_capacity(max_entries: usize) -> Self {
         Self {
             inner: Arc::new(StdRwLock::new(HashMap::new())),
             max_entries: max_entries.max(1),
@@ -888,7 +888,7 @@ fn retain_credentials(
     clippy::too_many_arguments,
     reason = "connection boundary keeps owned session resources explicit"
 )]
-pub async fn handle_connection(
+pub(crate) async fn handle_connection(
     socket: WebSocket,
     room_manager: Arc<RoomManager>,
     turn_config: Option<Arc<TurnConfig>>,

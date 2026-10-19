@@ -17,7 +17,7 @@ use tracing::warn;
 
 /// Keep handler futures small without changing their HTTP error responses.
 #[derive(Debug)]
-pub struct RoomApiError(Box<Response>);
+pub(crate) struct RoomApiError(Box<Response>);
 
 impl From<Response> for RoomApiError {
     fn from(response: Response) -> Self {
@@ -32,7 +32,7 @@ impl IntoResponse for RoomApiError {
 }
 
 #[derive(Serialize)]
-pub struct RoomListItem {
+pub(crate) struct RoomListItem {
     pub id: String,
     pub display_name: String,
     pub topic: Option<String>,
@@ -98,7 +98,7 @@ pub(crate) fn room_list_item(server: &SignalingServer, row: RoomListRow) -> Room
 }
 
 #[derive(Deserialize)]
-pub struct ListParams {
+pub(crate) struct ListParams {
     pub page: Option<u32>,
     pub limit: Option<u32>,
     pub q: Option<String>,
@@ -185,7 +185,7 @@ pub(crate) fn room_database_error(error: sqlx::Error) -> Response {
 }
 
 /// GET /api/rooms
-pub async fn list_rooms(
+pub(crate) async fn list_rooms(
     State(server): State<SignalingServer>,
     Query(params): Query<ListParams>,
 ) -> Result<Json<Vec<RoomListItem>>, RoomApiError> {
@@ -354,7 +354,7 @@ pub(crate) async fn fetch_directory_page(
 }
 
 /// POST /api/rooms
-pub async fn create_room(
+pub(crate) async fn create_room(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
     Json(req): Json<CreateRoomRequest>,
@@ -434,7 +434,7 @@ pub async fn create_room(
 }
 
 /// DELETE /api/rooms/:id
-pub async fn delete_room(
+pub(crate) async fn delete_room(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
     Path(room_id): Path<String>,
@@ -476,7 +476,7 @@ pub async fn delete_room(
 }
 
 /// GET /api/rooms/mine — includes the owner's private rooms, capped by their quota.
-pub async fn owned_rooms(
+pub(crate) async fn owned_rooms(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
 ) -> Result<(HeaderMap, Json<Vec<RoomListItem>>), RoomApiError> {
@@ -508,7 +508,7 @@ pub async fn owned_rooms(
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct RoomImageParams {
+pub(crate) struct RoomImageParams {
     /// The current content digest; without it there is nothing to serve.
     pub v: Option<String>,
 }
@@ -540,7 +540,7 @@ fn decode_room_image(image: &str) -> Option<(&'static str, Vec<u8>)> {
 /// download sandbox policy, from the public media lane (shared with avatars)
 /// rather than the sign-in lane or the room API allowance a directory page
 /// spends on its listing.
-pub async fn room_image(
+pub(crate) async fn room_image(
     State(server): State<SignalingServer>,
     Path(id): Path<String>,
     Query(params): Query<RoomImageParams>,
@@ -592,7 +592,7 @@ pub async fn room_image(
 }
 
 /// PATCH /api/rooms/:id/identity — ownership is rechecked by the database mutation.
-pub async fn update_room_identity(
+pub(crate) async fn update_room_identity(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
     Path(id): Path<String>,

@@ -49,23 +49,23 @@ const GLOBAL_USER_REGISTRATION_LOCK: i64 = 7_349_872_340_911;
 const DUMMY_PASSWORD_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$Zml4ZWQtYXV0aC1zYWx0IQ$56/mxjo1tyWyHRqsMxTLQs/Zunrj6km+QS8vLNAMeFo";
 
 #[derive(Debug, Deserialize)]
-pub struct PasskeyRegisterStartRequest {
+pub(crate) struct PasskeyRegisterStartRequest {
     email: String,
     display_name: String,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct PasskeyLoginStartRequest {}
+pub(crate) struct PasskeyLoginStartRequest {}
 
 #[derive(Debug, Deserialize)]
-pub struct PasskeyRegisterFinishRequest {
+pub(crate) struct PasskeyRegisterFinishRequest {
     ceremony_id: String,
     credential: RegisterPublicKeyCredential,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct PasskeyLoginFinishRequest {
+pub(crate) struct PasskeyLoginFinishRequest {
     ceremony_id: String,
     credential: PublicKeyCredential,
 }
@@ -443,7 +443,7 @@ pub(crate) async fn login(
 }
 
 /// POST /api/auth/refresh
-pub async fn refresh(
+pub(crate) async fn refresh(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
 ) -> Result<(HeaderMap, Json<AuthResponse>), AuthError> {
@@ -507,7 +507,7 @@ pub async fn refresh(
 }
 
 /// POST /api/auth/logout
-pub async fn logout(
+pub(crate) async fn logout(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
 ) -> (HeaderMap, StatusCode) {
@@ -585,7 +585,7 @@ pub(crate) async fn passkey_register_start(
 }
 
 /// POST /api/auth/passkey/register/finish
-pub async fn passkey_register_finish(
+pub(crate) async fn passkey_register_finish(
     State(server): State<SignalingServer>,
     Json(body): Json<PasskeyRegisterFinishRequest>,
 ) -> Result<(HeaderMap, Json<AuthResponse>), AuthError> {
@@ -728,7 +728,7 @@ pub(crate) async fn passkey_login_start(
 }
 
 /// POST /api/auth/passkey/login/finish
-pub async fn passkey_login_finish(
+pub(crate) async fn passkey_login_finish(
     State(server): State<SignalingServer>,
     Json(body): Json<PasskeyLoginFinishRequest>,
 ) -> Result<(HeaderMap, Json<AuthResponse>), AuthError> {

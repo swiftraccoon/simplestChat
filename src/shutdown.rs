@@ -9,7 +9,7 @@ use tokio::sync::watch;
 
 /// Shared, persistent drain notification, including for late subscribers.
 #[derive(Clone)]
-pub struct DrainSignal {
+pub(crate) struct DrainSignal {
     state: watch::Sender<bool>,
     admission: Arc<Mutex<()>>,
 }
@@ -25,7 +25,7 @@ impl Default for DrainSignal {
 
 impl DrainSignal {
     /// Atomically closes admission and wakes all current and future waiters.
-    pub fn begin_draining(&self) {
+    pub(crate) fn begin_draining(&self) {
         let _guard = self
             .admission
             .lock()
@@ -34,7 +34,7 @@ impl DrainSignal {
     }
 
     /// Whether shutdown has begun; drain cannot be reversed.
-    pub fn is_draining(&self) -> bool {
+    pub(crate) fn is_draining(&self) -> bool {
         *self.state.borrow()
     }
 
@@ -49,7 +49,7 @@ impl DrainSignal {
     }
 
     /// Completes immediately for late subscribers after shutdown has begun.
-    pub async fn wait(&self) {
+    pub(crate) async fn wait(&self) {
         let mut receiver = self.state.subscribe();
         while !*receiver.borrow_and_update() {
             if receiver.changed().await.is_err() {
@@ -61,7 +61,7 @@ impl DrainSignal {
 
 /// Run a cleanup stage within its budget. Failure is logged and returned so the
 /// caller can continue later stages without reporting a false successful exit.
-pub async fn run_stage<E: std::fmt::Display>(
+pub(crate) async fn run_stage<E: std::fmt::Display>(
     stage: &'static str,
     budget: Duration,
     work: impl Future<Output = Result<(), E>>,

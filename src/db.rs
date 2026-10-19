@@ -46,7 +46,7 @@ fn error_kind(error: &sqlx::Error) -> usize {
 
 /// Count a failure at one error-conversion boundary, before redacting details.
 /// Do not call this twice while propagating the same error.
-pub fn record_error(error: &sqlx::Error) {
+pub(crate) fn record_error(error: &sqlx::Error) {
     DATABASE_ERRORS[error_kind(error)].fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 }
 
@@ -65,7 +65,7 @@ pub(crate) fn append_error_metrics(out: &mut String) {
     }
 }
 
-pub async fn connect() -> anyhow::Result<Option<PgPool>> {
+pub(crate) async fn connect() -> anyhow::Result<Option<PgPool>> {
     let limits = crate::configuration::numeric_settings()?;
     let url = match std::env::var("DATABASE_URL") {
         Ok(url) => url,

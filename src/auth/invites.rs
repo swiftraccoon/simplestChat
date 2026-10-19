@@ -16,11 +16,11 @@ use sqlx::{PgConnection, PgPool};
 use uuid::Uuid;
 
 /// Live (unused, unexpired) registration codes one account may hold.
-pub const MAX_LIVE_REGISTRATION_INVITES: i64 = 5;
+pub(crate) const MAX_LIVE_REGISTRATION_INVITES: i64 = 5;
 const REGISTRATION_INVITE_DAYS: i32 = 7;
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
-pub struct RegistrationInvite {
+pub(crate) struct RegistrationInvite {
     pub id: Uuid,
     pub uses_left: i32,
     pub expires_at: DateTime<Utc>,
@@ -29,7 +29,7 @@ pub struct RegistrationInvite {
 
 /// The secret is returned only by creation, never by listing.
 #[derive(Debug, Serialize)]
-pub struct CreatedRegistrationInvite {
+pub(crate) struct CreatedRegistrationInvite {
     #[serde(flatten)]
     pub details: RegistrationInvite,
     pub code: String,
@@ -73,7 +73,7 @@ async fn caller(
 }
 
 /// GET /api/auth/invites — the account's live registration codes.
-pub async fn list(
+pub(crate) async fn list(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
 ) -> Result<(HeaderMap, Json<Vec<RegistrationInvite>>), AuthError> {
@@ -86,7 +86,7 @@ pub async fn list(
 }
 
 /// POST /api/auth/invites — mint a single-use code, a week long.
-pub async fn create(
+pub(crate) async fn create(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
 ) -> Result<(HeaderMap, Json<CreatedRegistrationInvite>), AuthError> {
@@ -135,7 +135,7 @@ pub async fn create(
 }
 
 /// DELETE /api/auth/invites/:id — take back one of the account's own codes.
-pub async fn revoke(
+pub(crate) async fn revoke(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
     Path(id): Path<Uuid>,

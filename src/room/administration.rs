@@ -27,7 +27,7 @@ const MAX_OFFSET: u32 = 10_000;
 
 #[derive(Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct SettingsPatch {
+pub(crate) struct SettingsPatch {
     pub moderated: Option<bool>,
     pub lobby_enabled: Option<bool>,
     pub guests_allowed: Option<bool>,
@@ -113,7 +113,7 @@ impl SettingsPatch {
 
 #[derive(Default, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct PageQuery {
+pub(crate) struct PageQuery {
     pub offset: Option<u32>,
 }
 
@@ -129,26 +129,26 @@ impl PageQuery {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct RoleRequest {
+pub(crate) struct RoleRequest {
     pub role: u8,
 }
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct ReportRequest {
+pub(crate) struct ReportRequest {
     pub status: String,
 }
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct LobbyRequest {
+pub(crate) struct LobbyRequest {
     pub action: String,
     pub reason: Option<String>,
 }
 
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct SanctionRequest {
+pub(crate) struct SanctionRequest {
     pub target_participant_id: String,
     pub kind: String,
     pub enabled: bool,
@@ -167,7 +167,7 @@ struct SanctionPublication {
 
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ModerationRequest {
+pub(crate) struct ModerationRequest {
     pub action: String,
     pub target_participant_id: String,
     pub reason: Option<String>,
@@ -1291,7 +1291,7 @@ async fn admit(
 type Response = (HeaderMap, Json<Value>);
 
 /// GET /api/rooms/:id/administration.
-pub async fn overview(
+pub(crate) async fn overview(
     State(server): State<SignalingServer>,
     Path(id): Path<String>,
     headers: HeaderMap,
@@ -1332,7 +1332,7 @@ async fn mutate(
     Ok((private_headers(), Json(result)))
 }
 
-pub async fn patch_settings(
+pub(crate) async fn patch_settings(
     State(server): State<SignalingServer>,
     Path(id): Path<String>,
     headers: HeaderMap,
@@ -1341,7 +1341,7 @@ pub async fn patch_settings(
     mutate(server, headers, id, Command::Settings(patch)).await
 }
 
-pub async fn set_role(
+pub(crate) async fn set_role(
     State(server): State<SignalingServer>,
     Path((id, target)): Path<(String, Uuid)>,
     headers: HeaderMap,
@@ -1352,7 +1352,7 @@ pub async fn set_role(
     mutate(server, headers, id, Command::Role(target, role)).await
 }
 
-pub async fn remove_ban(
+pub(crate) async fn remove_ban(
     State(server): State<SignalingServer>,
     Path((id, ban)): Path<(String, Uuid)>,
     headers: HeaderMap,
@@ -1360,7 +1360,7 @@ pub async fn remove_ban(
     mutate(server, headers, id, Command::Unban(ban)).await
 }
 
-pub async fn resolve_report(
+pub(crate) async fn resolve_report(
     State(server): State<SignalingServer>,
     Path((id, report)): Path<(String, Uuid)>,
     headers: HeaderMap,
@@ -1369,7 +1369,7 @@ pub async fn resolve_report(
     mutate(server, headers, id, Command::Report(report, request.status)).await
 }
 
-pub async fn moderate(
+pub(crate) async fn moderate(
     State(server): State<SignalingServer>,
     Path(id): Path<String>,
     headers: HeaderMap,
@@ -1379,7 +1379,7 @@ pub async fn moderate(
     mutate(server, headers, id, Command::Moderate(request)).await
 }
 
-pub async fn lobby_action(
+pub(crate) async fn lobby_action(
     State(server): State<SignalingServer>,
     Path((id, target)): Path<(String, String)>,
     headers: HeaderMap,
@@ -1388,7 +1388,7 @@ pub async fn lobby_action(
     mutate(server, headers, id, Command::Lobby(target, request)).await
 }
 
-pub async fn sanction(
+pub(crate) async fn sanction(
     State(server): State<SignalingServer>,
     Path(id): Path<String>,
     headers: HeaderMap,
@@ -1397,23 +1397,8 @@ pub async fn sanction(
     mutate(server, headers, id, Command::Sanction(request)).await
 }
 
-pub async fn lobby(
-    State(server): State<SignalingServer>,
-    Path(id): Path<String>,
-    headers: HeaderMap,
-    Query(query): Query<PageQuery>,
-) -> Result<Response, api::RoomApiError> {
-    list(
-        State(server),
-        Path((id, "lobby".to_owned())),
-        headers,
-        Query(query),
-    )
-    .await
-}
-
 /// GET /api/rooms/:id/administration/:section?offset=N.
-pub async fn list(
+pub(crate) async fn list(
     State(server): State<SignalingServer>,
     Path((id, section)): Path<(String, String)>,
     headers: HeaderMap,

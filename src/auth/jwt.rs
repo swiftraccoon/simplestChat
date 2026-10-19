@@ -7,15 +7,15 @@ use std::time::{SystemTime, UNIX_EPOCH};
 const TOKEN_LIFETIME_SECS: u64 = 15 * 60;
 const JWT_ISSUER: &str = "simplestchat";
 const JWT_AUDIENCE: &str = "simplestchat";
-pub const MIN_SECRET_BYTES: usize = 32;
+pub(crate) const MIN_SECRET_BYTES: usize = 32;
 
-pub fn secret_is_strong(secret: &str) -> bool {
+pub(crate) fn secret_is_strong(secret: &str) -> bool {
     secret.len() >= MIN_SECRET_BYTES
 }
 
 /// The token a sign-in or refresh issues: bound to its refresh session, so
 /// signing that session out retires it before its 15-minute expiry.
-pub fn create_session_token(
+pub(crate) fn create_session_token(
     user_id: &str,
     display_name: &str,
     secret: &str,
@@ -48,7 +48,7 @@ pub fn create_session_token(
     .map_err(|e| AuthError::DatabaseError(format!("JWT encode error: {e}")))
 }
 
-pub fn validate_token(token: &str, secret: &str) -> Result<Claims, AuthError> {
+pub(crate) fn validate_token(token: &str, secret: &str) -> Result<Claims, AuthError> {
     if !secret_is_strong(secret) {
         return Err(AuthError::InvalidToken);
     }
@@ -76,7 +76,7 @@ pub fn validate_token(token: &str, secret: &str) -> Result<Claims, AuthError> {
 }
 
 /// Require the current account version and its live, unexpired issuing session.
-pub async fn validate_current_claims(
+pub(crate) async fn validate_current_claims(
     pool: &sqlx::PgPool,
     claims: &Claims,
 ) -> Result<(), AuthError> {

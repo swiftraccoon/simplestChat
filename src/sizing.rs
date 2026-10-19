@@ -17,7 +17,7 @@ const WEBINAR_VIEWERS_PER_WORKER: usize = 175;
 const GRID_PARTICIPANTS: usize = 28;
 
 /// The cgroup v2 CPU quota in whole CPUs, or `None` without a limit.
-pub fn parse_cpu_max(contents: &str) -> Option<f64> {
+pub(crate) fn parse_cpu_max(contents: &str) -> Option<f64> {
     let mut fields = contents.split_whitespace();
     let quota = fields.next()?;
     let period: f64 = fields.next()?.parse().ok()?;
@@ -29,7 +29,7 @@ pub fn parse_cpu_max(contents: &str) -> Option<f64> {
 }
 
 /// A cgroup v2 memory limit in bytes, or `None` without one.
-pub fn parse_memory_max(contents: &str) -> Option<u64> {
+pub(crate) fn parse_memory_max(contents: &str) -> Option<u64> {
     let value = contents.trim();
     if value == "max" {
         return None;
@@ -38,7 +38,7 @@ pub fn parse_memory_max(contents: &str) -> Option<u64> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Sizing {
+pub(crate) struct Sizing {
     pub workers: usize,
     /// Whole CPUs of quota, when the cgroup sets one.
     pub quota_cpus: Option<u64>,
@@ -49,17 +49,17 @@ pub struct Sizing {
 
 impl Sizing {
     /// About how many meeting participants these workers carry.
-    pub fn meeting_participants(&self) -> usize {
+    pub(crate) fn meeting_participants(&self) -> usize {
         self.workers * MEETING_PARTICIPANTS_PER_WORKER
     }
 
     /// About how many webinar viewers, spread over every worker.
-    pub fn webinar_viewers(&self) -> usize {
+    pub(crate) fn webinar_viewers(&self) -> usize {
         self.workers * WEBINAR_VIEWERS_PER_WORKER
     }
 
     /// One line for the log, plus the warnings a mis-sized deployment earns.
-    pub fn report(&self) -> (String, Vec<String>) {
+    pub(crate) fn report(&self) -> (String, Vec<String>) {
         let quota = self.quota_cpus.map_or_else(
             || "no CPU quota".to_owned(),
             |cpus| format!("a {cpus}-CPU quota"),
@@ -127,7 +127,7 @@ fn read_env_usize(name: &str) -> Option<usize> {
 }
 
 /// The process's sizing from its cgroup files and environment.
-pub fn from_process(workers: usize, cgroup: &Path) -> Sizing {
+pub(crate) fn from_process(workers: usize, cgroup: &Path) -> Sizing {
     let read = |name: &str| std::fs::read_to_string(cgroup.join(name)).ok();
     Sizing {
         workers,
@@ -143,7 +143,7 @@ pub fn from_process(workers: usize, cgroup: &Path) -> Sizing {
 }
 
 /// Log the sizing line and its warnings.
-pub fn announce(workers: usize) {
+pub(crate) fn announce(workers: usize) {
     let sizing = from_process(workers, Path::new("/sys/fs/cgroup"));
     let (line, warnings) = sizing.report();
     tracing::info!("{line}");

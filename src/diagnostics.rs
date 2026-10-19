@@ -27,7 +27,7 @@ const WRITER_PARK_BUDGET: Duration = Duration::from_millis(50);
 /// Fixed operation vocabulary. No client-provided names become record fields.
 #[derive(Clone, Copy, Debug, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum OperationKind {
+pub(crate) enum OperationKind {
     JoinRoom,
     LeaveRoom,
     Reconnect,
@@ -56,13 +56,11 @@ pub enum OperationKind {
 /// Presence in this vocabulary does not imply that every path is instrumented.
 #[derive(Clone, Copy, Debug, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum Stage {
+pub(crate) enum Stage {
     RoomCreationLockWait,
     RoomLockWait,
     RoomPolicyLookup,
     RoomPasswordPermitWait,
-    RoomPasswordDispatch,
-    RoomPasswordWork,
     RoomMediaSetup,
     RoomMembershipCommit,
     SessionLockWait,
@@ -71,7 +69,6 @@ pub enum Stage {
     MediaProduce,
     MediaConsume,
     MediaResume,
-    OutboundQueueWait,
     SocketWrite,
     Dispatch,
 }
@@ -81,7 +78,7 @@ pub enum Stage {
 /// future records `Cancelled`, including unwinding, rather than inventing success.
 #[derive(Clone, Copy, Debug, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum Outcome {
+pub(crate) enum Outcome {
     Ok,
     Error,
     Completed,
@@ -123,7 +120,7 @@ impl Default for Limits {
 /// Shared recorder handle. Default is disabled: no thread, allocation, file,
 /// clock read or connection-ID generation is required to construct it.
 #[derive(Clone, Default)]
-pub struct Diagnostics {
+pub(crate) struct Diagnostics {
     inner: Option<Arc<Inner>>,
 }
 
@@ -131,7 +128,6 @@ struct Inner {
     sender: mpsc::Sender<Record>,
     shared: Arc<Shared>,
     next_operation: AtomicU64,
-    next_connection: AtomicU64,
 }
 
 struct Shared {
@@ -286,7 +282,7 @@ impl Diagnostics {
     /// Enables a new private JSONL file only when `DIAGNOSTICS_PATH` is set.
     /// Existing files (including symlinks) are never overwritten. The path must
     /// be absolute; its parent must already exist. Numeric limits fail closed.
-    pub fn from_env() -> io::Result<Self> {
+    pub(crate) fn from_env() -> io::Result<Self> {
         let Some(path) = std::env::var_os("DIAGNOSTICS_PATH") else {
             return Ok(Self::default());
         };
@@ -364,24 +360,15 @@ impl Diagnostics {
                     sender,
                     shared,
                     next_operation: AtomicU64::new(0),
-                    next_connection: AtomicU64::new(0),
                 })),
             },
             receiver,
         )
     }
 
-    /// Process-local reference with no relationship to account, room, reconnect
-    /// token or media identity. References restart in each diagnostic file.
-    pub fn connection_id(&self) -> Option<u64> {
-        self.inner
-            .as_ref()
-            .and_then(|inner| next_id(&inner.next_connection))
-    }
-
     /// Begins one short operation. Call [`Operation::finish`] with its actual
     /// result, or cancellation will be recorded when the guard is dropped.
-    pub fn operation(&self, kind: OperationKind, connection_id: Option<u64>) -> Operation {
+    pub(crate) fn operation(&self, kind: OperationKind, connection_id: Option<u64>) -> Operation {
         let active = self.inner.as_ref().and_then(|inner| {
             let id = next_id(&inner.next_operation)?;
             if !self.begin_record() {
@@ -455,7 +442,7 @@ impl Diagnostics {
     /// success/failure result or extend an existing drain indefinitely. True
     /// acknowledges writer completion, not coverage; inspect the summary for
     /// dropped, expired or unfinished records.
-    pub async fn shutdown(&self) -> bool {
+    pub(crate) async fn shutdown(&self) -> bool {
         let Some(inner) = &self.inner else {
             return true;
         };
@@ -594,7 +581,7 @@ impl Active {
 
 /// RAII operation timer. Context is scoped to polls, not an entered thread-local
 /// tracing span held across `await`. Detached tasks do not inherit it implicitly.
-pub struct Operation {
+pub(crate) struct Operation {
     active: Option<Active>,
     span: tracing::Span,
 }
@@ -602,7 +589,7 @@ pub struct Operation {
 impl Operation {
     /// Runs a future under this operation's timing context. Spawned tasks must
     /// establish their own explicit scope; no application data is captured.
-    pub async fn scope<T>(&self, future: impl Future<Output = T>) -> T {
+    pub(crate) async fn scope<T>(&self, future: impl Future<Output = T>) -> T {
         match &self.active {
             Some(active) => {
                 CURRENT_OPERATION
@@ -615,7 +602,7 @@ impl Operation {
 
     /// Completes a record with a known outcome; consuming the timer prevents
     /// duplicate completion on its later drop.
-    pub fn finish(mut self, outcome: Outcome) {
+    pub(crate) fn finish(mut self, outcome: Outcome) {
         self.span.record("outcome", tracing::field::debug(outcome));
         if let Some(active) = self.active.take() {
             active.finish(outcome);
@@ -668,7 +655,7 @@ impl Drop for StageGuard {
 
 /// Measures elapsed time until a future returns, without interpreting its value.
 /// In particular, returning `Result::Err` is still `Completed` with this helper.
-pub async fn measure<T>(stage: Stage, future: impl Future<Output = T>) -> T {
+pub(crate) async fn measure<T>(stage: Stage, future: impl Future<Output = T>) -> T {
     let guard = StageGuard::new(stage);
     let result = future.await;
     guard.finish(Outcome::Completed);
@@ -677,7 +664,7 @@ pub async fn measure<T>(stage: Stage, future: impl Future<Output = T>) -> T {
 
 /// Measures a single Result-returning boundary. Nested Results and values that
 /// encode failure need explicit handling; this checks only the outer Result.
-pub async fn measure_result<T, E>(
+pub(crate) async fn measure_result<T, E>(
     stage: Stage,
     future: impl Future<Output = Result<T, E>>,
 ) -> Result<T, E> {
@@ -727,7 +714,6 @@ mod tests {
     async fn disabled_records_nothing_and_preserves_future_results() {
         let diagnostics = Diagnostics::default();
         assert!(diagnostics.inner.is_none());
-        assert_eq!(diagnostics.connection_id(), None);
         let operation = diagnostics.operation(OperationKind::Chat, None);
         assert_eq!(
             operation
@@ -743,7 +729,7 @@ mod tests {
     async fn scopes_correlate_without_capturing_values_and_preserve_errors() {
         let output = Buffer::default();
         let diagnostics = Diagnostics::with_writer(output.clone(), Limits::default()).unwrap();
-        let id = diagnostics.connection_id();
+        let id = Some(7);
         let operation = diagnostics.operation(OperationKind::JoinRoom, id);
         let result = operation
             .scope(measure_result(Stage::RoomPolicyLookup, async {
@@ -758,7 +744,7 @@ mod tests {
         assert_eq!(records[0]["stage"], "room_policy_lookup");
         assert_eq!(records[0]["outcome"], "error");
         assert_eq!(records[0]["operationId"], records[1]["operationId"]);
-        assert_eq!(records[1]["connectionId"], id.unwrap());
+        assert_eq!(records[1]["connectionId"], 7);
         assert!(records[1]["stage"].is_null());
         assert_eq!(records[2]["written"], 2);
         assert!(!serde_json::to_string(&records).unwrap().contains("PRIVATE"));

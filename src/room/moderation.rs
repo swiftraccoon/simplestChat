@@ -37,13 +37,13 @@ pub(crate) fn canonical_guest_ip(address: IpAddr) -> IpAddr {
 
 /// In-memory punitive state for a participant
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct PunitiveState {
+pub(crate) struct PunitiveState {
     pub cam_banned: bool,
     pub text_muted: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PunitiveKind {
+pub(crate) enum PunitiveKind {
     CamBanned,
     Muted,
 }
@@ -284,7 +284,7 @@ pub(crate) async fn record_event(
 /// How long moderation data stays: addresses for `address_days`, whole
 /// entries, closed reports and expired sanctions for `history_days`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct RetentionConfig {
+pub(crate) struct RetentionConfig {
     pub address_days: u32,
     pub history_days: u32,
 }
@@ -312,7 +312,7 @@ fn parse_days(name: &str, value: Option<&str>, default: u32) -> anyhow::Result<u
 impl RetentionConfig {
     /// `MODERATION_ADDRESS_RETENTION_DAYS` (30) and
     /// `MODERATION_HISTORY_RETENTION_DAYS` (365); addresses never outlive entries.
-    pub fn from_env() -> anyhow::Result<Self> {
+    pub(crate) fn from_env() -> anyhow::Result<Self> {
         fn read(name: &str) -> anyhow::Result<Option<String>> {
             match std::env::var(name) {
                 Ok(value) => Ok(Some(value)),
@@ -351,7 +351,7 @@ impl RetentionConfig {
 
 /// Rows changed by one bounded batch or an aggregate sweep.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub struct RetentionReport {
+pub(crate) struct RetentionReport {
     pub addresses_cleared: u64,
     pub sanctions_removed: u64,
     pub entries_removed: u64,
@@ -360,7 +360,7 @@ pub struct RetentionReport {
 }
 
 impl RetentionReport {
-    pub fn total(&self) -> u64 {
+    pub(crate) fn total(&self) -> u64 {
         self.addresses_cleared
             + self.sanctions_removed
             + self.entries_removed
@@ -375,7 +375,7 @@ impl RetentionReport {
 /// Expired invitations and redemption receipts stay for seven additional days.
 /// Each statement selects at most 1,000 parent rows and skips locked rows;
 /// earlier statements remain committed if a later statement fails or is cancelled.
-pub async fn retire_old(
+pub(crate) async fn retire_old(
     pool: &PgPool,
     config: RetentionConfig,
 ) -> Result<RetentionReport, sqlx::Error> {
@@ -491,7 +491,10 @@ async fn retention_sweep(
 /// Sweep every six hours, a minute after startup, each sweep bounded; a failed
 /// sweep is retried by the next one. At most 16 batches per table run within
 /// the 30-second sweep budget, allowing incremental progress on a large backlog.
-pub fn spawn_retention(pool: PgPool, config: RetentionConfig) -> tokio::task::JoinHandle<()> {
+pub(crate) fn spawn_retention(
+    pool: PgPool,
+    config: RetentionConfig,
+) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         tokio::time::sleep(RETENTION_FIRST_DELAY).await;
         let mut interval = tokio::time::interval(RETENTION_INTERVAL);
@@ -597,7 +600,7 @@ pub(crate) async fn list_events(
 /// Load durable camera/chat sanctions for a joining identity. Registered users
 /// match only by UUID; unauthenticated users match by IP so a new guest socket
 /// cannot discard a sanction simply by receiving a new participant UUID.
-pub async fn load_punitive_state(
+pub(crate) async fn load_punitive_state(
     pool: &PgPool,
     room_id: &str,
     user_id: Option<Uuid>,
@@ -818,7 +821,7 @@ pub(crate) async fn persist_ban(
 /// Check whether a joining participant is banned. Registered users match by
 /// user_id (from any IP). IP rows only block unauthenticated connections —
 /// shared IPs (CGNAT, tunnels) must not lock out registered users.
-pub async fn is_banned(
+pub(crate) async fn is_banned(
     pool: &PgPool,
     room_id: &str,
     user_id: Option<Uuid>,
@@ -893,7 +896,12 @@ pub(crate) async fn remove_user_ban(
 }
 
 /// Check if a participant can produce (not cam-banned, has correct role for moderated rooms)
-pub fn can_produce(state: &PunitiveState, role: Role, moderated: bool, kind: MediaKind) -> bool {
+pub(crate) fn can_produce(
+    state: &PunitiveState,
+    role: Role,
+    moderated: bool,
+    kind: MediaKind,
+) -> bool {
     // Camera bans apply to the actual media kind, not a client-supplied source
     // label that can be spoofed.
     if state.cam_banned && kind == MediaKind::Video {
@@ -906,7 +914,7 @@ pub fn can_produce(state: &PunitiveState, role: Role, moderated: bool, kind: Med
 }
 
 /// Check if a participant can chat (not text-muted, has correct role)
-pub fn can_chat(state: &PunitiveState, role: Role, moderated: bool) -> bool {
+pub(crate) fn can_chat(state: &PunitiveState, role: Role, moderated: bool) -> bool {
     if state.text_muted {
         return false;
     }

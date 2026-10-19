@@ -5,11 +5,11 @@
 use rand::{TryRng, rngs::SysRng};
 use sha2::{Digest, Sha256};
 
-pub const CODE_LEN: usize = 32;
+pub(crate) const CODE_LEN: usize = 32;
 const ALPHABET: &[u8; 32] = b"abcdefghjkmnpqrstuvwxyz023456789";
 
 /// A fresh code from the system's randomness.
-pub fn generate() -> anyhow::Result<String> {
+pub(crate) fn generate() -> anyhow::Result<String> {
     let mut bytes = [0u8; CODE_LEN];
     SysRng
         .try_fill_bytes(&mut bytes)
@@ -21,20 +21,20 @@ pub fn generate() -> anyhow::Result<String> {
 }
 
 /// Whether text has the shape of a code this server issues.
-pub fn is_valid(code: &str) -> bool {
+pub(crate) fn is_valid(code: &str) -> bool {
     code.len() == CODE_LEN && code.bytes().all(|byte| ALPHABET.contains(&byte))
 }
 
 /// Database lookup key for a normalized high-entropy capability. It is never
 /// returned by the API. Unlike a password, this random token has no guessable
 /// human vocabulary; its digest needs no slow KDF or rotating server key.
-pub fn digest(code: &str) -> String {
+pub(crate) fn digest(code: &str) -> String {
     hex::encode(Sha256::digest(code.as_bytes()))
 }
 
 /// A code as typed or pasted: trimmed and lowercased, or `None` when it could
 /// never match.
-pub fn normalize(code: &str) -> Option<String> {
+pub(crate) fn normalize(code: &str) -> Option<String> {
     let code = code.trim().to_ascii_lowercase();
     is_valid(&code).then_some(code)
 }

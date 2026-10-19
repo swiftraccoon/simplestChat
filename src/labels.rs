@@ -15,7 +15,7 @@ mod property_tests;
 /// Compatibility normalization, full Unicode case folding and removal of
 /// default-ignorables prevent formatting from creating another identity with
 /// the same visible name. This is not a cross-script confusable detector.
-pub fn comparison_key(text: &str) -> String {
+pub(crate) fn comparison_key(text: &str) -> String {
     let ignorables = CodePointSetData::new::<DefaultIgnorableCodePoint>();
     let visible: String = text.chars().filter(|c| !ignorables.contains(*c)).collect();
     let normalized = ComposingNormalizer::new_nfkc().normalize(visible.trim());
@@ -52,7 +52,7 @@ fn is_hidden_format(character: char) -> bool {
 /// Message text keeps its line breaks and tabs; otherwise it is as plain as a
 /// label: no other control character and nothing that reorders or hides what
 /// is shown, so a pasted link reads the way it resolves.
-pub fn is_plain_text(text: &str) -> bool {
+pub(crate) fn is_plain_text(text: &str) -> bool {
     !text.chars().any(|character| {
         (character.is_control() && character != '\n' && character != '\t')
             || is_hidden_format(character)
@@ -60,7 +60,7 @@ pub fn is_plain_text(text: &str) -> bool {
 }
 
 /// A label that reads as it is: no control characters and no hidden formatting.
-pub fn is_plain(text: &str) -> bool {
+pub(crate) fn is_plain(text: &str) -> bool {
     !comparison_key(text).is_empty()
         && !text
             .chars()
@@ -68,7 +68,7 @@ pub fn is_plain(text: &str) -> bool {
 }
 
 /// Chat shows the reader's own messages as "You"; nobody else may claim it.
-pub fn is_reserved_name(name: &str) -> bool {
+pub(crate) fn is_reserved_name(name: &str) -> bool {
     comparison_key(name) == "you"
 }
 

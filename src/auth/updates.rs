@@ -304,7 +304,7 @@ impl Connection {
 
 /// Authentication is bounded before headers. The response body owns only its
 /// dedicated stream lease; it cannot occupy an ordinary auth request permit.
-pub async fn stream(
+pub(crate) async fn stream(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
 ) -> Result<

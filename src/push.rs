@@ -26,13 +26,13 @@ use uuid::Uuid;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct SubscriptionRequest {
+pub(crate) struct SubscriptionRequest {
     endpoint: String,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PushStatus {
+pub(crate) struct PushStatus {
     public_key: String,
     enabled: bool,
 }
@@ -126,7 +126,7 @@ async fn load_key(pool: &PgPool) -> anyhow::Result<VapidKey> {
     )
 }
 
-pub async fn status(
+pub(crate) async fn status(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
 ) -> Result<(HeaderMap, Json<PushStatus>), AuthError> {
@@ -191,7 +191,7 @@ async fn save_subscription(
     tx.commit().await.map_err(routes::database_error)
 }
 
-pub async fn subscribe(
+pub(crate) async fn subscribe(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
     Json(body): Json<SubscriptionRequest>,
@@ -219,7 +219,7 @@ async fn delete_subscription(pool: &PgPool, claims: &Claims) -> Result<(), AuthE
     tx.commit().await.map_err(routes::database_error)
 }
 
-pub async fn unsubscribe(
+pub(crate) async fn unsubscribe(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
 ) -> Result<(HeaderMap, StatusCode), AuthError> {
@@ -377,7 +377,7 @@ async fn deliver(
 
 /// The signing identity lives in the database so backup/restore and supported
 /// VPS migrations preserve subscriptions. No third-party account is required.
-pub async fn spawn(
+pub(crate) async fn spawn(
     pool: PgPool,
     origin: Option<String>,
 ) -> anyhow::Result<tokio::task::JoinHandle<()>> {

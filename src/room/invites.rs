@@ -24,7 +24,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 /// Live (unused, unexpired) codes one room may hold.
-pub const MAX_LIVE_ROOM_INVITES: i64 = 20;
+pub(crate) const MAX_LIVE_ROOM_INVITES: i64 = 20;
 
 /// A code stays usable only while whoever minted it could mint it today: the
 /// room's owner, or an admin whose current role is still above the offered
@@ -38,8 +38,8 @@ macro_rules! issuer_still_authorized {
                        AND rr.user_id = i.created_by AND rr.role >= 3 AND rr.role > i.role))"
     };
 }
-pub const MAX_INVITE_USES: i32 = 100;
-pub const MAX_INVITE_DAYS: i32 = 30;
+pub(crate) const MAX_INVITE_USES: i32 = 100;
+pub(crate) const MAX_INVITE_DAYS: i32 = 30;
 const DEFAULT_INVITE_DAYS: i32 = 7;
 /// Memberships returned on one page; additional memberships use an ID cursor.
 const MEMBERSHIP_PAGE_SIZE: usize = 100;
@@ -47,7 +47,7 @@ const MEMBERSHIP_PAGE_SIZE: usize = 100;
 pub(crate) const INVITE_RECEIPT_RETENTION_DAYS: i32 = 7;
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
-pub struct RoomInvite {
+pub(crate) struct RoomInvite {
     pub id: Uuid,
     #[sqlx(try_from = "i16")]
     pub role: InviteRole,
@@ -58,7 +58,7 @@ pub struct RoomInvite {
 
 /// The secret is returned once; subsequent listings contain metadata only.
 #[derive(Debug, Serialize)]
-pub struct CreatedRoomInvite {
+pub(crate) struct CreatedRoomInvite {
     #[serde(flatten)]
     pub details: RoomInvite,
     pub code: String,
@@ -66,13 +66,13 @@ pub struct CreatedRoomInvite {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct InviteCodeRequest {
+pub(crate) struct InviteCodeRequest {
     pub code: String,
 }
 
 /// A stored role value as its name; the table's CHECK keeps it in range.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct InviteRole(pub Role);
+pub(crate) struct InviteRole(pub Role);
 
 impl TryFrom<i16> for InviteRole {
     type Error = String;
@@ -88,40 +88,40 @@ impl Serialize for InviteRole {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct CreateRoomInviteRequest {
+pub(crate) struct CreateRoomInviteRequest {
     pub role: u8,
     pub uses: Option<i32>,
     pub days: Option<i32>,
 }
 
 #[derive(Debug, Serialize)]
-pub struct InviteRedemption {
+pub(crate) struct InviteRedemption {
     pub room_id: String,
     pub display_name: String,
     pub role: &'static str,
 }
 
 #[derive(Serialize)]
-pub struct MembershipItem {
+pub(crate) struct MembershipItem {
     #[serde(flatten)]
     pub room: RoomListItem,
     pub role: &'static str,
 }
 
 #[derive(Serialize)]
-pub struct MembershipPage {
+pub(crate) struct MembershipPage {
     pub items: Vec<MembershipItem>,
     pub next_cursor: Option<String>,
 }
 
 #[derive(Default, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct MembershipParams {
+pub(crate) struct MembershipParams {
     pub after: Option<String>,
 }
 
 /// Mint a code for `room_id`; `None` when the room already holds its limit.
-pub async fn create_room_invite(
+pub(crate) async fn create_room_invite(
     pool: &PgPool,
     room_id: &str,
     role: Role,
@@ -167,7 +167,7 @@ pub async fn create_room_invite(
     }))
 }
 
-pub async fn list_room_invites(
+pub(crate) async fn list_room_invites(
     pool: &PgPool,
     room_id: &str,
 ) -> Result<Vec<RoomInvite>, sqlx::Error> {
@@ -198,7 +198,7 @@ pub(crate) async fn revoke_issued_invites(
         .rows_affected())
 }
 
-pub async fn revoke_room_invite(
+pub(crate) async fn revoke_room_invite(
     pool: &PgPool,
     room_id: &str,
     id: Uuid,
@@ -221,7 +221,7 @@ pub async fn revoke_room_invite(
 /// The returned role is the original result, not a current authorization check.
 /// `None` when no receipt exists and the code is unknown, exhausted or expired;
 /// revocation and receipt expiry also make previous successes unavailable.
-pub async fn redeem_room_invite(
+pub(crate) async fn redeem_room_invite(
     pool: &PgPool,
     code: &str,
     user_id: Uuid,
@@ -363,14 +363,14 @@ type MembershipRow = (
     i16,
 );
 
-pub struct MembershipBatch {
+pub(crate) struct MembershipBatch {
     pub rows: Vec<(RoomListRow, i16)>,
     pub next_cursor: Option<String>,
 }
 
 /// A stable ID-ordered membership page, excluding rooms owned by the account.
 /// Room renames do not shift the pagination boundary.
-pub async fn memberships(
+pub(crate) async fn memberships(
     pool: &PgPool,
     user_id: Uuid,
     after: Option<&str>,
@@ -488,7 +488,7 @@ async fn room_role(pool: &PgPool, room_id: &str, user: Uuid) -> Result<Role, Roo
 }
 
 /// GET /api/rooms/:id/invites (Admin+)
-pub async fn list(
+pub(crate) async fn list(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
     Path(room_id): Path<String>,
@@ -505,7 +505,7 @@ pub async fn list(
 }
 
 /// POST /api/rooms/:id/invites (Admin+; a role below the caller's own)
-pub async fn create(
+pub(crate) async fn create(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
     Path(room_id): Path<String>,
@@ -546,7 +546,7 @@ pub async fn create(
 }
 
 /// DELETE /api/rooms/:id/invites/:invite_id (Admin+)
-pub async fn revoke(
+pub(crate) async fn revoke(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
     Path((room_id, invite_id)): Path<(String, Uuid)>,
@@ -568,7 +568,7 @@ pub async fn revoke(
 }
 
 /// POST /api/rooms/invites/redeem — explicitly accept a body-only secret.
-pub async fn redeem(
+pub(crate) async fn redeem(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
     Json(request): Json<InviteCodeRequest>,
@@ -600,7 +600,7 @@ pub async fn redeem(
 }
 
 /// POST /api/rooms/invites/preview — inspect before explicit acceptance.
-pub async fn preview(
+pub(crate) async fn preview(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
     Json(request): Json<InviteCodeRequest>,
@@ -632,7 +632,7 @@ pub async fn preview(
 }
 
 /// GET /api/rooms/memberships — rooms the account belongs to but does not own.
-pub async fn list_memberships(
+pub(crate) async fn list_memberships(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
     Query(params): Query<MembershipParams>,

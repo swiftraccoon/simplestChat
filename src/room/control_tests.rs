@@ -26,7 +26,6 @@ async fn bounded<T>(future: impl Future<Output = T>) -> T {
 fn runtime_room(id: &str) -> Arc<TokioRwLock<Room>> {
     Arc::new(TokioRwLock::new(Room::new(
         id.to_string(),
-        "unused-control-router".to_string(),
         Some(RoomManager::default_room_settings(id)),
         false,
         None,
@@ -699,7 +698,6 @@ async fn blocked_room_sql_keeps_chat_available_and_committed_control_outlives_it
         let (settings, hash) = settings::load_room(&pool, &room_id).await.unwrap().unwrap();
         let room = Arc::new(TokioRwLock::new(Room::new(
             room_id.clone(),
-            "unused-control-router".into(),
             Some(settings),
             true,
             hash,
@@ -762,11 +760,13 @@ async fn blocked_room_sql_keeps_chat_available_and_committed_control_outlives_it
             futures_util::poll!(&mut departure).is_pending(),
             "membership must wait for the policy commit, not bypass it"
         );
-        bounded(manager.broadcast_chat(
+        bounded(manager.send_social_chat(
             &room_id,
             &owner.id,
             &owner.sender,
             "chat remains available during owned SQL wait".into(),
+            None,
+            None,
         ))
         .await
         .unwrap();

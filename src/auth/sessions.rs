@@ -19,7 +19,7 @@ use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
-pub struct AccountSession {
+pub(crate) struct AccountSession {
     pub id: Uuid,
     pub current: bool,
     pub created_at: DateTime<Utc>,
@@ -104,7 +104,7 @@ async fn revoke_sessions(
 }
 
 /// GET /api/auth/sessions: live sessions belonging to the caller, current first.
-pub async fn list(
+pub(crate) async fn list(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
 ) -> Result<(HeaderMap, Json<Vec<AccountSession>>), AuthError> {
@@ -117,7 +117,7 @@ pub async fn list(
 
 /// DELETE /api/auth/sessions/{id}: revoke one of the caller's sessions. Existing
 /// socket and reconnect-grace validation check the deleted row every 5 s.
-pub async fn revoke(
+pub(crate) async fn revoke(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
     Path(id): Path<Uuid>,
@@ -143,7 +143,7 @@ pub async fn revoke(
 }
 
 /// DELETE /api/auth/sessions/others: keep the calling session and revoke the rest.
-pub async fn revoke_others(
+pub(crate) async fn revoke_others(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
 ) -> Result<(HeaderMap, StatusCode), AuthError> {

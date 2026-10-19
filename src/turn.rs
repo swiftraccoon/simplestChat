@@ -14,7 +14,7 @@ type HmacSha1 = Hmac<Sha1>;
 
 /// TURN server configuration, loaded from environment variables.
 #[derive(Clone)]
-pub struct TurnConfig {
+pub(crate) struct TurnConfig {
     /// TURN server URLs (e.g. ["turn:example.com:3478", "turns:example.com:5349"])
     pub urls: Vec<String>,
     /// Shared secret for generating time-limited credentials
@@ -38,8 +38,8 @@ pub struct IceServer {
 /// credential they were created with, and coturn rejects an expired one, so
 /// the lifetime bounds how long a relayed call can continue. ICE restarts mint
 /// fresh credentials, but an undisturbed call never restarts ICE.
-pub const DEFAULT_TURN_TTL_SECS: u64 = 86_400;
-pub const MAX_TURN_TTL_SECS: u64 = 86_400;
+pub(crate) const DEFAULT_TURN_TTL_SECS: u64 = 86_400;
+pub(crate) const MAX_TURN_TTL_SECS: u64 = 86_400;
 
 pub(crate) fn parse_turn_ttl(value: Option<&str>) -> anyhow::Result<u64> {
     let ttl_secs = match value {
@@ -57,7 +57,7 @@ pub(crate) fn parse_turn_ttl(value: Option<&str>) -> anyhow::Result<u64> {
 
 impl TurnConfig {
     /// Load from environment variables. Returns None if TURN_URLS is not set.
-    pub fn from_env() -> anyhow::Result<Option<Self>> {
+    pub(crate) fn from_env() -> anyhow::Result<Option<Self>> {
         let Some(urls_str) = std::env::var("TURN_URLS").ok() else {
             return Ok(None);
         };
@@ -94,7 +94,7 @@ impl TurnConfig {
     ///
     /// coturn format: username = "expiry_timestamp:arbitrary_id"
     ///               credential = base64(HMAC-SHA1(secret, username))
-    pub fn generate_credentials(&self) -> IceServer {
+    pub(crate) fn generate_credentials(&self) -> IceServer {
         let expiry = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()

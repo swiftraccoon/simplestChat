@@ -7,7 +7,7 @@
 use anyhow::{Result, bail};
 
 /// Parse an optional integer without reading or modifying process environment.
-pub fn parse_usize(
+pub(crate) fn parse_usize(
     name: &str,
     value: Option<&str>,
     default: usize,
@@ -24,7 +24,7 @@ pub fn parse_usize(
 }
 
 /// Read a bounded integer; error messages identify the setting, never its value.
-pub fn read_usize(name: &str, default: usize, min: usize, max: usize) -> Result<usize> {
+pub(crate) fn read_usize(name: &str, default: usize, min: usize, max: usize) -> Result<usize> {
     let value = match std::env::var(name) {
         Ok(value) => Some(value),
         Err(std::env::VarError::NotPresent) => None,
@@ -35,7 +35,7 @@ pub fn read_usize(name: &str, default: usize, min: usize, max: usize) -> Result<
 
 /// Validate numeric capacity controls before opening workers or a database.
 /// Returned values are public limits only; credentials are never included.
-pub fn numeric_settings() -> Result<std::collections::BTreeMap<&'static str, usize>> {
+pub(crate) fn numeric_settings() -> Result<std::collections::BTreeMap<&'static str, usize>> {
     let mut values = std::collections::BTreeMap::new();
     for (name, default, min, max) in [
         ("PORT", 3000, 1, 65535),

@@ -44,7 +44,7 @@ pub(crate) fn note_room_visit(pool: &PgPool, own: Uuid, room: &str) {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Contact {
+pub(crate) struct Contact {
     account_id: Uuid,
     account_name: String,
     status: &'static str,
@@ -52,14 +52,14 @@ pub struct Contact {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ContactsPage {
+pub(crate) struct ContactsPage {
     account_id: Uuid,
     contacts: Vec<Contact>,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ContactRequest {
+pub(crate) struct ContactRequest {
     account_id: Uuid,
 }
 
@@ -118,7 +118,7 @@ async fn require_session(
     live.map(|_| ()).ok_or(AuthError::InvalidToken)
 }
 
-pub async fn list_contacts(
+pub(crate) async fn list_contacts(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
 ) -> Result<(HeaderMap, Json<ContactsPage>), AuthError> {
@@ -209,7 +209,7 @@ async fn request_contact(pool: &PgPool, claims: &Claims, peer: Uuid) -> Result<b
     Ok(true)
 }
 
-pub async fn create_contact(
+pub(crate) async fn create_contact(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
     Json(request): Json<ContactRequest>,
@@ -263,7 +263,7 @@ async fn change_contact(
     Ok(changed)
 }
 
-pub async fn accept_contact(
+pub(crate) async fn accept_contact(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
     Path(peer): Path<Uuid>,
@@ -287,7 +287,7 @@ pub async fn accept_contact(
     Ok((routes::no_store_headers(), StatusCode::NO_CONTENT))
 }
 
-pub async fn remove_contact(
+pub(crate) async fn remove_contact(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
     Path(peer): Path<Uuid>,
@@ -325,20 +325,20 @@ pub(crate) async fn accepted_contact(
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SavedRoom {
+pub(crate) struct SavedRoom {
     room: RoomListItem,
     favorite: bool,
     last_visited: Option<DateTime<Utc>>,
 }
 
 #[derive(Serialize)]
-pub struct SavedRoomsPage {
+pub(crate) struct SavedRoomsPage {
     rooms: Vec<SavedRoom>,
 }
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct SaveRoomRequest {
+pub(crate) struct SaveRoomRequest {
     favorite: bool,
 }
 
@@ -353,7 +353,7 @@ async fn visible_saved_entries(
         .bind(own).fetch_all(pool).await
 }
 
-pub async fn saved_rooms(
+pub(crate) async fn saved_rooms(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
 ) -> Result<(HeaderMap, Json<SavedRoomsPage>), AuthError> {
@@ -463,7 +463,7 @@ async fn save_favorite(
     tx.commit().await.map_err(routes::database_error)
 }
 
-pub async fn save_room(
+pub(crate) async fn save_room(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
     Path(room): Path<String>,

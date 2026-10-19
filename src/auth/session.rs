@@ -40,7 +40,7 @@ pub(crate) fn generate_refresh_token() -> Result<RefreshToken, AuthError> {
     build_refresh_token(&family_secret)
 }
 
-pub fn hash_token(raw: &str) -> String {
+pub(crate) fn hash_token(raw: &str) -> String {
     hash_bytes(raw.as_bytes())
 }
 
@@ -298,7 +298,10 @@ pub(crate) async fn rotate_refresh_token_with(
 
 /// Revoke the family represented by either its current token or any predecessor.
 /// Logout remains idempotent, so an unknown or malformed token is not an error.
-pub async fn delete_session_by_token(pool: &PgPool, raw_token: &str) -> Result<bool, AuthError> {
+pub(crate) async fn delete_session_by_token(
+    pool: &PgPool,
+    raw_token: &str,
+) -> Result<bool, AuthError> {
     let token_hash = hash_token(raw_token);
     let Some(family_secret) = family_secret(raw_token) else {
         return Ok(false);
@@ -321,7 +324,7 @@ pub async fn delete_session_by_token(pool: &PgPool, raw_token: &str) -> Result<b
 /// not pile up concurrent table-wide DELETEs, and shutdown must be able to
 /// wait for the one in flight before closing the pool.
 #[derive(Clone)]
-pub struct SessionCleanup {
+pub(crate) struct SessionCleanup {
     gate: std::sync::Arc<tokio::sync::Semaphore>,
 }
 
@@ -335,12 +338,12 @@ impl Default for SessionCleanup {
 
 impl SessionCleanup {
     /// Claims the single sweep slot, or `None` while a sweep is running.
-    pub fn begin(&self) -> Option<tokio::sync::OwnedSemaphorePermit> {
+    pub(crate) fn begin(&self) -> Option<tokio::sync::OwnedSemaphorePermit> {
         self.gate.clone().try_acquire_owned().ok()
     }
 
     /// Sweeps in flight (zero or one), for drain accounting.
-    pub fn pending(&self) -> usize {
+    pub(crate) fn pending(&self) -> usize {
         1_usize.saturating_sub(self.gate.available_permits())
     }
 }
@@ -349,7 +352,7 @@ const EXPIRED_CLEANUP_TIMEOUT: std::time::Duration = std::time::Duration::from_s
 
 /// Runs at most one bounded sweep at a time; a refresh that finds a sweep in
 /// flight simply skips its turn.
-pub fn spawn_expired_cleanup(pool: &PgPool, cleanup: &SessionCleanup) {
+pub(crate) fn spawn_expired_cleanup(pool: &PgPool, cleanup: &SessionCleanup) {
     let Some(permit) = cleanup.begin() else {
         return;
     };
@@ -364,20 +367,11 @@ pub fn spawn_expired_cleanup(pool: &PgPool, cleanup: &SessionCleanup) {
     });
 }
 
-pub async fn delete_user_sessions(pool: &PgPool, user_id: &Uuid) -> Result<(), AuthError> {
-    sqlx::query("DELETE FROM sessions WHERE user_id = $1")
-        .bind(user_id)
-        .execute(pool)
-        .await
-        .map_err(crate::auth::routes::database_error)?;
-    Ok(())
-}
-
 /// Rows one sweep removes; a backlog drains over successive refreshes instead of
 /// one table-wide DELETE that could exceed its time budget and roll back.
 const EXPIRED_CLEANUP_BATCH: i64 = 1000;
 
-pub async fn cleanup_expired(pool: &PgPool) -> Result<u64, AuthError> {
+pub(crate) async fn cleanup_expired(pool: &PgPool) -> Result<u64, AuthError> {
     let result = sqlx::query(
         "DELETE FROM sessions
          WHERE id IN (SELECT id FROM sessions WHERE expires_at < now() LIMIT $1)",

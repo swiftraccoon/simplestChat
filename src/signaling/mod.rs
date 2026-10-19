@@ -4,7 +4,7 @@
 
 #[cfg(test)]
 mod authorization_tests;
-pub mod connection;
+pub(crate) mod connection;
 mod media_diagnostics;
 pub(crate) mod outbound;
 pub mod protocol;
@@ -38,7 +38,7 @@ use tower_http::services::ServeDir;
 use tower_http::timeout::{RequestBodyTimeoutLayer, TimeoutLayer};
 use tracing::{Instrument, info, warn};
 
-pub use connection::GracePeriodMap;
+pub(crate) use connection::GracePeriodMap;
 
 #[derive(Clone, Copy)]
 pub(crate) struct ClientIp(pub(crate) IpAddr);
@@ -295,7 +295,7 @@ impl Drop for IpConnectionPermit {
 
 /// Signaling server state
 #[derive(Clone)]
-pub struct SignalingServer {
+pub(crate) struct SignalingServer {
     room_manager: Arc<RoomManager>,
     turn_config: Option<Arc<TurnConfig>>,
     grace_periods: GracePeriodMap,
@@ -333,7 +333,7 @@ pub struct SignalingServer {
 
 impl SignalingServer {
     /// Creates a new signaling server
-    pub fn new(
+    pub(crate) fn new(
         room_manager: Arc<RoomManager>,
         turn_config: Option<TurnConfig>,
         metrics: ServerMetrics,
@@ -528,14 +528,14 @@ impl SignalingServer {
         })
     }
 
-    pub fn room_manager(&self) -> &RoomManager {
+    pub(crate) fn room_manager(&self) -> &RoomManager {
         &self.room_manager
     }
 
     /// Closes room/upgrade admission, wakes socket writers, stops HTTP accepts,
     /// and cancels retained reconnect timers. Room/media cleanup is coordinated
     /// separately, including membership retained by those cancelled timers.
-    pub fn begin_draining(&self) {
+    pub(crate) fn begin_draining(&self) {
         self.readiness.begin_draining();
         let retained_sessions = self.grace_periods.close();
         info!(
@@ -546,7 +546,7 @@ impl SignalingServer {
 
     /// Upgraded WebSockets and blocking password jobs can outlive their HTTP
     /// callers. Wait for their owned permits too; the coordinator bounds this.
-    pub async fn wait_for_connections(&self) {
+    pub(crate) async fn wait_for_connections(&self) {
         while self.connection_count() > 0
             || self.pending_password_work() > 0
             || self.session_cleanup.pending() > 0
@@ -561,40 +561,40 @@ impl SignalingServer {
     }
 
     /// Includes accepted upgrades and any authentication work holding a permit.
-    pub fn connection_count(&self) -> usize {
+    pub(crate) fn connection_count(&self) -> usize {
         self.max_connections
             .saturating_sub(self.connection_semaphore.available_permits())
     }
 
     /// Password permits remain owned by blocking jobs even after cancellation
     /// of a request. Counting both lanes makes incomplete CPU cleanup visible.
-    pub fn pending_password_work(&self) -> usize {
+    pub(crate) fn pending_password_work(&self) -> usize {
         self.max_password_work
             .saturating_sub(self.password_work.available_permits())
             + self.room_manager.pending_password_work()
     }
 
-    pub fn db_pool(&self) -> Option<&PgPool> {
+    pub(crate) fn db_pool(&self) -> Option<&PgPool> {
         self.db_pool.as_ref()
     }
 
     /// Contact URI for VAPID; configured origins are already validated at startup.
-    pub fn notification_origin(&self) -> Option<String> {
+    pub(crate) fn notification_origin(&self) -> Option<String> {
         self.allowed_origins
             .iter()
             .find(|origin| origin.starts_with("https://"))
             .cloned()
     }
 
-    pub fn jwt_secret(&self) -> Option<&str> {
+    pub(crate) fn jwt_secret(&self) -> Option<&str> {
         self.jwt_secret.as_deref()
     }
 
-    pub fn webauthn(&self) -> Option<&webauthn_rs::prelude::Webauthn> {
+    pub(crate) fn webauthn(&self) -> Option<&webauthn_rs::prelude::Webauthn> {
         self.webauthn.as_deref()
     }
 
-    pub fn challenge_store(&self) -> Option<&ChallengeStore> {
+    pub(crate) fn challenge_store(&self) -> Option<&ChallengeStore> {
         self.challenge_store.as_deref()
     }
 
@@ -697,7 +697,7 @@ impl SignalingServer {
     }
 
     /// Creates the Axum router for the signaling server
-    pub fn router(self) -> Router {
+    pub(crate) fn router(self) -> Router {
         use axum::routing::{delete, patch, post, put};
 
         let auth_routes = Router::new()
@@ -992,7 +992,7 @@ impl SignalingServer {
     ///
     /// # Errors
     /// Returns an error if the server fails to bind to the port
-    pub async fn serve(self, port: u16) -> anyhow::Result<()> {
+    pub(crate) async fn serve(self, port: u16) -> anyhow::Result<()> {
         let bind_addr = std::env::var("BIND_ADDR").unwrap_or_else(|_| "127.0.0.1".to_string());
         let addr = format!("{bind_addr}:{port}");
         info!("Starting signaling server on {}", addr);

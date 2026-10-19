@@ -9,37 +9,37 @@ use url::Url;
 use uuid::Uuid;
 use webauthn_rs::prelude::*;
 
-pub struct RegistrationData {
+pub(crate) struct RegistrationData {
     pub state: PasskeyRegistration,
     pub user_id: Uuid,
     pub email: String,
     pub display_name: String,
 }
 
-pub struct AuthenticationData {
+pub(crate) struct AuthenticationData {
     pub state: DiscoverableAuthentication,
 }
 
-pub struct AccountAuthenticationData {
+pub(crate) struct AccountAuthenticationData {
     pub state: DiscoverableAuthentication,
     pub user_id: Uuid,
     pub auth_version: i64,
     pub action: super::passkeys::PasskeyAction,
 }
 
-pub struct AccountRegistrationData {
+pub(crate) struct AccountRegistrationData {
     pub state: PasskeyRegistration,
     pub user_id: Uuid,
     pub auth_version: i64,
     pub replacement: Option<ReplacementRegistration>,
 }
 
-pub struct ReplacementRegistration {
+pub(crate) struct ReplacementRegistration {
     pub target: Uuid,
     pub recovery_hash: String,
 }
 
-pub enum AccountChallenge {
+pub(crate) enum AccountChallenge {
     Authentication(AccountAuthenticationData),
     Registration(AccountRegistrationData),
 }
@@ -66,7 +66,7 @@ struct TimedChallenge<T> {
     source_ip: IpAddr,
 }
 
-pub struct ChallengeStore {
+pub(crate) struct ChallengeStore {
     challenges: RwLock<ChallengeMaps>,
 }
 
@@ -105,13 +105,13 @@ const MAX_REGISTRATION_CHALLENGES_PER_IP: usize = 8;
 const MAX_AUTHENTICATION_CHALLENGES_PER_IP: usize = 16;
 
 impl ChallengeStore {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             challenges: RwLock::new(ChallengeMaps::default()),
         }
     }
 
-    pub fn store_registration(
+    pub(crate) fn store_registration(
         &self,
         state: PasskeyRegistration,
         user_id: Uuid,
@@ -168,13 +168,13 @@ impl ChallengeStore {
         Some(ceremony_id)
     }
 
-    pub fn take_registration(&self, ceremony_id: &str) -> Option<RegistrationData> {
+    pub(crate) fn take_registration(&self, ceremony_id: &str) -> Option<RegistrationData> {
         let mut challenges = self.challenges.write().unwrap_or_else(|e| e.into_inner());
         let challenge = challenges.registrations.remove(ceremony_id)?;
         (challenge.created_at.elapsed() < CHALLENGE_TTL).then_some(challenge.data)
     }
 
-    pub fn store_authentication(
+    pub(crate) fn store_authentication(
         &self,
         state: DiscoverableAuthentication,
         source_ip: IpAddr,
@@ -208,7 +208,7 @@ impl ChallengeStore {
         Some(ceremony_id)
     }
 
-    pub fn take_authentication(&self, ceremony_id: &str) -> Option<AuthenticationData> {
+    pub(crate) fn take_authentication(&self, ceremony_id: &str) -> Option<AuthenticationData> {
         let mut challenges = self.challenges.write().unwrap_or_else(|e| e.into_inner());
         let challenge = challenges.authentications.remove(ceremony_id)?;
         (challenge.created_at.elapsed() < CHALLENGE_TTL).then_some(challenge.data)
@@ -216,7 +216,11 @@ impl ChallengeStore {
 
     /// A management ceremony belongs to one account/version and one operation.
     /// Admission never evicts somebody else's in-flight operation, including on a shared NAT.
-    pub fn store_account(&self, data: AccountChallenge, source_ip: IpAddr) -> Option<String> {
+    pub(crate) fn store_account(
+        &self,
+        data: AccountChallenge,
+        source_ip: IpAddr,
+    ) -> Option<String> {
         let source_ip = rate_limit_ip(source_ip);
         let mut challenges = self
             .challenges
@@ -254,7 +258,7 @@ impl ChallengeStore {
 
     /// A mismatched account cannot consume a ceremony; matching uses are one-shot,
     /// including failed cryptographic verification or a wrong finish endpoint.
-    pub fn take_account(
+    pub(crate) fn take_account(
         &self,
         id: &str,
         user_id: Uuid,
@@ -309,7 +313,7 @@ fn fresh_ceremony_id<T>(map: &HashMap<String, T>) -> String {
     }
 }
 
-pub fn init_webauthn() -> anyhow::Result<Option<(Webauthn, Arc<ChallengeStore>)>> {
+pub(crate) fn init_webauthn() -> anyhow::Result<Option<(Webauthn, Arc<ChallengeStore>)>> {
     let rp_id = std::env::var("WEBAUTHN_RP_ID").ok();
     let origin_str = std::env::var("WEBAUTHN_ORIGIN").ok();
     let (rp_id, origin_str) = match (rp_id, origin_str) {

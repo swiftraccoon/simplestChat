@@ -113,7 +113,7 @@ struct FailureState {
 
 /// Failure-charged delays for password sign-in and recovery redemption.
 #[derive(Clone)]
-pub struct FailureLimiter {
+pub(crate) struct FailureLimiter {
     state: Arc<Mutex<FailureState>>,
 }
 
@@ -124,7 +124,7 @@ impl Default for FailureLimiter {
 }
 
 impl FailureLimiter {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             state: Arc::new(Mutex::new(FailureState {
                 pairs: FailureTable::new(FREE_PAIR_FAILURES, MAX_PAIR_DELAY),
@@ -134,7 +134,7 @@ impl FailureLimiter {
 
     /// Whole seconds this client must still wait before trying this account,
     /// or `None` when it may try now. Never zero: a wait under a second rounds up.
-    pub fn wait(&self, address: IpAddr, account: &str) -> Option<u64> {
+    pub(crate) fn wait(&self, address: IpAddr, account: &str) -> Option<u64> {
         self.wait_at(address, account, Instant::now())
     }
 
@@ -153,7 +153,7 @@ impl FailureLimiter {
         })
     }
 
-    pub fn record_failure(&self, address: IpAddr, account: &str) {
+    pub(crate) fn record_failure(&self, address: IpAddr, account: &str) {
         self.record_failure_at(address, account, Instant::now());
     }
 
@@ -165,7 +165,7 @@ impl FailureLimiter {
     }
 
     /// A correct password proves the owner is present: forgive everything.
-    pub fn record_success(&self, address: IpAddr, account: &str) {
+    pub(crate) fn record_success(&self, address: IpAddr, account: &str) {
         let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
         state.pairs.clear(&(cohort(address), account.to_owned()));
     }
@@ -180,14 +180,14 @@ struct Window {
 /// Registrations and taken-email answers share one address-cohort window.
 /// Cold entries may be evicted at the hard memory bound; unrelated addresses
 /// never inherit another cohort's exhausted allowance.
-pub struct WindowLimiter {
+pub(crate) struct WindowLimiter {
     entries: Mutex<LruCache<IpAddr, Window>>,
     window: Duration,
     allowance: u32,
 }
 
 impl WindowLimiter {
-    pub fn new(allowance: u32, window: Duration) -> Self {
+    pub(crate) fn new(allowance: u32, window: Duration) -> Self {
         Self {
             entries: Mutex::new(LruCache::new(NonZeroUsize::new(MAX_TRACKED_KEYS).unwrap())),
             window,
@@ -195,7 +195,7 @@ impl WindowLimiter {
         }
     }
 
-    pub fn allow(&self, address: IpAddr) -> bool {
+    pub(crate) fn allow(&self, address: IpAddr) -> bool {
         self.allow_at(address, Instant::now())
     }
 
