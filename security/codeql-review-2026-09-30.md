@@ -798,3 +798,23 @@ Complete-source SHA256 per rebound file:
 | 60 | `src/room/settings.rs:610:610:33:43` | `codeql:1a3baf3792e223f94c968a944f32d0a4877495c2ea9724260fa9d36a1ddf3ec8` |
 | 61 | `src/room/settings.rs:612:612:33:43` | `codeql:fe5628f3fe864517acedca3cb90c0066531f0a70b1b922605724977b4720ad94` |
 | 62 | `src/room/settings.rs:615:615:33:45` | `codeql:6b9e12c415a4d0d4f57857c1608ee716240d937df8622c9e508457a151bf4752` |
+
+## Source re-review: typed identifiers (2026-10-19)
+
+The identifier refactor (`ff7dcbb`) retyped room, participant, message and account identifiers. In `src/room/settings.rs` the slug validator now delegates to `RoomId::new`, which moved the four reviewed `cfg(test)` password-boundary literals up by four lines; in `src/signaling/connection_authorization_tests.rs` typed imports moved the two reviewed test literals down by two lines; in `src/room/dormant_join_tests.rs` one fixture import moved the reviewed passphrase literal down by one line. Every flagged line is byte-identical to the previously reviewed source; the identities were recomputed with the same line-mapping method as the earlier 2026-10-19 rebindings, and the dormant-join exception's rule, tool version and message hash are those of the hosted report of run 39206189199. Owner, rationale, scope semantics and the 2026-11-29 expiry are unchanged; hosted ingestion remains a separate required check.
+
+Complete-source SHA256 per rebound file:
+
+- `src/room/dormant_join_tests.rs`: `e7dbb399e89850360a89d080b557ac81d1938a53971b89fbb22f49f192376e0f`
+- `src/room/settings.rs`: `0de1cc388fb5c7741171298abdaf0d501fa16be633034a0eda61ab35b2b3bea4`
+- `src/signaling/connection_authorization_tests.rs`: `b4d2e8203b1e4105d8612bf7d59b94f516530f0cbc75722a2443dfa8a7054b13`
+
+| Alert | Range | Fingerprint |
+|---|---|---|
+| 36 | `src/signaling/connection_authorization_tests.rs:400:400:21:62` | `codeql:b32429a310d428dd1867181a654bea18670732cc0e3c2cc002fcfb4f115c62a8` |
+| 37 | `src/signaling/connection_authorization_tests.rs:447:447:17:51` | `codeql:0964708386424b46303ca05b80e49e55a7961eb888fa7c2025dfcc40a3b2c1f4` |
+| 59 | `src/room/settings.rs:601:601:33:42` | `codeql:1943573c70efa2d6b40cc938de81b1fcd3153e2f575c0846badc15273c7d0262` |
+| 60 | `src/room/settings.rs:606:606:33:43` | `codeql:5dfa4efd47effbad417b40e0752a1068cc46f61c49d55d144eb8e3d20d23e1b8` |
+| 61 | `src/room/settings.rs:608:608:33:43` | `codeql:7ff3c2baf5759e5c967ed8c6ba710b69e35bc48533894c14d6d4d9fe92def2ee` |
+| 62 | `src/room/settings.rs:611:611:33:45` | `codeql:c982b68ddabd0f35629261cbd23c59abb19a12f7279a63ce31ccc71622640ab5` |
+| exception | `src/room/dormant_join_tests.rs:106:106:57:79` | `codeql:ebc1cea4e4b9f17d3d3e0a91d189562bb62f9fe4bc71f6b465308253cb824c98` |
