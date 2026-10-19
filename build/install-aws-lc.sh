@@ -12,9 +12,44 @@ case "$install_prefix" in
     /*) ;;
     *) echo 'AWS-LC install prefix must be absolute' >&2; exit 2 ;;
 esac
-if [ -e "$install_prefix" ] || [ -L "$install_prefix" ]; then
-    echo 'AWS-LC destination already exists; retain it or select a new prefix.' >&2
+# A prefix this installer produced carries share/simplestchat/build.json. The
+# same installer with every recorded file intact is retained (a cache restored
+# it beside a missed dedicated cache); another installer's or a damaged prefix
+# is rebuilt and replaced only after the new build succeeds; anything else
+# (an unknown directory, a symbolic link) is never touched.
+replace_existing=0
+if [ -L "$install_prefix" ]; then
+    echo 'AWS-LC destination is a symbolic link; refusing to replace it.' >&2
     exit 2
+fi
+if [ -e "$install_prefix" ]; then
+    receipt="$install_prefix/share/simplestchat/build.json"
+    if [ ! -f "$receipt" ]; then
+        echo 'AWS-LC destination already exists; retain it or select a new prefix.' >&2
+        exit 2
+    fi
+    if python3 - "$install_prefix" "$0" <<'PY'
+import hashlib, json, pathlib, sys
+prefix, installer = map(pathlib.Path, sys.argv[1:])
+digest = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
+try:
+    receipt = json.loads((prefix / "share/simplestchat/build.json").read_text())
+    files = receipt["files"]
+    complete = receipt["installer_sha256"] == digest(installer) and isinstance(files, dict) and all(
+        isinstance(name, str) and "/.." not in f"/{name}" and (prefix / name).is_file()
+        and digest(prefix / name) == expected
+        for name, expected in files.items()
+    )
+except (OSError, ValueError, KeyError, TypeError):
+    complete = False
+raise SystemExit(0 if complete else 1)
+PY
+    then
+        echo "AWS-LC ${awslc_version} is already installed by this installer at $install_prefix; retaining it." >&2
+        exit 0
+    fi
+    echo "Replacing the AWS-LC installation at $install_prefix after this build succeeds: its receipt names another installer or is incomplete." >&2
+    replace_existing=1
 fi
 install_parent=$(dirname "$install_prefix")
 mkdir -p "$install_parent"
@@ -117,6 +152,9 @@ receipt = {"configure_options": {key: options[key] for key in keys},
            "files": {name: digest(prefix / name) for name in files}}
 (prefix / "share/simplestchat/build.json").write_text(json.dumps(receipt, indent=2) + "\n")
 PY
+if [ "$replace_existing" = 1 ]; then
+    rm -rf "$install_prefix"
+fi
 if [ -e "$install_prefix" ] || [ -L "$install_prefix" ]; then
     echo 'AWS-LC destination appeared during the build; refusing replacement.' >&2
     exit 2
