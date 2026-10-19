@@ -18,9 +18,11 @@ from security_tools import ToolError
 EVIDENCE = ROOT / "security/license-evidence/fedora-runtime-2026-09-30.json"
 GLIBC_EVIDENCE = ROOT / "security/license-evidence/fedora-glibc-2026-10-01.json"
 TZDATA_EVIDENCE = ROOT / "security/license-evidence/fedora-tzdata-2026-10-10.json"
+VIM_EVIDENCE = ROOT / "security/license-evidence/fedora-vim-2026-10-19.json"
 GLIBC_PACKAGES = {"glibc", "glibc-common", "glibc-minimal-langpack"}
 TZDATA_PACKAGES = {"tzdata"}
-SUPERSEDED_PACKAGES = GLIBC_PACKAGES | TZDATA_PACKAGES
+VIM_PACKAGES = {"vim-data", "vim-minimal"}
+SUPERSEDED_PACKAGES = GLIBC_PACKAGES | TZDATA_PACKAGES | VIM_PACKAGES
 TODAY = date(2026, 9, 30)
 
 
@@ -44,7 +46,7 @@ def packages(value: JsonObject) -> list[JsonObject]:
 
 
 def current_packages() -> list[JsonObject]:
-    """Replace superseded observations with the separately retained glibc and tzdata evidence."""
+    """Replace superseded observations with the separately retained newer evidence."""
     retained = [
         item
         for item in packages(evidence())
@@ -54,6 +56,7 @@ def current_packages() -> list[JsonObject]:
         *retained,
         *packages(object_value(image.report(GLIBC_EVIDENCE))),
         *packages(object_value(image.report(TZDATA_EVIDENCE))),
+        *packages(object_value(image.report(VIM_EVIDENCE))),
     ]
 
 
@@ -166,6 +169,49 @@ class CanonicalRuntimeLicenseTests(unittest.TestCase):
         new_notices = object_value(object_value(updated["noticeSets"])["N01"])
         self.assertEqual(old_notices["files"], new_notices["files"])
         self.assertNotEqual(old_notices["ownerPurl"], new_notices["ownerPurl"])
+
+    def test_superseded_vim_scopes_are_historical_evidence_only(self) -> None:
+        """The 9.2.1202 refresh does not accumulate compatibility approvals for 9.2.1129."""
+        updated = object_value(image.report(VIM_EVIDENCE))
+        old = [item for item in packages(evidence()) if string_value(item["name"]) in VIM_PACKAGES]
+        new = packages(updated)
+        self.assertEqual({string_value(item["name"]) for item in new}, VIM_PACKAGES)
+        self.assertEqual(len(new), 2)
+        self.assertEqual(
+            {string_value(scope) for scope in array_value(updated["supersedes"])},
+            {string_value(item["purl"]) for item in old},
+        )
+        current = reviews.read_exceptions(today=TODAY)
+        policy = image.load_policy(ROOT / "security/image-policy.json")
+        self.assertEqual(
+            len(array_value(image.license_verdict(old, policy, current)["blocked"])), 2
+        )
+        self.assertTrue(image.license_verdict(new, policy, current)["passed"])
+        historical = {
+            string_value(object_value(item)["name"]): object_value(item)
+            for item in array_value(evidence()["packages"])
+        }
+        new_declaration = object_value(object_value(updated["declarations"])["D01"])
+        new_notices = object_value(object_value(updated["noticeSets"])["N01"])
+        for name in sorted(VIM_PACKAGES):
+            old_key = string_value(historical[name]["declaration"])
+            old_declaration = object_value(object_value(evidence()["declarations"])[old_key])
+            self.assertEqual(
+                old_declaration["reviewFingerprint"], new_declaration["reviewFingerprint"]
+            )
+            old_notice_key = string_value(historical[name]["noticeSet"])
+            old_notices = object_value(object_value(evidence()["noticeSets"])[old_notice_key])
+            self.assertEqual(old_notices["files"], new_notices["files"])
+            self.assertNotEqual(old_notices["ownerPurl"], new_notices["ownerPurl"])
+        canonical = object_value(updated["canonical"])
+        self.assertFalse(canonical["imageCheckPassed"])
+        self.assertFalse(canonical["licenseCheckPassedBeforeReview"])
+        self.assertFalse(canonical["secretCheckPassedBeforeReview"])
+        self.assertEqual(canonical["ciRunId"], 39212373766)
+        self.assertEqual(
+            set(array_value(canonical["licenseBlockedBeforeReview"])),
+            {string_value(item["purl"]) for item in new},
+        )
 
     def test_declaration_provenance_and_shared_notices_are_retained(self) -> None:
         """Original record hashes and explicit shared owners remain reviewable evidence."""

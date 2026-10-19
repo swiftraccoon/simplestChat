@@ -1,5 +1,53 @@
 # Fedora RPM database secret findings
 
+## Two regions after the vim 9.2.1202 refresh — 2026-10-19
+
+When the runtime package layer was rebuilt from the Fedora 44 repositories
+(`vim` 2:9.2.1129 became 2:9.2.1202-1.fc44), rpm rewrote its SQLite
+`Basenames` index: two of the four reviewed regions recur byte-for-byte, two no
+longer occur, and two new complete `generic-api-key` regions appeared at the
+same path `001/usr/lib/sysimage/rpm/rpmdb.sqlite`, observed in
+[CI run 39212373766](https://github.com/swiftraccoon/simplestChat/actions/runs/39212373766)
+(revision `353c5e7755adb64e13251321cff77a098d0a6edb`, image
+`sha256:eab407f8ef7ef96b03db3d8170463cce9b3d86c168f3abc08bbf9dda2ff7d2ed`,
+artifact `12168437967` rehashed against GitHub's digest). The
+[new evidence](secret-evidence/fedora-rpm-2026-10-19.json) covers the two new
+regions; the two dormant fingerprints
+(`image-match:0e1f4907…f648c`, `image-match:ae0325c1…0d999`) are removed from the
+active ledger and the two recurring reviews keep their 2026-09-30 evidence.
+Owner `swiftraccoon` and expiry **2026-11-29** are unchanged.
+
+A new bounded local replay (two CPU cores, 2 GiB, 900-second deadline, the pinned
+Fedora base and the canonical `dnf upgrade` plus `dnf install` transaction with
+the same refresh epoch; no application built or executed) installed the same 148
+runtime package identities as the canonical image. Its complete database and
+projection differ from the canonical ones, as transaction timing shifts the
+projection by 33 and 51 lines, but the pinned detector (gitleaks 8.30.1 on the
+same ASCII projection) reports exactly four regions whose complete match bytes,
+lengths and SHA-256 digests equal the canonical findings: the two recurring
+reviews and the two new regions. Read-only `PRAGMA quick_check` passed.
+
+The 58-byte region is one live `Basenames_key_idx` record for a public
+`fedora-gpg-keys` 44-2 signing-key filename (26 filename bytes and two serialized
+row-identifier bytes) followed by a 32-byte freeblock whose four-byte header and
+surviving content are a freed copy of the same public filename; that filename is
+also a live record in the authenticated immutable Fedora base database. The
+detector's candidate is exactly the public filename. The 57-byte region spans two
+live records of the same package (cell size, record header, two public filenames
+and their row-identifier bytes), with the candidate being one filename plus one
+row-identifier byte, exactly the structure of the three 57-byte regions reviewed
+on 2026-09-30. Every detected byte is accounted for by index-cell structures or
+freeblock metadata; no byte is an issued credential or a signing private key.
+
+Each new ledger entry binds the exact rule, original layer path, pinned
+scanner/projection format, complete match length and SHA-256. A changed region,
+path, rule or format requires a fresh review; every additional finding remains
+independently blocking. There is still no blanket path or package exception and
+no automatic expiry renewal. A fresh canonical image gate is required before
+signing or deployment, and the Fedora repositories may move again before it.
+
+## Original review — 2026-09-30
+
 Reviewed **2026-09-30** under the owner-authorized security rollout.
 Owner: `swiftraccoon`. Review expiry: **2026-11-29**, unchanged.
 

@@ -1,5 +1,77 @@
 # Canonical runtime RPM license context review
 
+## Current vim 9.2.1202 assessment — 2026-10-19
+
+The canonical packages `vim-data` (noarch) and `vim-minimal` (x86_64) changed from
+`2:9.2.1129-1.fc44` to `2:9.2.1202-1.fc44` when the runtime package layer was
+rebuilt from the Fedora 44 repositories (the layer cache no longer held the
+2026-10-10 transaction), observed in
+[CI run 39212373766](https://github.com/swiftraccoon/simplestChat/actions/runs/39212373766).
+Their **exact 9.2.1202-1 PURLs replace the 9.2.1129-1 scopes** in the active
+ledger. The 24 other assessments (20 original entries, the three glibc release-9
+entries and the tzdata 2026e entry retained separately) remain unchanged. The
+[new evidence](license-evidence/fedora-vim-2026-10-19.json) records this separate
+source review; the original evidence remains byte-for-byte historical. Owner
+`swiftraccoon` and expiry **2026-11-29** remain unchanged.
+
+Both packages retain the complete declaration `(Vim AND LGPL-2.1-or-later AND MIT
+AND GPL-1.0-only AND (GPL-2.0-only OR Vim) AND Apache-2.0 AND BSD-2-Clause AND
+BSD-3-Clause AND GPL-2.0-or-later AND GPL-3.0-or-later AND OPUBL-1.0 AND
+Apache-2.0 WITH Swift-exception)` and fingerprint
+`license:d40108afa2b4493cd6b9aa96c8d5709f0e5c0209d1548bbb5817c869d7c654b0`. Only
+the Syft declaration's provenance layer digest changes. No term is removed from
+the declaration and no license is added to the global allowlist; the Open
+Publication context is unchanged and remains limited to documentation without
+section VI options.
+
+### Exact source and notice comparison
+
+The official read-only Koji `getBuild` response identifies successful
+[build 3122379](https://koji.fedoraproject.org/koji/buildinfo?buildID=3122379),
+`vim-9.2.1202-1.fc44`, completed 2026-10-16, and Fedora dist-git commit
+`b432bbc9eb0a935c8e486646632e7940c1c054a9`; Bodhi update `FEDORA-2026-d59fbe5923`
+reached stable on 2026-10-18. The
+[immutable spec](https://src.fedoraproject.org/rpms/vim/raw/b432bbc9eb0a935c8e486646632e7940c1c054a9/f/vim.spec)
+differs from the reviewed 9.2.1129 spec (commit
+`0a97d98c98a7362617ad826630b95df9d782d524`, bound by Koji build 3108417) outside
+`%changelog` only in the patch level and a new pixman build dependency
+(`BuildRequires: pkgconfig(pixman-1)`, `--enable-pixman` for the two full
+configurations and `--disable-pixman` for the minimal configuration that
+produces `vim-minimal`); its License line, Source entries, notice installation
+and subpackages are unchanged. The commit's sources manifest binds
+`vim-9.2-1202.tar.bz2` by SHA-512; the archive was downloaded over HTTPS from the
+Fedora lookaside and matches. Its `LICENSE` member (5,021 bytes, SHA-256
+`0b3f1f330cb1b179bb17c7c687d4cec601e0aa3462bc7f890ad4c3888d37d720`) is
+byte-identical to the installed `/usr/share/licenses/vim-data/LICENSE`, which
+matches its RPM digest and the 9.2.1129 review, and its `runtime/doc/usr_01.txt`
+(SHA-256 `2fccea6a8ee57f1d5d422a5a18d45d02962535dcb5717d914a170df9a708e7e6`) is
+byte-identical to the reviewed 9.2.1129 manual and to the upstream `v9.2.1202`
+tag, so the Open Publication License statement without section VI options is
+unchanged. The pinned Fedora legal data `OPUBL-1.0.toml` (commit `cbd8b74c`) was
+re-fetched and still lists `vim` among the documentation exceptions. No
+downloaded code was executed.
+
+| Package | Context and retained evidence |
+| --- | --- |
+| vim-data | Same declaration and fingerprint as 9.2.1129; archive LICENSE and manual re-checked by hash against the installed notice, the historical notice and the upstream tag. Fedora's documentation-only Open Publication exception still applies; every software term is retained. |
+| vim-minimal | Same exact source RPM and aggregate as vim-data; the retained notice is vim-data's software LICENSE. pixman is enabled only for the full configurations and disabled for the minimal build, so no new linked component is inferred. The minimal binary is not treated as governed by the documentation license. |
+
+### Artifact binding and limits
+
+The evidence is [artifact 12168437967](https://github.com/swiftraccoon/simplestChat/actions/runs/39212373766/artifacts/12168437967)
+of that run (1,803,957 bytes; its SHA-256 matches GitHub's artifact digest). Its
+`outcome.json` binds the runtime notice report, runtime proof and SPDX document
+by hash, and the independent Syft report agrees on image ID, revision and the
+ordered declaration. That retained image check **failed**: its runtime proof and
+vulnerability verdict passed, its license verdict blocked exactly these two
+changed scopes before the review and none after it, and its secret verdict
+blocked two rpm-database regions that the
+[separate secret review](fedora-rpm-secret-review.md) covers. This assessment
+does not relabel the retained run as successful or supply a signed
+passing-release attestation. Ledger matching remains exact **PURL plus
+fingerprint**; source and notice hashes record review evidence, not additional
+automatic matching fields.
+
 ## Current tzdata 2026e assessment — 2026-10-10
 
 The canonical noarch package `tzdata` changed from `2026c-2.fc44` to
