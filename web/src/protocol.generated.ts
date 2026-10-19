@@ -907,7 +907,7 @@ export interface RoomSettings {
   historyRetentionDays: number;
 }
 
-export const CHAT_STYLE_KINDS = ['accent', 'text', 'bubble', 'unknown'] as const;
+export const CHAT_STYLE_KINDS = ['accent', 'text', 'bubble'] as const;
 export type ChatStyleKind = (typeof CHAT_STYLE_KINDS)[number];
 
 export interface ModerationEvent {

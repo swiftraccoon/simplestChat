@@ -1384,7 +1384,8 @@ pub(super) async fn save_private_message(
     };
     let style = crate::signaling::protocol::ChatStyle {
         color: sender.chat_color,
-        style: crate::signaling::protocol::ChatStyleKind::named(&sender.chat_style),
+        style: crate::signaling::protocol::ChatStyleKind::named(&sender.chat_style)
+            .unwrap_or_default(),
     };
     let message = ChatEntry {
         message_id: MessageId::random(),

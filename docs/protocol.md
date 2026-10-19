@@ -893,10 +893,10 @@ look applied. The `setChatStyle` social action changes it, saving an account's l
 before anyone sees it, and the room broadcasts `chatStyleChanged` to everyone,
 the sender included. Looks travel on `ParticipantInfo`, `participantJoined`,
 `ChatEntry` and `chatReceived`, so a message keeps the look it was sent with.
-The server rejects a `setChatStyle` color outside the palette, ignores one on a
-join, and treats an unknown style as `accent`. The browser shows a color token it
-does not know as the automatic color and an unknown style as `accent`; neither
-drops the message.
+The server rejects a `setChatStyle` color outside the palette and ignores one on a
+join; a treatment outside `accent`, `text` and `bubble` is a format error on any
+frame that carries it, so the server never emits one. The browser shows a color
+token it does not know as the automatic color without dropping the message.
 
 `joinRoom.participantName` is the requested room-local name for both guests and
 accounts. The browser uses the account profile name as a default when no name

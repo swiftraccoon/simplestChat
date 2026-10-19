@@ -787,28 +787,24 @@ pub enum ChatStyleKind {
     Accent,
     Text,
     Bubble,
-    /// A treatment a newer client knows and this server does not.
-    #[serde(other)]
-    Unknown,
 }
 
 impl ChatStyleKind {
-    /// The treatment stored under `name`; anything this server does not know is
-    /// [`ChatStyleKind::Unknown`], as on the wire.
+    /// The treatment stored under `name`, or `None` for one this server does not know.
     #[must_use]
-    pub fn named(name: &str) -> Self {
+    pub fn named(name: &str) -> Option<Self> {
         match name {
-            "accent" => Self::Accent,
-            "text" => Self::Text,
-            "bubble" => Self::Bubble,
-            _ => Self::Unknown,
+            "accent" => Some(Self::Accent),
+            "text" => Some(Self::Text),
+            "bubble" => Some(Self::Bubble),
+            _ => None,
         }
     }
 
     #[must_use]
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::Accent | Self::Unknown => "accent",
+            Self::Accent => "accent",
             Self::Text => "text",
             Self::Bubble => "bubble",
         }
@@ -827,8 +823,7 @@ pub struct ChatStyle {
 }
 
 impl ChatStyle {
-    /// The style with a known treatment (an unknown one shows as the accent),
-    /// or `None` when its color is outside the palette.
+    /// The style, or `None` when its color is outside the palette.
     #[must_use]
     pub fn validated(&self) -> Option<Self> {
         if self
@@ -838,14 +833,7 @@ impl ChatStyle {
         {
             return None;
         }
-        let style = match self.style {
-            ChatStyleKind::Unknown => ChatStyleKind::Accent,
-            known => known,
-        };
-        Some(Self {
-            color: self.color.clone(),
-            style,
-        })
+        Some(self.clone())
     }
 }
 
@@ -866,7 +854,7 @@ where
         color: appearance.color,
         style: appearance.style,
     };
-    if style.style == ChatStyleKind::Unknown || style.validated().is_none() {
+    if style.validated().is_none() {
         return Err(serde::de::Error::custom(
             "Unknown appearance color or treatment",
         ));
@@ -1218,7 +1206,7 @@ mod tests {
     }
 
     #[test]
-    fn chat_styles_keep_to_the_palette_and_tolerate_newer_treatments() {
+    fn chat_styles_keep_to_the_palette_and_refuse_unknown_treatments() {
         let style: ChatStyle =
             serde_json::from_value(json!({"color":"rose","style":"bubble"})).unwrap();
         assert_eq!(style.validated(), Some(style.clone()));
@@ -1231,9 +1219,10 @@ mod tests {
             (automatic.color.as_deref(), automatic.style),
             (None, ChatStyleKind::Accent)
         );
-        let newer: ChatStyle =
-            serde_json::from_value(json!({"color":"sky","style":"neon"})).unwrap();
-        assert_eq!(newer.validated().unwrap().style, ChatStyleKind::Accent);
+        assert!(
+            serde_json::from_value::<ChatStyle>(json!({"color":"sky","style":"neon"})).is_err(),
+            "a treatment this server does not know is a format error, never another look"
+        );
         for outside in ["#ff0000", "Rose", "red; background:url(x)", ""] {
             let style = ChatStyle {
                 color: Some(outside.into()),
@@ -1537,14 +1526,16 @@ mod tests {
             ("accent", ChatStyleKind::Accent),
             ("text", ChatStyleKind::Text),
             ("bubble", ChatStyleKind::Bubble),
-            ("glow", ChatStyleKind::Unknown),
         ] {
-            assert_eq!(ChatStyleKind::named(name), kind);
+            assert_eq!(ChatStyleKind::named(name), Some(kind));
             let wire: ChatStyleKind = serde_json::from_value(json!(name)).unwrap();
             assert_eq!(
                 wire, kind,
                 "{name} must read the same from a row and from the wire"
             );
         }
+        // A treatment this server does not know is refused, not shown as something else.
+        assert_eq!(ChatStyleKind::named("glow"), None);
+        assert!(serde_json::from_value::<ChatStyleKind>(json!("glow")).is_err());
     }
 }

@@ -214,11 +214,7 @@ pub(crate) async fn load_chat_style(
             .fetch_optional(pool)
             .await?;
     Ok(row.map(|(color, style)| {
-        let style = match style.as_str() {
-            "text" => ChatStyleKind::Text,
-            "bubble" => ChatStyleKind::Bubble,
-            _ => ChatStyleKind::Accent,
-        };
+        let style = ChatStyleKind::named(&style).unwrap_or_default();
         ChatStyle { color, style }
             .validated()
             .unwrap_or(ChatStyle { color: None, style })
