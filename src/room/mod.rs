@@ -178,14 +178,67 @@ const ROOM_VOICE_REQUEST_WINDOW: std::time::Duration = std::time::Duration::from
 const MAX_ROOM_VOICE_REQUESTS_PER_WINDOW: usize = 5;
 const ROOM_ADMIN_MUTATION_WINDOW: std::time::Duration = std::time::Duration::from_secs(1);
 const MAX_ROOM_ADMIN_MUTATIONS_PER_WINDOW: usize = 20;
-const ALLOW_AD_HOC_ROOMS_BY_DEFAULT: bool = false;
 const JOIN_RATE_WINDOW: std::time::Duration = std::time::Duration::from_secs(60);
-/// Defaults of `JOIN_ATTEMPTS_PER_IP_PER_MINUTE` and `JOIN_ATTEMPTS_PER_ROOM_IP_PER_MINUTE`:
-/// a school or an office behind one address raises them.
-const MAX_JOIN_ATTEMPTS_PER_IP: u32 = 30;
-const MAX_JOIN_ATTEMPTS_PER_ROOM_IP: u32 = 10;
-const MAX_JOIN_LIMIT: u32 = 100_000;
 const MAX_TRACKED_JOIN_KEYS: usize = 10_000;
+
+/// The room manager's operator settings, taken from [`crate::config::Config`].
+/// The defaults are those of an empty environment; fixtures start from them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ManagerSettings {
+    /// `ALLOW_AD_HOC_ROOMS`: a loopback listener can still be internet-facing
+    /// through a reverse proxy, so ephemeral room creation is an explicit opt-in.
+    pub allow_ad_hoc_rooms: bool,
+    /// `MAX_PARTICIPANTS_PER_ROOM`.
+    pub max_participants_per_room: Option<usize>,
+    /// `MAX_BROADCASTERS_PER_ROOM`.
+    pub max_broadcasters_per_room: Option<usize>,
+    /// Concurrent Argon2 verifications for joins; an unset
+    /// `MAX_PASSWORD_WORKERS` keeps two.
+    pub password_verify_workers: usize,
+    /// `MAX_ROOMS`.
+    pub max_rooms: usize,
+    /// `MAX_PERSISTED_ROOMS`.
+    pub max_persisted_rooms: i64,
+    /// `JOIN_ATTEMPTS_PER_IP_PER_MINUTE`: a school or an office behind one
+    /// address raises it.
+    pub join_attempts_per_ip_per_minute: u32,
+    /// `JOIN_ATTEMPTS_PER_ROOM_IP_PER_MINUTE`.
+    pub join_attempts_per_room_ip_per_minute: u32,
+    /// Account update subscribers, bounded like connections (`MAX_CONNECTIONS`).
+    pub account_update_capacity: usize,
+}
+
+impl Default for ManagerSettings {
+    fn default() -> Self {
+        Self {
+            allow_ad_hoc_rooms: false,
+            max_participants_per_room: None,
+            max_broadcasters_per_room: None,
+            password_verify_workers: 2,
+            max_rooms: 1_000,
+            max_persisted_rooms: 10_000,
+            join_attempts_per_ip_per_minute: 30,
+            join_attempts_per_room_ip_per_minute: 10,
+            account_update_capacity: 10_000,
+        }
+    }
+}
+
+impl From<&crate::config::Config> for ManagerSettings {
+    fn from(config: &crate::config::Config) -> Self {
+        Self {
+            allow_ad_hoc_rooms: config.rooms.allow_ad_hoc,
+            max_participants_per_room: config.limits.max_participants_per_room,
+            max_broadcasters_per_room: config.limits.max_broadcasters_per_room,
+            password_verify_workers: config.limits.max_password_workers.unwrap_or(2),
+            max_rooms: config.limits.max_rooms,
+            max_persisted_rooms: config.limits.max_persisted_rooms,
+            join_attempts_per_ip_per_minute: config.rates.join_attempts_per_ip_per_minute,
+            join_attempts_per_room_ip_per_minute: config.rates.join_attempts_per_room_ip_per_minute,
+            account_update_capacity: config.limits.max_connections,
+        }
+    }
+}
 
 #[derive(Debug)]
 struct RateWindow {
@@ -325,86 +378,6 @@ fn rate_limit_ip(address: IpAddr) -> IpAddr {
                 0,
                 0,
             ))
-        }
-    }
-}
-
-fn environment_flag(name: &str, default: bool) -> Result<bool> {
-    match std::env::var(name) {
-        Ok(value) => parse_environment_flag_value(name, Some(&value), default),
-        Err(std::env::VarError::NotPresent) => parse_environment_flag_value(name, None, default),
-        Err(std::env::VarError::NotUnicode(_)) => anyhow::bail!("{name} must be valid UTF-8"),
-    }
-}
-
-fn parse_environment_flag_value(name: &str, value: Option<&str>, default: bool) -> Result<bool> {
-    match value {
-        Some(value) if value.eq_ignore_ascii_case("true") || value == "1" => Ok(true),
-        Some(value) if value.eq_ignore_ascii_case("false") || value == "0" => Ok(false),
-        Some(_) => anyhow::bail!("{name} must be true, false, 1, or 0"),
-        None => Ok(default),
-    }
-}
-
-/// The deployment's participant ceiling. Unset or empty (Compose forwards an
-/// unset variable as an empty string) means none; anything else must be a
-/// whole number from 2 to 10000, because an ignored typo would leave every
-/// room unlimited while the operator believes it is capped.
-fn parse_participant_ceiling(value: Option<&str>) -> Result<Option<usize>> {
-    let Some(value) = value.map(str::trim).filter(|value| !value.is_empty()) else {
-        return Ok(None);
-    };
-    match value.parse::<usize>() {
-        Ok(ceiling) if (2..=10_000).contains(&ceiling) => Ok(Some(ceiling)),
-        _ => anyhow::bail!("MAX_PARTICIPANTS_PER_ROOM must be a whole number from 2 to 10000"),
-    }
-}
-
-fn participant_ceiling() -> Result<Option<usize>> {
-    match std::env::var("MAX_PARTICIPANTS_PER_ROOM") {
-        Ok(value) => parse_participant_ceiling(Some(&value)),
-        Err(std::env::VarError::NotPresent) => Ok(None),
-        Err(std::env::VarError::NotUnicode(_)) => {
-            anyhow::bail!("MAX_PARTICIPANTS_PER_ROOM must be valid UTF-8")
-        }
-    }
-}
-
-/// The deployment's broadcaster ceiling for every room: past about thirty
-/// publishers the per-viewer bitrate cap, not CPU, starves every tile, while a
-/// one-to-many room keeps hundreds of viewers. Same shape as the participant one.
-fn parse_broadcaster_ceiling(value: Option<&str>) -> Result<Option<usize>> {
-    let Some(value) = value.map(str::trim).filter(|value| !value.is_empty()) else {
-        return Ok(None);
-    };
-    match value.parse::<usize>() {
-        Ok(ceiling) if (1..=1_000).contains(&ceiling) => Ok(Some(ceiling)),
-        _ => anyhow::bail!("MAX_BROADCASTERS_PER_ROOM must be a whole number from 1 to 1000"),
-    }
-}
-
-fn parse_join_limit(name: &str, value: Option<&str>, default: u32) -> Result<u32> {
-    let Some(value) = value.map(str::trim).filter(|value| !value.is_empty()) else {
-        return Ok(default);
-    };
-    match value.parse::<u32>() {
-        Ok(limit) if (1..=MAX_JOIN_LIMIT).contains(&limit) => Ok(limit),
-        _ => anyhow::bail!("{name} must be a whole number from 1 to {MAX_JOIN_LIMIT}"),
-    }
-}
-fn join_limit(name: &str, default: u32) -> Result<u32> {
-    match std::env::var(name) {
-        Ok(value) => parse_join_limit(name, Some(&value), default),
-        Err(std::env::VarError::NotPresent) => Ok(default),
-        Err(std::env::VarError::NotUnicode(_)) => anyhow::bail!("{name} must be valid UTF-8"),
-    }
-}
-fn broadcaster_ceiling() -> Result<Option<usize>> {
-    match std::env::var("MAX_BROADCASTERS_PER_ROOM") {
-        Ok(value) => parse_broadcaster_ceiling(Some(&value)),
-        Err(std::env::VarError::NotPresent) => Ok(None),
-        Err(std::env::VarError::NotUnicode(_)) => {
-            anyhow::bail!("MAX_BROADCASTERS_PER_ROOM must be valid UTF-8")
         }
     }
 }
@@ -1442,21 +1415,22 @@ impl RoomManager {
     /// # Errors
     /// Returns an error if room configuration is invalid or media server initialization fails
     pub(crate) async fn new(
+        settings: ManagerSettings,
         media_config: MediaConfig,
         metrics: ServerMetrics,
         db_pool: Option<sqlx::PgPool>,
     ) -> Result<Self> {
-        // A loopback listener can still be internet-facing through a reverse
-        // proxy, so ephemeral room creation is always an explicit opt-in.
-        let allow_ad_hoc_rooms =
-            environment_flag("ALLOW_AD_HOC_ROOMS", ALLOW_AD_HOC_ROOMS_BY_DEFAULT)?;
-        let max_participants_per_room = participant_ceiling()?;
-        let max_broadcasters_per_room = broadcaster_ceiling()?;
-        let password_verify_workers =
-            crate::configuration::read_usize("MAX_PASSWORD_WORKERS", 2, 1, 32)?;
-        let max_rooms = crate::configuration::read_usize("MAX_ROOMS", 1_000, 1, 1_000_000)?;
-        let max_persisted_rooms =
-            crate::configuration::read_usize("MAX_PERSISTED_ROOMS", 10_000, 1, 1_000_000)? as i64;
+        let ManagerSettings {
+            allow_ad_hoc_rooms,
+            max_participants_per_room,
+            max_broadcasters_per_room,
+            password_verify_workers,
+            max_rooms,
+            max_persisted_rooms,
+            join_attempts_per_ip_per_minute,
+            join_attempts_per_room_ip_per_minute,
+            account_update_capacity,
+        } = settings;
         let media_server = Arc::new(MediaServer::new(media_config).await?);
 
         Ok(Self {
@@ -1465,7 +1439,7 @@ impl RoomManager {
             drain: DrainSignal::default(),
             metrics,
             db_pool,
-            account_updates: crate::auth::updates::Hub::configured()?,
+            account_updates: crate::auth::updates::Hub::with_capacity(account_update_capacity),
             room_creation_lock: Arc::new(tokio::sync::Mutex::new(())),
             deleting_rooms: Arc::new(StdRwLock::new(HashMap::new())),
             identity_updates: Arc::new(StdRwLock::new(HashSet::new())),
@@ -1480,14 +1454,8 @@ impl RoomManager {
             // every CPU while the separate verification lane serves joiners.
             password_hash_work: Arc::new(tokio::sync::Semaphore::new(1)),
             max_password_verify_work: password_verify_workers,
-            join_attempts_by_ip: SharedRateLimiter::new(join_limit(
-                "JOIN_ATTEMPTS_PER_IP_PER_MINUTE",
-                MAX_JOIN_ATTEMPTS_PER_IP,
-            )?),
-            join_attempts_by_room_ip: SharedRateLimiter::new(join_limit(
-                "JOIN_ATTEMPTS_PER_ROOM_IP_PER_MINUTE",
-                MAX_JOIN_ATTEMPTS_PER_ROOM_IP,
-            )?),
+            join_attempts_by_ip: SharedRateLimiter::new(join_attempts_per_ip_per_minute),
+            join_attempts_by_room_ip: SharedRateLimiter::new(join_attempts_per_room_ip_per_minute),
         })
     }
 
@@ -1523,7 +1491,9 @@ impl RoomManager {
         let mut config = MediaConfig::default();
         config.worker_config.num_workers = 1;
         config.webrtc_server_port_base = 0;
-        let mut manager = Self::new(config, metrics, pool).await.unwrap();
+        let mut manager = Self::new(ManagerSettings::default(), config, metrics, pool)
+            .await
+            .unwrap();
         manager.allow_ad_hoc_rooms = true;
         manager
     }
@@ -6625,9 +6595,14 @@ mod security_tests {
         config.worker_config.num_workers = 1;
         // Port zero asks the owned native listener to select an unused port.
         config.webrtc_server_port_base = 0;
-        let mut manager = RoomManager::new(config, ServerMetrics::new(), None)
-            .await
-            .unwrap();
+        let mut manager = RoomManager::new(
+            ManagerSettings::default(),
+            config,
+            ServerMetrics::new(),
+            None,
+        )
+        .await
+        .unwrap();
         manager.allow_ad_hoc_rooms = true;
         manager
     }
@@ -6636,9 +6611,14 @@ mod security_tests {
         let mut config = MediaConfig::default();
         config.worker_config.num_workers = 2;
         config.webrtc_server_port_base = crate::media::worker_manager::reserve_worker_ports(2);
-        let mut manager = RoomManager::new(config, ServerMetrics::new(), None)
-            .await
-            .unwrap();
+        let mut manager = RoomManager::new(
+            ManagerSettings::default(),
+            config,
+            ServerMetrics::new(),
+            None,
+        )
+        .await
+        .unwrap();
         manager.allow_ad_hoc_rooms = true;
         Arc::new(manager)
     }
@@ -7714,47 +7694,6 @@ mod security_tests {
     }
 
     #[test]
-    fn ad_hoc_rooms_default_closed_and_require_explicit_opt_in() {
-        assert!(
-            !parse_environment_flag_value(
-                "ALLOW_AD_HOC_ROOMS",
-                None,
-                ALLOW_AD_HOC_ROOMS_BY_DEFAULT,
-            )
-            .unwrap()
-        );
-        assert!(
-            parse_environment_flag_value(
-                "ALLOW_AD_HOC_ROOMS",
-                Some("true"),
-                ALLOW_AD_HOC_ROOMS_BY_DEFAULT,
-            )
-            .unwrap()
-        );
-    }
-
-    #[test]
-    fn participant_ceiling_is_absent_or_valid_never_silently_dropped() {
-        assert_eq!(parse_participant_ceiling(None).unwrap(), None);
-        // Compose forwards an unset variable as an empty string.
-        assert_eq!(parse_participant_ceiling(Some("")).unwrap(), None);
-        assert_eq!(parse_participant_ceiling(Some("  ")).unwrap(), None);
-        assert_eq!(parse_participant_ceiling(Some(" 80 ")).unwrap(), Some(80));
-        assert_eq!(parse_participant_ceiling(Some("2")).unwrap(), Some(2));
-        assert_eq!(
-            parse_participant_ceiling(Some("10000")).unwrap(),
-            Some(10_000)
-        );
-        for invalid in ["1", "0", "10001", "eighty", "-5", "8.5"] {
-            let error = parse_participant_ceiling(Some(invalid)).unwrap_err();
-            assert!(
-                error.to_string().contains("MAX_PARTICIPANTS_PER_ROOM"),
-                "{invalid}: {error}"
-            );
-        }
-    }
-
-    #[test]
     fn aggregate_room_media_budget_is_bounded_and_recovers() {
         let mut room = Room::new("room".to_string(), None, false, None);
         let start = std::time::Instant::now();
@@ -8540,26 +8479,6 @@ mod security_tests {
 #[cfg(test)]
 mod broadcaster_ceiling_tests {
     use super::*;
-
-    #[test]
-    fn join_limits_default_and_refuse_nonsense() {
-        assert_eq!(parse_join_limit("X", None, 30).unwrap(), 30);
-        assert_eq!(parse_join_limit("X", Some(" "), 30).unwrap(), 30);
-        assert_eq!(parse_join_limit("X", Some("500"), 30).unwrap(), 500);
-        assert!(parse_join_limit("X", Some("0"), 30).is_err());
-        assert!(parse_join_limit("X", Some("100001"), 30).is_err());
-        assert!(parse_join_limit("X", Some("ten"), 30).is_err());
-    }
-
-    #[test]
-    fn broadcaster_ceiling_parses_like_the_participant_one() {
-        assert_eq!(parse_broadcaster_ceiling(None).unwrap(), None);
-        assert_eq!(parse_broadcaster_ceiling(Some(" ")).unwrap(), None);
-        assert_eq!(parse_broadcaster_ceiling(Some("30")).unwrap(), Some(30));
-        assert!(parse_broadcaster_ceiling(Some("0")).is_err());
-        assert!(parse_broadcaster_ceiling(Some("1001")).is_err());
-        assert!(parse_broadcaster_ceiling(Some("many")).is_err());
-    }
 
     #[test]
     fn the_deployment_ceiling_applies_beneath_a_rooms_own_broadcaster_limit() {

@@ -12,9 +12,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 type HmacSha1 = Hmac<Sha1>;
 
-/// TURN server configuration, loaded from environment variables.
-#[derive(Clone)]
-pub(crate) struct TurnConfig {
+/// TURN server configuration (`TURN_URLS`, `TURN_SECRET`, `TURN_TTL`).
+#[derive(Debug, Clone)]
+pub struct TurnConfig {
     /// TURN server URLs (e.g. ["turn:example.com:3478", "turns:example.com:5349"])
     pub urls: Vec<String>,
     /// Shared secret for generating time-limited credentials
@@ -56,36 +56,34 @@ pub(crate) fn parse_turn_ttl(value: Option<&str>) -> anyhow::Result<u64> {
 }
 
 impl TurnConfig {
-    /// Load from environment variables. Returns None if TURN_URLS is not set.
-    pub(crate) fn from_env() -> anyhow::Result<Option<Self>> {
-        let Some(urls_str) = std::env::var("TURN_URLS").ok() else {
+    /// Builds the relay configuration from `TURN_URLS`, `TURN_SECRET` (already
+    /// length-checked by the configuration layer) and `TURN_TTL`; `None`
+    /// without `TURN_URLS`.
+    pub(crate) fn parse(
+        urls: Option<&str>,
+        secret: Option<SecretString>,
+        ttl: Option<&str>,
+    ) -> anyhow::Result<Option<Self>> {
+        let Some(urls) = urls else {
             return Ok(None);
         };
-        let secret = std::env::var("TURN_SECRET")
-            .map_err(|_| anyhow::anyhow!("TURN_SECRET is required when TURN_URLS is set"))?;
-        if secret.len() < 32 {
-            anyhow::bail!("TURN_SECRET must contain at least 32 bytes");
-        }
-        let ttl_secs = parse_turn_ttl(std::env::var("TURN_TTL").ok().as_deref())?;
-
-        let urls: Vec<String> = urls_str
+        let secret = secret
+            .ok_or_else(|| anyhow::anyhow!("TURN_SECRET is required when TURN_URLS is set"))?;
+        let ttl_secs = parse_turn_ttl(ttl)?;
+        let urls: Vec<String> = urls
             .split(',')
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty())
             .collect();
-        if urls.is_empty() {
-            anyhow::bail!("TURN_URLS must contain at least one URL");
-        }
-        if urls
-            .iter()
-            .any(|url| !url.starts_with("turn:") && !url.starts_with("turns:"))
-        {
-            anyhow::bail!("TURN_URLS entries must use turn: or turns:");
-        }
-
+        anyhow::ensure!(!urls.is_empty(), "TURN_URLS must contain at least one URL");
+        anyhow::ensure!(
+            urls.iter()
+                .all(|url| url.starts_with("turn:") || url.starts_with("turns:")),
+            "TURN_URLS entries must use turn: or turns:"
+        );
         Ok(Some(Self {
             urls,
-            secret: secret.into(),
+            secret,
             ttl_secs,
         }))
     }

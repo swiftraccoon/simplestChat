@@ -5,7 +5,6 @@ use std::net::IpAddr;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 use tracing::info;
-use url::Url;
 use uuid::Uuid;
 use webauthn_rs::prelude::*;
 
@@ -313,37 +312,11 @@ fn fresh_ceremony_id<T>(map: &HashMap<String, T>) -> String {
     }
 }
 
-pub(crate) fn init_webauthn() -> anyhow::Result<Option<(Webauthn, Arc<ChallengeStore>)>> {
-    let rp_id = std::env::var("WEBAUTHN_RP_ID").ok();
-    let origin_str = std::env::var("WEBAUTHN_ORIGIN").ok();
-    let (rp_id, origin_str) = match (rp_id, origin_str) {
-        (None, None) => return Ok(None),
-        (Some(rp_id), Some(origin)) => (rp_id, origin),
-        _ => anyhow::bail!("WEBAUTHN_RP_ID and WEBAUTHN_ORIGIN must be configured together"),
-    };
-    let origin = Url::parse(&origin_str)
-        .map_err(|_| anyhow::anyhow!("WEBAUTHN_ORIGIN must be a valid URL"))?;
-    let secure_origin = origin.scheme() == "https"
-        || (origin.scheme() == "http"
-            && origin.host_str().is_some_and(|host| {
-                host.eq_ignore_ascii_case("localhost")
-                    || host
-                        .parse::<std::net::IpAddr>()
-                        .is_ok_and(|address| address.is_loopback())
-            }));
-    if !secure_origin
-        || !origin.username().is_empty()
-        || origin.password().is_some()
-        || origin.path() != "/"
-        || origin.query().is_some()
-        || origin.fragment().is_some()
-    {
-        anyhow::bail!(
-            "WEBAUTHN_ORIGIN must be an HTTPS origin without a path (HTTP localhost is allowed for development)"
-        );
-    }
-
-    let webauthn = WebauthnBuilder::new(&rp_id, &origin)
+pub(crate) fn init_webauthn(
+    settings: &crate::config::WebAuthn,
+) -> anyhow::Result<(Webauthn, Arc<ChallengeStore>)> {
+    let rp_id = settings.rp_id.as_str();
+    let webauthn = WebauthnBuilder::new(rp_id, &settings.origin)
         .map_err(|error| anyhow::anyhow!("Invalid WebAuthn relying party: {error}"))?
         .rp_name("simplestChat")
         .timeout(CHALLENGE_TTL)
@@ -352,7 +325,7 @@ pub(crate) fn init_webauthn() -> anyhow::Result<Option<(Webauthn, Arc<ChallengeS
 
     info!(rp_id, "WebAuthn/passkey authentication enabled");
 
-    Ok(Some((webauthn, Arc::new(ChallengeStore::new()))))
+    Ok((webauthn, Arc::new(ChallengeStore::new())))
 }
 
 #[cfg(test)]
@@ -362,7 +335,7 @@ mod tests {
     fn test_webauthn() -> Webauthn {
         WebauthnBuilder::new(
             "localhost",
-            &Url::parse("https://localhost").expect("valid test origin"),
+            &url::Url::parse("https://localhost").expect("valid test origin"),
         )
         .expect("valid test RP")
         .rp_name("test")

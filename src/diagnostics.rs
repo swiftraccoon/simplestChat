@@ -87,6 +87,13 @@ pub(crate) enum Outcome {
     Rejected,
 }
 
+/// Default and ceiling of `DIAGNOSTICS_MAX_RECORDS`.
+pub(crate) const DEFAULT_MAX_RECORDS: u64 = 10_000;
+pub(crate) const MAX_RECORDS_LIMIT: u64 = 100_000;
+/// Default and ceiling of `DIAGNOSTICS_DURATION_SECS`.
+pub(crate) const DEFAULT_DURATION_SECS: u64 = 300;
+pub(crate) const MAX_DURATION_SECS: u64 = 3600;
+
 #[derive(Clone, Copy)]
 struct Limits {
     max_records: u64,
@@ -95,9 +102,9 @@ struct Limits {
 
 impl Limits {
     fn validate(self) -> io::Result<Self> {
-        if !(1..=100_000).contains(&self.max_records)
+        if !(1..=MAX_RECORDS_LIMIT).contains(&self.max_records)
             || self.duration.is_zero()
-            || self.duration > Duration::from_secs(3600)
+            || self.duration > Duration::from_secs(MAX_DURATION_SECS)
         {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
@@ -111,8 +118,8 @@ impl Limits {
 impl Default for Limits {
     fn default() -> Self {
         Self {
-            max_records: 10_000,
-            duration: Duration::from_secs(300),
+            max_records: DEFAULT_MAX_RECORDS,
+            duration: Duration::from_secs(DEFAULT_DURATION_SECS),
         }
     }
 }
@@ -261,16 +268,6 @@ fn next_id(counter: &AtomicU64) -> Option<u64> {
         .map(|value| value + 1)
 }
 
-fn env_number(name: &'static str, default: u64) -> io::Result<u64> {
-    match std::env::var(name) {
-        Ok(value) => value
-            .parse()
-            .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, name)),
-        Err(std::env::VarError::NotPresent) => Ok(default),
-        Err(_) => Err(io::Error::new(io::ErrorKind::InvalidInput, name)),
-    }
-}
-
 impl Diagnostics {
     /// Give in-process request tests the real recorder without process-global
     /// environment changes or a production configuration bypass.
@@ -281,21 +278,17 @@ impl Diagnostics {
 
     /// Enables a new private JSONL file only when `DIAGNOSTICS_PATH` is set.
     /// Existing files (including symlinks) are never overwritten. The path must
-    /// be absolute; its parent must already exist. Numeric limits fail closed.
-    pub(crate) fn from_env() -> io::Result<Self> {
-        let Some(path) = std::env::var_os("DIAGNOSTICS_PATH") else {
+    /// be absolute; its parent must already exist.
+    pub(crate) fn configure(settings: &crate::config::Diagnostics) -> io::Result<Self> {
+        let Some(path) = &settings.path else {
             return Ok(Self::default());
         };
-        let defaults = Limits::default();
         let limits = Limits {
-            max_records: env_number("DIAGNOSTICS_MAX_RECORDS", defaults.max_records)?,
-            duration: Duration::from_secs(env_number(
-                "DIAGNOSTICS_DURATION_SECS",
-                defaults.duration.as_secs(),
-            )?),
+            max_records: settings.max_records,
+            duration: settings.duration,
         }
         .validate()?;
-        Self::open(Path::new(&path), limits)
+        Self::open(path, limits)
     }
 
     fn open(path: &Path, limits: Limits) -> io::Result<Self> {

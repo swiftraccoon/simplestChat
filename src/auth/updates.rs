@@ -100,16 +100,8 @@ pub(crate) struct Hub {
 }
 
 impl Hub {
-    pub(crate) fn configured() -> anyhow::Result<Self> {
-        Ok(Self::with_capacity(crate::configuration::read_usize(
-            "MAX_CONNECTIONS",
-            10_000,
-            1,
-            1_000_000,
-        )?))
-    }
-
-    fn with_capacity(capacity: usize) -> Self {
+    /// Bounds subscribers like connections (`MAX_CONNECTIONS`).
+    pub(crate) fn with_capacity(capacity: usize) -> Self {
         Self {
             inner: Arc::new(Inner {
                 state: Mutex::new(StateMap {

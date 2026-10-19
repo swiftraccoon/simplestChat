@@ -1487,9 +1487,14 @@ mod tests {
         config.webrtc_server_port_base = 0;
         let metrics = ServerMetrics::new();
         let manager = Arc::new(
-            RoomManager::new(config, metrics.clone(), Some(pool.clone()))
-                .await
-                .unwrap(),
+            RoomManager::new(
+                crate::room::ManagerSettings::default(),
+                config,
+                metrics.clone(),
+                Some(pool.clone()),
+            )
+            .await
+            .unwrap(),
         );
         let room = Arc::new(TokioRwLock::new(room));
         manager
@@ -1499,9 +1504,9 @@ mod tests {
             .insert(room_id.clone(), room.clone());
         let server = crate::signaling::SignalingServer::new(
             manager.clone(),
-            None,
             metrics,
             Some(pool.clone()),
+            &crate::config::Config::for_tests(),
         )
         .unwrap();
         let attempt = Uuid::new_v4().to_string();
@@ -2348,9 +2353,14 @@ mod tests {
         let mut config = MediaConfig::default();
         config.worker_config.num_workers = 1;
         config.webrtc_server_port_base = 0;
-        let manager = RoomManager::new(config, ServerMetrics::new(), None)
-            .await
-            .unwrap();
+        let manager = RoomManager::new(
+            crate::room::ManagerSettings::default(),
+            config,
+            ServerMetrics::new(),
+            None,
+        )
+        .await
+        .unwrap();
         let room_id = room.id.clone();
         let room_lock = Arc::new(TokioRwLock::new(room));
         manager
@@ -2449,9 +2459,14 @@ mod tests {
         let mut config = MediaConfig::default();
         config.worker_config.num_workers = 1;
         config.webrtc_server_port_base = 0;
-        let mut manager = RoomManager::new(config, ServerMetrics::new(), Some(pool.clone()))
-            .await
-            .unwrap();
+        let mut manager = RoomManager::new(
+            crate::room::ManagerSettings::default(),
+            config,
+            ServerMetrics::new(),
+            Some(pool.clone()),
+        )
+        .await
+        .unwrap();
         manager.allow_ad_hoc_rooms = true;
         let room_id = format!("style-{}", Uuid::new_v4());
         let join = |sent: ChatStyle| {
@@ -2629,9 +2644,14 @@ mod tests {
         let mut config = MediaConfig::default();
         config.worker_config.num_workers = 1;
         config.webrtc_server_port_base = 0;
-        let manager = RoomManager::new(config, ServerMetrics::new(), Some(pool.clone()))
-            .await
-            .unwrap();
+        let manager = RoomManager::new(
+            crate::room::ManagerSettings::default(),
+            config,
+            ServerMetrics::new(),
+            Some(pool.clone()),
+        )
+        .await
+        .unwrap();
         manager
             .rooms
             .write()
@@ -2769,9 +2789,14 @@ mod tests {
         let mut config = MediaConfig::default();
         config.worker_config.num_workers = 1;
         config.webrtc_server_port_base = 0;
-        let manager = RoomManager::new(config, ServerMetrics::new(), Some(pool.clone()))
-            .await
-            .unwrap();
+        let manager = RoomManager::new(
+            crate::room::ManagerSettings::default(),
+            config,
+            ServerMetrics::new(),
+            Some(pool.clone()),
+        )
+        .await
+        .unwrap();
         manager
             .rooms
             .write()

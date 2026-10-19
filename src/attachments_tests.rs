@@ -301,9 +301,14 @@ async fn database_attachments_live_grants_recheck_membership_removal_and_private
     config.worker_config.num_workers = 1;
     config.webrtc_server_port_base = 0;
     let manager = Arc::new(
-        RoomManager::new(config, metrics.clone(), Some(db.pool.clone()))
-            .await
-            .unwrap(),
+        RoomManager::new(
+            crate::room::ManagerSettings::default(),
+            config,
+            metrics.clone(),
+            Some(db.pool.clone()),
+        )
+        .await
+        .unwrap(),
     );
     let owner = db.users[0].to_string();
     let guest = Uuid::new_v4().to_string();
@@ -330,8 +335,13 @@ async fn database_attachments_live_grants_recheck_membership_removal_and_private
         senders.push(sender);
         receivers.push(receiver);
     }
-    let server =
-        SignalingServer::new(manager.clone(), None, metrics, Some(db.pool.clone())).unwrap();
+    let server = SignalingServer::new(
+        manager.clone(),
+        metrics,
+        Some(db.pool.clone()),
+        &crate::config::Config::for_tests(),
+    )
+    .unwrap();
     let file = db.upload(0, b"live bytes".to_vec()).await;
     manager
         .handle_chat_command(

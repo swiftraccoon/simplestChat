@@ -65,20 +65,16 @@ pub(crate) fn append_error_metrics(out: &mut String) {
     }
 }
 
-pub(crate) async fn connect() -> anyhow::Result<Option<PgPool>> {
-    let limits = crate::configuration::numeric_settings()?;
-    let url = match std::env::var("DATABASE_URL") {
-        Ok(url) => url,
-        Err(_) => {
-            info!("DATABASE_URL not set — running without database (anonymous-only mode)");
-            return Ok(None);
-        }
+pub(crate) async fn connect(settings: &crate::config::Database) -> anyhow::Result<Option<PgPool>> {
+    let Some(url) = &settings.url else {
+        info!("DATABASE_URL not set — running without database (anonymous-only mode)");
+        return Ok(None);
     };
+    let url = url.expose_secret();
 
-    let options = PgConnectOptions::from_str(&url).context("invalid DATABASE_URL")?;
+    let options = PgConnectOptions::from_str(url).context("invalid DATABASE_URL")?;
     let options = with_runtime_timeouts(options);
     require_verified_remote_database(&options)?;
-    let run_migrations = run_migrations()?;
 
     // A small warm floor keeps the first request after an idle period from
     // paying a full connect (TLS on remote hosts) inside the acquire budget.
@@ -86,26 +82,24 @@ pub(crate) async fn connect() -> anyhow::Result<Option<PgPool>> {
     // round trip is cheaper than a user-facing failure on a stale connection
     // after a database restart.
     let pool = PgPoolOptions::new()
-        .max_connections(limits["DATABASE_MAX_CONNECTIONS"] as u32)
-        .min_connections(limits["DATABASE_MIN_CONNECTIONS"] as u32)
+        .max_connections(settings.max_connections)
+        .min_connections(settings.min_connections)
         .idle_timeout(Duration::from_secs(600))
         .max_lifetime(Duration::from_secs(1800))
-        .acquire_timeout(Duration::from_secs(
-            limits["DATABASE_ACQUIRE_TIMEOUT_SECS"] as u64,
-        ))
+        .acquire_timeout(settings.acquire_timeout)
         .acquire_slow_threshold(Duration::from_millis(500))
         .connect_with(options)
         .await?;
 
     info!("Connected to PostgreSQL");
 
-    if run_migrations {
+    if settings.run_migrations {
         // An interrupted concurrent build may leave an invalid named index. Never
         // let IF NOT EXISTS mark its migration complete without repairing it.
         verify_chat_indexes(&pool, false).await?;
         // Maintenance budgets, not the runtime's 10 s statement deadline: a large
         // index build or backfill must not fail at a limit meant for requests.
-        let maintenance = PgConnectOptions::from_str(&url)
+        let maintenance = PgConnectOptions::from_str(url)
             .context("invalid DATABASE_URL")?
             .options([("statement_timeout", "10min"), ("lock_timeout", "1min")]);
         let mut connection = sqlx::postgres::PgConnection::connect_with(&maintenance).await?;
@@ -253,20 +247,6 @@ fn with_runtime_timeouts(options: PgConnectOptions) -> PgConnectOptions {
         ("lock_timeout", "5s"),
         ("idle_in_transaction_session_timeout", "15s"),
     ])
-}
-
-fn run_migrations() -> anyhow::Result<bool> {
-    let value = match std::env::var("RUN_MIGRATIONS") {
-        Ok(value) => value,
-        Err(std::env::VarError::NotPresent) => return Ok(false),
-        Err(error) => return Err(error).context("RUN_MIGRATIONS must be valid UTF-8"),
-    };
-
-    match value.trim().to_ascii_lowercase().as_str() {
-        "true" | "1" | "yes" => Ok(true),
-        "false" | "0" | "no" | "" => Ok(false),
-        _ => bail!("RUN_MIGRATIONS must be true or false"),
-    }
 }
 
 #[cfg(test)]

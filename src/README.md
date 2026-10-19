@@ -19,8 +19,8 @@ HTTP / WebSocket
 
 | Area | Entry points |
 | --- | --- |
-| Startup and database pool | `main.rs`, `db.rs` |
-| Admission drain and bounded shutdown | `shutdown.rs`, `main.rs` |
+| Configuration, startup and database pool | `config.rs`, `app.rs`, `db.rs` |
+| Admission drain and bounded shutdown | `shutdown.rs`, `app.rs` |
 | Routes, origin/limits, WebSocket lifecycle | `signaling/mod.rs`, `signaling/connection.rs` |
 | Dependency readiness | `signaling/readiness.rs`, `media/worker_manager.rs` |
 | Wire contract | `signaling/protocol.rs` and [web/src/protocol.ts](../web/src/protocol.ts) |

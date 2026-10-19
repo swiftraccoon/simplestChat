@@ -43,27 +43,8 @@ pub(crate) use connection::GracePeriodMap;
 #[derive(Clone, Copy)]
 pub(crate) struct ClientIp(pub(crate) IpAddr);
 
-const DEFAULT_AUTH_REQUESTS_PER_MINUTE: u32 = 60;
-const DEFAULT_AUTH_REQUESTS_PER_ACCOUNT_PER_MINUTE: u32 = 20;
-const DEFAULT_AUTH_CONCURRENCY: usize = 16;
-const DEFAULT_ACCOUNT_REQUESTS_PER_MINUTE: u32 = 300;
-const DEFAULT_ACCOUNT_CONCURRENCY: usize = 32;
-const DEFAULT_ROOM_API_REQUESTS_PER_MINUTE: u32 = 120;
-/// Public profile reads (avatars for every participant a viewer sees) get their
-/// own address budget so a busy room cannot spend the sign-in and refresh one.
-const DEFAULT_PROFILE_REQUESTS_PER_MINUTE: u32 = 600;
 /// How long an avatar or room image request queues for the media lane.
 const PROFILE_PERMIT_WAIT: Duration = Duration::from_secs(5);
-const DEFAULT_ROOM_API_CONCURRENCY: usize = 32;
-const DEFAULT_ROOM_CREATIONS_PER_ACCOUNT_PER_MINUTE: u32 = 10;
-const DEFAULT_WS_HANDSHAKES_PER_MINUTE: u32 = 120;
-const DEFAULT_CONNECTIONS_PER_IP: usize = 50;
-const DEFAULT_MAX_USERS: i64 = 100_000;
-const REGISTRATION_ENABLED_BY_DEFAULT: bool = false;
-/// Registrations, and taken-email answers, one client address may receive per
-/// hour: without email verification the register endpoint says whether an
-/// address has an account, so the answer is what is metered.
-const DEFAULT_REGISTRATIONS_PER_IP_PER_HOUR: u32 = 5;
 const MAX_TRACKED_AUTH_IPS: usize = 10_000;
 const PRINCIPAL_RATE_WINDOW: Duration = Duration::from_secs(60);
 // Four independently keyed 64K-wide rows cost 1 MiB per limiter. The
@@ -303,6 +284,8 @@ pub(crate) struct SignalingServer {
     readiness: readiness::ReadinessState,
     connection_semaphore: Arc<Semaphore>,
     max_connections: usize,
+    /// `BIND_ADDR:PORT`.
+    listen: std::net::SocketAddr,
     ip_connection_limiter: IpConnectionLimiter,
     ws_handshake_guard: AuthGuard,
     auth_guard: AuthGuard,
@@ -335,70 +318,50 @@ impl SignalingServer {
     /// Creates a new signaling server
     pub(crate) fn new(
         room_manager: Arc<RoomManager>,
-        turn_config: Option<TurnConfig>,
         metrics: ServerMetrics,
         db_pool: Option<PgPool>,
+        config: &crate::config::Config,
     ) -> anyhow::Result<Self> {
-        let max_connections =
-            crate::configuration::read_usize("MAX_CONNECTIONS", 10_000, 1, 1_000_000)?;
+        let max_connections = config.limits.max_connections;
         info!("Max connections: {}", max_connections);
 
-        let jwt_secret = std::env::var("JWT_SECRET").ok();
-        if let Some(secret) = jwt_secret.as_deref()
-            && secret.len() < 32
-        {
-            anyhow::bail!("JWT_SECRET must contain at least 32 bytes");
-        }
+        let jwt_secret = config
+            .auth
+            .jwt_secret
+            .as_ref()
+            .map(|secret| secret.expose_secret().to_owned());
         if jwt_secret.is_some() {
             info!("JWT authentication enabled");
         } else {
             info!("JWT_SECRET not set — authentication disabled");
         }
-
-        let metrics_token = std::env::var("METRICS_TOKEN").ok();
-        if let Some(token) = metrics_token.as_deref()
-            && token.len() < 32
-        {
-            anyhow::bail!("METRICS_TOKEN must contain at least 32 bytes");
-        }
+        let metrics_token = config
+            .observability
+            .metrics_token
+            .as_ref()
+            .map(|token| token.expose_secret().to_owned());
         let media_diagnostics = media_diagnostics::MediaDiagnostics::configure(
-            env_bool("MEDIA_DIAGNOSTICS_ENABLED", false)?,
+            config.observability.media_diagnostics_enabled,
             metrics_token.as_deref(),
         )?;
+        let trusted_proxy_secret = Arc::new(
+            config
+                .network
+                .trusted_proxy_secret
+                .as_ref()
+                .map(|secret| secret.expose_secret().to_owned()),
+        );
 
-        let trusted_proxy_secret = std::env::var("TRUSTED_PROXY_SECRET")
-            .ok()
-            .filter(|secret| !secret.is_empty());
-        if let Some(secret) = trusted_proxy_secret.as_deref()
-            && secret.len() < 32
-        {
-            anyhow::bail!("TRUSTED_PROXY_SECRET must contain at least 32 bytes");
-        }
-        let trusted_proxy_secret = Arc::new(trusted_proxy_secret);
-
-        let max_connections_per_ip =
-            env_usize("MAX_CONNECTIONS_PER_IP", DEFAULT_CONNECTIONS_PER_IP)?;
-        let auth_requests_per_minute =
-            env_u32("AUTH_REQUESTS_PER_MINUTE", DEFAULT_AUTH_REQUESTS_PER_MINUTE)?;
-        let auth_requests_per_account_per_minute = env_u32(
-            "AUTH_REQUESTS_PER_ACCOUNT_PER_MINUTE",
-            DEFAULT_AUTH_REQUESTS_PER_ACCOUNT_PER_MINUTE,
-        )?;
-        let registrations_per_ip_per_hour = env_u32(
-            "REGISTRATIONS_PER_IP_PER_HOUR",
-            DEFAULT_REGISTRATIONS_PER_IP_PER_HOUR,
-        )?;
-        let auth_concurrency = env_usize("AUTH_MAX_CONCURRENCY", DEFAULT_AUTH_CONCURRENCY)?;
-        let account_requests_per_minute = env_u32(
-            "ACCOUNT_REQUESTS_PER_MINUTE",
-            DEFAULT_ACCOUNT_REQUESTS_PER_MINUTE,
-        )?;
-        let account_concurrency =
-            env_usize("ACCOUNT_MAX_CONCURRENCY", DEFAULT_ACCOUNT_CONCURRENCY)?;
+        let rates = &config.rates;
+        let max_connections_per_ip = config.limits.max_connections_per_ip;
+        let auth_requests_per_minute = rates.auth_requests_per_minute;
+        let auth_requests_per_account_per_minute = rates.auth_requests_per_account_per_minute;
+        let registrations_per_ip_per_hour = rates.registrations_per_ip_per_hour;
+        let auth_concurrency = rates.auth_concurrency;
+        let account_requests_per_minute = rates.account_requests_per_minute;
+        let account_concurrency = rates.account_concurrency;
         let password_workers = password_lane_capacity(
-            std::env::var_os("MAX_PASSWORD_WORKERS")
-                .map(|_| crate::configuration::read_usize("MAX_PASSWORD_WORKERS", 2, 1, 32))
-                .transpose()?,
+            config.limits.max_password_workers,
             auth_concurrency,
             std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get),
         );
@@ -406,44 +369,24 @@ impl SignalingServer {
             password_workers,
             auth_concurrency, "Account password verification lane sized"
         );
-        let profile_requests_per_minute = env_u32(
-            "PROFILE_REQUESTS_PER_MINUTE",
-            DEFAULT_PROFILE_REQUESTS_PER_MINUTE,
-        )?;
-        let room_api_requests_per_minute = env_u32(
-            "ROOM_API_REQUESTS_PER_MINUTE",
-            DEFAULT_ROOM_API_REQUESTS_PER_MINUTE,
-        )?;
-        let room_api_concurrency =
-            env_usize("ROOM_API_MAX_CONCURRENCY", DEFAULT_ROOM_API_CONCURRENCY)?;
-        let room_creations_per_account = env_u32(
-            "ROOM_CREATIONS_PER_ACCOUNT_PER_MINUTE",
-            DEFAULT_ROOM_CREATIONS_PER_ACCOUNT_PER_MINUTE,
-        )?;
-        let ws_handshakes_per_minute =
-            env_u32("WS_HANDSHAKES_PER_MINUTE", DEFAULT_WS_HANDSHAKES_PER_MINUTE)?;
-        let allowed_origins = Arc::new(parse_allowed_origins()?);
-        let bind_addr = std::env::var("BIND_ADDR").unwrap_or_else(|_| "127.0.0.1".to_string());
-        let externally_reachable = bind_addr
-            .parse::<IpAddr>()
-            .map_or(true, |address| !address.is_loopback());
-        if externally_reachable && allowed_origins.is_empty() {
-            anyhow::bail!("ALLOWED_ORIGINS is required when BIND_ADDR is not loopback");
-        }
-        // A loopback listener can still be internet-facing through a reverse
-        // proxy, including the bundled Caddy deployment.
-        let registration_enabled =
-            env_bool("REGISTRATION_ENABLED", REGISTRATION_ENABLED_BY_DEFAULT)?;
-        let max_users = crate::configuration::read_usize(
-            "MAX_USERS",
-            DEFAULT_MAX_USERS as usize,
-            1,
-            10_000_000,
-        )? as i64;
+        let profile_requests_per_minute = rates.profile_requests_per_minute;
+        let room_api_requests_per_minute = rates.room_api_requests_per_minute;
+        let room_api_concurrency = rates.room_api_concurrency;
+        let room_creations_per_account = rates.room_creations_per_account_per_minute;
+        let ws_handshakes_per_minute = rates.ws_handshakes_per_minute;
+        let allowed_origins = Arc::new(config.network.allowed_origins.clone());
+        let registration_enabled = config.auth.registration_enabled;
+        let max_users = config.limits.max_users;
 
-        let (webauthn, challenge_store) = crate::auth::webauthn::init_webauthn()?
-            .map(|(w, c)| (Some(Arc::new(w)), Some(c)))
-            .unwrap_or((None, None));
+        let (webauthn, challenge_store) = match &config.auth.webauthn {
+            Some(settings) => {
+                let (webauthn, store) = crate::auth::webauthn::init_webauthn(settings)?;
+                (Some(Arc::new(webauthn)), Some(store))
+            }
+            None => (None, None),
+        };
+        let turn_config = config.turn.clone();
+        let listen = std::net::SocketAddr::new(config.network.bind_addr, config.network.port);
 
         let readiness = readiness::ReadinessState::new(room_manager.drain_signal());
         Ok(Self {
@@ -457,6 +400,7 @@ impl SignalingServer {
             readiness,
             connection_semaphore: Arc::new(Semaphore::new(max_connections)),
             max_connections,
+            listen,
             ip_connection_limiter: IpConnectionLimiter::new(max_connections_per_ip),
             ws_handshake_guard: AuthGuard::new(
                 ws_handshakes_per_minute,
@@ -988,16 +932,15 @@ impl SignalingServer {
         ))
     }
 
-    /// Starts the signaling server on the specified port
+    /// Serves HTTP and WebSockets on `BIND_ADDR:PORT` until the drain signal.
     ///
     /// # Errors
-    /// Returns an error if the server fails to bind to the port
-    pub(crate) async fn serve(self, port: u16) -> anyhow::Result<()> {
-        let bind_addr = std::env::var("BIND_ADDR").unwrap_or_else(|_| "127.0.0.1".to_string());
-        let addr = format!("{bind_addr}:{port}");
+    /// Returns an error if the listener cannot bind.
+    pub(crate) async fn serve(self) -> anyhow::Result<()> {
+        let addr = self.listen;
         info!("Starting signaling server on {}", addr);
 
-        let listener = tuned_listener(tokio::net::TcpListener::bind(&addr).await?);
+        let listener = tuned_listener(tokio::net::TcpListener::bind(addr).await?);
         let drain = self.room_manager.drain_signal();
         let app = self.router();
 
@@ -1343,58 +1286,6 @@ async fn ws_handler(
             )
             .await;
         })
-}
-
-fn env_usize(name: &str, default: usize) -> anyhow::Result<usize> {
-    crate::configuration::read_usize(name, default, 1, 1_000_000)
-}
-
-fn env_u32(name: &str, default: u32) -> anyhow::Result<u32> {
-    Ok(crate::configuration::read_usize(name, default as usize, 1, 1_000_000)? as u32)
-}
-
-fn env_bool(name: &str, default: bool) -> anyhow::Result<bool> {
-    match std::env::var(name) {
-        Ok(value) => parse_bool_value(name, Some(&value), default),
-        Err(std::env::VarError::NotPresent) => parse_bool_value(name, None, default),
-        Err(std::env::VarError::NotUnicode(_)) => anyhow::bail!("{name} must be valid UTF-8"),
-    }
-}
-
-fn parse_bool_value(name: &str, value: Option<&str>, default: bool) -> anyhow::Result<bool> {
-    match value {
-        Some(value) if value.eq_ignore_ascii_case("true") || value == "1" => Ok(true),
-        Some(value) if value.eq_ignore_ascii_case("false") || value == "0" => Ok(false),
-        Some(_) => anyhow::bail!("{name} must be true, false, 1, or 0"),
-        None => Ok(default),
-    }
-}
-
-fn parse_allowed_origins() -> anyhow::Result<Vec<String>> {
-    let Some(value) = std::env::var("ALLOWED_ORIGINS").ok() else {
-        return Ok(Vec::new());
-    };
-    value
-        .split(',')
-        .map(str::trim)
-        .filter(|origin| !origin.is_empty())
-        .map(|origin| {
-            let parsed = url::Url::parse(origin)
-                .map_err(|_| anyhow::anyhow!("ALLOWED_ORIGINS contains an invalid origin"))?;
-            if !matches!(parsed.scheme(), "http" | "https")
-                || !parsed.username().is_empty()
-                || parsed.password().is_some()
-                || parsed.query().is_some()
-                || parsed.fragment().is_some()
-                || parsed.path() != "/"
-            {
-                anyhow::bail!(
-                    "ALLOWED_ORIGINS entries must be exact http(s) origins without paths"
-                );
-            }
-            Ok(parsed.origin().ascii_serialization())
-        })
-        .collect()
 }
 
 fn trusted_client_ip(
@@ -2144,26 +2035,6 @@ mod security_tests {
         assert!(!guard.allow(ip));
     }
 
-    #[test]
-    fn registration_defaults_closed_and_requires_explicit_opt_in() {
-        assert!(
-            !parse_bool_value(
-                "REGISTRATION_ENABLED",
-                None,
-                REGISTRATION_ENABLED_BY_DEFAULT,
-            )
-            .unwrap()
-        );
-        assert!(
-            parse_bool_value(
-                "REGISTRATION_ENABLED",
-                Some("true"),
-                REGISTRATION_ENABLED_BY_DEFAULT,
-            )
-            .unwrap()
-        );
-    }
-
     #[tokio::test]
     #[ignore = "requires TEST_DATABASE_URL pointing to a migrated disposable PostgreSQL database"]
     async fn database_membership_handler_always_returns_a_private_cursor_page() {
@@ -2183,11 +2054,22 @@ mod security_tests {
         media.webrtc_server_port_base = crate::media::worker_manager::reserve_worker_ports(1);
         let metrics = ServerMetrics::new();
         let manager = Arc::new(
-            RoomManager::new(media, metrics.clone(), None)
-                .await
-                .unwrap(),
+            RoomManager::new(
+                crate::room::ManagerSettings::default(),
+                media,
+                metrics.clone(),
+                None,
+            )
+            .await
+            .unwrap(),
         );
-        let mut server = SignalingServer::new(manager, None, metrics, Some(pool.clone())).unwrap();
+        let mut server = SignalingServer::new(
+            manager,
+            metrics,
+            Some(pool.clone()),
+            &crate::config::Config::for_tests(),
+        )
+        .unwrap();
         let secret = "disposable-membership-handler-secret-at-least-32-bytes";
         server.jwt_secret = Some(secret.into());
         let session_id = crate::auth::session::create_session(
@@ -2263,11 +2145,22 @@ mod security_tests {
         media.webrtc_server_port_base = crate::media::worker_manager::reserve_worker_ports(1);
         let metrics = ServerMetrics::new();
         let manager = Arc::new(
-            RoomManager::new(media, metrics.clone(), None)
-                .await
-                .unwrap(),
+            RoomManager::new(
+                crate::room::ManagerSettings::default(),
+                media,
+                metrics.clone(),
+                None,
+            )
+            .await
+            .unwrap(),
         );
-        let mut server = SignalingServer::new(manager, None, metrics, Some(pool.clone())).unwrap();
+        let mut server = SignalingServer::new(
+            manager,
+            metrics,
+            Some(pool.clone()),
+            &crate::config::Config::for_tests(),
+        )
+        .unwrap();
         server.registration_enabled = true;
         server.jwt_secret = Some(format!("{}{}", uuid::Uuid::new_v4(), uuid::Uuid::new_v4()));
         server.webauthn = Some(Arc::new(
@@ -2361,11 +2254,22 @@ mod security_tests {
         media.webrtc_server_port_base = crate::media::worker_manager::reserve_worker_ports(1);
         let metrics = ServerMetrics::new();
         let manager = Arc::new(
-            RoomManager::new(media, metrics.clone(), None)
-                .await
-                .unwrap(),
+            RoomManager::new(
+                crate::room::ManagerSettings::default(),
+                media,
+                metrics.clone(),
+                None,
+            )
+            .await
+            .unwrap(),
         );
-        let mut server = SignalingServer::new(manager, None, metrics, Some(pool.clone())).unwrap();
+        let mut server = SignalingServer::new(
+            manager,
+            metrics,
+            Some(pool.clone()),
+            &crate::config::Config::for_tests(),
+        )
+        .unwrap();
         server.jwt_secret = Some(secret.into());
         let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
             .await

@@ -73,9 +73,14 @@ async fn a_refused_join_to_a_dormant_room_creates_no_router() {
     let mut config = MediaConfig::default();
     config.worker_config.num_workers = 1;
     config.webrtc_server_port_base = 0; // Only this test's ephemeral UDP socket.
-    let manager = RoomManager::new(config, ServerMetrics::new(), Some(pool.clone()))
-        .await
-        .unwrap();
+    let manager = RoomManager::new(
+        crate::room::ManagerSettings::default(),
+        config,
+        ServerMetrics::new(),
+        Some(pool.clone()),
+    )
+    .await
+    .unwrap();
     let owner_id = Uuid::new_v4();
     let visitor_id = Uuid::new_v4();
     let banned_id = Uuid::new_v4();
