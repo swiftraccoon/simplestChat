@@ -103,7 +103,7 @@
     "ZPL-2.1"
   ],
   "firstParty": {
-    "name": "simplestChat",
+    "name": "simplestchat",
     "source": "local",
     "license": "NOASSERTION",
     "cargoPublish": false,

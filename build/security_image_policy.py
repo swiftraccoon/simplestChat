@@ -98,7 +98,7 @@ def load_policy(path: Path) -> JsonObject:
     require(
         policy["firstParty"]
         == {
-            "name": "simplestChat",
+            "name": "simplestchat",
             "source": "local",
             "license": "NOASSERTION",
             "cargoPublish": False,
@@ -220,7 +220,7 @@ def inventory(value: JsonObject, policy: JsonObject) -> list[JsonObject]:
     require(any(item.get("type") == "rpm" for item in packages), "image_rpm_inventory_missing")
     rust = [item for item in packages if item.get("type") == "rust-crate"]
     require(
-        any(item.get("name") == "simplestChat" for item in rust), "image_rust_inventory_missing"
+        any(item.get("name") == "simplestchat" for item in rust), "image_rust_inventory_missing"
     )
     require(
         all(
@@ -411,7 +411,7 @@ def license_verdict(
         expression = " AND ".join("(" + item + ")" for item in expressions if item)
         complete = bool(expressions) and all(expressions)
         approved = complete and LicenseExpression(expression, allowed).allowed_expression()
-        if package.get("name") == "simplestChat" and package.get("type") == "rust-crate":
+        if package.get("name") == "simplestchat" and package.get("type") == "rust-crate":
             approved = expressions == ["NOASSERTION"]
         if approved:
             continue
@@ -492,7 +492,7 @@ def rust_license_join(packages: list[JsonObject], native: JsonObject, elf: JsonO
                 expression = CARGO_LICENSE_ALTERNATIVES.get(expression, expression)
         if license_record["first_party"] is True:
             require(
-                identity[0] == "simplestChat"
+                identity[0] == "simplestchat"
                 and source == "local"
                 and expression is None
                 and license_record["cargo_publish"] is False,

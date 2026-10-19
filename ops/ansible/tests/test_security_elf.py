@@ -42,7 +42,7 @@ def metadata() -> dict[str, object]:
         "format": 1,
         "packages": [
             {
-                "name": "simplestChat",
+                "name": "simplestchat",
                 "version": "0.1.0",
                 "source": "local",
                 "root": True,
@@ -310,11 +310,11 @@ class ElfSecurityTests(unittest.TestCase):
     def test_dependency_graph_rejects_invalid_roots_indices_and_cycles(self) -> None:
         """Graph traversal is iterative and cannot accept malformed relationships."""
         for packages in (
-            [{"name": "simplestChat", "version": "0.1.0", "source": "local"}],
+            [{"name": "simplestchat", "version": "0.1.0", "source": "local"}],
             [{"name": "other", "version": "0.1.0", "source": "local", "root": True}],
             [
                 {
-                    "name": "simplestChat",
+                    "name": "simplestchat",
                     "version": "0.1.0",
                     "source": "local",
                     "root": True,
@@ -323,7 +323,7 @@ class ElfSecurityTests(unittest.TestCase):
             ],
             [
                 {
-                    "name": "simplestChat",
+                    "name": "simplestchat",
                     "version": "0.1.0",
                     "source": "local",
                     "root": True,
