@@ -1,0 +1,9 @@
+# Stable rustfmt options only; CI runs `cargo fmt --all -- --check` with the
+# pinned toolchain. Statements rustfmt cannot format (a string literal longer
+# than the line) are caught separately by the over-length line check.
+edition = "2024"
+style_edition = "2024"
+max_width = 100
+newline_style = "Unix"
+use_field_init_shorthand = true
+use_try_shorthand = true
