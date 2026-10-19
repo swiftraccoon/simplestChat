@@ -196,6 +196,25 @@ async function scanPage(page, name, AxeBuilder) {
   };
 }
 
+/** Presses Escape once and waits for the sheet to leave the screen it showed. */
+async function escapeOnce(page) {
+  const shown = await page.evaluate(() => {
+    const region = document.getElementById('settings-sheet');
+    return {
+      title: region?.querySelector('h2')?.textContent ?? null,
+      atRoot: region?.querySelector('.sheet-back')?.hidden ?? true,
+    };
+  });
+  await page.keyboard.press('Escape');
+  await page.waitForFunction((previous) => {
+    const region = document.getElementById('settings-sheet');
+    if (!region || region.hidden) return true;
+    const title = region.querySelector('h2')?.textContent ?? null;
+    const atRoot = region.querySelector('.sheet-back')?.hidden ?? true;
+    return title !== previous.title || atRoot !== previous.atRoot;
+  }, shown);
+}
+
 async function run(env = process.env) {
   const { base, options } = configuration(env);
   const artifacts =
@@ -412,7 +431,7 @@ async function run(env = process.env) {
       await scan(page, `${prefix}-settings-quality`, AxeBuilder);
       await check(`${prefix}-personal-Escape-restores-focus`, async () => {
         // Quality, Camera & mic and the list, then the sheet itself.
-        for (let depth = 0; depth < 3; depth++) await page.keyboard.press('Escape');
+        for (let depth = 0; depth < 3; depth++) await escapeOnce(page);
         await region.waitFor({ state: 'hidden' });
         assert.equal(await opener.evaluate((node) => node === document.activeElement), true);
       });
@@ -426,8 +445,8 @@ async function run(env = process.env) {
         await scan(page, `${prefix}-room-${slug(name)}`, AxeBuilder);
       }
       await check(`${prefix}-room-Escape-restores-focus`, async () => {
-        await page.keyboard.press('Escape');
-        await page.keyboard.press('Escape');
+        await escapeOnce(page);
+        await escapeOnce(page);
         await region.waitFor({ state: 'hidden' });
         assert.equal(await roomOpener.evaluate((node) => node === document.activeElement), true);
       });
@@ -445,8 +464,8 @@ async function run(env = process.env) {
         .waitFor({ state: 'visible' });
       await scan(page, `${prefix}-account-security`, AxeBuilder);
       await check(`${prefix}-account-Escape-restores-focus`, async () => {
-        await page.keyboard.press('Escape');
-        await page.keyboard.press('Escape');
+        await escapeOnce(page);
+        await escapeOnce(page);
         await region.waitFor({ state: 'hidden' });
         // The Account item sits in the closed More menu, so focus returns to the menu toggle.
         assert.equal(

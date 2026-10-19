@@ -110,6 +110,8 @@ export class AppNavigation {
   private entry = 0;
   private position = 0;
   private changing = false;
+  /** A requested traversal whose location change has not arrived yet. */
+  private traversing = false;
   private restoring: Surface | null = null;
   private account: string | null;
   private pending: AppLocation | null;
@@ -125,6 +127,7 @@ export class AppNavigation {
 
   /** Called by the central modal factory, including for nested confirmations. */
   opened(surface: NavigationSurface, replace = false): () => void {
+    this.traversing = false;
     const previous = this.surfaces[this.surfaces.length - 1];
     const record = this.restoring ?? {
       ...surface,
@@ -171,7 +174,12 @@ export class AppNavigation {
   back(): boolean {
     const top = this.surfaces[this.surfaces.length - 1];
     if (!top || this.position <= top.returnPosition) return false;
-    window.history.go(-1);
+    // The location change arrives later; a second Back before it would traverse
+    // past the entry the first one closes, so the repeat is owned and dropped.
+    if (!this.traversing) {
+      this.traversing = true;
+      window.history.go(-1);
+    }
     return true;
   }
 
@@ -203,6 +211,7 @@ export class AppNavigation {
 
   /** RoomNavigation delegates location events here before considering a room exit. */
   locationChanged(selectedRoom: string): boolean {
+    this.traversing = false;
     const location = parseAppLocation(window.location.hash);
     if (!location) return false;
     if (!this.surfaces.every((surface) => surface.canLeave())) {

@@ -17,6 +17,7 @@ async function fixture({
   let cursor = 0;
   const errors = [];
   const opened = [];
+  let deferredTraversals = null;
   const deferredCloses = [];
   const state = { ready, account, room: hash === '#call' ? 'call' : '', busy: false };
   const apply = (entry) => {
@@ -36,6 +37,10 @@ async function fixture({
       apply(entries[cursor]);
     },
     go(delta) {
+      if (deferredTraversals) {
+        deferredTraversals.push(delta);
+        return;
+      }
       const next = Math.max(0, Math.min(entries.length - 1, cursor + delta));
       if (next === cursor) return;
       cursor = next;
@@ -85,6 +90,14 @@ async function fixture({
     entries,
     back: () => history.go(-1),
     forward: () => history.go(1),
+    deferTraversals() {
+      deferredTraversals = [];
+    },
+    flushTraversals() {
+      const queued = deferredTraversals;
+      deferredTraversals = null;
+      for (const delta of queued) history.go(delta);
+    },
     visit(hash) {
       history.pushState(null, '', hash);
       return navigation.locationChanged(state.room);
@@ -204,6 +217,22 @@ test('closing settings skips its nested screens while browser Back restores each
   assert.deepEqual(f.opened.at(-1).destination, privacy);
   f.opened.at(-1).close();
   assert.equal(f.location.hash, '#call', 'Close settings returns before the whole sheet');
+});
+
+test('a second Back before its location change traverses one entry, not two', async () => {
+  const f = await fixture();
+  const root = { kind: 'settings', segment: 'you' };
+  const privacy = { kind: 'settings', section: 'privacy', segment: 'you' };
+  f.open(root, { group: 'settings', restore: () => f.open(root, { group: 'settings' }) });
+  f.open(privacy, { group: 'settings' });
+  f.deferTraversals();
+  assert.equal(f.navigation.back(), true);
+  assert.equal(f.navigation.back(), true, 'the repeat is owned while the traversal is pending');
+  f.flushTraversals();
+  assert.deepEqual(f.opened.at(-1).destination, root, 'only the nested screen closed');
+  assert.notEqual(f.location.hash, '#call');
+  assert.equal(f.navigation.back(), true, 'Back after the change arrived traverses again');
+  assert.equal(f.location.hash, '#call');
 });
 
 test('closing a cold restored route stays on this page instead of leaving for a previous site', async () => {
