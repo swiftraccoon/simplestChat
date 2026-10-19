@@ -10,7 +10,7 @@ native prefixes before invoking Cargo.
 
 ```sh
 build/check.sh
-cargo test --locked --all-features -- --test-threads=1
+cargo test --locked --workspace -- --test-threads=1
 ```
 
 `build/check.sh` shares the CI quality gates: typed web lint, formatting,
@@ -46,7 +46,7 @@ scanner does not prove the running application keeps credentials out of logs.
 
 ```sh
 build/with-test-postgres.sh \
-  cargo test --locked --all-features --lib runtime_canary \
+  cargo test --locked --lib runtime_canary \
   -- --include-ignored --test-threads=1
 ```
 
@@ -193,7 +193,7 @@ With PostgreSQL tools on `PATH`, use the owned bootstrap:
 ```sh
 cargo build --locked --bin simplestChat
 build/with-test-postgres.sh build/with-test-server.sh \
-  cargo test --locked --all-features -- --include-ignored --test-threads=1
+  cargo test --locked --workspace -- --include-ignored --test-threads=1
 ```
 
 It creates a fresh loopback-only PostgreSQL cluster on port 15434, starts and
@@ -402,7 +402,7 @@ export DATABASE_URL='postgres://test_owner@127.0.0.1:15434/simplestchat_test?ssl
 export DISPOSABLE_TEST_DATABASE=1
 
 cargo build --locked --bin simplestChat
-build/with-test-server.sh cargo test --locked --all-features -- --include-ignored --test-threads=1
+build/with-test-server.sh cargo test --locked --workspace -- --include-ignored --test-threads=1
 ```
 
 Trust authentication is only for this disposable loopback cluster. The helper
@@ -508,7 +508,7 @@ native toolchain caches bind the vendored sources, whose files receive a fixed
 mtime so reusable worker artifacts stay valid across checkouts. Rust lint,
 native/PostgreSQL tests and browser backends use separate `rust-check`,
 `rust-test` and `rust-build` dependency-cache namespaces. The test job primes
-all targets with `cargo build --locked --all-features --all-targets --profile test`,
+all targets with `cargo build --locked --workspace --all-targets --profile test`,
 including development dependencies and test harnesses; it then runs the complete
 test command with ignored tests included and one test thread. A browser-only
 binary cache cannot substitute for that test graph. The production image caches

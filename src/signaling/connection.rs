@@ -2013,11 +2013,11 @@ async fn handle_connection_with_timing(
                         "Grace period expired for participant {} in room {}",
                         pid, rid
                     );
-                    if tracing::enabled!(target: "simplestChat::lifecycle", tracing::Level::DEBUG)
+                    if tracing::enabled!(target: "simplestchat::lifecycle", tracing::Level::DEBUG)
                         && let Ok(lifecycle_id) = Uuid::parse_str(&pid)
                     {
                         debug!(
-                            target: "simplestChat::lifecycle",
+                            target: "simplestchat::lifecycle",
                             event = "grace_cleanup_started",
                             participant_id = %lifecycle_id,
                             "lifecycle"
@@ -2048,11 +2048,11 @@ async fn handle_connection_with_timing(
                 activate_timer,
             );
             if retained_for_reconnect
-                && tracing::enabled!(target: "simplestChat::lifecycle", tracing::Level::DEBUG)
+                && tracing::enabled!(target: "simplestchat::lifecycle", tracing::Level::DEBUG)
                 && let Ok(lifecycle_id) = Uuid::parse_str(&participant_id)
             {
                 debug!(
-                    target: "simplestChat::lifecycle",
+                    target: "simplestchat::lifecycle",
                     event = "grace_started",
                     participant_id = %lifecycle_id,
                     "lifecycle"
@@ -2506,7 +2506,7 @@ async fn handle_client_message(
 
         ClientMessage::LeaveRoom => {
             if let Some(room_id) = current_room_id.take() {
-                let lifecycle_id = if tracing::enabled!(target: "simplestChat::lifecycle", tracing::Level::DEBUG)
+                let lifecycle_id = if tracing::enabled!(target: "simplestchat::lifecycle", tracing::Level::DEBUG)
                 {
                     Uuid::parse_str(participant_id).ok()
                 } else {
@@ -2514,7 +2514,7 @@ async fn handle_client_message(
                 };
                 if let Some(lifecycle_id) = lifecycle_id {
                     debug!(
-                        target: "simplestChat::lifecycle",
+                        target: "simplestchat::lifecycle",
                         event = "explicit_leave_started",
                         participant_id = %lifecycle_id,
                         "lifecycle"
@@ -2528,7 +2528,7 @@ async fn handle_client_message(
                 // Media cleanup has separate markers for actual handle drops.
                 if let Some(lifecycle_id) = lifecycle_id {
                     debug!(
-                        target: "simplestChat::lifecycle",
+                        target: "simplestchat::lifecycle",
                         event = "explicit_leave_finished",
                         participant_id = %lifecycle_id,
                         "lifecycle"

@@ -1,9 +1,15 @@
+//! Shared measurement window, per-attempt readiness and coverage, and consumer delivery checks.
+
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::time::Instant;
+
 /// One wall-clock interval shared by every client, including clients that churn.
 pub struct MeasurementWindow {
     pub start: Instant,
     pub end: Instant,
-    publishers: std::sync::Mutex<HashMap<String, (Instant, Option<Instant>)>>,
-    publisher_owners: std::sync::Mutex<HashMap<String, (String, bool)>>,
+    pub(super) publishers: std::sync::Mutex<HashMap<String, (Instant, Option<Instant>)>>,
+    pub(super) publisher_owners: std::sync::Mutex<HashMap<String, (String, bool)>>,
 }
 
 impl MeasurementWindow {
@@ -16,7 +22,7 @@ impl MeasurementWindow {
         }
     }
 
-    fn bucket(&self, now: Instant) -> Option<usize> {
+    pub(super) fn bucket(&self, now: Instant) -> Option<usize> {
         (now >= self.start && now < self.end)
             .then(|| now.duration_since(self.start).as_secs() as usize)
     }
@@ -95,31 +101,31 @@ pub struct PlannedSubscriptionEdge {
     pub is_audio: bool,
 }
 
-struct PlannedCoverageEvaluation {
-    report: PlannedSubscriptionCoverage,
-    validated_audio: usize,
-    validated_video: usize,
-    failure_reasons: Vec<String>,
+pub(super) struct PlannedCoverageEvaluation {
+    pub(super) report: PlannedSubscriptionCoverage,
+    pub(super) validated_audio: usize,
+    pub(super) validated_video: usize,
+    pub(super) failure_reasons: Vec<String>,
 }
 
-struct AttemptState {
-    started: Instant,
-    plan: Option<AttemptPlan>,
-    report: ConnectionAttempt,
-    failed: bool,
+pub(super) struct AttemptState {
+    pub(super) started: Instant,
+    pub(super) plan: Option<AttemptPlan>,
+    pub(super) report: ConnectionAttempt,
+    pub(super) failed: bool,
 }
 
-struct MeasurementState {
-    total: MeasurementMetrics,
+pub(super) struct MeasurementState {
+    pub(super) total: MeasurementMetrics,
     // Shares the existing counter lock: no additional lock on the send hot path.
     // Closing an attempt freezes its count before native cleanup starts.
-    queued_by_attempt: HashMap<usize, AttemptQueued>,
+    pub(super) queued_by_attempt: HashMap<usize, AttemptQueued>,
 }
 
-struct AttemptQueued {
-    packets: u64,
-    ended: bool,
-    deadline: Option<Instant>,
+pub(super) struct AttemptQueued {
+    pub(super) packets: u64,
+    pub(super) ended: bool,
+    pub(super) deadline: Option<Instant>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -160,36 +166,36 @@ pub struct ReceiverStallTrigger {
     pub end_bucket: usize,
 }
 
-struct ConsumerState {
-    consumer_id: String,
-    producer_id: String,
-    ssrc: u32,
-    attempt: usize,
-    is_audio: Option<bool>,
-    planned_end: Option<Instant>,
+pub(super) struct ConsumerState {
+    pub(super) consumer_id: String,
+    pub(super) producer_id: String,
+    pub(super) ssrc: u32,
+    pub(super) attempt: usize,
+    pub(super) is_audio: Option<bool>,
+    pub(super) planned_end: Option<Instant>,
     // Frozen at registration; packet accounting needs no new lookup or lock.
-    full_window: bool,
-    created: Instant,
-    resumed: Option<Instant>,
-    first_packet: Option<Instant>,
-    closed: Option<Instant>,
-    packets_by_second: Vec<u64>,
+    pub(super) full_window: bool,
+    pub(super) created: Instant,
+    pub(super) resumed: Option<Instant>,
+    pub(super) first_packet: Option<Instant>,
+    pub(super) closed: Option<Instant>,
+    pub(super) packets_by_second: Vec<u64>,
 }
 
 /// Detailed observations are separate from the legacy lifetime counters.
 pub struct Measurements {
-    client_id: String,
-    connection_start: std::sync::Mutex<Instant>,
-    attempts: std::sync::Mutex<Vec<AttemptState>>,
-    window: std::sync::Arc<MeasurementWindow>,
-    measurement: std::sync::Mutex<MeasurementState>,
-    consumers: std::sync::Mutex<Vec<ConsumerState>>,
-    subscriptions: std::sync::Mutex<HashMap<String, bool>>,
-    current_producers: std::sync::Mutex<Vec<String>>,
+    pub(super) client_id: String,
+    pub(super) connection_start: std::sync::Mutex<Instant>,
+    pub(super) attempts: std::sync::Mutex<Vec<AttemptState>>,
+    pub(super) window: std::sync::Arc<MeasurementWindow>,
+    pub(super) measurement: std::sync::Mutex<MeasurementState>,
+    pub(super) consumers: std::sync::Mutex<Vec<ConsumerState>>,
+    pub(super) subscriptions: std::sync::Mutex<HashMap<String, bool>>,
+    pub(super) current_producers: std::sync::Mutex<Vec<String>>,
 }
 
 impl Measurements {
-    fn new(client_id: String, window: std::sync::Arc<MeasurementWindow>) -> Self {
+    pub(super) fn new(client_id: String, window: std::sync::Arc<MeasurementWindow>) -> Self {
         Self {
             client_id,
             connection_start: std::sync::Mutex::new(Instant::now()),
@@ -218,7 +224,7 @@ impl Measurements {
         self.begin_attempt(None);
     }
 
-    fn begin_attempt(&self, plan: Option<AttemptPlan>) -> usize {
+    pub(super) fn begin_attempt(&self, plan: Option<AttemptPlan>) -> usize {
         let started = Instant::now();
         let deadline = plan.as_ref().map(|p| p.deadline);
         *self.connection_start.lock().unwrap() = started;
@@ -247,7 +253,7 @@ impl Measurements {
         ordinal
     }
 
-    fn attempt_elapsed_ms(&self) -> u64 {
+    pub(super) fn attempt_elapsed_ms(&self) -> u64 {
         self.connection_start.lock().unwrap().elapsed().as_millis() as u64
     }
 
@@ -323,7 +329,11 @@ impl Measurements {
         self.receiver_stall_at(ordinal, Instant::now())
     }
 
-    fn receiver_stall_at(&self, ordinal: usize, now: Instant) -> Option<ReceiverStallTrigger> {
+    pub(super) fn receiver_stall_at(
+        &self,
+        ordinal: usize,
+        now: Instant,
+    ) -> Option<ReceiverStallTrigger> {
         if now < self.window.start
             || now >= self.window.end
             || ordinal == 0
@@ -472,7 +482,7 @@ impl Measurements {
         }
     }
 
-    fn record_queued(&self, attempt: usize, size: usize) {
+    pub(super) fn record_queued(&self, attempt: usize, size: usize) {
         let now = Instant::now();
         if self.window.bucket(now).is_some() {
             let mut measurement = self.measurement.lock().unwrap();
@@ -487,7 +497,7 @@ impl Measurements {
         }
     }
 
-    fn record_received(&self, size: usize) {
+    pub(super) fn record_received(&self, size: usize) {
         if self.window.bucket(Instant::now()).is_some() {
             let mut measurement = self.measurement.lock().unwrap();
             measurement.total.packets_received += 1;
@@ -496,7 +506,7 @@ impl Measurements {
     }
 
     /// Joins happen during the ramp, so first packets count outside the window.
-    fn record_ssrc(&self, attempt: usize, ssrc: u32) {
+    pub(super) fn record_ssrc(&self, attempt: usize, ssrc: u32) {
         let now = Instant::now();
         let bucket = self.window.bucket(now);
         if let Some(consumer) = self
@@ -514,7 +524,7 @@ impl Measurements {
         }
     }
 
-    fn delivery_report(&self) -> Vec<ConsumerDelivery> {
+    pub(super) fn delivery_report(&self) -> Vec<ConsumerDelivery> {
         let publishers = self.window.publishers.lock().unwrap();
         self.consumers
             .lock()
@@ -566,7 +576,7 @@ impl Measurements {
             .collect()
     }
 
-    fn attempt_report(&self, delivery: &[ConsumerDelivery]) -> Vec<ConnectionAttempt> {
+    pub(super) fn attempt_report(&self, delivery: &[ConsumerDelivery]) -> Vec<ConnectionAttempt> {
         let owners = self.window.publisher_owners.lock().unwrap();
         let attempts = self.attempts.lock().unwrap();
         let measurement = self.measurement.lock().unwrap();
@@ -672,7 +682,7 @@ impl Measurements {
     }
 }
 
-fn planned_subscription_coverage(
+pub(super) fn planned_subscription_coverage(
     client_id: &str,
     ordinal: usize,
     targets: &crate::subscription_plan::PlannedTargets,
@@ -799,14 +809,14 @@ fn planned_subscription_coverage(
     }
 }
 
-fn media_kind(is_audio: bool) -> &'static str {
+pub(super) fn media_kind(is_audio: bool) -> &'static str {
     if is_audio { "audio" } else { "video" }
 }
 
 /// Planned graphs inspect the entire shared window without lifetime exemptions.
 /// Discovery workloads allow subscription/renegotiation to settle, then inspect
 /// complete seconds; owned departures end their eligibility without grace.
-fn consumer_eligible_buckets(
+pub(super) fn consumer_eligible_buckets(
     window: &MeasurementWindow,
     consumer: &ConsumerState,
     publisher: Option<&(Instant, Option<Instant>)>,
@@ -839,7 +849,7 @@ fn consumer_eligible_buckets(
     begin_bucket..end_bucket
 }
 
-fn delivery_coverage(buckets: &[u64]) -> (usize, usize) {
+pub(super) fn delivery_coverage(buckets: &[u64]) -> (usize, usize) {
     let mut active = 0;
     let mut gap = 0;
     let mut longest = 0;
@@ -862,7 +872,7 @@ mod planned_subscription_tests {
     use std::sync::Arc;
     use std::time::Duration;
 
-    fn fixture() -> (Measurements, Instant) {
+    pub(super) fn fixture() -> (Measurements, Instant) {
         let start = Instant::now() - Duration::from_secs(20);
         let observations = Measurements::new(
             "viewer".into(),
@@ -886,7 +896,12 @@ mod planned_subscription_tests {
         (observations, start)
     }
 
-    fn edge(observations: &Measurements, producer: &str, publisher: &str, is_audio: bool) {
+    pub(super) fn edge(
+        observations: &Measurements,
+        producer: &str,
+        publisher: &str,
+        is_audio: bool,
+    ) {
         let created = observations.window.start - Duration::from_secs(3);
         observations
             .window
@@ -908,14 +923,14 @@ mod planned_subscription_tests {
         consumer.packets_by_second.fill(1);
     }
 
-    fn complete_graph(observations: &Measurements) {
+    pub(super) fn complete_graph(observations: &Measurements) {
         // Deliberately register in reverse canonical report order.
         edge(observations, "video", "video-peer", false);
         edge(observations, "audio", "audio-peer", true);
     }
 
     #[test]
-    fn eligible_packet_counts_exclude_partial_lifetime_boundaries() {
+    pub(super) fn eligible_packet_counts_exclude_partial_lifetime_boundaries() {
         let (observations, start) = fixture();
         edge(&observations, "audio", "audio-peer", true);
         {
@@ -934,14 +949,14 @@ mod planned_subscription_tests {
         assert_eq!(report[0].eligible_packets, Some(850));
     }
 
-    fn coverage(observations: &Measurements) -> AttemptCoverage {
+    pub(super) fn coverage(observations: &Measurements) -> AttemptCoverage {
         observations.attempt_report(&observations.delivery_report())[0]
             .coverage
             .clone()
             .unwrap()
     }
 
-    fn assert_failed(observations: &Measurements) -> AttemptCoverage {
+    pub(super) fn assert_failed(observations: &Measurements) -> AttemptCoverage {
         let report = coverage(observations);
         assert!(!report.passed && !report.skipped_short_tail);
         assert_eq!(report.planned_eligible_seconds, 20);
@@ -951,7 +966,7 @@ mod planned_subscription_tests {
     }
 
     #[test]
-    fn exact_graph_requires_full_window_delivery_and_serializes_canonical_evidence() {
+    pub(super) fn exact_graph_requires_full_window_delivery_and_serializes_canonical_evidence() {
         let (observations, _) = fixture();
         complete_graph(&observations);
         let report = coverage(&observations);
@@ -990,7 +1005,7 @@ mod planned_subscription_tests {
     }
 
     #[test]
-    fn correct_subscription_count_with_wrong_target_is_not_coverage() {
+    pub(super) fn correct_subscription_count_with_wrong_target_is_not_coverage() {
         let (observations, _) = fixture();
         edge(&observations, "audio", "different-peer", true);
         edge(&observations, "video", "video-peer", false);
@@ -1012,7 +1027,7 @@ mod planned_subscription_tests {
     }
 
     #[test]
-    fn unknown_owner_has_no_fallback_and_keeps_an_explicit_failure() {
+    pub(super) fn unknown_owner_has_no_fallback_and_keeps_an_explicit_failure() {
         let (observations, _) = fixture();
         complete_graph(&observations);
         observations
@@ -1032,7 +1047,7 @@ mod planned_subscription_tests {
     }
 
     #[test]
-    fn consumer_kind_must_match_authoritative_owned_producer_kind() {
+    pub(super) fn consumer_kind_must_match_authoritative_owned_producer_kind() {
         let (observations, _) = fixture();
         complete_graph(&observations);
         observations.consumers.lock().unwrap()[1].is_audio = Some(false);
@@ -1047,7 +1062,7 @@ mod planned_subscription_tests {
     }
 
     #[test]
-    fn duplicate_and_extra_edges_fail_even_when_expected_counts_are_available() {
+    pub(super) fn duplicate_and_extra_edges_fail_even_when_expected_counts_are_available() {
         let (observations, _) = fixture();
         complete_graph(&observations);
         edge(&observations, "duplicate-audio", "audio-peer", true);
@@ -1073,7 +1088,7 @@ mod planned_subscription_tests {
     }
 
     #[test]
-    fn a_failed_attempt_never_reports_a_passing_planned_graph() {
+    pub(super) fn a_failed_attempt_never_reports_a_passing_planned_graph() {
         let (observations, _) = fixture();
         complete_graph(&observations);
         observations.attempts.lock().unwrap()[0].report.room_join_ms = None;
@@ -1082,7 +1097,7 @@ mod planned_subscription_tests {
     }
 
     #[test]
-    fn absent_publishers_and_failed_setup_do_not_remove_planned_expectations() {
+    pub(super) fn absent_publishers_and_failed_setup_do_not_remove_planned_expectations() {
         let (observations, _) = fixture();
         let absent = assert_failed(&observations);
         assert_eq!((absent.expected_audio, absent.expected_video), (1, 1));
@@ -1099,7 +1114,7 @@ mod planned_subscription_tests {
     }
 
     #[test]
-    fn late_attempt_and_late_admission_cannot_shorten_the_measurement_window() {
+    pub(super) fn late_attempt_and_late_admission_cannot_shorten_the_measurement_window() {
         for late_start in [false, true] {
             let (observations, start) = fixture();
             complete_graph(&observations);
@@ -1122,7 +1137,7 @@ mod planned_subscription_tests {
     }
 
     #[test]
-    fn late_consumer_or_late_publisher_cannot_pass_using_a_shorter_lifetime() {
+    pub(super) fn late_consumer_or_late_publisher_cannot_pass_using_a_shorter_lifetime() {
         for late_publisher in [false, true] {
             let (observations, start) = fixture();
             complete_graph(&observations);
@@ -1146,7 +1161,7 @@ mod planned_subscription_tests {
     }
 
     #[test]
-    fn early_consumer_publisher_or_attempt_departure_cannot_excuse_missing_tail() {
+    pub(super) fn early_consumer_publisher_or_attempt_departure_cannot_excuse_missing_tail() {
         for early_boundary in ["consumer", "publisher", "attempt"] {
             let (observations, start) = fixture();
             complete_graph(&observations);
@@ -1179,7 +1194,7 @@ mod planned_subscription_tests {
     }
 
     #[test]
-    fn one_empty_bucket_at_any_position_fails_the_strict_graph() {
+    pub(super) fn one_empty_bucket_at_any_position_fails_the_strict_graph() {
         for empty_bucket in [0, 9, 19] {
             let (observations, _) = fixture();
             complete_graph(&observations);
@@ -1193,7 +1208,7 @@ mod planned_subscription_tests {
     }
 
     #[test]
-    fn same_peer_can_have_one_audio_and_one_video_edge_but_not_reused_consumer_ids() {
+    pub(super) fn same_peer_can_have_one_audio_and_one_video_edge_but_not_reused_consumer_ids() {
         let (observations, _) = fixture();
         observations.attempts.lock().unwrap()[0]
             .plan
@@ -1220,7 +1235,7 @@ mod planned_subscription_tests {
     }
 
     #[test]
-    fn unplanned_artifacts_omit_exact_graph_evidence_without_inventing_it() {
+    pub(super) fn unplanned_artifacts_omit_exact_graph_evidence_without_inventing_it() {
         let (observations, _) = fixture();
         observations.attempts.lock().unwrap()[0]
             .plan
@@ -1240,7 +1255,7 @@ mod receiver_stall_tests {
     use std::sync::Arc;
     use std::time::Duration;
 
-    fn fixture() -> (Measurements, Instant) {
+    pub(super) fn fixture() -> (Measurements, Instant) {
         let start = Instant::now() + Duration::from_secs(60);
         let observations = Measurements::new(
             "receiver".into(),
@@ -1250,7 +1265,7 @@ mod receiver_stall_tests {
         (observations, start)
     }
 
-    fn begin_attempt(observations: &Measurements, deadline: Instant) {
+    pub(super) fn begin_attempt(observations: &Measurements, deadline: Instant) {
         observations.begin_planned_attempt(AttemptPlan {
             deadline,
             stable_publishers: Arc::new(Default::default()),
@@ -1261,7 +1276,12 @@ mod receiver_stall_tests {
         });
     }
 
-    fn consumer(observations: &Measurements, producer: &str, created: Instant, audio: bool) {
+    pub(super) fn consumer(
+        observations: &Measurements,
+        producer: &str,
+        created: Instant,
+        audio: bool,
+    ) {
         observations.subscribe(producer, audio);
         observations.record_consumer(producer, producer, 123);
         observations
@@ -1274,7 +1294,7 @@ mod receiver_stall_tests {
     }
 
     #[test]
-    fn receiver_stall_requires_three_latest_complete_empty_eligible_seconds() {
+    pub(super) fn receiver_stall_requires_three_latest_complete_empty_eligible_seconds() {
         let (observations, start) = fixture();
         consumer(
             &observations,
@@ -1321,7 +1341,7 @@ mod receiver_stall_tests {
     }
 
     #[test]
-    fn receiver_stall_shares_settling_and_partial_start_geometry_with_delivery() {
+    pub(super) fn receiver_stall_shares_settling_and_partial_start_geometry_with_delivery() {
         let (observations, start) = fixture();
         consumer(
             &observations,
@@ -1359,7 +1379,7 @@ mod receiver_stall_tests {
     }
 
     #[test]
-    fn receiver_stall_excludes_warmup_shared_end_and_partial_final_second() {
+    pub(super) fn receiver_stall_excludes_warmup_shared_end_and_partial_final_second() {
         let (observations, start) = fixture();
         consumer(
             &observations,
@@ -1390,7 +1410,7 @@ mod receiver_stall_tests {
     }
 
     #[test]
-    fn receiver_stall_requires_current_live_attempt_and_retains_full_consumer_ordinal() {
+    pub(super) fn receiver_stall_requires_current_live_attempt_and_retains_full_consumer_ordinal() {
         let (observations, start) = fixture();
         consumer(&observations, "old", start - Duration::from_secs(3), true);
         assert!(
@@ -1433,7 +1453,7 @@ mod receiver_stall_tests {
     }
 
     #[test]
-    fn receiver_stall_ends_at_planned_deadline_even_without_owned_cleanup() {
+    pub(super) fn receiver_stall_ends_at_planned_deadline_even_without_owned_cleanup() {
         let (observations, start) = fixture();
         begin_attempt(&observations, start + Duration::from_millis(7500));
         consumer(&observations, "audio", start - Duration::from_secs(3), true);
@@ -1457,7 +1477,7 @@ mod receiver_stall_tests {
     }
 
     #[test]
-    fn receiver_stall_skips_closed_and_owned_retired_but_keeps_unknown_publishers() {
+    pub(super) fn receiver_stall_skips_closed_and_owned_retired_but_keeps_unknown_publishers() {
         let (observations, start) = fixture();
         for producer in ["closed", "retired", "unknown"] {
             consumer(
@@ -1489,7 +1509,7 @@ mod receiver_stall_tests {
     }
 
     #[test]
-    fn receiver_stall_does_not_excuse_server_closure_of_live_owned_publisher() {
+    pub(super) fn receiver_stall_does_not_excuse_server_closure_of_live_owned_publisher() {
         let (observations, start) = fixture();
         consumer(&observations, "live", start - Duration::from_secs(3), false);
         observations
@@ -1529,7 +1549,7 @@ mod receiver_stall_tests {
     }
 
     #[test]
-    fn receiver_stall_skips_healthy_consumers_without_copying_or_changing_buckets() {
+    pub(super) fn receiver_stall_skips_healthy_consumers_without_copying_or_changing_buckets() {
         let (observations, start) = fixture();
         consumer(
             &observations,

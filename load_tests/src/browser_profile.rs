@@ -489,7 +489,7 @@ mod tests {
     fn layer_choice_matches_the_web_clients_shared_cases() {
         let shared: serde_json::Value = serde_json::from_str(include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/web/tests/layer-cap-cases.json"
+            "/../web/tests/layer-cap-cases.json"
         )))
         .unwrap();
         let widths: Vec<f64> = shared["layerWidths"]
@@ -525,8 +525,16 @@ mod tests {
             grid.announce(&format!("{peer}-audio"), peer);
             grid.announce(&format!("{peer}-video"), peer);
             requests.push(grid.consume(&[
-                (format!("{peer}-audio-consumer"), format!("{peer}-audio"), false),
-                (format!("{peer}-video-consumer"), format!("{peer}-video"), true),
+                (
+                    format!("{peer}-audio-consumer"),
+                    format!("{peer}-audio"),
+                    false,
+                ),
+                (
+                    format!("{peer}-video-consumer"),
+                    format!("{peer}-video"),
+                    true,
+                ),
             ]));
         }
         assert_eq!(
@@ -543,7 +551,11 @@ mod tests {
         let mut batch = Vec::new();
         for peer in ["a", "b", "c", "d"] {
             late.announce(&format!("{peer}-video"), peer);
-            batch.push((format!("{peer}-video-consumer"), format!("{peer}-video"), true));
+            batch.push((
+                format!("{peer}-video-consumer"),
+                format!("{peer}-video"),
+                true,
+            ));
         }
         assert!(late.consume(&batch).iter().all(|(_, layer)| *layer == 1));
     }
@@ -633,7 +645,7 @@ mod tests {
     fn browser_receive_modes_match_the_shared_web_policy() {
         let shared: serde_json::Value = serde_json::from_str(include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/web/tests/browser-receive-policy-cases.json"
+            "/../web/tests/browser-receive-policy-cases.json"
         )))
         .unwrap();
         assert_eq!(

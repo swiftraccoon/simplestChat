@@ -11,7 +11,7 @@ const generationId = '00000000-0000-4000-8000-000000000003';
 const workerId = '00000000-0000-4000-8000-000000000004';
 const base = Date.parse('2026-09-11T12:00:00.000Z');
 const at = ms => new Date(base + ms).toISOString();
-const marker = (ms, event, fields = '') => `${at(ms)} DEBUG simplestChat::lifecycle: lifecycle event="${event}" participant_id=${participantId}${fields ? ` ${fields}` : ''}`;
+const marker = (ms, event, fields = '') => `${at(ms)} DEBUG simplestchat::lifecycle: lifecycle event="${event}" participant_id=${participantId}${fields ? ` ${fields}` : ''}`;
 const transportFields = `transport_id=${transportId} transport_type="recv"`;
 const transport = (ms, event, state) => marker(ms, event, `${transportFields}${state ? ` state=${state}` : ''}`);
 const cleanup = (ms, event) => marker(ms, event, `generation=${generationId}`);
@@ -42,7 +42,7 @@ async function ownedLog(t, lines = fixture()) {
 test('realistic ANSI, span prefixes and UTC offsets produce private nominal phase evidence', async t => {
   const lines = fixture().map(line => line.replace(' DEBUG ', ' \u001b[34mDEBUG\u001b[0m dispatch{operation=consume}: ')
     .replace(/^(\S+)/, '\u001b[2m$1\u001b[0m'));
-  lines.unshift(`${at(0)} INFO simplestChat::media::transport_manager: legacy-room\u001fprivate-room-secret`);
+  lines.unshift(`${at(0)} INFO simplestchat::media::transport_manager: legacy-room\u001fprivate-room-secret`);
   const { path } = await ownedLog(t, lines);
   const report = await readLifecycleReport(path, timeline(), { expectedParticipants: 1 });
   assert.equal(report.coverage.complete, true, report.coverage.issues.join(', '));

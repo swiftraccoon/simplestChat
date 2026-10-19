@@ -1,9 +1,4 @@
 #![forbid(unsafe_code)]
-// Keep the existing public crate name compatible with downstream imports.
-#![cfg_attr(
-    not(test),
-    expect(non_snake_case, reason = "public crate name is simplestChat")
-)]
 
 //! Single-process chat and media server. [`signaling`] owns HTTP/WebSocket
 //! admission, [`room`] owns authoritative membership and room policy, and
@@ -11,6 +6,7 @@
 //! [`auth`] and [`db`] provide optional persisted identity and settings.
 //! [`shutdown`] coordinates one-way drain; the binary owns runtime deadlines.
 
+pub mod app;
 pub mod attachments;
 pub mod auth;
 pub mod configuration;

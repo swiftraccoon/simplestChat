@@ -269,7 +269,7 @@ test_metrics_environment=("PATH=${PATH}")
 if [[ "${PRESENTATION_E2E:-}" == 1 ]]; then
   # A fixed, owned diagnostic profile; inherited operator log filters stay out
   # of the clean environment. These targets record estimates/layer results.
-  test_metrics_environment+=("RUST_LOG=simplestChat=info,mediasoup=warn,sqlx::pool=warn,simplestChat::signaling::connection=debug,simplestChat::media::transport_manager=debug")
+  test_metrics_environment+=("RUST_LOG=simplestchat=info,mediasoup=warn,sqlx::pool=warn,simplestchat::signaling::connection=debug,simplestchat::media::transport_manager=debug")
 fi
 if [[ "${PASSKEY_E2E:-}" == 1 ]]; then
   test_metrics_environment+=("WEBAUTHN_RP_ID=localhost" "WEBAUTHN_ORIGIN=${BASE_URL}")

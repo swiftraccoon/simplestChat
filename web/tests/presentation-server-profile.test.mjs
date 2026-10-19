@@ -32,7 +32,7 @@ function environment(value) {
 test('owned presentation diagnostics use only the fixed bandwidth log profile', () => {
   assert.equal(
     environment('1'),
-    'PATH=/owned-test-bin RUST_LOG=simplestChat=info,mediasoup=warn,sqlx::pool=warn,simplestChat::signaling::connection=debug,simplestChat::media::transport_manager=debug',
+    'PATH=/owned-test-bin RUST_LOG=simplestchat=info,mediasoup=warn,sqlx::pool=warn,simplestchat::signaling::connection=debug,simplestchat::media::transport_manager=debug',
   );
   assert.ok(!profile.includes('${RUST_LOG'));
   assert.ok(!profile.includes('$RUST_LOG'));

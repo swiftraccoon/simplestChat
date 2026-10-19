@@ -1373,7 +1373,7 @@ impl TransportManager {
 
         if let Some(lock) = participant_lock {
             let mut participant = lock.lock().await;
-            let lifecycle_id = if tracing::enabled!(target: "simplestChat::lifecycle", tracing::Level::DEBUG)
+            let lifecycle_id = if tracing::enabled!(target: "simplestchat::lifecycle", tracing::Level::DEBUG)
             {
                 lifecycle_participant_id(participant_id)
             } else {
@@ -1381,7 +1381,7 @@ impl TransportManager {
             };
             if let Some(lifecycle_id) = lifecycle_id {
                 debug!(
-                    target: "simplestChat::lifecycle",
+                    target: "simplestchat::lifecycle",
                     event = "media_cleanup_started",
                     participant_id = %lifecycle_id,
                     generation = %participant.generation,
@@ -1409,7 +1409,7 @@ impl TransportManager {
             // worker close acknowledgement or the end of other cloned handles.
             if let Some(lifecycle_id) = lifecycle_id {
                 debug!(
-                    target: "simplestChat::lifecycle",
+                    target: "simplestchat::lifecycle",
                     event = "media_cleanup_finished",
                     participant_id = %lifecycle_id,
                     generation = %participant.generation,
@@ -1434,7 +1434,7 @@ impl TransportManager {
         participant_id: &str,
         transport_type: &'static str,
     ) {
-        let lifecycle_id = if tracing::enabled!(target: "simplestChat::lifecycle", tracing::Level::DEBUG)
+        let lifecycle_id = if tracing::enabled!(target: "simplestchat::lifecycle", tracing::Level::DEBUG)
         {
             lifecycle_participant_id(participant_id)
         } else {
@@ -1445,7 +1445,7 @@ impl TransportManager {
 
         if let Some(lifecycle_id) = lifecycle_id {
             debug!(
-                target: "simplestChat::lifecycle",
+                target: "simplestchat::lifecycle",
                 event = "transport_created",
                 participant_id = %lifecycle_id,
                 transport_id = %transport_id,
@@ -1461,7 +1461,7 @@ impl TransportManager {
                 move || {
                     if let Some(lifecycle_id) = lifecycle_id {
                         debug!(
-                            target: "simplestChat::lifecycle",
+                            target: "simplestchat::lifecycle",
                             event = "transport_closed",
                             participant_id = %lifecycle_id,
                             transport_id = %transport_id,
@@ -1480,7 +1480,7 @@ impl TransportManager {
                 move |dtls_state| {
                     if let Some(lifecycle_id) = lifecycle_id {
                         debug!(
-                            target: "simplestChat::lifecycle",
+                            target: "simplestchat::lifecycle",
                             event = "transport_dtls",
                             participant_id = %lifecycle_id,
                             transport_id = %transport_id,
@@ -1502,7 +1502,7 @@ impl TransportManager {
                 move |ice_state| {
                     if let Some(lifecycle_id) = lifecycle_id {
                         debug!(
-                            target: "simplestChat::lifecycle",
+                            target: "simplestchat::lifecycle",
                             event = "transport_ice",
                             participant_id = %lifecycle_id,
                             transport_id = %transport_id,

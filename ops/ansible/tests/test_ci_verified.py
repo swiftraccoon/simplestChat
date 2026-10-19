@@ -554,8 +554,8 @@ class VerifiedCacheTests(unittest.TestCase):
             "Cargo.toml",
             "rust-toolchain.toml",
             ".cargo/config.toml",
-            "load_tests/bin/load_test.rs",
-            "load_tests/clients/measurement.rs",
+            "load_tests/src/main.rs",
+            "load_tests/src/metrics/measurement.rs",
             "migrations/new.sql",
             "src/embedded.txt",
             "other-target/helper.rs",
@@ -597,7 +597,7 @@ class VerifiedCacheTests(unittest.TestCase):
         for before, after, changed in (
             ("name: Build production container", "name: Build the production image", False),
             ("test:stress", "test:stress-extra", False),
-            ("cargo build --locked --all-features --bins", "cargo build --locked --bins", True),
+            ("cargo build --locked --workspace --bins", "cargo build --locked --bins", True),
             ('OPENSSL_STATIC: "1"', 'OPENSSL_STATIC: "0"', True),
             ("target/openssl-4.0.3", "target/openssl-4.0.4", True),
             ("cache-key: rust-build", "cache-key: different-build", True),
@@ -756,7 +756,7 @@ class VerifiedWorkflowTests(unittest.TestCase):
             )
             arguments = shlex.split(string(build, "run"))
             self.assertIn("--locked", arguments)
-            self.assertIn("--all-features", arguments)
+            self.assertIn("--workspace", arguments)
             if name == "browser":
                 self.assertIn("--bins", arguments)
                 self.assertNotIn("--all-targets", arguments)
@@ -769,7 +769,7 @@ class VerifiedWorkflowTests(unittest.TestCase):
             )
             self.assertEqual(
                 string(execute, "run"),
-                "cargo test --locked --all-features -- --include-ignored --test-threads=1",
+                "cargo test --locked --workspace -- --include-ignored --test-threads=1",
             )
             self.assertLess(steps.index(build), steps.index(execute))
             self.assertEqual(build["if"], execute["if"])

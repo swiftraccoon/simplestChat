@@ -333,7 +333,7 @@ not a server acknowledgment. Server-side markers separately establish that the
 leave handler returned and that media cleanup ran. Abrupt departure still
 exercises the unchanged 30-second reconnect grace.
 
-Full diagnostic runs enable the `simplestChat::lifecycle` DEBUG target from server
+Full diagnostic runs enable the `simplestchat::lifecycle` DEBUG target from server
 startup. It records transport creation, ICE/DTLS changes, transport-handle closure,
 grace cleanup, explicit leave and application media cleanup. There are no new
 packet callbacks, native media commands or background pollers. These ordinary

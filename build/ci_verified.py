@@ -104,7 +104,7 @@ CODEQL_RUST_PREFIXES = (
 CODEQL_RUST_MANIFESTS = frozenset(
     {"Cargo.toml", "Cargo.lock", "rust-toolchain", "rust-toolchain.toml", "rust-project.json"}
 )
-BACKEND_PREFIXES = ("src/", "tests/", "load_tests/", "migrations/", "vendor/", ".cargo/")
+BACKEND_PREFIXES = ("src/", "tests/", "load_tests/", "xtask/", "migrations/", "vendor/", ".cargo/")
 BACKEND_FILES = frozenset(
     {
         ".github/workflows/ci.yml",

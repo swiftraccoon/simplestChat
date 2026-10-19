@@ -17,7 +17,7 @@ services:
       # 40000. Keep this range aligned with the maximum deployed worker count.
       - "40000-${RTC_PORT_END:-40063}:40000-${RTC_PORT_END:-40063}/udp"
     environment:
-      RUST_LOG: "${RUST_LOG:-simplestChat=info,mediasoup=warn}"
+      RUST_LOG: "${RUST_LOG:-simplestchat=info,mediasoup=warn}"
       # The process binds inside its own network namespace; the host-side port
       # remains loopback-only above.
       BIND_ADDR: "0.0.0.0"

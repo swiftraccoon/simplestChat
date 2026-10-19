@@ -399,7 +399,7 @@ impl Diagnostics {
             })
         });
         let span = match &active {
-            Some(active) => tracing::debug_span!(target: "simplestChat::diagnostics", "operation",
+            Some(active) => tracing::debug_span!(target: "simplestchat::diagnostics", "operation",
                 operation = ?kind, operation_id = active.context.id,
                 connection_id = connection_id, outcome = tracing::field::Empty),
             None => tracing::Span::none(),

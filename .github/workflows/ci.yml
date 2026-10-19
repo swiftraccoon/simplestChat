@@ -341,7 +341,7 @@ jobs:
       # profile too; every test still executes in the test step below.
       - name: Build server, load generator and test harnesses
         if: steps.verified.outputs.cache-hit != 'true'
-        run: cargo build --locked --all-features --all-targets --profile test
+        run: cargo build --locked --workspace --all-targets --profile test
 
       - name: Verify readiness and graceful shutdown
         if: steps.verified.outputs.cache-hit != 'true'
@@ -415,7 +415,7 @@ jobs:
       # Serialize native media-worker and room-session integration tests.
       - name: Test (including PostgreSQL recovery, refresh and moderation)
         if: steps.verified.outputs.cache-hit != 'true'
-        run: cargo test --locked --all-features -- --include-ignored --test-threads=1
+        run: cargo test --locked --workspace -- --include-ignored --test-threads=1
 
       - name: Synthetic media delivery correctness smoke
         if: steps.verified.outputs.cache-hit != 'true'
@@ -624,7 +624,7 @@ jobs:
       # the server code is identical.
       - name: Build server and load generator
         if: steps.verified.outputs.cache-hit != 'true'
-        run: cargo build --locked --all-features --bins
+        run: cargo build --locked --workspace --bins
 
       - name: Record the successful backend verification
         if: steps.verified.outputs.cache-hit != 'true'
@@ -1135,7 +1135,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/buildx-cache
-          key: buildx-v3-${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'main' || 'untrusted' }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Dockerfile', '.dockerignore', 'Cargo.toml', 'Cargo.lock', 'src/**', 'migrations/**', 'vendor/**', 'build/install-openssl.sh', 'build/install-aws-lc.sh', 'build/install-npm.mjs', 'build/pip-constraints.txt', 'build/security_tools.py', 'build/security-tools.lock.json', 'build/security_vendor.py', 'build/security_native.py', 'build/security_awslc.py', 'build/security_elf.py', 'ops/ansible/files/bounded_process.py', 'ops/ansible/files/release_json.py', 'security/exceptions.json', 'security/image-policy.json', 'security/runtime/**', 'web/package*.json', 'web/tsconfig*.json', 'web/vite.config.ts', 'web/index.html', 'web/bundle-budget.json', 'web/scripts/check-bundle.mjs', 'web/scripts/mediasoup-runtime.mjs', 'web/public/**', 'web/src/**') }}
+          key: buildx-v3-${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'main' || 'untrusted' }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Dockerfile', '.dockerignore', 'Cargo.toml', 'Cargo.lock', 'src/**', 'load_tests/**', 'xtask/**', 'migrations/**', 'vendor/**', 'build/install-openssl.sh', 'build/install-aws-lc.sh', 'build/install-npm.mjs', 'build/pip-constraints.txt', 'build/security_tools.py', 'build/security-tools.lock.json', 'build/security_vendor.py', 'build/security_native.py', 'build/security_awslc.py', 'build/security_elf.py', 'ops/ansible/files/bounded_process.py', 'ops/ansible/files/release_json.py', 'security/exceptions.json', 'security/image-policy.json', 'security/runtime/**', 'web/package*.json', 'web/tsconfig*.json', 'web/vite.config.ts', 'web/index.html', 'web/bundle-budget.json', 'web/scripts/check-bundle.mjs', 'web/scripts/mediasoup-runtime.mjs', 'web/public/**', 'web/src/**') }}
           restore-keys: |
             buildx-v3-${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'main' || 'untrusted' }}-${{ runner.os }}-${{ runner.arch }}-
             buildx-v2-${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'main' || 'untrusted' }}-${{ runner.os }}-${{ runner.arch }}-

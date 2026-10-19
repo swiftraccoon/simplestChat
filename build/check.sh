@@ -6,7 +6,7 @@ usage() {
     echo 'Usage: build/check.sh [--web | --rust | --python | --helpers]'
     echo 'Default: run all four groups. Requires the development prerequisites.'
     echo 'Web: typed lint, formatting, unit tests, type checking and production build.'
-    echo 'Rust: formatting, all-target/all-feature Clippy, and checked documentation.'
+    echo 'Rust: formatting, workspace Clippy, the over-length line ratchet and checked documentation.'
     echo 'Python: pinned Ruff lint/format and strict basedpyright over maintained sources and stubs.'
     echo 'Helpers: shell syntax and helper/benchmark regression tests.'
     echo 'Database, native Rust tests and browser integration remain separate; see docs/testing.md.'
@@ -70,10 +70,11 @@ if [ "$check_group" = all ] || [ "$check_group" = rust ]; then
         exit 2
     fi
     rustup run "$toolchain" cargo fmt --all -- --check
-    rustup run "$toolchain" cargo clippy --locked --all-targets --all-features --no-deps -- -D warnings
+    rustup run "$toolchain" cargo clippy --locked --workspace --all-targets --no-deps -- -D warnings
+    rustup run "$toolchain" cargo run --locked -q -p xtask -- line-length
     RUSTDOCFLAGS="${RUSTDOCFLAGS:-} -D warnings"
     export RUSTDOCFLAGS
-    rustup run "$toolchain" cargo doc --locked --all-features --no-deps --document-private-items
+    rustup run "$toolchain" cargo doc --locked --workspace --no-deps --document-private-items
 fi
 
 if [ "$check_group" = all ] || [ "$check_group" = python ]; then

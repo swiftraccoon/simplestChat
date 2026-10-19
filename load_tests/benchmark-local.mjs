@@ -331,7 +331,7 @@ export function captureArguments(options, directory) {
 export function diagnosticPolicy(options) {
   const full = options.purpose === 'diagnostic' && options.diagnosticDetail !== 'capture-only';
   return { generatorArgs: full ? ['--diagnostics', '--departure', options.departure ?? 'abrupt'] : [], requireSnapshots: full,
-    serverLog: full ? 'warn,simplestChat::media::transport_manager=info,simplestChat::lifecycle=debug' : 'error',
+    serverLog: full ? 'warn,simplestchat::media::transport_manager=info,simplestchat::lifecycle=debug' : 'error',
     generatorLog: full ? 'warn,load_test=info' : 'error' };
 }
 

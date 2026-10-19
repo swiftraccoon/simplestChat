@@ -54,7 +54,7 @@ impl Capture {
             tracing_subscriber::fmt()
                 .json()
                 .with_ansi(false)
-                .with_env_filter("simplestChat=info,mediasoup=warn,sqlx::pool=warn")
+                .with_env_filter("simplestchat=info,mediasoup=warn,sqlx::pool=warn")
                 .with_writer(move || output.clone())
                 .finish(),
         )

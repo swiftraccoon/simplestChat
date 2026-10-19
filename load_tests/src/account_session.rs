@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use base64::Engine;
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, COOKIE, ORIGIN, SET_COOKIE};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
-use simplestChat::signaling::protocol::{ClientMessage, ServerMessage};
+use simplestchat::signaling::protocol::{ClientMessage, ServerMessage};
 use std::collections::HashSet;
 use std::io::Read;
 use std::net::{IpAddr, Ipv4Addr};

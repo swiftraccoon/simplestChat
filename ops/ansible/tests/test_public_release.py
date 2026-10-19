@@ -604,7 +604,7 @@ func main() {
                     "Labels": {"org.opencontainers.image.revision": REVISION},
                     "Cmd": ["/app/simplestChat"],
                     "WorkingDir": "/app",
-                    "Env": ["PATH=/usr/bin", "RUST_LOG=simplestChat=info"],
+                    "Env": ["PATH=/usr/bin", "RUST_LOG=simplestchat=info"],
                 },
             }
 

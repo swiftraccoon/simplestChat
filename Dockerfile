@@ -126,6 +126,8 @@ RUN python3 build/security_tools.py install --tools cargo-auditable --directory 
 COPY build/pip-constraints.txt /opt/simplestchat/pip-constraints.txt
 ENV PIP_CONSTRAINT=/opt/simplestchat/pip-constraints.txt
 COPY Cargo.toml Cargo.lock ./
+COPY load_tests/Cargo.toml load_tests/Cargo.toml
+COPY xtask/Cargo.toml xtask/Cargo.toml
 COPY vendor ./vendor
 COPY build/security_vendor.py ./build/
 COPY ops/ansible/files/bounded_process.py ops/ansible/files/release_json.py ./ops/ansible/files/
@@ -134,15 +136,16 @@ RUN python3 build/security_vendor.py verify --cache /tmp/vendor-cache --output /
 # Warm every dependency, including the native worker, against stub sources.
 # This layer is reused until the manifest, lockfile or vendored patches change,
 # so a source-only build compiles this crate alone instead of the whole graph.
-RUN mkdir -p src load_tests/bin \
+RUN mkdir -p src load_tests/src xtask/src \
     && printf '#![allow(non_snake_case)]\nfn main() {}\n' > src/main.rs \
     && printf '#![allow(non_snake_case)]\n' > src/lib.rs \
-    && printf 'fn main() {}\n' > load_tests/bin/load_test.rs \
+    && printf 'fn main() {}\n' > load_tests/src/main.rs \
+    && printf 'fn main() {}\n' > xtask/src/main.rs \
     && /opt/security-tools/bin/cargo-auditable auditable build --locked --release --bin simplestChat \
-    && rm -rf src load_tests \
+    && rm -rf src load_tests/src xtask/src \
         target/release/simplestChat \
-        target/release/deps/simplestChat-* target/release/deps/libsimplestChat-* \
-        target/release/.fingerprint/simplestChat-*
+        target/release/deps/simplestChat-* target/release/deps/libsimplestchat-* \
+        target/release/.fingerprint/simplestChat-* target/release/.fingerprint/simplestchat-*
 COPY src ./src
 COPY migrations/*.sql ./migrations/
 RUN python3 build/security_tools.py path cargo-auditable --directory /opt/security-tools \
@@ -168,7 +171,7 @@ RUN python3 -c 'import pathlib, tarfile; \
 # executable are absent from the default production image.
 FROM builder AS loadtest-builder
 COPY load_tests ./load_tests
-RUN cargo build --locked --release --features load-test --bin load_test
+RUN cargo build --locked --release -p simplestchat-load-test --bin load_test
 
 FROM docker.io/library/fedora:44@sha256:43b29f65a41eb9c35e1cd5323e3bdf3b655c2357a9f4f1ff2f9c2798e5045d80 AS runtime-base
 ARG FEDORA_REFRESH_EPOCH
@@ -208,7 +211,7 @@ RUN ldd /app/simplestChat > /tmp/simplestchat-ldd \
 
 USER 10001:10001
 EXPOSE 3000
-ENV RUST_LOG=simplestChat=info,mediasoup=warn
+ENV RUST_LOG=simplestchat=info,mediasoup=warn
 CMD ["/app/simplestChat"]
 
 FROM runtime-base AS loadtest

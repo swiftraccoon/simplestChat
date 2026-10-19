@@ -1,14 +1,16 @@
-[package]
-name = "simplestChat"
+[workspace]
+members = ["load_tests", "xtask"]
+
+[workspace.package]
 version = "0.1.0"
-# This executable is deployed as an image, not published as a library crate.
-publish = false
 edition = "2024"
 rust-version = "1.99.0"
+# These executables are deployed as an image, not published as library crates.
+publish = false
 
 # First-party targets only; dependencies keep their own policies.
 # https://doc.rust-lang.org/cargo/reference/manifest.html#the-lints-section
-[lints.rust]
+[workspace.lints.rust]
 unsafe_code = "forbid"
 warnings = "deny"
 unfulfilled_lint_expectations = "deny"
@@ -16,18 +18,32 @@ unfulfilled_lint_expectations = "deny"
 # Keep the reviewed default lint baseline strict without enabling all pedantic
 # or restriction lints. Name async lifetime checks explicitly for this server.
 # https://rust-lang.github.io/rust-clippy/master/index.html
-[lints.clippy]
+[workspace.lints.clippy]
 correctness = { level = "deny", priority = -1 }
 suspicious = { level = "deny", priority = -1 }
 await_holding_lock = "deny"
 await_holding_refcell_ref = "deny"
 let_underscore_future = "deny"
 
+[package]
+name = "simplestchat"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+# The library is `simplestchat`; the deployed executable keeps its historical name.
+[[bin]]
+name = "simplestChat"
+path = "src/main.rs"
+
 [features]
+# No optional features. The table stays so Cargo reports the production
+# server's artifacts under the default feature set that image evidence expects.
 default = []
-# Keep the synthetic WebRTC client and its dependency graph out of production
-# server builds. Enable this only when building/running the load-test binary.
-load-test = ["dep:webrtc", "dep:rtc", "dep:async-trait"]
 
 [dependencies]
 mediasoup = "0.29.0"
@@ -43,9 +59,6 @@ thiserror = "2.0.21"
 num_cpus = "1.17.0"
 uuid = { version = "1.27.0", features = ["v4"] }
 futures-util = "0.3.34"
-webrtc = { version = "0.21.0", optional = true }
-rtc = { version = "0.21.0", optional = true }
-async-trait = { version = "0.1.92", optional = true }
 bytes = "1.12.1"
 chrono = { version = "0.4.45", features = ["serde"] }
 rand = "0.10.3"
@@ -89,8 +102,3 @@ mediasoup-sys = { path = "vendor/mediasoup-sys-0.19.0" }
 [profile.release.build-override]
 opt-level = 0
 strip = false
-
-[[bin]]
-name = "load_test"
-path = "load_tests/bin/load_test.rs"
-required-features = ["load-test"]

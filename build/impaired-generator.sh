@@ -34,7 +34,7 @@ env -i PATH="${PATH}" HOME="${HOME}" TMPDIR="${TMPDIR:-/tmp}" \
   WEBRTC_SERVER_PORT_BASE="${udp_port}" ALLOW_AD_HOC_ROOMS=true \
   ALLOWED_ORIGINS="http://127.0.0.1:${port}" REGISTRATION_ENABLED=false \
   MAX_CONNECTIONS_PER_IP=128 WS_HANDSHAKES_PER_MINUTE=600 \
-  RUST_LOG=simplestChat=info,mediasoup=warn "${binary}" > "${results}/server.log" 2>&1 &
+  RUST_LOG=simplestchat=info,mediasoup=warn "${binary}" > "${results}/server.log" 2>&1 &
 server=$!
 status=0
 cleanup() {
