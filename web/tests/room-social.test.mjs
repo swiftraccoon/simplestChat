@@ -681,7 +681,12 @@ test('social timeouts, send errors, server errors and leave remove pending reque
   assert.equal(h.timers.size, 0);
   const rejected = h.room.requestSocial('listRoomReports');
   const request = h.sent.at(-1);
-  h.reply({ type: 'socialError', requestId: request.requestId, message: 'Not a moderator' });
+  h.reply({
+    type: 'socialError',
+    code: 'forbidden',
+    requestId: request.requestId,
+    message: 'Not a moderator',
+  });
   await assert.rejects(rejected, /Not a moderator/);
   const abandoned = h.room.requestSocial('listRoomMembers');
   const rejection = assert.rejects(abandoned, /Room left/);
@@ -968,6 +973,7 @@ test('snapshot errors do not force a successfully resumed room to rejoin', async
   assert.ok(request);
   h.reply({
     type: 'socialError',
+    code: 'rate_limited',
     requestId: request.requestId,
     message: 'Room requests are rate limited',
   });
@@ -1257,7 +1263,9 @@ test('a failed fresh join still clears the expired session media and reports rec
   const h = await harness({
     reconnect: () => ({ type: 'reconnectResult', success: false, participantId: 'local' }),
     joinReply: () =>
-      ++joins === 2 ? { type: 'error', message: 'Room no longer available' } : undefined,
+      ++joins === 2
+        ? { type: 'error', code: 'not_found', message: 'Room no longer available' }
+        : undefined,
   });
   await h.room.join('room', 'Local');
   h.instances[0].audioEnabled = h.instances[0].videoEnabled = true;

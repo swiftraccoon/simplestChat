@@ -516,13 +516,22 @@ reconnect grace. It runs before any disconnect-time database credential check.
 | Social action | Generated `requestId` plus matching `action`; 10 seconds, at most 32 pending |
 | Chat send | `clientMessageId` reconciles the optimistic entry with an acknowledgement; 12 seconds before marking delivery unconfirmed |
 
-An `error` carries a human-readable `message`. An error with a `requestId` rejects
-only that pending request. Errors without IDs are connection or uncorrelated
-command notifications and cannot settle a pending media/reconnect request; they can reach
-the join handler. `roomPasswordRequired` is a distinct retry/prompt result, while
-`roomClosed` is terminal room state. `serverRestarting` is a separate temporary
-process-shutdown event with a human-readable `reason`; it is not room deletion.
-Do not infer machine-readable error codes from message text.
+An `error` and a `socialError` carry a machine-readable `code` and a
+human-readable `message`. Clients switch on the code and never on the message,
+which may change at any time. The codes are `invalid_message` (the frame could
+not be parsed or named an unknown operation), `invalid` (a field was missing,
+malformed, out of range or already used), `forbidden` (the caller may not do
+this, or the room's state forbids it), `not_found` (the target does not exist or
+is no longer available), `rate_limited` (retry after a pause), `unavailable` (a
+dependency the request needs is down; retry later), `timed_out` (the operation
+did not finish in time and may or may not have applied) and `request_failed`
+(the server could not complete the request). An error with a `requestId`
+rejects only that pending request. Errors without IDs are connection or
+uncorrelated command notifications and cannot settle a pending media/reconnect
+request; they can reach the join handler. `roomPasswordRequired` is a distinct
+retry/prompt result, while `roomClosed` is terminal room state.
+`serverRestarting` is a separate temporary process-shutdown event with a
+human-readable `reason`; it is not room deletion.
 
 The browser assigns each acknowledged media/reconnect command a fresh `requestId`
 and retains its sequence across room changes and reconnects. IDs contain 1–64

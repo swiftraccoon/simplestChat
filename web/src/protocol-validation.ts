@@ -51,7 +51,7 @@ import {
   list,
   object,
 } from './validation';
-import { ROLES } from './protocol';
+import { ERROR_CODES, ROLES } from './protocol';
 type Variant<K extends ServerMessage['type']> = Extract<ServerMessage, { type: K }>;
 function message<K extends ServerMessage['type']>(
   type: K,
@@ -514,7 +514,11 @@ const messages = {
     yourName: optional(text),
     roomSettings: optional(settings),
   }),
-  error: message('error', { requestId: optionalRequestId, message: text }),
+  error: message('error', {
+    requestId: optionalRequestId,
+    code: choice(...ERROR_CODES),
+    message: text,
+  }),
   roomPasswordRequired: message('roomPasswordRequired', {}),
   roomClosed: message('roomClosed', { reason: text }),
   serverRestarting: message('serverRestarting', { reason: text }),
@@ -625,6 +629,7 @@ const messages = {
   socialError: message('socialError', {
     requestId: optionalRequestId,
     clientMessageId: optional(text),
+    code: choice(...ERROR_CODES),
     message: text,
   }),
   nicknameChanged: message('nicknameChanged', { participantId: text, nickname: text }),

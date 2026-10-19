@@ -322,7 +322,9 @@ export class SignalingClient {
           if (performance.now() >= pending.deadline) {
             pending.reject(new SignalingRequestTimeoutError(pending.responseType));
           } else if (msg.type === 'error') {
-            pending.reject(new Error(msg.message));
+            pending.reject(
+              Object.assign(new Error(msg.message), { name: 'ServerError', code: msg.code }),
+            );
           } else {
             pending.resolve(msg);
           }

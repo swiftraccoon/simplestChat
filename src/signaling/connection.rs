@@ -2,7 +2,7 @@
 
 // WebSocket connection handler for individual clients
 
-use super::protocol::{ClientMessage, RequestHeader, ServerMessage, ServerReply};
+use super::protocol::{ClientMessage, ErrorCode, RequestHeader, ServerMessage, ServerReply};
 use crate::auth::types::Claims;
 use crate::diagnostics::{self, OperationKind, Outcome, Stage};
 use crate::metrics::ServerMetrics;
@@ -227,6 +227,7 @@ fn client_error_response(error: &anyhow::Error) -> ServerMessage {
         ServerMessage::RoomPasswordRequired
     } else {
         ServerMessage::Error {
+            code: ErrorCode::RequestFailed,
             message: "Request could not be completed".to_string(),
         }
     }
@@ -1320,6 +1321,7 @@ async fn handle_connection_with_timing(
                     request_id: request_id.as_deref(),
                 };
                 let _ = reply.send(&ServerMessage::Error {
+                    code: ErrorCode::RateLimited,
                     message: format!(
                         "Rate limit exceeded: max {} frames/second",
                         RATE_LIMIT_REFILL_RATE
@@ -1355,6 +1357,7 @@ async fn handle_connection_with_timing(
                             &metrics,
                             &tx,
                             &ServerMessage::Error {
+                                code: ErrorCode::InvalidMessage,
                                 message: "Invalid message format".to_string(),
                             },
                         );
@@ -1465,6 +1468,7 @@ async fn handle_connection_with_timing(
                         if media_limit_exceeded {
                             let media_mutation_violations = media_rate_state.record_violation(now);
                             let _ = reply.send(&ServerMessage::Error {
+                                code: ErrorCode::RateLimited,
                                 message: "Media changes are rate limited".to_string(),
                             });
                             if media_mutation_violations >= MEDIA_MUTATION_MAX_VIOLATIONS {
@@ -1496,8 +1500,12 @@ async fn handle_connection_with_timing(
                             admin_mutation_violations = admin_mutation_violations.saturating_add(1);
                             let _ = reply.send(
                                 &client_msg
-                                    .social_error("Room administration changes are rate limited")
+                                    .social_error(
+                                        ErrorCode::RateLimited,
+                                        "Room administration changes are rate limited",
+                                    )
                                     .unwrap_or(ServerMessage::Error {
+                                        code: ErrorCode::RateLimited,
                                         message: "Room administration changes are rate limited"
                                             .to_string(),
                                     }),
@@ -1536,8 +1544,12 @@ async fn handle_connection_with_timing(
                             }
                             let _ = reply.send(
                                 &client_msg
-                                    .social_error("Chat rate limit exceeded")
+                                    .social_error(
+                                        ErrorCode::RateLimited,
+                                        "Chat rate limit exceeded",
+                                    )
                                     .unwrap_or(ServerMessage::Error {
+                                        code: ErrorCode::RateLimited,
                                         message: "Chat rate limit exceeded".to_string(),
                                     }),
                             );
@@ -1556,6 +1568,7 @@ async fn handle_connection_with_timing(
                                 now.duration_since(previous) < ROOM_PASSWORD_HASH_COOLDOWN
                             }) {
                                 let _ = reply.send(&ServerMessage::Error {
+                                    code: ErrorCode::RateLimited,
                                     message: "Room password updates are rate limited".to_string(),
                                 });
                                 continue;
@@ -1569,6 +1582,7 @@ async fn handle_connection_with_timing(
                             && !join_attempts.allow(room_id, password.is_some(), Instant::now())
                         {
                             let _ = reply.send(&ServerMessage::Error {
+                                code: ErrorCode::RateLimited,
                                 message: "Join attempts are rate limited".to_string(),
                             });
                             continue;
@@ -1580,6 +1594,7 @@ async fn handle_connection_with_timing(
                                 now.duration_since(previous) < VOICE_REQUEST_COOLDOWN
                             }) {
                                 let _ = reply.send(&ServerMessage::Error {
+                                    code: ErrorCode::RateLimited,
                                     message: "Voice requests are rate limited".to_string(),
                                 });
                                 continue;
@@ -1799,11 +1814,14 @@ async fn handle_connection_with_timing(
                             if tx.is_closed() {
                                 break;
                             }
-                            let public_message = e
+                            let (code, public_message) = e
                                 .downcast_ref::<crate::room::social::SocialFailure>()
-                                .map_or("Request could not be completed", |error| error.0.as_str());
+                                .map_or(
+                                    (ErrorCode::RequestFailed, "Request could not be completed"),
+                                    |error| (error.code, error.message.as_str()),
+                                );
                             let response = client_msg
-                                .social_error(public_message)
+                                .social_error(code, public_message)
                                 .unwrap_or_else(|| client_error_response(&e));
                             if reply.send(&response).is_err() {
                                 break;
@@ -1857,6 +1875,7 @@ async fn handle_connection_with_timing(
                         );
                         metrics.inc_errors();
                         let _ = reply.send(&ServerMessage::Error {
+                            code: ErrorCode::InvalidMessage,
                             message: "Invalid message format".to_string(),
                         });
                     }
@@ -3293,6 +3312,7 @@ mod security_tests {
                 serde_json::to_value(client_error_response(&error)).unwrap(),
                 serde_json::json!({
                     "type": "error",
+                    "code": "request_failed",
                     "message": "Request could not be completed",
                 }),
             );
@@ -3398,6 +3418,7 @@ mod security_tests {
         let (sender, receiver) = mpsc::channel(1);
         let registration = crate::signaling::outbound::register(&sender);
         let message = ServerMessage::Error {
+            code: ErrorCode::RateLimited,
             message: "PRIVATE_FIXTURE_CONTENT".into(),
         };
         send_json(&metrics, &sender, &message).unwrap();

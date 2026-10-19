@@ -607,7 +607,7 @@ export class RoomClient {
           if (msg.type === 'roomPasswordRequired') {
             reject(new RoomPasswordRequiredError());
           } else if (msg.type === 'error') {
-            reject(new Error(msg.message));
+            reject(Object.assign(new Error(msg.message), { name: 'ServerError', code: msg.code }));
           } else {
             resolve(msg);
           }
@@ -1843,7 +1843,9 @@ export class RoomClient {
         if (request && msg.requestId) {
           this.socialRequests.delete(msg.requestId);
           clearTimeout(request.timer);
-          request.reject(new Error(msg.message));
+          request.reject(
+            Object.assign(new Error(msg.message), { name: 'ServerError', code: msg.code }),
+          );
         }
         this.events.onSocialEvent?.(msg);
         break;

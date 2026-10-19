@@ -55,6 +55,45 @@ pub(super) struct ServerReply<'a> {
 /// Roles travel by name; see [`Role`].
 pub use crate::room::roles::Role;
 
+/// Why the server refused a frame or request. Clients switch on the code;
+/// `message` beside it is for people and may change at any time.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ErrorCode {
+    /// The frame could not be parsed or named an unknown operation.
+    InvalidMessage,
+    /// A field was missing, malformed, out of range or already used.
+    Invalid,
+    /// The caller may not perform this action, or the room's state forbids it.
+    Forbidden,
+    /// The target does not exist or is no longer available.
+    NotFound,
+    /// Too many requests; retry after a pause.
+    RateLimited,
+    /// A dependency the request needs is not available; retry later.
+    Unavailable,
+    /// The operation did not finish in time; it may or may not have applied.
+    TimedOut,
+    /// The server could not complete the request.
+    RequestFailed,
+}
+
+impl ErrorCode {
+    /// The wire name.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::InvalidMessage => "invalid_message",
+            Self::Invalid => "invalid",
+            Self::Forbidden => "forbidden",
+            Self::NotFound => "not_found",
+            Self::RateLimited => "rate_limited",
+            Self::Unavailable => "unavailable",
+            Self::TimedOut => "timed_out",
+            Self::RequestFailed => "request_failed",
+        }
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct AuthenticationToken(SecretString);
@@ -491,7 +530,8 @@ pub enum ServerMessage {
         expires_at: u64,
     },
     /// Error response
-    Error { message: String },
+    /// A request or frame the server refused; `code` is what clients act on.
+    Error { code: ErrorCode, message: String },
     /// The client should prompt for a password and retry this room join.
     RoomPasswordRequired,
     /// Terminal room lifecycle event, distinct from recoverable request errors.
@@ -647,6 +687,7 @@ pub enum ServerMessage {
         request_id: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         client_message_id: Option<String>,
+        code: ErrorCode,
         message: String,
     },
     #[serde(rename_all = "camelCase")]

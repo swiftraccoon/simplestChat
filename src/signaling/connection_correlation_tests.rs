@@ -354,11 +354,13 @@ fn correlated_reply_envelopes_do_not_duplicate_authentication_or_social_ids() {
         ServerMessage::SocialError {
             request_id: Some("social-1".into()),
             client_message_id: None,
+            code: crate::signaling::protocol::ErrorCode::RequestFailed,
             message: "Rejected".into(),
         },
         ServerMessage::SocialError {
             request_id: None,
             client_message_id: Some("chat-1".into()),
+            code: crate::signaling::protocol::ErrorCode::RequestFailed,
             message: "Rejected".into(),
         },
     ] {

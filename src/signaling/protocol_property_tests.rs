@@ -1,6 +1,6 @@
 //! Bounded serialization properties. Wire types and application policy are distinct.
 
-use super::{ClientMessage, RequestHeader, Role};
+use super::{ClientMessage, ErrorCode, RequestHeader, Role};
 use rand::{RngExt, SeedableRng, rngs::StdRng};
 use serde_json::{Value, json};
 
@@ -183,4 +183,24 @@ fn boundary_properties_nullable_settings_preserve_every_independent_patch_combin
             }
         }
     }
+}
+
+#[test]
+fn error_codes_serialize_by_snake_case_name() {
+    for code in [
+        ErrorCode::InvalidMessage,
+        ErrorCode::Invalid,
+        ErrorCode::Forbidden,
+        ErrorCode::NotFound,
+        ErrorCode::RateLimited,
+        ErrorCode::Unavailable,
+        ErrorCode::TimedOut,
+        ErrorCode::RequestFailed,
+    ] {
+        let wire = serde_json::to_value(code).unwrap();
+        assert_eq!(wire, json!(code.name()));
+        assert_eq!(serde_json::from_value::<ErrorCode>(wire).unwrap(), code);
+    }
+    assert!(serde_json::from_value::<ErrorCode>(json!("RateLimited")).is_err());
+    assert!(serde_json::from_value::<ErrorCode>(json!(429)).is_err());
 }

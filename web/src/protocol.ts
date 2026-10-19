@@ -127,7 +127,7 @@ export type ServerMessage =
       yourName?: string;
       roomSettings?: RoomSettings;
     }
-  | { type: 'error'; requestId?: string; message: string }
+  | { type: 'error'; requestId?: string; code: ErrorCode; message: string }
   | { type: 'roomPasswordRequired' }
   | { type: 'roomClosed'; reason: string }
   | { type: 'serverRestarting'; reason: string }
@@ -212,7 +212,13 @@ export type ServerMessage =
         | 'storage_unconfirmed';
     }
   | SocialResponse
-  | { type: 'socialError'; requestId?: string; clientMessageId?: string; message: string }
+  | {
+      type: 'socialError';
+      requestId?: string;
+      clientMessageId?: string;
+      code: ErrorCode;
+      message: string;
+    }
   | { type: 'nicknameChanged'; participantId: string; nickname: string }
   | { type: 'chatStyleChanged'; participantId: string; chatStyle: ChatStyle }
   | { type: 'participantTyping'; participantId: string; targetParticipantId?: string }
@@ -295,6 +301,28 @@ export type RoomControl = Extract<
 >;
 
 // --- Shared types ---
+
+/** Why the server refused a frame or request; the message beside it is for people. */
+export const ERROR_CODES = [
+  'invalid_message',
+  'invalid',
+  'forbidden',
+  'not_found',
+  'rate_limited',
+  'unavailable',
+  'timed_out',
+  'request_failed',
+] as const;
+export type ErrorCode = (typeof ERROR_CODES)[number];
+
+/**
+ * A refusal the server sent: an `Error` whose `name` is `ServerError` and that
+ * carries the code clients switch on. Built with `Object.assign` where the
+ * frame is received, so this module stays type-only for its importers.
+ */
+export interface ServerError extends Error {
+  readonly code: ErrorCode;
+}
 
 /** A participant's standing in a room, least to most trusted; the wire carries the name. */
 export const ROLES = ['guest', 'user', 'member', 'moderator', 'admin', 'owner'] as const;

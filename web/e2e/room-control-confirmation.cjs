@@ -89,6 +89,7 @@ async function main() {
               () =>
                 this.receive({
                   type: 'error',
+                  code: 'request_failed',
                   requestId: request.requestId,
                   message: 'Owned chat-only fixture',
                 }),
@@ -143,6 +144,7 @@ async function main() {
         } else
           socket.receive({
             type: 'error',
+            code: 'request_failed',
             requestId: request.requestId,
             message: 'Fixture rejected change',
           });
