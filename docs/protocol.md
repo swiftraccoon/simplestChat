@@ -1155,6 +1155,27 @@ explicitly nullable values remain nullable. Current ICE `address` and legacy
 `ip` inputs are normalized for the client library. Invalid frames are ignored
 with a payload-free diagnostic; pending requests still expire normally.
 
+### Identifiers
+
+Every identifier is a JSON string on the wire, and the server decodes each one
+into a dedicated type, so a malformed identifier fails at message decoding (the
+generic invalid-message refusal) rather than in a later lookup:
+
+- Room identifiers (`roomId`) are 1–128 ASCII letters, digits, hyphens or
+  underscores.
+- Participant identifiers (`participantId`, `targetParticipantId`, `reporterId`,
+  `recipientId`, `participantIds`, `ignoredParticipantIds`) are UUIDs. A signed-in
+  participant's identifier is its account UUID; a guest receives a fresh random
+  UUID for each connection.
+- Message identifiers (`messageId`, `replyTo`, `readMessageId`,
+  `firstUnreadMessageId`, `around`) are UUIDs minted by the server.
+- Account identifiers (`userId`, `targetUserId`) are UUIDs.
+- A moderation event's `targetId` is a participant UUID, or the ban's own key
+  when the entry concerns a ban that no longer names a participant.
+
+Clients never invent participant or message identifiers; they echo the values
+the server issued.
+
 When changing the contract:
 
 - Update Rust types/serialization, TypeScript types, the decoder and dispatch

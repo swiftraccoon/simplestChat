@@ -12,6 +12,7 @@ pub mod auth;
 pub mod config;
 pub mod db;
 pub mod diagnostics;
+pub mod ids;
 pub mod invite_codes;
 pub mod labels;
 pub mod media;

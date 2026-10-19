@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+use crate::ids::RoomId;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -88,7 +89,7 @@ impl Role {
 
 pub(crate) async fn resolve_role(
     pool: &PgPool,
-    room_id: &str,
+    room_id: &RoomId,
     user_id: Option<&Uuid>,
     owner_id: &Uuid,
     is_authenticated: bool,
@@ -119,7 +120,7 @@ pub(crate) async fn resolve_role(
 
 pub(crate) async fn set_role(
     pool: &PgPool,
-    room_id: &str,
+    room_id: &RoomId,
     user_id: &Uuid,
     role: Role,
     granted_by: &Uuid,

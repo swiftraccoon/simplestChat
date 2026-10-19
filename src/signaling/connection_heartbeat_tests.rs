@@ -3,6 +3,8 @@
 //! ignored authentication fixture requires the existing disposable test database.
 
 use super::*;
+use crate::ids::ParticipantId;
+use crate::ids::fixtures::rid;
 use axum::{Router, extract::ws::WebSocketUpgrade, routing::get};
 use tokio::sync::{Semaphore, broadcast};
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, tungstenite::Message as PeerMessage};
@@ -282,8 +284,8 @@ async fn quiet_lobby_socket_survives_without_gaining_room_admission() {
     fixture
         .manager
         .add_participant(
-            "heartbeat-test",
-            Uuid::new_v4().to_string(),
+            &rid("heartbeat-test"),
+            ParticipantId::random(),
             "Owner".into(),
             owner_sender,
             false,
@@ -295,7 +297,9 @@ async fn quiet_lobby_socket_survives_without_gaining_room_admission() {
         )
         .await
         .unwrap();
-    let room = fixture.manager.room_for_connection_tests("heartbeat-test");
+    let room = fixture
+        .manager
+        .room_for_connection_tests(&rid("heartbeat-test"));
     room.write().await.settings = Some(settings::RoomSettings {
         id: "heartbeat-test".into(),
         owner_id: Uuid::nil(),
@@ -392,7 +396,7 @@ async fn authoritative_removal_stops_heartbeat_despite_stale_local_room() {
     let joined = fixture.join().await.unwrap();
     fixture
         .manager
-        .remove_participant("heartbeat-test", joined["participantId"].as_str().unwrap())
+        .remove_participant(&rid("heartbeat-test"), &joined_id(&joined))
         .await
         .unwrap();
     let observed = fixture.observe_alive(TEST_IDLE * 3).await;
@@ -407,21 +411,29 @@ async fn authoritative_removal_stops_heartbeat_despite_stale_local_room() {
 async fn sender_rebind_stops_heartbeat_for_the_superseded_socket() {
     let mut fixture = Fixture::new().await;
     let joined = fixture.join().await.unwrap();
-    let id = joined["participantId"].as_str().unwrap();
-    let room = fixture.manager.room_for_connection_tests("heartbeat-test");
+    let id = &joined_id(&joined);
+    let room = fixture
+        .manager
+        .room_for_connection_tests(&rid("heartbeat-test"));
     let old_sender = room.read().await.participants[id].sender.clone();
     let (new_sender, _new_receiver) = mpsc::channel(16);
     assert!(
         fixture
             .manager
-            .rebind_participant_sender("heartbeat-test", id, None, &old_sender, new_sender.clone())
+            .rebind_participant_sender(
+                &rid("heartbeat-test"),
+                id,
+                None,
+                &old_sender,
+                new_sender.clone()
+            )
             .await
             .unwrap()
     );
     let observed = fixture.observe_alive(TEST_IDLE * 3).await;
     let still_bound = fixture
         .manager
-        .is_bound_participant("heartbeat-test", id, &new_sender)
+        .is_bound_participant(&rid("heartbeat-test"), id, &new_sender)
         .await;
     fixture.finish().await;
     assert!(observed.is_err(), "a stale sender cannot grant heartbeats");
@@ -435,7 +447,9 @@ async fn sender_rebind_stops_heartbeat_for_the_superseded_socket() {
 async fn membership_lock_contention_does_not_extend_the_idle_deadline() {
     let mut fixture = Fixture::new().await;
     fixture.join().await.unwrap();
-    let room = fixture.manager.room_for_connection_tests("heartbeat-test");
+    let room = fixture
+        .manager
+        .room_for_connection_tests(&rid("heartbeat-test"));
     let held = room.write().await;
     let observed = fixture.observe_alive(TEST_IDLE * 3).await;
     drop(held);
@@ -450,7 +464,9 @@ async fn membership_lock_contention_does_not_extend_the_idle_deadline() {
 async fn drain_finishes_while_room_membership_is_locked() {
     let mut fixture = Fixture::new().await;
     fixture.join().await.unwrap();
-    let room = fixture.manager.room_for_connection_tests("heartbeat-test");
+    let room = fixture
+        .manager
+        .room_for_connection_tests(&rid("heartbeat-test"));
     let held = room.write().await;
     fixture.manager.drain_signal().begin_draining();
     let completed = fixture.wait_for_completion().await;
@@ -621,11 +637,13 @@ async fn authenticated_renewal_keeps_socket_and_membership_across_original_expir
         async {
             let joined = fixture.join().await?;
             anyhow::ensure!(joined["type"] == "roomJoined", "fixture was not admitted");
-            let participant_id = account_id.to_string();
-            let room = fixture.manager.room_for_connection_tests("heartbeat-test");
+            let participant_id = ParticipantId::from(account_id);
+            let room = fixture
+                .manager
+                .room_for_connection_tests(&rid("heartbeat-test"));
             let before = room.read().await.participants[&participant_id].clone();
             let token = crate::auth::jwt::create_session_token(
-                &participant_id,
+                &participant_id.to_string(),
                 "Renewal fixture",
                 secret,
                 0,
@@ -704,4 +722,12 @@ async fn authenticated_renewal_keeps_socket_and_membership_across_original_expir
         observed.is_ok(),
         "same-socket renewal must preserve live membership: {observed:?}"
     );
+}
+
+fn joined_id(joined: &serde_json::Value) -> ParticipantId {
+    joined["participantId"]
+        .as_str()
+        .expect("joined message names the participant")
+        .parse()
+        .expect("participant identifier is a UUID")
 }

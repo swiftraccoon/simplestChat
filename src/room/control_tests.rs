@@ -3,8 +3,9 @@
 //! Future gates establish exact phases without scheduling sleeps. The ignored
 //! integration fixture locks only its generated row in an explicitly disposable
 //! PostgreSQL database; no service failure or public workload is induced.
-
 use super::*;
+use crate::ids::RoomId;
+use crate::ids::fixtures::{pid, rid};
 use futures_util::FutureExt;
 use serde_json::Value;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
@@ -25,8 +26,8 @@ async fn bounded<T>(future: impl Future<Output = T>) -> T {
 
 fn runtime_room(id: &str) -> Arc<TokioRwLock<Room>> {
     Arc::new(TokioRwLock::new(Room::new(
-        id.to_string(),
-        Some(RoomManager::default_room_settings(id)),
+        rid(id),
+        Some(RoomManager::default_room_settings(&rid(id))),
         false,
         None,
     )))
@@ -36,7 +37,7 @@ fn participant(role: roles::Role) -> (Participant, mpsc::Receiver<crate::Outboun
     let (sender, receiver) = mpsc::channel(32);
     (
         Participant {
-            id: Uuid::new_v4().to_string(),
+            id: ParticipantId::random(),
             name: "Room control fixture".to_string(),
             social: social::ParticipantSocial::new(0),
             sender,
@@ -54,7 +55,7 @@ fn participant(role: roles::Role) -> (Participant, mpsc::Receiver<crate::Outboun
 
 struct Fixture {
     manager: RoomManager,
-    room_id: String,
+    room_id: RoomId,
     room: Arc<TokioRwLock<Room>>,
     owner: Participant,
     owner_messages: mpsc::Receiver<crate::OutboundJson>,
@@ -68,13 +69,13 @@ where
     Fut: Future<Output = ()>,
 {
     let manager = RoomManager::new_for_connection_tests(ServerMetrics::new()).await;
-    let room_id = format!("control-{}", Uuid::new_v4());
-    let room = runtime_room(&room_id);
+    let room_id = rid(&format!("control-{}", Uuid::new_v4()));
+    let room = runtime_room(room_id.as_str());
     let (owner, owner_messages) = participant(roles::Role::Owner);
     room.write()
         .await
         .participants
-        .insert(owner.id.clone(), owner.clone());
+        .insert(owner.id, owner.clone());
     manager
         .rooms
         .write()
@@ -364,7 +365,7 @@ async fn chat_preference_ack_waits_for_inflight_durable_control() {
                 .get(&fixture.owner.id)
                 .unwrap()
                 .social
-                .accepts_inbox_from("peer")
+                .accepts_inbox_from(&pid("peer"))
         );
         drop(held);
         bounded(preference).await.unwrap();
@@ -379,7 +380,7 @@ async fn chat_preference_ack_waits_for_inflight_durable_control() {
                 .get(&fixture.owner.id)
                 .unwrap()
                 .social
-                .accepts_inbox_from("peer")
+                .accepts_inbox_from(&pid("peer"))
         );
     })
     .await;
@@ -432,7 +433,7 @@ async fn queued_control_never_runs_against_a_same_id_replacement() {
             },
         ));
         assert!(futures_util::poll!(&mut pending).is_pending());
-        let replacement = runtime_room(&fixture.room_id);
+        let replacement = runtime_room(fixture.room_id.as_str());
         fixture
             .manager
             .rooms
@@ -546,7 +547,7 @@ async fn indeterminate_persistence_quarantines_only_its_exact_room_incarnation()
         ] {
             assert!(control::persistence_is_indeterminate(&error));
         }
-        let replacement = runtime_room(&fixture.room_id);
+        let replacement = runtime_room(fixture.room_id.as_str());
         fixture
             .manager
             .rooms
@@ -656,7 +657,7 @@ async fn blocked_room_sql_keeps_chat_available_and_committed_control_outlives_it
             .get_database()
             .is_some_and(|database| database.ends_with("_test"))
     );
-    let room_id = format!("control-sql-{}", Uuid::new_v4());
+    let room_id = rid(&format!("control-sql-{}", Uuid::new_v4()));
     let application_name = format!("control-fixture-{}", Uuid::new_v4());
     let pool = PgPoolOptions::new()
         .max_connections(4)
@@ -681,7 +682,7 @@ async fn blocked_room_sql_keeps_chat_available_and_committed_control_outlives_it
     .unwrap();
     let (owner, mut owner_messages) = participant(roles::Role::Owner);
     let (member, mut member_messages) = participant(roles::Role::User);
-    let owner_id = Uuid::parse_str(&owner.id).unwrap();
+    let owner_id = Uuid::parse_str(&owner.id.to_string()).unwrap();
     let mut blocker = None;
     let mut caller = None;
     let mut installed_room = None;
@@ -709,8 +710,8 @@ async fn blocked_room_sql_keeps_chat_available_and_committed_control_outlives_it
         )));
         {
             let mut room = room.write().await;
-            room.participants.insert(owner.id.clone(), owner.clone());
-            room.participants.insert(member.id.clone(), member.clone());
+            room.participants.insert(owner.id, owner.clone());
+            room.participants.insert(member.id, member.clone());
         }
         manager
             .rooms

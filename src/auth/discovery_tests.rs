@@ -1,4 +1,5 @@
 use super::*;
+use crate::ids::fixtures::rid;
 
 #[test]
 fn contact_preferences_match_private_message_optout_and_ignore() {
@@ -305,7 +306,7 @@ async fn database_discovery_contact_and_favorite_caps_serialize_concurrent_write
             .unwrap()
     );
     for index in 0..101 {
-        let room = format!("discovery-cap-{aid}-{index}");
+        let room = rid(&format!("discovery-cap-{aid}-{index}"));
         sqlx::query("INSERT INTO rooms (id,owner_id,display_name) VALUES ($1,$2,'Favorite cap')")
             .bind(&room)
             .bind(aid)
@@ -313,7 +314,9 @@ async fn database_discovery_contact_and_favorite_caps_serialize_concurrent_write
             .await
             .unwrap();
         if index < 99 {
-            save_favorite(&pool, &alice, &room, true).await.unwrap();
+            save_favorite(&pool, &alice, room.as_str(), true)
+                .await
+                .unwrap();
         }
     }
     let first_room = format!("discovery-cap-{aid}-99");

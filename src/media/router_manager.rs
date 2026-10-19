@@ -554,6 +554,7 @@ mod allocation_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ids::fixtures::rid;
     use crate::media::config::MediaConfig;
 
     #[tokio::test]
@@ -568,20 +569,20 @@ mod tests {
         let router_manager = RouterManager::new(worker_manager);
 
         // Create router
-        let room_id = "test-room".to_string();
+        let room_id = rid("test-room");
         let result = router_manager
-            .create_router(room_id.clone(), config.router_config.clone())
+            .create_router(room_id.to_string(), config.router_config.clone())
             .await;
         assert!(result.is_ok());
 
         // Check if router exists
-        assert!(router_manager.has_router(&room_id).await);
+        assert!(router_manager.has_router(room_id.as_str()).await);
 
         // Remove router
-        let result = router_manager.remove_router(&room_id).await;
+        let result = router_manager.remove_router(room_id.as_str()).await;
         assert!(result.is_ok());
 
         // Check if router was removed
-        assert!(!router_manager.has_router(&room_id).await);
+        assert!(!router_manager.has_router(room_id.as_str()).await);
     }
 }

@@ -371,14 +371,14 @@ pub(crate) async fn saved_rooms(
         "SELECT r.id,r.display_name,r.topic,r.password_hash IS NOT NULL,r.moderated,r.description,r.image_version,r.secret,r.name_style,r.topic_style
          FROM rooms r WHERE r.id=ANY($1) AND (r.secret=false OR r.owner_id=$2 OR EXISTS(SELECT 1 FROM room_roles m WHERE m.room_id=r.id AND m.user_id=$2))")
         .bind(ids).bind(own).fetch_all(pool).await.map_err(routes::database_error)?;
-    let mut details: std::collections::HashMap<String, RoomListRow> = rooms
+    let mut details: std::collections::HashMap<crate::ids::RoomId, RoomListRow> = rooms
         .into_iter()
         .map(|room| (room.0.clone(), room))
         .collect();
     let rooms = entries
         .into_iter()
         .filter_map(|(id, favorite, last_visited)| {
-            details.remove(&id).map(|room| SavedRoom {
+            details.remove(id.as_str()).map(|room| SavedRoom {
                 room: room_list_item(&server, room),
                 favorite,
                 last_visited,

@@ -2,9 +2,12 @@
 
 // WebSocket connection handler for individual clients
 
-use super::protocol::{ClientMessage, ErrorCode, RequestHeader, ServerMessage, ServerReply};
+use super::protocol::{
+    ClientMessage, ErrorCode, RequestHeader, ServerMessage, ServerReply, SocialResponse,
+};
 use crate::auth::types::Claims;
 use crate::diagnostics::{self, OperationKind, Outcome, Stage};
+use crate::ids::{ParticipantId, RoomId};
 use crate::metrics::ServerMetrics;
 use crate::room::{JoinResult, RoomManager, RoomPasswordRequired, settings};
 use crate::secret::SecretString;
@@ -198,18 +201,18 @@ const ROOM_PASSWORD_HASH_COOLDOWN: Duration = Duration::from_secs(30);
 #[derive(Default)]
 struct JoinAttemptState {
     last_attempt: Option<Instant>,
-    password_challenge_room: Option<String>,
+    password_challenge_room: Option<RoomId>,
 }
 
 impl JoinAttemptState {
-    fn allow(&mut self, room_id: &str, has_password: bool, now: Instant) -> bool {
+    fn allow(&mut self, room_id: &RoomId, has_password: bool, now: Instant) -> bool {
         // One response to an issued password challenge belongs to the same
         // interaction, even when a password manager answers immediately.
         // RoomManager's shared IP and room/IP budgets still count both requests.
         let answering_challenge = self
             .password_challenge_room
             .take()
-            .is_some_and(|pending| pending == room_id && has_password);
+            .is_some_and(|pending| pending == *room_id && has_password);
         if !answering_challenge
             && self
                 .last_attempt
@@ -400,7 +403,7 @@ struct GraceEntry {
     timer: tokio::task::JoinHandle<()>,
 }
 
-type GraceEntries = HashMap<(String, String, String), GraceEntry>;
+type GraceEntries = HashMap<(RoomId, ParticipantId, String), GraceEntry>;
 
 /// Shared map of participants in grace period (disconnected but not yet removed)
 #[derive(Clone)]
@@ -448,7 +451,7 @@ impl GracePeriodMap {
         &self,
         user_id: &str,
         minimum_version: i64,
-    ) -> Vec<(String, String, mpsc::Sender<crate::OutboundJson>)> {
+    ) -> Vec<(RoomId, ParticipantId, mpsc::Sender<crate::OutboundJson>)> {
         let mut map = self
             .inner
             .write()
@@ -461,11 +464,7 @@ impl GracePeriodMap {
                     .is_none_or(|version| version < minimum_version)
             {
                 entry.timer.abort();
-                removed.push((
-                    room_id.clone(),
-                    participant_id.clone(),
-                    entry.sender.clone(),
-                ));
+                removed.push((room_id.clone(), *participant_id, entry.sender.clone()));
                 false
             } else {
                 true
@@ -477,7 +476,7 @@ impl GracePeriodMap {
     /// Retain a disconnected session without evicting another reconnectable
     /// participant. On capacity exhaustion the new timer is aborted and the
     /// caller must immediately remove that participant's room/media state.
-    fn insert(&self, room_id: String, participant_id: String, entry: GraceEntry) -> bool {
+    fn insert(&self, room_id: RoomId, participant_id: ParticipantId, entry: GraceEntry) -> bool {
         let mut map = self.inner.write().unwrap_or_else(|e| e.into_inner());
         let key = (room_id, participant_id, entry.reconnect_token.clone());
         if self.closed.load(Ordering::Acquire)
@@ -499,8 +498,8 @@ impl GracePeriodMap {
     /// A retained timer may start only after its matching map entry exists.
     fn insert_activated(
         &self,
-        room_id: String,
-        participant_id: String,
+        room_id: RoomId,
+        participant_id: ParticipantId,
         entry: GraceEntry,
         activation: tokio::sync::oneshot::Sender<()>,
     ) -> bool {
@@ -513,15 +512,15 @@ impl GracePeriodMap {
 
     fn remove_if_token_matches(
         &self,
-        room_id: &str,
-        participant_id: &str,
+        room_id: &RoomId,
+        participant_id: &ParticipantId,
         reconnect_token: &str,
         authenticated_subject: Option<&str>,
     ) -> Option<GraceEntry> {
         let mut map = self.inner.write().unwrap_or_else(|e| e.into_inner());
         let key = (
-            room_id.to_string(),
-            participant_id.to_string(),
+            room_id.clone(),
+            *participant_id,
             reconnect_token.to_string(),
         );
         if map
@@ -719,7 +718,7 @@ fn begin_join_session(reconnect_token: &mut String) -> String {
     fresh
 }
 
-fn reconnect_attempt_allowed(current_room_id: Option<&str>, in_lobby: bool) -> bool {
+fn reconnect_attempt_allowed(current_room_id: Option<&RoomId>, in_lobby: bool) -> bool {
     current_room_id.is_none() && !in_lobby
 }
 
@@ -931,10 +930,16 @@ async fn handle_connection_with_timing(
     timing: ConnectionTiming,
 ) {
     // Use authenticated user ID if available, otherwise generate anonymous UUID
-    let mut participant_id = authenticated_user
-        .as_ref()
-        .map(|c| c.sub.clone())
-        .unwrap_or_else(|| Uuid::new_v4().to_string());
+    let mut participant_id = match authenticated_user.as_ref() {
+        Some(claims) => match claims.sub.parse::<ParticipantId>() {
+            Ok(id) => id,
+            Err(_) => {
+                tracing::warn!("Rejecting a connection whose account subject is not a UUID");
+                return;
+            }
+        },
+        None => ParticipantId::random(),
+    };
 
     let is_authenticated = authenticated_user.is_some();
     let mut auth_exp = authenticated_user.as_ref().map(|claims| claims.exp as u64);
@@ -1051,7 +1056,7 @@ async fn handle_connection_with_timing(
     }));
 
     // Handle incoming messages
-    let mut current_room_id: Option<String> = None;
+    let mut current_room_id: Option<RoomId> = None;
     // True while the participant waits in a lobby. Shared (Arc) because admission
     // happens on the moderator's connection task — admit_from_lobby clears it via
     // the LobbyEntry so this task's guard opens without any local event.
@@ -1103,7 +1108,7 @@ async fn handle_connection_with_timing(
             || credential_continuity.expired(Instant::now())
         {
             info!(
-                participant_id,
+                %participant_id,
                 "Accepted authentication lifetime or validation allowance expired; closing WebSocket"
             );
             credentials_invalidated = true;
@@ -1194,7 +1199,7 @@ async fn handle_connection_with_timing(
                 // frame (normally the protocol Pong) renews the idle deadline.
                 next_heartbeat = Instant::now() + timing.heartbeat_interval;
                 if last_frame_received.elapsed() >= timing.heartbeat_interval
-                    && let Some(room_id) = current_room_id.as_deref()
+                    && let Some(room_id) = current_room_id.as_ref()
                 {
                     // The timer may have consumed most of the receive budget.
                     // Preserve its absolute deadline instead of reusing the
@@ -1247,7 +1252,7 @@ async fn handle_connection_with_timing(
                     || credential_continuity.expired(Instant::now())
                 {
                     info!(
-                        participant_id,
+                        %participant_id,
                         "Accepted authentication lifetime or validation allowance expired; closing WebSocket"
                     );
                     credentials_invalidated = true;
@@ -1330,7 +1335,7 @@ async fn handle_connection_with_timing(
             }
             if rate_limit_violations >= RATE_LIMIT_MAX_VIOLATIONS {
                 warn!(
-                    participant_id,
+                    %participant_id,
                     rate_limit_violations, "Closing WebSocket after repeated frame-rate violations"
                 );
                 break;
@@ -1342,7 +1347,7 @@ async fn handle_connection_with_timing(
             Message::Text(text) => {
                 if text.len() > MAX_SIGNAL_MESSAGE_LEN {
                     warn!(
-                        participant_id,
+                        %participant_id,
                         size = text.len(),
                         "Oversized signaling message"
                     );
@@ -1473,7 +1478,7 @@ async fn handle_connection_with_timing(
                             });
                             if media_mutation_violations >= MEDIA_MUTATION_MAX_VIOLATIONS {
                                 warn!(
-                                    participant_id,
+                                    %participant_id,
                                     media_mutation_violations,
                                     "Closing WebSocket after repeated media-mutation rate violations"
                                 );
@@ -1512,7 +1517,7 @@ async fn handle_connection_with_timing(
                             );
                             if admin_mutation_violations >= ADMIN_MUTATION_MAX_VIOLATIONS {
                                 warn!(
-                                    participant_id,
+                                    %participant_id,
                                     admin_mutation_violations,
                                     "Closing WebSocket after repeated room-administration rate violations"
                                 );
@@ -1611,16 +1616,16 @@ async fn handle_connection_with_timing(
                         } = &client_msg
                         {
                             if !reconnect_attempt_allowed(
-                                current_room_id.as_deref(),
+                                current_room_id.as_ref(),
                                 in_lobby.load(Ordering::Acquire),
                             ) {
                                 warn!(
-                                    participant_id,
+                                    %participant_id,
                                     "Rejected reconnect from a socket with an active room session"
                                 );
                                 let _ = reply.send(&ServerMessage::ReconnectResult {
                                     success: false,
-                                    participant_id: reconnect_id.clone(),
+                                    participant_id: *reconnect_id,
                                     reconnect_token: None,
                                 });
                                 continue;
@@ -1665,7 +1670,7 @@ async fn handle_connection_with_timing(
 
                             if let Some(restored_media_rate_state) = restored_media_rate_state {
                                 media_rate_state = restored_media_rate_state;
-                                participant_id = reconnect_id.clone();
+                                participant_id = *reconnect_id;
                                 current_room_id = Some(reconnect_room.clone());
 
                                 // Restart stats task for reconnected session
@@ -1696,7 +1701,7 @@ async fn handle_connection_with_timing(
                                 stats_task = Some(spawn_stats_task(
                                     room_manager.clone(),
                                     reconnect_room.clone(),
-                                    participant_id.clone(),
+                                    participant_id,
                                     tx.clone(),
                                     bwe_rx,
                                 ));
@@ -1705,9 +1710,9 @@ async fn handle_connection_with_timing(
                             let response_sent = reply.send(&ServerMessage::ReconnectResult {
                                 success,
                                 participant_id: if success {
-                                    participant_id.clone()
+                                    participant_id
                                 } else {
-                                    reconnect_id.clone()
+                                    *reconnect_id
                                 },
                                 reconnect_token: fresh_reconnect_token
                                     .clone()
@@ -1741,7 +1746,7 @@ async fn handle_connection_with_timing(
                                         if in_lobby.load(Ordering::Acquire) {
                                             anyhow::bail!("Cannot perform this action while waiting in lobby");
                                         }
-                                        let room_id = current_room_id.as_deref().ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
+                                        let room_id = current_room_id.as_ref().ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
                                         let pool = db_pool.as_ref().ok_or_else(|| anyhow::anyhow!("Database unavailable"))?;
                                         let access = crate::attachments::grant_access(
                                             &room_manager, pool, room_id, &participant_id, &tx,
@@ -1749,8 +1754,10 @@ async fn handle_connection_with_timing(
                                         ).await.map_err(|_| anyhow::anyhow!("Attachment unavailable"))?;
                                         reply.send(&ServerMessage::SocialResponse {
                                             request_id: request_id.clone(),
-                                            action: "getAttachmentAccess".to_owned(),
-                                            data: serde_json::to_value(access)?,
+                                            response: SocialResponse::GetAttachmentAccess {
+                                                token: access.token,
+                                                expires_at: access.expires_at,
+                                            },
                                         })
                                     } else {
                                         handle_client_message(
@@ -1805,7 +1812,7 @@ async fn handle_connection_with_timing(
                             // Keep them observable without allowing a socket to
                             // amplify them into production error logs.
                             debug!(
-                                participant_id,
+                                %participant_id,
                                 error = %e,
                                 "Client signaling request was rejected"
                             );
@@ -1853,7 +1860,7 @@ async fn handle_connection_with_timing(
                             stats_task = Some(spawn_stats_task(
                                 room_manager.clone(),
                                 room_id.clone(),
-                                participant_id.clone(),
+                                participant_id,
                                 tx.clone(),
                                 bwe_rx,
                             ));
@@ -1869,7 +1876,7 @@ async fn handle_connection_with_timing(
                     }
                     Err(e) => {
                         debug!(
-                            participant_id,
+                            %participant_id,
                             error = %e,
                             "Invalid client signaling message"
                         );
@@ -1883,7 +1890,7 @@ async fn handle_connection_with_timing(
             }
             Message::Binary(payload) => {
                 warn!(
-                    participant_id,
+                    %participant_id,
                     size = payload.len(),
                     "Unsupported binary WebSocket frame; closing connection"
                 );
@@ -1938,7 +1945,7 @@ async fn handle_connection_with_timing(
         if drain.is_draining() {
             // Global room drain clears both live and retained memberships. Do
             // not start a new grace timer or race its authoritative cleanup.
-            debug!(room_id, participant_id, "Membership handed to server drain");
+            debug!(%room_id, %participant_id, "Membership handed to server drain");
         } else if in_lobby.load(Ordering::Acquire) || credentials_invalidated {
             // Lobby and invalidated memberships do not receive reconnect grace.
             info!(
@@ -1959,7 +1966,7 @@ async fn handle_connection_with_timing(
 
             let grace_map = grace_periods.clone();
             let rm = room_manager.clone();
-            let pid = participant_id.clone();
+            let pid = participant_id;
             let rid = room_id.clone();
             let timer_token = reconnect_token.clone();
             let authenticated_subject =
@@ -2027,9 +2034,8 @@ async fn handle_connection_with_timing(
                         "Grace period expired for participant {} in room {}",
                         pid, rid
                     );
-                    if tracing::enabled!(target: "simplestchat::lifecycle", tracing::Level::DEBUG)
-                        && let Ok(lifecycle_id) = Uuid::parse_str(&pid)
-                    {
+                    if tracing::enabled!(target: "simplestchat::lifecycle", tracing::Level::DEBUG) {
+                        let lifecycle_id = pid.as_uuid();
                         debug!(
                             target: "simplestchat::lifecycle",
                             event = "grace_cleanup_started",
@@ -2048,7 +2054,7 @@ async fn handle_connection_with_timing(
 
             let retained_for_reconnect = grace_periods.insert_activated(
                 room_id.clone(),
-                participant_id.clone(),
+                participant_id,
                 GraceEntry {
                     reconnect_token,
                     authenticated_subject,
@@ -2063,8 +2069,8 @@ async fn handle_connection_with_timing(
             );
             if retained_for_reconnect
                 && tracing::enabled!(target: "simplestchat::lifecycle", tracing::Level::DEBUG)
-                && let Ok(lifecycle_id) = Uuid::parse_str(&participant_id)
             {
+                let lifecycle_id = participant_id.as_uuid();
                 debug!(
                     target: "simplestchat::lifecycle",
                     event = "grace_started",
@@ -2074,8 +2080,8 @@ async fn handle_connection_with_timing(
             }
             if !retained_for_reconnect {
                 warn!(
-                    room_id,
-                    participant_id,
+                    %room_id,
+                    %participant_id,
                     "Grace-session capacity reached; cleaning up disconnected participant immediately"
                 );
                 if let Err(error) = room_manager
@@ -2083,8 +2089,8 @@ async fn handle_connection_with_timing(
                     .await
                 {
                     debug!(
-                        room_id,
-                        participant_id,
+                        %room_id,
+                        %participant_id,
                         %error,
                         "Immediate grace-cap cleanup found no current participant session"
                     );
@@ -2109,7 +2115,7 @@ async fn handle_connection_with_timing(
         .is_err()
         {
             warn!(
-                participant_id,
+                %participant_id,
                 "Shutdown writer did not finish within its deadline"
             );
             send_task.abort();
@@ -2122,7 +2128,7 @@ async fn handle_connection_with_timing(
     // Availability is best effort and may contend with a room mutation. Finish
     // the socket first, and never delay server drain for this notification.
     if !drain.is_draining()
-        && let Some(room_id) = disconnected_room_id.as_deref()
+        && let Some(room_id) = disconnected_room_id.as_ref()
     {
         let _ = room_manager
             .mark_participant_disconnected(room_id, &participant_id, &tx)
@@ -2158,18 +2164,15 @@ mod credential_tests;
 
 /// Attempt to reconnect a participant to their existing session
 async fn handle_reconnect(
-    participant_id: &str,
-    room_id: &str,
+    participant_id: &ParticipantId,
+    room_id: &RoomId,
     client_token: &str,
     authenticated_subject: Option<&str>,
     grace_periods: &GracePeriodMap,
     room_manager: &Arc<RoomManager>,
     new_sender: &mpsc::Sender<crate::OutboundJson>,
 ) -> Option<MediaSessionRateState> {
-    if !settings::valid_room_id(room_id)
-        || participant_id.parse::<Uuid>().is_err()
-        || client_token.parse::<Uuid>().is_err()
-    {
+    if client_token.parse::<Uuid>().is_err() {
         return None;
     }
     // Check if participant is in grace period
@@ -2234,8 +2237,8 @@ async fn handle_reconnect(
 /// - ConnectionStats sent to client every ~10s using last-known bitrate (no IPC, skipped if unchanged)
 fn spawn_stats_task(
     room_manager: Arc<RoomManager>,
-    room_id: String,
-    participant_id: String,
+    room_id: RoomId,
+    participant_id: ParticipantId,
     sender: mpsc::Sender<crate::OutboundJson>,
     mut bwe_rx: mpsc::Receiver<crate::media::types::ReceiveBandwidthEstimate>,
 ) -> OwnedTask {
@@ -2347,7 +2350,6 @@ fn make_ice_servers(turn_config: &Option<Arc<TurnConfig>>) -> Vec<crate::turn::I
 }
 
 pub(crate) const MAX_PARTICIPANT_NAME_LEN: usize = 64;
-const MAX_TARGET_ID_LEN: usize = 128;
 
 /// The report a sanction answers must at least look like one of ours.
 fn parse_report_id(report_id: Option<&str>) -> anyhow::Result<Option<Uuid>> {
@@ -2357,13 +2359,6 @@ fn parse_report_id(report_id: Option<&str>) -> anyhow::Result<Option<Uuid>> {
                 .map_err(|_| anyhow::anyhow!("Invalid report"))
         })
         .transpose()
-}
-
-fn validate_target_id(id: &str) -> anyhow::Result<()> {
-    if id.is_empty() || id.len() > MAX_TARGET_ID_LEN || id.parse::<Uuid>().is_err() {
-        anyhow::bail!("Invalid target participant ID");
-    }
-    Ok(())
 }
 
 fn validate_reason(reason: Option<&str>) -> anyhow::Result<()> {
@@ -2387,8 +2382,8 @@ fn validate_durable_reason(reason: Option<&str>) -> anyhow::Result<()> {
 )]
 async fn handle_client_message(
     message: &ClientMessage,
-    participant_id: &str,
-    current_room_id: &mut Option<String>,
+    participant_id: &ParticipantId,
+    current_room_id: &mut Option<RoomId>,
     in_lobby: &Arc<AtomicBool>,
     reply: &ReplySender<'_>,
     room_manager: &Arc<RoomManager>,
@@ -2432,11 +2427,6 @@ async fn handle_client_message(
             password,
             chat_style,
         } => {
-            if !settings::valid_room_id(room_id) {
-                anyhow::bail!(
-                    "Invalid room_id: use 1-128 letters, numbers, hyphens, or underscores"
-                );
-            }
             if participant_name.trim().is_empty()
                 || participant_name.len() > MAX_PARTICIPANT_NAME_LEN
                 || !crate::labels::is_plain(participant_name)
@@ -2472,7 +2462,7 @@ async fn handle_client_message(
             let join_result = room_manager
                 .add_participant(
                     room_id,
-                    participant_id.to_string(),
+                    *participant_id,
                     participant_name.to_string(),
                     sender.clone(),
                     is_authenticated,
@@ -2497,7 +2487,7 @@ async fn handle_client_message(
                     metrics.inc_joins();
 
                     reply.send(&ServerMessage::RoomJoined {
-                        participant_id: participant_id.to_string(),
+                        participant_id: *participant_id,
                         participants,
                         reconnect_token: session_reconnect_token.into(),
                         your_role: role,
@@ -2522,7 +2512,7 @@ async fn handle_client_message(
             if let Some(room_id) = current_room_id.take() {
                 let lifecycle_id = if tracing::enabled!(target: "simplestchat::lifecycle", tracing::Level::DEBUG)
                 {
-                    Uuid::parse_str(participant_id).ok()
+                    Some(participant_id.as_uuid())
                 } else {
                     None
                 };
@@ -2616,7 +2606,7 @@ async fn handle_client_message(
 
         ClientMessage::ReplaceRecvTransport { transport_id } => {
             let room_id = current_room_id
-                .as_deref()
+                .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
             let transport_info = room_manager
                 .replace_recv_transport(
@@ -2868,19 +2858,8 @@ async fn handle_client_message(
         | ClientMessage::PrivateMessage { .. }
         | ClientMessage::RetryChatMessage(_) => {
             let room_id = current_room_id
-                .as_deref()
+                .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
-            let target = match message {
-                ClientMessage::PrivateMessage {
-                    target_participant_id,
-                    ..
-                } => Some(target_participant_id.as_str()),
-                ClientMessage::RetryChatMessage(retry) => retry.target_participant_id.as_deref(),
-                _ => None,
-            };
-            if let Some(target) = target {
-                validate_target_id(target)?;
-            }
             room_manager
                 .handle_chat_command(room_id, participant_id, sender, message)
                 .await?;
@@ -2889,17 +2868,14 @@ async fn handle_client_message(
             target_participant_id,
         } => {
             let room_id = current_room_id
-                .as_deref()
+                .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
-            if let Some(target) = target_participant_id.as_deref() {
-                validate_target_id(target)?;
-            }
             room_manager
                 .relay_typing(
                     room_id,
                     participant_id,
                     sender,
-                    target_participant_id.as_deref(),
+                    target_participant_id.as_ref(),
                 )
                 .await?;
         }
@@ -2924,7 +2900,7 @@ async fn handle_client_message(
         | ClientMessage::ResolveRoomReport { .. }
         | ClientMessage::ListModerationEvents { .. } => {
             let room_id = current_room_id
-                .as_deref()
+                .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
             room_manager
                 .handle_social_request(room_id, participant_id, sender, message)
@@ -2943,7 +2919,6 @@ async fn handle_client_message(
             let room_id = current_room_id
                 .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
-            validate_target_id(target_participant_id)?;
             room_manager
                 .close_cam(room_id, participant_id, sender, target_participant_id)
                 .await?;
@@ -2956,7 +2931,6 @@ async fn handle_client_message(
             let room_id = current_room_id
                 .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
-            validate_target_id(target_participant_id)?;
             validate_durable_reason(reason.as_deref())?;
             room_manager
                 .cam_ban(
@@ -2975,7 +2949,6 @@ async fn handle_client_message(
             let room_id = current_room_id
                 .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
-            validate_target_id(target_participant_id)?;
             room_manager
                 .cam_unban(room_id, participant_id, sender, target_participant_id)
                 .await?;
@@ -2987,7 +2960,6 @@ async fn handle_client_message(
             let room_id = current_room_id
                 .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
-            validate_target_id(target_participant_id)?;
             room_manager
                 .text_mute(room_id, participant_id, sender, target_participant_id)
                 .await?;
@@ -2999,7 +2971,6 @@ async fn handle_client_message(
             let room_id = current_room_id
                 .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
-            validate_target_id(target_participant_id)?;
             room_manager
                 .text_unmute(room_id, participant_id, sender, target_participant_id)
                 .await?;
@@ -3013,7 +2984,6 @@ async fn handle_client_message(
             let room_id = current_room_id
                 .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
-            validate_target_id(target_participant_id)?;
             validate_reason(reason.as_deref())?;
             let report_id = parse_report_id(report_id.as_deref())?;
             room_manager
@@ -3037,7 +3007,6 @@ async fn handle_client_message(
             let room_id = current_room_id
                 .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
-            validate_target_id(target_participant_id)?;
             validate_durable_reason(reason.as_deref())?;
             let report_id = parse_report_id(report_id.as_deref())?;
             room_manager
@@ -3057,7 +3026,6 @@ async fn handle_client_message(
             let room_id = current_room_id
                 .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
-            validate_target_id(target_user_id)?;
             room_manager
                 .unban_participant(room_id, participant_id, sender, target_user_id)
                 .await?;
@@ -3070,7 +3038,6 @@ async fn handle_client_message(
             let room_id = current_room_id
                 .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
-            validate_target_id(target_participant_id)?;
             let new_role = *role;
             room_manager
                 .set_participant_role(
@@ -3151,7 +3118,6 @@ async fn handle_client_message(
             let room_id = current_room_id
                 .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
-            validate_target_id(target_participant_id)?;
             room_manager
                 .admit_from_lobby(room_id, participant_id, sender, target_participant_id)
                 .await?;
@@ -3163,7 +3129,6 @@ async fn handle_client_message(
             let room_id = current_room_id
                 .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
-            validate_target_id(target_participant_id)?;
             room_manager
                 .deny_from_lobby(room_id, participant_id, sender, target_participant_id, None)
                 .await?;
@@ -3196,6 +3161,7 @@ async fn handle_client_message(
 #[cfg(test)]
 mod security_tests {
     use super::*;
+    use crate::ids::fixtures::{pid, rid};
 
     #[tokio::test]
     async fn shutdown_aborts_owned_tasks_on_drop() {
@@ -3225,12 +3191,12 @@ mod security_tests {
         let map = GracePeriodMap::new();
         let retained = grace_entry("retained");
         let retained_abort = retained.timer.abort_handle();
-        assert!(map.insert("room".into(), "peer".into(), retained));
+        assert!(map.insert(rid("room"), pid("peer"), retained));
         assert_eq!(map.close(), 1);
         assert_eq!(map.close(), 0);
         let late = grace_entry("late");
         let late_abort = late.timer.abort_handle();
-        assert!(!map.clone().insert("room".into(), "late-peer".into(), late));
+        assert!(!map.clone().insert(rid("room"), pid("late-peer"), late));
         tokio::time::timeout(Duration::from_secs(1), async {
             while !retained_abort.is_finished() || !late_abort.is_finished() {
                 tokio::task::yield_now().await;
@@ -3442,11 +3408,11 @@ mod security_tests {
     fn password_challenge_allows_one_immediate_answer_for_the_same_room() {
         let now = Instant::now();
         let mut attempts = JoinAttemptState::default();
-        assert!(attempts.allow("private-room", false, now));
-        attempts.password_challenge_room = Some("private-room".to_string());
-        assert!(attempts.allow("private-room", true, now));
-        assert!(!attempts.allow("private-room", true, now));
-        assert!(attempts.allow("private-room", true, now + Duration::from_secs(1)));
+        assert!(attempts.allow(&rid("private-room"), false, now));
+        attempts.password_challenge_room = Some(rid("private-room"));
+        assert!(attempts.allow(&rid("private-room"), true, now));
+        assert!(!attempts.allow(&rid("private-room"), true, now));
+        assert!(attempts.allow(&rid("private-room"), true, now + Duration::from_secs(1)));
     }
 
     #[test]
@@ -3454,10 +3420,10 @@ mod security_tests {
         let now = Instant::now();
         for (room_id, has_password) in [("another-room", true), ("private-room", false)] {
             let mut attempts = JoinAttemptState::default();
-            assert!(attempts.allow("private-room", false, now));
-            attempts.password_challenge_room = Some("private-room".to_string());
-            assert!(!attempts.allow(room_id, has_password, now));
-            assert!(!attempts.allow("private-room", true, now));
+            assert!(attempts.allow(&rid("private-room"), false, now));
+            attempts.password_challenge_room = Some(rid("private-room"));
+            assert!(!attempts.allow(&rid(room_id), has_password, now));
+            assert!(!attempts.allow(&rid("private-room"), true, now));
         }
     }
 
@@ -3635,7 +3601,7 @@ mod security_tests {
     #[tokio::test]
     async fn grace_reconnect_does_not_restore_consumer_burst_capacity() {
         let map = GracePeriodMap::new();
-        let participant_id = Uuid::new_v4().to_string();
+        let participant_id = ParticipantId::random();
         let token = Uuid::new_v4().to_string();
         let now = Instant::now();
         let consumer_mutation = ClientMessage::PauseConsumer {
@@ -3677,9 +3643,9 @@ mod security_tests {
         assert_eq!(entry.media_rate_state.record_violation(now), 1);
         assert_eq!(entry.media_rate_state.record_violation(now), 2);
 
-        map.insert("room-a".to_string(), participant_id.clone(), entry);
+        map.insert(rid("room-a"), participant_id, entry);
         let mut restored = map
-            .remove_if_token_matches("room-a", &participant_id, &token, None)
+            .remove_if_token_matches(&rid("room-a"), &participant_id, &token, None)
             .expect("the matching reconnect token must recover its session state");
         restored.timer.abort();
 
@@ -3699,7 +3665,7 @@ mod security_tests {
     #[tokio::test]
     async fn reconnect_rate_state_is_isolated_between_session_incarnations() {
         let map = GracePeriodMap::new();
-        let participant_id = Uuid::new_v4().to_string();
+        let participant_id = ParticipantId::random();
         let stale_token = Uuid::new_v4().to_string();
         let replacement_token = Uuid::new_v4().to_string();
         let now = Instant::now();
@@ -3725,17 +3691,17 @@ mod security_tests {
             now,
             crate::media::config::DEFAULT_MAX_CONSUMERS_PER_PARTICIPANT,
         );
-        map.insert("room-a".to_string(), participant_id.clone(), stale);
-        map.insert("room-a".to_string(), participant_id.clone(), replacement);
+        map.insert(rid("room-a"), participant_id, stale);
+        map.insert(rid("room-a"), participant_id, replacement);
 
         let mut replacement = map
-            .remove_if_token_matches("room-a", &participant_id, &replacement_token, None)
+            .remove_if_token_matches(&rid("room-a"), &participant_id, &replacement_token, None)
             .expect("replacement incarnation should remain independently addressable");
         replacement.timer.abort();
         assert!(!replacement.media_rate_state.limit_exceeded(&mutation, now));
 
         let mut stale = map
-            .remove_if_token_matches("room-a", &participant_id, &stale_token, None)
+            .remove_if_token_matches(&rid("room-a"), &participant_id, &stale_token, None)
             .expect("stale incarnation should remain independently addressable");
         stale.timer.abort();
         assert!(stale.media_rate_state.limit_exceeded(&mutation, now));
@@ -3744,7 +3710,7 @@ mod security_tests {
     #[test]
     fn admin_mutation_budget_covers_moderation_and_settings_messages() {
         assert!(is_admin_mutation(&ClientMessage::CloseCam {
-            target_participant_id: "target".to_string(),
+            target_participant_id: pid("target"),
         }));
         assert!(is_admin_mutation(&ClientMessage::SetTopic {
             topic: "topic".to_string(),
@@ -3766,7 +3732,7 @@ mod security_tests {
             password: None,
         }));
         assert!(is_admin_mutation(&ClientMessage::DenyFromLobby {
-            target_participant_id: "target".to_string(),
+            target_participant_id: pid("target"),
         }));
         assert!(!is_admin_mutation(&ClientMessage::RequestVoice));
         assert!(!is_admin_mutation(&ClientMessage::ChatMessage {
@@ -3804,17 +3770,17 @@ mod security_tests {
             let mut entry = grace_entry(token);
             entry.authenticated_subject = subject.map(str::to_owned);
             entry.authenticated_version = version;
-            assert!(map.insert("room".into(), token.into(), entry));
+            assert!(map.insert(rid("room"), pid(token), entry));
         }
         let removed = map.take_revoked("alice", 1);
         assert_eq!(removed.len(), 1);
-        assert_eq!(removed[0].1, "old");
+        assert_eq!(removed[0].1, pid("old"));
         for (token, subject) in [
             ("new", Some("alice")),
             ("other", Some("bob")),
             ("guest", None),
         ] {
-            map.remove_if_token_matches("room", token, token, subject)
+            map.remove_if_token_matches(&rid("room"), &pid(token), token, subject)
                 .expect("unaffected session retained")
                 .timer
                 .abort();
@@ -3832,7 +3798,7 @@ mod security_tests {
     #[test]
     fn reconnect_is_only_allowed_from_an_unbound_socket() {
         assert!(reconnect_attempt_allowed(None, false));
-        assert!(!reconnect_attempt_allowed(Some("room-a"), false));
+        assert!(!reconnect_attempt_allowed(Some(&rid("room-a")), false));
         assert!(!reconnect_attempt_allowed(None, true));
     }
 
@@ -3841,7 +3807,7 @@ mod security_tests {
         let token = Uuid::new_v4().to_string();
         let json = serde_json::to_value(ServerMessage::ReconnectResult {
             success: true,
-            participant_id: Uuid::new_v4().to_string(),
+            participant_id: ParticipantId::random(),
             reconnect_token: Some(token.clone().into()),
         })
         .unwrap();
@@ -3854,20 +3820,16 @@ mod security_tests {
     #[tokio::test]
     async fn wrong_reconnect_token_does_not_consume_or_extend_grace() {
         let map = GracePeriodMap::new();
-        let participant_id = Uuid::new_v4().to_string();
+        let participant_id = ParticipantId::random();
         let token = Uuid::new_v4().to_string();
-        map.insert(
-            "room-a".to_string(),
-            participant_id.clone(),
-            grace_entry(&token),
-        );
+        map.insert(rid("room-a"), participant_id, grace_entry(&token));
 
         assert!(
-            map.remove_if_token_matches("room-a", &participant_id, "wrong", None)
+            map.remove_if_token_matches(&rid("room-a"), &participant_id, "wrong", None)
                 .is_none()
         );
         let entry = map
-            .remove_if_token_matches("room-a", &participant_id, &token, None)
+            .remove_if_token_matches(&rid("room-a"), &participant_id, &token, None)
             .expect("valid token must still work after a failed attempt");
         entry.timer.abort();
     }
@@ -3875,25 +3837,17 @@ mod security_tests {
     #[tokio::test]
     async fn grace_entries_are_scoped_by_room() {
         let map = GracePeriodMap::new();
-        let participant_id = Uuid::new_v4().to_string();
+        let participant_id = ParticipantId::random();
         let token_a = Uuid::new_v4().to_string();
         let token_b = Uuid::new_v4().to_string();
-        map.insert(
-            "room-a".to_string(),
-            participant_id.clone(),
-            grace_entry(&token_a),
-        );
-        map.insert(
-            "room-b".to_string(),
-            participant_id.clone(),
-            grace_entry(&token_b),
-        );
+        map.insert(rid("room-a"), participant_id, grace_entry(&token_a));
+        map.insert(rid("room-b"), participant_id, grace_entry(&token_b));
 
         let first = map
-            .remove_if_token_matches("room-a", &participant_id, &token_a, None)
+            .remove_if_token_matches(&rid("room-a"), &participant_id, &token_a, None)
             .unwrap();
         let second = map
-            .remove_if_token_matches("room-b", &participant_id, &token_b, None)
+            .remove_if_token_matches(&rid("room-b"), &participant_id, &token_b, None)
             .unwrap();
         first.timer.abort();
         second.timer.abort();
@@ -3902,28 +3856,20 @@ mod security_tests {
     #[tokio::test]
     async fn grace_capacity_rejects_new_state_without_evicting_reconnectable_session() {
         let map = GracePeriodMap::with_capacity(1);
-        let first_id = Uuid::new_v4().to_string();
+        let first_id = ParticipantId::random();
         let first_token = Uuid::new_v4().to_string();
-        let rejected_id = Uuid::new_v4().to_string();
+        let rejected_id = ParticipantId::random();
         let rejected_token = Uuid::new_v4().to_string();
 
-        assert!(map.insert(
-            "room-a".to_string(),
-            first_id.clone(),
-            grace_entry(&first_token),
-        ));
-        assert!(!map.insert(
-            "room-b".to_string(),
-            rejected_id.clone(),
-            grace_entry(&rejected_token),
-        ));
+        assert!(map.insert(rid("room-a"), first_id, grace_entry(&first_token),));
+        assert!(!map.insert(rid("room-b"), rejected_id, grace_entry(&rejected_token),));
         assert!(
-            map.remove_if_token_matches("room-b", &rejected_id, &rejected_token, None)
+            map.remove_if_token_matches(&rid("room-b"), &rejected_id, &rejected_token, None)
                 .is_none()
         );
 
         let retained = map
-            .remove_if_token_matches("room-a", &first_id, &first_token, None)
+            .remove_if_token_matches(&rid("room-a"), &first_id, &first_token, None)
             .expect("capacity failure must not evict an existing grace session");
         retained.timer.abort();
     }
@@ -3931,25 +3877,21 @@ mod security_tests {
     #[tokio::test]
     async fn stale_disconnect_does_not_replace_same_uuid_grace_entry() {
         let map = GracePeriodMap::new();
-        let participant_id = Uuid::new_v4().to_string();
+        let participant_id = ParticipantId::random();
         let stale_token = Uuid::new_v4().to_string();
         let replacement_token = Uuid::new_v4().to_string();
+        map.insert(rid("room-a"), participant_id, grace_entry(&stale_token));
         map.insert(
-            "room-a".to_string(),
-            participant_id.clone(),
-            grace_entry(&stale_token),
-        );
-        map.insert(
-            "room-a".to_string(),
-            participant_id.clone(),
+            rid("room-a"),
+            participant_id,
             grace_entry(&replacement_token),
         );
 
         let stale = map
-            .remove_if_token_matches("room-a", &participant_id, &stale_token, None)
+            .remove_if_token_matches(&rid("room-a"), &participant_id, &stale_token, None)
             .expect("stale and replacement incarnations must coexist");
         let replacement = map
-            .remove_if_token_matches("room-a", &participant_id, &replacement_token, None)
+            .remove_if_token_matches(&rid("room-a"), &participant_id, &replacement_token, None)
             .expect("stale disconnect must not abort replacement grace");
         stale.timer.abort();
         replacement.timer.abort();
@@ -3958,18 +3900,23 @@ mod security_tests {
     #[tokio::test]
     async fn authenticated_grace_requires_same_refreshed_identity() {
         let map = GracePeriodMap::new();
-        let participant_id = Uuid::new_v4().to_string();
+        let participant_id = ParticipantId::random();
         let token = Uuid::new_v4().to_string();
         let mut entry = grace_entry(&token);
-        entry.authenticated_subject = Some(participant_id.clone());
-        map.insert("room-a".to_string(), participant_id.clone(), entry);
+        entry.authenticated_subject = Some(participant_id.to_string());
+        map.insert(rid("room-a"), participant_id, entry);
 
         assert!(
-            map.remove_if_token_matches("room-a", &participant_id, &token, None)
+            map.remove_if_token_matches(&rid("room-a"), &participant_id, &token, None)
                 .is_none()
         );
         let entry = map
-            .remove_if_token_matches("room-a", &participant_id, &token, Some(&participant_id))
+            .remove_if_token_matches(
+                &rid("room-a"),
+                &participant_id,
+                &token,
+                Some(&participant_id.to_string()),
+            )
             .unwrap();
         entry.timer.abort();
     }

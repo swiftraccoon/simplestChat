@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+use crate::ids::RoomId;
 use crate::signaling::protocol::ChatStyle;
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, PgPool};
@@ -7,7 +8,7 @@ use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct RoomSettings {
+pub struct RoomSettings {
     pub id: String,
     pub owner_id: Uuid,
     pub display_name: String,
@@ -74,7 +75,6 @@ pub(crate) struct CreateRoomRequest {
     pub topic: Option<String>,
 }
 
-pub(crate) const MAX_ROOM_ID_LEN: usize = 128;
 pub(crate) const MAX_DISPLAY_NAME_LEN: usize = 128;
 pub(crate) const MAX_TOPIC_LEN: usize = 512;
 pub(crate) const MIN_PASSWORD_LEN: usize = 8;
@@ -105,11 +105,7 @@ pub(crate) fn is_global_persisted_room_quota_error(error: &sqlx::Error) -> bool 
 }
 
 pub(crate) fn valid_room_id(room_id: &str) -> bool {
-    !room_id.is_empty()
-        && room_id.len() <= MAX_ROOM_ID_LEN
-        && room_id
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+    RoomId::new(room_id).is_ok()
 }
 
 pub(crate) fn valid_new_room_password(password: &str) -> bool {
@@ -164,7 +160,7 @@ pub(crate) fn validate_create_request(request: &CreateRoomRequest) -> Result<(),
 
 pub(crate) async fn load_room(
     pool: &PgPool,
-    room_id: &str,
+    room_id: &RoomId,
 ) -> Result<Option<(RoomSettings, Option<String>)>, sqlx::Error> {
     let row = sqlx::query_as::<_, RoomRow>(
         "SELECT id, owner_id, display_name, password_hash, require_registration,
@@ -406,7 +402,7 @@ pub(crate) fn apply_settings_update(
 )]
 pub(crate) async fn update_room_settings(
     pool: &PgPool,
-    room_id: &str,
+    room_id: &RoomId,
     moderated: Option<bool>,
     lobby_enabled: Option<bool>,
     guests_allowed: Option<bool>,

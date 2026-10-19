@@ -16,6 +16,8 @@ use axum::{
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+
+use crate::ids::{MessageId, ParticipantId, RoomId};
 use sqlx::{PgConnection, PgPool, types::Json as SqlJson};
 use uuid::Uuid;
 
@@ -30,20 +32,20 @@ const CLEANUP_BATCH: i64 = 1_000;
 pub(crate) struct HistoryQuery {
     pub before: Option<String>,
     pub after: Option<String>,
-    pub around: Option<String>,
+    pub around: Option<MessageId>,
     pub resume: Option<bool>,
     pub q: Option<String>,
     pub limit: Option<u32>,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct HistoryPage {
+pub struct HistoryPage {
     pub messages: Vec<ChatEntry>,
     pub next_cursor: Option<String>,
     pub newer_cursor: Option<String>,
-    pub first_unread_message_id: Option<String>,
-    pub read_message_id: Option<String>,
+    pub first_unread_message_id: Option<MessageId>,
+    pub read_message_id: Option<MessageId>,
     pub retention_days: i32,
 }
 
@@ -74,7 +76,7 @@ pub(crate) struct ReadRequest {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ReadResult {
-    pub read_message_id: String,
+    pub read_message_id: MessageId,
     /// Internal commit receipt; a repeated or older read has no visible change.
     #[serde(skip)]
     advanced: bool,
@@ -101,7 +103,7 @@ pub(crate) struct SetReactionRequest {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ReactionResult {
-    pub message_id: String,
+    pub message_id: MessageId,
     pub reactions: Vec<crate::signaling::protocol::ChatReaction>,
 }
 
@@ -203,13 +205,6 @@ impl HistoryQuery {
         {
             return Err("Choose one history position");
         }
-        if self
-            .around
-            .as_ref()
-            .is_some_and(|id| id.parse::<Uuid>().is_err())
-        {
-            return Err("Invalid message ID");
-        }
         if self.limit.is_some_and(|limit| !(1..=50).contains(&limit)) {
             return Err("History pages contain 1–50 messages");
         }
@@ -310,14 +305,9 @@ pub(crate) async fn persist_message(
     attachment_ids: &[Uuid],
 ) -> Result<ChatEntry, sqlx::Error> {
     let mut tx = pool.begin().await?;
-    if let Some(recipient) = message.recipient_id.as_deref() {
-        let sender = message
-            .participant_id
-            .parse()
-            .map_err(|_| invalid("Invalid sender"))?;
-        let recipient = recipient
-            .parse()
-            .map_err(|_| invalid("Invalid recipient"))?;
+    if let Some(recipient) = message.recipient_id {
+        let sender = message.participant_id.as_uuid();
+        let recipient = recipient.as_uuid();
         let (sender, recipient) = lock_private_accounts(&mut tx, sender, recipient).await?;
         if !sender_authenticated || !private_accounts_allow(&sender, &recipient) {
             return Err(invalid("Private message unavailable"));
@@ -335,12 +325,9 @@ pub(crate) async fn persist_message(
     .await?;
     tx.commit().await?;
     if saved.message_id == message.message_id
-        && let Some(recipient) = &saved.recipient_id
+        && let Some(recipient) = saved.recipient_id
     {
-        let recipient = recipient
-            .parse()
-            .map_err(|_| invalid("Invalid recipient"))?;
-        crate::push::enqueue(pool, recipient).await;
+        crate::push::enqueue(pool, recipient.as_uuid()).await;
     }
     Ok(saved)
 }
@@ -354,16 +341,8 @@ async fn insert_message(
     message: &ChatEntry,
     attachment_ids: &[Uuid],
 ) -> Result<ChatEntry, sqlx::Error> {
-    let sender: Uuid = message
-        .participant_id
-        .parse()
-        .map_err(|_| invalid("Invalid sender"))?;
-    let recipient = message
-        .recipient_id
-        .as_deref()
-        .map(str::parse::<Uuid>)
-        .transpose()
-        .map_err(|_| invalid("Invalid recipient"))?;
+    let sender: Uuid = message.participant_id.as_uuid();
+    let recipient = message.recipient_id.map(|id| id.as_uuid());
     let conversation = match (room, recipient) {
         (Some(room), None) => public_conversation(room),
         (None, Some(recipient)) if sender_authenticated => private_conversation(sender, recipient),
@@ -406,12 +385,7 @@ async fn insert_message(
             "SELECT body FROM chat_messages WHERE conversation=$1 AND id=$2 AND expires_at>now()",
         )
         .bind(&conversation)
-        .bind(
-            reply
-                .message_id
-                .parse::<Uuid>()
-                .map_err(|_| invalid("Invalid reply"))?,
-        )
+        .bind(reply.message_id.as_uuid())
         .fetch_optional(&mut *connection)
         .await?;
         if let Some(original) = original {
@@ -422,10 +396,7 @@ async fn insert_message(
             };
         }
     }
-    let id: Uuid = message
-        .message_id
-        .parse()
-        .map_err(|_| invalid("Invalid message ID"))?;
+    let id: Uuid = message.message_id.as_uuid();
     let at = message.sent_at;
     let expires = at + chrono::Duration::days(i64::from(retention_days));
     // The unique attempt key reconciles retries after an uncertain commit. Never
@@ -507,17 +478,11 @@ pub(crate) async fn page(
     } else {
         None
     };
-    let anchor = query
-        .around
-        .as_deref()
-        .map(str::parse::<Uuid>)
-        .transpose()
-        .map_err(|_| invalid("Invalid message ID"))?
-        .or_else(|| {
-            (query.resume == Some(true))
-                .then_some(first_unread)
-                .flatten()
-        });
+    let anchor = query.around.map(|id| id.as_uuid()).or_else(|| {
+        (query.resume == Some(true))
+            .then_some(first_unread)
+            .flatten()
+    });
     let mut rows: Vec<MessageRow> = if let Some(anchor) = anchor {
         let at:DateTime<Utc> = sqlx::query_scalar("SELECT sent_at FROM chat_messages WHERE conversation=$1 AND id=$2 AND expires_at>now()")
             .bind(conversation).bind(anchor).fetch_one(pool).await?;
@@ -585,8 +550,8 @@ pub(crate) async fn page(
             .collect(),
         next_cursor,
         newer_cursor,
-        first_unread_message_id: first_unread.map(|id| id.to_string()),
-        read_message_id: read.map(|(id, _)| id.to_string()),
+        first_unread_message_id: first_unread.map(MessageId::from),
+        read_message_id: read.map(|(id, _)| MessageId::from(id)),
         retention_days,
     })
 }
@@ -642,17 +607,17 @@ pub(crate) async fn mark_read(
     };
     transaction.commit().await?;
     Ok(ReadResult {
-        read_message_id: read_message_id.to_string(),
+        read_message_id: MessageId::from(read_message_id),
         advanced: result.is_some(),
     })
 }
 
 pub(crate) async fn save_reactions(
     pool: &PgPool,
-    id: &str,
+    id: &MessageId,
     reactions: &[crate::signaling::protocol::ChatReaction],
 ) -> Result<(), sqlx::Error> {
-    let id: Uuid = id.parse().map_err(|_| invalid("Invalid message ID"))?;
+    let id: Uuid = id.as_uuid();
     sqlx::query("UPDATE chat_messages SET body=jsonb_set(body,'{reactions}',$2) WHERE id=$1 AND expires_at>now() AND body->>'removedAt' IS NULL")
         .bind(id).bind(SqlJson(reactions)).execute(pool).await?;
     Ok(())
@@ -664,12 +629,12 @@ pub(crate) async fn save_reactions(
 pub(crate) async fn react_public(
     pool: &PgPool,
     room: &str,
-    id: &str,
-    participant: &str,
-    ignored: &[String],
+    id: &MessageId,
+    participant: &ParticipantId,
+    ignored: &[ParticipantId],
     emoji: &str,
 ) -> Result<Option<ChatEntry>, sqlx::Error> {
-    let id: Uuid = id.parse().map_err(|_| invalid("Invalid message ID"))?;
+    let id: Uuid = id.as_uuid();
     let mut tx = pool.begin().await?;
     sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1,29))")
         .bind(public_conversation(room))
@@ -681,7 +646,7 @@ pub(crate) async fn react_public(
     )
     .bind(room)
     .bind(id)
-    .bind(ignored)
+    .bind(ignored.iter().map(ToString::to_string).collect::<Vec<_>>())
     .fetch_optional(&mut *tx)
     .await?;
     let Some(SqlJson(mut message)) = saved else {
@@ -701,9 +666,9 @@ pub(crate) async fn react_public(
 pub(crate) async fn lookup_public(
     pool: &PgPool,
     room: &str,
-    id: &str,
+    id: &MessageId,
 ) -> Result<Option<(ChatEntry, bool)>, sqlx::Error> {
-    let id: Uuid = id.parse().map_err(|_| invalid("Invalid message ID"))?;
+    let id: Uuid = id.as_uuid();
     let row: Option<(SqlJson<ChatEntry>,bool)> = sqlx::query_as(
         "SELECT body,sender_account IS NOT NULL FROM chat_messages WHERE room_id=$1 AND id=$2 AND expires_at>now()")
         .bind(room).bind(id).fetch_optional(pool).await?;
@@ -714,10 +679,10 @@ pub(crate) async fn lookup_public(
 pub(crate) async fn remove_public(
     connection: &mut PgConnection,
     room: &str,
-    id: &str,
+    id: &MessageId,
     removed_at: DateTime<Utc>,
 ) -> Result<Option<(ChatEntry, bool)>, sqlx::Error> {
-    let id: Uuid = id.parse().map_err(|_| invalid("Invalid message ID"))?;
+    let id: Uuid = id.as_uuid();
     sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1,29))")
         .bind(public_conversation(room))
         .execute(&mut *connection)
@@ -799,8 +764,8 @@ pub(crate) async fn edit_saved(
     request: &EditRequest,
 ) -> Result<ChatEntry, sqlx::Error> {
     let mut tx = pool.begin().await?;
-    let conversation = if let Some(peer) = &original.recipient_id {
-        let peer = peer.parse().map_err(|_| invalid("Invalid recipient"))?;
+    let conversation = if let Some(peer) = original.recipient_id {
+        let peer = peer.as_uuid();
         let (sender, recipient) = lock_private_accounts(&mut tx, actor, peer).await?;
         if guest_session.is_some() || !private_accounts_allow(&sender, &recipient) {
             return Err(invalid("Private message unavailable"));
@@ -809,10 +774,7 @@ pub(crate) async fn edit_saved(
     } else {
         public_conversation(room.ok_or_else(|| invalid("Room unavailable"))?)
     };
-    let message = original
-        .message_id
-        .parse()
-        .map_err(|_| invalid("Invalid message ID"))?;
+    let message = original.message_id.as_uuid();
     let edited = edit_in_transaction(
         &mut tx,
         &conversation,
@@ -914,7 +876,7 @@ async fn set_private_reaction_in_transaction(
     connection: &mut PgConnection,
     conversation: &str,
     message: Uuid,
-    actor: &str,
+    actor: &ParticipantId,
     request: &SetReactionRequest,
 ) -> Result<ChatEntry, sqlx::Error> {
     sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1,29))")
@@ -929,12 +891,7 @@ async fn set_private_reaction_in_transaction(
         super::social::set_reaction(&message.reactions, actor, &request.emoji, request.present)
             .map_err(invalid)?;
     sqlx::query("UPDATE chat_messages SET body=jsonb_set(body,'{reactions}',$2) WHERE id=$1")
-        .bind(
-            message
-                .message_id
-                .parse::<Uuid>()
-                .map_err(|_| invalid("Invalid message ID"))?,
-        )
+        .bind(message.message_id.as_uuid())
         .bind(SqlJson(&message.reactions))
         .execute(&mut *connection)
         .await?;
@@ -1008,7 +965,7 @@ async fn save_private_reaction(
         &mut tx,
         &conversation,
         message,
-        &own.to_string(),
+        &ParticipantId::from(own),
         &request,
     )
     .await
@@ -1036,10 +993,10 @@ pub(crate) async fn pinned_messages(
 pub(crate) async fn set_pin(
     pool: &PgPool,
     room: &str,
-    message: &str,
+    message: &MessageId,
     pinned: bool,
 ) -> Result<(), sqlx::Error> {
-    let message: Uuid = message.parse().map_err(|_| invalid("Invalid message ID"))?;
+    let message: Uuid = message.as_uuid();
     let mut tx = pool.begin().await?;
     sqlx::query("SELECT id FROM rooms WHERE id=$1 FOR UPDATE")
         .bind(room)
@@ -1335,7 +1292,12 @@ pub(super) async fn save_private_message(
             Some(
                 server
                     .room_manager()
-                    .private_creation_context(id, own, peer)
+                    .private_creation_context(
+                        &RoomId::new(id.as_str())
+                            .map_err(|_| AuthError::InvalidInput("Invalid room"))?,
+                        own,
+                        peer,
+                    )
                     .await?,
             )
         }
@@ -1382,16 +1344,8 @@ pub(super) async fn save_private_message(
         .bind(&conversation).bind(own).bind(&request.client_message_id).fetch_optional(&mut *tx).await.map_err(routes::database_error)?;
     if let Some(existing) = existing {
         if (existing.0.edited_at.is_none() && existing.0.content != request.content)
-            || existing
-                .0
-                .reply_to
-                .as_ref()
-                .map(|reply| reply.message_id.as_str())
-                != request
-                    .reply_to
-                    .as_ref()
-                    .map(|id| id.to_string())
-                    .as_deref()
+            || existing.0.reply_to.as_ref().map(|reply| reply.message_id)
+                != request.reply_to.map(MessageId::from)
             || existing
                 .0
                 .attachments
@@ -1418,7 +1372,7 @@ pub(super) async fn save_private_message(
             "SELECT body FROM chat_messages WHERE conversation=$1 AND id=$2 AND expires_at>now() AND body->>'removedAt' IS NULL",
         ).bind(&conversation).bind(id).fetch_one(&mut *tx).await.map_err(edit_error)?;
         Some(crate::signaling::protocol::ChatReplyRef {
-            message_id: id.to_string(),
+            message_id: MessageId::from(id),
             participant_id: original.0.participant_id,
             participant_name: original.0.participant_name,
             excerpt: quote_excerpt(&original.0.content),
@@ -1431,11 +1385,11 @@ pub(super) async fn save_private_message(
     )
     .unwrap_or_default();
     let message = ChatEntry {
-        message_id: Uuid::new_v4().to_string(),
+        message_id: MessageId::random(),
         client_message_id: request.client_message_id,
-        participant_id: own.to_string(),
+        participant_id: ParticipantId::from(own),
         participant_name: sender.display_name.clone(),
-        recipient_id: Some(peer.to_string()),
+        recipient_id: Some(ParticipantId::from(peer)),
         account_conversation: Some(true),
         recipient_name: Some(recipient.display_name.clone()),
         content: request.content,
@@ -1470,7 +1424,7 @@ impl super::RoomManager {
     /// while the caller subsequently acquires users, session and message locks.
     async fn private_creation_context(
         &self,
-        id: &str,
+        id: &RoomId,
         own: Uuid,
         peer: Uuid,
     ) -> Result<tokio::sync::OwnedMutexGuard<()>, AuthError> {
@@ -1496,8 +1450,8 @@ impl super::RoomManager {
         }
         if !super::social::can_start_account_conversation(
             &state,
-            &own.to_string(),
-            &peer.to_string(),
+            &ParticipantId::from(own),
+            &ParticipantId::from(peer),
         ) {
             return Err(unavailable());
         }
@@ -1509,7 +1463,7 @@ impl super::RoomManager {
     /// as well. A busy/disconnected socket reconciles from its durable inbox.
     pub(crate) fn deliver_inbox_message(&self, message: &ChatEntry) {
         self.account_updates().private_message(message);
-        let Some(recipient) = message.recipient_id.as_deref() else {
+        let Some(recipient) = message.recipient_id else {
             return;
         };
         let Ok(event) = serde_json::to_string(
@@ -1539,11 +1493,11 @@ impl super::RoomManager {
                     && (person.id == recipient || person.id == message.participant_id)
             }) {
                 let peer = if participant.id == recipient {
-                    message.participant_id.as_str()
+                    message.participant_id
                 } else {
                     recipient
                 };
-                if participant.social.accepts_inbox_from(peer) {
+                if participant.social.accepts_inbox_from(&peer) {
                     let _ = super::try_send_essential(
                         &self.metrics,
                         &participant.sender,
@@ -1586,12 +1540,13 @@ pub(crate) fn spawn_retention(pool: PgPool) -> tokio::task::JoinHandle<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ids::fixtures::{mid, rid};
 
     #[test]
     fn read_commit_receipts_keep_the_existing_wire_contract() {
         for advanced in [false, true] {
             let result = ReadResult {
-                read_message_id: "00000000-0000-4000-8000-000000000005".into(),
+                read_message_id: mid("00000000-0000-4000-8000-000000000005"),
                 advanced,
             };
             assert_eq!(
@@ -1672,9 +1627,9 @@ mod tests {
     fn entry(content: &str) -> ChatEntry {
         ChatEntry {
             attachments: Vec::new(),
-            message_id: Uuid::new_v4().to_string(),
+            message_id: MessageId::random(),
             client_message_id: Uuid::new_v4().to_string(),
-            participant_id: Uuid::new_v4().to_string(),
+            participant_id: ParticipantId::random(),
             participant_name: "Author".into(),
             recipient_id: None,
             account_conversation: None,
@@ -1693,7 +1648,7 @@ mod tests {
     #[test]
     fn message_edits_are_revision_checked_idempotent_and_removal_is_terminal() {
         let mut message = entry("Original");
-        let original_id = message.message_id.clone();
+        let original_id = message.message_id;
         let request = EditRequest {
             content: "Corrected".into(),
             expected_revision: 0,
@@ -1754,16 +1709,12 @@ mod tests {
     fn history_positions_are_exclusive_and_message_ids_validated() {
         for query in [
             HistoryQuery {
-                around: Some("not-an-id".into()),
-                ..Default::default()
-            },
-            HistoryQuery {
-                around: Some(Uuid::new_v4().to_string()),
+                around: Some(MessageId::random()),
                 resume: Some(true),
                 ..Default::default()
             },
             HistoryQuery {
-                around: Some(Uuid::new_v4().to_string()),
+                around: Some(MessageId::random()),
                 q: Some("query".into()),
                 ..Default::default()
             },
@@ -1795,14 +1746,14 @@ mod tests {
             .unwrap();
         }
         let mut original = entry("Private original");
-        original.participant_id = author.to_string();
-        original.recipient_id = Some(peer.to_string());
+        original.participant_id = ParticipantId::from(author);
+        original.recipient_id = Some(ParticipantId::from(peer));
         original.recipient_name = Some("Peer".into());
         let original = persist_message(&pool, None, author, true, 90, &original, &[])
             .await
             .unwrap();
         assert_eq!(original.account_conversation, Some(true));
-        let id = original.message_id.parse().unwrap();
+        let id = original.message_id.as_uuid();
         let conversation = private_conversation(author, peer);
         for _ in 0..2 {
             let mut tx = pool.begin().await.unwrap();
@@ -1810,7 +1761,7 @@ mod tests {
                 &mut tx,
                 &conversation,
                 id,
-                &author.to_string(),
+                &ParticipantId::from(author),
                 &SetReactionRequest {
                     emoji: "👍".into(),
                     present: true,
@@ -1821,7 +1772,7 @@ mod tests {
             tx.commit().await.unwrap();
             assert_eq!(
                 changed.reactions[0].participant_ids,
-                vec![author.to_string()]
+                vec![ParticipantId::from(author)]
             );
         }
         let mut tx = pool.begin().await.unwrap();
@@ -1829,7 +1780,7 @@ mod tests {
             &mut tx,
             &conversation,
             id,
-            &peer.to_string(),
+            &ParticipantId::from(peer),
             &SetReactionRequest {
                 emoji: "👍".into(),
                 present: true,
@@ -1845,7 +1796,7 @@ mod tests {
                 &mut tx,
                 &conversation,
                 id,
-                &author.to_string(),
+                &ParticipantId::from(author),
                 &SetReactionRequest {
                     emoji: "👍".into(),
                     present: false,
@@ -1854,7 +1805,10 @@ mod tests {
             .await
             .unwrap();
             tx.commit().await.unwrap();
-            assert_eq!(changed.reactions[0].participant_ids, vec![peer.to_string()]);
+            assert_eq!(
+                changed.reactions[0].participant_ids,
+                vec![ParticipantId::from(peer)]
+            );
         }
         let mut tx = pool.begin().await.unwrap();
         assert!(
@@ -1862,7 +1816,7 @@ mod tests {
                 &mut tx,
                 &private_conversation(author, Uuid::new_v4()),
                 id,
-                &author.to_string(),
+                &ParticipantId::from(author),
                 &SetReactionRequest {
                     emoji: "👍".into(),
                     present: true
@@ -1889,7 +1843,10 @@ mod tests {
         )
         .await
         .unwrap();
-        assert_eq!(edited.reactions[0].participant_ids, vec![peer.to_string()]);
+        assert_eq!(
+            edited.reactions[0].participant_ids,
+            vec![ParticipantId::from(peer)]
+        );
         sqlx::query("UPDATE chat_messages SET body=body-'accountConversation' WHERE id=$1")
             .bind(id)
             .execute(&pool)
@@ -1926,7 +1883,7 @@ mod tests {
                 &mut tx,
                 &conversation,
                 id,
-                &author.to_string(),
+                &ParticipantId::from(author),
                 &SetReactionRequest {
                     emoji: "👍".into(),
                     present: true
@@ -1958,7 +1915,7 @@ mod tests {
         .execute(&pool)
         .await
         .unwrap();
-        let room = format!("reaction-{}", Uuid::new_v4());
+        let room = rid(&format!("reaction-{}", Uuid::new_v4()));
         sqlx::query(
             "INSERT INTO rooms(id,owner_id,display_name,history_retention_days) VALUES($1,$2,$1,7)",
         )
@@ -1968,19 +1925,41 @@ mod tests {
         .await
         .unwrap();
         let mut original = entry("Original retained question");
-        original.participant_id = author.to_string();
-        persist_message(&pool, Some(&room), Uuid::new_v4(), true, 7, &original, &[])
-            .await
-            .unwrap();
-        let first = Uuid::new_v4().to_string();
-        let second = Uuid::new_v4().to_string();
+        original.participant_id = ParticipantId::from(author);
+        persist_message(
+            &pool,
+            Some(room.as_str()),
+            Uuid::new_v4(),
+            true,
+            7,
+            &original,
+            &[],
+        )
+        .await
+        .unwrap();
+        let first = ParticipantId::random();
+        let second = ParticipantId::random();
         let (a, b) = tokio::join!(
-            react_public(&pool, &room, &original.message_id, &first, &[], "👍"),
-            react_public(&pool, &room, &original.message_id, &second, &[], "👍"),
+            react_public(
+                &pool,
+                room.as_str(),
+                &original.message_id,
+                &first,
+                &[],
+                "👍"
+            ),
+            react_public(
+                &pool,
+                room.as_str(),
+                &original.message_id,
+                &second,
+                &[],
+                "👍"
+            ),
         );
         assert!(a.unwrap().is_some());
         assert!(b.unwrap().is_some());
-        let (saved, _) = lookup_public(&pool, &room, &original.message_id)
+        let (saved, _) = lookup_public(&pool, room.as_str(), &original.message_id)
             .await
             .unwrap()
             .unwrap();
@@ -1991,7 +1970,7 @@ mod tests {
         );
         let corrected = edit_saved(
             &pool,
-            Some(&room),
+            Some(room.as_str()),
             author,
             None,
             &saved,
@@ -2002,10 +1981,17 @@ mod tests {
         )
         .await
         .unwrap();
-        let toggled = react_public(&pool, &room, &original.message_id, &first, &[], "👍")
-            .await
-            .unwrap()
-            .unwrap();
+        let toggled = react_public(
+            &pool,
+            room.as_str(),
+            &original.message_id,
+            &first,
+            &[],
+            "👍",
+        )
+        .await
+        .unwrap()
+        .unwrap();
         assert_eq!(toggled.content, corrected.content);
         assert_eq!(toggled.revision, corrected.revision);
         assert_eq!(toggled.reactions[0].participant_ids, vec![second]);
@@ -2025,10 +2011,10 @@ mod tests {
         assert!(
             react_public(
                 &pool,
-                &room,
+                room.as_str(),
                 &original.message_id,
                 &first,
-                &[author.to_string()],
+                &[ParticipantId::from(author)],
                 "👍"
             )
             .await
@@ -2036,29 +2022,51 @@ mod tests {
             .is_none()
         );
         assert!(
-            react_public(&pool, &room, &original.message_id, &first, &[], "🍕")
-                .await
-                .is_err()
+            react_public(
+                &pool,
+                room.as_str(),
+                &original.message_id,
+                &first,
+                &[],
+                "🍕"
+            )
+            .await
+            .is_err()
         );
         let mut tx = pool.begin().await.unwrap();
-        remove_public(&mut tx, &room, &original.message_id, Utc::now())
+        remove_public(&mut tx, room.as_str(), &original.message_id, Utc::now())
             .await
             .unwrap();
         tx.commit().await.unwrap();
         assert!(
-            react_public(&pool, &room, &original.message_id, &first, &[], "👍")
-                .await
-                .unwrap()
-                .is_none()
+            react_public(
+                &pool,
+                room.as_str(),
+                &original.message_id,
+                &first,
+                &[],
+                "👍"
+            )
+            .await
+            .unwrap()
+            .is_none()
         );
         let mut expired = entry("Expired question");
-        expired.participant_id = author.to_string();
+        expired.participant_id = ParticipantId::from(author);
         expired.sent_at = Utc::now() - chrono::Duration::days(8);
-        persist_message(&pool, Some(&room), Uuid::new_v4(), true, 7, &expired, &[])
-            .await
-            .unwrap();
+        persist_message(
+            &pool,
+            Some(room.as_str()),
+            Uuid::new_v4(),
+            true,
+            7,
+            &expired,
+            &[],
+        )
+        .await
+        .unwrap();
         assert!(
-            react_public(&pool, &room, &expired.message_id, &first, &[], "👍")
+            react_public(&pool, room.as_str(), &expired.message_id, &first, &[], "👍")
                 .await
                 .unwrap()
                 .is_none()
@@ -2093,7 +2101,7 @@ mod tests {
             .await
             .unwrap();
         }
-        let room = format!("updates-{}", Uuid::new_v4());
+        let room = rid(&format!("updates-{}", Uuid::new_v4()));
         sqlx::query(
             "INSERT INTO rooms(id,owner_id,display_name,history_retention_days) VALUES($1,$2,$1,7)",
         )
@@ -2106,28 +2114,28 @@ mod tests {
         let mut messages = vec![];
         for n in 0..6 {
             let mut message = entry(&format!("Message {n}"));
-            message.participant_id = author.to_string();
+            message.participant_id = ParticipantId::from(author);
             message.sent_at = Utc::now() - chrono::Duration::seconds(100 - n);
             if n == 1 {
                 let first: &ChatEntry = &messages[0];
                 message.reply_to = Some(crate::signaling::protocol::ChatReplyRef {
-                    message_id: first.message_id.clone(),
-                    participant_id: author.to_string(),
+                    message_id: first.message_id,
+                    participant_id: ParticipantId::from(author),
                     participant_name: "Author".into(),
                     excerpt: "Message 0".into(),
                 });
             }
-            persist_message(&pool, Some(&room), session, true, 7, &message, &[])
+            persist_message(&pool, Some(room.as_str()), session, true, 7, &message, &[])
                 .await
                 .unwrap();
             messages.push(message);
         }
-        let conversation = public_conversation(&room);
+        let conversation = public_conversation(room.as_str());
         mark_read(
             &pool,
             &conversation,
             reader,
-            messages[1].message_id.parse().unwrap(),
+            messages[1].message_id.as_uuid(),
         )
         .await
         .unwrap();
@@ -2145,18 +2153,18 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(
-            resumed.first_unread_message_id.as_deref(),
-            Some(messages[2].message_id.as_str())
+            resumed.first_unread_message_id,
+            Some(messages[2].message_id)
         );
         assert_eq!(
             resumed
                 .messages
                 .iter()
-                .map(|m| m.message_id.as_str())
+                .map(|m| m.message_id)
                 .collect::<Vec<_>>(),
             messages[..4]
                 .iter()
-                .map(|m| m.message_id.as_str())
+                .map(|m| m.message_id)
                 .collect::<Vec<_>>()
         );
         let newer = page(
@@ -2181,7 +2189,7 @@ mod tests {
                 Some(reader),
                 90,
                 &HistoryQuery {
-                    around: Some(messages[0].message_id.clone()),
+                    around: Some(messages[0].message_id),
                     ..Default::default()
                 }
             )
@@ -2193,19 +2201,40 @@ mod tests {
             expected_revision: 0,
         };
         assert!(
-            edit_saved(&pool, Some(&room), reader, None, &messages[0], &request)
-                .await
-                .is_err()
-        );
-        let edited = edit_saved(&pool, Some(&room), author, None, &messages[0], &request)
+            edit_saved(
+                &pool,
+                Some(room.as_str()),
+                reader,
+                None,
+                &messages[0],
+                &request
+            )
             .await
-            .unwrap();
+            .is_err()
+        );
+        let edited = edit_saved(
+            &pool,
+            Some(room.as_str()),
+            author,
+            None,
+            &messages[0],
+            &request,
+        )
+        .await
+        .unwrap();
         assert_eq!(edited.revision, 1);
         assert_eq!(
-            edit_saved(&pool, Some(&room), author, None, &messages[0], &request)
-                .await
-                .unwrap()
-                .revision,
+            edit_saved(
+                &pool,
+                Some(room.as_str()),
+                author,
+                None,
+                &messages[0],
+                &request
+            )
+            .await
+            .unwrap()
+            .revision,
             1
         );
         let stored = page(&pool, &conversation, None, 7, &HistoryQuery::default())
@@ -2217,36 +2246,50 @@ mod tests {
         );
         // A retry of the original send returns its edited receipt, without redelivery or rollback.
         assert_eq!(
-            persist_message(&pool, Some(&room), session, true, 7, &messages[0], &[])
-                .await
-                .unwrap()
-                .content,
+            persist_message(
+                &pool,
+                Some(room.as_str()),
+                session,
+                true,
+                7,
+                &messages[0],
+                &[]
+            )
+            .await
+            .unwrap()
+            .content,
             "Corrected original"
         );
         for message in messages.iter().take(3) {
-            set_pin(&pool, &room, &message.message_id, true)
+            set_pin(&pool, room.as_str(), &message.message_id, true)
                 .await
                 .unwrap();
         }
-        set_pin(&pool, &room, &messages[0].message_id, true)
+        set_pin(&pool, room.as_str(), &messages[0].message_id, true)
             .await
             .unwrap();
-        assert_eq!(pinned_messages(&pool, &room).await.unwrap().len(), 3);
+        assert_eq!(
+            pinned_messages(&pool, room.as_str()).await.unwrap().len(),
+            3
+        );
         assert!(
-            set_pin(&pool, &room, &messages[3].message_id, true)
+            set_pin(&pool, room.as_str(), &messages[3].message_id, true)
                 .await
                 .is_err()
         );
         let mut tx = pool.begin().await.unwrap();
-        remove_public(&mut tx, &room, &messages[0].message_id, Utc::now())
+        remove_public(&mut tx, room.as_str(), &messages[0].message_id, Utc::now())
             .await
             .unwrap();
         tx.commit().await.unwrap();
-        assert_eq!(pinned_messages(&pool, &room).await.unwrap().len(), 2);
+        assert_eq!(
+            pinned_messages(&pool, room.as_str()).await.unwrap().len(),
+            2
+        );
         assert!(
             edit_saved(
                 &pool,
-                Some(&room),
+                Some(room.as_str()),
                 author,
                 None,
                 &edited,
@@ -2259,7 +2302,7 @@ mod tests {
             .is_err()
         );
         assert!(
-            set_pin(&pool, &room, &messages[0].message_id, true)
+            set_pin(&pool, room.as_str(), &messages[0].message_id, true)
                 .await
                 .is_err()
         );
@@ -2272,13 +2315,21 @@ mod tests {
         );
         // An expired pin disappears on reads even before the retention sweep runs.
         sqlx::query("UPDATE chat_messages SET expires_at=now()-interval '1 second' WHERE id=$1")
-            .bind(messages[2].message_id.parse::<Uuid>().unwrap())
+            .bind(messages[2].message_id.as_uuid())
             .execute(&pool)
             .await
             .unwrap();
-        assert_eq!(pinned_messages(&pool, &room).await.unwrap().len(), 1);
-        set_retention(&pool, &room, 0).await.unwrap();
-        assert!(pinned_messages(&pool, &room).await.unwrap().is_empty());
+        assert_eq!(
+            pinned_messages(&pool, room.as_str()).await.unwrap().len(),
+            1
+        );
+        set_retention(&pool, room.as_str(), 0).await.unwrap();
+        assert!(
+            pinned_messages(&pool, room.as_str())
+                .await
+                .unwrap()
+                .is_empty()
+        );
         sqlx::query("DELETE FROM rooms WHERE id=$1")
             .bind(&room)
             .execute(&pool)
@@ -2309,7 +2360,7 @@ mod tests {
                 .await
                 .unwrap();
         }
-        let room = format!("history-{}", Uuid::new_v4());
+        let room = rid(&format!("history-{}", Uuid::new_v4()));
         sqlx::query("INSERT INTO rooms(id,owner_id,display_name) VALUES($1,$2,'History room')")
             .bind(&room)
             .bind(alice)
@@ -2323,16 +2374,16 @@ mod tests {
                 .await
                 .unwrap();
         assert_eq!(retention, 0, "existing/new rooms begin ephemeral");
-        set_retention(&pool, &room, 7).await.unwrap();
+        set_retention(&pool, room.as_str(), 7).await.unwrap();
         let session = Uuid::new_v4();
         let base = Utc::now() - chrono::Duration::seconds(100);
         let make = |n: i64, recipient: Option<Uuid>| ChatEntry {
             attachments: Vec::new(),
-            message_id: Uuid::new_v4().to_string(),
+            message_id: MessageId::random(),
             client_message_id: format!("attempt-{n}"),
-            participant_id: alice.to_string(),
+            participant_id: ParticipantId::from(alice),
             participant_name: "Alice".into(),
-            recipient_id: recipient.map(|id| id.to_string()),
+            recipient_id: recipient.map(ParticipantId::from),
             account_conversation: None,
             recipient_name: recipient.map(|_| "Bob".into()),
             content: format!("Message needle%_{n}"),
@@ -2348,11 +2399,11 @@ mod tests {
         let second = make(2, None);
         let third = make(3, None);
         for message in [&first, &second, &third] {
-            persist_message(&pool, Some(&room), session, true, 7, message, &[])
+            persist_message(&pool, Some(room.as_str()), session, true, 7, message, &[])
                 .await
                 .unwrap();
         }
-        let public = public_conversation(&room);
+        let public = public_conversation(room.as_str());
         let page_one = page(
             &pool,
             &public,
@@ -2369,9 +2420,9 @@ mod tests {
             page_one
                 .messages
                 .iter()
-                .map(|m| m.message_id.as_str())
+                .map(|m| m.message_id)
                 .collect::<Vec<_>>(),
-            vec![second.message_id.as_str(), third.message_id.as_str()]
+            vec![second.message_id, third.message_id]
         );
         let page_two = page(
             &pool,
@@ -2406,15 +2457,15 @@ mod tests {
             found.messages[0].message_id, second.message_id,
             "search treats SQL wildcard characters literally"
         );
-        let advance = mark_read(&pool, &public, alice, third.message_id.parse().unwrap())
+        let advance = mark_read(&pool, &public, alice, third.message_id.as_uuid())
             .await
             .unwrap();
         assert!(advance.advanced);
-        let repeat = mark_read(&pool, &public, alice, third.message_id.parse().unwrap())
+        let repeat = mark_read(&pool, &public, alice, third.message_id.as_uuid())
             .await
             .unwrap();
         assert!(!repeat.advanced);
-        let read = mark_read(&pool, &public, alice, first.message_id.parse().unwrap())
+        let read = mark_read(&pool, &public, alice, first.message_id.as_uuid())
             .await
             .unwrap();
         assert!(!read.advanced);
@@ -2523,7 +2574,7 @@ mod tests {
                 &pool,
                 &private_conversation(alice, stranger),
                 stranger,
-                private.message_id.parse().unwrap()
+                private.message_id.as_uuid()
             )
             .await
             .is_err()
@@ -2539,7 +2590,7 @@ mod tests {
             "both accounts discover the conversation after reconnect/restart"
         );
         sqlx::query("UPDATE chat_messages SET expires_at=now()-interval '1 second' WHERE id=$1")
-            .bind(first.message_id.parse::<Uuid>().unwrap())
+            .bind(first.message_id.as_uuid())
             .execute(&pool)
             .await
             .unwrap();
@@ -2552,7 +2603,7 @@ mod tests {
             2,
             "expired content is hidden before physical cleanup"
         );
-        set_retention(&pool, &room, 0).await.unwrap();
+        set_retention(&pool, room.as_str(), 0).await.unwrap();
         let remaining: i64 =
             sqlx::query_scalar("SELECT count(*) FROM chat_messages WHERE room_id=$1")
                 .bind(&room)

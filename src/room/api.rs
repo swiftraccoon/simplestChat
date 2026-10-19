@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 use crate::auth::{account, types::AuthError};
+use crate::ids::RoomId;
 use crate::room::DeleteRoomResult;
 use crate::room::community::RoomIdentityUpdate;
 use crate::room::settings::{self, CreateRoomRequest, RoomSettings};
@@ -33,7 +34,7 @@ impl IntoResponse for RoomApiError {
 
 #[derive(Serialize)]
 pub(crate) struct RoomListItem {
-    pub id: String,
+    pub id: RoomId,
     pub display_name: String,
     pub topic: Option<String>,
     /// `null` when the room's state lock was busy at listing time.
@@ -58,13 +59,13 @@ pub(crate) struct RoomListItem {
 /// image, and the image endpoint answers only the exact current one, so a
 /// listing never carries image bytes and an unlisted room's image is reachable
 /// only through a listing the caller could see.
-pub(crate) fn room_image_url(room_id: &str, version: &str) -> String {
+pub(crate) fn room_image_url(room_id: &RoomId, version: &str) -> String {
     format!("/api/rooms/{room_id}/image?v={version}")
 }
 
 /// A listing row; the seventh column is the image version, not the image.
 pub(crate) type RoomListRow = (
-    String,
+    RoomId,
     String,
     Option<String>,
     bool,
@@ -260,12 +261,12 @@ pub(crate) fn page_window(live_len: usize, limit: i64, offset: i64) -> PageWindo
 /// keep the indexed `created_at` order and exclude every live id.
 pub(crate) async fn fetch_directory_page(
     pool: &sqlx::PgPool,
-    live: &[(String, Option<usize>)],
+    live: &[(RoomId, Option<usize>)],
     pattern: Option<&str>,
     limit: i64,
     offset: i64,
 ) -> Result<Vec<RoomListRow>, sqlx::Error> {
-    let live_ids: Vec<String> = live.iter().map(|(id, _)| id.clone()).collect();
+    let live_ids: Vec<String> = live.iter().map(|(id, _)| id.to_string()).collect();
     let mut live_rows = if live_ids.is_empty() {
         Vec::new()
     } else if let Some(pattern) = pattern {
@@ -439,11 +440,11 @@ pub(crate) async fn delete_room(
     headers: HeaderMap,
     Path(room_id): Path<String>,
 ) -> Result<StatusCode, RoomApiError> {
-    if !settings::valid_room_id(&room_id) {
+    let Ok(room_id) = RoomId::new(room_id) else {
         return Err((StatusCode::NOT_FOUND, "Room not found")
             .into_response()
             .into());
-    }
+    };
     if server.db_pool().is_none() {
         return Err(AuthError::NotConfigured.into_response().into());
     }
@@ -461,7 +462,7 @@ pub(crate) async fn delete_room(
         .await
         .map_err(|error| {
             crate::db::record_error(&error);
-            warn!(room_id, %error, "Failed to delete room");
+            warn!(%room_id, %error, "Failed to delete room");
             AuthError::DatabaseError("room deletion failed".to_string()).into_response()
         })?;
 
@@ -546,8 +547,10 @@ pub(crate) async fn room_image(
     Query(params): Query<RoomImageParams>,
 ) -> Result<Response, RoomApiError> {
     let version = params.v.as_deref().unwrap_or_default();
-    if !settings::valid_room_id(&id)
-        || version.len() != 16
+    let Ok(id) = RoomId::new(id) else {
+        return Err(not_found());
+    };
+    if version.len() != 16
         || !version
             .bytes()
             .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
@@ -598,11 +601,11 @@ pub(crate) async fn update_room_identity(
     Path(id): Path<String>,
     Json(request): Json<RoomIdentityUpdate>,
 ) -> Result<Json<RoomListItem>, RoomApiError> {
-    if !settings::valid_room_id(&id) {
+    let Ok(id) = RoomId::new(id) else {
         return Err((StatusCode::NOT_FOUND, "Room not found")
             .into_response()
             .into());
-    }
+    };
     let _permit = acquire_room_api_request(&server)?;
     let claims = account::authenticated_claims(&server, &headers)
         .await
@@ -637,12 +640,13 @@ pub(crate) async fn update_room_identity(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ids::fixtures::rid;
 
     #[test]
     fn room_image_urls_and_stored_data_urls_are_validated() {
         let version = "0123456789abcdef";
         assert_eq!(
-            room_image_url("lobby", version),
+            room_image_url(&rid("lobby"), version),
             "/api/rooms/lobby/image?v=0123456789abcdef"
         );
         let image = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=";
@@ -793,11 +797,11 @@ mod tests {
         // Live: room 3 is busiest, room 1 next, room 0's count is unknown; the
         // secret room and an ad-hoc room never list.
         let live = vec![
-            (ids[1].clone(), Some(2)),
-            (ids[3].clone(), Some(5)),
-            (ids[0].clone(), None),
-            (secret.clone(), Some(9)),
-            ("ad-hoc-room-not-in-the-database".to_string(), Some(4)),
+            (rid(&ids[1]), Some(2)),
+            (rid(&ids[3]), Some(5)),
+            (rid(&ids[0]), None),
+            (rid(&secret), Some(9)),
+            (rid("ad-hoc-room-not-in-the-database"), Some(4)),
         ];
         let pattern = format!("%{prefix}%");
         let page = |limit: i64, offset: i64| {
@@ -809,7 +813,7 @@ mod tests {
                     .await
                     .unwrap()
                     .into_iter()
-                    .map(|row| row.0)
+                    .map(|row| row.0.to_string())
                     .collect::<Vec<String>>()
             }
         };
@@ -827,7 +831,7 @@ mod tests {
             .await
             .unwrap()
             .into_iter()
-            .map(|row| row.0)
+            .map(|row| row.0.to_string())
             .collect::<Vec<String>>();
         // The stored version is a digest of the room id and its image: it
         // changes with the image, differs between rooms sharing a picture, and
@@ -854,7 +858,7 @@ mod tests {
                 .await
                 .unwrap()
                 .into_iter()
-                .map(|row| (row.0, row.6))
+                .map(|row| (row.0.to_string(), row.6))
                 .collect();
         sqlx::query(
             "UPDATE rooms SET image_url = $2, image_version = room_image_version(id, $2) WHERE id = $1",

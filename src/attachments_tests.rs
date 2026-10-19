@@ -1,4 +1,6 @@
 use super::*;
+use crate::ids::fixtures::rid;
+use crate::ids::{MessageId, ParticipantId};
 
 #[test]
 fn attachments_accept_bounded_unique_ids_and_sanitize_names() {
@@ -109,9 +111,9 @@ impl Database {
     }
     fn message(&self) -> crate::signaling::protocol::ChatEntry {
         crate::signaling::protocol::ChatEntry {
-            message_id: Uuid::new_v4().to_string(),
+            message_id: MessageId::random(),
             client_message_id: Uuid::new_v4().to_string(),
-            participant_id: self.users[0].to_string(),
+            participant_id: ParticipantId::from(self.users[0]),
             participant_name: "Attachment tester".into(),
             recipient_id: None,
             recipient_name: None,
@@ -133,7 +135,7 @@ impl Database {
 #[ignore = "requires a migrated disposable TEST_DATABASE_URL"]
 async fn database_attachments_claim_atomically_require_owner_and_preserve_retry_identity() {
     let mut db = Database::new().await;
-    let room = db.room(7).await;
+    let room = rid(&db.room(7).await);
     let file = db.upload(0, b"retained attachment".to_vec()).await;
     let mut tx = db.pool.begin().await.unwrap();
     assert!(
@@ -146,7 +148,7 @@ async fn database_attachments_claim_atomically_require_owner_and_preserve_retry_
     let session = Uuid::new_v4();
     let saved = crate::room::history::persist_message(
         &db.pool,
-        Some(&room),
+        Some(room.as_str()),
         session,
         true,
         7,
@@ -157,10 +159,10 @@ async fn database_attachments_claim_atomically_require_owner_and_preserve_retry_
     .unwrap();
     assert_eq!(saved.attachments, vec![file.clone()]);
     let mut retry = message.clone();
-    retry.message_id = Uuid::new_v4().to_string();
+    retry.message_id = MessageId::random();
     let retried = crate::room::history::persist_message(
         &db.pool,
-        Some(&room),
+        Some(room.as_str()),
         session,
         true,
         7,
@@ -171,15 +173,23 @@ async fn database_attachments_claim_atomically_require_owner_and_preserve_retry_
     .unwrap();
     assert_eq!(saved.message_id, retried.message_id);
     assert!(
-        crate::room::history::persist_message(&db.pool, Some(&room), session, true, 7, &retry, &[])
-            .await
-            .is_err()
+        crate::room::history::persist_message(
+            &db.pool,
+            Some(room.as_str()),
+            session,
+            true,
+            7,
+            &retry,
+            &[]
+        )
+        .await
+        .is_err()
     );
     retry.client_message_id = Uuid::new_v4().to_string();
     assert!(
         crate::room::history::persist_message(
             &db.pool,
-            Some(&room),
+            Some(room.as_str()),
             session,
             true,
             7,
@@ -198,14 +208,14 @@ async fn database_attachments_claim_atomically_require_owner_and_preserve_retry_
         count, 1,
         "a failed attachment claim cannot insert an empty message"
     );
-    crate::room::history::set_retention(&db.pool, &room, 1)
+    crate::room::history::set_retention(&db.pool, room.as_str(), 1)
         .await
         .unwrap();
     let matched:bool=sqlx::query_scalar("SELECT a.expires_at=m.expires_at FROM attachments a JOIN chat_messages m ON m.id=a.message_id WHERE a.id=$1")
         .bind(file.id).fetch_one(&db.pool).await.unwrap();
     assert!(matched);
     let mut tx = db.pool.begin().await.unwrap();
-    crate::room::history::remove_public(&mut tx, &room, &saved.message_id, Utc::now())
+    crate::room::history::remove_public(&mut tx, room.as_str(), &saved.message_id, Utc::now())
         .await
         .unwrap();
     tx.commit().await.unwrap();
@@ -219,7 +229,7 @@ async fn database_attachments_claim_atomically_require_owner_and_preserve_retry_
     let second = db.upload(0, b"cascade attachment".to_vec()).await;
     crate::room::history::persist_message(
         &db.pool,
-        Some(&room),
+        Some(room.as_str()),
         session,
         true,
         1,
@@ -228,7 +238,7 @@ async fn database_attachments_claim_atomically_require_owner_and_preserve_retry_
     )
     .await
     .unwrap();
-    crate::room::history::set_retention(&db.pool, &room, 0)
+    crate::room::history::set_retention(&db.pool, room.as_str(), 0)
         .await
         .unwrap();
     assert!(location(&db.pool, second.id).await.is_err());
@@ -290,7 +300,7 @@ async fn database_attachments_live_grants_recheck_membership_removal_and_private
         signaling::protocol::ClientMessage,
     };
     let mut db = Database::new().await;
-    let room = db.room(0).await;
+    let room = rid(&db.room(0).await);
     let metrics = ServerMetrics::new();
     let mut config = MediaConfig::default();
     config.worker_config.num_workers = 1;
@@ -305,9 +315,9 @@ async fn database_attachments_live_grants_recheck_membership_removal_and_private
         .await
         .unwrap(),
     );
-    let owner = db.users[0].to_string();
-    let guest = Uuid::new_v4().to_string();
-    let stranger = Uuid::new_v4().to_string();
+    let owner = ParticipantId::from(db.users[0]);
+    let guest = ParticipantId::random();
+    let stranger = ParticipantId::random();
     let mut senders = Vec::new();
     let mut receivers = Vec::new();
     for (id, authenticated) in [(&owner, true), (&guest, false), (&stranger, false)] {
@@ -315,7 +325,7 @@ async fn database_attachments_live_grants_recheck_membership_removal_and_private
         manager
             .add_participant(
                 &room,
-                id.clone(),
+                *id,
                 "Reader".into(),
                 sender.clone(),
                 authenticated,
@@ -408,7 +418,7 @@ async fn database_attachments_live_grants_recheck_membership_removal_and_private
     manager
         .add_participant(
             &room,
-            guest.clone(),
+            guest,
             "Reader".into(),
             replacement.clone(),
             false,
@@ -462,7 +472,7 @@ async fn database_attachments_live_grants_recheck_membership_removal_and_private
             &senders[0],
             &ClientMessage::RemoveChatMessage {
                 request_id: "remove-file".into(),
-                message_id: location.ephemeral_message_id.unwrap().to_string(),
+                message_id: MessageId::from(location.ephemeral_message_id.unwrap()),
             },
         )
         .await
@@ -479,7 +489,7 @@ async fn database_attachments_live_grants_recheck_membership_removal_and_private
             &owner,
             &senders[0],
             &ClientMessage::PrivateMessage {
-                target_participant_id: guest.clone(),
+                target_participant_id: guest,
                 content: String::new(),
                 attachment_ids: vec![private.id],
                 client_message_id: "private-file".into(),

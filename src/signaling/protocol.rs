@@ -5,8 +5,11 @@
 use crate::secret::SecretString;
 use crate::turn::IceServer;
 use chrono::{DateTime, Utc};
+
+use crate::ids::{MessageId, ParticipantId, RoomId, UserId};
 use mediasoup::prelude::*;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 #[cfg(test)]
 #[path = "protocol_property_tests.rs"]
@@ -134,7 +137,7 @@ pub enum ClientMessage {
     /// Join a room
     #[serde(rename_all = "camelCase")]
     JoinRoom {
-        room_id: String,
+        room_id: RoomId,
         participant_name: String,
         /// Required for password-protected rooms (Admin+ bypass)
         #[serde(default)]
@@ -210,8 +213,8 @@ pub enum ClientMessage {
     /// Reconnect to an existing session after WS disconnect
     #[serde(rename_all = "camelCase")]
     Reconnect {
-        participant_id: String,
-        room_id: String,
+        participant_id: ParticipantId,
+        room_id: RoomId,
         reconnect_token: SecretString,
     },
     /// Request ICE restart on a transport
@@ -238,11 +241,11 @@ pub enum ClientMessage {
         sequence: Option<u64>,
         /// The retained message this one answers, in the same conversation.
         #[serde(default)]
-        reply_to: Option<String>,
+        reply_to: Option<MessageId>,
     },
     #[serde(rename_all = "camelCase")]
     PrivateMessage {
-        target_participant_id: String,
+        target_participant_id: ParticipantId,
         content: String,
         #[serde(default)]
         attachment_ids: Vec<uuid::Uuid>,
@@ -250,7 +253,7 @@ pub enum ClientMessage {
         #[serde(default)]
         sequence: Option<u64>,
         #[serde(default)]
-        reply_to: Option<String>,
+        reply_to: Option<MessageId>,
     },
     RetryChatMessage(RetryChatMessage),
     #[serde(rename_all = "camelCase")]
@@ -263,7 +266,7 @@ pub enum ClientMessage {
         request_id: String,
         before: Option<String>,
         after: Option<String>,
-        around: Option<String>,
+        around: Option<MessageId>,
         resume: Option<bool>,
         q: Option<String>,
         limit: Option<u32>,
@@ -271,7 +274,7 @@ pub enum ClientMessage {
     #[serde(rename_all = "camelCase")]
     MarkChatRead {
         request_id: String,
-        message_id: String,
+        message_id: MessageId,
     },
     #[serde(rename_all = "camelCase")]
     SetRoomHistory {
@@ -282,7 +285,7 @@ pub enum ClientMessage {
     SetChatPreferences {
         request_id: String,
         allow_private_messages: bool,
-        ignored_participant_ids: Vec<String>,
+        ignored_participant_ids: Vec<ParticipantId>,
     },
     /// Change how this participant's name and messages look to everyone.
     #[serde(rename_all = "camelCase")]
@@ -294,7 +297,7 @@ pub enum ClientMessage {
     #[serde(rename_all = "camelCase")]
     EditChatMessage {
         request_id: String,
-        message_id: String,
+        message_id: MessageId,
         content: String,
         expected_revision: u32,
     },
@@ -305,19 +308,19 @@ pub enum ClientMessage {
     #[serde(rename_all = "camelCase")]
     SetPinnedMessage {
         request_id: String,
-        message_id: String,
+        message_id: MessageId,
         pinned: bool,
     },
     #[serde(rename_all = "camelCase")]
     RemoveChatMessage {
         request_id: String,
-        message_id: String,
+        message_id: MessageId,
     },
     /// Add this participant's reaction to a retained message, or take it back.
     #[serde(rename_all = "camelCase")]
     ReactToMessage {
         request_id: String,
-        message_id: String,
+        message_id: MessageId,
         emoji: String,
     },
     #[serde(rename_all = "camelCase")]
@@ -349,13 +352,13 @@ pub enum ClientMessage {
     #[serde(rename_all = "camelCase")]
     SetMemberRole {
         request_id: String,
-        target_user_id: String,
+        target_user_id: UserId,
         role: Role,
     },
     #[serde(rename_all = "camelCase")]
     ReportParticipant {
         request_id: String,
-        target_participant_id: String,
+        target_participant_id: ParticipantId,
         reason: String,
     },
     #[serde(rename_all = "camelCase")]
@@ -384,41 +387,41 @@ pub enum ClientMessage {
     #[serde(rename_all = "camelCase")]
     Typing {
         #[serde(default)]
-        target_participant_id: Option<String>,
+        target_participant_id: Option<ParticipantId>,
     },
 
     // === Moderation ===
     /// Force-close a participant's camera/screen producer
     #[serde(rename_all = "camelCase")]
     CloseCam {
-        target_participant_id: String,
+        target_participant_id: ParticipantId,
     },
     /// Ban a participant from producing video/screen
     #[serde(rename_all = "camelCase")]
     CamBan {
-        target_participant_id: String,
+        target_participant_id: ParticipantId,
         reason: Option<String>,
     },
     /// Unban a participant from producing video/screen
     #[serde(rename_all = "camelCase")]
     CamUnban {
-        target_participant_id: String,
+        target_participant_id: ParticipantId,
     },
     /// Mute a participant's text chat
     #[serde(rename_all = "camelCase")]
     TextMute {
-        target_participant_id: String,
+        target_participant_id: ParticipantId,
     },
     /// Unmute a participant's text chat
     #[serde(rename_all = "camelCase")]
     TextUnmute {
-        target_participant_id: String,
+        target_participant_id: ParticipantId,
     },
     /// Kick a participant from the room; `report_id` names the open report
     /// this answers, which is resolved with it.
     #[serde(rename_all = "camelCase")]
     Kick {
-        target_participant_id: String,
+        target_participant_id: ParticipantId,
         reason: Option<String>,
         #[serde(default)]
         report_id: Option<String>,
@@ -426,7 +429,7 @@ pub enum ClientMessage {
     /// Ban a participant from the room; `report_id` as for `Kick`.
     #[serde(rename_all = "camelCase")]
     Ban {
-        target_participant_id: String,
+        target_participant_id: ParticipantId,
         reason: Option<String>,
         duration: Option<u64>,
         #[serde(default)]
@@ -435,12 +438,12 @@ pub enum ClientMessage {
     /// Unban a user (stub — no persistent ban list yet)
     #[serde(rename_all = "camelCase")]
     Unban {
-        target_user_id: String,
+        target_user_id: UserId,
     },
     /// Set a participant's role
     #[serde(rename_all = "camelCase")]
     SetRole {
-        target_participant_id: String,
+        target_participant_id: ParticipantId,
         role: Role,
     },
     /// Request voice in a moderated room (sent by User/Guest)
@@ -489,12 +492,12 @@ pub enum ClientMessage {
     /// Admit a participant from the lobby
     #[serde(rename_all = "camelCase")]
     AdmitFromLobby {
-        target_participant_id: String,
+        target_participant_id: ParticipantId,
     },
     /// Deny a participant from the lobby
     #[serde(rename_all = "camelCase")]
     DenyFromLobby {
-        target_participant_id: String,
+        target_participant_id: ParticipantId,
     },
 }
 
@@ -505,7 +508,7 @@ pub enum ServerMessage {
     /// Room joined successfully
     #[serde(rename_all = "camelCase")]
     RoomJoined {
-        participant_id: String,
+        participant_id: ParticipantId,
         participants: Vec<ParticipantInfo>,
         reconnect_token: SecretString,
         your_role: Role,
@@ -572,7 +575,7 @@ pub enum ServerMessage {
     /// New participant joined the room
     #[serde(rename_all = "camelCase")]
     ParticipantJoined {
-        participant_id: String,
+        participant_id: ParticipantId,
         participant_name: String,
         role: Role,
         authenticated: bool,
@@ -581,11 +584,11 @@ pub enum ServerMessage {
     },
     /// Participant left the room
     #[serde(rename_all = "camelCase")]
-    ParticipantLeft { participant_id: String },
+    ParticipantLeft { participant_id: ParticipantId },
     /// New producer available from another participant
     #[serde(rename_all = "camelCase")]
     NewProducer {
-        participant_id: String,
+        participant_id: ParticipantId,
         producer_id: String,
         kind: MediaKind,
         #[serde(default)]
@@ -616,7 +619,7 @@ pub enum ServerMessage {
     #[serde(rename_all = "camelCase")]
     ReconnectResult {
         success: bool,
-        participant_id: String,
+        participant_id: ParticipantId,
         #[serde(skip_serializing_if = "Option::is_none")]
         reconnect_token: Option<SecretString>,
     },
@@ -644,12 +647,12 @@ pub enum ServerMessage {
     /// Chat message received from another participant
     #[serde(rename_all = "camelCase")]
     ChatReceived {
-        participant_id: String,
+        participant_id: ParticipantId,
         participant_name: String,
         content: String,
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         attachments: Vec<ChatAttachment>,
-        message_id: String,
+        message_id: MessageId,
         client_message_id: String,
         sent_at: DateTime<Utc>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -676,11 +679,12 @@ pub enum ServerMessage {
     },
     #[serde(rename_all = "camelCase")]
     PrivateMessageReceived { message: ChatEntry },
+    /// The reply to a social request: `action` and `data` come from [`SocialResponse`].
     #[serde(rename_all = "camelCase")]
     SocialResponse {
         request_id: String,
-        action: String,
-        data: serde_json::Value,
+        #[serde(flatten)]
+        response: SocialResponse,
     },
     #[serde(rename_all = "camelCase")]
     SocialError {
@@ -693,21 +697,21 @@ pub enum ServerMessage {
     },
     #[serde(rename_all = "camelCase")]
     NicknameChanged {
-        participant_id: String,
+        participant_id: ParticipantId,
         nickname: String,
     },
     #[serde(rename_all = "camelCase")]
     ChatStyleChanged {
-        participant_id: String,
+        participant_id: ParticipantId,
         chat_style: ChatStyle,
     },
     /// A participant is composing a message; private when `target_participant_id`
     /// is set (then only that target hears it).
     #[serde(rename_all = "camelCase")]
     ParticipantTyping {
-        participant_id: String,
+        participant_id: ParticipantId,
         #[serde(skip_serializing_if = "Option::is_none")]
-        target_participant_id: Option<String>,
+        target_participant_id: Option<ParticipantId>,
     },
     #[serde(rename_all = "camelCase")]
     ChatMessageEdited { message: ChatEntry },
@@ -716,18 +720,18 @@ pub enum ServerMessage {
     /// A public message and any quotes of it must be replaced by a tombstone.
     #[serde(rename_all = "camelCase")]
     ChatMessageRemoved {
-        message_id: String,
+        message_id: MessageId,
         removed_at: DateTime<Utc>,
     },
     /// A message's reactions changed; sent to everyone who can see it.
     #[serde(rename_all = "camelCase")]
     MessageReactions {
-        message_id: String,
+        message_id: MessageId,
         reactions: Vec<ChatReaction>,
     },
     /// Active/dominant speaker changed
     #[serde(rename_all = "camelCase")]
-    ActiveSpeaker { participant_id: String },
+    ActiveSpeaker { participant_id: ParticipantId },
     /// Audio levels for all speaking participants; an empty list means nobody
     /// exceeded the threshold during the last interval
     #[serde(rename_all = "camelCase")]
@@ -739,39 +743,39 @@ pub enum ServerMessage {
     ForceClosedProducer { producer_id: String, reason: String },
     /// Participant's camera was banned
     #[serde(rename_all = "camelCase")]
-    CamBanned { participant_id: String },
+    CamBanned { participant_id: ParticipantId },
     /// Participant's camera ban was lifted
     #[serde(rename_all = "camelCase")]
-    CamUnbanned { participant_id: String },
+    CamUnbanned { participant_id: ParticipantId },
     /// Participant was text-muted
     #[serde(rename_all = "camelCase")]
-    TextMuted { participant_id: String },
+    TextMuted { participant_id: ParticipantId },
     /// Participant was text-unmuted
     #[serde(rename_all = "camelCase")]
-    TextUnmuted { participant_id: String },
+    TextUnmuted { participant_id: ParticipantId },
     /// Participant was kicked from the room
     #[serde(rename_all = "camelCase")]
     ParticipantKicked {
-        participant_id: String,
+        participant_id: ParticipantId,
         reason: Option<String>,
     },
     /// Participant was banned from the room
     #[serde(rename_all = "camelCase")]
     ParticipantBanned {
-        participant_id: String,
+        participant_id: ParticipantId,
         reason: Option<String>,
     },
     /// Participant's role was changed
     #[serde(rename_all = "camelCase")]
     RoleChanged {
-        participant_id: String,
+        participant_id: ParticipantId,
         new_role: Role,
         granted_by: String,
     },
     /// A participant requested voice (sent to Moderator+)
     #[serde(rename_all = "camelCase")]
     VoiceRequested {
-        participant_id: String,
+        participant_id: ParticipantId,
         display_name: String,
     },
 
@@ -800,7 +804,7 @@ pub enum ServerMessage {
     /// A participant joined the lobby (sent to Moderator+)
     #[serde(rename_all = "camelCase")]
     LobbyJoin {
-        participant_id: String,
+        participant_id: ParticipantId,
         display_name: String,
         authenticated: bool,
     },
@@ -815,7 +819,7 @@ pub enum ServerMessage {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AudioLevelEntry {
-    pub participant_id: String,
+    pub participant_id: ParticipantId,
     pub volume: i8, // dBov (0 = loudest, -127 = silence)
 }
 
@@ -823,7 +827,7 @@ pub struct AudioLevelEntry {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ParticipantInfo {
-    pub id: String,
+    pub id: ParticipantId,
     pub name: String,
     pub producers: Vec<ProducerMetadata>,
     pub role: Role,
@@ -927,12 +931,12 @@ where
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ChatEntry {
-    pub message_id: String,
+    pub message_id: MessageId,
     pub client_message_id: String,
-    pub participant_id: String,
+    pub participant_id: ParticipantId,
     pub participant_name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub recipient_id: Option<String>,
+    pub recipient_id: Option<ParticipantId>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub recipient_name: Option<String>,
     /// True only for a retained conversation between two accounts, across rooms.
@@ -976,8 +980,8 @@ pub const REACTIONS: [&str; 8] = ["👍", "❤️", "😂", "😮", "😢", "�
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ChatReplyRef {
-    pub message_id: String,
-    pub participant_id: String,
+    pub message_id: MessageId,
+    pub participant_id: ParticipantId,
     pub participant_name: String,
     pub excerpt: String,
 }
@@ -987,7 +991,7 @@ pub struct ChatReplyRef {
 #[serde(rename_all = "camelCase")]
 pub struct ChatReaction {
     pub emoji: String,
-    pub participant_ids: Vec<String>,
+    pub participant_ids: Vec<ParticipantId>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -1017,9 +1021,9 @@ pub struct RetryChatMessage {
     pub content: String,
     #[serde(default)]
     pub attachment_ids: Vec<uuid::Uuid>,
-    pub target_participant_id: Option<String>,
+    pub target_participant_id: Option<ParticipantId>,
     #[serde(default)]
-    pub reply_to: Option<String>,
+    pub reply_to: Option<MessageId>,
 }
 
 /// Producer metadata
@@ -1032,57 +1036,245 @@ pub struct ProducerMetadata {
     pub source: Option<String>,
 }
 
+/// The reply to one social request, serialized beside the request id as
+/// `action` (the variant name) and `data` (the variant's fields).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "action", content = "data", rename_all = "camelCase")]
+pub enum SocialResponse {
+    #[serde(rename_all = "camelCase")]
+    SetChatPreferences {
+        allow_private_messages: bool,
+        ignored_participant_ids: Vec<ParticipantId>,
+    },
+    ChangeNickname {
+        nickname: String,
+    },
+    #[serde(rename_all = "camelCase")]
+    SetChatStyle {
+        chat_style: ChatStyle,
+    },
+    #[serde(rename_all = "camelCase")]
+    RemoveChatMessage {
+        message_id: MessageId,
+        removed_at: DateTime<Utc>,
+    },
+    EditChatMessage {
+        message: ChatEntry,
+    },
+    #[serde(rename_all = "camelCase")]
+    GetAttachmentAccess {
+        token: String,
+        expires_at: DateTime<Utc>,
+    },
+    GetPinnedMessages {
+        messages: Vec<ChatEntry>,
+    },
+    SetPinnedMessage {
+        messages: Vec<ChatEntry>,
+    },
+    #[serde(rename_all = "camelCase")]
+    ReactToMessage {
+        message_id: MessageId,
+        reactions: Vec<ChatReaction>,
+    },
+    GetRoomSnapshot(RoomSnapshot),
+    GetChatHistory(crate::room::history::HistoryPage),
+    #[serde(rename_all = "camelCase")]
+    MarkChatRead {
+        read_message_id: Option<MessageId>,
+    },
+    #[serde(rename_all = "camelCase")]
+    SetRoomHistory {
+        retention_days: i32,
+    },
+    #[serde(rename_all = "camelCase")]
+    ListRoomBans {
+        bans: Vec<BanEntry>,
+        has_more: bool,
+    },
+    RemoveRoomBan {
+        removed: bool,
+    },
+    #[serde(rename_all = "camelCase")]
+    ListRoomMembers {
+        members: Vec<MemberEntry>,
+        has_more: bool,
+    },
+    SetMemberRole {
+        updated: bool,
+    },
+    #[serde(rename_all = "camelCase")]
+    ReportParticipant {
+        report_id: String,
+        status: String,
+    },
+    #[serde(rename_all = "camelCase")]
+    ListRoomReports {
+        reports: Vec<ReportEntry>,
+        has_more: bool,
+    },
+    #[serde(rename_all = "camelCase")]
+    ResolveRoomReport {
+        report_id: String,
+        status: String,
+    },
+    #[serde(rename_all = "camelCase")]
+    ListModerationEvents {
+        events: Vec<ModerationEventView>,
+        has_more: bool,
+    },
+}
+
+/// One consistent view of a room for a joining or resuming participant,
+/// captured under the room lock and serialized after releasing it.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RoomSnapshot {
+    pub participants: Vec<ParticipantInfo>,
+    pub messages: Vec<ChatEntry>,
+    pub lobby: Vec<SnapshotLobbyEntry>,
+    pub your_role: Role,
+    pub chat_session_id: Uuid,
+    pub room_settings: Option<crate::room::settings::RoomSettings>,
+    pub nickname: String,
+    pub allow_private_messages: bool,
+    pub ignored_participant_ids: Vec<ParticipantId>,
+    pub paused_producer_ids: Vec<String>,
+    pub text_muted: bool,
+    pub cam_banned: bool,
+    pub can_chat: bool,
+    pub local_producer_ids: Vec<String>,
+    pub can_broadcast: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SnapshotLobbyEntry {
+    pub participant_id: ParticipantId,
+    pub display_name: String,
+    pub authenticated: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BanEntry {
+    pub ban_id: String,
+    pub display_name: String,
+    pub authenticated: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReportEntry {
+    pub report_id: String,
+    pub reporter_id: ParticipantId,
+    pub reporter_name: String,
+    pub target_participant_id: ParticipantId,
+    pub target_name: String,
+    pub reason: String,
+    pub status: String,
+    pub created_at: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resolved_at: Option<String>,
+    /// The newest history entry that answered this report, if any did.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outcome: Option<ReportOutcome>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReportOutcome {
+    pub action: String,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MemberEntry {
+    pub user_id: UserId,
+    pub display_name: String,
+    pub role: Role,
+    pub online: bool,
+    pub authenticated: bool,
+}
+
+/// A moderation history entry as a viewer receives it; only an owner's view
+/// carries the target's address.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModerationEventView {
+    #[serde(flatten)]
+    pub event: crate::room::moderation::ModerationEvent,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_ip: Option<String>,
+}
+
+impl ModerationEventView {
+    /// The entry for one viewer: owners see the target's address.
+    pub(crate) fn new(event: crate::room::moderation::ModerationEvent, owner: bool) -> Self {
+        let target_ip = owner
+            .then(|| event.target_ip.map(|ip| ip.to_string()))
+            .flatten();
+        Self { event, target_ip }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
         CHAT_COLORS, ChatEntry, ChatReaction, ChatReplyRef, ChatStyle, ChatStyleKind,
         ClientMessage, REACTIONS, RequestHeader, ServerMessage,
     };
+    use crate::ids::fixtures::{mid, pid};
     use serde_json::{Value, json};
 
     #[test]
     fn replies_and_reactions_keep_their_wire_names() {
         let react: ClientMessage = serde_json::from_value(json!({
-            "type": "reactToMessage", "requestId": "r1", "messageId": "m1", "emoji": "🎉"
+            "type": "reactToMessage", "requestId": "r1", "messageId": mid("m1").to_string(), "emoji": "🎉"
         }))
         .unwrap();
         assert_eq!(react.social_request(), Some(("r1", "reactToMessage")));
         let chat: ClientMessage = serde_json::from_value(json!({
-            "type": "chatMessage", "content": "hi", "clientMessageId": "c1", "replyTo": "m1"
+            "type": "chatMessage", "content": "hi", "clientMessageId": "c1", "replyTo": mid("m1").to_string()
         }))
         .unwrap();
         assert!(
-            matches!(chat, ClientMessage::ChatMessage { reply_to: Some(ref id), .. } if id == "m1")
+            matches!(chat, ClientMessage::ChatMessage { reply_to: Some(id), .. } if id == mid("m1"))
         );
         let event = serde_json::to_value(ServerMessage::MessageReactions {
-            message_id: "m1".into(),
+            message_id: mid("m1"),
             reactions: vec![ChatReaction {
                 emoji: "🎉".into(),
-                participant_ids: vec!["p".into()],
+                participant_ids: vec![pid("p")],
             }],
         })
         .unwrap();
         assert_eq!(
             event,
-            json!({"type": "messageReactions", "messageId": "m1",
-                   "reactions": [{"emoji": "🎉", "participantIds": ["p"]}]})
+            json!({"type": "messageReactions", "messageId": mid("m1").to_string(),
+                   "reactions": [{"emoji": "🎉", "participantIds": [pid("p").to_string()]}]})
         );
         let mut entry: ChatEntry = serde_json::from_value(json!({
-            "messageId": "m2", "clientMessageId": "c2", "participantId": "p",
+            "messageId": mid("m2").to_string(), "clientMessageId": "c2", "participantId": pid("p").to_string(),
             "participantName": "P", "content": "hi", "sentAt": "2026-09-28T00:00:00Z"
         }))
         .unwrap();
         let bare = serde_json::to_value(&entry).unwrap();
         assert!(bare.get("replyTo").is_none() && bare.get("reactions").is_none());
         entry.reply_to = Some(ChatReplyRef {
-            message_id: "m1".into(),
-            participant_id: "q".into(),
+            message_id: mid("m1"),
+            participant_id: pid("q"),
             participant_name: "Q".into(),
             excerpt: "hello".into(),
         });
         assert_eq!(
             serde_json::to_value(&entry).unwrap()["replyTo"],
-            json!({"messageId": "m1", "participantId": "q", "participantName": "Q", "excerpt": "hello"})
+            json!({"messageId": mid("m1").to_string(), "participantId": pid("q").to_string(), "participantName": "Q", "excerpt": "hello"})
         );
         assert_eq!(REACTIONS.len(), 8);
     }
@@ -1140,7 +1332,7 @@ mod tests {
         .unwrap();
         assert_eq!(change.social_request(), Some(("r1", "setChatStyle")));
         let changed = ServerMessage::ChatStyleChanged {
-            participant_id: "p".into(),
+            participant_id: pid("p"),
             chat_style: ChatStyle {
                 color: Some("sky".into()),
                 style: ChatStyleKind::Accent,
@@ -1148,7 +1340,7 @@ mod tests {
         };
         assert_eq!(
             serde_json::to_value(&changed).unwrap(),
-            json!({"type":"chatStyleChanged","participantId":"p","chatStyle":{"color":"sky","style":"accent"}})
+            json!({"type":"chatStyleChanged","participantId": pid("p").to_string(),"chatStyle":{"color":"sky","style":"accent"}})
         );
     }
 

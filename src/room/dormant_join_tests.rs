@@ -2,6 +2,8 @@
 //! router exists for the attempt: a refused join leaves no media state behind.
 
 use super::*;
+use crate::ids::fixtures::pid;
+use crate::ids::fixtures::rid;
 use futures_util::FutureExt;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use std::panic::AssertUnwindSafe;
@@ -11,7 +13,7 @@ use uuid::Uuid;
 
 async fn join(
     manager: &RoomManager,
-    room_id: &str,
+    room_id: &RoomId,
     id: &str,
     authenticated: bool,
     password: Option<&str>,
@@ -20,7 +22,7 @@ async fn join(
     manager
         .add_participant(
             room_id,
-            id.to_string(),
+            pid(id),
             "Dormant fixture".to_string(),
             sender.clone(),
             authenticated,
@@ -34,7 +36,7 @@ async fn join(
     Ok(sender)
 }
 
-async fn has_media_state(manager: &RoomManager, room_id: &str) -> bool {
+async fn has_media_state(manager: &RoomManager, room_id: &RoomId) -> bool {
     manager
         .rooms
         .read()
@@ -43,7 +45,7 @@ async fn has_media_state(manager: &RoomManager, room_id: &str) -> bool {
         || manager
             .media_server
             .router_manager()
-            .get_router(room_id)
+            .get_router(room_id.as_str())
             .await
             .is_ok()
 }
@@ -84,7 +86,7 @@ async fn a_refused_join_to_a_dormant_room_creates_no_router() {
     let owner_id = Uuid::new_v4();
     let visitor_id = Uuid::new_v4();
     let banned_id = Uuid::new_v4();
-    let room_id = format!("dormant-{}", Uuid::new_v4());
+    let room_id = rid(&format!("dormant-{}", Uuid::new_v4()));
     let created_before = manager.metrics.rooms_created_total();
 
     let outcome = AssertUnwindSafe(tokio::time::timeout(Duration::from_secs(60), async {
@@ -189,7 +191,7 @@ async fn a_refused_join_to_a_dormant_room_creates_no_router() {
             "{error}"
         );
         manager
-            .remove_participant_for_sender(&room_id, &visitor_id.to_string(), &sender)
+            .remove_participant_for_sender(&room_id, &ParticipantId::from(visitor_id), &sender)
             .await
             .unwrap();
     }))

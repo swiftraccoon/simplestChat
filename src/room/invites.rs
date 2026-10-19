@@ -4,6 +4,7 @@
 //! account can list the rooms it belongs to.
 
 use crate::auth::{account, types::AuthError};
+use crate::ids::RoomId;
 use crate::invite_codes;
 use crate::room::api::{
     RoomApiError, RoomListItem, RoomListRow, acquire_room_api_request, room_database_error,
@@ -78,7 +79,7 @@ pub(crate) struct CreateRoomInviteRequest {
 
 #[derive(Debug, Serialize)]
 pub(crate) struct InviteRedemption {
-    pub room_id: String,
+    pub room_id: RoomId,
     pub display_name: String,
     pub role: Role,
 }
@@ -105,7 +106,7 @@ pub(crate) struct MembershipParams {
 /// Mint a code for `room_id`; `None` when the room already holds its limit.
 pub(crate) async fn create_room_invite(
     pool: &PgPool,
-    room_id: &str,
+    room_id: &RoomId,
     role: Role,
     uses: i32,
     days: i32,
@@ -151,7 +152,7 @@ pub(crate) async fn create_room_invite(
 
 pub(crate) async fn list_room_invites(
     pool: &PgPool,
-    room_id: &str,
+    room_id: &RoomId,
 ) -> Result<Vec<RoomInvite>, sqlx::Error> {
     sqlx::query_as(concat!(
         "SELECT i.id, i.role, i.uses_left, i.expires_at, i.created_at FROM invites i
@@ -182,7 +183,7 @@ pub(crate) async fn revoke_issued_invites(
 
 pub(crate) async fn revoke_room_invite(
     pool: &PgPool,
-    room_id: &str,
+    room_id: &RoomId,
     id: Uuid,
 ) -> Result<bool, sqlx::Error> {
     Ok(
@@ -207,7 +208,7 @@ pub(crate) async fn redeem_room_invite(
     pool: &PgPool,
     code: &str,
     user_id: Uuid,
-) -> Result<Option<(String, String, Role)>, sqlx::Error> {
+) -> Result<Option<(RoomId, String, Role)>, sqlx::Error> {
     let hash = invite_codes::digest(code);
     let mut transaction = pool.begin().await?;
     // Serialize all attempts against this code before checking the receipt.
@@ -243,7 +244,11 @@ pub(crate) async fn redeem_room_invite(
     .await?;
     if let Some(role) = receipt {
         transaction.commit().await?;
-        return Ok(Some((room_id, display_name, role)));
+        return Ok(Some((
+            RoomId::new(room_id).map_err(|error| sqlx::Error::Decode(error.into()))?,
+            display_name,
+            role,
+        )));
     }
     if !live || uses_left == 0 {
         return Ok(None);
@@ -298,7 +303,11 @@ pub(crate) async fn redeem_room_invite(
     .execute(&mut *transaction)
     .await?;
     transaction.commit().await?;
-    Ok(Some((room_id, display_name, granted)))
+    Ok(Some((
+        RoomId::new(room_id).map_err(|error| sqlx::Error::Decode(error.into()))?,
+        display_name,
+        granted,
+    )))
 }
 
 /// Read-only preview; possession of the code and an authenticated account may
@@ -308,7 +317,7 @@ async fn preview_room_invite(
     pool: &PgPool,
     code: &str,
     user_id: Uuid,
-) -> Result<Option<(String, String, Role)>, sqlx::Error> {
+) -> Result<Option<(RoomId, String, Role)>, sqlx::Error> {
     sqlx::query_as(concat!(
         "SELECT i.room_id, r.display_name, i.role FROM invites i
          JOIN rooms r ON r.id = i.room_id
@@ -328,7 +337,7 @@ async fn preview_room_invite(
 
 /// A directory row joined with the account's stored role.
 type MembershipRow = (
-    String,
+    RoomId,
     String,
     Option<String>,
     bool,
@@ -368,7 +377,7 @@ pub(crate) async fn memberships(
     .await?;
     let has_more = rows.len() > MEMBERSHIP_PAGE_SIZE;
     rows.truncate(MEMBERSHIP_PAGE_SIZE);
-    let next_cursor = has_more.then(|| rows.last().expect("full membership page").0.clone());
+    let next_cursor = has_more.then(|| rows.last().expect("full membership page").0.to_string());
     Ok(MembershipBatch {
         next_cursor,
         rows: rows
@@ -450,10 +459,7 @@ async fn caller(
 }
 
 /// The caller's role in the room, or a 404 when there is no such room.
-async fn room_role(pool: &PgPool, room_id: &str, user: Uuid) -> Result<Role, RoomApiError> {
-    if !settings::valid_room_id(room_id) {
-        return Err(not_found());
-    }
+async fn room_role(pool: &PgPool, room_id: &RoomId, user: Uuid) -> Result<Role, RoomApiError> {
     let owner: Option<Uuid> = sqlx::query_scalar("SELECT owner_id FROM rooms WHERE id = $1")
         .bind(room_id)
         .fetch_optional(pool)
@@ -473,6 +479,7 @@ pub(crate) async fn list(
 ) -> Result<(HeaderMap, Json<Vec<RoomInvite>>), RoomApiError> {
     let _permit = acquire_room_api_request(&server)?;
     let (user, pool) = caller(&server, &headers).await?;
+    let room_id = RoomId::new(room_id).map_err(|_| not_found())?;
     if room_role(&pool, &room_id, user).await? < Role::Admin {
         return Err(forbidden("Only room admins manage invitations"));
     }
@@ -502,6 +509,7 @@ pub(crate) async fn create(
     if !(1..=MAX_INVITE_USES).contains(&uses) || !(1..=MAX_INVITE_DAYS).contains(&days) {
         return Err(bad_request("Uses must be 1–100 and validity 1–30 days"));
     }
+    let room_id = RoomId::new(room_id).map_err(|_| not_found())?;
     let role = room_role(&pool, &room_id, user).await?;
     if role < Role::Admin || !role.can_set_role(Role::User, granting) {
         return Err(forbidden(
@@ -531,6 +539,7 @@ pub(crate) async fn revoke(
 ) -> Result<StatusCode, RoomApiError> {
     let _permit = acquire_room_api_request(&server)?;
     let (user, pool) = caller(&server, &headers).await?;
+    let room_id = RoomId::new(room_id).map_err(|_| not_found())?;
     if room_role(&pool, &room_id, user).await? < Role::Admin {
         return Err(forbidden("Only room admins manage invitations"));
     }
@@ -646,6 +655,7 @@ pub(crate) async fn list_memberships(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ids::fixtures::rid;
 
     #[test]
     fn issuer_rule_names_the_stored_role_values_it_compares() {
@@ -694,7 +704,7 @@ mod tests {
                 .await
                 .unwrap();
         }
-        let room_id = format!("invites-{}", Uuid::new_v4());
+        let room_id = rid(&format!("invites-{}", Uuid::new_v4()));
         sqlx::query("INSERT INTO rooms(id,owner_id,display_name) VALUES($1,$2,'Invited room')")
             .bind(&room_id)
             .bind(owner)
@@ -1102,7 +1112,7 @@ mod tests {
             .into_iter()
             .chain(second.rows)
             .chain(third.rows)
-            .map(|(row, _)| row.0)
+            .map(|(row, _)| row.0.to_string())
             .collect();
         assert_eq!(all, rooms);
         assert!(

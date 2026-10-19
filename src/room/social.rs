@@ -1,15 +1,17 @@
 //! Room-session chat and owner/moderator community tools.
 //! Private text stays out of reports and logs; account PM retention lives in `history`.
 use super::*;
+use crate::ids::{MessageId, ParticipantId, RoomId, UserId};
 use crate::room::moderation::{
-    Actor, MAX_MODERATION_EVENTS, ModerationAction, ModerationEvent, Target, record_event,
+    Actor, MAX_MODERATION_EVENTS, ModerationAction, ModerationEvent, ModerationTargetId, Target,
+    record_event,
 };
 use crate::signaling::protocol::{
-    ChatEntry, ChatReaction, ChatReplyRef, ChatRetryOutcome, ChatRetryReason, ChatStyle,
-    ChatStyleKind, ClientMessage, ErrorCode, REACTIONS, valid_correlation_id,
+    BanEntry, ChatEntry, ChatReaction, ChatReplyRef, ChatRetryOutcome, ChatRetryReason, ChatStyle,
+    ChatStyleKind, ClientMessage, ErrorCode, MemberEntry, ModerationEventView, REACTIONS,
+    ReportEntry, ReportOutcome, RoomSnapshot, SnapshotLobbyEntry, SocialResponse,
+    valid_correlation_id,
 };
-use serde::Serialize;
-use serde_json::{Value, json};
 use uuid::Uuid;
 
 const HISTORY_MESSAGES: usize = 300;
@@ -41,9 +43,9 @@ type BanRow = (
 );
 type ReportRow = (
     Uuid,
+    ParticipantId,
     String,
-    String,
-    String,
+    ParticipantId,
     String,
     String,
     String,
@@ -53,36 +55,6 @@ type ReportRow = (
     Option<chrono::DateTime<chrono::Utc>>,
 );
 
-/// Owned projection: capture one consistent room view under a read lock, then
-/// serialize it after releasing the lock so snapshot encoding cannot block writes.
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct RoomSnapshot {
-    participants: Vec<ParticipantInfo>,
-    messages: Vec<ChatEntry>,
-    lobby: Vec<SnapshotLobbyEntry>,
-    your_role: roles::Role,
-    chat_session_id: Uuid,
-    room_settings: Option<settings::RoomSettings>,
-    nickname: String,
-    allow_private_messages: bool,
-    ignored_participant_ids: Vec<String>,
-    paused_producer_ids: Vec<String>,
-    text_muted: bool,
-    cam_banned: bool,
-    can_chat: bool,
-    local_producer_ids: Vec<String>,
-    can_broadcast: bool,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct SnapshotLobbyEntry {
-    participant_id: String,
-    display_name: String,
-    authenticated: bool,
-}
-
 #[derive(Clone)]
 pub(crate) struct ParticipantSocial {
     pub(super) connected: bool,
@@ -90,14 +62,16 @@ pub(crate) struct ParticipantSocial {
     chat_high_water: u64,
     joined_sequence: u64,
     allow_private_messages: bool,
-    ignored: HashSet<String>,
-    guest_ignored: HashSet<String>,
+    ignored: HashSet<ParticipantId>,
+    guest_ignored: HashSet<ParticipantId>,
     last_typing: Option<std::time::Instant>,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ids::fixtures::{mid, pid, rid};
+    use serde_json::{Value, json};
 
     fn message(json: &str) -> ClientMessage {
         serde_json::from_str(json).unwrap()
@@ -157,7 +131,7 @@ mod tests {
             SocialBudget::ChatBroadcast
         );
         assert_eq!(
-            message(r#"{"type":"setMemberRole","requestId":"r","targetUserId":"u","role":"user"}"#)
+            message(r#"{"type":"setMemberRole","requestId":"r","targetUserId":"af63e84c-8602-00f0-78a1-05398d44ae24","role":"user"}"#)
                 .social_budget(),
             SocialBudget::AdminMutation
         );
@@ -187,13 +161,13 @@ mod tests {
 
     #[test]
     fn private_messages_do_not_consume_the_public_chat_window() {
-        let mut room = Room::new("room".to_string(), None, false, None);
+        let mut room = Room::new(rid("room"), None, false, None);
         let (alice, _alice_rx) = participant("alice");
         let (bob, _bob_rx) = participant("bob");
-        let (alice_id, alice_sender) = (alice.id.clone(), alice.sender.clone());
-        let bob_id = bob.id.clone();
-        room.participants.insert(alice_id.clone(), alice);
-        room.participants.insert(bob_id.clone(), bob);
+        let (alice_id, alice_sender) = (alice.id, alice.sender.clone());
+        let bob_id = bob.id;
+        room.participants.insert(alice_id, alice);
+        room.participants.insert(bob_id, bob);
 
         for index in 0..MAX_ROOM_CHAT_MESSAGES_PER_WINDOW {
             RoomManager::process_social_chat(
@@ -223,7 +197,7 @@ mod tests {
         let (sender, receiver) = mpsc::channel(16);
         (
             Participant {
-                id: Uuid::new_v4().to_string(),
+                id: ParticipantId::random(),
                 name: name.to_string(),
                 sender,
                 media_session_id: Uuid::new_v4(),
@@ -249,15 +223,20 @@ mod tests {
         let (alice, arx) = participant("Alice");
         let (bob, brx) = participant("Bob");
         let (carol, crx) = participant("Carol");
-        let mut room = Room::new("social".into(), None, false, None);
+        let mut room = Room::new(rid("social"), None, false, None);
         for participant in [&alice, &bob, &carol] {
             room.participants
-                .insert(participant.id.clone(), participant.clone());
+                .insert(participant.id, participant.clone());
         }
         (room, alice, bob, carol, vec![arx, brx, crx])
     }
 
-    fn chat(room: &mut Room, sender: &Participant, id: &str, target: Option<&str>) -> Result<()> {
+    fn chat(
+        room: &mut Room,
+        sender: &Participant,
+        id: &str,
+        target: Option<&ParticipantId>,
+    ) -> Result<()> {
         RoomManager::process_social_chat(
             room,
             &sender.id,
@@ -276,11 +255,11 @@ mod tests {
             .unwrap()
             .social
             .ignored
-            .insert(alice.id.clone());
+            .insert(alice.id);
         room.relay_typing(&alice.id, &alice.sender, None).unwrap();
         let event: Value = serde_json::from_str(&receivers[1].try_recv().unwrap()).unwrap();
         assert_eq!(event["type"], "participantTyping");
-        assert_eq!(event["participantId"], alice.id);
+        assert_eq!(event["participantId"], alice.id.to_string());
         assert!(event.get("targetParticipantId").is_none());
         assert!(receivers[0].try_recv().is_err(), "never back to the sender");
         assert!(
@@ -304,7 +283,7 @@ mod tests {
         room.relay_typing(&alice.id, &alice.sender, Some(&bob.id))
             .unwrap();
         let event: Value = serde_json::from_str(&receivers[1].try_recv().unwrap()).unwrap();
-        assert_eq!(event["targetParticipantId"], bob.id);
+        assert_eq!(event["targetParticipantId"], bob.id.to_string());
         assert!(
             receivers[2].try_recv().is_err(),
             "private typing stays private"
@@ -322,7 +301,7 @@ mod tests {
             "a closed inbox hears nothing"
         );
         rearm(&mut room);
-        room.relay_typing(&alice.id, &alice.sender, Some("nobody"))
+        room.relay_typing(&alice.id, &alice.sender, Some(&pid("nobody")))
             .unwrap();
         room.participants
             .get_mut(&alice.id)
@@ -349,7 +328,7 @@ mod tests {
             .unwrap()
             .social
             .ignored
-            .insert(alice.id.clone());
+            .insert(alice.id);
         chat(&mut room, &alice, "message-1", None).unwrap();
         let ack: Value = serde_json::from_str(&receivers[0].try_recv().unwrap()).unwrap();
         assert_eq!(ack["type"], "messageAck");
@@ -415,7 +394,7 @@ mod tests {
             .unwrap()
             .social
             .ignored
-            .insert(alice.id.clone());
+            .insert(alice.id);
         assert!(chat(&mut room, &alice, "two", Some(&bob.id)).is_err());
         room.participants
             .get_mut(&bob.id)
@@ -428,9 +407,9 @@ mod tests {
             .unwrap()
             .social
             .ignored
-            .insert(bob.id.clone());
+            .insert(bob.id);
         assert!(chat(&mut room, &alice, "three", Some(&bob.id)).is_err());
-        assert!(chat(&mut room, &alice, "four", Some(&Uuid::new_v4().to_string())).is_err());
+        assert!(chat(&mut room, &alice, "four", Some(&ParticipantId::random())).is_err());
         assert!(room.social.history.is_empty());
         for receiver in &mut receivers {
             assert!(receiver.try_recv().is_err());
@@ -466,7 +445,7 @@ mod tests {
         sender: &Participant,
         id: &str,
         sequence: u64,
-        target: Option<&str>,
+        target: Option<&ParticipantId>,
         retry: Option<String>,
     ) -> Result<()> {
         RoomManager::process_chat_attempt(
@@ -477,7 +456,7 @@ mod tests {
                 attachment_ids: Vec::new(),
                 content: "hello".into(),
                 client_message_id: Some(id.into()),
-                recipient_id: target.map(String::from),
+                recipient_id: target.copied(),
                 sequence: Some(sequence),
                 retry_session: retry,
                 reply_to: None,
@@ -896,9 +875,9 @@ mod tests {
         for index in 0..400 {
             let message = ChatEntry {
                 attachments: Vec::new(),
-                message_id: Uuid::new_v4().to_string(),
+                message_id: MessageId::random(),
                 client_message_id: index.to_string(),
-                participant_id: alice.id.clone(),
+                participant_id: alice.id,
                 participant_name: alice.name.clone(),
                 recipient_id: None,
                 account_conversation: None,
@@ -960,7 +939,7 @@ mod tests {
             .unwrap()
             .punitive
             .text_muted = false;
-        let mut settings = RoomManager::default_room_settings("social");
+        let mut settings = RoomManager::default_room_settings(&rid("social"));
         settings.moderated = true;
         room.settings = Some(settings);
         assert!(chat(&mut room, &alice, "moderated", None).is_err());
@@ -1023,7 +1002,7 @@ mod tests {
             .unwrap()
             .social
             .ignored
-            .insert(alice.id.clone());
+            .insert(alice.id);
         chat(&mut room, &alice, "ignored", None).unwrap();
         let metrics = room.metrics.render_prometheus(0, 0, 0);
         assert!(
@@ -1069,7 +1048,7 @@ mod tests {
         social.record_ban(
             "Guest".into(),
             false,
-            vec![Uuid::new_v4().to_string()],
+            vec![ParticipantId::random()],
             Some("203.0.113.42".parse().unwrap()),
             Some("reason"),
             Some(60),
@@ -1102,7 +1081,7 @@ mod tests {
         room: &mut Room,
         sender: &Participant,
         id: &str,
-        target: Option<&str>,
+        target: Option<&ParticipantId>,
         content: &str,
         reply_to: Option<&str>,
     ) -> Result<()> {
@@ -1114,10 +1093,10 @@ mod tests {
                 attachment_ids: Vec::new(),
                 content: content.into(),
                 client_message_id: Some(id.into()),
-                recipient_id: target.map(String::from),
+                recipient_id: target.copied(),
                 sequence: None,
                 retry_session: None,
-                reply_to: reply_to.map(String::from),
+                reply_to: reply_to.map(mid),
             },
         )
     }
@@ -1133,16 +1112,17 @@ mod tests {
         let (mut room, alice, bob, carol, mut receivers) = fixture();
         let long = format!("line one\n{}", "word ".repeat(40));
         reply(&mut room, &alice, "public-1", None, &long, None).unwrap();
-        let original = room
-            .social
-            .history
-            .back()
-            .unwrap()
-            .message
-            .message_id
-            .clone();
+        let original = room.social.history.back().unwrap().message.message_id;
         drain(&mut receivers);
-        reply(&mut room, &bob, "reply-1", None, "agreed", Some(&original)).unwrap();
+        reply(
+            &mut room,
+            &bob,
+            "reply-1",
+            None,
+            "agreed",
+            Some(&original.to_string()),
+        )
+        .unwrap();
         let quoted = room
             .social
             .history
@@ -1160,7 +1140,7 @@ mod tests {
         assert_eq!(quoted.excerpt.chars().count(), REPLY_EXCERPT_CHARS + 1);
         let public: Value = serde_json::from_str(&receivers[2].try_recv().unwrap()).unwrap();
         assert_eq!(public["type"], "chatReceived");
-        assert_eq!(public["replyTo"]["messageId"], original.as_str());
+        assert_eq!(public["replyTo"]["messageId"], original.to_string());
         // A private reply cannot quote public text, nor anything it cannot see.
         assert!(
             reply(
@@ -1169,7 +1149,7 @@ mod tests {
                 "reply-2",
                 Some(&carol.id),
                 "psst",
-                Some(&original)
+                Some(&original.to_string())
             )
             .is_err()
         );
@@ -1193,22 +1173,25 @@ mod tests {
             None,
         )
         .unwrap();
-        let private = room
-            .social
-            .history
-            .back()
-            .unwrap()
-            .message
-            .message_id
-            .clone();
-        assert!(reply(&mut room, &carol, "reply-4", None, "me too", Some(&private)).is_err());
+        let private = room.social.history.back().unwrap().message.message_id;
+        assert!(
+            reply(
+                &mut room,
+                &carol,
+                "reply-4",
+                None,
+                "me too",
+                Some(&private.to_string())
+            )
+            .is_err()
+        );
         reply(
             &mut room,
             &bob,
             "reply-5",
             Some(&alice.id),
             "ok",
-            Some(&private),
+            Some(&private.to_string()),
         )
         .unwrap();
         assert!(
@@ -1228,39 +1211,29 @@ mod tests {
     fn reactions_toggle_reach_only_viewers_and_stay_within_budget() {
         let (mut room, alice, bob, carol, mut receivers) = fixture();
         reply(&mut room, &alice, "public-1", None, "party?", None).unwrap();
-        let message = room
-            .social
-            .history
-            .back()
-            .unwrap()
-            .message
-            .message_id
-            .clone();
+        let message = room.social.history.back().unwrap().message.message_id;
         drain(&mut receivers);
-        let emojis = |reactions: &[ChatReaction]| -> Vec<(String, Vec<String>)> {
+        let emojis = |reactions: &[ChatReaction]| -> Vec<(String, Vec<ParticipantId>)> {
             reactions
                 .iter()
                 .map(|r| (r.emoji.clone(), r.participant_ids.clone()))
                 .collect()
         };
         let added = react_to_message(&mut room, &bob.id, &message, "🎉").unwrap();
-        assert_eq!(
-            emojis(&added),
-            vec![("🎉".to_string(), vec![bob.id.clone()])]
-        );
+        assert_eq!(emojis(&added), vec![("🎉".to_string(), vec![bob.id])]);
         for receiver in &mut receivers {
             let event: Value = serde_json::from_str(&receiver.try_recv().unwrap()).unwrap();
             assert_eq!(event["type"], "messageReactions");
-            assert_eq!(event["messageId"], message.as_str());
+            assert_eq!(event["messageId"], message.to_string());
         }
         react_to_message(&mut room, &carol.id, &message, "🎉").unwrap();
         let taken_back = react_to_message(&mut room, &bob.id, &message, "🎉").unwrap();
         assert_eq!(
             emojis(&taken_back),
-            vec![("🎉".to_string(), vec![carol.id.clone()])]
+            vec![("🎉".to_string(), vec![carol.id])]
         );
         assert!(react_to_message(&mut room, &bob.id, &message, "🍕").is_err());
-        assert!(react_to_message(&mut room, &bob.id, "missing", "🎉").is_err());
+        assert!(react_to_message(&mut room, &bob.id, &mid("missing"), "🎉").is_err());
         // Private text takes reactions only from its two participants.
         reply(
             &mut room,
@@ -1271,14 +1244,7 @@ mod tests {
             None,
         )
         .unwrap();
-        let private = room
-            .social
-            .history
-            .back()
-            .unwrap()
-            .message
-            .message_id
-            .clone();
+        let private = room.social.history.back().unwrap().message.message_id;
         drain(&mut receivers);
         assert!(react_to_message(&mut room, &carol.id, &private, "👍").is_err());
         react_to_message(&mut room, &bob.id, &private, "👍").unwrap();
@@ -1301,7 +1267,7 @@ mod tests {
         let mut extra = Vec::new();
         for index in 0..MESSAGE_REACTIONS / REACTIONS.len() {
             let (member, receiver) = participant(&format!("Member {index}"));
-            room.participants.insert(member.id.clone(), member.clone());
+            room.participants.insert(member.id, member.clone());
             extra.push((member, receiver));
         }
         // Carol takes hers back, leaving the message bare before it fills up.
@@ -1344,14 +1310,14 @@ mod tests {
             recipient_id: None,
             sequence: None,
             retry_session: None,
-            reply_to: Some(id.into()),
+            reply_to: Some(mid(id)),
         };
         assert!(
             RoomManager::prepare_chat_attempt(
                 &mut room,
                 &bob.id,
                 &bob.sender,
-                attempt(&original.message_id)
+                attempt(&original.message_id.to_string())
             )
             .is_err()
         );
@@ -1359,7 +1325,7 @@ mod tests {
             &mut room,
             &bob.id,
             &bob.sender,
-            attempt(&original.message_id),
+            attempt(&original.message_id.to_string()),
             Some(&original),
         )
         .unwrap()
@@ -1380,13 +1346,13 @@ mod tests {
             .unwrap()
             .social
             .ignored
-            .insert(alice.id.clone());
+            .insert(alice.id);
         assert!(
             RoomManager::prepare_chat_attempt_with_saved_reply(
                 &mut room,
                 &bob.id,
                 &bob.sender,
-                attempt(&original.message_id),
+                attempt(&original.message_id.to_string()),
                 Some(&original),
             )
             .is_err()
@@ -1398,7 +1364,7 @@ mod tests {
             .ignored
             .clear();
         let mut private = original.clone();
-        private.recipient_id = Some(bob.id.clone());
+        private.recipient_id = Some(bob.id);
         assert!(saved_public_reply(&private, &bob).is_err());
         let mut removed = original.clone();
         removed.removed_at = Some(chrono::Utc::now());
@@ -1407,10 +1373,10 @@ mod tests {
 
     #[test]
     fn explicit_reaction_presence_retries_do_not_toggle_or_duplicate() {
-        let reactor = Uuid::new_v4().to_string();
+        let reactor = ParticipantId::random();
         let first = set_reaction(&[], &reactor, "👍", true).unwrap();
         let repeated = set_reaction(&first, &reactor, "👍", true).unwrap();
-        assert_eq!(repeated[0].participant_ids, vec![reactor.clone()]);
+        assert_eq!(repeated[0].participant_ids, vec![reactor]);
         let removed = set_reaction(&repeated, &reactor, "👍", false).unwrap();
         assert!(removed.is_empty());
         assert!(
@@ -1428,7 +1394,7 @@ mod tests {
         assert!(!can_start_account_conversation(
             &room,
             &alice.id,
-            &Uuid::new_v4().to_string()
+            &ParticipantId::random()
         ));
         room.participants.get_mut(&bob.id).unwrap().authenticated = false;
         assert!(!can_start_account_conversation(&room, &alice.id, &bob.id));
@@ -1444,7 +1410,7 @@ mod tests {
             .unwrap()
             .punitive
             .text_muted = false;
-        let mut settings = RoomManager::default_room_settings("social");
+        let mut settings = RoomManager::default_room_settings(&rid("social"));
         settings.allow_chat = false;
         room.settings = Some(settings);
         assert!(!can_start_account_conversation(&room, &alice.id, &bob.id));
@@ -1458,11 +1424,11 @@ mod tests {
                 .await
                 .unwrap();
         let (mut room, alice, bob, _carol, _receivers) = fixture();
-        let own: Uuid = alice.id.parse().unwrap();
-        let peer: Uuid = bob.id.parse().unwrap();
+        let own: Uuid = alice.id.as_uuid();
+        let peer: Uuid = bob.id.as_uuid();
         for person in [&alice, &bob] {
             sqlx::query("INSERT INTO users(id,email,display_name) VALUES($1,$2,$3)")
-                .bind(person.id.parse::<Uuid>().unwrap())
+                .bind(person.id.as_uuid())
                 .bind(format!("{}@firstpm.invalid", person.id))
                 .bind(&person.name)
                 .execute(&pool)
@@ -1485,7 +1451,7 @@ mod tests {
             auth_version: 0,
             sid,
         };
-        let room_id = format!("first-pm-{}", Uuid::new_v4());
+        let room_id = rid(&format!("first-pm-{}", Uuid::new_v4()));
         room.id.clone_from(&room_id);
         let mut config = MediaConfig::default();
         config.worker_config.num_workers = 1;
@@ -1544,7 +1510,7 @@ mod tests {
                 &server,
                 &claims,
                 peer,
-                request(Some(room_id.clone()), "First account PM", None)
+                request(Some(room_id.to_string()), "First account PM", None)
             )
             .await
             .is_err()
@@ -1560,7 +1526,7 @@ mod tests {
             &server,
             &claims,
             peer,
-            request(Some(room_id.clone()), "First account PM", None),
+            request(Some(room_id.to_string()), "First account PM", None),
         )
         .await
         .unwrap();
@@ -1592,11 +1558,7 @@ mod tests {
                 &server,
                 &claims,
                 peer,
-                request(
-                    None,
-                    "First account PM",
-                    Some(saved.message_id.parse().unwrap())
-                )
+                request(None, "First account PM", Some(saved.message_id.as_uuid()))
             )
             .await
             .is_err()
@@ -1605,7 +1567,7 @@ mod tests {
             client_message_id: Uuid::new_v4().to_string(),
             content: "Offline answer".into(),
             attachment_ids: vec![],
-            reply_to: Some(saved.message_id.parse().unwrap()),
+            reply_to: Some(saved.message_id.as_uuid()),
             room_id: None,
         };
         let (reply, created) = history::save_private_message(&server, &claims, peer, reply)
@@ -1674,21 +1636,21 @@ mod tests {
     #[test]
     fn account_policy_refresh_preserves_only_separate_temporary_guest_ignores() {
         let mut social = ParticipantSocial::new(0);
-        let guest = Uuid::new_v4().to_string();
-        let account = Uuid::new_v4().to_string();
-        social.guest_ignored.insert(guest.clone());
-        social.ignored.insert(Uuid::new_v4().to_string());
+        let guest = ParticipantId::random();
+        let account = ParticipantId::random();
+        social.guest_ignored.insert(guest);
+        social.ignored.insert(ParticipantId::random());
         let mut preferences = crate::auth::account::ChatPreferences {
             allow_private_messages: false,
             ignored: vec![crate::auth::account::IgnoredPerson {
-                id: account.clone(),
+                id: account.to_string(),
                 name: "Account".into(),
             }],
             ..Default::default()
         };
         social.apply_account_preferences(&preferences);
         assert!(!social.allow_private_messages);
-        assert_eq!(social.ignored, HashSet::from([guest.clone(), account]));
+        assert_eq!(social.ignored, HashSet::from([guest, account]));
         preferences.allow_private_messages = true;
         preferences.ignored.clear();
         social.apply_account_preferences(&preferences);
@@ -1720,13 +1682,13 @@ mod tests {
             .unwrap()
             .social
             .ignored
-            .insert(alice.id.clone());
+            .insert(alice.id);
         saved.reactions = toggle_reactions(&saved.reactions, &bob.id, "👍").unwrap();
         drain(&mut receivers);
         publish_saved_reaction(&mut room, &saved).unwrap();
         assert_eq!(
             room.social.history[0].message.reactions[0].participant_ids,
-            vec![bob.id.clone()]
+            vec![bob.id]
         );
         assert_eq!(
             room.social.history_bytes,
@@ -1767,15 +1729,16 @@ mod tests {
             None,
         )
         .unwrap();
-        let id = room
-            .social
-            .history
-            .back()
-            .unwrap()
-            .message
-            .message_id
-            .clone();
-        reply(&mut room, &bob, "quote", None, "a reply", Some(&id)).unwrap();
+        let id = room.social.history.back().unwrap().message.message_id;
+        reply(
+            &mut room,
+            &bob,
+            "quote",
+            None,
+            "a reply",
+            Some(&id.to_string()),
+        )
+        .unwrap();
         reply(
             &mut room,
             &alice,
@@ -1818,7 +1781,17 @@ mod tests {
         );
         assert_eq!(room.social.history[2].message.content, "private remains");
         assert!(react_to_message(&mut room, &bob.id, &id, "👍").is_err());
-        assert!(reply(&mut room, &bob, "late-reply", None, "late", Some(&id)).is_err());
+        assert!(
+            reply(
+                &mut room,
+                &bob,
+                "late-reply",
+                None,
+                "late",
+                Some(&id.to_string())
+            )
+            .is_err()
+        );
         while receivers[0].try_recv().is_ok() {}
         reply(
             &mut room,
@@ -1851,14 +1824,7 @@ mod tests {
     fn reaction_completion_never_targets_a_reused_history_slot() {
         let (mut room, alice, bob, _, _) = fixture();
         reply(&mut room, &alice, "First", None, "reaction-first", None).unwrap();
-        let first = room
-            .social
-            .history
-            .back()
-            .unwrap()
-            .message
-            .message_id
-            .clone();
+        let first = room.social.history.back().unwrap().message.message_id;
         let reactions = prepare_reaction(&room, &bob.id, &first, "👍").unwrap();
         let removed = room.social.history.pop_front().unwrap();
         room.social.history_bytes -= removed.bytes;
@@ -1886,7 +1852,7 @@ mod tests {
             "Answer",
             None,
             "answer",
-            Some(&original.message_id),
+            Some(&original.message_id.to_string()),
         )
         .unwrap();
         let request = history::EditRequest {
@@ -1998,7 +1964,7 @@ mod tests {
             "private-quote",
             Some(&alice.id),
             "Private reply",
-            Some(&original.message_id),
+            Some(&original.message_id.to_string()),
         )
         .unwrap();
         let mut edited = original.clone();
@@ -2093,7 +2059,10 @@ mod tests {
             for receiver in &mut fixture.receivers[..2] {
                 let event: Value = serde_json::from_str(&receiver.try_recv().unwrap()).unwrap();
                 assert_eq!(event["type"], "chatMessageEdited");
-                assert_eq!(event["message"]["messageId"], fixture.edited.message_id);
+                assert_eq!(
+                    event["message"]["messageId"],
+                    fixture.edited.message_id.to_string()
+                );
                 assert_eq!(event["message"]["content"], fixture.edited.content);
                 assert!(receiver.try_recv().is_err(), "one edit event per party");
             }
@@ -2165,7 +2134,7 @@ mod tests {
                 .unwrap()
                 .social
                 .ignored
-                .insert(fixture.alice.id.clone());
+                .insert(fixture.alice.id);
             drop(held);
             tokio::time::timeout(std::time::Duration::from_secs(2), delivery)
                 .await
@@ -2199,7 +2168,7 @@ mod tests {
                     // Same account IDs make an incorrect retarget observable.
                     replacement
                         .participants
-                        .insert(fixture.alice.id.clone(), fixture.alice.clone());
+                        .insert(fixture.alice.id, fixture.alice.clone());
                     fixture
                         .manager
                         .rooms
@@ -2266,10 +2235,10 @@ mod tests {
             let _origin_receivers = fixture.receivers;
             let (mut remote_bob, mut remote_events) = participant("Bob in another room");
             remote_bob.id.clone_from(&fixture.bob.id);
-            let mut remote = Room::new("other-edit-room".into(), None, false, None);
+            let mut remote = Room::new(rid("other-edit-room"), None, false, None);
             remote
                 .participants
-                .insert(remote_bob.id.clone(), remote_bob.clone());
+                .insert(remote_bob.id, remote_bob.clone());
             remote.social.remember(
                 fixture.alice.media_session_id,
                 Some(remote_bob.media_session_id),
@@ -2282,7 +2251,7 @@ mod tests {
                 .rooms
                 .write()
                 .unwrap()
-                .insert("other-edit-room".into(), remote.clone());
+                .insert(rid("other-edit-room"), remote.clone());
             while fixture.alice.sender.capacity() > 0 {
                 fixture
                     .alice
@@ -2299,7 +2268,7 @@ mod tests {
                     &fixture.alice.sender,
                     &ClientMessage::EditChatMessage {
                         request_id: "edit-with-full-response-queue".into(),
-                        message_id: fixture.original.message_id.clone(),
+                        message_id: fixture.original.message_id,
                         content: fixture.edited.content.clone(),
                         expected_revision: 0,
                     },
@@ -2326,17 +2295,9 @@ mod tests {
     async fn message_removal_requires_moderation_and_never_targets_private_messages() {
         let (mut room, alice, mut moderator, _carol, mut receivers) = fixture();
         moderator.role = roles::Role::Moderator;
-        room.participants
-            .insert(moderator.id.clone(), moderator.clone());
+        room.participants.insert(moderator.id, moderator.clone());
         reply(&mut room, &alice, "public", None, "remove", None).unwrap();
-        let public = room
-            .social
-            .history
-            .back()
-            .unwrap()
-            .message
-            .message_id
-            .clone();
+        let public = room.social.history.back().unwrap().message.message_id;
         reply(
             &mut room,
             &alice,
@@ -2346,14 +2307,7 @@ mod tests {
             None,
         )
         .unwrap();
-        let private = room
-            .social
-            .history
-            .back()
-            .unwrap()
-            .message
-            .message_id
-            .clone();
+        let private = room.social.history.back().unwrap().message.message_id;
         for receiver in &mut receivers {
             while receiver.try_recv().is_ok() {}
         }
@@ -2375,13 +2329,13 @@ mod tests {
             .write()
             .unwrap()
             .insert(room_id.clone(), room_lock.clone());
-        let command = |message_id: &str| ClientMessage::RemoveChatMessage {
+        let command = |message_id: &MessageId| ClientMessage::RemoveChatMessage {
             request_id: "remove".into(),
-            message_id: message_id.into(),
+            message_id: *message_id,
         };
-        let pin = |message_id: &str| ClientMessage::SetPinnedMessage {
+        let pin = |message_id: &MessageId| ClientMessage::SetPinnedMessage {
             request_id: "pin".into(),
-            message_id: message_id.into(),
+            message_id: *message_id,
             pinned: true,
         };
         assert!(
@@ -2440,10 +2394,10 @@ mod tests {
             room.social.moderation_events[0].action,
             ModerationAction::MessageRemoved
         );
-        assert_eq!(room.social.moderation_events[0].target_id, alice.id);
+        assert_eq!(room.social.moderation_events[0].target_id, alice.id.into());
         let event: Value = serde_json::from_str(&receivers[0].try_recv().unwrap()).unwrap();
         assert_eq!(event["type"], "chatMessageRemoved");
-        assert_eq!(event["messageId"], public);
+        assert_eq!(event["messageId"], public.to_string());
     }
 
     #[tokio::test]
@@ -2475,7 +2429,7 @@ mod tests {
         .await
         .unwrap();
         manager.allow_ad_hoc_rooms = true;
-        let room_id = format!("style-{}", Uuid::new_v4());
+        let room_id = rid(&format!("style-{}", Uuid::new_v4()));
         let join = |sent: ChatStyle| {
             let (tx, rx) = mpsc::channel(64);
             let manager = &manager;
@@ -2484,7 +2438,7 @@ mod tests {
                 let joined = manager
                     .add_participant(
                         &room_id,
-                        user.to_string(),
+                        ParticipantId::from(user),
                         "Styled".into(),
                         tx.clone(),
                         true,
@@ -2516,7 +2470,7 @@ mod tests {
         manager
             .handle_social_request(
                 &room_id,
-                &user.to_string(),
+                &ParticipantId::from(user),
                 &tx,
                 &ClientMessage::SetChatStyle {
                     request_id: "look".into(),
@@ -2530,7 +2484,7 @@ mod tests {
             Some(violet.clone())
         );
         manager
-            .remove_participant_for_sender(&room_id, &user.to_string(), &tx)
+            .remove_participant_for_sender(&room_id, &ParticipantId::from(user), &tx)
             .await
             .unwrap();
         let (style, _tx, _rx) = join(pink).await;
@@ -2551,13 +2505,12 @@ mod tests {
                 .unwrap();
         let (mut room, alice, mut moderator, _carol, _receivers) = fixture();
         moderator.role = roles::Role::Moderator;
-        room.participants
-            .insert(moderator.id.clone(), moderator.clone());
-        let room_id = format!("remove-{}", Uuid::new_v4());
-        let other_room = format!("remove-other-{}", Uuid::new_v4());
+        room.participants.insert(moderator.id, moderator.clone());
+        let room_id = rid(&format!("remove-{}", Uuid::new_v4()));
+        let other_room = rid(&format!("remove-other-{}", Uuid::new_v4()));
         for person in [&alice, &moderator] {
             sqlx::query("INSERT INTO users(id,email,display_name) VALUES($1,$2,$3)")
-                .bind(person.id.parse::<Uuid>().unwrap())
+                .bind(person.id.as_uuid())
                 .bind(format!("{}@remove.invalid", person.id))
                 .bind(&person.name)
                 .execute(&pool)
@@ -2566,10 +2519,10 @@ mod tests {
         }
         for id in [&room_id, &other_room] {
             sqlx::query("INSERT INTO rooms(id,owner_id,display_name,history_retention_days) VALUES($1,$2,$1,7)")
-                .bind(id).bind(moderator.id.parse::<Uuid>().unwrap()).execute(&pool).await.unwrap();
+                .bind(id).bind(moderator.id.as_uuid()).execute(&pool).await.unwrap();
         }
         let mut settings = RoomManager::default_room_settings(&room_id);
-        settings.owner_id = moderator.id.parse().unwrap();
+        settings.owner_id = moderator.id.as_uuid();
         settings.history_retention_days = 7;
         room.id = room_id.clone();
         room.persisted = true;
@@ -2590,7 +2543,7 @@ mod tests {
             "quote",
             None,
             "durable reply",
-            Some(&original.message_id),
+            Some(&original.message_id.to_string()),
         )
         .unwrap();
         let quoted = room.social.history.back().unwrap().message.clone();
@@ -2607,7 +2560,7 @@ mod tests {
         for message in [&original, &quoted] {
             super::super::history::persist_message(
                 &pool,
-                Some(&room_id),
+                Some(room_id.as_str()),
                 alice.media_session_id,
                 true,
                 7,
@@ -2629,13 +2582,13 @@ mod tests {
         .await
         .unwrap();
         let foreign = ChatEntry {
-            message_id: Uuid::new_v4().to_string(),
+            message_id: MessageId::random(),
             client_message_id: "foreign".into(),
             ..original.clone()
         };
         super::super::history::persist_message(
             &pool,
-            Some(&other_room),
+            Some(other_room.as_str()),
             alice.media_session_id,
             true,
             7,
@@ -2664,9 +2617,9 @@ mod tests {
             .write()
             .unwrap()
             .insert(room_id.clone(), Arc::new(TokioRwLock::new(room)));
-        let command = |id: &str| ClientMessage::RemoveChatMessage {
+        let command = |id: &MessageId| ClientMessage::RemoveChatMessage {
             request_id: "remove".into(),
-            message_id: id.into(),
+            message_id: *id,
         };
         for denied in [&foreign.message_id, &private.message_id] {
             assert!(
@@ -2706,13 +2659,13 @@ mod tests {
         );
         let removed = bodies
             .iter()
-            .find(|body| body["messageId"] == original.message_id)
+            .find(|body| body["messageId"] == original.message_id.to_string())
             .unwrap();
         assert_eq!(removed["content"], "");
         assert!(removed["removedAt"].is_string());
         let quote = bodies
             .iter()
-            .find(|body| body["messageId"] == quoted.message_id)
+            .find(|body| body["messageId"] == quoted.message_id.to_string())
             .unwrap();
         assert_eq!(quote["replyTo"]["excerpt"], "Message removed");
         let events: i64 = sqlx::query_scalar(
@@ -2725,7 +2678,7 @@ mod tests {
         assert_eq!(events, 1, "repeated removal is idempotent");
         let private_body: serde_json::Value =
             sqlx::query_scalar("SELECT body FROM chat_messages WHERE id=$1")
-                .bind(private.message_id.parse::<Uuid>().unwrap())
+                .bind(private.message_id.as_uuid())
                 .fetch_one(&pool)
                 .await
                 .unwrap();
@@ -2739,7 +2692,7 @@ mod tests {
         }
         for person in [&alice, &moderator] {
             sqlx::query("DELETE FROM users WHERE id=$1")
-                .bind(person.id.parse::<Uuid>().unwrap())
+                .bind(person.id.as_uuid())
                 .execute(&pool)
                 .await
                 .unwrap();
@@ -2756,19 +2709,19 @@ mod tests {
             .await
             .unwrap();
         let (mut room, mut owner, bob, mut absent, mut receivers) = fixture();
-        let room_id = format!("social-{}", Uuid::new_v4());
-        let other_room_id = format!("other-{}", Uuid::new_v4());
+        let room_id = rid(&format!("social-{}", Uuid::new_v4()));
+        let other_room_id = rid(&format!("other-{}", Uuid::new_v4()));
         owner.role = roles::Role::Owner;
         absent.role = roles::Role::Member;
-        let owner_id: Uuid = owner.id.parse().unwrap();
-        let absent_id: Uuid = absent.id.parse().unwrap();
+        let owner_id: Uuid = owner.id.as_uuid();
+        let absent_id: Uuid = absent.id.as_uuid();
         let user_ids: Vec<Uuid> = [&owner, &bob, &absent]
             .iter()
-            .map(|p| p.id.parse().unwrap())
+            .map(|p| p.id.as_uuid())
             .collect();
         for participant in [&owner, &bob, &absent] {
             sqlx::query("INSERT INTO users(id,email,display_name) VALUES($1,$2,$3)")
-                .bind(participant.id.parse::<Uuid>().unwrap())
+                .bind(participant.id.as_uuid())
                 .bind(format!("{}@social.invalid", participant.id))
                 .bind(&participant.name)
                 .execute(&pool)
@@ -2791,7 +2744,7 @@ mod tests {
         room.id = room_id.clone();
         room.persisted = true;
         room.settings = Some(settings);
-        room.participants.insert(owner.id.clone(), owner.clone());
+        room.participants.insert(owner.id, owner.clone());
         room.participants.remove(&absent.id);
         let mut config = MediaConfig::default();
         config.worker_config.num_workers = 1;
@@ -2824,11 +2777,9 @@ mod tests {
             .unwrap();
         let response: Value = serde_json::from_str(&receivers[0].try_recv().unwrap()).unwrap();
         let members = response["data"]["members"].as_array().unwrap();
-        assert!(
-            members
-                .iter()
-                .any(|m| m["userId"] == absent.id && m["online"] == false && m["role"] == "member")
-        );
+        assert!(members.iter().any(|m| m["userId"] == absent.id.to_string()
+            && m["online"] == false
+            && m["role"] == "member"));
         manager
             .handle_social_request(
                 &room_id,
@@ -2836,7 +2787,7 @@ mod tests {
                 &owner.sender,
                 &ClientMessage::SetMemberRole {
                     request_id: "promote".into(),
-                    target_user_id: absent.id.clone(),
+                    target_user_id: UserId::from(absent.id.as_uuid()),
                     role: roles::Role::Moderator,
                 },
             )
@@ -2873,7 +2824,7 @@ mod tests {
                     &owner.sender,
                     &ClientMessage::SetMemberRole {
                         request_id: "unrelated".into(),
-                        target_user_id: Uuid::new_v4().to_string(),
+                        target_user_id: UserId::random(),
                         role: roles::Role::Member
                     }
                 )
@@ -2888,7 +2839,7 @@ mod tests {
                 &bob.sender,
                 &ClientMessage::ReportParticipant {
                     request_id: "report".into(),
-                    target_participant_id: owner.id.clone(),
+                    target_participant_id: owner.id,
                     reason: "Needs moderator review".into(),
                 },
             )
@@ -3036,7 +2987,7 @@ mod tests {
         );
         // Resolved reports rotate out at the cap; open reports are never silently lost.
         sqlx::query("INSERT INTO room_reports(room_id,reporter_id,reporter_name,target_participant_id,target_name,reason) SELECT $1,$2,'Owner',$3,'Bob','fixture' FROM generate_series(1,499)")
-            .bind(&room_id).bind(&owner.id).bind(&bob.id).execute(&pool).await.unwrap();
+            .bind(&room_id).bind(owner.id).bind(bob.id).execute(&pool).await.unwrap();
         manager
             .handle_social_request(
                 &room_id,
@@ -3044,7 +2995,7 @@ mod tests {
                 &owner.sender,
                 &ClientMessage::ReportParticipant {
                     request_id: "bounded".into(),
-                    target_participant_id: bob.id.clone(),
+                    target_participant_id: bob.id,
                     reason: "Another report".into(),
                 },
             )
@@ -3073,7 +3024,7 @@ mod tests {
                     &bob.sender,
                     &ClientMessage::ReportParticipant {
                         request_id: "full".into(),
-                        target_participant_id: owner.id.clone(),
+                        target_participant_id: owner.id,
                         reason: "Capacity check".into()
                     }
                 )
@@ -3081,7 +3032,7 @@ mod tests {
                 .is_err()
         );
         sqlx::query("UPDATE users SET preferences=$2 WHERE id=$1")
-            .bind(owner.id.parse::<Uuid>().unwrap())
+            .bind(owner.id.as_uuid())
             .bind(sqlx::types::Json(json!({"allowPrivateMessages": false, "ignored": [{"id": absent.id, "name": absent.name}]})))
             .execute(&pool).await.unwrap();
         manager
@@ -3117,14 +3068,17 @@ mod tests {
         drop(snapshot_read);
         let snapshot: Value = serde_json::from_str(&receivers[0].try_recv().unwrap()).unwrap();
         assert_eq!(snapshot["data"]["allowPrivateMessages"], false);
-        assert_eq!(snapshot["data"]["ignoredParticipantIds"][0], absent.id);
+        assert_eq!(
+            snapshot["data"]["ignoredParticipantIds"][0],
+            absent.id.to_string()
+        );
         assert_eq!(snapshot["data"]["canChat"], true);
         assert!(
             snapshot["data"]["participants"]
                 .as_array()
                 .unwrap()
                 .iter()
-                .all(|p| p["id"] != owner.id && p["authenticated"] == true)
+                .all(|p| p["id"] != owner.id.to_string() && p["authenticated"] == true)
         );
         manager.shutdown().await.unwrap();
         manager.media_server().shutdown().await.unwrap();
@@ -3152,12 +3106,12 @@ impl ParticipantSocial {
         self.ignored = preferences
             .ignored
             .iter()
-            .map(|person| person.id.clone())
+            .filter_map(|person| person.id.parse().ok())
             .collect();
         self.ignored.extend(self.guest_ignored.iter().cloned());
     }
 
-    pub(super) fn accepts_inbox_from(&self, sender: &str) -> bool {
+    pub(super) fn accepts_inbox_from(&self, sender: &ParticipantId) -> bool {
         self.connected && self.allow_private_messages && !self.ignored.contains(sender)
     }
     pub(crate) fn new(joined_sequence: u64) -> Self {
@@ -3209,10 +3163,10 @@ struct ChatAttempt {
     content: String,
     attachment_ids: Vec<Uuid>,
     client_message_id: Option<String>,
-    recipient_id: Option<String>,
+    recipient_id: Option<ParticipantId>,
     sequence: Option<u64>,
     retry_session: Option<String>,
-    reply_to: Option<String>,
+    reply_to: Option<MessageId>,
 }
 
 const REPORT_COOLDOWN: std::time::Duration = std::time::Duration::from_secs(30);
@@ -3244,57 +3198,11 @@ pub(crate) struct RoomSocial {
     moderation_events: VecDeque<ModerationEvent>,
 }
 
-#[derive(Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct BanEntry {
-    ban_id: String,
-    display_name: String,
-    authenticated: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    reason: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    expires_at: Option<String>,
-}
 struct RuntimeBan {
     entry: BanEntry,
-    participant_ids: Vec<String>,
+    participant_ids: Vec<ParticipantId>,
     guest_ip: Option<IpAddr>,
     expiry: Option<std::time::Instant>,
-}
-
-#[derive(Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ReportEntry {
-    report_id: String,
-    reporter_id: String,
-    reporter_name: String,
-    target_participant_id: String,
-    target_name: String,
-    reason: String,
-    status: String,
-    created_at: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    resolved_at: Option<String>,
-    /// The newest history entry that answered this report, if any did.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    outcome: Option<ReportOutcome>,
-}
-
-#[derive(Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ReportOutcome {
-    action: String,
-    created_at: String,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct MemberEntry {
-    user_id: String,
-    display_name: String,
-    role: roles::Role,
-    online: bool,
-    authenticated: bool,
 }
 
 /// A request the room refused: the code the client switches on and a
@@ -3580,29 +3488,26 @@ fn visible(entry: &HistoryEntry, viewer: &Participant) -> bool {
             .contains(&entry.message.participant_id)
     }
 }
-fn replied_to(message: &ChatEntry) -> Option<&str> {
-    message
-        .reply_to
-        .as_ref()
-        .map(|reply| reply.message_id.as_str())
+fn replied_to(message: &ChatEntry) -> Option<MessageId> {
+    message.reply_to.as_ref().map(|reply| reply.message_id)
 }
 /// Erase message text and references without retaining a second hidden copy.
 pub(super) fn redact_message(
     message: &mut ChatEntry,
-    message_id: &str,
+    message_id: &MessageId,
     removed_at: chrono::DateTime<chrono::Utc>,
 ) {
     if message.recipient_id.is_some() {
         return;
     }
-    if message.message_id == message_id {
+    if message.message_id == *message_id {
         message.content.clear();
         message.attachments.clear();
         message.reply_to = None;
         message.reactions.clear();
         message.removed_at = Some(removed_at);
     } else if let Some(reply) = &mut message.reply_to
-        && reply.message_id == message_id
+        && reply.message_id == *message_id
     {
         reply.excerpt = "Message removed".to_owned();
     }
@@ -3612,13 +3517,13 @@ pub(super) fn redact_message(
 fn quote_reply(
     history: &VecDeque<HistoryEntry>,
     sender: &Participant,
-    recipient_id: Option<&str>,
-    message_id: &str,
+    recipient_id: Option<&ParticipantId>,
+    message_id: &MessageId,
 ) -> Result<ChatReplyRef> {
     let original = history
         .iter()
         .rev()
-        .find(|entry| entry.message.message_id == message_id && visible(entry, sender))
+        .find(|entry| entry.message.message_id == *message_id && visible(entry, sender))
         .ok_or_else(|| not_found("That message is no longer available to reply to"))?;
     reply_reference(&original.message, sender, recipient_id)
 }
@@ -3635,16 +3540,16 @@ fn saved_public_reply(message: &ChatEntry, sender: &Participant) -> Result<ChatR
 fn reply_reference(
     message: &ChatEntry,
     sender: &Participant,
-    recipient_id: Option<&str>,
+    recipient_id: Option<&ParticipantId>,
 ) -> Result<ChatReplyRef> {
     if message.removed_at.is_some() {
         return Err(not_found("That message has been removed"));
     }
-    let same_conversation = match (recipient_id, message.recipient_id.as_deref()) {
+    let same_conversation = match (recipient_id, message.recipient_id.as_ref()) {
         (None, None) => true,
         (Some(to), Some(other)) => {
-            let pair = [message.participant_id.as_str(), other];
-            pair.contains(&to) && pair.contains(&sender.id.as_str())
+            let pair = [&message.participant_id, other];
+            pair.contains(&to) && pair.contains(&&sender.id)
         }
         _ => false,
     };
@@ -3666,8 +3571,8 @@ fn reply_reference(
         head
     };
     Ok(ChatReplyRef {
-        message_id: message.message_id.clone(),
-        participant_id: message.participant_id.clone(),
+        message_id: message.message_id,
+        participant_id: message.participant_id,
         participant_name: message.participant_name.clone(),
         excerpt,
     })
@@ -3676,8 +3581,8 @@ fn reply_reference(
 /// back, and tells everyone who can see the message, the reactor included.
 fn prepare_reaction(
     room: &Room,
-    participant_id: &str,
-    message_id: &str,
+    participant_id: &ParticipantId,
+    message_id: &MessageId,
     emoji: &str,
 ) -> Result<Vec<ChatReaction>> {
     let actor = room
@@ -3688,7 +3593,7 @@ fn prepare_reaction(
         .social
         .history
         .iter()
-        .position(|entry| entry.message.message_id == message_id && visible(entry, actor))
+        .position(|entry| entry.message.message_id == *message_id && visible(entry, actor))
         .ok_or_else(|| not_found("That message is no longer available"))?;
     if room.social.history[index].message.removed_at.is_some() {
         return Err(not_found("That message has been removed"));
@@ -3705,7 +3610,7 @@ fn prepare_reaction(
 /// caller owns target visibility; this function enforces the bounded palette.
 pub(super) fn toggle_reactions(
     current: &[ChatReaction],
-    participant_id: &str,
+    participant_id: &ParticipantId,
     emoji: &str,
 ) -> std::result::Result<Vec<ChatReaction>, &'static str> {
     if !REACTIONS.contains(&emoji) {
@@ -3744,7 +3649,7 @@ pub(super) fn toggle_reactions(
 /// toggle the same reaction off again.
 pub(super) fn set_reaction(
     current: &[ChatReaction],
-    participant_id: &str,
+    participant_id: &ParticipantId,
     emoji: &str,
     present: bool,
 ) -> std::result::Result<Vec<ChatReaction>, &'static str> {
@@ -3787,7 +3692,7 @@ fn publish_saved_reaction(room: &mut Room, message: &ChatEntry) -> Result<()> {
     }
     let event =
         crate::OutboundJson::from(serde_json::to_string(&ServerMessage::MessageReactions {
-            message_id: message.message_id.clone(),
+            message_id: message.message_id,
             reactions: message.reactions.clone(),
         })?);
     for viewer in room.participants.values().filter(|viewer| {
@@ -3800,7 +3705,7 @@ fn publish_saved_reaction(room: &mut Room, message: &ChatEntry) -> Result<()> {
 
 fn publish_reaction(
     room: &mut Room,
-    message_id: &str,
+    message_id: &MessageId,
     reactions: Vec<ChatReaction>,
 ) -> Result<Vec<ChatReaction>> {
     // Ephemeral chat can trim replay while a saved reaction waits for SQL.
@@ -3809,7 +3714,7 @@ fn publish_reaction(
         .social
         .history
         .iter()
-        .position(|entry| entry.message.message_id == message_id)
+        .position(|entry| entry.message.message_id == *message_id)
         .ok_or_else(|| not_found("That message is no longer available"))?;
     if room.social.history[index].message.removed_at.is_some() {
         return Err(not_found("That message has been removed"));
@@ -3817,7 +3722,7 @@ fn publish_reaction(
     room.social.history[index].message.reactions = reactions.clone();
     let event =
         crate::OutboundJson::from(serde_json::to_string(&ServerMessage::MessageReactions {
-            message_id: message_id.to_string(),
+            message_id: *message_id,
             reactions: reactions.clone(),
         })?);
     let entry = &room.social.history[index];
@@ -3830,8 +3735,8 @@ fn publish_reaction(
 #[cfg(test)]
 fn react_to_message(
     room: &mut Room,
-    participant_id: &str,
-    message_id: &str,
+    participant_id: &ParticipantId,
+    message_id: &MessageId,
     emoji: &str,
 ) -> Result<Vec<ChatReaction>> {
     let reactions = prepare_reaction(room, participant_id, message_id, emoji)?;
@@ -3841,7 +3746,7 @@ fn react_to_message(
 fn prepare_edit(
     room: &Room,
     actor: &Participant,
-    message_id: &str,
+    message_id: &MessageId,
     request: &history::EditRequest,
 ) -> Result<Option<ChatEntry>> {
     if room.settings.as_ref().is_some_and(|s| !s.allow_chat)
@@ -3857,7 +3762,7 @@ fn prepare_edit(
         .social
         .history
         .iter()
-        .find(|entry| entry.message.message_id == message_id)
+        .find(|entry| entry.message.message_id == *message_id)
     else {
         return Ok(None);
     };
@@ -3953,7 +3858,11 @@ fn can_private_message(sender: &Participant, recipient: &Participant) -> bool {
 
 /// An HTTP first message may use the same account-to-account authority as an
 /// admitted room send. The caller holds that room's control gate through commit.
-pub(super) fn can_start_account_conversation(room: &Room, sender: &str, recipient: &str) -> bool {
+pub(super) fn can_start_account_conversation(
+    room: &Room,
+    sender: &ParticipantId,
+    recipient: &ParticipantId,
+) -> bool {
     let (Some(sender), Some(recipient)) = (
         room.participants.get(sender),
         room.participants.get(recipient),
@@ -3993,8 +3902,13 @@ impl RoomSocial {
     }
 
     /// Scrub both replay and deduplication receipts before broadcasting removal.
-    fn remove_message(&mut self, message_id: &str, removed_at: chrono::DateTime<chrono::Utc>) {
-        self.pins.retain(|message| message.message_id != message_id);
+    fn remove_message(
+        &mut self,
+        message_id: &MessageId,
+        removed_at: chrono::DateTime<chrono::Utc>,
+    ) {
+        self.pins
+            .retain(|message| message.message_id != *message_id);
         self.history_bytes = 0;
         for entry in &mut self.history {
             redact_message(&mut entry.message, message_id, removed_at);
@@ -4127,7 +4041,7 @@ impl RoomSocial {
     }
 
     /// Drop an account's runtime ban and say what name it was recorded under.
-    pub(crate) fn forget_user_ban(&mut self, participant_id: &str) -> Option<String> {
+    pub(crate) fn forget_user_ban(&mut self, participant_id: &ParticipantId) -> Option<String> {
         let mut name = None;
         self.bans.retain(|_, ban| {
             let matches = ban.entry.authenticated
@@ -4144,9 +4058,9 @@ impl RoomSocial {
     /// address. The caller removes the returned identities from room gate caches.
     pub(super) fn forget_ban(
         &mut self,
-        user: Option<&str>,
+        user: Option<&ParticipantId>,
         guest_ip: Option<IpAddr>,
-    ) -> Vec<String> {
+    ) -> Vec<ParticipantId> {
         let mut affected = Vec::new();
         self.bans.retain(|_, ban| {
             let matches = user.is_some_and(|user| ban.participant_ids.iter().any(|id| id == user))
@@ -4242,7 +4156,7 @@ impl RoomSocial {
         &mut self,
         name: String,
         authenticated: bool,
-        participant_ids: Vec<String>,
+        participant_ids: Vec<ParticipantId>,
         ip: Option<IpAddr>,
         reason: Option<&str>,
         duration: Option<u64>,
@@ -4279,9 +4193,9 @@ impl Room {
     /// once per `TYPING_INTERVAL`. A sender who cannot chat is silently dropped.
     pub(crate) fn relay_typing(
         &mut self,
-        sender_id: &str,
+        sender_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
-        target: Option<&str>,
+        target: Option<&ParticipantId>,
     ) -> Result<()> {
         let now = std::time::Instant::now();
         let moderated = self.settings.as_ref().is_some_and(|s| s.moderated);
@@ -4311,8 +4225,8 @@ impl Room {
             sender.social.last_typing = Some(now);
         }
         let event = ServerMessage::ParticipantTyping {
-            participant_id: sender_id.to_string(),
-            target_participant_id: target.map(String::from),
+            participant_id: *sender_id,
+            target_participant_id: target.copied(),
         };
         let json = crate::OutboundJson::from(serde_json::to_string(&event)?);
         match target {
@@ -4323,7 +4237,7 @@ impl Room {
             }
             None => {
                 for participant in self.participants.values() {
-                    if participant.id != sender_id
+                    if participant.id != *sender_id
                         && !participant.social.ignored.contains(sender_id)
                     {
                         self.try_send_broadcast(&participant.sender, json.clone(), &event);
@@ -4340,8 +4254,8 @@ impl RoomManager {
     /// grant and every byte fetch, including reconnect/rejoin and removal.
     pub(crate) async fn attachment_grant_context(
         &self,
-        room_id: &str,
-        participant_id: &str,
+        room_id: &RoomId,
+        participant_id: &ParticipantId,
         expected_sender: Option<&mpsc::Sender<crate::OutboundJson>>,
         media_session: Option<Uuid>,
         attachment_id: Uuid,
@@ -4368,11 +4282,11 @@ impl RoomManager {
                     .attachments
                     .iter()
                     .any(|file| file.id == attachment_id)
-                && entry.message.message_id.parse::<Uuid>().ok()
+                && Some(entry.message.message_id.as_uuid())
                     == location.message_id.or(location.ephemeral_message_id)
         });
         let retained_public = location.message_id.is_some()
-            && location.room_id.as_deref() == Some(room_id)
+            && location.room_id.as_deref() == Some(room_id.as_str())
             && room.persisted
             && room
                 .settings
@@ -4383,10 +4297,10 @@ impl RoomManager {
 
     pub(crate) async fn relay_typing(
         &self,
-        room_id: &str,
-        sender_id: &str,
+        room_id: &RoomId,
+        sender_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
-        target: Option<&str>,
+        target: Option<&ParticipantId>,
     ) -> Result<()> {
         let room_lock = self.get_room(room_id)?;
         let mut room = room_lock.write().await;
@@ -4398,12 +4312,12 @@ impl RoomManager {
     #[cfg(test)]
     pub(crate) async fn send_social_chat(
         &self,
-        room_id: &str,
-        sender_id: &str,
+        room_id: &RoomId,
+        sender_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         content: String,
         client_message_id: Option<String>,
-        recipient_id: Option<&str>,
+        recipient_id: Option<&ParticipantId>,
     ) -> Result<()> {
         let command = match recipient_id {
             Some(target) => ClientMessage::PrivateMessage {
@@ -4429,8 +4343,8 @@ impl RoomManager {
 
     pub(crate) async fn handle_chat_command(
         &self,
-        room_id: &str,
-        sender_id: &str,
+        room_id: &RoomId,
+        sender_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         command: &ClientMessage,
     ) -> Result<()> {
@@ -4448,7 +4362,7 @@ impl RoomManager {
                 recipient_id: None,
                 sequence: *sequence,
                 retry_session: None,
-                reply_to: reply_to.clone(),
+                reply_to: *reply_to,
             },
             ClientMessage::PrivateMessage {
                 content,
@@ -4461,19 +4375,19 @@ impl RoomManager {
                 content: content.clone(),
                 attachment_ids: attachment_ids.clone(),
                 client_message_id: Some(client_message_id.clone()),
-                recipient_id: Some(target_participant_id.clone()),
+                recipient_id: Some(*target_participant_id),
                 sequence: *sequence,
                 retry_session: None,
-                reply_to: reply_to.clone(),
+                reply_to: *reply_to,
             },
             ClientMessage::RetryChatMessage(message) => ChatAttempt {
                 content: message.content.clone(),
                 attachment_ids: message.attachment_ids.clone(),
                 client_message_id: Some(message.client_message_id.clone()),
-                recipient_id: message.target_participant_id.clone(),
+                recipient_id: message.target_participant_id,
                 sequence: Some(message.sequence),
                 retry_session: Some(message.chat_session_id.clone()),
-                reply_to: message.reply_to.clone(),
+                reply_to: message.reply_to,
             },
             _ => return Err(invalid("Invalid chat command")),
         };
@@ -4483,15 +4397,15 @@ impl RoomManager {
 
     async fn submit_chat_attempt(
         &self,
-        room_id: &str,
-        sender_id: &str,
+        room_id: &RoomId,
+        sender_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         attempt: ChatAttempt,
     ) -> Result<()> {
         let room_lock = self.get_room(room_id)?;
         let mut room = room_lock.write().await;
         let durable = self.db_pool.is_some()
-            && if let Some(recipient) = attempt.recipient_id.as_deref() {
+            && if let Some(recipient) = attempt.recipient_id.as_ref() {
                 room.participants
                     .get(sender_id)
                     .is_some_and(|sender| sender.authenticated)
@@ -4523,7 +4437,7 @@ impl RoomManager {
                     .settings
                     .as_ref()
                     .is_some_and(|settings| settings.history_retention_days > 0)
-                && let Some(id) = attempt.reply_to.as_deref()
+                && let Some(id) = attempt.reply_to.as_ref()
             {
                 let actor = Self::participant_for_sender(&room, &sender_id, &expected_sender)?;
                 if quote_reply(&room.social.history, actor, None, id).is_err() {
@@ -4534,7 +4448,7 @@ impl RoomManager {
                     drop(room);
                     let saved = tokio::time::timeout(
                         control::PERSISTENCE_TIMEOUT,
-                        history::lookup_public(pool, &room_id, id),
+                        history::lookup_public(pool, room_id.as_str(), id),
                     )
                     .await
                     .map_err(|_| timed_out("Chat history timed out"))??;
@@ -4622,16 +4536,10 @@ impl RoomManager {
                         &room_lock,
                         crate::attachments::bind_ephemeral(
                             pool,
-                            sender_id
-                                .parse()
-                                .map_err(|_| forbidden("Sign in to attach files"))?,
+                            sender_id.as_uuid(),
                             &prepared.attachment_ids,
-                            prepared
-                                .message
-                                .message_id
-                                .parse()
-                                .map_err(|_| invalid("Invalid message ID"))?,
-                            &room_id,
+                            prepared.message.message_id.as_uuid(),
+                            room_id.as_str(),
                         ),
                     )
                     .await;
@@ -4669,7 +4577,7 @@ impl RoomManager {
     ) -> Option<tokio::task::JoinHandle<()>> {
         use futures_util::StreamExt as _;
         use tracing::Instrument as _;
-        let recipient = message.recipient_id.clone()?;
+        let recipient = message.recipient_id?;
         let encoded = serde_json::to_string(&ServerMessage::ChatMessageEdited {
             message: message.clone(),
         })
@@ -4713,13 +4621,11 @@ impl RoomManager {
                                 let Some(pool) = manager.db_pool.as_ref() else {
                                     return;
                                 };
-                                let (Ok(own), Ok(peer), Ok(id)) = (
-                                    message.participant_id.parse::<Uuid>(),
-                                    recipient.parse::<Uuid>(),
-                                    message.message_id.parse::<Uuid>(),
-                                ) else {
-                                    return;
-                                };
+                                let (own, peer, id) = (
+                                    message.participant_id.as_uuid(),
+                                    recipient.as_uuid(),
+                                    message.message_id.as_uuid(),
+                                );
                                 let Ok(Ok(Some(saved))) = tokio::time::timeout(
                                     control::PERSISTENCE_TIMEOUT,
                                     history::private_message(pool, own, peer, id),
@@ -4737,7 +4643,7 @@ impl RoomManager {
                             let event = if reactions {
                                 let Ok(encoded) =
                                     serde_json::to_string(&ServerMessage::MessageReactions {
-                                        message_id: message.message_id.clone(),
+                                        message_id: message.message_id,
                                         reactions: message.reactions.clone(),
                                     })
                                 else {
@@ -4770,15 +4676,14 @@ impl RoomManager {
                             }
                             for person in room.participants.values().filter(|p| {
                                 p.authenticated
-                                    && (p.id == message.participant_id
-                                        || p.id == recipient.as_str())
+                                    && (p.id == message.participant_id || p.id == *recipient)
                             }) {
-                                let peer = if person.id == recipient.as_str() {
-                                    message.participant_id.as_str()
+                                let peer = if person.id == *recipient {
+                                    message.participant_id
                                 } else {
-                                    recipient.as_str()
+                                    *recipient
                                 };
-                                if person.social.accepts_inbox_from(peer) {
+                                if person.social.accepts_inbox_from(&peer) {
                                     let _ = try_send_essential(
                                         &manager.metrics,
                                         &person.sender,
@@ -4823,11 +4728,11 @@ impl RoomManager {
     #[cfg(test)]
     fn process_social_chat(
         room: &mut Room,
-        sender_id: &str,
+        sender_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         content: String,
         client_message_id: Option<String>,
-        recipient_id: Option<&str>,
+        recipient_id: Option<&ParticipantId>,
     ) -> Result<()> {
         Self::process_chat_attempt(
             room,
@@ -4837,7 +4742,7 @@ impl RoomManager {
                 content,
                 attachment_ids: Vec::new(),
                 client_message_id,
-                recipient_id: recipient_id.map(String::from),
+                recipient_id: recipient_id.copied(),
                 sequence: None,
                 retry_session: None,
                 reply_to: None,
@@ -4847,7 +4752,7 @@ impl RoomManager {
 
     fn prepare_chat_attempt(
         room: &mut Room,
-        sender_id: &str,
+        sender_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         attempt: ChatAttempt,
     ) -> Result<Option<PreparedChat>> {
@@ -4856,7 +4761,7 @@ impl RoomManager {
 
     fn prepare_chat_attempt_with_saved_reply(
         room: &mut Room,
-        sender_id: &str,
+        sender_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         attempt: ChatAttempt,
         saved_reply: Option<&ChatEntry>,
@@ -4870,8 +4775,7 @@ impl RoomManager {
             retry_session,
             reply_to,
         } = attempt;
-        let reply_to = reply_to.as_deref();
-        let recipient_id = recipient_id.as_deref();
+        let recipient_id = recipient_id.as_ref();
         if (content.trim().is_empty() && attachment_ids.is_empty()) || content.len() > 4096 {
             return Err(invalid("Message must contain 1–4096 bytes of text"));
         }
@@ -4885,10 +4789,7 @@ impl RoomManager {
         if !valid_correlation_id(&client_message_id) {
             return Err(invalid("Invalid message ID"));
         }
-        if sequence.is_some_and(|value| value == 0 || value > MAX_CHAT_SEQUENCE)
-            || recipient_id.is_some_and(|id| id.parse::<Uuid>().is_err())
-            || reply_to.is_some_and(|id| !valid_correlation_id(id))
-        {
+        if sequence.is_some_and(|value| value == 0 || value > MAX_CHAT_SEQUENCE) {
             return Err(invalid("Invalid chat attempt"));
         }
         room.ensure_live()?;
@@ -4932,7 +4833,7 @@ impl RoomManager {
                         .map(|file| file.id)
                         .collect::<Vec<_>>()
                         != attachment_ids)
-                || existing.message.recipient_id.as_deref() != recipient_id
+                || existing.message.recipient_id.as_ref() != recipient_id
                 || existing.sequence != sequence
             {
                 if retry_session.is_none() {
@@ -4985,7 +4886,7 @@ impl RoomManager {
                         .map(|file| file.id)
                         .collect::<Vec<_>>()
                         != attachment_ids)
-                || existing.message.recipient_id.as_deref() != recipient_id
+                || existing.message.recipient_id.as_ref() != recipient_id
             {
                 return Err(invalid("Message ID was already used"));
             }
@@ -5010,7 +4911,7 @@ impl RoomManager {
         };
         let reply_to = match reply_to {
             Some(id) => Some(
-                quote_reply(&room.social.history, sender, recipient_id, id).or_else(|error| {
+                quote_reply(&room.social.history, sender, recipient_id, &id).or_else(|error| {
                     if recipient_id.is_none()
                         && let Some(original) =
                             saved_reply.filter(|message| message.message_id == id)
@@ -5023,11 +4924,11 @@ impl RoomManager {
             None => None,
         };
         let message = ChatEntry {
-            message_id: Uuid::new_v4().to_string(),
+            message_id: MessageId::random(),
             client_message_id: client_message_id.clone(),
-            participant_id: sender_id.to_string(),
+            participant_id: *sender_id,
             participant_name: sender_name,
-            recipient_id: recipient_id.map(String::from),
+            recipient_id: recipient_id.copied(),
             account_conversation: None,
             recipient_name: recipient.as_ref().map(|p| p.0.clone()),
             content,
@@ -5081,7 +4982,7 @@ impl RoomManager {
 
     fn process_chat_attempt(
         room: &mut Room,
-        sender_id: &str,
+        sender_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         attempt: ChatAttempt,
     ) -> Result<()> {
@@ -5095,7 +4996,7 @@ impl RoomManager {
 
     fn finish_chat_attempt(
         room: &mut Room,
-        sender_id: &str,
+        sender_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         prepared: PreparedChat,
     ) -> Result<()> {
@@ -5124,11 +5025,11 @@ impl RoomManager {
             }
         } else {
             let event = ServerMessage::ChatReceived {
-                participant_id: message.participant_id.clone(),
+                participant_id: message.participant_id,
                 participant_name: message.participant_name.clone(),
                 content: message.content.clone(),
                 attachments: message.attachments.clone(),
-                message_id: message.message_id.clone(),
+                message_id: message.message_id,
                 client_message_id: message.client_message_id.clone(),
                 sent_at: message.sent_at,
                 removed_at: message.removed_at,
@@ -5139,7 +5040,7 @@ impl RoomManager {
             };
             let json = crate::OutboundJson::from(serde_json::to_string(&event)?);
             for participant in room.participants.values() {
-                if participant.id != sender_id && !participant.social.ignored.contains(sender_id) {
+                if participant.id != *sender_id && !participant.social.ignored.contains(sender_id) {
                     let _ = try_send_essential(&room.metrics, &participant.sender, json.clone());
                 }
             }
@@ -5171,8 +5072,8 @@ impl RoomManager {
 
     pub(crate) async fn handle_social_request(
         &self,
-        room_id: &str,
-        participant_id: &str,
+        room_id: &RoomId,
+        participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         command: &ClientMessage,
     ) -> Result<()> {
@@ -5194,8 +5095,7 @@ impl RoomManager {
                 expected_sender,
                 &ServerMessage::SocialResponse {
                     request_id: request_id.clone(),
-                    action: "getRoomSnapshot".to_owned(),
-                    data: serde_json::to_value(snapshot)?,
+                    response: SocialResponse::GetRoomSnapshot(snapshot),
                 },
             );
         }
@@ -5238,7 +5138,7 @@ impl RoomManager {
                 .values()
                 .filter(|p| p.id != actor.id)
                 .map(|p| ParticipantInfo {
-                    id: p.id.clone(),
+                    id: p.id,
                     name: p.name.clone(),
                     role: p.role,
                     authenticated: p.authenticated,
@@ -5265,7 +5165,7 @@ impl RoomManager {
                 room.lobby
                     .values()
                     .map(|p| SnapshotLobbyEntry {
-                        participant_id: p.participant_id.clone(),
+                        participant_id: p.participant_id,
                         display_name: p.name.clone(),
                         authenticated: p.authenticated,
                     })
@@ -5311,13 +5211,13 @@ impl RoomManager {
 
     async fn handle_social_request_inner(
         &self,
-        room_id: &str,
-        participant_id: &str,
+        room_id: &RoomId,
+        participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         command: &ClientMessage,
         control: Option<super::control::RoomControl>,
     ) -> Result<()> {
-        let (request_id, action) = command
+        let (request_id, _) = command
             .social_request()
             .ok_or_else(|| not_found("Unknown request"))?;
         if !valid_correlation_id(request_id) {
@@ -5335,14 +5235,16 @@ impl RoomManager {
             let room_lock = self.get_room(room_id)?;
             let room = room_lock.read().await;
             Self::participant_for_sender(&room, participant_id, expected_sender)?;
-            let online = room.participants.contains_key(target_user_id);
+            let online = room
+                .participants
+                .contains_key(&ParticipantId::from(target_user_id.as_uuid()));
             drop(room);
             if online {
                 self.set_participant_role_controlled(
                     room_id,
                     participant_id,
                     expected_sender,
-                    target_user_id,
+                    &ParticipantId::from(target_user_id.as_uuid()),
                     new_role,
                     control.ok_or_else(|| unavailable("Room control is unavailable"))?,
                 )
@@ -5352,8 +5254,7 @@ impl RoomManager {
                     expected_sender,
                     &ServerMessage::SocialResponse {
                         request_id: request_id.to_string(),
-                        action: action.to_string(),
-                        data: json!({"updated":true}),
+                        response: SocialResponse::SetMemberRole { updated: true },
                     },
                 );
             }
@@ -5378,7 +5279,7 @@ impl RoomManager {
                 }
             }
         }
-        let data = match command {
+        let response = match command {
             ClientMessage::GetChatHistory {
                 before,
                 after,
@@ -5395,29 +5296,33 @@ impl RoomManager {
                 let query = history::HistoryQuery {
                     before: before.clone(),
                     after: after.clone(),
-                    around: around.clone(),
+                    around: *around,
                     resume: *resume,
                     q: q.clone(),
                     limit: *limit,
                 };
                 query.validate().map_err(rejected)?;
                 if days == 0 || !room.persisted {
-                    json!({"messages": [], "nextCursor": null, "newerCursor": null, "firstUnreadMessageId": null, "readMessageId": null, "retentionDays": 0})
+                    SocialResponse::GetChatHistory(history::HistoryPage {
+                        messages: Vec::new(),
+                        next_cursor: None,
+                        newer_cursor: None,
+                        first_unread_message_id: None,
+                        read_message_id: None,
+                        retention_days: 0,
+                    })
                 } else {
                     let pool = self
                         .db_pool
                         .as_ref()
                         .ok_or_else(|| unavailable("History unavailable"))?;
-                    let account = actor_authenticated
-                        .then(|| participant_id.parse::<Uuid>())
-                        .transpose()
-                        .map_err(|_| invalid("Invalid account"))?;
+                    let account = actor_authenticated.then(|| participant_id.as_uuid());
                     drop(room);
                     let mut page = tokio::time::timeout(
                         control::PERSISTENCE_TIMEOUT,
                         history::page(
                             pool,
-                            &history::public_conversation(room_id),
+                            &history::public_conversation(room_id.as_str()),
                             account,
                             days,
                             &query,
@@ -5436,7 +5341,7 @@ impl RoomManager {
                         .ignored;
                     page.messages
                         .retain(|message| !ignored.contains(&message.participant_id));
-                    serde_json::to_value(page)?
+                    SocialResponse::GetChatHistory(page)
                 }
             }
             ClientMessage::MarkChatRead { message_id, .. } => {
@@ -5449,12 +5354,8 @@ impl RoomManager {
                 {
                     return Err(unavailable("Saved room history is unavailable"));
                 }
-                let account = participant_id
-                    .parse::<Uuid>()
-                    .map_err(|_| invalid("Invalid account"))?;
-                let message = message_id
-                    .parse::<Uuid>()
-                    .map_err(|_| invalid("Invalid message ID"))?;
+                let account = participant_id.as_uuid();
+                let message = message_id.as_uuid();
                 let pool = self
                     .db_pool
                     .as_ref()
@@ -5464,7 +5365,7 @@ impl RoomManager {
                     control::PERSISTENCE_TIMEOUT,
                     history::mark_read(
                         pool,
-                        &history::public_conversation(room_id),
+                        &history::public_conversation(room_id.as_str()),
                         account,
                         message,
                     ),
@@ -5481,7 +5382,9 @@ impl RoomManager {
                 room = room_lock.write().await;
                 room.ensure_live()?;
                 Self::participant_for_sender(&room, participant_id, expected_sender)?;
-                serde_json::to_value(read)?
+                SocialResponse::MarkChatRead {
+                    read_message_id: Some(read.read_message_id),
+                }
             }
             ClientMessage::SetRoomHistory { retention_days, .. } => {
                 require_role(actor_role, roles::Role::Owner)?;
@@ -5499,7 +5402,7 @@ impl RoomManager {
                 self.persist_room(
                     room_id,
                     &room_lock,
-                    history::set_retention(pool, room_id, *retention_days),
+                    history::set_retention(pool, room_id.as_str(), *retention_days),
                 )
                 .await?;
                 room = room_lock.write().await;
@@ -5516,7 +5419,9 @@ impl RoomManager {
                     room.social.pins.clear();
                 }
                 publish_pins(&room)?;
-                json!({"retentionDays": retention_days})
+                SocialResponse::SetRoomHistory {
+                    retention_days: *retention_days,
+                }
             }
             ClientMessage::SetChatPreferences {
                 allow_private_messages,
@@ -5526,7 +5431,7 @@ impl RoomManager {
                 if ignored_participant_ids.len() > MAX_IGNORED
                     || ignored_participant_ids
                         .iter()
-                        .any(|id| id.parse::<Uuid>().is_err() || id == participant_id)
+                        .any(|id| id == participant_id)
                 {
                     return Err(invalid(
                         "Choose at most 100 valid participant identities to ignore",
@@ -5537,9 +5442,7 @@ impl RoomManager {
                         .db_pool
                         .as_ref()
                         .ok_or_else(|| unavailable("Account preferences unavailable"))?;
-                    let account = participant_id
-                        .parse()
-                        .map_err(|_| invalid("Invalid account"))?;
+                    let account = participant_id.as_uuid();
                     drop(room);
                     let preferences = tokio::time::timeout(
                         control::PERSISTENCE_TIMEOUT,
@@ -5570,7 +5473,10 @@ impl RoomManager {
                     actor.social.ignored = ignored_participant_ids.iter().cloned().collect();
                 }
                 let actor = room.participants.get(participant_id).unwrap();
-                json!({"allowPrivateMessages":actor.social.allow_private_messages,"ignoredParticipantIds":actor.social.ignored.iter().collect::<Vec<_>>()})
+                SocialResponse::SetChatPreferences {
+                    allow_private_messages: actor.social.allow_private_messages,
+                    ignored_participant_ids: actor.social.ignored.iter().cloned().collect(),
+                }
             }
             ClientMessage::ChangeNickname { nickname, .. } => {
                 let nickname = nickname.trim();
@@ -5588,19 +5494,19 @@ impl RoomManager {
                 }
                 room.participants.get_mut(participant_id).unwrap().name = nickname.to_string();
                 room.broadcast_all(&ServerMessage::NicknameChanged {
-                    participant_id: participant_id.to_string(),
+                    participant_id: *participant_id,
                     nickname: nickname.to_string(),
                 });
-                json!({"nickname":nickname})
+                SocialResponse::ChangeNickname {
+                    nickname: nickname.to_string(),
+                }
             }
             ClientMessage::SetChatStyle { chat_style, .. } => {
                 let chat_style = chat_style
                     .validated()
                     .ok_or_else(|| invalid("Choose a chat color from the palette"))?;
                 if actor_authenticated && let Some(pool) = self.db_pool.clone() {
-                    let user: Uuid = participant_id
-                        .parse()
-                        .map_err(|_| invalid("Invalid account"))?;
+                    let user: Uuid = participant_id.as_uuid();
                     // The account keeps the look before anyone sees it.
                     drop(room);
                     tokio::time::timeout(
@@ -5619,10 +5525,12 @@ impl RoomManager {
                     .ok_or_else(|| not_found("Participant not found"))?
                     .chat_style = chat_style.clone();
                 room.broadcast_all(&ServerMessage::ChatStyleChanged {
-                    participant_id: participant_id.to_string(),
+                    participant_id: *participant_id,
                     chat_style: chat_style.clone(),
                 });
-                json!({"chatStyle": chat_style})
+                SocialResponse::SetChatStyle {
+                    chat_style: chat_style.clone(),
+                }
             }
             ClientMessage::EditChatMessage {
                 message_id,
@@ -5630,12 +5538,7 @@ impl RoomManager {
                 expected_revision,
                 ..
             } => {
-                let account: Uuid = participant_id
-                    .parse()
-                    .map_err(|_| invalid("Invalid participant"))?;
-                if message_id.parse::<Uuid>().is_err() {
-                    return Err(invalid("Invalid message ID"));
-                }
+                let account: Uuid = participant_id.as_uuid();
                 let request = history::EditRequest {
                     content: content.clone(),
                     expected_revision: *expected_revision,
@@ -5656,7 +5559,7 @@ impl RoomManager {
                     drop(room);
                     let found = tokio::time::timeout(
                         control::PERSISTENCE_TIMEOUT,
-                        history::lookup_public(pool, room_id, message_id),
+                        history::lookup_public(pool, room_id.as_str(), message_id),
                     )
                     .await
                     .map_err(|_| timed_out("History request timed out"))??;
@@ -5666,7 +5569,7 @@ impl RoomManager {
                     Self::participant_for_sender(&room, participant_id, expected_sender)?;
                 }
                 let mut edited = edited.ok_or_else(|| unavailable("Message unavailable"))?;
-                if edited.participant_id != participant_id {
+                if edited.participant_id != *participant_id {
                     return Err(forbidden("Only the author can edit this message"));
                 }
                 let durable = self.db_pool.is_some()
@@ -5685,7 +5588,7 @@ impl RoomManager {
                             &room_lock,
                             history::edit_saved(
                                 pool,
-                                Some(room_id),
+                                Some(room_id.as_str()),
                                 account,
                                 guest_session,
                                 &edited,
@@ -5709,7 +5612,7 @@ impl RoomManager {
                 }
                 publish_edit(&mut room, &edited)?;
                 drop(self.schedule_inbox_edit(&edited));
-                json!({"message":edited})
+                SocialResponse::EditChatMessage { message: edited }
             }
             ClientMessage::GetPinnedMessages { .. } | ClientMessage::SetPinnedMessage { .. } => {
                 let change = if let ClientMessage::SetPinnedMessage {
@@ -5717,9 +5620,6 @@ impl RoomManager {
                 } = command
                 {
                     require_role(actor_role, roles::Role::Moderator)?;
-                    if message_id.parse::<Uuid>().is_err() {
-                        return Err(invalid("Invalid message ID"));
-                    }
                     Some((message_id, *pinned))
                 } else {
                     None
@@ -5739,7 +5639,7 @@ impl RoomManager {
                         self.persist_room(
                             room_id,
                             &room_lock,
-                            history::set_pin(pool, room_id, message, pinned),
+                            history::set_pin(pool, room_id.as_str(), message, pinned),
                         )
                         .await
                         .map_err(|error| {
@@ -5752,7 +5652,7 @@ impl RoomManager {
                     }
                     let pins = tokio::time::timeout(
                         control::PERSISTENCE_TIMEOUT,
-                        history::pinned_messages(pool, room_id),
+                        history::pinned_messages(pool, room_id.as_str()),
                     )
                     .await
                     .map_err(|_| timed_out("Pinned messages request timed out"))??;
@@ -5795,13 +5695,14 @@ impl RoomManager {
                     .filter(|message| !actor.social.ignored.contains(&message.participant_id))
                     .cloned()
                     .collect();
-                json!({"messages":messages})
+                if matches!(command, ClientMessage::SetPinnedMessage { .. }) {
+                    SocialResponse::SetPinnedMessage { messages }
+                } else {
+                    SocialResponse::GetPinnedMessages { messages }
+                }
             }
             ClientMessage::RemoveChatMessage { message_id, .. } => {
                 require_role(actor_role, roles::Role::Moderator)?;
-                if message_id.parse::<Uuid>().is_err() {
-                    return Err(invalid("Invalid message ID"));
-                }
                 let mut original = room
                     .social
                     .history
@@ -5824,7 +5725,7 @@ impl RoomManager {
                     drop(room);
                     original = tokio::time::timeout(
                         control::PERSISTENCE_TIMEOUT,
-                        super::history::lookup_public(pool, room_id, message_id),
+                        super::history::lookup_public(pool, room_id.as_str(), message_id),
                     )
                     .await
                     .map_err(|_| timed_out("Chat history timed out"))??;
@@ -5843,7 +5744,7 @@ impl RoomManager {
                             name: &actor_name,
                         },
                         Target {
-                            id: &original.participant_id,
+                            id: original.participant_id.into(),
                             name: &original.participant_name,
                             authenticated,
                             ip: None,
@@ -5862,14 +5763,14 @@ impl RoomManager {
                             if keeps_history {
                                 super::history::remove_public(
                                     &mut transaction,
-                                    room_id,
+                                    room_id.as_str(),
                                     message_id,
                                     removed_at,
                                 )
                                 .await?;
                             }
                             sqlx::query("DELETE FROM attachments WHERE room_id=$1 AND ephemeral_message_id=$2")
-                                .bind(room_id).bind(message_id.parse::<Uuid>().map_err(|_|sqlx::Error::RowNotFound)?)
+                                .bind(room_id).bind(message_id.as_uuid())
                                 .execute(&mut *transaction).await?;
                             record_event(&mut transaction, room_id, &event, MAX_MODERATION_EVENTS)
                                 .await?;
@@ -5883,7 +5784,7 @@ impl RoomManager {
                             drop(room);
                             self.persist_room(room_id,&room_lock,async {
                                 sqlx::query("DELETE FROM attachments WHERE room_id=$1 AND ephemeral_message_id=$2")
-                                    .bind(room_id).bind(message_id.parse::<Uuid>().map_err(|_|sqlx::Error::RowNotFound)?)
+                                    .bind(room_id).bind(message_id.as_uuid())
                                     .execute(pool).await.map(|_|())
                             }).await?;
                             room = room_lock.write().await;
@@ -5894,11 +5795,14 @@ impl RoomManager {
                 }
                 room.social.remove_message(message_id, removed_at);
                 room.broadcast_all(&ServerMessage::ChatMessageRemoved {
-                    message_id: message_id.clone(),
+                    message_id: *message_id,
                     removed_at,
                 });
                 publish_pins(&room)?;
-                json!({"messageId": message_id, "removedAt": removed_at})
+                SocialResponse::RemoveChatMessage {
+                    message_id: *message_id,
+                    removed_at,
+                }
             }
             ClientMessage::ReactToMessage {
                 message_id, emoji, ..
@@ -5935,7 +5839,7 @@ impl RoomManager {
                             &room_lock,
                             history::react_public(
                                 pool,
-                                room_id,
+                                room_id.as_str(),
                                 message_id,
                                 participant_id,
                                 &ignored,
@@ -5960,8 +5864,10 @@ impl RoomManager {
                             expected_sender,
                             &ServerMessage::SocialResponse {
                                 request_id: request_id.to_owned(),
-                                action: action.to_owned(),
-                                data: json!({"messageId": message_id, "reactions": message.reactions}),
+                                response: SocialResponse::ReactToMessage {
+                                    message_id: *message_id,
+                                    reactions: message.reactions.clone(),
+                                },
                             },
                         );
                     }
@@ -5989,7 +5895,10 @@ impl RoomManager {
                     Self::participant_for_sender(&room, participant_id, expected_sender)?;
                 }
                 let reactions = publish_reaction(&mut room, message_id, reactions)?;
-                json!({"messageId": message_id, "reactions": reactions})
+                SocialResponse::ReactToMessage {
+                    message_id: *message_id,
+                    reactions,
+                }
             }
             ClientMessage::ListRoomBans { offset, .. } => {
                 require_role(actor_role, roles::Role::Admin)?;
@@ -6028,7 +5937,7 @@ impl RoomManager {
                 };
                 let has_more = bans.len() > PAGE_SIZE;
                 bans.truncate(PAGE_SIZE);
-                json!({"bans":bans,"hasMore":has_more})
+                SocialResponse::ListRoomBans { bans, has_more }
             }
             ClientMessage::RemoveRoomBan { ban_id, .. } => {
                 require_role(actor_role, roles::Role::Admin)?;
@@ -6039,7 +5948,7 @@ impl RoomManager {
                         .as_ref()
                         .ok_or_else(|| unavailable("Ban service unavailable"))?;
                     drop(room);
-                    let actor_id = participant_id.to_string();
+                    let actor_id = *participant_id;
                     let actor_name = actor_name.clone();
                     let row: Option<(Option<Uuid>, Option<String>)> = self
                         .persist_room(room_id, &room_lock, async {
@@ -6049,12 +5958,15 @@ impl RoomManager {
                             let Some((uid, ip, name)) = row else {
                                 return Ok(None);
                             };
-                            let target_id = uid.map_or_else(|| id.to_string(), |uid| uid.to_string());
+                            let target_id = uid.map_or_else(
+                                || ModerationTargetId::Ban(id.to_string()),
+                                |uid| ModerationTargetId::from(ParticipantId::from(uid)),
+                            );
                             let event = ModerationEvent::new(
                                 ModerationAction::Unban,
                                 Actor { id: &actor_id, name: &actor_name },
                                 Target {
-                                    id: &target_id,
+                                    id: target_id.clone(),
                                     name: name.as_deref().unwrap_or(if uid.is_some() { "Removed account" } else { "Guest" }),
                                     authenticated: uid.is_some(),
                                     ip: ip.as_deref().and_then(|ip| ip.parse().ok()),
@@ -6072,7 +5984,7 @@ impl RoomManager {
                     room.ensure_live()?;
                     let (uid, ip) = row.ok_or_else(|| not_found("Ban not found"))?;
                     (
-                        uid.map(|u| u.to_string()),
+                        uid.map(ParticipantId::from),
                         if uid.is_none() {
                             ip.and_then(|ip| ip.parse::<IpAddr>().ok())
                         } else {
@@ -6098,7 +6010,10 @@ impl RoomManager {
                             name: &actor_name,
                         },
                         Target {
-                            id: target_id.as_deref().unwrap_or(ban_id),
+                            id: target_id.map_or_else(
+                                || ModerationTargetId::Ban(ban_id.to_string()),
+                                ModerationTargetId::from,
+                            ),
                             name: &ban.entry.display_name,
                             authenticated: ban.entry.authenticated,
                             ip: ban.guest_ip,
@@ -6131,7 +6046,7 @@ impl RoomManager {
                     room.banned_guest_participants.remove(&id);
                 }
                 room.policy_revision = room.policy_revision.wrapping_add(1);
-                json!({"removed":true})
+                SocialResponse::RemoveRoomBan { removed: true }
             }
             ClientMessage::ListRoomMembers { offset, .. } => {
                 require_role(actor_role, roles::Role::Moderator)?;
@@ -6150,15 +6065,12 @@ impl RoomManager {
                     room = room_lock.write().await;
                     room.ensure_live()?;
                     rows.into_iter()
-                        .map(|(id, name, role)| {
-                            let id = id.to_string();
-                            MemberEntry {
-                                online: room.participants.contains_key(&id),
-                                user_id: id,
-                                display_name: name,
-                                role,
-                                authenticated: true,
-                            }
+                        .map(|(id, name, role)| MemberEntry {
+                            online: room.participants.contains_key(&ParticipantId::from(id)),
+                            user_id: UserId::from(id),
+                            display_name: name,
+                            role,
+                            authenticated: true,
                         })
                         .collect()
                 } else {
@@ -6166,7 +6078,7 @@ impl RoomManager {
                         .participants
                         .values()
                         .map(|p| MemberEntry {
-                            user_id: p.id.clone(),
+                            user_id: UserId::from(p.id.as_uuid()),
                             display_name: p.name.clone(),
                             role: p.role,
                             online: true,
@@ -6186,7 +6098,7 @@ impl RoomManager {
                 };
                 let has_more = members.len() > PAGE_SIZE;
                 members.truncate(PAGE_SIZE);
-                json!({"members":members,"hasMore":has_more})
+                SocialResponse::ListRoomMembers { members, has_more }
             }
             ClientMessage::SetMemberRole {
                 target_user_id,
@@ -6197,10 +6109,8 @@ impl RoomManager {
                 if !room.persisted || !actor_authenticated {
                     return Err(forbidden("Offline roles require a persistent room"));
                 }
-                let target: Uuid = target_user_id
-                    .parse()
-                    .map_err(|_| invalid("Invalid member"))?;
-                let setter: Uuid = participant_id.parse()?;
+                let target: Uuid = target_user_id.as_uuid();
+                let setter: Uuid = participant_id.as_uuid();
                 let new_role = *role;
                 if new_role < roles::Role::User {
                     return Err(forbidden(
@@ -6231,7 +6141,7 @@ impl RoomManager {
                 room = room_lock.write().await;
                 room.ensure_live()?;
                 room.policy_revision = room.policy_revision.wrapping_add(1);
-                json!({"updated":true})
+                SocialResponse::SetMemberRole { updated: true }
             }
             ClientMessage::ReportParticipant {
                 target_participant_id,
@@ -6261,9 +6171,9 @@ impl RoomManager {
                 let report_id = Uuid::new_v4();
                 let report = ReportEntry {
                     report_id: report_id.to_string(),
-                    reporter_id: participant_id.to_string(),
+                    reporter_id: *participant_id,
                     reporter_name: actor_name,
-                    target_participant_id: target_participant_id.clone(),
+                    target_participant_id: *target_participant_id,
                     target_name,
                     reason: reason.to_string(),
                     status: "open".to_string(),
@@ -6323,7 +6233,10 @@ impl RoomManager {
                 }
                 room.social.note_report(reporter, std::time::Instant::now());
                 // Only the submitting participant receives the report ID here.
-                json!({"reportId":report.report_id,"status":"open"})
+                SocialResponse::ReportParticipant {
+                    report_id: report.report_id.clone(),
+                    status: "open".to_owned(),
+                }
             }
             ClientMessage::ListRoomReports { offset, .. } => {
                 require_role(actor_role, roles::Role::Moderator)?;
@@ -6391,7 +6304,7 @@ impl RoomManager {
                 };
                 let has_more = reports.len() > PAGE_SIZE;
                 reports.truncate(PAGE_SIZE);
-                json!({"reports":reports,"hasMore":has_more})
+                SocialResponse::ListRoomReports { reports, has_more }
             }
             ClientMessage::ResolveRoomReport {
                 report_id, status, ..
@@ -6412,20 +6325,20 @@ impl RoomManager {
                         .as_ref()
                         .ok_or_else(|| unavailable("Report service unavailable"))?;
                     drop(room);
-                    let actor_id = participant_id.to_string();
+                    let actor_id = *participant_id;
                     let actor_name = actor_name.clone();
                     let resolved = self
                         .persist_room(room_id, &room_lock, async {
                             let mut transaction = pool.begin().await?;
                             let target: Option<(String, String, bool)> = sqlx::query_as("UPDATE room_reports r SET status=$3,resolved_at=now(),resolved_by=$4 WHERE r.room_id=$1 AND r.id=$2 AND r.status='open' RETURNING r.target_participant_id,r.target_name,EXISTS(SELECT 1 FROM users u WHERE u.id::text=r.target_participant_id)")
-                                .bind(room_id).bind(id).bind(status).bind(&actor_id).fetch_optional(&mut *transaction).await?;
+                                .bind(room_id).bind(id).bind(status).bind(actor_id).fetch_optional(&mut *transaction).await?;
                             let Some((target_id, target_name, target_authenticated)) = target else {
                                 return Ok(false);
                             };
                             let event = ModerationEvent::new(
                                 action,
                                 Actor { id: &actor_id, name: &actor_name },
-                                Target { id: &target_id, name: &target_name, authenticated: target_authenticated, ip: None },
+                                Target { id: ModerationTargetId::from_text(&target_id), name: &target_name, authenticated: target_authenticated, ip: None },
                                 None,
                                 None,
                                 Some(id),
@@ -6449,7 +6362,7 @@ impl RoomManager {
                         .ok_or_else(|| not_found("Open report not found"))?;
                     report.status = status.clone();
                     report.resolved_at = Some(chrono::Utc::now().to_rfc3339());
-                    let target_id = report.target_participant_id.clone();
+                    let target_id = report.target_participant_id;
                     let target_name = report.target_name.clone();
                     let target_authenticated = room
                         .participants
@@ -6462,7 +6375,7 @@ impl RoomManager {
                             name: &actor_name,
                         },
                         Target {
-                            id: &target_id,
+                            id: target_id.into(),
                             name: &target_name,
                             authenticated: target_authenticated,
                             ip: None,
@@ -6472,7 +6385,10 @@ impl RoomManager {
                         Some(id),
                     ));
                 }
-                json!({"reportId":report_id,"status":status})
+                SocialResponse::ResolveRoomReport {
+                    report_id: report_id.to_string(),
+                    status: status.to_string(),
+                }
             }
             ClientMessage::ListModerationEvents { offset, .. } => {
                 require_role(actor_role, roles::Role::Moderator)?;
@@ -6511,8 +6427,11 @@ impl RoomManager {
                 let has_more = events.len() > PAGE_SIZE;
                 events.truncate(PAGE_SIZE);
                 // Only the owner reads a target's address; moderators never do.
-                let events: Vec<Value> = events.iter().map(|event| event.to_json(owner)).collect();
-                json!({"events":events,"hasMore":has_more})
+                let events: Vec<ModerationEventView> = events
+                    .iter()
+                    .map(|event| ModerationEventView::new(event.clone(), owner))
+                    .collect();
+                SocialResponse::ListModerationEvents { events, has_more }
             }
             _ => return Err(not_found("Unknown request")),
         };
@@ -6525,8 +6444,7 @@ impl RoomManager {
             expected_sender,
             &ServerMessage::SocialResponse {
                 request_id: request_id.to_string(),
-                action: action.to_string(),
-                data,
+                response,
             },
         )
     }

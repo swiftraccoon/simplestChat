@@ -3,6 +3,8 @@
 
 use super::*;
 use crate::auth::{jwt, session};
+use crate::ids::fixtures::rid;
+use crate::ids::{MessageId, ParticipantId};
 use crate::room::roles::{self, Role};
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
@@ -621,11 +623,11 @@ async fn authorization_database_inbox_offline_delivery_read_sync_and_consent() {
     let bob = fixture.users[1];
     let stranger = fixture.users[2];
     let initial = crate::signaling::protocol::ChatEntry {
-        message_id: Uuid::new_v4().to_string(),
+        message_id: MessageId::random(),
         client_message_id: "initial-room-pm".into(),
-        participant_id: alice.to_string(),
+        participant_id: ParticipantId::from(alice),
         participant_name: "Alice".into(),
-        recipient_id: Some(bob.to_string()),
+        recipient_id: Some(ParticipantId::from(bob)),
         recipient_name: Some("Bob".into()),
         content: "First conversation together in a room".into(),
         attachments: Vec::new(),
@@ -838,8 +840,8 @@ async fn authorization_database_room_roles_and_owner_mutations_do_not_cross_room
     // Make the credential budget deterministic and exhaust it through the real
     // ticket route. Room administration must still use its own HTTP admission.
     fixture.server.principal_auth_limiter = PrincipalRateLimiter::new(1);
-    let room = format!("policy-{}", Uuid::new_v4());
-    let other_room = format!("policy-{}", Uuid::new_v4());
+    let room = rid(&format!("policy-{}", Uuid::new_v4()));
+    let other_room = rid(&format!("policy-{}", Uuid::new_v4()));
     for (id, owner) in [(&room, fixture.users[4]), (&other_room, fixture.users[0])] {
         sqlx::query("INSERT INTO rooms(id,owner_id,display_name) VALUES($1,$2,'Policy room')")
             .bind(id)

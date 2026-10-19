@@ -171,11 +171,12 @@ impl Hub {
         if message.account_conversation != Some(true) {
             return;
         }
-        if let (Ok(account), Some(Ok(peer))) = (
-            message.participant_id.parse(),
-            message.recipient_id.as_deref().map(str::parse),
-        ) {
-            self.pair(account, peer, Scope::Inbox);
+        if let Some(peer) = message.recipient_id {
+            self.pair(
+                message.participant_id.as_uuid(),
+                peer.as_uuid(),
+                Scope::Inbox,
+            );
         }
     }
 

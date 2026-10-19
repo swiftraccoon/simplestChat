@@ -7,6 +7,7 @@ use crate::auth::{
     account, sessions,
     types::{AuthError, Claims},
 };
+use crate::ids::{ParticipantId, RoomId};
 use crate::signaling::{SignalingServer, protocol::ServerMessage};
 use axum::{
     Json,
@@ -149,16 +150,16 @@ pub(crate) struct LobbyRequest {
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct SanctionRequest {
-    pub target_participant_id: String,
+    pub target_participant_id: ParticipantId,
     pub kind: String,
     pub enabled: bool,
     pub reason: Option<String>,
 }
 
 struct SanctionPublication {
-    target: String,
-    participants: Vec<String>,
-    lobby: Vec<String>,
+    target: ParticipantId,
+    participants: Vec<ParticipantId>,
+    lobby: Vec<ParticipantId>,
     authenticated: bool,
     ip: Option<IpAddr>,
     kind: moderation::PunitiveKind,
@@ -169,7 +170,7 @@ struct SanctionPublication {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct ModerationRequest {
     pub action: String,
-    pub target_participant_id: String,
+    pub target_participant_id: ParticipantId,
     pub reason: Option<String>,
     pub duration_seconds: Option<u64>,
     pub report_id: Option<Uuid>,
@@ -177,10 +178,7 @@ pub(crate) struct ModerationRequest {
 
 impl ModerationRequest {
     fn validate(&self) -> Result<(), sqlx::Error> {
-        if !matches!(self.action.as_str(), "kick" | "ban")
-            || self.target_participant_id.is_empty()
-            || self.target_participant_id.len() > 128
-        {
+        if !matches!(self.action.as_str(), "kick" | "ban") {
             return Err(invalid(
                 "Choose a participant and a supported moderation action",
             ));
@@ -209,8 +207,8 @@ impl ModerationRequest {
 
 struct ModerationPublication {
     request: ModerationRequest,
-    participants: Vec<String>,
-    lobby: Vec<String>,
+    participants: Vec<ParticipantId>,
+    lobby: Vec<ParticipantId>,
     authenticated: bool,
     ip: Option<IpAddr>,
     name: String,
@@ -222,7 +220,7 @@ enum Command {
     Unban(Uuid),
     Report(Uuid, String),
     Moderate(ModerationRequest),
-    Lobby(String, LobbyRequest),
+    Lobby(ParticipantId, LobbyRequest),
     Sanction(SanctionRequest),
 }
 
@@ -237,7 +235,7 @@ enum Publication {
 
 struct Context {
     manager: RoomManager,
-    room_id: String,
+    room_id: RoomId,
     user: Uuid,
     session: Uuid,
     expires_at: i64,
@@ -310,12 +308,9 @@ fn private_headers() -> HeaderMap {
 impl Context {
     async fn admit(
         manager: RoomManager,
-        room_id: String,
+        room_id: RoomId,
         claims: Claims,
     ) -> Result<Self, api::RoomApiError> {
-        if !settings::valid_room_id(&room_id) {
-            return Err(response_error(StatusCode::BAD_REQUEST, "Invalid room"));
-        }
         let creation = tokio::time::timeout(
             control::ADMISSION_TIMEOUT,
             manager.room_creation_lock.clone().lock_owned(),
@@ -593,12 +588,10 @@ impl Context {
 
     async fn lobby_action(
         mut self,
-        target: String,
+        target: ParticipantId,
         request: LobbyRequest,
     ) -> Result<Value, sqlx::Error> {
         if !matches!(request.action.as_str(), "admit" | "deny")
-            || target.is_empty()
-            || target.len() > 128
             || request
                 .reason
                 .as_ref()
@@ -700,7 +693,7 @@ impl Context {
         {
             return Ok((Publication::None, json!({"updated":true})));
         }
-        let actor = self.user.to_string();
+        let actor = ParticipantId::from(self.user);
         let event = moderation::ModerationEvent::new(
             moderation::ModerationAction::for_punitive(kind, request.enabled),
             moderation::Actor {
@@ -708,7 +701,7 @@ impl Context {
                 name: &self.actor_name,
             },
             moderation::Target {
-                id: &request.target_participant_id,
+                id: request.target_participant_id.into(),
                 name: &person.name,
                 authenticated: person.authenticated,
                 ip: person.ip,
@@ -718,7 +711,7 @@ impl Context {
             None,
         );
         let publication = SanctionPublication {
-            target: request.target_participant_id.clone(),
+            target: request.target_participant_id,
             participants,
             lobby,
             authenticated: person.authenticated,
@@ -730,8 +723,7 @@ impl Context {
         let room_id = self.room_id.clone();
         let user = publication
             .authenticated
-            .then(|| request.target_participant_id.parse::<Uuid>().ok())
-            .flatten();
+            .then(|| request.target_participant_id.as_uuid());
         let ip = if publication.authenticated {
             publication.ip
         } else {
@@ -836,7 +828,7 @@ impl Context {
         let online = if let Some(runtime) = self.runtime.as_ref() {
             let room = runtime.read().await;
             room.participants
-                .get(&target.to_string())
+                .get(&ParticipantId::from(target))
                 .filter(|person| person.authenticated)
                 .map(|person| person.role)
         } else {
@@ -868,8 +860,8 @@ impl Context {
         let row: Option<(Option<Uuid>,Option<String>,Option<String>)> = sqlx::query_as("DELETE FROM room_states s WHERE s.room_id=$1 AND s.id=$2 AND s.state='banned' RETURNING s.user_id,host(s.ip_address),(SELECT display_name FROM users WHERE id=s.user_id)")
             .bind(&room_id).bind(id).fetch_optional(self.connection()).await?;
         let (user, ip, name) = row.ok_or_else(|| invalid("Ban not found in this room"))?;
-        let target = user.unwrap_or(id).to_string();
-        let actor = self.user.to_string();
+        let target = ParticipantId::from(user.unwrap_or(id));
+        let actor = ParticipantId::from(self.user);
         let address = ip.and_then(|ip| ip.parse::<IpAddr>().ok());
         let event = moderation::ModerationEvent::new(
             moderation::ModerationAction::Unban,
@@ -878,7 +870,7 @@ impl Context {
                 name: &self.actor_name,
             },
             moderation::Target {
-                id: &target,
+                id: target.into(),
                 name: name.as_deref().unwrap_or("Guest"),
                 authenticated: user.is_some(),
                 ip: address,
@@ -909,9 +901,9 @@ impl Context {
             return Err(invalid("Choose resolved or dismissed"));
         }
         let room_id = self.room_id.clone();
-        let actor = self.user.to_string();
-        let row: Option<(String,String,bool)> = sqlx::query_as("UPDATE room_reports r SET status=$3,resolved_at=now(),resolved_by=$4 WHERE r.room_id=$1 AND r.id=$2 AND r.status='open' RETURNING r.target_participant_id,r.target_name,EXISTS(SELECT 1 FROM users u WHERE u.id::text=r.target_participant_id)")
-            .bind(&room_id).bind(id).bind(status).bind(&actor).fetch_optional(self.connection()).await?;
+        let actor = ParticipantId::from(self.user);
+        let row: Option<(ParticipantId, String, bool)> = sqlx::query_as("UPDATE room_reports r SET status=$3,resolved_at=now(),resolved_by=$4 WHERE r.room_id=$1 AND r.id=$2 AND r.status='open' RETURNING r.target_participant_id,r.target_name,EXISTS(SELECT 1 FROM users u WHERE u.id::text=r.target_participant_id)")
+            .bind(&room_id).bind(id).bind(status).bind(actor).fetch_optional(self.connection()).await?;
         let (target, name, authenticated) =
             row.ok_or_else(|| invalid("Open report not found in this room"))?;
         let action = if status == "resolved" {
@@ -926,7 +918,7 @@ impl Context {
                 name: &self.actor_name,
             },
             moderation::Target {
-                id: &target,
+                id: target.into(),
                 name: &name,
                 authenticated,
                 ip: None,
@@ -967,7 +959,7 @@ impl Context {
             super::moderation_cohort(&room, &request.target_participant_id, self.role)
                 .map_err(|_| invalid("Insufficient room permissions"))?
         } else {
-            vec![request.target_participant_id.clone()]
+            vec![request.target_participant_id]
         };
         let lobby = if ban {
             super::guest_ip_lobby_cohort(&room, target.authenticated, target.ip, self.role)
@@ -994,13 +986,13 @@ impl Context {
         }
         let room_id = self.room_id.clone();
         if let Some(report) = request.report_id {
-            let target:Option<String> = sqlx::query_scalar("SELECT target_participant_id FROM room_reports WHERE room_id=$1 AND id=$2 AND status='open' FOR UPDATE")
+            let target: Option<ParticipantId> = sqlx::query_scalar("SELECT target_participant_id FROM room_reports WHERE room_id=$1 AND id=$2 AND status='open' FOR UPDATE")
                 .bind(&room_id).bind(report).fetch_optional(self.connection()).await?;
-            if target.as_deref() != Some(&request.target_participant_id) {
+            if target != Some(request.target_participant_id) {
                 return Err(invalid("Open report does not match this participant"));
             }
         }
-        let actor = self.user.to_string();
+        let actor = ParticipantId::from(self.user);
         let expiry = request.duration_seconds.and_then(|duration| {
             Utc::now().checked_add_signed(chrono::Duration::seconds(duration as i64))
         });
@@ -1015,7 +1007,7 @@ impl Context {
                 name: &self.actor_name,
             },
             moderation::Target {
-                id: &request.target_participant_id,
+                id: request.target_participant_id.into(),
                 name: &publication.name,
                 authenticated: publication.authenticated,
                 ip: publication.ip,
@@ -1028,8 +1020,7 @@ impl Context {
             let actor = self.user;
             let user = publication
                 .authenticated
-                .then(|| request.target_participant_id.parse::<Uuid>().ok())
-                .flatten();
+                .then(|| request.target_participant_id.as_uuid());
             let ip = if publication.authenticated {
                 publication.ip
             } else {
@@ -1077,7 +1068,7 @@ impl Context {
                 room.broadcast_all(&ServerMessage::RoomSettingsChanged { settings: value });
             }
             Publication::Role(target, role) => {
-                let target = target.to_string();
+                let target = ParticipantId::from(target);
                 if let Some(person) = room.participants.get_mut(&target) {
                     person.role = role;
                 }
@@ -1085,15 +1076,15 @@ impl Context {
                     person.role = role;
                 }
                 room.broadcast_all(&ServerMessage::RoleChanged {
-                    participant_id: target.clone(),
+                    participant_id: target,
                     new_role: role,
                     granted_by: self.user.to_string(),
                 });
                 affected = Some(target);
             }
             Publication::Unban(user, ip) => {
-                let user = user.map(|user| user.to_string());
-                let ids = room.social.forget_ban(user.as_deref(), ip);
+                let user = user.map(ParticipantId::from);
+                let ids = room.social.forget_ban(user.as_ref(), ip);
                 if let Some(user) = user {
                     room.banned_participants.remove(&user);
                 }
@@ -1140,12 +1131,12 @@ impl Context {
                 for id in publication.participants {
                     let notice = if ban {
                         ServerMessage::ParticipantBanned {
-                            participant_id: id.clone(),
+                            participant_id: id,
                             reason: publication.request.reason.clone(),
                         }
                     } else {
                         ServerMessage::ParticipantKicked {
-                            participant_id: id.clone(),
+                            participant_id: id,
                             reason: publication.request.reason.clone(),
                         }
                     };
@@ -1154,7 +1145,7 @@ impl Context {
                         for producer in person.producers.keys() {
                             room.producer_to_participant.remove(producer);
                         }
-                        sessions.push((id.clone(), person.media_session_id));
+                        sessions.push((id, person.media_session_id));
                         room.broadcast_participant_left(&id);
                     }
                 }
@@ -1213,7 +1204,7 @@ impl Context {
                     room.broadcast_all(&super::punitive_notification(
                         publication.kind,
                         publication.enabled,
-                        id.clone(),
+                        *id,
                     ));
                 }
                 for id in &publication.lobby {
@@ -1222,7 +1213,7 @@ impl Context {
                         serde_json::to_string(&super::punitive_notification(
                             publication.kind,
                             publication.enabled,
-                            id.clone(),
+                            *id,
                         )),
                     ) {
                         let _ = super::try_send_essential(
@@ -1251,7 +1242,7 @@ impl Context {
         let revoked = revoked_override.unwrap_or_else(|| {
             RoomManager::revoke_unauthorized_producers(
                 &mut room,
-                affected.as_deref(),
+                affected.as_ref(),
                 "Room policy no longer permits this producer",
             )
         });
@@ -1269,7 +1260,7 @@ impl Context {
 
 async fn load_settings(
     connection: &mut PgConnection,
-    room_id: &str,
+    room_id: &RoomId,
 ) -> Result<settings::RoomSettings, sqlx::Error> {
     let value: Value = sqlx::query_scalar("SELECT jsonb_build_object('id',id,'ownerId',owner_id,'displayName',display_name,'passwordProtected',password_hash IS NOT NULL,'requireRegistration',require_registration,'maxParticipants',max_participants,'maxBroadcasters',max_broadcasters,'allowScreenSharing',allow_screen_sharing,'allowChat',allow_chat,'allowVideo',allow_video,'moderated',moderated,'inviteOnly',invite_only,'secret',secret,'lobbyEnabled',lobby_enabled,'pushToTalk',push_to_talk,'guestsAllowed',guests_allowed,'guestsCanBroadcast',guests_can_broadcast,'topic',topic,'nameStyle',name_style,'topicStyle',topic_style,'historyRetentionDays',history_retention_days) FROM rooms WHERE id=$1")
         .bind(room_id).fetch_one(connection).await?;
@@ -1284,7 +1275,9 @@ async fn admit(
     let claims = account::authenticated_claims(server, headers)
         .await
         .map_err(IntoResponse::into_response)?;
-    Context::admit(server.room_manager().clone(), id, claims).await
+    let room_id =
+        RoomId::new(id).map_err(|_| response_error(StatusCode::BAD_REQUEST, "Invalid room"))?;
+    Context::admit(server.room_manager().clone(), room_id, claims).await
 }
 
 type Response = (HeaderMap, Json<Value>);
@@ -1382,6 +1375,9 @@ pub(crate) async fn lobby_action(
     headers: HeaderMap,
     Json(request): Json<LobbyRequest>,
 ) -> Result<Response, api::RoomApiError> {
+    let target = target
+        .parse()
+        .map_err(|_| response_error(StatusCode::BAD_REQUEST, "Invalid participant"))?;
     mutate(server, headers, id, Command::Lobby(target, request)).await
 }
 
@@ -1480,6 +1476,7 @@ impl Context {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ids::fixtures::rid;
 
     #[test]
     fn patch_preserves_nullable_contract_and_refuses_unknown_fields() {
@@ -1497,7 +1494,7 @@ mod tests {
 
     #[test]
     fn patch_checks_effective_combined_limits_without_changing_other_settings() {
-        let current = RoomManager::default_room_settings("saved");
+        let current = RoomManager::default_room_settings(&rid("saved"));
         let patch: SettingsPatch =
             serde_json::from_value(json!({"maxParticipants":2,"maxBroadcasters":3})).unwrap();
         assert!(patch.apply(&current).is_err());

@@ -1,4 +1,6 @@
 use super::*;
+use crate::ids::RoomId;
+use crate::ids::fixtures::rid;
 use crate::signaling::protocol::ClientMessage;
 use futures_util::FutureExt;
 use serde_json::{Value, json};
@@ -8,7 +10,12 @@ use std::str::FromStr;
 use std::time::Duration;
 use uuid::Uuid;
 
-async fn apply_wire_patch(manager: &RoomManager, room_id: &str, owner: &Participant, patch: Value) {
+async fn apply_wire_patch(
+    manager: &RoomManager,
+    room_id: &RoomId,
+    owner: &Participant,
+    patch: Value,
+) {
     let ClientMessage::UpdateRoomSettings {
         moderated,
         lobby_enabled,
@@ -55,7 +62,7 @@ async fn apply_wire_patch(manager: &RoomManager, room_id: &str, owner: &Particip
 async fn assert_saved_settings(
     manager: &RoomManager,
     pool: &sqlx::PgPool,
-    room_id: &str,
+    room_id: &RoomId,
     participants: Option<i32>,
     broadcasters: Option<i32>,
     protected: bool,
@@ -110,10 +117,10 @@ async fn wire_settings_set_omit_and_clear_are_persisted() {
     .await
     .unwrap();
     let owner_id = Uuid::new_v4();
-    let room_id = format!("settings-{}", Uuid::new_v4());
+    let room_id = rid(&format!("settings-{}", Uuid::new_v4()));
     let (sender, _receiver) = mpsc::channel(16);
     let owner = Participant {
-        id: owner_id.to_string(),
+        id: ParticipantId::from(owner_id),
         social: social::ParticipantSocial::new(0),
         name: "Settings test owner".into(),
         sender,
@@ -143,7 +150,7 @@ async fn wire_settings_set_omit_and_clear_are_persisted() {
             .unwrap();
         let (initial, hash) = settings::load_room(&pool, &room_id).await.unwrap().unwrap();
         let mut room = Room::new(room_id.clone(), Some(initial), true, hash);
-        room.participants.insert(owner.id.clone(), owner.clone());
+        room.participants.insert(owner.id, owner.clone());
         manager
             .rooms
             .write()
