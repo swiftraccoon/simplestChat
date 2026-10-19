@@ -108,7 +108,7 @@
         "sha256": "5622e043625b6d1f32c84f53699690a44d1419e657879de26eb252699f5ebb7c",
         "format": "tar.gz"
       },
-      "installer_sha256": "5018c0796a93c067285eb0345d003f766e4773ab45945b24c8d0212df9389591",
+      "installer_sha256": "f481a595fe52bd79c98e8db7555a2055f4771e9cf27357f7ba4b26ed921a85d8",
       "symbol_prefix": "simplestchat_awslc_5_11_0",
       "configure_options": {
         "CMAKE_BUILD_TYPE": "Release",
