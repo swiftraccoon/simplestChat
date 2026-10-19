@@ -1,4 +1,5 @@
 use super::*;
+use crate::ids::fixtures::{pid, rid};
 use std::cell::Cell;
 
 fn metric(metrics: &ServerMetrics, name: &str) -> u64 {
@@ -13,7 +14,7 @@ fn metric(metrics: &ServerMetrics, name: &str) -> u64 {
 
 fn participant(id: &str, sender: mpsc::Sender<crate::OutboundJson>) -> Participant {
     Participant {
-        id: id.into(),
+        id: pid(id),
         name: id.into(),
         sender,
         social: social::ParticipantSocial::new(0),
@@ -29,7 +30,7 @@ fn participant(id: &str, sender: mpsc::Sender<crate::OutboundJson>) -> Participa
 
 fn departure() -> serde_json::Result<String> {
     serde_json::to_string(&ServerMessage::ParticipantLeft {
-        participant_id: "departed".into(),
+        participant_id: pid("departed"),
     })
 }
 
@@ -152,23 +153,33 @@ fn departure_counts_a_channel_that_closes_after_eligibility_was_checked() {
 
 #[test]
 fn departure_fanout_does_not_remove_grace_memberships_or_replace_authoritative_senders() {
-    let mut room = Room::new("room".into(), None, false, None);
+    let mut room = Room::new(rid("room"), None, false, None);
     let (closed, mut closed_receiver) = mpsc::channel(1);
     let (live, mut live_receiver) = mpsc::channel(1);
     closed_receiver.close();
     room.participants
-        .insert("grace".into(), participant("grace", closed.clone()));
+        .insert(pid("grace"), participant("grace", closed.clone()));
     room.participants
-        .insert("live".into(), participant("live", live.clone()));
+        .insert(pid("live"), participant("live", live.clone()));
     room.social.next_sequence = 42;
-    let grace_session = room.participants["grace"].media_session_id;
-    let live_session = room.participants["live"].media_session_id;
-    room.broadcast_participant_left("departed");
+    let grace_session = room.participants[&pid("grace")].media_session_id;
+    let live_session = room.participants[&pid("live")].media_session_id;
+    room.broadcast_participant_left(&pid("departed"));
     assert_eq!(room.participants.len(), 2);
-    assert!(room.participants["grace"].sender.same_channel(&closed));
-    assert!(room.participants["live"].sender.same_channel(&live));
-    assert_eq!(room.participants["grace"].media_session_id, grace_session);
-    assert_eq!(room.participants["live"].media_session_id, live_session);
+    assert!(
+        room.participants[&pid("grace")]
+            .sender
+            .same_channel(&closed)
+    );
+    assert!(room.participants[&pid("live")].sender.same_channel(&live));
+    assert_eq!(
+        room.participants[&pid("grace")].media_session_id,
+        grace_session
+    );
+    assert_eq!(
+        room.participants[&pid("live")].media_session_id,
+        live_session
+    );
     assert_eq!(room.social.next_sequence, 42);
     assert_eq!(
         live_receiver.try_recv().unwrap().as_str(),
@@ -205,19 +216,18 @@ fn departure_fanout_does_not_remove_grace_memberships_or_replace_authoritative_s
 fn simultaneous_grace_departures_do_not_attempt_quadratic_closed_queue_fanout() {
     let metrics = ServerMetrics::new();
     for room_index in 0..4 {
-        let mut room = Room::new(format!("room-{room_index}"), None, false, None);
+        let mut room = Room::new(rid(&format!("room-{room_index}")), None, false, None);
         room.metrics = metrics.clone();
         for index in 0..25 {
             let (sender, receiver) = mpsc::channel(1);
             drop(receiver);
             let id = format!("participant-{index}");
-            room.participants
-                .insert(id.clone(), participant(&id, sender));
+            room.participants.insert(pid(&id), participant(&id, sender));
         }
         for index in 0..25 {
             let id = format!("participant-{index}");
-            assert!(room.participants.remove(&id).is_some());
-            room.broadcast_participant_left(&id);
+            assert!(room.participants.remove(&pid(&id)).is_some());
+            room.broadcast_participant_left(&pid(&id));
             assert_eq!(room.participants.len(), 24 - index);
         }
     }
@@ -240,9 +250,9 @@ fn essential_overflow_requires_reconciliation_but_speaker_hints_remain_lossy() {
     sender
         .try_send(crate::OutboundJson::from("queued"))
         .unwrap();
-    let mut room = Room::new("room".into(), None, false, None);
+    let mut room = Room::new(rid("room"), None, false, None);
     room.participants
-        .insert("viewer".into(), participant("viewer", sender));
+        .insert(pid("viewer"), participant("viewer", sender));
     room.broadcast_all(&ServerMessage::AudioLevels { levels: Vec::new() });
     assert!(!*registration.subscribe().borrow());
     broadcast_departure(

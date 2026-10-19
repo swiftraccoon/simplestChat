@@ -1,6 +1,7 @@
 //! Replace one member's receiver without changing their sender or membership.
 
 use super::RoomManager;
+use crate::ids::{ParticipantId, RoomId};
 use crate::media::transport_manager::ReceiveReplacementPlacement;
 use crate::media::types::{ReceiveBandwidthEstimate, TransportInfo};
 use mediasoup::prelude::TransportId;
@@ -12,8 +13,8 @@ impl RoomManager {
     /// identity; it never authorizes replacing another receiver or participant.
     pub(crate) async fn replace_recv_transport(
         &self,
-        room_id: &str,
-        participant_id: &str,
+        room_id: &RoomId,
+        participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         transport_id: &str,
         bwe_sender: Option<mpsc::Sender<ReceiveBandwidthEstimate>>,
@@ -41,7 +42,7 @@ impl RoomManager {
             let config = manager.media_server.config();
             let routers = manager.media_server.router_manager();
             let (router, worker, lease) = routers
-                .place_viewer(&room_id, &media_id, &config.router_config)
+                .place_viewer(room_id.as_str(), &media_id, &config.router_config)
                 .await?;
             let retain_existing_lease = routers.worker_for_participant(&media_id) == Some(worker);
             let webrtc_server = manager
@@ -73,8 +74,8 @@ impl RoomManager {
     /// this membership. This performs no native statistics request.
     pub(crate) async fn is_current_recv_transport(
         &self,
-        room_id: &str,
-        participant_id: &str,
+        room_id: &RoomId,
+        participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         expected: TransportId,
     ) -> bool {
@@ -97,6 +98,7 @@ impl RoomManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ids::fixtures::rid;
     use crate::metrics::ServerMetrics;
     use crate::room::JoinResult;
     use mediasoup::prelude::Transport;
@@ -105,8 +107,8 @@ mod tests {
 
     struct Fixture {
         manager: RoomManager,
-        room: String,
-        member: String,
+        room: RoomId,
+        member: ParticipantId,
         sender: mpsc::Sender<crate::OutboundJson>,
         _messages: mpsc::Receiver<crate::OutboundJson>,
         sent: TransportInfo,
@@ -116,13 +118,13 @@ mod tests {
     impl Fixture {
         async fn new() -> Self {
             let manager = RoomManager::new_for_connection_tests(ServerMetrics::new()).await;
-            let room = format!("receiver-{}", Uuid::new_v4());
-            let member = Uuid::new_v4().to_string();
+            let room = rid(&format!("receiver-{}", Uuid::new_v4()));
+            let member = ParticipantId::random();
             let (sender, messages) = mpsc::channel(64);
             let joined = manager
                 .add_participant(
                     &room,
-                    member.clone(),
+                    member,
                     "Receiver fixture".into(),
                     sender.clone(),
                     false,

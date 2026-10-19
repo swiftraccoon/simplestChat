@@ -6,6 +6,7 @@
 
 use super::{Room, RoomManager, TokioRwLock, control};
 use crate::auth::account::{ChatPreferences, load_chat_preferences};
+use crate::ids::ParticipantId;
 use futures_util::{StreamExt, stream};
 use sqlx::PgPool;
 use std::{future::Future, sync::Arc, time::Duration};
@@ -28,7 +29,7 @@ where
     let _control = tokio::time::timeout(control::ADMISSION_TIMEOUT, control::lock_room(room))
         .await
         .map_err(|_| anyhow::anyhow!("Privacy synchronization is waiting on a busy room"))?;
-    let account_id = account.to_string();
+    let account_id = ParticipantId::from(account);
     {
         let state = room.read().await;
         if !current() {
@@ -68,12 +69,12 @@ impl RoomManager {
     pub(super) async fn membership_chat_preferences(
         &self,
         authenticated: bool,
-        participant_id: &str,
+        participant_id: &ParticipantId,
     ) -> anyhow::Result<Option<ChatPreferences>> {
         if !authenticated {
             return Ok(None);
         }
-        let account = Uuid::parse_str(participant_id)?;
+        let account = participant_id.as_uuid();
         let pool = self
             .db_pool
             .as_ref()
@@ -97,7 +98,7 @@ impl RoomManager {
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("Account privacy requires a database"))?
             .clone();
-        let account_id = account.to_string();
+        let account_id = ParticipantId::from(account);
         let rooms: Vec<_> = self
             .rooms
             .read()
@@ -159,6 +160,7 @@ impl RoomManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ids::fixtures::{pid, rid};
     use crate::{
         room::{Participant, moderation, roles, social},
         signaling::protocol::ChatStyle,
@@ -170,12 +172,12 @@ mod tests {
     use tokio::sync::{mpsc, oneshot};
 
     fn fixture(account: Uuid) -> Arc<TokioRwLock<Room>> {
-        let mut room = Room::new("privacy-test".into(), None, false, None);
+        let mut room = Room::new(rid("privacy-test"), None, false, None);
         let (sender, _receiver) = mpsc::channel(1);
         room.participants.insert(
-            account.to_string(),
+            ParticipantId::from(account),
             Participant {
-                id: account.to_string(),
+                id: ParticipantId::from(account),
                 name: "Privacy policy fixture".into(),
                 social: social::ParticipantSocial::new(0),
                 sender,
@@ -224,9 +226,9 @@ mod tests {
             .unwrap();
         let state = room.read().await;
         assert!(
-            !state.participants[&account.to_string()]
+            !state.participants[&ParticipantId::from(account)]
                 .social
-                .accepts_inbox_from("peer")
+                .accepts_inbox_from(&pid("peer"))
         );
         assert_eq!(reads.load(Ordering::SeqCst), 1);
     }
@@ -281,9 +283,9 @@ mod tests {
         second.await.unwrap().unwrap();
         let state = room.read().await;
         assert!(
-            !state.participants[&account.to_string()]
+            !state.participants[&ParticipantId::from(account)]
                 .social
-                .accepts_inbox_from("peer")
+                .accepts_inbox_from(&pid("peer"))
         );
         assert_eq!(reads.load(Ordering::SeqCst), 1);
     }
@@ -303,7 +305,7 @@ mod tests {
         room.write()
             .await
             .participants
-            .get_mut(&account.to_string())
+            .get_mut(&ParticipantId::from(account))
             .unwrap()
             .social
             .apply_account_preferences(&saved);
@@ -335,9 +337,9 @@ mod tests {
             .is_err()
         );
         let state = room.read().await;
-        let actor = &state.participants[&account.to_string()];
-        assert!(!actor.social.accepts_inbox_from(&peer.to_string()));
-        assert!(actor.social.accepts_inbox_from("unrelated-peer"));
+        let actor = &state.participants[&ParticipantId::from(account)];
+        assert!(!actor.social.accepts_inbox_from(&ParticipantId::from(peer)));
+        assert!(actor.social.accepts_inbox_from(&pid("unrelated-peer")));
     }
 
     async fn database_fixture() -> (RoomManager, PgPool, Uuid, Uuid) {
@@ -398,8 +400,8 @@ mod tests {
         let (sender, receiver) = mpsc::channel(32);
         let result = manager
             .add_participant(
-                room,
-                participant.to_string(),
+                &rid(room),
+                ParticipantId::from(participant),
                 "Maya".into(),
                 sender.clone(),
                 authenticated,
@@ -432,11 +434,12 @@ mod tests {
         sqlx::query("UPDATE users SET preferences=$2 WHERE id=$1").bind(account)
             .bind(serde_json::json!({"allowPrivateMessages": false, "ignored": [{"id": peer, "name": "Peer"}]}))
             .execute(&pool).await.unwrap();
-        let room_id = format!("privacy-join-{}", Uuid::new_v4());
+        let room_id = rid(&format!("privacy-join-{}", Uuid::new_v4()));
         let guest = Uuid::new_v4();
-        let (guest_sender, _guest_receiver, _) = join(&manager, &room_id, guest, false).await;
+        let (guest_sender, _guest_receiver, _) =
+            join(&manager, room_id.as_str(), guest, false).await;
         let (_account_sender, mut account_receiver, joined) =
-            join(&manager, &room_id, account, true).await;
+            join(&manager, room_id.as_str(), account, true).await;
         assert!(
             matches!(joined, super::super::JoinResult::Joined { ref name, .. } if name == "Maya (2)")
         );
@@ -444,21 +447,21 @@ mod tests {
             manager
                 .send_social_chat(
                     &room_id,
-                    &guest.to_string(),
+                    &ParticipantId::from(guest),
                     &guest_sender,
                     "Blocked guest private message".into(),
                     Some(Uuid::new_v4().to_string()),
-                    Some(&account.to_string())
+                    Some(&ParticipantId::from(account))
                 )
                 .await
                 .is_err()
         );
-        let (peer_sender, _peer_receiver, _) = join(&manager, &room_id, peer, true).await;
+        let (peer_sender, _peer_receiver, _) = join(&manager, room_id.as_str(), peer, true).await;
         while account_receiver.try_recv().is_ok() {}
         manager
             .send_social_chat(
                 &room_id,
-                &peer.to_string(),
+                &ParticipantId::from(peer),
                 &peer_sender,
                 "Ignored public message".into(),
                 Some(Uuid::new_v4().to_string()),
@@ -480,15 +483,17 @@ mod tests {
     #[ignore = "requires migrated disposable TEST_DATABASE_URL and mediasoup worker"]
     async fn database_pending_join_and_lobby_admission_load_policy_after_a_concurrent_save() {
         let (manager, pool, account, peer) = database_fixture().await;
-        let room_id = format!("privacy-race-{}", Uuid::new_v4());
+        let room_id = rid(&format!("privacy-race-{}", Uuid::new_v4()));
         let guest = Uuid::new_v4();
-        let (guest_sender, _guest_receiver, _) = join(&manager, &room_id, guest, false).await;
+        let (guest_sender, _guest_receiver, _) =
+            join(&manager, room_id.as_str(), guest, false).await;
         let runtime = manager.get_room(&room_id).unwrap();
         let held = control::lock_room(&runtime).await;
         let joining_manager = manager.clone();
         let joining_room = room_id.clone();
-        let joining =
-            tokio::spawn(async move { join(&joining_manager, &joining_room, account, true).await });
+        let joining = tokio::spawn(async move {
+            join(&joining_manager, joining_room.as_str(), account, true).await
+        });
         tokio::task::yield_now().await;
         assert!(!joining.is_finished());
         sqlx::query("UPDATE users SET preferences=$2 WHERE id=$1")
@@ -506,20 +511,20 @@ mod tests {
             manager
                 .send_social_chat(
                     &room_id,
-                    &guest.to_string(),
+                    &ParticipantId::from(guest),
                     &guest_sender,
                     "Blocked during join race".into(),
                     Some(Uuid::new_v4().to_string()),
-                    Some(&account.to_string())
+                    Some(&ParticipantId::from(account))
                 )
                 .await
                 .is_err()
         );
 
-        let lobby_room_id = format!("privacy-lobby-{}", Uuid::new_v4());
+        let lobby_room_id = rid(&format!("privacy-lobby-{}", Uuid::new_v4()));
         let moderator = Uuid::new_v4();
         let (moderator_sender, _moderator_receiver, _) =
-            join(&manager, &lobby_room_id, moderator, false).await;
+            join(&manager, lobby_room_id.as_str(), moderator, false).await;
         let mut settings = RoomManager::default_room_settings(&lobby_room_id);
         settings.lobby_enabled = true;
         manager
@@ -529,7 +534,7 @@ mod tests {
             .await
             .settings = Some(settings);
         let (_peer_sender, _peer_receiver, waiting) =
-            join(&manager, &lobby_room_id, peer, true).await;
+            join(&manager, lobby_room_id.as_str(), peer, true).await;
         assert!(matches!(waiting, super::super::JoinResult::Lobbied));
         sqlx::query("UPDATE users SET preferences=$2 WHERE id=$1")
             .bind(peer)
@@ -540,9 +545,9 @@ mod tests {
         manager
             .admit_from_lobby(
                 &lobby_room_id,
-                &moderator.to_string(),
+                &ParticipantId::from(moderator),
                 &moderator_sender,
-                &peer.to_string(),
+                &ParticipantId::from(peer),
             )
             .await
             .unwrap();
@@ -550,11 +555,11 @@ mod tests {
             manager
                 .send_social_chat(
                     &lobby_room_id,
-                    &moderator.to_string(),
+                    &ParticipantId::from(moderator),
                     &moderator_sender,
                     "Blocked after lobby admission".into(),
                     Some(Uuid::new_v4().to_string()),
-                    Some(&peer.to_string())
+                    Some(&ParticipantId::from(peer))
                 )
                 .await
                 .is_err()

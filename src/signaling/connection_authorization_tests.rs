@@ -3,6 +3,8 @@
 
 use super::super::authorization_tests::manifest;
 use super::*;
+use crate::ids::fixtures::rid;
+use crate::ids::{ParticipantId, RoomId};
 
 #[path = "connection_secret_canary_tests.rs"]
 mod secret_canary_tests;
@@ -30,14 +32,14 @@ async fn authenticated_join_uses_requested_room_name_without_changing_identity()
         .unwrap();
         accounts.push(account);
     }
-    let room_id = format!("account-names-{}", Uuid::new_v4());
+    let room_id = rid(&format!("account-names-{}", Uuid::new_v4()));
     let outcome = AssertUnwindSafe(async {
         let mut participants = Vec::new();
         for (index, settled_name) in ["Room nickname", "Room nickname (2)"]
             .into_iter()
             .enumerate()
         {
-            let participant = accounts[index].to_string();
+            let participant = ParticipantId::from(accounts[index]);
             let (sender, mut receiver) = mpsc::channel(128);
             let mut room = None;
             let mut reconnect = String::new();
@@ -68,7 +70,7 @@ async fn authenticated_join_uses_requested_room_name_without_changing_identity()
             )
             .await
             .unwrap();
-            assert_eq!(room.as_deref(), Some(room_id.as_str()));
+            assert_eq!(room.as_ref(), Some(&room_id));
             let state = manager.room_for_connection_tests(&room_id);
             let state = state.read().await;
             let joined = &state.participants[&participant];
@@ -83,7 +85,7 @@ async fn authenticated_join_uses_requested_room_name_without_changing_identity()
                 serde_json::from_str(&receiver.try_recv().unwrap()).unwrap();
             assert_eq!(response["type"], "roomJoined");
             assert_eq!(response["yourName"], settled_name);
-            assert_eq!(response["participantId"], participant);
+            assert_eq!(response["participantId"], participant.to_string());
             participants.push((sender, receiver));
         }
         let profiles: Vec<String> =
@@ -119,7 +121,7 @@ async fn authenticated_join_validates_the_requested_room_name() {
         sender: &sender,
         request_id: None,
     };
-    let participant = Uuid::new_v4().to_string();
+    let participant = ParticipantId::random();
     let lobby = Arc::new(AtomicBool::new(false));
     let mut room = None;
     let mut reconnect = "unchanged".to_string();
@@ -132,7 +134,7 @@ async fn authenticated_join_validates_the_requested_room_name() {
         &"a".repeat(65),
     ] {
         let join = ClientMessage::JoinRoom {
-            room_id: "account-names".into(),
+            room_id: rid("account-names"),
             participant_name: name.to_string(),
             password: None,
             chat_style: None,
@@ -166,7 +168,7 @@ async fn authorization_dispatch_rejects_every_room_operation_after_sender_or_mem
     let manager = Arc::new(RoomManager::new_for_connection_tests(metrics.clone()).await);
     let (sender, mut receiver) = mpsc::channel(128);
     let (other_sender, mut other_receiver) = mpsc::channel(8);
-    let participant = Uuid::new_v4().to_string();
+    let participant = ParticipantId::random();
     let lobby = Arc::new(AtomicBool::new(false));
     let mut room = None;
     let mut reconnect = Uuid::new_v4().to_string();
@@ -191,10 +193,10 @@ async fn authorization_dispatch_rejects_every_room_operation_after_sender_or_mem
     )
     .await
     .unwrap();
-    assert_eq!(room.as_deref(), Some("policy-room"));
+    assert_eq!(room.as_ref().map(RoomId::as_str), Some("policy-room"));
     assert!(
         manager
-            .is_bound_participant("policy-room", &participant, &sender)
+            .is_bound_participant(&rid("policy-room"), &participant, &sender)
             .await
     );
     while receiver.try_recv().is_ok() {}
@@ -202,7 +204,7 @@ async fn authorization_dispatch_rejects_every_room_operation_after_sender_or_mem
     for removed in [false, true] {
         if removed {
             manager
-                .remove_participant_for_sender("policy-room", &participant, &sender)
+                .remove_participant_for_sender(&rid("policy-room"), &participant, &sender)
                 .await
                 .unwrap();
         }
@@ -237,7 +239,7 @@ async fn authorization_dispatch_rejects_every_room_operation_after_sender_or_mem
                 "{} removed={removed}",
                 row.operation
             );
-            assert_eq!(room.as_deref(), Some("policy-room"));
+            assert_eq!(room.as_ref().map(RoomId::as_str), Some("policy-room"));
         }
     }
     assert!(
@@ -258,8 +260,8 @@ async fn authorization_dispatch_lobby_policy_covers_every_decoded_operation() {
         request_id: Some("policy"),
     };
     let lobby = Arc::new(AtomicBool::new(true));
-    let participant = Uuid::new_v4().to_string();
-    let mut room = Some("policy-room".into());
+    let participant = ParticipantId::random();
+    let mut room = Some(rid("policy-room"));
     let mut reconnect = Uuid::new_v4().to_string();
     let mut allowed = Vec::new();
     for row in manifest().websocket {
@@ -314,7 +316,7 @@ async fn authorization_dispatch_moderation_checks_actor_and_target_roles() {
     let mut participants = Vec::new();
     for name in ["Actor", "Target"] {
         let (sender, receiver) = mpsc::channel(128);
-        let id = Uuid::new_v4().to_string();
+        let id = ParticipantId::random();
         let mut room = None;
         let reply = ReplySender {
             metrics: &metrics,
@@ -342,7 +344,7 @@ async fn authorization_dispatch_moderation_checks_actor_and_target_roles() {
         .unwrap();
         participants.push((id, sender, receiver));
     }
-    let room = manager.room_for_connection_tests("policy-roles");
+    let room = manager.room_for_connection_tests(&rid("policy-roles"));
     let roles = [Guest, User, Member, Moderator, Admin, Owner];
     let targets: [&[Role]; 6] = [
         &[],
@@ -371,17 +373,17 @@ async fn authorization_dispatch_moderation_checks_actor_and_target_roles() {
             // the production administration rate bucket or weakening it.
             for message in [
                 ClientMessage::CloseCam {
-                    target_participant_id: target.clone(),
+                    target_participant_id: *target,
                 },
                 ClientMessage::SetRole {
-                    target_participant_id: target.clone(),
+                    target_participant_id: *target,
                     role: target_role,
                 },
             ] {
                 let result = handle_client_message(
                     &message,
                     actor,
-                    &mut Some("policy-roles".into()),
+                    &mut Some(rid("policy-roles")),
                     &Arc::new(AtomicBool::new(false)),
                     &reply,
                     &manager,
@@ -428,7 +430,7 @@ async fn authorization_dispatch_moderation_checks_actor_and_target_roles() {
             let result = handle_client_message(
                 &message,
                 actor,
-                &mut Some("policy-roles".into()),
+                &mut Some(rid("policy-roles")),
                 &Arc::new(AtomicBool::new(false)),
                 &reply,
                 &manager,

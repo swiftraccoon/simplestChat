@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+use crate::ids::{ParticipantId, RoomId};
 use crate::room::roles::Role;
 use chrono::{DateTime, Utc};
 use mediasoup::prelude::MediaKind;
@@ -59,6 +60,80 @@ impl PunitiveKind {
 
 /// Durable history entries kept per room; the oldest go when a new one arrives.
 pub(crate) const MAX_MODERATION_EVENTS: usize = 1000;
+
+/// Whom a moderation entry is about: a participant, or a ban that no longer
+/// names a participant (guest bans are keyed by their own identifier). Both
+/// serialize as the plain string they always were.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ModerationTargetId {
+    Participant(ParticipantId),
+    Ban(String),
+}
+
+impl From<ParticipantId> for ModerationTargetId {
+    fn from(value: ParticipantId) -> Self {
+        Self::Participant(value)
+    }
+}
+
+impl From<&ParticipantId> for ModerationTargetId {
+    fn from(value: &ParticipantId) -> Self {
+        Self::Participant(*value)
+    }
+}
+
+impl std::fmt::Display for ModerationTargetId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Participant(id) => std::fmt::Display::fmt(id, f),
+            Self::Ban(id) => f.write_str(id),
+        }
+    }
+}
+
+impl ModerationTargetId {
+    /// A stored identifier: a participant when it parses as one, else a ban key.
+    pub(crate) fn from_text(value: &str) -> Self {
+        value
+            .parse()
+            .map_or_else(|_| Self::Ban(value.to_owned()), Self::Participant)
+    }
+}
+
+impl std::str::FromStr for ModerationTargetId {
+    type Err = std::convert::Infallible;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Ok(Self::from_text(value))
+    }
+}
+
+impl sqlx::Type<sqlx::Postgres> for ModerationTargetId {
+    fn type_info() -> sqlx::postgres::PgTypeInfo {
+        <String as sqlx::Type<sqlx::Postgres>>::type_info()
+    }
+
+    fn compatible(ty: &sqlx::postgres::PgTypeInfo) -> bool {
+        <String as sqlx::Type<sqlx::Postgres>>::compatible(ty)
+    }
+}
+
+impl sqlx::Encode<'_, sqlx::Postgres> for ModerationTargetId {
+    fn encode_by_ref(
+        &self,
+        buf: &mut sqlx::postgres::PgArgumentBuffer,
+    ) -> Result<sqlx::encode::IsNull, sqlx::error::BoxDynError> {
+        <String as sqlx::Encode<'_, sqlx::Postgres>>::encode(self.to_string(), buf)
+    }
+}
+
+impl sqlx::Decode<'_, sqlx::Postgres> for ModerationTargetId {
+    fn decode(value: sqlx::postgres::PgValueRef<'_>) -> Result<Self, sqlx::error::BoxDynError> {
+        let text = <&str as sqlx::Decode<'_, sqlx::Postgres>>::decode(value)?;
+        Ok(text.parse()?)
+    }
+}
 
 /// What a moderator did, as the history stores and serializes it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -122,14 +197,14 @@ impl ModerationAction {
 /// Who acted, as the history names them.
 #[derive(Clone, Copy)]
 pub(crate) struct Actor<'a> {
-    pub(crate) id: &'a str,
+    pub(crate) id: &'a ParticipantId,
     pub(crate) name: &'a str,
 }
 
 /// Whom it concerned; a guest's address is its sanction cohort.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub(crate) struct Target<'a> {
-    pub(crate) id: &'a str,
+    pub(crate) id: ModerationTargetId,
     pub(crate) name: &'a str,
     pub(crate) authenticated: bool,
     pub(crate) ip: Option<IpAddr>,
@@ -142,9 +217,9 @@ pub(crate) struct Target<'a> {
 pub struct ModerationEvent {
     pub(crate) event_id: String,
     pub(crate) action: ModerationAction,
-    pub(crate) actor_id: String,
+    pub(crate) actor_id: ParticipantId,
     pub(crate) actor_name: String,
-    pub(crate) target_id: String,
+    pub(crate) target_id: ModerationTargetId,
     pub(crate) target_name: String,
     pub(crate) target_authenticated: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -170,9 +245,9 @@ impl ModerationEvent {
         Self {
             event_id: Uuid::new_v4().to_string(),
             action,
-            actor_id: actor.id.to_owned(),
+            actor_id: *actor.id,
             actor_name: actor.name.to_owned(),
-            target_id: target.id.to_owned(),
+            target_id: target.id.clone(),
             target_name: target.name.to_owned(),
             target_authenticated: target.authenticated,
             reason: reason.map(str::to_owned),
@@ -193,7 +268,7 @@ impl ModerationEvent {
 /// still open, and refuses a report from another room.
 pub(crate) async fn record_event(
     transaction: &mut PgConnection,
-    room_id: &str,
+    room_id: &RoomId,
     event: &ModerationEvent,
     cap: usize,
 ) -> Result<(), sqlx::Error> {
@@ -219,7 +294,7 @@ pub(crate) async fn record_event(
         )
         .bind(room_id)
         .bind(report_id)
-        .bind(&event.actor_id)
+        .bind(event.actor_id)
         .execute(&mut *transaction)
         .await?;
     }
@@ -251,7 +326,7 @@ pub(crate) async fn record_event(
     .bind(event_id)
     .bind(room_id)
     .bind(event.action.as_str())
-    .bind(&event.actor_id)
+    .bind(event.actor_id)
     .bind(&event.actor_name)
     .bind(&event.target_id)
     .bind(&event.target_name)
@@ -490,7 +565,7 @@ pub(crate) fn spawn_retention(
 /// Write a history entry on its own, for a change that leaves no other row.
 pub(crate) async fn persist_event(
     pool: &PgPool,
-    room_id: &str,
+    room_id: &RoomId,
     event: &ModerationEvent,
 ) -> Result<(), sqlx::Error> {
     let mut transaction = pool.begin().await?;
@@ -502,7 +577,7 @@ pub(crate) async fn persist_event(
 /// The newest `limit` entries after `offset`, newest first.
 pub(crate) async fn list_events(
     pool: &PgPool,
-    room_id: &str,
+    room_id: &RoomId,
     offset: i64,
     limit: i64,
 ) -> Result<Vec<ModerationEvent>, sqlx::Error> {
@@ -551,9 +626,9 @@ pub(crate) async fn list_events(
                 Some(ModerationEvent {
                     event_id: id.to_string(),
                     action: ModerationAction::parse(&action)?,
-                    actor_id,
+                    actor_id: actor_id.parse().ok()?,
                     actor_name,
-                    target_id,
+                    target_id: target_id.parse().ok()?,
                     target_name,
                     target_authenticated,
                     reason,
@@ -572,7 +647,7 @@ pub(crate) async fn list_events(
 /// cannot discard a sanction simply by receiving a new participant UUID.
 pub(crate) async fn load_punitive_state(
     pool: &PgPool,
-    room_id: &str,
+    room_id: &RoomId,
     user_id: Option<Uuid>,
     ip: Option<IpAddr>,
     authenticated: bool,
@@ -623,7 +698,7 @@ pub(crate) async fn load_punitive_state(
 )]
 pub(crate) async fn set_punitive_state(
     pool: &PgPool,
-    room_id: &str,
+    room_id: &RoomId,
     user_id: Option<Uuid>,
     ip: Option<IpAddr>,
     kind: PunitiveKind,
@@ -725,7 +800,7 @@ pub(crate) async fn set_punitive_state(
 )]
 pub(crate) async fn persist_ban(
     pool: &PgPool,
-    room_id: &str,
+    room_id: &RoomId,
     user_id: Option<Uuid>,
     ip: Option<IpAddr>,
     reason: Option<&str>,
@@ -793,7 +868,7 @@ pub(crate) async fn persist_ban(
 /// shared IPs (CGNAT, tunnels) must not lock out registered users.
 pub(crate) async fn is_banned(
     pool: &PgPool,
-    room_id: &str,
+    room_id: &RoomId,
     user_id: Option<Uuid>,
     ip: Option<IpAddr>,
     authenticated: bool,
@@ -827,7 +902,7 @@ pub(crate) async fn is_banned(
 /// in which case the history names the account as it is called now.
 pub(crate) async fn remove_user_ban(
     pool: &PgPool,
-    room_id: &str,
+    room_id: &RoomId,
     user_id: Uuid,
     actor: Actor<'_>,
 ) -> Result<bool, sqlx::Error> {
@@ -846,12 +921,12 @@ pub(crate) async fn remove_user_ban(
         .bind(user_id)
         .fetch_optional(&mut *transaction)
         .await?;
-    let target_id = user_id.to_string();
+    let target_id = ParticipantId::from(user_id);
     let event = ModerationEvent::new(
         ModerationAction::Unban,
         actor,
         Target {
-            id: &target_id,
+            id: target_id.into(),
             name: name.as_deref().unwrap_or("Removed account"),
             authenticated: true,
             ip: None,
@@ -894,6 +969,7 @@ pub(crate) fn can_chat(state: &PunitiveState, role: Role, moderated: bool) -> bo
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ids::fixtures::rid;
 
     #[test]
     fn retention_periods_are_bounded_days_and_addresses_never_outlive_entries() {
@@ -963,8 +1039,8 @@ mod tests {
                 .await
                 .unwrap();
         }
-        let room_id = format!("history-{}", Uuid::new_v4());
-        let other_room_id = format!("history-other-{}", Uuid::new_v4());
+        let room_id = rid(&format!("history-{}", Uuid::new_v4()));
+        let other_room_id = rid(&format!("history-other-{}", Uuid::new_v4()));
         for id in [&room_id, &other_room_id] {
             sqlx::query("INSERT INTO rooms(id,owner_id,display_name) VALUES($1,$2,$1)")
                 .bind(id)
@@ -980,14 +1056,14 @@ mod tests {
                 .bind(id).bind(room).bind(owner.to_string()).bind(member.to_string())
                 .execute(&pool).await.unwrap();
         }
-        let owner_id = owner.to_string();
-        let member_id = member.to_string();
+        let owner_id = ParticipantId::from(owner);
+        let member_id = ParticipantId::from(member);
         let actor = Actor {
             id: &owner_id,
             name: "Owner",
         };
         let target = Target {
-            id: &member_id,
+            id: member_id.into(),
             name: "Maya",
             authenticated: true,
             ip: None,
@@ -997,7 +1073,7 @@ mod tests {
         let ban = ModerationEvent::new(
             ModerationAction::Ban,
             actor,
-            target,
+            target.clone(),
             Some("spam"),
             None,
             Some(report),
@@ -1021,8 +1097,8 @@ mod tests {
                 .await
                 .unwrap();
         assert_eq!(
-            (status.as_str(), resolved_by.as_deref()),
-            ("resolved", Some(owner_id.as_str()))
+            (status.as_str(), resolved_by),
+            ("resolved", Some(owner_id.to_string()))
         );
         assert!(
             is_banned(&pool, &room_id, Some(member), None, true)
@@ -1034,7 +1110,7 @@ mod tests {
         let foreign = ModerationEvent::new(
             ModerationAction::Kick,
             actor,
-            target,
+            target.clone(),
             None,
             None,
             Some(foreign_report),
@@ -1080,12 +1156,12 @@ mod tests {
         );
 
         // A guest's address is its cohort, and it reaches the owner's listing only.
-        let guest_id = Uuid::new_v4().to_string();
+        let guest_id = ParticipantId::random();
         let guest = ModerationEvent::new(
             ModerationAction::Kick,
             actor,
             Target {
-                id: &guest_id,
+                id: guest_id.into(),
                 name: "Guest",
                 authenticated: false,
                 ip: Some("2001:db8:1:2::9".parse().unwrap()),

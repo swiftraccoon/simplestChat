@@ -20,6 +20,7 @@ HTTP / WebSocket
 | Area | Entry points |
 | --- | --- |
 | Configuration, startup and database pool | `config.rs`, `app.rs`, `db.rs` |
+| Identifiers (room slug, participant, message and account UUIDs) | `ids.rs` |
 | Admission drain and bounded shutdown | `shutdown.rs`, `app.rs` |
 | Routes, origin/limits, WebSocket lifecycle | `signaling/mod.rs`, `signaling/connection.rs` |
 | Dependency readiness | `signaling/readiness.rs`, `media/worker_manager.rs` |

@@ -1878,23 +1878,23 @@ mod tests {
         let transport_manager = TransportManager::new();
 
         // Create router first
-        let room_id = "test-room".to_string();
+        let room_id = "test-room";
         router_manager
-            .create_router(room_id.clone(), RouterConfig::default())
+            .create_router(room_id.to_string(), RouterConfig::default())
             .await
             .unwrap();
-        let router = router_manager.get_router(&room_id).await.unwrap();
+        let router = router_manager.get_router(room_id).await.unwrap();
 
         // Look up the WebRtcServer for this room's worker
-        let worker_id = router_manager.get_worker_id(&room_id).await.unwrap();
+        let worker_id = router_manager.get_worker_id(room_id).await.unwrap();
         let webrtc_server = worker_manager.get_webrtc_server(worker_id).await.unwrap();
         let consumer_counter = worker_manager.get_consumer_counter(worker_id).unwrap();
 
         // Create transports via WebRtcServer (shared port)
-        let participant_id = "test-participant".to_string();
+        let participant_id = "test-participant";
         let send_transport = transport_manager
             .create_send_transport(
-                participant_id.clone(),
+                participant_id.to_string(),
                 &router,
                 webrtc_server.clone(),
                 &config.webrtc_transport_config,
@@ -1905,7 +1905,7 @@ mod tests {
 
         let recv_transport = transport_manager
             .create_recv_transport(
-                participant_id.clone(),
+                participant_id.to_string(),
                 &router,
                 webrtc_server.clone(),
                 &config.webrtc_transport_config,
@@ -1918,7 +1918,7 @@ mod tests {
         // The outgoing floor and both directional ceilings must remain applied.
         {
             let participant = transport_manager
-                .get_participant_lock(&participant_id)
+                .get_participant_lock(participant_id)
                 .unwrap();
             let participant = participant.lock().await;
             let sent = participant
@@ -1973,7 +1973,7 @@ mod tests {
 
         let producer = transport_manager
             .create_producer(
-                &participant_id,
+                participant_id,
                 MediaKind::Audio,
                 RtpParameters {
                     mid: Some("audio".to_string()),
@@ -2000,13 +2000,13 @@ mod tests {
             let producer_paused = attempt > 0;
             if producer_paused {
                 transport_manager
-                    .pause_producer(&participant_id, &producer.id().to_string())
+                    .pause_producer(participant_id, &producer.id().to_string())
                     .await
                     .unwrap();
             }
             let consumer = transport_manager
                 .create_consumer(
-                    &participant_id,
+                    participant_id,
                     producer.id(),
                     RtpCapabilities {
                         codecs: config.router_config.media_codecs.clone(),
@@ -2033,7 +2033,7 @@ mod tests {
 
             assert!(
                 transport_manager
-                    .resume_consumer(&participant_id, &info.id)
+                    .resume_consumer(participant_id, &info.id)
                     .await
                     .unwrap(),
                 "the first browser acknowledgment must resume the worker consumer"
@@ -2043,7 +2043,7 @@ mod tests {
             assert_eq!(resumed.producer_paused, producer_paused);
             assert!(
                 !transport_manager
-                    .resume_consumer(&participant_id, &info.id)
+                    .resume_consumer(participant_id, &info.id)
                     .await
                     .unwrap(),
                 "repeated acknowledgments remain idempotent"
@@ -2052,7 +2052,7 @@ mod tests {
             drop(consumer);
             assert!(
                 transport_manager
-                    .close_consumer(&participant_id, &info.id)
+                    .close_consumer(participant_id, &info.id)
                     .await
                     .unwrap()
             );
@@ -2063,7 +2063,7 @@ mod tests {
             assert_eq!(consumer_counter.load(Ordering::Relaxed), 0);
             assert!(
                 !transport_manager
-                    .close_consumer(&participant_id, &info.id)
+                    .close_consumer(participant_id, &info.id)
                     .await
                     .unwrap(),
                 "repeated closure must be a no-op"
@@ -2159,13 +2159,13 @@ mod tests {
         let worker_manager = Arc::new(WorkerManager::new(config.clone()).await.unwrap());
         let router_manager = RouterManager::new(worker_manager.clone());
         let transport_manager = TransportManager::new();
-        let room_id = "layers-room".to_string();
+        let room_id = "layers-room";
         router_manager
-            .create_router(room_id.clone(), RouterConfig::default())
+            .create_router(room_id.to_string(), RouterConfig::default())
             .await
             .unwrap();
-        let router = router_manager.get_router(&room_id).await.unwrap();
-        let worker_id = router_manager.get_worker_id(&room_id).await.unwrap();
+        let router = router_manager.get_router(room_id).await.unwrap();
+        let worker_id = router_manager.get_worker_id(room_id).await.unwrap();
         let webrtc_server = worker_manager.get_webrtc_server(worker_id).await.unwrap();
         let pid = "viewer".to_string();
         transport_manager
@@ -2432,7 +2432,7 @@ mod tests {
             let transport_manager = TransportManager::new();
             let room_id = format!("tcp-room-{tcp}");
             router_manager
-                .create_router(room_id.clone(), RouterConfig::default())
+                .create_router(room_id.to_string(), RouterConfig::default())
                 .await
                 .unwrap();
             let router = router_manager.get_router(&room_id).await.unwrap();

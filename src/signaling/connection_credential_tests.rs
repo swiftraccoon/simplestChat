@@ -1,6 +1,7 @@
 //! Deterministic credential-observation tests; no database or network failures.
 
 use super::*;
+use crate::ids::fixtures::{pid, rid};
 use std::future::{Future, pending, ready};
 use tokio::sync::broadcast;
 
@@ -335,8 +336,8 @@ async fn grace_activation_publishes_the_entry_before_immediately_ready_cleanup()
         // Cleanup is ready immediately after activation, as with a retained
         // session whose credential or grace deadline has already expired.
         let entry = owned_map.remove_if_token_matches(
-            "credential-room",
-            "credential-participant",
+            &rid("credential-room"),
+            &pid("credential-participant"),
             "accepted-reconnect-token",
             Some("credential-observer-account"),
         );
@@ -348,8 +349,8 @@ async fn grace_activation_publishes_the_entry_before_immediately_ready_cleanup()
         .unwrap();
     assert!(map.inner.read().unwrap().is_empty());
     assert!(map.insert_activated(
-        "credential-room".to_string(),
-        "credential-participant".to_string(),
+        rid("credential-room"),
+        pid("credential-participant"),
         grace_entry_with_timer("accepted-reconnect-token", timer),
         activate,
     ));
@@ -385,8 +386,8 @@ async fn rejected_grace_insertion_aborts_the_owned_timer_without_activating_clea
         .unwrap();
     let abort = timer.abort_handle();
     assert!(!map.insert_activated(
-        "credential-room".to_string(),
-        "credential-participant".to_string(),
+        rid("credential-room"),
+        pid("credential-participant"),
         grace_entry_with_timer("rejected-reconnect-token", timer),
         activate,
     ));

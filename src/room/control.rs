@@ -6,6 +6,7 @@
 //! runtime publication or quarantine. Native cleanup may follow outside control.
 
 use super::{Room, RoomManager, ServerMessage, TokioRwLock, try_send_essential};
+use crate::ids::RoomId;
 use std::future::Future;
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
@@ -77,12 +78,12 @@ impl RoomManager {
     /// cannot strand a successful SQL write before its runtime publication.
     pub(super) async fn run_room_control<T, F, W>(
         &self,
-        room_id: &str,
+        room_id: &RoomId,
         action: F,
     ) -> anyhow::Result<T>
     where
         T: Send + 'static,
-        F: FnOnce(Self, String, RoomControl) -> W + Send + 'static,
+        F: FnOnce(Self, RoomId, RoomControl) -> W + Send + 'static,
         W: Future<Output = anyhow::Result<T>> + Send + 'static,
     {
         let room = self.get_room(room_id)?;
@@ -103,7 +104,7 @@ impl RoomManager {
             );
         }
         let manager = self.clone();
-        let room_id = room_id.to_owned();
+        let room_id = room_id.clone();
         // The task, not the operation, owns control: a closure that ignores its
         // token (or drops it on an early error path) still excludes other
         // writers until the owned work has finished.
@@ -131,7 +132,7 @@ impl RoomManager {
     /// Multi-statement writes must supply one transaction as this future.
     pub(super) async fn persist_room<T>(
         &self,
-        room_id: &str,
+        room_id: &RoomId,
         room: &Arc<TokioRwLock<Room>>,
         persistence: impl Future<Output = Result<T, sqlx::Error>>,
     ) -> Result<T, sqlx::Error> {
@@ -147,7 +148,7 @@ impl RoomManager {
     /// Absolute-deadline boundary kept separate for deterministic timer tests.
     pub(super) async fn persist_room_until<T>(
         &self,
-        room_id: &str,
+        room_id: &RoomId,
         room: &Arc<TokioRwLock<Room>>,
         deadline: tokio::time::Instant,
         persistence: impl Future<Output = Result<T, sqlx::Error>>,
@@ -170,7 +171,7 @@ impl RoomManager {
     /// Never revive uncertain policy or reuse its room ID automatically. The
     /// database row is left untouched; restart reloads its durable state. State
     /// publication is mandatory, not dropped by an end-to-end request timeout.
-    async fn quarantine_room(&self, room_id: &str, room_lock: &Arc<TokioRwLock<Room>>) {
+    async fn quarantine_room(&self, room_id: &RoomId, room_lock: &Arc<TokioRwLock<Room>>) {
         let sessions = {
             let mut room = room_lock.write().await;
             let mapped = self
@@ -218,11 +219,11 @@ impl RoomManager {
             sessions
         };
         warn!(
-            room_id,
+            %room_id,
             "Room persistence outcome uncertain; retaining runtime tombstone and room-ID reservation until restart"
         );
         let media = self.media_server.clone();
-        let room_id = room_id.to_owned();
+        let room_id = room_id.clone();
         tokio::spawn(
             async move {
                 use futures_util::StreamExt;
@@ -239,19 +240,19 @@ impl RoomManager {
                     .await
                     .is_err()
                 {
-                    warn!(room_id, "Quarantined room participant cleanup incomplete");
+                    warn!(%room_id, "Quarantined room participant cleanup incomplete");
                 }
                 match tokio::time::timeout(
                     QUARANTINE_CLEANUP_TIMEOUT,
-                    media.remove_router(&room_id),
+                    media.remove_router(room_id.as_str()),
                 )
                 .await
                 {
                     Ok(Ok(())) => {}
                     Ok(Err(error)) => {
-                        warn!(room_id, %error, "Quarantined room router cleanup failed")
+                        warn!(%room_id, %error, "Quarantined room router cleanup failed")
                     }
-                    Err(_) => warn!(room_id, "Quarantined room router cleanup incomplete"),
+                    Err(_) => warn!(%room_id, "Quarantined room router cleanup incomplete"),
                 }
                 // Intentionally retain the reservation even after successful cleanup.
             }

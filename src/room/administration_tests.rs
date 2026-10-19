@@ -1,5 +1,6 @@
 //! Runs only against the explicitly disposable, migrated hosted test database.
 use super::*;
+use crate::ids::fixtures::rid;
 use crate::{media::MediaConfig, metrics::ServerMetrics};
 use futures_util::FutureExt;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
@@ -89,8 +90,8 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
         Uuid::new_v4(),
         Uuid::new_v4(),
     ];
-    let room_id = format!("http-admin-{}", Uuid::new_v4());
-    let other_room = format!("http-admin-other-{}", Uuid::new_v4());
+    let room_id = rid(&format!("http-admin-{}", Uuid::new_v4()));
+    let other_room = rid(&format!("http-admin-other-{}", Uuid::new_v4()));
     let proof = async {
         for (index, user) in users.iter().enumerate() {
             sqlx::query("INSERT INTO users(id,email,display_name) VALUES($1,$2,$3)")
@@ -166,7 +167,7 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
 
         let (sender, mut receiver) = mpsc::channel(64);
         let person = super::super::Participant {
-            id: peer.to_string(),
+            id: ParticipantId::from(peer),
             name: "Live member".into(),
             sender,
             media_session_id: Uuid::new_v4(),
@@ -179,7 +180,7 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
             social: super::super::social::ParticipantSocial::new(0),
         };
         let mut room = Room::new(room_id.clone(), Some(saved), true, hash);
-        room.participants.insert(person.id.clone(), person);
+        room.participants.insert(person.id, person);
         let room = Arc::new(RwLock::new(room));
         manager
             .rooms
@@ -203,7 +204,7 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
                 .read()
                 .await
                 .participants
-                .contains_key(&owner.to_string())
+                .contains_key(&ParticipantId::from(owner))
         );
         Context::admit(manager.clone(), room_id.clone(), claims(owner, sessions[0]))
             .await
@@ -212,7 +213,7 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
             .await
             .unwrap();
         assert_eq!(
-            room.read().await.participants[&peer.to_string()].role,
+            room.read().await.participants[&ParticipantId::from(peer)].role,
             roles::Role::Admin
         );
         let mut listing =
@@ -270,14 +271,14 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
                     .await
                     .unwrap()
                     .execute(Command::Sanction(SanctionRequest {
-                        target_participant_id: peer.to_string(),
+                        target_participant_id: ParticipantId::from(peer),
                         kind: kind.into(),
                         enabled,
                         reason: None,
                     }))
                     .await
                     .unwrap();
-                let state = room.read().await.participants[&peer.to_string()]
+                let state = room.read().await.participants[&ParticipantId::from(peer)]
                     .punitive
                     .clone();
                 assert_eq!(
@@ -290,13 +291,13 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
                 );
             }
         }
-        let mut returning = room.read().await.participants[&peer.to_string()].clone();
+        let mut returning = room.read().await.participants[&ParticipantId::from(peer)].clone();
         Context::admit(manager.clone(), room_id.clone(), claims(owner, sessions[0]))
             .await
             .unwrap()
             .execute(Command::Moderate(ModerationRequest {
                 action: "ban".into(),
-                target_participant_id: peer.to_string(),
+                target_participant_id: ParticipantId::from(peer),
                 reason: Some("Test administration".into()),
                 duration_seconds: Some(3600),
                 report_id: None,
@@ -308,7 +309,7 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
             room.read()
                 .await
                 .banned_participants
-                .contains_key(&peer.to_string())
+                .contains_key(&ParticipantId::from(peer))
         );
         let ban: Uuid = sqlx::query_scalar(
             "SELECT id FROM room_states WHERE room_id=$1 AND user_id=$2 AND state='banned'",
@@ -339,7 +340,7 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
                 .read()
                 .await
                 .banned_participants
-                .contains_key(&peer.to_string())
+                .contains_key(&ParticipantId::from(peer))
         );
         assert!(
             !moderation::is_banned(&pool, &room_id, Some(peer), None, true)
@@ -361,14 +362,14 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
         room.write()
             .await
             .participants
-            .insert(peer.to_string(), returning);
+            .insert(ParticipantId::from(peer), returning);
 
         let (waiting_sender, mut waiting_receiver) = mpsc::channel(32);
         let waiting = Arc::new(std::sync::atomic::AtomicBool::new(true));
         room.write().await.lobby.insert(
-            outsider.to_string(),
+            ParticipantId::from(outsider),
             super::super::LobbyEntry {
-                participant_id: outsider.to_string(),
+                participant_id: ParticipantId::from(outsider),
                 name: "Waiting account".into(),
                 sender: waiting_sender,
                 chat_style: Default::default(),
@@ -385,7 +386,7 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
             .await
             .unwrap()
             .execute(Command::Lobby(
-                outsider.to_string(),
+                ParticipantId::from(outsider),
                 LobbyRequest {
                     action: "admit".into(),
                     reason: None,
@@ -398,7 +399,7 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
             room.read()
                 .await
                 .participants
-                .contains_key(&outsider.to_string())
+                .contains_key(&ParticipantId::from(outsider))
         );
         let admitted: Value =
             serde_json::from_str(&waiting_receiver.recv().await.unwrap()).unwrap();
@@ -408,19 +409,19 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
             .unwrap()
             .execute(Command::Moderate(ModerationRequest {
                 action: "kick".into(),
-                target_participant_id: outsider.to_string(),
+                target_participant_id: ParticipantId::from(outsider),
                 reason: None,
                 duration_seconds: None,
                 report_id: None,
             }))
             .await
             .unwrap();
-        let denied_id = Uuid::new_v4().to_string();
+        let denied_id = ParticipantId::random();
         let (denied_sender, mut denied_receiver) = mpsc::channel(16);
         room.write().await.lobby.insert(
-            denied_id.clone(),
+            denied_id,
             super::super::LobbyEntry {
-                participant_id: denied_id.clone(),
+                participant_id: denied_id,
                 name: "Waiting guest".into(),
                 sender: denied_sender,
                 chat_style: Default::default(),
@@ -437,7 +438,7 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
             .await
             .unwrap()
             .execute(Command::Lobby(
-                denied_id.clone(),
+                denied_id,
                 LobbyRequest {
                     action: "deny".into(),
                     reason: Some("Closed meeting".into()),

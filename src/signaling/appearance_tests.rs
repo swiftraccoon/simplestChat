@@ -1,6 +1,7 @@
 //! Persisted appearance remains independent of chat and honors account/room ownership.
 
 use super::*;
+use crate::ids::fixtures::rid;
 
 async fn body(response: Response) -> Value {
     serde_json::from_slice(
@@ -58,7 +59,7 @@ async fn authorization_database_appearance_persists_independently_and_only_owner
     assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(body(response).await["profile_style"], profile_style);
 
-    let room = format!("appearance-{}", Uuid::new_v4());
+    let room = rid(&format!("appearance-{}", Uuid::new_v4()));
     sqlx::query("INSERT INTO rooms(id,owner_id,display_name) VALUES($1,$2,'Our room')")
         .bind(&room)
         .bind(fixture.users[0])
@@ -80,7 +81,7 @@ async fn authorization_database_appearance_persists_independently_and_only_owner
         .room_manager()
         .add_participant(
             &room,
-            fixture.users[0].to_string(),
+            crate::ids::ParticipantId::from(fixture.users[0]),
             "Room nickname".into(),
             sender,
             true,

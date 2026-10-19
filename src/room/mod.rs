@@ -24,6 +24,7 @@ mod dormant_join_tests;
 mod settings_patch_tests;
 
 use crate::diagnostics::{Stage, measure, measure_result};
+use crate::ids::{ParticipantId, RoomId, UserId};
 use crate::media::types::{MediaResult, TransportInfo};
 use crate::media::{MediaConfig, MediaServer};
 use crate::metrics::ServerMetrics;
@@ -61,7 +62,7 @@ enum ObserverEvent {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct RevokedProducer {
-    participant_id: String,
+    participant_id: ParticipantId,
     media_session_id: uuid::Uuid,
     producer_id: String,
     kind: MediaKind,
@@ -71,7 +72,7 @@ struct RevokedProducer {
 #[derive(Clone)]
 pub(crate) struct Participant {
     pub(crate) social: social::ParticipantSocial,
-    pub id: String,
+    pub id: ParticipantId,
     pub name: String,
     pub sender: mpsc::Sender<crate::OutboundJson>,
     /// Unique to this room membership, even when `id` is a stable account UUID.
@@ -91,7 +92,7 @@ pub(crate) struct Participant {
 
 /// Entry for a participant waiting in the lobby
 pub(crate) struct LobbyEntry {
-    pub participant_id: String,
+    pub participant_id: ParticipantId,
     pub name: String,
     pub sender: mpsc::Sender<crate::OutboundJson>,
     /// Carried into the room on admission.
@@ -123,7 +124,11 @@ enum SanctionKey {
 }
 
 impl SanctionKey {
-    fn for_identity(participant_id: &str, authenticated: bool, ip: Option<IpAddr>) -> Self {
+    fn for_identity(
+        participant_id: &ParticipantId,
+        authenticated: bool,
+        ip: Option<IpAddr>,
+    ) -> Self {
         if authenticated {
             Self::User(participant_id.to_string())
         } else if let Some(ip) = ip {
@@ -391,8 +396,8 @@ fn room_creation_timeout(operation: &str) -> sqlx::Error {
 }
 
 pub(crate) struct IdentityUpdateGuard {
-    updates: Arc<StdRwLock<HashSet<String>>>,
-    room_id: String,
+    updates: Arc<StdRwLock<HashSet<RoomId>>>,
+    room_id: RoomId,
 }
 
 impl Drop for IdentityUpdateGuard {
@@ -405,8 +410,8 @@ impl Drop for IdentityUpdateGuard {
 }
 
 fn release_deletion_reservation(
-    deleting_rooms: &StdRwLock<HashMap<String, uuid::Uuid>>,
-    room_id: &str,
+    deleting_rooms: &StdRwLock<HashMap<RoomId, uuid::Uuid>>,
+    room_id: &RoomId,
     token: uuid::Uuid,
 ) {
     let mut deleting = deleting_rooms
@@ -418,8 +423,8 @@ fn release_deletion_reservation(
 }
 
 fn release_deletion_reservation_after_router_teardown(
-    deleting_rooms: &StdRwLock<HashMap<String, uuid::Uuid>>,
-    room_id: &str,
+    deleting_rooms: &StdRwLock<HashMap<RoomId, uuid::Uuid>>,
+    room_id: &RoomId,
     token: uuid::Uuid,
     router_teardown_succeeded: bool,
 ) {
@@ -430,8 +435,8 @@ fn release_deletion_reservation_after_router_teardown(
 
 async fn restore_failed_deletion(
     runtime_room: Option<Arc<TokioRwLock<Room>>>,
-    deleting_rooms: Arc<StdRwLock<HashMap<String, uuid::Uuid>>>,
-    room_id: String,
+    deleting_rooms: Arc<StdRwLock<HashMap<RoomId, uuid::Uuid>>>,
+    room_id: RoomId,
     token: uuid::Uuid,
 ) {
     if let Some(runtime_room) = runtime_room {
@@ -545,8 +550,8 @@ pub(crate) struct Room {
     /// Shared process counters; runtime rooms must not keep isolated counters.
     metrics: ServerMetrics,
     pub(crate) social: social::RoomSocial,
-    pub id: String,
-    pub participants: HashMap<String, Participant>,
+    pub id: RoomId,
+    pub participants: HashMap<ParticipantId, Participant>,
     pub settings: Option<settings::RoomSettings>,
     /// The deployment's broadcaster ceiling, applied beneath the room's own limit.
     pub(crate) broadcaster_ceiling: Option<usize>,
@@ -581,16 +586,16 @@ pub(crate) struct Room {
     active_speaker_observer: Option<ActiveSpeakerObserver>,
     audio_level_observer: Option<AudioLevelObserver>,
     /// Map producer_id -> participant_id for observer lookups
-    producer_to_participant: HashMap<String, String>,
+    producer_to_participant: HashMap<String, ParticipantId>,
     /// In-memory ban list — prevents banned participants from rejoining
-    banned_participants: HashMap<String, Option<std::time::Instant>>,
+    banned_participants: HashMap<ParticipantId, Option<std::time::Instant>>,
     /// Guest identities are connection-scoped, so retain their IP as the
     /// in-memory ban key (registered users are always keyed by user UUID).
     banned_guest_ips: HashMap<std::net::IpAddr, Option<std::time::Instant>>,
     /// Participant IDs that were removed as part of a guest ban. Guest IDs are
     /// UUID-shaped but are not account IDs, so this marker keeps the user-ID
     /// unban path from silently targeting the wrong durable key.
-    banned_guest_participants: HashSet<String>,
+    banned_guest_participants: HashSet<ParticipantId>,
     /// Security policy generation captured by joiners before slow DB/password
     /// work. A mismatch at commit time forces a safe retry rather than allowing
     /// a stale snapshot of lobby/invite/password/role/sanction policy.
@@ -606,7 +611,7 @@ pub(crate) struct Room {
     /// room Arc must reject their commit after this tombstone becomes visible.
     deleting: bool,
     /// Lobby: participants waiting for moderator approval
-    pub lobby: HashMap<String, LobbyEntry>,
+    pub lobby: HashMap<ParticipantId, LobbyEntry>,
 }
 
 struct MediaMutationReservation {
@@ -622,11 +627,11 @@ struct MediaControlIpcReservation {
 impl Room {
     /// Whether a participant or lobby entry other than `except` already uses
     /// `name`, using the shared Unicode identity comparison.
-    pub(crate) fn name_in_use(&self, name: &str, except: Option<&str>) -> bool {
+    pub(crate) fn name_in_use(&self, name: &str, except: Option<&ParticipantId>) -> bool {
         let wanted = crate::labels::comparison_key(name);
         self.participants
             .values()
-            .filter(|participant| Some(participant.id.as_str()) != except)
+            .filter(|participant| Some(&participant.id) != except)
             .map(|participant| participant.name.as_str())
             .chain(self.lobby.values().map(|entry| entry.name.as_str()))
             .any(|taken| crate::labels::comparison_key(taken) == wanted)
@@ -697,7 +702,7 @@ impl Room {
 
     fn mark_disconnected(
         &mut self,
-        participant_id: &str,
+        participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
     ) {
         let Some(participant) = self.participants.get_mut(participant_id) else {
@@ -712,7 +717,7 @@ impl Room {
 
     #[cfg(test)]
     fn new(
-        id: String,
+        id: RoomId,
         settings: Option<settings::RoomSettings>,
         persisted: bool,
         password_hash: Option<String>,
@@ -748,7 +753,7 @@ impl Room {
     }
 
     fn new_with_observers(
-        id: String,
+        id: RoomId,
         settings: Option<settings::RoomSettings>,
         persisted: bool,
         password_hash: Option<String>,
@@ -906,7 +911,7 @@ impl Room {
 
     fn identity_is_banned(
         &self,
-        participant_id: &str,
+        participant_id: &ParticipantId,
         authenticated: bool,
         ip: Option<IpAddr>,
     ) -> bool {
@@ -919,7 +924,7 @@ impl Room {
     }
 
     /// Broadcast a message to all participants except the sender
-    fn broadcast_except(&self, sender_id: &str, message: &ServerMessage) {
+    fn broadcast_except(&self, sender_id: &ParticipantId, message: &ServerMessage) {
         let json = match serde_json::to_string(message) {
             Ok(j) => crate::OutboundJson::from(j),
             Err(e) => {
@@ -967,7 +972,7 @@ impl Room {
     /// The caller has already removed the departed membership under this room's
     /// write lock. Retained grace memberships stay authoritative until their own
     /// removal/rebind; a future reconnect obtains the current roster snapshot.
-    fn broadcast_participant_left(&self, participant_id: &str) {
+    fn broadcast_participant_left(&self, participant_id: &ParticipantId) {
         broadcast_departure(
             &self.metrics,
             self.participants
@@ -975,7 +980,7 @@ impl Room {
                 .map(|participant| &participant.sender),
             || {
                 serde_json::to_string(&ServerMessage::ParticipantLeft {
-                    participant_id: participant_id.to_string(),
+                    participant_id: *participant_id,
                 })
             },
         );
@@ -1029,9 +1034,9 @@ fn moderation_history_error(error: sqlx::Error) -> anyhow::Error {
 
 fn moderation_cohort(
     room: &Room,
-    target_participant_id: &str,
+    target_participant_id: &ParticipantId,
     moderator_role: roles::Role,
-) -> Result<Vec<String>> {
+) -> Result<Vec<ParticipantId>> {
     let target = room
         .participants
         .get(target_participant_id)
@@ -1046,13 +1051,13 @@ fn moderation_cohort(
                     !participant.authenticated
                         && participant.ip.map(moderation::canonical_guest_ip) == Some(target_ip)
                 })
-                .map(|(participant_id, _)| participant_id.clone())
+                .map(|(participant_id, _)| *participant_id)
                 .collect()
         } else {
-            vec![target_participant_id.to_string()]
+            vec![*target_participant_id]
         }
     } else {
-        vec![target_participant_id.to_string()]
+        vec![*target_participant_id]
     };
 
     if participant_ids.iter().any(|participant_id| {
@@ -1072,7 +1077,7 @@ fn guest_ip_lobby_cohort(
     target_authenticated: bool,
     target_ip: Option<IpAddr>,
     moderator_role: roles::Role,
-) -> Result<Vec<String>> {
+) -> Result<Vec<ParticipantId>> {
     if target_authenticated {
         return Ok(Vec::new());
     }
@@ -1080,13 +1085,13 @@ fn guest_ip_lobby_cohort(
         return Ok(Vec::new());
     };
     let target_ip = moderation::canonical_guest_ip(target_ip);
-    let mut participant_ids: Vec<String> = room
+    let mut participant_ids: Vec<ParticipantId> = room
         .lobby
         .iter()
         .filter(|(_, entry)| {
             !entry.authenticated && entry.ip.map(moderation::canonical_guest_ip) == Some(target_ip)
         })
-        .map(|(participant_id, _)| participant_id.clone())
+        .map(|(participant_id, _)| *participant_id)
         .collect();
     if participant_ids.iter().any(|participant_id| {
         room.lobby
@@ -1102,7 +1107,7 @@ fn guest_ip_lobby_cohort(
 fn punitive_notification(
     kind: moderation::PunitiveKind,
     enabled: bool,
-    participant_id: String,
+    participant_id: ParticipantId,
 ) -> ServerMessage {
     match (kind, enabled) {
         (moderation::PunitiveKind::CamBanned, true) => ServerMessage::CamBanned { participant_id },
@@ -1123,8 +1128,8 @@ fn punitive_value(punitive: &moderation::PunitiveState, kind: moderation::Puniti
 
 fn punitive_cohort_matches(
     room: &Room,
-    participant_ids: &[String],
-    lobby_ids: &[String],
+    participant_ids: &[ParticipantId],
+    lobby_ids: &[ParticipantId],
     sanction_key: &SanctionKey,
     kind: moderation::PunitiveKind,
     enabled: bool,
@@ -1148,8 +1153,8 @@ fn punitive_cohort_matches(
 
 fn apply_punitive_to_cohort(
     room: &mut Room,
-    participant_ids: &[String],
-    lobby_ids: &[String],
+    participant_ids: &[ParticipantId],
+    lobby_ids: &[ParticipantId],
     sanction_key: SanctionKey,
     kind: moderation::PunitiveKind,
     enabled: bool,
@@ -1196,14 +1201,14 @@ fn apply_punitive_to_cohort(
 
 fn record_banned_cohort(
     room: &mut Room,
-    participant_ids: &[String],
+    participant_ids: &[ParticipantId],
     target_authenticated: bool,
     target_ip: Option<IpAddr>,
     runtime_expiry: Option<std::time::Instant>,
 ) {
     for participant_id in participant_ids {
         room.banned_participants
-            .insert(participant_id.clone(), runtime_expiry);
+            .insert(*participant_id, runtime_expiry);
     }
     if !target_authenticated {
         room.banned_guest_participants
@@ -1229,7 +1234,7 @@ fn record_banned_cohort(
 /// writes quarantine the exact runtime room until restart reloads durable state.
 #[derive(Clone)]
 pub(crate) struct RoomManager {
-    rooms: Arc<StdRwLock<HashMap<String, Arc<TokioRwLock<Room>>>>>,
+    rooms: Arc<StdRwLock<HashMap<RoomId, Arc<TokioRwLock<Room>>>>>,
     media_server: Arc<MediaServer>,
     drain: DrainSignal,
     metrics: ServerMetrics,
@@ -1242,10 +1247,10 @@ pub(crate) struct RoomManager {
     room_creation_lock: Arc<tokio::sync::Mutex<()>>,
     /// Room IDs stay reserved while deletion tears down their old router and
     /// media state outside the creation lock.
-    deleting_rooms: Arc<StdRwLock<HashMap<String, uuid::Uuid>>>,
+    deleting_rooms: Arc<StdRwLock<HashMap<RoomId, uuid::Uuid>>>,
     /// Rooms whose durable identity is mid-update: creation of that one room
     /// waits, instead of every room waiting on the process-wide creation lock.
-    identity_updates: Arc<StdRwLock<HashSet<String>>>,
+    identity_updates: Arc<StdRwLock<HashSet<RoomId>>>,
     max_rooms: usize,
     max_persisted_rooms: i64,
     allow_ad_hoc_rooms: bool,
@@ -1266,8 +1271,8 @@ pub(crate) struct RoomManager {
 
 #[derive(Clone)]
 struct FailedJoinCleanup {
-    rooms: Arc<StdRwLock<HashMap<String, Arc<TokioRwLock<Room>>>>>,
-    deleting_rooms: Arc<StdRwLock<HashMap<String, uuid::Uuid>>>,
+    rooms: Arc<StdRwLock<HashMap<RoomId, Arc<TokioRwLock<Room>>>>>,
+    deleting_rooms: Arc<StdRwLock<HashMap<RoomId, uuid::Uuid>>>,
     room_creation_lock: Arc<tokio::sync::Mutex<()>>,
     media_server: Arc<MediaServer>,
 }
@@ -1277,7 +1282,7 @@ struct FailedJoinCleanup {
 /// decrement and empty-room teardown on the runtime so an unauthenticated join
 /// cannot leave a router behind.
 struct PendingRoomJoin {
-    room_id: String,
+    room_id: RoomId,
     room: Arc<TokioRwLock<Room>>,
     cleanup: FailedJoinCleanup,
     active: bool,
@@ -1290,7 +1295,7 @@ impl PendingRoomJoin {
 
     fn complete_locked(&mut self, room: &mut Room) {
         if room.pending_joins == 0 {
-            warn!(room_id = self.room_id, "Join reservation count underflow");
+            warn!(room_id = %self.room_id, "Join reservation count underflow");
         } else {
             room.pending_joins -= 1;
         }
@@ -1314,7 +1319,7 @@ impl Drop for PendingRoomJoin {
                 });
             }
             Err(error) => {
-                warn!(%error, room_id = self.room_id, "Could not schedule failed-join cleanup");
+                warn!(%error, room_id = %self.room_id, "Could not schedule failed-join cleanup");
             }
         }
     }
@@ -1332,7 +1337,7 @@ fn release_join_reservation(room: &mut Room) -> bool {
 }
 
 impl FailedJoinCleanup {
-    async fn release_failed_join(self, room_id: String, room_lock: Arc<TokioRwLock<Room>>) {
+    async fn release_failed_join(self, room_id: RoomId, room_lock: Arc<TokioRwLock<Room>>) {
         // Cleanup has no request deadline: every creator holding this mutex is
         // itself bounded, and abandoning this reservation would permanently
         // consume runtime room/router capacity.
@@ -1379,21 +1384,21 @@ impl FailedJoinCleanup {
         if let Some(deletion_token) = eviction_token {
             let router_teardown_succeeded = match tokio::time::timeout(
                 ROOM_DELETE_TIMEOUT,
-                self.media_server.remove_router(&room_id),
+                self.media_server.remove_router(room_id.as_str()),
             )
             .await
             {
                 Ok(Ok(())) => {
-                    debug!(room_id, "Cleaned up router after failed join");
+                    debug!(%room_id, "Cleaned up router after failed join");
                     true
                 }
                 Ok(Err(error)) => {
-                    warn!(room_id, %error, "Failed to tear down failed-join router; retaining room-ID reservation");
+                    warn!(%room_id, %error, "Failed to tear down failed-join router; retaining room-ID reservation");
                     false
                 }
                 Err(_) => {
                     warn!(
-                        room_id,
+                        %room_id,
                         "Timed out tearing down failed-join router; retaining room-ID reservation"
                     );
                     false
@@ -1499,7 +1504,7 @@ impl RoomManager {
     }
 
     #[cfg(test)]
-    pub(crate) fn room_for_connection_tests(&self, room_id: &str) -> Arc<TokioRwLock<Room>> {
+    pub(crate) fn room_for_connection_tests(&self, room_id: &RoomId) -> Arc<TokioRwLock<Room>> {
         self.get_room(room_id).unwrap()
     }
 
@@ -1608,7 +1613,7 @@ impl RoomManager {
             .deleting_rooms
             .read()
             .unwrap_or_else(|error| error.into_inner())
-            .contains_key(&request.id)
+            .contains_key(request.id.as_str())
         {
             return Ok(None);
         }
@@ -1616,7 +1621,7 @@ impl RoomManager {
             .rooms
             .read()
             .unwrap_or_else(|error| error.into_inner())
-            .contains_key(&request.id)
+            .contains_key(request.id.as_str())
         {
             return Ok(None);
         }
@@ -1644,11 +1649,11 @@ impl RoomManager {
     /// after the mutex is released.
     pub(crate) async fn delete_persisted_room(
         &self,
-        room_id: &str,
+        room_id: &RoomId,
         requester_id: &uuid::Uuid,
     ) -> std::result::Result<DeleteRoomResult, sqlx::Error> {
         let pool = self.db_pool.clone().ok_or(sqlx::Error::PoolClosed)?;
-        let room_id = room_id.to_string();
+        let room_id = room_id.clone();
         let requester_id = *requester_id;
         let rooms = self.rooms.clone();
         let deleting_rooms = self.deleting_rooms.clone();
@@ -1753,7 +1758,7 @@ impl RoomManager {
                         // unknowable. Keep the room reserved and tombstoned
                         // rather than reviving a runtime room whose DB row may
                         // already be gone.
-                        warn!(room_id, %error, "Room delete outcome is indeterminate; retaining tombstone");
+                        warn!(%room_id, %error, "Room delete outcome is indeterminate; retaining tombstone");
                     }
                     return Err(error);
                 }
@@ -1763,7 +1768,7 @@ impl RoomManager {
                     // PostgreSQL did not commit. Fail closed until process
                     // reconciliation/restart rather than creating a zombie.
                     warn!(
-                        room_id,
+                        %room_id,
                         "Room delete timed out; retaining tombstone because commit status is unknown"
                     );
                     return Err(room_delete_timeout("deleting the database row"));
@@ -1789,7 +1794,7 @@ impl RoomManager {
                             // tombstoned and the ID reserved rather than leak a
                             // permanently waiting teardown task.
                             warn!(
-                                room_id,
+                                %room_id,
                                 "Timed out draining deleted room; retaining room-ID reservation"
                             );
                             return Ok(DeleteRoomResult::Deleted);
@@ -1806,10 +1811,10 @@ impl RoomManager {
                         let _ = try_send_essential(&room.metrics, &entry.sender, message.clone());
                     }
                 }
-                let participant_sessions: Vec<(String, uuid::Uuid)> = room
+                let participant_sessions: Vec<(ParticipantId, uuid::Uuid)> = room
                     .participants
                     .values()
-                    .map(|participant| (participant.id.clone(), participant.media_session_id))
+                    .map(|participant| (participant.id, participant.media_session_id))
                     .collect();
                 room.participants.clear();
                 room.lobby.clear();
@@ -1845,7 +1850,7 @@ impl RoomManager {
                             .remove_participant(&media_participant_id)
                             .await
                         {
-                            warn!(room_id, %participant_id, %error, "Failed to tear down deleted-room participant media");
+                            warn!(%room_id, %participant_id, %error, "Failed to tear down deleted-room participant media");
                         }
                     }
                 },
@@ -1858,14 +1863,14 @@ impl RoomManager {
             .is_err()
             {
                 warn!(
-                    room_id,
+                    %room_id,
                     "Timed out tearing down deleted-room participant media"
                 );
             }
             let router_teardown_succeeded = if runtime_room.is_some() {
                 match tokio::time::timeout(
                     ROOM_DELETE_TIMEOUT,
-                    media_server.remove_router(&room_id),
+                    media_server.remove_router(room_id.as_str()),
                 )
                 .await
                 {
@@ -1876,12 +1881,12 @@ impl RoomManager {
                         // recreation fail or attach to stale infrastructure.
                         // Fail closed until restart/reconciliation can prove the
                         // router is gone.
-                        warn!(room_id, %error, "Failed to tear down deleted-room router; retaining room-ID reservation");
+                        warn!(%room_id, %error, "Failed to tear down deleted-room router; retaining room-ID reservation");
                         false
                     }
                     Err(_) => {
                         warn!(
-                            room_id,
+                            %room_id,
                             "Timed out tearing down deleted-room router; retaining room-ID reservation"
                         );
                         false
@@ -1906,8 +1911,8 @@ impl RoomManager {
     }
 
     fn media_participant_id(
-        room_id: &str,
-        participant_id: &str,
+        room_id: &RoomId,
+        participant_id: &ParticipantId,
         media_session_id: uuid::Uuid,
     ) -> String {
         format!("{room_id}\u{1f}{media_session_id}\u{1f}{participant_id}")
@@ -1916,7 +1921,7 @@ impl RoomManager {
     /// Excludes creation of one room while its durable identity is updated.
     /// The marker lives as long as the returned guard, so an update task that
     /// outlives its HTTP caller keeps the exclusion until it completes.
-    pub(crate) fn begin_identity_update(&self, room_id: &str) -> IdentityUpdateGuard {
+    pub(crate) fn begin_identity_update(&self, room_id: &RoomId) -> IdentityUpdateGuard {
         self.identity_updates
             .write()
             .unwrap_or_else(|error| error.into_inner())
@@ -1985,11 +1990,14 @@ impl RoomManager {
             );
         }
         for room_id in rooms {
+            let Ok(room_id) = RoomId::new(room_id) else {
+                continue;
+            };
             if let Err(error) = self
                 .close_room_for_rejoin(&room_id, dead_worker, "Media worker restarted; rejoining")
                 .await
             {
-                warn!(room_id, %error, "Failed to close a room whose media worker died");
+                warn!(%room_id, %error, "Failed to close a room whose media worker died");
             }
         }
     }
@@ -2000,7 +2008,7 @@ impl RoomManager {
     /// replacement router.
     async fn close_room_for_rejoin(
         &self,
-        room_id: &str,
+        room_id: &RoomId,
         expected_worker: mediasoup::worker::WorkerId,
         reason: &str,
     ) -> Result<()> {
@@ -2025,7 +2033,7 @@ impl RoomManager {
         if self
             .media_server
             .router_manager()
-            .get_worker_id(room_id)
+            .get_worker_id(room_id.as_str())
             .await
             .ok()
             != Some(expected_worker)
@@ -2050,10 +2058,10 @@ impl RoomManager {
                     let _ = try_send_essential(&room.metrics, &entry.sender, message.clone());
                 }
             }
-            let sessions: Vec<(String, uuid::Uuid)> = room
+            let sessions: Vec<(ParticipantId, uuid::Uuid)> = room
                 .participants
                 .values()
-                .map(|participant| (participant.id.clone(), participant.media_session_id))
+                .map(|participant| (participant.id, participant.media_session_id))
                 .collect();
             room.participants.clear();
             room.lobby.clear();
@@ -2092,12 +2100,12 @@ impl RoomManager {
                 .remove_participant(&media_participant_id)
                 .await
             {
-                debug!(room_id, %participant_id, %error, "Media for a rejoining participant was already gone");
+                debug!(%room_id, %participant_id, %error, "Media for a rejoining participant was already gone");
             }
         }
         let teardown = tokio::time::timeout(
             ROOM_DELETE_TIMEOUT,
-            self.media_server.remove_router(room_id),
+            self.media_server.remove_router(room_id.as_str()),
         )
         .await;
         let succeeded = matches!(&teardown, Ok(Ok(())));
@@ -2115,7 +2123,7 @@ impl RoomManager {
     }
 
     /// Gets a room lock by ID (brief outer read lock, no await)
-    fn get_room(&self, room_id: &str) -> Result<Arc<TokioRwLock<Room>>> {
+    fn get_room(&self, room_id: &RoomId) -> Result<Arc<TokioRwLock<Room>>> {
         let rooms = self.rooms.read().unwrap_or_else(|e| e.into_inner());
         rooms
             .get(room_id)
@@ -2134,7 +2142,7 @@ impl RoomManager {
 
     async fn reserve_existing_room_join(
         &self,
-        room_id: &str,
+        room_id: &RoomId,
         room_lock: Arc<TokioRwLock<Room>>,
     ) -> Result<PendingRoomJoin> {
         let mut room = measure_result(
@@ -2152,7 +2160,7 @@ impl RoomManager {
         drop(admission);
         drop(room);
         Ok(PendingRoomJoin {
-            room_id: room_id.to_string(),
+            room_id: room_id.clone(),
             room: room_lock,
             cleanup: self.failed_join_cleanup(),
             active: true,
@@ -2163,7 +2171,7 @@ impl RoomManager {
     /// password lane's permit; "Incorrect room password" when it does not match.
     async fn verify_room_password(
         &self,
-        room_id: &str,
+        room_id: &RoomId,
         supplied: String,
         hash: String,
     ) -> Result<()> {
@@ -2183,7 +2191,7 @@ impl RoomManager {
         })
         .await
         .map_err(|error| {
-            warn!(room_id, %error, "Password verification task failed");
+            warn!(%room_id, %error, "Password verification task failed");
             anyhow::anyhow!("Password verification failed")
         })?;
         anyhow::ensure!(verified, "Incorrect room password");
@@ -2200,7 +2208,7 @@ impl RoomManager {
     /// Argon2 run when the hash is unchanged.
     async fn dormant_room_precheck(
         &self,
-        room_id: &str,
+        room_id: &RoomId,
         user_uuid: Option<uuid::Uuid>,
         client_ip: Option<std::net::IpAddr>,
         authenticated: bool,
@@ -2209,12 +2217,11 @@ impl RoomManager {
         let Some(pool) = &self.db_pool else {
             return Ok(None);
         };
-        if !settings::valid_room_id(room_id)
-            || self
-                .rooms
-                .read()
-                .unwrap_or_else(|error| error.into_inner())
-                .contains_key(room_id)
+        if self
+            .rooms
+            .read()
+            .unwrap_or_else(|error| error.into_inner())
+            .contains_key(room_id)
         {
             return Ok(None);
         }
@@ -2225,7 +2232,7 @@ impl RoomManager {
         .await
         .map_err(|_| anyhow::anyhow!("Room data is temporarily unavailable"))?
         .map_err(|error| {
-            warn!(room_id, %error, "Failed to load room");
+            warn!(%room_id, %error, "Failed to load room");
             anyhow::anyhow!("Room data is temporarily unavailable")
         })?;
         let Some((room_settings, password_hash)) = loaded else {
@@ -2241,7 +2248,7 @@ impl RoomManager {
             Ok(true) => anyhow::bail!("You are banned from this room"),
             Ok(false) => {}
             Err(error) => {
-                warn!(room_id, %error, "Ban check failed");
+                warn!(%room_id, %error, "Ban check failed");
                 anyhow::bail!("Room access could not be verified");
             }
         }
@@ -2266,7 +2273,7 @@ impl RoomManager {
         )
         .await
         .map_err(|error| {
-            warn!(room_id, %error, "Role lookup failed");
+            warn!(%room_id, %error, "Role lookup failed");
             anyhow::anyhow!("Room access could not be verified")
         })?;
         if role >= roles::Role::Admin {
@@ -2280,11 +2287,8 @@ impl RoomManager {
     }
 
     /// Gets or creates a room, creating a router if needed
-    async fn get_or_create_room(&self, room_id: &str) -> Result<PendingRoomJoin> {
+    async fn get_or_create_room(&self, room_id: &RoomId) -> Result<PendingRoomJoin> {
         anyhow::ensure!(!self.drain.is_draining(), "Server shutting down");
-        if !settings::valid_room_id(room_id) {
-            anyhow::bail!("Invalid room ID");
-        }
         if self
             .deleting_rooms
             .read()
@@ -2358,7 +2362,7 @@ impl RoomManager {
             .await
             .map_err(|_| anyhow::anyhow!("Room data is temporarily unavailable"))?
             .map_err(|error| {
-                warn!(room_id, %error, "Failed to load room");
+                warn!(%room_id, %error, "Failed to load room");
                 anyhow::anyhow!("Room data is temporarily unavailable")
             })?;
             loaded.map_or((None, None), |(settings, hash)| (Some(settings), hash))
@@ -2380,7 +2384,7 @@ impl RoomManager {
             let router = self
                 .media_server
                 .router_manager()
-                .get_router(room_id)
+                .get_router(room_id.as_str())
                 .await
                 .map_err(|error| anyhow::anyhow!(error))?;
 
@@ -2390,7 +2394,7 @@ impl RoomManager {
             {
                 Ok(observer) => Some(observer),
                 Err(error) => {
-                    warn!(room_id, %error, "Failed to create active speaker observer");
+                    warn!(%room_id, %error, "Failed to create active speaker observer");
                     None
                 }
             };
@@ -2402,7 +2406,7 @@ impl RoomManager {
             let audio_level_observer = match router.create_audio_level_observer(options).await {
                 Ok(observer) => Some(observer),
                 Err(error) => {
-                    warn!(room_id, %error, "Failed to create audio level observer");
+                    warn!(%room_id, %error, "Failed to create audio level observer");
                     None
                 }
             };
@@ -2418,16 +2422,16 @@ impl RoomManager {
             Ok(Err(error)) => {
                 let _ = tokio::time::timeout(
                     ROOM_DELETE_TIMEOUT,
-                    self.media_server.remove_router(room_id),
+                    self.media_server.remove_router(room_id.as_str()),
                 )
                 .await;
                 return Err(error);
             }
             Err(_) => {
-                warn!(room_id, "Room media setup timed out; rolling back router");
+                warn!(%room_id, "Room media setup timed out; rolling back router");
                 let _ = tokio::time::timeout(
                     ROOM_DELETE_TIMEOUT,
-                    self.media_server.remove_router(room_id),
+                    self.media_server.remove_router(room_id.as_str()),
                 )
                 .await;
                 anyhow::bail!("Room media service is temporarily unavailable");
@@ -2479,7 +2483,7 @@ impl RoomManager {
             // `room_creation_lock`, which is still held here.
             debug_assert!(!rooms.contains_key(room_id));
             let mut created = Room::new_with_observers(
-                room_id.to_string(),
+                room_id.clone(),
                 room_settings,
                 persisted,
                 password_hash,
@@ -2490,7 +2494,7 @@ impl RoomManager {
             created.broadcaster_ceiling = self.max_broadcasters_per_room;
             let new_room = Arc::new(TokioRwLock::new(created));
             if let Ok(_admission) = self.drain.admit() {
-                rooms.insert(room_id.to_string(), new_room.clone());
+                rooms.insert(room_id.clone(), new_room.clone());
                 Some(new_room)
             } else {
                 None
@@ -2503,12 +2507,12 @@ impl RoomManager {
             if !matches!(
                 tokio::time::timeout(
                     ROOM_CREATION_TIMEOUT,
-                    self.media_server.remove_router(room_id),
+                    self.media_server.remove_router(room_id.as_str()),
                 )
                 .await,
                 Ok(Ok(()))
             ) {
-                warn!(room_id, "Draining room creation rollback incomplete");
+                warn!(%room_id, "Draining room creation rollback incomplete");
             }
             anyhow::bail!("Server shutting down");
         };
@@ -2518,7 +2522,7 @@ impl RoomManager {
         tokio::spawn(Self::observer_broadcast_task(observer_rx, weak_room));
 
         Ok(PendingRoomJoin {
-            room_id: room_id.to_string(),
+            room_id: room_id.clone(),
             room: room_arc,
             cleanup: self.failed_join_cleanup(),
             active: true,
@@ -2544,7 +2548,7 @@ impl RoomManager {
                         room.producer_to_participant.get(&producer_id.to_string())
                     {
                         room.broadcast_all(&ServerMessage::ActiveSpeaker {
-                            participant_id: participant_id.clone(),
+                            participant_id: *participant_id,
                         });
                     }
                 }
@@ -2554,7 +2558,7 @@ impl RoomManager {
                         .filter_map(|(pid, vol)| {
                             room.producer_to_participant.get(&pid.to_string()).map(
                                 |participant_id| AudioLevelEntry {
-                                    participant_id: participant_id.clone(),
+                                    participant_id: *participant_id,
                                     volume: *vol,
                                 },
                             )
@@ -2584,8 +2588,8 @@ impl RoomManager {
     )]
     pub(crate) async fn add_participant(
         &self,
-        room_id: &str,
-        participant_id: String,
+        room_id: &RoomId,
+        participant_id: ParticipantId,
         participant_name: String,
         sender: mpsc::Sender<crate::OutboundJson>,
         authenticated: bool,
@@ -2622,7 +2626,7 @@ impl RoomManager {
         if let Ok(worker_id) = self
             .media_server
             .router_manager()
-            .get_worker_id(room_id)
+            .get_worker_id(room_id.as_str())
             .await
             && self
                 .media_server
@@ -2636,11 +2640,7 @@ impl RoomManager {
         }
 
         let user_uuid = if authenticated {
-            Some(
-                participant_id
-                    .parse::<uuid::Uuid>()
-                    .map_err(|_| anyhow::anyhow!("Invalid authenticated participant identity"))?,
-            )
+            Some(participant_id.as_uuid())
         } else {
             None
         };
@@ -2669,8 +2669,9 @@ impl RoomManager {
         };
         if let Some(stale_sender) = stale_sender {
             info!(
-                room_id,
-                participant_id, "Replacing a retained membership whose socket has closed"
+                %room_id,
+                %participant_id,
+                "Replacing a retained membership whose socket has closed"
             );
             self.remove_participant_for_sender(room_id, &participant_id, &stale_sender)
                 .await?;
@@ -2721,7 +2722,7 @@ impl RoomManager {
                     Ok(true) => anyhow::bail!("You are banned from this room"),
                     Ok(false) => {}
                     Err(error) => {
-                        warn!(room_id, %error, "Ban check failed");
+                        warn!(%room_id, %error, "Ban check failed");
                         anyhow::bail!("Room access could not be verified");
                     }
                 }
@@ -2748,7 +2749,7 @@ impl RoomManager {
                 )
                 .await
                 .map_err(|error| {
-                    warn!(room_id, %error, "Role lookup failed");
+                    warn!(%room_id, %error, "Role lookup failed");
                     anyhow::anyhow!("Room access could not be verified")
                 })?,
             )
@@ -2770,11 +2771,11 @@ impl RoomManager {
             {
                 Ok(Ok(saved)) => saved.unwrap_or_default(),
                 Ok(Err(error)) => {
-                    warn!(room_id, %error, "Chat style lookup failed");
+                    warn!(%room_id, %error, "Chat style lookup failed");
                     requested_style
                 }
                 Err(_) => {
-                    warn!(room_id, "Chat style lookup timed out");
+                    warn!(%room_id, "Chat style lookup timed out");
                     requested_style
                 }
             },
@@ -2795,7 +2796,7 @@ impl RoomManager {
             )
             .await
             .map_err(|error| {
-                warn!(room_id, %error, "Sanction lookup failed");
+                warn!(%room_id, %error, "Sanction lookup failed");
                 anyhow::anyhow!("Room access could not be verified")
             })?
         } else {
@@ -2897,7 +2898,7 @@ impl RoomManager {
                 let room_name = room
                     .settings
                     .as_ref()
-                    .map_or_else(|| room.id.clone(), |s| s.display_name.clone());
+                    .map_or_else(|| room.id.to_string(), |s| s.display_name.clone());
                 let topic = room.settings.as_ref().and_then(|s| s.topic.clone());
                 let (participant_count, moderator_count) = room.lobby_counts();
 
@@ -2917,7 +2918,7 @@ impl RoomManager {
                 room.broadcast_to_role(
                     roles::Role::Moderator,
                     &ServerMessage::LobbyJoin {
-                        participant_id: participant_id.clone(),
+                        participant_id,
                         display_name: participant_name.clone(),
                         authenticated,
                     },
@@ -2925,9 +2926,9 @@ impl RoomManager {
 
                 // Add to lobby map (reconnect_token set later by connection handler)
                 room.lobby.insert(
-                    participant_id.clone(),
+                    participant_id,
                     LobbyEntry {
-                        participant_id: participant_id.clone(),
+                        participant_id,
                         name: participant_name.clone(),
                         sender,
                         media_session_id,
@@ -2955,7 +2956,7 @@ impl RoomManager {
                 social.apply_account_preferences(preferences);
             }
             let participant = Participant {
-                id: participant_id.clone(),
+                id: participant_id,
                 social,
                 name: participant_name.clone(),
                 sender,
@@ -2968,8 +2969,7 @@ impl RoomManager {
                 chat_style: chat_style.clone(),
             };
 
-            room.participants
-                .insert(participant_id.clone(), participant);
+            room.participants.insert(participant_id, participant);
             room.notify_lobby_status();
             pending_join.complete_locked(&mut room);
             // The membership is committed. Do not serialize response snapshots
@@ -2982,7 +2982,7 @@ impl RoomManager {
             room.broadcast_except(
                 &participant_id,
                 &ServerMessage::ParticipantJoined {
-                    participant_id: participant_id.clone(),
+                    participant_id,
                     participant_name: participant_name.clone(),
                     role,
                     authenticated,
@@ -3001,7 +3001,7 @@ impl RoomManager {
                 .values()
                 .filter(|p| p.id != participant_id)
                 .map(|p| ParticipantInfo {
-                    id: p.id.clone(),
+                    id: p.id,
                     name: p.name.clone(),
                     producers: p
                         .producers
@@ -3040,8 +3040,8 @@ impl RoomManager {
     #[cfg(test)]
     pub(crate) async fn remove_participant(
         &self,
-        room_id: &str,
-        participant_id: &str,
+        room_id: &RoomId,
+        participant_id: &ParticipantId,
     ) -> Result<()> {
         self.remove_participant_inner(room_id, participant_id, None)
             .await
@@ -3053,8 +3053,8 @@ impl RoomManager {
     /// grace timers so an old socket cannot evict a same-ID replacement.
     pub(crate) async fn remove_participant_for_sender(
         &self,
-        room_id: &str,
-        participant_id: &str,
+        room_id: &RoomId,
+        participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
     ) -> Result<bool> {
         self.remove_participant_inner(room_id, participant_id, Some(expected_sender))
@@ -3063,8 +3063,8 @@ impl RoomManager {
 
     async fn remove_participant_inner(
         &self,
-        room_id: &str,
-        participant_id: &str,
+        room_id: &RoomId,
+        participant_id: &ParticipantId,
         expected_sender: Option<&mpsc::Sender<crate::OutboundJson>>,
     ) -> Result<bool> {
         let mut removed = false;
@@ -3187,7 +3187,7 @@ impl RoomManager {
                 {
                     Ok(guard) => guard,
                     Err(_) => {
-                        warn!(room_id, "Timed out waiting to evict an empty room");
+                        warn!(%room_id, "Timed out waiting to evict an empty room");
                         return Ok(removed_any);
                     }
                 };
@@ -3197,7 +3197,7 @@ impl RoomManager {
                 Ok(room) => room,
                 Err(_) => {
                     warn!(
-                        room_id,
+                        %room_id,
                         "Timed out rechecking an empty room; leaving it active"
                     );
                     return Ok(removed_any);
@@ -3222,7 +3222,7 @@ impl RoomManager {
                 self.deleting_rooms
                     .write()
                     .unwrap_or_else(|error| error.into_inner())
-                    .insert(room_id.to_string(), deletion_token);
+                    .insert(room_id.clone(), deletion_token);
                 let mut rooms = self.rooms.write().unwrap_or_else(|e| e.into_inner());
                 if rooms
                     .get(room_id)
@@ -3243,7 +3243,7 @@ impl RoomManager {
             if let Some(deletion_token) = eviction_token {
                 let router_teardown_succeeded = match tokio::time::timeout(
                     ROOM_DELETE_TIMEOUT,
-                    self.media_server.remove_router(room_id),
+                    self.media_server.remove_router(room_id.as_str()),
                 )
                 .await
                 {
@@ -3252,12 +3252,12 @@ impl RoomManager {
                         true
                     }
                     Ok(Err(error)) => {
-                        warn!(room_id, %error, "Failed to tear down empty-room router; retaining room-ID reservation");
+                        warn!(%room_id, %error, "Failed to tear down empty-room router; retaining room-ID reservation");
                         false
                     }
                     Err(_) => {
                         warn!(
-                            room_id,
+                            %room_id,
                             "Timed out tearing down empty-room router; retaining room-ID reservation"
                         );
                         false
@@ -3281,8 +3281,8 @@ impl RoomManager {
     /// Returns an error if the room doesn't exist
     pub(crate) async fn get_router_rtp_capabilities(
         &self,
-        room_id: &str,
-        participant_id: &str,
+        room_id: &RoomId,
+        participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
     ) -> Result<RtpCapabilitiesFinalized> {
         self.media_session_for_sender(room_id, participant_id, expected_sender)
@@ -3297,8 +3297,8 @@ impl RoomManager {
     /// Returns an error if transport creation fails
     pub(crate) async fn create_send_transport(
         &self,
-        room_id: &str,
-        participant_id: &str,
+        room_id: &RoomId,
+        participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
     ) -> Result<TransportInfo> {
         let media_session_id = self
@@ -3307,7 +3307,7 @@ impl RoomManager {
         let router = self.get_router(room_id).await?;
         let webrtc_server = self
             .media_server
-            .get_webrtc_server_for_room(room_id)
+            .get_webrtc_server_for_room(room_id.as_str())
             .await?;
         let media_participant_id =
             Self::media_participant_id(room_id, participant_id, media_session_id);
@@ -3346,8 +3346,8 @@ impl RoomManager {
     /// Returns an error if transport creation fails
     pub(crate) async fn create_recv_transport(
         &self,
-        room_id: &str,
-        participant_id: &str,
+        room_id: &RoomId,
+        participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
     ) -> Result<TransportInfo> {
         let media_session_id = self
@@ -3361,7 +3361,11 @@ impl RoomManager {
         let (router, worker_id, lease) = self
             .media_server
             .router_manager()
-            .place_viewer(room_id, &media_participant_id, &media_config.router_config)
+            .place_viewer(
+                room_id.as_str(),
+                &media_participant_id,
+                &media_config.router_config,
+            )
             .await
             .map_err(|e| anyhow::anyhow!(e))?;
         let webrtc_server = self
@@ -3389,7 +3393,7 @@ impl RoomManager {
                 .attach_viewer_lease(&media_participant_id, lease)
                 .await
         {
-            debug!(room_id, %error, "Receive transport left before its placement was recorded");
+            debug!(%room_id, %error, "Receive transport left before its placement was recorded");
         }
         if !self
             .is_current_media_session(room_id, participant_id, expected_sender, media_session_id)
@@ -3411,8 +3415,8 @@ impl RoomManager {
     /// Returns an error if connection fails
     pub(crate) async fn connect_transport(
         &self,
-        room_id: &str,
-        participant_id: &str,
+        room_id: &RoomId,
+        participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         transport_id: &str,
         dtls_parameters: DtlsParameters,
@@ -3451,8 +3455,8 @@ impl RoomManager {
     /// Returns an error if producer creation fails
     pub(crate) async fn create_producer(
         &self,
-        room_id: &str,
-        participant_id: &str,
+        room_id: &RoomId,
+        participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         kind: MediaKind,
         rtp_parameters: RtpParameters,
@@ -3541,12 +3545,12 @@ impl RoomManager {
                 .producers
                 .insert(producer_id.clone(), (kind, Some(source.to_string())));
             room.producer_to_participant
-                .insert(producer_id.clone(), participant_id.to_string());
+                .insert(producer_id.clone(), *participant_id);
 
             room.broadcast_except(
                 participant_id,
                 &ServerMessage::NewProducer {
-                    participant_id: participant_id.to_string(),
+                    participant_id: *participant_id,
                     producer_id: producer_id.clone(),
                     kind,
                     source: Some(source.to_string()),
@@ -3567,14 +3571,14 @@ impl RoomManager {
                     .add_producer(RtpObserverAddProducerOptions::new(producer_id_typed))
                     .await
             {
-                warn!(room_id, producer_id, %error, "Active speaker observer rejected a producer");
+                warn!(%room_id, producer_id, %error, "Active speaker observer rejected a producer");
             }
             if let Some(obs) = &audio_obs
                 && let Err(error) = obs
                     .add_producer(RtpObserverAddProducerOptions::new(producer_id_typed))
                     .await
             {
-                warn!(room_id, producer_id, %error, "Audio level observer rejected a producer");
+                warn!(%room_id, producer_id, %error, "Audio level observer rejected a producer");
             }
         }
 
@@ -3592,8 +3596,8 @@ impl RoomManager {
     /// Returns an error if consumer creation fails
     pub(crate) async fn create_consumer(
         &self,
-        room_id: &str,
-        participant_id: &str,
+        room_id: &RoomId,
+        participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         producer_id: ProducerId,
         rtp_capabilities: RtpCapabilities,
@@ -3632,12 +3636,12 @@ impl RoomManager {
         // A viewer placed on another worker consumes the producer's pipe there.
         self.media_server
             .router_manager()
-            .ensure_piped(room_id, &media_participant_id, producer_id)
+            .ensure_piped(room_id.as_str(), &media_participant_id, producer_id)
             .await?;
         // Look up the consumer counter for the participant's worker (for load-aware tracking)
         let consumer_counter = self
             .media_server
-            .get_consumer_counter_for_participant(room_id, &media_participant_id)
+            .get_consumer_counter_for_participant(room_id.as_str(), &media_participant_id)
             .await
             .ok()
             .flatten();
@@ -3683,8 +3687,8 @@ impl RoomManager {
     /// Resumes a consumer for a participant
     pub(crate) async fn resume_consumer(
         &self,
-        room_id: &str,
-        participant_id: &str,
+        room_id: &RoomId,
+        participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         consumer_id: &str,
     ) -> Result<()> {
@@ -3719,8 +3723,8 @@ impl RoomManager {
     /// Pauses a consumer for a participant
     pub(crate) async fn pause_consumer(
         &self,
-        room_id: &str,
-        participant_id: &str,
+        room_id: &RoomId,
+        participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         consumer_id: &str,
     ) -> Result<()> {
@@ -3756,8 +3760,8 @@ impl RoomManager {
     /// session. Teardown may race producer closure or repeat after a lost reply.
     pub(crate) async fn close_consumer(
         &self,
-        room_id: &str,
-        participant_id: &str,
+        room_id: &RoomId,
+        participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         consumer_id: &str,
     ) -> Result<()> {
@@ -3783,8 +3787,8 @@ impl RoomManager {
     /// Closes a producer for a participant
     pub(crate) async fn close_producer(
         &self,
-        room_id: &str,
-        participant_id: &str,
+        room_id: &RoomId,
+        participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         producer_id: &str,
     ) -> Result<()> {
@@ -3863,8 +3867,8 @@ impl RoomManager {
     /// consumers, so no server-wide consumer scan is needed.
     pub(crate) async fn pause_producer(
         &self,
-        room_id: &str,
-        participant_id: &str,
+        room_id: &RoomId,
+        participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         producer_id: &str,
     ) -> Result<()> {
@@ -3926,8 +3930,8 @@ impl RoomManager {
     /// consumers, so no server-wide consumer scan is needed.
     pub(crate) async fn resume_producer(
         &self,
-        room_id: &str,
-        participant_id: &str,
+        room_id: &RoomId,
+        participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         producer_id: &str,
     ) -> Result<()> {
@@ -3988,8 +3992,8 @@ impl RoomManager {
     /// Sets preferred simulcast layers for a consumer
     pub(crate) async fn set_preferred_layers(
         &self,
-        room_id: &str,
-        participant_id: &str,
+        room_id: &RoomId,
+        participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         consumer_id: &str,
         spatial_layer: u8,
@@ -4027,8 +4031,8 @@ impl RoomManager {
     /// Subscribes to BWE events for a participant's recv transport
     pub(crate) async fn subscribe_bwe_events(
         &self,
-        room_id: &str,
-        participant_id: &str,
+        room_id: &RoomId,
+        participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         bwe_sender: mpsc::Sender<crate::media::types::ReceiveBandwidthEstimate>,
     ) -> Result<()> {
@@ -4053,8 +4057,8 @@ impl RoomManager {
     /// number of worker requests made.
     pub(crate) async fn set_bandwidth_ceiling(
         &self,
-        room_id: &str,
-        participant_id: &str,
+        room_id: &RoomId,
+        participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         expected_transport: TransportId,
         spatial_layer: u8,
@@ -4095,8 +4099,8 @@ impl RoomManager {
     /// Restarts ICE on a transport, returning new ICE parameters
     pub(crate) async fn restart_ice(
         &self,
-        room_id: &str,
-        participant_id: &str,
+        room_id: &RoomId,
+        participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         transport_id: &str,
     ) -> Result<IceParameters> {
@@ -4118,8 +4122,8 @@ impl RoomManager {
     /// Best-effort exclusion of this exact socket from lobby availability during grace.
     pub(crate) async fn mark_participant_disconnected(
         &self,
-        room_id: &str,
-        participant_id: &str,
+        room_id: &RoomId,
+        participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
     ) -> Result<()> {
         if self.drain.is_draining() {
@@ -4144,8 +4148,8 @@ impl RoomManager {
     /// Rebinds a participant's WS sender after reconnection
     pub(crate) async fn rebind_participant_sender(
         &self,
-        room_id: &str,
-        participant_id: &str,
+        room_id: &RoomId,
+        participant_id: &ParticipantId,
         authenticated_subject: Option<&str>,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         new_sender: mpsc::Sender<crate::OutboundJson>,
@@ -4158,20 +4162,22 @@ impl RoomManager {
         if let Some(participant) = room.participants.get_mut(participant_id) {
             if !participant.sender.same_channel(expected_sender) {
                 warn!(
-                    room_id,
-                    participant_id, "Reconnect attempted against a superseded room session"
+                    %room_id,
+                    %participant_id,
+                    "Reconnect attempted against a superseded room session"
                 );
                 return Ok(false);
             }
             let identity_matches = match (participant.authenticated, authenticated_subject) {
-                (true, Some(subject)) => subject == participant_id,
+                (true, Some(subject)) => subject == participant_id.to_string(),
                 (false, None) => true,
                 _ => false,
             };
             if !identity_matches {
                 warn!(
-                    room_id,
-                    participant_id, "Reconnect authentication identity mismatch"
+                    %room_id,
+                    %participant_id,
+                    "Reconnect authentication identity mismatch"
                 );
                 return Ok(false);
             }
@@ -4186,7 +4192,7 @@ impl RoomManager {
 
     // === Room settings methods ===
 
-    fn default_room_settings(room_id: &str) -> settings::RoomSettings {
+    fn default_room_settings(room_id: &RoomId) -> settings::RoomSettings {
         settings::RoomSettings {
             id: room_id.to_string(),
             owner_id: uuid::Uuid::nil(),
@@ -4232,8 +4238,8 @@ impl RoomManager {
     )]
     pub(crate) async fn update_room_settings(
         &self,
-        room_id: &str,
-        admin_id: &str,
+        room_id: &RoomId,
+        admin_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         moderated: Option<bool>,
         lobby_enabled: Option<bool>,
@@ -4250,7 +4256,7 @@ impl RoomManager {
         secret: Option<bool>,
         password: Option<Option<SecretString>>,
     ) -> Result<()> {
-        let admin_id = admin_id.to_string();
+        let admin_id = *admin_id;
         let expected_sender = expected_sender.clone();
         self.run_room_control(room_id, move |manager, room_id, control| async move {
             manager
@@ -4285,8 +4291,8 @@ impl RoomManager {
     )]
     async fn update_room_settings_controlled(
         &self,
-        room_id: &str,
-        admin_id: &str,
+        room_id: &RoomId,
+        admin_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         moderated: Option<bool>,
         lobby_enabled: Option<bool>,
@@ -4358,11 +4364,11 @@ impl RoomManager {
                 })
                 .await
                 .map_err(|error| {
-                    warn!(room_id, %error, "Password hash task failed");
+                    warn!(%room_id, %error, "Password hash task failed");
                     anyhow::anyhow!("Password update failed")
                 })?
                 .map_err(|error| {
-                    warn!(room_id, %error, "Password hashing failed");
+                    warn!(%room_id, %error, "Password hashing failed");
                     anyhow::anyhow!("Password update failed")
                 })?;
                 Some(Some(hash))
@@ -4452,7 +4458,7 @@ impl RoomManager {
             )
             .await
             .map_err(|error| {
-                warn!(room_id, %error, "Failed to persist room settings");
+                warn!(%room_id, %error, "Failed to persist room settings");
                 anyhow::anyhow!("Room settings could not be saved")
             })?;
         }
@@ -4488,12 +4494,12 @@ impl RoomManager {
     /// Updates the in-memory topic and broadcasts TopicChanged to all participants.
     pub(crate) async fn set_topic(
         &self,
-        room_id: &str,
-        admin_id: &str,
+        room_id: &RoomId,
+        admin_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         topic: String,
     ) -> Result<()> {
-        let admin_id = admin_id.to_string();
+        let admin_id = *admin_id;
         let expected_sender = expected_sender.clone();
         self.run_room_control(room_id, move |manager, room_id, control| async move {
             manager
@@ -4505,8 +4511,8 @@ impl RoomManager {
 
     async fn set_topic_controlled(
         &self,
-        room_id: &str,
-        admin_id: &str,
+        room_id: &RoomId,
+        admin_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         topic: String,
         control: control::RoomControl,
@@ -4554,7 +4560,7 @@ impl RoomManager {
             })
             .await
             .map_err(|error| {
-                warn!(room_id, %error, "Failed to persist room topic");
+                warn!(%room_id, %error, "Failed to persist room topic");
                 anyhow::anyhow!("Room topic could not be saved")
             })?;
         }
@@ -4582,17 +4588,17 @@ impl RoomManager {
     )]
     async fn update_punitive_state(
         &self,
-        room_id: &str,
-        moderator_id: &str,
+        room_id: &RoomId,
+        moderator_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
-        target_participant_id: &str,
+        target_participant_id: &ParticipantId,
         kind: moderation::PunitiveKind,
         enabled: bool,
         reason: Option<&str>,
     ) -> Result<bool> {
-        let moderator_id = moderator_id.to_string();
+        let moderator_id = *moderator_id;
         let expected_sender = expected_sender.clone();
-        let target_participant_id = target_participant_id.to_string();
+        let target_participant_id = *target_participant_id;
         let reason = reason.map(String::from);
         self.run_room_control(room_id, move |manager, room_id, control| async move {
             manager
@@ -4617,10 +4623,10 @@ impl RoomManager {
     )]
     async fn update_punitive_state_controlled(
         &self,
-        room_id: &str,
-        moderator_id: &str,
+        room_id: &RoomId,
+        moderator_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
-        target_participant_id: &str,
+        target_participant_id: &ParticipantId,
         kind: moderation::PunitiveKind,
         enabled: bool,
         reason: Option<&str>,
@@ -4682,7 +4688,7 @@ impl RoomManager {
                 name: &moderator_name,
             },
             moderation::Target {
-                id: target_participant_id,
+                id: target_participant_id.into(),
                 name: &target_name,
                 authenticated: target_authenticated,
                 ip: target_ip,
@@ -4700,15 +4706,10 @@ impl RoomManager {
                 .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("Moderation service is temporarily unavailable"))?;
             let applied_by = moderator_authenticated
-                .then(|| moderator_id.parse::<uuid::Uuid>().ok())
-                .flatten()
+                .then(|| moderator_id.as_uuid())
                 .ok_or_else(|| anyhow::anyhow!("A registered moderator is required"))?;
             let target_user = if target_authenticated {
-                Some(
-                    target_participant_id
-                        .parse::<uuid::Uuid>()
-                        .map_err(|_| anyhow::anyhow!("Invalid registered participant identity"))?,
-                )
+                Some(target_participant_id.as_uuid())
             } else {
                 None
             };
@@ -4732,7 +4733,7 @@ impl RoomManager {
             )
             .await
             .map_err(|error| {
-                warn!(room_id, %error, "Failed to persist participant sanction");
+                warn!(%room_id, %error, "Failed to persist participant sanction");
                 anyhow::anyhow!("Moderation state could not be saved")
             })?;
         }
@@ -4753,13 +4754,11 @@ impl RoomManager {
         room.policy_revision = room.policy_revision.wrapping_add(1);
 
         for affected_participant_id in &target_participant_ids {
-            let notification =
-                punitive_notification(kind, enabled, affected_participant_id.clone());
+            let notification = punitive_notification(kind, enabled, *affected_participant_id);
             room.broadcast_all(&notification);
         }
         for affected_participant_id in &target_lobby_ids {
-            let notification =
-                punitive_notification(kind, enabled, affected_participant_id.clone());
+            let notification = punitive_notification(kind, enabled, *affected_participant_id);
             if let (Some(entry), Ok(json)) = (
                 room.lobby.get(affected_participant_id),
                 serde_json::to_string(&notification),
@@ -4798,10 +4797,10 @@ impl RoomManager {
     /// Force-close all video/screen producers for a target participant
     pub(crate) async fn close_cam(
         &self,
-        room_id: &str,
-        moderator_id: &str,
+        room_id: &RoomId,
+        moderator_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
-        target_participant_id: &str,
+        target_participant_id: &ParticipantId,
     ) -> Result<()> {
         // Collect producer IDs to close (under room lock)
         let (producers_to_close, target_media_session_id): (Vec<String>, uuid::Uuid) = {
@@ -4893,10 +4892,10 @@ impl RoomManager {
     /// Ban a participant from producing video/screen (close existing + prevent future)
     pub(crate) async fn cam_ban(
         &self,
-        room_id: &str,
-        moderator_id: &str,
+        room_id: &RoomId,
+        moderator_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
-        target_participant_id: &str,
+        target_participant_id: &ParticipantId,
         reason: Option<&str>,
     ) -> Result<()> {
         let changed = self
@@ -4923,10 +4922,10 @@ impl RoomManager {
     /// Remove cam ban from a participant
     pub(crate) async fn cam_unban(
         &self,
-        room_id: &str,
-        moderator_id: &str,
+        room_id: &RoomId,
+        moderator_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
-        target_participant_id: &str,
+        target_participant_id: &ParticipantId,
     ) -> Result<()> {
         let changed = self
             .update_punitive_state(
@@ -4952,10 +4951,10 @@ impl RoomManager {
     /// Mute a participant's text chat
     pub(crate) async fn text_mute(
         &self,
-        room_id: &str,
-        moderator_id: &str,
+        room_id: &RoomId,
+        moderator_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
-        target_participant_id: &str,
+        target_participant_id: &ParticipantId,
     ) -> Result<()> {
         let changed = self
             .update_punitive_state(
@@ -4981,10 +4980,10 @@ impl RoomManager {
     /// Unmute a participant's text chat
     pub(crate) async fn text_unmute(
         &self,
-        room_id: &str,
-        moderator_id: &str,
+        room_id: &RoomId,
+        moderator_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
-        target_participant_id: &str,
+        target_participant_id: &ParticipantId,
     ) -> Result<()> {
         let changed = self
             .update_punitive_state(
@@ -5010,10 +5009,10 @@ impl RoomManager {
     /// Kick a participant from the room
     pub(crate) async fn kick_participant(
         &self,
-        room_id: &str,
-        moderator_id: &str,
+        room_id: &RoomId,
+        moderator_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
-        target_participant_id: &str,
+        target_participant_id: &ParticipantId,
         reason: Option<&str>,
         report_id: Option<uuid::Uuid>,
     ) -> Result<()> {
@@ -5039,7 +5038,7 @@ impl RoomManager {
                     name: &moderator.name,
                 },
                 moderation::Target {
-                    id: target_participant_id,
+                    id: target_participant_id.into(),
                     name: &target.name,
                     authenticated: target.authenticated,
                     ip: target.ip,
@@ -5080,7 +5079,7 @@ impl RoomManager {
 
             // Broadcast kick to everyone (including the target) before removing
             room.broadcast_all(&ServerMessage::ParticipantKicked {
-                participant_id: target_participant_id.to_string(),
+                participant_id: *target_participant_id,
                 reason: reason.map(String::from),
             });
 
@@ -5128,17 +5127,17 @@ impl RoomManager {
     )]
     pub(crate) async fn ban_participant(
         &self,
-        room_id: &str,
-        moderator_id: &str,
+        room_id: &RoomId,
+        moderator_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
-        target_participant_id: &str,
+        target_participant_id: &ParticipantId,
         reason: Option<&str>,
         duration: Option<u64>,
         report_id: Option<uuid::Uuid>,
     ) -> Result<()> {
-        let moderator_id = moderator_id.to_string();
+        let moderator_id = *moderator_id;
         let expected_sender = expected_sender.clone();
-        let target_participant_id = target_participant_id.to_string();
+        let target_participant_id = *target_participant_id;
         let reason = reason.map(String::from);
         self.run_room_control(room_id, move |manager, room_id, control| async move {
             manager
@@ -5163,10 +5162,10 @@ impl RoomManager {
     )]
     async fn ban_participant_controlled(
         &self,
-        room_id: &str,
-        moderator_id: &str,
+        room_id: &RoomId,
+        moderator_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
-        target_participant_id: &str,
+        target_participant_id: &ParticipantId,
         reason: Option<&str>,
         duration: Option<u64>,
         report_id: Option<uuid::Uuid>,
@@ -5219,7 +5218,7 @@ impl RoomManager {
                     name: &moderator_name,
                 },
                 moderation::Target {
-                    id: target_participant_id,
+                    id: target_participant_id.into(),
                     name: &target_name,
                     authenticated: target_authenticated,
                     ip: target_ip,
@@ -5239,12 +5238,9 @@ impl RoomManager {
                     .as_ref()
                     .ok_or_else(|| anyhow::anyhow!("Ban service is temporarily unavailable"))?;
                 let applied_by = moderator_authenticated
-                    .then(|| moderator_id.parse::<uuid::Uuid>().ok())
-                    .flatten()
+                    .then(|| moderator_id.as_uuid())
                     .ok_or_else(|| anyhow::anyhow!("A registered moderator is required"))?;
-                let target_user = target_authenticated
-                    .then(|| target_participant_id.parse::<uuid::Uuid>().ok())
-                    .flatten();
+                let target_user = target_authenticated.then(|| target_participant_id.as_uuid());
                 if target_user.is_none() && target_ip.is_none() {
                     anyhow::bail!("The target cannot be identified for a durable ban");
                 }
@@ -5267,7 +5263,7 @@ impl RoomManager {
                     if matches!(error, sqlx::Error::RowNotFound) {
                         return anyhow::anyhow!("Report not found");
                     }
-                    warn!(room_id, %error, "Failed to persist room ban");
+                    warn!(%room_id, %error, "Failed to persist room ban");
                     anyhow::anyhow!("Ban could not be saved")
                 })?;
             }
@@ -5281,7 +5277,7 @@ impl RoomManager {
                 room.social.record_moderation_event(event);
             }
             // Add to ban list — prevents rejoining
-            let banned_ids: Vec<String> = target_participant_ids
+            let banned_ids: Vec<ParticipantId> = target_participant_ids
                 .iter()
                 .chain(target_lobby_ids.iter())
                 .cloned()
@@ -5307,7 +5303,7 @@ impl RoomManager {
             for affected_participant_id in &target_participant_ids {
                 // Notify every socket in the affected IP cohort before removing it.
                 room.broadcast_all(&ServerMessage::ParticipantBanned {
-                    participant_id: affected_participant_id.clone(),
+                    participant_id: *affected_participant_id,
                     reason: reason.map(String::from),
                 });
 
@@ -5318,7 +5314,7 @@ impl RoomManager {
                 for producer_id in target.producers.keys() {
                     room.producer_to_participant.remove(producer_id);
                 }
-                target_sessions.push((affected_participant_id.clone(), target.media_session_id));
+                target_sessions.push((*affected_participant_id, target.media_session_id));
 
                 room.broadcast_participant_left(affected_participant_id);
             }
@@ -5368,21 +5364,21 @@ impl RoomManager {
     /// Remove a participant from the room's ban list
     pub(crate) async fn unban_participant(
         &self,
-        room_id: &str,
-        moderator_id: &str,
+        room_id: &RoomId,
+        moderator_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
-        target_participant_id: &str,
+        target_user_id: &UserId,
     ) -> Result<()> {
-        let moderator_id = moderator_id.to_string();
+        let moderator_id = *moderator_id;
         let expected_sender = expected_sender.clone();
-        let target_participant_id = target_participant_id.to_string();
+        let target_user_id = *target_user_id;
         self.run_room_control(room_id, move |manager, room_id, control| async move {
             manager
                 .unban_participant_controlled(
                     &room_id,
                     &moderator_id,
                     &expected_sender,
-                    &target_participant_id,
+                    &target_user_id,
                     control,
                 )
                 .await
@@ -5392,12 +5388,13 @@ impl RoomManager {
 
     async fn unban_participant_controlled(
         &self,
-        room_id: &str,
-        moderator_id: &str,
+        room_id: &RoomId,
+        moderator_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
-        target_participant_id: &str,
+        target_user_id: &UserId,
         control: control::RoomControl,
     ) -> Result<()> {
+        let target_participant_id = &ParticipantId::from(target_user_id.as_uuid());
         let room_lock = self.get_room(room_id)?;
         let mut room = room_lock.write().await;
         room.ensure_live()?;
@@ -5420,10 +5417,7 @@ impl RoomManager {
         }
 
         let in_memory_exists = room.banned_participants.contains_key(target_participant_id);
-        let persisted_target = room
-            .persisted
-            .then(|| target_participant_id.parse::<uuid::Uuid>().ok())
-            .flatten();
+        let persisted_target = room.persisted.then(|| target_participant_id.as_uuid());
         if !in_memory_exists && persisted_target.is_none() {
             anyhow::bail!("Participant is not banned");
         }
@@ -5458,7 +5452,7 @@ impl RoomManager {
                 )
                 .await
                 .map_err(|error| {
-                    warn!(room_id, %error, "Failed to remove persisted ban");
+                    warn!(%room_id, %error, "Failed to remove persisted ban");
                     anyhow::anyhow!("Ban state could not be updated")
                 })?;
         }
@@ -5483,7 +5477,7 @@ impl RoomManager {
                         name: &moderator_name,
                     },
                     moderation::Target {
-                        id: target_participant_id,
+                        id: target_participant_id.into(),
                         name: banned_name.as_deref().unwrap_or("Removed account"),
                         authenticated: true,
                         ip: None,
@@ -5506,15 +5500,15 @@ impl RoomManager {
     /// Set a participant's role
     pub(crate) async fn set_participant_role(
         &self,
-        room_id: &str,
-        setter_id: &str,
+        room_id: &RoomId,
+        setter_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
-        target_participant_id: &str,
+        target_participant_id: &ParticipantId,
         new_role: roles::Role,
     ) -> Result<()> {
-        let setter_id = setter_id.to_string();
+        let setter_id = *setter_id;
         let expected_sender = expected_sender.clone();
-        let target_participant_id = target_participant_id.to_string();
+        let target_participant_id = *target_participant_id;
         self.run_room_control(room_id, move |manager, room_id, control| async move {
             manager
                 .set_participant_role_controlled(
@@ -5532,10 +5526,10 @@ impl RoomManager {
 
     async fn set_participant_role_controlled(
         &self,
-        room_id: &str,
-        setter_id: &str,
+        room_id: &RoomId,
+        setter_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
-        target_participant_id: &str,
+        target_participant_id: &ParticipantId,
         new_role: roles::Role,
         control: control::RoomControl,
     ) -> Result<()> {
@@ -5558,7 +5552,7 @@ impl RoomManager {
             return Ok(());
         }
 
-        let setter_name = setter.id.clone();
+        let setter_name = setter.id.to_string();
         let setter_authenticated = setter.authenticated;
         let target_authenticated = target.authenticated;
         if !room.reserve_admin_mutation(std::time::Instant::now()) {
@@ -5571,12 +5565,8 @@ impl RoomManager {
             if !setter_authenticated || !target_authenticated {
                 anyhow::bail!("Persistent roles require registered participants");
             }
-            let granted_by = setter_id
-                .parse::<uuid::Uuid>()
-                .map_err(|_| anyhow::anyhow!("Invalid registered participant identity"))?;
-            let target_user = target_participant_id
-                .parse::<uuid::Uuid>()
-                .map_err(|_| anyhow::anyhow!("Invalid registered participant identity"))?;
+            let granted_by = setter_id.as_uuid();
+            let target_user = target_participant_id.as_uuid();
             let pool = self
                 .db_pool
                 .as_ref()
@@ -5588,7 +5578,7 @@ impl RoomManager {
             )
             .await
             .map_err(|error| {
-                warn!(room_id, %error, "Failed to persist participant role");
+                warn!(%room_id, %error, "Failed to persist participant role");
                 anyhow::anyhow!("Role could not be saved")
             })?;
         }
@@ -5611,7 +5601,7 @@ impl RoomManager {
         let audio_observer = room.audio_level_observer.clone();
 
         room.broadcast_all(&ServerMessage::RoleChanged {
-            participant_id: target_participant_id.to_string(),
+            participant_id: *target_participant_id,
             new_role,
             granted_by: setter_name,
         });
@@ -5631,8 +5621,8 @@ impl RoomManager {
     /// Request voice in a moderated room (broadcasts to Moderator+ participants)
     pub(crate) async fn request_voice(
         &self,
-        room_id: &str,
-        participant_id: &str,
+        room_id: &RoomId,
+        participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
     ) -> Result<()> {
         let room_lock = self.get_room(room_id)?;
@@ -5649,7 +5639,7 @@ impl RoomManager {
         room.broadcast_to_role(
             roles::Role::Moderator,
             &ServerMessage::VoiceRequested {
-                participant_id: participant_id.to_string(),
+                participant_id: *participant_id,
                 display_name,
             },
         );
@@ -5696,21 +5686,27 @@ impl RoomManager {
     }
 
     /// Call only after a successful admission and after releasing room locks.
-    pub(crate) fn note_room_visit(&self, room_id: &str, participant_id: &str, authenticated: bool) {
-        if authenticated
-            && let Some(pool) = self.db_pool.as_ref()
-            && let Ok(account) = uuid::Uuid::parse_str(participant_id)
-        {
-            crate::auth::discovery::note_room_visit(pool, account, room_id);
+    pub(crate) fn note_room_visit(
+        &self,
+        room_id: &RoomId,
+        participant_id: &ParticipantId,
+        authenticated: bool,
+    ) {
+        if authenticated && let Some(pool) = self.db_pool.as_ref() {
+            crate::auth::discovery::note_room_visit(
+                pool,
+                participant_id.as_uuid(),
+                room_id.as_str(),
+            );
         }
     }
 
     pub(crate) async fn admit_from_lobby(
         &self,
-        room_id: &str,
-        moderator_id: &str,
+        room_id: &RoomId,
+        moderator_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
-        target_id: &str,
+        target_id: &ParticipantId,
     ) -> Result<()> {
         let room_lock = self.get_room(room_id)?;
         let _control = control::lock_room(&room_lock).await;
@@ -5735,8 +5731,8 @@ impl RoomManager {
     /// its own actor; the final callback runs after all preference/state waits.
     pub(super) async fn admit_authorized_lobby(
         &self,
-        room_id: &str,
-        target_id: &str,
+        room_id: &RoomId,
+        target_id: &ParticipantId,
         _control: control::RoomControl,
         authorize: impl FnOnce() -> Result<()>,
     ) -> Result<()> {
@@ -5796,7 +5792,7 @@ impl RoomManager {
             .participants
             .values()
             .map(|p| ParticipantInfo {
-                id: p.id.clone(),
+                id: p.id,
                 name: p.name.clone(),
                 producers: p
                     .producers
@@ -5821,7 +5817,7 @@ impl RoomManager {
             social.apply_account_preferences(preferences);
         }
         let participant = Participant {
-            id: entry.participant_id.clone(),
+            id: entry.participant_id,
             social,
             name: entry.name.clone(),
             sender: entry.sender.clone(),
@@ -5833,8 +5829,7 @@ impl RoomManager {
             ip: entry.ip,
             chat_style: entry.chat_style.clone(),
         };
-        room.participants
-            .insert(entry.participant_id.clone(), participant);
+        room.participants.insert(entry.participant_id, participant);
 
         self.metrics.inc_lobby_admission();
         // Clear the connection task's lobby guard BEFORE notifying the client,
@@ -5862,7 +5857,7 @@ impl RoomManager {
             .as_ref()
             .and_then(|s| serde_json::to_value(s).ok());
         if let Ok(json) = serde_json::to_string(&ServerMessage::RoomJoined {
-            participant_id: entry.participant_id.clone(),
+            participant_id: entry.participant_id,
             participants,
             reconnect_token: reconnect_token.into(),
             your_role: admitted_role,
@@ -5881,7 +5876,7 @@ impl RoomManager {
         room.broadcast_except(
             &entry.participant_id,
             &ServerMessage::ParticipantJoined {
-                participant_id: entry.participant_id.clone(),
+                participant_id: entry.participant_id,
                 participant_name: entry.name.clone(),
                 role: admitted_role,
                 authenticated: entry.authenticated,
@@ -5902,10 +5897,10 @@ impl RoomManager {
     /// Removes the target from `room.lobby` and sends `LobbyDenied` to them.
     pub(crate) async fn deny_from_lobby(
         &self,
-        room_id: &str,
-        moderator_id: &str,
+        room_id: &RoomId,
+        moderator_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
-        target_id: &str,
+        target_id: &ParticipantId,
         reason: Option<String>,
     ) -> Result<()> {
         let room_lock = self.get_room(room_id)?;
@@ -5930,8 +5925,8 @@ impl RoomManager {
 
     pub(super) async fn deny_authorized_lobby(
         &self,
-        room_id: &str,
-        target_id: &str,
+        room_id: &RoomId,
+        target_id: &ParticipantId,
         reason: Option<String>,
         _control: control::RoomControl,
         authorize: impl FnOnce() -> Result<()>,
@@ -5968,7 +5963,7 @@ impl RoomManager {
 
     fn participant_for_sender<'a>(
         room: &'a Room,
-        participant_id: &str,
+        participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
     ) -> Result<&'a Participant> {
         room.ensure_live()?;
@@ -5984,8 +5979,8 @@ impl RoomManager {
 
     async fn reserve_media_mutation_for_sender(
         &self,
-        room_id: &str,
-        participant_id: &str,
+        room_id: &RoomId,
+        participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         producer_id: Option<&str>,
     ) -> Result<MediaMutationReservation> {
@@ -6008,8 +6003,8 @@ impl RoomManager {
 
     async fn reserve_producer_pause_mutation_for_sender(
         &self,
-        room_id: &str,
-        participant_id: &str,
+        room_id: &RoomId,
+        participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         producer_id: &str,
         desired_paused: bool,
@@ -6046,8 +6041,8 @@ impl RoomManager {
 
     async fn reserve_media_control_ipc_for_sender(
         &self,
-        room_id: &str,
-        participant_id: &str,
+        room_id: &RoomId,
+        participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
     ) -> Result<MediaControlIpcReservation> {
         let room_lock = self.get_room(room_id)?;
@@ -6071,7 +6066,7 @@ impl RoomManager {
 
     fn participant_session_is_current(
         room: &Room,
-        participant_id: &str,
+        participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         media_session_id: uuid::Uuid,
     ) -> bool {
@@ -6087,8 +6082,8 @@ impl RoomManager {
 
     pub(crate) async fn is_bound_participant(
         &self,
-        room_id: &str,
-        participant_id: &str,
+        room_id: &RoomId,
+        participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
     ) -> bool {
         let Ok(room_lock) = self.get_room(room_id) else {
@@ -6108,8 +6103,8 @@ impl RoomManager {
 
     async fn media_session_for_sender(
         &self,
-        room_id: &str,
-        participant_id: &str,
+        room_id: &RoomId,
+        participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
     ) -> Result<uuid::Uuid> {
         let room_lock = self.get_room(room_id)?;
@@ -6119,8 +6114,8 @@ impl RoomManager {
 
     async fn is_current_media_session(
         &self,
-        room_id: &str,
-        participant_id: &str,
+        room_id: &RoomId,
+        participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         media_session_id: uuid::Uuid,
     ) -> bool {
@@ -6215,7 +6210,7 @@ impl RoomManager {
     /// `close_revoked_producers` after the room lock is released.
     fn revoke_unauthorized_producers(
         room: &mut Room,
-        participant_filter: Option<&str>,
+        participant_filter: Option<&ParticipantId>,
         reason: &str,
     ) -> Vec<RevokedProducer> {
         let max_broadcasters = Self::broadcaster_limit(room);
@@ -6223,7 +6218,7 @@ impl RoomManager {
         // Determine which otherwise-authorized broadcasters survive a newly
         // reduced cap. Prefer more privileged roles, then stable participant ID,
         // so enforcement is deterministic and does not depend on HashMap order.
-        let mut broadcaster_candidates: Vec<(String, roles::Role)> = room
+        let mut broadcaster_candidates: Vec<(ParticipantId, roles::Role)> = room
             .participants
             .values()
             .filter(|participant| {
@@ -6233,11 +6228,11 @@ impl RoomManager {
                     })
                 })
             })
-            .map(|participant| (participant.id.clone(), participant.role))
+            .map(|participant| (participant.id, participant.role))
             .collect();
         broadcaster_candidates
             .sort_by(|left, right| right.1.cmp(&left.1).then_with(|| left.0.cmp(&right.0)));
-        let over_capacity: HashSet<String> = max_broadcasters
+        let over_capacity: HashSet<ParticipantId> = max_broadcasters
             .map(|maximum| {
                 broadcaster_candidates
                     .into_iter()
@@ -6250,7 +6245,7 @@ impl RoomManager {
         let revoked: Vec<RevokedProducer> = room
             .participants
             .values()
-            .filter(|participant| participant_filter.is_none_or(|filter| participant.id == filter))
+            .filter(|participant| participant_filter.is_none_or(|filter| participant.id == *filter))
             .flat_map(|participant| {
                 participant
                     .producers
@@ -6266,7 +6261,7 @@ impl RoomManager {
                         });
                         (!allowed || over_capacity.contains(&participant.id)).then(|| {
                             RevokedProducer {
-                                participant_id: participant.id.clone(),
+                                participant_id: participant.id,
                                 media_session_id: participant.media_session_id,
                                 producer_id: producer_id.clone(),
                                 kind: *kind,
@@ -6295,7 +6290,7 @@ impl RoomManager {
 
     async fn close_revoked_producers(
         &self,
-        room_id: &str,
+        room_id: &RoomId,
         revoked: Vec<RevokedProducer>,
         active_observer: Option<ActiveSpeakerObserver>,
         audio_observer: Option<AudioLevelObserver>,
@@ -6318,13 +6313,13 @@ impl RoomManager {
                 // stream alive. Fall back to dropping all media state for that
                 // participant; they may establish fresh authorized transports.
                 warn!(
-                    room_id,
+                    %room_id,
                     participant_id = %producer.participant_id,
                     producer_id = %producer.producer_id,
                     %error,
                     "Failed to close revoked producer; dropping participant media state"
                 );
-                failed_participants.insert(producer.participant_id.clone());
+                failed_participants.insert(producer.participant_id);
                 if let Err(cleanup_error) = self
                     .media_server
                     .transport_manager()
@@ -6332,7 +6327,7 @@ impl RoomManager {
                     .await
                 {
                     warn!(
-                        room_id,
+                        %room_id,
                         participant_id = %producer.participant_id,
                         %cleanup_error,
                         "Failed to drop media state after producer revocation"
@@ -6356,8 +6351,8 @@ impl RoomManager {
     /// Check if a participant can produce a given source type
     pub(crate) async fn can_participant_produce(
         &self,
-        room_id: &str,
-        participant_id: &str,
+        room_id: &RoomId,
+        participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         kind: MediaKind,
         source: &str,
@@ -6375,10 +6370,10 @@ impl RoomManager {
     }
 
     /// Gets the router for a room (from media server)
-    async fn get_router(&self, room_id: &str) -> Result<Router> {
+    async fn get_router(&self, room_id: &RoomId) -> Result<Router> {
         self.media_server
             .router_manager()
-            .get_router(room_id)
+            .get_router(room_id.as_str())
             .await
             .map_err(|e| anyhow::anyhow!(e))
     }
@@ -6430,7 +6425,7 @@ impl RoomManager {
                         room.active_speaker_observer = None;
                         room.audio_level_observer = None;
                         remaining.fetch_sub(1, Ordering::Relaxed);
-                        info!(room_id, participants, lobby, "Room membership drained");
+                        info!(%room_id, participants, lobby, "Room membership drained");
                     }
                 })
                 .await;
@@ -6485,7 +6480,7 @@ impl RoomManager {
     /// Participant count for a room, or `None` when the room is not live or its
     /// state lock is held by a writer. Callers must not render `None` as empty:
     /// under load the busiest rooms are exactly the ones that are locked.
-    pub(crate) fn participant_count_for_room(&self, room_id: &str) -> Option<usize> {
+    pub(crate) fn participant_count_for_room(&self, room_id: &RoomId) -> Option<usize> {
         let rooms = self.rooms.read().unwrap_or_else(|e| e.into_inner());
         rooms
             .get(room_id)
@@ -6498,14 +6493,14 @@ impl RoomManager {
 
     /// Every live room with its readable participant count (`None` while a
     /// writer holds the room), for directory ordering. Empty rooms are not live.
-    pub(crate) fn live_room_counts(&self) -> Vec<(String, Option<usize>)> {
+    pub(crate) fn live_room_counts(&self) -> Vec<(RoomId, Option<usize>)> {
         let rooms = self.rooms.read().unwrap_or_else(|e| e.into_inner());
         Self::live_counts(rooms.iter())
     }
 
     pub(crate) fn live_counts<'a>(
-        rooms: impl Iterator<Item = (&'a String, &'a Arc<TokioRwLock<Room>>)>,
-    ) -> Vec<(String, Option<usize>)> {
+        rooms: impl Iterator<Item = (&'a RoomId, &'a Arc<TokioRwLock<Room>>)>,
+    ) -> Vec<(RoomId, Option<usize>)> {
         rooms
             .filter_map(|(id, lock)| match Self::readable_participant_count(lock) {
                 Some(0) => None,
@@ -6527,14 +6522,15 @@ impl RoomManager {
 #[cfg(test)]
 mod security_tests {
     use super::*;
+    use crate::ids::fixtures::{pid, rid};
 
     #[tokio::test]
     async fn live_counts_skip_empty_rooms_and_keep_locked_rooms_unknown() {
         let make_room = |name: &str, members: usize| {
-            let mut room = Room::new(name.into(), None, false, None);
+            let mut room = Room::new(rid(name), None, false, None);
             for index in 0..members {
                 room.participants.insert(
-                    format!("member-{index}"),
+                    pid(&format!("member-{index}")),
                     participant(
                         "member",
                         roles::Role::Guest,
@@ -6545,31 +6541,28 @@ mod security_tests {
             }
             Arc::new(TokioRwLock::new(room))
         };
-        let rooms: HashMap<String, Arc<TokioRwLock<Room>>> = [
-            ("empty".to_string(), make_room("empty", 0)),
-            ("busy".to_string(), make_room("busy", 3)),
-            ("locked".to_string(), make_room("locked", 1)),
+        let rooms: HashMap<RoomId, Arc<TokioRwLock<Room>>> = [
+            (rid("empty"), make_room("empty", 0)),
+            (rid("busy"), make_room("busy", 3)),
+            (rid("locked"), make_room("locked", 1)),
         ]
         .into_iter()
         .collect();
-        let held = rooms["locked"].clone();
+        let held = rooms[&rid("locked")].clone();
         let guard = held.write().await;
         let mut counts = RoomManager::live_counts(rooms.iter());
         drop(guard);
         counts.sort();
-        assert_eq!(
-            counts,
-            vec![("busy".to_string(), Some(3)), ("locked".to_string(), None)]
-        );
+        assert_eq!(counts, vec![(rid("busy"), Some(3)), (rid("locked"), None)]);
     }
 
     #[tokio::test]
     async fn participant_snapshot_distinguishes_empty_partial_and_complete_counts() {
         assert_eq!(RoomManager::count_readable_participants(&[]), (0, true));
         let make_room = |name: &str| {
-            let mut room = Room::new(name.into(), None, false, None);
+            let mut room = Room::new(rid(name), None, false, None);
             room.participants.insert(
-                "member".into(),
+                pid("member"),
                 participant(
                     "member",
                     roles::Role::Guest,
@@ -6634,8 +6627,8 @@ mod security_tests {
         let (tx, rx) = mpsc::channel(32);
         let joined = manager
             .add_participant(
-                room,
-                name.into(),
+                &rid(room),
+                pid(name),
                 name.into(),
                 tx.clone(),
                 false,
@@ -6655,15 +6648,15 @@ mod security_tests {
     async fn guests_sharing_a_name_get_numbered_and_nobody_may_take_a_name_in_use() {
         use crate::signaling::protocol::ClientMessage;
         let manager = drain_test_manager().await;
-        let join = |id: String, name: &str, authenticated: bool| {
+        let join = |id: ParticipantId, name: &str, authenticated: bool| {
             let manager = &manager;
             let name = name.to_string();
             async move {
                 let (tx, rx) = mpsc::channel(32);
                 let joined = manager
                     .add_participant(
-                        "names",
-                        id.clone(),
+                        &rid("names"),
+                        id,
                         name,
                         tx.clone(),
                         authenticated,
@@ -6681,24 +6674,24 @@ mod security_tests {
                 (name, tx, rx)
             }
         };
-        let (first, _tx1, _rx1) = join("g1".into(), "Maya", false).await;
-        let (second, tx2, _rx2) = join("g2".into(), " maya ", false).await;
-        let (third, _tx3, _rx3) = join("g3".into(), "MAYA", false).await;
+        let (first, _tx1, _rx1) = join(pid("g1"), "Maya", false).await;
+        let (second, tx2, _rx2) = join(pid("g2"), " maya ", false).await;
+        let (third, _tx3, _rx3) = join(pid("g3"), "MAYA", false).await;
         assert_eq!(
             (first.as_str(), second.as_str(), third.as_str()),
             ("Maya", "maya (2)", "MAYA (3)"),
             "a taken name gains the smallest free number, ignoring case and spaces"
         );
-        let (account, _tx4, _rx4) = join(uuid::Uuid::new_v4().to_string(), "Maya", false).await;
+        let (account, _tx4, _rx4) = join(ParticipantId::random(), "Maya", false).await;
         assert_eq!(
             account, "Maya (4)",
             "UUID guest identities also receive an unambiguous room label"
         );
-        let (variant, _tx7, _rx7) = join("g7".into(), "Ma\u{200D}ya", false).await;
+        let (variant, _tx7, _rx7) = join(pid("g7"), "Ma\u{200D}ya", false).await;
         assert_eq!(variant, "Ma\u{200D}ya (5)");
         let long = "x".repeat(crate::signaling::connection::MAX_PARTICIPANT_NAME_LEN);
-        let (_l1, _tx5, _rx5) = join("g5".into(), &long, false).await;
-        let (l2, _tx6, _rx6) = join("g6".into(), &long, false).await;
+        let (_l1, _tx5, _rx5) = join(pid("g5"), &long, false).await;
+        let (l2, _tx6, _rx6) = join(pid("g6"), &long, false).await;
         assert!(l2.ends_with(" (2)") && l2.chars().count() <= 64, "{l2}");
 
         let rename = |nickname: &str| {
@@ -6709,7 +6702,7 @@ mod security_tests {
             let (manager, tx2) = (&manager, &tx2);
             async move {
                 manager
-                    .handle_social_request("names", "g2", tx2, &command)
+                    .handle_social_request(&rid("names"), &pid("g2"), tx2, &command)
                     .await
             }
         };
@@ -6740,8 +6733,8 @@ mod security_tests {
             async move {
                 let joined = manager
                     .add_participant(
-                        "styled",
-                        name.clone(),
+                        &rid("styled"),
+                        pid(&name),
                         name.clone(),
                         tx.clone(),
                         false,
@@ -6787,8 +6780,8 @@ mod security_tests {
         };
         manager
             .handle_social_request(
-                "styled",
-                "bob",
+                &rid("styled"),
+                &pid("bob"),
                 &bob,
                 &ClientMessage::SetChatStyle {
                     request_id: "look".into(),
@@ -6798,7 +6791,7 @@ mod security_tests {
             .await
             .unwrap();
         let changed = serde_json::to_string(&ServerMessage::ChatStyleChanged {
-            participant_id: "bob".into(),
+            participant_id: pid("bob"),
             chat_style: sky.clone(),
         })
         .unwrap();
@@ -6807,8 +6800,8 @@ mod security_tests {
 
         let refused = manager
             .handle_social_request(
-                "styled",
-                "bob",
+                &rid("styled"),
+                &pid("bob"),
                 &bob,
                 &ClientMessage::SetChatStyle {
                     request_id: "outside".into(),
@@ -6827,8 +6820,8 @@ mod security_tests {
 
         manager
             .handle_chat_command(
-                "styled",
-                "bob",
+                &rid("styled"),
+                &pid("bob"),
                 &bob,
                 &ClientMessage::ChatMessage {
                     content: "hello".into(),
@@ -6857,8 +6850,8 @@ mod security_tests {
         let (carol_tx, _carol_rx) = mpsc::channel(32);
         let refused = manager
             .add_participant(
-                "capped",
-                "carol".into(),
+                &rid("capped"),
+                pid("carol"),
                 "carol".into(),
                 carol_tx,
                 false,
@@ -6879,8 +6872,8 @@ mod security_tests {
         let mut manager = drain_test_manager().await;
         manager.max_participants_per_room = Some(2);
         let (owner_tx, _owner_rx) = join_guest(&manager, "capped-lobby", "owner").await;
-        let room = manager.get_room("capped-lobby").unwrap();
-        let mut settings = RoomManager::default_room_settings("capped-lobby");
+        let room = manager.get_room(&rid("capped-lobby")).unwrap();
+        let mut settings = RoomManager::default_room_settings(&rid("capped-lobby"));
         settings.lobby_enabled = true;
         room.write().await.settings = Some(settings);
         // Both wait while the room still has space; the first admission fills it.
@@ -6890,8 +6883,8 @@ mod security_tests {
             receivers.push(waiting_rx);
             let lobbied = manager
                 .add_participant(
-                    "capped-lobby",
-                    waiting.into(),
+                    &rid("capped-lobby"),
+                    pid(waiting),
                     waiting.into(),
                     waiting_tx,
                     false,
@@ -6906,15 +6899,25 @@ mod security_tests {
             assert!(matches!(lobbied, JoinResult::Lobbied));
         }
         manager
-            .admit_from_lobby("capped-lobby", "owner", &owner_tx, "first")
+            .admit_from_lobby(
+                &rid("capped-lobby"),
+                &pid("owner"),
+                &owner_tx,
+                &pid("first"),
+            )
             .await
             .unwrap();
         let refused = manager
-            .admit_from_lobby("capped-lobby", "owner", &owner_tx, "second")
+            .admit_from_lobby(
+                &rid("capped-lobby"),
+                &pid("owner"),
+                &owner_tx,
+                &pid("second"),
+            )
             .await
             .expect_err("admission past the ceiling is refused");
         assert_eq!(refused.to_string(), "Room is full");
-        assert!(room.read().await.lobby.contains_key("second"));
+        assert!(room.read().await.lobby.contains_key(&pid("second")));
         manager.media_server().shutdown().await.unwrap();
     }
 
@@ -6959,8 +6962,8 @@ mod security_tests {
             drain_messages(&mut beta_rx).is_empty(),
             "the other worker's room is untouched"
         );
-        assert!(manager.get_room("alpha").is_err());
-        assert!(manager.get_room("beta").is_ok());
+        assert!(manager.get_room(&rid("alpha")).is_err());
+        assert!(manager.get_room(&rid("beta")).is_ok());
         assert_eq!(
             workers.live_worker_count().await,
             2,
@@ -6983,11 +6986,11 @@ mod security_tests {
         let routers = manager.media_server().router_manager();
         let old_router = routers.get_router("recovering").await.unwrap().id();
         let expected_worker = routers.get_worker_id("recovering").await.unwrap();
-        manager.get_or_create_room("healthy").await.unwrap();
+        manager.get_or_create_room(&rid("healthy")).await.unwrap();
         let other_worker = routers.get_worker_id("healthy").await.unwrap();
         assert_ne!(expected_worker, other_worker);
         manager
-            .close_room_for_rejoin("recovering", other_worker, "Stale death notice")
+            .close_room_for_rejoin(&rid("recovering"), other_worker, "Stale death notice")
             .await
             .unwrap();
         assert_eq!(
@@ -6998,7 +7001,7 @@ mod security_tests {
         let recovering = manager.clone();
         let task = tokio::spawn(async move {
             recovering
-                .close_room_for_rejoin("recovering", expected_worker, "Rejoining")
+                .close_room_for_rejoin(&rid("recovering"), expected_worker, "Rejoining")
                 .await
         });
         tokio::time::timeout(std::time::Duration::from_secs(2), async {
@@ -7008,9 +7011,11 @@ mod security_tests {
         })
         .await
         .unwrap();
-        assert!(manager.get_room("recovering").is_err());
-        assert!(matches!(manager.get_or_create_room("recovering").await,
-            Err(error) if error.to_string() == "Room is being deleted"));
+        assert!(manager.get_room(&rid("recovering")).is_err());
+        assert!(
+            matches!(manager.get_or_create_room(&rid("recovering")).await,
+            Err(error) if error.to_string() == "Room is being deleted")
+        );
         assert!(!task.is_finished());
         drop(pause);
         task.await.unwrap().unwrap();
@@ -7029,8 +7034,8 @@ mod security_tests {
         let (tx, _rx) = mpsc::channel(8);
         let error = match manager
             .add_participant(
-                "busy",
-                "alice".into(),
+                &rid("busy"),
+                pid("alice"),
                 "alice".into(),
                 tx,
                 false,
@@ -7047,7 +7052,7 @@ mod security_tests {
         };
         assert!(error.to_string().contains("at capacity"), "{error}");
         assert!(
-            manager.get_room("busy").is_err(),
+            manager.get_room(&rid("busy")).is_err(),
             "no room is created for a refused join"
         );
         let body = manager.metrics.render_prometheus(0, 0, 1);
@@ -7071,8 +7076,8 @@ mod security_tests {
         let (tx, _rx) = mpsc::channel(8);
         let error = match manager
             .add_participant(
-                "alpha",
-                "carol".into(),
+                &rid("alpha"),
+                pid("carol"),
                 "carol".into(),
                 tx,
                 false,
@@ -7114,7 +7119,7 @@ mod security_tests {
         assert!(workers.release_worker_listener(worker).await);
         assert!(workers.simulate_death(worker));
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-        while manager.get_room("gamma").is_ok() {
+        while manager.get_room(&rid("gamma")).is_ok() {
             assert!(std::time::Instant::now() < deadline, "recovery did not run");
             tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         }
@@ -7125,12 +7130,12 @@ mod security_tests {
     #[tokio::test]
     async fn rejoin_after_abrupt_disconnect_replaces_the_retained_membership() {
         let manager = Arc::new(drain_test_manager().await);
-        let user_id = uuid::Uuid::new_v4().to_string();
+        let user_id = ParticipantId::random();
         let (first_tx, first_rx) = mpsc::channel(16);
         let joined = manager
             .add_participant(
-                "rejoin",
-                user_id.clone(),
+                &rid("rejoin"),
+                user_id,
                 "User".into(),
                 first_tx.clone(),
                 false,
@@ -7150,8 +7155,8 @@ mod security_tests {
         let (second_tx, _second_rx) = mpsc::channel(16);
         let rejoined = manager
             .add_participant(
-                "rejoin",
-                user_id.clone(),
+                &rid("rejoin"),
+                user_id,
                 "User".into(),
                 second_tx.clone(),
                 false,
@@ -7165,7 +7170,7 @@ mod security_tests {
             .unwrap();
         assert!(matches!(rejoined, JoinResult::Joined { .. }));
 
-        let room = manager.get_room("rejoin").unwrap();
+        let room = manager.get_room(&rid("rejoin")).unwrap();
         {
             let room = room.read().await;
             assert_eq!(room.participants.len(), 1);
@@ -7174,7 +7179,7 @@ mod security_tests {
         // The stale socket's grace timer can no longer evict the replacement.
         assert!(
             !manager
-                .remove_participant_for_sender("rejoin", &user_id, &first_tx)
+                .remove_participant_for_sender(&rid("rejoin"), &user_id, &first_tx)
                 .await
                 .unwrap()
         );
@@ -7184,18 +7189,18 @@ mod security_tests {
     #[tokio::test]
     async fn room_creation_waits_out_only_the_room_whose_identity_is_updating() {
         let manager = drain_test_manager().await;
-        let guard = manager.begin_identity_update("editing");
+        let guard = manager.begin_identity_update(&rid("editing"));
         let blocked = manager
-            .get_or_create_room("editing")
+            .get_or_create_room(&rid("editing"))
             .await
             .err()
             .expect("creation of the updating room is excluded");
         assert!(blocked.to_string().contains("updated"), "{blocked}");
-        let other = manager.get_or_create_room("other").await;
+        let other = manager.get_or_create_room(&rid("other")).await;
         assert!(other.is_ok(), "unrelated rooms are unaffected");
         drop(other);
         drop(guard);
-        assert!(manager.get_or_create_room("editing").await.is_ok());
+        assert!(manager.get_or_create_room(&rid("editing")).await.is_ok());
     }
 
     #[tokio::test]
@@ -7204,8 +7209,8 @@ mod security_tests {
         let (owner_tx, _owner_rx) = mpsc::channel(16);
         manager
             .add_participant(
-                "busy-control",
-                "owner".into(),
+                &rid("busy-control"),
+                pid("owner"),
                 "Owner".into(),
                 owner_tx,
                 false,
@@ -7217,15 +7222,15 @@ mod security_tests {
             )
             .await
             .unwrap();
-        let room = manager.get_room("busy-control").unwrap();
+        let room = manager.get_room(&rid("busy-control")).unwrap();
         // A persisted policy write holds control across SQL for up to 15 s.
         let _held = control::lock_room(&room).await;
         let (tx, _rx) = mpsc::channel(16);
         let outcome = tokio::time::timeout(
             std::time::Duration::from_secs(12),
             manager.add_participant(
-                "busy-control",
-                "second".into(),
+                &rid("busy-control"),
+                pid("second"),
                 "Second".into(),
                 tx,
                 false,
@@ -7247,9 +7252,9 @@ mod security_tests {
 
     #[tokio::test]
     async fn directory_counts_are_unknown_not_zero_while_a_room_is_write_locked() {
-        let room = Arc::new(TokioRwLock::new(Room::new("dir".into(), None, false, None)));
+        let room = Arc::new(TokioRwLock::new(Room::new(rid("dir"), None, false, None)));
         room.write().await.participants.insert(
-            "p".into(),
+            pid("p"),
             participant(
                 "p",
                 roles::Role::User,
@@ -7271,16 +7276,16 @@ mod security_tests {
         let mut channels = Vec::new();
         for id in ["owner", "member", "waiting", "other-waiting"] {
             if id == "waiting" {
-                let room = manager.get_room("lobby-status").unwrap();
-                let mut settings = RoomManager::default_room_settings("lobby-status");
+                let room = manager.get_room(&rid("lobby-status")).unwrap();
+                let mut settings = RoomManager::default_room_settings(&rid("lobby-status"));
                 settings.lobby_enabled = true;
                 room.write().await.settings = Some(settings);
             }
             let (sender, receiver) = mpsc::channel(32);
             manager
                 .add_participant(
-                    "lobby-status",
-                    id.into(),
+                    &rid("lobby-status"),
+                    pid(id),
                     id.into(),
                     sender.clone(),
                     false,
@@ -7312,7 +7317,7 @@ mod security_tests {
             );
         };
         manager
-            .mark_participant_disconnected("lobby-status", "owner", &channels[0].0)
+            .mark_participant_disconnected(&rid("lobby-status"), &pid("owner"), &channels[0].0)
             .await
             .unwrap();
         assert!(
@@ -7326,8 +7331,8 @@ mod security_tests {
         assert!(
             manager
                 .rebind_participant_sender(
-                    "lobby-status",
-                    "owner",
+                    &rid("lobby-status"),
+                    &pid("owner"),
                     None,
                     &channels[0].0,
                     rebound.clone()
@@ -7339,7 +7344,7 @@ mod security_tests {
             status(&mut channels[index].1, 2, 1);
         }
         manager
-            .mark_participant_disconnected("lobby-status", "owner", &channels[0].0)
+            .mark_participant_disconnected(&rid("lobby-status"), &pid("owner"), &channels[0].0)
             .await
             .unwrap();
         for index in [2, 3] {
@@ -7347,10 +7352,10 @@ mod security_tests {
         }
         manager
             .set_participant_role(
-                "lobby-status",
-                "owner",
+                &rid("lobby-status"),
+                &pid("owner"),
                 &rebound,
-                "member",
+                &pid("member"),
                 roles::Role::Moderator,
             )
             .await
@@ -7359,23 +7364,35 @@ mod security_tests {
             status(&mut channels[index].1, 2, 2);
         }
         manager
-            .kick_participant("lobby-status", "owner", &rebound, "member", None, None)
+            .kick_participant(
+                &rid("lobby-status"),
+                &pid("owner"),
+                &rebound,
+                &pid("member"),
+                None,
+                None,
+            )
             .await
             .unwrap();
         for index in [2, 3] {
             status(&mut channels[index].1, 1, 1);
         }
         manager
-            .admit_from_lobby("lobby-status", "owner", &rebound, "waiting")
+            .admit_from_lobby(
+                &rid("lobby-status"),
+                &pid("owner"),
+                &rebound,
+                &pid("waiting"),
+            )
             .await
             .unwrap();
         status(&mut channels[3].1, 2, 1);
         manager
             .ban_participant(
-                "lobby-status",
-                "owner",
+                &rid("lobby-status"),
+                &pid("owner"),
                 &rebound,
-                "waiting",
+                &pid("waiting"),
                 None,
                 None,
                 None,
@@ -7384,7 +7401,7 @@ mod security_tests {
             .unwrap();
         status(&mut channels[3].1, 1, 1);
         manager
-            .remove_participant("lobby-status", "owner")
+            .remove_participant(&rid("lobby-status"), &pid("owner"))
             .await
             .unwrap();
         status(&mut channels[3].1, 0, 0);
@@ -7394,9 +7411,9 @@ mod security_tests {
 
     #[test]
     fn lobby_counts_exclude_closed_queues_and_disconnected_grace_members() {
-        let mut room = Room::new("room".into(), None, false, None);
+        let mut room = Room::new(rid("room"), None, false, None);
         room.participants.insert(
-            "closed".into(),
+            pid("closed"),
             participant(
                 "closed",
                 roles::Role::Owner,
@@ -7412,9 +7429,13 @@ mod security_tests {
             None,
         );
         connected.sender = sender;
-        room.participants.insert("live".into(), connected);
+        room.participants.insert(pid("live"), connected);
         assert_eq!(room.lobby_counts(), (1, 0));
-        room.participants.get_mut("live").unwrap().social.connected = false;
+        room.participants
+            .get_mut(&pid("live"))
+            .unwrap()
+            .social
+            .connected = false;
         assert_eq!(room.lobby_counts(), (0, 0));
     }
 
@@ -7424,8 +7445,8 @@ mod security_tests {
         let (owner_tx, _owner_rx) = mpsc::channel(16);
         let owner_join = manager
             .add_participant(
-                "drain-test",
-                "owner".into(),
+                &rid("drain-test"),
+                pid("owner"),
                 "Owner".into(),
                 owner_tx.clone(),
                 false,
@@ -7438,15 +7459,15 @@ mod security_tests {
             .await
             .unwrap();
         assert!(matches!(owner_join, JoinResult::Joined { .. }));
-        let room = manager.get_room("drain-test").unwrap();
-        let mut settings = RoomManager::default_room_settings("drain-test");
+        let room = manager.get_room(&rid("drain-test")).unwrap();
+        let mut settings = RoomManager::default_room_settings(&rid("drain-test"));
         settings.lobby_enabled = true;
         room.write().await.settings = Some(settings);
         let (waiting_tx, _waiting_rx) = mpsc::channel(16);
         let waiting = manager
             .add_participant(
-                "drain-test",
-                "waiting".into(),
+                &rid("drain-test"),
+                pid("waiting"),
                 "Waiting".into(),
                 waiting_tx,
                 false,
@@ -7467,7 +7488,7 @@ mod security_tests {
         let joining_room = room.clone();
         let pending = tokio::spawn(async move {
             joining_manager
-                .reserve_existing_room_join("drain-test", joining_room)
+                .reserve_existing_room_join(&rid("drain-test"), joining_room)
                 .await
                 .is_err()
         });
@@ -7475,13 +7496,24 @@ mod security_tests {
         manager.drain_signal().begin_draining();
         drop(held_room);
         let late_join_rejected = pending.await.unwrap();
-        let new_room_rejected = manager.get_or_create_room("late-room").await.is_err();
+        let new_room_rejected = manager.get_or_create_room(&rid("late-room")).await.is_err();
         let reconnect_rejected = manager
-            .rebind_participant_sender("drain-test", "owner", None, &owner_tx, owner_tx.clone())
+            .rebind_participant_sender(
+                &rid("drain-test"),
+                &pid("owner"),
+                None,
+                &owner_tx,
+                owner_tx.clone(),
+            )
             .await
             .is_err();
         let admission_rejected = manager
-            .admit_from_lobby("drain-test", "owner", &owner_tx, "waiting")
+            .admit_from_lobby(
+                &rid("drain-test"),
+                &pid("owner"),
+                &owner_tx,
+                &pid("waiting"),
+            )
             .await
             .is_err();
         let cleanup = manager.shutdown().await;
@@ -7524,7 +7556,7 @@ mod security_tests {
         drop(pending_verify);
         assert_eq!(manager.pending_password_work(), 0);
         let room = Arc::new(TokioRwLock::new(Room::new(
-            "stalled".into(),
+            rid("stalled"),
             None,
             false,
             None,
@@ -7533,7 +7565,7 @@ mod security_tests {
             .rooms
             .write()
             .unwrap()
-            .insert("stalled".into(), room.clone());
+            .insert(rid("stalled"), room.clone());
         let held_creation = manager.room_creation_lock.lock().await;
         let creation_result = manager
             .shutdown_with_budget(std::time::Duration::from_millis(5))
@@ -7548,13 +7580,13 @@ mod security_tests {
         assert!(creation_result.is_err());
         assert!(result.is_err());
         assert!(manager.drain_signal().is_draining());
-        assert!(manager.get_or_create_room("new-room").await.is_err());
+        assert!(manager.get_or_create_room(&rid("new-room")).await.is_err());
         media_cleanup.unwrap();
     }
 
     #[tokio::test]
     async fn silence_observer_event_clears_audio_levels_for_every_participant() {
-        let mut room = Room::new("room".into(), None, false, None);
+        let mut room = Room::new(rid("room"), None, false, None);
         let (sender, mut receiver) = mpsc::channel(4);
         let mut member = participant(
             "member",
@@ -7563,7 +7595,7 @@ mod security_tests {
             None,
         );
         member.sender = sender;
-        room.participants.insert("member".into(), member);
+        room.participants.insert(pid("member"), member);
         let room = Arc::new(TokioRwLock::new(room));
         let (events, event_receiver) = mpsc::channel(4);
         events.try_send(ObserverEvent::Silence).unwrap();
@@ -7575,7 +7607,7 @@ mod security_tests {
 
     #[test]
     fn broadcast_queue_counters_count_selected_essential_rejections_only() {
-        let mut room = Room::new("room".into(), None, false, None);
+        let mut room = Room::new(rid("room"), None, false, None);
         let (owner_sender, _owner_receiver) = mpsc::channel(1);
         let (member_sender, _member_receiver) = mpsc::channel(1);
         owner_sender
@@ -7593,12 +7625,12 @@ mod security_tests {
             if let Some(sender) = sender {
                 entry.sender = sender;
             }
-            room.participants.insert(id.into(), entry);
+            room.participants.insert(pid(id), entry);
         }
         let control = ServerMessage::RoomClosed {
             reason: "Room closed".into(),
         };
-        room.broadcast_except("owner", &control);
+        room.broadcast_except(&pid("owner"), &control);
         room.broadcast_to_role(roles::Role::Moderator, &control);
         room.broadcast_all(&control);
 
@@ -7615,12 +7647,12 @@ mod security_tests {
         );
         for hint in [
             ServerMessage::ActiveSpeaker {
-                participant_id: "owner".into(),
+                participant_id: pid("owner"),
             },
             ServerMessage::AudioLevels { levels: vec![] },
         ] {
             room.broadcast_all(&hint);
-            room.broadcast_except("owner", &hint);
+            room.broadcast_except(&pid("owner"), &hint);
             room.broadcast_to_role(roles::Role::Moderator, &hint);
         }
         assert_eq!(room.metrics.render_prometheus(0, 0, 0), before_hints);
@@ -7629,15 +7661,8 @@ mod security_tests {
     #[test]
     fn runtime_room_queue_failures_reach_shared_process_metrics() {
         let metrics = ServerMetrics::new();
-        let mut room = Room::new_with_observers(
-            "room".into(),
-            None,
-            false,
-            None,
-            None,
-            None,
-            metrics.clone(),
-        );
+        let mut room =
+            Room::new_with_observers(rid("room"), None, false, None, None, None, metrics.clone());
         // This helper intentionally drops its receiver, simulating a departed socket.
         let entry = participant(
             "closed",
@@ -7645,7 +7670,7 @@ mod security_tests {
             moderation::PunitiveState::default(),
             None,
         );
-        room.participants.insert(entry.id.clone(), entry);
+        room.participants.insert(entry.id, entry);
         room.broadcast_all(&ServerMessage::RoomClosed {
             reason: "Room closed".into(),
         });
@@ -7659,7 +7684,7 @@ mod security_tests {
 
     #[test]
     fn successful_broadcast_enqueue_does_not_count_as_failure_or_socket_write() {
-        let mut room = Room::new("room".into(), None, false, None);
+        let mut room = Room::new(rid("room"), None, false, None);
         let (sender, mut receiver) = mpsc::channel(1);
         let mut entry = participant(
             "owner",
@@ -7668,7 +7693,7 @@ mod security_tests {
             None,
         );
         entry.sender = sender;
-        room.participants.insert(entry.id.clone(), entry);
+        room.participants.insert(entry.id, entry);
         let event = ServerMessage::RoomClosed {
             reason: "Room closed".into(),
         };
@@ -7683,7 +7708,7 @@ mod security_tests {
 
     #[test]
     fn aggregate_room_chat_budget_is_bounded_and_recovers() {
-        let mut room = Room::new("room".to_string(), None, false, None);
+        let mut room = Room::new(rid("room"), None, false, None);
         let start = std::time::Instant::now();
         for _ in 0..MAX_ROOM_CHAT_MESSAGES_PER_WINDOW {
             assert!(room.reserve_chat_broadcast(start));
@@ -7695,7 +7720,7 @@ mod security_tests {
 
     #[test]
     fn aggregate_room_media_budget_is_bounded_and_recovers() {
-        let mut room = Room::new("room".to_string(), None, false, None);
+        let mut room = Room::new(rid("room"), None, false, None);
         let start = std::time::Instant::now();
         for _ in 0..MAX_ROOM_MEDIA_MUTATIONS_PER_WINDOW {
             assert!(room.reserve_media_mutation(start));
@@ -7707,7 +7732,7 @@ mod security_tests {
 
     #[test]
     fn no_op_media_mutation_refund_preserves_aggregate_capacity() {
-        let mut room = Room::new("room".to_string(), None, false, None);
+        let mut room = Room::new(rid("room"), None, false, None);
         let start = std::time::Instant::now();
         for _ in 0..(MAX_ROOM_MEDIA_MUTATIONS_PER_WINDOW * 2) {
             assert!(room.reserve_media_mutation(start));
@@ -7723,18 +7748,8 @@ mod security_tests {
     #[tokio::test]
     async fn media_mutation_refund_targets_original_room_generation() {
         let start = std::time::Instant::now();
-        let original = Arc::new(TokioRwLock::new(Room::new(
-            "room".to_string(),
-            None,
-            false,
-            None,
-        )));
-        let replacement = Arc::new(TokioRwLock::new(Room::new(
-            "room".to_string(),
-            None,
-            false,
-            None,
-        )));
+        let original = Arc::new(TokioRwLock::new(Room::new(rid("room"), None, false, None)));
+        let replacement = Arc::new(TokioRwLock::new(Room::new(rid("room"), None, false, None)));
         assert!(original.write().await.reserve_media_mutation(start));
         assert!(replacement.write().await.reserve_media_mutation(start));
 
@@ -7750,7 +7765,7 @@ mod security_tests {
 
     #[test]
     fn aggregate_room_media_control_ipc_budget_is_bounded_and_recovers() {
-        let mut room = Room::new("room".to_string(), None, false, None);
+        let mut room = Room::new(rid("room"), None, false, None);
         let start = std::time::Instant::now();
         for _ in 0..MAX_ROOM_MEDIA_CONTROL_IPC_PER_WINDOW {
             assert!(room.reserve_media_control_ipc(start));
@@ -7762,7 +7777,7 @@ mod security_tests {
 
     #[test]
     fn no_op_media_control_ipc_refund_preserves_aggregate_capacity() {
-        let mut room = Room::new("room".to_string(), None, false, None);
+        let mut room = Room::new(rid("room"), None, false, None);
         let start = std::time::Instant::now();
         for _ in 0..(MAX_ROOM_MEDIA_CONTROL_IPC_PER_WINDOW * 2) {
             assert!(room.reserve_media_control_ipc(start));
@@ -7777,7 +7792,7 @@ mod security_tests {
 
     #[test]
     fn aggregate_room_admin_budget_is_bounded_and_recovers() {
-        let mut room = Room::new("room".to_string(), None, false, None);
+        let mut room = Room::new(rid("room"), None, false, None);
         let start = std::time::Instant::now();
         for _ in 0..MAX_ROOM_ADMIN_MUTATIONS_PER_WINDOW {
             assert!(room.reserve_admin_mutation(start));
@@ -7789,7 +7804,7 @@ mod security_tests {
 
     #[test]
     fn aggregate_room_voice_request_budget_is_bounded_and_recovers() {
-        let mut room = Room::new("room".to_string(), None, false, None);
+        let mut room = Room::new(rid("room"), None, false, None);
         let start = std::time::Instant::now();
         for _ in 0..MAX_ROOM_VOICE_REQUESTS_PER_WINDOW {
             assert!(room.reserve_voice_request(start));
@@ -7819,12 +7834,12 @@ mod security_tests {
 
     #[test]
     fn failed_join_cleanup_evicts_only_the_last_unpopulated_reservation() {
-        let mut abandoned = Room::new("abandoned".to_string(), None, false, None);
+        let mut abandoned = Room::new(rid("abandoned"), None, false, None);
         abandoned.pending_joins = 1;
         assert!(release_join_reservation(&mut abandoned));
         assert_eq!(abandoned.pending_joins, 0);
 
-        let mut concurrent = Room::new("concurrent".to_string(), None, false, None);
+        let mut concurrent = Room::new(rid("concurrent"), None, false, None);
         concurrent.pending_joins = 2;
         // One failed join must not evict the room while another join is still
         // performing its authorization/password work.
@@ -7832,7 +7847,7 @@ mod security_tests {
         assert_eq!(concurrent.pending_joins, 1);
 
         concurrent.participants.insert(
-            "winner".to_string(),
+            pid("winner"),
             participant(
                 "winner",
                 roles::Role::Guest,
@@ -7844,7 +7859,7 @@ mod security_tests {
         // an occupied room and therefore cannot authorize teardown.
         assert!(!release_join_reservation(&mut concurrent));
         assert_eq!(concurrent.pending_joins, 0);
-        assert!(concurrent.participants.contains_key("winner"));
+        assert!(concurrent.participants.contains_key(&pid("winner")));
     }
 
     #[test]
@@ -7899,6 +7914,11 @@ mod security_tests {
         assert!(limiter.tracked_keys() <= 11);
     }
 
+    fn sorted(mut ids: Vec<ParticipantId>) -> Vec<ParticipantId> {
+        ids.sort();
+        ids
+    }
+
     fn participant(
         id: &str,
         role: roles::Role,
@@ -7907,7 +7927,7 @@ mod security_tests {
     ) -> Participant {
         let (sender, _receiver) = mpsc::channel(4);
         Participant {
-            id: id.to_string(),
+            id: pid(id),
             social: social::ParticipantSocial::new(0),
             name: id.to_string(),
             sender,
@@ -7938,12 +7958,12 @@ mod security_tests {
     fn guest_sanctions_survive_a_new_connection_identity() {
         let ip: IpAddr = "203.0.113.7".parse().unwrap();
         assert_eq!(
-            SanctionKey::for_identity("old-socket", false, Some(ip)),
-            SanctionKey::for_identity("new-socket", false, Some(ip))
+            SanctionKey::for_identity(&pid("old-socket"), false, Some(ip)),
+            SanctionKey::for_identity(&pid("new-socket"), false, Some(ip))
         );
         assert_ne!(
-            SanctionKey::for_identity("old-socket", false, None),
-            SanctionKey::for_identity("new-socket", false, None)
+            SanctionKey::for_identity(&pid("old-socket"), false, None),
+            SanctionKey::for_identity(&pid("new-socket"), false, None)
         );
 
         let merged = merge_punitive_state(
@@ -7961,16 +7981,21 @@ mod security_tests {
 
     #[test]
     fn unchanged_punitive_cohort_is_detected_without_mutation() {
-        let mut room = Room::new("room".to_string(), None, false, None);
-        let target_id = "target".to_string();
-        let key = SanctionKey::User(target_id.clone());
+        let mut room = Room::new(rid("room"), None, false, None);
+        let target_id = pid("target");
+        let key = SanctionKey::User(target_id.to_string());
         let muted = moderation::PunitiveState {
             cam_banned: false,
             text_muted: true,
         };
         room.participants.insert(
-            target_id.clone(),
-            participant(&target_id, roles::Role::User, muted.clone(), None),
+            target_id,
+            participant(
+                &target_id.to_string(),
+                roles::Role::User,
+                muted.clone(),
+                None,
+            ),
         );
         room.sanctions.insert(key.clone(), muted);
 
@@ -8011,10 +8036,10 @@ mod security_tests {
     fn guest_ip_moderation_covers_every_unauthenticated_socket() {
         let ip: IpAddr = "203.0.113.7".parse().unwrap();
         let other_ip: IpAddr = "203.0.113.8".parse().unwrap();
-        let mut room = Room::new("room".to_string(), None, false, None);
+        let mut room = Room::new(rid("room"), None, false, None);
 
         room.participants.insert(
-            "target".to_string(),
+            pid("target"),
             participant(
                 "target",
                 roles::Role::Guest,
@@ -8029,9 +8054,9 @@ mod security_tests {
             Some(ip),
         );
         peer.authenticated = false;
-        room.participants.insert("peer".to_string(), peer);
+        room.participants.insert(pid("peer"), peer);
         room.participants.insert(
-            "registered".to_string(),
+            pid("registered"),
             participant(
                 "registered",
                 roles::Role::User,
@@ -8040,7 +8065,7 @@ mod security_tests {
             ),
         );
         room.participants.insert(
-            "other".to_string(),
+            pid("other"),
             participant(
                 "other",
                 roles::Role::Guest,
@@ -8050,9 +8075,9 @@ mod security_tests {
         );
         let (lobby_sender, _lobby_receiver) = mpsc::channel(4);
         room.lobby.insert(
-            "waiting".to_string(),
+            pid("waiting"),
             LobbyEntry {
-                participant_id: "waiting".to_string(),
+                participant_id: pid("waiting"),
                 name: "waiting".to_string(),
                 sender: lobby_sender,
                 media_session_id: uuid::Uuid::new_v4(),
@@ -8066,25 +8091,29 @@ mod security_tests {
             },
         );
 
-        assert!(moderation_cohort(&room, "target", roles::Role::Moderator).is_err());
+        assert!(moderation_cohort(&room, &pid("target"), roles::Role::Moderator).is_err());
         assert!(guest_ip_lobby_cohort(&room, false, Some(ip), roles::Role::Moderator).is_err());
 
-        room.participants.get_mut("peer").unwrap().role = roles::Role::User;
-        room.lobby.get_mut("waiting").unwrap().role = roles::Role::User;
-        let cohort = moderation_cohort(&room, "target", roles::Role::Moderator).unwrap();
-        assert_eq!(cohort, vec!["peer".to_string(), "target".to_string()]);
+        room.participants.get_mut(&pid("peer")).unwrap().role = roles::Role::User;
+        room.lobby.get_mut(&pid("waiting")).unwrap().role = roles::Role::User;
+        let cohort = moderation_cohort(&room, &pid("target"), roles::Role::Moderator).unwrap();
+        assert_eq!(
+            sorted(cohort.clone()),
+            sorted(vec![pid("peer"), pid("target")])
+        );
         let lobby_cohort =
             guest_ip_lobby_cohort(&room, false, Some(ip), roles::Role::Moderator).unwrap();
-        assert_eq!(lobby_cohort, vec!["waiting".to_string()]);
+        assert_eq!(lobby_cohort, vec![pid("waiting")]);
 
-        let banned_ids: Vec<String> = cohort.iter().chain(lobby_cohort.iter()).cloned().collect();
+        let banned_ids: Vec<ParticipantId> =
+            cohort.iter().chain(lobby_cohort.iter()).cloned().collect();
         record_banned_cohort(&mut room, &banned_ids, false, Some(ip), None);
-        assert!(room.identity_is_banned("target", false, Some(ip)));
-        assert!(room.identity_is_banned("preopened-guest", false, Some(ip)));
-        assert!(!room.identity_is_banned("registered", true, Some(ip)));
-        assert!(room.banned_guest_participants.contains("target"));
-        assert!(room.banned_guest_participants.contains("peer"));
-        assert!(room.banned_guest_participants.contains("waiting"));
+        assert!(room.identity_is_banned(&pid("target"), false, Some(ip)));
+        assert!(room.identity_is_banned(&pid("preopened-guest"), false, Some(ip)));
+        assert!(!room.identity_is_banned(&pid("registered"), true, Some(ip)));
+        assert!(room.banned_guest_participants.contains(&pid("target")));
+        assert!(room.banned_guest_participants.contains(&pid("peer")));
+        assert!(room.banned_guest_participants.contains(&pid("waiting")));
     }
 
     #[test]
@@ -8092,7 +8121,7 @@ mod security_tests {
         let first: IpAddr = "2001:db8:1:2::1".parse().unwrap();
         let rotated: IpAddr = "2001:db8:1:2:ffff:ffff:ffff:42".parse().unwrap();
         let adjacent: IpAddr = "2001:db8:1:3::1".parse().unwrap();
-        let mut room = Room::new("room".to_string(), None, false, None);
+        let mut room = Room::new(rid("room"), None, false, None);
 
         for (id, ip) in [
             ("target", first),
@@ -8100,7 +8129,7 @@ mod security_tests {
             ("adjacent", adjacent),
         ] {
             room.participants.insert(
-                id.to_string(),
+                pid(id),
                 participant(
                     id,
                     roles::Role::Guest,
@@ -8110,28 +8139,31 @@ mod security_tests {
             );
         }
 
-        let cohort = moderation_cohort(&room, "target", roles::Role::Moderator).unwrap();
-        assert_eq!(cohort, vec!["rotated".to_string(), "target".to_string()]);
+        let cohort = moderation_cohort(&room, &pid("target"), roles::Role::Moderator).unwrap();
+        assert_eq!(
+            sorted(cohort.clone()),
+            sorted(vec![pid("rotated"), pid("target")])
+        );
 
         record_banned_cohort(&mut room, &cohort, false, Some(first), None);
-        assert!(room.identity_is_banned("new-socket", false, Some(rotated)));
-        assert!(!room.identity_is_banned("outside-prefix", false, Some(adjacent)));
+        assert!(room.identity_is_banned(&pid("new-socket"), false, Some(rotated)));
+        assert!(!room.identity_is_banned(&pid("outside-prefix"), false, Some(adjacent)));
         assert_eq!(
-            SanctionKey::for_identity("first", false, Some(first)),
-            SanctionKey::for_identity("rotated", false, Some(rotated))
+            SanctionKey::for_identity(&pid("first"), false, Some(first)),
+            SanctionKey::for_identity(&pid("rotated"), false, Some(rotated))
         );
         assert_ne!(
-            SanctionKey::for_identity("first", false, Some(first)),
-            SanctionKey::for_identity("adjacent", false, Some(adjacent))
+            SanctionKey::for_identity(&pid("first"), false, Some(first)),
+            SanctionKey::for_identity(&pid("adjacent"), false, Some(adjacent))
         );
     }
 
     #[test]
     fn guest_ip_punitive_state_is_applied_consistently_to_the_cohort() {
         let ip: IpAddr = "203.0.113.7".parse().unwrap();
-        let mut room = Room::new("room".to_string(), None, false, None);
+        let mut room = Room::new(rid("room"), None, false, None);
         room.participants.insert(
-            "first".to_string(),
+            pid("first"),
             participant(
                 "first",
                 roles::Role::Guest,
@@ -8143,7 +8175,7 @@ mod security_tests {
             ),
         );
         room.participants.insert(
-            "second".to_string(),
+            pid("second"),
             participant(
                 "second",
                 roles::Role::Guest,
@@ -8156,9 +8188,9 @@ mod security_tests {
         );
         let (lobby_sender, _lobby_receiver) = mpsc::channel(4);
         room.lobby.insert(
-            "waiting".to_string(),
+            pid("waiting"),
             LobbyEntry {
-                participant_id: "waiting".to_string(),
+                participant_id: pid("waiting"),
                 name: "waiting".to_string(),
                 sender: lobby_sender,
                 media_session_id: uuid::Uuid::new_v4(),
@@ -8174,8 +8206,8 @@ mod security_tests {
                 chat_style: Default::default(),
             },
         );
-        let cohort = vec!["first".to_string(), "second".to_string()];
-        let lobby_cohort = vec!["waiting".to_string()];
+        let cohort = vec![pid("first"), pid("second")];
+        let lobby_cohort = vec![pid("waiting")];
 
         let punitive = apply_punitive_to_cohort(
             &mut room,
@@ -8192,9 +8224,9 @@ mod security_tests {
                 text_muted: false,
             }
         );
-        assert_eq!(room.participants["first"].punitive, punitive);
-        assert_eq!(room.participants["second"].punitive, punitive);
-        assert_eq!(room.lobby["waiting"].punitive, punitive);
+        assert_eq!(room.participants[&pid("first")].punitive, punitive);
+        assert_eq!(room.participants[&pid("second")].punitive, punitive);
+        assert_eq!(room.lobby[&pid("waiting")].punitive, punitive);
 
         apply_punitive_to_cohort(
             &mut room,
@@ -8206,36 +8238,36 @@ mod security_tests {
         );
         assert!(!room.sanctions.contains_key(&SanctionKey::GuestIp(ip)));
         assert_eq!(
-            room.participants["first"].punitive,
+            room.participants[&pid("first")].punitive,
             moderation::PunitiveState::default()
         );
         assert_eq!(
-            room.participants["second"].punitive,
+            room.participants[&pid("second")].punitive,
             moderation::PunitiveState::default()
         );
         assert_eq!(
-            room.lobby["waiting"].punitive,
+            room.lobby[&pid("waiting")].punitive,
             moderation::PunitiveState::default()
         );
     }
 
     #[test]
     fn expired_guest_ban_pruning_clears_participant_origin_marker() {
-        let mut room = Room::new("room".to_string(), None, false, None);
+        let mut room = Room::new(rid("room"), None, false, None);
         room.banned_participants.insert(
-            "guest".to_string(),
+            pid("guest"),
             Some(std::time::Instant::now() - std::time::Duration::from_secs(1)),
         );
-        room.banned_guest_participants.insert("guest".to_string());
+        room.banned_guest_participants.insert(pid("guest"));
 
         room.prune_expired_bans(std::time::Instant::now());
-        assert!(!room.banned_participants.contains_key("guest"));
-        assert!(!room.banned_guest_participants.contains("guest"));
+        assert!(!room.banned_participants.contains_key(&pid("guest")));
+        assert!(!room.banned_guest_participants.contains(&pid("guest")));
     }
 
     #[test]
     fn stale_join_policy_snapshot_is_rejected() {
-        let mut room = Room::new("room".to_string(), None, false, None);
+        let mut room = Room::new(rid("room"), None, false, None);
         let snapshot = room.policy_revision;
         assert!(policy_snapshot_matches(&room, snapshot));
         room.policy_revision = room.policy_revision.wrapping_add(1);
@@ -8244,7 +8276,7 @@ mod security_tests {
 
     #[test]
     fn deletion_tombstone_rejects_in_flight_room_commits() {
-        let mut room = Room::new("room".to_string(), None, true, None);
+        let mut room = Room::new(rid("room"), None, true, None);
         let snapshot = room.policy_revision;
         room.deleting = true;
         room.policy_revision = room.policy_revision.wrapping_add(1);
@@ -8257,12 +8289,12 @@ mod security_tests {
     fn only_the_owning_delete_task_releases_a_room_reservation() {
         let deleting = StdRwLock::new(HashMap::new());
         let owner = uuid::Uuid::new_v4();
-        deleting.write().unwrap().insert("room".to_string(), owner);
+        deleting.write().unwrap().insert(rid("room"), owner);
 
-        release_deletion_reservation(&deleting, "room", uuid::Uuid::new_v4());
+        release_deletion_reservation(&deleting, &rid("room"), uuid::Uuid::new_v4());
         assert_eq!(deleting.read().unwrap().get("room"), Some(&owner));
 
-        release_deletion_reservation(&deleting, "room", owner);
+        release_deletion_reservation(&deleting, &rid("room"), owner);
         assert!(!deleting.read().unwrap().contains_key("room"));
     }
 
@@ -8270,12 +8302,12 @@ mod security_tests {
     fn failed_router_teardown_retains_the_room_reservation() {
         let deleting = StdRwLock::new(HashMap::new());
         let owner = uuid::Uuid::new_v4();
-        deleting.write().unwrap().insert("room".to_string(), owner);
+        deleting.write().unwrap().insert(rid("room"), owner);
 
-        release_deletion_reservation_after_router_teardown(&deleting, "room", owner, false);
+        release_deletion_reservation_after_router_teardown(&deleting, &rid("room"), owner, false);
         assert_eq!(deleting.read().unwrap().get("room"), Some(&owner));
 
-        release_deletion_reservation_after_router_teardown(&deleting, "room", owner, true);
+        release_deletion_reservation_after_router_teardown(&deleting, &rid("room"), owner, true);
         assert!(!deleting.read().unwrap().contains_key("room"));
     }
 
@@ -8284,7 +8316,7 @@ mod security_tests {
         let (old_sender, _old_receiver) = mpsc::channel(1);
         let (new_sender, _new_receiver) = mpsc::channel(1);
         let media_session_id = uuid::Uuid::new_v4();
-        let mut room = Room::new("room".to_string(), None, false, None);
+        let mut room = Room::new(rid("room"), None, false, None);
         let mut member = participant(
             "member",
             roles::Role::User,
@@ -8293,19 +8325,19 @@ mod security_tests {
         );
         member.sender = old_sender.clone();
         member.media_session_id = media_session_id;
-        room.participants.insert("member".to_string(), member);
+        room.participants.insert(pid("member"), member);
 
-        assert!(RoomManager::participant_for_sender(&room, "member", &old_sender).is_ok());
-        assert!(RoomManager::participant_for_sender(&room, "member", &new_sender).is_err());
+        assert!(RoomManager::participant_for_sender(&room, &pid("member"), &old_sender).is_ok());
+        assert!(RoomManager::participant_for_sender(&room, &pid("member"), &new_sender).is_err());
         assert!(RoomManager::participant_session_is_current(
             &room,
-            "member",
+            &pid("member"),
             &old_sender,
             media_session_id,
         ));
         assert!(!RoomManager::participant_session_is_current(
             &room,
-            "member",
+            &pid("member"),
             &old_sender,
             uuid::Uuid::new_v4(),
         ));
@@ -8313,21 +8345,21 @@ mod security_tests {
 
     #[test]
     fn media_namespaces_do_not_alias_same_uuid_rejoins() {
-        let participant_id = uuid::Uuid::new_v4().to_string();
+        let participant_id = ParticipantId::random();
         let first =
-            RoomManager::media_participant_id("room", &participant_id, uuid::Uuid::new_v4());
+            RoomManager::media_participant_id(&rid("room"), &participant_id, uuid::Uuid::new_v4());
         let second =
-            RoomManager::media_participant_id("room", &participant_id, uuid::Uuid::new_v4());
+            RoomManager::media_participant_id(&rid("room"), &participant_id, uuid::Uuid::new_v4());
         assert_ne!(first, second);
     }
 
     #[test]
     fn lobby_admission_preserves_resolved_role_and_sanctions() {
-        let participant_id = uuid::Uuid::new_v4().to_string();
+        let participant_id = ParticipantId::random();
         let (sender, _receiver) = mpsc::channel(4);
-        let mut room = Room::new("room".to_string(), None, false, None);
+        let mut room = Room::new(rid("room"), None, false, None);
         room.sanctions.insert(
-            SanctionKey::User(participant_id.clone()),
+            SanctionKey::User(participant_id.to_string()),
             moderation::PunitiveState {
                 cam_banned: true,
                 text_muted: false,
@@ -8356,9 +8388,9 @@ mod security_tests {
 
     #[test]
     fn restrictive_policy_removes_existing_unauthorized_producers() {
-        let mut settings = RoomManager::default_room_settings("room");
+        let mut settings = RoomManager::default_room_settings(&rid("room"));
         settings.guests_can_broadcast = false;
-        let mut room = Room::new("room".to_string(), Some(settings), false, None);
+        let mut room = Room::new(rid("room"), Some(settings), false, None);
         let mut guest = participant(
             "guest",
             roles::Role::Guest,
@@ -8370,20 +8402,20 @@ mod security_tests {
             (MediaKind::Audio, Some("microphone".to_string())),
         );
         room.producer_to_participant
-            .insert("microphone".to_string(), "guest".to_string());
-        room.participants.insert("guest".to_string(), guest);
+            .insert("microphone".to_string(), pid("guest"));
+        room.participants.insert(pid("guest"), guest);
 
         let revoked = RoomManager::revoke_unauthorized_producers(&mut room, None, "policy changed");
         assert_eq!(revoked.len(), 1);
-        assert!(room.participants["guest"].producers.is_empty());
+        assert!(room.participants[&pid("guest")].producers.is_empty());
         assert!(!room.producer_to_participant.contains_key("microphone"));
     }
 
     #[test]
     fn moderated_role_demotion_removes_existing_producers() {
-        let mut settings = RoomManager::default_room_settings("room");
+        let mut settings = RoomManager::default_room_settings(&rid("room"));
         settings.moderated = true;
-        let mut room = Room::new("room".to_string(), Some(settings), false, None);
+        let mut room = Room::new(rid("room"), Some(settings), false, None);
         let mut member = participant(
             "member",
             roles::Role::User,
@@ -8394,12 +8426,15 @@ mod security_tests {
             "camera".to_string(),
             (MediaKind::Video, Some("camera".to_string())),
         );
-        room.participants.insert("member".to_string(), member);
+        room.participants.insert(pid("member"), member);
 
-        let revoked =
-            RoomManager::revoke_unauthorized_producers(&mut room, Some("member"), "role changed");
+        let revoked = RoomManager::revoke_unauthorized_producers(
+            &mut room,
+            Some(&pid("member")),
+            "role changed",
+        );
         assert_eq!(revoked.len(), 1);
-        assert!(room.participants["member"].producers.is_empty());
+        assert!(room.participants[&pid("member")].producers.is_empty());
     }
 
     #[test]
@@ -8416,7 +8451,7 @@ mod security_tests {
 
         let (sender, _receiver) = mpsc::channel(1);
         let participant = Participant {
-            id: uuid::Uuid::new_v4().to_string(),
+            id: ParticipantId::random(),
             social: social::ParticipantSocial::new(0),
             name: "test".to_string(),
             sender,
@@ -8431,7 +8466,7 @@ mod security_tests {
             ip: None,
             chat_style: Default::default(),
         };
-        let room = Room::new("room".to_string(), None, false, None);
+        let room = Room::new(rid("room"), None, false, None);
         assert!(!RoomManager::participant_can_produce(
             &room,
             &participant,
@@ -8450,7 +8485,7 @@ mod security_tests {
     fn guest_broadcast_and_chat_settings_are_enforceable() {
         let (sender, _receiver) = mpsc::channel(1);
         let participant = Participant {
-            id: uuid::Uuid::new_v4().to_string(),
+            id: ParticipantId::random(),
             social: social::ParticipantSocial::new(0),
             name: "guest".to_string(),
             sender,
@@ -8462,10 +8497,10 @@ mod security_tests {
             ip: None,
             chat_style: Default::default(),
         };
-        let mut settings = RoomManager::default_room_settings("room");
+        let mut settings = RoomManager::default_room_settings(&rid("room"));
         settings.guests_can_broadcast = false;
         settings.allow_chat = false;
-        let room = Room::new("room".to_string(), Some(settings), false, None);
+        let room = Room::new(rid("room"), Some(settings), false, None);
         assert!(!RoomManager::participant_can_produce(
             &room,
             &participant,
@@ -8479,14 +8514,15 @@ mod security_tests {
 #[cfg(test)]
 mod broadcaster_ceiling_tests {
     use super::*;
+    use crate::ids::fixtures::rid;
 
     #[test]
     fn the_deployment_ceiling_applies_beneath_a_rooms_own_broadcaster_limit() {
-        let mut room = Room::new("ceiling".into(), None, false, None);
+        let mut room = Room::new(rid("ceiling"), None, false, None);
         assert_eq!(RoomManager::broadcaster_limit(&room), None);
         room.broadcaster_ceiling = Some(30);
         assert_eq!(RoomManager::broadcaster_limit(&room), Some(30));
-        let mut settings = RoomManager::default_room_settings("ceiling");
+        let mut settings = RoomManager::default_room_settings(&rid("ceiling"));
         settings.max_broadcasters = Some(8);
         room.settings = Some(settings);
         assert_eq!(RoomManager::broadcaster_limit(&room), Some(8));

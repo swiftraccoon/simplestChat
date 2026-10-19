@@ -3,6 +3,7 @@
 use super::{RoomManager, control, settings};
 use crate::auth::account::{validate_image_data_url, validate_text};
 use crate::auth::types::AuthError;
+use crate::ids::RoomId;
 use crate::signaling::protocol::{ChatStyle, ServerMessage, deserialize_appearance_style};
 use serde::Deserialize;
 use std::time::Duration;
@@ -63,7 +64,7 @@ impl RoomIdentityUpdate {
 impl RoomManager {
     /// Broadcaster count for a room, or `None` when it is not live or its
     /// state lock is busy; see `participant_count_for_room`.
-    pub(crate) fn broadcaster_count_for_room(&self, room_id: &str) -> Option<usize> {
+    pub(crate) fn broadcaster_count_for_room(&self, room_id: &RoomId) -> Option<usize> {
         let rooms = self.rooms.read().unwrap_or_else(|error| error.into_inner());
         rooms
             .get(room_id)
@@ -72,7 +73,7 @@ impl RoomManager {
 
     pub(crate) async fn update_room_identity(
         &self,
-        room_id: &str,
+        room_id: &RoomId,
         owner_id: Uuid,
         identity: RoomIdentityUpdate,
     ) -> Result<bool, sqlx::Error> {
@@ -224,7 +225,7 @@ impl RoomManager {
                         .entry(room_id.clone())
                         .or_insert_with(Uuid::new_v4);
                     tracing::warn!(
-                        room_id,
+                        %room_id,
                         "Room identity persistence outcome uncertain; retaining room-ID reservation until restart"
                     );
                 }

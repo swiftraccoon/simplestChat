@@ -2,6 +2,7 @@
 
 use super::heartbeat_tests::Fixture;
 use super::*;
+use crate::ids::fixtures::pid;
 use serde_json::{Value, json};
 
 #[tokio::test]
@@ -319,7 +320,7 @@ async fn correlated_reconnect_replies_cover_unbound_and_already_joined_sockets()
     let rejected = fixture
         .request(
             json!({
-                "type": "reconnect", "requestId": "unbound-reconnect", "participantId": "missing",
+                "type": "reconnect", "requestId": "unbound-reconnect", "participantId": pid("missing").to_string(),
                 "roomId": "heartbeat-test", "reconnectToken": "missing",
             }),
             "reconnectResult",

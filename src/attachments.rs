@@ -1,5 +1,6 @@
 //! Bounded account uploads. Bytes stay in the existing database/backup boundary;
 //! access follows the live or durable message, never knowledge of a file UUID.
+use crate::ids::{ParticipantId, RoomId};
 use crate::{
     auth::{
         account::authenticated_claims,
@@ -258,8 +259,8 @@ struct Grant {
     aud: String,
     exp: usize,
     attachment_id: Uuid,
-    room_id: String,
-    participant_id: String,
+    room_id: RoomId,
+    participant_id: ParticipantId,
     media_session: Uuid,
     account: Option<Claims>,
 }
@@ -287,8 +288,8 @@ async fn location(pool: &PgPool, id: Uuid) -> Result<AttachmentLocation, AuthErr
 pub(crate) async fn grant_access(
     manager: &crate::room::RoomManager,
     pool: &PgPool,
-    room_id: &str,
-    participant_id: &str,
+    room_id: &RoomId,
+    participant_id: &ParticipantId,
     expected_sender: &mpsc::Sender<crate::OutboundJson>,
     claims: Option<&Claims>,
     attachment_id: Uuid,
@@ -306,7 +307,7 @@ pub(crate) async fn grant_access(
         .await
         .ok_or_else(unavailable)?;
     if authenticated != claims.is_some()
-        || claims.is_some_and(|claims| claims.sub != participant_id)
+        || claims.is_some_and(|claims| claims.sub != participant_id.to_string())
     {
         return Err(unavailable());
     }
@@ -319,8 +320,8 @@ pub(crate) async fn grant_access(
         aud: "attachment".into(),
         exp: expires_at.timestamp() as usize,
         attachment_id,
-        room_id: room_id.into(),
-        participant_id: participant_id.into(),
+        room_id: room_id.clone(),
+        participant_id: *participant_id,
         media_session: session,
         account: claims.cloned(),
     };

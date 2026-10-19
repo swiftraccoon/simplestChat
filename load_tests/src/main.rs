@@ -17,6 +17,7 @@ use std::time::{Duration, Instant};
 use tokio::time::sleep;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
+use simplestchat::ids::RoomId;
 use simplestchat::signaling::protocol::{ClientMessage, ServerMessage, SocialResponse};
 
 mod media_generator;
@@ -1856,7 +1857,8 @@ async fn run_client_inner(
     // Join room (timed)
     let t = Instant::now();
     let join_msg = ClientMessage::JoinRoom {
-        room_id: config.room_id.clone(),
+        room_id: RoomId::new(config.room_id.clone())
+            .map_err(|error| anyhow::anyhow!("Invalid room id: {error}"))?,
         participant_name: config.participant_name.clone(),
         password: None,
         chat_style: None,
@@ -1878,7 +1880,8 @@ async fn run_client_inner(
             if let Some(plan) = &config.planned_subscriptions {
                 // Register before any Produce request: another client's live
                 // notification can arrive before this client's producer ack.
-                plan.owners.register(&participant_id, &client_id)?;
+                plan.owners
+                    .register(&participant_id.to_string(), &client_id)?;
             }
             metrics.record_signaling_latency("join_room", t.elapsed().as_millis() as u64);
             tracing::info!(
@@ -1908,7 +1911,7 @@ async fn run_client_inner(
                 for p in &participants {
                     for producer in &p.producers {
                         existing_producer_events.push(ServerMessage::NewProducer {
-                            participant_id: p.id.clone(),
+                            participant_id: p.id,
                             producer_id: producer.id.clone(),
                             kind: producer.kind,
                             source: producer.source.clone(),
@@ -1940,7 +1943,7 @@ async fn run_client_inner(
 
     if let Some(session) = &account {
         anyhow::ensure!(
-            _participant_id == session.account_id(),
+            _participant_id.to_string() == session.account_id(),
             "Authenticated room identity changed"
         );
     }
@@ -4072,7 +4075,8 @@ mod chat_and_continuous_audio_tests {
             let start = Instant::now() + Duration::from_millis(10);
             let load = chat_load::ChatLoad::new(1, 1, 1_000, start, start + Duration::from_secs(3));
             let chat = load.client(0);
-            chat.register("owned-participant")?;
+            let owned_participant = simplestchat::ids::ParticipantId::random();
+            chat.register(&owned_participant)?;
             let metrics = Arc::new(MetricsCollector::new("chat-socket".into()));
             let session = Arc::new(Mutex::new(WebRtcSession::new(
                 "chat-socket".into(),
@@ -4114,9 +4118,9 @@ mod chat_and_continuous_audio_tests {
                 client_message_id: id.clone(),
                 message: ChatEntry {
                     attachments: Vec::new(),
-                    message_id: "server-owned-message".into(),
+                    message_id: simplestchat::ids::MessageId::random(),
                     client_message_id: id,
-                    participant_id: "owned-participant".into(),
+                    participant_id: owned_participant,
                     participant_name: "TestUser0".into(),
                     recipient_id: None,
                     recipient_name: None,
@@ -4166,11 +4170,11 @@ async fn handle_server_message(
             ..
         } => {
             if let Some(grid) = grid {
-                grid.announce(&producer_id, &participant_id);
+                grid.announce(&producer_id, &participant_id.to_string());
             }
             let retired = metrics.producer_retired(&producer_id);
             if let Err(error) =
-                subscriptions.discover_from(&participant_id, producer_id, kind, retired)
+                subscriptions.discover_from(&participant_id.to_string(), producer_id, kind, retired)
             {
                 metrics.record_error(format!("Producer discovery failed: {error}"));
             }
@@ -5068,7 +5072,7 @@ mod incremental_receive_tests {
                 4,
                 4,
                 vec![ServerMessage::NewProducer {
-                    participant_id: "batch-publisher".into(),
+                    participant_id: simplestchat::ids::ParticipantId::random(),
                     producer_id: "batch-producer".into(),
                     kind: MediaKind::Audio,
                     source: None,
@@ -5238,7 +5242,7 @@ mod subscription_loop_tests {
 
     fn producer(id: &str, kind: MediaKind) -> ServerMessage {
         ServerMessage::NewProducer {
-            participant_id: "scripted-publisher".into(),
+            participant_id: simplestchat::ids::ParticipantId::random(),
             producer_id: id.into(),
             kind,
             source: None,

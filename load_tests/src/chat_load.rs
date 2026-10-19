@@ -2,6 +2,7 @@
 // One lock per room, no work on the RTP path, and a bounded delivery inventory.
 use anyhow::{Context, Result};
 use serde::Serialize;
+use simplestchat::ids::{MessageId, ParticipantId};
 use simplestchat::signaling::protocol::{ClientMessage, ServerMessage};
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -25,7 +26,7 @@ pub struct ChatLoad {
 
 #[derive(Debug, Default)]
 struct Room {
-    participants: HashMap<usize, String>,
+    participants: HashMap<usize, ParticipantId>,
     messages: HashMap<String, Sent>,
 }
 
@@ -34,7 +35,7 @@ struct Sent {
     sender: usize,
     content: String,
     at: Instant,
-    message_id: Option<String>,
+    message_id: Option<MessageId>,
     acknowledged: bool,
     received: HashSet<usize>,
 }
@@ -163,8 +164,8 @@ impl ChatLoad {
                     (&sent.message_id, room.participants.get(&sent.sender))
                 {
                     inventory.push(ChatInventoryEntry {
-                        message_id: message_id.clone(),
-                        sender_account_id: sender.clone(),
+                        message_id: message_id.to_string(),
+                        sender_account_id: sender.to_string(),
                         client_message_id: client_message_id.clone(),
                         content_sha256: hex::encode(sha2::Sha256::digest(sent.content.as_bytes())),
                     });
@@ -262,7 +263,7 @@ impl ChatLoad {
 }
 
 impl ChatClient {
-    pub fn register(&self, participant_id: &str) -> Result<()> {
+    pub fn register(&self, participant_id: &ParticipantId) -> Result<()> {
         let mut room = self.load.rooms[self.index % self.load.rooms.len()]
             .lock()
             .unwrap();
@@ -270,8 +271,7 @@ impl ChatClient {
             !room.participants.contains_key(&self.index),
             "Chat participant registered more than once"
         );
-        room.participants
-            .insert(self.index, participant_id.to_owned());
+        room.participants.insert(self.index, *participant_id);
         Ok(())
     }
 
@@ -358,7 +358,7 @@ impl ChatClient {
         );
         let sent = room.messages.get_mut(id).unwrap();
         anyhow::ensure!(
-            &sent.content == content && !server_id.is_empty(),
+            &sent.content == content,
             "Chat content or server identity changed"
         );
         if let Some(expected) = &sent.message_id {
@@ -384,7 +384,7 @@ impl ChatClient {
                 "Duplicate or self chat fanout"
             );
         }
-        sent.message_id = Some(server_id.clone());
+        sent.message_id = Some(*server_id);
         Ok(Some((
             if acknowledgement {
                 "chat_ack"
@@ -478,7 +478,9 @@ mod tests {
         );
         for index in 0..clients {
             load.client(index)
-                .register(&format!("participant-{index}"))
+                .register(&ParticipantId::from(uuid::Uuid::from_u128(
+                    u128::from(index as u64) + 1,
+                )))
                 .unwrap();
         }
         load
@@ -497,9 +499,13 @@ mod tests {
         assert_eq!(content.len(), CONTENT_BYTES);
         let entry = ChatEntry {
             attachments: Vec::new(),
-            message_id: format!("server-{index}-{sequence}"),
+            message_id: MessageId::from(uuid::Uuid::from_u128(
+                (u128::from(index as u64) << 64) | u128::from(sequence),
+            )),
             client_message_id: id.clone(),
-            participant_id: format!("participant-{index}"),
+            participant_id: ParticipantId::from(uuid::Uuid::from_u128(
+                u128::from(index as u64) + 1,
+            )),
             participant_name: format!("TestUser{index}"),
             recipient_id: None,
             recipient_name: None,
@@ -612,7 +618,7 @@ mod tests {
     fn retained_inventory_binds_confirmed_identities_and_hashes_without_exporting_text() {
         let start = Instant::now();
         let load = ChatLoad::new(4, 2, 3_000, start, start + Duration::from_secs(5));
-        let accounts: Vec<_> = (0..4).map(|_| uuid::Uuid::new_v4().to_string()).collect();
+        let accounts: Vec<_> = (0..4).map(|_| ParticipantId::random()).collect();
         for (index, account) in accounts.iter().enumerate() {
             load.client(index).register(account).unwrap();
         }
@@ -620,17 +626,17 @@ mod tests {
         for (index, server_id, digest) in [
             (
                 0,
-                "server-z",
+                MessageId::random(),
                 "5eb9e86ba36bad1743060972cf8b544d10a8c7e7323af16528d65945fe95d606",
             ),
             (
                 1,
-                "server-a",
+                MessageId::random(),
                 "73f7bb5fa469af4ebae57428c87b20e947566c5c1360b2558b8654eb0b8a93b2",
             ),
             (
                 2,
-                "server-m",
+                MessageId::random(),
                 "604b8f010df73f031c8786b3069361e3c65d8b1a7db08580edc5ff3b64fe136d",
             ),
         ] {
@@ -645,11 +651,11 @@ mod tests {
             else {
                 panic!("Expected an acknowledgement");
             };
-            message.message_id = server_id.to_owned();
-            message.participant_id.clone_from(&accounts[index]);
+            message.message_id = server_id;
+            message.participant_id = accounts[index];
             expected.push(serde_json::json!({
-                "messageId": server_id,
-                "senderAccountId": accounts[index],
+                "messageId": server_id.to_string(),
+                "senderAccountId": accounts[index].to_string(),
                 "clientMessageId": client_message_id,
                 "contentSha256": digest,
             }));
@@ -661,8 +667,8 @@ mod tests {
             else {
                 panic!("Expected a peer delivery");
             };
-            *message_id = server_id.to_owned();
-            participant_id.clone_from(&accounts[index]);
+            *message_id = server_id;
+            *participant_id = accounts[index];
             let peer = load.client((index + 2) % 4);
             if index == 1 {
                 peer.observe(&fanout, now).unwrap();
@@ -748,7 +754,7 @@ mod tests {
         assert!(load.client(1).observe(&event, now).is_err());
         let mut changed = event.clone();
         if let ServerMessage::ChatReceived { message_id, .. } = &mut changed {
-            *message_id = "different".into();
+            *message_id = MessageId::random();
         }
         assert!(load.client(2).observe(&changed, now).is_err());
         assert!(

@@ -2,6 +2,7 @@
 //! Client delivery is checked separately because chat replies contain messages.
 
 use super::*;
+use crate::ids::fixtures::rid;
 use crate::security_canary_tests::{Capture, SensitiveValues};
 use tracing::instrument::WithSubscriber;
 
@@ -14,7 +15,7 @@ async fn runtime_canary_dispatch_keeps_messages_and_credentials_out_of_observati
     let metrics = ServerMetrics::with_diagnostics(diagnostics.clone());
     let manager = Arc::new(RoomManager::new_for_connection_tests(metrics.clone()).await);
     let (sender, mut receiver) = mpsc::channel(128);
-    let participant = Uuid::new_v4().to_string();
+    let participant = ParticipantId::random();
     let nonce = Uuid::new_v4().simple().to_string();
     let display_name = format!("DisplayCanary-{nonce}");
     let password = format!("RoomPasswordCanary-{nonce}");
@@ -48,7 +49,11 @@ async fn runtime_canary_dispatch_keeps_messages_and_credentials_out_of_observati
         for (index, body) in messages.into_iter().enumerate() {
             if index == 2 {
                 manager
-                    .remove_participant_for_sender("canary-observation-room", &participant, &sender)
+                    .remove_participant_for_sender(
+                        &rid("canary-observation-room"),
+                        &participant,
+                        &sender,
+                    )
                     .await
                     .unwrap();
             }
@@ -80,10 +85,17 @@ async fn runtime_canary_dispatch_keeps_messages_and_credentials_out_of_observati
             assert_eq!(result.is_ok(), index != 2, "fixed dispatcher outcome");
             if index == 0 {
                 secrets.add("issued reconnect credential", &reconnect);
-                assert_eq!(room.as_deref(), Some("canary-observation-room"));
+                assert_eq!(
+                    room.as_ref().map(RoomId::as_str),
+                    Some("canary-observation-room")
+                );
                 assert!(
                     manager
-                        .is_bound_participant("canary-observation-room", &participant, &sender)
+                        .is_bound_participant(
+                            &rid("canary-observation-room"),
+                            &participant,
+                            &sender
+                        )
                         .await
                 );
                 while receiver.try_recv().is_ok() {}
