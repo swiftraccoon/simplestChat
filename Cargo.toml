@@ -1,5 +1,9 @@
 [workspace]
 members = ["load_tests", "xtask"]
+# Nothing built or unpacked under these directories is a member: the native
+# toolchain helpers build `bindgen-cli` under `target/`, and the vendored crates
+# are path dependencies with their own manifests.
+exclude = ["target", "vendor"]
 
 [workspace.package]
 version = "0.1.0"
