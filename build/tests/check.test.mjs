@@ -187,6 +187,7 @@ test('Rust quality group pins tools, native inputs and warning-denying Clippy/do
     ['run', '9.88.7', 'cargo', 'fmt', '--all', '--', '--check'],
     ['run', '9.88.7', 'cargo', 'clippy', '--locked', '--workspace', '--all-targets', '--no-deps', '--', '-D', 'warnings'],
     ['run', '9.88.7', 'cargo', 'run', '--locked', '-q', '-p', 'xtask', '--', 'line-length'],
+    ['run', '9.88.7', 'cargo', 'run', '--locked', '-q', '-p', 'xtask', '--', 'protocol-ts', '--check'],
     ['run', '9.88.7', 'cargo', 'doc', '--locked', '--workspace', '--no-deps', '--document-private-items'],
   ]);
   assert.ok(result.events.every(event => event.command === 'rustup' && event.cwd === setup.root));
@@ -266,7 +267,7 @@ test('default quality check runs web, Rust, Python and helper groups in order', 
   const result = await setup.run();
   assert.equal(result.status, 0, result.output);
   assert.deepEqual(result.events.map(event => event.command), [
-    'npm', 'npm', 'npm', 'npm', 'rustup', 'rustup', 'rustup', 'rustup', 'rustup', 'rustup',
+    'npm', 'npm', 'npm', 'npm', 'rustup', 'rustup', 'rustup', 'rustup', 'rustup', 'rustup', 'rustup',
     'python-check', 'sh', 'sh', 'sh', ...setup.helperNames.map(() => 'bash'), 'shellcheck', 'node',
   ]);
 });

@@ -2493,7 +2493,7 @@ async fn handle_client_message(
                         your_role: role,
                         your_name: name,
                         your_chat_style: chat_style,
-                        room_settings,
+                        room_settings: room_settings.map(|settings| *settings),
                     })?;
                     room_manager.note_room_visit(room_id, participant_id, is_authenticated);
                 }

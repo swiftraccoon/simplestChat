@@ -12,6 +12,7 @@ mod privacy;
 mod receive_replacement;
 pub(crate) mod roles;
 pub(crate) mod settings;
+pub use settings::RoomSettings;
 pub(crate) mod social;
 
 #[cfg(test)]
@@ -145,7 +146,8 @@ pub(crate) enum JoinResult {
     Joined {
         participants: Vec<ParticipantInfo>,
         role: roles::Role,
-        room_settings: Option<serde_json::Value>,
+        /// Boxed so the lobby outcome does not pay for the settings it lacks.
+        room_settings: Option<Box<settings::RoomSettings>>,
         /// The joiner's look: the account's saved one, or the guest's.
         chat_style: ChatStyle,
         /// The name the room knows the joiner by: a guest's may carry a number.
@@ -3019,10 +3021,7 @@ impl RoomManager {
                 .collect();
 
             // Serialize room settings for the joining client
-            let room_settings = room
-                .settings
-                .as_ref()
-                .and_then(|s| serde_json::to_value(s).ok());
+            let room_settings = room.settings.clone().map(Box::new);
 
             Ok(JoinResult::Joined {
                 participants,
@@ -4192,32 +4191,6 @@ impl RoomManager {
 
     // === Room settings methods ===
 
-    fn default_room_settings(room_id: &RoomId) -> settings::RoomSettings {
-        settings::RoomSettings {
-            id: room_id.to_string(),
-            owner_id: uuid::Uuid::nil(),
-            display_name: room_id.to_string(),
-            name_style: ChatStyle::default(),
-            topic_style: ChatStyle::default(),
-            history_retention_days: 0,
-            password_protected: false,
-            require_registration: false,
-            max_participants: None,
-            max_broadcasters: None,
-            allow_screen_sharing: true,
-            allow_chat: true,
-            allow_video: true,
-            moderated: false,
-            invite_only: false,
-            secret: false,
-            lobby_enabled: false,
-            push_to_talk: false,
-            guests_allowed: true,
-            guests_can_broadcast: true,
-            topic: None,
-        }
-    }
-
     fn validate_capacity(label: &str, value: Option<Option<i32>>, maximum: i32) -> Result<()> {
         if let Some(Some(value)) = value
             && !(1..=maximum).contains(&value)
@@ -4386,7 +4359,7 @@ impl RoomManager {
         let current = room
             .settings
             .clone()
-            .unwrap_or_else(|| Self::default_room_settings(room_id));
+            .unwrap_or_else(|| settings::RoomSettings::defaults(room_id));
         let password_changed = match password.as_ref() {
             Some(Some(_)) => true,
             Some(None) => room.password_hash.is_some() || current.password_protected,
@@ -4422,8 +4395,6 @@ impl RoomManager {
         if !admin_mutation_reserved && !room.reserve_admin_mutation(std::time::Instant::now()) {
             anyhow::bail!("Room administration changes are rate limited");
         }
-        let settings_value = serde_json::to_value(&updated)
-            .map_err(|_| anyhow::anyhow!("Room settings could not be serialized"))?;
 
         // For DB-backed rooms persistence is the commit point. Do not advertise
         // or enforce a setting that failed to persist.
@@ -4468,7 +4439,7 @@ impl RoomManager {
         if let Some(hash) = password_hash {
             room.password_hash = hash;
         }
-        room.settings = Some(updated);
+        room.settings = Some(updated.clone());
         room.policy_revision = room.policy_revision.wrapping_add(1);
         let revoked = Self::revoke_unauthorized_producers(
             &mut room,
@@ -4477,9 +4448,7 @@ impl RoomManager {
         );
         let active_observer = room.active_speaker_observer.clone();
         let audio_observer = room.audio_level_observer.clone();
-        room.broadcast_all(&ServerMessage::RoomSettingsChanged {
-            settings: settings_value,
-        });
+        room.broadcast_all(&ServerMessage::RoomSettingsChanged { settings: updated });
         drop(room);
         control.release();
 
@@ -4568,7 +4537,7 @@ impl RoomManager {
         let mut room = room_lock.write().await;
         room.ensure_live()?;
         room.settings
-            .get_or_insert_with(|| Self::default_room_settings(room_id))
+            .get_or_insert_with(|| settings::RoomSettings::defaults(room_id))
             .topic = Some(topic.clone());
         room.broadcast_all(&ServerMessage::TopicChanged {
             topic: topic.clone(),
@@ -5852,10 +5821,7 @@ impl RoomManager {
         } else {
             entry.reconnect_token.clone()
         };
-        let room_settings = room
-            .settings
-            .as_ref()
-            .and_then(|s| serde_json::to_value(s).ok());
+        let room_settings = room.settings.clone();
         if let Ok(json) = serde_json::to_string(&ServerMessage::RoomJoined {
             participant_id: entry.participant_id,
             participants,
@@ -6873,7 +6839,7 @@ mod security_tests {
         manager.max_participants_per_room = Some(2);
         let (owner_tx, _owner_rx) = join_guest(&manager, "capped-lobby", "owner").await;
         let room = manager.get_room(&rid("capped-lobby")).unwrap();
-        let mut settings = RoomManager::default_room_settings(&rid("capped-lobby"));
+        let mut settings = settings::RoomSettings::defaults(&rid("capped-lobby"));
         settings.lobby_enabled = true;
         room.write().await.settings = Some(settings);
         // Both wait while the room still has space; the first admission fills it.
@@ -7277,7 +7243,7 @@ mod security_tests {
         for id in ["owner", "member", "waiting", "other-waiting"] {
             if id == "waiting" {
                 let room = manager.get_room(&rid("lobby-status")).unwrap();
-                let mut settings = RoomManager::default_room_settings(&rid("lobby-status"));
+                let mut settings = settings::RoomSettings::defaults(&rid("lobby-status"));
                 settings.lobby_enabled = true;
                 room.write().await.settings = Some(settings);
             }
@@ -7460,7 +7426,7 @@ mod security_tests {
             .unwrap();
         assert!(matches!(owner_join, JoinResult::Joined { .. }));
         let room = manager.get_room(&rid("drain-test")).unwrap();
-        let mut settings = RoomManager::default_room_settings(&rid("drain-test"));
+        let mut settings = settings::RoomSettings::defaults(&rid("drain-test"));
         settings.lobby_enabled = true;
         room.write().await.settings = Some(settings);
         let (waiting_tx, _waiting_rx) = mpsc::channel(16);
@@ -8388,7 +8354,7 @@ mod security_tests {
 
     #[test]
     fn restrictive_policy_removes_existing_unauthorized_producers() {
-        let mut settings = RoomManager::default_room_settings(&rid("room"));
+        let mut settings = settings::RoomSettings::defaults(&rid("room"));
         settings.guests_can_broadcast = false;
         let mut room = Room::new(rid("room"), Some(settings), false, None);
         let mut guest = participant(
@@ -8413,7 +8379,7 @@ mod security_tests {
 
     #[test]
     fn moderated_role_demotion_removes_existing_producers() {
-        let mut settings = RoomManager::default_room_settings(&rid("room"));
+        let mut settings = settings::RoomSettings::defaults(&rid("room"));
         settings.moderated = true;
         let mut room = Room::new(rid("room"), Some(settings), false, None);
         let mut member = participant(
@@ -8497,7 +8463,7 @@ mod security_tests {
             ip: None,
             chat_style: Default::default(),
         };
-        let mut settings = RoomManager::default_room_settings(&rid("room"));
+        let mut settings = settings::RoomSettings::defaults(&rid("room"));
         settings.guests_can_broadcast = false;
         settings.allow_chat = false;
         let room = Room::new(rid("room"), Some(settings), false, None);
@@ -8522,7 +8488,7 @@ mod broadcaster_ceiling_tests {
         assert_eq!(RoomManager::broadcaster_limit(&room), None);
         room.broadcaster_ceiling = Some(30);
         assert_eq!(RoomManager::broadcaster_limit(&room), Some(30));
-        let mut settings = RoomManager::default_room_settings(&rid("ceiling"));
+        let mut settings = settings::RoomSettings::defaults(&rid("ceiling"));
         settings.max_broadcasters = Some(8);
         room.settings = Some(settings);
         assert_eq!(RoomManager::broadcaster_limit(&room), Some(8));

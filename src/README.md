@@ -24,7 +24,7 @@ HTTP / WebSocket
 | Admission drain and bounded shutdown | `shutdown.rs`, `app.rs` |
 | Routes, origin/limits, WebSocket lifecycle | `signaling/mod.rs`, `signaling/connection.rs` |
 | Dependency readiness | `signaling/readiness.rs`, `media/worker_manager.rs` |
-| Wire contract | `signaling/protocol.rs` and [web/src/protocol.ts](../web/src/protocol.ts) |
+| Wire contract | `signaling/protocol.rs`; `cargo run -q -p xtask -- protocol-ts` generates [web/src/protocol.generated.ts](../web/src/protocol.generated.ts) from it |
 | Password/passkey auth and JWT validation | `auth/routes.rs`, `auth/password.rs`, `auth/webauthn.rs`, `auth/jwt.rs`, `auth/limiter.rs` (sign-in failure delays, registration window) |
 | Profiles, recovery and refresh sessions | `auth/account.rs`, `auth/session.rs` |
 | Atomic account privacy and fresh runtime publication | `auth/account.rs`, `room/privacy.rs` |
@@ -303,8 +303,9 @@ cargo test --locked --workspace -- --test-threads=1
 ```
 
 The quality check runs formatting, workspace Clippy with warnings rejected, the
-over-length line ratchet (`cargo run -q -p xtask -- line-length`) and public/private
-Rustdoc with warnings denied. It selects the pinned
+over-length line ratchet (`cargo run -q -p xtask -- line-length`), the generated
+TypeScript contract check (`cargo run -q -p xtask -- protocol-ts --check`) and
+public/private Rustdoc with warnings denied. It selects the pinned
 toolchain and static native environment for its own process; separate Cargo commands still
 need the development shell setup. First-party compiler warnings and unfulfilled
 lint expectations fail the build, and `unsafe` remains forbidden. See

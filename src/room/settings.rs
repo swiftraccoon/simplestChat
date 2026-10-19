@@ -10,11 +10,17 @@ use uuid::Uuid;
 #[serde(rename_all = "camelCase")]
 pub struct RoomSettings {
     pub id: String,
+    /// Never written to the wire: participants learn the owner by role, not by
+    /// account id. Read when present, because the administration path rebuilds
+    /// the settings from a JSON row that carries it.
+    #[serde(skip_serializing, default)]
     pub owner_id: Uuid,
     pub display_name: String,
     pub password_protected: bool,
     pub require_registration: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub max_participants: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub max_broadcasters: Option<i32>,
     pub allow_screen_sharing: bool,
     pub allow_chat: bool,
@@ -26,10 +32,40 @@ pub struct RoomSettings {
     pub push_to_talk: bool,
     pub guests_allowed: bool,
     pub guests_can_broadcast: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub topic: Option<String>,
     pub name_style: ChatStyle,
     pub topic_style: ChatStyle,
     pub history_retention_days: i32,
+}
+
+impl RoomSettings {
+    /// The settings of a room that has none stored: open, unmoderated and unowned.
+    pub fn defaults(room_id: &RoomId) -> Self {
+        Self {
+            id: room_id.to_string(),
+            owner_id: Uuid::nil(),
+            display_name: room_id.to_string(),
+            name_style: ChatStyle::default(),
+            topic_style: ChatStyle::default(),
+            history_retention_days: 0,
+            password_protected: false,
+            require_registration: false,
+            max_participants: None,
+            max_broadcasters: None,
+            allow_screen_sharing: true,
+            allow_chat: true,
+            allow_video: true,
+            moderated: false,
+            invite_only: false,
+            secret: false,
+            lobby_enabled: false,
+            push_to_talk: false,
+            guests_allowed: true,
+            guests_can_broadcast: true,
+            topic: None,
+        }
+    }
 }
 
 #[derive(FromRow)]
@@ -548,7 +584,6 @@ mod tests {
             "passwordProtected",
             "requireRegistration",
             "maxParticipants",
-            "maxBroadcasters",
             "allowScreenSharing",
             "allowChat",
             "allowVideo",
@@ -564,6 +599,9 @@ mod tests {
             !obj.contains_key("lobby_enabled"),
             "snake_case key leaked into wire format"
         );
+        // An absent ceiling or topic is omitted, never null: the client reads `?:` fields.
+        assert!(!obj.contains_key("maxBroadcasters"));
+        assert_eq!(obj["topic"], "hello");
     }
 
     #[test]
@@ -624,5 +662,21 @@ mod tests {
         assert!(!is_persisted_room_quota_error(&global_error));
         assert!(!is_persisted_room_quota_error(&sqlx::Error::PoolClosed));
         assert_eq!(MAX_PERSISTED_ROOMS_PER_OWNER, 100);
+    }
+
+    /// The owner id leaves with no payload but survives a JSON round-trip that carries it,
+    /// which is how the administration transaction loads the row it patches.
+    #[test]
+    fn owner_id_is_read_but_never_written() {
+        let owner = Uuid::new_v4();
+        let mut settings = RoomSettings::defaults(&"owned".parse().unwrap());
+        settings.owner_id = owner;
+        let mut value = serde_json::to_value(&settings).unwrap();
+        assert!(value.get("ownerId").is_none());
+        let anonymous: RoomSettings = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(anonymous.owner_id, Uuid::nil());
+        value["ownerId"] = serde_json::json!(owner);
+        let loaded: RoomSettings = serde_json::from_value(value).unwrap();
+        assert_eq!(loaded.owner_id, owner);
     }
 }

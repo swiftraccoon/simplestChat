@@ -72,6 +72,7 @@ if [ "$check_group" = all ] || [ "$check_group" = rust ]; then
     rustup run "$toolchain" cargo fmt --all -- --check
     rustup run "$toolchain" cargo clippy --locked --workspace --all-targets --no-deps -- -D warnings
     rustup run "$toolchain" cargo run --locked -q -p xtask -- line-length
+    rustup run "$toolchain" cargo run --locked -q -p xtask -- protocol-ts --check
     RUSTDOCFLAGS="${RUSTDOCFLAGS:-} -D warnings"
     export RUSTDOCFLAGS
     rustup run "$toolchain" cargo doc --locked --workspace --no-deps --document-private-items

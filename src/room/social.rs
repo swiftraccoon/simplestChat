@@ -3,8 +3,8 @@
 use super::*;
 use crate::ids::{MessageId, ParticipantId, RoomId, UserId};
 use crate::room::moderation::{
-    Actor, MAX_MODERATION_EVENTS, ModerationAction, ModerationEvent, ModerationTargetId, Target,
-    record_event,
+    Actor, MAX_MODERATION_EVENTS, ModerationAction, ModerationEvent, ModerationTargetId,
+    ReportStatus, Target, record_event,
 };
 use crate::signaling::protocol::{
     BanEntry, ChatEntry, ChatReaction, ChatReplyRef, ChatRetryOutcome, ChatRetryReason, ChatStyle,
@@ -48,7 +48,7 @@ type ReportRow = (
     ParticipantId,
     String,
     String,
-    String,
+    ReportStatus,
     chrono::DateTime<chrono::Utc>,
     Option<chrono::DateTime<chrono::Utc>>,
     Option<String>,
@@ -939,7 +939,7 @@ mod tests {
             .unwrap()
             .punitive
             .text_muted = false;
-        let mut settings = RoomManager::default_room_settings(&rid("social"));
+        let mut settings = crate::room::RoomSettings::defaults(&rid("social"));
         settings.moderated = true;
         room.settings = Some(settings);
         assert!(chat(&mut room, &alice, "moderated", None).is_err());
@@ -1410,7 +1410,7 @@ mod tests {
             .unwrap()
             .punitive
             .text_muted = false;
-        let mut settings = RoomManager::default_room_settings(&rid("social"));
+        let mut settings = crate::room::RoomSettings::defaults(&rid("social"));
         settings.allow_chat = false;
         room.settings = Some(settings);
         assert!(!can_start_account_conversation(&room, &alice.id, &bob.id));
@@ -2521,7 +2521,7 @@ mod tests {
             sqlx::query("INSERT INTO rooms(id,owner_id,display_name,history_retention_days) VALUES($1,$2,$1,7)")
                 .bind(id).bind(moderator.id.as_uuid()).execute(&pool).await.unwrap();
         }
-        let mut settings = RoomManager::default_room_settings(&room_id);
+        let mut settings = crate::room::RoomSettings::defaults(&room_id);
         settings.owner_id = moderator.id.as_uuid();
         settings.history_retention_days = 7;
         room.id = room_id.clone();
@@ -2739,7 +2739,7 @@ mod tests {
         roles::set_role(&pool, &room_id, &absent_id, roles::Role::Member, &owner_id)
             .await
             .unwrap();
-        let mut settings = RoomManager::default_room_settings(&room_id);
+        let mut settings = crate::room::RoomSettings::defaults(&room_id);
         settings.owner_id = owner_id;
         room.id = room_id.clone();
         room.persisted = true;
@@ -2883,7 +2883,7 @@ mod tests {
                 &ClientMessage::ResolveRoomReport {
                     request_id: "resolve".into(),
                     report_id: report_id.clone(),
-                    status: "resolved".into(),
+                    status: crate::room::moderation::ReportResolution::Resolved,
                 },
             )
             .await
@@ -4088,8 +4088,8 @@ impl RoomSocial {
             .iter_mut()
             .find(|report| report.report_id == report_id)
             .ok_or_else(|| not_found("Report not found"))?;
-        if report.status == "open" {
-            report.status = "resolved".to_string();
+        if report.status == ReportStatus::Open {
+            report.status = ReportStatus::Resolved;
             report.resolved_at = Some(chrono::Utc::now().to_rfc3339());
         }
         Ok(())
@@ -5413,7 +5413,7 @@ impl RoomManager {
                     .as_mut()
                     .ok_or_else(|| unavailable("Room settings unavailable"))?;
                 settings.history_retention_days = *retention_days;
-                let settings = serde_json::to_value(settings)?;
+                let settings = settings.clone();
                 room.broadcast_all(&ServerMessage::RoomSettingsChanged { settings });
                 if *retention_days == 0 {
                     room.social.pins.clear();
@@ -6176,7 +6176,7 @@ impl RoomManager {
                     target_participant_id: *target_participant_id,
                     target_name,
                     reason: reason.to_string(),
-                    status: "open".to_string(),
+                    status: ReportStatus::Open,
                     created_at: chrono::Utc::now().to_rfc3339(),
                     resolved_at: None,
                     outcome: None,
@@ -6219,8 +6219,11 @@ impl RoomManager {
                     room.ensure_live()?;
                 } else {
                     if room.social.reports.len() >= MAX_REPORTS {
-                        if let Some(index) =
-                            room.social.reports.iter().position(|r| r.status != "open")
+                        if let Some(index) = room
+                            .social
+                            .reports
+                            .iter()
+                            .position(|r| r.status != ReportStatus::Open)
                         {
                             room.social.reports.remove(index);
                         } else {
@@ -6235,7 +6238,7 @@ impl RoomManager {
                 // Only the submitting participant receives the report ID here.
                 SocialResponse::ReportParticipant {
                     report_id: report.report_id.clone(),
-                    status: "open".to_owned(),
+                    status: ReportStatus::Open,
                 }
             }
             ClientMessage::ListRoomReports { offset, .. } => {
@@ -6310,15 +6313,8 @@ impl RoomManager {
                 report_id, status, ..
             } => {
                 require_role(actor_role, roles::Role::Moderator)?;
-                if !matches!(status.as_str(), "resolved" | "dismissed") {
-                    return Err(invalid("Choose resolved or dismissed"));
-                }
                 let id: Uuid = report_id.parse().map_err(|_| invalid("Invalid report"))?;
-                let action = if status == "resolved" {
-                    ModerationAction::ReportResolved
-                } else {
-                    ModerationAction::ReportDismissed
-                };
+                let action = status.action();
                 if room.persisted {
                     let pool = self
                         .db_pool
@@ -6358,9 +6354,9 @@ impl RoomManager {
                         .social
                         .reports
                         .iter_mut()
-                        .find(|r| r.report_id == *report_id && r.status == "open")
+                        .find(|r| r.report_id == *report_id && r.status == ReportStatus::Open)
                         .ok_or_else(|| not_found("Open report not found"))?;
-                    report.status = status.clone();
+                    report.status = status.status();
                     report.resolved_at = Some(chrono::Utc::now().to_rfc3339());
                     let target_id = report.target_participant_id;
                     let target_name = report.target_name.clone();
@@ -6387,7 +6383,7 @@ impl RoomManager {
                 }
                 SocialResponse::ResolveRoomReport {
                     report_id: report_id.to_string(),
-                    status: status.to_string(),
+                    status: *status,
                 }
             }
             ClientMessage::ListModerationEvents { offset, .. } => {

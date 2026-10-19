@@ -525,7 +525,7 @@ mod tests {
         let moderator = Uuid::new_v4();
         let (moderator_sender, _moderator_receiver, _) =
             join(&manager, lobby_room_id.as_str(), moderator, false).await;
-        let mut settings = RoomManager::default_room_settings(&lobby_room_id);
+        let mut settings = crate::room::RoomSettings::defaults(&lobby_room_id);
         settings.lobby_enabled = true;
         manager
             .get_room(&lobby_room_id)

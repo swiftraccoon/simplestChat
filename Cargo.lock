@@ -4608,6 +4608,7 @@ name = "xtask"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "syn 3.0.6",
 ]
 
 [[package]]

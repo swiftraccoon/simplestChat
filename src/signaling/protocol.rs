@@ -7,6 +7,8 @@ use crate::turn::IceServer;
 use chrono::{DateTime, Utc};
 
 use crate::ids::{MessageId, ParticipantId, RoomId, UserId};
+use crate::room::moderation::{ReportResolution, ReportStatus};
+use crate::room::settings::RoomSettings;
 use mediasoup::prelude::*;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -371,7 +373,7 @@ pub enum ClientMessage {
     ResolveRoomReport {
         request_id: String,
         report_id: String,
-        status: String,
+        status: ReportResolution,
     },
     /// The room's moderation history, newest first (Moderator+; the owner also
     /// sees each target's address).
@@ -518,7 +520,7 @@ pub enum ServerMessage {
         #[serde(default)]
         your_chat_style: ChatStyle,
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        room_settings: Option<serde_json::Value>,
+        room_settings: Option<RoomSettings>,
     },
     /// The existing socket accepted a same-identity credential renewal.
     #[serde(rename_all = "camelCase")]
@@ -591,7 +593,7 @@ pub enum ServerMessage {
         participant_id: ParticipantId,
         producer_id: String,
         kind: MediaKind,
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         source: Option<String>,
     },
     /// Producer closed by another participant
@@ -757,12 +759,14 @@ pub enum ServerMessage {
     #[serde(rename_all = "camelCase")]
     ParticipantKicked {
         participant_id: ParticipantId,
+        #[serde(skip_serializing_if = "Option::is_none")]
         reason: Option<String>,
     },
     /// Participant was banned from the room
     #[serde(rename_all = "camelCase")]
     ParticipantBanned {
         participant_id: ParticipantId,
+        #[serde(skip_serializing_if = "Option::is_none")]
         reason: Option<String>,
     },
     /// Participant's role was changed
@@ -782,7 +786,7 @@ pub enum ServerMessage {
     // === Room state ===
     /// Room settings were changed
     #[serde(rename_all = "camelCase")]
-    RoomSettingsChanged { settings: serde_json::Value },
+    RoomSettingsChanged { settings: RoomSettings },
     /// Room topic was changed
     #[serde(rename_all = "camelCase")]
     TopicChanged { topic: String, changed_by: String },
@@ -792,6 +796,7 @@ pub enum ServerMessage {
     #[serde(rename_all = "camelCase")]
     LobbyWaiting {
         room_name: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
         topic: Option<String>,
         participant_count: u32,
         moderator_count: u32,
@@ -810,7 +815,10 @@ pub enum ServerMessage {
     },
     /// Lobby admission was denied
     #[serde(rename_all = "camelCase")]
-    LobbyDenied { reason: Option<String> },
+    LobbyDenied {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        reason: Option<String>,
+    },
     /// Client was admitted from the lobby
     LobbyAdmitted,
 }
@@ -1032,7 +1040,7 @@ pub struct RetryChatMessage {
 pub struct ProducerMetadata {
     pub id: String,
     pub kind: MediaKind,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source: Option<String>,
 }
 
@@ -1106,7 +1114,7 @@ pub enum SocialResponse {
     #[serde(rename_all = "camelCase")]
     ReportParticipant {
         report_id: String,
-        status: String,
+        status: ReportStatus,
     },
     #[serde(rename_all = "camelCase")]
     ListRoomReports {
@@ -1116,7 +1124,7 @@ pub enum SocialResponse {
     #[serde(rename_all = "camelCase")]
     ResolveRoomReport {
         report_id: String,
-        status: String,
+        status: ReportResolution,
     },
     #[serde(rename_all = "camelCase")]
     ListModerationEvents {
@@ -1135,7 +1143,7 @@ pub struct RoomSnapshot {
     pub lobby: Vec<SnapshotLobbyEntry>,
     pub your_role: Role,
     pub chat_session_id: Uuid,
-    pub room_settings: Option<crate::room::settings::RoomSettings>,
+    pub room_settings: Option<RoomSettings>,
     pub nickname: String,
     pub allow_private_messages: bool,
     pub ignored_participant_ids: Vec<ParticipantId>,
@@ -1176,7 +1184,7 @@ pub struct ReportEntry {
     pub target_participant_id: ParticipantId,
     pub target_name: String,
     pub reason: String,
-    pub status: String,
+    pub status: ReportStatus,
     pub created_at: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub resolved_at: Option<String>,

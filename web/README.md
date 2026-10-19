@@ -103,7 +103,7 @@ For complete guest/account setup and LAN ICE addressing see
 | `src/account-preferences.ts`                                                                    | Account-owned privacy state, field PATCH intents, cross-device refresh and uncertain-save reconciliation, shared by home and room screens |
 | `src/account-updates.ts`                                                                        | Authenticated account invalidations, bounded SSE decoding, visibility ownership and reconnect repair                                      |
 | `src/pwa.ts`, `public/sw.js`, `public/manifest.webmanifest`                                     | Installation, optional generic PM push alerts and account-scoped subscription ownership; no offline cache                                 |
-| `src/signaling.ts`, `protocol.ts`                                                               | WebSocket lifecycle and typed server protocol                                                                                             |
+| `src/signaling.ts`, `protocol.ts`, `protocol.generated.ts`                                      | WebSocket lifecycle and the generated server protocol                                                                               |
 | `src/validation.ts`, `api-validation.ts`, `protocol-validation.ts`                              | Shared decoder primitives and HTTP/WebSocket response validation                                                                          |
 | `src/room.ts`, `room-navigation.ts`                                                             | Membership, confirmed room controls, lobby status and explicit room selection/departure                                                   |
 | `src/app-navigation.ts`                                                                         | Typed account destinations, identity-scoped surface history and Back/Forward restoration                                                  |
@@ -129,8 +129,10 @@ For complete guest/account setup and LAN ICE addressing see
 | `scripts/check-bundle.mjs`, `bundle-budget.json`                                                | Aggregate raw/gzip asset limits enforced by every production build                                                                        |
 
 Rust signaling types in [src/signaling/protocol.rs](../src/signaling/protocol.rs)
-are the other half of the wire contract. Update both sides together, including
-camelCase room settings embedded in JSON values.
+are the wire contract's source of truth: `cargo run -q -p xtask -- protocol-ts`
+writes `src/protocol.generated.ts` from them (`--check` fails when it is stale),
+and `src/protocol.ts` re-exports those types beside the hand-written helpers.
+Change the Rust side, regenerate, then update the decoders and handlers.
 See the [protocol guide](../docs/protocol.md) for sequencing, correlation limits,
 reconnect/replay and runtime validation.
 

@@ -137,7 +137,7 @@ pub(crate) struct RoleRequest {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct ReportRequest {
-    pub status: String,
+    pub status: moderation::ReportResolution,
 }
 
 #[derive(Deserialize)]
@@ -218,7 +218,7 @@ enum Command {
     Settings(SettingsPatch),
     Role(Uuid, roles::Role),
     Unban(Uuid),
-    Report(Uuid, String),
+    Report(Uuid, moderation::ReportResolution),
     Moderate(ModerationRequest),
     Lobby(ParticipantId, LobbyRequest),
     Sanction(SanctionRequest),
@@ -577,7 +577,7 @@ impl Context {
             Command::Settings(patch) => self.settings_change(patch).await,
             Command::Role(target, role) => self.role_change(target, role).await,
             Command::Unban(id) => self.unban(id).await,
-            Command::Report(id, status) => self.resolve_report(id, &status).await,
+            Command::Report(id, status) => self.resolve_report(id, status).await,
             Command::Moderate(request) => self.moderate(request).await,
             Command::Sanction(request) => self.sanction(request).await,
             Command::Lobby(..) => {
@@ -895,22 +895,15 @@ impl Context {
     async fn resolve_report(
         &mut self,
         id: Uuid,
-        status: &str,
+        status: moderation::ReportResolution,
     ) -> Result<(Publication, Value), sqlx::Error> {
-        if !matches!(status, "resolved" | "dismissed") {
-            return Err(invalid("Choose resolved or dismissed"));
-        }
         let room_id = self.room_id.clone();
         let actor = ParticipantId::from(self.user);
         let row: Option<(ParticipantId, String, bool)> = sqlx::query_as("UPDATE room_reports r SET status=$3,resolved_at=now(),resolved_by=$4 WHERE r.room_id=$1 AND r.id=$2 AND r.status='open' RETURNING r.target_participant_id,r.target_name,EXISTS(SELECT 1 FROM users u WHERE u.id::text=r.target_participant_id)")
             .bind(&room_id).bind(id).bind(status).bind(actor).fetch_optional(self.connection()).await?;
         let (target, name, authenticated) =
             row.ok_or_else(|| invalid("Open report not found in this room"))?;
-        let action = if status == "resolved" {
-            moderation::ModerationAction::ReportResolved
-        } else {
-            moderation::ModerationAction::ReportDismissed
-        };
+        let action = status.action();
         let event = moderation::ModerationEvent::new(
             action,
             moderation::Actor {
@@ -934,7 +927,10 @@ impl Context {
             moderation::MAX_MODERATION_EVENTS,
         )
         .await?;
-        Ok((Publication::None, json!({"reportId":id,"status":status})))
+        Ok((
+            Publication::None,
+            json!({"reportId":id,"status":status.status()}),
+        ))
     }
 
     async fn moderate(
@@ -1059,13 +1055,11 @@ impl Context {
         let mut revoked_override = None;
         match publication {
             Publication::Settings(settings, password) => {
-                let value =
-                    serde_json::to_value(&settings).expect("validated room settings serialize");
-                room.settings = Some(settings);
+                room.settings = Some(settings.clone());
                 if let Some(password) = password {
                     room.password_hash = password;
                 }
-                room.broadcast_all(&ServerMessage::RoomSettingsChanged { settings: value });
+                room.broadcast_all(&ServerMessage::RoomSettingsChanged { settings });
             }
             Publication::Role(target, role) => {
                 let target = ParticipantId::from(target);
@@ -1494,7 +1488,7 @@ mod tests {
 
     #[test]
     fn patch_checks_effective_combined_limits_without_changing_other_settings() {
-        let current = RoomManager::default_room_settings(&rid("saved"));
+        let current = settings::RoomSettings::defaults(&rid("saved"));
         let patch: SettingsPatch =
             serde_json::from_value(json!({"maxParticipants":2,"maxBroadcasters":3})).unwrap();
         assert!(patch.apply(&current).is_err());

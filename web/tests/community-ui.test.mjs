@@ -1,7 +1,7 @@
 import { accountUpdatesFixture } from './account-updates-fixture.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { loadTypeScript } from './source-loader.mjs';
+import { loadProtocol, loadTypeScript } from './source-loader.mjs';
 import { deferred, flush, uiFixture } from './ui-fixture.mjs';
 import { loadAppearanceFixture } from './appearance-fixture.mjs';
 import { loadDiscoveryFixture } from './discovery-fixture.mjs';
@@ -149,7 +149,7 @@ async function fixture() {
     globals: { document: dom.document, setTimeout: () => 1, clearTimeout: () => {} },
   });
   const updates = accountUpdatesFixture();
-  const protocol = await loadTypeScript('src/protocol.ts');
+  const protocol = await loadProtocol();
   const api = await loadTypeScript('src/community-ui.ts', {
     modules: {
       './protocol': protocol,
@@ -1073,7 +1073,7 @@ test('room-scoped actions mount in the room tools while account actions stay in 
   });
   const api = await loadTypeScript('src/community-ui.ts', {
     modules: {
-      './protocol': await loadTypeScript('src/protocol.ts'),
+      './protocol': await loadProtocol(),
       './account-updates': accountUpdatesFixture().module,
       './ui': { ...dom.ui, api: { ...dom.ui.api, inboxUnread: async () => ({ unreadCount: 0 }) } },
       './settings-sheet': {},

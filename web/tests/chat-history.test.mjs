@@ -16,6 +16,7 @@ const message = (id, content = `Message ${id}`) => ({
   recipientName: 'Account',
   content,
   sentAt: '2026-10-07T10:00:00Z',
+  chatStyle: { color: null, style: 'accent' },
   reactions: [],
 });
 const receipt = (data, id = 'confirmed') => ({
