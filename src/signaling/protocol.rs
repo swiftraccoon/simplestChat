@@ -593,7 +593,7 @@ pub enum ServerMessage {
         participant_id: ParticipantId,
         producer_id: String,
         kind: MediaKind,
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         source: Option<String>,
     },
     /// Producer closed by another participant
@@ -759,12 +759,14 @@ pub enum ServerMessage {
     #[serde(rename_all = "camelCase")]
     ParticipantKicked {
         participant_id: ParticipantId,
+        #[serde(skip_serializing_if = "Option::is_none")]
         reason: Option<String>,
     },
     /// Participant was banned from the room
     #[serde(rename_all = "camelCase")]
     ParticipantBanned {
         participant_id: ParticipantId,
+        #[serde(skip_serializing_if = "Option::is_none")]
         reason: Option<String>,
     },
     /// Participant's role was changed
@@ -794,6 +796,7 @@ pub enum ServerMessage {
     #[serde(rename_all = "camelCase")]
     LobbyWaiting {
         room_name: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
         topic: Option<String>,
         participant_count: u32,
         moderator_count: u32,
@@ -812,7 +815,10 @@ pub enum ServerMessage {
     },
     /// Lobby admission was denied
     #[serde(rename_all = "camelCase")]
-    LobbyDenied { reason: Option<String> },
+    LobbyDenied {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        reason: Option<String>,
+    },
     /// Client was admitted from the lobby
     LobbyAdmitted,
 }
@@ -1034,7 +1040,7 @@ pub struct RetryChatMessage {
 pub struct ProducerMetadata {
     pub id: String,
     pub kind: MediaKind,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source: Option<String>,
 }
 

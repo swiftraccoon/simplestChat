@@ -10,11 +10,15 @@ use uuid::Uuid;
 #[serde(rename_all = "camelCase")]
 pub struct RoomSettings {
     pub id: String,
+    /// Server-side only: participants learn the owner by role, never by account id.
+    #[serde(skip)]
     pub owner_id: Uuid,
     pub display_name: String,
     pub password_protected: bool,
     pub require_registration: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub max_participants: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub max_broadcasters: Option<i32>,
     pub allow_screen_sharing: bool,
     pub allow_chat: bool,
@@ -26,6 +30,7 @@ pub struct RoomSettings {
     pub push_to_talk: bool,
     pub guests_allowed: bool,
     pub guests_can_broadcast: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub topic: Option<String>,
     pub name_style: ChatStyle,
     pub topic_style: ChatStyle,
@@ -577,7 +582,6 @@ mod tests {
             "passwordProtected",
             "requireRegistration",
             "maxParticipants",
-            "maxBroadcasters",
             "allowScreenSharing",
             "allowChat",
             "allowVideo",
@@ -593,6 +597,9 @@ mod tests {
             !obj.contains_key("lobby_enabled"),
             "snake_case key leaked into wire format"
         );
+        // An absent ceiling or topic is omitted, never null: the client reads `?:` fields.
+        assert!(!obj.contains_key("maxBroadcasters"));
+        assert_eq!(obj["topic"], "hello");
     }
 
     #[test]
