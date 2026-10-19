@@ -130,7 +130,7 @@ impl PageQuery {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct RoleRequest {
-    pub role: u8,
+    pub role: roles::Role,
 }
 
 #[derive(Deserialize)]
@@ -406,7 +406,7 @@ impl Context {
                     .await
                     .map_err(database_error)?
                     .ok_or_else(|| response_error(StatusCode::NOT_FOUND, "Saved room not found"))?;
-            let membership: Option<i16> = sqlx::query_scalar(
+            let membership: Option<roles::Role> = sqlx::query_scalar(
                 "SELECT role FROM room_roles WHERE room_id=$1 AND user_id=$2 FOR UPDATE",
             )
             .bind(&room_id)
@@ -417,7 +417,7 @@ impl Context {
             let role = if owner == user {
                 roles::Role::Owner
             } else {
-                membership.map_or(roles::Role::User, roles::Role::from_db)
+                membership.unwrap_or(roles::Role::User)
             };
             if role < roles::Role::Moderator {
                 return Err(response_error(
@@ -831,7 +831,7 @@ impl Context {
         new_role: roles::Role,
     ) -> Result<(Publication, Value), sqlx::Error> {
         let room_id = self.room_id.clone();
-        let current: Option<i16> = sqlx::query_scalar("SELECT CASE WHEN $2=owner_id THEN 5 ELSE (SELECT role+1 FROM room_roles WHERE room_id=$1 AND user_id=$2) END::smallint FROM rooms WHERE id=$1 AND ($2=owner_id OR EXISTS(SELECT 1 FROM room_roles WHERE room_id=$1 AND user_id=$2))")
+        let current: Option<roles::Role> = sqlx::query_scalar("SELECT CASE WHEN $2=owner_id THEN 5 ELSE (SELECT role FROM room_roles WHERE room_id=$1 AND user_id=$2) END::smallint FROM rooms WHERE id=$1 AND ($2=owner_id OR EXISTS(SELECT 1 FROM room_roles WHERE room_id=$1 AND user_id=$2))")
             .bind(&room_id).bind(target).fetch_optional(self.connection()).await?;
         let online = if let Some(runtime) = self.runtime.as_ref() {
             let room = runtime.read().await;
@@ -843,14 +843,13 @@ impl Context {
             None
         };
         let current = current
-            .and_then(|value| roles::Role::from_u8(value as u8))
             .or(online)
             .ok_or_else(|| invalid("Member not found in this room"))?;
         if new_role < roles::Role::User || !self.role.can_set_role(current, new_role) {
             return Err(invalid("Insufficient room permissions"));
         }
         let setter = self.user;
-        if new_role.to_db() == 0 {
+        if !new_role.is_stored() {
             sqlx::query("DELETE FROM room_roles WHERE room_id=$1 AND user_id=$2")
                 .bind(&room_id)
                 .bind(target)
@@ -858,7 +857,7 @@ impl Context {
                 .await?;
         } else {
             sqlx::query("INSERT INTO room_roles(room_id,user_id,role,granted_by) VALUES($1,$2,$3,$4) ON CONFLICT(room_id,user_id) DO UPDATE SET role=$3,granted_by=$4")
-                .bind(&room_id).bind(target).bind(new_role.to_db()).bind(setter).execute(self.connection()).await?;
+                .bind(&room_id).bind(target).bind(new_role).bind(setter).execute(self.connection()).await?;
         }
         Ok((Publication::Role(target, new_role), json!({"updated":true})))
     }
@@ -1087,7 +1086,7 @@ impl Context {
                 }
                 room.broadcast_all(&ServerMessage::RoleChanged {
                     participant_id: target.clone(),
-                    new_role: role.name().to_owned(),
+                    new_role: role,
                     granted_by: self.user.to_string(),
                 });
                 affected = Some(target);
@@ -1347,9 +1346,7 @@ pub(crate) async fn set_role(
     headers: HeaderMap,
     Json(request): Json<RoleRequest>,
 ) -> Result<Response, api::RoomApiError> {
-    let role = roles::Role::from_u8(request.role)
-        .ok_or_else(|| response_error(StatusCode::BAD_REQUEST, "Invalid role"))?;
-    mutate(server, headers, id, Command::Role(target, role)).await
+    mutate(server, headers, id, Command::Role(target, request.role)).await
 }
 
 pub(crate) async fn remove_ban(
@@ -1450,7 +1447,7 @@ impl Context {
             "members" => {
                 let online = if let Some(runtime)=self.runtime.as_ref() { runtime.read().await.participants.values().map(|person|json!({"id":person.id,"name":person.name,"role":person.role.name(),"authenticated":person.authenticated})).collect::<Vec<_>>() } else {Vec::new()};
                 // Merge saved membership and current participants before paging.
-                sqlx::query_scalar("WITH roster AS (SELECT owner_id AS user_id,5::smallint AS role FROM rooms WHERE id=$1 UNION ALL SELECT rr.user_id,(rr.role+1)::smallint FROM room_roles rr JOIN rooms r ON r.id=rr.room_id WHERE rr.room_id=$1 AND rr.user_id<>r.owner_id),live AS(SELECT * FROM jsonb_to_recordset($3) AS p(id text,name text,role text,authenticated boolean)),combined AS(SELECT u.id::text AS id,u.display_name AS name,CASE roster.role WHEN 5 THEN 'owner' WHEN 4 THEN 'admin' WHEN 3 THEN 'moderator' ELSE 'member' END AS role,true AS authenticated,EXISTS(SELECT FROM live WHERE live.id=u.id::text) AS online FROM roster JOIN users u ON u.id=roster.user_id UNION ALL SELECT id,name,role,authenticated,true FROM live WHERE NOT EXISTS(SELECT FROM roster WHERE roster.user_id::text=live.id)) SELECT jsonb_build_object('userId',id,'displayName',name,'role',role,'online',online,'authenticated',authenticated) FROM combined ORDER BY name,id LIMIT 101 OFFSET $2")
+                sqlx::query_scalar("WITH roster AS (SELECT owner_id AS user_id,5::smallint AS role FROM rooms WHERE id=$1 UNION ALL SELECT rr.user_id,rr.role FROM room_roles rr JOIN rooms r ON r.id=rr.room_id WHERE rr.room_id=$1 AND rr.user_id<>r.owner_id),live AS(SELECT * FROM jsonb_to_recordset($3) AS p(id text,name text,role text,authenticated boolean)),combined AS(SELECT u.id::text AS id,u.display_name AS name,CASE roster.role WHEN 5 THEN 'owner' WHEN 4 THEN 'admin' WHEN 3 THEN 'moderator' ELSE 'member' END AS role,true AS authenticated,EXISTS(SELECT FROM live WHERE live.id=u.id::text) AS online FROM roster JOIN users u ON u.id=roster.user_id UNION ALL SELECT id,name,role,authenticated,true FROM live WHERE NOT EXISTS(SELECT FROM roster WHERE roster.user_id::text=live.id)) SELECT jsonb_build_object('userId',id,'displayName',name,'role',role,'online',online,'authenticated',authenticated) FROM combined ORDER BY name,id LIMIT 101 OFFSET $2")
                     .bind(&room_id).bind(offset).bind(sqlx::types::Json(online)).fetch_all(self.connection()).await?
             }
             "bans" => {

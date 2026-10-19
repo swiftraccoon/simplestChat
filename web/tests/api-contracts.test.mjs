@@ -323,7 +323,7 @@ const endpoints = [
   ],
   [
     'room invite creation',
-    (api) => api.createRoomInvite('token', 'room', { role: 2, uses: 1, days: 7 }),
+    (api) => api.createRoomInvite('token', 'room', { role: 'member', uses: 1, days: 7 }),
     '/api/rooms/room/invites',
     'POST',
     { ...roomInvite, code: 'a'.repeat(32) },

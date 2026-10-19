@@ -9,7 +9,8 @@ import { mountAccountSessions } from './account-sessions';
 import { mountSavedRooms, createFavoriteButton, offerContact } from './discovery';
 import { appearancePicker } from './appearance';
 import type { RoomClient } from './room';
-import type { AccountProfile, PublicProfile, RoomListItem } from './protocol';
+import { ROLES, asRole, rank } from './protocol';
+import type { AccountProfile, PublicProfile, Role, RoomListItem } from './protocol';
 import type { RegistrationInvite, RoomInvite } from './api-validation';
 import {
   api,
@@ -64,14 +65,12 @@ interface Options {
   onJoinRoom: (id: string) => void;
 }
 
-/** Roles an invitation may grant, as the server numbers them. */
-const INVITE_ROLES: readonly { value: number; label: string }[] = [
-  { value: 2, label: 'Member' },
-  { value: 3, label: 'Moderator' },
-  { value: 4, label: 'Admin' },
+/** Roles an invitation may grant. */
+const INVITE_ROLES: readonly { value: Role; label: string }[] = [
+  { value: 'member', label: 'Member' },
+  { value: 'moderator', label: 'Moderator' },
+  { value: 'admin', label: 'Admin' },
 ];
-
-const ROLES = ['guest', 'user', 'member', 'moderator', 'admin', 'owner'];
 /** History actions as the server names them, read as what happened to the target. */
 const ACTION_LABELS: Record<string, string> = {
   message_removed: 'message removed',
@@ -238,7 +237,7 @@ export class CommunityUI {
     this.messagesButton.hidden = !this.options.auth.isLoggedIn;
     this.roomsButton.hidden = !this.options.auth.isLoggedIn;
     this.nicknameButton.hidden = !room?.localParticipantId;
-    this.manageButton.hidden = !room?.localParticipantId || ROLES.indexOf(room.role) < 3;
+    this.manageButton.hidden = !room?.localParticipantId || rank(room.role) < rank('moderator');
     if (accountChanged) this.refreshMessages().catch(() => {});
   }
 
@@ -1161,11 +1160,11 @@ export class CommunityUI {
       });
     }
     const live = () => (this.editingRoom ? null : this.options.getRoom());
-    const rank = () => ROLES.indexOf(live()?.role ?? 'guest');
+    const ownRank = () => rank(live()?.role ?? 'guest');
     const owner = () =>
       live() ? live()?.role === 'owner' && this.options.auth.isLoggedIn : this.editingRoom !== null;
-    const moderator = () => Boolean(live()?.localParticipantId) && rank() >= 3;
-    const admin = () => Boolean(live()?.localParticipantId) && rank() >= 4;
+    const moderator = () => Boolean(live()?.localParticipantId) && ownRank() >= rank('moderator');
+    const admin = () => Boolean(live()?.localParticipantId) && ownRank() >= rank('admin');
     const name = () =>
       live() ? (live()?.roomSettings?.displayName ?? '') : (this.editingRoom?.display_name ?? '');
     return [
@@ -1406,28 +1405,28 @@ export class CommunityUI {
                     `${person.displayName} · ${person.role} · ${person.online ? 'online' : 'offline'}`,
                   ),
                 );
-                const rank = ROLES.indexOf(room.role);
-                const targetRank = ROLES.indexOf(person.role);
+                const actorRank = rank(room.role);
+                const targetRank = rank(person.role);
                 if (
                   person.authenticated &&
-                  rank > targetRank &&
+                  actorRank > targetRank &&
                   person.userId !== room.localParticipantId
                 ) {
                   const role = el('select');
                   role.setAttribute('aria-label', `Role for ${person.displayName}`);
-                  for (let index = 1; index < rank; index++) {
-                    const option = el('option', ROLES[index]);
-                    option.value = String(index);
+                  for (const candidate of ROLES.slice(1, actorRank)) {
+                    const option = el('option', candidate);
+                    option.value = candidate;
                     role.append(option);
                   }
-                  role.value = String(targetRank);
+                  role.value = person.role;
                   const save = asyncButton(
                     'Update role',
                     () =>
                       busy(save, error, async () => {
                         await room.requestSocial('setMemberRole', {
                           targetUserId: person.userId,
-                          role: Number(role.value),
+                          role: asRole(role.value) ?? person.role,
                         });
                         await render();
                       }),
@@ -1619,7 +1618,7 @@ export class CommunityUI {
         role.setAttribute('aria-label', 'Role granted');
         for (const option of INVITE_ROLES) {
           const node = el('option', option.label);
-          node.value = String(option.value);
+          node.value = option.value;
           role.append(node);
         }
         const uses = input('1', 'number', 3);
@@ -1650,7 +1649,7 @@ export class CommunityUI {
             busy(create, error, async () => {
               if (!stillCurrent()) return;
               const invite = await api.createRoomInvite(this.options.auth.jwt, owned.id, {
-                role: Number(role.value),
+                role: asRole(role.value) ?? 'member',
                 uses: Number(uses.value) || 1,
                 days: Number(days.value) || 7,
               });

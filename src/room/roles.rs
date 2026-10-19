@@ -3,8 +3,29 @@
 use sqlx::PgPool;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) enum Role {
+/// A participant's standing in a room, ordered from least to most trusted.
+///
+/// One numbering serves every boundary: the wire carries the lowercase name,
+/// `room_roles.role` and `invites.role` store the discriminant (only
+/// `Member`..`Admin` are ever stored: `User` is the absence of a row and
+/// `Owner` is `rooms.owner_id`), and `invite_redemptions.granted_role` records
+/// what a redemption granted.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    serde::Serialize,
+    serde::Deserialize,
+    sqlx::Type,
+)]
+#[serde(rename_all = "lowercase")]
+#[repr(i16)]
+pub enum Role {
     Guest = 0,
     User = 1,
     Member = 2,
@@ -14,37 +35,8 @@ pub(crate) enum Role {
 }
 
 impl Role {
-    pub(crate) fn from_u8(value: u8) -> Option<Self> {
-        match value {
-            0 => Some(Role::Guest),
-            1 => Some(Role::User),
-            2 => Some(Role::Member),
-            3 => Some(Role::Moderator),
-            4 => Some(Role::Admin),
-            5 => Some(Role::Owner),
-            _ => None,
-        }
-    }
-
-    pub(crate) fn from_db(value: i16) -> Self {
-        match value {
-            1 => Role::Member,
-            2 => Role::Moderator,
-            3 => Role::Admin,
-            _ => Role::User,
-        }
-    }
-
-    pub(crate) fn to_db(self) -> i16 {
-        match self {
-            Role::Member => 1,
-            Role::Moderator => 2,
-            Role::Admin => 3,
-            _ => 0,
-        }
-    }
-
-    pub(crate) fn name(&self) -> &'static str {
+    /// The wire and display name.
+    pub(crate) fn name(self) -> &'static str {
         match self {
             Role::Owner => "owner",
             Role::Admin => "admin",
@@ -53,6 +45,12 @@ impl Role {
             Role::User => "user",
             Role::Guest => "guest",
         }
+    }
+
+    /// Whether a saved membership row carries this role: `User` is the absence
+    /// of a row and `Guest`/`Owner` are never stored.
+    pub(crate) fn is_stored(self) -> bool {
+        matches!(self, Role::Member | Role::Moderator | Role::Admin)
     }
 
     pub(crate) fn can_moderate(&self, target: Role) -> bool {
@@ -100,7 +98,7 @@ pub(crate) async fn resolve_role(
             return Ok(Role::Owner);
         }
 
-        if let Some(row) = sqlx::query_as::<_, (i16,)>(
+        if let Some(role) = sqlx::query_scalar::<_, Role>(
             "SELECT role FROM room_roles WHERE room_id = $1 AND user_id = $2",
         )
         .bind(room_id)
@@ -108,7 +106,7 @@ pub(crate) async fn resolve_role(
         .fetch_optional(pool)
         .await?
         {
-            return Ok(Role::from_db(row.0));
+            return Ok(role);
         }
 
         if is_authenticated {
@@ -126,8 +124,7 @@ pub(crate) async fn set_role(
     role: Role,
     granted_by: &Uuid,
 ) -> Result<(), sqlx::Error> {
-    let role_val = role.to_db();
-    if role_val == 0 {
+    if !role.is_stored() {
         sqlx::query("DELETE FROM room_roles WHERE room_id = $1 AND user_id = $2")
             .bind(room_id)
             .bind(user_id)
@@ -141,7 +138,7 @@ pub(crate) async fn set_role(
         )
         .bind(room_id)
         .bind(user_id)
-        .bind(role_val)
+        .bind(role)
         .bind(granted_by)
         .execute(pool)
         .await?;
@@ -152,6 +149,36 @@ pub(crate) async fn set_role(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn roles_serialize_by_name_and_store_their_discriminant() {
+        for (role, name, number) in [
+            (Role::Guest, "guest", 0),
+            (Role::User, "user", 1),
+            (Role::Member, "member", 2),
+            (Role::Moderator, "moderator", 3),
+            (Role::Admin, "admin", 4),
+            (Role::Owner, "owner", 5),
+        ] {
+            assert_eq!(serde_json::to_string(&role).unwrap(), format!("{name:?}"));
+            assert_eq!(
+                serde_json::from_str::<Role>(&format!("{name:?}")).unwrap(),
+                role
+            );
+            assert_eq!(role.name(), name);
+            assert_eq!(role as i16, number);
+        }
+        assert!(serde_json::from_str::<Role>("2").is_err());
+        assert!(serde_json::from_str::<Role>("\"Owner\"").is_err());
+        assert_eq!(
+            [Role::Member, Role::Moderator, Role::Admin]
+                .iter()
+                .filter(|role| role.is_stored())
+                .count(),
+            3
+        );
+        assert!(!Role::User.is_stored() && !Role::Owner.is_stored() && !Role::Guest.is_stored());
+    }
 
     #[test]
     fn test_role_ordering() {

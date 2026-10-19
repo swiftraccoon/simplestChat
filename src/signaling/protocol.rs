@@ -52,6 +52,9 @@ pub(super) struct ServerReply<'a> {
 }
 
 /// A signaling bearer is serialized only for transport, never for diagnostics.
+/// Roles travel by name; see [`Role`].
+pub use crate::room::roles::Role;
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct AuthenticationToken(SecretString);
@@ -307,7 +310,7 @@ pub enum ClientMessage {
     SetMemberRole {
         request_id: String,
         target_user_id: String,
-        role: u8,
+        role: Role,
     },
     #[serde(rename_all = "camelCase")]
     ReportParticipant {
@@ -398,7 +401,7 @@ pub enum ClientMessage {
     #[serde(rename_all = "camelCase")]
     SetRole {
         target_participant_id: String,
-        role: u8,
+        role: Role,
     },
     /// Request voice in a moderated room (sent by User/Guest)
     RequestVoice,
@@ -465,7 +468,7 @@ pub enum ServerMessage {
         participant_id: String,
         participants: Vec<ParticipantInfo>,
         reconnect_token: SecretString,
-        your_role: String,
+        your_role: Role,
         /// The name the room knows this participant by; a guest's may carry a number.
         your_name: String,
         /// This participant's look: an account's saved one, or the guest's.
@@ -530,7 +533,7 @@ pub enum ServerMessage {
     ParticipantJoined {
         participant_id: String,
         participant_name: String,
-        role: String,
+        role: Role,
         authenticated: bool,
         #[serde(default)]
         chat_style: ChatStyle,
@@ -720,7 +723,7 @@ pub enum ServerMessage {
     #[serde(rename_all = "camelCase")]
     RoleChanged {
         participant_id: String,
-        new_role: String,
+        new_role: Role,
         granted_by: String,
     },
     /// A participant requested voice (sent to Moderator+)
@@ -781,7 +784,7 @@ pub struct ParticipantInfo {
     pub id: String,
     pub name: String,
     pub producers: Vec<ProducerMetadata>,
-    pub role: String,
+    pub role: Role,
     #[serde(default)]
     pub authenticated: bool,
     #[serde(default)]

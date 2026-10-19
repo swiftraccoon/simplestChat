@@ -994,7 +994,7 @@ async fn authorization_database_room_roles_and_owner_mutations_do_not_cross_room
                 "/api/rooms/{room}/administration/members/{}",
                 fixture.users[index]
             ),
-            Some(json!({"role":2})),
+            Some(json!({"role":"member"})),
         );
         assert_eq!(
             fixture
@@ -1022,9 +1022,9 @@ async fn authorization_database_room_roles_and_owner_mutations_do_not_cross_room
             "list {role:?}"
         );
         for (grant, allowed) in [
-            (2, [false, false, false, true, true]),
-            (3, [false, false, false, true, true]),
-            (4, [false, false, false, false, true]),
+            ("member", [false, false, false, true, true]),
+            ("moderator", [false, false, false, true, true]),
+            ("admin", [false, false, false, false, true]),
         ] {
             let create = operation("POST", list.path.clone(), Some(json!({"role":grant})));
             let response = fixture
@@ -1126,7 +1126,7 @@ async fn authorization_database_room_roles_and_owner_mutations_do_not_cross_room
                 "/api/rooms/{room}/administration/members/{}",
                 fixture.users[0]
             ),
-            Some(json!({"role":2})),
+            Some(json!({"role":"member"})),
         ),
         operation(
             "DELETE",

@@ -61,7 +61,7 @@ struct RoomSnapshot {
     participants: Vec<ParticipantInfo>,
     messages: Vec<ChatEntry>,
     lobby: Vec<SnapshotLobbyEntry>,
-    your_role: &'static str,
+    your_role: roles::Role,
     chat_session_id: Uuid,
     room_settings: Option<settings::RoomSettings>,
     nickname: String,
@@ -157,7 +157,7 @@ mod tests {
             SocialBudget::ChatBroadcast
         );
         assert_eq!(
-            message(r#"{"type":"setMemberRole","requestId":"r","targetUserId":"u","role":1}"#)
+            message(r#"{"type":"setMemberRole","requestId":"r","targetUserId":"u","role":"user"}"#)
                 .social_budget(),
             SocialBudget::AdminMutation
         );
@@ -2830,20 +2830,20 @@ mod tests {
                 &ClientMessage::SetMemberRole {
                     request_id: "promote".into(),
                     target_user_id: absent.id.clone(),
-                    role: 3,
+                    role: roles::Role::Moderator,
                 },
             )
             .await
             .unwrap();
         receivers[0].try_recv().unwrap();
-        let role: i16 =
+        let role: roles::Role =
             sqlx::query_scalar("SELECT role FROM room_roles WHERE room_id=$1 AND user_id=$2")
                 .bind(&room_id)
                 .bind(absent_id)
                 .fetch_one(&pool)
                 .await
                 .unwrap();
-        assert_eq!(role, 2);
+        assert_eq!(role, roles::Role::Moderator);
         assert!(
             manager
                 .handle_social_request(
@@ -2867,7 +2867,7 @@ mod tests {
                     &ClientMessage::SetMemberRole {
                         request_id: "unrelated".into(),
                         target_user_id: Uuid::new_v4().to_string(),
-                        role: 2
+                        role: roles::Role::Member
                     }
                 )
                 .await
@@ -3285,7 +3285,7 @@ struct ReportOutcome {
 struct MemberEntry {
     user_id: String,
     display_name: String,
-    role: String,
+    role: roles::Role,
     online: bool,
     authenticated: bool,
 }
@@ -5163,7 +5163,7 @@ impl RoomManager {
                 .map(|p| ParticipantInfo {
                     id: p.id.clone(),
                     name: p.name.clone(),
-                    role: p.role.name().to_owned(),
+                    role: p.role,
                     authenticated: p.authenticated,
                     chat_style: p.chat_style.clone(),
                     producers: p
@@ -5196,7 +5196,7 @@ impl RoomManager {
             } else {
                 Vec::new()
             },
-            your_role: actor.role.name(),
+            your_role: actor.role,
             chat_session_id: actor.social.chat_session_id,
             room_settings: room.settings.clone(),
             nickname: actor.name.clone(),
@@ -5254,7 +5254,7 @@ impl RoomManager {
             ..
         } = command
         {
-            let new_role = roles::Role::from_u8(*role).ok_or_else(|| rejected("Invalid role"))?;
+            let new_role = *role;
             let room_lock = self.get_room(room_id)?;
             let room = room_lock.read().await;
             Self::participant_for_sender(&room, participant_id, expected_sender)?;
@@ -6068,9 +6068,9 @@ impl RoomManager {
                         .as_ref()
                         .ok_or_else(|| rejected("Member service unavailable"))?;
                     drop(room);
-                    let rows: Vec<(Uuid, String, i16)> = tokio::time::timeout(
+                    let rows: Vec<(Uuid, String, roles::Role)> = tokio::time::timeout(
                         control::PERSISTENCE_TIMEOUT,
-                        sqlx::query_as("WITH roster AS (SELECT owner_id AS user_id,5::smallint AS role FROM rooms WHERE id=$1 UNION ALL SELECT rr.user_id,(rr.role+1)::smallint FROM room_roles rr JOIN rooms r ON r.id=rr.room_id WHERE rr.room_id=$1 AND rr.user_id<>r.owner_id) SELECT u.id,u.display_name,roster.role FROM roster JOIN users u ON u.id=roster.user_id ORDER BY u.display_name,u.id LIMIT 101 OFFSET $2")
+                        sqlx::query_as("WITH roster AS (SELECT owner_id AS user_id,5::smallint AS role FROM rooms WHERE id=$1 UNION ALL SELECT rr.user_id,rr.role FROM room_roles rr JOIN rooms r ON r.id=rr.room_id WHERE rr.room_id=$1 AND rr.user_id<>r.owner_id) SELECT u.id,u.display_name,roster.role FROM roster JOIN users u ON u.id=roster.user_id ORDER BY u.display_name,u.id LIMIT 101 OFFSET $2")
                             .bind(room_id).bind(offset as i64).fetch_all(pool),
                     ).await.map_err(|_| rejected("Member service timed out"))??;
                     room = room_lock.write().await;
@@ -6082,10 +6082,7 @@ impl RoomManager {
                                 online: room.participants.contains_key(&id),
                                 user_id: id,
                                 display_name: name,
-                                role: roles::Role::from_u8(role as u8)
-                                    .unwrap_or(roles::Role::User)
-                                    .name()
-                                    .to_string(),
+                                role,
                                 authenticated: true,
                             }
                         })
@@ -6097,7 +6094,7 @@ impl RoomManager {
                         .map(|p| MemberEntry {
                             user_id: p.id.clone(),
                             display_name: p.name.clone(),
-                            role: p.role.name().to_string(),
+                            role: p.role,
                             online: true,
                             authenticated: p.authenticated,
                         })
@@ -6130,8 +6127,7 @@ impl RoomManager {
                     .parse()
                     .map_err(|_| rejected("Invalid member"))?;
                 let setter: Uuid = participant_id.parse()?;
-                let new_role =
-                    roles::Role::from_u8(*role).ok_or_else(|| rejected("Invalid role"))?;
+                let new_role = *role;
                 if new_role < roles::Role::User {
                     return Err(rejected(
                         "Registered accounts require at least the user role",
@@ -6143,14 +6139,12 @@ impl RoomManager {
                     .ok_or_else(|| rejected("Member service unavailable"))?;
                 drop(room);
                 // Absent targets must already belong to this room's roster; no account enumeration.
-                let current: Option<i16> = tokio::time::timeout(
+                let current: Option<roles::Role> = tokio::time::timeout(
                     control::PERSISTENCE_TIMEOUT,
-                    sqlx::query_scalar("SELECT CASE WHEN $2=owner_id THEN 5 ELSE (SELECT role+1 FROM room_roles WHERE room_id=$1 AND user_id=$2) END::smallint FROM rooms WHERE id=$1 AND ($2=owner_id OR EXISTS(SELECT 1 FROM room_roles WHERE room_id=$1 AND user_id=$2))")
+                    sqlx::query_scalar("SELECT CASE WHEN $2=owner_id THEN 5 ELSE (SELECT role FROM room_roles WHERE room_id=$1 AND user_id=$2) END::smallint FROM rooms WHERE id=$1 AND ($2=owner_id OR EXISTS(SELECT 1 FROM room_roles WHERE room_id=$1 AND user_id=$2))")
                         .bind(room_id).bind(target).fetch_optional(pool),
                 ).await.map_err(|_| rejected("Member service timed out"))??;
-                let current = current
-                    .and_then(|r| roles::Role::from_u8(r as u8))
-                    .ok_or_else(|| rejected("Room member not found"))?;
+                let current = current.ok_or_else(|| rejected("Room member not found"))?;
                 if !actor_role.can_set_role(current, new_role) {
                     return Err(rejected("Insufficient role permissions"));
                 }

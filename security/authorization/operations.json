@@ -502,7 +502,7 @@
       "handler": "crate::room::administration::set_role",
       "policy": "current-session",
       "body": {
-        "role": 2
+        "role": "member"
       },
       "unauthenticated_status": null,
       "checks": [
@@ -641,7 +641,7 @@
       "handler": "crate::room::invites::create",
       "policy": "current-session",
       "body": {
-        "role": 2
+        "role": "member"
       },
       "unauthenticated_status": null,
       "checks": [
@@ -1556,7 +1556,7 @@
         "type": "setMemberRole",
         "requestId": "policy-request",
         "targetUserId": "00000000-0000-4000-8000-000000000007",
-        "role": 2
+        "role": "member"
       },
       "checks": [
         "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",
@@ -1772,7 +1772,7 @@
       "body": {
         "type": "setRole",
         "targetParticipantId": "00000000-0000-4000-8000-000000000006",
-        "role": 2
+        "role": "member"
       },
       "checks": [
         "authorization_dispatch_rejects_every_room_operation_after_sender_or_membership_changes",

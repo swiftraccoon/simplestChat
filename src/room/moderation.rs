@@ -1187,7 +1187,7 @@ mod tests {
             .map(|_| crate::invite_codes::digest(&Uuid::new_v4().to_string()))
             .collect();
         for (index, code) in codes.iter().enumerate() {
-            sqlx::query("INSERT INTO invites(code_hash,kind,room_id,role,created_by,uses_left,expires_at) VALUES($1,'room',$2,1,$3,0,now()-make_interval(days=>$4))")
+            sqlx::query("INSERT INTO invites(code_hash,kind,room_id,role,created_by,uses_left,expires_at) VALUES($1,'room',$2,2,$3,0,now()-make_interval(days=>$4))")
                 .bind(code).bind(&room_id).bind(owner).bind(if index == 4 {1_i32} else {8_i32})
                 .execute(&pool).await.unwrap();
             sqlx::query(

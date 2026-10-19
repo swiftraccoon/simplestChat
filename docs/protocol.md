@@ -259,7 +259,7 @@ code (`RegistrationInvite`) is single use and a week long; any account holds at
 most five unused ones, and `register` accepts `invite_code`, which opens
 registration while `REGISTRATION_ENABLED` is false and is spent either way
 (`users.invited_by` remembers the inviter). A room code (`RoomInvite`) is
-minted by a room admin for a role below their own (`role` 2–4, `uses` 1–100,
+minted by a room admin for a role below their own (`role` `member`, `moderator` or `admin`, `uses` 1–100,
 `days` 1–30; twenty unused per room) and redeemed by any signed-in account,
 which gains the role in `room_roles` without ever losing a higher one; the
 owner stays the owner. A code stays usable only while whoever minted it could

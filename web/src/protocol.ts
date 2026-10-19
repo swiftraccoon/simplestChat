@@ -97,7 +97,7 @@ export type ClientMessage =
       reportId?: string;
     }
   | { type: 'unban'; targetUserId: string }
-  | { type: 'setRole'; targetParticipantId: string; role: number }
+  | { type: 'setRole'; targetParticipantId: string; role: Role }
   | { type: 'requestVoice' }
   // Room management
   | ({ type: 'updateRoomSettings' } & RoomSettingsPatch)
@@ -122,7 +122,7 @@ export type ServerMessage =
       participantId: string;
       participants: ParticipantInfo[];
       reconnectToken: string;
-      yourRole: string;
+      yourRole: Role;
       yourChatStyle?: ChatStyle;
       yourName?: string;
       roomSettings?: RoomSettings;
@@ -155,7 +155,7 @@ export type ServerMessage =
       type: 'participantJoined';
       participantId: string;
       participantName: string;
-      role: string;
+      role: Role;
       authenticated: boolean;
       chatStyle?: ChatStyle;
     }
@@ -230,7 +230,7 @@ export type ServerMessage =
   | { type: 'textUnmuted'; participantId: string }
   | { type: 'participantKicked'; participantId: string; reason?: string }
   | { type: 'participantBanned'; participantId: string; reason?: string }
-  | { type: 'roleChanged'; participantId: string; newRole: string; grantedBy: string }
+  | { type: 'roleChanged'; participantId: string; newRole: Role; grantedBy: string }
   | { type: 'voiceRequested'; participantId: string; displayName: string }
   // Room state
   | { type: 'roomSettingsChanged'; settings: RoomSettings }
@@ -296,11 +296,20 @@ export type RoomControl = Extract<
 
 // --- Shared types ---
 
+/** A participant's standing in a room, least to most trusted; the wire carries the name. */
+export const ROLES = ['guest', 'user', 'member', 'moderator', 'admin', 'owner'] as const;
+export type Role = (typeof ROLES)[number];
+/** Position of a role in the trust order. */
+export const rank = (role: Role): number => ROLES.indexOf(role);
+/** The role a select or query string names, or undefined. */
+export const asRole = (value: string): Role | undefined =>
+  (ROLES as readonly string[]).includes(value) ? (value as Role) : undefined;
+
 export interface ParticipantInfo {
   id: string;
   name: string;
   producers: ProducerMetadata[];
-  role: string;
+  role: Role;
   authenticated?: boolean;
   chatStyle?: ChatStyle;
 }
@@ -362,7 +371,7 @@ export interface SocialRequests {
   listRoomBans: { offset?: number };
   removeRoomBan: { banId: string };
   listRoomMembers: { offset?: number };
-  setMemberRole: { targetUserId: string; role: number };
+  setMemberRole: { targetUserId: string; role: Role };
   reportParticipant: { targetParticipantId: string; reason: string };
   listRoomReports: { offset?: number };
   resolveRoomReport: { reportId: string; status: 'resolved' | 'dismissed' };
@@ -467,7 +476,7 @@ export interface RoomSnapshot {
   chatSessionId?: string;
   participants: ParticipantInfo[];
   messages: ChatEntry[];
-  yourRole: string;
+  yourRole: Role;
   roomSettings?: RoomSettings | null;
   nickname?: string;
   textMuted?: boolean;
@@ -509,7 +518,7 @@ export interface BanEntry {
 export interface MemberEntry {
   userId: string;
   displayName: string;
-  role: string;
+  role: Role;
   online: boolean;
   authenticated: boolean;
 }

@@ -1,6 +1,6 @@
 //! Bounded serialization properties. Wire types and application policy are distinct.
 
-use super::{ClientMessage, RequestHeader};
+use super::{ClientMessage, RequestHeader, Role};
 use rand::{RngExt, SeedableRng, rngs::StdRng};
 use serde_json::{Value, json};
 
@@ -107,19 +107,25 @@ fn boundary_properties_correlation_bytes_and_lengths_match_the_envelope_contract
 
 #[test]
 fn boundary_properties_integer_fields_reject_values_outside_their_wire_types() {
-    for role in 0..=255_u16 {
-        let body = json!({"type":"setRole", "targetParticipantId":"target", "role":role});
+    for role in [
+        Role::Guest,
+        Role::User,
+        Role::Member,
+        Role::Moderator,
+        Role::Admin,
+        Role::Owner,
+    ] {
+        let name = json!(role.name());
+        let body = json!({"type":"setRole", "targetParticipantId":"target", "role":name});
         let decoded: ClientMessage = serde_json::from_value(body).unwrap();
-        assert_eq!(serde_json::to_value(decoded).unwrap()["role"], json!(role));
+        assert_eq!(serde_json::to_value(decoded).unwrap()["role"], name);
+    }
+    for invalid in [json!(2), json!("Owner"), json!("superuser"), json!(null)] {
+        let body = json!({"type":"setRole", "targetParticipantId":"target", "role":invalid});
+        assert!(serde_json::from_value::<ClientMessage>(body).is_err());
     }
     // This checks Serde integer bounds, not the smaller authorized role/layer range.
     for (operation, field, maximum, extra) in [
-        (
-            "setRole",
-            "role",
-            u64::from(u8::MAX),
-            json!({"targetParticipantId":"target"}),
-        ),
         (
             "listRoomMembers",
             "offset",

@@ -69,7 +69,7 @@ import './community.css';
 import './participant-hovercard.css';
 import './notification-preferences.css';
 import './discovery.css';
-import type { CreateRoomRequest, RoomListItem, RoomSettingsPatch } from './protocol';
+import type { CreateRoomRequest, Role, RoomListItem, RoomSettingsPatch } from './protocol';
 import type { ServerCapabilities } from './api-validation';
 
 declare const __APP_REVISION__: string;
@@ -1230,16 +1230,16 @@ function showModerationMenu(targetId: string, targetName: string, x: number, y: 
   }
 
   // Set Role sub-menu
-  const roleOptions: { label: string; value: number }[] = [];
+  const roleOptions: { label: string; value: Role }[] = [];
   if (isMod && !isSelf) {
-    roleOptions.push({ label: 'User', value: 1 });
-    roleOptions.push({ label: 'Member', value: 2 });
+    roleOptions.push({ label: 'User', value: 'user' });
+    roleOptions.push({ label: 'Member', value: 'member' });
   }
   if (isAdmin && !isSelf) {
-    roleOptions.push({ label: 'Moderator', value: 3 });
+    roleOptions.push({ label: 'Moderator', value: 'moderator' });
   }
   if (role === 'owner' && !isSelf) {
-    roleOptions.push({ label: 'Admin', value: 4 });
+    roleOptions.push({ label: 'Admin', value: 'admin' });
   }
 
   if (roleOptions.length > 0) {
@@ -1296,7 +1296,7 @@ const ROLE_NAMES: Record<string, string> = {
   member: 'Member',
 };
 
-function getRoleBadgeSpan(role: string): HTMLSpanElement | null {
+function getRoleBadgeSpan(role: Role): HTMLSpanElement | null {
   const symbol = ROLE_SYMBOLS[role];
   if (!symbol) return null;
   const span = document.createElement('span');
@@ -3490,7 +3490,7 @@ joinBtn.addEventListener(
                 action: () => {
                   const owner = room;
                   if (owner)
-                    observeUiTask(owner.setRole(participantId, 2), 'Could not grant voice');
+                    observeUiTask(owner.setRole(participantId, 'member'), 'Could not grant voice');
                 },
               },
               { label: 'Dismiss', action: () => {} },

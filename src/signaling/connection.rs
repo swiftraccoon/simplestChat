@@ -3052,8 +3052,7 @@ async fn handle_client_message(
                 .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
             validate_target_id(target_participant_id)?;
-            let new_role = crate::room::roles::Role::from_u8(*role)
-                .ok_or_else(|| anyhow::anyhow!("Invalid role value: {}", role))?;
+            let new_role = *role;
             room_manager
                 .set_participant_role(
                     room_id,

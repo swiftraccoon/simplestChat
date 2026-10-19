@@ -51,6 +51,7 @@ import {
   list,
   object,
 } from './validation';
+import { ROLES } from './protocol';
 type Variant<K extends ServerMessage['type']> = Extract<ServerMessage, { type: K }>;
 function message<K extends ServerMessage['type']>(
   type: K,
@@ -108,7 +109,7 @@ const participant = object<ParticipantInfo>({
   id: text,
   name: text,
   producers: list(producer),
-  role: text,
+  role: choice(...ROLES),
   authenticated: optional(boolean),
   chatStyle: optional(chatStyle),
 });
@@ -208,7 +209,7 @@ const snapshot = object<RoomSnapshot>({
   chatSessionId: optional(chatSessionId),
   participants: list(participant),
   messages: list(chat),
-  yourRole: text,
+  yourRole: choice(...ROLES),
   roomSettings: nullable(optional(settings)),
   nickname: optional(text),
   textMuted: optional(boolean),
@@ -231,7 +232,7 @@ const ban = object<BanEntry>({
 const member = object<MemberEntry>({
   userId: text,
   displayName: text,
-  role: text,
+  role: choice(...ROLES),
   online: boolean,
   authenticated: boolean,
 });
@@ -508,7 +509,7 @@ const messages = {
     participantId: text,
     participants: list(participant),
     reconnectToken: text,
-    yourRole: text,
+    yourRole: choice(...ROLES),
     yourChatStyle: optional(chatStyle),
     yourName: optional(text),
     roomSettings: optional(settings),
@@ -544,7 +545,7 @@ const messages = {
   participantJoined: message('participantJoined', {
     participantId: text,
     participantName: text,
-    role: text,
+    role: choice(...ROLES),
     authenticated: boolean,
     chatStyle: optional(chatStyle),
   }),
@@ -648,7 +649,11 @@ const messages = {
   textUnmuted: message('textUnmuted', { participantId: text }),
   participantKicked: message('participantKicked', { participantId: text, reason: optional(text) }),
   participantBanned: message('participantBanned', { participantId: text, reason: optional(text) }),
-  roleChanged: message('roleChanged', { participantId: text, newRole: text, grantedBy: text }),
+  roleChanged: message('roleChanged', {
+    participantId: text,
+    newRole: choice(...ROLES),
+    grantedBy: text,
+  }),
   voiceRequested: message('voiceRequested', { participantId: text, displayName: text }),
   roomSettingsChanged: message('roomSettingsChanged', { settings }),
   topicChanged: message('topicChanged', { topic: text, changedBy: text }),
