@@ -116,23 +116,32 @@ def secret_checks(  # noqa: PLR0913 -- Explicit source scope joins existing scan
     )
     if base is not None:
         require(re.fullmatch(r"[a-f0-9]{40}", base), "invalid_security_diff_base")
-        _ = context.run(
-            "diff-base", [executable("git"), "merge-base", "--is-ancestor", base, "HEAD"]
+        # 1: the base is not an ancestor; 128: the clone does not have it. Both mean
+        # the branch was rewritten (an owner-only force push), so no range of pushed
+        # commits exists to scan: the tree scan above still covered every current
+        # byte, and the evidence records the skipped range scan by name.
+        status, _ = context.run(
+            "diff-base",
+            [executable("git"), "merge-base", "--is-ancestor", base, "HEAD"],
+            accepted=(0, 1, 128),
         )
-        clean_secret_scan(
-            context,
-            "gitleaks-diff",
-            [
-                scanner,
-                "git",
-                ".",
-                "--log-opts="
-                + base
-                + "..HEAD"
-                + ("" if include_vendor else " -- . :(top,exclude)vendor/**"),
-                *common,
-            ],
-        )
+        if status == 0:
+            clean_secret_scan(
+                context,
+                "gitleaks-diff",
+                [
+                    scanner,
+                    "git",
+                    ".",
+                    "--log-opts="
+                    + base
+                    + "..HEAD"
+                    + ("" if include_vendor else " -- . :(top,exclude)vendor/**"),
+                    *common,
+                ],
+            )
+        else:
+            context.checks[-1]["rangeScan"] = "skipped_base_not_an_ancestor"
     working_env = working_diff_environment(context, snapshot, include_vendor=include_vendor)
     clean_secret_scan(
         context,

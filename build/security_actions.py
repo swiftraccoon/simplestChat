@@ -224,6 +224,19 @@ def check(
     context: Context, snapshot: Path, base: str | None, *, include_vendor: bool = False
 ) -> None:
     """Run this review through the same bounded process/evidence path as other scanners."""
+    if base is not None:
+        # An unknown or rewritten base (an owner-only force push) leaves no range of
+        # changed pins to review, and reviewing every pin as new would need the
+        # release metadata of each one; the review is skipped and the evidence says
+        # so. The next ordinary push compares against this head.
+        status, _ = context.run(
+            "actions-base-ancestor",
+            [executable("git"), "merge-base", "--is-ancestor", base, "HEAD"],
+            accepted=(0, 1, 128),
+        )
+        if status != 0:
+            context.checks[-1]["rangeScan"] = "skipped_base_not_an_ancestor"
+            return
     _ = context.run(
         "actions-dependency-review",
         [

@@ -37,6 +37,16 @@ build/check-security.sh fast --include-vendor
 build/check-security.sh deep --deep-check native --include-vendor
 ```
 
+`--base` names the commit the push started from (CI passes the event's
+`before` id, or a pull request's base): the secret scan, the dependency license
+review and the action pin review compare the current tree with that commit.
+When the base is not an ancestor of the head, which only an owner-authorized
+force push produces, there is no range to compare: the secret tree scan still
+covers every current byte, while the secret range scan, the dependency license
+review and the action pin review are skipped with `skipped_base_not_an_ancestor`
+recorded in the evidence. The next ordinary push compares against the rewritten
+head as usual.
+
 `--include-vendor` is rejected when `CI`, `GITHUB_ACTIONS`, or `ACT` is present
 in the environment. It does not provide a workflow opt-in or a deployment gate.
 

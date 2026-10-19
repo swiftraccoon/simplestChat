@@ -456,14 +456,26 @@ def changed_dependencies(
     """Require an ancestor commit; omitted base compares working changes with HEAD."""
     selected = base or "HEAD"
     require(selected == "HEAD" or re.fullmatch(r"[a-f0-9]{40}", selected), "dependency_diff_base")
-    _, revision = context.run(
-        "dependency-base", [executable("git"), "rev-parse", "--verify", selected + "^{commit}"]
+    status, revision = context.run(
+        "dependency-base",
+        [executable("git"), "rev-parse", "--verify", selected + "^{commit}"],
+        accepted=(0, 128),
     )
-    resolved = revision.decode().strip()
-    _ = context.run(
-        "dependency-base-ancestor",
-        [executable("git"), "merge-base", "--is-ancestor", resolved, "HEAD"],
-    )
+    resolved = revision.decode().strip() if status == 0 else ""
+    ancestor = 1
+    if resolved:
+        ancestor, _ = context.run(
+            "dependency-base-ancestor",
+            [executable("git"), "merge-base", "--is-ancestor", resolved, "HEAD"],
+            accepted=(0, 1, 128),
+        )
+    if ancestor != 0:
+        # An unknown or rewritten base (an owner-only force push) leaves no range to
+        # diff. Reviewing every dependency instead would fetch registry metadata for
+        # all of them on each such push, so the range review is skipped and the
+        # evidence says so; the next ordinary push compares against this head.
+        context.checks[-1]["rangeScan"] = "skipped_base_not_an_ancestor"
+        return selected, set()
     _, listing = context.run(
         "dependency-base-files", [executable("git"), "ls-tree", "-rz", "--name-only", resolved]
     )

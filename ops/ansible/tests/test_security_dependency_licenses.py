@@ -436,7 +436,10 @@ class DependencyLicenseTests(unittest.TestCase):
                 commands: list[list[str]] = []
 
                 def run(
-                    _name: str, argv: list[str], recorded: list[list[str]] = commands
+                    _name: str,
+                    argv: list[str],
+                    recorded: list[list[str]] = commands,
+                    **_: object,
                 ) -> tuple[int, bytes]:
                     recorded.append(argv)
                     if "rev-parse" in argv:
@@ -458,7 +461,7 @@ class DependencyLicenseTests(unittest.TestCase):
                 )
 
     def test_bad_base_and_nonancestor_cannot_become_an_empty_diff(self) -> None:
-        """An invalid comparison fails rather than claiming there are no changed packages."""
+        """An invalid comparison fails; a rewritten one skips the range and says so."""
         with tempfile.TemporaryDirectory() as directory:
             context = self.context(Path(directory))
             with (
@@ -467,13 +470,30 @@ class DependencyLicenseTests(unittest.TestCase):
             ):
                 _ = licenses.changed_dependencies(context, context.root, "HEAD~1")
             run.assert_not_called()
-            with (
-                patch.object(
-                    context, "run", side_effect=[(0, ("b" * 40).encode()), ToolError("nonancestor")]
-                ),
-                self.assertRaisesRegex(ToolError, "nonancestor"),
-            ):
-                _ = licenses.changed_dependencies(context, context.root, "b" * 40)
+            (context.root / "web").mkdir()
+            _ = (context.root / "web/package-lock.json").write_bytes(lock(version="2.0.0"))
+
+            def run_rewritten(_name: str, argv: list[str], **_: object) -> tuple[int, bytes]:
+                context.checks.append({"name": _name, "exitStatus": 0})
+                if "rev-parse" in argv:
+                    return 0, ("b" * 40 + "\n").encode()
+                if "merge-base" in argv:
+                    return 1, b""
+                message = "a rewritten base must not be diffed"
+                raise AssertionError(message)
+
+            with patch.object(context, "run", side_effect=run_rewritten):
+                resolved, changed = licenses.changed_dependencies(context, context.root, "b" * 40)
+            self.assertEqual(resolved, "b" * 40)
+            self.assertEqual(changed, set())
+            self.assertIn(
+                {
+                    "name": "dependency-base-ancestor",
+                    "exitStatus": 0,
+                    "rangeScan": "skipped_base_not_an_ancestor",
+                },
+                context.checks,
+            )
 
     def test_identical_wheel_metadata_is_fetched_once_for_all_platforms(self) -> None:
         """Deduplication saves network work while preserving both wheel identities."""
