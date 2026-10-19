@@ -783,3 +783,18 @@ Complete-source SHA256 per rebound file:
 | 66 | `src/turn.rs:137:137:49:59` | `codeql:07db376b287fd3e5002ee62da055cc5748c4dfb530a300caecf4b6b03fe70d36` |
 | 69 | `src/signaling/mod.rs:1746:1746:79:91` | `codeql:1bcb648c98436f56e156a5170434de46202da566add251b549405331865cc3c5` |
 | exception | `src/room/dormant_join_tests.rs:104:104:57:79` | `codeql:a653c7fd419f76d4f9924f7a28cb63264e71e5e21cd495ff67d4e0c6bffd671d` |
+
+## Source re-review: typed social responses (2026-10-19)
+
+The typed social response change (`b13c994`) made `RoomSettings` public in `src/room/settings.rs` so the protocol module can embed it in the public room snapshot. That edit changes one declaration line far from the four reviewed `cfg(test)` password-boundary literals, so the exact identities of alerts 59–62 rebind to the file's new complete-source SHA256 with unchanged ranges, messages, owner, rationale, scope semantics and the 2026-11-29 expiry. The flagged lines are byte-identical to the previously reviewed source; the recomputation follows the same line-mapping method as the earlier 2026-10-19 rebindings. Hosted ingestion remains a separate required check.
+
+Complete-source SHA256 per rebound file:
+
+- `src/room/settings.rs`: `30fd916a4e851ca6738f8b7264d36a922ceadff3b6242ee8e8813bf76b3934ff`
+
+| Alert | Range | Fingerprint |
+|---|---|---|
+| 59 | `src/room/settings.rs:605:605:33:42` | `codeql:9d43688c3d854828f7221b4a142420abcf319849eb12fb0351100a708b03b302` |
+| 60 | `src/room/settings.rs:610:610:33:43` | `codeql:1a3baf3792e223f94c968a944f32d0a4877495c2ea9724260fa9d36a1ddf3ec8` |
+| 61 | `src/room/settings.rs:612:612:33:43` | `codeql:fe5628f3fe864517acedca3cb90c0066531f0a70b1b922605724977b4720ad94` |
+| 62 | `src/room/settings.rs:615:615:33:45` | `codeql:6b9e12c415a4d0d4f57857c1608ee716240d937df8622c9e508457a151bf4752` |
