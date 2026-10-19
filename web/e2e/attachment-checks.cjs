@@ -28,15 +28,20 @@ async function imageBytes(page) {
   });
 }
 /**
- * Wait for the download and read its bytes at once: Chromium drops a page
- * response's body as soon as its frame moves on, and the preview renders the
- * image before the caller gets to inspect the response.
+ * Wait for the download, then fetch the same grant again for its bytes: Chromium
+ * discards a preview frame's response body as soon as the frame moves on, so the
+ * intercepted response proves the request and its headers while the bytes come
+ * from a second GET carrying the same attachment authorization.
  */
 function downloadFor(page, path) {
-  return responseFor(page, path).then(async (response) => ({
-    response,
-    body: await response.body(),
-  }));
+  return responseFor(page, path).then(async (response) => {
+    const authorization = response.request().headers().authorization;
+    const fetched = await page.request.get(response.url(), {
+      headers: { Authorization: authorization },
+    });
+    assert.equal(fetched.status(), response.status());
+    return { response, body: await fetched.body() };
+  });
 }
 async function checkDownload({ response, body }, size) {
   assert.equal(response.status(), 200);
