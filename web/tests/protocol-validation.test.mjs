@@ -288,7 +288,7 @@ const fixtures = [
     iceParameters: ice,
     iceServers: [{ urls: ['turn:relay.example:3478'], username: '1:u', credential: 'c' }],
   },
-  { type: 'connectionStats', availableBitrate: null, rtt: null },
+  { type: 'connectionStats', availableBitrate: null },
   {
     type: 'consumerLayersChanged',
     consumerId: 'consumer',
@@ -560,10 +560,9 @@ test('normalizes Rust null optionals without losing meaningful false, zero, or e
   assert.equal(Object.hasOwn(room.roomSettings, 'topic'), false);
   assert.equal(Object.hasOwn(room.participants[0].producers[0], 'source'), false);
   assert.equal(Object.hasOwn(room.roomSettings, 'ownerId'), false, 'unknown fields are stripped');
-  assert.deepEqual(decode({ type: 'connectionStats', availableBitrate: 0, rtt: 0 }), {
+  assert.deepEqual(decode({ type: 'connectionStats', availableBitrate: 0 }), {
     type: 'connectionStats',
     availableBitrate: 0,
-    rtt: 0,
   });
   assert.deepEqual(decode({ type: 'topicChanged', topic: '', changedBy: '' }), {
     type: 'topicChanged',

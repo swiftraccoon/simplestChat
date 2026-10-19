@@ -2265,7 +2265,6 @@ fn spawn_stats_task(
                         last_sent_bitrate = last_bitrate;
                         if let Ok(json) = serde_json::to_string(&ServerMessage::ConnectionStats {
                             available_bitrate: Some(last_bitrate),
-                            rtt: None,
                         }) {
                             let _ = sender.try_send(crate::OutboundJson::from(json));
                         }

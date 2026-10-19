@@ -3,28 +3,28 @@
 //! Single-process chat and media server. [`signaling`] owns HTTP/WebSocket
 //! admission, [`room`] owns authoritative membership and room policy, and
 //! [`media`] owns mediasoup workers, routers, and session-scoped transports.
-//! [`auth`] and [`db`] provide optional persisted identity and settings.
+//! `auth` and `db` provide optional persisted identity and settings.
 //! [`shutdown`] coordinates one-way drain; the binary owns runtime deadlines.
 
 pub mod app;
-pub mod attachments;
-pub mod auth;
+pub(crate) mod attachments;
+pub(crate) mod auth;
 pub mod config;
-pub mod db;
-pub mod diagnostics;
+pub(crate) mod db;
+pub(crate) mod diagnostics;
 pub mod ids;
-pub mod invite_codes;
-pub mod labels;
+pub(crate) mod invite_codes;
+pub(crate) mod labels;
 pub mod media;
-pub mod metrics;
-pub mod net;
-pub mod push;
+pub(crate) mod metrics;
+pub(crate) mod net;
+pub(crate) mod push;
 pub mod room;
-pub mod saturation;
+pub(crate) mod saturation;
 pub mod secret;
 pub mod shutdown;
 pub mod signaling;
-pub mod sizing;
+pub(crate) mod sizing;
 pub mod turn;
 
 #[cfg(test)]

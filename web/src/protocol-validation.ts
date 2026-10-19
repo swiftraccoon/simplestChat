@@ -582,7 +582,6 @@ const messages = {
   }),
   connectionStats: message('connectionStats', {
     availableBitrate: nullable(uint32),
-    rtt: nullable(number),
   }),
   consumerLayersChanged: message('consumerLayersChanged', {
     consumerId: text,

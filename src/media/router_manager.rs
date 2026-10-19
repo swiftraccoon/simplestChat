@@ -7,7 +7,7 @@ use crate::media::types::{MediaError, MediaResult};
 use crate::media::worker_manager::{RouterLoadReservation, WorkerManager};
 use anyhow::Result;
 use mediasoup::prelude::*;
-use mediasoup::router::{PipeToRouterOptions, RouterDump};
+use mediasoup::router::PipeToRouterOptions;
 use mediasoup::worker::WorkerId;
 use std::collections::{HashMap, hash_map::Entry};
 use std::sync::Arc;
@@ -481,16 +481,6 @@ impl RouterManager {
     /// Gets the number of active routers
     pub async fn router_count(&self) -> usize {
         self.routers.read().await.len()
-    }
-
-    /// Gets router statistics for a room
-    pub async fn get_router_stats(&self, room_id: &str) -> MediaResult<RouterDump> {
-        let router = self.get_router(room_id).await?;
-
-        router
-            .dump()
-            .await
-            .map_err(|e| MediaError::RouterError(format!("Failed to get router stats: {e}")))
     }
 
     /// Sets up event handlers for a router

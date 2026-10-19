@@ -523,7 +523,6 @@ export type ServerMessage =
       type: 'connectionStats';
       requestId?: string;
       availableBitrate: number | null;
-      rtt: number | null;
     }
   | {
       type: 'consumerLayersChanged';

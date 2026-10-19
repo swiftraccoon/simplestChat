@@ -8,7 +8,7 @@ use crate::saturation::{WorkerThreadInfo, WorkerThreads};
 use anyhow::Result;
 use mediasoup::prelude::*;
 use mediasoup::types::data_structures::SocketFlags;
-use mediasoup::worker::{WorkerDump, WorkerId};
+use mediasoup::worker::WorkerId;
 use std::collections::{HashMap, HashSet};
 use std::net::{IpAddr, Ipv4Addr};
 use std::sync::RwLock as StdRwLock;
@@ -529,20 +529,6 @@ impl WorkerManager {
                 )
             })
             .count()
-    }
-
-    /// Gets current worker statistics
-    pub async fn get_worker_stats(&self) -> Vec<WorkerDump> {
-        let workers = self.workers.read().await.clone();
-        let mut stats = Vec::new();
-
-        for worker in workers.iter() {
-            if let Ok(worker_stats) = worker.dump().await {
-                stats.push(worker_stats);
-            }
-        }
-
-        stats
     }
 
     /// Gets pending plus registered router counts for allocation tie-breaking.

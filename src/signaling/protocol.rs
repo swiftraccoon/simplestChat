@@ -568,7 +568,6 @@ pub enum ServerMessage {
     /// Connection quality stats
     ConnectionStats {
         available_bitrate: Option<u32>,
-        rtt: Option<f64>,
     },
     /// Consumer simulcast layers changed
     ConsumerLayersChanged {
