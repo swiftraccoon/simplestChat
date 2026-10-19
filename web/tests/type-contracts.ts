@@ -28,6 +28,8 @@ export async function checkContracts(
   });
   await room.requestSocial('changeNickname', { nickname: 'Name' });
   await room.requestSocial('removeRoomBan', { banId: 'ban' });
+  await room.requestSocial('setMemberRole', { targetUserId: 'user', role: 'member' });
+  // @ts-expect-error Roles travel by name, never by number.
   await room.requestSocial('setMemberRole', { targetUserId: 'user', role: 2 });
   await room.requestSocial('reportParticipant', {
     targetParticipantId: 'target',

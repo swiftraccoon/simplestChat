@@ -195,6 +195,7 @@ async function run() {
         if (message.type === 'getRouterRtpCapabilities')
           send({
             type: 'error',
+            code: 'request_failed',
             requestId: message.requestId,
             message: 'Media is disabled in this layout fixture',
           });

@@ -1,4 +1,5 @@
-import type { AccountProfile, ChatStyle, PublicProfile, RoomListItem } from './protocol';
+import { ROLES } from './protocol';
+import type { AccountProfile, ChatStyle, PublicProfile, Role, RoomListItem } from './protocol';
 import { CHAT_PALETTE } from './avatar-colors';
 import {
   boolean,
@@ -232,7 +233,7 @@ export interface RegistrationInvite {
   created_at: string;
 }
 export interface RoomInvite extends RegistrationInvite {
-  role: string;
+  role: Role;
 }
 export interface CreatedRegistrationInvite extends RegistrationInvite {
   code: string;
@@ -243,15 +244,16 @@ export interface CreatedRoomInvite extends RoomInvite {
 export interface InviteRedemption {
   room_id: string;
   display_name: string;
-  role: string;
+  role: Role;
 }
 export interface MembershipItem extends RoomListItem {
-  role: string;
+  role: Role;
 }
 const inviteFields = { id: text, uses_left: integer(), expires_at: text, created_at: text };
 export const decodeRegistrationInvite = object<RegistrationInvite>(inviteFields);
 export const decodeRegistrationInvites = list(decodeRegistrationInvite);
-export const decodeRoomInvite = object<RoomInvite>({ ...inviteFields, role: text });
+const role = choice(...ROLES);
+export const decodeRoomInvite = object<RoomInvite>({ ...inviteFields, role });
 export const decodeRoomInvites = list(decodeRoomInvite);
 export const decodeCreatedRegistrationInvite = object<CreatedRegistrationInvite>({
   ...inviteFields,
@@ -259,19 +261,19 @@ export const decodeCreatedRegistrationInvite = object<CreatedRegistrationInvite>
 });
 export const decodeCreatedRoomInvite = object<CreatedRoomInvite>({
   ...inviteFields,
-  role: text,
+  role,
   code: text,
 });
 export const decodeInviteRedemption = object<InviteRedemption>({
   room_id: text,
   display_name: text,
-  role: text,
+  role,
 });
 export interface MembershipPage {
   items: MembershipItem[];
   next_cursor: string | null;
 }
-const decodeMembershipItems = list(object<MembershipItem>({ ...roomListItemFields, role: text }));
+const decodeMembershipItems = list(object<MembershipItem>({ ...roomListItemFields, role }));
 export const decodeMemberships = object<MembershipPage>({
   items: decodeMembershipItems,
   next_cursor: nullable(text),

@@ -375,7 +375,7 @@ async fn authorization_dispatch_moderation_checks_actor_and_target_roles() {
                 },
                 ClientMessage::SetRole {
                     target_participant_id: target.clone(),
-                    role: target_role as u8,
+                    role: target_role,
                 },
             ] {
                 let result = handle_client_message(

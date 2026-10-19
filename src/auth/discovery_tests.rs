@@ -195,9 +195,10 @@ async fn database_discovery_room_shortcuts_preserve_favorites_and_bound_recents(
     .await
     .unwrap();
     assert!(save_favorite(&pool, &alice, &private, true).await.is_err());
-    sqlx::query("INSERT INTO room_roles (room_id,user_id,role) VALUES ($1,$2,1)")
+    sqlx::query("INSERT INTO room_roles (room_id,user_id,role) VALUES ($1,$2,$3)")
         .bind(&private)
         .bind(aid)
+        .bind(crate::room::roles::Role::Member)
         .execute(&pool)
         .await
         .unwrap();

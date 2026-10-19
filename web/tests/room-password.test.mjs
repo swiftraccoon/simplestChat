@@ -62,7 +62,7 @@ test('password challenge permits a join retry carrying the entered password', as
 
 test('ordinary join errors do not prompt for a password based on their text', async () => {
   const { room, RoomPasswordRequiredError } = await roomWithReplies([
-    { type: 'error', message: 'This room requires a password' },
+    { type: 'error', code: 'forbidden', message: 'This room requires a password' },
   ]);
   await assert.rejects(room.join('private-room', 'Guest'), (error) => {
     assert.ok(error instanceof Error);

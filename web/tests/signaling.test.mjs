@@ -184,6 +184,7 @@ test('ordinary request errors cannot reject a correlated authentication renewal'
   );
   socket.receive({
     type: 'error',
+    code: 'request_failed',
     requestId: socket.sent.at(-1).requestId,
     message: 'Room operation failed',
   });
@@ -704,7 +705,11 @@ test('malformed replies neither resolve pending requests nor reach application h
   client.setOnMessage((value) => messages.push(value));
   const pending = client.request({ type: 'createRecvTransport' }, 'transportCreated', 100);
   socket.receive({ type: 'transportCreated', transportId: 'missing-media-fields' });
-  socket.receive({ type: 'error', message: { secret: 'payload-sentinel' } });
+  socket.receive({
+    type: 'error',
+    code: 'request_failed',
+    message: { secret: 'payload-sentinel' },
+  });
   socket.receive({ type: 'participantJoined', participantId: 'bad', participantName: 42 });
   socket.onmessage({ data: '{ malformed payload-sentinel' });
   socket.onmessage({ data: new ArrayBuffer(1) });
@@ -736,7 +741,12 @@ test('late success and error replies cannot settle a retry or become application
   const retryId = socket.sent[1].requestId;
   assert.notEqual(retryId, originalId);
   socket.receive(transportReply('expired', originalId));
-  socket.receive({ type: 'error', requestId: originalId, message: 'Old operation failed' });
+  socket.receive({
+    type: 'error',
+    code: 'request_failed',
+    requestId: originalId,
+    message: 'Old operation failed',
+  });
   originalTimeout();
   assert.equal(timers.pendingCount, 1);
   assert.deepEqual(events, []);
@@ -744,7 +754,12 @@ test('late success and error replies cannot settle a retry or become application
   socket.receive(reply);
   assert.deepEqual(await retry, reply);
   socket.receive(reply);
-  socket.receive({ type: 'error', requestId: retryId, message: 'Duplicate reply' });
+  socket.receive({
+    type: 'error',
+    code: 'request_failed',
+    requestId: retryId,
+    message: 'Duplicate reply',
+  });
   assert.deepEqual(events, []);
   assert.equal(timers.pendingCount, 0);
 });
@@ -757,6 +772,7 @@ test('server errors reject the request and leave the next response available', a
   );
   socket.receive({
     type: 'error',
+    code: 'request_failed',
     requestId: socket.sent.at(-1).requestId,
     message: 'Transport limit reached',
   });
@@ -821,6 +837,7 @@ test('a correlated error rejects only its operation regardless of request order'
   );
   socket.receive({
     type: 'error',
+    code: 'request_failed',
     requestId: socket.sent[1].requestId,
     message: 'Receiver rejected',
   });
@@ -840,13 +857,27 @@ test('missing or unknown IDs and mismatched response types cannot consume a requ
   socket.receive(transportReply('missing-id'));
   socket.receive(transportReply('unknown', 'unknown'));
   socket.receive({ type: 'producerCreated', requestId, producerId: 'wrong-type' });
-  socket.receive({ type: 'error', requestId: 'unknown', message: 'Unrelated error' });
+  socket.receive({
+    type: 'error',
+    code: 'request_failed',
+    requestId: 'unknown',
+    message: 'Unrelated error',
+  });
   assert.equal(timers.pendingCount, 1);
   assert.deepEqual(events, []);
 
-  const notice = { type: 'error', message: 'Uncorrelated connection notice' };
+  const notice = {
+    type: 'error',
+    code: 'request_failed',
+    message: 'Uncorrelated connection notice',
+  };
   const pause = { type: 'producerPaused', producerId: 'producer' };
-  const social = { type: 'socialError', requestId, message: 'Social operation failed' };
+  const social = {
+    type: 'socialError',
+    code: 'request_failed',
+    requestId,
+    message: 'Social operation failed',
+  };
   const socialReply = {
     type: 'socialResponse',
     requestId,
@@ -872,7 +903,7 @@ test('a reply at the deadline rejects even when browser timeout callbacks have b
     socket.receive(
       responseType === 'success'
         ? transportReply('too-late', requestId)
-        : { type: 'error', requestId, message: 'Too late' },
+        : { type: 'error', code: 'request_failed', requestId, message: 'Too late' },
     );
     await expired;
     assert.equal(timers.pendingCount, 0);

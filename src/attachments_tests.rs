@@ -117,7 +117,7 @@ impl Database {
             recipient_name: None,
             content: String::new(),
             attachments: Vec::new(),
-            sent_at: Utc::now().to_rfc3339(),
+            sent_at: Utc::now(),
             removed_at: None,
             revision: 0,
             edited_at: None,
@@ -205,14 +205,9 @@ async fn database_attachments_claim_atomically_require_owner_and_preserve_retry_
         .bind(file.id).fetch_one(&db.pool).await.unwrap();
     assert!(matched);
     let mut tx = db.pool.begin().await.unwrap();
-    crate::room::history::remove_public(
-        &mut tx,
-        &room,
-        &saved.message_id,
-        &Utc::now().to_rfc3339(),
-    )
-    .await
-    .unwrap();
+    crate::room::history::remove_public(&mut tx, &room, &saved.message_id, Utc::now())
+        .await
+        .unwrap();
     tx.commit().await.unwrap();
     assert!(location(&db.pool, file.id).await.is_err());
     let remaining: i64 = sqlx::query_scalar("SELECT count(*) FROM attachments WHERE id=$1")

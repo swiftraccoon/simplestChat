@@ -1929,7 +1929,7 @@ async fn run_client_inner(
 
             participant_id
         }
-        ServerMessage::Error { message } => {
+        ServerMessage::Error { message, .. } => {
             metrics.record_error(format!("Failed to join room: {}", message));
             return Err(anyhow::anyhow!("Failed to join room: {}", message));
         }
@@ -1976,7 +1976,7 @@ async fn run_client_inner(
                 tracing::debug!("{}: Got router RTP capabilities", client_id);
                 rtp_capabilities
             }
-            ServerMessage::Error { message } => {
+            ServerMessage::Error { message, .. } => {
                 metrics.record_error(format!("Failed to get router caps: {}", message));
                 return Err(anyhow::anyhow!("Failed to get router caps: {}", message));
             }
@@ -2025,7 +2025,7 @@ async fn run_client_inner(
                         dtls_parameters,
                     )
                 }
-                ServerMessage::Error { message } => {
+                ServerMessage::Error { message, .. } => {
                     metrics.record_error(format!("Failed to create send transport: {}", message));
                     return Err(anyhow::anyhow!(
                         "Failed to create send transport: {}",
@@ -2064,7 +2064,7 @@ async fn run_client_inner(
                 );
                 tracing::info!("{}: Send transport connected (REAL ICE/DTLS!)", client_id);
             }
-            ServerMessage::Error { message } => {
+            ServerMessage::Error { message, .. } => {
                 metrics.record_error(format!("Send transport connect failed: {}", message));
                 return Err(anyhow::anyhow!(
                     "Send transport connect failed: {}",
@@ -2101,7 +2101,7 @@ async fn run_client_inner(
                     dtls_parameters,
                 )
             }
-            ServerMessage::Error { message } => {
+            ServerMessage::Error { message, .. } => {
                 metrics.record_error(format!("Failed to create recv transport: {}", message));
                 return Err(anyhow::anyhow!(
                     "Failed to create recv transport: {}",
@@ -2141,7 +2141,7 @@ async fn run_client_inner(
                 client_id
             );
         }
-        ServerMessage::Error { message } => {
+        ServerMessage::Error { message, .. } => {
             metrics.record_error(format!("Receive transport connect failed: {}", message));
             return Err(anyhow::anyhow!(
                 "Receive transport connect failed: {}",
@@ -2195,7 +2195,7 @@ async fn run_client_inner(
                     metrics.record_producer_created();
                     metrics.record_publisher(&producer_id, true);
                 }
-                ServerMessage::Error { message } => {
+                ServerMessage::Error { message, .. } => {
                     metrics.record_error(format!("Audio producer failed: {}", message));
                 }
                 _ => {}
@@ -2230,7 +2230,7 @@ async fn run_client_inner(
                     metrics.record_producer_created();
                     metrics.record_publisher(&producer_id, false);
                 }
-                ServerMessage::Error { message } => {
+                ServerMessage::Error { message, .. } => {
                     metrics.record_error(format!("Video producer failed: {}", message));
                 }
                 _ => {}
@@ -4124,7 +4124,7 @@ mod chat_and_continuous_audio_tests {
                     recipient_id: None,
                     recipient_name: None,
                     content,
-                    sent_at: "2026-09-30T00:00:00Z".into(),
+                    sent_at: "2026-09-30T00:00:00Z".parse().expect("fixture timestamp"),
                     chat_style: ChatStyle::default(),
                     reply_to: None,
                     removed_at: None,
@@ -4271,7 +4271,7 @@ async fn handle_server_message(
         } => {
             metrics.record_bandwidth_estimate(available_bitrate);
         }
-        ServerMessage::Error { message } => {
+        ServerMessage::Error { message, .. } => {
             tracing::warn!("{}: Server error: {}", client_id, message);
             metrics.record_error(format!("Server error: {}", message));
         }

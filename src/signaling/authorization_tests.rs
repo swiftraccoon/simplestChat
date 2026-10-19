@@ -629,7 +629,7 @@ async fn authorization_database_inbox_offline_delivery_read_sync_and_consent() {
         recipient_name: Some("Bob".into()),
         content: "First conversation together in a room".into(),
         attachments: Vec::new(),
-        sent_at: (chrono::Utc::now() - chrono::Duration::seconds(1)).to_rfc3339(),
+        sent_at: chrono::Utc::now() - chrono::Duration::seconds(1),
         removed_at: None,
         revision: 0,
         edited_at: None,
@@ -994,7 +994,7 @@ async fn authorization_database_room_roles_and_owner_mutations_do_not_cross_room
                 "/api/rooms/{room}/administration/members/{}",
                 fixture.users[index]
             ),
-            Some(json!({"role":2})),
+            Some(json!({"role":"member"})),
         );
         assert_eq!(
             fixture
@@ -1022,9 +1022,9 @@ async fn authorization_database_room_roles_and_owner_mutations_do_not_cross_room
             "list {role:?}"
         );
         for (grant, allowed) in [
-            (2, [false, false, false, true, true]),
-            (3, [false, false, false, true, true]),
-            (4, [false, false, false, false, true]),
+            ("member", [false, false, false, true, true]),
+            ("moderator", [false, false, false, true, true]),
+            ("admin", [false, false, false, false, true]),
         ] {
             let create = operation("POST", list.path.clone(), Some(json!({"role":grant})));
             let response = fixture
@@ -1126,7 +1126,7 @@ async fn authorization_database_room_roles_and_owner_mutations_do_not_cross_room
                 "/api/rooms/{room}/administration/members/{}",
                 fixture.users[0]
             ),
-            Some(json!({"role":2})),
+            Some(json!({"role":"member"})),
         ),
         operation(
             "DELETE",

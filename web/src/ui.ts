@@ -50,6 +50,7 @@ import {
   decodeAdministrationResolution,
   decodeAdministrationLobby,
 } from './room-administration-validation';
+import type { Role } from './protocol';
 
 /** Account password selection mirrors the server's NFC and Unicode-scalar policy. */
 export function validatePassword(password: string, confirmation: string): void {
@@ -421,7 +422,7 @@ export const api = {
     token: string,
     id: string,
     target: string,
-    role: number,
+    role: Role,
     signal: AbortSignal,
   ) =>
     apiJson(
@@ -772,7 +773,7 @@ export const api = {
   createRoomInvite: (
     token: string | null,
     id: string,
-    data: { role: number; uses: number; days: number },
+    data: { role: Role; uses: number; days: number },
   ) =>
     apiJson(
       decodeCreatedRoomInvite,

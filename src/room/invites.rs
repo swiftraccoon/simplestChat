@@ -35,7 +35,7 @@ macro_rules! issuer_still_authorized {
     () => {
         "(EXISTS (SELECT 1 FROM rooms r WHERE r.id = i.room_id AND r.owner_id = i.created_by)
           OR EXISTS (SELECT 1 FROM room_roles rr WHERE rr.room_id = i.room_id
-                       AND rr.user_id = i.created_by AND rr.role >= 3 AND rr.role > i.role))"
+                       AND rr.user_id = i.created_by AND rr.role >= 4 AND rr.role > i.role))"
     };
 }
 pub(crate) const MAX_INVITE_USES: i32 = 100;
@@ -49,8 +49,7 @@ pub(crate) const INVITE_RECEIPT_RETENTION_DAYS: i32 = 7;
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
 pub(crate) struct RoomInvite {
     pub id: Uuid,
-    #[sqlx(try_from = "i16")]
-    pub role: InviteRole,
+    pub role: Role,
     pub uses_left: i32,
     pub expires_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
@@ -70,26 +69,9 @@ pub(crate) struct InviteCodeRequest {
     pub code: String,
 }
 
-/// A stored role value as its name; the table's CHECK keeps it in range.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct InviteRole(pub Role);
-
-impl TryFrom<i16> for InviteRole {
-    type Error = String;
-    fn try_from(value: i16) -> Result<Self, Self::Error> {
-        Ok(Self(Role::from_db(value)))
-    }
-}
-
-impl Serialize for InviteRole {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(self.0.name())
-    }
-}
-
 #[derive(Debug, Deserialize)]
 pub(crate) struct CreateRoomInviteRequest {
-    pub role: u8,
+    pub role: Role,
     pub uses: Option<i32>,
     pub days: Option<i32>,
 }
@@ -98,14 +80,14 @@ pub(crate) struct CreateRoomInviteRequest {
 pub(crate) struct InviteRedemption {
     pub room_id: String,
     pub display_name: String,
-    pub role: &'static str,
+    pub role: Role,
 }
 
 #[derive(Serialize)]
 pub(crate) struct MembershipItem {
     #[serde(flatten)]
     pub room: RoomListItem,
-    pub role: &'static str,
+    pub role: Role,
 }
 
 #[derive(Serialize)]
@@ -154,7 +136,7 @@ pub(crate) async fn create_room_invite(
     )
     .bind(invite_codes::digest(&code))
     .bind(room_id)
-    .bind(role.to_db())
+    .bind(role)
     .bind(created_by)
     .bind(uses)
     .bind(days)
@@ -231,7 +213,7 @@ pub(crate) async fn redeem_room_invite(
     // Serialize all attempts against this code before checking the receipt.
     // A repeated successful request never spends again or re-grants a role that
     // a moderator has subsequently changed.
-    let invitation: Option<(String, i16, Uuid, i32, bool)> = sqlx::query_as(
+    let invitation: Option<(String, Role, Uuid, i32, bool)> = sqlx::query_as(
         "SELECT room_id, role, created_by, uses_left, expires_at > clock_timestamp()
          FROM invites WHERE code_hash = $1 AND kind = 'room'
            AND expires_at > clock_timestamp() - make_interval(days => $2)
@@ -252,7 +234,7 @@ pub(crate) async fn redeem_room_invite(
     let Some((owner_id, display_name)) = room else {
         return Ok(None);
     };
-    let receipt: Option<i16> = sqlx::query_scalar(
+    let receipt: Option<Role> = sqlx::query_scalar(
         "SELECT granted_role FROM invite_redemptions WHERE invite_hash = $1 AND user_id = $2",
     )
     .bind(&hash)
@@ -260,10 +242,6 @@ pub(crate) async fn redeem_room_invite(
     .fetch_optional(&mut *transaction)
     .await?;
     if let Some(role) = receipt {
-        let role = u8::try_from(role)
-            .ok()
-            .and_then(Role::from_u8)
-            .ok_or_else(|| sqlx::Error::Protocol("invalid invitation receipt role".into()))?;
         transaction.commit().await?;
         return Ok(Some((room_id, display_name, role)));
     }
@@ -272,7 +250,7 @@ pub(crate) async fn redeem_room_invite(
     }
     // Shared-locked so a demotion committing concurrently waits for this
     // redemption or is seen by it, never slips between the read and the grant.
-    let issuer_membership: Option<i16> = sqlx::query_scalar(
+    let issuer_membership: Option<Role> = sqlx::query_scalar(
         "SELECT role FROM room_roles WHERE room_id = $1 AND user_id = $2 FOR SHARE",
     )
     .bind(&room_id)
@@ -282,15 +260,15 @@ pub(crate) async fn redeem_room_invite(
     let issuer = if created_by == owner_id {
         Role::Owner
     } else {
-        issuer_membership.map_or(Role::User, Role::from_db)
+        issuer_membership.unwrap_or(Role::User)
     };
-    if issuer < Role::Admin || issuer <= Role::from_db(role) {
+    if issuer < Role::Admin || issuer <= role {
         return Ok(None);
     }
     let granted = if owner_id == user_id {
         Role::Owner
     } else {
-        let stored: i16 = sqlx::query_scalar(
+        let stored: Role = sqlx::query_scalar(
             "INSERT INTO room_roles (room_id, user_id, role, granted_by)
              VALUES ($1, $2, $3, $4)
              ON CONFLICT (room_id, user_id) DO UPDATE
@@ -305,7 +283,7 @@ pub(crate) async fn redeem_room_invite(
         .bind(created_by)
         .fetch_one(&mut *transaction)
         .await?;
-        Role::from_db(stored)
+        stored
     };
     sqlx::query("UPDATE invites SET uses_left = uses_left - 1 WHERE code_hash = $1")
         .bind(&hash)
@@ -316,7 +294,7 @@ pub(crate) async fn redeem_room_invite(
     )
     .bind(&hash)
     .bind(user_id)
-    .bind(granted as i16)
+    .bind(granted)
     .execute(&mut *transaction)
     .await?;
     transaction.commit().await?;
@@ -330,7 +308,7 @@ async fn preview_room_invite(
     pool: &PgPool,
     code: &str,
     user_id: Uuid,
-) -> Result<Option<(String, String, i16)>, sqlx::Error> {
+) -> Result<Option<(String, String, Role)>, sqlx::Error> {
     sqlx::query_as(concat!(
         "SELECT i.room_id, r.display_name, i.role FROM invites i
          JOIN rooms r ON r.id = i.room_id
@@ -360,11 +338,11 @@ type MembershipRow = (
     bool,
     sqlx::types::Json<crate::signaling::protocol::ChatStyle>,
     sqlx::types::Json<crate::signaling::protocol::ChatStyle>,
-    i16,
+    Role,
 );
 
 pub(crate) struct MembershipBatch {
-    pub rows: Vec<(RoomListRow, i16)>,
+    pub rows: Vec<(RoomListRow, Role)>,
     pub next_cursor: Option<String>,
 }
 
@@ -513,7 +491,7 @@ pub(crate) async fn create(
 ) -> Result<(HeaderMap, Json<CreatedRoomInvite>), RoomApiError> {
     let _permit = acquire_room_api_request(&server)?;
     let (user, pool) = caller(&server, &headers).await?;
-    let granting = Role::from_u8(request.role).ok_or_else(|| bad_request("Choose a role"))?;
+    let granting = request.role;
     if !matches!(granting, Role::Member | Role::Moderator | Role::Admin) {
         return Err(bad_request(
             "An invitation grants member, moderator or admin",
@@ -594,7 +572,7 @@ pub(crate) async fn redeem(
         Json(InviteRedemption {
             room_id,
             display_name,
-            role: role.name(),
+            role,
         }),
     ))
 }
@@ -626,7 +604,7 @@ pub(crate) async fn preview(
         Json(InviteRedemption {
             room_id,
             display_name,
-            role: Role::from_db(role).name(),
+            role,
         }),
     ))
 }
@@ -658,7 +636,7 @@ pub(crate) async fn list_memberships(
                 .into_iter()
                 .map(|(row, role)| MembershipItem {
                     room: room_list_item(&server, row),
-                    role: Role::from_db(role).name(),
+                    role,
                 })
                 .collect(),
         }),
@@ -671,10 +649,10 @@ mod tests {
 
     #[test]
     fn issuer_rule_names_the_stored_role_values_it_compares() {
-        assert_eq!(Role::Member.to_db(), 1);
-        assert_eq!(Role::Moderator.to_db(), 2);
-        assert_eq!(Role::Admin.to_db(), 3);
-        assert!(issuer_still_authorized!().contains("rr.role >= 3 AND rr.role > i.role"));
+        assert_eq!(Role::Member as i16, 2);
+        assert_eq!(Role::Moderator as i16, 3);
+        assert_eq!(Role::Admin as i16, 4);
+        assert!(issuer_still_authorized!().contains("rr.role >= 4 AND rr.role > i.role"));
     }
 
     #[test]
@@ -733,7 +711,7 @@ mod tests {
             .unwrap();
         assert!(invite_codes::is_valid(&invite.code));
         assert_eq!(
-            (invite.details.role.0, invite.details.uses_left),
+            (invite.details.role, invite.details.uses_left),
             (Role::Member, 2)
         );
         assert_eq!(list_room_invites(&pool, &room_id).await.unwrap().len(), 1);
@@ -755,7 +733,7 @@ mod tests {
                 preview_room_invite(&pool, &invite.code, alice)
                     .await
                     .unwrap(),
-                Some((room_id.clone(), "Invited room".into(), Role::Member.to_db()))
+                Some((room_id.clone(), "Invited room".into(), Role::Member))
             );
         }
         assert_eq!(
@@ -1026,7 +1004,7 @@ mod tests {
         sqlx::query("INSERT INTO room_roles(room_id,user_id,role,granted_by) VALUES($1,$2,$3,$4)")
             .bind(&room_id)
             .bind(alice)
-            .bind(Role::Member.to_db())
+            .bind(Role::Member)
             .bind(owner)
             .execute(&pool)
             .await
@@ -1054,7 +1032,7 @@ mod tests {
         assert!(mine.next_cursor.is_none());
         assert_eq!(
             (mine.rows[0].0.0.as_str(), mine.rows[0].1),
-            (room_id.as_str(), Role::Member.to_db())
+            (room_id.as_str(), Role::Member)
         );
         assert!(
             memberships(&pool, owner, None)
@@ -1099,8 +1077,8 @@ mod tests {
             .collect();
         sqlx::query("INSERT INTO rooms(id,owner_id,display_name) SELECT id,$2,'Same name' FROM unnest($1::text[]) AS id")
             .bind(&rooms).bind(owner).execute(&pool).await.unwrap();
-        sqlx::query("INSERT INTO room_roles(room_id,user_id,role,granted_by) SELECT id,$2,1,$3 FROM unnest($1::text[]) AS id")
-            .bind(&rooms).bind(member).bind(owner).execute(&pool).await.unwrap();
+        sqlx::query("INSERT INTO room_roles(room_id,user_id,role,granted_by) SELECT id,$2,$4,$3 FROM unnest($1::text[]) AS id")
+            .bind(&rooms).bind(member).bind(owner).bind(Role::Member).execute(&pool).await.unwrap();
         let first = memberships(&pool, member, None).await.unwrap();
         assert_eq!(first.rows.len(), 100);
         assert_eq!(first.next_cursor.as_ref(), Some(&rooms[99]));

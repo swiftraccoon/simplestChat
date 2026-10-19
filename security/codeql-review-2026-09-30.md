@@ -762,3 +762,24 @@ Complete-source SHA256 per rebound file:
 | 69 | `src/signaling/mod.rs:1855:1855:79:91` | `codeql:f8507fe451e15f5c5b9fb3b3225d110d0e0e88f066e1aae4bd3c2c53c86e9e79` |
 | 102 | `src/security_canary_tests.rs:90:90:21:62` | `codeql:93594648d3260f9b5d31d6eda1bd77cd1c8802603ea35ecd4e844779585a19ae` |
 | 953 | `load_tests/src/account_session.rs:274:274:19:62` | `codeql:0a072f64dd733d355d8e57a20da2d0f1aa4cd6513e9fe39544934a3b11373142` |
+
+## Source re-review: typed configuration and named roles (2026-10-19)
+
+The typed configuration (`4ca15a0`) removed the environment readers from `src/signaling/mod.rs` and `src/turn.rs`, and the named-role change moved two lines in `src/signaling/connection_authorization_tests.rs`, so the exact identities of six reviewed findings and the `src/room/dormant_join_tests.rs` exception moved by whole-line shifts; no flagged line changed. The recomputation was checked against the hosted Rust policy report of run 39206189199 (`a49f127`): every finding that report blocked or waived matched, and the dormant-join exception takes that report's identity directly. Owner, rationale, scope semantics and the 2026-11-29 expiry are unchanged; hosted ingestion remains a separate required check.
+
+Complete-source SHA256 per rebound file:
+
+- `src/room/dormant_join_tests.rs`: `e9d78ed118131605edc22ae4cd21ccc3ff246a96e2529f8f703897a2f30aae79`
+- `src/signaling/connection_authorization_tests.rs`: `a9fa341e3da86e8a292a6676e1a865ed038d0f9395110614212a1a38cdc925eb`
+- `src/signaling/mod.rs`: `538c77f84f239549fb6d4a2218c9b0a3d3ac9ed478c66b956e3468f6769172d8`
+- `src/turn.rs`: `6a4b14b63a92c0dd55e5f72da0564efa901f7bad4f8b542a5e37c3835efe3cde`
+
+| Alert | Range | Fingerprint |
+|---|---|---|
+| 35 | `src/signaling/mod.rs:1755:1755:153:165` | `codeql:54119f553c1725491241988aeab1dd1d5d33d70649e06648ef3744d49a7840d6` |
+| 36 | `src/signaling/connection_authorization_tests.rs:398:398:21:62` | `codeql:d032ba09e7acf4ae83a5f48b218ee85b2083cce0c1b5a96331bb1dffe0039453` |
+| 37 | `src/signaling/connection_authorization_tests.rs:445:445:17:51` | `codeql:7d6300a8eddb26ebd994cdd6abffc5fdecaec3288ad51f8ebed1c91728452a23` |
+| 63 | `src/signaling/mod.rs:2186:2186:31:56` | `codeql:997564094e5e82df2718c53e513a715b39d049f9460bd593ccb97714a04f1c7c` |
+| 66 | `src/turn.rs:137:137:49:59` | `codeql:07db376b287fd3e5002ee62da055cc5748c4dfb530a300caecf4b6b03fe70d36` |
+| 69 | `src/signaling/mod.rs:1746:1746:79:91` | `codeql:1bcb648c98436f56e156a5170434de46202da566add251b549405331865cc3c5` |
+| exception | `src/room/dormant_join_tests.rs:104:104:57:79` | `codeql:a653c7fd419f76d4f9924f7a28cb63264e71e5e21cd495ff67d4e0c6bffd671d` |

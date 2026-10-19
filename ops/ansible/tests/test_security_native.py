@@ -118,8 +118,9 @@ class Fixture:
         _ = put(
             self.root,
             "Cargo.toml",
-            b'[package]\nname="simplestchat"\nversion="0.1.0"\n'
-            + b'rust-version="1.99.0"\npublish=false\n',
+            b'[workspace]\nmembers=[]\n[workspace.package]\nversion="0.1.0"\n'
+            + b'rust-version="1.99.0"\n[package]\nname="simplestchat"\n'
+            + b"version.workspace=true\nrust-version.workspace=true\npublish=false\n",
         )
         aws_files = {
             "Cargo.toml": b'[package]\nname="aws-lc-sys"\nversion="0.45.0"\nlicense="ISC"\n',

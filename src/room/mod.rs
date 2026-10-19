@@ -139,7 +139,7 @@ pub(crate) enum JoinResult {
     /// Successfully joined the room — includes participant list, role, and room settings
     Joined {
         participants: Vec<ParticipantInfo>,
-        role: String,
+        role: roles::Role,
         room_settings: Option<serde_json::Value>,
         /// The joiner's look: the account's saved one, or the guest's.
         chat_style: ChatStyle,
@@ -2984,7 +2984,7 @@ impl RoomManager {
                 &ServerMessage::ParticipantJoined {
                     participant_id: participant_id.clone(),
                     participant_name: participant_name.clone(),
-                    role: role.name().to_string(),
+                    role,
                     authenticated,
                     chat_style: chat_style.clone(),
                 },
@@ -3012,7 +3012,7 @@ impl RoomManager {
                             source: source.clone(),
                         })
                         .collect(),
-                    role: p.role.name().to_string(),
+                    role: p.role,
                     authenticated: p.authenticated,
                     chat_style: p.chat_style.clone(),
                 })
@@ -3026,7 +3026,7 @@ impl RoomManager {
 
             Ok(JoinResult::Joined {
                 participants,
-                role: role.name().to_string(),
+                role,
                 room_settings,
                 chat_style,
                 name: participant_name,
@@ -5612,7 +5612,7 @@ impl RoomManager {
 
         room.broadcast_all(&ServerMessage::RoleChanged {
             participant_id: target_participant_id.to_string(),
-            new_role: new_role.name().to_string(),
+            new_role,
             granted_by: setter_name,
         });
         drop(room);
@@ -5807,7 +5807,7 @@ impl RoomManager {
                         source: source.clone(),
                     })
                     .collect(),
-                role: p.role.name().to_string(),
+                role: p.role,
                 authenticated: p.authenticated,
                 chat_style: p.chat_style.clone(),
             })
@@ -5865,7 +5865,7 @@ impl RoomManager {
             participant_id: entry.participant_id.clone(),
             participants,
             reconnect_token: reconnect_token.into(),
-            your_role: admitted_role.name().to_string(),
+            your_role: admitted_role,
             your_name: entry.name.clone(),
             your_chat_style: entry.chat_style.clone(),
             room_settings,
@@ -5883,7 +5883,7 @@ impl RoomManager {
             &ServerMessage::ParticipantJoined {
                 participant_id: entry.participant_id.clone(),
                 participant_name: entry.name.clone(),
-                role: admitted_role.name().to_string(),
+                role: admitted_role,
                 authenticated: entry.authenticated,
                 chat_style: entry.chat_style.clone(),
             },

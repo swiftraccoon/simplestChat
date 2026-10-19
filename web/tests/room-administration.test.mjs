@@ -75,7 +75,7 @@ async function fixture(role = 'owner') {
     };
   }
   const { administrationSections } = await loadTypeScript('src/room-administration.ts', {
-    modules: { './ui': f.ui },
+    modules: { './protocol': await loadTypeScript('src/protocol.ts'), './ui': f.ui },
   });
   const sections = administrationSections({
     roomId: 'saved-room',

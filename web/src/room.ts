@@ -38,11 +38,12 @@ import type {
   ScreenShareResult,
   ScreenShareAudio,
 } from './media';
+import type { Role } from './protocol';
 
 export interface Participant {
   id: string;
   name: string;
-  role: string;
+  role: Role;
   authenticated?: boolean;
   chatStyle?: ChatStyle;
   producers: Map<string, { kind: 'audio' | 'video'; source?: string }>;
@@ -175,7 +176,7 @@ export type RoomEventHandler = {
   onFollowedSpeakerChanged?: (participantId: string | null) => void;
   onAudioLevels: (levels: { participantId: string; volume: number }[]) => void;
   onModeration: (action: string, participantId: string, reason?: string) => void;
-  onRoleChanged: (participantId: string, newRole: string) => void;
+  onRoleChanged: (participantId: string, newRole: Role) => void;
   onRoomSettingsChanged: (settings: RoomSettings) => void;
   onTopicChanged: (topic: string, changedBy: string) => void;
   onVoiceRequested: (participantId: string, displayName: string) => void;
@@ -277,7 +278,7 @@ export class RoomClient {
   private events: RoomEventHandler;
   private reconnectToken: string | null = null;
   private connectionQuality: ConnectionQuality = 'unknown';
-  private localRole: string = 'user';
+  private localRole: Role = 'user';
   private _roomSettings: RoomSettings | null = null;
   private localTextMuted = false;
   private localCamBanned = false;
@@ -606,7 +607,7 @@ export class RoomClient {
           if (msg.type === 'roomPasswordRequired') {
             reject(new RoomPasswordRequiredError());
           } else if (msg.type === 'error') {
-            reject(new Error(msg.message));
+            reject(Object.assign(new Error(msg.message), { name: 'ServerError', code: msg.code }));
           } else {
             resolve(msg);
           }
@@ -1361,7 +1362,7 @@ export class RoomClient {
     await this.media?.switchMic(deviceId);
   }
 
-  get role(): string {
+  get role(): Role {
     return this.localRole;
   }
 
@@ -1419,7 +1420,7 @@ export class RoomClient {
     return this.requestControl({ type: 'unban', targetUserId });
   }
 
-  setRole(targetId: string, role: number): Promise<void> {
+  setRole(targetId: string, role: Role): Promise<void> {
     return this.requestControl({ type: 'setRole', targetParticipantId: targetId, role });
   }
 
@@ -1842,7 +1843,9 @@ export class RoomClient {
         if (request && msg.requestId) {
           this.socialRequests.delete(msg.requestId);
           clearTimeout(request.timer);
-          request.reject(new Error(msg.message));
+          request.reject(
+            Object.assign(new Error(msg.message), { name: 'ServerError', code: msg.code }),
+          );
         }
         this.events.onSocialEvent?.(msg);
         break;

@@ -714,6 +714,21 @@ def embedded_registry_licenses(
     return records
 
 
+def inherit_workspace_package(package: JsonObject, root: JsonObject) -> JsonObject:
+    """Resolve `key.workspace = true` fields from the root manifest's [workspace.package]."""
+    shared = object_value(object_value(root.get("workspace", {})).get("package", {}))
+    resolved: JsonObject = {}
+    for key, value in package.items():
+        if isinstance(value, dict) and value == {"workspace": True}:
+            if key not in shared:
+                message = f"Workspace package field is not declared by the root manifest: {key}"
+                raise NativeError(message)
+            resolved[key] = shared[key]
+        else:
+            resolved[key] = value
+    return resolved
+
+
 def local_license_source(
     build: Build, integrity: vendor.Manifest, path: Path, locked: JsonObject
 ) -> tuple[JsonObject, dict[str, bytes], JsonValue]:
@@ -722,6 +737,8 @@ def local_license_source(
         raise NativeError("Unsupported non-registry Rust source")
     path = beneath(path, build.root)
     package = object_value(toml(path)["package"])
+    if path == build.root / "Cargo.toml" or path.parent.parent == build.root:
+        package = inherit_workspace_package(package, toml(build.root / "Cargo.toml"))
     if path == build.root / "Cargo.toml":
         files = {"Cargo.toml": vendor.read_regular(path, vendor.MAX_MANIFEST)}
         if package.get("license-file") is not None:
@@ -841,7 +858,8 @@ def builder_rpm_records(lines: Sequence[str]) -> tuple[list[str], list[str]]:
 def toolchain_evidence(root: Path, runtime: Path) -> JsonObject:
     """Record actual compiler identity and builder RPM/source-RPM ownership."""
     rust = command(["rustc", "--version", "--verbose"], limit=65536)
-    package = object_value(toml(root / "Cargo.toml")["package"])
+    manifest = toml(root / "Cargo.toml")
+    package = inherit_workspace_package(object_value(manifest["package"]), manifest)
     if f"release: {text(package, 'rust-version')}\n" not in rust:
         raise NativeError("Rust compiler differs from the reviewed production version")
     compiler = command(["c++", "--version"], limit=65536)

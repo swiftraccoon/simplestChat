@@ -149,13 +149,15 @@ async function fixture() {
     globals: { document: dom.document, setTimeout: () => 1, clearTimeout: () => {} },
   });
   const updates = accountUpdatesFixture();
+  const protocol = await loadTypeScript('src/protocol.ts');
   const api = await loadTypeScript('src/community-ui.ts', {
     modules: {
+      './protocol': protocol,
       './account-updates': updates.module,
       './ui': ui,
       './settings-sheet': sheet,
       './room-administration': await loadTypeScript('src/room-administration.ts', {
-        modules: { './ui': ui, './settings-sheet': sheet },
+        modules: { './protocol': protocol, './ui': ui, './settings-sheet': sheet },
         globals: { document: dom.document },
       }),
       './room-administration-api': await loadTypeScript('src/room-administration-api.ts', {
@@ -1071,6 +1073,7 @@ test('room-scoped actions mount in the room tools while account actions stay in 
   });
   const api = await loadTypeScript('src/community-ui.ts', {
     modules: {
+      './protocol': await loadTypeScript('src/protocol.ts'),
       './account-updates': accountUpdatesFixture().module,
       './ui': { ...dom.ui, api: { ...dom.ui.api, inboxUnread: async () => ({ unreadCount: 0 }) } },
       './settings-sheet': {},

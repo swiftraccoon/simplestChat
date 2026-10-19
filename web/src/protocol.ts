@@ -97,7 +97,7 @@ export type ClientMessage =
       reportId?: string;
     }
   | { type: 'unban'; targetUserId: string }
-  | { type: 'setRole'; targetParticipantId: string; role: number }
+  | { type: 'setRole'; targetParticipantId: string; role: Role }
   | { type: 'requestVoice' }
   // Room management
   | ({ type: 'updateRoomSettings' } & RoomSettingsPatch)
@@ -122,12 +122,12 @@ export type ServerMessage =
       participantId: string;
       participants: ParticipantInfo[];
       reconnectToken: string;
-      yourRole: string;
+      yourRole: Role;
       yourChatStyle?: ChatStyle;
       yourName?: string;
       roomSettings?: RoomSettings;
     }
-  | { type: 'error'; requestId?: string; message: string }
+  | { type: 'error'; requestId?: string; code: ErrorCode; message: string }
   | { type: 'roomPasswordRequired' }
   | { type: 'roomClosed'; reason: string }
   | { type: 'serverRestarting'; reason: string }
@@ -155,7 +155,7 @@ export type ServerMessage =
       type: 'participantJoined';
       participantId: string;
       participantName: string;
-      role: string;
+      role: Role;
       authenticated: boolean;
       chatStyle?: ChatStyle;
     }
@@ -212,7 +212,13 @@ export type ServerMessage =
         | 'storage_unconfirmed';
     }
   | SocialResponse
-  | { type: 'socialError'; requestId?: string; clientMessageId?: string; message: string }
+  | {
+      type: 'socialError';
+      requestId?: string;
+      clientMessageId?: string;
+      code: ErrorCode;
+      message: string;
+    }
   | { type: 'nicknameChanged'; participantId: string; nickname: string }
   | { type: 'chatStyleChanged'; participantId: string; chatStyle: ChatStyle }
   | { type: 'participantTyping'; participantId: string; targetParticipantId?: string }
@@ -230,7 +236,7 @@ export type ServerMessage =
   | { type: 'textUnmuted'; participantId: string }
   | { type: 'participantKicked'; participantId: string; reason?: string }
   | { type: 'participantBanned'; participantId: string; reason?: string }
-  | { type: 'roleChanged'; participantId: string; newRole: string; grantedBy: string }
+  | { type: 'roleChanged'; participantId: string; newRole: Role; grantedBy: string }
   | { type: 'voiceRequested'; participantId: string; displayName: string }
   // Room state
   | { type: 'roomSettingsChanged'; settings: RoomSettings }
@@ -296,11 +302,42 @@ export type RoomControl = Extract<
 
 // --- Shared types ---
 
+/** Why the server refused a frame or request; the message beside it is for people. */
+export const ERROR_CODES = [
+  'invalid_message',
+  'invalid',
+  'forbidden',
+  'not_found',
+  'rate_limited',
+  'unavailable',
+  'timed_out',
+  'request_failed',
+] as const;
+export type ErrorCode = (typeof ERROR_CODES)[number];
+
+/**
+ * A refusal the server sent: an `Error` whose `name` is `ServerError` and that
+ * carries the code clients switch on. Built with `Object.assign` where the
+ * frame is received, so this module stays type-only for its importers.
+ */
+export interface ServerError extends Error {
+  readonly code: ErrorCode;
+}
+
+/** A participant's standing in a room, least to most trusted; the wire carries the name. */
+export const ROLES = ['guest', 'user', 'member', 'moderator', 'admin', 'owner'] as const;
+export type Role = (typeof ROLES)[number];
+/** Position of a role in the trust order. */
+export const rank = (role: Role): number => ROLES.indexOf(role);
+/** The role a select or query string names, or undefined. */
+export const asRole = (value: string): Role | undefined =>
+  (ROLES as readonly string[]).includes(value) ? (value as Role) : undefined;
+
 export interface ParticipantInfo {
   id: string;
   name: string;
   producers: ProducerMetadata[];
-  role: string;
+  role: Role;
   authenticated?: boolean;
   chatStyle?: ChatStyle;
 }
@@ -362,7 +399,7 @@ export interface SocialRequests {
   listRoomBans: { offset?: number };
   removeRoomBan: { banId: string };
   listRoomMembers: { offset?: number };
-  setMemberRole: { targetUserId: string; role: number };
+  setMemberRole: { targetUserId: string; role: Role };
   reportParticipant: { targetParticipantId: string; reason: string };
   listRoomReports: { offset?: number };
   resolveRoomReport: { reportId: string; status: 'resolved' | 'dismissed' };
@@ -467,7 +504,7 @@ export interface RoomSnapshot {
   chatSessionId?: string;
   participants: ParticipantInfo[];
   messages: ChatEntry[];
-  yourRole: string;
+  yourRole: Role;
   roomSettings?: RoomSettings | null;
   nickname?: string;
   textMuted?: boolean;
@@ -509,7 +546,7 @@ export interface BanEntry {
 export interface MemberEntry {
   userId: string;
   displayName: string;
-  role: string;
+  role: Role;
   online: boolean;
   authenticated: boolean;
 }

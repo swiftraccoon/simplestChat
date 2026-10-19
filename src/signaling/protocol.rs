@@ -4,6 +4,7 @@
 
 use crate::secret::SecretString;
 use crate::turn::IceServer;
+use chrono::{DateTime, Utc};
 use mediasoup::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -52,6 +53,48 @@ pub(super) struct ServerReply<'a> {
 }
 
 /// A signaling bearer is serialized only for transport, never for diagnostics.
+/// Roles travel by name; see [`Role`].
+pub use crate::room::roles::Role;
+
+/// Why the server refused a frame or request. Clients switch on the code;
+/// `message` beside it is for people and may change at any time.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ErrorCode {
+    /// The frame could not be parsed or named an unknown operation.
+    InvalidMessage,
+    /// A field was missing, malformed, out of range or already used.
+    Invalid,
+    /// The caller may not perform this action, or the room's state forbids it.
+    Forbidden,
+    /// The target does not exist or is no longer available.
+    NotFound,
+    /// Too many requests; retry after a pause.
+    RateLimited,
+    /// A dependency the request needs is not available; retry later.
+    Unavailable,
+    /// The operation did not finish in time; it may or may not have applied.
+    TimedOut,
+    /// The server could not complete the request.
+    RequestFailed,
+}
+
+impl ErrorCode {
+    /// The wire name.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::InvalidMessage => "invalid_message",
+            Self::Invalid => "invalid",
+            Self::Forbidden => "forbidden",
+            Self::NotFound => "not_found",
+            Self::RateLimited => "rate_limited",
+            Self::Unavailable => "unavailable",
+            Self::TimedOut => "timed_out",
+            Self::RequestFailed => "request_failed",
+        }
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct AuthenticationToken(SecretString);
@@ -307,7 +350,7 @@ pub enum ClientMessage {
     SetMemberRole {
         request_id: String,
         target_user_id: String,
-        role: u8,
+        role: Role,
     },
     #[serde(rename_all = "camelCase")]
     ReportParticipant {
@@ -398,7 +441,7 @@ pub enum ClientMessage {
     #[serde(rename_all = "camelCase")]
     SetRole {
         target_participant_id: String,
-        role: u8,
+        role: Role,
     },
     /// Request voice in a moderated room (sent by User/Guest)
     RequestVoice,
@@ -465,7 +508,7 @@ pub enum ServerMessage {
         participant_id: String,
         participants: Vec<ParticipantInfo>,
         reconnect_token: SecretString,
-        your_role: String,
+        your_role: Role,
         /// The name the room knows this participant by; a guest's may carry a number.
         your_name: String,
         /// This participant's look: an account's saved one, or the guest's.
@@ -488,7 +531,8 @@ pub enum ServerMessage {
         expires_at: u64,
     },
     /// Error response
-    Error { message: String },
+    /// A request or frame the server refused; `code` is what clients act on.
+    Error { code: ErrorCode, message: String },
     /// The client should prompt for a password and retry this room join.
     RoomPasswordRequired,
     /// Terminal room lifecycle event, distinct from recoverable request errors.
@@ -530,7 +574,7 @@ pub enum ServerMessage {
     ParticipantJoined {
         participant_id: String,
         participant_name: String,
-        role: String,
+        role: Role,
         authenticated: bool,
         #[serde(default)]
         chat_style: ChatStyle,
@@ -607,13 +651,13 @@ pub enum ServerMessage {
         attachments: Vec<ChatAttachment>,
         message_id: String,
         client_message_id: String,
-        sent_at: String,
+        sent_at: DateTime<Utc>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        removed_at: Option<String>,
+        removed_at: Option<DateTime<Utc>>,
         #[serde(default)]
         revision: u32,
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        edited_at: Option<String>,
+        edited_at: Option<DateTime<Utc>>,
         #[serde(default)]
         chat_style: ChatStyle,
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -644,6 +688,7 @@ pub enum ServerMessage {
         request_id: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         client_message_id: Option<String>,
+        code: ErrorCode,
         message: String,
     },
     #[serde(rename_all = "camelCase")]
@@ -672,7 +717,7 @@ pub enum ServerMessage {
     #[serde(rename_all = "camelCase")]
     ChatMessageRemoved {
         message_id: String,
-        removed_at: String,
+        removed_at: DateTime<Utc>,
     },
     /// A message's reactions changed; sent to everyone who can see it.
     #[serde(rename_all = "camelCase")]
@@ -720,7 +765,7 @@ pub enum ServerMessage {
     #[serde(rename_all = "camelCase")]
     RoleChanged {
         participant_id: String,
-        new_role: String,
+        new_role: Role,
         granted_by: String,
     },
     /// A participant requested voice (sent to Moderator+)
@@ -781,7 +826,7 @@ pub struct ParticipantInfo {
     pub id: String,
     pub name: String,
     pub producers: Vec<ProducerMetadata>,
-    pub role: String,
+    pub role: Role,
     #[serde(default)]
     pub authenticated: bool,
     #[serde(default)]
@@ -896,15 +941,15 @@ pub struct ChatEntry {
     pub content: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub attachments: Vec<ChatAttachment>,
-    pub sent_at: String,
+    pub sent_at: DateTime<Utc>,
     /// Moderator removal erases content while retaining its place in the conversation.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub removed_at: Option<String>,
+    pub removed_at: Option<DateTime<Utc>>,
     /// Monotonic body revision; removal remains terminal regardless of revision.
     #[serde(default)]
     pub revision: u32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub edited_at: Option<String>,
+    pub edited_at: Option<DateTime<Utc>>,
     /// The sender's look when they sent it, so history keeps it after they leave.
     #[serde(default)]
     pub chat_style: ChatStyle,

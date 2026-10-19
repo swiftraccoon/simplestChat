@@ -229,7 +229,7 @@ const fixtures = [
     yourChatStyle: { color: 'sky', style: 'text' },
     roomSettings: settings,
   },
-  { type: 'error', message: 'Test error' },
+  { type: 'error', code: 'request_failed', message: 'Test error' },
   { type: 'roomPasswordRequired' },
   { type: 'roomClosed', reason: 'Deleted' },
   { type: 'serverRestarting', reason: 'Server shutting down' },
@@ -304,7 +304,13 @@ const fixtures = [
     reason: 'receipt_expired',
   },
   { type: 'socialResponse', requestId: 'request', action: 'getRoomSnapshot', data: snapshot },
-  { type: 'socialError', requestId: 'request', clientMessageId: 'draft', message: 'Test error' },
+  {
+    type: 'socialError',
+    code: 'request_failed',
+    requestId: 'request',
+    clientMessageId: 'draft',
+    message: 'Test error',
+  },
   { type: 'nicknameChanged', participantId: 'participant', nickname: 'New name' },
   { type: 'participantTyping', participantId: 'participant', targetParticipantId: 'local' },
   {
@@ -745,7 +751,7 @@ test('unknown messages and non-JSON primitive shapes produce fixed payload-free 
     'payload-sentinel',
     {},
     { type: 'payload-sentinel' },
-    { type: 'error', message: { secret: 'payload-sentinel' } },
+    { type: 'error', code: 'request_failed', message: { secret: 'payload-sentinel' } },
     { type: 'socialResponse', action: 'unknown', requestId: 'request', data: {} },
   ]) {
     assert.throws(

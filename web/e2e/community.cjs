@@ -1178,15 +1178,10 @@ async function setRole(owner, name, role) {
   const row = dialog
     .locator('.management-entry')
     .filter({ has: owner.getByRole('combobox', { name: `Role for ${name}`, exact: true }) });
-  await row.getByRole('combobox').selectOption(String(role));
+  await row.getByRole('combobox').selectOption(role);
   await row.getByRole('button', { name: 'Update role', exact: true }).click();
-  if (role === 1) await row.waitFor({ state: 'detached' });
-  else
-    await dialog
-      .getByText(
-        new RegExp(`${name} · ${['guest', 'user', 'member', 'moderator', 'admin', 'owner'][role]}`),
-      )
-      .waitFor();
+  if (role === 'user') await row.waitFor({ state: 'detached' });
+  else await dialog.getByText(new RegExp(`${name} · ${role}`)).waitFor();
   await close(dialog);
 }
 
@@ -2309,8 +2304,8 @@ async function setRole(owner, name, role) {
     await step('membership roles, live moderation gates and allow-chat toggle', async () => {
       await action(owner, 'E2E Member', 'Moderator');
       await roomMenuOffers(member, 'Manage room');
-      await setRole(owner, 'E2E Member', 2);
-      await setRole(owner, 'E2E Member', 1);
+      await setRole(owner, 'E2E Member', 'member');
+      await setRole(owner, 'E2E Member', 'user');
       await roomSetting(owner, '#rs-moderated', true);
       await chatEnabled(member, false);
       await chatEnabled(guest, false);
@@ -2344,7 +2339,7 @@ async function setRole(owner, name, role) {
         await close(received);
         await close(inbox);
         await close(conversation);
-        await setRole(owner, 'E2E Member', 3);
+        await setRole(owner, 'E2E Member', 'moderator');
         await chatEnabled(owner, true);
         await join(member, 'E2E Member');
         await roomMenuOffers(member, 'Manage room');

@@ -17,14 +17,16 @@ import {
   input,
   modal,
 } from './ui';
+import { ROLES, asRole, rank } from './protocol';
+import type { Role } from './protocol';
 
 export interface RoomAdministrationView {
-  role: string;
+  role: Role;
   settings: RoomSettings;
 }
 
 export interface RoomAdministrationLobbyPage {
-  lobby: { participantId: string; displayName: string; authenticated: boolean; role: string }[];
+  lobby: { participantId: string; displayName: string; authenticated: boolean; role: Role }[];
   hasMore: boolean;
 }
 
@@ -75,7 +77,7 @@ export interface RoomAdministrationApi {
     token: string,
     id: string,
     target: string,
-    role: number,
+    role: Role,
     signal: AbortSignal,
   ): Promise<void>;
   removeBan(token: string, id: string, ban: string, signal: AbortSignal): Promise<void>;
@@ -111,8 +113,6 @@ export interface RoomAdministrationOptions {
   changed?: (view: RoomAdministrationView) => void;
 }
 
-const roles = ['guest', 'user', 'member', 'moderator', 'admin', 'owner'];
-const rank = (role: string): number => roles.indexOf(role);
 type Section = 'members' | 'bans' | 'reports' | 'history' | 'lobby';
 const labels: Record<Section, string> = {
   members: 'People',
@@ -565,12 +565,12 @@ export function administrationSections(options: RoomAdministrationOptions): Shee
               ) {
                 const role = el('select');
                 role.setAttribute('aria-label', `Role for ${person.displayName}`);
-                for (let index = 1; index < rank(view.role); index++) {
-                  const choice = el('option', roles[index]);
-                  choice.value = String(index);
+                for (const candidate of ROLES.slice(1, rank(view.role))) {
+                  const choice = el('option', candidate);
+                  choice.value = candidate;
                   role.append(choice);
                 }
-                role.value = String(rank(person.role));
+                role.value = person.role;
                 row.append(
                   role,
                   asyncButton(
@@ -581,7 +581,7 @@ export function administrationSections(options: RoomAdministrationOptions): Shee
                           options.token(),
                           options.roomId,
                           person.userId,
-                          Number(role.value),
+                          asRole(role.value) ?? person.role,
                           signal,
                         ),
                       ),
