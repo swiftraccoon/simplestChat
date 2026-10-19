@@ -27,7 +27,18 @@ async function imageBytes(page) {
     );
   });
 }
-async function checkDownload(response, size) {
+/**
+ * Wait for the download and read its bytes at once: Chromium drops a page
+ * response's body as soon as its frame moves on, and the preview renders the
+ * image before the caller gets to inspect the response.
+ */
+function downloadFor(page, path) {
+  return responseFor(page, path).then(async (response) => ({
+    response,
+    body: await response.body(),
+  }));
+}
+async function checkDownload({ response, body }, size) {
   assert.equal(response.status(), 200);
   const headers = response.headers();
   assert.equal(headers['content-type'], 'image/png');
@@ -35,7 +46,7 @@ async function checkDownload(response, size) {
   assert.match(headers['cache-control'], /no-store/);
   assert.equal(headers['content-security-policy'], "default-src 'none'; sandbox");
   assert.match(headers['content-disposition'], /^inline;/);
-  assert.equal((await response.body()).length, size);
+  assert.equal(body.length, size);
 }
 async function contactConversation(page, peerName, header) {
   const inbox = await header(page, 'Messages');
@@ -120,7 +131,7 @@ async function privateAttachmentChecks(owner, member, outsider, { base, header, 
   const visible = receiver.conversation
     .locator('.message-attachment')
     .filter({ hasText: 'private-pasted.png' });
-  const downloaded = responseFor(member, downloadPath(uploaded.id));
+  const downloaded = downloadFor(member, downloadPath(uploaded.id));
   await visible.getByRole('button', { name: 'Preview', exact: true }).click();
   await checkDownload(await downloaded, bytes.length);
   await visible.locator('img').evaluate((image) => image.decode());
@@ -168,11 +179,11 @@ async function publicAttachmentChecks(owner, guest, { base, leave, join, send })
   await ready(owner.locator('#chat-input-row'));
   await send(owner, 'Public attachment with retained history');
   const row = guest.locator('.message-attachment').filter({ hasText: 'public-drop.png' });
-  const firstDownload = responseFor(guest, downloadPath(file.id));
+  const firstDownload = downloadFor(guest, downloadPath(file.id));
   await row.getByRole('button', { name: 'Preview', exact: true }).click();
-  const response = await firstDownload;
-  await checkDownload(response, bytes.length);
-  const roomAuthorization = response.request().headers().authorization;
+  const download = await firstDownload;
+  await checkDownload(download, bytes.length);
+  const roomAuthorization = download.response.request().headers().authorization;
   assert.ok(roomAuthorization?.startsWith('Attachment '));
   await leave(guest);
   const departed = await guest.request.get(`${base}${downloadPath(file.id)}`, {
