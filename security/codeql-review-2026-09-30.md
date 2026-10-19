@@ -818,3 +818,18 @@ Complete-source SHA256 per rebound file:
 | 61 | `src/room/settings.rs:608:608:33:43` | `codeql:7ff3c2baf5759e5c967ed8c6ba710b69e35bc48533894c14d6d4d9fe92def2ee` |
 | 62 | `src/room/settings.rs:611:611:33:45` | `codeql:c982b68ddabd0f35629261cbd23c59abb19a12f7279a63ce31ccc71622640ab5` |
 | exception | `src/room/dormant_join_tests.rs:106:106:57:79` | `codeql:ebc1cea4e4b9f17d3d3e0a91d189562bb62f9fe4bc71f6b465308253cb824c98` |
+
+## Source re-review: room settings constructor and serde attributes (2026-10-19)
+
+`216fde4` moved the default room settings into `RoomSettings::defaults` in `src/room/settings.rs` and `922ac30` added the omission attributes and the owner-id skip to the struct, which moved the four reviewed `cfg(test)` password-boundary literals down by 36 lines. Every flagged line is byte-identical to the previously reviewed source; the identities were recomputed with the same line-mapping method as the earlier 2026-10-19 rebindings (base `ff7dcbb`). Owner, rationale, scope semantics and the 2026-11-29 expiry are unchanged; hosted ingestion remains a separate required check.
+
+Complete-source SHA256 of the rebound file:
+
+- `src/room/settings.rs`: `bfdc90da1ca6ddd90920f17bf8a28af09241920ae76a2c2f2645924f5e95d60e`
+
+| Alert | Range | Fingerprint |
+|---|---|---|
+| 59 | `src/room/settings.rs:637:637:33:42` | `codeql:3a713acbc2a4520c5536cdffec7d4e46b87f699fd03aae20598c20f9dcc35a34` |
+| 60 | `src/room/settings.rs:642:642:33:43` | `codeql:63768c78dc001a9e9e96c112e9a2e65b1e2a75cf1219e9c6ddefa0e0f58247c7` |
+| 61 | `src/room/settings.rs:644:644:33:43` | `codeql:05131f905d7b1cccceacde99c6d43f4c1b377426e2fab6cb58f6f6ca5f30a77c` |
+| 62 | `src/room/settings.rs:647:647:33:45` | `codeql:663b1355a005d852f6f16df4e1b0af88ddc12bab18e45d995dafeebeba738cf4` |
