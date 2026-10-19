@@ -22,8 +22,21 @@ if (
 
 const options = browserOptions(process.env.E2E_BROWSER);
 const markerKey = 'simplestchat-account-change-v1';
+const unloadReceiptKey = 'simplestchat-e2e-account-unload';
 let activeCheck = 'launch';
 let activePhase = 'starting';
+
+/** Keep the departing fixture's counters across the deliberate sign-out reload. */
+function installAccountUnloadReceipt(key) {
+  window.addEventListener(
+    'pagehide',
+    () => {
+      const { captures, joins, hints } = window.__crossTabEvidence;
+      sessionStorage.setItem(key, JSON.stringify({ captures, joins, hints }));
+    },
+    { once: true },
+  );
+}
 
 function accountSession(name, revision) {
   const payload = Buffer.from(
@@ -414,6 +427,7 @@ async function scenario(browser, storageOnly) {
       },
       { storageOnly, markerKey },
     );
+    await context.addInitScript(installAccountUnloadReceipt, unloadReceiptKey);
     await context.route('**/api/**', async (route) => {
       const request = route.request();
       const pathname = new URL(request.url()).pathname;
@@ -570,26 +584,35 @@ async function scenario(browser, storageOnly) {
       () => document.getElementById('auth-display-name').textContent === 'Second',
     );
     activePhase = 'sign-out';
-    await signOut(first);
+    await Promise.all([first.waitForEvent('domcontentloaded'), signOut(first)]);
+    await first.locator('#sign-in-btn').waitFor({ state: 'visible' });
     await second.locator('#sign-in-btn').waitFor({ state: 'visible' });
     assert.equal(
       (await context.cookies()).some((cookie) => cookie.name === 'fixture_refresh'),
       false,
     );
     activePhase = 'evidence';
+    const departing = await first.evaluate(
+      (key) => JSON.parse(sessionStorage.getItem(key)),
+      unloadReceiptKey,
+    );
+    assert.ok(departing, 'the sign-out document preserved its final counters before reloading');
+    const evidence = [departing];
     for (const page of [first, second]) {
-      const evidence = await page.evaluate(() => window.__crossTabEvidence);
-      assert.equal(evidence.captures, 0, 'account changes never start media capture');
-      assert.equal(evidence.joins, 0, 'URL/history selection never joins a room automatically');
-      for (const hint of evidence.hints) {
-        assert.deepEqual(Object.keys(hint).sort(), ['revision', 'version']);
-        assert.match(hint.revision, /^[a-f0-9]{32}$/);
-        assert.equal(hint.version, 1);
-      }
+      evidence.push(await page.evaluate(() => window.__crossTabEvidence));
       assert.match(
         await page.evaluate((key) => localStorage.getItem(key), markerKey),
         /^[a-f0-9]{32}$/,
       );
+    }
+    for (const record of evidence) {
+      assert.equal(record.captures, 0, 'account changes never start media capture');
+      assert.equal(record.joins, 0, 'URL/history selection never joins a room automatically');
+      for (const hint of record.hints) {
+        assert.deepEqual(Object.keys(hint).sort(), ['revision', 'version']);
+        assert.match(hint.revision, /^[a-f0-9]{32}$/);
+        assert.equal(hint.version, 1);
+      }
     }
     assert.deepEqual(failures, []);
   } finally {
