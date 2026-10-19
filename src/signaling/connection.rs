@@ -7,6 +7,7 @@ use crate::auth::types::Claims;
 use crate::diagnostics::{self, OperationKind, Outcome, Stage};
 use crate::metrics::ServerMetrics;
 use crate::room::{JoinResult, RoomManager, RoomPasswordRequired, settings};
+use crate::secret::SecretString;
 use crate::turn::TurnConfig;
 use axum::extract::ws::{CloseFrame, Message, WebSocket, close_code};
 use futures_util::{Sink, SinkExt, Stream, StreamExt};
@@ -1625,7 +1626,7 @@ async fn handle_connection_with_timing(
                                     handle_reconnect(
                                         reconnect_id,
                                         reconnect_room,
-                                        client_token,
+                                        client_token.expose_secret(),
                                         authenticated_user
                                             .as_ref()
                                             .map(|claims| claims.sub.as_str()),
@@ -1698,7 +1699,9 @@ async fn handle_connection_with_timing(
                                 } else {
                                     reconnect_id.clone()
                                 },
-                                reconnect_token: fresh_reconnect_token.clone(),
+                                reconnect_token: fresh_reconnect_token
+                                    .clone()
+                                    .map(SecretString::from),
                             });
                             if response_sent.is_ok()
                                 && let Some(fresh_token) = fresh_reconnect_token
@@ -2429,11 +2432,15 @@ async fn handle_client_message(
                     "Invalid participant_name: must be 1-{MAX_PARTICIPANT_NAME_LEN} characters without control characters"
                 );
             }
-            if password.as_ref().is_some_and(|password| {
-                password.is_empty()
-                    || password.len() > settings::MAX_PASSWORD_LEN
-                    || password.chars().any(char::is_control)
-            }) {
+            if password
+                .as_ref()
+                .map(SecretString::expose_secret)
+                .is_some_and(|password| {
+                    password.is_empty()
+                        || password.len() > settings::MAX_PASSWORD_LEN
+                        || password.chars().any(char::is_control)
+                })
+            {
                 anyhow::bail!("Invalid room password");
             }
             // Rotate before RoomJoined is serialized. The same token remains in
@@ -2456,7 +2463,7 @@ async fn handle_client_message(
                     sender.clone(),
                     is_authenticated,
                     in_lobby.clone(),
-                    password.as_deref(),
+                    password.as_ref().map(SecretString::expose_secret),
                     &session_reconnect_token,
                     client_ip,
                     chat_style.clone(),
@@ -2478,7 +2485,7 @@ async fn handle_client_message(
                     reply.send(&ServerMessage::RoomJoined {
                         participant_id: participant_id.to_string(),
                         participants,
-                        reconnect_token: session_reconnect_token,
+                        reconnect_token: session_reconnect_token.into(),
                         your_role: role,
                         your_name: name,
                         your_chat_style: chat_style,
@@ -3809,7 +3816,7 @@ mod security_tests {
         let json = serde_json::to_value(ServerMessage::ReconnectResult {
             success: true,
             participant_id: Uuid::new_v4().to_string(),
-            reconnect_token: Some(token.clone()),
+            reconnect_token: Some(token.clone().into()),
         })
         .unwrap();
         assert_eq!(

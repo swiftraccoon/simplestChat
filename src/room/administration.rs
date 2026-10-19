@@ -44,7 +44,7 @@ pub struct SettingsPatch {
     pub push_to_talk: Option<bool>,
     pub secret: Option<bool>,
     #[serde(default, deserialize_with = "nullable")]
-    pub password: Option<Option<String>>,
+    pub password: Option<Option<crate::secret::SecretString>>,
 }
 
 fn nullable<'de, D, T>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
@@ -77,7 +77,7 @@ impl SettingsPatch {
             .password
             .as_ref()
             .and_then(Option::as_ref)
-            .is_some_and(|value| !settings::valid_new_room_password(value))
+            .is_some_and(|value| !settings::valid_new_room_password(value.expose_secret()))
         {
             return Err(invalid(
                 "Room password must be 8–256 bytes without control characters",
@@ -805,7 +805,7 @@ impl Context {
                 let password = password.clone();
                 let hash = tokio::task::spawn_blocking(move || {
                     let _permit = permit;
-                    crate::auth::password::hash_password(&password)
+                    crate::auth::password::hash_password(password.expose_secret())
                 })
                 .await
                 .map_err(|_| invalid("Password update failed"))?
@@ -1505,7 +1505,7 @@ mod tests {
         assert!(unchanged.password.is_none());
         let cleared: SettingsPatch =
             serde_json::from_value(json!({"password":null,"maxParticipants":null})).unwrap();
-        assert_eq!(cleared.password, Some(None));
+        assert!(matches!(cleared.password, Some(None)));
         assert_eq!(cleared.max_participants, Some(None));
         assert!(
             serde_json::from_value::<SettingsPatch>(json!({"ownerId":Uuid::new_v4()})).is_err()

@@ -1323,7 +1323,7 @@ async fn ws_handler(
             let renewal_authenticator = authenticated_user.as_ref().and_then(|_| {
                 server.jwt_secret.clone().map(|secret| {
                     connection::RenewalAuthenticator::new(
-                        secret,
+                        secret.into(),
                         server.auth_guard.concurrency.clone(),
                     )
                 })

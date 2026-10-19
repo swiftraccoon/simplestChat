@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::auth::jwt;
+use crate::secret::SecretString;
 use crate::signaling::protocol::AuthenticationToken;
 
 const RENEWAL_WINDOW: Duration = Duration::from_secs(60);
@@ -12,12 +13,12 @@ const RENEWAL_VALIDATION_TIMEOUT: Duration = Duration::from_secs(2);
 /// The signing secret is deliberately absent from `Debug` implementations.
 #[derive(Clone)]
 pub struct RenewalAuthenticator {
-    secret: String,
+    secret: SecretString,
     concurrency: Arc<tokio::sync::Semaphore>,
 }
 
 impl RenewalAuthenticator {
-    pub(crate) fn new(secret: String, concurrency: Arc<tokio::sync::Semaphore>) -> Self {
+    pub(crate) fn new(secret: SecretString, concurrency: Arc<tokio::sync::Semaphore>) -> Self {
         Self {
             secret,
             concurrency,
@@ -28,7 +29,7 @@ impl RenewalAuthenticator {
         if token.expose().is_empty() || token.expose().len() > 4_096 {
             return None;
         }
-        let candidate = jwt::validate_token(token.expose(), &self.secret).ok()?;
+        let candidate = jwt::validate_token(token.expose(), self.secret.expose_secret()).ok()?;
         renewal_matches(current, &candidate, unix_seconds()).then_some(candidate)
     }
 }

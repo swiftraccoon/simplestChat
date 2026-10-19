@@ -2,6 +2,7 @@
 
 // Signaling protocol - Message types for WebSocket communication
 
+use crate::secret::SecretString;
 use crate::turn::IceServer;
 use mediasoup::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -53,11 +54,11 @@ pub(super) struct ServerReply<'a> {
 /// A signaling bearer is serialized only for transport, never for diagnostics.
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(transparent)]
-pub struct AuthenticationToken(String);
+pub struct AuthenticationToken(SecretString);
 
 impl AuthenticationToken {
     pub(super) fn expose(&self) -> &str {
-        &self.0
+        self.0.expose_secret()
     }
 }
 
@@ -94,7 +95,7 @@ pub enum ClientMessage {
         participant_name: String,
         /// Required for password-protected rooms (Admin+ bypass)
         #[serde(default)]
-        password: Option<String>,
+        password: Option<SecretString>,
         /// A guest's chosen look; an account's saved one takes its place.
         #[serde(default)]
         chat_style: Option<ChatStyle>,
@@ -168,7 +169,7 @@ pub enum ClientMessage {
     Reconnect {
         participant_id: String,
         room_id: String,
-        reconnect_token: String,
+        reconnect_token: SecretString,
     },
     /// Request ICE restart on a transport
     #[serde(rename_all = "camelCase")]
@@ -434,7 +435,7 @@ pub enum ClientMessage {
             deserialize_with = "deserialize_nullable_patch",
             skip_serializing_if = "Option::is_none"
         )]
-        password: Option<Option<String>>,
+        password: Option<Option<SecretString>>,
     },
     /// Set the room topic
     SetTopic {
@@ -463,7 +464,7 @@ pub enum ServerMessage {
     RoomJoined {
         participant_id: String,
         participants: Vec<ParticipantInfo>,
-        reconnect_token: String,
+        reconnect_token: SecretString,
         your_role: String,
         /// The name the room knows this participant by; a guest's may carry a number.
         your_name: String,
@@ -573,7 +574,7 @@ pub enum ServerMessage {
         success: bool,
         participant_id: String,
         #[serde(skip_serializing_if = "Option::is_none")]
-        reconnect_token: Option<String>,
+        reconnect_token: Option<SecretString>,
     },
     /// ICE restarted — new ICE parameters plus fresh TURN credentials, since
     /// the ones minted at transport creation expire after `TURN_TTL`.
@@ -1243,7 +1244,9 @@ mod tests {
         assert_eq!(*max_broadcasters, expected_broadcasters);
         assert_eq!(*max_participants, expected_participants);
         assert_eq!(
-            password.as_ref().map(|value| value.as_deref()),
+            password.as_ref().map(|value| value
+                .as_ref()
+                .map(crate::secret::SecretString::expose_secret)),
             expected_password
         );
     }

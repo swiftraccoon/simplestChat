@@ -23,6 +23,7 @@ pub mod metrics;
 pub mod push;
 pub mod room;
 pub mod saturation;
+pub mod secret;
 pub mod shutdown;
 pub mod signaling;
 pub mod sizing;

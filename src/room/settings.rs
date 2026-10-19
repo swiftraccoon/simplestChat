@@ -337,7 +337,7 @@ pub fn apply_settings_update(
     invite_only: Option<bool>,
     push_to_talk: Option<bool>,
     secret: Option<bool>,
-    password: Option<Option<String>>,
+    password: Option<Option<crate::secret::SecretString>>,
 ) {
     if let Some(v) = moderated {
         settings.moderated = v;

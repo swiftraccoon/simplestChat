@@ -3,6 +3,7 @@
 // TURN credential generation for coturn time-limited credentials.
 // Uses HMAC-SHA1 per the TURN REST API spec (coturn --use-auth-secret).
 
+use crate::secret::SecretString;
 use base64::Engine;
 use hmac::{Hmac, KeyInit, Mac};
 use serde::{Deserialize, Serialize};
@@ -17,7 +18,7 @@ pub struct TurnConfig {
     /// TURN server URLs (e.g. ["turn:example.com:3478", "turns:example.com:5349"])
     pub urls: Vec<String>,
     /// Shared secret for generating time-limited credentials
-    pub secret: String,
+    pub secret: SecretString,
     /// Credential TTL in seconds (default: one day)
     pub ttl_secs: u64,
 }
@@ -84,7 +85,7 @@ impl TurnConfig {
 
         Ok(Some(Self {
             urls,
-            secret,
+            secret: secret.into(),
             ttl_secs,
         }))
     }
@@ -104,8 +105,8 @@ impl TurnConfig {
         // room. TURN logs should not become a cross-room identity trail.
         let username = format!("{expiry}:{}", uuid::Uuid::new_v4());
 
-        let mut mac =
-            HmacSha1::new_from_slice(self.secret.as_bytes()).expect("HMAC accepts any key size");
+        let mut mac = HmacSha1::new_from_slice(self.secret.expose_secret().as_bytes())
+            .expect("HMAC accepts any key size");
         mac.update(username.as_bytes());
         let credential =
             base64::engine::general_purpose::STANDARD.encode(mac.finalize().into_bytes());
@@ -152,7 +153,7 @@ mod tests {
     fn generated_turn_credential_signs_the_exact_expiring_username() {
         let config = TurnConfig {
             urls: vec!["turn:turn.example:3478".to_string()],
-            secret: "a-secure-random-secret-with-32-bytes".to_string(),
+            secret: "a-secure-random-secret-with-32-bytes".into(),
             ttl_secs: 600,
         };
         let before = SystemTime::now()
@@ -175,7 +176,8 @@ mod tests {
             .decode(encoded)
             .unwrap();
         assert_eq!(signature.len(), 20);
-        let mut verifier = HmacSha1::new_from_slice(config.secret.as_bytes()).unwrap();
+        let mut verifier =
+            HmacSha1::new_from_slice(config.secret.expose_secret().as_bytes()).unwrap();
         verifier.update(username.as_bytes());
         verifier.verify_slice(&signature).unwrap();
     }
@@ -184,7 +186,7 @@ mod tests {
     fn generated_turn_credential_does_not_expose_secret() {
         let config = TurnConfig {
             urls: vec!["turn:turn.example:3478".to_string()],
-            secret: "a-secure-random-secret-with-32-bytes".to_string(),
+            secret: "a-secure-random-secret-with-32-bytes".into(),
             ttl_secs: 600,
         };
         let credentials = config.generate_credentials();
@@ -192,7 +194,7 @@ mod tests {
         assert!(credentials.credential.is_some());
         assert_ne!(
             credentials.credential.as_deref(),
-            Some(config.secret.as_str())
+            Some(config.secret.expose_secret())
         );
         let username = credentials.username.as_deref().unwrap();
         let opaque_id = username.split_once(':').unwrap().1;

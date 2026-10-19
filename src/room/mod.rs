@@ -27,6 +27,7 @@ use crate::diagnostics::{Stage, measure, measure_result};
 use crate::media::types::{MediaResult, TransportInfo};
 use crate::media::{MediaConfig, MediaServer};
 use crate::metrics::ServerMetrics;
+use crate::secret::SecretString;
 use crate::shutdown::DrainSignal;
 use crate::signaling::protocol::{
     AudioLevelEntry, ChatStyle, ParticipantInfo, ProducerMetadata, ServerMessage,
@@ -4284,7 +4285,7 @@ impl RoomManager {
         invite_only: Option<bool>,
         push_to_talk: Option<bool>,
         secret: Option<bool>,
-        password: Option<Option<String>>,
+        password: Option<Option<SecretString>>,
     ) -> Result<()> {
         let admin_id = admin_id.to_string();
         let expected_sender = expected_sender.clone();
@@ -4355,7 +4356,7 @@ impl RoomManager {
         Self::validate_capacity("max broadcasters", max_broadcasters, 1_000)?;
         let mut admin_mutation_reserved = false;
         if let Some(Some(value)) = password.as_ref() {
-            if !settings::valid_new_room_password(value) {
+            if !settings::valid_new_room_password(value.expose_secret()) {
                 anyhow::bail!("Room password must be 8-256 bytes without control characters");
             }
 
@@ -4390,7 +4391,7 @@ impl RoomManager {
                     .map_err(|_| anyhow::anyhow!("Password service is busy; try again"))?;
                 let hash = tokio::task::spawn_blocking(move || {
                     let _permit = permit;
-                    crate::auth::password::hash_password(&value)
+                    crate::auth::password::hash_password(value.expose_secret())
                 })
                 .await
                 .map_err(|error| {
@@ -5900,7 +5901,7 @@ impl RoomManager {
         if let Ok(json) = serde_json::to_string(&ServerMessage::RoomJoined {
             participant_id: entry.participant_id.clone(),
             participants,
-            reconnect_token,
+            reconnect_token: reconnect_token.into(),
             your_role: admitted_role.name().to_string(),
             your_name: entry.name.clone(),
             your_chat_style: entry.chat_style.clone(),
