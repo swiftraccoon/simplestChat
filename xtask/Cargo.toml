@@ -11,4 +11,4 @@ workspace = true
 
 [dependencies]
 anyhow = "1.0.104"
-syn = { version = "=3.0.6", features = ["full"] }
+syn = { version = "=3.0.8", features = ["full"] }
