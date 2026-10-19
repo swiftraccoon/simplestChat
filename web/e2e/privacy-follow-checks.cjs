@@ -54,6 +54,8 @@ function followProbeFailure(error, phase) {
   )
     category = name;
   else if (/load failed|network error|failed to fetch/i.test(message)) category = 'network-load';
+  else if (/\b(?:cancelled|canceled|aborted|abort)\b/i.test(message))
+    category = 'network-cancelled';
   const stack = String(error?.stack ?? '').slice(0, 8192);
   const fixture = /privacy-follow-checks\.cjs:(\d{1,6}):(\d{1,7})(?!\d)/.exec(stack);
   const asset =
@@ -72,7 +74,108 @@ function followProbeFailure(error, phase) {
             column: Number(initializer[2]),
           }
         : null;
-  return { phase: ['goto', 'reload'].includes(phase) ? phase : 'unknown', name, category, frame };
+  const frames = Array.from(
+    stack.matchAll(
+      /(?:^|\/)\b(index|media)(?:-[A-Za-z0-9_-]{1,64})?\.js:(\d{1,6}):(\d{1,7})(?!\d)/g,
+    ),
+  )
+    .slice(0, 4)
+    .map((match) => ({
+      source: `${match[1]}.js`,
+      line: Number(match[2]),
+      column: Number(match[3]),
+    }));
+  return {
+    phase: ['goto', 'reload'].includes(phase) ? phase : 'unknown',
+    name,
+    category,
+    frame,
+    ...(frames.length > 1 ? { frames } : {}),
+  };
+}
+
+/** Passive Playwright metadata only: never wrap a native promise or read headers/bodies. */
+function observeFollowProbeRequests(page, phase, now = Date.now) {
+  const started = now();
+  const requests = [];
+  const pending = new WeakMap();
+  let sequence = 0;
+  let dropped = 0;
+  const elapsed = () => Math.max(0, Math.min(600_000, Math.round(now() - started)));
+  const currentPhase = () => (['goto', 'reload'].includes(phase()) ? phase() : 'unknown');
+  const paths = new Map([
+    ['/api/capabilities', 'capabilities'],
+    ['/api/auth/preferences', 'privacy'],
+    ['/api/auth/notification-preferences', 'notifications'],
+    ['/api/auth/inbox/unread', 'inbox-unread'],
+    ['/api/auth/contacts', 'contacts'],
+    ['/api/auth/saved-rooms', 'saved-rooms'],
+    ['/api/auth/profile', 'profile'],
+    ['/api/auth/updates', 'account-stream'],
+    ['/api/auth/refresh', 'session-refresh'],
+    ['/api/rooms', 'directory'],
+    ['/app-version.json', 'app-version'],
+  ]);
+  const request = (native) => {
+    let category;
+    try {
+      const pathname = new URL(native.url()).pathname;
+      category = paths.get(pathname) ?? (pathname.startsWith('/api/') ? 'other-api' : null);
+    } catch {
+      return;
+    }
+    if (!category) return;
+    const method = native.method();
+    const value = {
+      sequence: Math.min(++sequence, 1000),
+      category,
+      method: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE'].includes(method) ? method : 'OTHER',
+      startedPhase: currentPhase(),
+      startedMs: elapsed(),
+      outcome: 'pending',
+    };
+    pending.set(native, value);
+    if (requests.length === 16) {
+      requests.shift();
+      dropped = Math.min(1000, dropped + 1);
+    }
+    requests.push(value);
+  };
+  const response = (native) => {
+    const value = pending.get(native.request());
+    if (!value) return;
+    const status = native.status();
+    if (Number.isInteger(status) && status >= 100 && status <= 599) value.status = status;
+    value.outcome = 'response';
+    value.observedPhase = currentPhase();
+    value.observedMs = elapsed();
+  };
+  const finished = (native) => {
+    const value = pending.get(native);
+    if (!value) return;
+    value.outcome = 'finished';
+    value.observedPhase = currentPhase();
+    value.observedMs = elapsed();
+    pending.delete(native);
+  };
+  const failed = (native) => {
+    const value = pending.get(native);
+    if (!value) return;
+    const reason = String(native.failure()?.errorText ?? '').slice(0, 512);
+    value.outcome = /cancel|abort/i.test(reason) ? 'cancelled' : 'failed';
+    value.observedPhase = currentPhase();
+    value.observedMs = elapsed();
+    pending.delete(native);
+  };
+  const events = { request, response, requestfinished: finished, requestfailed: failed };
+  for (const [name, handler] of Object.entries(events)) page.on(name, handler);
+  return {
+    elapsed,
+    snapshot: () => ({ requests: requests.map((value) => ({ ...value })), dropped }),
+    dispose: () => {
+      for (const [name, handler] of Object.entries(events)) page.off(name, handler);
+    },
+  };
 }
 
 /** Own the DOM wrapper as well as its methods; WebKit may collect unrooted wrappers. */
@@ -236,6 +339,7 @@ async function checkFollowSpeakerPreference(owner, { base, artifacts }) {
   const captures = await owner.evaluate(() => window.__communityCaptureRequests);
   const viewport = owner.viewportSize();
   let probe;
+  let probeRequests;
   let probePhase = 'goto';
   let errors = 0;
   const failures = [];
@@ -266,9 +370,14 @@ async function checkFollowSpeakerPreference(owner, { base, artifacts }) {
     await follow.check();
     await owner.keyboard.press('Escape');
     probe = await owner.context().newPage();
+    probeRequests = observeFollowProbeRequests(probe, () => probePhase);
     probe.on('pageerror', (error) => {
       errors++;
-      if (failures.length < 8) failures.push(followProbeFailure(error, probePhase));
+      if (failures.length < 8)
+        failures.push({
+          ...followProbeFailure(error, probePhase),
+          elapsedMs: probeRequests.elapsed(),
+        });
     });
     await probe.addInitScript(installFollowCaptureObservation);
     await probe.goto(new URL('/', base).href);
@@ -286,11 +395,25 @@ async function checkFollowSpeakerPreference(owner, { base, artifacts }) {
       true,
       'the new tab remains outside a room',
     );
-    assert.equal(errors, 0, JSON.stringify({ kind: 'follow-probe-page-errors', errors, failures }));
+    assert.equal(
+      errors,
+      0,
+      JSON.stringify({
+        kind: 'follow-probe-page-errors',
+        errors,
+        failures,
+        network: probeRequests.snapshot(),
+      }),
+    );
     assert.equal(await owner.evaluate(() => window.__communityCaptureRequests), captures);
   } finally {
     if (errors) {
-      const diagnostic = { kind: 'follow-probe-page-errors', errors, failures };
+      const diagnostic = {
+        kind: 'follow-probe-page-errors',
+        errors,
+        failures,
+        network: probeRequests?.snapshot(),
+      };
       console.error(JSON.stringify(diagnostic));
       if (artifacts) {
         try {
@@ -304,6 +427,7 @@ async function checkFollowSpeakerPreference(owner, { base, artifacts }) {
         }
       }
     }
+    probeRequests?.dispose();
     await probe?.close();
     if (viewport) await owner.setViewportSize(viewport);
     await openRoomMenu(owner);
@@ -317,5 +441,6 @@ module.exports = {
   checkAccountPrivacyAcrossDevices,
   checkFollowSpeakerPreference,
   followProbeFailure,
+  observeFollowProbeRequests,
   installFollowCaptureObservation,
 };
