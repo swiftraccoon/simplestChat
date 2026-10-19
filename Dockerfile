@@ -136,13 +136,15 @@ RUN python3 build/security_vendor.py verify --cache /tmp/vendor-cache --output /
 # Warm every dependency, including the native worker, against stub sources.
 # This layer is reused until the manifest, lockfile or vendored patches change,
 # so a source-only build compiles this crate alone instead of the whole graph.
+# The member stubs stay in place: Cargo loads every workspace manifest, and
+# the load-test stage copies the real sources over them.
 RUN mkdir -p src load_tests/src xtask/src \
     && printf '#![allow(non_snake_case)]\nfn main() {}\n' > src/main.rs \
     && printf '#![allow(non_snake_case)]\n' > src/lib.rs \
     && printf 'fn main() {}\n' > load_tests/src/main.rs \
     && printf 'fn main() {}\n' > xtask/src/main.rs \
     && /opt/security-tools/bin/cargo-auditable auditable build --locked --release --bin simplestChat \
-    && rm -rf src load_tests/src xtask/src \
+    && rm -rf src \
         target/release/simplestChat \
         target/release/deps/simplestChat-* target/release/deps/libsimplestchat-* \
         target/release/.fingerprint/simplestChat-* target/release/.fingerprint/simplestchat-*
