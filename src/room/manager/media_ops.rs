@@ -278,9 +278,13 @@ impl RoomManager {
             }
 
             let participant = room.participants.get_mut(participant_id).unwrap();
-            participant
-                .producers
-                .insert(producer_id.clone(), (kind, Some(source.to_string())));
+            participant.producers.insert(
+                producer_id.clone(),
+                ProducerRecord {
+                    kind,
+                    source: Some(source.to_string()),
+                },
+            );
             room.producer_to_participant
                 .insert(producer_id.clone(), *participant_id);
 
@@ -360,8 +364,8 @@ impl RoomManager {
                     )
                 })?;
             crate::media::transport_manager::ConsumerMediaSource::from_room_source(
-                metadata.0,
-                metadata.1.as_deref(),
+                metadata.kind,
+                metadata.source.as_deref(),
             )
         };
         let _ipc_reservation = self
@@ -565,7 +569,7 @@ impl RoomManager {
                 .participants
                 .get_mut(participant_id)
                 .and_then(|participant| participant.producers.remove(producer_id))
-                .is_some_and(|(kind, _)| kind == MediaKind::Audio);
+                .is_some_and(|record| record.kind == MediaKind::Audio);
             room.producer_to_participant.remove(producer_id);
 
             room.broadcast_except(
@@ -1064,9 +1068,14 @@ impl RoomManager {
             .participants
             .values()
             .filter(|participant| {
-                participant.producers.values().any(|(kind, source)| {
-                    source.as_deref().is_some_and(|source| {
-                        Self::producer_allowed_without_capacity(room, participant, *kind, source)
+                participant.producers.values().any(|record| {
+                    record.source.as_deref().is_some_and(|source| {
+                        Self::producer_allowed_without_capacity(
+                            room,
+                            participant,
+                            record.kind,
+                            source,
+                        )
                     })
                 })
             })
@@ -1089,10 +1098,8 @@ impl RoomManager {
             .values()
             .filter(|participant| participant_filter.is_none_or(|filter| participant.id == *filter))
             .flat_map(|participant| {
-                participant
-                    .producers
-                    .iter()
-                    .filter_map(|(producer_id, (kind, source))| {
+                participant.producers.iter().filter_map(
+                    |(producer_id, ProducerRecord { kind, source })| {
                         let allowed = source.as_deref().is_some_and(|source| {
                             Self::producer_allowed_without_capacity(
                                 room,
@@ -1109,7 +1116,8 @@ impl RoomManager {
                                 kind: *kind,
                             }
                         })
-                    })
+                    },
+                )
             })
             .collect();
 

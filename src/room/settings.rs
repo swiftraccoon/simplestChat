@@ -154,6 +154,7 @@ struct RoomRow {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct CreateRoomRequest {
     pub id: String,
     pub display_name: String,
@@ -478,90 +479,42 @@ pub(crate) async fn update_room_settings(
     patch: &SettingsPatch,
     password_hash: Option<Option<String>>,
 ) -> Result<(), sqlx::Error> {
-    // Build a dynamic SET clause for only the provided fields
-    let mut set_parts: Vec<String> = Vec::new();
-
-    macro_rules! maybe_add {
-        ($opt:expr, $col:expr) => {
-            if $opt.is_some() {
-                // $1 is room_id; subsequent parameters follow insertion order.
-                set_parts.push(format!("{} = ${}", $col, set_parts.len() + 2));
+    // One assignment per provided field; the builder numbers the parameters, so
+    // the column and its value can never drift apart.
+    let mut builder = sqlx::QueryBuilder::<sqlx::Postgres>::new("UPDATE rooms SET ");
+    let mut assignments = builder.separated(", ");
+    let mut changed = false;
+    macro_rules! assign {
+        ($value:expr, $column:literal) => {
+            if let Some(value) = $value {
+                assignments
+                    .push(concat!($column, " = "))
+                    .push_bind_unseparated(value);
+                changed = true;
             }
         };
     }
-
-    maybe_add!(patch.moderated, "moderated");
-    maybe_add!(patch.lobby_enabled, "lobby_enabled");
-    maybe_add!(patch.guests_allowed, "guests_allowed");
-    maybe_add!(patch.guests_can_broadcast, "guests_can_broadcast");
-    maybe_add!(patch.max_broadcasters, "max_broadcasters");
-    maybe_add!(patch.max_participants, "max_participants");
-    maybe_add!(patch.allow_screen_sharing, "allow_screen_sharing");
-    maybe_add!(patch.allow_chat, "allow_chat");
-    maybe_add!(patch.allow_video, "allow_video");
-    maybe_add!(patch.require_registration, "require_registration");
-    maybe_add!(patch.invite_only, "invite_only");
-    maybe_add!(patch.push_to_talk, "push_to_talk");
-    maybe_add!(patch.secret, "secret");
-    maybe_add!(password_hash, "password_hash");
-
-    if set_parts.is_empty() {
+    assign!(patch.moderated, "moderated");
+    assign!(patch.lobby_enabled, "lobby_enabled");
+    assign!(patch.guests_allowed, "guests_allowed");
+    assign!(patch.guests_can_broadcast, "guests_can_broadcast");
+    assign!(patch.max_broadcasters, "max_broadcasters");
+    assign!(patch.max_participants, "max_participants");
+    assign!(patch.allow_screen_sharing, "allow_screen_sharing");
+    assign!(patch.allow_chat, "allow_chat");
+    assign!(patch.allow_video, "allow_video");
+    assign!(patch.require_registration, "require_registration");
+    assign!(patch.invite_only, "invite_only");
+    assign!(patch.push_to_talk, "push_to_talk");
+    assign!(patch.secret, "secret");
+    assign!(password_hash, "password_hash");
+    if !changed {
         return Ok(()); // Nothing to update
     }
+    assignments.push("updated_at = now()");
+    builder.push(" WHERE id = ").push_bind(room_id);
 
-    let sql = format!(
-        "UPDATE rooms SET {}, updated_at = now() WHERE id = $1",
-        set_parts.join(", ")
-    );
-    // Only fixed column names and placeholder numbers enter this SQL string;
-    // every caller-supplied value remains a separate bound parameter.
-    let mut query = sqlx::query(sqlx::AssertSqlSafe(sql)).bind(room_id);
-
-    // Bind values in the same order as the SET parts
-    if let Some(v) = patch.moderated {
-        query = query.bind(v);
-    }
-    if let Some(v) = patch.lobby_enabled {
-        query = query.bind(v);
-    }
-    if let Some(v) = patch.guests_allowed {
-        query = query.bind(v);
-    }
-    if let Some(v) = patch.guests_can_broadcast {
-        query = query.bind(v);
-    }
-    if let Some(v) = patch.max_broadcasters {
-        query = query.bind(v);
-    }
-    if let Some(v) = patch.max_participants {
-        query = query.bind(v);
-    }
-    if let Some(v) = patch.allow_screen_sharing {
-        query = query.bind(v);
-    }
-    if let Some(v) = patch.allow_chat {
-        query = query.bind(v);
-    }
-    if let Some(v) = patch.allow_video {
-        query = query.bind(v);
-    }
-    if let Some(v) = patch.require_registration {
-        query = query.bind(v);
-    }
-    if let Some(v) = patch.invite_only {
-        query = query.bind(v);
-    }
-    if let Some(v) = patch.push_to_talk {
-        query = query.bind(v);
-    }
-    if let Some(v) = patch.secret {
-        query = query.bind(v);
-    }
-    if let Some(v) = password_hash {
-        query = query.bind(v);
-    }
-
-    let result = query.execute(pool).await?;
+    let result = builder.build().execute(pool).await?;
     if result.rows_affected() != 1 {
         return Err(sqlx::Error::RowNotFound);
     }

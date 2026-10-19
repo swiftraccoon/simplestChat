@@ -150,7 +150,7 @@ impl ModerationRequest {
         if self
             .reason
             .as_ref()
-            .is_some_and(|reason| reason.len() > 256 || reason.chars().any(char::is_control))
+            .is_some_and(|reason| !moderation::valid_reason(reason))
         {
             return Err(invalid(
                 "Moderation reason must be at most 256 bytes without control characters",
@@ -551,7 +551,7 @@ impl Context {
             || request
                 .reason
                 .as_ref()
-                .is_some_and(|value| value.len() > 256 || value.chars().any(char::is_control))
+                .is_some_and(|value| !moderation::valid_reason(value))
         {
             return Err(invalid("Invalid waiting-room action"));
         }
@@ -620,7 +620,7 @@ impl Context {
         if request
             .reason
             .as_ref()
-            .is_some_and(|value| value.len() > 256 || value.chars().any(char::is_control))
+            .is_some_and(|value| !moderation::valid_reason(value))
         {
             return Err(invalid(
                 "Moderation reason must be at most 256 bytes without control characters",

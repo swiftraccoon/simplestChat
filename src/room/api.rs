@@ -64,37 +64,41 @@ pub(crate) fn room_image_url(room_id: &RoomId, version: &str) -> String {
 }
 
 /// A listing row; the seventh column is the image version, not the image.
-pub(crate) type RoomListRow = (
-    RoomId,
-    String,
-    Option<String>,
-    bool,
-    bool,
-    String,
-    Option<String>,
-    bool,
-    sqlx::types::Json<ChatStyle>,
-    sqlx::types::Json<ChatStyle>,
-);
+/// A room as every listing reads it: the queries select these columns by name
+/// (`password_hash IS NOT NULL AS password_protected`) and `room_list_item` adds
+/// the live counts and the image link.
+#[derive(Clone, sqlx::FromRow)]
+pub(crate) struct RoomListRow {
+    pub id: RoomId,
+    pub display_name: String,
+    pub topic: Option<String>,
+    pub password_protected: bool,
+    pub moderated: bool,
+    pub description: String,
+    pub image_version: Option<String>,
+    pub secret: bool,
+    pub name_style: sqlx::types::Json<ChatStyle>,
+    pub topic_style: sqlx::types::Json<ChatStyle>,
+}
 
 pub(crate) fn room_list_item(server: &SignalingServer, row: RoomListRow) -> RoomListItem {
     let image_url = row
-        .6
+        .image_version
         .as_deref()
-        .map(|version| room_image_url(&row.0, version));
+        .map(|version| room_image_url(&row.id, version));
     RoomListItem {
-        participant_count: server.room_manager().participant_count_for_room(&row.0),
-        broadcaster_count: server.room_manager().broadcaster_count_for_room(&row.0),
-        id: row.0,
-        display_name: row.1,
-        topic: row.2,
-        password_protected: row.3,
-        moderated: row.4,
-        description: row.5,
+        participant_count: server.room_manager().participant_count_for_room(&row.id),
+        broadcaster_count: server.room_manager().broadcaster_count_for_room(&row.id),
+        id: row.id,
+        display_name: row.display_name,
+        topic: row.topic,
+        password_protected: row.password_protected,
+        moderated: row.moderated,
+        description: row.description,
         image_url,
-        secret: row.7,
-        name_style: row.8.0,
-        topic_style: row.9.0,
+        secret: row.secret,
+        name_style: row.name_style.0,
+        topic_style: row.topic_style.0,
     }
 }
 
@@ -271,7 +275,7 @@ pub(crate) async fn fetch_directory_page(
         Vec::new()
     } else if let Some(pattern) = pattern {
         sqlx::query_as::<_, RoomListRow>(
-            r#"SELECT id, display_name, topic, password_hash IS NOT NULL, moderated, description, image_version, secret, name_style, topic_style
+            r#"SELECT id, display_name, topic, password_hash IS NOT NULL AS password_protected, moderated, description, image_version, secret, name_style, topic_style
                FROM rooms
                WHERE secret = false AND id = ANY($1)
                  AND (display_name || E'\n' || COALESCE(topic, '')) ILIKE $2 ESCAPE E'\\'
@@ -283,7 +287,7 @@ pub(crate) async fn fetch_directory_page(
         .await?
     } else {
         sqlx::query_as::<_, RoomListRow>(
-            "SELECT id, display_name, topic, password_hash IS NOT NULL, moderated, description, image_version, secret, name_style, topic_style
+            "SELECT id, display_name, topic, password_hash IS NOT NULL AS password_protected, moderated, description, image_version, secret, name_style, topic_style
              FROM rooms WHERE secret = false AND id = ANY($1)
              ORDER BY created_at DESC, id DESC",
         )
@@ -298,8 +302,8 @@ pub(crate) async fn fetch_directory_page(
     // Stable: rooms with the same count keep the newest-first database order.
     live_rows.sort_by(|a, b| {
         busiest_first(
-            counts.get(a.0.as_str()).copied().flatten(),
-            counts.get(b.0.as_str()).copied().flatten(),
+            counts.get(a.id.as_str()).copied().flatten(),
+            counts.get(b.id.as_str()).copied().flatten(),
         )
     });
     let window = page_window(live_rows.len(), limit, offset);
@@ -340,7 +344,7 @@ pub(crate) async fn fetch_directory_page(
         .await?
     } else {
         sqlx::query_as::<_, RoomListRow>(
-            "SELECT id, display_name, topic, password_hash IS NOT NULL, moderated, description, image_version, secret, name_style, topic_style
+            "SELECT id, display_name, topic, password_hash IS NOT NULL AS password_protected, moderated, description, image_version, secret, name_style, topic_style
              FROM rooms WHERE secret = false AND NOT (id = ANY($3))
              ORDER BY created_at DESC, id DESC LIMIT $1 OFFSET $2",
         )
@@ -489,7 +493,7 @@ pub(crate) async fn owned_rooms(
         .sub
         .parse()
         .map_err(|_| AuthError::InvalidToken.into_response())?;
-    let rows = sqlx::query_as::<_, RoomListRow>("SELECT id, display_name, topic, password_hash IS NOT NULL, moderated, description, image_version, secret, name_style, topic_style FROM rooms WHERE owner_id = $1 ORDER BY created_at DESC LIMIT $2")
+    let rows = sqlx::query_as::<_, RoomListRow>("SELECT id, display_name, topic, password_hash IS NOT NULL AS password_protected, moderated, description, image_version, secret, name_style, topic_style FROM rooms WHERE owner_id = $1 ORDER BY created_at DESC LIMIT $2")
         .bind(owner).bind(settings::MAX_PERSISTED_ROOMS_PER_OWNER).fetch_all(server.db_pool().ok_or_else(|| AuthError::NotConfigured.into_response())?)
         .await.map_err(room_database_error)?;
     let mut response_headers = HeaderMap::new();
@@ -623,7 +627,7 @@ pub(crate) async fn update_room_identity(
             .into_response()
             .into());
     }
-    let row = sqlx::query_as::<_, RoomListRow>("SELECT id, display_name, topic, password_hash IS NOT NULL, moderated, description, image_version, secret, name_style, topic_style FROM rooms WHERE id = $1 AND owner_id = $2")
+    let row = sqlx::query_as::<_, RoomListRow>("SELECT id, display_name, topic, password_hash IS NOT NULL AS password_protected, moderated, description, image_version, secret, name_style, topic_style FROM rooms WHERE id = $1 AND owner_id = $2")
     .bind(&id)
     .bind(owner)
     .fetch_optional(
@@ -813,7 +817,7 @@ mod tests {
                     .await
                     .unwrap()
                     .into_iter()
-                    .map(|row| row.0.to_string())
+                    .map(|row| row.id.to_string())
                     .collect::<Vec<String>>()
             }
         };
@@ -831,7 +835,7 @@ mod tests {
             .await
             .unwrap()
             .into_iter()
-            .map(|row| row.0.to_string())
+            .map(|row| row.id.to_string())
             .collect::<Vec<String>>();
         // The stored version is a digest of the room id and its image: it
         // changes with the image, differs between rooms sharing a picture, and
@@ -858,7 +862,7 @@ mod tests {
                 .await
                 .unwrap()
                 .into_iter()
-                .map(|row| (row.0.to_string(), row.6))
+                .map(|row| (row.id.to_string(), row.image_version))
                 .collect();
         sqlx::query(
             "UPDATE rooms SET image_url = $2, image_version = room_image_version(id, $2) WHERE id = $1",

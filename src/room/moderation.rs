@@ -204,6 +204,15 @@ impl std::str::FromStr for ReportResolution {
     }
 }
 
+/// The longest reason a sanction, report resolution or lobby decision may carry, in bytes.
+pub(crate) const MAX_REASON_LEN: usize = 256;
+
+/// Whether a given reason fits the stored rule: at most [`MAX_REASON_LEN`] bytes
+/// without control characters.
+pub(crate) fn valid_reason(value: &str) -> bool {
+    value.len() <= MAX_REASON_LEN && !value.chars().any(char::is_control)
+}
+
 /// What a moderator did, as the history stores and serializes it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -221,6 +230,21 @@ pub enum ModerationAction {
 }
 
 impl ModerationAction {
+    /// Every action, in the order the history vocabulary lists them.
+    pub(crate) const ALL: [Self; 10] = [
+        Self::Kick,
+        Self::Ban,
+        Self::Unban,
+        Self::CamBan,
+        Self::CamUnban,
+        Self::TextMute,
+        Self::TextUnmute,
+        Self::ReportResolved,
+        Self::ReportDismissed,
+        Self::MessageRemoved,
+    ];
+
+    /// The stored name, which is also the serialized one (a test keeps them equal).
     pub(crate) fn as_str(self) -> &'static str {
         match self {
             Self::Kick => "kick",
@@ -237,20 +261,9 @@ impl ModerationAction {
     }
 
     pub(crate) fn parse(value: &str) -> Option<Self> {
-        [
-            Self::Kick,
-            Self::Ban,
-            Self::Unban,
-            Self::CamBan,
-            Self::CamUnban,
-            Self::TextMute,
-            Self::TextUnmute,
-            Self::ReportResolved,
-            Self::ReportDismissed,
-            Self::MessageRemoved,
-        ]
-        .into_iter()
-        .find(|action| action.as_str() == value)
+        Self::ALL
+            .into_iter()
+            .find(|action| action.as_str() == value)
     }
 
     pub(crate) fn for_punitive(kind: PunitiveKind, enabled: bool) -> Self {
@@ -650,23 +663,25 @@ pub(crate) async fn list_events(
     offset: i64,
     limit: i64,
 ) -> Result<Vec<ModerationEvent>, sqlx::Error> {
-    type EventRow = (
-        Uuid,
-        String,
-        String,
-        String,
-        String,
-        String,
-        bool,
-        Option<String>,
-        Option<String>,
-        Option<DateTime<Utc>>,
-        Option<Uuid>,
-        DateTime<Utc>,
-    );
+    /// A moderation event as the log listing reads it.
+    #[derive(sqlx::FromRow)]
+    struct EventRow {
+        id: Uuid,
+        action: String,
+        actor_id: String,
+        actor_name: String,
+        target_id: String,
+        target_name: String,
+        target_authenticated: bool,
+        target_ip: Option<String>,
+        reason: Option<String>,
+        expires_at: Option<DateTime<Utc>>,
+        report_id: Option<Uuid>,
+        created_at: DateTime<Utc>,
+    }
     let rows: Vec<EventRow> = sqlx::query_as(
         "SELECT id, action, actor_id, actor_name, target_id, target_name, target_authenticated,
-                host(target_ip), reason, expires_at, report_id, created_at
+                host(target_ip) AS target_ip, reason, expires_at, report_id, created_at
          FROM moderation_events WHERE room_id = $1
          ORDER BY created_at DESC, id LIMIT $2 OFFSET $3",
     )
@@ -677,37 +692,22 @@ pub(crate) async fn list_events(
     .await?;
     Ok(rows
         .into_iter()
-        .filter_map(
-            |(
-                id,
-                action,
-                actor_id,
-                actor_name,
-                target_id,
-                target_name,
-                target_authenticated,
-                target_ip,
-                reason,
-                expires_at,
-                report_id,
-                created_at,
-            )| {
-                Some(ModerationEvent {
-                    event_id: id.to_string(),
-                    action: ModerationAction::parse(&action)?,
-                    actor_id: actor_id.parse().ok()?,
-                    actor_name,
-                    target_id: target_id.parse().ok()?,
-                    target_name,
-                    target_authenticated,
-                    reason,
-                    expires_at,
-                    report_id: report_id.map(|id| id.to_string()),
-                    created_at,
-                    target_ip: target_ip.and_then(|ip| ip.parse().ok()),
-                })
-            },
-        )
+        .filter_map(|row| {
+            Some(ModerationEvent {
+                event_id: row.id.to_string(),
+                action: ModerationAction::parse(&row.action)?,
+                actor_id: row.actor_id.parse().ok()?,
+                actor_name: row.actor_name,
+                target_id: row.target_id.parse().ok()?,
+                target_name: row.target_name,
+                target_authenticated: row.target_authenticated,
+                reason: row.reason,
+                expires_at: row.expires_at,
+                report_id: row.report_id.map(|id| id.to_string()),
+                created_at: row.created_at,
+                target_ip: row.target_ip.and_then(|ip| ip.parse().ok()),
+            })
+        })
         .collect())
 }
 
@@ -1038,6 +1038,15 @@ pub(crate) fn can_chat(state: &PunitiveState, role: Role, moderated: bool) -> bo
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn moderation_actions_store_and_serialize_under_one_name() {
+        for action in ModerationAction::ALL {
+            assert_eq!(serde_json::to_value(action).unwrap(), action.as_str());
+            assert_eq!(ModerationAction::parse(action.as_str()), Some(action));
+        }
+        assert_eq!(ModerationAction::parse("kicked"), None);
+    }
     use crate::ids::fixtures::rid;
 
     #[test]

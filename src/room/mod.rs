@@ -74,6 +74,14 @@ struct RevokedProducer {
     kind: MediaKind,
 }
 
+/// A producer a participant publishes: its media kind and the source the client
+/// declared for it (camera, screen, …) when it named one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ProducerRecord {
+    pub kind: MediaKind,
+    pub source: Option<String>,
+}
+
 /// Participant in a room
 #[derive(Clone)]
 pub(crate) struct Participant {
@@ -85,7 +93,7 @@ pub(crate) struct Participant {
     /// Media cleanup must use this value so an old socket cannot tear down a
     /// replacement session that joined with the same participant ID.
     pub media_session_id: uuid::Uuid,
-    pub producers: HashMap<String, (MediaKind, Option<String>)>,
+    pub producers: HashMap<String, ProducerRecord>,
     pub role: roles::Role,
     pub punitive: moderation::PunitiveState,
     /// True when the connection carried a valid JWT (id == user uuid)

@@ -905,3 +905,18 @@ Complete-source SHA256 per rebound file:
 | 35 | `src/signaling/security_tests.rs:177:177:149:161` | `codeql:9b89bbc599bbdd31b2ee03bbd20cefc32cd023954961909a2d644ee24a4b023e` |
 | 63 | `src/signaling/security_tests.rs:608:608:27:52` | `codeql:3d7ab5fb4d9946ccaebd4ca7a822c7fc4a703386384e3a815373dd7ae9740df9` |
 | 69 | `src/signaling/security_tests.rs:168:168:75:87` | `codeql:e209a3ae5e761becfa49c632916399ce14e90fa6638d3d0506f3bdb9f130067e` |
+
+## Source re-review: settings persistence on a query builder (2026-10-19)
+
+`262484d` rebuilt `update_room_settings` on `sqlx::QueryBuilder` (47 lines shorter) and made `CreateRoomRequest` reject unknown fields, so the four reviewed test lines of `src/room/settings.rs` (alerts 59–62) moved 47 lines up; every flagged line is byte-identical to the previously reviewed source and the identities were recomputed with the same line-mapping method (base ff4ed3a). Owner, rationale, scope semantics and the 2026-11-29 expiry are unchanged; hosted ingestion remains a separate required check.
+
+Complete-source SHA256 per rebound file:
+
+- `src/room/settings.rs`: `d929d94c4bedd34efe01cc57441dc6e217e502f65d63334d31d68fe1a0436d1d`
+
+| Alert | Range | Fingerprint |
+|---|---|---|
+| 59 | `src/room/settings.rs:616:616:33:42` | `codeql:ef74cc122b7eeec1599a499aa3ff9e44074d88da7c9fc8e39111c307337bc44e` |
+| 60 | `src/room/settings.rs:621:621:33:43` | `codeql:8cf38fa9277784468a7eec886fa96a8a6a599d12a2b82d72e5691ebfa15ef748` |
+| 61 | `src/room/settings.rs:623:623:33:43` | `codeql:366d6f928ab38d4001e68f14738c8fed814fb1e6884c25c144de81aa16489d06` |
+| 62 | `src/room/settings.rs:626:626:33:45` | `codeql:4654d720ac739ee3c5d88ffda391d93ba9094a0788e890eefe3995d47b349861` |

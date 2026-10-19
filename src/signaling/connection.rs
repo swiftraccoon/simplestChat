@@ -2304,7 +2304,7 @@ fn validate_reason(reason: Option<&str>) -> anyhow::Result<()> {
 }
 
 fn validate_durable_reason(reason: Option<&str>) -> anyhow::Result<()> {
-    if reason.is_some_and(|reason| reason.len() > 256 || reason.chars().any(char::is_control)) {
+    if reason.is_some_and(|reason| !crate::room::moderation::valid_reason(reason)) {
         anyhow::bail!("Reason must be at most 256 characters without control characters");
     }
     Ok(())

@@ -148,7 +148,7 @@ impl RoomManager {
                 producers: p
                     .producers
                     .iter()
-                    .map(|(id, (kind, source))| ProducerMetadata {
+                    .map(|(id, ProducerRecord { kind, source })| ProducerMetadata {
                         id: id.clone(),
                         kind: *kind,
                         source: source.clone(),

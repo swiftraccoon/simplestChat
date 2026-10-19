@@ -336,19 +336,13 @@ async fn preview_room_invite(
 }
 
 /// A directory row joined with the account's stored role.
-type MembershipRow = (
-    RoomId,
-    String,
-    Option<String>,
-    bool,
-    bool,
-    String,
-    Option<String>,
-    bool,
-    sqlx::types::Json<crate::signaling::protocol::ChatStyle>,
-    sqlx::types::Json<crate::signaling::protocol::ChatStyle>,
-    Role,
-);
+/// A membership page row: the room as the listings read it plus the member's role.
+#[derive(sqlx::FromRow)]
+struct MembershipRow {
+    #[sqlx(flatten)]
+    room: RoomListRow,
+    role: Role,
+}
 
 pub(crate) struct MembershipBatch {
     pub rows: Vec<(RoomListRow, Role)>,
@@ -363,7 +357,7 @@ pub(crate) async fn memberships(
     after: Option<&str>,
 ) -> Result<MembershipBatch, sqlx::Error> {
     let mut rows: Vec<MembershipRow> = sqlx::query_as(
-        "SELECT r.id, r.display_name, r.topic, r.password_hash IS NOT NULL, r.moderated,
+        "SELECT r.id, r.display_name, r.topic, r.password_hash IS NOT NULL AS password_protected, r.moderated,
                     r.description, r.image_version, r.secret, r.name_style, r.topic_style, rr.role
              FROM room_roles rr JOIN rooms r ON r.id = rr.room_id
              WHERE rr.user_id = $1 AND r.owner_id <> $1
@@ -377,43 +371,16 @@ pub(crate) async fn memberships(
     .await?;
     let has_more = rows.len() > MEMBERSHIP_PAGE_SIZE;
     rows.truncate(MEMBERSHIP_PAGE_SIZE);
-    let next_cursor = has_more.then(|| rows.last().expect("full membership page").0.to_string());
+    let next_cursor = has_more.then(|| {
+        rows.last()
+            .expect("full membership page")
+            .room
+            .id
+            .to_string()
+    });
     Ok(MembershipBatch {
         next_cursor,
-        rows: rows
-            .into_iter()
-            .map(
-                |(
-                    id,
-                    name,
-                    topic,
-                    password,
-                    moderated,
-                    description,
-                    image,
-                    secret,
-                    name_style,
-                    topic_style,
-                    role,
-                )| {
-                    (
-                        (
-                            id,
-                            name,
-                            topic,
-                            password,
-                            moderated,
-                            description,
-                            image,
-                            secret,
-                            name_style,
-                            topic_style,
-                        ),
-                        role,
-                    )
-                },
-            )
-            .collect(),
+        rows: rows.into_iter().map(|row| (row.room, row.role)).collect(),
     })
 }
 
@@ -1041,7 +1008,7 @@ mod tests {
         assert_eq!(mine.rows.len(), 1);
         assert!(mine.next_cursor.is_none());
         assert_eq!(
-            (mine.rows[0].0.0.as_str(), mine.rows[0].1),
+            (mine.rows[0].0.id.as_str(), mine.rows[0].1),
             (room_id.as_str(), Role::Member)
         );
         assert!(
@@ -1112,7 +1079,7 @@ mod tests {
             .into_iter()
             .chain(second.rows)
             .chain(third.rows)
-            .map(|(row, _)| row.0.to_string())
+            .map(|(row, _)| row.id.to_string())
             .collect();
         assert_eq!(all, rooms);
         assert!(

@@ -1391,15 +1391,15 @@
       "toolVersion": "2.27.1",
       "path": "src/room/settings.rs",
       "region": {
-        "start_line": 663,
-        "end_line": 663,
+        "start_line": 616,
+        "end_line": 616,
         "start_column": 33,
         "end_column": 42
       },
       "messageSha256": "d6798191115c7adefc7f5ee1f720512e328f10329b99fba8c42e1a015eaa1afb",
-      "sourceSha256": "9e4d1f3ecd98967ad923d4eefcf1f15ff69cace4445ff11c31e3cac3a3a384d5",
-      "scope": "src/room/settings.rs:663:663:33:42",
-      "fingerprint": "codeql:d99635d0f5df0867a67f158ed5a8a2f2c0de654423a6894fc2828439abaea9aa",
+      "sourceSha256": "d929d94c4bedd34efe01cc57441dc6e217e502f65d63334d31d68fe1a0436d1d",
+      "scope": "src/room/settings.rs:616:616:33:42",
+      "fingerprint": "codeql:ef74cc122b7eeec1599a499aa3ff9e44074d88da7c9fc8e39111c307337bc44e",
       "number": 59,
       "severity": "critical",
       "state": "open",
@@ -1407,24 +1407,24 @@
       "rationale": "These literals are cfg(test) room-password validation boundary inputs for length, UTF-8 bytes and control rejection. They do not create or authenticate any operational room.",
       "observedRevision": "9eaabb7b5ab586ca694283afc1550055ef2c3136",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/59",
-      "sourceProvenanceRevision": "ff4ed3aed04a6d4f04add1537c591b7134c9ffe2",
-      "sourceReviewBaseRevision": "8b56eed0a0f6814a10d475a0feec4db646bc5f34",
-      "sourceReviewBlob": "07f58fcee5eda96220524e89821f2598c3d74944"
+      "sourceProvenanceRevision": "ac758eaf3208b2382a0495a0176fa260e84d94ef",
+      "sourceReviewBaseRevision": "ff4ed3aed04a6d4f04add1537c591b7134c9ffe2",
+      "sourceReviewBlob": "46df131e5d7d43b2869b4b73d0d1ec7f3255fdad"
     },
     {
       "rule": "rust/hard-coded-cryptographic-value",
       "toolVersion": "2.27.1",
       "path": "src/room/settings.rs",
       "region": {
-        "start_line": 668,
-        "end_line": 668,
+        "start_line": 621,
+        "end_line": 621,
         "start_column": 33,
         "end_column": 43
       },
       "messageSha256": "d6798191115c7adefc7f5ee1f720512e328f10329b99fba8c42e1a015eaa1afb",
-      "sourceSha256": "9e4d1f3ecd98967ad923d4eefcf1f15ff69cace4445ff11c31e3cac3a3a384d5",
-      "scope": "src/room/settings.rs:668:668:33:43",
-      "fingerprint": "codeql:e34a7b6718132fab97108415b14582bdf6a00a0863cad0c901f1dec5a2f2b4a9",
+      "sourceSha256": "d929d94c4bedd34efe01cc57441dc6e217e502f65d63334d31d68fe1a0436d1d",
+      "scope": "src/room/settings.rs:621:621:33:43",
+      "fingerprint": "codeql:8cf38fa9277784468a7eec886fa96a8a6a599d12a2b82d72e5691ebfa15ef748",
       "number": 60,
       "severity": "critical",
       "state": "open",
@@ -1432,24 +1432,24 @@
       "rationale": "These literals are cfg(test) room-password validation boundary inputs for length, UTF-8 bytes and control rejection. They do not create or authenticate any operational room.",
       "observedRevision": "9eaabb7b5ab586ca694283afc1550055ef2c3136",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/60",
-      "sourceProvenanceRevision": "ff4ed3aed04a6d4f04add1537c591b7134c9ffe2",
-      "sourceReviewBaseRevision": "8b56eed0a0f6814a10d475a0feec4db646bc5f34",
-      "sourceReviewBlob": "07f58fcee5eda96220524e89821f2598c3d74944"
+      "sourceProvenanceRevision": "ac758eaf3208b2382a0495a0176fa260e84d94ef",
+      "sourceReviewBaseRevision": "ff4ed3aed04a6d4f04add1537c591b7134c9ffe2",
+      "sourceReviewBlob": "46df131e5d7d43b2869b4b73d0d1ec7f3255fdad"
     },
     {
       "rule": "rust/hard-coded-cryptographic-value",
       "toolVersion": "2.27.1",
       "path": "src/room/settings.rs",
       "region": {
-        "start_line": 670,
-        "end_line": 670,
+        "start_line": 623,
+        "end_line": 623,
         "start_column": 33,
         "end_column": 43
       },
       "messageSha256": "d6798191115c7adefc7f5ee1f720512e328f10329b99fba8c42e1a015eaa1afb",
-      "sourceSha256": "9e4d1f3ecd98967ad923d4eefcf1f15ff69cace4445ff11c31e3cac3a3a384d5",
-      "scope": "src/room/settings.rs:670:670:33:43",
-      "fingerprint": "codeql:c8b32581aa8089418b503c561051238061f22731f43990a05b2cdf5f6935322c",
+      "sourceSha256": "d929d94c4bedd34efe01cc57441dc6e217e502f65d63334d31d68fe1a0436d1d",
+      "scope": "src/room/settings.rs:623:623:33:43",
+      "fingerprint": "codeql:366d6f928ab38d4001e68f14738c8fed814fb1e6884c25c144de81aa16489d06",
       "number": 61,
       "severity": "critical",
       "state": "open",
@@ -1457,24 +1457,24 @@
       "rationale": "These literals are cfg(test) room-password validation boundary inputs for length, UTF-8 bytes and control rejection. They do not create or authenticate any operational room.",
       "observedRevision": "9eaabb7b5ab586ca694283afc1550055ef2c3136",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/61",
-      "sourceProvenanceRevision": "ff4ed3aed04a6d4f04add1537c591b7134c9ffe2",
-      "sourceReviewBaseRevision": "8b56eed0a0f6814a10d475a0feec4db646bc5f34",
-      "sourceReviewBlob": "07f58fcee5eda96220524e89821f2598c3d74944"
+      "sourceProvenanceRevision": "ac758eaf3208b2382a0495a0176fa260e84d94ef",
+      "sourceReviewBaseRevision": "ff4ed3aed04a6d4f04add1537c591b7134c9ffe2",
+      "sourceReviewBlob": "46df131e5d7d43b2869b4b73d0d1ec7f3255fdad"
     },
     {
       "rule": "rust/hard-coded-cryptographic-value",
       "toolVersion": "2.27.1",
       "path": "src/room/settings.rs",
       "region": {
-        "start_line": 673,
-        "end_line": 673,
+        "start_line": 626,
+        "end_line": 626,
         "start_column": 33,
         "end_column": 45
       },
       "messageSha256": "d6798191115c7adefc7f5ee1f720512e328f10329b99fba8c42e1a015eaa1afb",
-      "sourceSha256": "9e4d1f3ecd98967ad923d4eefcf1f15ff69cace4445ff11c31e3cac3a3a384d5",
-      "scope": "src/room/settings.rs:673:673:33:45",
-      "fingerprint": "codeql:143e6b5562d1e857bf243cbad055166ca5939fa1a9bb75081c7260a4eb377dc7",
+      "sourceSha256": "d929d94c4bedd34efe01cc57441dc6e217e502f65d63334d31d68fe1a0436d1d",
+      "scope": "src/room/settings.rs:626:626:33:45",
+      "fingerprint": "codeql:4654d720ac739ee3c5d88ffda391d93ba9094a0788e890eefe3995d47b349861",
       "number": 62,
       "severity": "critical",
       "state": "open",
@@ -1482,9 +1482,9 @@
       "rationale": "These literals are cfg(test) room-password validation boundary inputs for length, UTF-8 bytes and control rejection. They do not create or authenticate any operational room.",
       "observedRevision": "9eaabb7b5ab586ca694283afc1550055ef2c3136",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/62",
-      "sourceProvenanceRevision": "ff4ed3aed04a6d4f04add1537c591b7134c9ffe2",
-      "sourceReviewBaseRevision": "8b56eed0a0f6814a10d475a0feec4db646bc5f34",
-      "sourceReviewBlob": "07f58fcee5eda96220524e89821f2598c3d74944"
+      "sourceProvenanceRevision": "ac758eaf3208b2382a0495a0176fa260e84d94ef",
+      "sourceReviewBaseRevision": "ff4ed3aed04a6d4f04add1537c591b7134c9ffe2",
+      "sourceReviewBlob": "46df131e5d7d43b2869b4b73d0d1ec7f3255fdad"
     },
     {
       "rule": "rust/hard-coded-cryptographic-value",
@@ -1704,7 +1704,7 @@
       "observedRunId": 39085371470,
       "reviewed": "2026-10-18",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/953",
-      "sourceProvenanceRevision": "20e28a47f2efb54c749bd273d4e4c2b9e4668d05",
+      "sourceProvenanceRevision": "ac758eaf3208b2382a0495a0176fa260e84d94ef",
       "sourceReviewBaseRevision": "88e8ed0ceb1a999cb2318bdfbc845ae5ebd3c3b8",
       "sourceReviewBlob": "418638b65a4b0102886514fcb8e45abef957b6c1"
     }

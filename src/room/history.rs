@@ -22,6 +22,8 @@ use sqlx::{PgConnection, PgPool, types::Json as SqlJson};
 use uuid::Uuid;
 
 pub(crate) const PM_RETENTION_DAYS: i32 = 90;
+/// The retention periods a room may choose for its public history, in days (0 keeps none).
+pub(crate) const ROOM_HISTORY_RETENTION_DAYS: [i32; 5] = [0, 1, 7, 30, 90];
 const PAGE_LIMIT: usize = 50;
 /// Search examines the newest 10,000 retained messages, then paginates matches.
 const SEARCH_WINDOW: i64 = 10_000;
@@ -1042,7 +1044,7 @@ pub(crate) async fn set_pin(
 
 /// Public history stops being readable and is erased in the settings transaction.
 pub(crate) async fn set_retention(pool: &PgPool, room: &str, days: i32) -> Result<(), sqlx::Error> {
-    if ![0, 1, 7, 30, 90].contains(&days) {
+    if !ROOM_HISTORY_RETENTION_DAYS.contains(&days) {
         return Err(invalid("Invalid history retention"));
     }
     let mut tx = pool.begin().await?;
@@ -1380,10 +1382,10 @@ pub(super) async fn save_private_message(
     } else {
         None
     };
-    let style = serde_json::from_value(
-        serde_json::json!({"color":sender.chat_color,"style":sender.chat_style}),
-    )
-    .unwrap_or_default();
+    let style = crate::signaling::protocol::ChatStyle {
+        color: sender.chat_color,
+        style: crate::signaling::protocol::ChatStyleKind::named(&sender.chat_style),
+    };
     let message = ChatEntry {
         message_id: MessageId::random(),
         client_message_id: request.client_message_id,

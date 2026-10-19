@@ -54,7 +54,7 @@ impl RoomManager {
         reason: Option<&str>,
         control: control::RoomControl,
     ) -> Result<bool> {
-        if reason.is_some_and(|value| value.len() > 256 || value.chars().any(char::is_control)) {
+        if reason.is_some_and(|value| !moderation::valid_reason(value)) {
             anyhow::bail!(
                 "Moderation reason must be at most 256 characters without control characters"
             );
@@ -245,7 +245,7 @@ impl RoomManager {
             let producers: Vec<String> = target
                 .producers
                 .iter()
-                .filter(|(_, (kind, _))| *kind == MediaKind::Video)
+                .filter(|(_, record)| record.kind == MediaKind::Video)
                 .map(|(id, _)| id.clone())
                 .collect();
             let target_media_session_id = target.media_session_id;
@@ -597,7 +597,7 @@ impl RoomManager {
         if duration.is_some_and(|seconds| seconds == 0 || seconds > MAX_BAN_DURATION_SECS) {
             anyhow::bail!("Ban duration must be between 1 second and 10 years");
         }
-        if reason.is_some_and(|value| value.len() > 256 || value.chars().any(char::is_control)) {
+        if reason.is_some_and(|value| !moderation::valid_reason(value)) {
             anyhow::bail!("Ban reason must be at most 256 characters without control characters");
         }
         let runtime_expiry = duration.and_then(|seconds| {

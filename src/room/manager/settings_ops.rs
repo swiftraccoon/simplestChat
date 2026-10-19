@@ -64,8 +64,16 @@ impl RoomManager {
             }
         }
 
-        Self::validate_capacity("max participants", patch.max_participants, 10_000)?;
-        Self::validate_capacity("max broadcasters", patch.max_broadcasters, 1_000)?;
+        Self::validate_capacity(
+            "max participants",
+            patch.max_participants,
+            settings::MAX_PARTICIPANTS,
+        )?;
+        Self::validate_capacity(
+            "max broadcasters",
+            patch.max_broadcasters,
+            settings::MAX_BROADCASTERS,
+        )?;
         let mut admin_mutation_reserved = false;
         if let Some(Some(value)) = patch.password.as_ref() {
             if !settings::valid_new_room_password(value.expose_secret()) {
@@ -223,7 +231,7 @@ impl RoomManager {
         topic: String,
         control: control::RoomControl,
     ) -> Result<()> {
-        if topic.len() > 512 || topic.chars().any(char::is_control) {
+        if topic.len() > settings::MAX_TOPIC_LEN || topic.chars().any(char::is_control) {
             anyhow::bail!("Room topic must be at most 512 characters without control characters");
         }
         let room_lock = self.get_room(room_id)?;

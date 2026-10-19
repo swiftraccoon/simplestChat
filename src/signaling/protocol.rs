@@ -793,6 +793,18 @@ pub enum ChatStyleKind {
 }
 
 impl ChatStyleKind {
+    /// The treatment stored under `name`; anything this server does not know is
+    /// [`ChatStyleKind::Unknown`], as on the wire.
+    #[must_use]
+    pub fn named(name: &str) -> Self {
+        match name {
+            "accent" => Self::Accent,
+            "text" => Self::Text,
+            "bubble" => Self::Bubble,
+            _ => Self::Unknown,
+        }
+    }
+
     #[must_use]
     pub fn as_str(self) -> &'static str {
         match self {
@@ -1517,5 +1529,22 @@ mod tests {
         }))
         .expect_err("the HTTP body is strict");
         assert!(error.to_string().contains("unknown field"), "{error}");
+    }
+
+    #[test]
+    fn stored_chat_treatments_read_like_the_wire() {
+        for (name, kind) in [
+            ("accent", ChatStyleKind::Accent),
+            ("text", ChatStyleKind::Text),
+            ("bubble", ChatStyleKind::Bubble),
+            ("glow", ChatStyleKind::Unknown),
+        ] {
+            assert_eq!(ChatStyleKind::named(name), kind);
+            let wire: ChatStyleKind = serde_json::from_value(json!(name)).unwrap();
+            assert_eq!(
+                wire, kind,
+                "{name} must read the same from a row and from the wire"
+            );
+        }
     }
 }

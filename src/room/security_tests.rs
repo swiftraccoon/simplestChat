@@ -1886,7 +1886,10 @@ fn restrictive_policy_removes_existing_unauthorized_producers() {
     );
     guest.producers.insert(
         "microphone".to_string(),
-        (MediaKind::Audio, Some("microphone".to_string())),
+        ProducerRecord {
+            kind: MediaKind::Audio,
+            source: Some("microphone".to_string()),
+        },
     );
     room.producer_to_participant
         .insert("microphone".to_string(), pid("guest"));
@@ -1911,7 +1914,10 @@ fn moderated_role_demotion_removes_existing_producers() {
     );
     member.producers.insert(
         "camera".to_string(),
-        (MediaKind::Video, Some("camera".to_string())),
+        ProducerRecord {
+            kind: MediaKind::Video,
+            source: Some("camera".to_string()),
+        },
     );
     room.participants.insert(pid("member"), member);
 

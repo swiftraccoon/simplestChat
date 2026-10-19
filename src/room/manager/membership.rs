@@ -882,7 +882,7 @@ impl RoomManager {
                     producers: p
                         .producers
                         .iter()
-                        .map(|(id, (kind, source))| ProducerMetadata {
+                        .map(|(id, ProducerRecord { kind, source })| ProducerMetadata {
                             id: id.clone(),
                             kind: *kind,
                             source: source.clone(),
@@ -994,7 +994,7 @@ impl RoomManager {
                 info!("Participant {} left room {}", participant_id, room_id);
 
                 // Collect audio producer IDs for observer cleanup
-                for (pid, (kind, _)) in &participant.producers {
+                for (pid, ProducerRecord { kind, .. }) in &participant.producers {
                     if *kind == MediaKind::Audio {
                         audio_producer_ids.push(pid.clone());
                     }

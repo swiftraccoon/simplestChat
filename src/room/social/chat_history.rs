@@ -119,7 +119,7 @@ impl RoomManager {
         if !request.room().persisted {
             return Err(forbidden("Only saved rooms can keep chat history"));
         }
-        if ![0, 1, 7, 30, 90].contains(&retention_days) {
+        if !history::ROOM_HISTORY_RETENTION_DAYS.contains(&retention_days) {
             return Err(invalid("Choose off, 1, 7, 30 or 90 days"));
         }
         let pool = self
