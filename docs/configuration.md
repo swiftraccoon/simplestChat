@@ -53,7 +53,11 @@
 | `MAX_CONSUMERS_PER_PARTICIPANT` | `64` | Server-side consumer cap per participant. Each peer with camera and microphone costs two consumers (three with screen video, four with screen audio too), so the default covers 32 camera/microphone publishers. Consumer and frame burst budgets cover creation, resumption and a layer request for every allowed consumer; sustained limits and the room-wide IPC limit still apply. |
 | `METRICS_TOKEN` | (none) | Bearer token of at least 32 bytes; `/metrics` returns 404 when unset |
 | `RUST_LOG` | `simplestChat=info,mediasoup=warn` | Tracing filter |
+| `LOG_FORMAT` | `json` | Log encoding: `json` writes one object per line for aggregation; `text` is the human-readable form for local runs |
+| `SOURCE_REVISION` | `unknown` | The 40-hexadecimal commit the running build came from, set by the image build; reported at startup and as `simplestchat_build_info` on `/metrics`. Any other value is reported as `unknown` |
 | `DIAGNOSTICS_PATH` | (none) | Opt-in, new absolute path for private local operation records; see [limits and report definitions](diagnostics.md) |
+| `DIAGNOSTICS_MAX_RECORDS` | `10000` | Records one local diagnostics file keeps (1–100000) before recording stops; only read with `DIAGNOSTICS_PATH` |
+| `DIAGNOSTICS_DURATION_SECS` | `300` | Seconds a local diagnostics recording runs (1–3600) before it stops; only read with `DIAGNOSTICS_PATH` |
 | `MEDIA_DIAGNOSTICS_ENABLED` | `false` | Enable authenticated, on-demand native media snapshots; requires `METRICS_TOKEN`. See [collection bounds and interpretation](diagnostics.md#server-forwarding-snapshots) |
 | `TURN_URLS` | (none) | Comma-separated TURN server URLs |
 | `TURN_SECRET` | (none) | TURN shared secret of at least 32 bytes; required when `TURN_URLS` is set |
