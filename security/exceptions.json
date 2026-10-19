@@ -1713,10 +1713,10 @@
     },
     {
       "scanner": "gitleaks",
-      "fingerprint": "image-match:0e1f4907756da26059b25ce7acfe1d18e2e384888c0b8c25eecf3778666f648c",
+      "fingerprint": "image-match:731ba4ebc7682de27cb10050c381c382883ff0a9c6fad9ce10a2e8a71d6bf5e0",
       "scope": "001/usr/lib/sysimage/rpm/rpmdb.sqlite",
       "owner": "swiftraccoon",
-      "rationale": "The complete 57-byte canonical match equals the inspected bounded package-install replay. Every detected byte is covered by live public fedora-gpg-keys filename/index records, including printable serialized row-identifier bytes. The entire ASCII projection also matches canonical evidence. This is public package metadata, not an issued bearer credential or signing private key.",
+      "rationale": "The complete 58-byte canonical match equals the inspected bounded package-install replay made after the vim 9.2.1202 refresh. Every detected byte is one live public fedora-gpg-keys filename index record (26 filename bytes and two serialized row-identifier bytes) followed by a 32-byte SQLite freeblock whose header and surviving content are a freed copy of the same public filename; that filename is also a live record in the authenticated immutable Fedora base database. The detector's candidate is exactly the public filename. This is public package metadata, not an issued bearer credential or signing private key.",
       "reachability": "Only this exact complete detected region at this original layer path, rule and pinned scanner/projection format is reviewed. All row-identifier bytes remain in the match digest. Other findings, changed regions or paths remain blocking; whole database hashes remain fresh evidence and are not assumed identical.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-rpm-secret-review.md"
@@ -1743,10 +1743,10 @@
     },
     {
       "scanner": "gitleaks",
-      "fingerprint": "image-match:ae0325c1bb2087fd257d470d58a96600c8c0cdb866001ab6e141a8723b00d999",
+      "fingerprint": "image-match:3126abb26c2adac0d96b381546b424f003bdfbd0279685874c637e76bebed294",
       "scope": "001/usr/lib/sysimage/rpm/rpmdb.sqlite",
       "owner": "swiftraccoon",
-      "rationale": "The complete 65-byte canonical match equals the inspected bounded package-install replay. It is fully covered by a live public filename index record and adjacent deleted-index metadata. The surviving filename and row-identifier bytes in that freeblock independently match a live record in the authenticated immutable Fedora base. The entire ASCII projection also matches canonical evidence; no row bytes or match regions are normalized.",
+      "rationale": "The complete 57-byte canonical match equals the inspected bounded package-install replay made after the vim 9.2.1202 refresh. Every detected byte is covered by two live public fedora-gpg-keys filename index records, including the cell size, record header and printable serialized row-identifier bytes; the candidate is a public filename plus one row-identifier byte. The replay's complete projection differs from the canonical one only by line offsets while the complete match bytes agree. This is public package metadata, not an issued bearer credential or signing private key.",
       "reachability": "Only this exact complete detected region at this original layer path, rule and pinned scanner/projection format is reviewed. All row-identifier bytes remain in the match digest. Other findings, changed regions or paths remain blocking; whole database hashes remain fresh evidence and are not assumed identical.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/fedora-rpm-secret-review.md"
