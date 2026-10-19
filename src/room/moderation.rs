@@ -109,29 +109,125 @@ impl std::str::FromStr for ModerationTargetId {
     }
 }
 
-impl sqlx::Type<sqlx::Postgres> for ModerationTargetId {
-    fn type_info() -> sqlx::postgres::PgTypeInfo {
-        <String as sqlx::Type<sqlx::Postgres>>::type_info()
-    }
+/// Stores a `Display`/`FromStr` type in a text column.
+macro_rules! text_column {
+    ($name:ty) => {
+        impl sqlx::Type<sqlx::Postgres> for $name {
+            fn type_info() -> sqlx::postgres::PgTypeInfo {
+                <String as sqlx::Type<sqlx::Postgres>>::type_info()
+            }
 
-    fn compatible(ty: &sqlx::postgres::PgTypeInfo) -> bool {
-        <String as sqlx::Type<sqlx::Postgres>>::compatible(ty)
+            fn compatible(ty: &sqlx::postgres::PgTypeInfo) -> bool {
+                <String as sqlx::Type<sqlx::Postgres>>::compatible(ty)
+            }
+        }
+
+        impl sqlx::Encode<'_, sqlx::Postgres> for $name {
+            fn encode_by_ref(
+                &self,
+                buf: &mut sqlx::postgres::PgArgumentBuffer,
+            ) -> Result<sqlx::encode::IsNull, sqlx::error::BoxDynError> {
+                <String as sqlx::Encode<'_, sqlx::Postgres>>::encode(self.to_string(), buf)
+            }
+        }
+
+        impl sqlx::Decode<'_, sqlx::Postgres> for $name {
+            fn decode(
+                value: sqlx::postgres::PgValueRef<'_>,
+            ) -> Result<Self, sqlx::error::BoxDynError> {
+                let text = <&str as sqlx::Decode<'_, sqlx::Postgres>>::decode(value)?;
+                Ok(text.parse()?)
+            }
+        }
+    };
+}
+
+text_column!(ModerationTargetId);
+text_column!(ReportStatus);
+text_column!(ReportResolution);
+
+/// Where a report stands: open until a moderator resolves or dismisses it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ReportStatus {
+    Open,
+    Resolved,
+    Dismissed,
+}
+
+impl ReportStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Open => "open",
+            Self::Resolved => "resolved",
+            Self::Dismissed => "dismissed",
+        }
     }
 }
 
-impl sqlx::Encode<'_, sqlx::Postgres> for ModerationTargetId {
-    fn encode_by_ref(
-        &self,
-        buf: &mut sqlx::postgres::PgArgumentBuffer,
-    ) -> Result<sqlx::encode::IsNull, sqlx::error::BoxDynError> {
-        <String as sqlx::Encode<'_, sqlx::Postgres>>::encode(self.to_string(), buf)
+impl std::fmt::Display for ReportStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
     }
 }
 
-impl sqlx::Decode<'_, sqlx::Postgres> for ModerationTargetId {
-    fn decode(value: sqlx::postgres::PgValueRef<'_>) -> Result<Self, sqlx::error::BoxDynError> {
-        let text = <&str as sqlx::Decode<'_, sqlx::Postgres>>::decode(value)?;
-        Ok(text.parse()?)
+impl std::str::FromStr for ReportStatus {
+    type Err = UnknownReportStatus;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "open" => Ok(Self::Open),
+            "resolved" => Ok(Self::Resolved),
+            "dismissed" => Ok(Self::Dismissed),
+            _ => Err(UnknownReportStatus),
+        }
+    }
+}
+
+/// A stored report status outside the three the server writes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("unknown report status")]
+pub struct UnknownReportStatus;
+
+/// The two ways a moderator closes a report.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ReportResolution {
+    Resolved,
+    Dismissed,
+}
+
+impl ReportResolution {
+    pub fn status(self) -> ReportStatus {
+        match self {
+            Self::Resolved => ReportStatus::Resolved,
+            Self::Dismissed => ReportStatus::Dismissed,
+        }
+    }
+
+    pub fn action(self) -> ModerationAction {
+        match self {
+            Self::Resolved => ModerationAction::ReportResolved,
+            Self::Dismissed => ModerationAction::ReportDismissed,
+        }
+    }
+}
+
+impl std::fmt::Display for ReportResolution {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.status().as_str())
+    }
+}
+
+impl std::str::FromStr for ReportResolution {
+    type Err = UnknownReportStatus;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "resolved" => Ok(Self::Resolved),
+            "dismissed" => Ok(Self::Dismissed),
+            _ => Err(UnknownReportStatus),
+        }
     }
 }
 

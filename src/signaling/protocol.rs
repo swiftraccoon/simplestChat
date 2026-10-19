@@ -7,6 +7,7 @@ use crate::turn::IceServer;
 use chrono::{DateTime, Utc};
 
 use crate::ids::{MessageId, ParticipantId, RoomId, UserId};
+use crate::room::moderation::{ReportResolution, ReportStatus};
 use mediasoup::prelude::*;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -371,7 +372,7 @@ pub enum ClientMessage {
     ResolveRoomReport {
         request_id: String,
         report_id: String,
-        status: String,
+        status: ReportResolution,
     },
     /// The room's moderation history, newest first (Moderator+; the owner also
     /// sees each target's address).
@@ -1106,7 +1107,7 @@ pub enum SocialResponse {
     #[serde(rename_all = "camelCase")]
     ReportParticipant {
         report_id: String,
-        status: String,
+        status: ReportStatus,
     },
     #[serde(rename_all = "camelCase")]
     ListRoomReports {
@@ -1116,7 +1117,7 @@ pub enum SocialResponse {
     #[serde(rename_all = "camelCase")]
     ResolveRoomReport {
         report_id: String,
-        status: String,
+        status: ReportResolution,
     },
     #[serde(rename_all = "camelCase")]
     ListModerationEvents {
@@ -1176,7 +1177,7 @@ pub struct ReportEntry {
     pub target_participant_id: ParticipantId,
     pub target_name: String,
     pub reason: String,
-    pub status: String,
+    pub status: ReportStatus,
     pub created_at: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub resolved_at: Option<String>,

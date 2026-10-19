@@ -235,7 +235,10 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
         )
         .await
         .unwrap()
-        .execute(Command::Report(report, "dismissed".into()))
+        .execute(Command::Report(
+            report,
+            moderation::ReportResolution::Dismissed,
+        ))
         .await
         .unwrap();
         let mut history = Context::admit(
@@ -257,7 +260,10 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
         )
         .await
         .unwrap()
-        .execute(Command::Report(report, "dismissed".into()))
+        .execute(Command::Report(
+            report,
+            moderation::ReportResolution::Dismissed,
+        ))
         .await;
         assert!(matches!(stale_report, Err(sqlx::Error::InvalidArgument(_))));
         assert!(
