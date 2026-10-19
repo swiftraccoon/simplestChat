@@ -175,6 +175,7 @@ async function run() {
             participantId: 'local-fixture',
             reconnectToken: 'owned-fixture',
             yourRole: 'user',
+            yourName: 'Fixture guest',
             participants: [person],
             roomSettings: settings,
           });
@@ -221,10 +222,18 @@ async function run() {
             data: {
               participants: [person],
               messages: [],
+              chatSessionId: '3e9d7c5b-1a2f-4b6d-8c0e-5f7a9b1c3d2e',
               yourRole: 'user',
+              nickname: 'Fixture guest',
               roomSettings: settings,
               allowPrivateMessages: true,
               ignoredParticipantIds: [],
+              pausedProducerIds: [],
+              localProducerIds: [],
+              textMuted: false,
+              camBanned: false,
+              canChat: true,
+              canBroadcast: true,
             },
           });
       });

@@ -3,6 +3,10 @@ import type { ClientMessage, RequestResponses, ServerMessage } from './protocol'
 import { decodeServerMessage } from './protocol-validation';
 
 export type MessageHandler = (msg: ServerMessage) => void;
+/** A reply matched to a request by the id the request carried. */
+export type Reply<Type extends ServerMessage['type']> = Extract<ServerMessage, { type: Type }> & {
+  requestId: string;
+};
 export interface ConnectionTicket {
   ticket: string;
   expiresIn: number;
@@ -442,7 +446,7 @@ export class SignalingClient {
     msg: Extract<ClientMessage, { type: Type }> & { requestId?: never },
     responseType: NoInfer<RequestResponses[Type]>,
     timeoutMs = 5000,
-  ): Promise<Extract<ServerMessage, { type: RequestResponses[Type] }>> {
+  ): Promise<Reply<RequestResponses[Type]>> {
     if (!this.connected) return Promise.reject(new Error('WebSocket is not connected'));
     if (!Number.isFinite(timeoutMs) || timeoutMs <= 0 || timeoutMs > 2_147_483_647)
       return Promise.reject(new Error('Invalid request timeout'));
@@ -453,9 +457,9 @@ export class SignalingClient {
         deadline: performance.now() + timeoutMs,
         resolve: (m: ServerMessage) => {
           clearTimeout(timer);
-          // The validated message's discriminant was matched before dispatch.
-          // TypeScript cannot narrow a discriminated union to a generic literal.
-          resolve(m as Extract<ServerMessage, { type: RequestResponses[Type] }>);
+          // The validated message's discriminant and request id were matched before
+          // dispatch. TypeScript cannot narrow a discriminated union to a generic literal.
+          resolve(m as Reply<RequestResponses[Type]>);
         },
         reject: (err: Error) => {
           clearTimeout(timer);

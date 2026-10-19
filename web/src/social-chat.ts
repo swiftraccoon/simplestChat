@@ -810,6 +810,7 @@ export class SocialChat {
         content: text,
         sentAt: new Date().toISOString(),
         revision: 0,
+        chatStyle: AUTOMATIC_LOOK,
       },
       true,
     );
@@ -998,6 +999,8 @@ export class SocialChat {
         ...(attachments.length && { attachments }),
         sentAt: new Date().toISOString(),
         revision: 0,
+        // The look you have now; the acknowledgement carries the look the server stored.
+        chatStyle: room.chatStyle ?? AUTOMATIC_LOOK,
       },
       this.chatSessionId === null
         ? undefined

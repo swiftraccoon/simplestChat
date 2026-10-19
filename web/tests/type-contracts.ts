@@ -4,6 +4,7 @@ import type { SignalingClient } from '../src/signaling';
 import type {
   AccountProfile,
   ClientMessage,
+  ReportStatus,
   RoomSnapshot,
   RoomMembersPage,
   ServerMessage,
@@ -64,7 +65,7 @@ export async function checkContracts(
     expectType<unknown>(message.data.bans);
   }
   if (message.type === 'socialResponse' && message.action === 'reportParticipant') {
-    expectType<'open'>(message.data.status);
+    expectType<ReportStatus>(message.data.status);
   }
 
   const profile = await api.accountProfile('token');

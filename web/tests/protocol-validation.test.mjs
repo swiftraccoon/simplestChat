@@ -84,21 +84,26 @@ const chat = {
   },
   reactions: [{ emoji: '🎉', participantIds: ['participant'] }],
 };
+// A public broadcast carries the entry's own fields; reactions arrive by their own event.
+const { reactions: _reactions, ...publicChat } = chat;
 
 test('only the server’s explicit true marker identifies a durable account conversation', () => {
-  const message = {
-    type: 'chatReceived',
-    ...chat,
-    recipientId: 'recipient',
-    accountConversation: true,
-  };
-  assert.equal(decode(message).accountConversation, true);
+  const message = { ...chat, recipientId: 'recipient', accountConversation: true };
+  const received = (entry) => decode({ type: 'privateMessageReceived', message: entry });
+  assert.equal(received(message).message.accountConversation, true);
   for (const marker of [false, 'true', 1, {}]) {
-    assert.throws(() => decode({ ...message, accountConversation: marker }), invalid);
+    assert.throws(() => received({ ...message, accountConversation: marker }), invalid);
   }
   const guest = { ...message };
   delete guest.accountConversation;
-  assert.equal(decode(guest).accountConversation, undefined);
+  assert.equal(received(guest).message.accountConversation, undefined);
+});
+
+test('a message without a look wears the automatic one rather than being dropped', () => {
+  const bare = { ...chat };
+  delete bare.chatStyle;
+  const decoded = decode({ type: 'chatReceived', ...bare });
+  assert.deepEqual(decoded.chatStyle, { color: null, style: 'accent' });
 });
 const settings = {
   nameStyle: { color: null, style: 'accent' },
@@ -126,6 +131,7 @@ const settings = {
 const snapshot = {
   participants: [participant],
   messages: [chat],
+  chatSessionId: '7b1e9f3a-5c2d-4e8f-9a0b-1c2d3e4f5a6b',
   roomSettings: settings,
   yourRole: 'user',
   nickname: 'Person',
@@ -226,6 +232,7 @@ const fixtures = [
     participants: [participant],
     reconnectToken: 'fixture-token',
     yourRole: 'guest',
+    yourName: 'Self',
     yourChatStyle: { color: 'sky', style: 'text' },
     roomSettings: settings,
   },
@@ -288,7 +295,7 @@ const fixtures = [
     spatialLayer: null,
     temporalLayer: null,
   },
-  { type: 'chatReceived', ...chat },
+  { type: 'chatReceived', ...publicChat },
   { type: 'chatMessageEdited', message: { ...chat, revision: 1 } },
   { type: 'pinnedMessagesChanged', messages: [chat] },
   { type: 'chatMessageRemoved', messageId: 'message', removedAt: '2026-10-07T00:00:00Z' },
@@ -348,8 +355,8 @@ const fixtures = [
 
 test('fixtures cover every ServerMessage discriminant and every SocialAction', async () => {
   const source = ts.createSourceFile(
-    'protocol.ts',
-    await readFile(new URL('../src/protocol.ts', import.meta.url), 'utf8'),
+    'protocol.generated.ts',
+    await readFile(new URL('../src/protocol.generated.ts', import.meta.url), 'utf8'),
     ts.ScriptTarget.Latest,
     true,
   );
@@ -367,12 +374,13 @@ test('fixtures cover every ServerMessage discriminant and every SocialAction', a
       .text;
   });
   assert.deepEqual(fixtures.map((value) => value.type).sort(), types.sort());
+  // `SocialAction` is `keyof SocialResponses`: the map's members are the actions.
+  const responses = source.statements
+    .filter(ts.isInterfaceDeclaration)
+    .find((node) => node.name.text === 'SocialResponses');
   assert.deepEqual(
     Object.keys(socialData).sort(),
-    aliases
-      .get('SocialAction')
-      .types.map((node) => node.literal.text)
-      .sort(),
+    responses.members.map((member) => member.name.getText(source)).sort(),
   );
 });
 
@@ -655,19 +663,12 @@ test('a chat style from a newer peer degrades instead of dropping the message', 
 
 test('rejects missing or mistyped required top-level fields for every variant', () => {
   const optionals = {
-    roomJoined: ['roomSettings', 'yourChatStyle', 'yourName'],
+    roomJoined: ['roomSettings', 'yourChatStyle'],
     participantJoined: ['chatStyle'],
     transportCreated: ['iceServers'],
     newProducer: ['source'],
     reconnectResult: ['reconnectToken'],
-    chatReceived: [
-      'recipientId',
-      'recipientName',
-      'chatStyle',
-      'replyTo',
-      'reactions',
-      'removedAt',
-    ],
+    chatReceived: ['chatStyle', 'replyTo', 'removedAt'],
     socialError: ['requestId', 'clientMessageId'],
     participantKicked: ['reason'],
     participantBanned: ['reason'],

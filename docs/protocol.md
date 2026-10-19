@@ -1178,8 +1178,12 @@ the server issued.
 
 When changing the contract:
 
-- Update Rust types/serialization, TypeScript types, the decoder and dispatch
-  together. Embedded JSON settings and social payloads are part of the schema too.
+- Change the Rust types first, then regenerate the TypeScript shapes with
+  `cargo run -q -p xtask -- protocol-ts` (`web/src/protocol.generated.ts`; the
+  Rust gate runs `--check`) and update the decoder and dispatch to match. Serde
+  attributes decide the shape: `Option` without `skip_serializing_if` is
+  `T | null` on the way out, a skipped option is an optional property, and a
+  client may omit any `Option` or `default` field.
 - For HTTP changes, update the named method and endpoint decoder. For social
   changes, update both action maps and the action's decoder. Add valid/invalid
   runtime cases and [compile-time fixtures](../web/tests/type-contracts.ts);

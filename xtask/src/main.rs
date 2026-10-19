@@ -1,14 +1,15 @@
 //! Repository automation: `cargo run -q -p xtask -- <command>`.
 //!
-//! Every command runs from the repository root, uses only the standard
-//! library plus `anyhow`, and exits non-zero on the first failure so CI and
-//! local runs behave identically.
+//! Every command runs from the repository root, depends only on `anyhow` and
+//! `syn` (to read Rust sources), and exits non-zero on the first failure so CI
+//! and local runs behave identically.
 
 use anyhow::{Context, Result, bail};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 mod line_length;
+mod protocol_ts;
 
 const USAGE: &str = "\
 Usage: cargo run -q -p xtask -- <command>
@@ -17,6 +18,8 @@ Commands:
   line-length   Fail when Rust production code has more lines over 100 columns
                 than the ratchet in xtask/line-length-allowance.txt permits;
                 `--update` lowers the allowance to the current count.
+  protocol-ts   Write web/src/protocol.generated.ts from the Rust wire types;
+                `--check` fails when the committed file is stale.
 ";
 
 fn repository_root() -> Result<PathBuf> {
@@ -34,6 +37,7 @@ fn run(arguments: &[String]) -> Result<()> {
     let root = repository_root()?;
     match command.as_str() {
         "line-length" => line_length::run(&root, rest),
+        "protocol-ts" => protocol_ts::run(&root, rest),
         "--help" | "-h" | "help" => {
             print!("{USAGE}");
             Ok(())

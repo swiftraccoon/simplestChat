@@ -51,13 +51,18 @@ import {
   list,
   object,
 } from './validation';
-import { ERROR_CODES, ROLES } from './protocol';
+import { ERROR_CODES, MODERATION_ACTIONS, ROLES } from './protocol';
 type Variant<K extends ServerMessage['type']> = Extract<ServerMessage, { type: K }>;
+/** Any server frame may echo a request id; the reply to a correlated command must. */
+type Correlation<V extends { requestId?: string }> = undefined extends V['requestId']
+  ? { requestId?: Decoder<string | undefined> }
+  : { requestId: Decoder<string> };
 function message<K extends ServerMessage['type']>(
   type: K,
-  fields: Fields<Omit<Variant<K>, 'type'>>,
+  fields: Fields<Omit<Variant<K>, 'type' | 'requestId'>> & Correlation<Variant<K>>,
 ): Decoder<Variant<K>> {
-  const decode = object(fields);
+  const { requestId: correlation = optionalRequestId, ...rest } = fields;
+  const decode = object({ ...rest, requestId: correlation });
   return (value) => {
     const result = decode(value);
     if (record(value)['type'] !== type) return invalid();
@@ -98,6 +103,9 @@ const chatStyle: Decoder<ChatStyle> = (value) => {
     style: style === 'text' || style === 'bubble' ? style : 'accent',
   };
 };
+/** A message or person without a look wears the automatic one rather than being dropped. */
+const lookOrAutomatic: Decoder<ChatStyle> = (value) =>
+  value === undefined ? { color: null, style: 'accent' } : chatStyle(value);
 const replyRef = object<ChatReplyRef>({
   messageId: text,
   participantId: text,
@@ -110,8 +118,8 @@ const participant = object<ParticipantInfo>({
   name: text,
   producers: list(producer),
   role: choice(...ROLES),
-  authenticated: optional(boolean),
-  chatStyle: optional(chatStyle),
+  authenticated: boolean,
+  chatStyle: lookOrAutomatic,
 });
 export const decodeAttachment = object<ChatAttachment>({
   id: chatSessionId,
@@ -147,7 +155,7 @@ const chat = object<ChatEntry>({
   accountConversation: optional((value) => (value === true ? true : invalid())),
   content: text,
   sentAt: text,
-  chatStyle: optional(chatStyle),
+  chatStyle: lookOrAutomatic,
   replyTo: optional(replyRef),
   reactions: optional(list(reaction)),
   attachments: optional(attachments),
@@ -206,21 +214,21 @@ const lobbyEntry = object<{ participantId: string; displayName: string; authenti
   authenticated: boolean,
 });
 const snapshot = object<RoomSnapshot>({
-  chatSessionId: optional(chatSessionId),
+  chatSessionId,
   participants: list(participant),
   messages: list(chat),
   yourRole: choice(...ROLES),
-  roomSettings: nullable(optional(settings)),
-  nickname: optional(text),
-  textMuted: optional(boolean),
-  camBanned: optional(boolean),
-  canChat: optional(boolean),
-  canBroadcast: optional(boolean),
-  pausedProducerIds: optional(list(text)),
-  localProducerIds: optional(list(text)),
+  roomSettings: nullable(settings),
+  nickname: text,
+  textMuted: boolean,
+  camBanned: boolean,
+  canChat: boolean,
+  canBroadcast: boolean,
+  pausedProducerIds: list(text),
+  localProducerIds: list(text),
   allowPrivateMessages: boolean,
   ignoredParticipantIds: list(text),
-  lobby: optional(list(lobbyEntry)),
+  lobby: list(lobbyEntry),
 });
 const ban = object<BanEntry>({
   banId: text,
@@ -253,7 +261,7 @@ const report = object<ReportEntry>({
 });
 const moderationEvent = object<ModerationEventEntry>({
   eventId: text,
-  action: text,
+  action: choice(...MODERATION_ACTIONS),
   actorId: text,
   actorName: text,
   targetId: text,
@@ -510,12 +518,11 @@ const messages = {
     participants: list(participant),
     reconnectToken: text,
     yourRole: choice(...ROLES),
-    yourChatStyle: optional(chatStyle),
-    yourName: optional(text),
+    yourChatStyle: lookOrAutomatic,
+    yourName: text,
     roomSettings: optional(settings),
   }),
   error: message('error', {
-    requestId: optionalRequestId,
     code: choice(...ERROR_CODES),
     message: text,
   }),
@@ -523,11 +530,9 @@ const messages = {
   roomClosed: message('roomClosed', { reason: text }),
   serverRestarting: message('serverRestarting', { reason: text }),
   routerRtpCapabilities: message('routerRtpCapabilities', {
-    requestId: optionalRequestId,
     rtpCapabilities: capabilities,
   }),
   transportCreated: message('transportCreated', {
-    requestId: optionalRequestId,
     transportId: text,
     iceParameters: ice,
     iceCandidates: list(candidate),
@@ -535,12 +540,10 @@ const messages = {
     iceServers: optional(list(iceServer)),
   }),
   transportConnected: message('transportConnected', {
-    requestId: optionalRequestId,
     transportId: text,
   }),
-  producerCreated: message('producerCreated', { requestId: optionalRequestId, producerId: text }),
+  producerCreated: message('producerCreated', { producerId: text }),
   consumerCreated: message('consumerCreated', {
-    requestId: optionalRequestId,
     consumerId: text,
     producerId: text,
     kind: mediaKind,
@@ -551,7 +554,7 @@ const messages = {
     participantName: text,
     role: choice(...ROLES),
     authenticated: boolean,
-    chatStyle: optional(chatStyle),
+    chatStyle: lookOrAutomatic,
   }),
   participantLeft: message('participantLeft', { participantId: text }),
   newProducer: message('newProducer', {
@@ -561,20 +564,18 @@ const messages = {
     source: optional(text),
   }),
   producerClosed: message('producerClosed', { producerId: text }),
-  producerPaused: message('producerPaused', { requestId: optionalRequestId, producerId: text }),
-  producerResumed: message('producerResumed', { requestId: optionalRequestId, producerId: text }),
-  consumerResumed: message('consumerResumed', { requestId: optionalRequestId, consumerId: text }),
-  consumerPaused: message('consumerPaused', { requestId: optionalRequestId, consumerId: text }),
+  producerPaused: message('producerPaused', { producerId: text }),
+  producerResumed: message('producerResumed', { producerId: text }),
+  consumerResumed: message('consumerResumed', { consumerId: text }),
+  consumerPaused: message('consumerPaused', { consumerId: text }),
   mediaControlApplied: message('mediaControlApplied', { requestId }),
   roomControlApplied: message('roomControlApplied', { requestId }),
   reconnectResult: message('reconnectResult', {
-    requestId: optionalRequestId,
     success: boolean,
     participantId: text,
     reconnectToken: optional(text),
   }),
   iceRestarted: message('iceRestarted', {
-    requestId: optionalRequestId,
     transportId: text,
     iceParameters: ice,
     iceServers: list(iceServer),
@@ -593,16 +594,12 @@ const messages = {
     clientMessageId: text,
     participantId: text,
     participantName: text,
-    recipientId: optional(text),
-    recipientName: optional(text),
-    accountConversation: optional((value) => (value === true ? true : invalid())),
     content: text,
     sentAt: text,
     revision: integer(4_294_967_295),
     editedAt: optional(text),
-    chatStyle: optional(chatStyle),
+    chatStyle: lookOrAutomatic,
     replyTo: optional(replyRef),
-    reactions: optional(list(reaction)),
     attachments: optional(attachments),
     removedAt: optional(text),
   }),
@@ -627,7 +624,6 @@ const messages = {
   }),
   socialResponse,
   socialError: message('socialError', {
-    requestId: optionalRequestId,
     clientMessageId: optional(text),
     code: choice(...ERROR_CODES),
     message: text,

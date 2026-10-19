@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { loadTypeScript } from './source-loader.mjs';
+import { loadProtocol, loadTypeScript } from './source-loader.mjs';
 import { deferred, flush, uiFixture } from './ui-fixture.mjs';
 
 async function fixture(role = 'owner') {
@@ -75,7 +75,7 @@ async function fixture(role = 'owner') {
     };
   }
   const { administrationSections } = await loadTypeScript('src/room-administration.ts', {
-    modules: { './protocol': await loadTypeScript('src/protocol.ts'), './ui': f.ui },
+    modules: { './protocol': await loadProtocol(), './ui': f.ui },
   });
   const sections = administrationSections({
     roomId: 'saved-room',
