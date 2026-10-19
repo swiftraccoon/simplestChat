@@ -1029,8 +1029,10 @@ class PublicReleaseTests(unittest.TestCase):
         self.assertTrue(public.validate_browser_proxy(configuration))
         # Compose's own bind sub-options vary by version and never change what the
         # mount grants; the reviewed fields themselves must not differ.
-        proxy = obj(configuration, "services", "caddy")
-        mount = obj(proxy["volumes"][0])
+        volumes = obj(configuration, "services", "caddy")["volumes"]
+        self.assertIsInstance(volumes, list)
+        assert isinstance(volumes, list)
+        mount = obj(volumes[0])
         mount["bind"] = {"create_host_path": False, "propagation": "rprivate", "selinux": "z"}
         self.assertTrue(public.validate_browser_proxy(configuration))
         mount["read_only"] = False
