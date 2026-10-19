@@ -422,7 +422,7 @@ def seed(api: SeedApi, owner: Owner, report: SeedReport) -> None:
         if not isinstance(identifier, str):
             code = "invalid_owner_identity"
             raise SeedError(code)
-        owner_id = str(uuid.UUID(identifier))
+        _ = uuid.UUID(identifier)
     except (ValueError, TypeError, AttributeError):
         code = "invalid_owner_identity"
         raise SeedError(code) from None
@@ -449,9 +449,9 @@ def seed(api: SeedApi, owner: Owner, report: SeedReport) -> None:
     if not isinstance(room, dict):
         code = "room_ownership_mismatch"
         raise SeedError(code)
-    require(
-        room.get("id") == "lobby" and room.get("ownerId") == owner_id, "room_ownership_mismatch"
-    )
+    # The response names no owner; ownership is confirmed by the owned-rooms
+    # listing below.
+    require(room.get("id") == "lobby", "room_ownership_mismatch")
     for field, value in {
         "secret": False,
         "passwordProtected": False,

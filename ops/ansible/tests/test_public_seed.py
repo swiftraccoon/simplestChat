@@ -34,7 +34,6 @@ AUTH: JsonObject = {
 }
 NEW_ROOM: JsonObject = {
     "id": "lobby",
-    "ownerId": OWNER_ID,
     "secret": False,
     "passwordProtected": False,
     "requireRegistration": False,
@@ -229,9 +228,10 @@ class PublicSeedTests(unittest.TestCase):
             ([(401, None), (409, None)], "owner_credentials_conflict"),
             ([(200, AUTH), (200, []), (500, None)], "room_create_failed_or_conflict"),
             (
-                [(200, AUTH), (200, []), (200, {**NEW_ROOM, "ownerId": "foreign"})],
+                [(200, AUTH), (200, []), (200, {**NEW_ROOM, "id": "foreign"})],
                 "room_ownership_mismatch",
             ),
+            ([(200, AUTH), (200, []), (200, NEW_ROOM), (200, [])], "room_ownership_unconfirmed"),
         ]
         for responses, code in cases:
             api = FakeApi(responses)
