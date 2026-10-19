@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct RoomSettings {
+pub struct RoomSettings {
     pub id: String,
     pub owner_id: Uuid,
     pub display_name: String,

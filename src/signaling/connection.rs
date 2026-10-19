@@ -2,7 +2,9 @@
 
 // WebSocket connection handler for individual clients
 
-use super::protocol::{ClientMessage, ErrorCode, RequestHeader, ServerMessage, ServerReply};
+use super::protocol::{
+    ClientMessage, ErrorCode, RequestHeader, ServerMessage, ServerReply, SocialResponse,
+};
 use crate::auth::types::Claims;
 use crate::diagnostics::{self, OperationKind, Outcome, Stage};
 use crate::metrics::ServerMetrics;
@@ -1749,8 +1751,10 @@ async fn handle_connection_with_timing(
                                         ).await.map_err(|_| anyhow::anyhow!("Attachment unavailable"))?;
                                         reply.send(&ServerMessage::SocialResponse {
                                             request_id: request_id.clone(),
-                                            action: "getAttachmentAccess".to_owned(),
-                                            data: serde_json::to_value(access)?,
+                                            response: SocialResponse::GetAttachmentAccess {
+                                                token: access.token,
+                                                expires_at: access.expires_at,
+                                            },
                                         })
                                     } else {
                                         handle_client_message(

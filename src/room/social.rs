@@ -5,11 +5,11 @@ use crate::room::moderation::{
     Actor, MAX_MODERATION_EVENTS, ModerationAction, ModerationEvent, Target, record_event,
 };
 use crate::signaling::protocol::{
-    ChatEntry, ChatReaction, ChatReplyRef, ChatRetryOutcome, ChatRetryReason, ChatStyle,
-    ChatStyleKind, ClientMessage, ErrorCode, REACTIONS, valid_correlation_id,
+    BanEntry, ChatEntry, ChatReaction, ChatReplyRef, ChatRetryOutcome, ChatRetryReason, ChatStyle,
+    ChatStyleKind, ClientMessage, ErrorCode, MemberEntry, ModerationEventView, REACTIONS,
+    ReportEntry, ReportOutcome, RoomSnapshot, SnapshotLobbyEntry, SocialResponse,
+    valid_correlation_id,
 };
-use serde::Serialize;
-use serde_json::{Value, json};
 use uuid::Uuid;
 
 const HISTORY_MESSAGES: usize = 300;
@@ -53,36 +53,6 @@ type ReportRow = (
     Option<chrono::DateTime<chrono::Utc>>,
 );
 
-/// Owned projection: capture one consistent room view under a read lock, then
-/// serialize it after releasing the lock so snapshot encoding cannot block writes.
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct RoomSnapshot {
-    participants: Vec<ParticipantInfo>,
-    messages: Vec<ChatEntry>,
-    lobby: Vec<SnapshotLobbyEntry>,
-    your_role: roles::Role,
-    chat_session_id: Uuid,
-    room_settings: Option<settings::RoomSettings>,
-    nickname: String,
-    allow_private_messages: bool,
-    ignored_participant_ids: Vec<String>,
-    paused_producer_ids: Vec<String>,
-    text_muted: bool,
-    cam_banned: bool,
-    can_chat: bool,
-    local_producer_ids: Vec<String>,
-    can_broadcast: bool,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct SnapshotLobbyEntry {
-    participant_id: String,
-    display_name: String,
-    authenticated: bool,
-}
-
 #[derive(Clone)]
 pub(crate) struct ParticipantSocial {
     pub(super) connected: bool,
@@ -98,6 +68,7 @@ pub(crate) struct ParticipantSocial {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::{Value, json};
 
     fn message(json: &str) -> ClientMessage {
         serde_json::from_str(json).unwrap()
@@ -3244,57 +3215,11 @@ pub(crate) struct RoomSocial {
     moderation_events: VecDeque<ModerationEvent>,
 }
 
-#[derive(Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct BanEntry {
-    ban_id: String,
-    display_name: String,
-    authenticated: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    reason: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    expires_at: Option<String>,
-}
 struct RuntimeBan {
     entry: BanEntry,
     participant_ids: Vec<String>,
     guest_ip: Option<IpAddr>,
     expiry: Option<std::time::Instant>,
-}
-
-#[derive(Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ReportEntry {
-    report_id: String,
-    reporter_id: String,
-    reporter_name: String,
-    target_participant_id: String,
-    target_name: String,
-    reason: String,
-    status: String,
-    created_at: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    resolved_at: Option<String>,
-    /// The newest history entry that answered this report, if any did.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    outcome: Option<ReportOutcome>,
-}
-
-#[derive(Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ReportOutcome {
-    action: String,
-    created_at: String,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct MemberEntry {
-    user_id: String,
-    display_name: String,
-    role: roles::Role,
-    online: bool,
-    authenticated: bool,
 }
 
 /// A request the room refused: the code the client switches on and a
@@ -5194,8 +5119,7 @@ impl RoomManager {
                 expected_sender,
                 &ServerMessage::SocialResponse {
                     request_id: request_id.clone(),
-                    action: "getRoomSnapshot".to_owned(),
-                    data: serde_json::to_value(snapshot)?,
+                    response: SocialResponse::GetRoomSnapshot(snapshot),
                 },
             );
         }
@@ -5317,7 +5241,7 @@ impl RoomManager {
         command: &ClientMessage,
         control: Option<super::control::RoomControl>,
     ) -> Result<()> {
-        let (request_id, action) = command
+        let (request_id, _) = command
             .social_request()
             .ok_or_else(|| not_found("Unknown request"))?;
         if !valid_correlation_id(request_id) {
@@ -5352,8 +5276,7 @@ impl RoomManager {
                     expected_sender,
                     &ServerMessage::SocialResponse {
                         request_id: request_id.to_string(),
-                        action: action.to_string(),
-                        data: json!({"updated":true}),
+                        response: SocialResponse::SetMemberRole { updated: true },
                     },
                 );
             }
@@ -5378,7 +5301,7 @@ impl RoomManager {
                 }
             }
         }
-        let data = match command {
+        let response = match command {
             ClientMessage::GetChatHistory {
                 before,
                 after,
@@ -5402,7 +5325,14 @@ impl RoomManager {
                 };
                 query.validate().map_err(rejected)?;
                 if days == 0 || !room.persisted {
-                    json!({"messages": [], "nextCursor": null, "newerCursor": null, "firstUnreadMessageId": null, "readMessageId": null, "retentionDays": 0})
+                    SocialResponse::GetChatHistory(history::HistoryPage {
+                        messages: Vec::new(),
+                        next_cursor: None,
+                        newer_cursor: None,
+                        first_unread_message_id: None,
+                        read_message_id: None,
+                        retention_days: 0,
+                    })
                 } else {
                     let pool = self
                         .db_pool
@@ -5436,7 +5366,7 @@ impl RoomManager {
                         .ignored;
                     page.messages
                         .retain(|message| !ignored.contains(&message.participant_id));
-                    serde_json::to_value(page)?
+                    SocialResponse::GetChatHistory(page)
                 }
             }
             ClientMessage::MarkChatRead { message_id, .. } => {
@@ -5481,7 +5411,9 @@ impl RoomManager {
                 room = room_lock.write().await;
                 room.ensure_live()?;
                 Self::participant_for_sender(&room, participant_id, expected_sender)?;
-                serde_json::to_value(read)?
+                SocialResponse::MarkChatRead {
+                    read_message_id: Some(read.read_message_id),
+                }
             }
             ClientMessage::SetRoomHistory { retention_days, .. } => {
                 require_role(actor_role, roles::Role::Owner)?;
@@ -5516,7 +5448,9 @@ impl RoomManager {
                     room.social.pins.clear();
                 }
                 publish_pins(&room)?;
-                json!({"retentionDays": retention_days})
+                SocialResponse::SetRoomHistory {
+                    retention_days: *retention_days,
+                }
             }
             ClientMessage::SetChatPreferences {
                 allow_private_messages,
@@ -5570,7 +5504,10 @@ impl RoomManager {
                     actor.social.ignored = ignored_participant_ids.iter().cloned().collect();
                 }
                 let actor = room.participants.get(participant_id).unwrap();
-                json!({"allowPrivateMessages":actor.social.allow_private_messages,"ignoredParticipantIds":actor.social.ignored.iter().collect::<Vec<_>>()})
+                SocialResponse::SetChatPreferences {
+                    allow_private_messages: actor.social.allow_private_messages,
+                    ignored_participant_ids: actor.social.ignored.iter().cloned().collect(),
+                }
             }
             ClientMessage::ChangeNickname { nickname, .. } => {
                 let nickname = nickname.trim();
@@ -5591,7 +5528,9 @@ impl RoomManager {
                     participant_id: participant_id.to_string(),
                     nickname: nickname.to_string(),
                 });
-                json!({"nickname":nickname})
+                SocialResponse::ChangeNickname {
+                    nickname: nickname.to_string(),
+                }
             }
             ClientMessage::SetChatStyle { chat_style, .. } => {
                 let chat_style = chat_style
@@ -5622,7 +5561,9 @@ impl RoomManager {
                     participant_id: participant_id.to_string(),
                     chat_style: chat_style.clone(),
                 });
-                json!({"chatStyle": chat_style})
+                SocialResponse::SetChatStyle {
+                    chat_style: chat_style.clone(),
+                }
             }
             ClientMessage::EditChatMessage {
                 message_id,
@@ -5709,7 +5650,7 @@ impl RoomManager {
                 }
                 publish_edit(&mut room, &edited)?;
                 drop(self.schedule_inbox_edit(&edited));
-                json!({"message":edited})
+                SocialResponse::EditChatMessage { message: edited }
             }
             ClientMessage::GetPinnedMessages { .. } | ClientMessage::SetPinnedMessage { .. } => {
                 let change = if let ClientMessage::SetPinnedMessage {
@@ -5795,7 +5736,11 @@ impl RoomManager {
                     .filter(|message| !actor.social.ignored.contains(&message.participant_id))
                     .cloned()
                     .collect();
-                json!({"messages":messages})
+                if matches!(command, ClientMessage::SetPinnedMessage { .. }) {
+                    SocialResponse::SetPinnedMessage { messages }
+                } else {
+                    SocialResponse::GetPinnedMessages { messages }
+                }
             }
             ClientMessage::RemoveChatMessage { message_id, .. } => {
                 require_role(actor_role, roles::Role::Moderator)?;
@@ -5898,7 +5843,10 @@ impl RoomManager {
                     removed_at,
                 });
                 publish_pins(&room)?;
-                json!({"messageId": message_id, "removedAt": removed_at})
+                SocialResponse::RemoveChatMessage {
+                    message_id: message_id.clone(),
+                    removed_at,
+                }
             }
             ClientMessage::ReactToMessage {
                 message_id, emoji, ..
@@ -5960,8 +5908,10 @@ impl RoomManager {
                             expected_sender,
                             &ServerMessage::SocialResponse {
                                 request_id: request_id.to_owned(),
-                                action: action.to_owned(),
-                                data: json!({"messageId": message_id, "reactions": message.reactions}),
+                                response: SocialResponse::ReactToMessage {
+                                    message_id: message_id.clone(),
+                                    reactions: message.reactions.clone(),
+                                },
                             },
                         );
                     }
@@ -5989,7 +5939,10 @@ impl RoomManager {
                     Self::participant_for_sender(&room, participant_id, expected_sender)?;
                 }
                 let reactions = publish_reaction(&mut room, message_id, reactions)?;
-                json!({"messageId": message_id, "reactions": reactions})
+                SocialResponse::ReactToMessage {
+                    message_id: message_id.clone(),
+                    reactions,
+                }
             }
             ClientMessage::ListRoomBans { offset, .. } => {
                 require_role(actor_role, roles::Role::Admin)?;
@@ -6028,7 +5981,7 @@ impl RoomManager {
                 };
                 let has_more = bans.len() > PAGE_SIZE;
                 bans.truncate(PAGE_SIZE);
-                json!({"bans":bans,"hasMore":has_more})
+                SocialResponse::ListRoomBans { bans, has_more }
             }
             ClientMessage::RemoveRoomBan { ban_id, .. } => {
                 require_role(actor_role, roles::Role::Admin)?;
@@ -6131,7 +6084,7 @@ impl RoomManager {
                     room.banned_guest_participants.remove(&id);
                 }
                 room.policy_revision = room.policy_revision.wrapping_add(1);
-                json!({"removed":true})
+                SocialResponse::RemoveRoomBan { removed: true }
             }
             ClientMessage::ListRoomMembers { offset, .. } => {
                 require_role(actor_role, roles::Role::Moderator)?;
@@ -6186,7 +6139,7 @@ impl RoomManager {
                 };
                 let has_more = members.len() > PAGE_SIZE;
                 members.truncate(PAGE_SIZE);
-                json!({"members":members,"hasMore":has_more})
+                SocialResponse::ListRoomMembers { members, has_more }
             }
             ClientMessage::SetMemberRole {
                 target_user_id,
@@ -6231,7 +6184,7 @@ impl RoomManager {
                 room = room_lock.write().await;
                 room.ensure_live()?;
                 room.policy_revision = room.policy_revision.wrapping_add(1);
-                json!({"updated":true})
+                SocialResponse::SetMemberRole { updated: true }
             }
             ClientMessage::ReportParticipant {
                 target_participant_id,
@@ -6323,7 +6276,10 @@ impl RoomManager {
                 }
                 room.social.note_report(reporter, std::time::Instant::now());
                 // Only the submitting participant receives the report ID here.
-                json!({"reportId":report.report_id,"status":"open"})
+                SocialResponse::ReportParticipant {
+                    report_id: report.report_id.clone(),
+                    status: "open".to_owned(),
+                }
             }
             ClientMessage::ListRoomReports { offset, .. } => {
                 require_role(actor_role, roles::Role::Moderator)?;
@@ -6391,7 +6347,7 @@ impl RoomManager {
                 };
                 let has_more = reports.len() > PAGE_SIZE;
                 reports.truncate(PAGE_SIZE);
-                json!({"reports":reports,"hasMore":has_more})
+                SocialResponse::ListRoomReports { reports, has_more }
             }
             ClientMessage::ResolveRoomReport {
                 report_id, status, ..
@@ -6472,7 +6428,10 @@ impl RoomManager {
                         Some(id),
                     ));
                 }
-                json!({"reportId":report_id,"status":status})
+                SocialResponse::ResolveRoomReport {
+                    report_id: report_id.to_string(),
+                    status: status.to_string(),
+                }
             }
             ClientMessage::ListModerationEvents { offset, .. } => {
                 require_role(actor_role, roles::Role::Moderator)?;
@@ -6511,8 +6470,11 @@ impl RoomManager {
                 let has_more = events.len() > PAGE_SIZE;
                 events.truncate(PAGE_SIZE);
                 // Only the owner reads a target's address; moderators never do.
-                let events: Vec<Value> = events.iter().map(|event| event.to_json(owner)).collect();
-                json!({"events":events,"hasMore":has_more})
+                let events: Vec<ModerationEventView> = events
+                    .iter()
+                    .map(|event| ModerationEventView::new(event.clone(), owner))
+                    .collect();
+                SocialResponse::ListModerationEvents { events, has_more }
             }
             _ => return Err(not_found("Unknown request")),
         };
@@ -6525,8 +6487,7 @@ impl RoomManager {
             expected_sender,
             &ServerMessage::SocialResponse {
                 request_id: request_id.to_string(),
-                action: action.to_string(),
-                data,
+                response,
             },
         )
     }

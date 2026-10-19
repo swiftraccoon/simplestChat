@@ -17,7 +17,7 @@ use std::time::{Duration, Instant};
 use tokio::time::sleep;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
-use simplestchat::signaling::protocol::{ClientMessage, ServerMessage};
+use simplestchat::signaling::protocol::{ClientMessage, ServerMessage, SocialResponse};
 
 mod media_generator;
 
@@ -1957,11 +1957,8 @@ async fn run_client_inner(
         match receive_response(&mut read, &mut buffered_events, config.deadline).await? {
             ServerMessage::SocialResponse {
                 request_id: response_id,
-                action,
-                data,
-            } if response_id == request_id
-                && action == "setRoomHistory"
-                && data["retentionDays"] == 7 => {}
+                response: SocialResponse::SetRoomHistory { retention_days: 7 },
+            } if response_id == request_id => {}
             _ => anyhow::bail!("Retained room history was not confirmed"),
         }
     }
@@ -4509,8 +4506,7 @@ mod setup_response_tests {
             },
             ServerMessage::SocialResponse {
                 request_id: "retention".into(),
-                action: "setRoomHistory".into(),
-                data: serde_json::json!({"retentionDays": 7}),
+                response: SocialResponse::SetRoomHistory { retention_days: 7 },
             },
         ] {
             server

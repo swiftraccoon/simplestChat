@@ -7,6 +7,7 @@ use crate::turn::IceServer;
 use chrono::{DateTime, Utc};
 use mediasoup::prelude::*;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 #[cfg(test)]
 #[path = "protocol_property_tests.rs"]
@@ -676,11 +677,12 @@ pub enum ServerMessage {
     },
     #[serde(rename_all = "camelCase")]
     PrivateMessageReceived { message: ChatEntry },
+    /// The reply to a social request: `action` and `data` come from [`SocialResponse`].
     #[serde(rename_all = "camelCase")]
     SocialResponse {
         request_id: String,
-        action: String,
-        data: serde_json::Value,
+        #[serde(flatten)]
+        response: SocialResponse,
     },
     #[serde(rename_all = "camelCase")]
     SocialError {
@@ -1030,6 +1032,193 @@ pub struct ProducerMetadata {
     pub kind: MediaKind,
     #[serde(default)]
     pub source: Option<String>,
+}
+
+/// The reply to one social request, serialized beside the request id as
+/// `action` (the variant name) and `data` (the variant's fields).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "action", content = "data", rename_all = "camelCase")]
+pub enum SocialResponse {
+    #[serde(rename_all = "camelCase")]
+    SetChatPreferences {
+        allow_private_messages: bool,
+        ignored_participant_ids: Vec<String>,
+    },
+    ChangeNickname {
+        nickname: String,
+    },
+    #[serde(rename_all = "camelCase")]
+    SetChatStyle {
+        chat_style: ChatStyle,
+    },
+    #[serde(rename_all = "camelCase")]
+    RemoveChatMessage {
+        message_id: String,
+        removed_at: DateTime<Utc>,
+    },
+    EditChatMessage {
+        message: ChatEntry,
+    },
+    #[serde(rename_all = "camelCase")]
+    GetAttachmentAccess {
+        token: String,
+        expires_at: DateTime<Utc>,
+    },
+    GetPinnedMessages {
+        messages: Vec<ChatEntry>,
+    },
+    SetPinnedMessage {
+        messages: Vec<ChatEntry>,
+    },
+    #[serde(rename_all = "camelCase")]
+    ReactToMessage {
+        message_id: String,
+        reactions: Vec<ChatReaction>,
+    },
+    GetRoomSnapshot(RoomSnapshot),
+    GetChatHistory(crate::room::history::HistoryPage),
+    #[serde(rename_all = "camelCase")]
+    MarkChatRead {
+        read_message_id: Option<String>,
+    },
+    #[serde(rename_all = "camelCase")]
+    SetRoomHistory {
+        retention_days: i32,
+    },
+    #[serde(rename_all = "camelCase")]
+    ListRoomBans {
+        bans: Vec<BanEntry>,
+        has_more: bool,
+    },
+    RemoveRoomBan {
+        removed: bool,
+    },
+    #[serde(rename_all = "camelCase")]
+    ListRoomMembers {
+        members: Vec<MemberEntry>,
+        has_more: bool,
+    },
+    SetMemberRole {
+        updated: bool,
+    },
+    #[serde(rename_all = "camelCase")]
+    ReportParticipant {
+        report_id: String,
+        status: String,
+    },
+    #[serde(rename_all = "camelCase")]
+    ListRoomReports {
+        reports: Vec<ReportEntry>,
+        has_more: bool,
+    },
+    #[serde(rename_all = "camelCase")]
+    ResolveRoomReport {
+        report_id: String,
+        status: String,
+    },
+    #[serde(rename_all = "camelCase")]
+    ListModerationEvents {
+        events: Vec<ModerationEventView>,
+        has_more: bool,
+    },
+}
+
+/// One consistent view of a room for a joining or resuming participant,
+/// captured under the room lock and serialized after releasing it.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RoomSnapshot {
+    pub participants: Vec<ParticipantInfo>,
+    pub messages: Vec<ChatEntry>,
+    pub lobby: Vec<SnapshotLobbyEntry>,
+    pub your_role: Role,
+    pub chat_session_id: Uuid,
+    pub room_settings: Option<crate::room::settings::RoomSettings>,
+    pub nickname: String,
+    pub allow_private_messages: bool,
+    pub ignored_participant_ids: Vec<String>,
+    pub paused_producer_ids: Vec<String>,
+    pub text_muted: bool,
+    pub cam_banned: bool,
+    pub can_chat: bool,
+    pub local_producer_ids: Vec<String>,
+    pub can_broadcast: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SnapshotLobbyEntry {
+    pub participant_id: String,
+    pub display_name: String,
+    pub authenticated: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BanEntry {
+    pub ban_id: String,
+    pub display_name: String,
+    pub authenticated: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReportEntry {
+    pub report_id: String,
+    pub reporter_id: String,
+    pub reporter_name: String,
+    pub target_participant_id: String,
+    pub target_name: String,
+    pub reason: String,
+    pub status: String,
+    pub created_at: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resolved_at: Option<String>,
+    /// The newest history entry that answered this report, if any did.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outcome: Option<ReportOutcome>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReportOutcome {
+    pub action: String,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MemberEntry {
+    pub user_id: String,
+    pub display_name: String,
+    pub role: Role,
+    pub online: bool,
+    pub authenticated: bool,
+}
+
+/// A moderation history entry as a viewer receives it; only an owner's view
+/// carries the target's address.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModerationEventView {
+    #[serde(flatten)]
+    pub event: crate::room::moderation::ModerationEvent,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_ip: Option<String>,
+}
+
+impl ModerationEventView {
+    /// The entry for one viewer: owners see the target's address.
+    pub(crate) fn new(event: crate::room::moderation::ModerationEvent, owner: bool) -> Self {
+        let target_ip = owner
+            .then(|| event.target_ip.map(|ip| ip.to_string()))
+            .flatten();
+        Self { event, target_ip }
+    }
 }
 
 #[cfg(test)]

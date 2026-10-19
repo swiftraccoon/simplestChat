@@ -3,7 +3,7 @@
 use crate::room::roles::Role;
 use chrono::{DateTime, Utc};
 use mediasoup::prelude::MediaKind;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sqlx::{PgConnection, PgPool};
 use std::net::IpAddr;
 use uuid::Uuid;
@@ -61,9 +61,9 @@ impl PunitiveKind {
 pub(crate) const MAX_MODERATION_EVENTS: usize = 1000;
 
 /// What a moderator did, as the history stores and serializes it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub(crate) enum ModerationAction {
+pub enum ModerationAction {
     Kick,
     Ban,
     Unban,
@@ -137,9 +137,9 @@ pub(crate) struct Target<'a> {
 
 /// One entry of a room's moderation history. The target's address is for the
 /// owner only: it is never serialized with the entry, and `to_json` adds it.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct ModerationEvent {
+pub struct ModerationEvent {
     pub(crate) event_id: String,
     pub(crate) action: ModerationAction,
     pub(crate) actor_id: String,
@@ -185,21 +185,6 @@ impl ModerationEvent {
                 target.ip.map(canonical_guest_ip)
             },
         }
-    }
-
-    /// The entry as a reader of the given standing sees it.
-    pub(crate) fn to_json(&self, owner: bool) -> serde_json::Value {
-        let mut value = serde_json::to_value(self).unwrap_or_default();
-        if owner
-            && let Some(ip) = self.target_ip
-            && let Some(object) = value.as_object_mut()
-        {
-            object.insert(
-                "targetIp".to_owned(),
-                serde_json::Value::String(ip.to_string()),
-            );
-        }
-        value
     }
 }
 
@@ -1112,8 +1097,16 @@ mod tests {
         persist_event(&pool, &room_id, &guest).await.unwrap();
         let newest = list_events(&pool, &room_id, 0, 1).await.unwrap().remove(0);
         assert_eq!(newest.target_ip, Some("2001:db8:1:2::".parse().unwrap()));
-        assert_eq!(newest.to_json(true)["targetIp"], "2001:db8:1:2::");
-        assert!(newest.to_json(false).get("targetIp").is_none());
+        let owner_view = crate::signaling::protocol::ModerationEventView::new(newest.clone(), true);
+        assert_eq!(owner_view.target_ip.as_deref(), Some("2001:db8:1:2::"));
+        let viewer = crate::signaling::protocol::ModerationEventView::new(newest.clone(), false);
+        assert!(viewer.target_ip.is_none());
+        assert!(
+            serde_json::to_value(&viewer)
+                .unwrap()
+                .get("targetIp")
+                .is_none()
+        );
         assert!(!serde_json::to_string(&newest).unwrap().contains("2001:db8"));
 
         // The room keeps only its newest entries.

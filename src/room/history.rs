@@ -36,9 +36,9 @@ pub(crate) struct HistoryQuery {
     pub limit: Option<u32>,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct HistoryPage {
+pub struct HistoryPage {
     pub messages: Vec<ChatEntry>,
     pub next_cursor: Option<String>,
     pub newer_cursor: Option<String>,
