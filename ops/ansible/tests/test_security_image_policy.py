@@ -80,7 +80,7 @@ class ImagePolicyTests(unittest.TestCase):
     def test_inventory_requires_supported_os_rpm_and_rust_and_unique_identities(self) -> None:
         """An empty successful scanner report cannot produce a clean verdict."""
         policy = image.load_policy(ROOT / "security/image-policy.json")
-        rust = {**package("simplestChat"), "type": "rust-crate"}
+        rust = {**package("simplestchat"), "type": "rust-crate"}
         good: JsonObject = {
             "distro": {"id": "fedora", "versionID": "44"},
             "descriptor": {"name": "syft", "version": "1.54.0"},

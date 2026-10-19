@@ -187,7 +187,7 @@ mod tests {
 
     #[test]
     fn private_messages_do_not_consume_the_public_chat_window() {
-        let mut room = Room::new("room".to_string(), "router".to_string(), None, false, None);
+        let mut room = Room::new("room".to_string(), None, false, None);
         let (alice, _alice_rx) = participant("alice");
         let (bob, _bob_rx) = participant("bob");
         let (alice_id, alice_sender) = (alice.id.clone(), alice.sender.clone());
@@ -249,7 +249,7 @@ mod tests {
         let (alice, arx) = participant("Alice");
         let (bob, brx) = participant("Bob");
         let (carol, crx) = participant("Carol");
-        let mut room = Room::new("social".into(), "router".into(), None, false, None);
+        let mut room = Room::new("social".into(), None, false, None);
         for participant in [&alice, &bob, &carol] {
             room.participants
                 .insert(participant.id.clone(), participant.clone());
@@ -2254,13 +2254,7 @@ mod tests {
             let _origin_receivers = fixture.receivers;
             let (mut remote_bob, mut remote_events) = participant("Bob in another room");
             remote_bob.id.clone_from(&fixture.bob.id);
-            let mut remote = Room::new(
-                "other-edit-room".into(),
-                "unused-router".into(),
-                None,
-                false,
-                None,
-            );
+            let mut remote = Room::new("other-edit-room".into(), None, false, None);
             remote
                 .participants
                 .insert(remote_bob.id.clone(), remote_bob.clone());
@@ -4285,7 +4279,7 @@ impl RoomManager {
         (live || retained_public).then_some((viewer.media_session_id, viewer.authenticated))
     }
 
-    pub async fn relay_typing(
+    pub(crate) async fn relay_typing(
         &self,
         room_id: &str,
         sender_id: &str,
@@ -4297,7 +4291,41 @@ impl RoomManager {
         room.relay_typing(sender_id, expected_sender, target)
     }
 
-    pub async fn handle_chat_command(
+    /// Test convenience: a public or private chat command exactly as a socket
+    /// would deliver it, dispatched through [`Self::handle_chat_command`].
+    #[cfg(test)]
+    pub(crate) async fn send_social_chat(
+        &self,
+        room_id: &str,
+        sender_id: &str,
+        expected_sender: &mpsc::Sender<crate::OutboundJson>,
+        content: String,
+        client_message_id: Option<String>,
+        recipient_id: Option<&str>,
+    ) -> Result<()> {
+        let command = match recipient_id {
+            Some(target) => ClientMessage::PrivateMessage {
+                target_participant_id: target.to_owned(),
+                content,
+                attachment_ids: Vec::new(),
+                client_message_id: client_message_id
+                    .unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
+                sequence: None,
+                reply_to: None,
+            },
+            None => ClientMessage::ChatMessage {
+                content,
+                attachment_ids: Vec::new(),
+                client_message_id,
+                sequence: None,
+                reply_to: None,
+            },
+        };
+        self.handle_chat_command(room_id, sender_id, expected_sender, &command)
+            .await
+    }
+
+    pub(crate) async fn handle_chat_command(
         &self,
         room_id: &str,
         sender_id: &str,
@@ -4690,32 +4718,6 @@ impl RoomManager {
         }
     }
 
-    pub async fn send_social_chat(
-        &self,
-        room_id: &str,
-        sender_id: &str,
-        expected_sender: &mpsc::Sender<crate::OutboundJson>,
-        content: String,
-        client_message_id: Option<String>,
-        recipient_id: Option<&str>,
-    ) -> Result<()> {
-        self.submit_chat_attempt(
-            room_id,
-            sender_id,
-            expected_sender,
-            ChatAttempt {
-                content,
-                attachment_ids: Vec::new(),
-                client_message_id,
-                recipient_id: recipient_id.map(String::from),
-                sequence: None,
-                retry_session: None,
-                reply_to: None,
-            },
-        )
-        .await
-    }
-
     #[cfg(test)]
     fn process_social_chat(
         room: &mut Room,
@@ -5065,7 +5067,7 @@ impl RoomManager {
         acknowledge_chat(&room.metrics, expected_sender, message)
     }
 
-    pub async fn handle_social_request(
+    pub(crate) async fn handle_social_request(
         &self,
         room_id: &str,
         participant_id: &str,

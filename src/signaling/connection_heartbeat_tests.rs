@@ -373,7 +373,11 @@ async fn leaving_room_stops_heartbeat_renewal() {
         .await
         .unwrap();
     let observed = fixture.observe_alive(TEST_IDLE * 3).await;
-    let remaining = fixture.manager.total_participant_count().await;
+    let remaining = fixture
+        .manager
+        .try_total_participant_count()
+        .await
+        .expect("no room is write-locked");
     fixture.finish().await;
     assert!(
         observed.is_err(),

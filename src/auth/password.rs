@@ -8,30 +8,35 @@ use icu_normalizer::ComposingNormalizer;
 
 /// Account passwords use NFC for both selection and verification. Stored values
 /// are ordinary Argon2 PHC strings; there is no alternate normalization policy.
-pub fn normalize_selection(password: &str) -> String {
+pub(crate) fn normalize_selection(password: &str) -> String {
     ComposingNormalizer::new_nfc()
         .normalize(password)
         .into_owned()
 }
 
-pub fn hash_account_password(password: &str) -> Result<String, argon2::password_hash::Error> {
+pub(crate) fn hash_account_password(
+    password: &str,
+) -> Result<String, argon2::password_hash::Error> {
     hash_password(&normalize_selection(password))
 }
 
-pub fn verify_account_password(
+pub(crate) fn verify_account_password(
     password: &str,
     hash: &str,
 ) -> Result<bool, argon2::password_hash::Error> {
     verify_password(&normalize_selection(password), hash)
 }
 
-pub fn hash_password(password: &str) -> Result<String, argon2::password_hash::Error> {
+pub(crate) fn hash_password(password: &str) -> Result<String, argon2::password_hash::Error> {
     let argon2 = Argon2::default();
     let hash = argon2.hash_password(password.as_bytes())?;
     Ok(hash.to_string())
 }
 
-pub fn verify_password(password: &str, hash: &str) -> Result<bool, argon2::password_hash::Error> {
+pub(crate) fn verify_password(
+    password: &str,
+    hash: &str,
+) -> Result<bool, argon2::password_hash::Error> {
     let parsed = PasswordHash::new(hash)?;
     match Argon2::default().verify_password(password.as_bytes(), &parsed) {
         Ok(()) => Ok(true),

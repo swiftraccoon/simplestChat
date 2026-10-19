@@ -21,7 +21,7 @@ const MAX_CONVERSATIONS: i64 = 100;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct QuietHours {
+pub(crate) struct QuietHours {
     start_minute: i64,
     end_minute: i64,
     time_zone: String,
@@ -29,7 +29,7 @@ pub struct QuietHours {
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct NotificationPolicy {
+pub(crate) struct NotificationPolicy {
     private_messages: bool,
     mentions: bool,
     quiet_hours: Option<QuietHours>,
@@ -47,7 +47,7 @@ where
 /// clears quiet hours; a null boolean is never a missing preference.
 #[derive(Debug, Default, Deserialize)]
 #[serde(default, rename_all = "camelCase", deny_unknown_fields)]
-pub struct NotificationPatch {
+pub(crate) struct NotificationPatch {
     #[serde(deserialize_with = "present")]
     private_messages: Option<bool>,
     #[serde(deserialize_with = "present")]
@@ -58,14 +58,14 @@ pub struct NotificationPatch {
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ConversationPolicy {
+pub(crate) struct ConversationPolicy {
     muted: bool,
     snoozed_until: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
-pub struct ConversationPreference {
+pub(crate) struct ConversationPreference {
     peer_id: Uuid,
     muted: bool,
     snoozed_until: Option<DateTime<Utc>>,
@@ -73,7 +73,7 @@ pub struct ConversationPreference {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct NotificationPreferences {
+pub(crate) struct NotificationPreferences {
     #[serde(flatten)]
     policy: NotificationPolicy,
     conversations: Vec<ConversationPreference>,
@@ -318,7 +318,7 @@ async fn save_conversation(
     Ok(user)
 }
 
-pub async fn get_preferences(
+pub(crate) async fn get_preferences(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
 ) -> Result<(HeaderMap, Json<NotificationPreferences>), AuthError> {
@@ -329,7 +329,7 @@ pub async fn get_preferences(
     Ok((routes::no_store_headers(), Json(result)))
 }
 
-pub async fn put_preferences(
+pub(crate) async fn put_preferences(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
     Json(policy): Json<NotificationPolicy>,
@@ -350,7 +350,7 @@ pub async fn put_preferences(
     Ok((routes::no_store_headers(), Json(result)))
 }
 
-pub async fn patch_preferences(
+pub(crate) async fn patch_preferences(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
     Json(patch): Json<NotificationPatch>,
@@ -371,7 +371,7 @@ pub async fn patch_preferences(
     Ok((routes::no_store_headers(), Json(result)))
 }
 
-pub async fn put_conversation(
+pub(crate) async fn put_conversation(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
     Path(peer): Path<Uuid>,

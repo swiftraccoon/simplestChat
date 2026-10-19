@@ -767,7 +767,7 @@ test('full diagnostics remain opt-in and quiet mode works with the original gene
   const full = diagnosticPolicy({ purpose: 'diagnostic', diagnosticDetail: 'full' });
   assert.deepEqual(full.generatorArgs, ['--diagnostics', '--departure', 'abrupt']);
   assert.equal(full.requireSnapshots, true);
-  assert.equal(full.serverLog, 'warn,simplestChat::media::transport_manager=info,simplestChat::lifecycle=debug');
+  assert.equal(full.serverLog, 'warn,simplestchat::media::transport_manager=info,simplestchat::lifecycle=debug');
   assert.equal(full.generatorLog, 'warn,load_test=info');
 });
 

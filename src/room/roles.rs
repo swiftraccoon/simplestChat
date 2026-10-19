@@ -4,7 +4,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Role {
+pub(crate) enum Role {
     Guest = 0,
     User = 1,
     Member = 2,
@@ -14,7 +14,7 @@ pub enum Role {
 }
 
 impl Role {
-    pub fn from_u8(value: u8) -> Option<Self> {
+    pub(crate) fn from_u8(value: u8) -> Option<Self> {
         match value {
             0 => Some(Role::Guest),
             1 => Some(Role::User),
@@ -26,7 +26,7 @@ impl Role {
         }
     }
 
-    pub fn from_db(value: i16) -> Self {
+    pub(crate) fn from_db(value: i16) -> Self {
         match value {
             1 => Role::Member,
             2 => Role::Moderator,
@@ -35,7 +35,7 @@ impl Role {
         }
     }
 
-    pub fn to_db(self) -> i16 {
+    pub(crate) fn to_db(self) -> i16 {
         match self {
             Role::Member => 1,
             Role::Moderator => 2,
@@ -44,18 +44,7 @@ impl Role {
         }
     }
 
-    pub fn symbol(&self) -> &'static str {
-        match self {
-            Role::Owner => "~",
-            Role::Admin => "&",
-            Role::Moderator => "@",
-            Role::Member => "+",
-            Role::User => "",
-            Role::Guest => "?",
-        }
-    }
-
-    pub fn name(&self) -> &'static str {
+    pub(crate) fn name(&self) -> &'static str {
         match self {
             Role::Owner => "owner",
             Role::Admin => "admin",
@@ -66,15 +55,15 @@ impl Role {
         }
     }
 
-    pub fn can_moderate(&self, target: Role) -> bool {
+    pub(crate) fn can_moderate(&self, target: Role) -> bool {
         *self >= Role::Moderator && *self > target
     }
 
-    pub fn can_set_role(&self, target: Role, new_role: Role) -> bool {
+    pub(crate) fn can_set_role(&self, target: Role, new_role: Role) -> bool {
         *self >= Role::Moderator && *self > target && *self > new_role && new_role != Role::Owner
     }
 
-    pub fn can_broadcast(&self, moderated: bool) -> bool {
+    pub(crate) fn can_broadcast(&self, moderated: bool) -> bool {
         if moderated {
             *self >= Role::Member
         } else {
@@ -82,7 +71,7 @@ impl Role {
         }
     }
 
-    pub fn can_chat(&self, moderated: bool) -> bool {
+    pub(crate) fn can_chat(&self, moderated: bool) -> bool {
         if moderated {
             *self >= Role::Member
         } else {
@@ -90,16 +79,16 @@ impl Role {
         }
     }
 
-    pub fn can_change_settings(&self) -> bool {
+    pub(crate) fn can_change_settings(&self) -> bool {
         *self >= Role::Admin
     }
 
-    pub fn can_admit_lobby(&self) -> bool {
+    pub(crate) fn can_admit_lobby(&self) -> bool {
         *self >= Role::Moderator
     }
 }
 
-pub async fn resolve_role(
+pub(crate) async fn resolve_role(
     pool: &PgPool,
     room_id: &str,
     user_id: Option<&Uuid>,
@@ -130,7 +119,7 @@ pub async fn resolve_role(
     Ok(Role::Guest)
 }
 
-pub async fn set_role(
+pub(crate) async fn set_role(
     pool: &PgPool,
     room_id: &str,
     user_id: &Uuid,

@@ -337,7 +337,7 @@ async function runOne(options, scenario, repetition, manifest) {
     MEDIA_WORKERS: String(options.workers), WEBRTC_SERVER_PORT_BASE: String(options.udpPort),
     ALLOW_AD_HOC_ROOMS: 'true', ALLOWED_ORIGINS: origin, REGISTRATION_ENABLED: 'false',
     MAX_CONNECTIONS: String(options.maxConnections), MAX_CONNECTIONS_PER_IP: String(Math.min(options.maxConnections, scenario.clients + 16)),
-    WS_HANDSHAKES_PER_MINUTE: '600', METRICS_TOKEN: token, RUST_LOG: 'simplestChat=info,mediasoup=warn' };
+    WS_HANDSHAKES_PER_MINUTE: '600', METRICS_TOKEN: token, RUST_LOG: 'simplestchat=info,mediasoup=warn' };
   // Experiment overrides win over the script's defaults, never over its wiring.
   for (const key of Object.keys(options.serverEnv)) {
     if (SERVER_WIRING_KEYS.has(key)) throw new Error(`--server-env cannot override ${key}`);

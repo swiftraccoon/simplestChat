@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::{PgConnection, PgPool, types::Json as SqlJson};
 use uuid::Uuid;
 
-pub const PM_RETENTION_DAYS: i32 = 90;
+pub(crate) const PM_RETENTION_DAYS: i32 = 90;
 const PAGE_LIMIT: usize = 50;
 /// Search examines the newest 10,000 retained messages, then paginates matches.
 const SEARCH_WINDOW: i64 = 10_000;
@@ -27,7 +27,7 @@ const CLEANUP_BATCH: i64 = 1_000;
 
 #[derive(Default, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct HistoryQuery {
+pub(crate) struct HistoryQuery {
     pub before: Option<String>,
     pub after: Option<String>,
     pub around: Option<String>,
@@ -38,7 +38,7 @@ pub struct HistoryQuery {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct HistoryPage {
+pub(crate) struct HistoryPage {
     pub messages: Vec<ChatEntry>,
     pub next_cursor: Option<String>,
     pub newer_cursor: Option<String>,
@@ -49,7 +49,7 @@ pub struct HistoryPage {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Conversation {
+pub(crate) struct Conversation {
     pub peer_id: Uuid,
     pub peer_name: String,
     pub last_message: ChatEntry,
@@ -59,7 +59,7 @@ pub struct Conversation {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct InboxPage {
+pub(crate) struct InboxPage {
     pub conversations: Vec<Conversation>,
     pub next_cursor: Option<String>,
     pub retention_days: i32,
@@ -67,13 +67,13 @@ pub struct InboxPage {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ReadRequest {
+pub(crate) struct ReadRequest {
     pub message_id: Uuid,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ReadResult {
+pub(crate) struct ReadResult {
     pub read_message_id: String,
     /// Internal commit receipt; a repeated or older read has no visible change.
     #[serde(skip)]
@@ -82,7 +82,7 @@ pub struct ReadResult {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct SendRequest {
+pub(crate) struct SendRequest {
     pub client_message_id: String,
     pub content: String,
     pub reply_to: Option<Uuid>,
@@ -93,21 +93,21 @@ pub struct SendRequest {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct SetReactionRequest {
+pub(crate) struct SetReactionRequest {
     pub emoji: String,
     pub present: bool,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ReactionResult {
+pub(crate) struct ReactionResult {
     pub message_id: String,
     pub reactions: Vec<crate::signaling::protocol::ChatReaction>,
 }
 
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct EditRequest {
+pub(crate) struct EditRequest {
     pub content: String,
     pub expected_revision: u32,
 }
@@ -828,7 +828,7 @@ pub(crate) async fn edit_saved(
     Ok(edited)
 }
 
-pub async fn edit_message(
+pub(crate) async fn edit_message(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
     Path((peer, message)): Path<(Uuid, Uuid)>,
@@ -945,7 +945,7 @@ async fn set_private_reaction_in_transaction(
 
 /// Explicit presence makes repeated requests safe after a lost response. Current
 /// account consent/session authority is held through the transaction commit.
-pub async fn set_private_reaction(
+pub(crate) async fn set_private_reaction(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
     Path((peer, message)): Path<(Uuid, Uuid)>,
@@ -1117,7 +1117,7 @@ pub(crate) async fn set_retention(pool: &PgPool, room: &str, days: i32) -> Resul
     tx.commit().await
 }
 
-pub async fn inbox(
+pub(crate) async fn inbox(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
     Query(query): Query<HistoryQuery>,
@@ -1170,11 +1170,11 @@ pub async fn inbox(
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct UnreadSummary {
+pub(crate) struct UnreadSummary {
     pub unread_count: i64,
 }
 
-pub async fn unread_summary(
+pub(crate) async fn unread_summary(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
 ) -> Result<(HeaderMap, Json<UnreadSummary>), AuthError> {
@@ -1193,7 +1193,7 @@ pub async fn unread_summary(
     ))
 }
 
-pub async fn messages(
+pub(crate) async fn messages(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
     Path(peer): Path<Uuid>,
@@ -1216,7 +1216,7 @@ pub async fn messages(
     Ok((routes::no_store_headers(), Json(result)))
 }
 
-pub async fn read(
+pub(crate) async fn read(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
     Path(peer): Path<Uuid>,
@@ -1251,7 +1251,7 @@ pub async fn read(
     Ok((routes::no_store_headers(), Json(result)))
 }
 
-pub async fn send_message(
+pub(crate) async fn send_message(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
     Path(peer): Path<Uuid>,
@@ -1559,7 +1559,7 @@ impl super::RoomManager {
 
 /// Physically erase expired data in bounded batches; read predicates already
 /// make expiry exact even while a large cleanup backlog remains.
-pub fn spawn_retention(pool: PgPool) -> tokio::task::JoinHandle<()> {
+pub(crate) fn spawn_retention(pool: PgPool) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(std::time::Duration::from_secs(300));
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);

@@ -35,7 +35,7 @@ export AWS_LC_SYS_SYSTEM_DIR="$PWD/target/aws-lc-5.11.0"
 export AWS_LC_SYS_STATIC=1
 export AWS_LC_SYS_SYSTEM_SKIP_VERSION_CHECK=0
 export PIP_CONSTRAINT="$PWD/build/pip-constraints.txt"
-cargo build --locked --release --features load-test --bin load_test
+cargo build --locked --release -p simplestchat-load-test --bin load_test
 
 ./target/release/load_test \
   --server ws://127.0.0.1:3000/ws \
@@ -499,7 +499,7 @@ See [departure comparison and evidence limits](../docs/diagnostics.md#compare-ex
 With the same build environment:
 
 ```bash
-cargo test --locked --features load-test --bin load_test -- --test-threads=1
+cargo test --locked -p simplestchat-load-test -- --test-threads=1
 ```
 
 Tests cover metrics, reconnect timing, delivery checks, cleanup, incremental
@@ -510,4 +510,4 @@ invalid parameters remain retryable and that an accepted connect is idempotent
 even before ICE starts. A paused-consumer fixture verifies one bounded stall
 capture, resumed RTP, preservation of the original failing gap, and independent
 pre-close evidence. See
-[client internals](clients/README.md) for maintenance notes.
+[client internals](src/README.md) for maintenance notes.

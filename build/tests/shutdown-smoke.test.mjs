@@ -131,7 +131,7 @@ test('owned server configuration is explicit and contains no database, auth, TUR
     PATH: '/fixture/bin', BIND_ADDR: '127.0.0.1', PORT: '41001', ANNOUNCE_IP: '127.0.0.1',
     MEDIA_WORKERS: '1', WEBRTC_SERVER_PORT_BASE: '41002', ALLOWED_ORIGINS: 'http://127.0.0.1:41001',
     ALLOW_AD_HOC_ROOMS: 'true', REGISTRATION_ENABLED: 'false', RUN_MIGRATIONS: 'false',
-    RUST_LOG: 'simplestChat=info,mediasoup=warn',
+    RUST_LOG: 'simplestchat=info,mediasoup=warn',
   });
 });
 

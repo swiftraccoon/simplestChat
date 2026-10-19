@@ -2,7 +2,7 @@
 // One lock per room, no work on the RTP path, and a bounded delivery inventory.
 use anyhow::{Context, Result};
 use serde::Serialize;
-use simplestChat::signaling::protocol::{ClientMessage, ServerMessage};
+use simplestchat::signaling::protocol::{ClientMessage, ServerMessage};
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -456,7 +456,7 @@ impl ChatSchedule {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use simplestChat::signaling::protocol::{ChatEntry, ChatStyle};
+    use simplestchat::signaling::protocol::{ChatEntry, ChatStyle};
 
     fn load(clients: usize, rooms: usize, interval: u64, duration: u64) -> Arc<ChatLoad> {
         validate(

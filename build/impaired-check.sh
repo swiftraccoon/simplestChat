@@ -25,7 +25,7 @@ env -i PATH="${PATH}" HOME="${HOME}" TMPDIR="${TMPDIR:-/tmp}" \
   BIND_ADDR=127.0.0.1 PORT="${port}" ANNOUNCE_IP=127.0.0.1 MEDIA_WORKERS=1 \
   WEBRTC_SERVER_PORT_BASE="${udp_port}" ALLOW_AD_HOC_ROOMS=true \
   ALLOWED_ORIGINS="http://127.0.0.1:${port}" REGISTRATION_ENABLED=false \
-  RUST_LOG=simplestChat=info,mediasoup=warn "${binary}" > "${results}/server.log" 2>&1 &
+  RUST_LOG=simplestchat=info,mediasoup=warn "${binary}" > "${results}/server.log" 2>&1 &
 server=$!
 cleanup() {
   kill -TERM "${server}" 2>/dev/null || true

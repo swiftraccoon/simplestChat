@@ -594,7 +594,7 @@ def public_files() -> JsonObject:
             "MEDIA_WORKERS": "1",
             "REGISTRATION_ENABLED": "false",
             "ALLOW_AD_HOC_ROOMS": "false",
-            "RUST_LOG": "simplestChat=info,mediasoup=warn",
+            "RUST_LOG": "simplestchat=info,mediasoup=warn",
         },
         "Fixture migration environment differs",
     )

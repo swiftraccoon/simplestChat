@@ -27,7 +27,7 @@ const BUCKET_BOUNDS_US: [u64; 10] = [
 /// from one sampled vector, so concurrent observations cannot produce decreasing
 /// bucket boundaries or a different `+Inf` and `_count`. Sum/bucket sampling is
 /// weakly consistent, not a transactionally exact instant across all atomics.
-pub struct Histogram {
+pub(crate) struct Histogram {
     /// One interval per finite bound plus an overflow interval above five seconds.
     buckets: [AtomicU64; 11],
     /// Sum of all observations in microseconds
@@ -43,7 +43,7 @@ impl Histogram {
     }
 
     /// Record a duration observation.
-    pub fn observe(&self, duration: Duration) {
+    pub(crate) fn observe(&self, duration: Duration) {
         let us = duration.as_micros() as u64;
         let bucket = BUCKET_BOUNDS_US.partition_point(|bound| *bound < us);
         self.buckets[bucket].fetch_add(1, Relaxed);
@@ -90,7 +90,7 @@ impl Histogram {
 
 /// Server-wide metrics using lock-free atomics.
 #[derive(Clone)]
-pub struct ServerMetrics {
+pub(crate) struct ServerMetrics {
     inner: Arc<Inner>,
     diagnostics: Diagnostics,
 }
@@ -142,12 +142,12 @@ impl Default for ServerMetrics {
 
 impl ServerMetrics {
     /// Independent metrics with local operation diagnostics disabled by default.
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self::with_diagnostics(Diagnostics::default())
     }
 
     /// Attach the process-owned, bounded diagnostic recorder to these metrics.
-    pub fn with_diagnostics(diagnostics: Diagnostics) -> Self {
+    pub(crate) fn with_diagnostics(diagnostics: Diagnostics) -> Self {
         Self {
             inner: Arc::new(Inner {
                 telemetry: crate::signaling::telemetry::Telemetry::default(),
@@ -184,7 +184,7 @@ impl ServerMetrics {
     }
 
     /// The shared recorder attached at construction; disabled for [`Self::new`].
-    pub fn diagnostics(&self) -> &Diagnostics {
+    pub(crate) fn diagnostics(&self) -> &Diagnostics {
         &self.diagnostics
     }
 
@@ -194,54 +194,54 @@ impl ServerMetrics {
 
     // --- Counter increments ---
 
-    pub fn inc_connections_total(&self) {
+    pub(crate) fn inc_connections_total(&self) {
         self.inner.connections_total.fetch_add(1, Relaxed);
     }
 
     /// Counts an observed inbound frame, including control/rejected frames.
-    pub fn inc_messages_received(&self) {
+    pub(crate) fn inc_messages_received(&self) {
         self.inner.messages_received_total.fetch_add(1, Relaxed);
     }
 
     /// Counts a completed application text-frame socket write (including shutdown
     /// notices), not enqueue attempts
     /// or an acknowledgement that the peer processed the message.
-    pub fn inc_messages_sent(&self) {
+    pub(crate) fn inc_messages_sent(&self) {
         self.inner.messages_sent_total.fetch_add(1, Relaxed);
     }
 
     /// Counts an attempted application text-frame write returning an error or
     /// timing out. Deliberate drain cancellation is not a failed send.
-    pub fn inc_message_send_failed(&self) {
+    pub(crate) fn inc_message_send_failed(&self) {
         self.inner.message_send_failed_total.fetch_add(1, Relaxed);
     }
 
     /// Essential-message enqueue attempt rejected by a full recipient queue.
     /// Do not count intentionally coalesced/dropped ephemeral media hints here.
-    pub fn inc_outbound_queue_full(&self) {
+    pub(crate) fn inc_outbound_queue_full(&self) {
         self.inner.outbound_queue_full_total.fetch_add(1, Relaxed);
     }
 
     /// Essential-message enqueue attempt rejected by a closed recipient queue.
-    pub fn inc_outbound_queue_closed(&self) {
+    pub(crate) fn inc_outbound_queue_closed(&self) {
         self.inner.outbound_queue_closed_total.fetch_add(1, Relaxed);
     }
 
     /// An HTTP API request answered 429 or 503: rate limits, concurrency
     /// caps, the password lane, or a busy service. Without this series a
     /// login flood looks healthy on `/metrics`.
-    pub fn inc_api_request_rejected(&self) {
+    pub(crate) fn inc_api_request_rejected(&self) {
         self.inner.api_requests_rejected_total.fetch_add(1, Relaxed);
     }
 
     /// A WebSocket upgrade refused by the handshake, connection, or per-IP
     /// limits before `connections_active` could observe it.
-    pub fn inc_upgrade_rejected(&self) {
+    pub(crate) fn inc_upgrade_rejected(&self) {
         self.inner.upgrades_rejected_total.fetch_add(1, Relaxed);
     }
 
     /// A media worker died. Replacement outcomes are counted separately.
-    pub fn inc_media_worker_death(&self) {
+    pub(crate) fn inc_media_worker_death(&self) {
         self.inner.media_worker_deaths_total.fetch_add(1, Relaxed);
     }
 
@@ -257,27 +257,27 @@ impl ServerMetrics {
         self.inner.password_work_rejected.fetch_add(1, Relaxed);
     }
 
-    pub fn inc_errors(&self) {
+    pub(crate) fn inc_errors(&self) {
         self.inner.errors_total.fetch_add(1, Relaxed);
     }
 
     /// A worker request changed a consumer's preferred layers, after the
     /// viewer ceiling and the bandwidth tier were merged server-side.
-    pub fn inc_consumer_layer_request(&self) {
+    pub(crate) fn inc_consumer_layer_request(&self) {
         self.inner
             .consumer_layer_requests_total
             .fetch_add(1, Relaxed);
     }
 
     /// A fresh join was refused because the process is CPU saturated.
-    pub fn inc_join_refused_saturated(&self) {
+    pub(crate) fn inc_join_refused_saturated(&self) {
         self.inner
             .joins_refused_saturated_total
             .fetch_add(1, Relaxed);
     }
 
     /// Publishes the latest per-worker CPU readings of the saturation monitor.
-    pub fn set_worker_cpu(&self, workers: Vec<WorkerCpuSnapshot>) {
+    pub(crate) fn set_worker_cpu(&self, workers: Vec<WorkerCpuSnapshot>) {
         *self
             .inner
             .worker_cpu
@@ -285,7 +285,7 @@ impl ServerMetrics {
             .unwrap_or_else(|e| e.into_inner()) = workers;
     }
 
-    pub fn set_saturation(&self, snapshot: SaturationSnapshot) {
+    pub(crate) fn set_saturation(&self, snapshot: SaturationSnapshot) {
         *self
             .inner
             .saturation
@@ -293,7 +293,7 @@ impl ServerMetrics {
             .unwrap_or_else(|e| e.into_inner()) = Some(snapshot);
     }
 
-    pub fn set_quality_sample(&self, sample: crate::media::quality::QualitySample) {
+    pub(crate) fn set_quality_sample(&self, sample: crate::media::quality::QualitySample) {
         *self
             .inner
             .quality
@@ -301,7 +301,7 @@ impl ServerMetrics {
             .unwrap_or_else(|e| e.into_inner()) = Some(sample);
     }
 
-    pub fn inc_rooms_created(&self) {
+    pub(crate) fn inc_rooms_created(&self) {
         self.inner.rooms_created_total.fetch_add(1, Relaxed);
     }
 
@@ -310,7 +310,7 @@ impl ServerMetrics {
         self.inner.rooms_created_total.load(Relaxed)
     }
 
-    pub fn inc_joins(&self) {
+    pub(crate) fn inc_joins(&self) {
         self.inner.joins_total.fetch_add(1, Relaxed);
     }
 
@@ -322,15 +322,15 @@ impl ServerMetrics {
         self.inner.reconnects_total.fetch_add(1, Relaxed);
     }
 
-    pub fn inc_leaves(&self) {
+    pub(crate) fn inc_leaves(&self) {
         self.inner.leaves_total.fetch_add(1, Relaxed);
     }
 
-    pub fn inc_producers_created(&self) {
+    pub(crate) fn inc_producers_created(&self) {
         self.inner.producers_created_total.fetch_add(1, Relaxed);
     }
 
-    pub fn inc_consumers_created(&self) {
+    pub(crate) fn inc_consumers_created(&self) {
         self.inner.consumers_created_total.fetch_add(1, Relaxed);
     }
 
@@ -338,7 +338,7 @@ impl ServerMetrics {
 
     /// Increments connections_active and returns an RAII guard that decrements on drop.
     /// This guarantees the gauge is decremented even if the caller panics.
-    pub fn connection_active_guard(&self) -> ConnectionGuard {
+    pub(crate) fn connection_active_guard(&self) -> ConnectionGuard {
         self.inner.connections_active.fetch_add(1, Relaxed);
         ConnectionGuard {
             inner: self.inner.clone(),
@@ -347,7 +347,7 @@ impl ServerMetrics {
 
     // --- Histogram ---
 
-    pub fn observe_message_handling(&self, duration: Duration) {
+    pub(crate) fn observe_message_handling(&self, duration: Duration) {
         self.inner.message_handling.observe(duration);
     }
 
@@ -355,7 +355,8 @@ impl ServerMetrics {
 
     /// Render complete caller-supplied snapshots. Call
     /// [`Self::render_prometheus_snapshot`] if any sampled count is unavailable.
-    pub fn render_prometheus(
+    #[cfg(test)]
+    pub(crate) fn render_prometheus(
         &self,
         rooms_active: usize,
         participants_active: usize,
@@ -368,7 +369,7 @@ impl ServerMetrics {
     /// sample and emits its snapshot-complete gauge as zero; a known zero is
     /// emitted normally. This never substitutes stale/partial counts for a
     /// complete snapshot. Component snapshots are not globally atomic.
-    pub fn render_prometheus_snapshot(
+    pub(crate) fn render_prometheus_snapshot(
         &self,
         rooms_active: usize,
         participants_active: Option<usize>,
@@ -636,7 +637,7 @@ impl ServerMetrics {
 
 /// What the CPU saturation monitor last observed.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct SaturationSnapshot {
+pub(crate) struct SaturationSnapshot {
     pub throttling_available: bool,
     pub pressure_available: bool,
     pub saturated: bool,
@@ -652,7 +653,7 @@ pub struct SaturationSnapshot {
 /// One media worker thread's CPU share over the saturation window, labelled
 /// by its position in the pool.
 #[derive(Debug, Clone, PartialEq)]
-pub struct WorkerCpuSnapshot {
+pub(crate) struct WorkerCpuSnapshot {
     pub index: usize,
     /// Share of one core; `None` when the thread's time could not be read.
     pub utilization: Option<f64>,
@@ -880,7 +881,7 @@ fn render_snapshot_buckets(
 
 /// RAII guard that decrements `connections_active` on drop.
 /// Prevents gauge underflow/drift if the connection handler panics.
-pub struct ConnectionGuard {
+pub(crate) struct ConnectionGuard {
     inner: Arc<Inner>,
 }
 
@@ -897,7 +898,7 @@ fn render_counter(out: &mut String, name: &str, help: &str, value: u64) {
 }
 
 /// Append a gauge computed by the caller at scrape time.
-pub fn append_gauge(out: &mut String, name: &str, help: &str, value: u64) {
+pub(crate) fn append_gauge(out: &mut String, name: &str, help: &str, value: u64) {
     render_gauge(out, name, help, value);
 }
 

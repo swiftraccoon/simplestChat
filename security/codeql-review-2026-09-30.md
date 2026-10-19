@@ -704,3 +704,61 @@ Fresh original CodeQL 2.27.1 analysis of `8d2f3df3a86ff92ab3bdfa92d257e25e701754
 The new failure report accepts only one at-most-1-KiB exact helper message and a fixed stage enum. Extra text, unknown stages, symlinks and oversized stderr yield `unavailable`. No child output, credentials or arbitrary error string enters this field. The changed callers, parser and public-report flow were reviewed; 49 Python mock and 40 Node tests pass.
 
 Alert 32 now binds complete-source SHA256 `2528215712cfc3f97bfb4b91c6811fa26f201f028be3077481e9409fc08f0eb0`, range `179:179:18:75`, and fingerprint `codeql:3d3c9cd34cb0d0ba6c43f2d09da9871fd5074edf1be557cc935c5bc0caa6fbe8`. Original query, message, observation history, owner, scope and 2026-11-29 expiry remain unchanged. The original SARIF is replayed against this exact replacement; no query or path exclusion or remote dismissal is authorized. Hosted ingestion remains a separate required check.
+
+## Source re-review: workspace layout and crate rename (2026-10-19)
+
+Revision `61578db87ad7d0e1be8046008ac6a4582d78abaa` turns the repository into a Cargo workspace (the `simplestchat` library and server, `simplestchat-load-test` and `xtask`), moves the load generator's `include!`d sources to ordinary modules under `load_tests/src/`, wraps secrets in `SecretString`, narrows the crate's public surface and removes dead code. No flagged line changed: every rebinding below moves a region by whole-line shifts whose text is byte-identical at the reviewed base revision and at `61578db`. The recomputed identities were checked against four independent policy reports (hosted run 39198996777 at `a00c8df` for Rust and Python, local CodeQL 2.27.1 analyses of `61578db` for Rust and Python): 65 identities matched, none differed.
+
+Alert 953 (`rust/cleartext-transmission`) now binds the module file `load_tests/src/account_session.rs` directly (range `274:274:19:62`, the `format!("{}/api/auth/refresh", self.origin)` request URL); the parent `load_tests/bin/load_test.rs` and its twelve-file include closure no longer exist, so the identity carries no `includedSources`. Alerts 64 and 65 (`src/turn.rs` test credentials) are no longer reported: those credentials now construct `SecretString`, which the hard-coded-value query does not trace; their records stay bound to the last reviewed bytes and expire with the others. Owner, rationale, scope semantics and the 2026-11-29 expiry are unchanged for every record. The local SARIFs replay against the updated exceptions with `passed` true; hosted ingestion remains a separate required check.
+
+Complete-source SHA256 per rebound file:
+
+- `build/release_container_harness.py`: `109b4d8ffce824671ca6992b942fe77d1034a22f479ef963d95869ae784f8d47`
+- `load_tests/src/account_session.rs`: `d0eaf671e53beb81c763a8b0cfaa2c81b99e75d40603aecc93eeb15fcd92b05d`
+- `src/auth/common_passwords.rs`: `d4324d430995b945ff02a258792f5baaed479d1c0bb3b2d69a5b11c1928237da`
+- `src/auth/password.rs`: `7b0338401ce83eda21aa8e986baf2ee6e107578a1602daaddc36948755afd569`
+- `src/auth/routes.rs`: `7ae411376021d9b46c2d476d31767809fb9e9eb67ac66c2533326aa8887dba59`
+- `src/metrics.rs`: `773bd1884306327b8dedea8eee6f7e80de7207711384518a46cbb740e5477e85`
+- `src/room/settings.rs`: `7b2bdfe34ce31a9246209ceea782644e97ba447ba5341b030a4333f39fc2d25d`
+- `src/security_canary_tests.rs`: `4282b01b92cf22db047e87f37eb5cacba7617cac5fe2cdff8b6274f7c3aa03ae`
+- `src/signaling/mod.rs`: `b045727d0f312367364a705004d41a6646074c3b2936d509439b43ce658f2809`
+- `src/turn.rs`: `050dba94a642ac2d36aa3ee2d7aa5050805f485e60f584e6e74e7a8e47b22699`
+
+| Alert | Range | Fingerprint |
+|---|---|---|
+| 32 | `build/release_container_harness.py:179:179:18:75` | `codeql:0422fbc40cb8ac4531e29355b005e2ac6f0be59fb67dbcbcc6d2cc24f2ce8987` |
+| 33 | `src/metrics.rs:1159:1159:13:21` | `codeql:944df218d5a392de8291c4ff0ccc4306663cf88a6eab02d0879e34dfec8354ed` |
+| 34 | `src/metrics.rs:1163:1163:13:21` | `codeql:27e6e2fed157505c33cf4a6a1da47add9faad4a122d6efa9f8619a3f2eee8e69` |
+| 35 | `src/signaling/mod.rs:1864:1864:153:165` | `codeql:ecbca502bda84d5aff43830de1ec76d433bb20864ab3df68279e1ccbbfbeff2f` |
+| 38 | `src/auth/common_passwords.rs:266:266:27:40` | `codeql:effa41367abe2f25c97d0b6c99d8752ffe62dba887159260a6fb746b6de848eb` |
+| 39 | `src/auth/common_passwords.rs:267:267:27:42` | `codeql:c5ecc08a7a648cbc018bdafb3a24feab79557aaadcc4a8eddaac34054f5f77ca` |
+| 40 | `src/auth/common_passwords.rs:268:268:28:58` | `codeql:ba2bd7dd5fee042f34d70e74ecfaa4a747d2219796ca90be5ccd1317af32f1db` |
+| 41 | `src/auth/common_passwords.rs:269:269:28:51` | `codeql:3ddc2cd9248baaa0269c0dde9948ca37105f06598d40c8000e7198c608f226e8` |
+| 42 | `src/auth/password.rs:55:55:26:51` | `codeql:96e95fc1f29e1130867f9d8dd58a8aec20e8b56007b5cc7e17ad2d7e76584c26` |
+| 43 | `src/auth/password.rs:56:56:24:43` | `codeql:22648dccbde2c1533faa1fdc442e4c871cd310d13cd6da648f3196ac524468f7` |
+| 44 | `src/auth/password.rs:61:61:42:62` | `codeql:03185972b84f9e305974f0ff5bd08d7099a7a2fbdaadbda3965c4c29359f3334` |
+| 45 | `src/auth/password.rs:62:62:35:60` | `codeql:84375f4979e174b23d5a0292852ef5199117f35418ed7290b8f2f8c4f8e3b3ae` |
+| 46 | `src/auth/password.rs:63:63:41:66` | `codeql:9e81f81ff0f10b16eef23658fc6c07d2d0b20bc77b2c796171a398472df15585` |
+| 47 | `src/auth/password.rs:73:73:33:43` | `codeql:6942d2163da9a149e7aa10f1a3836602e61279bc60196e2e841f482da8cdd130` |
+| 48 | `src/auth/password.rs:74:74:34:50` | `codeql:e748ea6c46346c60dd7eba209720aa4946b86387c12d7eea642eb9b4d104f60b` |
+| 49 | `src/auth/password.rs:79:79:24:54` | `codeql:36df48f7808cba64590d0fe9d9d262ca7249bfd174e32c10eef3f64c0fa45844` |
+| 50 | `src/auth/password.rs:82:82:34:50` | `codeql:3bdf0022cdc60cc596c9d303656145764bafa91a0dc902a07d4cd9441955922b` |
+| 51 | `src/auth/password.rs:87:87:35:46` | `codeql:2672f757c091346eecb4d74fdbf7b298e2c3f8d9f1789f9a2a2c2cd0c1142c77` |
+| 52 | `src/auth/password.rs:88:88:35:46` | `codeql:bfade2b93df3eced1ae4231b28d286e366e956293677b0923a2810fa4c107244` |
+| 53 | `src/auth/password.rs:103:103:33:44` | `codeql:114b3a6a84fa11e39081441f6304a1a3109aa0ca9a255d4ceb26613fe67f80fc` |
+| 54 | `src/auth/password.rs:104:104:33:44` | `codeql:cabe3addf56af59656ca6d877af9eb4e4bcdcd7eb12fa37efdc137c24149566c` |
+| 55 | `src/auth/password.rs:109:109:34:36` | `codeql:1aa3a6c59dfb3bd7fed5f08389425991e0eb6056c2c1f983a3bc5f12ab7ec8ac` |
+| 56 | `src/auth/password.rs:110:110:33:35` | `codeql:e030a63bd68d33e28c82a9c4dec9c0d5b74f7416afde596254208be002de4f4e` |
+| 57 | `src/auth/password.rs:111:111:34:45` | `codeql:716cdd9ba8f50a57e460764992affd30e538119e5101d0f56053d16c131a17f8` |
+| 58 | `src/auth/routes.rs:938:938:44:68` | `codeql:ded994331d3d73a944b7ac87f1b2a370bbaf7785dbb9289da683ea808484d8a9` |
+| 59 | `src/room/settings.rs:605:605:33:42` | `codeql:1fcf2d03f22b246952847aaa629e79bbeb153d24c5bb38619d88d50e8578b418` |
+| 60 | `src/room/settings.rs:610:610:33:43` | `codeql:337e8c69b8ba96c9b2229f589d7a59213f3fcf3bb083ba19e69cd66301a05a7b` |
+| 61 | `src/room/settings.rs:612:612:33:43` | `codeql:6b14984c6e690f24c3bc31c609bf521bdac0b18fe2838baec76159c02013665e` |
+| 62 | `src/room/settings.rs:615:615:33:45` | `codeql:0c00b0b31d8c6f7fc7cfff1f82c7a8b66882d96f7f06679658fec52f65adb652` |
+| 63 | `src/signaling/mod.rs:2293:2293:31:56` | `codeql:abbafb7e47abceb8ede3ab2e0e01bfb4b98a631a84e6e538a23894f4a30b2144` |
+| 66 | `src/turn.rs:139:139:49:59` | `codeql:56afdf505218139b48497f153e5cc3f6147f836a0247c16bfd89bb805ae81a5f` |
+| 67 | `src/auth/common_passwords.rs:234:239:22:10` | `codeql:1df7a1f5a2f19d94de45b94d885ebeac0ec56a11fe9bfb43f073563b1a2e971f` |
+| 68 | `src/auth/common_passwords.rs:243:248:22:10` | `codeql:45f234a486faa62c6aef4ca594c1a7dcc0995c6d35f8327e09ab6f3167300356` |
+| 69 | `src/signaling/mod.rs:1855:1855:79:91` | `codeql:f8507fe451e15f5c5b9fb3b3225d110d0e0e88f066e1aae4bd3c2c53c86e9e79` |
+| 102 | `src/security_canary_tests.rs:90:90:21:62` | `codeql:93594648d3260f9b5d31d6eda1bd77cd1c8802603ea35ecd4e844779585a19ae` |
+| 953 | `load_tests/src/account_session.rs:274:274:19:62` | `codeql:0a072f64dd733d355d8e57a20da2d0f1aa4cd6513e9fe39544934a3b11373142` |

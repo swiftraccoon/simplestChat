@@ -31,7 +31,7 @@ const MAX_PASSKEYS: i64 = 10;
 
 #[derive(Deserialize)]
 #[serde(tag = "action", rename_all = "snake_case", deny_unknown_fields)]
-pub enum PasskeyAction {
+pub(crate) enum PasskeyAction {
     Add {},
     Remove { id: Uuid },
     Replace { id: Uuid },
@@ -40,33 +40,33 @@ pub enum PasskeyAction {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct StartRequest {
+pub(crate) struct StartRequest {
     pub operation: PasskeyAction,
     pub current_password: Option<String>,
 }
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct AuthorizeRequest {
+pub(crate) struct AuthorizeRequest {
     pub ceremony_id: String,
     pub credential: PublicKeyCredential,
 }
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct EnrollRequest {
+pub(crate) struct EnrollRequest {
     pub ceremony_id: String,
     pub credential: RegisterPublicKeyCredential,
 }
 
 #[derive(Serialize, FromRow)]
-pub struct PasskeySummary {
+pub(crate) struct PasskeySummary {
     pub id: Uuid,
     pub created_at: DateTime<Utc>,
 }
 
 #[derive(Serialize)]
-pub struct PasskeySettings {
+pub(crate) struct PasskeySettings {
     pub password_enabled: bool,
     pub recovery_enabled: bool,
     pub passkeys: Vec<PasskeySummary>,
@@ -75,7 +75,7 @@ pub struct PasskeySettings {
 
 #[derive(Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
-pub enum ActionResponse {
+pub(crate) enum ActionResponse {
     Authenticate {
         ceremony_id: String,
         options: Value,
@@ -130,7 +130,7 @@ async fn credentials(
 }
 
 /// Return record identifiers and dates, never credential IDs or key material.
-pub async fn list(
+pub(crate) async fn list(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
 ) -> Result<(HeaderMap, Json<PasskeySettings>), AuthError> {
@@ -513,7 +513,7 @@ async fn remove_credential(
 
 /// The enrollment challenge represents a recently verified owner, not a bearer
 /// enrollment token: current claims and the same authentication version are required.
-pub async fn enroll(
+pub(crate) async fn enroll(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
     Json(request): Json<EnrollRequest>,

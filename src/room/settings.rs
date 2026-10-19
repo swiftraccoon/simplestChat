@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RoomSettings {
+pub(crate) struct RoomSettings {
     pub id: String,
     pub owner_id: Uuid,
     pub display_name: String,
@@ -59,7 +59,7 @@ struct RoomRow {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct CreateRoomRequest {
+pub(crate) struct CreateRoomRequest {
     pub id: String,
     pub display_name: String,
     pub password: Option<String>,
@@ -74,14 +74,14 @@ pub struct CreateRoomRequest {
     pub topic: Option<String>,
 }
 
-pub const MAX_ROOM_ID_LEN: usize = 128;
-pub const MAX_DISPLAY_NAME_LEN: usize = 128;
-pub const MAX_TOPIC_LEN: usize = 512;
-pub const MIN_PASSWORD_LEN: usize = 8;
-pub const MAX_PASSWORD_LEN: usize = 256;
-pub const MAX_PARTICIPANTS: i32 = 10_000;
-pub const MAX_BROADCASTERS: i32 = 1_000;
-pub const MAX_PERSISTED_ROOMS_PER_OWNER: i64 = 100;
+pub(crate) const MAX_ROOM_ID_LEN: usize = 128;
+pub(crate) const MAX_DISPLAY_NAME_LEN: usize = 128;
+pub(crate) const MAX_TOPIC_LEN: usize = 512;
+pub(crate) const MIN_PASSWORD_LEN: usize = 8;
+pub(crate) const MAX_PASSWORD_LEN: usize = 256;
+pub(crate) const MAX_PARTICIPANTS: i32 = 10_000;
+pub(crate) const MAX_BROADCASTERS: i32 = 1_000;
+pub(crate) const MAX_PERSISTED_ROOMS_PER_OWNER: i64 = 100;
 
 const PERSISTED_ROOM_QUOTA_ERROR: &str = "persisted-room owner quota reached";
 const PERSISTED_ROOM_GLOBAL_QUOTA_ERROR: &str = "persisted-room global quota reached";
@@ -90,21 +90,21 @@ const GLOBAL_ROOM_CREATION_LOCK: i64 = 7_349_872_340_910;
 /// The surrounding room manager deliberately exposes `sqlx::Error`, so use a
 /// private, recognizable error value to preserve that API while allowing the
 /// HTTP layer to distinguish an account quota from a database outage.
-pub fn is_persisted_room_quota_error(error: &sqlx::Error) -> bool {
+pub(crate) fn is_persisted_room_quota_error(error: &sqlx::Error) -> bool {
     matches!(
         error,
         sqlx::Error::InvalidArgument(message) if message == PERSISTED_ROOM_QUOTA_ERROR
     )
 }
 
-pub fn is_global_persisted_room_quota_error(error: &sqlx::Error) -> bool {
+pub(crate) fn is_global_persisted_room_quota_error(error: &sqlx::Error) -> bool {
     matches!(
         error,
         sqlx::Error::InvalidArgument(message) if message == PERSISTED_ROOM_GLOBAL_QUOTA_ERROR
     )
 }
 
-pub fn valid_room_id(room_id: &str) -> bool {
+pub(crate) fn valid_room_id(room_id: &str) -> bool {
     !room_id.is_empty()
         && room_id.len() <= MAX_ROOM_ID_LEN
         && room_id
@@ -112,12 +112,12 @@ pub fn valid_room_id(room_id: &str) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
 }
 
-pub fn valid_new_room_password(password: &str) -> bool {
+pub(crate) fn valid_new_room_password(password: &str) -> bool {
     (MIN_PASSWORD_LEN..=MAX_PASSWORD_LEN).contains(&password.len())
         && !password.chars().any(char::is_control)
 }
 
-pub fn validate_create_request(request: &CreateRoomRequest) -> Result<(), &'static str> {
+pub(crate) fn validate_create_request(request: &CreateRoomRequest) -> Result<(), &'static str> {
     if !valid_room_id(&request.id) {
         return Err("Room ID must use 1-128 letters, numbers, hyphens, or underscores");
     }
@@ -162,7 +162,7 @@ pub fn validate_create_request(request: &CreateRoomRequest) -> Result<(), &'stat
     Ok(())
 }
 
-pub async fn load_room(
+pub(crate) async fn load_room(
     pool: &PgPool,
     room_id: &str,
 ) -> Result<Option<(RoomSettings, Option<String>)>, sqlx::Error> {
@@ -208,7 +208,7 @@ pub async fn load_room(
     }))
 }
 
-pub async fn create_room(
+pub(crate) async fn create_room(
     pool: &PgPool,
     owner_id: &Uuid,
     req: &CreateRoomRequest,
@@ -322,7 +322,7 @@ pub async fn create_room(
     clippy::too_many_arguments,
     reason = "explicit patch fields mirror the wire contract and persistence order"
 )]
-pub fn apply_settings_update(
+pub(crate) fn apply_settings_update(
     settings: &mut RoomSettings,
     moderated: Option<bool>,
     lobby_enabled: Option<bool>,
@@ -404,7 +404,7 @@ pub fn apply_settings_update(
     clippy::too_many_arguments,
     reason = "explicit patch fields preserve nullable updates and SQL binding order"
 )]
-pub async fn update_room_settings(
+pub(crate) async fn update_room_settings(
     pool: &PgPool,
     room_id: &str,
     moderated: Option<bool>,
@@ -510,19 +510,6 @@ pub async fn update_room_settings(
         return Err(sqlx::Error::RowNotFound);
     }
     Ok(())
-}
-
-pub async fn delete_room(
-    pool: &PgPool,
-    room_id: &str,
-    owner_id: &Uuid,
-) -> Result<bool, sqlx::Error> {
-    let result = sqlx::query("DELETE FROM rooms WHERE id = $1 AND owner_id = $2")
-        .bind(room_id)
-        .bind(owner_id)
-        .execute(pool)
-        .await?;
-    Ok(result.rows_affected() > 0)
 }
 
 #[cfg(test)]

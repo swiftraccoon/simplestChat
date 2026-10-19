@@ -298,11 +298,12 @@ See [deployment](../docs/deployment.md) before opening a service to other users.
 
 ```sh
 build/check.sh --rust
-cargo test --locked --all-features -- --test-threads=1
+cargo test --locked --workspace -- --test-threads=1
 ```
 
-The quality check runs formatting, all-target/all-feature Clippy with warnings
-rejected, and public/private Rustdoc with warnings denied. It selects the pinned
+The quality check runs formatting, workspace Clippy with warnings rejected, the
+over-length line ratchet (`cargo run -q -p xtask -- line-length`) and public/private
+Rustdoc with warnings denied. It selects the pinned
 toolchain and static native environment for its own process; separate Cargo commands still
 need the development shell setup. First-party compiler warnings and unfulfilled
 lint expectations fail the build, and `unsafe` remains forbidden. See

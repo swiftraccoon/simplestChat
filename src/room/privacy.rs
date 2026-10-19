@@ -170,13 +170,7 @@ mod tests {
     use tokio::sync::{mpsc, oneshot};
 
     fn fixture(account: Uuid) -> Arc<TokioRwLock<Room>> {
-        let mut room = Room::new(
-            "privacy-test".into(),
-            "unused-router".into(),
-            None,
-            false,
-            None,
-        );
+        let mut room = Room::new("privacy-test".into(), None, false, None);
         let (sender, _receiver) = mpsc::channel(1);
         room.participants.insert(
             account.to_string(),

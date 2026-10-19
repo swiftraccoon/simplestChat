@@ -109,8 +109,8 @@ test('the ramp preflight follows the address and room each client actually takes
 
 test('server environment overrides are parsed as pairs and recorded', () => {
   const base = ['--server-image', 's', '--generator-image', 'g', '--output', 'out', '--clients', '10'];
-  const options = parseOptions([...base, '--server-env', 'CPU_SATURATION_WORKER_UTILIZATION=0.7;RUST_LOG=simplestChat=info,mediasoup=debug']);
-  assert.deepEqual(options.serverEnv, { CPU_SATURATION_WORKER_UTILIZATION: '0.7', RUST_LOG: 'simplestChat=info,mediasoup=debug' });
+  const options = parseOptions([...base, '--server-env', 'CPU_SATURATION_WORKER_UTILIZATION=0.7;RUST_LOG=simplestchat=info,mediasoup=debug']);
+  assert.deepEqual(options.serverEnv, { CPU_SATURATION_WORKER_UTILIZATION: '0.7', RUST_LOG: 'simplestchat=info,mediasoup=debug' });
   assert.deepEqual(parseOptions(base).serverEnv, {});
   assert.throws(() => parseOptions([...base, '--server-env', 'lower=1']), /KEY=VALUE/);
 });

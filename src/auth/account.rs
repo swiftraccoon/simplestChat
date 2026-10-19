@@ -34,12 +34,12 @@ use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, PgPool};
 use uuid::Uuid;
 
-pub const MAX_IMAGE_BYTES: usize = 128 * 1024;
+pub(crate) const MAX_IMAGE_BYTES: usize = 128 * 1024;
 const MAX_IMAGE_DIMENSION: u32 = 2048;
 const RECOVERY_PREFIX: &str = "sc-recovery-";
 
 #[derive(Serialize, FromRow)]
-pub struct AccountProfile {
+pub(crate) struct AccountProfile {
     pub id: Uuid,
     pub email: String,
     pub display_name: String,
@@ -51,7 +51,7 @@ pub struct AccountProfile {
 }
 
 #[derive(Serialize, FromRow)]
-pub struct PublicProfile {
+pub(crate) struct PublicProfile {
     pub id: Uuid,
     pub display_name: String,
     pub avatar_url: Option<String>,
@@ -62,7 +62,7 @@ pub struct PublicProfile {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct UpdateProfileRequest {
+pub(crate) struct UpdateProfileRequest {
     pub display_name: String,
     pub avatar_url: Option<String>,
     pub bio: String,
@@ -76,7 +76,7 @@ pub struct UpdateProfileRequest {
 /// device and the profile.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
-pub struct ChatPreferences {
+pub(crate) struct ChatPreferences {
     pub allow_private_messages: bool,
     pub sounds: bool,
     pub large_text: bool,
@@ -98,7 +98,7 @@ impl Default for ChatPreferences {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct IgnoredPerson {
+pub(crate) struct IgnoredPerson {
     pub id: String,
     pub name: String,
 }
@@ -115,7 +115,7 @@ where
 /// Ignore operations are set/remove rather than toggles, so repeating one is safe.
 #[derive(Default, Deserialize)]
 #[serde(default, rename_all = "camelCase", deny_unknown_fields)]
-pub struct PreferencePatch {
+pub(crate) struct PreferencePatch {
     #[serde(deserialize_with = "present")]
     allow_private_messages: Option<bool>,
     #[serde(deserialize_with = "present")]
@@ -257,7 +257,7 @@ pub(crate) async fn load_chat_preferences(
 }
 
 /// GET /api/auth/preferences
-pub async fn get_preferences(
+pub(crate) async fn get_preferences(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
 ) -> Result<(HeaderMap, Json<ChatPreferences>), AuthError> {
@@ -288,7 +288,7 @@ pub async fn get_preferences(
 
 /// Merge one explicit intent with current account state under the user row lock.
 /// A concurrent appearance change cannot remove a newer ignore or PM opt-out.
-pub async fn patch_preferences(
+pub(crate) async fn patch_preferences(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
     Json(request): Json<PreferencePatch>,
@@ -422,25 +422,25 @@ async fn save_preferences(
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct ChangePasswordRequest {
+pub(crate) struct ChangePasswordRequest {
     pub current_password: String,
     pub new_password: String,
 }
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct RecoveryKeyRequest {
+pub(crate) struct RecoveryKeyRequest {
     pub current_password: String,
 }
 
 #[derive(Serialize)]
-pub struct RecoveryKeyResponse {
+pub(crate) struct RecoveryKeyResponse {
     pub recovery_key: String,
 }
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct RedeemRecoveryRequest {
+pub(crate) struct RedeemRecoveryRequest {
     pub email: String,
     pub recovery_key: String,
     pub new_password: String,
@@ -457,7 +457,7 @@ pub struct RedeemRecoveryRequest {
 /// Returns an [`AuthError`] for missing configuration, absent/malformed/expired
 /// credentials, revoked claims or a failed database check. Callers must propagate
 /// the failure rather than downgrading an authenticated request to guest access.
-pub async fn authenticated_claims(
+pub(crate) async fn authenticated_claims(
     server: &SignalingServer,
     headers: &HeaderMap,
 ) -> Result<Claims, AuthError> {
@@ -481,7 +481,7 @@ fn profile_error() -> AuthError {
 ///
 /// `multiline` permits only newline and tab among control characters. This does
 /// not enforce a nonempty value; callers apply field-specific minimum lengths.
-pub fn validate_text(value: &str, maximum: usize, multiline: bool) -> bool {
+pub(crate) fn validate_text(value: &str, maximum: usize, multiline: bool) -> bool {
     value.len() <= maximum
         && !value.chars().any(|character| {
             character.is_control() && !(multiline && matches!(character, '\n' | '\t'))
@@ -570,7 +570,7 @@ pub(crate) fn image_dimensions(mime: &str, bytes: &[u8]) -> Option<(u32, u32)> {
 /// Images are stored only as bounded raster data URLs and rendered as images.
 /// Header/dimension validation rejects SVG, arbitrary URLs, and oversized rasters;
 /// the browser's image decoder handles the remainder of the raster bitstream.
-pub fn validate_image_data_url(value: Option<&str>) -> Result<(), AuthError> {
+pub(crate) fn validate_image_data_url(value: Option<&str>) -> Result<(), AuthError> {
     let Some(value) = value else {
         return Ok(());
     };
@@ -605,7 +605,7 @@ async fn load_profile(pool: &PgPool, id: Uuid) -> Result<AccountProfile, AuthErr
         .bind(id).fetch_optional(pool).await.map_err(routes::database_error)?.ok_or(AuthError::UserNotFound)
 }
 
-pub async fn get_profile(
+pub(crate) async fn get_profile(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
 ) -> Result<(HeaderMap, Json<AccountProfile>), AuthError> {
@@ -619,7 +619,7 @@ pub async fn get_profile(
     Ok((routes::no_store_headers(), Json(profile)))
 }
 
-pub async fn update_profile(
+pub(crate) async fn update_profile(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
     Json(request): Json<UpdateProfileRequest>,
@@ -644,7 +644,7 @@ pub async fn update_profile(
     Ok((routes::no_store_headers(), Json(profile)))
 }
 
-pub async fn public_profile(
+pub(crate) async fn public_profile(
     State(server): State<SignalingServer>,
     Path(id): Path<Uuid>,
 ) -> Result<(HeaderMap, Json<PublicProfile>), AuthError> {
@@ -707,7 +707,7 @@ pub(super) async fn verified_password_hash(
 /// password or token after a successful change fails authentication. Clients
 /// should attempt normal sign-in with the new password, not blindly replay this
 /// mutation. Password hashing runs in the bounded password-work lane.
-pub async fn change_password(
+pub(crate) async fn change_password(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
     Json(request): Json<ChangePasswordRequest>,
@@ -784,7 +784,7 @@ fn recovery_hash(key: &str) -> Result<String, AuthError> {
 /// response. There is no read-back endpoint: a subsequent successful request
 /// creates a different key and invalidates the inaccessible one. Clients must
 /// not claim that an earlier key still works when replacement is unconfirmed.
-pub async fn create_recovery_key(
+pub(crate) async fn create_recovery_key(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
     Json(request): Json<RecoveryKeyRequest>,

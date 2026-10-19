@@ -36,7 +36,7 @@
 | `ROOM_CREATIONS_PER_ACCOUNT_PER_MINUTE` | `10` | Per-account persisted-room creation limit |
 | `TRUSTED_PROXY_SECRET` | (none) | Shared proxy-authentication secret of at least 32 bytes; required for accurate client IPs through a container bridge |
 | `MEDIA_WORKERS` | detected CPUs, capped at 64 | Worker count from 1 through 64; invalid or non-UTF-8 values fail startup |
-| `MEDIA_WORKER_LOG_LEVEL` | `warn` | What the native media worker logs: `debug`, `warn`, `error` or `none`; `debug` with `MEDIA_WORKER_LOG_TAGS=ice,dtls` records each transport's ICE and DTLS state machine for a diagnosis run (also raise the process filter, `RUST_LOG=simplestChat=info,mediasoup=debug`) |
+| `MEDIA_WORKER_LOG_LEVEL` | `warn` | What the native media worker logs: `debug`, `warn`, `error` or `none`; `debug` with `MEDIA_WORKER_LOG_TAGS=ice,dtls` records each transport's ICE and DTLS state machine for a diagnosis run (also raise the process filter, `RUST_LOG=simplestchat=info,mediasoup=debug`) |
 | `MEDIA_WORKER_LOG_TAGS` | `info,ice,dtls,rtp,rtcp` | Comma-separated worker log tags: `info`, `ice`, `dtls`, `rtp`, `srtp`, `rtcp`, `rtx`, `bwe`, `score`, `simulcast`, `svc`, `sctp`, `message`; an unknown tag fails startup |
 | `WEBRTC_SERVER_PORT_BASE` | `40000` | First dedicated WebRTC UDP port; worker N uses base+N. Range must fit within 1–65535; use a separate base for isolated local instances |
 | `WEBRTC_SERVER_TCP` | `false` | Also listen for ICE-TCP on each worker's port and offer TCP candidates (UDP stays preferred). Clients on networks that block UDP can then still connect; the deployment must publish the same port range over TCP and open it at the firewall first, or clients are offered candidates that cannot connect. TURN over TCP/TLS offers another fallback when clients cannot reach these media ports; a symmetric NAT alone does not require a relay to a reachable public ICE-Lite server |
@@ -52,7 +52,7 @@
 | `MAX_PRODUCERS_PER_PARTICIPANT` | `8` | Server-side media producer cap per participant |
 | `MAX_CONSUMERS_PER_PARTICIPANT` | `64` | Server-side consumer cap per participant. Each peer with camera and microphone costs two consumers (three with screen video, four with screen audio too), so the default covers 32 camera/microphone publishers. Consumer and frame burst budgets cover creation, resumption and a layer request for every allowed consumer; sustained limits and the room-wide IPC limit still apply. |
 | `METRICS_TOKEN` | (none) | Bearer token of at least 32 bytes; `/metrics` returns 404 when unset |
-| `RUST_LOG` | `simplestChat=info,mediasoup=warn` | Tracing filter |
+| `RUST_LOG` | `simplestchat=info,mediasoup=warn` | Tracing filter |
 | `LOG_FORMAT` | `json` | Log encoding: `json` writes one object per line for aggregation; `text` is the human-readable form for local runs |
 | `SOURCE_REVISION` | `unknown` | The 40-hexadecimal commit the running build came from, set by the image build; reported at startup and as `simplestchat_build_info` on `/metrics`. Any other value is reported as `unknown` |
 | `DIAGNOSTICS_PATH` | (none) | Opt-in, new absolute path for private local operation records; see [limits and report definitions](diagnostics.md) |

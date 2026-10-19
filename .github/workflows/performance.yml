@@ -104,7 +104,7 @@ jobs:
       - name: Build the candidate server and the generator
         run: |
           cargo build --locked --release --bin simplestChat
-          cargo build --locked --release --features load-test --bin load_test
+          cargo build --locked --release -p simplestchat-load-test --bin load_test
 
       - name: Run the controlled comparison
         shell: bash
@@ -184,7 +184,7 @@ jobs:
       - name: Build the server and the generator
         run: |
           cargo build --locked --release --bin simplestChat
-          cargo build --locked --release --features load-test --bin load_test
+          cargo build --locked --release -p simplestchat-load-test --bin load_test
 
       - name: Build UI and install pinned browser tooling
         run: |
@@ -283,7 +283,7 @@ jobs:
           echo "$RUNNER_TEMP/simplestchat-npm-12.2.0/bin" >> "$GITHUB_PATH"
 
       - name: Build server and load generator
-        run: cargo build --locked --all-features --bins
+        run: cargo build --locked --workspace --bins
 
       - name: Build UI and install pinned browser tooling
         run: |
@@ -377,7 +377,7 @@ jobs:
         run: command -v psql
 
       - name: Build the exact server and authenticated generator
-        run: cargo build --locked --release --features load-test --bins
+        run: cargo build --locked --release --workspace --bins
 
       - name: Measure the fixed thirty-account room for twenty minutes
         timeout-minutes: 35

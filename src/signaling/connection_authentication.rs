@@ -12,7 +12,7 @@ const RENEWAL_VALIDATION_TIMEOUT: Duration = Duration::from_secs(2);
 /// Connection-local access to the existing authentication concurrency budget.
 /// The signing secret is deliberately absent from `Debug` implementations.
 #[derive(Clone)]
-pub struct RenewalAuthenticator {
+pub(crate) struct RenewalAuthenticator {
     secret: SecretString,
     concurrency: Arc<tokio::sync::Semaphore>,
 }

@@ -8,7 +8,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug)]
-pub enum AuthError {
+pub(crate) enum AuthError {
     InvalidInput(&'static str),
     InvalidCredentials,
     InvalidPasskey,
@@ -34,6 +34,16 @@ pub enum AuthError {
 
 impl IntoResponse for AuthError {
     fn into_response(self) -> Response {
+        // The response carries a fixed phrase; the detail stays in the server log.
+        match &self {
+            AuthError::DatabaseError(detail) => {
+                tracing::warn!(%detail, "Account request failed on the database");
+            }
+            AuthError::WebAuthnError(detail) => {
+                tracing::debug!(%detail, "WebAuthn ceremony rejected");
+            }
+            _ => {}
+        }
         let retry_after = match &self {
             AuthError::ServiceBusy => Some(1),
             AuthError::PreferencesSynchronizationFailed => Some(1),
@@ -91,7 +101,7 @@ impl IntoResponse for AuthError {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct RegisterRequest {
+pub(crate) struct RegisterRequest {
     pub email: String,
     pub password: String,
     pub display_name: String,
@@ -101,26 +111,26 @@ pub struct RegisterRequest {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct LoginRequest {
+pub(crate) struct LoginRequest {
     pub email: String,
     pub password: String,
 }
 
 #[derive(Debug, Serialize)]
-pub struct AuthResponse {
+pub(crate) struct AuthResponse {
     pub token: String,
     pub user: UserInfo,
 }
 
 #[derive(Debug, Serialize, Clone)]
-pub struct UserInfo {
+pub(crate) struct UserInfo {
     pub id: String,
     pub email: String,
     pub display_name: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Claims {
+pub(crate) struct Claims {
     pub sub: String,
     pub name: String,
     pub iss: String,

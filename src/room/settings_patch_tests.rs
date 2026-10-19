@@ -137,13 +137,7 @@ async fn wire_settings_set_omit_and_clear_are_persisted() {
             .await
             .unwrap();
         let (initial, hash) = settings::load_room(&pool, &room_id).await.unwrap().unwrap();
-        let mut room = Room::new(
-            room_id.clone(),
-            "unused-router".into(),
-            Some(initial),
-            true,
-            hash,
-        );
+        let mut room = Room::new(room_id.clone(), Some(initial), true, hash);
         room.participants.insert(owner.id.clone(), owner.clone());
         manager
             .rooms

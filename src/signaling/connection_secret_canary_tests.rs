@@ -53,8 +53,7 @@ async fn runtime_canary_dispatch_keeps_messages_and_credentials_out_of_observati
                     .unwrap();
             }
             let message: ClientMessage = serde_json::from_value(body).unwrap();
-            let operation =
-                diagnostics.operation(diagnostic_operation(&message), diagnostics.connection_id());
+            let operation = diagnostics.operation(diagnostic_operation(&message), None);
             let result = operation
                 .scope(diagnostics::measure_result(
                     Stage::Dispatch,

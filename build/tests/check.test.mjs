@@ -36,7 +36,7 @@ if (command === 'npm') {
   } else if (args[0] === 'run') {
     if (args[1] !== env.FIXTURE_CHANNEL || args[2] !== 'cargo') process.exit(94);
     phase = 'cargo-' + args[3];
-    if (!['cargo-fmt', 'cargo-clippy', 'cargo-doc'].includes(phase)) process.exit(95);
+    if (!['cargo-fmt', 'cargo-clippy', 'cargo-run', 'cargo-doc'].includes(phase)) process.exit(95);
   } else process.exit(96);
 } else if (command === 'sh' || command === 'bash') {
   // A shell accepts only one script after -n. Passing several does not check
@@ -185,8 +185,9 @@ test('Rust quality group pins tools, native inputs and warning-denying Clippy/do
     ['which', '--toolchain', '9.88.7', 'rustc'],
     ['which', '--toolchain', '9.88.7', 'rustdoc'],
     ['run', '9.88.7', 'cargo', 'fmt', '--all', '--', '--check'],
-    ['run', '9.88.7', 'cargo', 'clippy', '--locked', '--all-targets', '--all-features', '--no-deps', '--', '-D', 'warnings'],
-    ['run', '9.88.7', 'cargo', 'doc', '--locked', '--all-features', '--no-deps', '--document-private-items'],
+    ['run', '9.88.7', 'cargo', 'clippy', '--locked', '--workspace', '--all-targets', '--no-deps', '--', '-D', 'warnings'],
+    ['run', '9.88.7', 'cargo', 'run', '--locked', '-q', '-p', 'xtask', '--', 'line-length'],
+    ['run', '9.88.7', 'cargo', 'doc', '--locked', '--workspace', '--no-deps', '--document-private-items'],
   ]);
   assert.ok(result.events.every(event => event.command === 'rustup' && event.cwd === setup.root));
   for (const event of result.events.filter(event => event.args[0] === 'run')) {
@@ -265,7 +266,7 @@ test('default quality check runs web, Rust, Python and helper groups in order', 
   const result = await setup.run();
   assert.equal(result.status, 0, result.output);
   assert.deepEqual(result.events.map(event => event.command), [
-    'npm', 'npm', 'npm', 'npm', 'rustup', 'rustup', 'rustup', 'rustup', 'rustup',
+    'npm', 'npm', 'npm', 'npm', 'rustup', 'rustup', 'rustup', 'rustup', 'rustup', 'rustup',
     'python-check', 'sh', 'sh', 'sh', ...setup.helperNames.map(() => 'bash'), 'shellcheck', 'node',
   ]);
 });

@@ -152,7 +152,7 @@ fn departure_counts_a_channel_that_closes_after_eligibility_was_checked() {
 
 #[test]
 fn departure_fanout_does_not_remove_grace_memberships_or_replace_authoritative_senders() {
-    let mut room = Room::new("room".into(), "router".into(), None, false, None);
+    let mut room = Room::new("room".into(), None, false, None);
     let (closed, mut closed_receiver) = mpsc::channel(1);
     let (live, mut live_receiver) = mpsc::channel(1);
     closed_receiver.close();
@@ -205,13 +205,7 @@ fn departure_fanout_does_not_remove_grace_memberships_or_replace_authoritative_s
 fn simultaneous_grace_departures_do_not_attempt_quadratic_closed_queue_fanout() {
     let metrics = ServerMetrics::new();
     for room_index in 0..4 {
-        let mut room = Room::new(
-            format!("room-{room_index}"),
-            "router".into(),
-            None,
-            false,
-            None,
-        );
+        let mut room = Room::new(format!("room-{room_index}"), None, false, None);
         room.metrics = metrics.clone();
         for index in 0..25 {
             let (sender, receiver) = mpsc::channel(1);
@@ -246,7 +240,7 @@ fn essential_overflow_requires_reconciliation_but_speaker_hints_remain_lossy() {
     sender
         .try_send(crate::OutboundJson::from("queued"))
         .unwrap();
-    let mut room = Room::new("room".into(), "router".into(), None, false, None);
+    let mut room = Room::new("room".into(), None, false, None);
     room.participants
         .insert("viewer".into(), participant("viewer", sender));
     room.broadcast_all(&ServerMessage::AudioLevels { levels: Vec::new() });

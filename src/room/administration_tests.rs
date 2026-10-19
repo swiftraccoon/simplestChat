@@ -173,13 +173,7 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
             chat_style: Default::default(),
             social: super::super::social::ParticipantSocial::new(0),
         };
-        let mut room = Room::new(
-            room_id.clone(),
-            "unused-administration-router".into(),
-            Some(saved),
-            true,
-            hash,
-        );
+        let mut room = Room::new(room_id.clone(), Some(saved), true, hash);
         room.participants.insert(person.id.clone(), person);
         let room = Arc::new(RwLock::new(room));
         manager

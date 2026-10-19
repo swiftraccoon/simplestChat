@@ -1,19 +1,19 @@
 #![forbid(unsafe_code)]
 
-pub mod account;
-pub mod common_passwords;
-pub mod discovery;
-pub mod invites;
-pub mod jwt;
-pub mod limiter;
-pub mod notifications;
-pub mod passkeys;
-pub mod password;
-pub mod routes;
-pub mod session;
-pub mod sessions;
-pub mod types;
+pub(crate) mod account;
+pub(crate) mod common_passwords;
+pub(crate) mod discovery;
+pub(crate) mod invites;
+pub(crate) mod jwt;
+pub(crate) mod limiter;
+pub(crate) mod notifications;
+pub(crate) mod passkeys;
+pub(crate) mod password;
+pub(crate) mod routes;
+pub(crate) mod session;
+pub(crate) mod sessions;
+pub(crate) mod types;
 pub(crate) mod updates;
-pub mod webauthn;
+pub(crate) mod webauthn;
 
 pub(crate) mod ws_tickets;

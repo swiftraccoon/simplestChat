@@ -15,7 +15,7 @@ pub struct SecretString(String);
 
 impl SecretString {
     /// The protected value. Call this only where the value is consumed.
-    pub fn expose_secret(&self) -> &str {
+    pub(crate) fn expose_secret(&self) -> &str {
         &self.0
     }
 }

@@ -44,7 +44,7 @@ def rust_evidence() -> tuple[list[JsonObject], JsonObject, JsonObject]:
     """Model local, registry and build-only source identities without runtime inference."""
     licenses: list[JsonValue] = [
         {
-            "name": "simplestChat",
+            "name": "simplestchat",
             "version": "1",
             "source": "local",
             "first_party": True,
@@ -90,7 +90,7 @@ def rust_evidence() -> tuple[list[JsonObject], JsonObject, JsonObject]:
         "compressedSha256": "b" * 64,
         "packageCount": len(graph),
     }
-    packages = [rust_package(name) for name in ("simplestChat", "serde", "mediasoup")]
+    packages = [rust_package(name) for name in ("simplestchat", "serde", "mediasoup")]
     return (
         packages,
         {"rust_licenses": licenses, "rust_dependency_metadata": dict(metadata)},
@@ -281,7 +281,7 @@ class RustEvidenceTests(unittest.TestCase):
         }
         self.assertEqual(
             expressions,
-            {"simplestChat": "NOASSERTION", "serde": "MIT OR Apache-2.0", "mediasoup": "ISC"},
+            {"simplestchat": "NOASSERTION", "serde": "MIT OR Apache-2.0", "mediasoup": "ISC"},
         )
         self.assertNotIn("build-helper", expressions)
         verdict = policy.license_verdict(
@@ -307,7 +307,7 @@ class RustEvidenceTests(unittest.TestCase):
         ]
         elf: JsonObject = {"auditable": metadata}
         policy.rust_license_join(packages, native, elf)
-        app = next(item for item in packages if item["name"] == "simplestChat")
+        app = next(item for item in packages if item["name"] == "simplestchat")
         self.assertEqual(
             object_value(array_value(app["licenses"])[0])["spdxExpression"], "NOASSERTION"
         )

@@ -16,19 +16,19 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use tracing::{info, warn};
 
-pub const DEFAULT_THROTTLED_FRACTION: f64 = 0.5;
-pub const DEFAULT_PRESSURE_AVG10: f64 = 50.0;
+pub(crate) const DEFAULT_THROTTLED_FRACTION: f64 = 0.5;
+pub(crate) const DEFAULT_PRESSURE_AVG10: f64 = 50.0;
 /// Share of one core a worker thread may use over the window before it is
 /// saturated. mediasoup's loop is single-threaded, so beyond this every
 /// packet of every room on the worker queues.
 /// At 0.85 a saturated ramp on the two-worker production shape killed the
 /// process before either guard fired; at 0.7 both workers refused joins at
 /// about 730 viewers with the room intact and memory at a third of its limit.
-pub const DEFAULT_WORKER_UTILIZATION: f64 = 0.7;
+pub(crate) const DEFAULT_WORKER_UTILIZATION: f64 = 0.7;
 /// Share of the cgroup memory limit in use at which the process counts as
 /// saturated. An over-admitted room queues outbound media in the process
 /// until the limit kills it, so joins stop well before that.
-pub const DEFAULT_MEMORY_FRACTION: f64 = 0.85;
+pub(crate) const DEFAULT_MEMORY_FRACTION: f64 = 0.85;
 /// Memory saturation clears once usage falls below this share of the threshold.
 const MEMORY_CLEAR_FACTOR: f64 = 0.9;
 /// A saturated worker clears once its utilization falls below this share of
@@ -38,7 +38,7 @@ const WINDOW: Duration = Duration::from_secs(10);
 const INTERVAL: Duration = Duration::from_secs(2);
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct SaturationConfig {
+pub(crate) struct SaturationConfig {
     /// Fraction of enforcement periods throttled over the window at which the
     /// process counts as saturated.
     pub throttled_fraction: f64,
@@ -81,7 +81,7 @@ impl Default for SaturationConfig {
 
 impl SaturationConfig {
     /// `None` when `CPU_SATURATION_DISABLED=true`.
-    pub fn from_env() -> anyhow::Result<Option<Self>> {
+    pub(crate) fn from_env() -> anyhow::Result<Option<Self>> {
         Self::from_values(
             std::env::var("CPU_SATURATION_DISABLED").ok().as_deref(),
             std::env::var("CPU_SATURATION_THROTTLED_FRACTION")
@@ -158,7 +158,7 @@ impl SaturationConfig {
 
 /// Bytes from a cgroup v2 memory file; `max` (no limit) and unreadable
 /// values are `None`.
-pub fn parse_memory_bytes(text: &str) -> Option<u64> {
+pub(crate) fn parse_memory_bytes(text: &str) -> Option<u64> {
     let text = text.trim();
     if text == "max" {
         return None;
@@ -167,7 +167,7 @@ pub fn parse_memory_bytes(text: &str) -> Option<u64> {
 }
 
 /// Memory in use as a share of the limit; `None` without a finite limit.
-pub fn memory_fraction(current: Option<u64>, max: Option<u64>) -> Option<f64> {
+pub(crate) fn memory_fraction(current: Option<u64>, max: Option<u64>) -> Option<f64> {
     match (current, max) {
         (Some(current), Some(max)) if max > 0 => Some(current as f64 / max as f64),
         _ => None,
@@ -177,7 +177,11 @@ pub fn memory_fraction(current: Option<u64>, max: Option<u64>) -> Option<f64> {
 /// Memory saturation with hysteresis: entered at the threshold, left once
 /// usage falls below ninety percent of it. A lost reading clears the guard
 /// rather than holding admission closed on stale data.
-pub fn evaluate_memory(previously_saturated: bool, fraction: Option<f64>, threshold: f64) -> bool {
+pub(crate) fn evaluate_memory(
+    previously_saturated: bool,
+    fraction: Option<f64>,
+    threshold: f64,
+) -> bool {
     let Some(fraction) = fraction else {
         return false;
     };
@@ -190,13 +194,13 @@ pub fn evaluate_memory(previously_saturated: bool, fraction: Option<f64>, thresh
 
 /// The cgroup v2 `cpu.stat` counters this monitor uses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct CpuStat {
+pub(crate) struct CpuStat {
     pub nr_periods: u64,
     pub nr_throttled: u64,
 }
 
 /// `None` when the file lacks the throttling counters (no quota, cgroup v1).
-pub fn parse_cpu_stat(text: &str) -> Option<CpuStat> {
+pub(crate) fn parse_cpu_stat(text: &str) -> Option<CpuStat> {
     let mut nr_periods = None;
     let mut nr_throttled = None;
     for line in text.lines() {
@@ -217,7 +221,7 @@ pub fn parse_cpu_stat(text: &str) -> Option<CpuStat> {
 }
 
 /// The `some avg10` percentage of a cgroup v2 `cpu.pressure` file.
-pub fn parse_cpu_pressure_some_avg10(text: &str) -> Option<f64> {
+pub(crate) fn parse_cpu_pressure_some_avg10(text: &str) -> Option<f64> {
     let line = text.lines().find(|line| line.starts_with("some "))?;
     line.split_whitespace()
         .find_map(|field| field.strip_prefix("avg10="))
@@ -227,7 +231,7 @@ pub fn parse_cpu_pressure_some_avg10(text: &str) -> Option<f64> {
 
 /// Throttled share of the enforcement periods between the oldest and newest
 /// reading; `None` until periods have elapsed (no quota, or nothing yet).
-pub fn throttled_fraction(readings: &VecDeque<CpuStat>) -> Option<f64> {
+pub(crate) fn throttled_fraction(readings: &VecDeque<CpuStat>) -> Option<f64> {
     let (oldest, newest) = (readings.front()?, readings.back()?);
     let periods = newest.nr_periods.checked_sub(oldest.nr_periods)?;
     let throttled = newest.nr_throttled.checked_sub(oldest.nr_throttled)?;
@@ -237,7 +241,7 @@ pub fn throttled_fraction(readings: &VecDeque<CpuStat>) -> Option<f64> {
 /// Saturation with hysteresis: entered at the thresholds, left only once both
 /// signals fall below half of them, so a load hovering at the line does not
 /// flap admission on and off.
-pub fn evaluate(
+pub(crate) fn evaluate(
     previously_saturated: bool,
     throttled: Option<f64>,
     pressure: Option<f64>,
@@ -254,7 +258,7 @@ pub fn evaluate(
 
 /// Nanoseconds a thread has run on a CPU: the first field of
 /// `/proc/self/task/<tid>/schedstat`.
-pub fn parse_schedstat(text: &str) -> Option<u64> {
+pub(crate) fn parse_schedstat(text: &str) -> Option<u64> {
     text.split_whitespace().next()?.parse().ok()
 }
 
@@ -262,7 +266,7 @@ pub fn parse_schedstat(text: &str) -> Option<u64> {
 /// nanoseconds over wall nanoseconds between the oldest and the newest sample.
 /// A counter that went backwards contributes nothing rather than a negative
 /// share.
-pub fn worker_utilization(readings: &VecDeque<(Duration, u64)>) -> Option<f64> {
+pub(crate) fn worker_utilization(readings: &VecDeque<(Duration, u64)>) -> Option<f64> {
     let (first_at, first_cpu) = readings.front()?;
     let (last_at, last_cpu) = readings.back()?;
     let wall = last_at.checked_sub(*first_at)?.as_nanos();
@@ -276,7 +280,7 @@ pub fn worker_utilization(readings: &VecDeque<(Duration, u64)>) -> Option<f64> {
 /// Worker saturation with hysteresis: entered at the threshold, left once the
 /// utilization falls below 80 % of it. A worker without a reading is never
 /// saturated.
-pub fn evaluate_worker(
+pub(crate) fn evaluate_worker(
     previously_saturated: bool,
     utilization: Option<f64>,
     threshold: f64,
@@ -291,7 +295,7 @@ pub fn evaluate_worker(
 /// One media worker as the monitor sees it: its position in the pool (the
 /// metric label) and its Linux thread ID, when the pool could learn it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct WorkerThreadInfo {
+pub(crate) struct WorkerThreadInfo {
     pub worker_id: WorkerId,
     pub index: usize,
     pub tid: Option<u32>,
@@ -299,7 +303,7 @@ pub struct WorkerThreadInfo {
 
 /// The media worker threads the monitor samples and the per-worker saturation
 /// flags it maintains for placement and admission.
-pub trait WorkerThreads: Send + Sync {
+pub(crate) trait WorkerThreads: Send + Sync {
     fn worker_threads(&self) -> Vec<WorkerThreadInfo>;
     fn set_worker_saturated(&self, worker_id: WorkerId, saturated: bool);
 }
@@ -312,62 +316,43 @@ struct Inner {
     /// Every worker thread with a reading is saturated: no room can be placed
     /// anywhere useful.
     workers_saturated: AtomicBool,
-    enabled: bool,
 }
 
 /// Shared handle; cloning is cheap and every clone observes the same state.
 #[derive(Clone)]
-pub struct SaturationMonitor {
+pub(crate) struct SaturationMonitor {
     inner: Arc<Inner>,
 }
 
 impl SaturationMonitor {
-    /// A monitor that never reports saturation (no cgroup, or disabled).
-    pub fn disabled() -> Self {
-        Self {
-            inner: Arc::new(Inner {
-                cgroup_saturated: AtomicBool::new(false),
-                memory_saturated: AtomicBool::new(false),
-                workers_saturated: AtomicBool::new(false),
-                enabled: false,
-            }),
-        }
-    }
-
     /// A monitor pinned to one state, for tests of the paths that consult it.
     #[cfg(test)]
-    pub fn forced(saturated: bool) -> Self {
+    pub(crate) fn forced(saturated: bool) -> Self {
         Self {
             inner: Arc::new(Inner {
                 cgroup_saturated: AtomicBool::new(saturated),
                 memory_saturated: AtomicBool::new(false),
                 workers_saturated: AtomicBool::new(false),
-                enabled: true,
             }),
         }
     }
 
     /// A monitor pinned to one memory state, for tests.
     #[cfg(test)]
-    pub fn forced_memory(saturated: bool) -> Self {
+    pub(crate) fn forced_memory(saturated: bool) -> Self {
         Self {
             inner: Arc::new(Inner {
                 cgroup_saturated: AtomicBool::new(false),
                 memory_saturated: AtomicBool::new(saturated),
                 workers_saturated: AtomicBool::new(false),
-                enabled: true,
             }),
         }
-    }
-
-    pub fn enabled(&self) -> bool {
-        self.inner.enabled
     }
 
     /// The process as a whole has no capacity: the cgroup is CPU saturated,
     /// memory has reached its guard, or every media worker is saturated. A
     /// single saturated worker is reported per room through the worker pool.
-    pub fn saturated(&self) -> bool {
+    pub(crate) fn saturated(&self) -> bool {
         self.inner.cgroup_saturated.load(Ordering::Relaxed)
             || self.inner.memory_saturated.load(Ordering::Relaxed)
             || self.inner.workers_saturated.load(Ordering::Relaxed)
@@ -376,7 +361,7 @@ impl SaturationMonitor {
     /// Starts sampling the cgroup files and, when a worker pool is given, each
     /// worker thread's scheduler time on the runtime; the task ends with the
     /// last handle. Each tick publishes a snapshot to the metrics.
-    pub fn spawn(
+    pub(crate) fn spawn(
         config: SaturationConfig,
         metrics: ServerMetrics,
         workers: Option<Arc<dyn WorkerThreads>>,
@@ -386,7 +371,6 @@ impl SaturationMonitor {
                 cgroup_saturated: AtomicBool::new(false),
                 memory_saturated: AtomicBool::new(false),
                 workers_saturated: AtomicBool::new(false),
-                enabled: true,
             }),
         };
         let weak = Arc::downgrade(&monitor.inner);
@@ -712,14 +696,11 @@ mod tests {
     fn a_memory_saturated_monitor_refuses_like_a_cpu_saturated_one() {
         let monitor = SaturationMonitor::forced_memory(true);
         assert!(monitor.saturated());
-        assert!(monitor.enabled());
         assert!(!SaturationMonitor::forced_memory(false).saturated());
     }
 
     #[test]
-    fn forced_and_disabled_monitors_report_their_state() {
-        assert!(!SaturationMonitor::disabled().saturated());
-        assert!(!SaturationMonitor::disabled().enabled());
+    fn forced_monitors_report_their_state() {
         assert!(SaturationMonitor::forced(true).saturated());
         assert!(!SaturationMonitor::forced(false).saturated());
     }

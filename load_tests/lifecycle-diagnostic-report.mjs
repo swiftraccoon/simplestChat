@@ -145,7 +145,7 @@ export async function readLifecycleReport(logPath, timeline, { expectedParticipa
     // eslint-disable-next-line no-control-regex
     try { line = new TextDecoder('utf-8', { fatal: true }).decode(buffer).replace(/\x1b\[[0-9;]*m/g, ''); }
     catch { issue('invalid_log_encoding'); return true; }
-    const lifecycle = line.includes('simplestChat::lifecycle');
+    const lifecycle = line.includes('simplestchat::lifecycle');
     const clamp = line.includes('start bitrate smaller than min bitrate') || line.includes('ClampConstraints()');
     if (!lifecycle && !clamp) return true;
     // Legacy INFO lines contain namespace separators; only our marker fields
@@ -155,7 +155,7 @@ export async function readLifecycleReport(logPath, timeline, { expectedParticipa
     if (report.relevantRecords >= LIFECYCLE_LIMITS.records) { issue('record_limit'); return false; }
     report.relevantRecords++;
     const match = lifecycle
-      ? /^(\S+) +DEBUG +(?:.* )?simplestChat::lifecycle: lifecycle +(.*)$/.exec(line)
+      ? /^(\S+) +DEBUG +(?:.* )?simplestchat::lifecycle: lifecycle +(.*)$/.exec(line)
       : /^(\S+) +ERROR +(?:.* )?mediasoup::worker: (?:\[id:([0-9a-f-]+)\] )?webrtc::GoogCcNetworkController::ClampConstraints\(\) \| start bitrate smaller than min bitrate \[starting_rate_:30000, min_data_rate_:100000\]$/.exec(line);
     const time = instant(match?.[1]);
     const fields = lifecycle && match ? markerFields(match[2]) : null;

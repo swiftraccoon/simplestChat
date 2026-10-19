@@ -85,7 +85,7 @@ class Fixture:
         self.registry: Path = self.cargo / "registry/src/index/aws-lc-sys-0.45.0"
         self.embedded: list[JsonValue] = [
             {
-                "name": "simplestChat",
+                "name": "simplestchat",
                 "version": "0.1.0",
                 "source": "local",
                 "root": True,
@@ -118,7 +118,7 @@ class Fixture:
         _ = put(
             self.root,
             "Cargo.toml",
-            b'[package]\nname="simplestChat"\nversion="0.1.0"\n'
+            b'[package]\nname="simplestchat"\nversion="0.1.0"\n'
             + b'rust-version="1.99.0"\npublish=false\n',
         )
         aws_files = {
@@ -145,7 +145,7 @@ class Fixture:
                 + '[[package]]\nname="openssl-sys"\nversion="0.9.117"\n'
                 + f'source="{native.SOURCE_REGISTRY}"\nchecksum="{vendor.sha256(ssl)}"\n'
                 + '[[package]]\nname="mediasoup-sys"\nversion="0.17.0"\n'
-                + '[[package]]\nname="simplestChat"\nversion="0.1.0"\n'
+                + '[[package]]\nname="simplestchat"\nversion="0.1.0"\n'
             ).encode(),
         )
         component: JsonObject = {
@@ -335,7 +335,7 @@ class Fixture:
         """Record only declared build-script output directories, not a target-directory scan."""
         events: list[JsonValue] = [
             artifact(
-                "path+file:///app#simplestChat@0.1.0", self.root / "Cargo.toml", binary=self.binary
+                "path+file:///app#simplestchat@0.1.0", self.root / "Cargo.toml", binary=self.binary
             )
         ]
         providers = object_value(self.native_manifest["native_links"])
@@ -524,10 +524,10 @@ class NativeTests(unittest.TestCase):
             for item in array_value(report["rust_licenses"])
         }
         self.assertEqual(object_value(licenses["openssl-sys"]["license"])["expression"], "MIT")
-        self.assertTrue(licenses["simplestChat"]["first_party"])
-        self.assertIs(licenses["simplestChat"]["cargo_publish"], expr2=False)
+        self.assertTrue(licenses["simplestchat"]["first_party"])
+        self.assertIs(licenses["simplestchat"]["cargo_publish"], expr2=False)
         self.assertNotIn("cargo_publish", licenses["openssl-sys"])
-        self.assertIsNone(object_value(licenses["simplestChat"]["license"])["expression"])
+        self.assertIsNone(object_value(licenses["simplestchat"]["license"])["expression"])
 
     def test_first_party_receipt_requires_explicit_unpublished_cargo_policy(self) -> None:
         """The receipt cannot invent a nonpublication policy from an absent license."""

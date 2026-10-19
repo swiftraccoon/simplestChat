@@ -944,6 +944,7 @@ class Harness:
             },
         )
         before = self.snapshot()
+        attempts_before = set((ROOT / "results").glob("release.*"))
         command = self.commands.run(
             [
                 str(self.browser[0]),
@@ -955,6 +956,13 @@ class Harness:
             timeout=330,
             success=False,
         )
+        # The releases the browser check drove are real helper attempts. Their
+        # sanitized outcomes name the failing release phase, which the fixed
+        # browser stage alone cannot, without copying private command output.
+        self.report["browserAssetReleases"] = [
+            self.sanitized_outcome(attempt)
+            for attempt in sorted(set((ROOT / "results").glob("release.*")) - attempts_before)
+        ]
         if command.code != 0:
             self.report["browserAssetFailureStage"] = browser_failure_stage(command.error)
             message = "Browser rollover command failed; inspect fixed stage and private evidence"
@@ -1088,6 +1096,27 @@ class Harness:
         finally:
             self.commands.last_failure = original_failure
 
+    @staticmethod
+    def sanitized_outcome(attempt: Path) -> JsonObject:
+        """Copy the helper's fixed identity and phase fields, never its private evidence."""
+        path = attempt / "outcome.json"
+        if not path.is_file():
+            return {"attempt": attempt.name, "outcome": "missing"}
+        outcome = object_value(decode_json(path.read_bytes()))
+        return {
+            key: outcome[key]
+            for key in (
+                "action",
+                "revision",
+                "phase",
+                "passed",
+                "failure",
+                "rollbackAttempted",
+                "rollbackPassed",
+            )
+            if key in outcome
+        }
+
     def invoke_release(
         self, action: str, candidate: Mapping[str, str], *, failure: bool = False
     ) -> tuple[Path, JsonObject]:
@@ -1102,19 +1131,7 @@ class Harness:
         require(len(attempts) == 1, "Release must retain exactly one new attempt")
         attempt = attempts.pop()
         outcome = object_value(decode_json((attempt / "outcome.json").read_bytes()))
-        self.report["lastRelease"] = {
-            key: outcome[key]
-            for key in (
-                "action",
-                "revision",
-                "phase",
-                "passed",
-                "failure",
-                "rollbackAttempted",
-                "rollbackPassed",
-            )
-            if key in outcome
-        }
+        self.report["lastRelease"] = self.sanitized_outcome(attempt)
         if command.code != 0:
             self.validator_startup_diagnostic(attempt, candidate)
         require(

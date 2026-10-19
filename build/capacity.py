@@ -1651,7 +1651,7 @@ def server_command(context: Context, name: str, token: str) -> list[str]:
         "ALLOW_AD_HOC_ROOMS": "true",
         "ALLOWED_ORIGINS": f"http://127.0.0.1:{SERVER_PORT}",
         "METRICS_TOKEN": token,
-        "RUST_LOG": "simplestChat=warn,mediasoup=warn",
+        "RUST_LOG": "simplestchat=warn,mediasoup=warn",
     }
     environment.update(context.server_env)
     return [

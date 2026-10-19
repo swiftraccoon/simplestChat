@@ -60,7 +60,7 @@ def image() -> JsonObject:
         "WorkingDir": "/app",
         "Cmd": ["/app/simplestChat"],
         "Entrypoint": None,
-        "Env": ["PATH=/usr/bin", "RUST_LOG=simplestChat=info"],
+        "Env": ["PATH=/usr/bin", "RUST_LOG=simplestchat=info"],
     }
 
 

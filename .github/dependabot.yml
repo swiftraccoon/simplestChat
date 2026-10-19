@@ -1,11 +1,14 @@
-# Weekly dependency update proposals. Every proposal still passes the full CI
-# graph, the dependency budget and the exact duplicate review in deny.toml.
+# Weekly dependency update proposals, each adopting a release only after it has
+# been public for a week. Every proposal still passes the full CI graph, the
+# dependency budget and the exact duplicate review in deny.toml.
 version: 2
 updates:
   - package-ecosystem: cargo
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     groups:
       cargo-minor-and-patch:
@@ -14,6 +17,8 @@ updates:
     directory: /web
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     groups:
       web-minor-and-patch:
@@ -22,29 +27,41 @@ updates:
     directory: /web/e2e
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 3
   - package-ecosystem: pip
     directory: /ops/ansible
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 3
   - package-ecosystem: pip
     directory: /security
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 3
   - package-ecosystem: pip
     directory: /build
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 3
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
   - package-ecosystem: docker
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 3

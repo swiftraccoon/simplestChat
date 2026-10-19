@@ -24,8 +24,8 @@ use std::sync::{Arc, LazyLock};
 use tokio::sync::{Semaphore, mpsc};
 use uuid::Uuid;
 
-pub const MAX_FILE_BYTES: usize = 5 * 1024 * 1024;
-pub const MAX_MESSAGE_FILES: usize = 4;
+pub(crate) const MAX_FILE_BYTES: usize = 5 * 1024 * 1024;
+pub(crate) const MAX_MESSAGE_FILES: usize = 4;
 const ACCOUNT_BYTES: i64 = 64 * 1024 * 1024;
 const TOTAL_BYTES: i64 = 1024 * 1024 * 1024;
 const ACCOUNT_FILES: i64 = 1000;
@@ -144,7 +144,7 @@ async fn store_upload(
     Ok(metadata)
 }
 
-pub async fn upload(
+pub(crate) async fn upload(
     State(server): State<SignalingServer>,
     request: Request,
 ) -> Result<(HeaderMap, Json<ChatAttachment>), AuthError> {
@@ -175,7 +175,7 @@ pub async fn upload(
     Ok((routes::no_store_headers(), Json(metadata)))
 }
 
-pub async fn delete_pending(
+pub(crate) async fn delete_pending(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
     Path(id): Path<Uuid>,
@@ -266,7 +266,7 @@ struct Grant {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AttachmentAccess {
+pub(crate) struct AttachmentAccess {
     pub token: String,
     pub expires_at: DateTime<Utc>,
 }
@@ -284,7 +284,7 @@ async fn location(pool: &PgPool, id: Uuid) -> Result<AttachmentLocation, AuthErr
         .bind(id).fetch_optional(pool).await.map_err(routes::database_error)?.ok_or_else(unavailable)
 }
 
-pub async fn grant_access(
+pub(crate) async fn grant_access(
     manager: &crate::room::RoomManager,
     pool: &PgPool,
     room_id: &str,
@@ -411,7 +411,7 @@ async fn allowed(server: &SignalingServer, headers: &HeaderMap, id: Uuid) -> Res
     Ok(())
 }
 
-pub async fn download(
+pub(crate) async fn download(
     State(server): State<SignalingServer>,
     headers: HeaderMap,
     Path(id): Path<Uuid>,

@@ -3253,12 +3253,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3a9fe34e3e7a50316060351f37187a3f546bce95496156754b601a5fa71b76e"
 
 [[package]]
-name = "simplestChat"
+name = "simplestchat"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "argon2",
- "async-trait",
  "aws-lc-rs",
  "axum",
  "base64 0.23.1",
@@ -3277,7 +3276,6 @@ dependencies = [
  "num_cpus",
  "rand 0.10.3",
  "reqwest",
- "rtc",
  "serde",
  "serde_json",
  "sha1 0.11.0",
@@ -3296,6 +3294,34 @@ dependencies = [
  "uuid",
  "webauthn-rs",
  "webauthn-rs-proto",
+]
+
+[[package]]
+name = "simplestchat-load-test"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "base64 0.23.1",
+ "bytes",
+ "chrono",
+ "futures-util",
+ "hex",
+ "mediasoup",
+ "mediasoup-types",
+ "rand 0.10.3",
+ "reqwest",
+ "rtc",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "simplestchat",
+ "tokio",
+ "tokio-tungstenite 0.30.0",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+ "uuid",
  "webrtc",
 ]
 
@@ -4575,6 +4601,13 @@ dependencies = [
  "rusticata-macros",
  "thiserror 2.0.21",
  "time",
+]
+
+[[package]]
+name = "xtask"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
 ]
 
 [[package]]

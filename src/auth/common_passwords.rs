@@ -174,7 +174,7 @@ const COMMON: &[&str] = &[
 /// Refuse a known complete password or one common stem padded at either end
 /// with a bounded number of ASCII digits/punctuation. This is selection only:
 /// the actual password remains NFC-normalized, not case-folded or stripped.
-pub fn is_common(password: &str) -> bool {
+pub(crate) fn is_common(password: &str) -> bool {
     let keys = KEYS.get_or_init(|| CORPUS.lines().chain(COMMON.iter().copied()).collect());
     let comparison = crate::labels::comparison_key(password);
     if keys.contains(comparison.as_str()) {

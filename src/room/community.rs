@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 #[derive(Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct RoomIdentityUpdate {
+pub(crate) struct RoomIdentityUpdate {
     pub display_name: String,
     pub topic: Option<String>,
     pub description: String,
@@ -30,7 +30,7 @@ fn deserialize_image_change<'de, D: serde::Deserializer<'de>>(
 }
 
 impl RoomIdentityUpdate {
-    pub fn validate(&self) -> Result<(), AuthError> {
+    pub(crate) fn validate(&self) -> Result<(), AuthError> {
         if self.display_name.trim().is_empty()
             || self.display_name.len() > settings::MAX_DISPLAY_NAME_LEN
             || !crate::labels::is_plain(&self.display_name)
@@ -63,14 +63,14 @@ impl RoomIdentityUpdate {
 impl RoomManager {
     /// Broadcaster count for a room, or `None` when it is not live or its
     /// state lock is busy; see `participant_count_for_room`.
-    pub fn broadcaster_count_for_room(&self, room_id: &str) -> Option<usize> {
+    pub(crate) fn broadcaster_count_for_room(&self, room_id: &str) -> Option<usize> {
         let rooms = self.rooms.read().unwrap_or_else(|error| error.into_inner());
         rooms
             .get(room_id)
             .and_then(Self::readable_broadcaster_count)
     }
 
-    pub async fn update_room_identity(
+    pub(crate) async fn update_room_identity(
         &self,
         room_id: &str,
         owner_id: Uuid,

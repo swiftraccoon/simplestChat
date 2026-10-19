@@ -45,7 +45,7 @@ export function serverEnvironment(ports, executablePath = process.env.PATH) {
     MEDIA_WORKERS: '1', WEBRTC_SERVER_PORT_BASE: String(ports.media),
     ALLOWED_ORIGINS: `http://127.0.0.1:${ports.http}`,
     ALLOW_AD_HOC_ROOMS: 'true', REGISTRATION_ENABLED: 'false', RUN_MIGRATIONS: 'false',
-    RUST_LOG: 'simplestChat=info,mediasoup=warn',
+    RUST_LOG: 'simplestchat=info,mediasoup=warn',
   };
 }
 

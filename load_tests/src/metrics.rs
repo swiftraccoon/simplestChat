@@ -3,7 +3,8 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Instant;
 
-include!("measurement.rs");
+mod measurement;
+pub use measurement::*;
 
 /// Metrics collected during a test client session
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -992,7 +993,10 @@ mod measurement_tests {
         metrics.record_keyframe(false);
         metrics.record_keyframe(true);
         let report = metrics.generate_report();
-        assert_eq!((report.keyframes_generated, report.keyframes_requested), (2, 1));
+        assert_eq!(
+            (report.keyframes_generated, report.keyframes_requested),
+            (2, 1)
+        );
     }
 
     #[test]

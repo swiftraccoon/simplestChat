@@ -139,6 +139,15 @@ fingerprint is
 the exact scope is `load_tests/bin/load_test.rs:57:57:5:47`. The review expires
 on 2026-11-29. It adds no query exclusion and authorizes no remote dismissal.
 
+On 2026-10-19 the workspace change (`61578db87ad7d0e1be8046008ac6a4582d78abaa`)
+made the helper an ordinary module, `load_tests/src/account_session.rs`; the
+parent `load_tests/bin/load_test.rs` and its `include!` closure no longer exist.
+The record now binds that module file's complete hash and the sink's own range
+`load_tests/src/account_session.rs:274:274:19:62` (the request-URL `format!`), with fingerprint
+`codeql:0a072f64dd733d355d8e57a20da2d0f1aa4cd6513e9fe39544934a3b11373142`.
+Rationale, owner, scope semantics and the 2026-11-29 expiry are unchanged, and the
+include-closure identity stays in force for any future literal include.
+
 ### October 18 account-conversation source refresh
 
 CodeQL 2.27.1 run

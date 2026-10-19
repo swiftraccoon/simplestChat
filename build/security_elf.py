@@ -340,7 +340,7 @@ def dependency_metadata(section: bytes | None) -> dict[str, object]:
         require(type(package.get("root", False)) is bool, "auditable_root_type")
         if package.get("root") is True:
             require(
-                package["name"] == "simplestChat" and package["source"] == "local", "auditable_root"
+                package["name"] == "simplestchat" and package["source"] == "local", "auditable_root"
             )
             roots.append(index)
         dependencies_value = package.get("dependencies", [])

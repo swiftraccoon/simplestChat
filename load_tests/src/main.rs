@@ -17,52 +17,29 @@ use std::time::{Duration, Instant};
 use tokio::time::sleep;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
-use simplestChat::signaling::protocol::{ClientMessage, ServerMessage};
+use simplestchat::signaling::protocol::{ClientMessage, ServerMessage};
 
-// Include modules directly
-mod media_generator {
-    include!("../clients/media_generator.rs");
-}
+mod media_generator;
 
-mod metrics {
-    include!("../clients/metrics.rs");
-}
+mod metrics;
 
-mod webrtc_client {
-    include!("../clients/webrtc_client.rs");
-}
+mod webrtc_client;
 
-mod subscriptions {
-    include!("../clients/subscriptions.rs");
-}
+mod subscriptions;
 
-mod subscription_plan {
-    include!("../clients/subscription_plan.rs");
-}
+mod subscription_plan;
 
-mod receiver_stall {
-    include!("../clients/receiver_stall.rs");
-}
+mod receiver_stall;
 
-mod datagram_counter {
-    include!("../clients/datagram_counter.rs");
-}
-mod browser_profile {
-    include!("../clients/browser_profile.rs");
-}
-mod chat_load {
-    include!("../clients/chat_load.rs");
-}
-mod account_session {
-    include!("../clients/account_session.rs");
-}
+mod account_session;
+mod browser_profile;
+mod chat_load;
+mod datagram_counter;
 
 type AccountReports = Arc<std::sync::Mutex<HashMap<String, account_session::AccountReport>>>;
 
 #[cfg(test)]
-mod keyframe_tests {
-    include!("../clients/keyframe_tests.rs");
-}
+mod keyframe_tests;
 
 use media_generator::{MediaConfig, MediaGenerator};
 use metrics::{AttemptPlan, ClientMetrics, MeasurementWindow, MetricsCollector, TestSummary};
@@ -4014,7 +3991,7 @@ fn observe_chat(
 #[cfg(test)]
 mod chat_and_continuous_audio_tests {
     use super::*;
-    use simplestChat::signaling::protocol::{ChatEntry, ChatStyle};
+    use simplestchat::signaling::protocol::{ChatEntry, ChatStyle};
 
     fn audio_config() -> TestConfig {
         let mut browser = BrowserOptions::default();
@@ -5566,9 +5543,9 @@ mod native_connect_order_tests {
     use super::*;
     use futures_util::FutureExt;
     use mediasoup_types::data_structures::{DtlsFingerprint, DtlsRole, DtlsState, IceState};
-    use simplestChat::media::config::{RouterConfig, WebRtcTransportConfig};
-    use simplestChat::media::transport_manager::TransportManager;
-    use simplestChat::media::types::MediaError;
+    use simplestchat::media::config::{RouterConfig, WebRtcTransportConfig};
+    use simplestchat::media::transport_manager::TransportManager;
+    use simplestchat::media::types::MediaError;
     use std::net::{IpAddr, Ipv4Addr};
     use std::panic::AssertUnwindSafe;
 

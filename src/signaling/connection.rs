@@ -24,7 +24,7 @@ use uuid::Uuid;
 
 #[path = "connection_authentication.rs"]
 mod authentication;
-pub use authentication::RenewalAuthenticator;
+pub(crate) use authentication::RenewalAuthenticator;
 use authentication::{RenewalBudget, RenewalOutcome, renew_authentication, unix_seconds};
 #[path = "connection_credentials.rs"]
 mod credentials;
@@ -410,7 +410,7 @@ type GraceEntries = HashMap<(String, String, String), GraceEntry>;
 
 /// Shared map of participants in grace period (disconnected but not yet removed)
 #[derive(Clone)]
-pub struct GracePeriodMap {
+pub(crate) struct GracePeriodMap {
     inner: Arc<StdRwLock<GraceEntries>>,
     max_entries: usize,
     closed: Arc<AtomicBool>,
@@ -423,11 +423,11 @@ impl Default for GracePeriodMap {
 }
 
 impl GracePeriodMap {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self::with_capacity(10_000)
     }
 
-    pub fn with_capacity(max_entries: usize) -> Self {
+    pub(crate) fn with_capacity(max_entries: usize) -> Self {
         Self {
             inner: Arc::new(StdRwLock::new(HashMap::new())),
             max_entries: max_entries.max(1),
@@ -888,7 +888,7 @@ fn retain_credentials(
     clippy::too_many_arguments,
     reason = "connection boundary keeps owned session resources explicit"
 )]
-pub async fn handle_connection(
+pub(crate) async fn handle_connection(
     socket: WebSocket,
     room_manager: Arc<RoomManager>,
     turn_config: Option<Arc<TurnConfig>>,
@@ -2013,11 +2013,11 @@ async fn handle_connection_with_timing(
                         "Grace period expired for participant {} in room {}",
                         pid, rid
                     );
-                    if tracing::enabled!(target: "simplestChat::lifecycle", tracing::Level::DEBUG)
+                    if tracing::enabled!(target: "simplestchat::lifecycle", tracing::Level::DEBUG)
                         && let Ok(lifecycle_id) = Uuid::parse_str(&pid)
                     {
                         debug!(
-                            target: "simplestChat::lifecycle",
+                            target: "simplestchat::lifecycle",
                             event = "grace_cleanup_started",
                             participant_id = %lifecycle_id,
                             "lifecycle"
@@ -2048,11 +2048,11 @@ async fn handle_connection_with_timing(
                 activate_timer,
             );
             if retained_for_reconnect
-                && tracing::enabled!(target: "simplestChat::lifecycle", tracing::Level::DEBUG)
+                && tracing::enabled!(target: "simplestchat::lifecycle", tracing::Level::DEBUG)
                 && let Ok(lifecycle_id) = Uuid::parse_str(&participant_id)
             {
                 debug!(
-                    target: "simplestChat::lifecycle",
+                    target: "simplestchat::lifecycle",
                     event = "grace_started",
                     participant_id = %lifecycle_id,
                     "lifecycle"
@@ -2506,7 +2506,7 @@ async fn handle_client_message(
 
         ClientMessage::LeaveRoom => {
             if let Some(room_id) = current_room_id.take() {
-                let lifecycle_id = if tracing::enabled!(target: "simplestChat::lifecycle", tracing::Level::DEBUG)
+                let lifecycle_id = if tracing::enabled!(target: "simplestchat::lifecycle", tracing::Level::DEBUG)
                 {
                     Uuid::parse_str(participant_id).ok()
                 } else {
@@ -2514,7 +2514,7 @@ async fn handle_client_message(
                 };
                 if let Some(lifecycle_id) = lifecycle_id {
                     debug!(
-                        target: "simplestChat::lifecycle",
+                        target: "simplestchat::lifecycle",
                         event = "explicit_leave_started",
                         participant_id = %lifecycle_id,
                         "lifecycle"
@@ -2528,7 +2528,7 @@ async fn handle_client_message(
                 // Media cleanup has separate markers for actual handle drops.
                 if let Some(lifecycle_id) = lifecycle_id {
                     debug!(
-                        target: "simplestChat::lifecycle",
+                        target: "simplestchat::lifecycle",
                         event = "explicit_leave_finished",
                         participant_id = %lifecycle_id,
                         "lifecycle"
