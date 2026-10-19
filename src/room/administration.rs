@@ -2,6 +2,7 @@
 //!
 //! Creation, runtime control and database authorization have one order. An
 //! admitted mutation owns its commit and publication even when HTTP disconnects.
+use super::settings::SettingsPatch;
 use super::{IdentityUpdateGuard, Room, RoomManager, api, control, moderation, roles, settings};
 use crate::auth::{
     account, sessions,
@@ -25,36 +26,6 @@ use uuid::Uuid;
 
 const PAGE_SIZE: usize = 100;
 const MAX_OFFSET: u32 = 10_000;
-
-#[derive(Clone, Default, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub(crate) struct SettingsPatch {
-    pub moderated: Option<bool>,
-    pub lobby_enabled: Option<bool>,
-    pub guests_allowed: Option<bool>,
-    pub guests_can_broadcast: Option<bool>,
-    #[serde(default, deserialize_with = "nullable")]
-    pub max_broadcasters: Option<Option<i32>>,
-    #[serde(default, deserialize_with = "nullable")]
-    pub max_participants: Option<Option<i32>>,
-    pub allow_screen_sharing: Option<bool>,
-    pub allow_chat: Option<bool>,
-    pub allow_video: Option<bool>,
-    pub require_registration: Option<bool>,
-    pub invite_only: Option<bool>,
-    pub push_to_talk: Option<bool>,
-    pub secret: Option<bool>,
-    #[serde(default, deserialize_with = "nullable")]
-    pub password: Option<Option<crate::secret::SecretString>>,
-}
-
-fn nullable<'de, D, T>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-    T: Deserialize<'de>,
-{
-    Option::<T>::deserialize(deserializer).map(Some)
-}
 
 impl SettingsPatch {
     fn apply(
@@ -85,23 +56,7 @@ impl SettingsPatch {
             ));
         }
         let mut updated = current.clone();
-        settings::apply_settings_update(
-            &mut updated,
-            self.moderated,
-            self.lobby_enabled,
-            self.guests_allowed,
-            self.guests_can_broadcast,
-            self.max_broadcasters,
-            self.max_participants,
-            self.allow_screen_sharing,
-            self.allow_chat,
-            self.allow_video,
-            self.require_registration,
-            self.invite_only,
-            self.push_to_talk,
-            self.secret,
-            self.password.clone(),
-        );
+        settings::apply_settings_update(&mut updated, self);
         if matches!((updated.max_broadcasters, updated.max_participants), (Some(broadcasters), Some(participants)) if broadcasters > participants)
         {
             return Err(invalid(
@@ -426,9 +381,10 @@ impl Context {
                     .fetch_one(&mut *transaction)
                     .await
                     .map_err(database_error)?;
-            let settings = load_settings(&mut transaction, &room_id)
+            let (settings, _) = settings::load_room(&mut *transaction, &room_id)
                 .await
-                .map_err(database_error)?;
+                .map_err(database_error)?
+                .ok_or_else(|| database_error(sqlx::Error::RowNotFound))?;
             // FOR UPDATE predicates may have been evaluated before a row-lock
             // wait. Check the current clock again after every admission lock.
             let session_expires_at: Option<DateTime<Utc>> = sqlx::query_scalar("SELECT expires_at FROM sessions WHERE id=$1 AND user_id=$2 AND expires_at>clock_timestamp()")
@@ -1250,15 +1206,6 @@ impl Context {
             .close_revoked_producers(&self.room_id, revoked, active, audio)
             .await;
     }
-}
-
-async fn load_settings(
-    connection: &mut PgConnection,
-    room_id: &RoomId,
-) -> Result<settings::RoomSettings, sqlx::Error> {
-    let value: Value = sqlx::query_scalar("SELECT jsonb_build_object('id',id,'ownerId',owner_id,'displayName',display_name,'passwordProtected',password_hash IS NOT NULL,'requireRegistration',require_registration,'maxParticipants',max_participants,'maxBroadcasters',max_broadcasters,'allowScreenSharing',allow_screen_sharing,'allowChat',allow_chat,'allowVideo',allow_video,'moderated',moderated,'inviteOnly',invite_only,'secret',secret,'lobbyEnabled',lobby_enabled,'pushToTalk',push_to_talk,'guestsAllowed',guests_allowed,'guestsCanBroadcast',guests_can_broadcast,'topic',topic,'nameStyle',name_style,'topicStyle',topic_style,'historyRetentionDays',history_retention_days) FROM rooms WHERE id=$1")
-        .bind(room_id).fetch_one(connection).await?;
-    serde_json::from_value(value).map_err(|error| sqlx::Error::Protocol(error.to_string()))
 }
 
 async fn admit(

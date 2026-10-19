@@ -68,6 +68,64 @@ impl RoomSettings {
     }
 }
 
+/// A partial settings change. An omitted field keeps its value; for the
+/// ceilings and the password `Some(None)` clears it. The socket and the HTTP
+/// administration API carry it, the room manager validates it, and the
+/// persistence layer binds only the fields it names.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SettingsPatch {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub moderated: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lobby_enabled: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub guests_allowed: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub guests_can_broadcast: Option<bool>,
+    #[serde(
+        default,
+        deserialize_with = "nullable",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub max_broadcasters: Option<Option<i32>>,
+    #[serde(
+        default,
+        deserialize_with = "nullable",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub max_participants: Option<Option<i32>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub allow_screen_sharing: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub allow_chat: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub allow_video: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub require_registration: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub invite_only: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub push_to_talk: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub secret: Option<bool>,
+    #[serde(
+        default,
+        deserialize_with = "nullable",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub password: Option<Option<crate::secret::SecretString>>,
+}
+
+/// Reads an explicit JSON `null` as `Some(None)` (clear), so a missing key stays `None` (keep).
+fn nullable<'de, D, T>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Option::<T>::deserialize(deserializer).map(Some)
+}
+
 #[derive(FromRow)]
 struct RoomRow {
     id: String,
@@ -194,8 +252,10 @@ pub(crate) fn validate_create_request(request: &CreateRoomRequest) -> Result<(),
     Ok(())
 }
 
-pub(crate) async fn load_room(
-    pool: &PgPool,
+/// The stored settings and password hash of a room, from a pool or from inside a
+/// transaction that already holds the row's locks.
+pub(crate) async fn load_room<'e>(
+    executor: impl sqlx::PgExecutor<'e>,
     room_id: &RoomId,
 ) -> Result<Option<(RoomSettings, Option<String>)>, sqlx::Error> {
     let row = sqlx::query_as::<_, RoomRow>(
@@ -206,7 +266,7 @@ pub(crate) async fn load_room(
          FROM rooms WHERE id = $1",
     )
     .bind(room_id)
-    .fetch_optional(pool)
+    .fetch_optional(executor)
     .await?;
 
     Ok(row.map(|r| {
@@ -350,67 +410,47 @@ pub(crate) async fn create_room(
 /// request and coordinate it with the database and current room generation.
 /// Password input updates only `password_protected`; the plaintext is never
 /// stored in [`RoomSettings`]. Database persistence receives a hash separately.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "explicit patch fields mirror the wire contract and persistence order"
-)]
-pub(crate) fn apply_settings_update(
-    settings: &mut RoomSettings,
-    moderated: Option<bool>,
-    lobby_enabled: Option<bool>,
-    guests_allowed: Option<bool>,
-    guests_can_broadcast: Option<bool>,
-    max_broadcasters: Option<Option<i32>>,
-    max_participants: Option<Option<i32>>,
-    allow_screen_sharing: Option<bool>,
-    allow_chat: Option<bool>,
-    allow_video: Option<bool>,
-    require_registration: Option<bool>,
-    invite_only: Option<bool>,
-    push_to_talk: Option<bool>,
-    secret: Option<bool>,
-    password: Option<Option<crate::secret::SecretString>>,
-) {
-    if let Some(v) = moderated {
+pub(crate) fn apply_settings_update(settings: &mut RoomSettings, patch: &SettingsPatch) {
+    if let Some(v) = patch.moderated {
         settings.moderated = v;
     }
-    if let Some(v) = lobby_enabled {
+    if let Some(v) = patch.lobby_enabled {
         settings.lobby_enabled = v;
     }
-    if let Some(v) = guests_allowed {
+    if let Some(v) = patch.guests_allowed {
         settings.guests_allowed = v;
     }
-    if let Some(v) = guests_can_broadcast {
+    if let Some(v) = patch.guests_can_broadcast {
         settings.guests_can_broadcast = v;
     }
-    if let Some(v) = max_broadcasters {
+    if let Some(v) = patch.max_broadcasters {
         settings.max_broadcasters = v;
     }
-    if let Some(v) = max_participants {
+    if let Some(v) = patch.max_participants {
         settings.max_participants = v;
     }
-    if let Some(v) = allow_screen_sharing {
+    if let Some(v) = patch.allow_screen_sharing {
         settings.allow_screen_sharing = v;
     }
-    if let Some(v) = allow_chat {
+    if let Some(v) = patch.allow_chat {
         settings.allow_chat = v;
     }
-    if let Some(v) = allow_video {
+    if let Some(v) = patch.allow_video {
         settings.allow_video = v;
     }
-    if let Some(v) = require_registration {
+    if let Some(v) = patch.require_registration {
         settings.require_registration = v;
     }
-    if let Some(v) = invite_only {
+    if let Some(v) = patch.invite_only {
         settings.invite_only = v;
     }
-    if let Some(v) = push_to_talk {
+    if let Some(v) = patch.push_to_talk {
         settings.push_to_talk = v;
     }
-    if let Some(v) = secret {
+    if let Some(v) = patch.secret {
         settings.secret = v;
     }
-    if let Some(v) = password {
+    if let Some(v) = &patch.password {
         settings.password_protected = v.is_some();
         // Don't store actual password in RoomSettings — it goes to DB only
     }
@@ -432,26 +472,10 @@ pub(crate) fn apply_settings_update(
 /// Returns the database error if the update fails. It does not open a transaction
 /// with other mutations or provide a retry/idempotency token; callers must not
 /// infer that an interrupted response means the database remained unchanged.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "explicit patch fields preserve nullable updates and SQL binding order"
-)]
 pub(crate) async fn update_room_settings(
     pool: &PgPool,
     room_id: &RoomId,
-    moderated: Option<bool>,
-    lobby_enabled: Option<bool>,
-    guests_allowed: Option<bool>,
-    guests_can_broadcast: Option<bool>,
-    max_broadcasters: Option<Option<i32>>,
-    max_participants: Option<Option<i32>>,
-    allow_screen_sharing: Option<bool>,
-    allow_chat: Option<bool>,
-    allow_video: Option<bool>,
-    require_registration: Option<bool>,
-    invite_only: Option<bool>,
-    push_to_talk: Option<bool>,
-    secret: Option<bool>,
+    patch: &SettingsPatch,
     password_hash: Option<Option<String>>,
 ) -> Result<(), sqlx::Error> {
     // Build a dynamic SET clause for only the provided fields
@@ -466,19 +490,19 @@ pub(crate) async fn update_room_settings(
         };
     }
 
-    maybe_add!(moderated, "moderated");
-    maybe_add!(lobby_enabled, "lobby_enabled");
-    maybe_add!(guests_allowed, "guests_allowed");
-    maybe_add!(guests_can_broadcast, "guests_can_broadcast");
-    maybe_add!(max_broadcasters, "max_broadcasters");
-    maybe_add!(max_participants, "max_participants");
-    maybe_add!(allow_screen_sharing, "allow_screen_sharing");
-    maybe_add!(allow_chat, "allow_chat");
-    maybe_add!(allow_video, "allow_video");
-    maybe_add!(require_registration, "require_registration");
-    maybe_add!(invite_only, "invite_only");
-    maybe_add!(push_to_talk, "push_to_talk");
-    maybe_add!(secret, "secret");
+    maybe_add!(patch.moderated, "moderated");
+    maybe_add!(patch.lobby_enabled, "lobby_enabled");
+    maybe_add!(patch.guests_allowed, "guests_allowed");
+    maybe_add!(patch.guests_can_broadcast, "guests_can_broadcast");
+    maybe_add!(patch.max_broadcasters, "max_broadcasters");
+    maybe_add!(patch.max_participants, "max_participants");
+    maybe_add!(patch.allow_screen_sharing, "allow_screen_sharing");
+    maybe_add!(patch.allow_chat, "allow_chat");
+    maybe_add!(patch.allow_video, "allow_video");
+    maybe_add!(patch.require_registration, "require_registration");
+    maybe_add!(patch.invite_only, "invite_only");
+    maybe_add!(patch.push_to_talk, "push_to_talk");
+    maybe_add!(patch.secret, "secret");
     maybe_add!(password_hash, "password_hash");
 
     if set_parts.is_empty() {
@@ -494,43 +518,43 @@ pub(crate) async fn update_room_settings(
     let mut query = sqlx::query(sqlx::AssertSqlSafe(sql)).bind(room_id);
 
     // Bind values in the same order as the SET parts
-    if let Some(v) = moderated {
+    if let Some(v) = patch.moderated {
         query = query.bind(v);
     }
-    if let Some(v) = lobby_enabled {
+    if let Some(v) = patch.lobby_enabled {
         query = query.bind(v);
     }
-    if let Some(v) = guests_allowed {
+    if let Some(v) = patch.guests_allowed {
         query = query.bind(v);
     }
-    if let Some(v) = guests_can_broadcast {
+    if let Some(v) = patch.guests_can_broadcast {
         query = query.bind(v);
     }
-    if let Some(v) = max_broadcasters {
+    if let Some(v) = patch.max_broadcasters {
         query = query.bind(v);
     }
-    if let Some(v) = max_participants {
+    if let Some(v) = patch.max_participants {
         query = query.bind(v);
     }
-    if let Some(v) = allow_screen_sharing {
+    if let Some(v) = patch.allow_screen_sharing {
         query = query.bind(v);
     }
-    if let Some(v) = allow_chat {
+    if let Some(v) = patch.allow_chat {
         query = query.bind(v);
     }
-    if let Some(v) = allow_video {
+    if let Some(v) = patch.allow_video {
         query = query.bind(v);
     }
-    if let Some(v) = require_registration {
+    if let Some(v) = patch.require_registration {
         query = query.bind(v);
     }
-    if let Some(v) = invite_only {
+    if let Some(v) = patch.invite_only {
         query = query.bind(v);
     }
-    if let Some(v) = push_to_talk {
+    if let Some(v) = patch.push_to_talk {
         query = query.bind(v);
     }
-    if let Some(v) = secret {
+    if let Some(v) = patch.secret {
         query = query.bind(v);
     }
     if let Some(v) = password_hash {

@@ -1416,7 +1416,7 @@ fn socket_boundary(message: &protocol::ClientMessage) -> &'static str {
         Unban { .. } => "room-membership",
         SetRole { .. } => "room-membership",
         RequestVoice => "room-membership",
-        UpdateRoomSettings { .. } => "room-membership",
+        UpdateRoomSettings(_) => "room-membership",
         SetTopic { .. } => "room-membership",
         AdmitFromLobby { .. } => "room-membership",
         DenyFromLobby { .. } => "room-membership",

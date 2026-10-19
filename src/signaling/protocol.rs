@@ -8,7 +8,7 @@ use chrono::{DateTime, Utc};
 
 use crate::ids::{MessageId, ParticipantId, RoomId, UserId};
 use crate::room::moderation::{ReportResolution, ReportStatus};
-use crate::room::settings::RoomSettings;
+use crate::room::settings::{RoomSettings, SettingsPatch};
 use mediasoup::prelude::*;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -114,16 +114,6 @@ impl std::fmt::Debug for AuthenticationToken {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter.write_str("AuthenticationToken([REDACTED])")
     }
-}
-
-// Missing fields use the serde default (None); an explicit null must instead
-// survive as Some(None) so nullable settings can be cleared.
-fn deserialize_nullable_patch<'de, D, T>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-    T: Deserialize<'de>,
-{
-    Option::<T>::deserialize(deserializer).map(Some)
 }
 
 /// Client-to-Server messages
@@ -452,39 +442,8 @@ pub enum ClientMessage {
     RequestVoice,
 
     // === Room management ===
-    /// Update room settings (Admin+)
-    #[serde(rename_all = "camelCase")]
-    UpdateRoomSettings {
-        moderated: Option<bool>,
-        lobby_enabled: Option<bool>,
-        guests_allowed: Option<bool>,
-        guests_can_broadcast: Option<bool>,
-        #[serde(
-            default,
-            deserialize_with = "deserialize_nullable_patch",
-            skip_serializing_if = "Option::is_none"
-        )]
-        max_broadcasters: Option<Option<i32>>,
-        #[serde(
-            default,
-            deserialize_with = "deserialize_nullable_patch",
-            skip_serializing_if = "Option::is_none"
-        )]
-        max_participants: Option<Option<i32>>,
-        allow_screen_sharing: Option<bool>,
-        allow_chat: Option<bool>,
-        allow_video: Option<bool>,
-        require_registration: Option<bool>,
-        invite_only: Option<bool>,
-        push_to_talk: Option<bool>,
-        secret: Option<bool>,
-        #[serde(
-            default,
-            deserialize_with = "deserialize_nullable_patch",
-            skip_serializing_if = "Option::is_none"
-        )]
-        password: Option<Option<SecretString>>,
-    },
+    /// Update room settings (Admin+): the patch's fields sit beside `type`.
+    UpdateRoomSettings(SettingsPatch),
     /// Set the room topic
     SetTopic {
         topic: String,
@@ -1477,12 +1436,12 @@ mod tests {
         expected_participants: Option<Option<i32>>,
         expected_password: Option<Option<&str>>,
     ) {
-        let ClientMessage::UpdateRoomSettings {
+        let ClientMessage::UpdateRoomSettings(super::SettingsPatch {
             max_broadcasters,
             max_participants,
             password,
             ..
-        } = message
+        }) = message
         else {
             panic!("expected a room settings patch");
         };

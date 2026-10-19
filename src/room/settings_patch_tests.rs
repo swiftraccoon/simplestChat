@@ -16,45 +16,11 @@ async fn apply_wire_patch(
     owner: &Participant,
     patch: Value,
 ) {
-    let ClientMessage::UpdateRoomSettings {
-        moderated,
-        lobby_enabled,
-        guests_allowed,
-        guests_can_broadcast,
-        max_broadcasters,
-        max_participants,
-        allow_screen_sharing,
-        allow_chat,
-        allow_video,
-        require_registration,
-        invite_only,
-        push_to_talk,
-        secret,
-        password,
-    } = serde_json::from_value(patch).unwrap()
-    else {
+    let ClientMessage::UpdateRoomSettings(patch) = serde_json::from_value(patch).unwrap() else {
         panic!("expected a room settings patch");
     };
     manager
-        .update_room_settings(
-            room_id,
-            &owner.id,
-            &owner.sender,
-            moderated,
-            lobby_enabled,
-            guests_allowed,
-            guests_can_broadcast,
-            max_broadcasters,
-            max_participants,
-            allow_screen_sharing,
-            allow_chat,
-            allow_video,
-            require_registration,
-            invite_only,
-            push_to_talk,
-            secret,
-            password,
-        )
+        .update_room_settings(room_id, &owner.id, &owner.sender, patch)
         .await
         .unwrap();
 }

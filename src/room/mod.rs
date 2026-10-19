@@ -12,7 +12,7 @@ mod privacy;
 mod receive_replacement;
 pub(crate) mod roles;
 pub(crate) mod settings;
-pub use settings::RoomSettings;
+pub use settings::{RoomSettings, SettingsPatch};
 pub(crate) mod social;
 mod window;
 
@@ -30,7 +30,6 @@ use crate::ids::{ParticipantId, RoomId, UserId};
 use crate::media::types::{MediaResult, TransportInfo};
 use crate::media::{MediaConfig, MediaServer};
 use crate::metrics::ServerMetrics;
-use crate::secret::SecretString;
 use crate::shutdown::DrainSignal;
 use crate::signaling::protocol::{
     AudioLevelEntry, ChatStyle, ParticipantInfo, ProducerMetadata, ServerMessage,
@@ -4115,29 +4114,12 @@ impl RoomManager {
     /// Persists a partial update for database-backed rooms before publishing the
     /// settings, revoking disallowed producers, and broadcasting the change.
     /// Admitted work survives cancellation of the requesting connection.
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "authorized mutation keeps each nullable wire patch field explicit"
-    )]
     pub(crate) async fn update_room_settings(
         &self,
         room_id: &RoomId,
         admin_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
-        moderated: Option<bool>,
-        lobby_enabled: Option<bool>,
-        guests_allowed: Option<bool>,
-        guests_can_broadcast: Option<bool>,
-        max_broadcasters: Option<Option<i32>>,
-        max_participants: Option<Option<i32>>,
-        allow_screen_sharing: Option<bool>,
-        allow_chat: Option<bool>,
-        allow_video: Option<bool>,
-        require_registration: Option<bool>,
-        invite_only: Option<bool>,
-        push_to_talk: Option<bool>,
-        secret: Option<bool>,
-        password: Option<Option<SecretString>>,
+        patch: SettingsPatch,
     ) -> Result<()> {
         let admin_id = *admin_id;
         let expected_sender = expected_sender.clone();
@@ -4147,20 +4129,7 @@ impl RoomManager {
                     &room_id,
                     &admin_id,
                     &expected_sender,
-                    moderated,
-                    lobby_enabled,
-                    guests_allowed,
-                    guests_can_broadcast,
-                    max_broadcasters,
-                    max_participants,
-                    allow_screen_sharing,
-                    allow_chat,
-                    allow_video,
-                    require_registration,
-                    invite_only,
-                    push_to_talk,
-                    secret,
-                    password,
+                    patch,
                     control,
                 )
                 .await
@@ -4168,29 +4137,12 @@ impl RoomManager {
         .await
     }
 
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "owned policy mutation retains each nullable patch field and its control guard"
-    )]
     async fn update_room_settings_controlled(
         &self,
         room_id: &RoomId,
         admin_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
-        moderated: Option<bool>,
-        lobby_enabled: Option<bool>,
-        guests_allowed: Option<bool>,
-        guests_can_broadcast: Option<bool>,
-        max_broadcasters: Option<Option<i32>>,
-        max_participants: Option<Option<i32>>,
-        allow_screen_sharing: Option<bool>,
-        allow_chat: Option<bool>,
-        allow_video: Option<bool>,
-        require_registration: Option<bool>,
-        invite_only: Option<bool>,
-        push_to_talk: Option<bool>,
-        secret: Option<bool>,
-        password: Option<Option<SecretString>>,
+        patch: SettingsPatch,
         control: control::RoomControl,
     ) -> Result<()> {
         // Authorize before expensive password work. Control retains this
@@ -4204,10 +4156,10 @@ impl RoomManager {
             }
         }
 
-        Self::validate_capacity("max participants", max_participants, 10_000)?;
-        Self::validate_capacity("max broadcasters", max_broadcasters, 1_000)?;
+        Self::validate_capacity("max participants", patch.max_participants, 10_000)?;
+        Self::validate_capacity("max broadcasters", patch.max_broadcasters, 1_000)?;
         let mut admin_mutation_reserved = false;
-        if let Some(Some(value)) = password.as_ref() {
+        if let Some(Some(value)) = patch.password.as_ref() {
             if !settings::valid_new_room_password(value.expose_secret()) {
                 anyhow::bail!("Room password must be 8-256 bytes without control characters");
             }
@@ -4233,7 +4185,7 @@ impl RoomManager {
 
         // Argon2 is deliberately expensive; keep it off the async executor and
         // bound concurrent work so settings updates cannot exhaust CPU threads.
-        let password_hash = match password.as_ref() {
+        let password_hash = match patch.password.as_ref() {
             Some(Some(value)) => {
                 let value = value.clone();
                 let permit = self
@@ -4270,29 +4222,13 @@ impl RoomManager {
             .settings
             .clone()
             .unwrap_or_else(|| settings::RoomSettings::defaults(room_id));
-        let password_changed = match password.as_ref() {
+        let password_changed = match patch.password.as_ref() {
             Some(Some(_)) => true,
             Some(None) => room.password_hash.is_some() || current.password_protected,
             None => false,
         };
         let mut updated = current.clone();
-        settings::apply_settings_update(
-            &mut updated,
-            moderated,
-            lobby_enabled,
-            guests_allowed,
-            guests_can_broadcast,
-            max_broadcasters,
-            max_participants,
-            allow_screen_sharing,
-            allow_chat,
-            allow_video,
-            require_registration,
-            invite_only,
-            push_to_talk,
-            secret,
-            password.clone(),
-        );
+        settings::apply_settings_update(&mut updated, &patch);
         if matches!(
             (updated.max_broadcasters, updated.max_participants),
             (Some(broadcasters), Some(participants)) if broadcasters > participants
@@ -4318,24 +4254,7 @@ impl RoomManager {
             self.persist_room(
                 room_id,
                 &room_lock,
-                settings::update_room_settings(
-                    pool,
-                    room_id,
-                    moderated,
-                    lobby_enabled,
-                    guests_allowed,
-                    guests_can_broadcast,
-                    max_broadcasters,
-                    max_participants,
-                    allow_screen_sharing,
-                    allow_chat,
-                    allow_video,
-                    require_registration,
-                    invite_only,
-                    push_to_talk,
-                    secret,
-                    password_hash.clone(),
-                ),
+                settings::update_room_settings(pool, room_id, &patch, password_hash.clone()),
             )
             .await
             .map_err(|error| {

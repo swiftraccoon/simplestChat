@@ -364,23 +364,7 @@ export type ClientMessage =
       role: Role;
     }
   | { type: 'requestVoice' }
-  | {
-      type: 'updateRoomSettings';
-      moderated?: boolean;
-      lobbyEnabled?: boolean;
-      guestsAllowed?: boolean;
-      guestsCanBroadcast?: boolean;
-      maxBroadcasters?: number | null;
-      maxParticipants?: number | null;
-      allowScreenSharing?: boolean;
-      allowChat?: boolean;
-      allowVideo?: boolean;
-      requireRegistration?: boolean;
-      inviteOnly?: boolean;
-      pushToTalk?: boolean;
-      secret?: boolean;
-      password?: string | null;
-    }
+  | ({ type: 'updateRoomSettings' } & SettingsPatch)
   | {
       type: 'setTopic';
       topic: string;
@@ -831,6 +815,23 @@ export interface RetryChatMessage {
   attachmentIds?: string[];
   targetParticipantId?: string;
   replyTo?: string;
+}
+
+export interface SettingsPatch {
+  moderated?: boolean;
+  lobbyEnabled?: boolean;
+  guestsAllowed?: boolean;
+  guestsCanBroadcast?: boolean;
+  maxBroadcasters?: number | null;
+  maxParticipants?: number | null;
+  allowScreenSharing?: boolean;
+  allowChat?: boolean;
+  allowVideo?: boolean;
+  requireRegistration?: boolean;
+  inviteOnly?: boolean;
+  pushToTalk?: boolean;
+  secret?: boolean;
+  password?: string | null;
 }
 
 export interface AudioLevelEntry {

@@ -9,6 +9,7 @@ import type {
   ClientMessage,
   ErrorCode,
   Role,
+  SettingsPatch,
   SocialResponses,
 } from './protocol.generated';
 
@@ -61,8 +62,6 @@ export type RoomControl = Extract<
 
 // --- Shared types ---
 
-// --- Shared types ---
-
 /**
  * A refusal the server sent: an `Error` whose `name` is `ServerError` and that
  * carries the code clients switch on. Built with `Object.assign` where the
@@ -87,22 +86,7 @@ export type RoomReportsPage = SocialResponses['listRoomReports'];
 export type ModerationEventsPage = SocialResponses['listModerationEvents'];
 
 /** Omitted fields stay unchanged; null clears a password or capacity limit. */
-export interface RoomSettingsPatch {
-  moderated?: boolean;
-  lobbyEnabled?: boolean;
-  guestsAllowed?: boolean;
-  guestsCanBroadcast?: boolean;
-  maxBroadcasters?: number | null;
-  maxParticipants?: number | null;
-  allowScreenSharing?: boolean;
-  allowChat?: boolean;
-  allowVideo?: boolean;
-  requireRegistration?: boolean;
-  inviteOnly?: boolean;
-  pushToTalk?: boolean;
-  secret?: boolean;
-  password?: string | null;
-}
+export type RoomSettingsPatch = SettingsPatch;
 
 // Use the client's actual transport/RTP contracts. Rust's finalized router
 // capabilities share the client capability shape on the wire.

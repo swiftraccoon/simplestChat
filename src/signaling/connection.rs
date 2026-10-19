@@ -9,7 +9,7 @@ use crate::auth::types::Claims;
 use crate::diagnostics::{self, OperationKind, Outcome, Stage};
 use crate::ids::{ParticipantId, RoomId};
 use crate::metrics::ServerMetrics;
-use crate::room::{JoinResult, RoomManager, RoomPasswordRequired, settings};
+use crate::room::{JoinResult, RoomManager, RoomPasswordRequired, SettingsPatch, settings};
 use crate::secret::SecretString;
 use crate::turn::TurnConfig;
 use axum::extract::ws::{CloseFrame, Message, WebSocket, close_code};
@@ -349,7 +349,7 @@ fn is_admin_mutation(message: &ClientMessage) -> bool {
                 | ClientMessage::Ban { .. }
                 | ClientMessage::Unban { .. }
                 | ClientMessage::SetRole { .. }
-                | ClientMessage::UpdateRoomSettings { .. }
+                | ClientMessage::UpdateRoomSettings(_)
                 | ClientMessage::SetTopic { .. }
                 | ClientMessage::AdmitFromLobby { .. }
                 | ClientMessage::DenyFromLobby { .. }
@@ -671,7 +671,7 @@ fn diagnostic_operation(message: &ClientMessage) -> OperationKind {
         | ClientMessage::Unban { .. }
         | ClientMessage::SetRole { .. }
         | ClientMessage::RequestVoice
-        | ClientMessage::UpdateRoomSettings { .. }
+        | ClientMessage::UpdateRoomSettings(_)
         | ClientMessage::SetTopic { .. }
         | ClientMessage::AdmitFromLobby { .. }
         | ClientMessage::DenyFromLobby { .. } => OperationKind::RoomAction,
@@ -1519,10 +1519,10 @@ async fn handle_connection_with_timing(
 
                         if matches!(
                             &client_msg,
-                            ClientMessage::UpdateRoomSettings {
+                            ClientMessage::UpdateRoomSettings(SettingsPatch {
                                 password: Some(Some(_)),
                                 ..
-                            }
+                            })
                         ) {
                             let now = Instant::now();
                             if last_room_password_hash.is_some_and(|previous| {
@@ -3016,45 +3016,12 @@ async fn handle_client_message(
         }
 
         // === Room management (stubs) ===
-        ClientMessage::UpdateRoomSettings {
-            moderated,
-            lobby_enabled,
-            guests_allowed,
-            guests_can_broadcast,
-            max_broadcasters,
-            max_participants,
-            allow_screen_sharing,
-            allow_chat,
-            allow_video,
-            require_registration,
-            invite_only,
-            push_to_talk,
-            secret,
-            password,
-        } => {
+        ClientMessage::UpdateRoomSettings(patch) => {
             let room_id = current_room_id
                 .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
             room_manager
-                .update_room_settings(
-                    room_id,
-                    participant_id,
-                    sender,
-                    *moderated,
-                    *lobby_enabled,
-                    *guests_allowed,
-                    *guests_can_broadcast,
-                    *max_broadcasters,
-                    *max_participants,
-                    *allow_screen_sharing,
-                    *allow_chat,
-                    *allow_video,
-                    *require_registration,
-                    *invite_only,
-                    *push_to_talk,
-                    *secret,
-                    password.clone(),
-                )
+                .update_room_settings(room_id, participant_id, sender, patch.clone())
                 .await?;
         }
 
@@ -3103,7 +3070,7 @@ async fn handle_client_message(
             | ClientMessage::Unban { .. }
             | ClientMessage::SetRole { .. }
             | ClientMessage::RequestVoice
-            | ClientMessage::UpdateRoomSettings { .. }
+            | ClientMessage::UpdateRoomSettings(_)
             | ClientMessage::SetTopic { .. }
             | ClientMessage::AdmitFromLobby { .. }
             | ClientMessage::DenyFromLobby { .. }
@@ -3610,22 +3577,12 @@ mod security_tests {
         assert!(is_admin_mutation(&ClientMessage::SetTopic {
             topic: "topic".to_string(),
         }));
-        assert!(is_admin_mutation(&ClientMessage::UpdateRoomSettings {
-            moderated: Some(true),
-            lobby_enabled: None,
-            guests_allowed: None,
-            guests_can_broadcast: None,
-            max_broadcasters: None,
-            max_participants: None,
-            allow_screen_sharing: None,
-            allow_chat: None,
-            allow_video: None,
-            require_registration: None,
-            invite_only: None,
-            push_to_talk: None,
-            secret: None,
-            password: None,
-        }));
+        assert!(is_admin_mutation(&ClientMessage::UpdateRoomSettings(
+            SettingsPatch {
+                moderated: Some(true),
+                ..Default::default()
+            }
+        )));
         assert!(is_admin_mutation(&ClientMessage::DenyFromLobby {
             target_participant_id: pid("target"),
         }));

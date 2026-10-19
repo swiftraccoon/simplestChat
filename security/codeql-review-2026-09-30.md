@@ -862,3 +862,18 @@ Complete-source SHA256 per rebound file:
 | 35 | `src/signaling/mod.rs:1733:1733:153:165` | `codeql:e4d3abdde1361dbabf349ca5117ed96922aa0ecef554a9aabdafba6a989b0727` |
 | 63 | `src/signaling/mod.rs:2164:2164:31:56` | `codeql:81da0a0f50cb1c68618ac7d074369ebcfa46191b8877091105491481343645fd` |
 | 69 | `src/signaling/mod.rs:1724:1724:79:91` | `codeql:32d000d21557ea7c9be5434762bfaf90b486304f3ec0530194b9fb7c9d7b41f4` |
+
+## Source re-review: one settings patch type (2026-10-19)
+
+`156dc9e` gave `settings::load_room` an executor parameter so the administration transaction reads the typed row instead of its own JSON loader, and `ff4ed3a` moved the `SettingsPatch` type and its `nullable` deserializer into `src/room/settings.rs` above the reviewed lines, so alerts 59–62 moved down 24 lines. Every flagged line is byte-identical to the previously reviewed source; the identities were recomputed with the same line-mapping method as the earlier 2026-10-19 rebindings (base 8b56eed). Owner, rationale, scope semantics and the 2026-11-29 expiry are unchanged; hosted ingestion remains a separate required check.
+
+Complete-source SHA256 per rebound file:
+
+- `src/room/settings.rs`: `9e4d1f3ecd98967ad923d4eefcf1f15ff69cace4445ff11c31e3cac3a3a384d5`
+
+| Alert | Range | Fingerprint |
+|---|---|---|
+| 59 | `src/room/settings.rs:663:663:33:42` | `codeql:d99635d0f5df0867a67f158ed5a8a2f2c0de654423a6894fc2828439abaea9aa` |
+| 60 | `src/room/settings.rs:668:668:33:43` | `codeql:e34a7b6718132fab97108415b14582bdf6a00a0863cad0c901f1dec5a2f2b4a9` |
+| 61 | `src/room/settings.rs:670:670:33:43` | `codeql:c8b32581aa8089418b503c561051238061f22731f43990a05b2cdf5f6935322c` |
+| 62 | `src/room/settings.rs:673:673:33:45` | `codeql:143e6b5562d1e857bf243cbad055166ca5939fa1a9bb75081c7260a4eb377dc7` |
