@@ -315,7 +315,7 @@ impl Telemetry {
         accepted: bool,
         duration: Duration,
     ) {
-        let operation = operation_label(operation);
+        let operation = operation.label();
         self.signaling
             .lock()
             .unwrap_or_else(|error| error.into_inner())
@@ -441,34 +441,6 @@ impl Telemetry {
                 out,
             );
         }
-    }
-}
-
-fn operation_label(operation: crate::diagnostics::OperationKind) -> &'static str {
-    use crate::diagnostics::OperationKind;
-    match operation {
-        OperationKind::JoinRoom => "join_room",
-        OperationKind::LeaveRoom => "leave_room",
-        OperationKind::Reconnect => "reconnect",
-        OperationKind::RouterCapabilities => "router_capabilities",
-        OperationKind::CreateSendTransport => "create_send_transport",
-        OperationKind::CreateRecvTransport => "create_recv_transport",
-        OperationKind::ConnectTransport => "connect_transport",
-        OperationKind::Produce => "produce",
-        OperationKind::Consume => "consume",
-        OperationKind::ResumeConsumer => "resume_consumer",
-        OperationKind::PauseConsumer => "pause_consumer",
-        OperationKind::CloseConsumer => "close_consumer",
-        OperationKind::PauseProducer => "pause_producer",
-        OperationKind::ResumeProducer => "resume_producer",
-        OperationKind::CloseProducer => "close_producer",
-        OperationKind::RestartIce => "restart_ice",
-        OperationKind::SetPreferredLayers => "set_preferred_layers",
-        OperationKind::Chat => "chat",
-        OperationKind::PrivateMessage => "private_message",
-        OperationKind::RoomAction => "room_action",
-        OperationKind::SocketWrite => "socket_write",
-        OperationKind::ShutdownNotification => "shutdown_notification",
     }
 }
 

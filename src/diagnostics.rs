@@ -25,8 +25,7 @@ const CLOSED: u64 = 1 << 63;
 const WRITER_PARK_BUDGET: Duration = Duration::from_millis(50);
 
 /// Fixed operation vocabulary. No client-provided names become record fields.
-#[derive(Clone, Copy, Debug, Serialize)]
-#[serde(rename_all = "snake_case")]
+#[derive(Clone, Copy, Debug)]
 pub(crate) enum OperationKind {
     JoinRoom,
     LeaveRoom,
@@ -50,6 +49,42 @@ pub(crate) enum OperationKind {
     RoomAction,
     SocketWrite,
     ShutdownNotification,
+}
+
+impl OperationKind {
+    /// The operation's name in records and metric labels: one vocabulary.
+    pub(crate) const fn label(self) -> &'static str {
+        match self {
+            Self::JoinRoom => "join_room",
+            Self::LeaveRoom => "leave_room",
+            Self::Reconnect => "reconnect",
+            Self::RouterCapabilities => "router_capabilities",
+            Self::CreateSendTransport => "create_send_transport",
+            Self::CreateRecvTransport => "create_recv_transport",
+            Self::ConnectTransport => "connect_transport",
+            Self::Produce => "produce",
+            Self::Consume => "consume",
+            Self::ResumeConsumer => "resume_consumer",
+            Self::PauseConsumer => "pause_consumer",
+            Self::CloseConsumer => "close_consumer",
+            Self::PauseProducer => "pause_producer",
+            Self::ResumeProducer => "resume_producer",
+            Self::CloseProducer => "close_producer",
+            Self::RestartIce => "restart_ice",
+            Self::SetPreferredLayers => "set_preferred_layers",
+            Self::Chat => "chat",
+            Self::PrivateMessage => "private_message",
+            Self::RoomAction => "room_action",
+            Self::SocketWrite => "socket_write",
+            Self::ShutdownNotification => "shutdown_notification",
+        }
+    }
+}
+
+impl Serialize for OperationKind {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.label())
+    }
 }
 
 /// Fixed timing boundaries. A stage can occur multiple times in one operation.
@@ -674,6 +709,17 @@ pub(crate) async fn measure_result<T, E>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn operation_kinds_serialize_as_their_labels() {
+        for kind in [OperationKind::JoinRoom, OperationKind::ShutdownNotification] {
+            assert_eq!(serde_json::to_value(kind).unwrap(), kind.label());
+        }
+        assert_eq!(
+            OperationKind::SetPreferredLayers.label(),
+            "set_preferred_layers"
+        );
+    }
     use std::sync::{Barrier, Mutex, mpsc as sync_mpsc};
 
     #[derive(Clone, Default)]

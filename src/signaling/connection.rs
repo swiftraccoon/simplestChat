@@ -40,7 +40,7 @@ mod bandwidth;
 #[path = "connection_token_bucket.rs"]
 mod token_bucket;
 use bandwidth::BandwidthTierUpdate;
-use token_bucket::{TOKEN_US, TokenBucket};
+use token_bucket::{TOKEN_US, TokenBucket, ViolationWindow};
 
 /// Bounded channel capacity per client.
 /// At 100 msg/s rate limit, 64 slots = 640ms of burst buffer.
@@ -280,8 +280,7 @@ struct MediaSessionRateState {
     media_mutations: TokenBucket,
     transport_mutations: TokenBucket,
     consumer_mutations: TokenBucket,
-    violation_window_started: Option<Instant>,
-    violations: u32,
+    violations: ViolationWindow,
 }
 
 impl MediaSessionRateState {
@@ -306,8 +305,7 @@ impl MediaSessionRateState {
                 CONSUMER_MUTATION_RATE_LIMIT_REFILL_RATE,
                 consumer_mutation_capacity(consumer_limit),
             ),
-            violation_window_started: None,
-            violations: 0,
+            violations: ViolationWindow::default(),
         }
     }
 
@@ -324,15 +322,7 @@ impl MediaSessionRateState {
     }
 
     fn record_violation(&mut self, now: Instant) -> u32 {
-        if self
-            .violation_window_started
-            .is_none_or(|started| now.duration_since(started) >= MEDIA_MUTATION_VIOLATION_WINDOW)
-        {
-            self.violation_window_started = Some(now);
-            self.violations = 0;
-        }
-        self.violations = self.violations.saturating_add(1);
-        self.violations
+        self.violations.record(now, MEDIA_MUTATION_VIOLATION_WINDOW)
     }
 }
 
@@ -1040,8 +1030,7 @@ async fn handle_connection_with_timing(
         RATE_LIMIT_REFILL_RATE,
         frame_capacity(consumer_mutation_capacity(consumer_limit)),
     );
-    let mut rate_limit_window_started: Option<Instant> = None;
-    let mut rate_limit_violations = 0_u32;
+    let mut frame_refusals = ViolationWindow::default();
     let mut chat_bucket = TokenBucket::full(
         Instant::now(),
         CHAT_RATE_LIMIT_REFILL_RATE,
@@ -1053,8 +1042,7 @@ async fn handle_connection_with_timing(
         ADMIN_MUTATION_RATE_LIMIT_REFILL_RATE,
         MAX_ADMIN_MUTATION_TOKENS_US,
     );
-    let mut admin_mutation_violation_window_started: Option<Instant> = None;
-    let mut admin_mutation_violations = 0_u32;
+    let mut admin_mutation_refusals = ViolationWindow::default();
     let mut last_room_password_hash: Option<Instant> = None;
     let mut join_attempts = JoinAttemptState::default();
     let mut last_voice_request: Option<Instant> = None;
@@ -1261,13 +1249,7 @@ async fn handle_connection_with_timing(
             if matches!(&msg, Message::Close(_)) {
                 break;
             }
-            if rate_limit_window_started
-                .is_none_or(|started| now.duration_since(started) >= RATE_LIMIT_VIOLATION_WINDOW)
-            {
-                rate_limit_window_started = Some(now);
-                rate_limit_violations = 0;
-            }
-            rate_limit_violations = rate_limit_violations.saturating_add(1);
+            let rate_limit_violations = frame_refusals.record(now, RATE_LIMIT_VIOLATION_WINDOW);
             if rate_limit_violations == 1 {
                 if metrics
                     .telemetry()
@@ -1457,13 +1439,8 @@ async fn handle_connection_with_timing(
 
                         if is_admin_mutation(&client_msg) && !admin_mutation_bucket.try_consume(now)
                         {
-                            if admin_mutation_violation_window_started.is_none_or(|started| {
-                                now.duration_since(started) >= ADMIN_MUTATION_VIOLATION_WINDOW
-                            }) {
-                                admin_mutation_violation_window_started = Some(now);
-                                admin_mutation_violations = 0;
-                            }
-                            admin_mutation_violations = admin_mutation_violations.saturating_add(1);
+                            let admin_mutation_violations = admin_mutation_refusals
+                                .record(now, ADMIN_MUTATION_VIOLATION_WINDOW);
                             let _ = reply.send(
                                 &client_msg
                                     .social_error(

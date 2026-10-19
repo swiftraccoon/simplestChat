@@ -1,5 +1,6 @@
 //! Token-bucket rate limits for one connection, counted in microseconds of
-//! capacity so sub-second refills stay exact without floating point.
+//! capacity so sub-second refills stay exact without floating point, and the
+//! violation windows that close a connection after repeated refusals.
 
 use std::time::Instant;
 
@@ -49,6 +50,29 @@ impl TokenBucket {
     }
 }
 
+/// Refusals counted within a rolling window: the count starts over when a
+/// refusal arrives once the window has elapsed since the first one.
+#[derive(Debug, Clone, Copy, Default)]
+pub(super) struct ViolationWindow {
+    started: Option<Instant>,
+    violations: u32,
+}
+
+impl ViolationWindow {
+    /// Records a refusal at `now` and returns the count within the current window.
+    pub(super) fn record(&mut self, now: Instant, window: std::time::Duration) -> u32 {
+        if self
+            .started
+            .is_none_or(|started| now.duration_since(started) >= window)
+        {
+            self.started = Some(now);
+            self.violations = 0;
+        }
+        self.violations = self.violations.saturating_add(1);
+        self.violations
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -68,5 +92,25 @@ mod tests {
         assert!(bucket.try_consume(start + Duration::from_secs(10)));
         assert!(bucket.try_consume(start + Duration::from_secs(10)));
         assert!(!bucket.try_consume(start + Duration::from_secs(10)));
+    }
+
+    #[test]
+    fn violation_window_restarts_once_the_window_has_elapsed() {
+        let started = Instant::now();
+        let window = std::time::Duration::from_secs(10);
+        let mut refusals = ViolationWindow::default();
+        assert_eq!(refusals.record(started, window), 1);
+        assert_eq!(
+            refusals.record(started + std::time::Duration::from_secs(9), window),
+            2
+        );
+        assert_eq!(
+            refusals.record(started + std::time::Duration::from_secs(10), window),
+            1
+        );
+        assert_eq!(
+            refusals.record(started + std::time::Duration::from_secs(11), window),
+            2
+        );
     }
 }
