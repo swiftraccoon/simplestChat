@@ -948,7 +948,7 @@ mod tests {
     #[test]
     fn secrets_need_thirty_two_bytes_and_are_never_echoed() {
         let short = "0123456789abcdef";
-        let long = "0123456789abcdef0123456789abcdef";
+        let long = "disposable-fixture-value-of-32-bytes";
         for name in ["JWT_SECRET", "METRICS_TOKEN", "TRUSTED_PROXY_SECRET"] {
             assert_eq!(
                 error(&[(name, short)]),
@@ -1127,7 +1127,7 @@ mod tests {
 
     #[test]
     fn turn_and_saturation_sections_compose_their_own_parsers() {
-        let secret = "0123456789abcdef0123456789abcdef";
+        let secret = "disposable-turn-relay-fixture-secret";
         assert_eq!(
             error(&[("TURN_URLS", "turn:relay.example.com:3478")]),
             "TURN_SECRET is required when TURN_URLS is set"
