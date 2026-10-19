@@ -102,12 +102,12 @@ pub(crate) async fn create_session(
     let mut transaction = pool
         .begin()
         .await
-        .map_err(|error| AuthError::DatabaseError(error.to_string()))?;
+        .map_err(crate::auth::routes::database_error)?;
     let session = create_session_with(&mut transaction, user_id, refresh_token).await?;
     transaction
         .commit()
         .await
-        .map_err(|error| AuthError::DatabaseError(error.to_string()))?;
+        .map_err(crate::auth::routes::database_error)?;
     Ok(session)
 }
 
@@ -123,7 +123,7 @@ pub(crate) async fn create_session_with(
         .bind(user_id)
         .execute(&mut **transaction)
         .await
-        .map_err(|error| AuthError::DatabaseError(error.to_string()))?;
+        .map_err(crate::auth::routes::database_error)?;
     let new_session_id = insert_session_with(&mut **transaction, user_id, refresh_token).await?;
 
     // A user who knows valid credentials must not be able to grow the sessions
@@ -149,7 +149,7 @@ pub(crate) async fn create_session_with(
     .bind(MAX_ACTIVE_SESSIONS_PER_USER - 1)
     .execute(&mut **transaction)
     .await
-    .map_err(|error| AuthError::DatabaseError(error.to_string()))?;
+    .map_err(crate::auth::routes::database_error)?;
     Ok(new_session_id)
 }
 
@@ -172,7 +172,7 @@ where
     .bind(&refresh_token.family_hash)
     .fetch_one(executor)
     .await
-    .map_err(|e| AuthError::DatabaseError(e.to_string()))
+    .map_err(crate::auth::routes::database_error)
 }
 
 pub(crate) async fn rotate_refresh_token_with(
@@ -201,7 +201,7 @@ pub(crate) async fn rotate_refresh_token_with(
     .bind(&family_hash)
     .fetch_optional(&mut **transaction)
     .await
-    .map_err(|error| AuthError::DatabaseError(error.to_string()))?
+    .map_err(crate::auth::routes::database_error)?
     .ok_or(AuthError::InvalidToken)?;
 
     let locked_user: Option<Uuid> =
@@ -209,7 +209,7 @@ pub(crate) async fn rotate_refresh_token_with(
             .bind(candidate_user_id)
             .fetch_optional(&mut **transaction)
             .await
-            .map_err(|error| AuthError::DatabaseError(error.to_string()))?;
+            .map_err(crate::auth::routes::database_error)?;
     if locked_user.is_none() {
         return Err(AuthError::InvalidToken);
     }
@@ -229,7 +229,7 @@ pub(crate) async fn rotate_refresh_token_with(
     .bind(candidate_user_id)
     .fetch_optional(&mut **transaction)
     .await
-    .map_err(|error| AuthError::DatabaseError(error.to_string()))?;
+    .map_err(crate::auth::routes::database_error)?;
 
     if let Some((session_id, stored_family_hash)) = current_session {
         if stored_family_hash != family_hash {
@@ -252,7 +252,7 @@ pub(crate) async fn rotate_refresh_token_with(
         .bind(session_id)
         .execute(&mut **transaction)
         .await
-        .map_err(|error| AuthError::DatabaseError(error.to_string()))?;
+        .map_err(crate::auth::routes::database_error)?;
 
         return Ok(RefreshRotation::Rotated {
             user_id: candidate_user_id,
@@ -281,7 +281,7 @@ pub(crate) async fn rotate_refresh_token_with(
     .bind(CONCURRENT_REFRESH_GRACE_SECONDS)
     .fetch_optional(&mut **transaction)
     .await
-    .map_err(|error| AuthError::DatabaseError(error.to_string()))?
+    .map_err(crate::auth::routes::database_error)?
     .ok_or(AuthError::InvalidToken)?;
 
     if family_session.1 {
@@ -292,7 +292,7 @@ pub(crate) async fn rotate_refresh_token_with(
         .bind(family_session.0)
         .execute(&mut **transaction)
         .await
-        .map_err(|error| AuthError::DatabaseError(error.to_string()))?;
+        .map_err(crate::auth::routes::database_error)?;
     Ok(RefreshRotation::ReuseDetected)
 }
 
@@ -313,7 +313,7 @@ pub async fn delete_session_by_token(pool: &PgPool, raw_token: &str) -> Result<b
     .bind(family_hash)
     .execute(pool)
     .await
-    .map_err(|e| AuthError::DatabaseError(e.to_string()))?;
+    .map_err(crate::auth::routes::database_error)?;
     Ok(result.rows_affected() > 0)
 }
 
@@ -369,7 +369,7 @@ pub async fn delete_user_sessions(pool: &PgPool, user_id: &Uuid) -> Result<(), A
         .bind(user_id)
         .execute(pool)
         .await
-        .map_err(|e| AuthError::DatabaseError(e.to_string()))?;
+        .map_err(crate::auth::routes::database_error)?;
     Ok(())
 }
 
@@ -385,7 +385,7 @@ pub async fn cleanup_expired(pool: &PgPool) -> Result<u64, AuthError> {
     .bind(EXPIRED_CLEANUP_BATCH)
     .execute(pool)
     .await
-    .map_err(|e| AuthError::DatabaseError(e.to_string()))?;
+    .map_err(crate::auth::routes::database_error)?;
     Ok(result.rows_affected())
 }
 
@@ -452,12 +452,12 @@ mod tests {
         let mut transaction = pool
             .begin()
             .await
-            .map_err(|error| AuthError::DatabaseError(error.to_string()))?;
+            .map_err(crate::auth::routes::database_error)?;
         let outcome = rotate_refresh_token_with(&mut transaction, raw_token).await?;
         transaction
             .commit()
             .await
-            .map_err(|error| AuthError::DatabaseError(error.to_string()))?;
+            .map_err(crate::auth::routes::database_error)?;
         Ok(outcome)
     }
 
