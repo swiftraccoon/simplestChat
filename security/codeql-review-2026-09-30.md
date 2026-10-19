@@ -920,3 +920,27 @@ Complete-source SHA256 per rebound file:
 | 60 | `src/room/settings.rs:621:621:33:43` | `codeql:8cf38fa9277784468a7eec886fa96a8a6a599d12a2b82d72e5691ebfa15ef748` |
 | 61 | `src/room/settings.rs:623:623:33:43` | `codeql:366d6f928ab38d4001e68f14738c8fed814fb1e6884c25c144de81aa16489d06` |
 | 62 | `src/room/settings.rs:626:626:33:45` | `codeql:4654d720ac739ee3c5d88ffda391d93ba9094a0788e890eefe3995d47b349861` |
+
+## History rewrite: today's commits squashed by theme (2026-10-19)
+
+The 77 commits of 2026-10-19 were rewritten into the 17 thematic commits below at the owner's request; every tree is a tree the original history also had, and the final tree is byte-identical to the original head (`0fbb7a58d6ea1296456e4091851a287b34855b67`). The sections above name the original commit ids; this table maps them. The review records' provenance revisions were rewritten to the new ids (fingerprints, scopes and file hashes are unchanged, so the exact reviews stay valid).
+
+| Commit | Subject | Original commits |
+|---|---|---|
+| `2d82501` | build: form a Cargo workspace around the simplestchat crate and tidy the repository | `88e8ed0`, `a00c8df`, `ba010e1`, `e7172c2`, `73c0fa3`, `61578db`, `e050179`, `64596d2`, `dc64fbf`, `294206b` |
+| `a3c3279` | refactor(config): read every setting through one typed Config | `4ca15a0`, `a49f127`, `546dc33`, `9e49249`, `ffb3052` |
+| `006c968` | refactor(protocol)!: carry roles by name, give refusals error codes and type chat timestamps | `a2f2291`, `b1e6c89`, `3586755`, `98dcb4f`, `c3fb3cf`, `0016bad` |
+| `d2791f6` | fix(deploy): compare the browser asset mount by its reviewed fields | `353c5e7`, `126386a`, `c3e7b6e` |
+| `7906521` | chore(security): review the Fedora vim refresh and the rpm database regions it moved | `84ba4d8`, `62e37b1` |
+| `76e1113` | refactor(protocol)!: type social responses and identifiers | `b13c994`, `cc94261`, `ff7dcbb`, `732867c` |
+| `60d388e` | feat(protocol): generate the TypeScript contract from the Rust wire types | `5fe48e1`, `510c2aa`, `216fde4`, `922ac30`, `421ce3e`, `4d90826`, `8b56eed`, `50af78a`, `7f59901` |
+| `42ce6c3` | refactor: one sliding window, address cohort and token bucket for the server's limits | `a744883`, `d265619`, `afab203`, `ddb844e`, `f36ccd7`, `d3d8317` |
+| `041e9ec` | refactor(room): one typed settings loader and one settings patch | `156dc9e`, `ff4ed3a`, `0c266bf` |
+| `07a7e41` | refactor(room): split the room manager, the social dispatcher and the route tree | `9bdb3cf`, `5b13433`, `612cc18`, `3df8ae5`, `8b7a99f`, `402e1e5`, `cf139bd`, `add9f78`, `34eefa4`, `4dca954` |
+| `167a4e5` | refactor(protocol): declare field renaming once per enum and type the capabilities payload | `b7212bd`, `20e28a4`, `87b4981`, `44331df`, `56f85e5` |
+| `aa797ef` | refactor(signaling): one violation window and one operation vocabulary | `5018454`, `629d765` |
+| `19dd0a9` | refactor(room): name the persistence rows and state each rule once | `a1bda60`, `262484d`, `c324551`, `77d02a5`, `a8da2cb`, `fd713bb`, `14f9e88`, `ca9a1ee` |
+| `77871e2` | fix(ops): confirm the seeded room's owner through the owned-rooms listing | `ac758ea` |
+| `0dbe170` | fix(web): own a repeated Back while its history traversal is pending | `07049b2` |
+| `0510e91` | refactor(protocol): refuse unknown chat treatments instead of showing them as accent | `b19f471` |
+| `5ad95e3` | refactor: narrow the library's public surface and drop what nothing used | `0fbb7a5` |

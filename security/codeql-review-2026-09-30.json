@@ -734,7 +734,7 @@
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/32",
       "sourceReviewBaseRevision": "8d2f3df3a86ff92ab3bdfa92d257e25e701754f5",
       "sourceReviewBlob": "c064e6150eb0ca7552fd54641a53e320b8510d9b",
-      "sourceProvenanceRevision": "61578db87ad7d0e1be8046008ac6a4582d78abaa"
+      "sourceProvenanceRevision": "2d8250182c3080d7a9c53829f0bf294ce37bca5a"
     },
     {
       "rule": "rust/cleartext-logging",
@@ -757,7 +757,7 @@
       "rationale": "The sink is a cfg(test) assertion diagnostic for a locally constructed metrics snapshot. The values are numeric counters/gauges; a password-named metric does not contain an account password. No credential or production log sink is involved.",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/33",
-      "sourceProvenanceRevision": "61578db87ad7d0e1be8046008ac6a4582d78abaa",
+      "sourceProvenanceRevision": "2d8250182c3080d7a9c53829f0bf294ce37bca5a",
       "sourceReviewBaseRevision": "4c26fe1137eed51144c9eecd0bf5745ab2ea458b",
       "sourceReviewBlob": "0269401ceed0961223b833627824827bfe47d944"
     },
@@ -782,7 +782,7 @@
       "rationale": "The sink is a cfg(test) assertion diagnostic for a locally constructed metrics snapshot. The values are numeric counters/gauges; a password-named metric does not contain an account password. No credential or production log sink is involved.",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/34",
-      "sourceProvenanceRevision": "61578db87ad7d0e1be8046008ac6a4582d78abaa",
+      "sourceProvenanceRevision": "2d8250182c3080d7a9c53829f0bf294ce37bca5a",
       "sourceReviewBaseRevision": "4c26fe1137eed51144c9eecd0bf5745ab2ea458b",
       "sourceReviewBlob": "0269401ceed0961223b833627824827bfe47d944"
     },
@@ -807,8 +807,8 @@
       "rationale": "The sink is a cfg(test) assertion diagnostic for a locally constructed metrics snapshot. The values are numeric counters/gauges; a password-named metric does not contain an account password. No credential or production log sink is involved.",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/35",
-      "sourceProvenanceRevision": "20e28a47f2efb54c749bd273d4e4c2b9e4668d05",
-      "sourceReviewBaseRevision": "b7212bd342fa1acff9028f179d80f1b0db1ec1bd",
+      "sourceProvenanceRevision": "167a4e5b58e6432bcbd9c87cae4eb6baf7f6ac37",
+      "sourceReviewBaseRevision": "167a4e5b58e6432bcbd9c87cae4eb6baf7f6ac37",
       "sourceReviewBlob": "1988b00f1a9f5d5ab48a752f185b4fb2cfd2f6b4"
     },
     {
@@ -832,8 +832,8 @@
       "rationale": "The sink is an assertion diagnostic in the cfg(test)-only authorization dispatcher fixture. It formats local synthetic operation results and roles, not a production logger or account credential. The reviewed test calls use fixed fixture participants and messages.",
       "observedRevision": "9eaabb7b5ab586ca694283afc1550055ef2c3136",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/36",
-      "sourceProvenanceRevision": "ff7dcbb4a3e17a78f1c3b585eb65f4e9fa42cc81",
-      "sourceReviewBaseRevision": "a2f229163ce2d8f663c961047288069bcd4cf0b2",
+      "sourceProvenanceRevision": "76e11139d1da29faedaf6c0a2f938418faee898d",
+      "sourceReviewBaseRevision": "006c9689554519e732b31aef9007cbc4aed83c84",
       "sourceReviewBlob": "efb169bd13f2d833426378c99a6a600b29966b6b"
     },
     {
@@ -857,8 +857,8 @@
       "rationale": "The sink is an assertion diagnostic in the cfg(test)-only authorization dispatcher fixture. It formats local synthetic operation results and roles, not a production logger or account credential. The reviewed test calls use fixed fixture participants and messages.",
       "observedRevision": "9eaabb7b5ab586ca694283afc1550055ef2c3136",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/37",
-      "sourceProvenanceRevision": "ff7dcbb4a3e17a78f1c3b585eb65f4e9fa42cc81",
-      "sourceReviewBaseRevision": "a2f229163ce2d8f663c961047288069bcd4cf0b2",
+      "sourceProvenanceRevision": "76e11139d1da29faedaf6c0a2f938418faee898d",
+      "sourceReviewBaseRevision": "006c9689554519e732b31aef9007cbc4aed83c84",
       "sourceReviewBlob": "efb169bd13f2d833426378c99a6a600b29966b6b"
     },
     {
@@ -884,7 +884,7 @@
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/38",
       "sourceReviewBaseRevision": "f1cb5701a2ecea03b1183da3ae5afbb1bec02424",
       "sourceReviewBlob": "2a6a56cc1bc38b543697cda75b389a64cf641977",
-      "sourceProvenanceRevision": "61578db87ad7d0e1be8046008ac6a4582d78abaa"
+      "sourceProvenanceRevision": "2d8250182c3080d7a9c53829f0bf294ce37bca5a"
     },
     {
       "rule": "rust/hard-coded-cryptographic-value",
@@ -909,7 +909,7 @@
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/39",
       "sourceReviewBaseRevision": "f1cb5701a2ecea03b1183da3ae5afbb1bec02424",
       "sourceReviewBlob": "2a6a56cc1bc38b543697cda75b389a64cf641977",
-      "sourceProvenanceRevision": "61578db87ad7d0e1be8046008ac6a4582d78abaa"
+      "sourceProvenanceRevision": "2d8250182c3080d7a9c53829f0bf294ce37bca5a"
     },
     {
       "rule": "rust/hard-coded-cryptographic-value",
@@ -934,7 +934,7 @@
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/40",
       "sourceReviewBaseRevision": "f1cb5701a2ecea03b1183da3ae5afbb1bec02424",
       "sourceReviewBlob": "2a6a56cc1bc38b543697cda75b389a64cf641977",
-      "sourceProvenanceRevision": "61578db87ad7d0e1be8046008ac6a4582d78abaa"
+      "sourceProvenanceRevision": "2d8250182c3080d7a9c53829f0bf294ce37bca5a"
     },
     {
       "rule": "rust/hard-coded-cryptographic-value",
@@ -959,7 +959,7 @@
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/41",
       "sourceReviewBaseRevision": "f1cb5701a2ecea03b1183da3ae5afbb1bec02424",
       "sourceReviewBlob": "2a6a56cc1bc38b543697cda75b389a64cf641977",
-      "sourceProvenanceRevision": "61578db87ad7d0e1be8046008ac6a4582d78abaa"
+      "sourceProvenanceRevision": "2d8250182c3080d7a9c53829f0bf294ce37bca5a"
     },
     {
       "rule": "rust/hard-coded-cryptographic-value",
@@ -984,7 +984,7 @@
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/42",
       "sourceReviewBaseRevision": "baebe3d0b858b379b07d8bdc887389333a08c37b",
       "sourceReviewBlob": "51b564a8f14973b2585491830383aa69aac9d0a0",
-      "sourceProvenanceRevision": "61578db87ad7d0e1be8046008ac6a4582d78abaa"
+      "sourceProvenanceRevision": "2d8250182c3080d7a9c53829f0bf294ce37bca5a"
     },
     {
       "rule": "rust/hard-coded-cryptographic-value",
@@ -1009,7 +1009,7 @@
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/43",
       "sourceReviewBaseRevision": "baebe3d0b858b379b07d8bdc887389333a08c37b",
       "sourceReviewBlob": "51b564a8f14973b2585491830383aa69aac9d0a0",
-      "sourceProvenanceRevision": "61578db87ad7d0e1be8046008ac6a4582d78abaa"
+      "sourceProvenanceRevision": "2d8250182c3080d7a9c53829f0bf294ce37bca5a"
     },
     {
       "rule": "rust/hard-coded-cryptographic-value",
@@ -1034,7 +1034,7 @@
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/44",
       "sourceReviewBaseRevision": "baebe3d0b858b379b07d8bdc887389333a08c37b",
       "sourceReviewBlob": "51b564a8f14973b2585491830383aa69aac9d0a0",
-      "sourceProvenanceRevision": "61578db87ad7d0e1be8046008ac6a4582d78abaa"
+      "sourceProvenanceRevision": "2d8250182c3080d7a9c53829f0bf294ce37bca5a"
     },
     {
       "rule": "rust/hard-coded-cryptographic-value",
@@ -1059,7 +1059,7 @@
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/45",
       "sourceReviewBaseRevision": "baebe3d0b858b379b07d8bdc887389333a08c37b",
       "sourceReviewBlob": "51b564a8f14973b2585491830383aa69aac9d0a0",
-      "sourceProvenanceRevision": "61578db87ad7d0e1be8046008ac6a4582d78abaa"
+      "sourceProvenanceRevision": "2d8250182c3080d7a9c53829f0bf294ce37bca5a"
     },
     {
       "rule": "rust/hard-coded-cryptographic-value",
@@ -1084,7 +1084,7 @@
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/46",
       "sourceReviewBaseRevision": "baebe3d0b858b379b07d8bdc887389333a08c37b",
       "sourceReviewBlob": "51b564a8f14973b2585491830383aa69aac9d0a0",
-      "sourceProvenanceRevision": "61578db87ad7d0e1be8046008ac6a4582d78abaa"
+      "sourceProvenanceRevision": "2d8250182c3080d7a9c53829f0bf294ce37bca5a"
     },
     {
       "rule": "rust/hard-coded-cryptographic-value",
@@ -1109,7 +1109,7 @@
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/47",
       "sourceReviewBaseRevision": "baebe3d0b858b379b07d8bdc887389333a08c37b",
       "sourceReviewBlob": "51b564a8f14973b2585491830383aa69aac9d0a0",
-      "sourceProvenanceRevision": "61578db87ad7d0e1be8046008ac6a4582d78abaa"
+      "sourceProvenanceRevision": "2d8250182c3080d7a9c53829f0bf294ce37bca5a"
     },
     {
       "rule": "rust/hard-coded-cryptographic-value",
@@ -1134,7 +1134,7 @@
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/48",
       "sourceReviewBaseRevision": "baebe3d0b858b379b07d8bdc887389333a08c37b",
       "sourceReviewBlob": "51b564a8f14973b2585491830383aa69aac9d0a0",
-      "sourceProvenanceRevision": "61578db87ad7d0e1be8046008ac6a4582d78abaa"
+      "sourceProvenanceRevision": "2d8250182c3080d7a9c53829f0bf294ce37bca5a"
     },
     {
       "rule": "rust/hard-coded-cryptographic-value",
@@ -1159,7 +1159,7 @@
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/49",
       "sourceReviewBaseRevision": "baebe3d0b858b379b07d8bdc887389333a08c37b",
       "sourceReviewBlob": "51b564a8f14973b2585491830383aa69aac9d0a0",
-      "sourceProvenanceRevision": "61578db87ad7d0e1be8046008ac6a4582d78abaa"
+      "sourceProvenanceRevision": "2d8250182c3080d7a9c53829f0bf294ce37bca5a"
     },
     {
       "rule": "rust/hard-coded-cryptographic-value",
@@ -1184,7 +1184,7 @@
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/50",
       "sourceReviewBaseRevision": "baebe3d0b858b379b07d8bdc887389333a08c37b",
       "sourceReviewBlob": "51b564a8f14973b2585491830383aa69aac9d0a0",
-      "sourceProvenanceRevision": "61578db87ad7d0e1be8046008ac6a4582d78abaa"
+      "sourceProvenanceRevision": "2d8250182c3080d7a9c53829f0bf294ce37bca5a"
     },
     {
       "rule": "rust/hard-coded-cryptographic-value",
@@ -1209,7 +1209,7 @@
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/51",
       "sourceReviewBaseRevision": "baebe3d0b858b379b07d8bdc887389333a08c37b",
       "sourceReviewBlob": "51b564a8f14973b2585491830383aa69aac9d0a0",
-      "sourceProvenanceRevision": "61578db87ad7d0e1be8046008ac6a4582d78abaa"
+      "sourceProvenanceRevision": "2d8250182c3080d7a9c53829f0bf294ce37bca5a"
     },
     {
       "rule": "rust/hard-coded-cryptographic-value",
@@ -1234,7 +1234,7 @@
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/52",
       "sourceReviewBaseRevision": "baebe3d0b858b379b07d8bdc887389333a08c37b",
       "sourceReviewBlob": "51b564a8f14973b2585491830383aa69aac9d0a0",
-      "sourceProvenanceRevision": "61578db87ad7d0e1be8046008ac6a4582d78abaa"
+      "sourceProvenanceRevision": "2d8250182c3080d7a9c53829f0bf294ce37bca5a"
     },
     {
       "rule": "rust/hard-coded-cryptographic-value",
@@ -1259,7 +1259,7 @@
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/53",
       "sourceReviewBaseRevision": "baebe3d0b858b379b07d8bdc887389333a08c37b",
       "sourceReviewBlob": "51b564a8f14973b2585491830383aa69aac9d0a0",
-      "sourceProvenanceRevision": "61578db87ad7d0e1be8046008ac6a4582d78abaa"
+      "sourceProvenanceRevision": "2d8250182c3080d7a9c53829f0bf294ce37bca5a"
     },
     {
       "rule": "rust/hard-coded-cryptographic-value",
@@ -1284,7 +1284,7 @@
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/54",
       "sourceReviewBaseRevision": "baebe3d0b858b379b07d8bdc887389333a08c37b",
       "sourceReviewBlob": "51b564a8f14973b2585491830383aa69aac9d0a0",
-      "sourceProvenanceRevision": "61578db87ad7d0e1be8046008ac6a4582d78abaa"
+      "sourceProvenanceRevision": "2d8250182c3080d7a9c53829f0bf294ce37bca5a"
     },
     {
       "rule": "rust/hard-coded-cryptographic-value",
@@ -1309,7 +1309,7 @@
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/55",
       "sourceReviewBaseRevision": "baebe3d0b858b379b07d8bdc887389333a08c37b",
       "sourceReviewBlob": "51b564a8f14973b2585491830383aa69aac9d0a0",
-      "sourceProvenanceRevision": "61578db87ad7d0e1be8046008ac6a4582d78abaa"
+      "sourceProvenanceRevision": "2d8250182c3080d7a9c53829f0bf294ce37bca5a"
     },
     {
       "rule": "rust/hard-coded-cryptographic-value",
@@ -1334,7 +1334,7 @@
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/56",
       "sourceReviewBaseRevision": "baebe3d0b858b379b07d8bdc887389333a08c37b",
       "sourceReviewBlob": "51b564a8f14973b2585491830383aa69aac9d0a0",
-      "sourceProvenanceRevision": "61578db87ad7d0e1be8046008ac6a4582d78abaa"
+      "sourceProvenanceRevision": "2d8250182c3080d7a9c53829f0bf294ce37bca5a"
     },
     {
       "rule": "rust/hard-coded-cryptographic-value",
@@ -1359,7 +1359,7 @@
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/57",
       "sourceReviewBaseRevision": "baebe3d0b858b379b07d8bdc887389333a08c37b",
       "sourceReviewBlob": "51b564a8f14973b2585491830383aa69aac9d0a0",
-      "sourceProvenanceRevision": "61578db87ad7d0e1be8046008ac6a4582d78abaa"
+      "sourceProvenanceRevision": "2d8250182c3080d7a9c53829f0bf294ce37bca5a"
     },
     {
       "rule": "rust/hard-coded-cryptographic-value",
@@ -1382,7 +1382,7 @@
       "rationale": "This cfg(test) assertion verifies the timing-equalization dummy password hash does not match an arbitrary public input. It provisions no account and is outside runtime credential selection.",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/58",
-      "sourceProvenanceRevision": "61578db87ad7d0e1be8046008ac6a4582d78abaa",
+      "sourceProvenanceRevision": "2d8250182c3080d7a9c53829f0bf294ce37bca5a",
       "sourceReviewBaseRevision": "551ce5db2ccf6a76de03f2d3e4bbce32e9f06196",
       "sourceReviewBlob": "f3b76b57f68aabaf31d58e03694cc2c8253ad6dc"
     },
@@ -1407,8 +1407,8 @@
       "rationale": "These literals are cfg(test) room-password validation boundary inputs for length, UTF-8 bytes and control rejection. They do not create or authenticate any operational room.",
       "observedRevision": "9eaabb7b5ab586ca694283afc1550055ef2c3136",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/59",
-      "sourceProvenanceRevision": "ac758eaf3208b2382a0495a0176fa260e84d94ef",
-      "sourceReviewBaseRevision": "ff4ed3aed04a6d4f04add1537c591b7134c9ffe2",
+      "sourceProvenanceRevision": "77871e2140cf958c0d860ab8f95b4b4e087f6bed",
+      "sourceReviewBaseRevision": "041e9ec53224c162ea02fdcef14a612ec8e0629c",
       "sourceReviewBlob": "46df131e5d7d43b2869b4b73d0d1ec7f3255fdad"
     },
     {
@@ -1432,8 +1432,8 @@
       "rationale": "These literals are cfg(test) room-password validation boundary inputs for length, UTF-8 bytes and control rejection. They do not create or authenticate any operational room.",
       "observedRevision": "9eaabb7b5ab586ca694283afc1550055ef2c3136",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/60",
-      "sourceProvenanceRevision": "ac758eaf3208b2382a0495a0176fa260e84d94ef",
-      "sourceReviewBaseRevision": "ff4ed3aed04a6d4f04add1537c591b7134c9ffe2",
+      "sourceProvenanceRevision": "77871e2140cf958c0d860ab8f95b4b4e087f6bed",
+      "sourceReviewBaseRevision": "041e9ec53224c162ea02fdcef14a612ec8e0629c",
       "sourceReviewBlob": "46df131e5d7d43b2869b4b73d0d1ec7f3255fdad"
     },
     {
@@ -1457,8 +1457,8 @@
       "rationale": "These literals are cfg(test) room-password validation boundary inputs for length, UTF-8 bytes and control rejection. They do not create or authenticate any operational room.",
       "observedRevision": "9eaabb7b5ab586ca694283afc1550055ef2c3136",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/61",
-      "sourceProvenanceRevision": "ac758eaf3208b2382a0495a0176fa260e84d94ef",
-      "sourceReviewBaseRevision": "ff4ed3aed04a6d4f04add1537c591b7134c9ffe2",
+      "sourceProvenanceRevision": "77871e2140cf958c0d860ab8f95b4b4e087f6bed",
+      "sourceReviewBaseRevision": "041e9ec53224c162ea02fdcef14a612ec8e0629c",
       "sourceReviewBlob": "46df131e5d7d43b2869b4b73d0d1ec7f3255fdad"
     },
     {
@@ -1482,8 +1482,8 @@
       "rationale": "These literals are cfg(test) room-password validation boundary inputs for length, UTF-8 bytes and control rejection. They do not create or authenticate any operational room.",
       "observedRevision": "9eaabb7b5ab586ca694283afc1550055ef2c3136",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/62",
-      "sourceProvenanceRevision": "ac758eaf3208b2382a0495a0176fa260e84d94ef",
-      "sourceReviewBaseRevision": "ff4ed3aed04a6d4f04add1537c591b7134c9ffe2",
+      "sourceProvenanceRevision": "77871e2140cf958c0d860ab8f95b4b4e087f6bed",
+      "sourceReviewBaseRevision": "041e9ec53224c162ea02fdcef14a612ec8e0629c",
       "sourceReviewBlob": "46df131e5d7d43b2869b4b73d0d1ec7f3255fdad"
     },
     {
@@ -1507,8 +1507,8 @@
       "rationale": "This fixed passphrase is inside the cfg(test) disposable-database registration enumeration-limiter test. It is used only with a unique fixture account and test-owned state, never a production identity.",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/63",
-      "sourceProvenanceRevision": "20e28a47f2efb54c749bd273d4e4c2b9e4668d05",
-      "sourceReviewBaseRevision": "b7212bd342fa1acff9028f179d80f1b0db1ec1bd",
+      "sourceProvenanceRevision": "167a4e5b58e6432bcbd9c87cae4eb6baf7f6ac37",
+      "sourceReviewBaseRevision": "167a4e5b58e6432bcbd9c87cae4eb6baf7f6ac37",
       "sourceReviewBlob": "1988b00f1a9f5d5ab48a752f185b4fb2cfd2f6b4"
     },
     {
@@ -1576,9 +1576,9 @@
       "rationale": "This key is the public RFC2202 HMAC-SHA1 known-answer vector inside the cfg(test) module. The exact expected digest verifies protocol interoperability; it is not a deployed TURN key.",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/66",
-      "sourceReviewBaseRevision": "ba010e1baf5e1249031967241888ece79bf0e276",
+      "sourceReviewBaseRevision": "2d8250182c3080d7a9c53829f0bf294ce37bca5a",
       "sourceReviewBlob": "51a849c5651214c9610124597b23bd6ca2898de1",
-      "sourceProvenanceRevision": "ffb30521b3ef611cd5a56d58f992bec9602971b4"
+      "sourceProvenanceRevision": "a3c32791ec7558525be6238532878bbfc359ed0b"
     },
     {
       "rule": "rust/hard-coded-cryptographic-value",
@@ -1603,7 +1603,7 @@
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/67",
       "sourceReviewBaseRevision": "f1cb5701a2ecea03b1183da3ae5afbb1bec02424",
       "sourceReviewBlob": "2a6a56cc1bc38b543697cda75b389a64cf641977",
-      "sourceProvenanceRevision": "61578db87ad7d0e1be8046008ac6a4582d78abaa"
+      "sourceProvenanceRevision": "2d8250182c3080d7a9c53829f0bf294ce37bca5a"
     },
     {
       "rule": "rust/hard-coded-cryptographic-value",
@@ -1628,7 +1628,7 @@
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/68",
       "sourceReviewBaseRevision": "f1cb5701a2ecea03b1183da3ae5afbb1bec02424",
       "sourceReviewBlob": "2a6a56cc1bc38b543697cda75b389a64cf641977",
-      "sourceProvenanceRevision": "61578db87ad7d0e1be8046008ac6a4582d78abaa"
+      "sourceProvenanceRevision": "2d8250182c3080d7a9c53829f0bf294ce37bca5a"
     },
     {
       "rule": "rust/log-injection",
@@ -1651,8 +1651,8 @@
       "rationale": "The sink is a cfg(test) assertion diagnostic for a response from the test-owned loopback HTTP server. The route returns fixed status/body bytes to test timeout and admission metrics; no external input or production logging path is used.",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/69",
-      "sourceProvenanceRevision": "20e28a47f2efb54c749bd273d4e4c2b9e4668d05",
-      "sourceReviewBaseRevision": "b7212bd342fa1acff9028f179d80f1b0db1ec1bd",
+      "sourceProvenanceRevision": "167a4e5b58e6432bcbd9c87cae4eb6baf7f6ac37",
+      "sourceReviewBaseRevision": "167a4e5b58e6432bcbd9c87cae4eb6baf7f6ac37",
       "sourceReviewBlob": "1988b00f1a9f5d5ab48a752f185b4fb2cfd2f6b4"
     },
     {
@@ -1679,7 +1679,7 @@
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/102",
       "sourceReviewBaseRevision": "42a467b4944071adc54cf592409c419276d3efc8",
       "sourceReviewBlob": "7b1259cbdb9263770b7032799cb063e61079fca0",
-      "sourceProvenanceRevision": "61578db87ad7d0e1be8046008ac6a4582d78abaa"
+      "sourceProvenanceRevision": "2d8250182c3080d7a9c53829f0bf294ce37bca5a"
     },
     {
       "rule": "rust/cleartext-transmission",
@@ -1704,8 +1704,8 @@
       "observedRunId": 39085371470,
       "reviewed": "2026-10-18",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/953",
-      "sourceProvenanceRevision": "ac758eaf3208b2382a0495a0176fa260e84d94ef",
-      "sourceReviewBaseRevision": "88e8ed0ceb1a999cb2318bdfbc845ae5ebd3c3b8",
+      "sourceProvenanceRevision": "77871e2140cf958c0d860ab8f95b4b4e087f6bed",
+      "sourceReviewBaseRevision": "2d8250182c3080d7a9c53829f0bf294ce37bca5a",
       "sourceReviewBlob": "418638b65a4b0102886514fcb8e45abef957b6c1"
     }
   ]
