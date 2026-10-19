@@ -442,8 +442,14 @@ pub enum ClientMessage {
     RequestVoice,
 
     // === Room management ===
-    /// Update room settings (Admin+): the patch's fields sit beside `type`.
-    UpdateRoomSettings(SettingsPatch),
+    /// Update room settings (Admin+). The patch's fields sit beside `type`; the
+    /// envelope's other keys (`requestId`) are ignored as on every command, and
+    /// only the HTTP route, which reads `SettingsPatch` directly, rejects unknown
+    /// fields.
+    UpdateRoomSettings {
+        #[serde(flatten)]
+        patch: SettingsPatch,
+    },
     /// Set the room topic
     SetTopic {
         topic: String,
@@ -1436,12 +1442,15 @@ mod tests {
         expected_participants: Option<Option<i32>>,
         expected_password: Option<Option<&str>>,
     ) {
-        let ClientMessage::UpdateRoomSettings(super::SettingsPatch {
-            max_broadcasters,
-            max_participants,
-            password,
-            ..
-        }) = message
+        let ClientMessage::UpdateRoomSettings {
+            patch:
+                super::SettingsPatch {
+                    max_broadcasters,
+                    max_participants,
+                    password,
+                    ..
+                },
+        } = message
         else {
             panic!("expected a room settings patch");
         };
@@ -1534,5 +1543,26 @@ mod tests {
             message[field] = value;
             assert!(serde_json::from_value::<ClientMessage>(message).is_err());
         }
+    }
+
+    #[test]
+    fn room_settings_frames_tolerate_the_envelope_request_id() {
+        let message: ClientMessage = serde_json::from_value(json!({
+            "type": "updateRoomSettings", "requestId": "settings-1", "moderated": true,
+        }))
+        .unwrap();
+        let ClientMessage::UpdateRoomSettings { patch } = message else {
+            panic!("expected a room settings patch");
+        };
+        assert_eq!(patch.moderated, Some(true));
+    }
+
+    #[test]
+    fn room_settings_patch_bodies_reject_unknown_fields() {
+        let error = serde_json::from_value::<super::SettingsPatch>(json!({
+            "requestId": "settings-1", "moderated": true,
+        }))
+        .expect_err("the HTTP body is strict");
+        assert!(error.to_string().contains("unknown field"), "{error}");
     }
 }

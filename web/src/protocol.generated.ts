@@ -364,7 +364,9 @@ export type ClientMessage =
       role: Role;
     }
   | { type: 'requestVoice' }
-  | ({ type: 'updateRoomSettings' } & SettingsPatch)
+  | ({
+      type: 'updateRoomSettings';
+    } & SettingsPatch)
   | {
       type: 'setTopic';
       topic: string;

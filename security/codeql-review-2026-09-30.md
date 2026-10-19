@@ -877,3 +877,17 @@ Complete-source SHA256 per rebound file:
 | 60 | `src/room/settings.rs:668:668:33:43` | `codeql:e34a7b6718132fab97108415b14582bdf6a00a0863cad0c901f1dec5a2f2b4a9` |
 | 61 | `src/room/settings.rs:670:670:33:43` | `codeql:c8b32581aa8089418b503c561051238061f22731f43990a05b2cdf5f6935322c` |
 | 62 | `src/room/settings.rs:673:673:33:45` | `codeql:143e6b5562d1e857bf243cbad055166ca5939fa1a9bb75081c7260a4eb377dc7` |
+
+## Source re-review: signaling security tests in a sibling file (2026-10-19)
+
+`8b7a99f` moved the inline `security_tests` module of `src/signaling/mod.rs` to `src/signaling/security_tests.rs` (declared beside `authorization_tests`), so the three reviewed test-fixture findings now live in that file, two lines further down than their offset in the module body (the file's doc header) and four columns to the left (the module indentation). Every flagged line is byte-identical apart from that indentation; the identities were recomputed with the explicit relocation entries of the same tool that relocated alert 953 (base afab203). Owner, rationale, scope semantics and the 2026-11-29 expiry are unchanged; hosted ingestion remains a separate required check.
+
+Complete-source SHA256 per rebound file:
+
+- `src/signaling/security_tests.rs`: `d00dd474e013795d837835d45e6ab887ab540283f5abaddb0f43db066dd81099`
+
+| Alert | Range | Fingerprint |
+|---|---|---|
+| 35 | `src/signaling/security_tests.rs:169:169:149:161` | `codeql:53a91bf4656726c03edcfdb9f95e1fb8f2ded2c774635428dcc93ea5b4fbc0df` |
+| 63 | `src/signaling/security_tests.rs:600:600:27:52` | `codeql:8a2968846df11dbce42503727ccc8699873c791ff65018774f17244e495746be` |
+| 69 | `src/signaling/security_tests.rs:160:160:75:87` | `codeql:e89d6f2ff22e7828b387aef0303755dac75f7d86b48257dd0735e7279f2b28d6` |

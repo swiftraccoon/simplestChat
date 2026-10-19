@@ -226,12 +226,26 @@ test('context matching covers parent inheritance and last-rule precedence', () =
   assert.throws(() => excluded('web/index.html', ['web/[ab].html']), /Unsupported/);
 });
 
+test('every Rust source and migration in the repository reaches the build context', () => {
+  // The context admits source directories one by one, so a new directory needs its own
+  // rules: the Rust CI jobs build from the checkout and pass while only the image build
+  // sees the hole (CI runs 39295831051 and 39302090481).
+  const sources = ['src/**/*.rs', 'load_tests/src/**/*.rs', 'xtask/src/**/*.rs', 'migrations/*.sql']
+    .flatMap(pattern => globSync(pattern, { cwd: root }));
+  assert.ok(sources.length > 100, 'the source globs must find the crate sources');
+  for (const filename of sources) {
+    assert.equal(excluded(filename.split(path.sep).join('/')), false,
+      `${filename} must reach the build context: admit its directory in .dockerignore`);
+  }
+});
+
 test('context excludes local-only descendants while retaining production inputs', () => {
   for (const filename of [
     '.env', 'CLAUDE.md', 'results/local/report.json',
     'build/CLAUDE.md', 'build/private.env', 'src/CLAUDE.md', 'src/auth/private.env',
     'security/private.env', 'security/notes.json', 'security/runtime/private.env',
-    'src/media/CLAUDE.md', 'src/room/notes.md', 'src/signaling/private.env',
+    'src/media/CLAUDE.md', 'src/room/notes.md', 'src/room/manager/notes.md', 'src/room/social/notes.md',
+    'src/signaling/private.env',
     'migrations/private.env', 'load_tests/notes.md', 'load_tests/src/CLAUDE.md',
     'load_tests/src/metrics/private.env', 'xtask/notes.md', 'xtask/src/CLAUDE.md', 'web/CLAUDE.md', 'web/.env',
     'web/node_modules/example/index.js', 'web/e2e/results/report.json',
@@ -242,7 +256,8 @@ test('context excludes local-only descendants while retaining production inputs'
     'Dockerfile', '.dockerignore', 'Cargo.toml', 'Cargo.lock',
     'build/pip-constraints.txt', 'build/install-openssl.sh',
     'security/exceptions.json', 'security/image-policy.json', 'security/runtime/nsswitch.conf',
-    'src/main.rs', 'src/auth/mod.rs', 'src/media/mod.rs', 'src/room/mod.rs',
+    'src/main.rs', 'src/auth/mod.rs', 'src/media/mod.rs', 'src/room/mod.rs', 'src/room/manager/membership.rs',
+    'src/room/social/members.rs',
     'src/signaling/mod.rs', 'migrations/001_initial.sql',
     'load_tests/Cargo.toml', 'load_tests/src/main.rs', 'load_tests/src/metrics/measurement.rs',
     'xtask/Cargo.toml', 'xtask/src/main.rs',

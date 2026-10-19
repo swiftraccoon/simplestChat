@@ -168,11 +168,18 @@ fn methods(expression: &syn::Expr) -> Vec<(String, String)> {
 }
 fn routes(expression: &syn::Expr, bindings: &BTreeMap<String, Vec<Route>>) -> Vec<Route> {
     match expression {
-        syn::Expr::Call(call) => {
-            assert_eq!(path(&call.func), "Router::new");
-            assert!(call.args.is_empty());
-            Vec::new()
-        }
+        syn::Expr::Call(call) => match path(&call.func).as_str() {
+            "Router::new" => {
+                assert!(call.args.is_empty());
+                Vec::new()
+            }
+            // A group behind its own address budget: the routes are its first argument.
+            "budgeted" => {
+                assert_eq!(call.args.len(), 2);
+                routes(&call.args[0], bindings)
+            }
+            other => panic!("unreviewed router constructor: {other}"),
+        },
         syn::Expr::Path(_) => bindings
             .get(&path(expression))
             .expect("known router binding")
@@ -272,7 +279,7 @@ fn authorization_inventory_matches_actual_routes_handlers_and_message_variants()
             );
         }
     }
-    let source = syn::parse_file(include_str!("mod.rs")).unwrap();
+    let source = syn::parse_file(include_str!("routes.rs")).unwrap();
     let router = source
         .items
         .iter()
@@ -1416,7 +1423,7 @@ fn socket_boundary(message: &protocol::ClientMessage) -> &'static str {
         Unban { .. } => "room-membership",
         SetRole { .. } => "room-membership",
         RequestVoice => "room-membership",
-        UpdateRoomSettings(_) => "room-membership",
+        UpdateRoomSettings { .. } => "room-membership",
         SetTopic { .. } => "room-membership",
         AdmitFromLobby { .. } => "room-membership",
         DenyFromLobby { .. } => "room-membership",

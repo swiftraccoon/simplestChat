@@ -16,7 +16,7 @@ async fn apply_wire_patch(
     owner: &Participant,
     patch: Value,
 ) {
-    let ClientMessage::UpdateRoomSettings(patch) = serde_json::from_value(patch).unwrap() else {
+    let ClientMessage::UpdateRoomSettings { patch } = serde_json::from_value(patch).unwrap() else {
         panic!("expected a room settings patch");
     };
     manager

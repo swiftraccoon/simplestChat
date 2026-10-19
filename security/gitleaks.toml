@@ -31,9 +31,9 @@ regexTarget = "secret"
 regexes = ["^ordinary\\-renewal\\-fixture\\-secret\\-at\\-least\\-32\\-bytes$"]
 
 [[allowlists]]
-description = "Public fixture: src/signaling/mod.rs"
+description = "Public fixture: src/signaling/security_tests.rs"
 condition = "AND"
-paths = ["(^|/)src/signaling/mod\\.rs$"]
+paths = ["(^|/)src/signaling/security_tests\\.rs$"]
 regexTarget = "secret"
 regexes = ["^dGhlIHNhbXBsZSBub25jZQ==$"]
 

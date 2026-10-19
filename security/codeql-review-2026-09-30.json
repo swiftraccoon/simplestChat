@@ -789,17 +789,17 @@
     {
       "rule": "rust/cleartext-logging",
       "toolVersion": "2.27.1",
-      "path": "src/signaling/mod.rs",
+      "path": "src/signaling/security_tests.rs",
       "region": {
-        "start_line": 1733,
-        "end_line": 1733,
-        "start_column": 153,
-        "end_column": 165
+        "start_line": 169,
+        "end_line": 169,
+        "start_column": 149,
+        "end_column": 161
       },
       "messageSha256": "f3a41a98c9e17d302a77434763ce9ae4e42f51df43895cdf2eb21c97ed1b9706",
-      "sourceSha256": "46a0d2fb6703e33af6ee7f71529a4688f4b6c904dfe34fb866c4c2f1ec8eb8ed",
-      "scope": "src/signaling/mod.rs:1733:1733:153:165",
-      "fingerprint": "codeql:e4d3abdde1361dbabf349ca5117ed96922aa0ecef554a9aabdafba6a989b0727",
+      "sourceSha256": "d00dd474e013795d837835d45e6ab887ab540283f5abaddb0f43db066dd81099",
+      "scope": "src/signaling/security_tests.rs:169:169:149:161",
+      "fingerprint": "codeql:53a91bf4656726c03edcfdb9f95e1fb8f2ded2c774635428dcc93ea5b4fbc0df",
       "number": 35,
       "severity": "high",
       "state": "open",
@@ -807,9 +807,9 @@
       "rationale": "The sink is a cfg(test) assertion diagnostic for a locally constructed metrics snapshot. The values are numeric counters/gauges; a password-named metric does not contain an account password. No credential or production log sink is involved.",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/35",
-      "sourceProvenanceRevision": "f36ccd73e8ac9529158277802c835c38e9a66a3c",
-      "sourceReviewBaseRevision": "4ca15a0b41b0125f31ec14d6580ff8b74649b4ef",
-      "sourceReviewBlob": "c3a67ab195a65712c86d90c1b9ffbfab22602b30"
+      "sourceProvenanceRevision": "8b7a99f29cea4da174e1f0edffc49986908831a1",
+      "sourceReviewBaseRevision": "afab203366f5d649eb476673cabb7b1531047332",
+      "sourceReviewBlob": "fc097343ac2b7a4da9f15040466c1a8ed4f1c20a"
     },
     {
       "rule": "rust/cleartext-logging",
@@ -1489,17 +1489,17 @@
     {
       "rule": "rust/hard-coded-cryptographic-value",
       "toolVersion": "2.27.1",
-      "path": "src/signaling/mod.rs",
+      "path": "src/signaling/security_tests.rs",
       "region": {
-        "start_line": 2164,
-        "end_line": 2164,
-        "start_column": 31,
-        "end_column": 56
+        "start_line": 600,
+        "end_line": 600,
+        "start_column": 27,
+        "end_column": 52
       },
       "messageSha256": "9a865ae340f22b08ac3d2ee38d165e24655ca92924b04f7a36c224ed4b3c215c",
-      "sourceSha256": "46a0d2fb6703e33af6ee7f71529a4688f4b6c904dfe34fb866c4c2f1ec8eb8ed",
-      "scope": "src/signaling/mod.rs:2164:2164:31:56",
-      "fingerprint": "codeql:81da0a0f50cb1c68618ac7d074369ebcfa46191b8877091105491481343645fd",
+      "sourceSha256": "d00dd474e013795d837835d45e6ab887ab540283f5abaddb0f43db066dd81099",
+      "scope": "src/signaling/security_tests.rs:600:600:27:52",
+      "fingerprint": "codeql:8a2968846df11dbce42503727ccc8699873c791ff65018774f17244e495746be",
       "number": 63,
       "severity": "critical",
       "state": "open",
@@ -1507,9 +1507,9 @@
       "rationale": "This fixed passphrase is inside the cfg(test) disposable-database registration enumeration-limiter test. It is used only with a unique fixture account and test-owned state, never a production identity.",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/63",
-      "sourceProvenanceRevision": "f36ccd73e8ac9529158277802c835c38e9a66a3c",
-      "sourceReviewBaseRevision": "4ca15a0b41b0125f31ec14d6580ff8b74649b4ef",
-      "sourceReviewBlob": "c3a67ab195a65712c86d90c1b9ffbfab22602b30"
+      "sourceProvenanceRevision": "8b7a99f29cea4da174e1f0edffc49986908831a1",
+      "sourceReviewBaseRevision": "afab203366f5d649eb476673cabb7b1531047332",
+      "sourceReviewBlob": "fc097343ac2b7a4da9f15040466c1a8ed4f1c20a"
     },
     {
       "rule": "rust/hard-coded-cryptographic-value",
@@ -1633,17 +1633,17 @@
     {
       "rule": "rust/log-injection",
       "toolVersion": "2.27.1",
-      "path": "src/signaling/mod.rs",
+      "path": "src/signaling/security_tests.rs",
       "region": {
-        "start_line": 1724,
-        "end_line": 1724,
-        "start_column": 79,
-        "end_column": 91
+        "start_line": 160,
+        "end_line": 160,
+        "start_column": 75,
+        "end_column": 87
       },
       "messageSha256": "d46f9dd9e35359ee0e1f76406f350f66c4a01df130e8f29bfaca169997ada897",
-      "sourceSha256": "46a0d2fb6703e33af6ee7f71529a4688f4b6c904dfe34fb866c4c2f1ec8eb8ed",
-      "scope": "src/signaling/mod.rs:1724:1724:79:91",
-      "fingerprint": "codeql:32d000d21557ea7c9be5434762bfaf90b486304f3ec0530194b9fb7c9d7b41f4",
+      "sourceSha256": "d00dd474e013795d837835d45e6ab887ab540283f5abaddb0f43db066dd81099",
+      "scope": "src/signaling/security_tests.rs:160:160:75:87",
+      "fingerprint": "codeql:e89d6f2ff22e7828b387aef0303755dac75f7d86b48257dd0735e7279f2b28d6",
       "number": 69,
       "severity": "medium",
       "state": "open",
@@ -1651,9 +1651,9 @@
       "rationale": "The sink is a cfg(test) assertion diagnostic for a response from the test-owned loopback HTTP server. The route returns fixed status/body bytes to test timeout and admission metrics; no external input or production logging path is used.",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/69",
-      "sourceProvenanceRevision": "f36ccd73e8ac9529158277802c835c38e9a66a3c",
-      "sourceReviewBaseRevision": "4ca15a0b41b0125f31ec14d6580ff8b74649b4ef",
-      "sourceReviewBlob": "c3a67ab195a65712c86d90c1b9ffbfab22602b30"
+      "sourceProvenanceRevision": "8b7a99f29cea4da174e1f0edffc49986908831a1",
+      "sourceReviewBaseRevision": "afab203366f5d649eb476673cabb7b1531047332",
+      "sourceReviewBlob": "fc097343ac2b7a4da9f15040466c1a8ed4f1c20a"
     },
     {
       "rule": "rust/cleartext-logging",
@@ -1704,7 +1704,7 @@
       "observedRunId": 39085371470,
       "reviewed": "2026-10-18",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/953",
-      "sourceProvenanceRevision": "ff4ed3aed04a6d4f04add1537c591b7134c9ffe2",
+      "sourceProvenanceRevision": "8b7a99f29cea4da174e1f0edffc49986908831a1",
       "sourceReviewBaseRevision": "88e8ed0ceb1a999cb2318bdfbc845ae5ebd3c3b8",
       "sourceReviewBlob": "418638b65a4b0102886514fcb8e45abef957b6c1"
     }

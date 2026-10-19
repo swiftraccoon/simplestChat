@@ -67,6 +67,10 @@ pub(crate) struct ParticipantSocial {
     last_typing: Option<std::time::Instant>,
 }
 
+mod chat_history;
+mod members;
+mod preferences;
+mod reports;
 #[cfg(test)]
 #[path = "social_tests.rs"]
 mod tests;
@@ -1224,6 +1228,47 @@ impl Room {
     }
 }
 
+/// A social request's hold on the room: the write guard a handler works under,
+/// given up around every await through [`SocialRequest::release`] and taken back
+/// through [`SocialRequest::reacquire`], which checks that the room is still live
+/// and the actor still bound to this connection before the handler goes on. The
+/// actor's standing is the one admitted before the handler ran.
+struct SocialRequest<'a> {
+    room_id: &'a RoomId,
+    participant_id: &'a ParticipantId,
+    expected_sender: &'a mpsc::Sender<crate::OutboundJson>,
+    room_lock: &'a std::sync::Arc<tokio::sync::RwLock<Room>>,
+    room: Option<tokio::sync::RwLockWriteGuard<'a, Room>>,
+    actor_role: roles::Role,
+    actor_name: String,
+    actor_authenticated: bool,
+}
+
+impl SocialRequest<'_> {
+    /// The room, held between awaits.
+    fn room(&mut self) -> &mut Room {
+        self.room
+            .as_deref_mut()
+            .expect("a social request holds the room between awaits")
+    }
+
+    /// Gives the room up for an await.
+    fn release(&mut self) {
+        self.room = None;
+    }
+
+    /// Takes the room back after an await: it must still be live and the actor
+    /// still bound to this connection.
+    async fn reacquire(&mut self) -> Result<()> {
+        let lock = self.room_lock;
+        let room = lock.write().await;
+        room.ensure_live()?;
+        RoomManager::participant_for_sender(&room, self.participant_id, self.expected_sender)?;
+        self.room = Some(room);
+        Ok(())
+    }
+}
+
 impl RoomManager {
     /// Live membership and original-message visibility are checked for every
     /// grant and every byte fetch, including reconnect/rejoin and removal.
@@ -2254,6 +2299,16 @@ impl RoomManager {
                 }
             }
         }
+        let mut request = SocialRequest {
+            room_id,
+            participant_id,
+            expected_sender,
+            room_lock: &room_lock,
+            room: Some(room),
+            actor_role,
+            actor_name,
+            actor_authenticated,
+        };
         let response = match command {
             ClientMessage::GetChatHistory {
                 before,
@@ -2264,10 +2319,6 @@ impl RoomManager {
                 limit,
                 ..
             } => {
-                let days = room
-                    .settings
-                    .as_ref()
-                    .map_or(0, |settings| settings.history_retention_days);
                 let query = history::HistoryQuery {
                     before: before.clone(),
                     after: after.clone(),
@@ -2276,236 +2327,31 @@ impl RoomManager {
                     q: q.clone(),
                     limit: *limit,
                 };
-                query.validate().map_err(rejected)?;
-                if days == 0 || !room.persisted {
-                    SocialResponse::GetChatHistory(history::HistoryPage {
-                        messages: Vec::new(),
-                        next_cursor: None,
-                        newer_cursor: None,
-                        first_unread_message_id: None,
-                        read_message_id: None,
-                        retention_days: 0,
-                    })
-                } else {
-                    let pool = self
-                        .db_pool
-                        .as_ref()
-                        .ok_or_else(|| unavailable("History unavailable"))?;
-                    let account = actor_authenticated.then(|| participant_id.as_uuid());
-                    drop(room);
-                    let mut page = tokio::time::timeout(
-                        control::PERSISTENCE_TIMEOUT,
-                        history::page(
-                            pool,
-                            &history::public_conversation(room_id.as_str()),
-                            account,
-                            days,
-                            &query,
-                        ),
-                    )
-                    .await
-                    .map_err(|_| timed_out("History request timed out"))??;
-                    room = room_lock.write().await;
-                    room.ensure_live()?;
-                    Self::participant_for_sender(&room, participant_id, expected_sender)?;
-                    let ignored = &room
-                        .participants
-                        .get(participant_id)
-                        .unwrap()
-                        .social
-                        .ignored;
-                    page.messages
-                        .retain(|message| !ignored.contains(&message.participant_id));
-                    SocialResponse::GetChatHistory(page)
-                }
+                self.chat_history(&mut request, query).await?
             }
             ClientMessage::MarkChatRead { message_id, .. } => {
-                if !actor_authenticated
-                    || !room.persisted
-                    || !room
-                        .settings
-                        .as_ref()
-                        .is_some_and(|settings| settings.history_retention_days > 0)
-                {
-                    return Err(unavailable("Saved room history is unavailable"));
-                }
-                let account = participant_id.as_uuid();
-                let message = message_id.as_uuid();
-                let pool = self
-                    .db_pool
-                    .as_ref()
-                    .ok_or_else(|| unavailable("History unavailable"))?;
-                drop(room);
-                let read = tokio::time::timeout(
-                    control::PERSISTENCE_TIMEOUT,
-                    history::mark_read(
-                        pool,
-                        &history::public_conversation(room_id.as_str()),
-                        account,
-                        message,
-                    ),
-                )
-                .await
-                .map_err(|_| failed("Read marker could not be saved"))?
-                .map_err(|error| {
-                    if matches!(error, sqlx::Error::RowNotFound) {
-                        unavailable("Message unavailable")
-                    } else {
-                        error.into()
-                    }
-                })?;
-                room = room_lock.write().await;
-                room.ensure_live()?;
-                Self::participant_for_sender(&room, participant_id, expected_sender)?;
-                SocialResponse::MarkChatRead {
-                    read_message_id: Some(read.read_message_id),
-                }
+                self.mark_chat_read(&mut request, message_id).await?
             }
             ClientMessage::SetRoomHistory { retention_days, .. } => {
-                require_role(actor_role, roles::Role::Owner)?;
-                if !room.persisted {
-                    return Err(forbidden("Only saved rooms can keep chat history"));
-                }
-                if ![0, 1, 7, 30, 90].contains(retention_days) {
-                    return Err(invalid("Choose off, 1, 7, 30 or 90 days"));
-                }
-                let pool = self
-                    .db_pool
-                    .as_ref()
-                    .ok_or_else(|| unavailable("History unavailable"))?;
-                drop(room);
-                self.persist_room(
-                    room_id,
-                    &room_lock,
-                    history::set_retention(pool, room_id.as_str(), *retention_days),
-                )
-                .await?;
-                room = room_lock.write().await;
-                room.ensure_live()?;
-                Self::participant_for_sender(&room, participant_id, expected_sender)?;
-                let settings = room
-                    .settings
-                    .as_mut()
-                    .ok_or_else(|| unavailable("Room settings unavailable"))?;
-                settings.history_retention_days = *retention_days;
-                let settings = settings.clone();
-                room.broadcast_all(&ServerMessage::RoomSettingsChanged { settings });
-                if *retention_days == 0 {
-                    room.social.pins.clear();
-                }
-                publish_pins(&room)?;
-                SocialResponse::SetRoomHistory {
-                    retention_days: *retention_days,
-                }
+                self.set_room_history(&mut request, *retention_days).await?
             }
             ClientMessage::SetChatPreferences {
                 allow_private_messages,
                 ignored_participant_ids,
                 ..
             } => {
-                if ignored_participant_ids.len() > MAX_IGNORED
-                    || ignored_participant_ids
-                        .iter()
-                        .any(|id| id == participant_id)
-                {
-                    return Err(invalid(
-                        "Choose at most 100 valid participant identities to ignore",
-                    ));
-                }
-                if actor_authenticated {
-                    let pool = self
-                        .db_pool
-                        .as_ref()
-                        .ok_or_else(|| unavailable("Account preferences unavailable"))?;
-                    let account = participant_id.as_uuid();
-                    drop(room);
-                    let preferences = tokio::time::timeout(
-                        control::PERSISTENCE_TIMEOUT,
-                        crate::auth::account::load_chat_preferences(pool, account),
-                    )
-                    .await
-                    .map_err(|_| timed_out("Account preferences timed out"))??;
-                    room = room_lock.write().await;
-                    room.ensure_live()?;
-                    let actor =
-                        Self::participant_for_sender(&room, participant_id, expected_sender)?;
-                    let guests = ignored_participant_ids
-                        .iter()
-                        .filter(|id| {
-                            room.participants
-                                .get(*id)
-                                .is_some_and(|person| !person.authenticated)
-                                || actor.social.guest_ignored.contains(*id)
-                        })
-                        .cloned()
-                        .collect();
-                    let actor = room.participants.get_mut(participant_id).unwrap();
-                    actor.social.guest_ignored = guests;
-                    actor.social.apply_account_preferences(&preferences);
-                } else {
-                    let actor = room.participants.get_mut(participant_id).unwrap();
-                    actor.social.allow_private_messages = *allow_private_messages;
-                    actor.social.ignored = ignored_participant_ids.iter().cloned().collect();
-                }
-                let actor = room.participants.get(participant_id).unwrap();
-                SocialResponse::SetChatPreferences {
-                    allow_private_messages: actor.social.allow_private_messages,
-                    ignored_participant_ids: actor.social.ignored.iter().cloned().collect(),
-                }
+                self.set_chat_preferences(
+                    &mut request,
+                    *allow_private_messages,
+                    ignored_participant_ids,
+                )
+                .await?
             }
             ClientMessage::ChangeNickname { nickname, .. } => {
-                let nickname = nickname.trim();
-                if nickname.is_empty()
-                    || nickname.len() > 64
-                    || !crate::labels::is_plain(nickname)
-                    || crate::labels::is_reserved_name(nickname)
-                {
-                    return Err(invalid(
-                        "Nickname must be 1–64 bytes of plain text; \"You\" is taken",
-                    ));
-                }
-                if room.name_in_use(nickname, Some(participant_id)) {
-                    return Err(invalid("That name is already in use in this room"));
-                }
-                room.participants.get_mut(participant_id).unwrap().name = nickname.to_string();
-                room.broadcast_all(&ServerMessage::NicknameChanged {
-                    participant_id: *participant_id,
-                    nickname: nickname.to_string(),
-                });
-                SocialResponse::ChangeNickname {
-                    nickname: nickname.to_string(),
-                }
+                self.change_nickname(&mut request, nickname)?
             }
             ClientMessage::SetChatStyle { chat_style, .. } => {
-                let chat_style = chat_style
-                    .validated()
-                    .ok_or_else(|| invalid("Choose a chat color from the palette"))?;
-                if actor_authenticated && let Some(pool) = self.db_pool.clone() {
-                    let user: Uuid = participant_id.as_uuid();
-                    // The account keeps the look before anyone sees it.
-                    drop(room);
-                    tokio::time::timeout(
-                        control::PERSISTENCE_TIMEOUT,
-                        save_chat_style(&pool, user, &chat_style),
-                    )
-                    .await
-                    .map_err(|_| failed("Your chat look could not be saved"))?
-                    .map_err(|_| failed("Your chat look could not be saved"))?;
-                    room = room_lock.write().await;
-                    room.ensure_live()?;
-                    Self::participant_for_sender(&room, participant_id, expected_sender)?;
-                }
-                room.participants
-                    .get_mut(participant_id)
-                    .ok_or_else(|| not_found("Participant not found"))?
-                    .chat_style = chat_style.clone();
-                room.broadcast_all(&ServerMessage::ChatStyleChanged {
-                    participant_id: *participant_id,
-                    chat_style: chat_style.clone(),
-                });
-                SocialResponse::SetChatStyle {
-                    chat_style: chat_style.clone(),
-                }
+                self.set_chat_style(&mut request, chat_style).await?
             }
             ClientMessage::EditChatMessage {
                 message_id,
@@ -2513,900 +2359,71 @@ impl RoomManager {
                 expected_revision,
                 ..
             } => {
-                let account: Uuid = participant_id.as_uuid();
-                let request = history::EditRequest {
+                let edit = history::EditRequest {
                     content: content.clone(),
                     expected_revision: *expected_revision,
                 };
-                let actor = Self::participant_for_sender(&room, participant_id, expected_sender)?;
-                let guest_session = (!actor.authenticated).then_some(actor.media_session_id);
-                let mut edited = prepare_edit(&room, actor, message_id, &request)?;
-                let keeps_history = room.persisted
-                    && room
-                        .settings
-                        .as_ref()
-                        .is_some_and(|s| s.history_retention_days > 0);
-                if edited.is_none() && keeps_history {
-                    let pool = self
-                        .db_pool
-                        .as_ref()
-                        .ok_or_else(|| unavailable("History unavailable"))?;
-                    drop(room);
-                    let found = tokio::time::timeout(
-                        control::PERSISTENCE_TIMEOUT,
-                        history::lookup_public(pool, room_id.as_str(), message_id),
-                    )
-                    .await
-                    .map_err(|_| timed_out("History request timed out"))??;
-                    edited = found.map(|(message, _)| message);
-                    room = room_lock.write().await;
-                    room.ensure_live()?;
-                    Self::participant_for_sender(&room, participant_id, expected_sender)?;
-                }
-                let mut edited = edited.ok_or_else(|| unavailable("Message unavailable"))?;
-                if edited.participant_id != *participant_id {
-                    return Err(forbidden("Only the author can edit this message"));
-                }
-                let durable = self.db_pool.is_some()
-                    && if let Some(peer) = &edited.recipient_id {
-                        actor_authenticated
-                            && room.participants.get(peer).is_some_and(|p| p.authenticated)
-                    } else {
-                        keeps_history
-                    };
-                if durable {
-                    let pool = self.db_pool.as_ref().unwrap();
-                    drop(room);
-                    edited = self
-                        .persist_room(
-                            room_id,
-                            &room_lock,
-                            history::edit_saved(
-                                pool,
-                                Some(room_id.as_str()),
-                                account,
-                                guest_session,
-                                &edited,
-                                &request,
-                            ),
-                        )
-                        .await
-                        .map_err(|error| {
-                            if let sqlx::Error::InvalidArgument(message) = error {
-                                rejected(&message)
-                            } else {
-                                error.into()
-                            }
-                        })?;
-                    self.account_updates().private_message(&edited);
-                    room = room_lock.write().await;
-                    room.ensure_live()?;
-                    Self::participant_for_sender(&room, participant_id, expected_sender)?;
-                } else {
-                    history::apply_edit(&mut edited, &request).map_err(rejected)?;
-                }
-                publish_edit(&mut room, &edited)?;
-                drop(self.schedule_inbox_edit(&edited));
-                SocialResponse::EditChatMessage { message: edited }
+                self.edit_chat_message(&mut request, message_id, edit)
+                    .await?
             }
-            ClientMessage::GetPinnedMessages { .. } | ClientMessage::SetPinnedMessage { .. } => {
-                let change = if let ClientMessage::SetPinnedMessage {
-                    message_id, pinned, ..
-                } = command
-                {
-                    require_role(actor_role, roles::Role::Moderator)?;
-                    Some((message_id, *pinned))
-                } else {
-                    None
-                };
-                let durable = room.persisted
-                    && room
-                        .settings
-                        .as_ref()
-                        .is_some_and(|s| s.history_retention_days > 0);
-                if durable {
-                    let pool = self
-                        .db_pool
-                        .as_ref()
-                        .ok_or_else(|| unavailable("History unavailable"))?;
-                    drop(room);
-                    if let Some((message, pinned)) = change {
-                        self.persist_room(
-                            room_id,
-                            &room_lock,
-                            history::set_pin(pool, room_id.as_str(), message, pinned),
-                        )
-                        .await
-                        .map_err(|error| {
-                            if let sqlx::Error::InvalidArgument(message) = error {
-                                rejected(&message)
-                            } else {
-                                error.into()
-                            }
-                        })?;
-                    }
-                    let pins = tokio::time::timeout(
-                        control::PERSISTENCE_TIMEOUT,
-                        history::pinned_messages(pool, room_id.as_str()),
-                    )
-                    .await
-                    .map_err(|_| timed_out("Pinned messages request timed out"))??;
-                    room = room_lock.write().await;
-                    room.ensure_live()?;
-                    Self::participant_for_sender(&room, participant_id, expected_sender)?;
-                    room.social.pins = pins;
-                } else if let Some((message, pinned)) = change {
-                    if pinned && !room.social.pins.iter().any(|m| m.message_id == *message) {
-                        if room.social.pins.len() >= 3 {
-                            return Err(forbidden(
-                                "Unpin a message before pinning another; rooms keep up to three",
-                            ));
-                        }
-                        let original = room
-                            .social
-                            .history
-                            .iter()
-                            .find(|entry| {
-                                entry.message.message_id == *message
-                                    && entry.message.recipient_id.is_none()
-                                    && entry.message.removed_at.is_none()
-                            })
-                            .ok_or_else(|| unavailable("Public message unavailable"))?
-                            .message
-                            .clone();
-                        room.social.pins.insert(0, original);
-                    } else if !pinned {
-                        room.social.pins.retain(|m| m.message_id != *message);
-                    }
-                }
-                if change.is_some() {
-                    publish_pins(&room)?;
-                }
-                let actor = Self::participant_for_sender(&room, participant_id, expected_sender)?;
-                let messages: Vec<_> = room
-                    .social
-                    .pins
-                    .iter()
-                    .filter(|message| !actor.social.ignored.contains(&message.participant_id))
-                    .cloned()
-                    .collect();
-                if matches!(command, ClientMessage::SetPinnedMessage { .. }) {
-                    SocialResponse::SetPinnedMessage { messages }
-                } else {
-                    SocialResponse::GetPinnedMessages { messages }
-                }
+            ClientMessage::GetPinnedMessages { .. } => {
+                self.pinned_messages(&mut request, None).await?
+            }
+            ClientMessage::SetPinnedMessage {
+                message_id, pinned, ..
+            } => {
+                self.pinned_messages(&mut request, Some((message_id, *pinned)))
+                    .await?
             }
             ClientMessage::RemoveChatMessage { message_id, .. } => {
-                require_role(actor_role, roles::Role::Moderator)?;
-                let mut original = room
-                    .social
-                    .history
-                    .iter()
-                    .find(|entry| {
-                        entry.message.message_id == *message_id
-                            && entry.message.recipient_id.is_none()
-                    })
-                    .map(|entry| (entry.message.clone(), entry.sender_authenticated));
-                let persisted = room.persisted;
-                let keeps_history = room
-                    .settings
-                    .as_ref()
-                    .is_some_and(|s| s.history_retention_days > 0);
-                let pool = self.db_pool.clone();
-                if original.is_none() && persisted && keeps_history {
-                    let pool = pool
-                        .as_ref()
-                        .ok_or_else(|| unavailable("Chat history unavailable"))?;
-                    drop(room);
-                    original = tokio::time::timeout(
-                        control::PERSISTENCE_TIMEOUT,
-                        super::history::lookup_public(pool, room_id.as_str(), message_id),
-                    )
-                    .await
-                    .map_err(|_| timed_out("Chat history timed out"))??;
-                    room = room_lock.write().await;
-                    room.ensure_live()?;
-                    Self::participant_for_sender(&room, participant_id, expected_sender)?;
-                }
-                let (original, authenticated) =
-                    original.ok_or_else(|| not_found("Message not found"))?;
-                let removed_at = original.removed_at.unwrap_or_else(chrono::Utc::now);
-                if original.removed_at.is_none() {
-                    let event = ModerationEvent::new(
-                        ModerationAction::MessageRemoved,
-                        Actor {
-                            id: participant_id,
-                            name: &actor_name,
-                        },
-                        Target {
-                            id: original.participant_id.into(),
-                            name: &original.participant_name,
-                            authenticated,
-                            ip: None,
-                        },
-                        Some(&format!("Message {message_id}")),
-                        None,
-                        None,
-                    );
-                    if persisted {
-                        let pool = pool
-                            .as_ref()
-                            .ok_or_else(|| unavailable("Moderation unavailable"))?;
-                        drop(room);
-                        self.persist_room(room_id, &room_lock, async {
-                            let mut transaction = pool.begin().await?;
-                            if keeps_history {
-                                super::history::remove_public(
-                                    &mut transaction,
-                                    room_id.as_str(),
-                                    message_id,
-                                    removed_at,
-                                )
-                                .await?;
-                            }
-                            sqlx::query("DELETE FROM attachments WHERE room_id=$1 AND ephemeral_message_id=$2")
-                                .bind(room_id).bind(message_id.as_uuid())
-                                .execute(&mut *transaction).await?;
-                            record_event(&mut transaction, room_id, &event, MAX_MODERATION_EVENTS)
-                                .await?;
-                            transaction.commit().await
-                        })
-                        .await?;
-                        room = room_lock.write().await;
-                        room.ensure_live()?;
-                    } else {
-                        if let Some(pool) = &pool {
-                            drop(room);
-                            self.persist_room(room_id,&room_lock,async {
-                                sqlx::query("DELETE FROM attachments WHERE room_id=$1 AND ephemeral_message_id=$2")
-                                    .bind(room_id).bind(message_id.as_uuid())
-                                    .execute(pool).await.map(|_|())
-                            }).await?;
-                            room = room_lock.write().await;
-                            room.ensure_live()?;
-                        }
-                        room.social.record_moderation_event(event);
-                    }
-                }
-                room.social.remove_message(message_id, removed_at);
-                room.broadcast_all(&ServerMessage::ChatMessageRemoved {
-                    message_id: *message_id,
-                    removed_at,
-                });
-                publish_pins(&room)?;
-                SocialResponse::RemoveChatMessage {
-                    message_id: *message_id,
-                    removed_at,
-                }
+                self.remove_chat_message(&mut request, message_id).await?
             }
             ClientMessage::ReactToMessage {
                 message_id, emoji, ..
             } => {
-                let saved_public = room.persisted
-                    && room
-                        .settings
-                        .as_ref()
-                        .is_some_and(|settings| settings.history_retention_days > 0)
-                    && room
-                        .social
-                        .history
-                        .iter()
-                        .find(|entry| entry.message.message_id == *message_id)
-                        .is_none_or(|entry| entry.message.recipient_id.is_none());
-                if saved_public {
-                    let ignored: Vec<_> = room
-                        .participants
-                        .get(participant_id)
-                        .unwrap()
-                        .social
-                        .ignored
-                        .iter()
-                        .cloned()
-                        .collect();
-                    let pool = self
-                        .db_pool
-                        .as_ref()
-                        .ok_or_else(|| unavailable("History unavailable"))?;
-                    drop(room);
-                    let saved = self
-                        .persist_room(
-                            room_id,
-                            &room_lock,
-                            history::react_public(
-                                pool,
-                                room_id.as_str(),
-                                message_id,
-                                participant_id,
-                                &ignored,
-                                emoji,
-                            ),
-                        )
-                        .await
-                        .map_err(|error| {
-                            if let sqlx::Error::InvalidArgument(message) = error {
-                                rejected(&message)
-                            } else {
-                                error.into()
-                            }
-                        })?;
-                    room = room_lock.write().await;
-                    room.ensure_live()?;
-                    Self::participant_for_sender(&room, participant_id, expected_sender)?;
-                    if let Some(message) = saved {
-                        publish_saved_reaction(&mut room, &message)?;
-                        return send(
-                            &self.metrics,
-                            expected_sender,
-                            &ServerMessage::SocialResponse {
-                                request_id: request_id.to_owned(),
-                                response: SocialResponse::ReactToMessage {
-                                    message_id: *message_id,
-                                    reactions: message.reactions.clone(),
-                                },
-                            },
-                        );
-                    }
-                }
-                let reactions = prepare_reaction(&room, participant_id, message_id, emoji)?;
-                let private_message = room
-                    .social
-                    .history
-                    .iter()
-                    .find(|entry| entry.message.message_id == *message_id)
-                    .map(|entry| entry.message.clone());
-                if !saved_public && let Some(pool) = &self.db_pool {
-                    drop(room);
-                    self.persist_room(
-                        room_id,
-                        &room_lock,
-                        history::save_reactions(pool, message_id, &reactions),
-                    )
-                    .await?;
-                    if let Some(message) = &private_message {
-                        self.account_updates().private_message(message);
-                    }
-                    room = room_lock.write().await;
-                    room.ensure_live()?;
-                    Self::participant_for_sender(&room, participant_id, expected_sender)?;
-                }
-                let reactions = publish_reaction(&mut room, message_id, reactions)?;
-                SocialResponse::ReactToMessage {
-                    message_id: *message_id,
-                    reactions,
-                }
+                self.react_to_message(&mut request, message_id, emoji)
+                    .await?
             }
             ClientMessage::ListRoomBans { offset, .. } => {
-                require_role(actor_role, roles::Role::Admin)?;
-                let offset = page_offset(*offset)?;
-                let mut bans: Vec<BanEntry> = if room.persisted {
-                    let pool = self
-                        .db_pool
-                        .as_ref()
-                        .ok_or_else(|| unavailable("Ban service unavailable"))?;
-                    drop(room);
-                    let rows: Vec<BanRow> = tokio::time::timeout(
-                        control::PERSISTENCE_TIMEOUT,
-                        sqlx::query_as(
-                            "SELECT s.id,u.display_name,s.user_id IS NOT NULL,s.reason,s.expires_at FROM room_states s LEFT JOIN users u ON u.id=s.user_id WHERE s.room_id=$1 AND s.state='banned' AND (s.expires_at IS NULL OR s.expires_at>now()) ORDER BY s.created_at DESC,s.id LIMIT 101 OFFSET $2")
-                            .bind(room_id).bind(offset as i64).fetch_all(pool),
-                    ).await.map_err(|_| timed_out("Ban service timed out"))??;
-                    room = room_lock.write().await;
-                    room.ensure_live()?;
-                    rows.into_iter()
-                        .map(|(id, name, authenticated, reason, expiry)| BanEntry {
-                            ban_id: id.to_string(),
-                            display_name: name.unwrap_or_else(|| "Guest".to_string()),
-                            authenticated,
-                            reason,
-                            expires_at: expiry.map(|e| e.to_rfc3339()),
-                        })
-                        .collect()
-                } else {
-                    room.social
-                        .bans
-                        .retain(|_, b| b.expiry.is_none_or(|e| e > std::time::Instant::now()));
-                    let mut bans: Vec<_> =
-                        room.social.bans.values().map(|b| b.entry.clone()).collect();
-                    bans.sort_by(|a, b| a.ban_id.cmp(&b.ban_id));
-                    bans.into_iter().skip(offset).take(PAGE_SIZE + 1).collect()
-                };
-                let has_more = bans.len() > PAGE_SIZE;
-                bans.truncate(PAGE_SIZE);
-                SocialResponse::ListRoomBans { bans, has_more }
+                self.list_room_bans(&mut request, *offset).await?
             }
             ClientMessage::RemoveRoomBan { ban_id, .. } => {
-                require_role(actor_role, roles::Role::Admin)?;
-                let id: Uuid = ban_id.parse().map_err(|_| invalid("Invalid ban"))?;
-                let (user_id, guest_ip, ids) = if room.persisted {
-                    let pool = self
-                        .db_pool
-                        .as_ref()
-                        .ok_or_else(|| unavailable("Ban service unavailable"))?;
-                    drop(room);
-                    let actor_id = *participant_id;
-                    let actor_name = actor_name.clone();
-                    let row: Option<(Option<Uuid>, Option<String>)> = self
-                        .persist_room(room_id, &room_lock, async {
-                            let mut transaction = pool.begin().await?;
-                            let row: Option<(Option<Uuid>, Option<String>, Option<String>)> = sqlx::query_as("DELETE FROM room_states s WHERE s.room_id=$1 AND s.id=$2 AND s.state='banned' RETURNING s.user_id,host(s.ip_address),(SELECT u.display_name FROM users u WHERE u.id=s.user_id)")
-                                .bind(room_id).bind(id).fetch_optional(&mut *transaction).await?;
-                            let Some((uid, ip, name)) = row else {
-                                return Ok(None);
-                            };
-                            let target_id = uid.map_or_else(
-                                || ModerationTargetId::Ban(id.to_string()),
-                                |uid| ModerationTargetId::from(ParticipantId::from(uid)),
-                            );
-                            let event = ModerationEvent::new(
-                                ModerationAction::Unban,
-                                Actor { id: &actor_id, name: &actor_name },
-                                Target {
-                                    id: target_id.clone(),
-                                    name: name.as_deref().unwrap_or(if uid.is_some() { "Removed account" } else { "Guest" }),
-                                    authenticated: uid.is_some(),
-                                    ip: ip.as_deref().and_then(|ip| ip.parse().ok()),
-                                },
-                                None,
-                                None,
-                                None,
-                            );
-                            record_event(&mut transaction, room_id, &event, MAX_MODERATION_EVENTS).await?;
-                            transaction.commit().await?;
-                            Ok(Some((uid, ip)))
-                        })
-                        .await?;
-                    room = room_lock.write().await;
-                    room.ensure_live()?;
-                    let (uid, ip) = row.ok_or_else(|| not_found("Ban not found"))?;
-                    (
-                        uid.map(ParticipantId::from),
-                        if uid.is_none() {
-                            ip.and_then(|ip| ip.parse::<IpAddr>().ok())
-                        } else {
-                            None
-                        },
-                        Vec::new(),
-                    )
-                } else {
-                    let ban = room
-                        .social
-                        .bans
-                        .remove(ban_id)
-                        .ok_or_else(|| not_found("Ban not found"))?;
-                    let target_id = ban
-                        .entry
-                        .authenticated
-                        .then(|| ban.participant_ids.first().cloned())
-                        .flatten();
-                    room.social.record_moderation_event(ModerationEvent::new(
-                        ModerationAction::Unban,
-                        Actor {
-                            id: participant_id,
-                            name: &actor_name,
-                        },
-                        Target {
-                            id: target_id.map_or_else(
-                                || ModerationTargetId::Ban(ban_id.to_string()),
-                                ModerationTargetId::from,
-                            ),
-                            name: &ban.entry.display_name,
-                            authenticated: ban.entry.authenticated,
-                            ip: ban.guest_ip,
-                        },
-                        None,
-                        None,
-                        None,
-                    ));
-                    (target_id, ban.guest_ip, ban.participant_ids)
-                };
-                if let Some(uid) = &user_id {
-                    room.banned_participants.remove(uid);
-                }
-                if let Some(ip) = guest_ip {
-                    room.banned_guest_ips.remove(&ip);
-                }
-                let mut affected = ids;
-                room.social.bans.retain(|_, ban| {
-                    let matches = user_id
-                        .as_ref()
-                        .is_some_and(|uid| ban.participant_ids.contains(uid))
-                        || guest_ip.is_some_and(|ip| ban.guest_ip == Some(ip));
-                    if matches {
-                        affected.extend(ban.participant_ids.iter().cloned());
-                    }
-                    !matches
-                });
-                for id in affected {
-                    room.banned_participants.remove(&id);
-                    room.banned_guest_participants.remove(&id);
-                }
-                room.policy_revision = room.policy_revision.wrapping_add(1);
-                SocialResponse::RemoveRoomBan { removed: true }
+                self.remove_room_ban(&mut request, ban_id).await?
             }
             ClientMessage::ListRoomMembers { offset, .. } => {
-                require_role(actor_role, roles::Role::Moderator)?;
-                let offset = page_offset(*offset)?;
-                let mut members: Vec<MemberEntry> = if room.persisted {
-                    let pool = self
-                        .db_pool
-                        .as_ref()
-                        .ok_or_else(|| unavailable("Member service unavailable"))?;
-                    drop(room);
-                    let rows: Vec<(Uuid, String, roles::Role)> = tokio::time::timeout(
-                        control::PERSISTENCE_TIMEOUT,
-                        sqlx::query_as("WITH roster AS (SELECT owner_id AS user_id,5::smallint AS role FROM rooms WHERE id=$1 UNION ALL SELECT rr.user_id,rr.role FROM room_roles rr JOIN rooms r ON r.id=rr.room_id WHERE rr.room_id=$1 AND rr.user_id<>r.owner_id) SELECT u.id,u.display_name,roster.role FROM roster JOIN users u ON u.id=roster.user_id ORDER BY u.display_name,u.id LIMIT 101 OFFSET $2")
-                            .bind(room_id).bind(offset as i64).fetch_all(pool),
-                    ).await.map_err(|_| timed_out("Member service timed out"))??;
-                    room = room_lock.write().await;
-                    room.ensure_live()?;
-                    rows.into_iter()
-                        .map(|(id, name, role)| MemberEntry {
-                            online: room.participants.contains_key(&ParticipantId::from(id)),
-                            user_id: UserId::from(id),
-                            display_name: name,
-                            role,
-                            authenticated: true,
-                        })
-                        .collect()
-                } else {
-                    let mut members: Vec<_> = room
-                        .participants
-                        .values()
-                        .map(|p| MemberEntry {
-                            user_id: UserId::from(p.id.as_uuid()),
-                            display_name: p.name.clone(),
-                            role: p.role,
-                            online: true,
-                            authenticated: p.authenticated,
-                        })
-                        .collect();
-                    members.sort_by(|a, b| {
-                        a.display_name
-                            .cmp(&b.display_name)
-                            .then(a.user_id.cmp(&b.user_id))
-                    });
-                    members
-                        .into_iter()
-                        .skip(offset)
-                        .take(PAGE_SIZE + 1)
-                        .collect()
-                };
-                let has_more = members.len() > PAGE_SIZE;
-                members.truncate(PAGE_SIZE);
-                SocialResponse::ListRoomMembers { members, has_more }
+                self.list_room_members(&mut request, *offset).await?
             }
             ClientMessage::SetMemberRole {
                 target_user_id,
                 role,
                 ..
             } => {
-                require_role(actor_role, roles::Role::Moderator)?;
-                if !room.persisted || !actor_authenticated {
-                    return Err(forbidden("Offline roles require a persistent room"));
-                }
-                let target: Uuid = target_user_id.as_uuid();
-                let setter: Uuid = participant_id.as_uuid();
-                let new_role = *role;
-                if new_role < roles::Role::User {
-                    return Err(forbidden(
-                        "Registered accounts require at least the user role",
-                    ));
-                }
-                let pool = self
-                    .db_pool
-                    .as_ref()
-                    .ok_or_else(|| unavailable("Member service unavailable"))?;
-                drop(room);
-                // Absent targets must already belong to this room's roster; no account enumeration.
-                let current: Option<roles::Role> = tokio::time::timeout(
-                    control::PERSISTENCE_TIMEOUT,
-                    sqlx::query_scalar("SELECT CASE WHEN $2=owner_id THEN 5 ELSE (SELECT role FROM room_roles WHERE room_id=$1 AND user_id=$2) END::smallint FROM rooms WHERE id=$1 AND ($2=owner_id OR EXISTS(SELECT 1 FROM room_roles WHERE room_id=$1 AND user_id=$2))")
-                        .bind(room_id).bind(target).fetch_optional(pool),
-                ).await.map_err(|_| timed_out("Member service timed out"))??;
-                let current = current.ok_or_else(|| not_found("Room member not found"))?;
-                if !actor_role.can_set_role(current, new_role) {
-                    return Err(forbidden("Insufficient role permissions"));
-                }
-                self.persist_room(
-                    room_id,
-                    &room_lock,
-                    roles::set_role(pool, room_id, &target, new_role, &setter),
-                )
-                .await?;
-                room = room_lock.write().await;
-                room.ensure_live()?;
-                room.policy_revision = room.policy_revision.wrapping_add(1);
-                SocialResponse::SetMemberRole { updated: true }
+                self.set_member_role(&mut request, target_user_id, *role)
+                    .await?
             }
             ClientMessage::ReportParticipant {
                 target_participant_id,
                 reason,
                 ..
             } => {
-                let reason = reason.trim();
-                if reason.is_empty() || reason.len() > 1024 || reason.chars().any(char::is_control)
-                {
-                    return Err(invalid("Report reason must be 1–1024 bytes"));
-                }
-                if target_participant_id == participant_id {
-                    return Err(invalid("Choose another participant"));
-                }
-                let target = room
-                    .participants
-                    .get(target_participant_id)
-                    .ok_or_else(|| not_found("Participant is no longer in this room"))?;
-                let target_name = target.name.clone();
-                let reporter = reporter_key(room.participants.get(participant_id).unwrap());
-                if room
-                    .social
-                    .report_cooldown_active(&reporter, std::time::Instant::now())
-                {
-                    return Err(rate_limited("Please wait before submitting another report"));
-                }
-                let report_id = Uuid::new_v4();
-                let report = ReportEntry {
-                    report_id: report_id.to_string(),
-                    reporter_id: *participant_id,
-                    reporter_name: actor_name,
-                    target_participant_id: *target_participant_id,
-                    target_name,
-                    reason: reason.to_string(),
-                    status: ReportStatus::Open,
-                    created_at: chrono::Utc::now().to_rfc3339(),
-                    resolved_at: None,
-                    outcome: None,
-                };
-                if room.persisted {
-                    let pool = self
-                        .db_pool
-                        .as_ref()
-                        .ok_or_else(|| unavailable("Report service unavailable"))?;
-                    drop(room);
-                    let inserted = self.persist_room(room_id, &room_lock, async {
-                        let mut transaction = pool.begin().await?;
-                        sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1,71339))")
-                            .bind(room_id)
-                            .execute(&mut *transaction)
-                            .await?;
-                        let count: i64 =
-                            sqlx::query_scalar("SELECT COUNT(*) FROM room_reports WHERE room_id=$1")
-                                .bind(room_id)
-                                .fetch_one(&mut *transaction)
-                                .await?;
-                        if count >= MAX_REPORTS as i64 {
-                            let removed=sqlx::query("DELETE FROM room_reports WHERE id IN (SELECT id FROM room_reports WHERE room_id=$1 AND status<>'open' ORDER BY created_at,id LIMIT 1)").bind(room_id).execute(&mut *transaction).await?.rows_affected();
-                            if removed == 0 {
-                                return Ok(false);
-                            }
-                        }
-                        sqlx::query("INSERT INTO room_reports(id,room_id,reporter_id,reporter_name,target_participant_id,target_name,reason) VALUES($1,$2,$3,$4,$5,$6,$7)")
-                            .bind(report_id).bind(room_id).bind(participant_id).bind(&report.reporter_name).bind(target_participant_id).bind(&report.target_name).bind(reason).execute(&mut *transaction).await?;
-                        transaction.commit().await?;
-                        Ok(true)
-                    })
-                    .await?;
-                    if !inserted {
-                        return Err(forbidden(
-                            "Room report capacity reached; contact a moderator",
-                        ));
-                    }
-                    room = room_lock.write().await;
-                    room.ensure_live()?;
-                } else {
-                    if room.social.reports.len() >= MAX_REPORTS {
-                        if let Some(index) = room
-                            .social
-                            .reports
-                            .iter()
-                            .position(|r| r.status != ReportStatus::Open)
-                        {
-                            room.social.reports.remove(index);
-                        } else {
-                            return Err(forbidden(
-                                "Room report capacity reached; contact a moderator",
-                            ));
-                        }
-                    }
-                    room.social.reports.push_back(report.clone());
-                }
-                room.social.note_report(reporter, std::time::Instant::now());
-                // Only the submitting participant receives the report ID here.
-                SocialResponse::ReportParticipant {
-                    report_id: report.report_id.clone(),
-                    status: ReportStatus::Open,
-                }
+                self.report_participant(&mut request, target_participant_id, reason)
+                    .await?
             }
             ClientMessage::ListRoomReports { offset, .. } => {
-                require_role(actor_role, roles::Role::Moderator)?;
-                let offset = page_offset(*offset)?;
-                let mut reports: Vec<ReportEntry> = if room.persisted {
-                    let pool = self
-                        .db_pool
-                        .as_ref()
-                        .ok_or_else(|| unavailable("Report service unavailable"))?;
-                    drop(room);
-                    let rows: Vec<ReportRow> = tokio::time::timeout(
-                        control::PERSISTENCE_TIMEOUT,
-                        sqlx::query_as("SELECT r.id,r.reporter_id,r.reporter_name,r.target_participant_id,r.target_name,r.reason,r.status,r.created_at,r.resolved_at,o.action,o.created_at FROM room_reports r LEFT JOIN LATERAL (SELECT e.action,e.created_at FROM moderation_events e WHERE e.report_id=r.id ORDER BY e.created_at DESC,e.id LIMIT 1) o ON true WHERE r.room_id=$1 ORDER BY r.created_at DESC,r.id LIMIT 101 OFFSET $2")
-                            .bind(room_id).bind(offset as i64).fetch_all(pool),
-                    ).await.map_err(|_| timed_out("Report service timed out"))??;
-                    room = room_lock.write().await;
-                    room.ensure_live()?;
-                    rows.into_iter()
-                        .map(
-                            |(
-                                id,
-                                rid,
-                                rname,
-                                tid,
-                                tname,
-                                reason,
-                                status,
-                                created,
-                                resolved,
-                                outcome_action,
-                                outcome_at,
-                            )| {
-                                ReportEntry {
-                                    report_id: id.to_string(),
-                                    reporter_id: rid,
-                                    reporter_name: rname,
-                                    target_participant_id: tid,
-                                    target_name: tname,
-                                    reason,
-                                    status,
-                                    created_at: created.to_rfc3339(),
-                                    resolved_at: resolved.map(|r| r.to_rfc3339()),
-                                    outcome: outcome_action.zip(outcome_at).map(|(action, at)| {
-                                        ReportOutcome {
-                                            action,
-                                            created_at: at.to_rfc3339(),
-                                        }
-                                    }),
-                                }
-                            },
-                        )
-                        .collect()
-                } else {
-                    room.social
-                        .reports
-                        .iter()
-                        .rev()
-                        .skip(offset)
-                        .take(PAGE_SIZE + 1)
-                        .map(|report| ReportEntry {
-                            outcome: room.social.report_outcome(&report.report_id),
-                            ..report.clone()
-                        })
-                        .collect()
-                };
-                let has_more = reports.len() > PAGE_SIZE;
-                reports.truncate(PAGE_SIZE);
-                SocialResponse::ListRoomReports { reports, has_more }
+                self.list_room_reports(&mut request, *offset).await?
             }
             ClientMessage::ResolveRoomReport {
                 report_id, status, ..
             } => {
-                require_role(actor_role, roles::Role::Moderator)?;
-                let id: Uuid = report_id.parse().map_err(|_| invalid("Invalid report"))?;
-                let action = status.action();
-                if room.persisted {
-                    let pool = self
-                        .db_pool
-                        .as_ref()
-                        .ok_or_else(|| unavailable("Report service unavailable"))?;
-                    drop(room);
-                    let actor_id = *participant_id;
-                    let actor_name = actor_name.clone();
-                    let resolved = self
-                        .persist_room(room_id, &room_lock, async {
-                            let mut transaction = pool.begin().await?;
-                            let target: Option<(String, String, bool)> = sqlx::query_as("UPDATE room_reports r SET status=$3,resolved_at=now(),resolved_by=$4 WHERE r.room_id=$1 AND r.id=$2 AND r.status='open' RETURNING r.target_participant_id,r.target_name,EXISTS(SELECT 1 FROM users u WHERE u.id::text=r.target_participant_id)")
-                                .bind(room_id).bind(id).bind(status).bind(actor_id).fetch_optional(&mut *transaction).await?;
-                            let Some((target_id, target_name, target_authenticated)) = target else {
-                                return Ok(false);
-                            };
-                            let event = ModerationEvent::new(
-                                action,
-                                Actor { id: &actor_id, name: &actor_name },
-                                Target { id: ModerationTargetId::from_text(&target_id), name: &target_name, authenticated: target_authenticated, ip: None },
-                                None,
-                                None,
-                                Some(id),
-                            );
-                            record_event(&mut transaction, room_id, &event, MAX_MODERATION_EVENTS).await?;
-                            transaction.commit().await?;
-                            Ok(true)
-                        })
-                        .await?;
-                    room = room_lock.write().await;
-                    room.ensure_live()?;
-                    if !resolved {
-                        return Err(not_found("Open report not found"));
-                    }
-                } else {
-                    let report = room
-                        .social
-                        .reports
-                        .iter_mut()
-                        .find(|r| r.report_id == *report_id && r.status == ReportStatus::Open)
-                        .ok_or_else(|| not_found("Open report not found"))?;
-                    report.status = status.status();
-                    report.resolved_at = Some(chrono::Utc::now().to_rfc3339());
-                    let target_id = report.target_participant_id;
-                    let target_name = report.target_name.clone();
-                    let target_authenticated = room
-                        .participants
-                        .get(&target_id)
-                        .is_some_and(|participant| participant.authenticated);
-                    room.social.record_moderation_event(ModerationEvent::new(
-                        action,
-                        Actor {
-                            id: participant_id,
-                            name: &actor_name,
-                        },
-                        Target {
-                            id: target_id.into(),
-                            name: &target_name,
-                            authenticated: target_authenticated,
-                            ip: None,
-                        },
-                        None,
-                        None,
-                        Some(id),
-                    ));
-                }
-                SocialResponse::ResolveRoomReport {
-                    report_id: report_id.to_string(),
-                    status: *status,
-                }
+                self.resolve_room_report(&mut request, report_id, *status)
+                    .await?
             }
             ClientMessage::ListModerationEvents { offset, .. } => {
-                require_role(actor_role, roles::Role::Moderator)?;
-                let offset = page_offset(*offset)?;
-                let owner = actor_role >= roles::Role::Owner;
-                let mut events: Vec<ModerationEvent> = if room.persisted {
-                    let pool = self
-                        .db_pool
-                        .as_ref()
-                        .ok_or_else(|| unavailable("History service unavailable"))?;
-                    drop(room);
-                    let rows = tokio::time::timeout(
-                        control::PERSISTENCE_TIMEOUT,
-                        moderation::list_events(
-                            pool,
-                            room_id,
-                            offset as i64,
-                            (PAGE_SIZE + 1) as i64,
-                        ),
-                    )
-                    .await
-                    .map_err(|_| timed_out("History service timed out"))??;
-                    room = room_lock.write().await;
-                    room.ensure_live()?;
-                    rows
-                } else {
-                    room.social
-                        .moderation_events
-                        .iter()
-                        .rev()
-                        .skip(offset)
-                        .take(PAGE_SIZE + 1)
-                        .cloned()
-                        .collect()
-                };
-                let has_more = events.len() > PAGE_SIZE;
-                events.truncate(PAGE_SIZE);
-                // Only the owner reads a target's address; moderators never do.
-                let events: Vec<ModerationEventView> = events
-                    .iter()
-                    .map(|event| ModerationEventView::new(event.clone(), owner))
-                    .collect();
-                SocialResponse::ListModerationEvents { events, has_more }
+                self.list_moderation_events(&mut request, *offset).await?
             }
             _ => return Err(not_found("Unknown request")),
         };
-        drop(room);
+        request.release();
         if let Some(control) = &control {
             control.release();
         }

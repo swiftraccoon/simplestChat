@@ -48,6 +48,12 @@ src/media/**
 !src/room/
 src/room/**
 !src/room/*.rs
+!src/room/manager/
+src/room/manager/**
+!src/room/manager/*.rs
+!src/room/social/
+src/room/social/**
+!src/room/social/*.rs
 !src/signaling/
 src/signaling/**
 !src/signaling/*.rs
