@@ -1033,10 +1033,19 @@ def validate_browser_proxy(config: JsonObject, *, legacy_allowed: bool = False) 
     require(len(selected) == 1, "Ambiguous browser asset proxy mount")
     mount = selected[0]
     expected = browser_asset_mount()
+    # Compose renders the bind sub-options (host path creation, propagation,
+    # SELinux labels) by its own version; the reviewed capability is the
+    # read-only bind of the store at the fixed target and nothing else.
+    comparable = {key: value for key, value in mount.items() if key != "bind"}
+    reviewed = {key: value for key, value in expected.items() if key != "bind"}
+    differing = sorted(
+        key for key in set(comparable) | set(reviewed) if comparable.get(key) != reviewed.get(key)
+    )
+    if not isinstance(mount.get("bind", {}), dict):
+        differing.append("bind")
     require(
-        mount == expected
-        or mount == {key: value for key, value in expected.items() if key != "bind"},
-        "Browser asset proxy mount differs from reviewed readonly store",
+        not differing,
+        "Browser asset proxy mount differs from reviewed readonly store: " + ", ".join(differing),
     )
     receipt = CONFIG / "browser-assets-installed.json"
     protected(receipt, limit=512)

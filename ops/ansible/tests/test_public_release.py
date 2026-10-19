@@ -1027,6 +1027,20 @@ class PublicReleaseTests(unittest.TestCase):
         self.assertEqual((self.attempt / "before-Caddyfile").read_text(), "legacy fixture proxy\n")
         configuration = json_object(self.runner.compose("config", "--format", "json"))
         self.assertTrue(public.validate_browser_proxy(configuration))
+        # Compose's own bind sub-options vary by version and never change what the
+        # mount grants; the reviewed fields themselves must not differ.
+        proxy = obj(configuration, "services", "caddy")
+        mount = obj(proxy["volumes"][0])
+        mount["bind"] = {"create_host_path": False, "propagation": "rprivate", "selinux": "z"}
+        self.assertTrue(public.validate_browser_proxy(configuration))
+        mount["read_only"] = False
+        with self.assertRaisesRegex(public.ReleaseError, "readonly store: read_only"):
+            _ = public.validate_browser_proxy(configuration)
+        mount["read_only"] = True
+        mount["source"] = str(public.ROOT / "elsewhere")
+        with self.assertRaisesRegex(public.ReleaseError, "readonly store: source"):
+            _ = public.validate_browser_proxy(configuration)
+        mount["source"] = str(public.ROOT / "browser-assets")
         self.assertTrue(
             any(
                 kind == "docker" and "caddy" in args and "validate" in args
