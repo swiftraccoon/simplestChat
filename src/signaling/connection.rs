@@ -37,7 +37,10 @@ use credentials::{
 };
 #[path = "connection_bandwidth.rs"]
 mod bandwidth;
+#[path = "connection_token_bucket.rs"]
+mod token_bucket;
 use bandwidth::BandwidthTierUpdate;
+use token_bucket::{TOKEN_US, TokenBucket};
 
 /// Bounded channel capacity per client.
 /// At 100 msg/s rate limit, 64 slots = 640ms of burst buffer.
@@ -129,8 +132,6 @@ impl Default for ConnectionTiming {
 const RATE_LIMIT_MAX_TOKENS: u64 = 100;
 /// Token bucket: refill rate in tokens per second.
 const RATE_LIMIT_REFILL_RATE: u64 = 100;
-/// Internal: 1 token in microseconds (for integer math).
-const TOKEN_US: u64 = 1_000_000;
 /// Internal: max tokens in microseconds.
 const MAX_TOKENS_US: u64 = RATE_LIMIT_MAX_TOKENS * TOKEN_US;
 /// Repeated overruns indicate a sender that is ignoring backpressure. Stop
@@ -236,26 +237,6 @@ fn client_error_response(error: &anyhow::Error) -> ServerMessage {
     }
 }
 
-fn consume_rate_token(
-    tokens_us: &mut u64,
-    last_refill: &mut Instant,
-    now: Instant,
-    refill_rate: u64,
-    max_tokens_us: u64,
-) -> bool {
-    let elapsed_us =
-        u64::try_from(now.duration_since(*last_refill).as_micros()).unwrap_or(u64::MAX);
-    *last_refill = now;
-    *tokens_us = tokens_us
-        .saturating_add(elapsed_us.saturating_mul(refill_rate))
-        .min(max_tokens_us);
-    if *tokens_us < TOKEN_US {
-        return false;
-    }
-    *tokens_us -= TOKEN_US;
-    true
-}
-
 fn is_media_mutation(message: &ClientMessage) -> bool {
     matches!(
         message,
@@ -296,13 +277,9 @@ fn is_consumer_mutation(message: &ClientMessage) -> bool {
 /// reconnect-token entry prevents a new socket from restoring full media burst
 /// capacity for an existing session.
 struct MediaSessionRateState {
-    media_mutation_tokens_us: u64,
-    media_mutation_last_refill: Instant,
-    transport_mutation_tokens_us: u64,
-    transport_mutation_last_refill: Instant,
-    consumer_mutation_tokens_us: u64,
-    consumer_mutation_capacity_us: u64,
-    consumer_mutation_last_refill: Instant,
+    media_mutations: TokenBucket,
+    transport_mutations: TokenBucket,
+    consumer_mutations: TokenBucket,
     violation_window_started: Option<Instant>,
     violations: u32,
 }
@@ -313,15 +290,22 @@ impl MediaSessionRateState {
     }
 
     fn with_consumer_limit(now: Instant, consumer_limit: usize) -> Self {
-        let consumer_mutation_capacity_us = consumer_mutation_capacity(consumer_limit);
         Self {
-            media_mutation_tokens_us: MAX_MEDIA_MUTATION_TOKENS_US,
-            media_mutation_last_refill: now,
-            transport_mutation_tokens_us: MAX_TRANSPORT_MUTATION_TOKENS_US,
-            transport_mutation_last_refill: now,
-            consumer_mutation_tokens_us: consumer_mutation_capacity_us,
-            consumer_mutation_capacity_us,
-            consumer_mutation_last_refill: now,
+            media_mutations: TokenBucket::full(
+                now,
+                MEDIA_MUTATION_RATE_LIMIT_REFILL_RATE,
+                MAX_MEDIA_MUTATION_TOKENS_US,
+            ),
+            transport_mutations: TokenBucket::full(
+                now,
+                TRANSPORT_MUTATION_RATE_LIMIT_REFILL_RATE,
+                MAX_TRANSPORT_MUTATION_TOKENS_US,
+            ),
+            consumer_mutations: TokenBucket::full(
+                now,
+                CONSUMER_MUTATION_RATE_LIMIT_REFILL_RATE,
+                consumer_mutation_capacity(consumer_limit),
+            ),
             violation_window_started: None,
             violations: 0,
         }
@@ -329,29 +313,11 @@ impl MediaSessionRateState {
 
     fn limit_exceeded(&mut self, message: &ClientMessage, now: Instant) -> bool {
         if is_media_mutation(message) {
-            !consume_rate_token(
-                &mut self.media_mutation_tokens_us,
-                &mut self.media_mutation_last_refill,
-                now,
-                MEDIA_MUTATION_RATE_LIMIT_REFILL_RATE,
-                MAX_MEDIA_MUTATION_TOKENS_US,
-            )
+            !self.media_mutations.try_consume(now)
         } else if is_transport_mutation(message) {
-            !consume_rate_token(
-                &mut self.transport_mutation_tokens_us,
-                &mut self.transport_mutation_last_refill,
-                now,
-                TRANSPORT_MUTATION_RATE_LIMIT_REFILL_RATE,
-                MAX_TRANSPORT_MUTATION_TOKENS_US,
-            )
+            !self.transport_mutations.try_consume(now)
         } else if is_consumer_mutation(message) {
-            !consume_rate_token(
-                &mut self.consumer_mutation_tokens_us,
-                &mut self.consumer_mutation_last_refill,
-                now,
-                CONSUMER_MUTATION_RATE_LIMIT_REFILL_RATE,
-                self.consumer_mutation_capacity_us,
-            )
+            !self.consumer_mutations.try_consume(now)
         } else {
             false
         }
@@ -1069,16 +1035,24 @@ async fn handle_connection_with_timing(
         .media_server()
         .config()
         .max_consumers_per_participant;
-    let max_frame_tokens_us = frame_capacity(consumer_mutation_capacity(consumer_limit));
-    let mut frame_tokens_us = max_frame_tokens_us;
-    let mut frame_last_refill = Instant::now();
+    let mut frame_bucket = TokenBucket::full(
+        Instant::now(),
+        RATE_LIMIT_REFILL_RATE,
+        frame_capacity(consumer_mutation_capacity(consumer_limit)),
+    );
     let mut rate_limit_window_started: Option<Instant> = None;
     let mut rate_limit_violations = 0_u32;
-    let mut chat_tokens_us: u64 = MAX_CHAT_TOKENS_US;
-    let mut chat_last_refill = Instant::now();
+    let mut chat_bucket = TokenBucket::full(
+        Instant::now(),
+        CHAT_RATE_LIMIT_REFILL_RATE,
+        MAX_CHAT_TOKENS_US,
+    );
     let mut media_rate_state = MediaSessionRateState::new(consumer_limit);
-    let mut admin_mutation_tokens_us: u64 = MAX_ADMIN_MUTATION_TOKENS_US;
-    let mut admin_mutation_last_refill = Instant::now();
+    let mut admin_mutation_bucket = TokenBucket::full(
+        Instant::now(),
+        ADMIN_MUTATION_RATE_LIMIT_REFILL_RATE,
+        MAX_ADMIN_MUTATION_TOKENS_US,
+    );
     let mut admin_mutation_violation_window_started: Option<Instant> = None;
     let mut admin_mutation_violations = 0_u32;
     let mut last_room_password_hash: Option<Instant> = None;
@@ -1283,13 +1257,7 @@ async fn handle_connection_with_timing(
         // frames lets binary/control-frame floods bypass connection accounting.
         metrics.inc_messages_received();
         let now = Instant::now();
-        if !consume_rate_token(
-            &mut frame_tokens_us,
-            &mut frame_last_refill,
-            now,
-            RATE_LIMIT_REFILL_RATE,
-            max_frame_tokens_us,
-        ) {
+        if !frame_bucket.try_consume(now) {
             if matches!(&msg, Message::Close(_)) {
                 break;
             }
@@ -1487,14 +1455,7 @@ async fn handle_connection_with_timing(
                             continue;
                         }
 
-                        if is_admin_mutation(&client_msg)
-                            && !consume_rate_token(
-                                &mut admin_mutation_tokens_us,
-                                &mut admin_mutation_last_refill,
-                                now,
-                                ADMIN_MUTATION_RATE_LIMIT_REFILL_RATE,
-                                MAX_ADMIN_MUTATION_TOKENS_US,
-                            )
+                        if is_admin_mutation(&client_msg) && !admin_mutation_bucket.try_consume(now)
                         {
                             if admin_mutation_violation_window_started.is_none_or(|started| {
                                 now.duration_since(started) >= ADMIN_MUTATION_VIOLATION_WINDOW
@@ -1531,13 +1492,8 @@ async fn handle_connection_with_timing(
                             ClientMessage::ChatMessage { .. }
                                 | ClientMessage::PrivateMessage { .. }
                                 | ClientMessage::RetryChatMessage(_)
-                        ) && !consume_rate_token(
-                            &mut chat_tokens_us,
-                            &mut chat_last_refill,
-                            Instant::now(),
-                            CHAT_RATE_LIMIT_REFILL_RATE,
-                            MAX_CHAT_TOKENS_US,
-                        ) {
+                        ) && !chat_bucket.try_consume(Instant::now())
+                        {
                             if metrics
                                 .telemetry()
                                 .warning_should_log(super::telemetry::WarningFamily::ChatRate)
@@ -3428,57 +3384,6 @@ mod security_tests {
     }
 
     #[test]
-    fn token_bucket_refills_and_remains_bounded() {
-        let start = Instant::now();
-        let mut tokens = TOKEN_US;
-        let mut last_refill = start;
-
-        assert!(consume_rate_token(
-            &mut tokens,
-            &mut last_refill,
-            start,
-            2,
-            2 * TOKEN_US,
-        ));
-        assert!(!consume_rate_token(
-            &mut tokens,
-            &mut last_refill,
-            start,
-            2,
-            2 * TOKEN_US,
-        ));
-        assert!(consume_rate_token(
-            &mut tokens,
-            &mut last_refill,
-            start + Duration::from_millis(500),
-            2,
-            2 * TOKEN_US,
-        ));
-
-        assert!(consume_rate_token(
-            &mut tokens,
-            &mut last_refill,
-            start + Duration::from_secs(10),
-            2,
-            2 * TOKEN_US,
-        ));
-        assert!(consume_rate_token(
-            &mut tokens,
-            &mut last_refill,
-            start + Duration::from_secs(10),
-            2,
-            2 * TOKEN_US,
-        ));
-        assert!(!consume_rate_token(
-            &mut tokens,
-            &mut last_refill,
-            start + Duration::from_secs(10),
-            2,
-            2 * TOKEN_US,
-        ));
-    }
-
-    #[test]
     fn media_mutation_budgets_cover_all_client_driven_mediasoup_ipc() {
         assert!(is_media_mutation(&ClientMessage::Produce {
             transport_id: Uuid::new_v4().to_string(),
@@ -3538,21 +3443,17 @@ mod security_tests {
         let now = Instant::now();
         for limit in [16, 64, 128] {
             let mut session = MediaSessionRateState::with_consumer_limit(now, limit);
-            let capacity = frame_capacity(session.consumer_mutation_capacity_us);
-            let mut frame_tokens = capacity;
-            let mut frame_refill = now;
+            let mut frame_bucket = TokenBucket::full(
+                now,
+                RATE_LIMIT_REFILL_RATE,
+                frame_capacity(session.consumer_mutations.capacity_us()),
+            );
             // Full producer and transport setup plus join and capabilities.
             for _ in 0..MEDIA_MUTATION_RATE_LIMIT_MAX_TOKENS
                 + TRANSPORT_MUTATION_RATE_LIMIT_MAX_TOKENS
                 + 2
             {
-                assert!(consume_rate_token(
-                    &mut frame_tokens,
-                    &mut frame_refill,
-                    now,
-                    RATE_LIMIT_REFILL_RATE,
-                    capacity,
-                ));
+                assert!(frame_bucket.try_consume(now));
             }
             for index in 0..limit {
                 for message in [
@@ -3570,13 +3471,7 @@ mod security_tests {
                     },
                 ] {
                     assert!(!session.limit_exceeded(&message, now));
-                    assert!(consume_rate_token(
-                        &mut frame_tokens,
-                        &mut frame_refill,
-                        now,
-                        RATE_LIMIT_REFILL_RATE,
-                        capacity,
-                    ));
+                    assert!(frame_bucket.try_consume(now));
                 }
             }
             let extra = ClientMessage::ResumeConsumer {
@@ -3616,7 +3511,7 @@ mod security_tests {
             crate::media::config::DEFAULT_MAX_CONSUMERS_PER_PARTICIPANT,
         );
 
-        for _ in 0..entry.media_rate_state.consumer_mutation_capacity_us / TOKEN_US {
+        for _ in 0..entry.media_rate_state.consumer_mutations.capacity_us() / TOKEN_US {
             assert!(
                 !entry
                     .media_rate_state

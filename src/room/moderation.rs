@@ -9,33 +9,6 @@ use sqlx::{PgConnection, PgPool};
 use std::net::IpAddr;
 use uuid::Uuid;
 
-/// Guest identities have no stable account key. IPv6 clients normally control
-/// many interface identifiers inside one delegated /64, so exact-address
-/// moderation would let a banned or muted guest reconnect immediately. Keep
-/// IPv4 exact while using the same IPv6 /64 identity already used by abuse
-/// limits elsewhere in the server.
-pub(crate) fn canonical_guest_ip(address: IpAddr) -> IpAddr {
-    match address {
-        IpAddr::V4(_) => address,
-        IpAddr::V6(address) => {
-            if let Some(address) = address.to_ipv4_mapped() {
-                return IpAddr::V4(address);
-            }
-            let segments = address.segments();
-            IpAddr::V6(std::net::Ipv6Addr::new(
-                segments[0],
-                segments[1],
-                segments[2],
-                segments[3],
-                0,
-                0,
-                0,
-                0,
-            ))
-        }
-    }
-}
-
 /// In-memory punitive state for a participant
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct PunitiveState {
@@ -353,7 +326,7 @@ impl ModerationEvent {
             target_ip: if target.authenticated {
                 target.ip
             } else {
-                target.ip.map(canonical_guest_ip)
+                target.ip.map(crate::net::cohort)
             },
         }
     }
@@ -751,7 +724,7 @@ pub(crate) async fn load_punitive_state(
     let ip = if authenticated {
         ip
     } else {
-        ip.map(canonical_guest_ip)
+        ip.map(crate::net::cohort)
     };
     let (cam_banned, text_muted): (bool, bool) = sqlx::query_as(
         "SELECT
@@ -807,7 +780,7 @@ pub(crate) async fn set_punitive_state(
     let ip = if user_id.is_some() {
         ip
     } else {
-        ip.map(canonical_guest_ip)
+        ip.map(crate::net::cohort)
     };
     let ip = ip.map(|address| address.to_string());
     let mut transaction = pool.begin().await?;
@@ -907,7 +880,7 @@ pub(crate) async fn persist_ban(
     let ip = if user_id.is_some() {
         ip
     } else {
-        ip.map(canonical_guest_ip)
+        ip.map(crate::net::cohort)
     };
     let ip = ip.map(|address| address.to_string());
     let mut transaction = pool.begin().await?;
@@ -972,7 +945,7 @@ pub(crate) async fn is_banned(
     let ip = if authenticated {
         ip
     } else {
-        ip.map(canonical_guest_ip)
+        ip.map(crate::net::cohort)
     };
     let (exists,): (bool,) = sqlx::query_as(
         "SELECT EXISTS(
@@ -1089,32 +1062,6 @@ mod tests {
         assert!(RetentionConfig::parse(None, Some("3651")).is_err());
         assert!(RetentionConfig::parse(Some("forever"), None).is_err());
         assert!(RetentionConfig::parse(Some("400"), Some("365")).is_err());
-    }
-
-    #[test]
-    fn guest_ipv6_identity_is_scoped_to_64_bit_prefix() {
-        let first: IpAddr = "2001:db8:1:2::1".parse().unwrap();
-        let rotated: IpAddr = "2001:db8:1:2:ffff:ffff:ffff:42".parse().unwrap();
-        let other_prefix: IpAddr = "2001:db8:1:3::1".parse().unwrap();
-
-        assert_eq!(canonical_guest_ip(first), canonical_guest_ip(rotated));
-        assert_ne!(canonical_guest_ip(first), canonical_guest_ip(other_prefix));
-    }
-
-    #[test]
-    fn guest_ipv4_identity_remains_exact() {
-        let first: IpAddr = "192.0.2.10".parse().unwrap();
-        let other: IpAddr = "192.0.2.11".parse().unwrap();
-        let mapped_first: IpAddr = "::ffff:192.0.2.10".parse().unwrap();
-        let mapped_other: IpAddr = "::ffff:192.0.2.11".parse().unwrap();
-
-        assert_eq!(canonical_guest_ip(first), first);
-        assert_ne!(canonical_guest_ip(first), canonical_guest_ip(other));
-        assert_eq!(canonical_guest_ip(mapped_first), first);
-        assert_ne!(
-            canonical_guest_ip(mapped_first),
-            canonical_guest_ip(mapped_other)
-        );
     }
 
     #[tokio::test]

@@ -14,6 +14,7 @@ pub(crate) mod roles;
 pub(crate) mod settings;
 pub use settings::RoomSettings;
 pub(crate) mod social;
+mod window;
 
 #[cfg(test)]
 mod control_tests;
@@ -133,7 +134,7 @@ impl SanctionKey {
         if authenticated {
             Self::User(participant_id.to_string())
         } else if let Some(ip) = ip {
-            Self::GuestIp(moderation::canonical_guest_ip(ip))
+            Self::GuestIp(crate::net::cohort(ip))
         } else {
             Self::Connection(participant_id.to_string())
         }
@@ -367,28 +368,6 @@ where
     }
 }
 
-fn rate_limit_ip(address: IpAddr) -> IpAddr {
-    match address {
-        IpAddr::V4(_) => address,
-        IpAddr::V6(address) => {
-            if let Some(address) = address.to_ipv4_mapped() {
-                return IpAddr::V4(address);
-            }
-            let segments = address.segments();
-            IpAddr::V6(std::net::Ipv6Addr::new(
-                segments[0],
-                segments[1],
-                segments[2],
-                segments[3],
-                0,
-                0,
-                0,
-                0,
-            ))
-        }
-    }
-}
-
 fn room_delete_timeout(operation: &str) -> sqlx::Error {
     sqlx::Error::Protocol(format!("room deletion timed out while {operation}"))
 }
@@ -570,21 +549,21 @@ pub(crate) struct Room {
     last_password_hash_at: Option<std::time::Instant>,
     /// Chat fan-out is O(room size). Bound aggregate broadcasts in addition to
     /// the per-connection limit enforced by the signaling task.
-    recent_chat_broadcasts: VecDeque<std::time::Instant>,
+    chat_broadcasts: window::SlidingWindow,
     /// Producer mutations cross mediasoup IPC and fan out room-wide. A shared
     /// room budget prevents many individually compliant sockets from restoring
     /// the original amplification attack.
-    recent_media_mutations: VecDeque<std::time::Instant>,
+    media_mutations: window::SlidingWindow,
     /// Consumer and transport operations cross the mediasoup worker boundary.
     /// Bound their aggregate so a large open room cannot multiply each
     /// participant's compliant per-session refill into unbounded worker IPC.
-    recent_media_control_ipc: VecDeque<std::time::Instant>,
+    media_control_ipc: window::SlidingWindow,
     /// Voice requests create persistent action UI for moderators, so bound the
     /// aggregate as well as applying the per-connection cooldown.
-    recent_voice_requests: VecDeque<std::time::Instant>,
+    voice_requests: window::SlidingWindow,
     /// Authorized moderation and settings changes can write the database and
     /// fan out room-wide. Bound their aggregate across moderator sockets.
-    recent_admin_mutations: VecDeque<std::time::Instant>,
+    admin_mutations: window::SlidingWindow,
     active_speaker_observer: Option<ActiveSpeakerObserver>,
     audio_level_observer: Option<AudioLevelObserver>,
     /// Map producer_id -> participant_id for observer lookups
@@ -735,11 +714,26 @@ impl Room {
             persisted,
             password_hash,
             last_password_hash_at: None,
-            recent_chat_broadcasts: VecDeque::new(),
-            recent_media_mutations: VecDeque::new(),
-            recent_media_control_ipc: VecDeque::new(),
-            recent_voice_requests: VecDeque::new(),
-            recent_admin_mutations: VecDeque::new(),
+            chat_broadcasts: window::SlidingWindow::new(
+                ROOM_CHAT_WINDOW,
+                MAX_ROOM_CHAT_MESSAGES_PER_WINDOW,
+            ),
+            media_mutations: window::SlidingWindow::new(
+                ROOM_MEDIA_MUTATION_WINDOW,
+                MAX_ROOM_MEDIA_MUTATIONS_PER_WINDOW,
+            ),
+            media_control_ipc: window::SlidingWindow::new(
+                ROOM_MEDIA_CONTROL_IPC_WINDOW,
+                MAX_ROOM_MEDIA_CONTROL_IPC_PER_WINDOW,
+            ),
+            voice_requests: window::SlidingWindow::new(
+                ROOM_VOICE_REQUEST_WINDOW,
+                MAX_ROOM_VOICE_REQUESTS_PER_WINDOW,
+            ),
+            admin_mutations: window::SlidingWindow::new(
+                ROOM_ADMIN_MUTATION_WINDOW,
+                MAX_ROOM_ADMIN_MUTATIONS_PER_WINDOW,
+            ),
             active_speaker_observer: None,
             audio_level_observer: None,
             producer_to_participant: HashMap::new(),
@@ -774,11 +768,26 @@ impl Room {
             persisted,
             password_hash,
             last_password_hash_at: None,
-            recent_chat_broadcasts: VecDeque::new(),
-            recent_media_mutations: VecDeque::new(),
-            recent_media_control_ipc: VecDeque::new(),
-            recent_voice_requests: VecDeque::new(),
-            recent_admin_mutations: VecDeque::new(),
+            chat_broadcasts: window::SlidingWindow::new(
+                ROOM_CHAT_WINDOW,
+                MAX_ROOM_CHAT_MESSAGES_PER_WINDOW,
+            ),
+            media_mutations: window::SlidingWindow::new(
+                ROOM_MEDIA_MUTATION_WINDOW,
+                MAX_ROOM_MEDIA_MUTATIONS_PER_WINDOW,
+            ),
+            media_control_ipc: window::SlidingWindow::new(
+                ROOM_MEDIA_CONTROL_IPC_WINDOW,
+                MAX_ROOM_MEDIA_CONTROL_IPC_PER_WINDOW,
+            ),
+            voice_requests: window::SlidingWindow::new(
+                ROOM_VOICE_REQUEST_WINDOW,
+                MAX_ROOM_VOICE_REQUESTS_PER_WINDOW,
+            ),
+            admin_mutations: window::SlidingWindow::new(
+                ROOM_ADMIN_MUTATION_WINDOW,
+                MAX_ROOM_ADMIN_MUTATIONS_PER_WINDOW,
+            ),
             active_speaker_observer,
             audio_level_observer,
             producer_to_participant: HashMap::new(),
@@ -803,105 +812,6 @@ impl Room {
         Ok(())
     }
 
-    fn reserve_chat_broadcast(&mut self, now: std::time::Instant) -> bool {
-        while self
-            .recent_chat_broadcasts
-            .front()
-            .is_some_and(|sent_at| now.duration_since(*sent_at) >= ROOM_CHAT_WINDOW)
-        {
-            self.recent_chat_broadcasts.pop_front();
-        }
-        if self.recent_chat_broadcasts.len() >= MAX_ROOM_CHAT_MESSAGES_PER_WINDOW {
-            return false;
-        }
-        self.recent_chat_broadcasts.push_back(now);
-        true
-    }
-
-    fn reserve_media_mutation(&mut self, now: std::time::Instant) -> bool {
-        while self
-            .recent_media_mutations
-            .front()
-            .is_some_and(|sent_at| now.duration_since(*sent_at) >= ROOM_MEDIA_MUTATION_WINDOW)
-        {
-            self.recent_media_mutations.pop_front();
-        }
-        if self.recent_media_mutations.len() >= MAX_ROOM_MEDIA_MUTATIONS_PER_WINDOW {
-            return false;
-        }
-        self.recent_media_mutations.push_back(now);
-        true
-    }
-
-    fn refund_media_mutation(&mut self, reserved_at: std::time::Instant) -> bool {
-        let Some(position) = self
-            .recent_media_mutations
-            .iter()
-            .position(|entry| *entry == reserved_at)
-        else {
-            return false;
-        };
-        self.recent_media_mutations.remove(position);
-        true
-    }
-
-    fn reserve_media_control_ipc(&mut self, now: std::time::Instant) -> bool {
-        while self
-            .recent_media_control_ipc
-            .front()
-            .is_some_and(|sent_at| now.duration_since(*sent_at) >= ROOM_MEDIA_CONTROL_IPC_WINDOW)
-        {
-            self.recent_media_control_ipc.pop_front();
-        }
-        if self.recent_media_control_ipc.len() >= MAX_ROOM_MEDIA_CONTROL_IPC_PER_WINDOW {
-            return false;
-        }
-        self.recent_media_control_ipc.push_back(now);
-        true
-    }
-
-    fn refund_media_control_ipc(&mut self, reserved_at: std::time::Instant) -> bool {
-        let Some(position) = self
-            .recent_media_control_ipc
-            .iter()
-            .position(|entry| *entry == reserved_at)
-        else {
-            return false;
-        };
-        self.recent_media_control_ipc.remove(position);
-        true
-    }
-
-    fn reserve_voice_request(&mut self, now: std::time::Instant) -> bool {
-        while self
-            .recent_voice_requests
-            .front()
-            .is_some_and(|sent_at| now.duration_since(*sent_at) >= ROOM_VOICE_REQUEST_WINDOW)
-        {
-            self.recent_voice_requests.pop_front();
-        }
-        if self.recent_voice_requests.len() >= MAX_ROOM_VOICE_REQUESTS_PER_WINDOW {
-            return false;
-        }
-        self.recent_voice_requests.push_back(now);
-        true
-    }
-
-    fn reserve_admin_mutation(&mut self, now: std::time::Instant) -> bool {
-        while self
-            .recent_admin_mutations
-            .front()
-            .is_some_and(|sent_at| now.duration_since(*sent_at) >= ROOM_ADMIN_MUTATION_WINDOW)
-        {
-            self.recent_admin_mutations.pop_front();
-        }
-        if self.recent_admin_mutations.len() >= MAX_ROOM_ADMIN_MUTATIONS_PER_WINDOW {
-            return false;
-        }
-        self.recent_admin_mutations.push_back(now);
-        true
-    }
-
     fn prune_expired_bans(&mut self, now: std::time::Instant) {
         self.banned_participants
             .retain(|_, expiry| expiry.is_none_or(|expiry| expiry > now));
@@ -921,7 +831,7 @@ impl Room {
             || (!authenticated
                 && ip.is_some_and(|address| {
                     self.banned_guest_ips
-                        .contains_key(&moderation::canonical_guest_ip(address))
+                        .contains_key(&crate::net::cohort(address))
                 }))
     }
 
@@ -1046,12 +956,12 @@ fn moderation_cohort(
 
     let mut participant_ids = if !target.authenticated {
         if let Some(target_ip) = target.ip {
-            let target_ip = moderation::canonical_guest_ip(target_ip);
+            let target_ip = crate::net::cohort(target_ip);
             room.participants
                 .iter()
                 .filter(|(_, participant)| {
                     !participant.authenticated
-                        && participant.ip.map(moderation::canonical_guest_ip) == Some(target_ip)
+                        && participant.ip.map(crate::net::cohort) == Some(target_ip)
                 })
                 .map(|(participant_id, _)| *participant_id)
                 .collect()
@@ -1086,12 +996,12 @@ fn guest_ip_lobby_cohort(
     let Some(target_ip) = target_ip else {
         return Ok(Vec::new());
     };
-    let target_ip = moderation::canonical_guest_ip(target_ip);
+    let target_ip = crate::net::cohort(target_ip);
     let mut participant_ids: Vec<ParticipantId> = room
         .lobby
         .iter()
         .filter(|(_, entry)| {
-            !entry.authenticated && entry.ip.map(moderation::canonical_guest_ip) == Some(target_ip)
+            !entry.authenticated && entry.ip.map(crate::net::cohort) == Some(target_ip)
         })
         .map(|(participant_id, _)| *participant_id)
         .collect();
@@ -1217,7 +1127,7 @@ fn record_banned_cohort(
             .extend(participant_ids.iter().cloned());
         if let Some(address) = target_ip {
             room.banned_guest_ips
-                .insert(moderation::canonical_guest_ip(address), runtime_expiry);
+                .insert(crate::net::cohort(address), runtime_expiry);
         }
     }
 }
@@ -2604,10 +2514,10 @@ impl RoomManager {
         let client_ip = if authenticated {
             client_ip
         } else {
-            client_ip.map(moderation::canonical_guest_ip)
+            client_ip.map(crate::net::cohort)
         };
         if let Some(address) = client_ip {
-            let address = rate_limit_ip(address);
+            let address = crate::net::cohort(address);
             let now = std::time::Instant::now();
             if !self.join_attempts_by_ip.allow(address, now)
                 || !self
@@ -4314,7 +4224,7 @@ impl RoomManager {
             {
                 anyhow::bail!("Room password updates are rate limited");
             }
-            if !room.reserve_admin_mutation(now) {
+            if !room.admin_mutations.reserve(now) {
                 anyhow::bail!("Room administration changes are rate limited");
             }
             admin_mutation_reserved = true;
@@ -4392,7 +4302,7 @@ impl RoomManager {
         if !password_changed && updated == current {
             return Ok(());
         }
-        if !admin_mutation_reserved && !room.reserve_admin_mutation(std::time::Instant::now()) {
+        if !admin_mutation_reserved && !room.admin_mutations.reserve(std::time::Instant::now()) {
             anyhow::bail!("Room administration changes are rate limited");
         }
 
@@ -4504,7 +4414,7 @@ impl RoomManager {
         {
             return Ok(());
         }
-        if !room.reserve_admin_mutation(std::time::Instant::now()) {
+        if !room.admin_mutations.reserve(std::time::Instant::now()) {
             anyhow::bail!("Room administration changes are rate limited");
         }
 
@@ -4647,7 +4557,7 @@ impl RoomManager {
         ) {
             return Ok(false);
         }
-        if !room.reserve_admin_mutation(std::time::Instant::now()) {
+        if !room.admin_mutations.reserve(std::time::Instant::now()) {
             anyhow::bail!("Room administration changes are rate limited");
         }
         let event = moderation::ModerationEvent::new(
@@ -4799,7 +4709,7 @@ impl RoomManager {
             if producers.is_empty() {
                 return Ok(());
             }
-            if !room.reserve_admin_mutation(std::time::Instant::now()) {
+            if !room.admin_mutations.reserve(std::time::Instant::now()) {
                 anyhow::bail!("Room administration changes are rate limited");
             }
             (producers, target_media_session_id)
@@ -5016,7 +4926,7 @@ impl RoomManager {
                 None,
                 report_id,
             );
-            if !room.reserve_admin_mutation(std::time::Instant::now()) {
+            if !room.admin_mutations.reserve(std::time::Instant::now()) {
                 anyhow::bail!("Room administration changes are rate limited");
             }
             // A kick leaves no sanction row, so its history entry (and the
@@ -5174,7 +5084,7 @@ impl RoomManager {
             let target_lobby_ids =
                 guest_ip_lobby_cohort(&room, target_authenticated, target_ip, moderator.role)?;
             room.social.reserve_ban()?;
-            if !room.reserve_admin_mutation(std::time::Instant::now()) {
+            if !room.admin_mutations.reserve(std::time::Instant::now()) {
                 anyhow::bail!("Room administration changes are rate limited");
             }
             let expires_at = duration.and_then(|seconds| {
@@ -5390,7 +5300,7 @@ impl RoomManager {
         if !in_memory_exists && persisted_target.is_none() {
             anyhow::bail!("Participant is not banned");
         }
-        if !room.reserve_admin_mutation(std::time::Instant::now()) {
+        if !room.admin_mutations.reserve(std::time::Instant::now()) {
             anyhow::bail!("Room administration changes are rate limited");
         }
 
@@ -5524,7 +5434,7 @@ impl RoomManager {
         let setter_name = setter.id.to_string();
         let setter_authenticated = setter.authenticated;
         let target_authenticated = target.authenticated;
-        if !room.reserve_admin_mutation(std::time::Instant::now()) {
+        if !room.admin_mutations.reserve(std::time::Instant::now()) {
             anyhow::bail!("Room administration changes are rate limited");
         }
 
@@ -5601,7 +5511,7 @@ impl RoomManager {
 
         let display_name = participant.name.clone();
 
-        if !room.reserve_voice_request(std::time::Instant::now()) {
+        if !room.voice_requests.reserve(std::time::Instant::now()) {
             anyhow::bail!("Room voice-request rate limit exceeded");
         }
 
@@ -5729,7 +5639,7 @@ impl RoomManager {
         {
             anyhow::bail!("Participant has already disconnected");
         }
-        if !room.reserve_admin_mutation(std::time::Instant::now()) {
+        if !room.admin_mutations.reserve(std::time::Instant::now()) {
             anyhow::bail!("Room administration changes are rate limited");
         }
 
@@ -5904,7 +5814,7 @@ impl RoomManager {
         if !room.lobby.contains_key(target_id) {
             anyhow::bail!("Participant not found in lobby");
         }
-        if !room.reserve_admin_mutation(std::time::Instant::now()) {
+        if !room.admin_mutations.reserve(std::time::Instant::now()) {
             anyhow::bail!("Room administration changes are rate limited");
         }
 
@@ -5957,7 +5867,7 @@ impl RoomManager {
             anyhow::bail!("Producer does not belong to this participant");
         }
         let reserved_at = std::time::Instant::now();
-        if !room.reserve_media_mutation(reserved_at) {
+        if !room.media_mutations.reserve(reserved_at) {
             anyhow::bail!("Room media changes are rate limited");
         }
         drop(room);
@@ -5990,7 +5900,7 @@ impl RoomManager {
             return Ok(None);
         }
         let reserved_at = std::time::Instant::now();
-        if !room.reserve_media_mutation(reserved_at) {
+        if !room.media_mutations.reserve(reserved_at) {
             anyhow::bail!("Room media changes are rate limited");
         }
         drop(room);
@@ -6002,7 +5912,7 @@ impl RoomManager {
 
     async fn refund_media_mutation(reservation: MediaMutationReservation) {
         let mut room = reservation.room.write().await;
-        room.refund_media_mutation(reservation.reserved_at);
+        room.media_mutations.refund(reservation.reserved_at);
     }
 
     async fn reserve_media_control_ipc_for_sender(
@@ -6015,7 +5925,7 @@ impl RoomManager {
         let mut room = measure(Stage::RoomLockWait, room_lock.write()).await;
         Self::participant_for_sender(&room, participant_id, expected_sender)?;
         let reserved_at = std::time::Instant::now();
-        if !room.reserve_media_control_ipc(reserved_at) {
+        if !room.media_control_ipc.reserve(reserved_at) {
             anyhow::bail!("Room media control operations are rate limited");
         }
         drop(room);
@@ -6027,7 +5937,7 @@ impl RoomManager {
 
     async fn refund_media_control_ipc(reservation: MediaControlIpcReservation) {
         let mut room = reservation.room.write().await;
-        room.refund_media_control_ipc(reservation.reserved_at);
+        room.media_control_ipc.refund(reservation.reserved_at);
     }
 
     fn participant_session_is_current(
@@ -7677,11 +7587,11 @@ mod security_tests {
         let mut room = Room::new(rid("room"), None, false, None);
         let start = std::time::Instant::now();
         for _ in 0..MAX_ROOM_CHAT_MESSAGES_PER_WINDOW {
-            assert!(room.reserve_chat_broadcast(start));
+            assert!(room.chat_broadcasts.reserve(start));
         }
-        assert!(!room.reserve_chat_broadcast(start));
-        assert!(room.reserve_chat_broadcast(start + ROOM_CHAT_WINDOW));
-        assert_eq!(room.recent_chat_broadcasts.len(), 1);
+        assert!(!room.chat_broadcasts.reserve(start));
+        assert!(room.chat_broadcasts.reserve(start + ROOM_CHAT_WINDOW));
+        assert_eq!(room.chat_broadcasts.len(), 1);
     }
 
     #[test]
@@ -7689,11 +7599,14 @@ mod security_tests {
         let mut room = Room::new(rid("room"), None, false, None);
         let start = std::time::Instant::now();
         for _ in 0..MAX_ROOM_MEDIA_MUTATIONS_PER_WINDOW {
-            assert!(room.reserve_media_mutation(start));
+            assert!(room.media_mutations.reserve(start));
         }
-        assert!(!room.reserve_media_mutation(start));
-        assert!(room.reserve_media_mutation(start + ROOM_MEDIA_MUTATION_WINDOW));
-        assert_eq!(room.recent_media_mutations.len(), 1);
+        assert!(!room.media_mutations.reserve(start));
+        assert!(
+            room.media_mutations
+                .reserve(start + ROOM_MEDIA_MUTATION_WINDOW)
+        );
+        assert_eq!(room.media_mutations.len(), 1);
     }
 
     #[test]
@@ -7701,14 +7614,14 @@ mod security_tests {
         let mut room = Room::new(rid("room"), None, false, None);
         let start = std::time::Instant::now();
         for _ in 0..(MAX_ROOM_MEDIA_MUTATIONS_PER_WINDOW * 2) {
-            assert!(room.reserve_media_mutation(start));
-            assert!(room.refund_media_mutation(start));
+            assert!(room.media_mutations.reserve(start));
+            assert!(room.media_mutations.refund(start));
         }
-        assert!(room.recent_media_mutations.is_empty());
+        assert!(room.media_mutations.is_empty());
         for _ in 0..MAX_ROOM_MEDIA_MUTATIONS_PER_WINDOW {
-            assert!(room.reserve_media_mutation(start));
+            assert!(room.media_mutations.reserve(start));
         }
-        assert!(!room.reserve_media_mutation(start));
+        assert!(!room.media_mutations.reserve(start));
     }
 
     #[tokio::test]
@@ -7716,8 +7629,8 @@ mod security_tests {
         let start = std::time::Instant::now();
         let original = Arc::new(TokioRwLock::new(Room::new(rid("room"), None, false, None)));
         let replacement = Arc::new(TokioRwLock::new(Room::new(rid("room"), None, false, None)));
-        assert!(original.write().await.reserve_media_mutation(start));
-        assert!(replacement.write().await.reserve_media_mutation(start));
+        assert!(original.write().await.media_mutations.reserve(start));
+        assert!(replacement.write().await.media_mutations.reserve(start));
 
         RoomManager::refund_media_mutation(MediaMutationReservation {
             room: original.clone(),
@@ -7725,8 +7638,8 @@ mod security_tests {
         })
         .await;
 
-        assert!(original.read().await.recent_media_mutations.is_empty());
-        assert_eq!(replacement.read().await.recent_media_mutations.len(), 1);
+        assert!(original.read().await.media_mutations.is_empty());
+        assert_eq!(replacement.read().await.media_mutations.len(), 1);
     }
 
     #[test]
@@ -7734,11 +7647,14 @@ mod security_tests {
         let mut room = Room::new(rid("room"), None, false, None);
         let start = std::time::Instant::now();
         for _ in 0..MAX_ROOM_MEDIA_CONTROL_IPC_PER_WINDOW {
-            assert!(room.reserve_media_control_ipc(start));
+            assert!(room.media_control_ipc.reserve(start));
         }
-        assert!(!room.reserve_media_control_ipc(start));
-        assert!(room.reserve_media_control_ipc(start + ROOM_MEDIA_CONTROL_IPC_WINDOW));
-        assert_eq!(room.recent_media_control_ipc.len(), 1);
+        assert!(!room.media_control_ipc.reserve(start));
+        assert!(
+            room.media_control_ipc
+                .reserve(start + ROOM_MEDIA_CONTROL_IPC_WINDOW)
+        );
+        assert_eq!(room.media_control_ipc.len(), 1);
     }
 
     #[test]
@@ -7746,14 +7662,14 @@ mod security_tests {
         let mut room = Room::new(rid("room"), None, false, None);
         let start = std::time::Instant::now();
         for _ in 0..(MAX_ROOM_MEDIA_CONTROL_IPC_PER_WINDOW * 2) {
-            assert!(room.reserve_media_control_ipc(start));
-            assert!(room.refund_media_control_ipc(start));
+            assert!(room.media_control_ipc.reserve(start));
+            assert!(room.media_control_ipc.refund(start));
         }
-        assert!(room.recent_media_control_ipc.is_empty());
+        assert!(room.media_control_ipc.is_empty());
         for _ in 0..MAX_ROOM_MEDIA_CONTROL_IPC_PER_WINDOW {
-            assert!(room.reserve_media_control_ipc(start));
+            assert!(room.media_control_ipc.reserve(start));
         }
-        assert!(!room.reserve_media_control_ipc(start));
+        assert!(!room.media_control_ipc.reserve(start));
     }
 
     #[test]
@@ -7761,11 +7677,14 @@ mod security_tests {
         let mut room = Room::new(rid("room"), None, false, None);
         let start = std::time::Instant::now();
         for _ in 0..MAX_ROOM_ADMIN_MUTATIONS_PER_WINDOW {
-            assert!(room.reserve_admin_mutation(start));
+            assert!(room.admin_mutations.reserve(start));
         }
-        assert!(!room.reserve_admin_mutation(start));
-        assert!(room.reserve_admin_mutation(start + ROOM_ADMIN_MUTATION_WINDOW));
-        assert_eq!(room.recent_admin_mutations.len(), 1);
+        assert!(!room.admin_mutations.reserve(start));
+        assert!(
+            room.admin_mutations
+                .reserve(start + ROOM_ADMIN_MUTATION_WINDOW)
+        );
+        assert_eq!(room.admin_mutations.len(), 1);
     }
 
     #[test]
@@ -7773,27 +7692,30 @@ mod security_tests {
         let mut room = Room::new(rid("room"), None, false, None);
         let start = std::time::Instant::now();
         for _ in 0..MAX_ROOM_VOICE_REQUESTS_PER_WINDOW {
-            assert!(room.reserve_voice_request(start));
+            assert!(room.voice_requests.reserve(start));
         }
-        assert!(!room.reserve_voice_request(start));
-        assert!(room.reserve_voice_request(start + ROOM_VOICE_REQUEST_WINDOW));
-        assert_eq!(room.recent_voice_requests.len(), 1);
+        assert!(!room.voice_requests.reserve(start));
+        assert!(
+            room.voice_requests
+                .reserve(start + ROOM_VOICE_REQUEST_WINDOW)
+        );
+        assert_eq!(room.voice_requests.len(), 1);
     }
 
     #[test]
     fn shared_join_budget_aggregates_sockets_and_ipv6_addresses() {
         let limiter = SharedRateLimiter::new(2);
         let start = std::time::Instant::now();
-        let first = rate_limit_ip("2001:db8:1:2::1".parse().unwrap());
-        let rotated = rate_limit_ip("2001:db8:1:2:ffff::42".parse().unwrap());
+        let first = crate::net::cohort("2001:db8:1:2::1".parse().unwrap());
+        let rotated = crate::net::cohort("2001:db8:1:2:ffff::42".parse().unwrap());
         assert_eq!(first, rotated);
         assert!(limiter.allow(first, start));
         assert!(limiter.allow(rotated, start));
         assert!(!limiter.allow(first, start));
         assert!(limiter.allow(first, start + JOIN_RATE_WINDOW));
 
-        let mapped_first = rate_limit_ip("::ffff:192.0.2.1".parse().unwrap());
-        let mapped_second = rate_limit_ip("::ffff:192.0.2.2".parse().unwrap());
+        let mapped_first = crate::net::cohort("::ffff:192.0.2.1".parse().unwrap());
+        let mapped_second = crate::net::cohort("::ffff:192.0.2.2".parse().unwrap());
         assert_eq!(mapped_first, "192.0.2.1".parse::<IpAddr>().unwrap());
         assert_ne!(mapped_first, mapped_second);
     }

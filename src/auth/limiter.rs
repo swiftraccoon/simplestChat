@@ -7,6 +7,7 @@
 //! assigning strangers a shared overflow penalty. HTTP admission and password
 //! work semaphores independently bound resource use under distributed traffic.
 
+use crate::net::cohort;
 use lru::LruCache;
 use std::hash::Hash;
 use std::net::IpAddr;
@@ -22,29 +23,6 @@ const FREE_PAIR_FAILURES: u32 = 3;
 const MAX_PAIR_DELAY: Duration = Duration::from_secs(300);
 const FAILURE_MEMORY: Duration = Duration::from_secs(3600);
 const MAX_TRACKED_KEYS: usize = 10_000;
-
-/// Keyed IPv6 clients by their /64, like every other address limit here.
-pub(crate) fn cohort(address: IpAddr) -> IpAddr {
-    match address {
-        IpAddr::V4(_) => address,
-        IpAddr::V6(address) => {
-            if let Some(mapped) = address.to_ipv4_mapped() {
-                return IpAddr::V4(mapped);
-            }
-            let segments = address.segments();
-            IpAddr::V6(std::net::Ipv6Addr::new(
-                segments[0],
-                segments[1],
-                segments[2],
-                segments[3],
-                0,
-                0,
-                0,
-                0,
-            ))
-        }
-    }
-}
 
 /// The wait after `failures`, once `free` of them have been forgiven: one
 /// second, then doubling to `ceiling`.

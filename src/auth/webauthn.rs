@@ -118,7 +118,7 @@ impl ChallengeStore {
         display_name: String,
         source_ip: IpAddr,
     ) -> Option<String> {
-        let source_ip = rate_limit_ip(source_ip);
+        let source_ip = crate::net::cohort(source_ip);
         let mut challenges = self.challenges.write().unwrap_or_else(|e| e.into_inner());
         challenges.retain_live();
 
@@ -178,7 +178,7 @@ impl ChallengeStore {
         state: DiscoverableAuthentication,
         source_ip: IpAddr,
     ) -> Option<String> {
-        let source_ip = rate_limit_ip(source_ip);
+        let source_ip = crate::net::cohort(source_ip);
         let mut challenges = self.challenges.write().unwrap_or_else(|e| e.into_inner());
         challenges.retain_live();
 
@@ -220,7 +220,7 @@ impl ChallengeStore {
         data: AccountChallenge,
         source_ip: IpAddr,
     ) -> Option<String> {
-        let source_ip = rate_limit_ip(source_ip);
+        let source_ip = crate::net::cohort(source_ip);
         let mut challenges = self
             .challenges
             .write()
@@ -272,28 +272,6 @@ impl ChallengeStore {
         }
         let challenge = challenges.accounts.remove(id)?;
         (challenge.created_at.elapsed() < challenge.data.ttl()).then_some(challenge.data)
-    }
-}
-
-fn rate_limit_ip(address: IpAddr) -> IpAddr {
-    match address {
-        IpAddr::V4(_) => address,
-        IpAddr::V6(address) => {
-            if let Some(address) = address.to_ipv4_mapped() {
-                return IpAddr::V4(address);
-            }
-            let segments = address.segments();
-            IpAddr::V6(std::net::Ipv6Addr::new(
-                segments[0],
-                segments[1],
-                segments[2],
-                segments[3],
-                0,
-                0,
-                0,
-                0,
-            ))
-        }
     }
 }
 

@@ -22,14 +22,15 @@ HTTP / WebSocket
 | Configuration, startup and database pool | `config.rs`, `app.rs`, `db.rs` |
 | Identifiers (room slug, participant, message and account UUIDs) | `ids.rs` |
 | Admission drain and bounded shutdown | `shutdown.rs`, `app.rs` |
-| Routes, origin/limits, WebSocket lifecycle | `signaling/mod.rs`, `signaling/connection.rs` |
+| Routes, origin/limits, WebSocket lifecycle | `signaling/mod.rs`, `signaling/connection.rs` (`connection_token_bucket.rs` holds its per-connection rate limits) |
 | Dependency readiness | `signaling/readiness.rs`, `media/worker_manager.rs` |
 | Wire contract | `signaling/protocol.rs`; `cargo run -q -p xtask -- protocol-ts` generates [web/src/protocol.generated.ts](../web/src/protocol.generated.ts) from it |
 | Password/passkey auth and JWT validation | `auth/routes.rs`, `auth/password.rs`, `auth/webauthn.rs`, `auth/jwt.rs`, `auth/limiter.rs` (sign-in failure delays, registration window) |
 | Profiles, recovery and refresh sessions | `auth/account.rs`, `auth/session.rs` |
 | Atomic account privacy and fresh runtime publication | `auth/account.rs`, `room/privacy.rs` |
 | One-use WebSocket authentication tickets | `auth/ws_tickets.rs` |
-| Membership, lobby, chat and reconnect state | `room/mod.rs`, `room/social.rs` |
+| Membership, lobby, chat and reconnect state | `room/mod.rs`, `room/social.rs` (tests in `room/social_tests.rs`), `room/window.rs` (per-room admission budgets) |
+| Address cohort shared by every per-address limit and sanction | `net.rs` |
 | Durable room history, PM inbox, read positions and chat expiry | `room/history.rs` |
 | Account notification rules, quiet hours and per-conversation overrides | `auth/notifications.rs` |
 | Bounded authenticated account invalidations outside rooms | `auth/updates.rs`, `auth/updates_tests.rs` |

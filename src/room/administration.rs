@@ -528,7 +528,7 @@ impl Context {
         };
         if let Some(runtime) = self.runtime.as_ref() {
             let mut room = runtime.write().await;
-            if !room.reserve_admin_mutation(std::time::Instant::now()) {
+            if !room.admin_mutations.reserve(std::time::Instant::now()) {
                 return Err(invalid("Room administration changes are rate limited"));
             }
         }
@@ -727,7 +727,7 @@ impl Context {
         let ip = if publication.authenticated {
             publication.ip
         } else {
-            publication.ip.map(moderation::canonical_guest_ip)
+            publication.ip.map(crate::net::cohort)
         }
         .map(|ip| ip.to_string());
         let state = if kind == moderation::PunitiveKind::CamBanned {
@@ -1020,7 +1020,7 @@ impl Context {
             let ip = if publication.authenticated {
                 publication.ip
             } else {
-                publication.ip.map(moderation::canonical_guest_ip)
+                publication.ip.map(crate::net::cohort)
             }
             .map(|ip| ip.to_string());
             if let Some(user) = user {

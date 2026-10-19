@@ -848,3 +848,17 @@ Complete-source SHA256 of the rebound file:
 | 60 | `src/room/settings.rs:644:644:33:43` | `codeql:8386448f1746eae63a1b312f6ba44d539f32cd37bbf866bbc25c21c4d3571aae` |
 | 61 | `src/room/settings.rs:646:646:33:43` | `codeql:34eaa4b3879d063c8387728a6cc1535602fd16df218854f05cb852ab0a92ce17` |
 | 62 | `src/room/settings.rs:649:649:33:45` | `codeql:e2c3eab59fcd8770ccad7bf18e8ca4f434f98466d492c7b0fd27bff55f0f66f5` |
+
+## Source re-review: shared address cohort (2026-10-19)
+
+`afab203` replaced the five identical IPv6 /64 address-identity functions with `net::cohort`; in `src/signaling/mod.rs` the removed `rate_limit_ip` and its identity test moved the reviewed lines (35, 63, 69) up. Every flagged line is byte-identical to the previously reviewed source; the identities were recomputed with the same line-mapping method as the earlier 2026-10-19 rebindings (base 4ca15a0). Owner, rationale, scope semantics and the 2026-11-29 expiry are unchanged; hosted ingestion remains a separate required check.
+
+Complete-source SHA256 per rebound file:
+
+- `src/signaling/mod.rs`: `46a0d2fb6703e33af6ee7f71529a4688f4b6c904dfe34fb866c4c2f1ec8eb8ed`
+
+| Alert | Range | Fingerprint |
+|---|---|---|
+| 35 | `src/signaling/mod.rs:1733:1733:153:165` | `codeql:e4d3abdde1361dbabf349ca5117ed96922aa0ecef554a9aabdafba6a989b0727` |
+| 63 | `src/signaling/mod.rs:2164:2164:31:56` | `codeql:81da0a0f50cb1c68618ac7d074369ebcfa46191b8877091105491481343645fd` |
+| 69 | `src/signaling/mod.rs:1724:1724:79:91` | `codeql:32d000d21557ea7c9be5434762bfaf90b486304f3ec0530194b9fb7c9d7b41f4` |

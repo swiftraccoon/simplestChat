@@ -59,28 +59,6 @@ const HTTP_UPLOAD_REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 const HTTP_BODY_IDLE_TIMEOUT: Duration = Duration::from_secs(5);
 const WS_AUTH_PROTOCOL_PREFIX: &str = "ticket.";
 
-fn rate_limit_ip(ip: IpAddr) -> IpAddr {
-    match ip {
-        IpAddr::V4(_) => ip,
-        IpAddr::V6(address) => {
-            if let Some(address) = address.to_ipv4_mapped() {
-                return IpAddr::V4(address);
-            }
-            let segments = address.segments();
-            IpAddr::V6(std::net::Ipv6Addr::new(
-                segments[0],
-                segments[1],
-                segments[2],
-                segments[3],
-                0,
-                0,
-                0,
-                0,
-            ))
-        }
-    }
-}
-
 #[derive(Debug)]
 struct AuthRateEntry {
     window_started: Instant,
@@ -132,7 +110,7 @@ impl AuthGuard {
     }
 
     fn allow_at(&self, ip: IpAddr, now: Instant) -> bool {
-        let ip = rate_limit_ip(ip);
+        let ip = crate::net::cohort(ip);
         let mut table = self.entries.lock().unwrap_or_else(|e| e.into_inner());
         // At capacity, evict a cold cohort rather than imposing one stranger's
         // exhausted allowance on every untracked address. Global semaphores
@@ -239,7 +217,7 @@ impl IpConnectionLimiter {
     }
 
     fn try_acquire(&self, ip: IpAddr) -> Option<IpConnectionPermit> {
-        let ip = rate_limit_ip(ip);
+        let ip = crate::net::cohort(ip);
         let mut counts = self.counts.lock().unwrap_or_else(|e| e.into_inner());
         let count = counts.entry(ip).or_default();
         if *count >= self.max_per_ip {
@@ -2489,18 +2467,5 @@ mod security_tests {
         assert!(Query::<WsParams>::try_from_uri(&"/ws".parse().unwrap()).is_ok());
         assert!(Query::<WsParams>::try_from_uri(&"/ws?token=secret".parse().unwrap()).is_err());
         assert!(Query::<WsParams>::try_from_uri(&"/ws?ticket=secret".parse().unwrap()).is_err());
-    }
-
-    #[test]
-    fn ipv6_rate_limits_are_scoped_to_a_64_bit_prefix() {
-        let first: IpAddr = "2001:db8:1:2::1".parse().unwrap();
-        let rotated: IpAddr = "2001:db8:1:2:ffff::42".parse().unwrap();
-        assert_eq!(rate_limit_ip(first), rate_limit_ip(rotated));
-
-        let mapped_first: IpAddr = "::ffff:192.0.2.1".parse().unwrap();
-        let mapped_second: IpAddr = "::ffff:192.0.2.2".parse().unwrap();
-        let canonical_first: IpAddr = "192.0.2.1".parse().unwrap();
-        assert_eq!(rate_limit_ip(mapped_first), canonical_first);
-        assert_ne!(rate_limit_ip(mapped_first), rate_limit_ip(mapped_second));
     }
 }
