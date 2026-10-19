@@ -619,6 +619,7 @@ impl Context {
             );
             Ok(())
         };
+        let control = super::control::RoomControl::from_guard(control);
         // Retain users/session/room row locks across the helper's preference
         // lookup. Its final synchronous callback runs after the final await.
         let operation = async {

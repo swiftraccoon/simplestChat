@@ -4337,8 +4337,8 @@ impl RoomManager {
         invite_only: Option<bool>,
         push_to_talk: Option<bool>,
         secret: Option<bool>,
-        password: Option<Option<String>>,
-        control: tokio::sync::OwnedMutexGuard<()>,
+        password: Option<Option<SecretString>>,
+        control: control::RoomControl,
     ) -> Result<()> {
         // Authorize before expensive password work. Control retains this
         // membership/permission order while brief state locks allow chat/media.
@@ -4511,7 +4511,7 @@ impl RoomManager {
             settings: settings_value,
         });
         drop(room);
-        drop(control);
+        control.release();
 
         self.close_revoked_producers(room_id, revoked, active_observer, audio_observer)
             .await;
@@ -4545,7 +4545,7 @@ impl RoomManager {
         admin_id: &str,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         topic: String,
-        control: tokio::sync::OwnedMutexGuard<()>,
+        control: control::RoomControl,
     ) -> Result<()> {
         if topic.len() > 512 || topic.chars().any(char::is_control) {
             anyhow::bail!("Room topic must be at most 512 characters without control characters");
@@ -4605,7 +4605,7 @@ impl RoomManager {
             changed_by: admin_id.to_string(),
         });
         drop(room);
-        drop(control);
+        control.release();
         info!("Topic set for room {} by {}", room_id, admin_id);
         Ok(())
     }
@@ -4660,7 +4660,7 @@ impl RoomManager {
         kind: moderation::PunitiveKind,
         enabled: bool,
         reason: Option<&str>,
-        control: tokio::sync::OwnedMutexGuard<()>,
+        control: control::RoomControl,
     ) -> Result<bool> {
         if reason.is_some_and(|value| value.len() > 256 || value.chars().any(char::is_control)) {
             anyhow::bail!(
@@ -4825,7 +4825,7 @@ impl RoomManager {
         let audio_observer = room.audio_level_observer.clone();
         drop(room);
 
-        drop(control);
+        control.release();
         self.close_revoked_producers(room_id, revoked, active_observer, audio_observer)
             .await;
         Ok(true)
@@ -5206,7 +5206,7 @@ impl RoomManager {
         reason: Option<&str>,
         duration: Option<u64>,
         report_id: Option<uuid::Uuid>,
-        control: tokio::sync::OwnedMutexGuard<()>,
+        control: control::RoomControl,
     ) -> Result<()> {
         const MAX_BAN_DURATION_SECS: u64 = 10 * 365 * 24 * 60 * 60;
         if duration.is_some_and(|seconds| seconds == 0 || seconds > MAX_BAN_DURATION_SECS) {
@@ -5375,7 +5375,7 @@ impl RoomManager {
             room.notify_lobby_status();
             target_sessions
         };
-        drop(control);
+        control.release();
 
         // Clean up media outside lock
         for (affected_participant_id, media_session_id) in target_sessions {
@@ -5432,7 +5432,7 @@ impl RoomManager {
         moderator_id: &str,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         target_participant_id: &str,
-        control: tokio::sync::OwnedMutexGuard<()>,
+        control: control::RoomControl,
     ) -> Result<()> {
         let room_lock = self.get_room(room_id)?;
         let mut room = room_lock.write().await;
@@ -5530,7 +5530,7 @@ impl RoomManager {
                 ));
         }
         drop(room);
-        drop(control);
+        control.release();
 
         info!(
             "unban: {} unbanned {} from room {}",
@@ -5573,7 +5573,7 @@ impl RoomManager {
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         target_participant_id: &str,
         new_role: roles::Role,
-        control: tokio::sync::OwnedMutexGuard<()>,
+        control: control::RoomControl,
     ) -> Result<()> {
         let room_lock = self.get_room(room_id)?;
         let mut room = room_lock.write().await;
@@ -5652,7 +5652,7 @@ impl RoomManager {
             granted_by: setter_name,
         });
         drop(room);
-        drop(control);
+        control.release();
 
         self.close_revoked_producers(room_id, revoked, active_observer, audio_observer)
             .await;
@@ -5758,8 +5758,13 @@ impl RoomManager {
             anyhow::bail!("Insufficient permissions to admit from lobby");
         }
         drop(room);
-        self.admit_authorized_lobby(room_id, target_id, _control, || Ok(()))
-            .await
+        self.admit_authorized_lobby(
+            room_id,
+            target_id,
+            control::RoomControl::from_guard(_control),
+            || Ok(()),
+        )
+        .await
     }
 
     /// Complete admission under an existing control guard. The caller validates
@@ -5768,7 +5773,7 @@ impl RoomManager {
         &self,
         room_id: &str,
         target_id: &str,
-        _control: tokio::sync::OwnedMutexGuard<()>,
+        _control: control::RoomControl,
         authorize: impl FnOnce() -> Result<()>,
     ) -> Result<()> {
         let room_lock = self.get_room(room_id)?;
@@ -5923,7 +5928,7 @@ impl RoomManager {
         info!("Admitted {} to room {}", target_id, room_id);
         room.notify_lobby_status();
         drop(room);
-        drop(_control);
+        _control.release();
         self.note_room_visit(room_id, &entry.participant_id, entry.authenticated);
         Ok(())
     }
@@ -5949,8 +5954,14 @@ impl RoomManager {
             anyhow::bail!("Insufficient permissions to deny from lobby");
         }
         drop(room);
-        self.deny_authorized_lobby(room_id, target_id, reason, _control, || Ok(()))
-            .await
+        self.deny_authorized_lobby(
+            room_id,
+            target_id,
+            reason,
+            control::RoomControl::from_guard(_control),
+            || Ok(()),
+        )
+        .await
     }
 
     pub(super) async fn deny_authorized_lobby(
@@ -5958,7 +5969,7 @@ impl RoomManager {
         room_id: &str,
         target_id: &str,
         reason: Option<String>,
-        _control: tokio::sync::OwnedMutexGuard<()>,
+        _control: control::RoomControl,
         authorize: impl FnOnce() -> Result<()>,
     ) -> Result<()> {
         let room_lock = self.get_room(room_id)?;

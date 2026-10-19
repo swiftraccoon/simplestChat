@@ -7,12 +7,34 @@
 
 use super::{Room, RoomManager, ServerMessage, TokioRwLock, try_send_essential};
 use std::future::Future;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 use tokio::sync::OwnedMutexGuard;
 use tracing::{Instrument, warn};
 
 pub(super) const ADMISSION_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Proof that an owned operation holds its room's control lock.
+///
+/// The operation's task keeps control for its whole run whatever the operation
+/// does with this token: dropping it, or never touching it, cannot release
+/// control early. An operation that has published its result and wants later
+/// work (native cleanup, notifications) to proceed without excluding other
+/// writers calls [`RoomControl::release`] explicitly.
+#[derive(Clone)]
+pub(crate) struct RoomControl(Arc<Mutex<Option<OwnedMutexGuard<()>>>>);
+
+impl RoomControl {
+    /// Wrap control a caller acquired itself through [`lock_room`].
+    pub(crate) fn from_guard(guard: OwnedMutexGuard<()>) -> Self {
+        Self(Arc::new(Mutex::new(Some(guard))))
+    }
+
+    /// End the exclusion now, before the owned task finishes.
+    pub(crate) fn release(&self) {
+        drop(self.0.lock().unwrap_or_else(PoisonError::into_inner).take());
+    }
+}
 pub(super) const PERSISTENCE_TIMEOUT: Duration = Duration::from_secs(15);
 const QUARANTINE_CLEANUP_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -60,7 +82,7 @@ impl RoomManager {
     ) -> anyhow::Result<T>
     where
         T: Send + 'static,
-        F: FnOnce(Self, String, OwnedMutexGuard<()>) -> W + Send + 'static,
+        F: FnOnce(Self, String, RoomControl) -> W + Send + 'static,
         W: Future<Output = anyhow::Result<T>> + Send + 'static,
     {
         let room = self.get_room(room_id)?;
@@ -82,14 +104,26 @@ impl RoomManager {
         }
         let manager = self.clone();
         let room_id = room_id.to_owned();
+        // The task, not the operation, owns control: a closure that ignores its
+        // token (or drops it on an early error path) still excludes other
+        // writers until the owned work has finished.
+        let control = RoomControl::from_guard(control);
+        let held = control.clone();
+        let operation = action(manager, room_id, control);
         // Preserve log correlation explicitly. Task-local diagnostic timers do
         // not inherit a request scope that may end before this owned work does.
-        tokio::spawn(action(manager, room_id, control).in_current_span())
-            .await
-            .map_err(|error| {
-                warn!(%error, "Owned room control task failed");
-                anyhow::anyhow!("Room control operation failed")
-            })?
+        tokio::spawn(
+            async move {
+                let _held = held;
+                operation.await
+            }
+            .in_current_span(),
+        )
+        .await
+        .map_err(|error| {
+            warn!(%error, "Owned room control task failed");
+            anyhow::anyhow!("Room control operation failed")
+        })?
     }
 
     /// Bound the complete SQL phase, including acquisition and COMMIT. Callers

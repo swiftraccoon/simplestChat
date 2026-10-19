@@ -5211,7 +5211,7 @@ impl RoomManager {
         participant_id: &str,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
         command: &ClientMessage,
-        control: Option<tokio::sync::OwnedMutexGuard<()>>,
+        control: Option<super::control::RoomControl>,
     ) -> Result<()> {
         let (request_id, action) = command
             .social_request()
@@ -6422,7 +6422,9 @@ impl RoomManager {
             _ => return Err(rejected("Unknown request")),
         };
         drop(room);
-        drop(control);
+        if let Some(control) = &control {
+            control.release();
+        }
         send(
             &self.metrics,
             expected_sender,
