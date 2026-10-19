@@ -122,12 +122,13 @@ impl Sizing {
     }
 }
 
-fn read_env_usize(name: &str) -> Option<usize> {
-    std::env::var(name).ok()?.trim().parse().ok()
-}
-
 /// The process's sizing from its cgroup files and environment.
-pub(crate) fn from_process(workers: usize, cgroup: &Path) -> Sizing {
+pub(crate) fn from_process(
+    workers: usize,
+    cgroup: &Path,
+    max_connections: Option<usize>,
+    max_rooms: Option<usize>,
+) -> Sizing {
     let read = |name: &str| std::fs::read_to_string(cgroup.join(name)).ok();
     Sizing {
         workers,
@@ -137,14 +138,19 @@ pub(crate) fn from_process(workers: usize, cgroup: &Path) -> Sizing {
         memory_mib: read("memory.max")
             .and_then(|contents| parse_memory_max(&contents))
             .map(|bytes| bytes / (1024 * 1024)),
-        max_connections: read_env_usize("MAX_CONNECTIONS"),
-        max_rooms: read_env_usize("MAX_ROOMS"),
+        max_connections,
+        max_rooms,
     }
 }
 
 /// Log the sizing line and its warnings.
-pub(crate) fn announce(workers: usize) {
-    let sizing = from_process(workers, Path::new("/sys/fs/cgroup"));
+pub(crate) fn announce(workers: usize, max_connections: usize, max_rooms: usize) {
+    let sizing = from_process(
+        workers,
+        Path::new("/sys/fs/cgroup"),
+        Some(max_connections),
+        Some(max_rooms),
+    );
     let (line, warnings) = sizing.report();
     tracing::info!("{line}");
     for warning in warnings {
@@ -228,8 +234,8 @@ mod tests {
         std::fs::create_dir_all(&directory).unwrap();
         std::fs::write(directory.join("cpu.max"), "200000 100000\n").unwrap();
         std::fs::write(directory.join("memory.max"), "3221225472\n").unwrap();
-        let sizing = from_process(2, &directory);
-        let missing = from_process(2, &directory.join("absent"));
+        let sizing = from_process(2, &directory, None, None);
+        let missing = from_process(2, &directory.join("absent"), None, None);
         std::fs::remove_dir_all(&directory).unwrap();
         assert_eq!(
             (sizing.quota_cpus, sizing.memory_mib),

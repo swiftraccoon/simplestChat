@@ -9,7 +9,7 @@
 pub mod app;
 pub mod attachments;
 pub mod auth;
-pub mod configuration;
+pub mod config;
 pub mod db;
 pub mod diagnostics;
 pub mod invite_codes;

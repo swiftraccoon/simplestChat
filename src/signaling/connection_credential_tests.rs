@@ -312,7 +312,9 @@ fn grace_entry_with_timer(token: &str, timer: tokio::task::JoinHandle<()>) -> Gr
         reconnect_token: token.to_string(),
         authenticated_subject: Some("credential-observer-account".to_string()),
         authenticated_version: Some(2),
-        media_rate_state: MediaSessionRateState::new(),
+        media_rate_state: MediaSessionRateState::new(
+            crate::media::config::DEFAULT_MAX_CONSUMERS_PER_PARTICIPANT,
+        ),
         sender,
         timer,
     }

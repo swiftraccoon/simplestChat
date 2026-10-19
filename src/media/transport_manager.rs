@@ -28,34 +28,6 @@ use uuid::Uuid;
 #[path = "receive_replacement_tests.rs"]
 mod receive_replacement_tests;
 
-fn max_producers_per_participant() -> usize {
-    std::env::var("MAX_PRODUCERS_PER_PARTICIPANT")
-        .ok()
-        .and_then(|value| value.trim().parse().ok())
-        .filter(|value| *value > 0)
-        .unwrap_or(8)
-}
-
-pub(crate) fn max_consumers_per_participant() -> usize {
-    consumer_cap_from(
-        std::env::var("MAX_CONSUMERS_PER_PARTICIPANT")
-            .ok()
-            .as_deref(),
-    )
-}
-
-/// Per-participant consumer cap. Browsers consume every remote producer, so
-/// a participant needs `2 * (N - 1)` consumers in an N-person room with
-/// camera and microphone (four per peer with screen video and audio). The default
-/// covers 32 such publishers; the previous value of 16 silently blanked the
-/// tenth participant's tiles.
-fn consumer_cap_from(configured: Option<&str>) -> usize {
-    configured
-        .and_then(|value| value.trim().parse().ok())
-        .filter(|value| *value > 0)
-        .unwrap_or(64)
-}
-
 fn producer_pause_transition_needed(currently_paused: bool, requested_paused: bool) -> bool {
     currently_paused != requested_paused
 }
@@ -186,6 +158,10 @@ pub struct TransportManager {
     bwe_trace_handlers: Arc<StdRwLock<HashMap<Uuid, Box<dyn Any + Send + Sync>>>>,
     /// `MediaConfig::key_frame_request_delay_ms`, applied to video producers.
     key_frame_request_delay: u32,
+    /// `MediaConfig::max_producers_per_participant`.
+    producer_cap: usize,
+    /// `MediaConfig::max_consumers_per_participant`.
+    consumer_cap: usize,
 }
 
 /// A placement selected before replacing the receiver. An unchanged placement
@@ -220,7 +196,17 @@ impl TransportManager {
             paused_producers: Arc::new(StdRwLock::new(HashMap::new())),
             bwe_trace_handlers: Arc::new(StdRwLock::new(HashMap::new())),
             key_frame_request_delay: 0,
+            producer_cap: super::config::DEFAULT_MAX_PRODUCERS_PER_PARTICIPANT,
+            consumer_cap: super::config::DEFAULT_MAX_CONSUMERS_PER_PARTICIPANT,
         }
+    }
+
+    /// Bound every participant's producers and consumers.
+    #[must_use]
+    pub fn with_participant_caps(mut self, producers: usize, consumers: usize) -> Self {
+        self.producer_cap = producers;
+        self.consumer_cap = consumers;
+        self
     }
 
     /// Coalesce keyframe requests to each video producer's sender to one per
@@ -688,7 +674,7 @@ impl TransportManager {
                 index.remove(id);
             }
         }
-        let producer_cap = max_producers_per_participant();
+        let producer_cap = self.producer_cap;
         if participant.producers.len() >= producer_cap {
             return Err(MediaError::ProducerError(format!(
                 "Producer limit reached ({producer_cap})"
@@ -754,7 +740,7 @@ impl TransportManager {
         participant
             .consumer_layers
             .retain(|id, _| live.contains_key(id));
-        let consumer_cap = max_consumers_per_participant();
+        let consumer_cap = self.consumer_cap;
         if participant.consumers.len() >= consumer_cap {
             return Err(MediaError::ConsumerError(format!(
                 "Consumer limit reached ({consumer_cap})"
@@ -1768,9 +1754,9 @@ mod tests {
     fn default_consumer_cap_covers_a_32_person_camera_and_microphone_room() {
         // Every participant consumes audio and video from each peer, so a room
         // of N publishers needs 2 * (N - 1) consumers per participant.
-        assert!(consumer_cap_from(None) >= 2 * 31);
-        assert_eq!(consumer_cap_from(Some(" 8 ")), 8);
-        assert_eq!(consumer_cap_from(Some("0")), consumer_cap_from(None));
+        const {
+            assert!(super::super::config::DEFAULT_MAX_CONSUMERS_PER_PARTICIPANT >= 2 * 31);
+        }
     }
 
     #[test]
@@ -2010,7 +1996,7 @@ mod tests {
         // retired receiver must release both native ownership and allocation load.
         // Active and paused producers require the same browser-ready acknowledgment.
         transport_manager.get_or_create_participant("other-session");
-        for attempt in 0..=consumer_cap_from(None) {
+        for attempt in 0..=super::super::config::DEFAULT_MAX_CONSUMERS_PER_PARTICIPANT {
             let producer_paused = attempt > 0;
             if producer_paused {
                 transport_manager

@@ -101,9 +101,14 @@ async fn wire_settings_set_omit_and_clear_are_persisted() {
     let mut config = MediaConfig::default();
     config.worker_config.num_workers = 1;
     config.webrtc_server_port_base = 0; // Only this test's ephemeral UDP socket.
-    let manager = RoomManager::new(config, ServerMetrics::new(), Some(pool.clone()))
-        .await
-        .unwrap();
+    let manager = RoomManager::new(
+        crate::room::ManagerSettings::default(),
+        config,
+        ServerMetrics::new(),
+        Some(pool.clone()),
+    )
+    .await
+    .unwrap();
     let owner_id = Uuid::new_v4();
     let room_id = format!("settings-{}", Uuid::new_v4());
     let (sender, _receiver) = mpsc::channel(16);

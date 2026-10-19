@@ -38,7 +38,7 @@ const WINDOW: Duration = Duration::from_secs(10);
 const INTERVAL: Duration = Duration::from_secs(2);
 
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct SaturationConfig {
+pub struct SaturationConfig {
     /// Fraction of enforcement periods throttled over the window at which the
     /// process counts as saturated.
     pub throttled_fraction: f64,
@@ -80,23 +80,7 @@ impl Default for SaturationConfig {
 }
 
 impl SaturationConfig {
-    /// `None` when `CPU_SATURATION_DISABLED=true`.
-    pub(crate) fn from_env() -> anyhow::Result<Option<Self>> {
-        Self::from_values(
-            std::env::var("CPU_SATURATION_DISABLED").ok().as_deref(),
-            std::env::var("CPU_SATURATION_THROTTLED_FRACTION")
-                .ok()
-                .as_deref(),
-            std::env::var("CPU_SATURATION_PRESSURE_AVG10")
-                .ok()
-                .as_deref(),
-            std::env::var("CPU_SATURATION_WORKER_UTILIZATION")
-                .ok()
-                .as_deref(),
-            std::env::var("MEMORY_SATURATION_FRACTION").ok().as_deref(),
-        )
-    }
-
+    /// `None` when `CPU_SATURATION_DISABLED` is true.
     pub(crate) fn from_values(
         disabled: Option<&str>,
         throttled_fraction: Option<&str>,

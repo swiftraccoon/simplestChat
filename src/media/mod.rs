@@ -45,7 +45,12 @@ impl MediaServer {
         let worker_manager = Arc::new(WorkerManager::new(config.clone()).await?);
         let router_manager = Arc::new(RouterManager::new(worker_manager.clone()));
         let transport_manager = Arc::new(
-            TransportManager::new().with_key_frame_request_delay(config.key_frame_request_delay_ms),
+            TransportManager::new()
+                .with_key_frame_request_delay(config.key_frame_request_delay_ms)
+                .with_participant_caps(
+                    config.max_producers_per_participant,
+                    config.max_consumers_per_participant,
+                ),
         );
 
         Ok(Self {

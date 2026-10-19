@@ -3,15 +3,14 @@
 //! [`main`], so every log line carries this crate's target.
 
 use crate::{
+    config::{Config, LogFormat},
     db,
     diagnostics::Diagnostics,
-    media::MediaConfig,
     metrics::ServerMetrics,
-    room::RoomManager,
-    saturation::{SaturationConfig, SaturationMonitor, WorkerThreads},
+    room::{ManagerSettings, RoomManager},
+    saturation::{SaturationMonitor, WorkerThreads},
     shutdown::run_stage,
     signaling::SignalingServer,
-    turn::TurnConfig,
 };
 use anyhow::Result;
 use std::sync::Arc;
@@ -42,20 +41,16 @@ pub fn main() -> Result<()> {
         arguments.is_empty() || arguments == ["--check-config"],
         "Usage: simplestChat [--check-config]"
     );
-    // Reject malformed numeric controls before native workers, migrations or
-    // listeners can have side effects. This check does not print secret values.
-    let numeric = crate::configuration::numeric_settings()?;
+    // Every setting is read and validated before native workers, migrations or
+    // listeners can have side effects. Secrets never appear in the output.
+    let config = Config::from_env()?;
     if !arguments.is_empty() {
-        let media = MediaConfig::from_env()?;
-        let _ = SaturationConfig::from_env()?;
-        let turn = TurnConfig::from_env()?;
         println!(
             "{}",
             serde_json::json!({
-                "version": 1, "numeric": numeric,
-                "mediaWorkers": media.worker_config.num_workers,
-                "turnConfigured": turn.is_some(),
-                "scope": "numeric limits, media policy, saturation policy and TURN syntax; no connectivity or credentials are exercised"
+                "version": 2,
+                "settings": config.settings(),
+                "scope": "every setting parsed and validated; no listener, worker, database or relay is exercised"
             })
         );
         return Ok(());
@@ -65,22 +60,20 @@ pub fn main() -> Result<()> {
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()?;
-    let result = runtime.block_on(run());
+    let result = runtime.block_on(run(config));
     runtime.shutdown_timeout(Duration::from_secs(1));
     result
 }
 
-async fn run() -> Result<()> {
+async fn run(config: Config) -> Result<()> {
     // JSON survives aggregation without parsing human messages. Operators may
     // select text locally; credentials and arbitrary request data are not fields.
-    let format = std::env::var("LOG_FORMAT").unwrap_or_else(|_| "json".to_owned());
-    let formatter = match format.as_str() {
-        "json" => tracing_subscriber::fmt::layer()
+    let formatter = match config.observability.log_format {
+        LogFormat::Json => tracing_subscriber::fmt::layer()
             .json()
             .with_ansi(false)
             .boxed(),
-        "text" => tracing_subscriber::fmt::layer().with_ansi(false).boxed(),
-        _ => anyhow::bail!("LOG_FORMAT must be json or text"),
+        LogFormat::Text => tracing_subscriber::fmt::layer().with_ansi(false).boxed(),
     };
     tracing_subscriber::registry()
         .with(
@@ -90,56 +83,38 @@ async fn run() -> Result<()> {
         .with(formatter)
         .init();
 
-    let diagnostics = Diagnostics::from_env()?;
-    let result = run_server(diagnostics.clone()).await;
+    let diagnostics = Diagnostics::configure(&config.diagnostics)?;
+    let result = run_server(config, diagnostics.clone()).await;
     if !diagnostics.shutdown().await {
         warn!("Local diagnostic output incomplete; server outcome is unchanged");
     }
     result
 }
 
-async fn run_server(diagnostics: Diagnostics) -> Result<()> {
-    let revision = std::env::var("SOURCE_REVISION")
-        .ok()
-        .filter(|value| value.len() == 40 && value.bytes().all(|byte| byte.is_ascii_hexdigit()))
-        .unwrap_or_else(|| "unknown".to_owned());
+async fn run_server(config: Config, diagnostics: Diagnostics) -> Result<()> {
+    let revision = config
+        .observability
+        .source_revision
+        .as_deref()
+        .unwrap_or("unknown");
     info!(revision, "simplestChat server starting");
 
-    // Create room manager (includes media server)
-    let mut media_config = MediaConfig::from_env()?;
-    crate::sizing::announce(media_config.worker_config.num_workers);
+    let mut media_config = config.media.clone();
+    crate::sizing::announce(
+        media_config.worker_config.num_workers,
+        config.limits.max_connections,
+        config.limits.max_rooms,
+    );
 
     // The addresses clients reach, one listener per family: ANNOUNCE_IP (IPv4 or
     // IPv6; loopback when unset, the local launcher selects an owned LAN address)
     // and, on a dual-stack host, ANNOUNCE_IPV6 beside an IPv4 ANNOUNCE_IP.
-    let announced: std::net::IpAddr = match std::env::var("ANNOUNCE_IP") {
-        Ok(ip) => {
-            info!("Using ANNOUNCE_IP={}", ip);
-            ip.parse()
-                .map_err(|_| anyhow::anyhow!("Invalid ANNOUNCE_IP: {ip}"))?
-        }
-        Err(_) => {
-            let default_ip: std::net::IpAddr = "127.0.0.1".parse().unwrap();
-            info!("No ANNOUNCE_IP set, using {}", default_ip);
-            default_ip
-        }
-    };
+    info!("Announcing {}", config.network.announce_ip);
     media_config.webrtc_transport_config = media_config
         .webrtc_transport_config
-        .with_public_ip(announced);
-    if let Some(ipv6) = std::env::var("ANNOUNCE_IPV6")
-        .ok()
-        .map(|value| value.trim().to_owned())
-        .filter(|value| !value.is_empty())
-    {
-        let address: std::net::Ipv6Addr = ipv6
-            .parse()
-            .map_err(|_| anyhow::anyhow!("Invalid ANNOUNCE_IPV6: {ipv6}"))?;
-        anyhow::ensure!(
-            announced.is_ipv4(),
-            "ANNOUNCE_IPV6 goes beside an IPv4 ANNOUNCE_IP; an IPv6 ANNOUNCE_IP already announces that family"
-        );
-        info!("Using ANNOUNCE_IPV6={address}");
+        .with_public_ip(config.network.announce_ip);
+    if let Some(address) = config.network.announce_ipv6 {
+        info!("Announcing {address} beside the IPv4 address");
         media_config.webrtc_transport_config = media_config
             .webrtc_transport_config
             .with_announced_address(std::net::IpAddr::V6(address));
@@ -147,25 +122,29 @@ async fn run_server(diagnostics: Diagnostics) -> Result<()> {
     media_config.validate()?;
 
     let metrics = ServerMetrics::with_diagnostics(diagnostics);
-    // Connect to database (optional)
-    let db_pool = db::connect().await?;
+    let db_pool = db::connect(&config.database).await?;
     if let Some(pool) = &db_pool {
         let _chat_retention = crate::room::history::spawn_retention(pool.clone());
         // Moderation history and closed reports age out on their own.
-        let _retention = crate::room::moderation::spawn_retention(
-            pool.clone(),
-            crate::room::moderation::RetentionConfig::from_env()?,
-        );
+        let _retention =
+            crate::room::moderation::spawn_retention(pool.clone(), config.rooms.retention);
     }
 
-    let room_manager =
-        Arc::new(RoomManager::new(media_config, metrics.clone(), db_pool.clone()).await?);
+    let room_manager = Arc::new(
+        RoomManager::new(
+            ManagerSettings::from(&config),
+            media_config,
+            metrics.clone(),
+            db_pool.clone(),
+        )
+        .await?,
+    );
     room_manager.spawn_worker_recovery();
-    match SaturationConfig::from_env()? {
-        Some(config) => {
+    match config.saturation.clone() {
+        Some(saturation) => {
             let workers: Arc<dyn WorkerThreads> = room_manager.media_server().worker_manager();
             room_manager.attach_saturation(SaturationMonitor::spawn(
-                config,
+                saturation,
                 metrics.clone(),
                 Some(workers),
             ));
@@ -173,38 +152,31 @@ async fn run_server(diagnostics: Diagnostics) -> Result<()> {
         None => info!("CPU saturation monitor disabled by configuration"),
     }
     room_manager.spawn_quality_sampler(
-        Duration::from_secs(quality_sample_interval_secs()?),
-        quality_sample_max_transport_stats()?,
+        config.observability.quality_sample_interval,
+        config.observability.quality_sample_max_transport_stats,
     );
 
     info!("Room manager and media server initialized");
 
-    // Load TURN config from environment (optional)
-    let turn_config = TurnConfig::from_env()?;
-    if let Some(ref tc) = turn_config {
-        info!(
+    match &config.turn {
+        Some(turn) => info!(
             "TURN configured: {} URL(s), TTL {}s",
-            tc.urls.len(),
-            tc.ttl_secs
-        );
-    } else {
-        info!("No TURN configured (set TURN_URLS and TURN_SECRET to enable)");
+            turn.urls.len(),
+            turn.ttl_secs
+        ),
+        None => info!("No TURN configured (set TURN_URLS and TURN_SECRET to enable)"),
     }
 
-    // Create and start signaling server
     let signaling_server =
-        SignalingServer::new(room_manager.clone(), turn_config, metrics, db_pool.clone())?;
+        SignalingServer::new(room_manager.clone(), metrics, db_pool.clone(), &config)?;
     if let Some(pool) = &db_pool {
         let _notifications =
             crate::push::spawn(pool.clone(), signaling_server.notification_origin()).await?;
     }
-    let port = crate::configuration::read_usize("PORT", 3000, 1, 65535)? as u16;
-
-    info!("Starting signaling server on port {}", port);
 
     // Keep the HTTP future alive on signal: dropping it would skip Axum's
     // graceful connection drain. Upgraded WebSockets are waited separately.
-    let mut serving = Box::pin(signaling_server.clone().serve(port));
+    let mut serving = Box::pin(signaling_server.clone().serve());
     let (server_completed, first_result) = tokio::select! {
         result = &mut serving => (true, result),
         signal = shutdown_signal() => {
@@ -253,34 +225,4 @@ async fn run_server(diagnostics: Diagnostics) -> Result<()> {
     );
     info!("Server shutdown complete");
     Ok(())
-}
-
-/// `QUALITY_SAMPLE_INTERVAL_SECS`: seconds between server-side media quality samples (5–300, default 15).
-fn quality_sample_interval_secs() -> Result<u64> {
-    match std::env::var("QUALITY_SAMPLE_INTERVAL_SECS") {
-        Ok(value) => value
-            .trim()
-            .parse::<u64>()
-            .ok()
-            .filter(|v| (5..=300).contains(v))
-            .ok_or_else(|| {
-                anyhow::anyhow!("QUALITY_SAMPLE_INTERVAL_SECS must be between 5 and 300")
-            }),
-        Err(_) => Ok(15),
-    }
-}
-
-/// `QUALITY_SAMPLE_MAX_TRANSPORT_STATS`: receive transports asked for statistics per sample (0–10000, default 100).
-fn quality_sample_max_transport_stats() -> Result<usize> {
-    match std::env::var("QUALITY_SAMPLE_MAX_TRANSPORT_STATS") {
-        Ok(value) => value
-            .trim()
-            .parse::<usize>()
-            .ok()
-            .filter(|v| *v <= 10_000)
-            .ok_or_else(|| {
-                anyhow::anyhow!("QUALITY_SAMPLE_MAX_TRANSPORT_STATS must be between 0 and 10000")
-            }),
-        Err(_) => Ok(100),
-    }
 }

@@ -374,6 +374,7 @@ mod tests {
         config.worker_config.num_workers = 1;
         config.webrtc_server_port_base = 0;
         let mut manager = RoomManager::new(
+            crate::room::ManagerSettings::default(),
             config,
             crate::metrics::ServerMetrics::new(),
             Some(pool.clone()),

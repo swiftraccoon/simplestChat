@@ -412,11 +412,22 @@ impl Fixture {
         media.worker_config.num_workers = 1;
         media.webrtc_server_port_base = 0;
         let manager = Arc::new(
-            RoomManager::new(media, metrics.clone(), Some(pool.clone()))
-                .await
-                .unwrap(),
+            RoomManager::new(
+                crate::room::ManagerSettings::default(),
+                media,
+                metrics.clone(),
+                Some(pool.clone()),
+            )
+            .await
+            .unwrap(),
         );
-        let mut server = SignalingServer::new(manager, None, metrics, Some(pool.clone())).unwrap();
+        let mut server = SignalingServer::new(
+            manager,
+            metrics,
+            Some(pool.clone()),
+            &crate::config::Config::for_tests(),
+        )
+        .unwrap();
         server.jwt_secret = Some("disposable-authorization-policy-fixture-secret".into());
         server.registration_enabled = false;
         server.metrics_token = Some("disposable-policy-metrics-secret-at-least-32-bytes".into());

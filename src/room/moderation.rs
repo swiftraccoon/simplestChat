@@ -284,7 +284,7 @@ pub(crate) async fn record_event(
 /// How long moderation data stays: addresses for `address_days`, whole
 /// entries, closed reports and expired sanctions for `history_days`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct RetentionConfig {
+pub struct RetentionConfig {
     pub address_days: u32,
     pub history_days: u32,
 }
@@ -312,22 +312,7 @@ fn parse_days(name: &str, value: Option<&str>, default: u32) -> anyhow::Result<u
 impl RetentionConfig {
     /// `MODERATION_ADDRESS_RETENTION_DAYS` (30) and
     /// `MODERATION_HISTORY_RETENTION_DAYS` (365); addresses never outlive entries.
-    pub(crate) fn from_env() -> anyhow::Result<Self> {
-        fn read(name: &str) -> anyhow::Result<Option<String>> {
-            match std::env::var(name) {
-                Ok(value) => Ok(Some(value)),
-                Err(std::env::VarError::NotPresent) => Ok(None),
-                Err(std::env::VarError::NotUnicode(_)) => {
-                    anyhow::bail!("{name} must be valid UTF-8")
-                }
-            }
-        }
-        let address = read("MODERATION_ADDRESS_RETENTION_DAYS")?;
-        let history = read("MODERATION_HISTORY_RETENTION_DAYS")?;
-        Self::parse(address.as_deref(), history.as_deref())
-    }
-
-    fn parse(address: Option<&str>, history: Option<&str>) -> anyhow::Result<Self> {
+    pub(crate) fn parse(address: Option<&str>, history: Option<&str>) -> anyhow::Result<Self> {
         let address_days = parse_days(
             "MODERATION_ADDRESS_RETENTION_DAYS",
             address,

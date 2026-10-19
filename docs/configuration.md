@@ -54,7 +54,7 @@
 | `METRICS_TOKEN` | (none) | Bearer token of at least 32 bytes; `/metrics` returns 404 when unset |
 | `RUST_LOG` | `simplestchat=info,mediasoup=warn` | Tracing filter |
 | `LOG_FORMAT` | `json` | Log encoding: `json` writes one object per line for aggregation; `text` is the human-readable form for local runs |
-| `SOURCE_REVISION` | `unknown` | The 40-hexadecimal commit the running build came from, set by the image build; reported at startup and as `simplestchat_build_info` on `/metrics`. Any other value is reported as `unknown` |
+| `SOURCE_REVISION` | (none) | The 40-hexadecimal commit the running build came from, set by the image build; reported at startup and as `simplestchat_build_info` on `/metrics`. Unset is reported as `unknown`; any other value fails startup |
 | `DIAGNOSTICS_PATH` | (none) | Opt-in, new absolute path for private local operation records; see [limits and report definitions](diagnostics.md) |
 | `DIAGNOSTICS_MAX_RECORDS` | `10000` | Records one local diagnostics file keeps (1–100000) before recording stops; only read with `DIAGNOSTICS_PATH` |
 | `DIAGNOSTICS_DURATION_SECS` | `300` | Seconds a local diagnostics recording runs (1–3600) before it stops; only read with `DIAGNOSTICS_PATH` |
@@ -84,13 +84,14 @@ MAX_CONNECTIONS=800 MEDIA_WORKERS=7 \
   ./target/release/simplestChat --check-config
 ```
 
-The command prints one JSON object containing public numeric limits, the worker
-count and whether TURN is configured. It exits nonzero for malformed core
-admission limits, invalid pool bounds, invalid media policy, saturation settings
-or TURN syntax. It does not start Tokio, open listeners, connect to PostgreSQL,
-run migrations, or start native media workers. Credentials and connection strings
-are excluded from the output. Use the exact binary and environment intended for
-deployment; an adviser's output is a proposal, not proof that a host can carry it.
+The command prints one JSON object whose `settings` member holds the effective
+value of every variable in the table above, by name, exactly as the process
+would run with them; secrets and `DATABASE_URL` appear only as `configured` or
+`null`. It exits nonzero, naming the variable, when any setting is malformed or
+out of bounds. It does not start Tokio, open listeners, connect to PostgreSQL,
+run migrations, or start native media workers. Use the exact binary and
+environment intended for deployment; an adviser's output is a proposal, not
+proof that a host can carry it.
 
 This is a partial configuration check, not readiness verification. It does not
 test database schema or credentials, origin/identity relationships, certificates,
@@ -98,14 +99,17 @@ firewalls, relay connectivity, or available host resources. Start the candidate
 through the documented deployment workflow, then check readiness and browser
 media separately. A successful preflight cannot establish production reachability.
 
-For core integer admission limits and pool settings, only an absent variable
-selects the default. Explicit empty, malformed, negative and out-of-range values
-fail with the variable's name rather than silently selecting a larger limit.
-The optional room participant/broadcaster ceilings retain their documented
-empty-means-unset convention; room-join rate limits treat blank as the default.
+One grammar covers every setting. An unset variable selects its default. An
+integer must be a whole number within its documented bounds: an explicit empty,
+malformed, negative or out-of-range value fails with the variable's name rather
+than silently selecting a larger limit. Optional settings (the room ceilings,
+`ANNOUNCE_IPV6`, secrets, URLs and paths) treat an empty value as unset, because
+Compose forwards an unset variable as an empty string. A flag is `true`, `false`,
+`1` or `0`, in any case; empty selects its default. A secret must hold at least
+32 bytes and never appears in an error, a log line or the preflight output.
 Compose's `${NAME:-default}` interpolation can replace an empty value before the
-application sees it; inspect the private input
-file and use explicit positive values when a finite limit is intended.
+application sees it; inspect the private input file and use explicit positive
+values when a finite limit is intended.
 
 Core connection, room-count, concurrency and request-rate controls accept
 1–1,000,000; `MAX_USERS` accepts 1–10,000,000; producer and consumer caps accept

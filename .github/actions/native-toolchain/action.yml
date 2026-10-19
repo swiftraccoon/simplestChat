@@ -121,4 +121,9 @@ runs:
     - name: Build checksum-pinned AWS-LC
       if: steps.aws-lc.outputs.cache-hit != 'true'
       shell: bash
-      run: build/install-aws-lc.sh "${AWS_LC_SYS_SYSTEM_DIR}"
+      # A miss means no verified prefix exists for this installer. A directory
+      # already at the path came from another cache's target/ (a run older than
+      # the installer's receipts) and must not block the rebuild.
+      run: |
+        rm -rf "${AWS_LC_SYS_SYSTEM_DIR}"
+        build/install-aws-lc.sh "${AWS_LC_SYS_SYSTEM_DIR}"

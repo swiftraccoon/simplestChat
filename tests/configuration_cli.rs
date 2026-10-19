@@ -19,7 +19,7 @@ fn preflight_is_offline_and_reports_only_public_settings() {
             "DATABASE_URL",
             "postgres://private-user:private-password@127.0.0.1:1/missing",
         )
-        .env("JWT_SECRET", "private-jwt-secret-never-print")
+        .env("JWT_SECRET", "private-jwt-secret-never-printed-anywhere")
         .env("MAX_CONNECTIONS", "123")
         .output()
         .unwrap();
@@ -29,8 +29,12 @@ fn preflight_is_offline_and_reports_only_public_settings() {
         String::from_utf8_lossy(&output.stderr)
     );
     let value: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(value["numeric"]["MAX_CONNECTIONS"], 123);
-    assert_eq!(value["mediaWorkers"], 1);
+    assert_eq!(value["version"], 2);
+    assert_eq!(value["settings"]["MAX_CONNECTIONS"], 123);
+    assert_eq!(value["settings"]["MEDIA_WORKERS"], 1);
+    assert_eq!(value["settings"]["DATABASE_URL"], "configured");
+    assert_eq!(value["settings"]["JWT_SECRET"], "configured");
+    assert_eq!(value["settings"]["METRICS_TOKEN"], serde_json::Value::Null);
     assert!(!String::from_utf8_lossy(&output.stdout).contains("private"));
 }
 

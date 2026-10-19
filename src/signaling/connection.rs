@@ -304,15 +304,8 @@ struct MediaSessionRateState {
 }
 
 impl MediaSessionRateState {
-    fn new() -> Self {
-        Self::new_at(Instant::now())
-    }
-
-    fn new_at(now: Instant) -> Self {
-        Self::with_consumer_limit(
-            now,
-            crate::media::transport_manager::max_consumers_per_participant(),
-        )
+    fn new(consumer_limit: usize) -> Self {
+        Self::with_consumer_limit(Instant::now(), consumer_limit)
     }
 
     fn with_consumer_limit(now: Instant, consumer_limit: usize) -> Self {
@@ -1066,16 +1059,18 @@ async fn handle_connection_with_timing(
     let mut bwe_sender: Option<mpsc::Sender<crate::media::types::ReceiveBandwidthEstimate>> = None;
 
     // Token bucket rate limiter state
-    let max_frame_tokens_us = frame_capacity(consumer_mutation_capacity(
-        crate::media::transport_manager::max_consumers_per_participant(),
-    ));
+    let consumer_limit = room_manager
+        .media_server()
+        .config()
+        .max_consumers_per_participant;
+    let max_frame_tokens_us = frame_capacity(consumer_mutation_capacity(consumer_limit));
     let mut frame_tokens_us = max_frame_tokens_us;
     let mut frame_last_refill = Instant::now();
     let mut rate_limit_window_started: Option<Instant> = None;
     let mut rate_limit_violations = 0_u32;
     let mut chat_tokens_us: u64 = MAX_CHAT_TOKENS_US;
     let mut chat_last_refill = Instant::now();
-    let mut media_rate_state = MediaSessionRateState::new();
+    let mut media_rate_state = MediaSessionRateState::new(consumer_limit);
     let mut admin_mutation_tokens_us: u64 = MAX_ADMIN_MUTATION_TOKENS_US;
     let mut admin_mutation_last_refill = Instant::now();
     let mut admin_mutation_violation_window_started: Option<Instant> = None;
@@ -1781,7 +1776,7 @@ async fn handle_connection_with_timing(
                             && current_room_id.is_some()
                             && reconnect_token != previous_reconnect_token
                         {
-                            media_rate_state = MediaSessionRateState::new();
+                            media_rate_state = MediaSessionRateState::new(consumer_limit);
                         }
 
                         if let Err(e) = result {
@@ -3630,7 +3625,10 @@ mod security_tests {
             transport_id: Uuid::new_v4().to_string(),
         };
         let mut entry = grace_entry(&token);
-        entry.media_rate_state = MediaSessionRateState::new_at(now);
+        entry.media_rate_state = MediaSessionRateState::with_consumer_limit(
+            now,
+            crate::media::config::DEFAULT_MAX_CONSUMERS_PER_PARTICIPANT,
+        );
 
         for _ in 0..entry.media_rate_state.consumer_mutation_capacity_us / TOKEN_US {
             assert!(
@@ -3693,14 +3691,20 @@ mod security_tests {
         };
 
         let mut stale = grace_entry(&stale_token);
-        stale.media_rate_state = MediaSessionRateState::new_at(now);
+        stale.media_rate_state = MediaSessionRateState::with_consumer_limit(
+            now,
+            crate::media::config::DEFAULT_MAX_CONSUMERS_PER_PARTICIPANT,
+        );
         for _ in 0..MEDIA_MUTATION_RATE_LIMIT_MAX_TOKENS {
             assert!(!stale.media_rate_state.limit_exceeded(&mutation, now));
         }
         assert!(stale.media_rate_state.limit_exceeded(&mutation, now));
 
         let mut replacement = grace_entry(&replacement_token);
-        replacement.media_rate_state = MediaSessionRateState::new_at(now);
+        replacement.media_rate_state = MediaSessionRateState::with_consumer_limit(
+            now,
+            crate::media::config::DEFAULT_MAX_CONSUMERS_PER_PARTICIPANT,
+        );
         map.insert("room-a".to_string(), participant_id.clone(), stale);
         map.insert("room-a".to_string(), participant_id.clone(), replacement);
 
@@ -3760,7 +3764,9 @@ mod security_tests {
             reconnect_token: token.to_string(),
             authenticated_subject: None,
             authenticated_version: None,
-            media_rate_state: MediaSessionRateState::new(),
+            media_rate_state: MediaSessionRateState::new(
+                crate::media::config::DEFAULT_MAX_CONSUMERS_PER_PARTICIPANT,
+            ),
             sender,
             timer: tokio::spawn(std::future::pending()),
         }

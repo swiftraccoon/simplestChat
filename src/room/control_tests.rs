@@ -671,9 +671,14 @@ async fn blocked_room_sql_keeps_chat_available_and_committed_control_outlives_it
     let mut config = MediaConfig::default();
     config.worker_config.num_workers = 1;
     config.webrtc_server_port_base = 0;
-    let manager = RoomManager::new(config, ServerMetrics::new(), Some(pool.clone()))
-        .await
-        .unwrap();
+    let manager = RoomManager::new(
+        crate::room::ManagerSettings::default(),
+        config,
+        ServerMetrics::new(),
+        Some(pool.clone()),
+    )
+    .await
+    .unwrap();
     let (owner, mut owner_messages) = participant(roles::Role::Owner);
     let (member, mut member_messages) = participant(roles::Role::User);
     let owner_id = Uuid::parse_str(&owner.id).unwrap();

@@ -362,7 +362,8 @@ def migration_timeout_context(root: Path) -> bytes:
     """Expose actual SQLx connection startup timeouts to the static SQL scanner."""
     source = bounded_file(root / "src/db.rs", MAX_REPORT).decode("utf-8")
     options = re.search(
-        r"let maintenance\s*=\s*PgConnectOptions::from_str\(&url\)" + r".*?\.options\(\[(.*?)\]\);",
+        r"let maintenance\s*=\s*PgConnectOptions::from_str\(&?url\)"
+        + r".*?\.options\(\[(.*?)\]\);",
         source,
         re.DOTALL,
     )

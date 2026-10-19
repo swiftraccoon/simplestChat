@@ -25,6 +25,15 @@ pub const DEFAULT_WEBRTC_SOCKET_BUFFER_BYTES: u32 = 1024 * 1024;
 const MIN_WEBRTC_SOCKET_BUFFER_BYTES: u32 = 64 * 1024;
 /// One keyframe request per second per video stream, in milliseconds.
 const DEFAULT_KEYFRAME_REQUEST_DELAY_MS: u32 = 1_000;
+/// `MAX_PRODUCERS_PER_PARTICIPANT` when unset.
+pub const DEFAULT_MAX_PRODUCERS_PER_PARTICIPANT: usize = 8;
+/// `MAX_CONSUMERS_PER_PARTICIPANT` when unset: browsers consume every remote
+/// producer, so an N-person room with camera and microphone needs
+/// `2 * (N - 1)` consumers per participant (four per peer with a screen
+/// share); this covers 32 such publishers. The earlier 16 silently blanked
+/// the tenth participant's tiles.
+pub const DEFAULT_MAX_CONSUMERS_PER_PARTICIPANT: usize = 64;
+const MAX_PARTICIPANT_CAP: usize = 10_000;
 const MAX_WEBRTC_SOCKET_BUFFER_BYTES: u32 = 64 * 1024 * 1024;
 
 /// Main media server configuration
@@ -52,6 +61,10 @@ pub struct MediaConfig {
     /// estimates in a 545-viewer webinar, where 1 s kept them while joiners
     /// waited under a second for video. `MEDIA_KEYFRAME_REQUEST_DELAY_MS`.
     pub key_frame_request_delay_ms: u32,
+    /// Media producers one participant may hold. `MAX_PRODUCERS_PER_PARTICIPANT`.
+    pub max_producers_per_participant: usize,
+    /// Media consumers one participant may hold. `MAX_CONSUMERS_PER_PARTICIPANT`.
+    pub max_consumers_per_participant: usize,
 }
 
 impl Default for MediaConfig {
@@ -65,74 +78,136 @@ impl Default for MediaConfig {
             webrtc_recv_buffer_bytes: DEFAULT_WEBRTC_SOCKET_BUFFER_BYTES,
             webrtc_send_buffer_bytes: DEFAULT_WEBRTC_SOCKET_BUFFER_BYTES,
             key_frame_request_delay_ms: DEFAULT_KEYFRAME_REQUEST_DELAY_MS,
+            max_producers_per_participant: DEFAULT_MAX_PRODUCERS_PER_PARTICIPANT,
+            max_consumers_per_participant: DEFAULT_MAX_CONSUMERS_PER_PARTICIPANT,
         }
     }
 }
 
 impl MediaConfig {
-    /// Builds the media configuration from process settings.
+    /// Builds the media configuration from `source`.
     ///
     /// `MEDIA_WORKERS` is optional. When present it must be an integer from 1
     /// through 64. When absent, the worker count defaults to the detected CPU
     /// count, capped to the same range.
-    pub fn from_env() -> anyhow::Result<Self> {
+    pub fn from_source(source: &dyn crate::config::Source) -> anyhow::Result<Self> {
         let mut config = Self::default();
-
-        match std::env::var("MEDIA_WORKERS") {
-            Ok(value) => {
-                config.worker_config.num_workers = parse_media_workers(&value)?;
-            }
-            Err(std::env::VarError::NotPresent) => {}
-            Err(std::env::VarError::NotUnicode(_)) => {
-                anyhow::bail!("MEDIA_WORKERS must be valid UTF-8");
-            }
+        if let Some(value) = source.get("MEDIA_WORKERS")? {
+            config.worker_config.num_workers = parse_media_workers(&value)?;
         }
-        if let Ok(value) = std::env::var("MEDIA_WORKER_LOG_LEVEL") {
+        if let Some(value) = source.get("MEDIA_WORKER_LOG_LEVEL")? {
             config.worker_config.log_level = parse_worker_log_level(&value)?;
         }
-        if let Ok(value) = std::env::var("MEDIA_WORKER_LOG_TAGS") {
+        if let Some(value) = source.get("MEDIA_WORKER_LOG_TAGS")? {
             config.worker_config.log_tags = parse_worker_log_tags(&value)?;
         }
-        if let Ok(value) = std::env::var("LIBWEBRTC_FIELD_TRIALS") {
+        if let Some(value) = source.get("LIBWEBRTC_FIELD_TRIALS")? {
             config.worker_config.libwebrtc_field_trials = Some(parse_field_trials(&value)?);
         }
-
-        match std::env::var("WEBRTC_SERVER_PORT_BASE") {
-            Ok(value) => config.webrtc_server_port_base = parse_webrtc_port_base(&value)?,
-            Err(std::env::VarError::NotPresent) => {}
-            Err(std::env::VarError::NotUnicode(_)) => {
-                anyhow::bail!("WEBRTC_SERVER_PORT_BASE must be valid UTF-8")
-            }
+        if let Some(value) = source.get("WEBRTC_SERVER_PORT_BASE")? {
+            config.webrtc_server_port_base = parse_webrtc_port_base(&value)?;
         }
-        if let Ok(value) = std::env::var("WEBRTC_SERVER_TCP") {
+        if let Some(value) = source.get("WEBRTC_SERVER_TCP")? {
             config.set_tcp(parse_switch("WEBRTC_SERVER_TCP", &value)?);
         }
-        if let Ok(value) = std::env::var("WEBRTC_RECV_BUFFER_BYTES") {
+        if let Some(value) = source.get("WEBRTC_RECV_BUFFER_BYTES")? {
             config.webrtc_recv_buffer_bytes =
                 parse_socket_buffer("WEBRTC_RECV_BUFFER_BYTES", &value)?;
         }
-        if let Ok(value) = std::env::var("WEBRTC_SEND_BUFFER_BYTES") {
+        if let Some(value) = source.get("WEBRTC_SEND_BUFFER_BYTES")? {
             config.webrtc_send_buffer_bytes =
                 parse_socket_buffer("WEBRTC_SEND_BUFFER_BYTES", &value)?;
         }
-        if let Ok(value) = std::env::var("MEDIA_KEYFRAME_REQUEST_DELAY_MS") {
+        if let Some(value) = source.get("MEDIA_KEYFRAME_REQUEST_DELAY_MS")? {
             config.key_frame_request_delay_ms = parse_keyframe_request_delay(&value)?;
         }
-        if let Ok(value) = std::env::var("WEBRTC_MIN_OUTGOING_BITRATE") {
+        if let Some(value) = source.get("WEBRTC_MIN_OUTGOING_BITRATE")? {
             config.webrtc_transport_config.min_outgoing_bitrate =
                 parse_bitrate("WEBRTC_MIN_OUTGOING_BITRATE", &value)?;
         }
-        if let Ok(value) = std::env::var("WEBRTC_MAX_INCOMING_BITRATE") {
+        if let Some(value) = source.get("WEBRTC_MAX_INCOMING_BITRATE")? {
             config.webrtc_transport_config.max_incoming_bitrate =
                 Some(parse_bitrate("WEBRTC_MAX_INCOMING_BITRATE", &value)?).filter(|v| *v > 0);
         }
-        if let Ok(value) = std::env::var("WEBRTC_MAX_OUTGOING_BITRATE") {
+        if let Some(value) = source.get("WEBRTC_MAX_OUTGOING_BITRATE")? {
             config.webrtc_transport_config.max_outgoing_bitrate =
                 parse_bitrate("WEBRTC_MAX_OUTGOING_BITRATE", &value)?;
         }
+        config.max_producers_per_participant = parse_participant_cap(
+            source,
+            "MAX_PRODUCERS_PER_PARTICIPANT",
+            DEFAULT_MAX_PRODUCERS_PER_PARTICIPANT,
+        )?;
+        config.max_consumers_per_participant = parse_participant_cap(
+            source,
+            "MAX_CONSUMERS_PER_PARTICIPANT",
+            DEFAULT_MAX_CONSUMERS_PER_PARTICIPANT,
+        )?;
 
         config.validate()?;
         Ok(config)
+    }
+
+    /// The effective value of every media setting by variable name.
+    pub fn settings(&self, out: &mut std::collections::BTreeMap<&'static str, serde_json::Value>) {
+        use serde_json::json;
+        let tags: Vec<String> = self
+            .worker_config
+            .log_tags
+            .iter()
+            .filter_map(|tag| serde_json::to_value(tag).ok()?.as_str().map(str::to_owned))
+            .collect();
+        out.insert("MEDIA_WORKERS", json!(self.worker_config.num_workers));
+        out.insert(
+            "MEDIA_WORKER_LOG_LEVEL",
+            serde_json::to_value(self.worker_config.log_level).unwrap_or_default(),
+        );
+        out.insert("MEDIA_WORKER_LOG_TAGS", json!(tags.join(",")));
+        out.insert(
+            "LIBWEBRTC_FIELD_TRIALS",
+            json!(self.worker_config.libwebrtc_field_trials),
+        );
+        out.insert(
+            "WEBRTC_SERVER_PORT_BASE",
+            json!(self.webrtc_server_port_base),
+        );
+        out.insert("WEBRTC_SERVER_TCP", json!(self.webrtc_server_tcp));
+        out.insert(
+            "WEBRTC_RECV_BUFFER_BYTES",
+            json!(self.webrtc_recv_buffer_bytes),
+        );
+        out.insert(
+            "WEBRTC_SEND_BUFFER_BYTES",
+            json!(self.webrtc_send_buffer_bytes),
+        );
+        out.insert(
+            "MEDIA_KEYFRAME_REQUEST_DELAY_MS",
+            json!(self.key_frame_request_delay_ms),
+        );
+        out.insert(
+            "WEBRTC_MIN_OUTGOING_BITRATE",
+            json!(self.webrtc_transport_config.min_outgoing_bitrate),
+        );
+        out.insert(
+            "WEBRTC_MAX_OUTGOING_BITRATE",
+            json!(self.webrtc_transport_config.max_outgoing_bitrate),
+        );
+        out.insert(
+            "WEBRTC_MAX_INCOMING_BITRATE",
+            json!(
+                self.webrtc_transport_config
+                    .max_incoming_bitrate
+                    .unwrap_or(0)
+            ),
+        );
+        out.insert(
+            "MAX_PRODUCERS_PER_PARTICIPANT",
+            json!(self.max_producers_per_participant),
+        );
+        out.insert(
+            "MAX_CONSUMERS_PER_PARTICIPANT",
+            json!(self.max_consumers_per_participant),
+        );
     }
 
     /// Enables or disables ICE-TCP on every worker's port. The transport flag
@@ -222,6 +297,22 @@ fn parse_field_trials(value: &str) -> anyhow::Result<String> {
         anyhow::bail!("LIBWEBRTC_FIELD_TRIALS may contain only letters, digits and / - _ : , .");
     }
     Ok(value.to_string())
+}
+
+/// A per-participant media cap: unset keeps `default`; anything else is a
+/// whole number from 1 to 10000.
+fn parse_participant_cap(
+    source: &dyn crate::config::Source,
+    name: &str,
+    default: usize,
+) -> anyhow::Result<usize> {
+    match source.get(name)? {
+        None => Ok(default),
+        Some(value) => match value.trim().parse::<usize>() {
+            Ok(cap) if (1..=MAX_PARTICIPANT_CAP).contains(&cap) => Ok(cap),
+            _ => anyhow::bail!("{name} must be a whole number from 1 to {MAX_PARTICIPANT_CAP}"),
+        },
+    }
 }
 
 fn parse_switch(name: &str, value: &str) -> anyhow::Result<bool> {
