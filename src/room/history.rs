@@ -144,7 +144,7 @@ pub(crate) fn apply_edit(
         .checked_add(1)
         .ok_or("This message cannot be edited again")?;
     message.content.clone_from(&request.content);
-    message.edited_at = Some(Utc::now().to_rfc3339());
+    message.edited_at = Some(Utc::now());
     Ok(())
 }
 
@@ -426,9 +426,7 @@ async fn insert_message(
         .message_id
         .parse()
         .map_err(|_| invalid("Invalid message ID"))?;
-    let at = DateTime::parse_from_rfc3339(&message.sent_at)
-        .map_err(|_| invalid("Invalid message date"))?
-        .with_timezone(&Utc);
+    let at = message.sent_at;
     let expires = at + chrono::Duration::days(i64::from(retention_days));
     // The unique attempt key reconciles retries after an uncertain commit. Never
     // replace the saved body: moderation may already have removed that content.
@@ -717,7 +715,7 @@ pub(crate) async fn remove_public(
     connection: &mut PgConnection,
     room: &str,
     id: &str,
-    removed_at: &str,
+    removed_at: DateTime<Utc>,
 ) -> Result<Option<(ChatEntry, bool)>, sqlx::Error> {
     let id: Uuid = id.parse().map_err(|_| invalid("Invalid message ID"))?;
     sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1,29))")
@@ -727,7 +725,7 @@ pub(crate) async fn remove_public(
     let row: Option<(SqlJson<ChatEntry>,bool)> = sqlx::query_as(
         "UPDATE chat_messages SET body=(body-'replyTo'-'attachments') || jsonb_build_object('content','','reactions','[]'::jsonb,'removedAt',COALESCE(body->>'removedAt',$3))
          WHERE room_id=$1 AND id=$2 AND expires_at>now() RETURNING body,sender_account IS NOT NULL")
-        .bind(room).bind(id).bind(removed_at).fetch_optional(&mut *connection).await?;
+        .bind(room).bind(id).bind(removed_at.to_rfc3339()).fetch_optional(&mut *connection).await?;
     sqlx::query("DELETE FROM attachments WHERE message_id=$1 AND room_id=$2")
         .bind(id)
         .bind(room)
@@ -1442,7 +1440,7 @@ pub(super) async fn save_private_message(
         recipient_name: Some(recipient.display_name.clone()),
         content: request.content,
         attachments: Vec::new(),
-        sent_at: Utc::now().to_rfc3339(),
+        sent_at: Utc::now(),
         removed_at: None,
         revision: 0,
         edited_at: None,
@@ -1682,7 +1680,7 @@ mod tests {
             account_conversation: None,
             recipient_name: None,
             content: content.into(),
-            sent_at: Utc::now().to_rfc3339(),
+            sent_at: Utc::now(),
             removed_at: None,
             revision: 0,
             edited_at: None,
@@ -1704,7 +1702,7 @@ mod tests {
         assert_eq!(message.revision, 1);
         assert!(message.edited_at.is_some());
         assert_eq!(message.message_id, original_id);
-        let edited_at = message.edited_at.clone();
+        let edited_at = message.edited_at;
         apply_edit(&mut message, &request).unwrap();
         assert_eq!(message.edited_at, edited_at);
         assert!(
@@ -1737,7 +1735,7 @@ mod tests {
                 .is_err()
             );
         }
-        message.removed_at = Some(Utc::now().to_rfc3339());
+        message.removed_at = Some(Utc::now());
         message.content.clear();
         assert!(
             apply_edit(
@@ -2043,14 +2041,9 @@ mod tests {
                 .is_err()
         );
         let mut tx = pool.begin().await.unwrap();
-        remove_public(
-            &mut tx,
-            &room,
-            &original.message_id,
-            &Utc::now().to_rfc3339(),
-        )
-        .await
-        .unwrap();
+        remove_public(&mut tx, &room, &original.message_id, Utc::now())
+            .await
+            .unwrap();
         tx.commit().await.unwrap();
         assert!(
             react_public(&pool, &room, &original.message_id, &first, &[], "👍")
@@ -2060,7 +2053,7 @@ mod tests {
         );
         let mut expired = entry("Expired question");
         expired.participant_id = author.to_string();
-        expired.sent_at = (Utc::now() - chrono::Duration::days(8)).to_rfc3339();
+        expired.sent_at = Utc::now() - chrono::Duration::days(8);
         persist_message(&pool, Some(&room), Uuid::new_v4(), true, 7, &expired, &[])
             .await
             .unwrap();
@@ -2114,7 +2107,7 @@ mod tests {
         for n in 0..6 {
             let mut message = entry(&format!("Message {n}"));
             message.participant_id = author.to_string();
-            message.sent_at = (Utc::now() - chrono::Duration::seconds(100 - n)).to_rfc3339();
+            message.sent_at = Utc::now() - chrono::Duration::seconds(100 - n);
             if n == 1 {
                 let first: &ChatEntry = &messages[0];
                 message.reply_to = Some(crate::signaling::protocol::ChatReplyRef {
@@ -2245,14 +2238,9 @@ mod tests {
                 .is_err()
         );
         let mut tx = pool.begin().await.unwrap();
-        remove_public(
-            &mut tx,
-            &room,
-            &messages[0].message_id,
-            &Utc::now().to_rfc3339(),
-        )
-        .await
-        .unwrap();
+        remove_public(&mut tx, &room, &messages[0].message_id, Utc::now())
+            .await
+            .unwrap();
         tx.commit().await.unwrap();
         assert_eq!(pinned_messages(&pool, &room).await.unwrap().len(), 2);
         assert!(
@@ -2348,7 +2336,7 @@ mod tests {
             account_conversation: None,
             recipient_name: recipient.map(|_| "Bob".into()),
             content: format!("Message needle%_{n}"),
-            sent_at: (base + chrono::Duration::seconds(n)).to_rfc3339(),
+            sent_at: base + chrono::Duration::seconds(n),
             removed_at: None,
             revision: 0,
             edited_at: None,

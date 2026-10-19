@@ -629,7 +629,7 @@ async fn authorization_database_inbox_offline_delivery_read_sync_and_consent() {
         recipient_name: Some("Bob".into()),
         content: "First conversation together in a room".into(),
         attachments: Vec::new(),
-        sent_at: (chrono::Utc::now() - chrono::Duration::seconds(1)).to_rfc3339(),
+        sent_at: chrono::Utc::now() - chrono::Duration::seconds(1),
         removed_at: None,
         revision: 0,
         edited_at: None,

@@ -4124,7 +4124,7 @@ mod chat_and_continuous_audio_tests {
                     recipient_id: None,
                     recipient_name: None,
                     content,
-                    sent_at: "2026-09-30T00:00:00Z".into(),
+                    sent_at: "2026-09-30T00:00:00Z".parse().expect("fixture timestamp"),
                     chat_style: ChatStyle::default(),
                     reply_to: None,
                     removed_at: None,

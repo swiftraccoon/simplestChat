@@ -4,6 +4,7 @@
 
 use crate::secret::SecretString;
 use crate::turn::IceServer;
+use chrono::{DateTime, Utc};
 use mediasoup::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -650,13 +651,13 @@ pub enum ServerMessage {
         attachments: Vec<ChatAttachment>,
         message_id: String,
         client_message_id: String,
-        sent_at: String,
+        sent_at: DateTime<Utc>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        removed_at: Option<String>,
+        removed_at: Option<DateTime<Utc>>,
         #[serde(default)]
         revision: u32,
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        edited_at: Option<String>,
+        edited_at: Option<DateTime<Utc>>,
         #[serde(default)]
         chat_style: ChatStyle,
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -716,7 +717,7 @@ pub enum ServerMessage {
     #[serde(rename_all = "camelCase")]
     ChatMessageRemoved {
         message_id: String,
-        removed_at: String,
+        removed_at: DateTime<Utc>,
     },
     /// A message's reactions changed; sent to everyone who can see it.
     #[serde(rename_all = "camelCase")]
@@ -940,15 +941,15 @@ pub struct ChatEntry {
     pub content: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub attachments: Vec<ChatAttachment>,
-    pub sent_at: String,
+    pub sent_at: DateTime<Utc>,
     /// Moderator removal erases content while retaining its place in the conversation.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub removed_at: Option<String>,
+    pub removed_at: Option<DateTime<Utc>>,
     /// Monotonic body revision; removal remains terminal regardless of revision.
     #[serde(default)]
     pub revision: u32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub edited_at: Option<String>,
+    pub edited_at: Option<DateTime<Utc>>,
     /// The sender's look when they sent it, so history keeps it after they leave.
     #[serde(default)]
     pub chat_style: ChatStyle,

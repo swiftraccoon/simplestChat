@@ -904,7 +904,7 @@ mod tests {
                 account_conversation: None,
                 recipient_name: None,
                 content: "x".repeat(4096),
-                sent_at: chrono::Utc::now().to_rfc3339(),
+                sent_at: chrono::Utc::now(),
                 chat_style: Default::default(),
                 reply_to: None,
                 removed_at: None,
@@ -1401,7 +1401,7 @@ mod tests {
         private.recipient_id = Some(bob.id.clone());
         assert!(saved_public_reply(&private, &bob).is_err());
         let mut removed = original.clone();
-        removed.removed_at = Some(chrono::Utc::now().to_rfc3339());
+        removed.removed_at = Some(chrono::Utc::now());
         assert!(saved_public_reply(&removed, &bob).is_err());
     }
 
@@ -1786,7 +1786,9 @@ mod tests {
         )
         .unwrap();
         react_to_message(&mut room, &bob.id, &id, "👍").unwrap();
-        let removed_at = "2026-10-07T12:00:00Z";
+        let removed_at = chrono::DateTime::parse_from_rfc3339("2026-10-07T12:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
         room.social.remove_message(&id, removed_at);
         for entry in &room.social.history {
             assert!(
@@ -1803,7 +1805,7 @@ mod tests {
             );
         }
         let original = &room.social.history[0].message;
-        assert_eq!(original.removed_at.as_deref(), Some(removed_at));
+        assert_eq!(original.removed_at, Some(removed_at));
         assert!(original.content.is_empty() && original.reactions.is_empty());
         assert_eq!(
             room.social.history[1]
@@ -1828,7 +1830,7 @@ mod tests {
         )
         .unwrap();
         let ack: Value = serde_json::from_str(&receivers[0].try_recv().unwrap()).unwrap();
-        assert_eq!(ack["message"]["removedAt"], removed_at);
+        assert_eq!(ack["message"]["removedAt"], serde_json::json!(removed_at));
         assert_eq!(ack["message"]["content"], "");
         assert_eq!(
             room.social.history.len(),
@@ -1955,7 +1957,7 @@ mod tests {
         );
         assert!(receivers[2].try_recv().is_err());
         room.social
-            .remove_message(&original.message_id, &chrono::Utc::now().to_rfc3339());
+            .remove_message(&original.message_id, chrono::Utc::now());
         room.social.edit_message(&edited);
         assert!(room.social.history[0].message.content.is_empty());
     }
@@ -3585,7 +3587,11 @@ fn replied_to(message: &ChatEntry) -> Option<&str> {
         .map(|reply| reply.message_id.as_str())
 }
 /// Erase message text and references without retaining a second hidden copy.
-pub(super) fn redact_message(message: &mut ChatEntry, message_id: &str, removed_at: &str) {
+pub(super) fn redact_message(
+    message: &mut ChatEntry,
+    message_id: &str,
+    removed_at: chrono::DateTime<chrono::Utc>,
+) {
     if message.recipient_id.is_some() {
         return;
     }
@@ -3594,7 +3600,7 @@ pub(super) fn redact_message(message: &mut ChatEntry, message_id: &str, removed_
         message.attachments.clear();
         message.reply_to = None;
         message.reactions.clear();
-        message.removed_at = Some(removed_at.to_owned());
+        message.removed_at = Some(removed_at);
     } else if let Some(reply) = &mut message.reply_to
         && reply.message_id == message_id
     {
@@ -3987,7 +3993,7 @@ impl RoomSocial {
     }
 
     /// Scrub both replay and deduplication receipts before broadcasting removal.
-    fn remove_message(&mut self, message_id: &str, removed_at: &str) {
+    fn remove_message(&mut self, message_id: &str, removed_at: chrono::DateTime<chrono::Utc>) {
         self.pins.retain(|message| message.message_id != message_id);
         self.history_bytes = 0;
         for entry in &mut self.history {
@@ -5026,7 +5032,7 @@ impl RoomManager {
             recipient_name: recipient.as_ref().map(|p| p.0.clone()),
             content,
             attachments: Vec::new(),
-            sent_at: chrono::Utc::now().to_rfc3339(),
+            sent_at: chrono::Utc::now(),
             chat_style: sender_style,
             reply_to,
             removed_at: None,
@@ -5124,10 +5130,10 @@ impl RoomManager {
                 attachments: message.attachments.clone(),
                 message_id: message.message_id.clone(),
                 client_message_id: message.client_message_id.clone(),
-                sent_at: message.sent_at.clone(),
-                removed_at: message.removed_at.clone(),
+                sent_at: message.sent_at,
+                removed_at: message.removed_at,
                 revision: message.revision,
-                edited_at: message.edited_at.clone(),
+                edited_at: message.edited_at,
                 chat_style: message.chat_style.clone(),
                 reply_to: message.reply_to.clone(),
             };
@@ -5828,10 +5834,7 @@ impl RoomManager {
                 }
                 let (original, authenticated) =
                     original.ok_or_else(|| not_found("Message not found"))?;
-                let removed_at = original
-                    .removed_at
-                    .clone()
-                    .unwrap_or_else(|| chrono::Utc::now().to_rfc3339());
+                let removed_at = original.removed_at.unwrap_or_else(chrono::Utc::now);
                 if original.removed_at.is_none() {
                     let event = ModerationEvent::new(
                         ModerationAction::MessageRemoved,
@@ -5861,7 +5864,7 @@ impl RoomManager {
                                     &mut transaction,
                                     room_id,
                                     message_id,
-                                    &removed_at,
+                                    removed_at,
                                 )
                                 .await?;
                             }
@@ -5889,10 +5892,10 @@ impl RoomManager {
                         room.social.record_moderation_event(event);
                     }
                 }
-                room.social.remove_message(message_id, &removed_at);
+                room.social.remove_message(message_id, removed_at);
                 room.broadcast_all(&ServerMessage::ChatMessageRemoved {
                     message_id: message_id.clone(),
-                    removed_at: removed_at.clone(),
+                    removed_at,
                 });
                 publish_pins(&room)?;
                 json!({"messageId": message_id, "removedAt": removed_at})
