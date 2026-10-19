@@ -891,3 +891,17 @@ Complete-source SHA256 per rebound file:
 | 35 | `src/signaling/security_tests.rs:169:169:149:161` | `codeql:53a91bf4656726c03edcfdb9f95e1fb8f2ded2c774635428dcc93ea5b4fbc0df` |
 | 63 | `src/signaling/security_tests.rs:600:600:27:52` | `codeql:8a2968846df11dbce42503727ccc8699873c791ff65018774f17244e495746be` |
 | 69 | `src/signaling/security_tests.rs:160:160:75:87` | `codeql:e89d6f2ff22e7828b387aef0303755dac75f7d86b48257dd0735e7279f2b28d6` |
+
+## Source re-review: capabilities test beside the signaling fixtures (2026-10-19)
+
+`b7212bd` typed the public capabilities payload and rewrote the first test of `src/signaling/security_tests.rs` against the new struct, which moved the three reviewed fixture findings eight lines down; every flagged line is byte-identical. `20e28a4` recorded them at their old lines by mistake (a hard-coded relocation table); this section and the records now carry the lines found by text, the same method as the relocation, and the file's current SHA256. Owner, rationale, scope semantics and the 2026-11-29 expiry are unchanged; hosted ingestion remains a separate required check.
+
+Complete-source SHA256 per rebound file:
+
+- `src/signaling/security_tests.rs`: `149f091ff8e531a5c6eecff71594749cea1e65f87d8677e44a093047fd310212`
+
+| Alert | Range | Fingerprint |
+|---|---|---|
+| 35 | `src/signaling/security_tests.rs:177:177:149:161` | `codeql:9b89bbc599bbdd31b2ee03bbd20cefc32cd023954961909a2d644ee24a4b023e` |
+| 63 | `src/signaling/security_tests.rs:608:608:27:52` | `codeql:3d7ab5fb4d9946ccaebd4ca7a822c7fc4a703386384e3a815373dd7ae9740df9` |
+| 69 | `src/signaling/security_tests.rs:168:168:75:87` | `codeql:e209a3ae5e761becfa49c632916399ce14e90fa6638d3d0506f3bdb9f130067e` |

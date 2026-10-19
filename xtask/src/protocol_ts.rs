@@ -2,8 +2,8 @@
 //!
 //! The Rust definitions are the contract. This command parses the modules that
 //! declare wire types with `syn`, applies the serde attributes the server uses
-//! (`rename_all`, `tag`/`content`, `flatten`, `default`, `skip_serializing_if`,
-//! `transparent`) and writes the TypeScript the web client imports. `--check`
+//! (`rename_all`, `rename_all_fields`, `tag`/`content`, `flatten`, `default`,
+//! `skip_serializing_if`, `transparent`) and writes the TypeScript the web client imports. `--check`
 //! fails when the committed file is stale, so CI keeps both sides equal.
 //!
 //! Optionality follows the client's decoder, not the raw JSON: a server
@@ -107,6 +107,7 @@ pub fn run(root: &Path, arguments: &[String]) -> Result<()> {
 #[derive(Clone, Debug, Default)]
 struct SerdeAttributes {
     rename_all: Option<String>,
+    rename_all_fields: Option<String>,
     rename: Option<String>,
     tag: Option<String>,
     content: Option<String>,
@@ -131,6 +132,7 @@ fn serde_attributes(attrs: &[syn::Attribute]) -> Result<SerdeAttributes> {
                 .unwrap_or_default();
             match name.as_str() {
                 "rename_all" => found.rename_all = Some(string_value(&meta)?),
+                "rename_all_fields" => found.rename_all_fields = Some(string_value(&meta)?),
                 "rename" => found.rename = Some(string_value(&meta)?),
                 "tag" => found.tag = Some(string_value(&meta)?),
                 "content" => found.content = Some(string_value(&meta)?),
@@ -536,7 +538,10 @@ fn render_enum(
                     syn::Fields::Named(fields) => {
                         let (mut lines, flattened) = generator.fields_text(
                             fields,
-                            variant_attrs.rename_all.as_deref().or(Some("camelCase")),
+                            variant_attrs
+                                .rename_all
+                                .as_deref()
+                                .or(attrs.rename_all_fields.as_deref()),
                             "      ",
                         )?;
                         let has_request_id = lines
@@ -595,7 +600,10 @@ fn render_enum(
                     syn::Fields::Named(fields) => {
                         let (lines, flattened) = generator.fields_text(
                             fields,
-                            variant_attrs.rename_all.as_deref().or(Some("camelCase")),
+                            variant_attrs
+                                .rename_all
+                                .as_deref()
+                                .or(attrs.rename_all_fields.as_deref()),
                             "    ",
                         )?;
                         let object = format!("{{\n{}\n  }}", lines.join("\n"));
@@ -678,7 +686,10 @@ fn envelopes(definitions: &BTreeMap<String, Definition>) -> Result<BTreeMap<Stri
                     continue;
                 }
                 let ident = field.ident.as_ref().context("named field")?.to_string();
-                let rule = variant_attrs.rename_all.as_deref().or(Some("camelCase"));
+                let rule = variant_attrs
+                    .rename_all
+                    .as_deref()
+                    .or(attrs.rename_all_fields.as_deref());
                 let name = field_attrs
                     .rename
                     .clone()

@@ -27,7 +27,7 @@ use axum::{
     response::{IntoResponse, Response},
     routing::get,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use std::{
     collections::{HashMap, hash_map::RandomState},
@@ -680,7 +680,7 @@ async fn capabilities_handler(State(server): State<SignalingServer>) -> Response
     let passkeys = accounts && server.webauthn.is_some();
     (
         [(header::CACHE_CONTROL, "no-store")],
-        Json(capabilities(
+        Json(Capabilities::new(
             accounts,
             passkeys,
             server.registration_enabled,
@@ -691,24 +691,64 @@ async fn capabilities_handler(State(server): State<SignalingServer>) -> Response
         .into_response()
 }
 
-fn capabilities(
+/// What `/api/capabilities` publishes: exactly the keys the web client's
+/// `decodeServerCapabilities` reads, and nothing about addresses, secrets or
+/// dependency errors.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Capabilities {
+    version: u8,
     accounts: bool,
-    passkeys: bool,
-    registration: bool,
-    directory: bool,
-    ad_hoc: bool,
-) -> serde_json::Value {
-    serde_json::json!({
-        "version": 1,
-        "accounts": accounts,
-        "passwordLogin": accounts,
-        "passkeyLogin": accounts && passkeys,
-        "passwordRegistration": if !accounts { "disabled" } else if registration { "open" } else { "invite" },
-        "passkeyRegistration": if accounts && passkeys && registration { "open" } else { "disabled" },
-        "roomDirectory": directory,
-        "roomCreation": accounts,
-        "adHocRooms": ad_hoc,
-    })
+    password_login: bool,
+    passkey_login: bool,
+    password_registration: RegistrationMode,
+    passkey_registration: RegistrationMode,
+    room_directory: bool,
+    room_creation: bool,
+    ad_hoc_rooms: bool,
+}
+
+/// How an account can be created, if at all.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+enum RegistrationMode {
+    Open,
+    Invite,
+    Disabled,
+}
+
+impl Capabilities {
+    fn new(
+        accounts: bool,
+        passkeys: bool,
+        registration: bool,
+        directory: bool,
+        ad_hoc: bool,
+    ) -> Self {
+        let password_registration = if !accounts {
+            RegistrationMode::Disabled
+        } else if registration {
+            RegistrationMode::Open
+        } else {
+            RegistrationMode::Invite
+        };
+        let passkey_registration = if accounts && passkeys && registration {
+            RegistrationMode::Open
+        } else {
+            RegistrationMode::Disabled
+        };
+        Self {
+            version: 1,
+            accounts,
+            password_login: accounts,
+            passkey_login: accounts && passkeys,
+            password_registration,
+            passkey_registration,
+            room_directory: directory,
+            room_creation: accounts,
+            ad_hoc_rooms: ad_hoc,
+        }
+    }
 }
 
 /// Process liveness only; dependency availability belongs to `/ready`.

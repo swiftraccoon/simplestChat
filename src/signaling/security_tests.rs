@@ -4,17 +4,25 @@ use super::*;
 
 #[test]
 fn public_capabilities_distinguish_guest_invited_and_open_enrollment() {
-    let guest = capabilities(false, false, false, false, true);
-    assert_eq!(guest["version"], 1);
-    assert_eq!(guest["passwordRegistration"], "disabled");
-    assert_eq!(guest["adHocRooms"], true);
-    let invited = capabilities(true, true, false, true, false);
-    assert_eq!(invited["passwordRegistration"], "invite");
-    assert_eq!(invited["passkeyRegistration"], "disabled");
-    assert_eq!(invited["passkeyLogin"], true);
-    let open = capabilities(true, true, true, true, false);
-    assert_eq!(open["passkeyRegistration"], "open");
-    assert_eq!(open["roomCreation"], true);
+    let guest = Capabilities::new(false, false, false, false, true);
+    assert_eq!(guest.password_registration, RegistrationMode::Disabled);
+    assert!(guest.ad_hoc_rooms);
+    let invited = Capabilities::new(true, true, false, true, false);
+    assert_eq!(invited.password_registration, RegistrationMode::Invite);
+    assert_eq!(invited.passkey_registration, RegistrationMode::Disabled);
+    assert!(invited.passkey_login);
+    let open = Capabilities::new(true, true, true, true, false);
+    assert_eq!(open.passkey_registration, RegistrationMode::Open);
+    assert!(open.room_creation);
+    // The exact wire keys the web client's `decodeServerCapabilities` reads.
+    assert_eq!(
+        serde_json::to_value(open).unwrap(),
+        serde_json::json!({
+            "version": 1, "accounts": true, "passwordLogin": true, "passkeyLogin": true,
+            "passwordRegistration": "open", "passkeyRegistration": "open",
+            "roomDirectory": true, "roomCreation": true, "adHocRooms": false,
+        })
+    );
 }
 
 #[test]

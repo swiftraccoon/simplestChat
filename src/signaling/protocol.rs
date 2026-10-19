@@ -118,16 +118,18 @@ impl std::fmt::Debug for AuthenticationToken {
 
 /// Client-to-Server messages
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase")]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum ClientMessage {
     /// Renew this authenticated socket without replacing its room membership.
-    #[serde(rename_all = "camelCase")]
     RenewAuthentication {
         request_id: String,
         token: AuthenticationToken,
     },
     /// Join a room
-    #[serde(rename_all = "camelCase")]
     JoinRoom {
         room_id: RoomId,
         participant_name: String,
@@ -147,18 +149,15 @@ pub enum ClientMessage {
     /// Create WebRTC receive transport
     CreateRecvTransport,
     /// Replace only this member's expected receive transport; retries replay its replacement.
-    #[serde(rename_all = "camelCase")]
     ReplaceRecvTransport {
         transport_id: String,
     },
     /// Connect transport with DTLS parameters
-    #[serde(rename_all = "camelCase")]
     ConnectTransport {
         transport_id: String,
         dtls_parameters: DtlsParameters,
     },
     /// Produce media (audio/video)
-    #[serde(rename_all = "camelCase")]
     Produce {
         transport_id: String,
         kind: MediaKind,
@@ -167,62 +166,51 @@ pub enum ClientMessage {
         source: Option<String>, // "camera", "microphone", "screen", "screen-audio"
     },
     /// Consume media from another participant
-    #[serde(rename_all = "camelCase")]
     Consume {
         producer_id: String,
         rtp_capabilities: RtpCapabilities,
     },
     /// Resume a consumer
-    #[serde(rename_all = "camelCase")]
     ResumeConsumer {
         consumer_id: String,
     },
     /// Pause a consumer
-    #[serde(rename_all = "camelCase")]
     PauseConsumer {
         consumer_id: String,
     },
     /// Release this receiver's consumer; repeated closure is a no-op.
-    #[serde(rename_all = "camelCase")]
     CloseConsumer {
         consumer_id: String,
     },
     /// Close a producer
-    #[serde(rename_all = "camelCase")]
     CloseProducer {
         producer_id: String,
     },
     /// Pause a producer (mute)
-    #[serde(rename_all = "camelCase")]
     PauseProducer {
         producer_id: String,
     },
     /// Resume a producer (unmute)
-    #[serde(rename_all = "camelCase")]
     ResumeProducer {
         producer_id: String,
     },
     /// Reconnect to an existing session after WS disconnect
-    #[serde(rename_all = "camelCase")]
     Reconnect {
         participant_id: ParticipantId,
         room_id: RoomId,
         reconnect_token: SecretString,
     },
     /// Request ICE restart on a transport
-    #[serde(rename_all = "camelCase")]
     RestartIce {
         transport_id: String,
     },
     /// Set preferred simulcast layers for a consumer
-    #[serde(rename_all = "camelCase")]
     SetConsumerPreferredLayers {
         consumer_id: String,
         spatial_layer: u8,
         temporal_layer: Option<u8>,
     },
     /// Send a chat message to the room
-    #[serde(rename_all = "camelCase")]
     ChatMessage {
         content: String,
         #[serde(default)]
@@ -235,7 +223,6 @@ pub enum ClientMessage {
         #[serde(default)]
         reply_to: Option<MessageId>,
     },
-    #[serde(rename_all = "camelCase")]
     PrivateMessage {
         target_participant_id: ParticipantId,
         content: String,
@@ -248,12 +235,10 @@ pub enum ClientMessage {
         reply_to: Option<MessageId>,
     },
     RetryChatMessage(RetryChatMessage),
-    #[serde(rename_all = "camelCase")]
     GetAttachmentAccess {
         request_id: String,
         attachment_id: uuid::Uuid,
     },
-    #[serde(rename_all = "camelCase")]
     GetChatHistory {
         request_id: String,
         before: Option<String>,
@@ -263,103 +248,85 @@ pub enum ClientMessage {
         q: Option<String>,
         limit: Option<u32>,
     },
-    #[serde(rename_all = "camelCase")]
     MarkChatRead {
         request_id: String,
         message_id: MessageId,
     },
-    #[serde(rename_all = "camelCase")]
     SetRoomHistory {
         request_id: String,
         retention_days: i32,
     },
-    #[serde(rename_all = "camelCase")]
     SetChatPreferences {
         request_id: String,
         allow_private_messages: bool,
         ignored_participant_ids: Vec<ParticipantId>,
     },
     /// Change how this participant's name and messages look to everyone.
-    #[serde(rename_all = "camelCase")]
     SetChatStyle {
         request_id: String,
         chat_style: ChatStyle,
     },
     /// Edit an authored message without overwriting a newer revision.
-    #[serde(rename_all = "camelCase")]
     EditChatMessage {
         request_id: String,
         message_id: MessageId,
         content: String,
         expected_revision: u32,
     },
-    #[serde(rename_all = "camelCase")]
     GetPinnedMessages {
         request_id: String,
     },
-    #[serde(rename_all = "camelCase")]
     SetPinnedMessage {
         request_id: String,
         message_id: MessageId,
         pinned: bool,
     },
-    #[serde(rename_all = "camelCase")]
     RemoveChatMessage {
         request_id: String,
         message_id: MessageId,
     },
     /// Add this participant's reaction to a retained message, or take it back.
-    #[serde(rename_all = "camelCase")]
     ReactToMessage {
         request_id: String,
         message_id: MessageId,
         emoji: String,
     },
-    #[serde(rename_all = "camelCase")]
     ChangeNickname {
         request_id: String,
         nickname: String,
     },
-    #[serde(rename_all = "camelCase")]
     GetRoomSnapshot {
         request_id: String,
     },
-    #[serde(rename_all = "camelCase")]
     ListRoomBans {
         request_id: String,
         #[serde(default)]
         offset: Option<u32>,
     },
-    #[serde(rename_all = "camelCase")]
     RemoveRoomBan {
         request_id: String,
         ban_id: String,
     },
-    #[serde(rename_all = "camelCase")]
     ListRoomMembers {
         request_id: String,
         #[serde(default)]
         offset: Option<u32>,
     },
-    #[serde(rename_all = "camelCase")]
     SetMemberRole {
         request_id: String,
         target_user_id: UserId,
         role: Role,
     },
-    #[serde(rename_all = "camelCase")]
     ReportParticipant {
         request_id: String,
         target_participant_id: ParticipantId,
         reason: String,
     },
-    #[serde(rename_all = "camelCase")]
     ListRoomReports {
         request_id: String,
         #[serde(default)]
         offset: Option<u32>,
     },
-    #[serde(rename_all = "camelCase")]
     ResolveRoomReport {
         request_id: String,
         report_id: String,
@@ -367,7 +334,6 @@ pub enum ClientMessage {
     },
     /// The room's moderation history, newest first (Moderator+; the owner also
     /// sees each target's address).
-    #[serde(rename_all = "camelCase")]
     ListModerationEvents {
         request_id: String,
         #[serde(default)]
@@ -376,7 +342,6 @@ pub enum ClientMessage {
 
     /// The sender is composing a message, for a private conversation when
     /// `target_participant_id` is set; relayed to those who would receive it.
-    #[serde(rename_all = "camelCase")]
     Typing {
         #[serde(default)]
         target_participant_id: Option<ParticipantId>,
@@ -384,34 +349,28 @@ pub enum ClientMessage {
 
     // === Moderation ===
     /// Force-close a participant's camera/screen producer
-    #[serde(rename_all = "camelCase")]
     CloseCam {
         target_participant_id: ParticipantId,
     },
     /// Ban a participant from producing video/screen
-    #[serde(rename_all = "camelCase")]
     CamBan {
         target_participant_id: ParticipantId,
         reason: Option<String>,
     },
     /// Unban a participant from producing video/screen
-    #[serde(rename_all = "camelCase")]
     CamUnban {
         target_participant_id: ParticipantId,
     },
     /// Mute a participant's text chat
-    #[serde(rename_all = "camelCase")]
     TextMute {
         target_participant_id: ParticipantId,
     },
     /// Unmute a participant's text chat
-    #[serde(rename_all = "camelCase")]
     TextUnmute {
         target_participant_id: ParticipantId,
     },
     /// Kick a participant from the room; `report_id` names the open report
     /// this answers, which is resolved with it.
-    #[serde(rename_all = "camelCase")]
     Kick {
         target_participant_id: ParticipantId,
         reason: Option<String>,
@@ -419,7 +378,6 @@ pub enum ClientMessage {
         report_id: Option<String>,
     },
     /// Ban a participant from the room; `report_id` as for `Kick`.
-    #[serde(rename_all = "camelCase")]
     Ban {
         target_participant_id: ParticipantId,
         reason: Option<String>,
@@ -428,12 +386,10 @@ pub enum ClientMessage {
         report_id: Option<String>,
     },
     /// Unban a user (stub — no persistent ban list yet)
-    #[serde(rename_all = "camelCase")]
     Unban {
         target_user_id: UserId,
     },
     /// Set a participant's role
-    #[serde(rename_all = "camelCase")]
     SetRole {
         target_participant_id: ParticipantId,
         role: Role,
@@ -457,12 +413,10 @@ pub enum ClientMessage {
 
     // === Lobby ===
     /// Admit a participant from the lobby
-    #[serde(rename_all = "camelCase")]
     AdmitFromLobby {
         target_participant_id: ParticipantId,
     },
     /// Deny a participant from the lobby
-    #[serde(rename_all = "camelCase")]
     DenyFromLobby {
         target_participant_id: ParticipantId,
     },
@@ -470,10 +424,13 @@ pub enum ClientMessage {
 
 /// Server-to-Client messages
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase")]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum ServerMessage {
     /// Room joined successfully
-    #[serde(rename_all = "camelCase")]
     RoomJoined {
         participant_id: ParticipantId,
         participants: Vec<ParticipantInfo>,
@@ -488,13 +445,15 @@ pub enum ServerMessage {
         room_settings: Option<RoomSettings>,
     },
     /// The existing socket accepted a same-identity credential renewal.
-    #[serde(rename_all = "camelCase")]
-    AuthenticationRenewed { request_id: String, expires_at: u64 },
+    AuthenticationRenewed {
+        request_id: String,
+        expires_at: u64,
+    },
     /// A renewal did not replace or extend the existing socket credential.
-    #[serde(rename_all = "camelCase")]
-    AuthenticationRenewalFailed { request_id: String },
+    AuthenticationRenewalFailed {
+        request_id: String,
+    },
     /// Temporary validation failure; the existing credential remains unchanged.
-    #[serde(rename_all = "camelCase")]
     AuthenticationRenewalDeferred {
         request_id: String,
         retry_after_ms: u32,
@@ -502,21 +461,26 @@ pub enum ServerMessage {
     },
     /// Error response
     /// A request or frame the server refused; `code` is what clients act on.
-    Error { code: ErrorCode, message: String },
+    Error {
+        code: ErrorCode,
+        message: String,
+    },
     /// The client should prompt for a password and retry this room join.
     RoomPasswordRequired,
     /// Terminal room lifecycle event, distinct from recoverable request errors.
-    RoomClosed { reason: String },
+    RoomClosed {
+        reason: String,
+    },
     /// Temporary process shutdown; clients may retain room intent and rejoin.
     /// Existing media transports do not survive the replacement process.
-    ServerRestarting { reason: String },
+    ServerRestarting {
+        reason: String,
+    },
     /// Router RTP capabilities
-    #[serde(rename_all = "camelCase")]
     RouterRtpCapabilities {
         rtp_capabilities: RtpCapabilitiesFinalized,
     },
     /// Transport created
-    #[serde(rename_all = "camelCase")]
     TransportCreated {
         transport_id: String,
         ice_parameters: IceParameters,
@@ -526,13 +490,14 @@ pub enum ServerMessage {
         ice_servers: Vec<IceServer>,
     },
     /// Transport connected
-    #[serde(rename_all = "camelCase")]
-    TransportConnected { transport_id: String },
+    TransportConnected {
+        transport_id: String,
+    },
     /// Producer created
-    #[serde(rename_all = "camelCase")]
-    ProducerCreated { producer_id: String },
+    ProducerCreated {
+        producer_id: String,
+    },
     /// Consumer created
-    #[serde(rename_all = "camelCase")]
     ConsumerCreated {
         consumer_id: String,
         producer_id: String,
@@ -540,7 +505,6 @@ pub enum ServerMessage {
         rtp_parameters: RtpParameters,
     },
     /// New participant joined the room
-    #[serde(rename_all = "camelCase")]
     ParticipantJoined {
         participant_id: ParticipantId,
         participant_name: String,
@@ -550,10 +514,10 @@ pub enum ServerMessage {
         chat_style: ChatStyle,
     },
     /// Participant left the room
-    #[serde(rename_all = "camelCase")]
-    ParticipantLeft { participant_id: ParticipantId },
+    ParticipantLeft {
+        participant_id: ParticipantId,
+    },
     /// New producer available from another participant
-    #[serde(rename_all = "camelCase")]
     NewProducer {
         participant_id: ParticipantId,
         producer_id: String,
@@ -562,20 +526,25 @@ pub enum ServerMessage {
         source: Option<String>,
     },
     /// Producer closed by another participant
-    #[serde(rename_all = "camelCase")]
-    ProducerClosed { producer_id: String },
+    ProducerClosed {
+        producer_id: String,
+    },
     /// Producer paused (muted) by its owner
-    #[serde(rename_all = "camelCase")]
-    ProducerPaused { producer_id: String },
+    ProducerPaused {
+        producer_id: String,
+    },
     /// Producer resumed (unmuted) by its owner
-    #[serde(rename_all = "camelCase")]
-    ProducerResumed { producer_id: String },
+    ProducerResumed {
+        producer_id: String,
+    },
     /// Consumer resumed
-    #[serde(rename_all = "camelCase")]
-    ConsumerResumed { consumer_id: String },
+    ConsumerResumed {
+        consumer_id: String,
+    },
     /// Consumer paused
-    #[serde(rename_all = "camelCase")]
-    ConsumerPaused { consumer_id: String },
+    ConsumerPaused {
+        consumer_id: String,
+    },
     /// A correlated closure or preferred-layer command completed successfully.
     /// Sent only inside a reply envelope with the caller's request ID.
     MediaControlApplied,
@@ -583,7 +552,6 @@ pub enum ServerMessage {
     /// state broadcasts remain independent and a timeout is not a rollback.
     RoomControlApplied,
     /// Result of reconnection attempt
-    #[serde(rename_all = "camelCase")]
     ReconnectResult {
         success: bool,
         participant_id: ParticipantId,
@@ -592,27 +560,23 @@ pub enum ServerMessage {
     },
     /// ICE restarted — new ICE parameters plus fresh TURN credentials, since
     /// the ones minted at transport creation expire after `TURN_TTL`.
-    #[serde(rename_all = "camelCase")]
     IceRestarted {
         transport_id: String,
         ice_parameters: IceParameters,
         ice_servers: Vec<IceServer>,
     },
     /// Connection quality stats
-    #[serde(rename_all = "camelCase")]
     ConnectionStats {
         available_bitrate: Option<u32>,
         rtt: Option<f64>,
     },
     /// Consumer simulcast layers changed
-    #[serde(rename_all = "camelCase")]
     ConsumerLayersChanged {
         consumer_id: String,
         spatial_layer: Option<u8>,
         temporal_layer: Option<u8>,
     },
     /// Chat message received from another participant
-    #[serde(rename_all = "camelCase")]
     ChatReceived {
         participant_id: ParticipantId,
         participant_name: String,
@@ -633,27 +597,24 @@ pub enum ServerMessage {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         reply_to: Option<ChatReplyRef>,
     },
-    #[serde(rename_all = "camelCase")]
     MessageAck {
         client_message_id: String,
         message: ChatEntry,
     },
-    #[serde(rename_all = "camelCase")]
     MessageRetryResult {
         client_message_id: String,
         outcome: ChatRetryOutcome,
         reason: ChatRetryReason,
     },
-    #[serde(rename_all = "camelCase")]
-    PrivateMessageReceived { message: ChatEntry },
+    PrivateMessageReceived {
+        message: ChatEntry,
+    },
     /// The reply to a social request: `action` and `data` come from [`SocialResponse`].
-    #[serde(rename_all = "camelCase")]
     SocialResponse {
         request_id: String,
         #[serde(flatten)]
         response: SocialResponse,
     },
-    #[serde(rename_all = "camelCase")]
     SocialError {
         #[serde(skip_serializing_if = "Option::is_none")]
         request_id: Option<String>,
@@ -662,87 +623,88 @@ pub enum ServerMessage {
         code: ErrorCode,
         message: String,
     },
-    #[serde(rename_all = "camelCase")]
     NicknameChanged {
         participant_id: ParticipantId,
         nickname: String,
     },
-    #[serde(rename_all = "camelCase")]
     ChatStyleChanged {
         participant_id: ParticipantId,
         chat_style: ChatStyle,
     },
     /// A participant is composing a message; private when `target_participant_id`
     /// is set (then only that target hears it).
-    #[serde(rename_all = "camelCase")]
     ParticipantTyping {
         participant_id: ParticipantId,
         #[serde(skip_serializing_if = "Option::is_none")]
         target_participant_id: Option<ParticipantId>,
     },
-    #[serde(rename_all = "camelCase")]
-    ChatMessageEdited { message: ChatEntry },
-    #[serde(rename_all = "camelCase")]
-    PinnedMessagesChanged { messages: Vec<ChatEntry> },
+    ChatMessageEdited {
+        message: ChatEntry,
+    },
+    PinnedMessagesChanged {
+        messages: Vec<ChatEntry>,
+    },
     /// A public message and any quotes of it must be replaced by a tombstone.
-    #[serde(rename_all = "camelCase")]
     ChatMessageRemoved {
         message_id: MessageId,
         removed_at: DateTime<Utc>,
     },
     /// A message's reactions changed; sent to everyone who can see it.
-    #[serde(rename_all = "camelCase")]
     MessageReactions {
         message_id: MessageId,
         reactions: Vec<ChatReaction>,
     },
     /// Active/dominant speaker changed
-    #[serde(rename_all = "camelCase")]
-    ActiveSpeaker { participant_id: ParticipantId },
+    ActiveSpeaker {
+        participant_id: ParticipantId,
+    },
     /// Audio levels for all speaking participants; an empty list means nobody
     /// exceeded the threshold during the last interval
-    #[serde(rename_all = "camelCase")]
-    AudioLevels { levels: Vec<AudioLevelEntry> },
+    AudioLevels {
+        levels: Vec<AudioLevelEntry>,
+    },
 
     // === Moderation broadcasts ===
     /// A producer was force-closed by a moderator
-    #[serde(rename_all = "camelCase")]
-    ForceClosedProducer { producer_id: String, reason: String },
+    ForceClosedProducer {
+        producer_id: String,
+        reason: String,
+    },
     /// Participant's camera was banned
-    #[serde(rename_all = "camelCase")]
-    CamBanned { participant_id: ParticipantId },
+    CamBanned {
+        participant_id: ParticipantId,
+    },
     /// Participant's camera ban was lifted
-    #[serde(rename_all = "camelCase")]
-    CamUnbanned { participant_id: ParticipantId },
+    CamUnbanned {
+        participant_id: ParticipantId,
+    },
     /// Participant was text-muted
-    #[serde(rename_all = "camelCase")]
-    TextMuted { participant_id: ParticipantId },
+    TextMuted {
+        participant_id: ParticipantId,
+    },
     /// Participant was text-unmuted
-    #[serde(rename_all = "camelCase")]
-    TextUnmuted { participant_id: ParticipantId },
+    TextUnmuted {
+        participant_id: ParticipantId,
+    },
     /// Participant was kicked from the room
-    #[serde(rename_all = "camelCase")]
     ParticipantKicked {
         participant_id: ParticipantId,
         #[serde(skip_serializing_if = "Option::is_none")]
         reason: Option<String>,
     },
     /// Participant was banned from the room
-    #[serde(rename_all = "camelCase")]
     ParticipantBanned {
         participant_id: ParticipantId,
         #[serde(skip_serializing_if = "Option::is_none")]
         reason: Option<String>,
     },
     /// Participant's role was changed
-    #[serde(rename_all = "camelCase")]
     RoleChanged {
         participant_id: ParticipantId,
         new_role: Role,
         granted_by: String,
     },
     /// A participant requested voice (sent to Moderator+)
-    #[serde(rename_all = "camelCase")]
     VoiceRequested {
         participant_id: ParticipantId,
         display_name: String,
@@ -750,15 +712,17 @@ pub enum ServerMessage {
 
     // === Room state ===
     /// Room settings were changed
-    #[serde(rename_all = "camelCase")]
-    RoomSettingsChanged { settings: RoomSettings },
+    RoomSettingsChanged {
+        settings: RoomSettings,
+    },
     /// Room topic was changed
-    #[serde(rename_all = "camelCase")]
-    TopicChanged { topic: String, changed_by: String },
+    TopicChanged {
+        topic: String,
+        changed_by: String,
+    },
 
     // === Lobby ===
     /// Client is waiting in the lobby
-    #[serde(rename_all = "camelCase")]
     LobbyWaiting {
         room_name: String,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -766,20 +730,17 @@ pub enum ServerMessage {
         participant_count: u32,
         moderator_count: u32,
     },
-    #[serde(rename_all = "camelCase")]
     LobbyStatus {
         participant_count: u32,
         moderator_count: u32,
     },
     /// A participant joined the lobby (sent to Moderator+)
-    #[serde(rename_all = "camelCase")]
     LobbyJoin {
         participant_id: ParticipantId,
         display_name: String,
         authenticated: bool,
     },
     /// Lobby admission was denied
-    #[serde(rename_all = "camelCase")]
     LobbyDenied {
         #[serde(skip_serializing_if = "Option::is_none")]
         reason: Option<String>,
@@ -1012,9 +973,13 @@ pub struct ProducerMetadata {
 /// The reply to one social request, serialized beside the request id as
 /// `action` (the variant name) and `data` (the variant's fields).
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "action", content = "data", rename_all = "camelCase")]
+#[serde(
+    tag = "action",
+    content = "data",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum SocialResponse {
-    #[serde(rename_all = "camelCase")]
     SetChatPreferences {
         allow_private_messages: bool,
         ignored_participant_ids: Vec<ParticipantId>,
@@ -1022,11 +987,9 @@ pub enum SocialResponse {
     ChangeNickname {
         nickname: String,
     },
-    #[serde(rename_all = "camelCase")]
     SetChatStyle {
         chat_style: ChatStyle,
     },
-    #[serde(rename_all = "camelCase")]
     RemoveChatMessage {
         message_id: MessageId,
         removed_at: DateTime<Utc>,
@@ -1034,7 +997,6 @@ pub enum SocialResponse {
     EditChatMessage {
         message: ChatEntry,
     },
-    #[serde(rename_all = "camelCase")]
     GetAttachmentAccess {
         token: String,
         expires_at: DateTime<Utc>,
@@ -1045,22 +1007,18 @@ pub enum SocialResponse {
     SetPinnedMessage {
         messages: Vec<ChatEntry>,
     },
-    #[serde(rename_all = "camelCase")]
     ReactToMessage {
         message_id: MessageId,
         reactions: Vec<ChatReaction>,
     },
     GetRoomSnapshot(RoomSnapshot),
     GetChatHistory(crate::room::history::HistoryPage),
-    #[serde(rename_all = "camelCase")]
     MarkChatRead {
         read_message_id: Option<MessageId>,
     },
-    #[serde(rename_all = "camelCase")]
     SetRoomHistory {
         retention_days: i32,
     },
-    #[serde(rename_all = "camelCase")]
     ListRoomBans {
         bans: Vec<BanEntry>,
         has_more: bool,
@@ -1068,7 +1026,6 @@ pub enum SocialResponse {
     RemoveRoomBan {
         removed: bool,
     },
-    #[serde(rename_all = "camelCase")]
     ListRoomMembers {
         members: Vec<MemberEntry>,
         has_more: bool,
@@ -1076,22 +1033,18 @@ pub enum SocialResponse {
     SetMemberRole {
         updated: bool,
     },
-    #[serde(rename_all = "camelCase")]
     ReportParticipant {
         report_id: String,
         status: ReportStatus,
     },
-    #[serde(rename_all = "camelCase")]
     ListRoomReports {
         reports: Vec<ReportEntry>,
         has_more: bool,
     },
-    #[serde(rename_all = "camelCase")]
     ResolveRoomReport {
         report_id: String,
         status: ReportResolution,
     },
-    #[serde(rename_all = "camelCase")]
     ListModerationEvents {
         events: Vec<ModerationEventView>,
         has_more: bool,
