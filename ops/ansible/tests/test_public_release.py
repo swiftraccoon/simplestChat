@@ -120,6 +120,8 @@ class FixtureRunner:
         self.image_migrations: dict[str, str] = dict(MIGRATIONS)
         self.preview_change: bool = False
         self.config_hash_mismatch: str | None = None
+        # The bind sub-options this fixture's "Compose" renders for the store mount.
+        self.proxy_mount_bind: JsonValue | None = None
         self.candidate_wrong_image: bool = False
         self.candidate_unready: bool = False
         # Rooms reported by successive metrics polls; the last value repeats.
@@ -279,7 +281,10 @@ class FixtureRunner:
             obj(rendered, "services", "migrate")["environment"] = {"RUN_MIGRATIONS": "true"}
             source = selected_file.read_text()
             if "/run/simplestchat-browser-assets" in source:
-                obj(rendered, "services", "caddy")["volumes"] = [public.browser_asset_mount()]
+                mount = public.browser_asset_mount()
+                if self.proxy_mount_bind is not None:
+                    mount["bind"] = self.proxy_mount_bind
+                obj(rendered, "services", "caddy")["volumes"] = [mount]
             if "    logging: *bounded-logging" in source:
                 obj(rendered, "services", "simplestchat")["logging"] = public.LOCAL_LOGGING
             if "      driver: journald" in source:
@@ -989,6 +994,45 @@ class PublicReleaseTests(unittest.TestCase):
             )
         self.assertEqual(plan.new_image, NEW_IMAGE)
         self.assertTrue(report["browserAssetProxyUpgraded"])
+
+    def test_asset_upgrade_accepts_the_hosts_own_bind_rendering(self) -> None:
+        """A Compose that renders the store mount with empty bind options still upgrades."""
+        staged = self.asset_upgrade_staged()
+        self.runner.proxy_mount_bind = {}
+        report: JsonObject = {}
+        with patch.object(public, "SOURCES", self.root / "sources"):
+            plan = public.prepare_maintenance(
+                self.runner, self.manifest, staged, report, browser_assets_upgrade=True
+            )
+        self.assertEqual(plan.new_image, NEW_IMAGE)
+        self.assertTrue(report["browserAssetProxyUpgraded"])
+
+    def test_asset_upgrade_refuses_a_malformed_bind_rendering(self) -> None:
+        """Only the bind sub-options vary; a non-object rendering is not accepted."""
+        staged = self.asset_upgrade_staged()
+        self.runner.proxy_mount_bind = "rprivate"
+        with (
+            patch.object(public, "SOURCES", self.root / "sources"),
+            self.assertRaisesRegex(
+                public.ReleaseError, "differs from reviewed readonly store: bind"
+            ),
+        ):
+            _ = public.prepare_maintenance(
+                self.runner, self.manifest, staged, {}, browser_assets_upgrade=True
+            )
+
+    def asset_upgrade_staged(self) -> JsonObject:
+        """Stage the candidate image over the legacy proxy configuration."""
+        self.asset_upgrade_fixture()
+        staged = self.stage()
+        for name in ("compose.public.yml", "compose.public.yml.candidate", "app.env"):
+            path = self.config / name
+            _ = path.write_text(path.read_text().replace(OLD_IMAGE, NEW_IMAGE))
+        _ = (self.config / "images.json").write_text(
+            json.dumps({"revision": REVISION, "serverImage": NEW_IMAGE})
+        )
+        self.runner.app_image = NEW_IMAGE
+        return staged
 
     def asset_upgrade_fixture(self) -> None:
         """Prepare distinct old and reviewed candidate proxy configurations."""
