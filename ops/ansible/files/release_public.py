@@ -1015,9 +1015,13 @@ def browser_asset_mount() -> JsonObject:
     }
 
 
-def validate_browser_proxy(config: JsonObject, *, legacy_allowed: bool = False) -> bool:
-    """Reject app-only replacement until stable proxy retention was explicitly installed."""
-    proxy = object_value(object_value(config["services"])["caddy"])
+def reviewed_browser_asset_mount(proxy: JsonObject) -> JsonObject | None:
+    """Return the store mount as this host's Compose renders it, or None when absent.
+
+    Compose renders the bind sub-options (host path creation, propagation,
+    SELinux labels) by its own version; the reviewed capability is the
+    read-only bind of the store at the fixed target and nothing else.
+    """
     mounts = array_value(proxy.get("volumes", []))
     selected = [
         object_value(item)
@@ -1025,19 +1029,33 @@ def validate_browser_proxy(config: JsonObject, *, legacy_allowed: bool = False) 
         if object_value(item).get("target") == release_assets.CONTAINER_PATH
     ]
     if not selected:
+        return None
+    require(len(selected) == 1, "Ambiguous browser asset proxy mount")
+    mount = selected[0]
+    expected = browser_asset_mount()
+    comparable = {key: value for key, value in mount.items() if key != "bind"}
+    reviewed = {key: value for key, value in expected.items() if key != "bind"}
+    differing = sorted(
+        key for key in set(comparable) | set(reviewed) if comparable.get(key) != reviewed.get(key)
+    )
+    if not isinstance(mount.get("bind", {}), dict):
+        differing.append("bind")
+    require(
+        not differing,
+        "Browser asset proxy mount differs from reviewed readonly store: " + ", ".join(differing),
+    )
+    return mount
+
+
+def validate_browser_proxy(config: JsonObject, *, legacy_allowed: bool = False) -> bool:
+    """Reject app-only replacement until stable proxy retention was explicitly installed."""
+    proxy = object_value(object_value(config["services"])["caddy"])
+    if reviewed_browser_asset_mount(proxy) is None:
         require(
             legacy_allowed,
             "Browser assets need --maintenance --browser-assets-upgrade before app-only releases",
         )
         return False
-    require(len(selected) == 1, "Ambiguous browser asset proxy mount")
-    mount = selected[0]
-    expected = browser_asset_mount()
-    require(
-        mount == expected
-        or mount == {key: value for key, value in expected.items() if key != "bind"},
-        "Browser asset proxy mount differs from reviewed readonly store",
-    )
     receipt = CONFIG / "browser-assets-installed.json"
     protected(receipt, limit=512)
     value = object_value(decode_json(receipt.read_bytes()))
@@ -1156,8 +1174,15 @@ def candidate_selection(  # noqa: PLR0913, PLR0915 - compare the entire resolved
     runtime_profile.validate_compose(after, ROOT / "postgres-socket", new_image)
     expected = deepcopy(base)
     if browser_assets_upgrade:
+        # The mount's reviewed fields are checked here; its bind sub-options are
+        # whatever this host's Compose renders, so the remaining configuration is
+        # compared around the mount exactly as rendered.
+        rendered = reviewed_browser_asset_mount(
+            object_value(object_value(after["services"])["caddy"])
+        )
+        require(rendered is not None, "Candidate proxy lacks the browser asset store mount")
         proxy = object_value(object_value(expected["services"])["caddy"])
-        array_value(proxy.setdefault("volumes", [])).append(browser_asset_mount())
+        array_value(proxy.setdefault("volumes", [])).append(rendered)
     if journal_changed:
         object_value(object_value(expected["services"])["simplestchat"])["logging"] = (
             JOURNAL_LOGGING
