@@ -200,6 +200,17 @@ before creating a commit; CI also checks the branch tip, including the actual
 PR head instead of GitHub's generated merge message. Supported types are `feat`,
 `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`,
 and `ops`; breaking changes may add `!` before the colon.
-Keep mechanical formatting separate from
+Size commits by coherent change, not by step. One commit carries one theme: a
+feature, the redesign of one area, a bug with its fix, or one maintenance
+concern, together with the tests, documentation, generated files, security
+review rebindings and allowlist updates that the change itself requires. Do not
+split a theme into a trail of small commits (a type here, a test move there, a
+review rebinding, an allowlist line): fold such follow-ups into the commit that
+needs them while the work is unpushed, and squash before pushing when the work
+accumulated as steps. Do not bundle unrelated themes either; a review's whole
+implementation is several commits, one per theme. As a yardstick, a day's work
+on one roadmap slice is a handful of commits, not dozens, and each must stand on
+its own: the subject names the theme, the body explains the non-obvious decisions
+and the validation that was run. Keep mechanical formatting separate from
 behavior changes where practical. Do not commit secrets, captured user data,
 generated build outputs or local agent instructions.
