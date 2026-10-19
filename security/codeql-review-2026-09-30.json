@@ -791,15 +791,15 @@
       "toolVersion": "2.27.1",
       "path": "src/signaling/mod.rs",
       "region": {
-        "start_line": 1864,
-        "end_line": 1864,
+        "start_line": 1755,
+        "end_line": 1755,
         "start_column": 153,
         "end_column": 165
       },
       "messageSha256": "f3a41a98c9e17d302a77434763ce9ae4e42f51df43895cdf2eb21c97ed1b9706",
-      "sourceSha256": "b045727d0f312367364a705004d41a6646074c3b2936d509439b43ce658f2809",
-      "scope": "src/signaling/mod.rs:1864:1864:153:165",
-      "fingerprint": "codeql:ecbca502bda84d5aff43830de1ec76d433bb20864ab3df68279e1ccbbfbeff2f",
+      "sourceSha256": "538c77f84f239549fb6d4a2218c9b0a3d3ac9ed478c66b956e3468f6769172d8",
+      "scope": "src/signaling/mod.rs:1755:1755:153:165",
+      "fingerprint": "codeql:54119f553c1725491241988aeab1dd1d5d33d70649e06648ef3744d49a7840d6",
       "number": 35,
       "severity": "high",
       "state": "open",
@@ -807,9 +807,9 @@
       "rationale": "The sink is a cfg(test) assertion diagnostic for a locally constructed metrics snapshot. The values are numeric counters/gauges; a password-named metric does not contain an account password. No credential or production log sink is involved.",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/35",
-      "sourceProvenanceRevision": "61578db87ad7d0e1be8046008ac6a4582d78abaa",
-      "sourceReviewBaseRevision": "4481e7f0e33969fcc822fe33919834d3ab962279",
-      "sourceReviewBlob": "feb9a614af436b1daf8e5ee35d9baf57afe4c425"
+      "sourceProvenanceRevision": "ffb30521b3ef611cd5a56d58f992bec9602971b4",
+      "sourceReviewBaseRevision": "ba010e1baf5e1249031967241888ece79bf0e276",
+      "sourceReviewBlob": "2b01766c081a8fc256677d3c153432ca446234cb"
     },
     {
       "rule": "rust/cleartext-logging",
@@ -822,9 +822,9 @@
         "end_column": 62
       },
       "messageSha256": "675d34a78b7f7de9fe58b30d6a71296864c129f25144c999b769e79b1093a9f9",
-      "sourceSha256": "49ff37b88717b33c2b05568a082b75075651cf76e0643af94d7e6a4ee63c7d42",
+      "sourceSha256": "a9fa341e3da86e8a292a6676e1a865ed038d0f9395110614212a1a38cdc925eb",
       "scope": "src/signaling/connection_authorization_tests.rs:398:398:21:62",
-      "fingerprint": "codeql:49bbb4dd1bfc2eb9d7e6ee8b69b1beda452e54ed05e9c249d9f843e4d63cce27",
+      "fingerprint": "codeql:d032ba09e7acf4ae83a5f48b218ee85b2083cce0c1b5a96331bb1dffe0039453",
       "number": 36,
       "severity": "high",
       "state": "open",
@@ -832,7 +832,9 @@
       "rationale": "The sink is an assertion diagnostic in the cfg(test)-only authorization dispatcher fixture. It formats local synthetic operation results and roles, not a production logger or account credential. The reviewed test calls use fixed fixture participants and messages.",
       "observedRevision": "9eaabb7b5ab586ca694283afc1550055ef2c3136",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/36",
-      "sourceProvenanceRevision": "673c93fb2d09b5cdc932de2871c5493b26eb5186"
+      "sourceProvenanceRevision": "ffb30521b3ef611cd5a56d58f992bec9602971b4",
+      "sourceReviewBaseRevision": "cc7ac43e7ac57d268af20e2ef668ab9034d6e93e",
+      "sourceReviewBlob": "e75defe23d8696cfd4be701230ab4b92de716f61"
     },
     {
       "rule": "rust/cleartext-logging",
@@ -845,9 +847,9 @@
         "end_column": 51
       },
       "messageSha256": "675d34a78b7f7de9fe58b30d6a71296864c129f25144c999b769e79b1093a9f9",
-      "sourceSha256": "49ff37b88717b33c2b05568a082b75075651cf76e0643af94d7e6a4ee63c7d42",
+      "sourceSha256": "a9fa341e3da86e8a292a6676e1a865ed038d0f9395110614212a1a38cdc925eb",
       "scope": "src/signaling/connection_authorization_tests.rs:445:445:17:51",
-      "fingerprint": "codeql:34fedc9555175b885bdeef63a9183e5330d848238fbeafe3ce58cf0f16daa567",
+      "fingerprint": "codeql:7d6300a8eddb26ebd994cdd6abffc5fdecaec3288ad51f8ebed1c91728452a23",
       "number": 37,
       "severity": "high",
       "state": "open",
@@ -855,7 +857,9 @@
       "rationale": "The sink is an assertion diagnostic in the cfg(test)-only authorization dispatcher fixture. It formats local synthetic operation results and roles, not a production logger or account credential. The reviewed test calls use fixed fixture participants and messages.",
       "observedRevision": "9eaabb7b5ab586ca694283afc1550055ef2c3136",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/37",
-      "sourceProvenanceRevision": "673c93fb2d09b5cdc932de2871c5493b26eb5186"
+      "sourceProvenanceRevision": "ffb30521b3ef611cd5a56d58f992bec9602971b4",
+      "sourceReviewBaseRevision": "cc7ac43e7ac57d268af20e2ef668ab9034d6e93e",
+      "sourceReviewBlob": "e75defe23d8696cfd4be701230ab4b92de716f61"
     },
     {
       "rule": "rust/hard-coded-cryptographic-value",
@@ -1487,15 +1491,15 @@
       "toolVersion": "2.27.1",
       "path": "src/signaling/mod.rs",
       "region": {
-        "start_line": 2293,
-        "end_line": 2293,
+        "start_line": 2186,
+        "end_line": 2186,
         "start_column": 31,
         "end_column": 56
       },
       "messageSha256": "9a865ae340f22b08ac3d2ee38d165e24655ca92924b04f7a36c224ed4b3c215c",
-      "sourceSha256": "b045727d0f312367364a705004d41a6646074c3b2936d509439b43ce658f2809",
-      "scope": "src/signaling/mod.rs:2293:2293:31:56",
-      "fingerprint": "codeql:abbafb7e47abceb8ede3ab2e0e01bfb4b98a631a84e6e538a23894f4a30b2144",
+      "sourceSha256": "538c77f84f239549fb6d4a2218c9b0a3d3ac9ed478c66b956e3468f6769172d8",
+      "scope": "src/signaling/mod.rs:2186:2186:31:56",
+      "fingerprint": "codeql:997564094e5e82df2718c53e513a715b39d049f9460bd593ccb97714a04f1c7c",
       "number": 63,
       "severity": "critical",
       "state": "open",
@@ -1503,9 +1507,9 @@
       "rationale": "This fixed passphrase is inside the cfg(test) disposable-database registration enumeration-limiter test. It is used only with a unique fixture account and test-owned state, never a production identity.",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/63",
-      "sourceProvenanceRevision": "61578db87ad7d0e1be8046008ac6a4582d78abaa",
-      "sourceReviewBaseRevision": "4481e7f0e33969fcc822fe33919834d3ab962279",
-      "sourceReviewBlob": "feb9a614af436b1daf8e5ee35d9baf57afe4c425"
+      "sourceProvenanceRevision": "ffb30521b3ef611cd5a56d58f992bec9602971b4",
+      "sourceReviewBaseRevision": "ba010e1baf5e1249031967241888ece79bf0e276",
+      "sourceReviewBlob": "2b01766c081a8fc256677d3c153432ca446234cb"
     },
     {
       "rule": "rust/hard-coded-cryptographic-value",
@@ -1556,15 +1560,15 @@
       "toolVersion": "2.27.1",
       "path": "src/turn.rs",
       "region": {
-        "start_line": 139,
-        "end_line": 139,
+        "start_line": 137,
+        "end_line": 137,
         "start_column": 49,
         "end_column": 59
       },
       "messageSha256": "057e3dca56bcecdef6ec2379c13c73193db40df445c1095e5c06df0a6091041c",
-      "sourceSha256": "050dba94a642ac2d36aa3ee2d7aa5050805f485e60f584e6e74e7a8e47b22699",
-      "scope": "src/turn.rs:139:139:49:59",
-      "fingerprint": "codeql:56afdf505218139b48497f153e5cc3f6147f836a0247c16bfd89bb805ae81a5f",
+      "sourceSha256": "6a4b14b63a92c0dd55e5f72da0564efa901f7bad4f8b542a5e37c3835efe3cde",
+      "scope": "src/turn.rs:137:137:49:59",
+      "fingerprint": "codeql:07db376b287fd3e5002ee62da055cc5748c4dfb530a300caecf4b6b03fe70d36",
       "number": 66,
       "severity": "critical",
       "state": "open",
@@ -1572,9 +1576,9 @@
       "rationale": "This key is the public RFC2202 HMAC-SHA1 known-answer vector inside the cfg(test) module. The exact expected digest verifies protocol interoperability; it is not a deployed TURN key.",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/66",
-      "sourceReviewBaseRevision": "5f8e9ef27f069bf77fa8ed749960d0a61e65ea85",
-      "sourceReviewBlob": "9a5ee6eb2848d1efece8a5e6f87a5b6d5986aed7",
-      "sourceProvenanceRevision": "61578db87ad7d0e1be8046008ac6a4582d78abaa"
+      "sourceReviewBaseRevision": "ba010e1baf5e1249031967241888ece79bf0e276",
+      "sourceReviewBlob": "51a849c5651214c9610124597b23bd6ca2898de1",
+      "sourceProvenanceRevision": "ffb30521b3ef611cd5a56d58f992bec9602971b4"
     },
     {
       "rule": "rust/hard-coded-cryptographic-value",
@@ -1631,15 +1635,15 @@
       "toolVersion": "2.27.1",
       "path": "src/signaling/mod.rs",
       "region": {
-        "start_line": 1855,
-        "end_line": 1855,
+        "start_line": 1746,
+        "end_line": 1746,
         "start_column": 79,
         "end_column": 91
       },
       "messageSha256": "d46f9dd9e35359ee0e1f76406f350f66c4a01df130e8f29bfaca169997ada897",
-      "sourceSha256": "b045727d0f312367364a705004d41a6646074c3b2936d509439b43ce658f2809",
-      "scope": "src/signaling/mod.rs:1855:1855:79:91",
-      "fingerprint": "codeql:f8507fe451e15f5c5b9fb3b3225d110d0e0e88f066e1aae4bd3c2c53c86e9e79",
+      "sourceSha256": "538c77f84f239549fb6d4a2218c9b0a3d3ac9ed478c66b956e3468f6769172d8",
+      "scope": "src/signaling/mod.rs:1746:1746:79:91",
+      "fingerprint": "codeql:1bcb648c98436f56e156a5170434de46202da566add251b549405331865cc3c5",
       "number": 69,
       "severity": "medium",
       "state": "open",
@@ -1647,9 +1651,9 @@
       "rationale": "The sink is a cfg(test) assertion diagnostic for a response from the test-owned loopback HTTP server. The route returns fixed status/body bytes to test timeout and admission metrics; no external input or production logging path is used.",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/69",
-      "sourceProvenanceRevision": "61578db87ad7d0e1be8046008ac6a4582d78abaa",
-      "sourceReviewBaseRevision": "4481e7f0e33969fcc822fe33919834d3ab962279",
-      "sourceReviewBlob": "feb9a614af436b1daf8e5ee35d9baf57afe4c425"
+      "sourceProvenanceRevision": "ffb30521b3ef611cd5a56d58f992bec9602971b4",
+      "sourceReviewBaseRevision": "ba010e1baf5e1249031967241888ece79bf0e276",
+      "sourceReviewBlob": "2b01766c081a8fc256677d3c153432ca446234cb"
     },
     {
       "rule": "rust/cleartext-logging",
@@ -1700,9 +1704,9 @@
       "observedRunId": 39085371470,
       "reviewed": "2026-10-18",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/953",
-      "sourceProvenanceRevision": "61578db87ad7d0e1be8046008ac6a4582d78abaa",
-      "sourceReviewBaseRevision": "d169bfa2fc884608485f8449c9799fe0f68bbaf8",
-      "sourceReviewBlob": "64167efcbc21ad2c6b80e4cd39fb77683e88ae73"
+      "sourceProvenanceRevision": "ffb30521b3ef611cd5a56d58f992bec9602971b4",
+      "sourceReviewBaseRevision": "88e8ed0ceb1a999cb2318bdfbc845ae5ebd3c3b8",
+      "sourceReviewBlob": "418638b65a4b0102886514fcb8e45abef957b6c1"
     }
   ]
 }
