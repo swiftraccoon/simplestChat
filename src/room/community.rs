@@ -153,10 +153,7 @@ impl RoomManager {
                 settings.topic = identity.topic.clone();
                 settings.name_style = identity.name_style.clone();
                 settings.topic_style = identity.topic_style.clone();
-                let mut value = serde_json::to_value(&settings)
-                    .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
-                value["description"] = serde_json::json!(identity.description);
-                Some((settings, value))
+                Some(settings)
             } else {
                 // Authorize before any uncertain write can reserve this ID.
                 // Read failure has no durable side effects to quarantine.
@@ -235,13 +232,13 @@ impl RoomManager {
                 return Ok(false);
             }
             if let Some(room_lock) = runtime.as_ref()
-                && let Some((settings, value)) = publication
+                && let Some(settings) = publication
             {
                 // Publication is mandatory after COMMIT, not part of its timeout.
                 let mut room = room_lock.write().await;
-                room.settings = Some(settings);
+                room.settings = Some(settings.clone());
                 room.policy_revision = room.policy_revision.wrapping_add(1);
-                room.broadcast_all(&ServerMessage::RoomSettingsChanged { settings: value });
+                room.broadcast_all(&ServerMessage::RoomSettingsChanged { settings });
             }
             Ok(true)
         };

@@ -32,6 +32,35 @@ pub struct RoomSettings {
     pub history_retention_days: i32,
 }
 
+impl RoomSettings {
+    /// The settings of a room that has none stored: open, unmoderated and unowned.
+    pub fn defaults(room_id: &RoomId) -> Self {
+        Self {
+            id: room_id.to_string(),
+            owner_id: Uuid::nil(),
+            display_name: room_id.to_string(),
+            name_style: ChatStyle::default(),
+            topic_style: ChatStyle::default(),
+            history_retention_days: 0,
+            password_protected: false,
+            require_registration: false,
+            max_participants: None,
+            max_broadcasters: None,
+            allow_screen_sharing: true,
+            allow_chat: true,
+            allow_video: true,
+            moderated: false,
+            invite_only: false,
+            secret: false,
+            lobby_enabled: false,
+            push_to_talk: false,
+            guests_allowed: true,
+            guests_can_broadcast: true,
+            topic: None,
+        }
+    }
+}
+
 #[derive(FromRow)]
 struct RoomRow {
     id: String,

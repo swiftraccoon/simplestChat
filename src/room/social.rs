@@ -939,7 +939,7 @@ mod tests {
             .unwrap()
             .punitive
             .text_muted = false;
-        let mut settings = RoomManager::default_room_settings(&rid("social"));
+        let mut settings = crate::room::RoomSettings::defaults(&rid("social"));
         settings.moderated = true;
         room.settings = Some(settings);
         assert!(chat(&mut room, &alice, "moderated", None).is_err());
@@ -1410,7 +1410,7 @@ mod tests {
             .unwrap()
             .punitive
             .text_muted = false;
-        let mut settings = RoomManager::default_room_settings(&rid("social"));
+        let mut settings = crate::room::RoomSettings::defaults(&rid("social"));
         settings.allow_chat = false;
         room.settings = Some(settings);
         assert!(!can_start_account_conversation(&room, &alice.id, &bob.id));
@@ -2521,7 +2521,7 @@ mod tests {
             sqlx::query("INSERT INTO rooms(id,owner_id,display_name,history_retention_days) VALUES($1,$2,$1,7)")
                 .bind(id).bind(moderator.id.as_uuid()).execute(&pool).await.unwrap();
         }
-        let mut settings = RoomManager::default_room_settings(&room_id);
+        let mut settings = crate::room::RoomSettings::defaults(&room_id);
         settings.owner_id = moderator.id.as_uuid();
         settings.history_retention_days = 7;
         room.id = room_id.clone();
@@ -2739,7 +2739,7 @@ mod tests {
         roles::set_role(&pool, &room_id, &absent_id, roles::Role::Member, &owner_id)
             .await
             .unwrap();
-        let mut settings = RoomManager::default_room_settings(&room_id);
+        let mut settings = crate::room::RoomSettings::defaults(&room_id);
         settings.owner_id = owner_id;
         room.id = room_id.clone();
         room.persisted = true;
@@ -5413,7 +5413,7 @@ impl RoomManager {
                     .as_mut()
                     .ok_or_else(|| unavailable("Room settings unavailable"))?;
                 settings.history_retention_days = *retention_days;
-                let settings = serde_json::to_value(settings)?;
+                let settings = settings.clone();
                 room.broadcast_all(&ServerMessage::RoomSettingsChanged { settings });
                 if *retention_days == 0 {
                     room.social.pins.clear();

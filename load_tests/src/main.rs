@@ -4503,7 +4503,12 @@ mod setup_response_tests {
         let mut server = server?;
         for message in [
             ServerMessage::RoomSettingsChanged {
-                settings: serde_json::json!({"historyRetentionDays": 7}),
+                settings: {
+                    let mut settings =
+                        simplestchat::room::RoomSettings::defaults(&"retention".parse()?);
+                    settings.history_retention_days = 7;
+                    settings
+                },
             },
             ServerMessage::PinnedMessagesChanged {
                 messages: Vec::new(),

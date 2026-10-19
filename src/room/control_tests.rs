@@ -27,7 +27,7 @@ async fn bounded<T>(future: impl Future<Output = T>) -> T {
 fn runtime_room(id: &str) -> Arc<TokioRwLock<Room>> {
     Arc::new(TokioRwLock::new(Room::new(
         rid(id),
-        Some(RoomManager::default_room_settings(&rid(id))),
+        Some(crate::room::RoomSettings::defaults(&rid(id))),
         false,
         None,
     )))

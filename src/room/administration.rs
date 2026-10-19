@@ -1055,13 +1055,11 @@ impl Context {
         let mut revoked_override = None;
         match publication {
             Publication::Settings(settings, password) => {
-                let value =
-                    serde_json::to_value(&settings).expect("validated room settings serialize");
-                room.settings = Some(settings);
+                room.settings = Some(settings.clone());
                 if let Some(password) = password {
                     room.password_hash = password;
                 }
-                room.broadcast_all(&ServerMessage::RoomSettingsChanged { settings: value });
+                room.broadcast_all(&ServerMessage::RoomSettingsChanged { settings });
             }
             Publication::Role(target, role) => {
                 let target = ParticipantId::from(target);
@@ -1490,7 +1488,7 @@ mod tests {
 
     #[test]
     fn patch_checks_effective_combined_limits_without_changing_other_settings() {
-        let current = RoomManager::default_room_settings(&rid("saved"));
+        let current = settings::RoomSettings::defaults(&rid("saved"));
         let patch: SettingsPatch =
             serde_json::from_value(json!({"maxParticipants":2,"maxBroadcasters":3})).unwrap();
         assert!(patch.apply(&current).is_err());
