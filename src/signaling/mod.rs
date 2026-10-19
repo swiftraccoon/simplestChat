@@ -1433,16 +1433,13 @@ async fn observe_http_request(
     next: Next,
 ) -> Response {
     let started = Instant::now();
-    let route = request
-        .extensions()
-        .get::<MatchedPath>()
-        .map(|path| path.as_str().to_owned());
+    let route = request.extensions().get::<MatchedPath>().cloned();
     let method = request.method().as_str().to_owned();
     let request_id = uuid::Uuid::new_v4().to_string();
-    let span = tracing::info_span!("http_request", request_id = %request_id, route = telemetry::fixed_route(route.as_deref()));
+    let span = tracing::info_span!("http_request", request_id = %request_id, route = telemetry::route_label(route.as_ref()));
     let mut response = next.run(request).instrument(span).await;
     metrics.telemetry().record_http(
-        route.as_deref(),
+        route.as_ref(),
         &method,
         response.status().as_u16(),
         started.elapsed(),

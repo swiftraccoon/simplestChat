@@ -2,7 +2,11 @@
 //! request paths, credentials, identities and arbitrary browser text never enter
 //! this store. Client reports are untrusted observations, never admission input.
 use super::SignalingServer;
-use axum::{Json, extract::State, http::StatusCode};
+use axum::{
+    Json,
+    extract::{MatchedPath, State},
+    http::StatusCode,
+};
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::{collections::BTreeMap, fmt::Write, sync::Mutex, time::Duration};
@@ -242,7 +246,7 @@ impl WarningWindow {
 /// static vocabularies; ingestion adds at most sixteen observations per request.
 #[derive(Default)]
 pub(crate) struct Telemetry {
-    http: Mutex<BTreeMap<(&'static str, &'static str, &'static str), Observation>>,
+    http: Mutex<BTreeMap<(String, &'static str, &'static str), Observation>>,
     signaling: Mutex<BTreeMap<(&'static str, &'static str), Observation>>,
     client: Mutex<BTreeMap<(ClientName, ClientOutcome, Browser), Observation>>,
     client_series_dropped: AtomicU64,
@@ -260,14 +264,20 @@ impl Telemetry {
         .observe(std::time::Instant::now())
     }
 
+    /// Record one HTTP response under the router's matched template. Only
+    /// Axum's `MatchedPath` reaches this label, so the route vocabulary is the
+    /// closed set the router defines, never a request path.
     pub(crate) fn record_http(
         &self,
-        route: Option<&str>,
+        route: Option<&MatchedPath>,
         method: &str,
         status: u16,
         duration: Duration,
     ) {
-        let route = fixed_route(route);
+        self.record_http_route(route_label(route), method, status, duration);
+    }
+
+    fn record_http_route(&self, route: &str, method: &str, status: u16, duration: Duration) {
         let method = match method {
             "GET" => "GET",
             "POST" => "POST",
@@ -288,7 +298,7 @@ impl Telemetry {
             _ => "5xx",
         };
         let mut records = self.http.lock().unwrap_or_else(|error| error.into_inner());
-        let key = (route, method, status);
+        let key = (route.to_owned(), method, status);
         if records.len() >= MAX_HTTP_SERIES && !records.contains_key(&key) {
             self.http_series_dropped.fetch_add(1, Ordering::Relaxed);
             return;
@@ -462,52 +472,14 @@ fn operation_label(operation: crate::diagnostics::OperationKind) -> &'static str
     }
 }
 
-const HTTP_ROUTES: &[&str] = &[
-    "/ws",
-    "/health",
-    "/ready",
-    "/metrics",
-    "/diagnostics/media",
-    "/api/telemetry",
-    "/api/auth/register",
-    "/api/auth/login",
-    "/api/auth/refresh",
-    "/api/auth/logout",
-    "/api/auth/sessions",
-    "/api/auth/sessions/others",
-    "/api/auth/sessions/{id}",
-    "/api/auth/inbox",
-    "/api/auth/inbox/unread",
-    "/api/auth/inbox/{peer}/messages/{messageId}",
-    "/api/auth/push",
-    "/api/auth/inbox/{peer}/messages",
-    "/api/auth/inbox/{peer}/read",
-    "/api/auth/profile",
-    "/api/auth/profiles/{id}",
-    "/api/auth/password",
-    "/api/auth/recovery/key",
-    "/api/auth/recovery/redeem",
-    "/api/auth/passkey/register/start",
-    "/api/auth/passkey/register/finish",
-    "/api/auth/passkey/login/start",
-    "/api/auth/passkey/login/finish",
-    "/api/auth/passkeys",
-    "/api/auth/passkeys/start",
-    "/api/auth/passkeys/authorize",
-    "/api/auth/passkeys/enroll",
-    "/api/rooms",
-    "/api/rooms/",
-    "/api/rooms/mine",
-    "/api/rooms/{id}/identity",
-    "/api/rooms/{id}",
-];
+/// Requests the router did not match (a 404 outside every route) share one label.
+pub(super) const UNMATCHED_ROUTE: &str = "unmatched";
 
-pub(super) fn fixed_route(route: Option<&str>) -> &'static str {
-    HTTP_ROUTES
-        .iter()
-        .copied()
-        .find(|known| Some(*known) == route)
-        .unwrap_or("unmatched")
+/// The metric and span label for a request: the router's matched template, a
+/// closed set the router defines, or [`UNMATCHED_ROUTE`]. Raw request paths
+/// cannot reach a label because only Axum constructs a `MatchedPath`.
+pub(super) fn route_label(route: Option<&MatchedPath>) -> &str {
+    route.map_or(UNMATCHED_ROUTE, MatchedPath::as_str)
 }
 
 #[cfg(test)]
@@ -524,11 +496,10 @@ mod tests {
         use crate::metrics::{SaturationSnapshot, ServerMetrics, WorkerCpuSnapshot};
         let metrics = ServerMetrics::new();
         let telemetry = metrics.telemetry();
-        for route in HTTP_ROUTES
-            .iter()
-            .copied()
-            .chain(["/unmatched-private-path"])
-        {
+        let routes: Vec<String> = (0..40)
+            .map(|index| format!("/api/synthetic/{index}"))
+            .collect();
+        for route in routes.iter().map(String::as_str) {
             for method in [
                 "GET",
                 "POST",
@@ -539,16 +510,16 @@ mod tests {
                 "nonstandard",
             ] {
                 for status in [101, 200, 302, 400, 408, 429, 500, 503] {
-                    telemetry.record_http(Some(route), method, status, Duration::from_millis(1));
+                    telemetry.record_http_route(route, method, status, Duration::from_millis(1));
                 }
             }
         }
         assert_eq!(telemetry.http.lock().unwrap().len(), MAX_HTTP_SERIES);
         assert!(telemetry.http_series_dropped.load(Ordering::Relaxed) > 0);
         let dropped = telemetry.http_series_dropped.load(Ordering::Relaxed);
-        telemetry.record_http(Some("/ws"), "GET", 101, Duration::from_millis(1));
+        telemetry.record_http_route("/api/synthetic/0", "GET", 101, Duration::from_millis(1));
         assert_eq!(
-            telemetry.http.lock().unwrap()[&("/ws", "GET", "1xx")].count,
+            telemetry.http.lock().unwrap()[&("/api/synthetic/0".to_owned(), "GET", "1xx")].count,
             2
         );
         assert_eq!(
@@ -672,7 +643,6 @@ mod tests {
         println!(
             "Full valid vocabulary and 64-worker snapshot: {samples} samples; conservative family bound plus 2000-base allowance: 14392 < 15000"
         );
-        assert!(!snapshot.contains("unmatched-private-path"));
     }
 
     #[test]
@@ -786,20 +756,12 @@ mod tests {
     }
 
     #[test]
-    fn request_labels_never_include_paths_or_unknown_methods() {
+    fn request_labels_use_matched_templates_and_known_methods() {
         let telemetry = Telemetry::default();
-        telemetry.record_http(
-            Some("/private-user?secret=abc"),
-            "arbitrary",
-            429,
-            Duration::from_millis(20),
-        );
-        telemetry.record_http(
-            Some("/api/auth/login"),
-            "POST",
-            408,
-            Duration::from_secs(15),
-        );
+        // A request outside every route carries no template and no method label
+        // the vocabulary does not know.
+        telemetry.record_http(None, "arbitrary", 429, Duration::from_millis(20));
+        telemetry.record_http_route("/api/auth/login", "POST", 408, Duration::from_secs(15));
         let mut text = String::new();
         telemetry.render(&mut text);
         assert!(!text.contains("secret"));
