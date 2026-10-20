@@ -3,10 +3,11 @@
 use crate::ids::{ParticipantId, RoomId};
 use crate::room::refusal::{Refusal, RoomError};
 use crate::room::roles::Role;
+use crate::signaling::protocol::{BanEntry, ReportEntry, ReportOutcome};
 use chrono::{DateTime, Utc};
 use mediasoup::prelude::MediaKind;
 use serde::{Deserialize, Serialize};
-use sqlx::{PgConnection, PgPool};
+use sqlx::{PgConnection, PgExecutor, PgPool};
 use std::net::IpAddr;
 use uuid::Uuid;
 
@@ -657,9 +658,112 @@ pub(crate) async fn persist_event(
     Ok(())
 }
 
+/// A banned identity as the ban listing reads it.
+#[derive(sqlx::FromRow)]
+struct BanRow {
+    id: Uuid,
+    display_name: Option<String>,
+    authenticated: bool,
+    reason: Option<String>,
+    expires_at: Option<DateTime<Utc>>,
+}
+
+/// The live bans after `offset`, newest first, at most `limit` of them.
+pub(crate) async fn list_bans<'e>(
+    executor: impl PgExecutor<'e>,
+    room_id: &RoomId,
+    offset: i64,
+    limit: i64,
+) -> Result<Vec<BanEntry>, RoomError> {
+    let rows: Vec<BanRow> = sqlx::query_as(
+        "SELECT s.id, u.display_name, s.user_id IS NOT NULL AS authenticated, s.reason, s.expires_at
+         FROM room_states s LEFT JOIN users u ON u.id = s.user_id
+         WHERE s.room_id = $1 AND s.state = 'banned'
+           AND (s.expires_at IS NULL OR s.expires_at > now())
+         ORDER BY s.created_at DESC, s.id LIMIT $3 OFFSET $2",
+    )
+    .bind(room_id)
+    .bind(offset)
+    .bind(limit)
+    .fetch_all(executor)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|row| BanEntry {
+            ban_id: row.id.to_string(),
+            display_name: row.display_name.unwrap_or_else(|| "Guest".to_string()),
+            authenticated: row.authenticated,
+            reason: row.reason,
+            expires_at: row.expires_at.map(|expires| expires.to_rfc3339()),
+        })
+        .collect())
+}
+
+/// A report with its latest moderation outcome as the report listing reads it.
+#[derive(sqlx::FromRow)]
+struct ReportRow {
+    id: Uuid,
+    reporter_id: ParticipantId,
+    reporter_name: String,
+    target_participant_id: ParticipantId,
+    target_name: String,
+    reason: String,
+    status: ReportStatus,
+    created_at: DateTime<Utc>,
+    resolved_at: Option<DateTime<Utc>>,
+    outcome_action: Option<String>,
+    outcome_at: Option<DateTime<Utc>>,
+}
+
+/// The reports after `offset`, newest first, at most `limit` of them, each with
+/// the latest moderation outcome that answered it.
+pub(crate) async fn list_reports<'e>(
+    executor: impl PgExecutor<'e>,
+    room_id: &RoomId,
+    offset: i64,
+    limit: i64,
+) -> Result<Vec<ReportEntry>, RoomError> {
+    let rows: Vec<ReportRow> = sqlx::query_as(
+        "SELECT r.id, r.reporter_id, r.reporter_name, r.target_participant_id, r.target_name,
+                r.reason, r.status, r.created_at, r.resolved_at,
+                o.action AS outcome_action, o.created_at AS outcome_at
+         FROM room_reports r
+         LEFT JOIN LATERAL (SELECT e.action, e.created_at FROM moderation_events e
+                            WHERE e.report_id = r.id ORDER BY e.created_at DESC, e.id LIMIT 1) o
+           ON true
+         WHERE r.room_id = $1 ORDER BY r.created_at DESC, r.id LIMIT $3 OFFSET $2",
+    )
+    .bind(room_id)
+    .bind(offset)
+    .bind(limit)
+    .fetch_all(executor)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|row| ReportEntry {
+            report_id: row.id.to_string(),
+            reporter_id: row.reporter_id,
+            reporter_name: row.reporter_name,
+            target_participant_id: row.target_participant_id,
+            target_name: row.target_name,
+            reason: row.reason,
+            status: row.status,
+            created_at: row.created_at.to_rfc3339(),
+            resolved_at: row.resolved_at.map(|resolved| resolved.to_rfc3339()),
+            outcome: row
+                .outcome_action
+                .zip(row.outcome_at)
+                .map(|(action, at)| ReportOutcome {
+                    action,
+                    created_at: at.to_rfc3339(),
+                }),
+        })
+        .collect())
+}
+
 /// The newest `limit` entries after `offset`, newest first.
-pub(crate) async fn list_events(
-    pool: &PgPool,
+pub(crate) async fn list_events<'e>(
+    executor: impl PgExecutor<'e>,
     room_id: &RoomId,
     offset: i64,
     limit: i64,
@@ -689,7 +793,7 @@ pub(crate) async fn list_events(
     .bind(room_id)
     .bind(limit)
     .bind(offset)
-    .fetch_all(pool)
+    .fetch_all(executor)
     .await?;
     Ok(rows
         .into_iter()

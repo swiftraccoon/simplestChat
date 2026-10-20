@@ -124,31 +124,14 @@ impl RoomManager {
                 .as_ref()
                 .ok_or_else(|| unavailable("Report service unavailable"))?;
             request.release();
-            let rows: Vec<ReportRow> = tokio::time::timeout(
+            let reports = tokio::time::timeout(
                 control::PERSISTENCE_TIMEOUT,
-                sqlx::query_as("SELECT r.id,r.reporter_id,r.reporter_name,r.target_participant_id,r.target_name,r.reason,r.status,r.created_at,r.resolved_at,o.action AS outcome_action,o.created_at AS outcome_at FROM room_reports r LEFT JOIN LATERAL (SELECT e.action,e.created_at FROM moderation_events e WHERE e.report_id=r.id ORDER BY e.created_at DESC,e.id LIMIT 1) o ON true WHERE r.room_id=$1 ORDER BY r.created_at DESC,r.id LIMIT 101 OFFSET $2")
-                    .bind(room_id).bind(offset as i64).fetch_all(pool),
-            ).await.map_err(|_| timed_out("Report service timed out"))??;
+                moderation::list_reports(pool, room_id, offset as i64, (PAGE_SIZE + 1) as i64),
+            )
+            .await
+            .map_err(|_| timed_out("Report service timed out"))??;
             request.reacquire().await?;
-            rows.into_iter()
-                .map(|row| ReportEntry {
-                    report_id: row.id.to_string(),
-                    reporter_id: row.reporter_id,
-                    reporter_name: row.reporter_name,
-                    target_participant_id: row.target_participant_id,
-                    target_name: row.target_name,
-                    reason: row.reason,
-                    status: row.status,
-                    created_at: row.created_at.to_rfc3339(),
-                    resolved_at: row.resolved_at.map(|r| r.to_rfc3339()),
-                    outcome: row.outcome_action.zip(row.outcome_at).map(|(action, at)| {
-                        ReportOutcome {
-                            action,
-                            created_at: at.to_rfc3339(),
-                        }
-                    }),
-                })
-                .collect()
+            reports
         } else {
             room.social
                 .reports

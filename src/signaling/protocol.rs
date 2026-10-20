@@ -1148,6 +1148,56 @@ impl ModerationEventView {
     }
 }
 
+/// A waiting-room entry as the administration page lists it.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LobbyEntry {
+    pub participant_id: ParticipantId,
+    pub display_name: String,
+    pub authenticated: bool,
+    pub role: Role,
+}
+
+/// One page of a saved room's members, with whether a further page exists.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MembersPage {
+    pub members: Vec<MemberEntry>,
+    pub has_more: bool,
+}
+
+/// One page of a saved room's live bans.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BansPage {
+    pub bans: Vec<BanEntry>,
+    pub has_more: bool,
+}
+
+/// One page of a saved room's reports, newest first.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReportsPage {
+    pub reports: Vec<ReportEntry>,
+    pub has_more: bool,
+}
+
+/// One page of a saved room's moderation history, newest first.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryPage {
+    pub events: Vec<ModerationEventView>,
+    pub has_more: bool,
+}
+
+/// One page of a room's waiting room, by name.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LobbyPage {
+    pub lobby: Vec<LobbyEntry>,
+    pub has_more: bool,
+}
+
 #[cfg(test)]
 mod tests {
     use super::{

@@ -8,9 +8,15 @@ use crate::auth::{
     account, sessions,
     types::{AuthError, Claims},
 };
-use crate::ids::{ParticipantId, RoomId};
+use crate::ids::{ParticipantId, RoomId, UserId};
 use crate::room::refusal::{Refusal, RoomError};
-use crate::signaling::{SignalingServer, protocol::ServerMessage};
+use crate::signaling::{
+    SignalingServer,
+    protocol::{
+        BansPage, HistoryPage, LobbyEntry, LobbyPage, MemberEntry, MembersPage,
+        ModerationEventView, ReportsPage, ServerMessage,
+    },
+};
 use axum::{
     Json,
     extract::{Path, Query, State},
@@ -1327,21 +1333,15 @@ pub(crate) async fn list(
     Path((id, section)): Path<(String, String)>,
     headers: HeaderMap,
     Query(query): Query<PageQuery>,
-) -> Result<Response, api::RoomApiError> {
+) -> Result<axum::response::Response, api::RoomApiError> {
     let _permit = api::acquire_room_api_request(&server)?;
     let offset = query.offset().map_err(database_error)?;
-    if !matches!(
-        section.as_str(),
-        "members" | "bans" | "reports" | "history" | "lobby"
-    ) {
-        return Err(response_error(
-            StatusCode::NOT_FOUND,
-            "Administration page not found",
-        ));
-    }
+    let section: Section = section
+        .parse()
+        .map_err(|()| response_error(StatusCode::NOT_FOUND, "Administration page not found"))?;
     let mut context = admit(&server, &headers, id).await?;
     let response =
-        tokio::time::timeout(control::PERSISTENCE_TIMEOUT, context.list(&section, offset))
+        tokio::time::timeout(control::PERSISTENCE_TIMEOUT, context.list(section, offset))
             .await
             .map_err(|_| {
                 response_error(
@@ -1357,50 +1357,194 @@ pub(crate) async fn list(
         .commit()
         .await
         .map_err(database_error)?;
-    Ok((private_headers(), Json(response)))
+    Ok((private_headers(), response).into_response())
+}
+
+/// A page of a saved room's administration listing, named by what it lists.
+pub(crate) enum AdministrationPage {
+    Members(MembersPage),
+    Bans(BansPage),
+    Reports(ReportsPage),
+    History(HistoryPage),
+    Lobby(LobbyPage),
+}
+
+impl IntoResponse for AdministrationPage {
+    fn into_response(self) -> axum::response::Response {
+        match self {
+            Self::Members(page) => Json(page).into_response(),
+            Self::Bans(page) => Json(page).into_response(),
+            Self::Reports(page) => Json(page).into_response(),
+            Self::History(page) => Json(page).into_response(),
+            Self::Lobby(page) => Json(page).into_response(),
+        }
+    }
+}
+
+/// The listings an administration page can show, named as the route names them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Section {
+    Members,
+    Bans,
+    Reports,
+    History,
+    Lobby,
+}
+
+impl std::str::FromStr for Section {
+    type Err = ();
+
+    fn from_str(name: &str) -> Result<Self, Self::Err> {
+        match name {
+            "members" => Ok(Self::Members),
+            "bans" => Ok(Self::Bans),
+            "reports" => Ok(Self::Reports),
+            "history" => Ok(Self::History),
+            "lobby" => Ok(Self::Lobby),
+            _ => Err(()),
+        }
+    }
+}
+
+/// A member row as the merged roster-and-live listing reads it.
+#[derive(sqlx::FromRow)]
+struct MemberRow {
+    id: Uuid,
+    name: String,
+    role: roles::Role,
+    authenticated: bool,
+    online: bool,
+}
+
+/// Keeps one page plus the lookahead row that says whether more follow.
+fn page<T>(mut rows: Vec<T>) -> (Vec<T>, bool) {
+    let has_more = rows.len() > PAGE_SIZE;
+    rows.truncate(PAGE_SIZE);
+    (rows, has_more)
 }
 
 impl Context {
-    async fn list(&mut self, section: &str, offset: i64) -> Result<Value, RoomError> {
+    async fn list(
+        &mut self,
+        section: Section,
+        offset: i64,
+    ) -> Result<AdministrationPage, RoomError> {
         let room_id = self.room_id.clone();
-        let mut rows: Vec<Value> = match section {
-            "lobby"=> {
-                let mut rows=if let Some(runtime)=self.runtime.as_ref() {
-                    runtime.read().await.lobby.values().map(|entry|json!({"participantId":entry.participant_id,"displayName":entry.name,"authenticated":entry.authenticated,"role":entry.role.name()})).collect::<Vec<_>>()
-                } else {Vec::new()};
-                rows.sort_by(|left,right|left["displayName"].as_str().cmp(&right["displayName"].as_str()).then(left["participantId"].as_str().cmp(&right["participantId"].as_str())));
-                rows.into_iter().skip(offset as usize).take(PAGE_SIZE+1).collect()
+        let limit = (PAGE_SIZE + 1) as i64;
+        Ok(match section {
+            Section::Lobby => {
+                let mut rows = if let Some(runtime) = self.runtime.as_ref() {
+                    runtime
+                        .read()
+                        .await
+                        .lobby
+                        .values()
+                        .map(|entry| LobbyEntry {
+                            participant_id: entry.participant_id,
+                            display_name: entry.name.clone(),
+                            authenticated: entry.authenticated,
+                            role: entry.role,
+                        })
+                        .collect::<Vec<_>>()
+                } else {
+                    Vec::new()
+                };
+                rows.sort_by(|left, right| {
+                    left.display_name
+                        .cmp(&right.display_name)
+                        .then(left.participant_id.cmp(&right.participant_id))
+                });
+                let rows = rows
+                    .into_iter()
+                    .skip(offset as usize)
+                    .take(PAGE_SIZE + 1)
+                    .collect();
+                let (lobby, has_more) = page(rows);
+                AdministrationPage::Lobby(LobbyPage { lobby, has_more })
             }
-            "members" => {
-                let online = if let Some(runtime)=self.runtime.as_ref() { runtime.read().await.participants.values().map(|person|json!({"id":person.id,"name":person.name,"role":person.role.name(),"authenticated":person.authenticated})).collect::<Vec<_>>() } else {Vec::new()};
+            Section::Members => {
+                let online = if let Some(runtime) = self.runtime.as_ref() {
+                    runtime
+                        .read()
+                        .await
+                        .participants
+                        .values()
+                        .map(|person| {
+                            json!({
+                                "id": person.id,
+                                "name": person.name,
+                                "role": person.role as i16,
+                                "authenticated": person.authenticated,
+                            })
+                        })
+                        .collect::<Vec<_>>()
+                } else {
+                    Vec::new()
+                };
                 // Merge saved membership and current participants before paging.
-                sqlx::query_scalar("WITH roster AS (SELECT owner_id AS user_id,5::smallint AS role FROM rooms WHERE id=$1 UNION ALL SELECT rr.user_id,rr.role FROM room_roles rr JOIN rooms r ON r.id=rr.room_id WHERE rr.room_id=$1 AND rr.user_id<>r.owner_id),live AS(SELECT * FROM jsonb_to_recordset($3) AS p(id text,name text,role text,authenticated boolean)),combined AS(SELECT u.id::text AS id,u.display_name AS name,CASE roster.role WHEN 5 THEN 'owner' WHEN 4 THEN 'admin' WHEN 3 THEN 'moderator' ELSE 'member' END AS role,true AS authenticated,EXISTS(SELECT FROM live WHERE live.id=u.id::text) AS online FROM roster JOIN users u ON u.id=roster.user_id UNION ALL SELECT id,name,role,authenticated,true FROM live WHERE NOT EXISTS(SELECT FROM roster WHERE roster.user_id::text=live.id)) SELECT jsonb_build_object('userId',id,'displayName',name,'role',role,'online',online,'authenticated',authenticated) FROM combined ORDER BY name,id LIMIT 101 OFFSET $2")
-                    .bind(&room_id).bind(offset).bind(sqlx::types::Json(online)).fetch_all(self.connection()).await?
+                let rows: Vec<MemberRow> = sqlx::query_as(
+                    "WITH roster AS (SELECT owner_id AS user_id, 5::smallint AS role FROM rooms WHERE id = $1
+                                     UNION ALL
+                                     SELECT rr.user_id, rr.role FROM room_roles rr JOIN rooms r ON r.id = rr.room_id
+                                     WHERE rr.room_id = $1 AND rr.user_id <> r.owner_id),
+                          live AS (SELECT * FROM jsonb_to_recordset($3)
+                                   AS p(id uuid, name text, role smallint, authenticated boolean)),
+                          combined AS (SELECT u.id AS id, u.display_name AS name, roster.role AS role,
+                                              true AS authenticated,
+                                              EXISTS(SELECT FROM live WHERE live.id = u.id) AS online
+                                       FROM roster JOIN users u ON u.id = roster.user_id
+                                       UNION ALL
+                                       SELECT id, name, role, authenticated, true FROM live
+                                       WHERE NOT EXISTS(SELECT FROM roster WHERE roster.user_id = live.id))
+                     SELECT id, name, role, authenticated, online FROM combined
+                     ORDER BY name, id LIMIT $4 OFFSET $2",
+                )
+                .bind(&room_id)
+                .bind(offset)
+                .bind(sqlx::types::Json(online))
+                .bind(limit)
+                .fetch_all(self.connection())
+                .await?;
+                let (rows, has_more) = page(rows);
+                let members = rows
+                    .into_iter()
+                    .map(|row| MemberEntry {
+                        user_id: UserId::from(row.id),
+                        display_name: row.name,
+                        role: row.role,
+                        online: row.online,
+                        authenticated: row.authenticated,
+                    })
+                    .collect();
+                AdministrationPage::Members(MembersPage { members, has_more })
             }
-            "bans" => {
+            Section::Bans => {
                 self.require(roles::Role::Admin)?;
-                sqlx::query_scalar("SELECT jsonb_strip_nulls(jsonb_build_object('banId',s.id,'displayName',COALESCE(u.display_name,'Guest'),'authenticated',s.user_id IS NOT NULL,'reason',s.reason,'expiresAt',s.expires_at)) FROM room_states s LEFT JOIN users u ON u.id=s.user_id WHERE s.room_id=$1 AND s.state='banned' AND(s.expires_at IS NULL OR s.expires_at>now()) ORDER BY s.created_at DESC,s.id LIMIT 101 OFFSET $2")
-                    .bind(&room_id).bind(offset).fetch_all(self.connection()).await?
+                let rows =
+                    moderation::list_bans(self.connection(), &room_id, offset, limit).await?;
+                let (bans, has_more) = page(rows);
+                AdministrationPage::Bans(BansPage { bans, has_more })
             }
-            "reports" => sqlx::query_scalar("SELECT jsonb_strip_nulls(jsonb_build_object('reportId',r.id,'reporterId',r.reporter_id,'reporterName',r.reporter_name,'targetParticipantId',r.target_participant_id,'targetName',r.target_name,'reason',r.reason,'status',r.status,'createdAt',r.created_at,'resolvedAt',r.resolved_at,'outcome',CASE WHEN o.action IS NULL THEN NULL ELSE jsonb_build_object('action',o.action,'createdAt',o.created_at) END)) FROM room_reports r LEFT JOIN LATERAL(SELECT action,created_at FROM moderation_events e WHERE e.report_id=r.id ORDER BY created_at DESC,id LIMIT 1)o ON true WHERE r.room_id=$1 ORDER BY r.created_at DESC,r.id LIMIT 101 OFFSET $2")
-                .bind(&room_id).bind(offset).fetch_all(self.connection()).await?,
-            "history" => {
-                let owner = self.role==roles::Role::Owner;
-                // list_events uses a pool; the same query here stays inside the
-                // current users -> sessions -> room authorization transaction.
-                sqlx::query_scalar("SELECT jsonb_strip_nulls(jsonb_build_object('eventId',id,'action',action,'actorId',actor_id,'actorName',actor_name,'targetId',target_id,'targetName',target_name,'targetAuthenticated',target_authenticated,'reason',reason,'expiresAt',expires_at,'reportId',report_id,'createdAt',created_at,'targetIp',CASE WHEN $3 THEN host(target_ip) ELSE NULL END)) FROM moderation_events WHERE room_id=$1 ORDER BY created_at DESC,id LIMIT 101 OFFSET $2")
-                    .bind(&room_id).bind(offset).bind(owner).fetch_all(self.connection()).await?
+            Section::Reports => {
+                let rows =
+                    moderation::list_reports(self.connection(), &room_id, offset, limit).await?;
+                let (reports, has_more) = page(rows);
+                AdministrationPage::Reports(ReportsPage { reports, has_more })
             }
-            _=>return Err(Refusal::Invalid("Invalid administration page".into()).into()),
-        };
-        let has_more = rows.len() > PAGE_SIZE;
-        rows.truncate(PAGE_SIZE);
-        let key = if section == "history" {
-            "events"
-        } else {
-            section
-        };
-        Ok(json!({(key):rows,"hasMore":has_more}))
+            Section::History => {
+                let owner = self.role == roles::Role::Owner;
+                // list_events also serves the socket from a pool; here it runs inside
+                // the current users -> sessions -> room authorization transaction.
+                let rows =
+                    moderation::list_events(self.connection(), &room_id, offset, limit).await?;
+                let (rows, has_more) = page(rows);
+                let events = rows
+                    .into_iter()
+                    .map(|event| ModerationEventView::new(event, owner))
+                    .collect();
+                AdministrationPage::History(HistoryPage { events, has_more })
+            }
+        })
     }
 }
 

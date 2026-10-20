@@ -212,8 +212,11 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
             Context::admit(manager.clone(), room_id.clone(), claims(owner, sessions[0]))
                 .await
                 .unwrap();
-        let members = listing.list("members", 0).await.unwrap();
-        assert_eq!(members["members"].as_array().unwrap().len(), 3);
+        let AdministrationPage::Members(members) = listing.list(Section::Members, 0).await.unwrap()
+        else {
+            panic!("the members section lists members");
+        };
+        assert_eq!(members.members.len(), 3);
         listing.transaction.take().unwrap().commit().await.unwrap();
         drop(listing);
 
@@ -240,9 +243,15 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
         )
         .await
         .unwrap();
-        let events = history.list("history", 0).await.unwrap();
-        assert_eq!(events["events"][0]["reportId"], report.to_string());
-        assert!(events["events"][0].get("targetIp").is_none());
+        let AdministrationPage::History(events) = history.list(Section::History, 0).await.unwrap()
+        else {
+            panic!("the history section lists events");
+        };
+        assert_eq!(
+            events.events[0].event.report_id.as_deref(),
+            Some(report.to_string().as_str())
+        );
+        assert!(events.events[0].target_ip.is_none());
         history.transaction.take().unwrap().commit().await.unwrap();
         drop(history);
         let stale_report = Context::admit(

@@ -19,22 +19,14 @@ impl RoomManager {
                 .as_ref()
                 .ok_or_else(|| unavailable("Ban service unavailable"))?;
             request.release();
-            let rows: Vec<BanRow> = tokio::time::timeout(
+            let bans = tokio::time::timeout(
                 control::PERSISTENCE_TIMEOUT,
-                sqlx::query_as(
-                    "SELECT s.id,u.display_name,s.user_id IS NOT NULL AS authenticated,s.reason,s.expires_at FROM room_states s LEFT JOIN users u ON u.id=s.user_id WHERE s.room_id=$1 AND s.state='banned' AND (s.expires_at IS NULL OR s.expires_at>now()) ORDER BY s.created_at DESC,s.id LIMIT 101 OFFSET $2")
-                    .bind(room_id).bind(offset as i64).fetch_all(pool),
-            ).await.map_err(|_| timed_out("Ban service timed out"))??;
+                moderation::list_bans(pool, room_id, offset as i64, (PAGE_SIZE + 1) as i64),
+            )
+            .await
+            .map_err(|_| timed_out("Ban service timed out"))??;
             request.reacquire().await?;
-            rows.into_iter()
-                .map(|row| BanEntry {
-                    ban_id: row.id.to_string(),
-                    display_name: row.display_name.unwrap_or_else(|| "Guest".to_string()),
-                    authenticated: row.authenticated,
-                    reason: row.reason,
-                    expires_at: row.expires_at.map(|e| e.to_rfc3339()),
-                })
-                .collect()
+            bans
         } else {
             room.social
                 .bans

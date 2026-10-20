@@ -35,32 +35,6 @@ const CHAT_RECEIPT_BYTES: usize = 512 * 1024;
 const CHAT_RECEIPTS_PER_MEMBER: usize = 128;
 const MAX_CHAT_SEQUENCE: u64 = 9_007_199_254_740_991;
 
-/// A banned identity as the ban listing reads it.
-#[derive(sqlx::FromRow)]
-struct BanRow {
-    id: Uuid,
-    display_name: Option<String>,
-    authenticated: bool,
-    reason: Option<String>,
-    expires_at: Option<chrono::DateTime<chrono::Utc>>,
-}
-
-/// A report with its latest moderation outcome as the report listing reads it.
-#[derive(sqlx::FromRow)]
-struct ReportRow {
-    id: Uuid,
-    reporter_id: ParticipantId,
-    reporter_name: String,
-    target_participant_id: ParticipantId,
-    target_name: String,
-    reason: String,
-    status: ReportStatus,
-    created_at: chrono::DateTime<chrono::Utc>,
-    resolved_at: Option<chrono::DateTime<chrono::Utc>>,
-    outcome_action: Option<String>,
-    outcome_at: Option<chrono::DateTime<chrono::Utc>>,
-}
-
 #[derive(Clone)]
 pub(crate) struct ParticipantSocial {
     pub(super) connected: bool,
