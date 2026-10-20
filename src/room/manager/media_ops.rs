@@ -283,6 +283,7 @@ impl RoomManager {
                 ProducerRecord {
                     kind,
                     source: Some(source.to_string()),
+                    paused: false,
                 },
             );
             room.producer_to_participant
@@ -609,6 +610,22 @@ impl RoomManager {
         Ok(())
     }
 
+    /// Remember a producer's pause state on the room's own record.
+    fn record_producer_paused(
+        room: &mut Room,
+        participant_id: &ParticipantId,
+        producer_id: ProducerId,
+        paused: bool,
+    ) {
+        if let Some(record) = room
+            .participants
+            .get_mut(participant_id)
+            .and_then(|participant| participant.producers.get_mut(&producer_id))
+        {
+            record.paused = paused;
+        }
+    }
+
     /// Pauses a producer. Mediasoup propagates producer pause state to its
     /// consumers, so no server-wide consumer scan is needed.
     pub(crate) async fn pause_producer(
@@ -646,9 +663,9 @@ impl RoomManager {
             return Ok(());
         }
 
-        // Broadcast ProducerPaused to other participants in the room
+        // Record the pause and tell the other participants in the room
         let room_lock = self.get_room(room_id)?;
-        let room = room_lock.read().await;
+        let mut room = room_lock.write().await;
         if !Self::participant_session_is_current(
             &room,
             participant_id,
@@ -657,6 +674,7 @@ impl RoomManager {
         ) {
             anyhow::bail!("Participant is no longer in this room");
         }
+        Self::record_producer_paused(&mut room, participant_id, producer_id, true);
         room.broadcast_except(
             participant_id,
             &ServerMessage::ProducerPaused { producer_id },
@@ -706,9 +724,9 @@ impl RoomManager {
             return Ok(());
         }
 
-        // Broadcast ProducerResumed to other participants in the room
+        // Record the resume and tell the other participants in the room
         let room_lock = self.get_room(room_id)?;
-        let room = room_lock.read().await;
+        let mut room = room_lock.write().await;
         if !Self::participant_session_is_current(
             &room,
             participant_id,
@@ -717,6 +735,7 @@ impl RoomManager {
         ) {
             anyhow::bail!("Participant is no longer in this room");
         }
+        Self::record_producer_paused(&mut room, participant_id, producer_id, false);
         room.broadcast_except(
             participant_id,
             &ServerMessage::ProducerResumed { producer_id },
@@ -892,15 +911,10 @@ impl RoomManager {
         let room_lock = self.get_room(room_id)?;
         let mut room = measure(Stage::RoomLockWait, room_lock.write()).await;
         let participant = Self::participant_for_sender(&room, participant_id, expected_sender)?;
-        if !participant.producers.contains_key(&producer_id) {
+        let Some(record) = participant.producers.get(&producer_id) else {
             anyhow::bail!("Producer does not belong to this participant");
-        }
-        if self
-            .media_server
-            .transport_manager()
-            .find_producer_paused(producer_id)
-            == Some(desired_paused)
-        {
+        };
+        if record.paused == desired_paused {
             return Ok(None);
         }
         let reserved_at = std::time::Instant::now();
@@ -1096,7 +1110,7 @@ impl RoomManager {
             .filter(|participant| participant_filter.is_none_or(|filter| participant.id == *filter))
             .flat_map(|participant| {
                 participant.producers.iter().filter_map(
-                    |(producer_id, ProducerRecord { kind, source })| {
+                    |(producer_id, ProducerRecord { kind, source, .. })| {
                         let allowed = source.as_deref().is_some_and(|source| {
                             Self::producer_allowed_without_capacity(
                                 room,

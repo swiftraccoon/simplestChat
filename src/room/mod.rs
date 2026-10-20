@@ -83,6 +83,8 @@ struct RevokedProducer {
 pub(crate) struct ProducerRecord {
     pub kind: MediaKind,
     pub source: Option<String>,
+    /// Whether its owner paused it: told to joiners, and a repeated request is a no-op.
+    pub paused: bool,
 }
 
 /// Participant in a room

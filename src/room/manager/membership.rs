@@ -859,11 +859,13 @@ impl RoomManager {
                     producers: p
                         .producers
                         .iter()
-                        .map(|(id, ProducerRecord { kind, source })| ProducerMetadata {
-                            id: *id,
-                            kind: *kind,
-                            source: source.clone(),
-                        })
+                        .map(
+                            |(id, ProducerRecord { kind, source, .. })| ProducerMetadata {
+                                id: *id,
+                                kind: *kind,
+                                source: source.clone(),
+                            },
+                        )
                         .collect(),
                     role: p.role,
                     authenticated: p.authenticated,

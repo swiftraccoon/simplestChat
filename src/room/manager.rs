@@ -72,7 +72,7 @@ impl RoomManager {
         &self.account_updates
     }
 
-    /// Gets the media server for direct access (e.g., find_producer_paused)
+    /// Gets the media server for direct access
     pub(crate) fn media_server(&self) -> &MediaServer {
         &self.media_server
     }

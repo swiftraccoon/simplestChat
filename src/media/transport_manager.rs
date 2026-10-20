@@ -146,9 +146,6 @@ fn application_bitrate(bitrate: u64) -> u32 {
 /// but only blocking that specific participant).
 pub struct TransportManager {
     participants: Arc<RwLock<HashMap<String, Arc<TokioMutex<ParticipantMedia>>>>>,
-    /// Index of producer paused state: producer_id -> paused.
-    /// Maintained by pause_producer, resume_producer, close_producer, remove_participant.
-    paused_producers: Arc<RwLock<HashMap<ProducerId, bool>>>,
     /// The concrete callback handle type is intentionally erased here because
     /// mediasoup does not re-export it. Retaining one handle per media-state
     /// keeps the callback active; replacing/dropping it unregisters the old
@@ -193,7 +190,6 @@ impl TransportManager {
     pub fn new() -> Self {
         Self {
             participants: Arc::new(RwLock::new(HashMap::new())),
-            paused_producers: Arc::new(RwLock::new(HashMap::new())),
             bwe_trace_handlers: Arc::new(RwLock::new(HashMap::new())),
             key_frame_request_delay: 0,
             producer_cap: super::config::DEFAULT_MAX_PRODUCERS_PER_PARTICIPANT,
@@ -649,23 +645,11 @@ impl TransportManager {
         let mut participant = measure(Stage::SessionLockWait, participant_lock.lock()).await;
 
         // A producer the worker closed (transport failure, native teardown)
-        // never reaches close_producer, so its paused-index entry must leave
-        // with it here rather than persisting for the process lifetime.
-        let mut pruned = Vec::new();
-        participant.producers.retain(|id, producer| {
-            if producer.closed() {
-                pruned.push(*id);
-                false
-            } else {
-                true
-            }
-        });
-        if !pruned.is_empty() {
-            let mut index = self.paused_producers.write();
-            for id in &pruned {
-                index.remove(id);
-            }
-        }
+        // never reaches close_producer, so it leaves the session here rather
+        // than counting against the cap for the process lifetime.
+        participant
+            .producers
+            .retain(|_, producer| !producer.closed());
         let producer_cap = self.producer_cap;
         if participant.producers.len() >= producer_cap {
             return Err(MediaError::ProducerError(format!(
@@ -694,12 +678,6 @@ impl TransportManager {
         let producer_id = producer.id();
         self.setup_producer_handlers(&producer, participant_id);
         participant.producers.insert(producer_id, producer.clone());
-
-        // Initialize paused index (producers start unpaused)
-        {
-            let mut index = self.paused_producers.write();
-            index.insert(producer_id, false);
-        }
 
         info!(
             "Created {:?} producer {} for participant {}",
@@ -872,12 +850,6 @@ impl TransportManager {
             .await
             .map_err(|e| MediaError::ProducerError(format!("Failed to pause producer: {e}")))?;
 
-        // Update paused index
-        {
-            let mut index = self.paused_producers.write();
-            index.insert(producer_id, true);
-        }
-
         info!(
             "Paused producer {} for participant {}",
             producer_id, participant_id
@@ -906,25 +878,11 @@ impl TransportManager {
             .await
             .map_err(|e| MediaError::ProducerError(format!("Failed to resume producer: {e}")))?;
 
-        // Update paused index
-        {
-            let mut index = self.paused_producers.write();
-            index.insert(producer_id, false);
-        }
-
         info!(
             "Resumed producer {} for participant {}",
             producer_id, participant_id
         );
         Ok(true)
-    }
-
-    /// Checks if a producer is paused using the in-memory index.
-    /// Returns `Some(paused)` if found, `None` if the producer doesn't exist.
-    /// O(1) lookup — no per-participant locking needed.
-    pub fn find_producer_paused(&self, producer_id: ProducerId) -> Option<bool> {
-        let index = self.paused_producers.read();
-        index.get(&producer_id).copied()
     }
 
     /// Records the viewer's own layer ceiling for a consumer (tile size or
@@ -1281,12 +1239,6 @@ impl TransportManager {
             MediaError::ProducerError(format!("Producer not found: {producer_id}"))
         })?;
 
-        // Clean up paused index
-        {
-            let mut index = self.paused_producers.write();
-            index.remove(&producer_id);
-        }
-
         info!(
             "Closed producer {} for participant {}",
             producer_id, participant_id
@@ -1344,15 +1296,7 @@ impl TransportManager {
                 );
             }
 
-            // Clean up paused index for all this participant's producers
-            {
-                let mut index = self.paused_producers.write();
-                for producer_id in participant.producers.keys() {
-                    index.remove(producer_id);
-                }
-            }
-
-            participant.close_all().await;
+            participant.close_all();
             // Clear by this media state's unique lifetime, not the reusable
             // participant ID. Holding its mutex orders this after any in-flight
             // subscription on the old receive transport.
@@ -1617,12 +1561,10 @@ impl TransportManager {
 
         for (participant_id, lock) in all_participants {
             let mut participant = lock.lock().await;
-            participant.close_all().await;
+            participant.close_all();
             self.clear_bwe_trace_handler(participant.generation);
             debug!("Closed all transports for participant: {}", participant_id);
         }
-
-        self.paused_producers.write().clear();
 
         Ok(())
     }
