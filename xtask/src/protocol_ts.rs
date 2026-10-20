@@ -24,6 +24,8 @@ const SOURCES: &[&str] = &[
     "src/room/moderation.rs",
     "src/turn.rs",
     "src/auth/account.rs",
+    "src/auth/types.rs",
+    "src/room/api.rs",
 ];
 
 /// Rust type names whose TypeScript spelling differs from the Rust one.
@@ -856,6 +858,11 @@ fn generate(root: &Path) -> Result<String> {
         ("ServerMessage", false),
         ("ChatPreferences", false),
         ("PreferencePatch", true),
+        ("AuthResponse", false),
+        ("AccountProfile", false),
+        ("PublicProfile", false),
+        ("RoomListItem", false),
+        ("CreateRoomRequest", true),
     ];
     let mut body = String::new();
     let mut queue: Vec<(String, bool)> = roots

@@ -1199,8 +1199,10 @@ When changing the contract:
 - Limits the browser applies before the server does (password characters and
   bytes, the display-name length) and the HTTP preference shapes are generated
   too: `xtask/src/protocol_ts.rs` lists the constants (`CONSTANTS`) and the
-  HTTP roots (`ChatPreferences`, `PreferencePatch`), so a limit changes in Rust
-  and `protocol-ts` carries it over; never copy one by hand into `web/src`.
+  HTTP roots (the chat preferences and their patch, the authentication response,
+  the public and account profiles, the room listing item and the room creation
+  request), so a limit or a shape changes in Rust and `protocol-ts` carries it
+  over; never copy one by hand into `web/src`.
 - For HTTP changes, update the named method and endpoint decoder. For social
   changes, update both action maps and the action's decoder. Add valid/invalid
   runtime cases and [compile-time fixtures](../web/tests/type-contracts.ts);

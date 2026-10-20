@@ -38,11 +38,11 @@ pub(crate) struct RoomListItem {
     pub id: RoomId,
     pub display_name: String,
     pub topic: Option<String>,
-    /// `null` when the room's state lock was busy at listing time.
+    /// `null` when the room's state lock was busy at listing time; never render it as zero.
     pub participant_count: Option<usize>,
     pub password_protected: bool,
     pub moderated: bool,
-    /// `null` when the room's state lock was busy at listing time.
+    /// `null` when the room's state lock was busy at listing time; never render it as zero.
     pub broadcaster_count: Option<usize>,
     pub description: String,
     /// A same-origin path naming the current image by a digest of its content

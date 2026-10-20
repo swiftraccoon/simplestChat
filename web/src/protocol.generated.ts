@@ -779,6 +779,65 @@ export interface PreferencePatch {
   unignore?: string;
 }
 
+export interface AuthResponse {
+  token: string;
+  user: UserInfo;
+}
+
+export interface AccountProfile {
+  id: string;
+  email: string;
+  display_name: string;
+  avatar_url: string | null;
+  bio: string;
+  profile_style: ChatStyle;
+  recovery_enabled: boolean;
+}
+
+export interface PublicProfile {
+  id: string;
+  display_name: string;
+  avatar_url: string | null;
+  bio: string;
+  profile_style: ChatStyle;
+}
+
+export interface RoomListItem {
+  id: string;
+  display_name: string;
+  topic: string | null;
+  /** `null` when the room's state lock was busy at listing time; never render it as zero. */
+  participant_count: number | null;
+  password_protected: boolean;
+  moderated: boolean;
+  /** `null` when the room's state lock was busy at listing time; never render it as zero. */
+  broadcaster_count: number | null;
+  description: string;
+  /**
+   * A same-origin path naming the current image by a digest of its content
+   * (`room_image_url`), or `null`; never the image bytes themselves.
+   */
+  image_url: string | null;
+  secret: boolean;
+  name_style: ChatStyle;
+  topic_style: ChatStyle;
+}
+
+export interface CreateRoomRequest {
+  id: string;
+  display_name: string;
+  password?: string;
+  require_registration?: boolean;
+  max_participants?: number;
+  max_broadcasters?: number;
+  moderated?: boolean;
+  secret?: boolean;
+  lobby_enabled?: boolean;
+  guests_allowed?: boolean;
+  guests_can_broadcast?: boolean;
+  topic?: string;
+}
+
 export interface BanEntry {
   banId: string;
   displayName: string;
@@ -1013,6 +1072,12 @@ export interface IgnoredPerson {
 /** How a viewer sees message times: on hover, or always in one format. */
 export const TIMESTAMP_FORMATS = ['hover', 'time', 'time12', 'seconds', 'datetime'] as const;
 export type TimestampFormat = (typeof TIMESTAMP_FORMATS)[number];
+
+export interface UserInfo {
+  id: string;
+  email: string;
+  display_name: string;
+}
 
 /**
  * How a participant's color shows: a stripe beside their messages, their

@@ -1,11 +1,10 @@
-// Signaling protocol: the wire types come from src/signaling/protocol.rs through
-// `cargo run -q -p xtask -- protocol-ts` (web/src/protocol.generated.ts); this
-// module adds the TypeScript-side helpers around them.
+// The wire and HTTP types come from the Rust sources `xtask/src/protocol_ts.rs`
+// lists, through `cargo run -q -p xtask -- protocol-ts` (web/src/protocol.generated.ts);
+// this module adds the TypeScript-side helpers around them.
 
 export * from './protocol.generated';
 import { ROLES } from './protocol.generated';
 import type {
-  ChatStyle,
   ClientMessage,
   ErrorCode,
   Role,
@@ -98,63 +97,3 @@ export type {
   IceParameters,
   IceCandidate,
 } from 'mediasoup-client/types';
-
-export interface AuthResponse {
-  token: string;
-  user: UserInfo;
-}
-
-export interface UserInfo {
-  id: string;
-  email: string;
-  display_name: string;
-}
-
-export interface AuthErrorResponse {
-  error: string;
-}
-
-export interface RoomListItem {
-  id: string;
-  display_name: string;
-  topic: string | null;
-  /** `null` when the room's state was busy at listing time; never render as zero. */
-  participant_count: number | null;
-  password_protected: boolean;
-  moderated: boolean;
-  /** `null` when the room's state was busy at listing time; never render as zero. */
-  broadcaster_count: number | null;
-  description: string;
-  image_url: string | null;
-  secret: boolean;
-  name_style: ChatStyle;
-  topic_style: ChatStyle;
-}
-
-export interface PublicProfile {
-  id: string;
-  display_name: string;
-  avatar_url: string | null;
-  bio: string;
-  profile_style: ChatStyle;
-}
-
-export interface AccountProfile extends PublicProfile {
-  email: string;
-  recovery_enabled: boolean;
-}
-
-export interface CreateRoomRequest {
-  id: string;
-  display_name: string;
-  password?: string;
-  require_registration?: boolean;
-  max_participants?: number;
-  max_broadcasters?: number;
-  moderated?: boolean;
-  secret?: boolean;
-  lobby_enabled?: boolean;
-  guests_allowed?: boolean;
-  guests_can_broadcast?: boolean;
-  topic?: string;
-}
