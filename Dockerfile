@@ -36,7 +36,7 @@ COPY web/scripts/check-bundle.mjs web/scripts/mediasoup-runtime.mjs ./scripts/
 COPY web/public ./public
 COPY web/src ./src
 ARG SOURCE_REVISION=unknown
-ENV FRONTEND_REVISION=${SOURCE_REVISION}
+ENV SOURCE_REVISION=${SOURCE_REVISION}
 RUN npm run build
 
 # Build on the same supported Fedora release used at runtime. mediasoup-sys

@@ -1,7 +1,8 @@
 import { defineConfig } from 'vite';
 import { mediasoupRuntime } from './scripts/mediasoup-runtime.mjs';
 
-const revision = process.env['FRONTEND_REVISION'] ?? process.env['GITHUB_SHA'] ?? '';
+// The build's own name, as the image build and the server read it; CI's sha otherwise.
+const revision = process.env['SOURCE_REVISION'] ?? process.env['GITHUB_SHA'] ?? '';
 
 export default defineConfig({
   plugins: [
