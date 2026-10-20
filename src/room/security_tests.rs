@@ -1,5 +1,5 @@
 use super::*;
-use crate::ids::fixtures::{pid, rid};
+use crate::ids::fixtures::{pid, prid, rid};
 
 #[tokio::test]
 async fn live_counts_skip_empty_rooms_and_keep_locked_rooms_unknown() {
@@ -1885,20 +1885,24 @@ fn restrictive_policy_removes_existing_unauthorized_producers() {
         Some("203.0.113.8".parse().unwrap()),
     );
     guest.producers.insert(
-        "microphone".to_string(),
+        prid("microphone"),
         ProducerRecord {
             kind: MediaKind::Audio,
             source: Some("microphone".to_string()),
         },
     );
     room.producer_to_participant
-        .insert("microphone".to_string(), pid("guest"));
+        .insert(prid("microphone"), pid("guest"));
     room.participants.insert(pid("guest"), guest);
 
     let revoked = RoomManager::revoke_unauthorized_producers(&mut room, None, "policy changed");
     assert_eq!(revoked.len(), 1);
     assert!(room.participants[&pid("guest")].producers.is_empty());
-    assert!(!room.producer_to_participant.contains_key("microphone"));
+    assert!(
+        !room
+            .producer_to_participant
+            .contains_key(&prid("microphone"))
+    );
 }
 
 #[test]
@@ -1913,7 +1917,7 @@ fn moderated_role_demotion_removes_existing_producers() {
         None,
     );
     member.producers.insert(
-        "camera".to_string(),
+        prid("camera"),
         ProducerRecord {
             kind: MediaKind::Video,
             source: Some("camera".to_string()),

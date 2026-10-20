@@ -70,7 +70,7 @@ enum ObserverEvent {
 struct RevokedProducer {
     participant_id: ParticipantId,
     media_session_id: uuid::Uuid,
-    producer_id: String,
+    producer_id: ProducerId,
     kind: MediaKind,
 }
 
@@ -93,7 +93,7 @@ pub(crate) struct Participant {
     /// Media cleanup must use this value so an old socket cannot tear down a
     /// replacement session that joined with the same participant ID.
     pub media_session_id: uuid::Uuid,
-    pub producers: HashMap<String, ProducerRecord>,
+    pub producers: HashMap<ProducerId, ProducerRecord>,
     pub role: roles::Role,
     pub punitive: moderation::PunitiveState,
     /// True when the connection carried a valid JWT (id == user uuid)
@@ -579,7 +579,7 @@ pub(crate) struct Room {
     active_speaker_observer: Option<ActiveSpeakerObserver>,
     audio_level_observer: Option<AudioLevelObserver>,
     /// Map producer_id -> participant_id for observer lookups
-    producer_to_participant: HashMap<String, ParticipantId>,
+    producer_to_participant: HashMap<ProducerId, ParticipantId>,
     /// In-memory ban list — prevents banned participants from rejoining
     banned_participants: HashMap<ParticipantId, Option<std::time::Instant>>,
     /// Guest identities are connection-scoped, so retain their IP as the

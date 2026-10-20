@@ -150,16 +150,16 @@ pub enum ClientMessage {
     CreateRecvTransport,
     /// Replace only this member's expected receive transport; retries replay its replacement.
     ReplaceRecvTransport {
-        transport_id: String,
+        transport_id: TransportId,
     },
     /// Connect transport with DTLS parameters
     ConnectTransport {
-        transport_id: String,
+        transport_id: TransportId,
         dtls_parameters: DtlsParameters,
     },
     /// Produce media (audio/video)
     Produce {
-        transport_id: String,
+        transport_id: TransportId,
         kind: MediaKind,
         rtp_parameters: RtpParameters,
         #[serde(default)]
@@ -167,32 +167,32 @@ pub enum ClientMessage {
     },
     /// Consume media from another participant
     Consume {
-        producer_id: String,
+        producer_id: ProducerId,
         rtp_capabilities: RtpCapabilities,
     },
     /// Resume a consumer
     ResumeConsumer {
-        consumer_id: String,
+        consumer_id: ConsumerId,
     },
     /// Pause a consumer
     PauseConsumer {
-        consumer_id: String,
+        consumer_id: ConsumerId,
     },
     /// Release this receiver's consumer; repeated closure is a no-op.
     CloseConsumer {
-        consumer_id: String,
+        consumer_id: ConsumerId,
     },
     /// Close a producer
     CloseProducer {
-        producer_id: String,
+        producer_id: ProducerId,
     },
     /// Pause a producer (mute)
     PauseProducer {
-        producer_id: String,
+        producer_id: ProducerId,
     },
     /// Resume a producer (unmute)
     ResumeProducer {
-        producer_id: String,
+        producer_id: ProducerId,
     },
     /// Reconnect to an existing session after WS disconnect
     Reconnect {
@@ -202,11 +202,11 @@ pub enum ClientMessage {
     },
     /// Request ICE restart on a transport
     RestartIce {
-        transport_id: String,
+        transport_id: TransportId,
     },
     /// Set preferred simulcast layers for a consumer
     SetConsumerPreferredLayers {
-        consumer_id: String,
+        consumer_id: ConsumerId,
         spatial_layer: u8,
         temporal_layer: Option<u8>,
     },
@@ -385,7 +385,7 @@ pub enum ClientMessage {
         #[serde(default)]
         report_id: Option<String>,
     },
-    /// Unban a user (stub — no persistent ban list yet)
+    /// Lift a stored ban on an account
     Unban {
         target_user_id: UserId,
     },
@@ -482,7 +482,7 @@ pub enum ServerMessage {
     },
     /// Transport created
     TransportCreated {
-        transport_id: String,
+        transport_id: TransportId,
         ice_parameters: IceParameters,
         ice_candidates: Vec<IceCandidate>,
         dtls_parameters: DtlsParameters,
@@ -491,16 +491,16 @@ pub enum ServerMessage {
     },
     /// Transport connected
     TransportConnected {
-        transport_id: String,
+        transport_id: TransportId,
     },
     /// Producer created
     ProducerCreated {
-        producer_id: String,
+        producer_id: ProducerId,
     },
     /// Consumer created
     ConsumerCreated {
-        consumer_id: String,
-        producer_id: String,
+        consumer_id: ConsumerId,
+        producer_id: ProducerId,
         kind: MediaKind,
         rtp_parameters: RtpParameters,
     },
@@ -520,30 +520,30 @@ pub enum ServerMessage {
     /// New producer available from another participant
     NewProducer {
         participant_id: ParticipantId,
-        producer_id: String,
+        producer_id: ProducerId,
         kind: MediaKind,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         source: Option<String>,
     },
     /// Producer closed by another participant
     ProducerClosed {
-        producer_id: String,
+        producer_id: ProducerId,
     },
     /// Producer paused (muted) by its owner
     ProducerPaused {
-        producer_id: String,
+        producer_id: ProducerId,
     },
     /// Producer resumed (unmuted) by its owner
     ProducerResumed {
-        producer_id: String,
+        producer_id: ProducerId,
     },
     /// Consumer resumed
     ConsumerResumed {
-        consumer_id: String,
+        consumer_id: ConsumerId,
     },
     /// Consumer paused
     ConsumerPaused {
-        consumer_id: String,
+        consumer_id: ConsumerId,
     },
     /// A correlated closure or preferred-layer command completed successfully.
     /// Sent only inside a reply envelope with the caller's request ID.
@@ -561,7 +561,7 @@ pub enum ServerMessage {
     /// ICE restarted — new ICE parameters plus fresh TURN credentials, since
     /// the ones minted at transport creation expire after `TURN_TTL`.
     IceRestarted {
-        transport_id: String,
+        transport_id: TransportId,
         ice_parameters: IceParameters,
         ice_servers: Vec<IceServer>,
     },
@@ -571,7 +571,7 @@ pub enum ServerMessage {
     },
     /// Consumer simulcast layers changed
     ConsumerLayersChanged {
-        consumer_id: String,
+        consumer_id: ConsumerId,
         spatial_layer: Option<u8>,
         temporal_layer: Option<u8>,
     },
@@ -666,7 +666,7 @@ pub enum ServerMessage {
     // === Moderation broadcasts ===
     /// A producer was force-closed by a moderator
     ForceClosedProducer {
-        producer_id: String,
+        producer_id: ProducerId,
         reason: String,
     },
     /// Participant's camera was banned
@@ -963,7 +963,7 @@ pub struct RetryChatMessage {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProducerMetadata {
-    pub id: String,
+    pub id: ProducerId,
     pub kind: MediaKind,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source: Option<String>,
@@ -1064,11 +1064,11 @@ pub struct RoomSnapshot {
     pub nickname: String,
     pub allow_private_messages: bool,
     pub ignored_participant_ids: Vec<ParticipantId>,
-    pub paused_producer_ids: Vec<String>,
+    pub paused_producer_ids: Vec<ProducerId>,
     pub text_muted: bool,
     pub cam_banned: bool,
     pub can_chat: bool,
-    pub local_producer_ids: Vec<String>,
+    pub local_producer_ids: Vec<ProducerId>,
     pub can_broadcast: bool,
 }
 
@@ -1353,7 +1353,7 @@ mod tests {
     #[test]
     fn ice_restart_carries_fresh_turn_credentials() {
         let message = ServerMessage::IceRestarted {
-            transport_id: "transport-1".into(),
+            transport_id: "00000000-0000-4000-8000-00000000c0de".parse().unwrap(),
             ice_parameters: serde_json::from_value(
                 json!({"usernameFragment":"u","password":"p","iceLite":true}),
             )
@@ -1366,7 +1366,7 @@ mod tests {
         };
         let wire = serde_json::to_value(&message).unwrap();
         assert_eq!(wire["type"], "iceRestarted");
-        assert_eq!(wire["transportId"], "transport-1");
+        assert_eq!(wire["transportId"], "00000000-0000-4000-8000-00000000c0de");
         assert_eq!(wire["iceParameters"]["usernameFragment"], "u");
         assert_eq!(wire["iceServers"][0]["urls"][0], "turn:relay.example:3478");
         assert_eq!(wire["iceServers"][0]["username"], "1700000000:credential");

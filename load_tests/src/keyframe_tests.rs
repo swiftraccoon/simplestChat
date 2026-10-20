@@ -1,5 +1,6 @@
 use super::*;
 use futures_util::FutureExt;
+use mediasoup::prelude::ConsumerId;
 use mediasoup_types::data_structures::DtlsState;
 use simplestchat::media::config::{RouterConfig, WebRtcTransportConfig};
 use simplestchat::media::transport_manager::TransportManager;
@@ -112,14 +113,14 @@ impl Fixture {
             .lock()
             .await
             .create_send_transport(
-                send.id.clone(),
+                send.id.to_string(),
                 send.ice_parameters,
                 send.ice_candidates,
                 send.dtls_parameters,
             )
             .await?;
         self.manager
-            .connect_transport(PUBLISHER, &send.id, local_dtls)
+            .connect_transport(PUBLISHER, send.id, local_dtls)
             .await?;
 
         let captured = Arc::new(std::sync::Mutex::new(None));
@@ -142,14 +143,14 @@ impl Fixture {
             .lock()
             .await
             .create_recv_transport(
-                receive.id.clone(),
+                receive.id.to_string(),
                 receive.ice_parameters,
                 receive.ice_candidates,
                 receive.dtls_parameters,
             )
             .await?;
         self.manager
-            .connect_transport(RECEIVER, &receive.id, local_dtls)
+            .connect_transport(RECEIVER, receive.id, local_dtls)
             .await?;
 
         let configuration = MediaConfig::video_only();
@@ -178,7 +179,13 @@ impl Fixture {
         }
         let producer = self
             .manager
-            .create_producer(PUBLISHER, MediaKind::Video, parameters, AppData::default())
+            .create_producer(
+                PUBLISHER,
+                send.id,
+                MediaKind::Video,
+                parameters,
+                AppData::default(),
+            )
             .await?;
         let capabilities: RtpCapabilities =
             serde_json::from_value(serde_json::to_value(router.rtp_capabilities())?)?;
@@ -194,7 +201,7 @@ impl Fixture {
             )
             .await?;
         let producer_id = producer.id().to_string();
-        let consumer_id = consumer.id().to_string();
+        let consumer_id = consumer.id();
         let consumer_ssrc = consumer
             .rtp_parameters()
             .encodings
@@ -203,8 +210,11 @@ impl Fixture {
             .context("Owned video consumer has no SSRC")?;
         self.publisher_metrics.record_publisher(&producer_id, false);
         self.receiver_metrics.subscribe(&producer_id, false);
-        self.receiver_metrics
-            .record_consumer(&consumer_id, &producer_id, consumer_ssrc);
+        self.receiver_metrics.record_consumer(
+            &consumer_id.to_string(),
+            &producer_id,
+            consumer_ssrc,
+        );
         {
             let mut receiver = self.receiver.lock().await;
             receiver.record_consumer(producer_id, MediaKind::Video, consumer.rtp_parameters())?;
@@ -280,7 +290,7 @@ impl Fixture {
         let resume = Instant::now();
         self.receiver_metrics
             .diagnostic_event("fixture-resume", serde_json::json!({}));
-        self.manager.resume_consumer(RECEIVER, &consumer_id).await?;
+        self.manager.resume_consumer(RECEIVER, consumer_id).await?;
         let end = resume + OBSERVATION;
         let mut packets_by_second = [0_u64; 8];
         let mut previous_packets = 0;
@@ -520,7 +530,7 @@ impl Fixture {
         // evidence must remain one-shot, even when the empty buckets continue.
         sleep(Duration::from_millis(1100)).await;
         self.ensure_sender_running()?;
-        self.manager.resume_consumer(RECEIVER, &consumer_id).await?;
+        self.manager.resume_consumer(RECEIVER, consumer_id).await?;
         while self
             .receiver_metrics
             .generate_report()
@@ -641,7 +651,7 @@ impl Fixture {
 
 struct PreparedCase {
     producer: Producer,
-    consumer_id: String,
+    consumer_id: ConsumerId,
     consumer_ssrc: u32,
     video_ssrc: u32,
     initial: Instant,

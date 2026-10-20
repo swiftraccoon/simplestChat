@@ -1172,9 +1172,13 @@ generic invalid-message refusal) rather than in a later lookup:
 - Account identifiers (`userId`, `targetUserId`) are UUIDs.
 - A moderation event's `targetId` is a participant UUID, or the ban's own key
   when the entry concerns a ban that no longer names a participant.
+- Media identifiers (`transportId`, `producerId`, `consumerId`) are the UUIDs the
+  media layer minted for that transport, producer or consumer. A `produce` names
+  the member's current send transport; one naming any other transport is refused
+  as not found.
 
-Clients never invent participant or message identifiers; they echo the values
-the server issued.
+Clients never invent participant, message or media identifiers; they echo the
+values the server issued.
 
 When changing the contract:
 

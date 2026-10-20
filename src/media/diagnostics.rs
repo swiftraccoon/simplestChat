@@ -1002,13 +1002,14 @@ mod tests {
                 let mut participant = participant.lock().await;
                 participant
                     .consumers
-                    .insert(consumer.id().to_string(), consumer.clone());
+                    .insert(consumer.id(), consumer.clone());
                 participant
                     .producers
-                    .insert(producer.id().to_string(), producer.clone());
-                participant
-                    .producers
-                    .insert("duplicate-producer".into(), producer.clone());
+                    .insert(producer.id(), producer.clone());
+                participant.producers.insert(
+                    crate::ids::fixtures::prid("duplicate-producer"),
+                    producer.clone(),
+                );
             }
             let registry = ParticipantRegistry::new(HashMap::from([(
                 "private-participant".into(),
@@ -1069,9 +1070,10 @@ mod tests {
             {
                 let mut participant = participant.lock().await;
                 for index in 0..MAX_ENTITIES {
-                    participant
-                        .producers
-                        .insert(format!("duplicate-{index}"), producer.clone());
+                    participant.producers.insert(
+                        crate::ids::fixtures::prid(&format!("duplicate-{index}")),
+                        producer.clone(),
+                    );
                 }
             }
             let mut limited = SnapshotCoverage::default();

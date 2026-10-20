@@ -420,9 +420,7 @@ impl RoomManager {
             let room = room_arc.read().await;
             match event {
                 ObserverEvent::ActiveSpeaker { producer_id } => {
-                    if let Some(participant_id) =
-                        room.producer_to_participant.get(&producer_id.to_string())
-                    {
+                    if let Some(participant_id) = room.producer_to_participant.get(&producer_id) {
                         room.broadcast_all(&ServerMessage::ActiveSpeaker {
                             participant_id: *participant_id,
                         });
@@ -432,12 +430,12 @@ impl RoomManager {
                     let levels: Vec<AudioLevelEntry> = volumes
                         .iter()
                         .filter_map(|(pid, vol)| {
-                            room.producer_to_participant.get(&pid.to_string()).map(
-                                |participant_id| AudioLevelEntry {
+                            room.producer_to_participant.get(pid).map(|participant_id| {
+                                AudioLevelEntry {
                                     participant_id: *participant_id,
                                     volume: *vol,
-                                },
-                            )
+                                }
+                            })
                         })
                         .collect();
                     if !levels.is_empty() {
@@ -883,7 +881,7 @@ impl RoomManager {
                         .producers
                         .iter()
                         .map(|(id, ProducerRecord { kind, source })| ProducerMetadata {
-                            id: id.clone(),
+                            id: *id,
                             kind: *kind,
                             source: source.clone(),
                         })
@@ -944,7 +942,7 @@ impl RoomManager {
         let mut removed_any = false;
         let mut room_empty = false;
         let mut media_session_id = None;
-        let mut audio_producer_ids: Vec<String> = Vec::new();
+        let mut audio_producer_ids: Vec<ProducerId> = Vec::new();
         let mut active_obs = None;
         let mut audio_obs = None;
 
@@ -996,7 +994,7 @@ impl RoomManager {
                 // Collect audio producer IDs for observer cleanup
                 for (pid, ProducerRecord { kind, .. }) in &participant.producers {
                     if *kind == MediaKind::Audio {
-                        audio_producer_ids.push(pid.clone());
+                        audio_producer_ids.push(*pid);
                     }
                 }
 
@@ -1018,14 +1016,12 @@ impl RoomManager {
         } // Release per-room lock before outer write
 
         // Remove audio producers from observers OUTSIDE lock
-        for pid_str in &audio_producer_ids {
-            if let Ok(pid) = pid_str.parse::<ProducerId>() {
-                if let Some(obs) = &active_obs {
-                    let _ = obs.remove_producer(pid).await;
-                }
-                if let Some(obs) = &audio_obs {
-                    let _ = obs.remove_producer(pid).await;
-                }
+        for pid in audio_producer_ids {
+            if let Some(obs) = &active_obs {
+                let _ = obs.remove_producer(pid).await;
+            }
+            if let Some(obs) = &audio_obs {
+                let _ = obs.remove_producer(pid).await;
             }
         }
 

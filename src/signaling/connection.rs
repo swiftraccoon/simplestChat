@@ -2547,7 +2547,7 @@ async fn handle_client_message(
                     room_id,
                     participant_id,
                     sender,
-                    transport_id,
+                    *transport_id,
                     bwe_sender.clone(),
                 )
                 .await?;
@@ -2570,13 +2570,13 @@ async fn handle_client_message(
                         room_id,
                         participant_id,
                         sender,
-                        transport_id,
+                        *transport_id,
                         dtls_parameters.clone(),
                     )
                     .await?;
 
                 reply.send(&ServerMessage::TransportConnected {
-                    transport_id: transport_id.clone(),
+                    transport_id: *transport_id,
                 })?;
             } else {
                 anyhow::bail!("Not in a room");
@@ -2584,7 +2584,7 @@ async fn handle_client_message(
         }
 
         ClientMessage::Produce {
-            transport_id: _,
+            transport_id,
             kind,
             rtp_parameters,
             source,
@@ -2614,6 +2614,7 @@ async fn handle_client_message(
                         room_id,
                         participant_id,
                         sender,
+                        *transport_id,
                         *kind,
                         rtp_parameters,
                         Some(source),
@@ -2637,7 +2638,7 @@ async fn handle_client_message(
                         room_id,
                         participant_id,
                         sender,
-                        producer_id.parse()?,
+                        *producer_id,
                         rtp_capabilities.clone(),
                         Some(sender.clone()),
                     )
@@ -2646,7 +2647,7 @@ async fn handle_client_message(
                 metrics.inc_consumers_created();
                 reply.send(&ServerMessage::ConsumerCreated {
                     consumer_id: consumer_info.id,
-                    producer_id: consumer_info.producer_id.clone(),
+                    producer_id: consumer_info.producer_id,
                     kind: consumer_info.kind,
                     rtp_parameters: consumer_info.rtp_parameters,
                 })?;
@@ -2658,7 +2659,7 @@ async fn handle_client_message(
                         metrics,
                         sender,
                         &ServerMessage::ProducerPaused {
-                            producer_id: producer_id.clone(),
+                            producer_id: *producer_id,
                         },
                     )?;
                 }
@@ -2670,11 +2671,11 @@ async fn handle_client_message(
         ClientMessage::ResumeConsumer { consumer_id } => {
             if let Some(room_id) = current_room_id.as_ref() {
                 room_manager
-                    .resume_consumer(room_id, participant_id, sender, consumer_id)
+                    .resume_consumer(room_id, participant_id, sender, *consumer_id)
                     .await?;
 
                 reply.send(&ServerMessage::ConsumerResumed {
-                    consumer_id: consumer_id.clone(),
+                    consumer_id: *consumer_id,
                 })?;
             } else {
                 anyhow::bail!("Not in a room");
@@ -2684,11 +2685,11 @@ async fn handle_client_message(
         ClientMessage::PauseConsumer { consumer_id } => {
             if let Some(room_id) = current_room_id.as_ref() {
                 room_manager
-                    .pause_consumer(room_id, participant_id, sender, consumer_id)
+                    .pause_consumer(room_id, participant_id, sender, *consumer_id)
                     .await?;
 
                 reply.send(&ServerMessage::ConsumerPaused {
-                    consumer_id: consumer_id.clone(),
+                    consumer_id: *consumer_id,
                 })?;
             } else {
                 anyhow::bail!("Not in a room");
@@ -2698,7 +2699,7 @@ async fn handle_client_message(
         ClientMessage::CloseConsumer { consumer_id } => {
             if let Some(room_id) = current_room_id.as_ref() {
                 room_manager
-                    .close_consumer(room_id, participant_id, sender, consumer_id)
+                    .close_consumer(room_id, participant_id, sender, *consumer_id)
                     .await?;
                 reply.acknowledge_control()?;
             } else {
@@ -2709,7 +2710,7 @@ async fn handle_client_message(
         ClientMessage::CloseProducer { producer_id } => {
             if let Some(room_id) = current_room_id.as_ref() {
                 room_manager
-                    .close_producer(room_id, participant_id, sender, producer_id)
+                    .close_producer(room_id, participant_id, sender, *producer_id)
                     .await?;
                 reply.acknowledge_control()?;
             } else {
@@ -2720,10 +2721,10 @@ async fn handle_client_message(
         ClientMessage::PauseProducer { producer_id } => {
             if let Some(room_id) = current_room_id.as_ref() {
                 room_manager
-                    .pause_producer(room_id, participant_id, sender, producer_id)
+                    .pause_producer(room_id, participant_id, sender, *producer_id)
                     .await?;
                 reply.send(&ServerMessage::ProducerPaused {
-                    producer_id: producer_id.clone(),
+                    producer_id: *producer_id,
                 })?;
             } else {
                 anyhow::bail!("Not in a room");
@@ -2733,10 +2734,10 @@ async fn handle_client_message(
         ClientMessage::ResumeProducer { producer_id } => {
             if let Some(room_id) = current_room_id.as_ref() {
                 room_manager
-                    .resume_producer(room_id, participant_id, sender, producer_id)
+                    .resume_producer(room_id, participant_id, sender, *producer_id)
                     .await?;
                 reply.send(&ServerMessage::ProducerResumed {
-                    producer_id: producer_id.clone(),
+                    producer_id: *producer_id,
                 })?;
             } else {
                 anyhow::bail!("Not in a room");
@@ -2751,11 +2752,11 @@ async fn handle_client_message(
         ClientMessage::RestartIce { transport_id } => {
             if let Some(room_id) = current_room_id.as_ref() {
                 let ice_parameters = room_manager
-                    .restart_ice(room_id, participant_id, sender, transport_id)
+                    .restart_ice(room_id, participant_id, sender, *transport_id)
                     .await?;
 
                 reply.send(&ServerMessage::IceRestarted {
-                    transport_id: transport_id.clone(),
+                    transport_id: *transport_id,
                     ice_parameters,
                     // Relay credentials minted at transport creation may
                     // have expired; candidate gathering needs fresh ones.
@@ -2777,7 +2778,7 @@ async fn handle_client_message(
                         room_id,
                         participant_id,
                         sender,
-                        consumer_id,
+                        *consumer_id,
                         *spatial_layer,
                         *temporal_layer,
                     )
@@ -2993,7 +2994,7 @@ async fn handle_client_message(
                 .await?;
         }
 
-        // === Room management (stubs) ===
+        // === Room management ===
         ClientMessage::UpdateRoomSettings { patch } => {
             let room_id = current_room_id
                 .as_ref()

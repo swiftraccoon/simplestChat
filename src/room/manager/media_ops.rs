@@ -155,7 +155,7 @@ impl RoomManager {
         room_id: &RoomId,
         participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
-        transport_id: &str,
+        transport_id: TransportId,
         dtls_parameters: DtlsParameters,
     ) -> Result<()> {
         let media_session_id = self
@@ -190,15 +190,20 @@ impl RoomManager {
     ///
     /// # Errors
     /// Returns an error if producer creation fails
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the produce boundary names the member, its socket and the client's transport"
+    )]
     pub(crate) async fn create_producer(
         &self,
         room_id: &RoomId,
         participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
+        transport_id: TransportId,
         kind: MediaKind,
         rtp_parameters: RtpParameters,
         source: Option<String>,
-    ) -> Result<String> {
+    ) -> Result<ProducerId> {
         let source = source
             .as_deref()
             .ok_or_else(|| anyhow::anyhow!("Media source is required"))?;
@@ -226,6 +231,7 @@ impl RoomManager {
             .transport_manager()
             .create_producer(
                 &media_participant_id,
+                transport_id,
                 kind,
                 rtp_parameters,
                 AppData::default(),
@@ -233,8 +239,7 @@ impl RoomManager {
             .await
             .map_err(|e| anyhow::anyhow!(e))?;
 
-        let producer_id = producer.id().to_string();
-        let producer_id_typed = producer.id();
+        let producer_id = producer.id();
 
         // Store producer info, broadcast, and clone observers (per-room write lock)
         let (active_obs, audio_obs) = {
@@ -244,7 +249,7 @@ impl RoomManager {
                     let _ = self
                         .media_server
                         .transport_manager()
-                        .close_producer(&media_participant_id, &producer_id)
+                        .close_producer(&media_participant_id, producer_id)
                         .await;
                     return Err(error);
                 }
@@ -255,7 +260,7 @@ impl RoomManager {
                 let _ = self
                     .media_server
                     .transport_manager()
-                    .close_producer(&media_participant_id, &producer_id)
+                    .close_producer(&media_participant_id, producer_id)
                     .await;
                 return Err(error);
             }
@@ -272,27 +277,27 @@ impl RoomManager {
                 let _ = self
                     .media_server
                     .transport_manager()
-                    .close_producer(&media_participant_id, &producer_id)
+                    .close_producer(&media_participant_id, producer_id)
                     .await;
                 anyhow::bail!("You are no longer allowed to produce this media type");
             }
 
             let participant = room.participants.get_mut(participant_id).unwrap();
             participant.producers.insert(
-                producer_id.clone(),
+                producer_id,
                 ProducerRecord {
                     kind,
                     source: Some(source.to_string()),
                 },
             );
             room.producer_to_participant
-                .insert(producer_id.clone(), *participant_id);
+                .insert(producer_id, *participant_id);
 
             room.broadcast_except(
                 participant_id,
                 &ServerMessage::NewProducer {
                     participant_id: *participant_id,
-                    producer_id: producer_id.clone(),
+                    producer_id,
                     kind,
                     source: Some(source.to_string()),
                 },
@@ -309,17 +314,27 @@ impl RoomManager {
         if kind == MediaKind::Audio {
             if let Some(obs) = &active_obs
                 && let Err(error) = obs
-                    .add_producer(RtpObserverAddProducerOptions::new(producer_id_typed))
+                    .add_producer(RtpObserverAddProducerOptions::new(producer_id))
                     .await
             {
-                warn!(%room_id, producer_id, %error, "Active speaker observer rejected a producer");
+                warn!(
+                    %room_id,
+                    %producer_id,
+                    %error,
+                    "Active speaker observer rejected a producer"
+                );
             }
             if let Some(obs) = &audio_obs
                 && let Err(error) = obs
-                    .add_producer(RtpObserverAddProducerOptions::new(producer_id_typed))
+                    .add_producer(RtpObserverAddProducerOptions::new(producer_id))
                     .await
             {
-                warn!(%room_id, producer_id, %error, "Audio level observer rejected a producer");
+                warn!(
+                    %room_id,
+                    %producer_id,
+                    %error,
+                    "Audio level observer rejected a producer"
+                );
             }
         }
 
@@ -355,9 +370,9 @@ impl RoomManager {
             let room = room_lock.read().await;
             let metadata = room
                 .producer_to_participant
-                .get(&producer_id.to_string())
+                .get(&producer_id)
                 .and_then(|owner| room.participants.get(owner))
-                .and_then(|owner| owner.producers.get(&producer_id.to_string()))
+                .and_then(|owner| owner.producers.get(&producer_id))
                 .ok_or_else(|| {
                     crate::media::types::MediaError::ConsumerError(
                         "Producer is not in this room".to_string(),
@@ -431,7 +446,7 @@ impl RoomManager {
         room_id: &RoomId,
         participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
-        consumer_id: &str,
+        consumer_id: ConsumerId,
     ) -> Result<()> {
         let media_session_id = self
             .media_session_for_sender(room_id, participant_id, expected_sender)
@@ -467,7 +482,7 @@ impl RoomManager {
         room_id: &RoomId,
         participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
-        consumer_id: &str,
+        consumer_id: ConsumerId,
     ) -> Result<()> {
         let media_session_id = self
             .media_session_for_sender(room_id, participant_id, expected_sender)
@@ -504,7 +519,7 @@ impl RoomManager {
         room_id: &RoomId,
         participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
-        consumer_id: &str,
+        consumer_id: ConsumerId,
     ) -> Result<()> {
         let media_session_id = self
             .media_session_for_sender(room_id, participant_id, expected_sender)
@@ -531,7 +546,7 @@ impl RoomManager {
         room_id: &RoomId,
         participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
-        producer_id: &str,
+        producer_id: ProducerId,
     ) -> Result<()> {
         let media_session_id = self
             .media_session_for_sender(room_id, participant_id, expected_sender)
@@ -568,15 +583,13 @@ impl RoomManager {
             let was_audio = room
                 .participants
                 .get_mut(participant_id)
-                .and_then(|participant| participant.producers.remove(producer_id))
+                .and_then(|participant| participant.producers.remove(&producer_id))
                 .is_some_and(|record| record.kind == MediaKind::Audio);
-            room.producer_to_participant.remove(producer_id);
+            room.producer_to_participant.remove(&producer_id);
 
             room.broadcast_except(
                 participant_id,
-                &ServerMessage::ProducerClosed {
-                    producer_id: producer_id.to_string(),
-                },
+                &ServerMessage::ProducerClosed { producer_id },
             );
 
             // Clone observers before releasing lock
@@ -588,12 +601,12 @@ impl RoomManager {
         }; // room lock released
 
         // Remove from observers OUTSIDE lock
-        if was_audio && let Ok(pid) = producer_id.parse::<ProducerId>() {
+        if was_audio {
             if let Some(obs) = &active_obs {
-                let _ = obs.remove_producer(pid).await;
+                let _ = obs.remove_producer(producer_id).await;
             }
             if let Some(obs) = &audio_obs {
-                let _ = obs.remove_producer(pid).await;
+                let _ = obs.remove_producer(producer_id).await;
             }
         }
 
@@ -611,7 +624,7 @@ impl RoomManager {
         room_id: &RoomId,
         participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
-        producer_id: &str,
+        producer_id: ProducerId,
     ) -> Result<()> {
         let media_session_id = self
             .media_session_for_sender(room_id, participant_id, expected_sender)
@@ -655,9 +668,7 @@ impl RoomManager {
         }
         room.broadcast_except(
             participant_id,
-            &ServerMessage::ProducerPaused {
-                producer_id: producer_id.to_string(),
-            },
+            &ServerMessage::ProducerPaused { producer_id },
         );
 
         info!(
@@ -674,7 +685,7 @@ impl RoomManager {
         room_id: &RoomId,
         participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
-        producer_id: &str,
+        producer_id: ProducerId,
     ) -> Result<()> {
         let media_session_id = self
             .media_session_for_sender(room_id, participant_id, expected_sender)
@@ -718,9 +729,7 @@ impl RoomManager {
         }
         room.broadcast_except(
             participant_id,
-            &ServerMessage::ProducerResumed {
-                producer_id: producer_id.to_string(),
-            },
+            &ServerMessage::ProducerResumed { producer_id },
         );
 
         info!(
@@ -736,7 +745,7 @@ impl RoomManager {
         room_id: &RoomId,
         participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
-        consumer_id: &str,
+        consumer_id: ConsumerId,
         spatial_layer: u8,
         temporal_layer: Option<u8>,
     ) -> Result<()> {
@@ -824,7 +833,7 @@ impl RoomManager {
                 .reserve_media_control_ipc_for_sender(room_id, participant_id, expected_sender)
                 .await?;
             let changed = transports
-                .apply_layer_ceilings(&media_participant_id, &consumer_id)
+                .apply_layer_ceilings(&media_participant_id, consumer_id)
                 .await
                 .map_err(|e| anyhow::anyhow!(e))?;
             if changed {
@@ -843,7 +852,7 @@ impl RoomManager {
         room_id: &RoomId,
         participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
-        transport_id: &str,
+        transport_id: TransportId,
     ) -> Result<IceParameters> {
         let media_session_id = self
             .media_session_for_sender(room_id, participant_id, expected_sender)
@@ -865,12 +874,13 @@ impl RoomManager {
         room_id: &RoomId,
         participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
-        producer_id: Option<&str>,
+        producer_id: Option<ProducerId>,
     ) -> Result<MediaMutationReservation> {
         let room_lock = self.get_room(room_id)?;
         let mut room = measure(Stage::RoomLockWait, room_lock.write()).await;
         let participant = Self::participant_for_sender(&room, participant_id, expected_sender)?;
-        if producer_id.is_some_and(|producer_id| !participant.producers.contains_key(producer_id)) {
+        if producer_id.is_some_and(|producer_id| !participant.producers.contains_key(&producer_id))
+        {
             anyhow::bail!("Producer does not belong to this participant");
         }
         let reserved_at = std::time::Instant::now();
@@ -889,13 +899,13 @@ impl RoomManager {
         room_id: &RoomId,
         participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
-        producer_id: &str,
+        producer_id: ProducerId,
         desired_paused: bool,
     ) -> Result<Option<MediaMutationReservation>> {
         let room_lock = self.get_room(room_id)?;
         let mut room = measure(Stage::RoomLockWait, room_lock.write()).await;
         let participant = Self::participant_for_sender(&room, participant_id, expected_sender)?;
-        if !participant.producers.contains_key(producer_id) {
+        if !participant.producers.contains_key(&producer_id) {
             anyhow::bail!("Producer does not belong to this participant");
         }
         if self
@@ -1108,14 +1118,14 @@ impl RoomManager {
                                 source,
                             )
                         });
-                        (!allowed || over_capacity.contains(&participant.id)).then(|| {
+                        (!allowed || over_capacity.contains(&participant.id)).then_some(
                             RevokedProducer {
                                 participant_id: participant.id,
                                 media_session_id: participant.media_session_id,
-                                producer_id: producer_id.clone(),
+                                producer_id: *producer_id,
                                 kind: *kind,
-                            }
-                        })
+                            },
+                        )
                     },
                 )
             })
@@ -1127,11 +1137,11 @@ impl RoomManager {
             }
             room.producer_to_participant.remove(&producer.producer_id);
             room.broadcast_all(&ServerMessage::ForceClosedProducer {
-                producer_id: producer.producer_id.clone(),
+                producer_id: producer.producer_id,
                 reason: reason.to_string(),
             });
             room.broadcast_all(&ServerMessage::ProducerClosed {
-                producer_id: producer.producer_id.clone(),
+                producer_id: producer.producer_id,
             });
         }
 
@@ -1156,7 +1166,7 @@ impl RoomManager {
                 && let Err(error) = self
                     .media_server
                     .transport_manager()
-                    .close_producer(&media_participant_id, &producer.producer_id)
+                    .close_producer(&media_participant_id, producer.producer_id)
                     .await
             {
                 // A failed individual close must not leave an unauthorized
@@ -1185,14 +1195,12 @@ impl RoomManager {
                 }
             }
 
-            if producer.kind == MediaKind::Audio
-                && let Ok(producer_id) = producer.producer_id.parse::<ProducerId>()
-            {
+            if producer.kind == MediaKind::Audio {
                 if let Some(observer) = &active_observer {
-                    let _ = observer.remove_producer(producer_id).await;
+                    let _ = observer.remove_producer(producer.producer_id).await;
                 }
                 if let Some(observer) = &audio_observer {
-                    let _ = observer.remove_producer(producer_id).await;
+                    let _ = observer.remove_producer(producer.producer_id).await;
                 }
             }
         }

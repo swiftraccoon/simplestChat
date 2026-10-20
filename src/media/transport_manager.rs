@@ -148,7 +148,7 @@ pub struct TransportManager {
     participants: Arc<StdRwLock<HashMap<String, Arc<TokioMutex<ParticipantMedia>>>>>,
     /// Index of producer paused state: producer_id -> paused.
     /// Maintained by pause_producer, resume_producer, close_producer, remove_participant.
-    paused_producers: Arc<StdRwLock<HashMap<String, bool>>>,
+    paused_producers: Arc<StdRwLock<HashMap<ProducerId, bool>>>,
     /// The concrete callback handle type is intentionally erased here because
     /// mediasoup does not re-export it. Retaining one handle per media-state
     /// keeps the callback active; replacing/dropping it unregisters the old
@@ -579,7 +579,7 @@ impl TransportManager {
     pub async fn connect_transport(
         &self,
         participant_id: &str,
-        transport_id: &str,
+        transport_id: TransportId,
         dtls_parameters: DtlsParameters,
     ) -> MediaResult<bool> {
         let participant_lock = self.get_participant_lock(participant_id)?;
@@ -588,13 +588,13 @@ impl TransportManager {
         let (transport, is_send) = participant
             .send_transport
             .as_ref()
-            .filter(|transport| transport.id().to_string() == transport_id)
+            .filter(|transport| transport.id() == transport_id)
             .map(|transport| (transport, true))
             .or_else(|| {
                 participant
                     .recv_transport
                     .as_ref()
-                    .filter(|transport| transport.id().to_string() == transport_id)
+                    .filter(|transport| transport.id() == transport_id)
                     .map(|transport| (transport, false))
             })
             .ok_or_else(|| {
@@ -646,6 +646,7 @@ impl TransportManager {
     pub async fn create_producer(
         &self,
         participant_id: &str,
+        transport_id: TransportId,
         kind: MediaKind,
         rtp_parameters: RtpParameters,
         app_data: AppData,
@@ -659,7 +660,7 @@ impl TransportManager {
         let mut pruned = Vec::new();
         participant.producers.retain(|id, producer| {
             if producer.closed() {
-                pruned.push(id.clone());
+                pruned.push(*id);
                 false
             } else {
                 true
@@ -684,7 +685,10 @@ impl TransportManager {
         let transport = participant
             .send_transport
             .as_ref()
-            .ok_or_else(|| MediaError::TransportError("Send transport not found".to_string()))?;
+            .filter(|transport| transport.id() == transport_id)
+            .ok_or_else(|| {
+                MediaError::TransportError(format!("Transport not found: {transport_id}"))
+            })?;
 
         let mut producer_options = ProducerOptions::new(kind, rtp_parameters);
         producer_options.app_data = app_data;
@@ -696,11 +700,9 @@ impl TransportManager {
             .await
             .map_err(|e| MediaError::ProducerError(format!("Failed to create producer: {e}")))?;
 
-        let producer_id = producer.id().to_string();
+        let producer_id = producer.id();
         self.setup_producer_handlers(&producer, participant_id);
-        participant
-            .producers
-            .insert(producer_id.clone(), producer.clone());
+        participant.producers.insert(producer_id, producer.clone());
 
         // Initialize paused index (producers start unpaused)
         {
@@ -708,7 +710,7 @@ impl TransportManager {
                 .paused_producers
                 .write()
                 .unwrap_or_else(|e| e.into_inner());
-            index.insert(producer_id.clone(), false);
+            index.insert(producer_id, false);
         }
 
         info!(
@@ -781,7 +783,7 @@ impl TransportManager {
             })?;
         }
 
-        let consumer_id = consumer.id().to_string();
+        let consumer_id = consumer.id();
 
         // Increment the worker's consumer count
         if let Some(ref counter) = consumer_counter {
@@ -790,14 +792,11 @@ impl TransportManager {
 
         self.setup_consumer_handlers(&consumer, participant_id, sender, consumer_counter);
         if let Some(top) = layered_top(&consumer) {
-            participant.consumer_layers.insert(
-                consumer_id.clone(),
-                ConsumerLayerState { top, client: None },
-            );
+            participant
+                .consumer_layers
+                .insert(consumer_id, ConsumerLayerState { top, client: None });
         }
-        participant
-            .consumers
-            .insert(consumer_id.clone(), consumer.clone());
+        participant.consumers.insert(consumer_id, consumer.clone());
 
         info!(
             "Created consumer {} for producer {} and participant {}",
@@ -810,12 +809,12 @@ impl TransportManager {
     pub async fn resume_consumer(
         &self,
         participant_id: &str,
-        consumer_id: &str,
+        consumer_id: ConsumerId,
     ) -> MediaResult<bool> {
         let participant_lock = self.get_participant_lock(participant_id)?;
         let participant = measure(Stage::SessionLockWait, participant_lock.lock()).await;
 
-        let consumer = participant.consumers.get(consumer_id).ok_or_else(|| {
+        let consumer = participant.consumers.get(&consumer_id).ok_or_else(|| {
             MediaError::ConsumerError(format!("Consumer not found: {consumer_id}"))
         })?;
 
@@ -838,12 +837,12 @@ impl TransportManager {
     pub async fn pause_consumer(
         &self,
         participant_id: &str,
-        consumer_id: &str,
+        consumer_id: ConsumerId,
     ) -> MediaResult<bool> {
         let participant_lock = self.get_participant_lock(participant_id)?;
         let participant = participant_lock.lock().await;
 
-        let consumer = participant.consumers.get(consumer_id).ok_or_else(|| {
+        let consumer = participant.consumers.get(&consumer_id).ok_or_else(|| {
             MediaError::ConsumerError(format!("Consumer not found: {consumer_id}"))
         })?;
 
@@ -867,12 +866,12 @@ impl TransportManager {
     pub async fn pause_producer(
         &self,
         participant_id: &str,
-        producer_id: &str,
+        producer_id: ProducerId,
     ) -> MediaResult<bool> {
         let participant_lock = self.get_participant_lock(participant_id)?;
         let participant = participant_lock.lock().await;
 
-        let producer = participant.producers.get(producer_id).ok_or_else(|| {
+        let producer = participant.producers.get(&producer_id).ok_or_else(|| {
             MediaError::ProducerError(format!("Producer not found: {producer_id}"))
         })?;
 
@@ -891,7 +890,7 @@ impl TransportManager {
                 .paused_producers
                 .write()
                 .unwrap_or_else(|e| e.into_inner());
-            index.insert(producer_id.to_string(), true);
+            index.insert(producer_id, true);
         }
 
         info!(
@@ -905,12 +904,12 @@ impl TransportManager {
     pub async fn resume_producer(
         &self,
         participant_id: &str,
-        producer_id: &str,
+        producer_id: ProducerId,
     ) -> MediaResult<bool> {
         let participant_lock = self.get_participant_lock(participant_id)?;
         let participant = measure(Stage::SessionLockWait, participant_lock.lock()).await;
 
-        let producer = participant.producers.get(producer_id).ok_or_else(|| {
+        let producer = participant.producers.get(&producer_id).ok_or_else(|| {
             MediaError::ProducerError(format!("Producer not found: {producer_id}"))
         })?;
 
@@ -928,7 +927,7 @@ impl TransportManager {
                 .paused_producers
                 .write()
                 .unwrap_or_else(|e| e.into_inner());
-            index.insert(producer_id.to_string(), false);
+            index.insert(producer_id, false);
         }
 
         info!(
@@ -941,12 +940,12 @@ impl TransportManager {
     /// Checks if a producer is paused using the in-memory index.
     /// Returns `Some(paused)` if found, `None` if the producer doesn't exist.
     /// O(1) lookup — no per-participant locking needed.
-    pub fn find_producer_paused(&self, producer_id: &str) -> Option<bool> {
+    pub fn find_producer_paused(&self, producer_id: ProducerId) -> Option<bool> {
         let index = self
             .paused_producers
             .read()
             .unwrap_or_else(|e| e.into_inner());
-        index.get(producer_id).copied()
+        index.get(&producer_id).copied()
     }
 
     /// Records the viewer's own layer ceiling for a consumer (tile size or
@@ -956,17 +955,17 @@ impl TransportManager {
     pub async fn set_preferred_layers(
         &self,
         participant_id: &str,
-        consumer_id: &str,
+        consumer_id: ConsumerId,
         layers: ConsumerLayers,
     ) -> MediaResult<bool> {
         let participant_lock = self.get_participant_lock(participant_id)?;
         let mut participant = participant_lock.lock().await;
         let participant = &mut *participant;
 
-        let consumer = participant.consumers.get(consumer_id).ok_or_else(|| {
+        let consumer = participant.consumers.get(&consumer_id).ok_or_else(|| {
             MediaError::ConsumerError(format!("Consumer not found: {consumer_id}"))
         })?;
-        let Some(state) = participant.consumer_layers.get_mut(consumer_id) else {
+        let Some(state) = participant.consumer_layers.get_mut(&consumer_id) else {
             return Ok(false);
         };
         state.client = Some(layers);
@@ -987,7 +986,7 @@ impl TransportManager {
         &self,
         participant_id: &str,
         spatial_layer: u8,
-    ) -> MediaResult<Vec<String>> {
+    ) -> MediaResult<Vec<ConsumerId>> {
         self.set_bandwidth_ceiling_for_transport(participant_id, None, spatial_layer)
             .await
     }
@@ -997,7 +996,7 @@ impl TransportManager {
         participant_id: &str,
         expected: Option<TransportId>,
         spatial_layer: u8,
-    ) -> MediaResult<Vec<String>> {
+    ) -> MediaResult<Vec<ConsumerId>> {
         let participant_lock = self.get_participant_lock(participant_id)?;
         let mut participant = participant_lock.lock().await;
         if let Some(expected) = expected
@@ -1011,7 +1010,7 @@ impl TransportManager {
             ));
         }
         participant.bandwidth_spatial_ceiling = Some(spatial_layer);
-        let mut pending: Vec<String> = participant
+        let mut pending: Vec<ConsumerId> = participant
             .consumer_layers
             .iter()
             .filter(|(id, state)| {
@@ -1026,7 +1025,7 @@ impl TransportManager {
                         )
                     })
             })
-            .map(|(id, _)| id.clone())
+            .map(|(id, _)| *id)
             .collect();
         pending.sort();
         Ok(pending)
@@ -1037,14 +1036,14 @@ impl TransportManager {
     pub async fn apply_layer_ceilings(
         &self,
         participant_id: &str,
-        consumer_id: &str,
+        consumer_id: ConsumerId,
     ) -> MediaResult<bool> {
         let participant_lock = self.get_participant_lock(participant_id)?;
         let participant = participant_lock.lock().await;
-        let consumer = participant.consumers.get(consumer_id).ok_or_else(|| {
+        let consumer = participant.consumers.get(&consumer_id).ok_or_else(|| {
             MediaError::ConsumerError(format!("Consumer not found: {consumer_id}"))
         })?;
-        let Some(state) = participant.consumer_layers.get(consumer_id) else {
+        let Some(state) = participant.consumer_layers.get(&consumer_id) else {
             return Ok(false);
         };
         Self::write_effective_layers(
@@ -1082,7 +1081,7 @@ impl TransportManager {
     pub async fn restart_ice(
         &self,
         participant_id: &str,
-        transport_id: &str,
+        transport_id: TransportId,
     ) -> MediaResult<IceParameters> {
         let participant_lock = self.get_participant_lock(participant_id)?;
         let participant = participant_lock.lock().await;
@@ -1090,12 +1089,12 @@ impl TransportManager {
         let transport = participant
             .send_transport
             .as_ref()
-            .filter(|transport| transport.id().to_string() == transport_id)
+            .filter(|transport| transport.id() == transport_id)
             .or_else(|| {
                 participant
                     .recv_transport
                     .as_ref()
-                    .filter(|transport| transport.id().to_string() == transport_id)
+                    .filter(|transport| transport.id() == transport_id)
             })
             .ok_or_else(|| {
                 MediaError::TransportError(format!("Transport not found: {transport_id}"))
@@ -1282,20 +1281,24 @@ impl TransportManager {
     pub async fn close_consumer(
         &self,
         participant_id: &str,
-        consumer_id: &str,
+        consumer_id: ConsumerId,
     ) -> MediaResult<bool> {
         let participant_lock = self.get_participant_lock(participant_id)?;
         let mut participant = participant_lock.lock().await;
-        participant.consumer_layers.remove(consumer_id);
-        Ok(participant.consumers.remove(consumer_id).is_some())
+        participant.consumer_layers.remove(&consumer_id);
+        Ok(participant.consumers.remove(&consumer_id).is_some())
     }
 
     /// Closes a producer for a participant
-    pub async fn close_producer(&self, participant_id: &str, producer_id: &str) -> MediaResult<()> {
+    pub async fn close_producer(
+        &self,
+        participant_id: &str,
+        producer_id: ProducerId,
+    ) -> MediaResult<()> {
         let participant_lock = self.get_participant_lock(participant_id)?;
         let mut participant = participant_lock.lock().await;
 
-        let _producer = participant.producers.remove(producer_id).ok_or_else(|| {
+        let _producer = participant.producers.remove(&producer_id).ok_or_else(|| {
             MediaError::ProducerError(format!("Producer not found: {producer_id}"))
         })?;
 
@@ -1305,7 +1308,7 @@ impl TransportManager {
                 .paused_producers
                 .write()
                 .unwrap_or_else(|e| e.into_inner());
-            index.remove(producer_id);
+            index.remove(&producer_id);
         }
 
         info!(
@@ -1500,7 +1503,7 @@ impl TransportManager {
     /// Handlers are detached so they persist for the producer's lifetime.
     fn setup_producer_handlers(&self, producer: &Producer, participant_id: &str) {
         let participant_id = participant_id.to_string();
-        let producer_id = producer.id().to_string();
+        let producer_id = producer.id();
 
         producer
             .on_close(|| {
@@ -1511,7 +1514,6 @@ impl TransportManager {
         producer
             .on_pause({
                 let participant_id = participant_id.clone();
-                let producer_id = producer_id.clone();
                 move || {
                     debug!(
                         "Producer {} paused for participant {}",
@@ -1543,7 +1545,7 @@ impl TransportManager {
         consumer_counter: Option<Arc<AtomicUsize>>,
     ) {
         let participant_id = participant_id.to_string();
-        let consumer_id = consumer.id().to_string();
+        let consumer_id = consumer.id();
 
         consumer
             .on_close({
@@ -1560,7 +1562,6 @@ impl TransportManager {
         consumer
             .on_pause({
                 let participant_id = participant_id.clone();
-                let consumer_id = consumer_id.clone();
                 move || {
                     debug!(
                         "Consumer {} paused for participant {}",
@@ -1573,7 +1574,6 @@ impl TransportManager {
         consumer
             .on_resume({
                 let participant_id = participant_id.clone();
-                let consumer_id = consumer_id.clone();
                 move || {
                     debug!(
                         "Consumer {} resumed for participant {}",
@@ -1586,7 +1586,6 @@ impl TransportManager {
         consumer
             .on_producer_pause({
                 let participant_id = participant_id.clone();
-                let consumer_id = consumer_id.clone();
                 move || {
                     debug!(
                         "Producer paused for consumer {} of participant {}",
@@ -1599,7 +1598,6 @@ impl TransportManager {
         consumer
             .on_producer_resume({
                 let participant_id = participant_id.clone();
-                let consumer_id = consumer_id.clone();
                 move || {
                     debug!(
                         "Producer resumed for consumer {} of participant {}",
@@ -1613,7 +1611,6 @@ impl TransportManager {
         if let Some(sender) = sender {
             consumer
                 .on_layers_change({
-                    let consumer_id = consumer_id.clone();
                     let participant_id = participant_id.clone();
                     move |layers| {
                         debug!(
@@ -1621,7 +1618,7 @@ impl TransportManager {
                             consumer_id, layers, participant_id
                         );
                         let msg = ServerMessage::ConsumerLayersChanged {
-                            consumer_id: consumer_id.clone(),
+                            consumer_id,
                             spatial_layer: layers.as_ref().map(|l| l.spatial_layer),
                             temporal_layer: layers.as_ref().and_then(|l| l.temporal_layer),
                         };
@@ -1964,6 +1961,7 @@ mod tests {
         let producer = transport_manager
             .create_producer(
                 participant_id,
+                send_transport.as_ref().unwrap().id,
                 MediaKind::Audio,
                 RtpParameters {
                     mid: Some("audio".to_string()),
@@ -1990,7 +1988,7 @@ mod tests {
             let producer_paused = attempt > 0;
             if producer_paused {
                 transport_manager
-                    .pause_producer(participant_id, &producer.id().to_string())
+                    .pause_producer(participant_id, producer.id())
                     .await
                     .unwrap();
             }
@@ -2012,7 +2010,7 @@ mod tests {
             assert_eq!(consumer_counter.load(Ordering::Relaxed), 1);
             assert!(
                 !transport_manager
-                    .close_consumer("other-session", &info.id)
+                    .close_consumer("other-session", info.id)
                     .await
                     .unwrap(),
                 "another participant cannot close the receiver"
@@ -2023,7 +2021,7 @@ mod tests {
 
             assert!(
                 transport_manager
-                    .resume_consumer(participant_id, &info.id)
+                    .resume_consumer(participant_id, info.id)
                     .await
                     .unwrap(),
                 "the first browser acknowledgment must resume the worker consumer"
@@ -2033,7 +2031,7 @@ mod tests {
             assert_eq!(resumed.producer_paused, producer_paused);
             assert!(
                 !transport_manager
-                    .resume_consumer(participant_id, &info.id)
+                    .resume_consumer(participant_id, info.id)
                     .await
                     .unwrap(),
                 "repeated acknowledgments remain idempotent"
@@ -2042,7 +2040,7 @@ mod tests {
             drop(consumer);
             assert!(
                 transport_manager
-                    .close_consumer(participant_id, &info.id)
+                    .close_consumer(participant_id, info.id)
                     .await
                     .unwrap()
             );
@@ -2053,7 +2051,7 @@ mod tests {
             assert_eq!(consumer_counter.load(Ordering::Relaxed), 0);
             assert!(
                 !transport_manager
-                    .close_consumer(participant_id, &info.id)
+                    .close_consumer(participant_id, info.id)
                     .await
                     .unwrap(),
                 "repeated closure must be a no-op"
@@ -2158,7 +2156,7 @@ mod tests {
         let worker_id = router_manager.get_worker_id(room_id).await.unwrap();
         let webrtc_server = worker_manager.get_webrtc_server(worker_id).await.unwrap();
         let pid = "viewer".to_string();
-        transport_manager
+        let sent = transport_manager
             .create_send_transport(
                 pid.clone(),
                 &router,
@@ -2183,6 +2181,7 @@ mod tests {
         let audio_producer = transport_manager
             .create_producer(
                 &pid,
+                sent.id,
                 MediaKind::Audio,
                 RtpParameters {
                     mid: Some("audio".to_string()),
@@ -2203,6 +2202,7 @@ mod tests {
         let video_producer = transport_manager
             .create_producer(
                 &pid,
+                sent.id,
                 MediaKind::Video,
                 simulcast_video_parameters(),
                 AppData::default(),
@@ -2231,8 +2231,8 @@ mod tests {
             )
             .await
             .unwrap();
-        let audio_id = audio.id().to_string();
-        let video_id = video.id().to_string();
+        let audio_id = audio.id();
+        let video_id = video.id();
         assert_eq!(video.r#type(), ConsumerType::Simulcast);
         assert_eq!(video.priority(), 1);
         assert_eq!(audio.priority(), 1);
@@ -2247,7 +2247,7 @@ mod tests {
             !transport_manager
                 .set_preferred_layers(
                     &pid,
-                    &audio_id,
+                    audio_id,
                     ConsumerLayers {
                         spatial_layer: 1,
                         temporal_layer: None,
@@ -2262,7 +2262,7 @@ mod tests {
                 .set_bandwidth_ceiling(&pid, 2)
                 .await
                 .unwrap(),
-            Vec::<String>::new(),
+            Vec::<ConsumerId>::new(),
             "the top tier matches the worker's default ceiling: nothing to write"
         );
 
@@ -2272,17 +2272,17 @@ mod tests {
                 .set_bandwidth_ceiling(&pid, 1)
                 .await
                 .unwrap(),
-            vec![video_id.clone()]
+            vec![video_id]
         );
         assert!(
             transport_manager
-                .apply_layer_ceilings(&pid, &video_id)
+                .apply_layer_ceilings(&pid, video_id)
                 .await
                 .unwrap()
         );
         assert!(
             !transport_manager
-                .apply_layer_ceilings(&pid, &video_id)
+                .apply_layer_ceilings(&pid, video_id)
                 .await
                 .unwrap(),
             "a second application is a no-op"
@@ -2300,7 +2300,7 @@ mod tests {
             transport_manager
                 .set_preferred_layers(
                     &pid,
-                    &video_id,
+                    video_id,
                     ConsumerLayers {
                         spatial_layer: 0,
                         temporal_layer: Some(1),
@@ -2314,7 +2314,7 @@ mod tests {
                 .set_bandwidth_ceiling(&pid, 2)
                 .await
                 .unwrap(),
-            Vec::<String>::new()
+            Vec::<ConsumerId>::new()
         );
         assert_eq!(
             video.preferred_layers(),
@@ -2331,7 +2331,7 @@ mod tests {
             transport_manager
                 .set_preferred_layers(
                     &pid,
-                    &video_id,
+                    video_id,
                     ConsumerLayers {
                         spatial_layer: 2,
                         temporal_layer: None,
@@ -2346,11 +2346,11 @@ mod tests {
                 .set_bandwidth_ceiling(&pid, 0)
                 .await
                 .unwrap(),
-            vec![video_id.clone()]
+            vec![video_id]
         );
         assert!(
             transport_manager
-                .apply_layer_ceilings(&pid, &video_id)
+                .apply_layer_ceilings(&pid, video_id)
                 .await
                 .unwrap()
         );
@@ -2381,13 +2381,13 @@ mod tests {
         drop(video);
         assert!(
             transport_manager
-                .close_consumer(&pid, &video_id)
+                .close_consumer(&pid, video_id)
                 .await
                 .unwrap()
         );
         let participant = transport_manager.get_participant(&pid).await.unwrap();
         assert!(!participant.consumer_layers.contains_key(&video_id));
-        assert!(participant.consumers.contains_key(&late.id().to_string()));
+        assert!(participant.consumers.contains_key(&late.id()));
     }
     /// A loopback port free for both UDP and TCP, so a TCP-enabled WebRtcServer
     /// can bind both in tests.

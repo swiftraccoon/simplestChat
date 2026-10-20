@@ -54,7 +54,7 @@ pub type MediaResult<T> = Result<T, MediaError>;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TransportInfo {
-    pub id: String,
+    pub id: TransportId,
     pub ice_parameters: IceParameters,
     pub ice_candidates: Vec<IceCandidate>,
     pub dtls_parameters: DtlsParameters,
@@ -63,7 +63,7 @@ pub struct TransportInfo {
 impl From<&WebRtcTransport> for TransportInfo {
     fn from(transport: &WebRtcTransport) -> Self {
         Self {
-            id: transport.id().to_string(),
+            id: transport.id(),
             ice_parameters: transport.ice_parameters().clone(),
             ice_candidates: transport.ice_candidates().clone(),
             dtls_parameters: transport.dtls_parameters(),
@@ -75,7 +75,7 @@ impl From<&WebRtcTransport> for TransportInfo {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProducerInfo {
-    pub id: String,
+    pub id: ProducerId,
     pub kind: MediaKind,
     pub rtp_parameters: RtpParameters,
     pub paused: bool,
@@ -84,7 +84,7 @@ pub struct ProducerInfo {
 impl From<&Producer> for ProducerInfo {
     fn from(producer: &Producer) -> Self {
         Self {
-            id: producer.id().to_string(),
+            id: producer.id(),
             kind: producer.kind(),
             rtp_parameters: producer.rtp_parameters().clone(),
             paused: producer.paused(),
@@ -96,8 +96,8 @@ impl From<&Producer> for ProducerInfo {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ConsumerInfo {
-    pub id: String,
-    pub producer_id: String,
+    pub id: ConsumerId,
+    pub producer_id: ProducerId,
     pub kind: MediaKind,
     pub rtp_parameters: RtpParameters,
     pub paused: bool,
@@ -107,8 +107,8 @@ pub struct ConsumerInfo {
 impl ConsumerInfo {
     pub fn from_consumer(consumer: &Consumer) -> Self {
         Self {
-            id: consumer.id().to_string(),
-            producer_id: consumer.producer_id().to_string(),
+            id: consumer.id(),
+            producer_id: consumer.producer_id(),
             kind: consumer.kind(),
             rtp_parameters: consumer.rtp_parameters().clone(),
             paused: consumer.paused(),
@@ -151,14 +151,14 @@ pub struct ParticipantMedia {
     pub(super) recv_connect_applied: Option<TransportId>,
     /// Only the most recent replacement is replayable, while its target is current.
     pub(super) recv_replacement: Option<(TransportId, TransportId)>,
-    pub producers: HashMap<String, Producer>,
-    pub consumers: HashMap<String, Consumer>,
+    pub producers: HashMap<ProducerId, Producer>,
+    pub consumers: HashMap<ConsumerId, Consumer>,
     /// Spatial layer ceiling from the receive transport's bandwidth estimate;
     /// applied to every layered consumer, including ones created later.
     pub bandwidth_spatial_ceiling: Option<u8>,
     /// Ceilings of the consumers that have layers at all. Audio and
     /// single-stream consumers have no entry and never receive layer requests.
-    pub consumer_layers: HashMap<String, ConsumerLayerState>,
+    pub consumer_layers: HashMap<ConsumerId, ConsumerLayerState>,
     /// Where the receive transport was placed when it is not on the room's
     /// primary worker; shared so clones of this state keep one placement.
     pub viewer_lease: Option<std::sync::Arc<crate::media::router_manager::ViewerLease>>,

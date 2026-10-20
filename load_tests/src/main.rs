@@ -1912,7 +1912,7 @@ async fn run_client_inner(
                     for producer in &p.producers {
                         existing_producer_events.push(ServerMessage::NewProducer {
                             participant_id: p.id,
-                            producer_id: producer.id.clone(),
+                            producer_id: producer.id,
                             kind: producer.kind,
                             source: producer.source.clone(),
                         });
@@ -1999,7 +1999,7 @@ async fn run_client_inner(
     let webrtc_session = Arc::new(Mutex::new(webrtc_session));
 
     // Publishers create send transport; viewers skip it
-    let mut send_transport_id: Option<String> = None;
+    let mut send_transport_id: Option<TransportId> = None;
     if config.is_publisher {
         // Create send transport (timed)
         let t = Instant::now();
@@ -2042,7 +2042,7 @@ async fn run_client_inner(
             .lock()
             .await
             .create_send_transport(
-                st_id.clone(),
+                st_id.to_string(),
                 send_ice_params,
                 send_ice_cands,
                 send_dtls_params,
@@ -2052,7 +2052,7 @@ async fn run_client_inner(
         // Connect send transport with REAL DTLS parameters (timed)
         let t = Instant::now();
         let connect_send_msg = ClientMessage::ConnectTransport {
-            transport_id: st_id.clone(),
+            transport_id: st_id,
             dtls_parameters: local_send_dtls,
         };
         send_message(&mut write, connect_send_msg).await?;
@@ -2118,7 +2118,7 @@ async fn run_client_inner(
         .lock()
         .await
         .create_recv_transport(
-            recv_transport_id.clone(),
+            recv_transport_id.to_string(),
             recv_ice_params,
             recv_ice_cands,
             recv_dtls_params,
@@ -2128,7 +2128,7 @@ async fn run_client_inner(
     // Connect receive transport with REAL DTLS parameters (timed)
     let t = Instant::now();
     let connect_recv_msg = ClientMessage::ConnectTransport {
-        transport_id: recv_transport_id.clone(),
+        transport_id: recv_transport_id,
         dtls_parameters: local_recv_dtls,
     };
     send_message(&mut write, connect_recv_msg).await?;
@@ -2181,7 +2181,7 @@ async fn run_client_inner(
                 }
             }
             let produce_msg = ClientMessage::Produce {
-                transport_id: st_id.clone(),
+                transport_id: *st_id,
                 kind: MediaKind::Audio,
                 rtp_parameters: audio_params,
                 source: Some("microphone".to_string()),
@@ -2193,7 +2193,7 @@ async fn run_client_inner(
                         .record_signaling_latency("produce_audio", t.elapsed().as_millis() as u64);
                     tracing::info!("{}: Audio producer created: {}", client_id, producer_id);
                     metrics.record_producer_created();
-                    metrics.record_publisher(&producer_id, true);
+                    metrics.record_publisher(&producer_id.to_string(), true);
                 }
                 ServerMessage::Error { message, .. } => {
                     metrics.record_error(format!("Audio producer failed: {}", message));
@@ -2216,7 +2216,7 @@ async fn run_client_inner(
                 video_params.encodings = simulcast_encodings(&profile.layers, &layers)?;
             }
             let produce_msg = ClientMessage::Produce {
-                transport_id: st_id.clone(),
+                transport_id: *st_id,
                 kind: MediaKind::Video,
                 rtp_parameters: video_params,
                 source: Some("camera".to_string()),
@@ -2228,7 +2228,7 @@ async fn run_client_inner(
                         .record_signaling_latency("produce_video", t.elapsed().as_millis() as u64);
                     tracing::info!("{}: Video producer created: {}", client_id, producer_id);
                     metrics.record_producer_created();
-                    metrics.record_publisher(&producer_id, false);
+                    metrics.record_publisher(&producer_id.to_string(), false);
                 }
                 ServerMessage::Error { message, .. } => {
                     metrics.record_error(format!("Video producer failed: {}", message));
@@ -3523,9 +3523,35 @@ mod watchdog_tests {
 
 /// Signaling metadata remains pending until its live SDP batch is installed.
 /// A server closure before then must not create an unnecessary transceiver.
+/// The generator keys its registries by the text of an identifier the server issued;
+/// the wire type parses that text back.
+fn issued<T: std::str::FromStr>(text: &str) -> T
+where
+    T::Err: std::fmt::Debug,
+{
+    text.parse()
+        .expect("the generator only stores identifiers the server issued")
+}
+
+/// A mediasoup identifier derived from a readable name (the types parse UUIDs).
+#[cfg(test)]
+fn media_id<T: std::str::FromStr>(name: &str) -> T
+where
+    T::Err: std::fmt::Debug,
+{
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for byte in name.bytes() {
+        hash = (hash ^ u64::from(byte)).wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    uuid::Uuid::from_u64_pair(hash, hash.rotate_left(29))
+        .to_string()
+        .parse()
+        .expect("a UUID parses as a mediasoup identifier")
+}
+
 struct PendingConsumer {
-    consumer_id: String,
-    producer_id: String,
+    consumer_id: ConsumerId,
+    producer_id: ProducerId,
     kind: MediaKind,
     rtp_parameters: RtpParameters,
 }
@@ -3739,7 +3765,7 @@ async fn receive_messages_loop(
                         }));
                     }
                     if let Err(error) = send_message(&mut write, ClientMessage::Consume {
-                        producer_id: request.producer_id,
+                        producer_id: issued(&request.producer_id),
                         rtp_capabilities: rtp_capabilities.clone(),
                     }).await {
                         // A failed write has ambiguous remote receipt. Keep the
@@ -3780,7 +3806,8 @@ async fn receive_messages_loop(
             if !metrics.attempt_accepts_work(attempt) {
                 subscriptions.stop();
             }
-            pending_resumes.retain(|consumer| subscriptions.can_resume(&consumer.consumer_id));
+            pending_resumes
+                .retain(|consumer| subscriptions.can_resume(&consumer.consumer_id.to_string()));
             if pending_resumes.is_empty() {
                 needs_renegotiation = false;
                 renegotiation_since = None;
@@ -3795,7 +3822,7 @@ async fn receive_messages_loop(
                 let mut recorded = Ok(());
                 for consumer in &pending_resumes {
                     recorded = session.record_consumer(
-                        consumer.producer_id.clone(),
+                        consumer.producer_id.to_string(),
                         consumer.kind,
                         &consumer.rtp_parameters,
                     );
@@ -3888,7 +3915,7 @@ async fn receive_messages_loop(
             let mut laid_out = Vec::new();
             for consumer in to_resume
                 .into_iter()
-                .filter(|consumer| subscriptions.can_resume(&consumer.consumer_id))
+                .filter(|consumer| subscriptions.can_resume(&consumer.consumer_id.to_string()))
             {
                 if !metrics.attempt_accepts_work(attempt) {
                     break;
@@ -3900,11 +3927,9 @@ async fn receive_messages_loop(
                         serde_json::json!({"consumerId": consumer_id}),
                     );
                 }
-                let resume_msg = ClientMessage::ResumeConsumer {
-                    consumer_id: consumer_id.clone(),
-                };
+                let resume_msg = ClientMessage::ResumeConsumer { consumer_id };
                 let json = serde_json::to_string(&resume_msg).unwrap();
-                metrics.record_resume_requested(&consumer_id);
+                metrics.record_resume_requested(&consumer_id.to_string());
                 if let Err(e) = write.feed(Message::Text(json.into())).await {
                     metrics.record_error(format!("Consumer resume write failed: {e}"));
                     tracing::error!(
@@ -3915,8 +3940,8 @@ async fn receive_messages_loop(
                     );
                 }
                 laid_out.push((
-                    consumer_id,
-                    consumer.producer_id,
+                    consumer_id.to_string(),
+                    consumer.producer_id.to_string(),
                     consumer.kind == MediaKind::Video,
                 ));
                 resume_count += 1;
@@ -3927,7 +3952,7 @@ async fn receive_messages_loop(
             if let Some(grid) = grid.as_mut() {
                 for (consumer_id, spatial_layer) in grid.consume(&laid_out) {
                     let request = ClientMessage::SetConsumerPreferredLayers {
-                        consumer_id,
+                        consumer_id: issued(&consumer_id),
                         spatial_layer,
                         temporal_layer: None,
                     };
@@ -4169,6 +4194,7 @@ async fn handle_server_message(
             kind,
             ..
         } => {
+            let producer_id = producer_id.to_string();
             if let Some(grid) = grid {
                 grid.announce(&producer_id, &participant_id.to_string());
             }
@@ -4189,7 +4215,7 @@ async fn handle_server_message(
                 subscriptions.stop();
                 return;
             }
-            match subscriptions.created(&producer_id, kind, &consumer_id) {
+            match subscriptions.created(&producer_id.to_string(), kind, &consumer_id.to_string()) {
                 Ok(true) => {}
                 Ok(false) => return,
                 Err(error) => {
@@ -4204,7 +4230,7 @@ async fn handle_server_message(
                 .first()
                 .and_then(|encoding| encoding.ssrc);
             if let Some(ssrc) = ssrc {
-                metrics.record_consumer(&consumer_id, &producer_id, ssrc);
+                metrics.record_consumer(&consumer_id.to_string(), &producer_id.to_string(), ssrc);
                 if metrics.diagnostics_enabled() {
                     metrics.diagnostic_event("consumer-created", serde_json::json!({
                         "consumerId": consumer_id, "producerId": producer_id, "kind": kind, "ssrc": ssrc,
@@ -4238,13 +4264,15 @@ async fn handle_server_message(
             tracing::debug!("{}: Participant left: {}", client_id, participant_id);
         }
         ServerMessage::ProducerClosed { producer_id } => {
+            let producer_id = producer_id.to_string();
             if let Some(grid) = grid {
                 grid.depart(&producer_id);
             }
             if let Err(error) = subscriptions.close(&producer_id) {
                 metrics.record_error(format!("Producer closure failed: {error}"));
             }
-            pending_resumes.retain(|consumer| subscriptions.can_resume(&consumer.consumer_id));
+            pending_resumes
+                .retain(|consumer| subscriptions.can_resume(&consumer.consumer_id.to_string()));
             let (_, unexpected) = metrics.close_producer(&producer_id);
             if unexpected {
                 metrics.record_error(format!("Server closed active generated producer {producer_id} before its planned lifetime ended"));
@@ -5078,7 +5106,7 @@ mod incremental_receive_tests {
                 4,
                 vec![ServerMessage::NewProducer {
                     participant_id: simplestchat::ids::ParticipantId::random(),
-                    producer_id: "batch-producer".into(),
+                    producer_id: media_id("batch-producer"),
                     kind: MediaKind::Audio,
                     source: None,
                 }],
@@ -5094,13 +5122,17 @@ mod incremental_receive_tests {
             let Message::Text(request) = request else {
                 anyhow::bail!("Expected a text Consume request");
             };
-            anyhow::ensure!(matches!(serde_json::from_str::<ClientMessage>(&request)?,
-                ClientMessage::Consume { producer_id, .. } if producer_id == "batch-producer"));
+            let consume = serde_json::from_str::<ClientMessage>(&request)?;
+            anyhow::ensure!(matches!(
+                consume,
+                ClientMessage::Consume { producer_id, .. }
+                    if producer_id == media_id("batch-producer")
+            ));
             server
                 .send(Message::Text(
                     serde_json::to_string(&ServerMessage::ConsumerCreated {
-                        consumer_id: "batch-consumer".into(),
-                        producer_id: "batch-producer".into(),
+                        consumer_id: media_id("batch-consumer"),
+                        producer_id: media_id("batch-producer"),
                         kind: MediaKind::Audio,
                         rtp_parameters: RtpParameters {
                             encodings: vec![RtpEncodingParameters {
@@ -5138,7 +5170,7 @@ mod incremental_receive_tests {
                     if let Message::Text(text) = message {
                         let message: ClientMessage = serde_json::from_str(&text)?;
                         if let ClientMessage::ResumeConsumer { consumer_id } = message {
-                            anyhow::ensure!(consumer_id == "batch-consumer");
+                            anyhow::ensure!(consumer_id == media_id("batch-consumer"));
                             break;
                         }
                     }
@@ -5186,7 +5218,10 @@ mod incremental_receive_tests {
                     .position(|event| event.kind == "resume-requested")
                     .context("Missing resume evidence")?;
                 anyhow::ensure!(applied < resumed);
-                anyhow::ensure!(events[resumed].details["consumerId"] == "batch-consumer");
+                anyhow::ensure!(
+                    events[resumed].details["consumerId"]
+                        == media_id::<ConsumerId>("batch-consumer").to_string()
+                );
             }
             Ok::<_, anyhow::Error>(())
         }))
@@ -5248,7 +5283,7 @@ mod subscription_loop_tests {
     fn producer(id: &str, kind: MediaKind) -> ServerMessage {
         ServerMessage::NewProducer {
             participant_id: simplestchat::ids::ParticipantId::random(),
-            producer_id: id.into(),
+            producer_id: media_id(id),
             kind,
             source: None,
         }
@@ -5317,7 +5352,7 @@ mod subscription_loop_tests {
         async fn consume(&mut self, expected: &str) -> Result<()> {
             anyhow::ensure!(
                 matches!(self.read().await?, ClientMessage::Consume { producer_id, .. }
-                if producer_id == expected),
+                if producer_id == media_id(expected)),
                 "Unexpected queued request"
             );
             Ok(())
@@ -5418,25 +5453,25 @@ mod subscription_loop_tests {
             fixture.send(producer("a3", MediaKind::Audio)).await?;
             fixture
                 .send(ServerMessage::ProducerClosed {
-                    producer_id: "a1".into(),
+                    producer_id: media_id("a1"),
                 })
                 .await?;
             fixture
                 .send(ServerMessage::ProducerClosed {
-                    producer_id: "a1".into(),
+                    producer_id: media_id("a1"),
                 })
                 .await?;
             fixture.send(producer("a1", MediaKind::Audio)).await?;
             fixture.consume("a2").await?;
             fixture
                 .send(ServerMessage::ProducerClosed {
-                    producer_id: "v1".into(),
+                    producer_id: media_id("v1"),
                 })
                 .await?;
             fixture.consume("v2").await?;
             fixture
                 .send(ServerMessage::ProducerClosed {
-                    producer_id: "a2".into(),
+                    producer_id: media_id("a2"),
                 })
                 .await?;
             fixture.consume("a3").await?;
@@ -5452,7 +5487,7 @@ mod subscription_loop_tests {
                 vec![
                     producer("closed", MediaKind::Audio),
                     ServerMessage::ProducerClosed {
-                        producer_id: "closed".into(),
+                        producer_id: media_id("closed"),
                     },
                     producer("closed", MediaKind::Audio),
                     producer("live", MediaKind::Video),
@@ -5475,8 +5510,8 @@ mod subscription_loop_tests {
             fixture.consume("closing").await?;
             fixture
                 .send(ServerMessage::ConsumerCreated {
-                    consumer_id: "closing-consumer".into(),
-                    producer_id: "closing".into(),
+                    consumer_id: media_id("closing-consumer"),
+                    producer_id: media_id("closing"),
                     kind: MediaKind::Audio,
                     rtp_parameters: RtpParameters {
                         encodings: vec![RtpEncodingParameters {
@@ -5489,7 +5524,7 @@ mod subscription_loop_tests {
                 .await?;
             fixture
                 .send(ServerMessage::ProducerClosed {
-                    producer_id: "closing".into(),
+                    producer_id: media_id("closing"),
                 })
                 .await?;
             // This fixture has no native receive transport: attempting native
@@ -5529,7 +5564,7 @@ mod subscription_loop_tests {
             fixture.metrics.end_session();
             fixture
                 .send(ServerMessage::ProducerClosed {
-                    producer_id: "first".into(),
+                    producer_id: media_id("first"),
                 })
                 .await?;
             anyhow::ensure!(
@@ -5623,7 +5658,7 @@ mod native_connect_order_tests {
                         .lock()
                         .await
                         .create_send_transport(
-                            info.id.clone(),
+                            info.id.to_string(),
                             info.ice_parameters,
                             info.ice_candidates,
                             info.dtls_parameters,
@@ -5634,7 +5669,7 @@ mod native_connect_order_tests {
                         .lock()
                         .await
                         .create_recv_transport(
-                            info.id.clone(),
+                            info.id.to_string(),
                             info.ice_parameters,
                             info.ice_candidates,
                             info.dtls_parameters,
@@ -5693,7 +5728,7 @@ mod native_connect_order_tests {
                     manager
                         .connect_transport(
                             participant_id,
-                            &info.id,
+                            info.id,
                             DtlsParameters {
                                 role: DtlsRole::Client,
                                 fingerprints: Vec::new()
@@ -5706,13 +5741,13 @@ mod native_connect_order_tests {
             }
             assert!(
                 manager
-                    .connect_transport(participant_id, &info.id, parameters.clone())
+                    .connect_transport(participant_id, info.id, parameters.clone())
                     .await?,
                 "First valid signaling connect must perform native IPC even after DTLS starts"
             );
             assert!(
                 !manager
-                    .connect_transport(participant_id, &info.id, parameters)
+                    .connect_transport(participant_id, info.id, parameters)
                     .await?,
                 "A successful native parameter application makes its immediate retry a no-op"
             );

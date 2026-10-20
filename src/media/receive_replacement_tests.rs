@@ -127,6 +127,7 @@ async fn receive_replacement_preserves_sender_and_producer_retires_consumers_and
         .manager
         .create_producer(
             "publisher-viewer",
+            sent.id,
             MediaKind::Audio,
             microphone(),
             AppData::default(),
@@ -137,6 +138,7 @@ async fn receive_replacement_preserves_sender_and_producer_retires_consumers_and
         .manager
         .create_producer(
             "publisher-viewer",
+            sent.id,
             MediaKind::Video,
             camera(),
             AppData::default(),
@@ -200,7 +202,7 @@ async fn receive_replacement_preserves_sender_and_producer_retires_consumers_and
             .len(),
         1
     );
-    let old_id = received.id.parse().unwrap();
+    let old_id = received.id;
     let replacement = f
         .manager
         .replace_recv_transport(
@@ -223,7 +225,7 @@ async fn receive_replacement_preserves_sender_and_producer_retires_consumers_and
     {
         let p = f.manager.get_participant_lock("publisher-viewer").unwrap();
         let p = p.lock().await;
-        assert_eq!(p.send_transport.as_ref().unwrap().id().to_string(), sent.id);
+        assert_eq!(p.send_transport.as_ref().unwrap().id(), sent.id);
         assert!(!p.send_transport.as_ref().unwrap().closed());
         assert_eq!(p.producers.len(), 2);
         assert!(p.consumers.is_empty());
@@ -296,7 +298,7 @@ async fn receive_replacement_preserves_sender_and_producer_retires_consumers_and
         .manager
         .replace_recv_transport(
             "publisher-viewer",
-            replacement.id.parse().unwrap(),
+            replacement.id,
             f.placement(),
             &f.config,
             None,
@@ -311,7 +313,7 @@ async fn receive_replacement_preserves_sender_and_producer_retires_consumers_and
     );
     assert!(
         f.manager
-            .is_current_recv_transport("publisher-viewer", next.id.parse().unwrap())
+            .is_current_recv_transport("publisher-viewer", next.id)
             .await
     );
     assert!(!producer.closed());
@@ -327,8 +329,8 @@ async fn receive_replacement_rejects_wrong_resource_and_failed_candidate_without
     let (sent, received) = f.member("one").await;
     let (_, other) = f.member("two").await;
     for wrong in [
-        sent.id.parse().unwrap(),
-        other.id.parse().unwrap(),
+        sent.id,
+        other.id,
         Uuid::new_v4().to_string().parse().unwrap(),
     ] {
         assert!(
@@ -342,29 +344,19 @@ async fn receive_replacement_rejects_wrong_resource_and_failed_candidate_without
     invalid.min_outgoing_bitrate = 4_000_000;
     assert!(
         f.manager
-            .replace_recv_transport(
-                "one",
-                received.id.parse().unwrap(),
-                f.placement(),
-                &invalid,
-                None
-            )
+            .replace_recv_transport("one", received.id, f.placement(), &invalid, None)
             .await
             .is_err()
     );
     assert!(
         f.manager
-            .is_current_recv_transport("one", received.id.parse().unwrap())
+            .is_current_recv_transport("one", received.id)
             .await
     );
+    assert!(f.manager.is_current_recv_transport("two", other.id).await);
     assert!(
         f.manager
-            .is_current_recv_transport("two", other.id.parse().unwrap())
-            .await
-    );
-    assert!(
-        f.manager
-            .recv_replacement_replay("one", received.id.parse().unwrap())
+            .recv_replacement_replay("one", received.id)
             .await
             .unwrap()
             .is_none()

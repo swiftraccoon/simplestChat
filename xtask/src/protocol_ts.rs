@@ -44,6 +44,9 @@ const STRING_TYPES: &[&str] = &[
     "ParticipantId",
     "MessageId",
     "UserId",
+    "TransportId",
+    "ProducerId",
+    "ConsumerId",
     "ModerationTargetId",
     "IpAddr",
 ];

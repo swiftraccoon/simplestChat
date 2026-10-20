@@ -16,12 +16,10 @@ impl RoomManager {
         room_id: &RoomId,
         participant_id: &ParticipantId,
         expected_sender: &mpsc::Sender<crate::OutboundJson>,
-        transport_id: &str,
+        transport_id: TransportId,
         bwe_sender: Option<mpsc::Sender<ReceiveBandwidthEstimate>>,
     ) -> anyhow::Result<TransportInfo> {
-        let expected = transport_id
-            .parse::<TransportId>()
-            .map_err(|_| anyhow::anyhow!("Invalid receive transport ID"))?;
+        let expected = transport_id;
         let participant_id = participant_id.to_owned();
         let expected_sender = expected_sender.clone();
         self.run_room_control(room_id, move |manager, room_id, _control| async move {
@@ -173,20 +171,20 @@ mod tests {
         let (stale_sender, _messages) = mpsc::channel(8);
         assert!(
             f.manager
-                .replace_recv_transport(&f.room, &f.member, &stale_sender, &f.received.id, None)
+                .replace_recv_transport(&f.room, &f.member, &stale_sender, f.received.id, None)
                 .await
                 .is_err()
         );
         assert!(
             f.manager
-                .replace_recv_transport(&f.room, &f.member, &f.sender, &f.sent.id, None)
+                .replace_recv_transport(&f.room, &f.member, &f.sender, f.sent.id, None)
                 .await
                 .is_err(),
             "send transport IDs never authorize receiver replacement"
         );
         let replacement = f
             .manager
-            .replace_recv_transport(&f.room, &f.member, &f.sender, &f.received.id, None)
+            .replace_recv_transport(&f.room, &f.member, &f.sender, f.received.id, None)
             .await
             .unwrap();
         assert_ne!(replacement.id, f.received.id);
@@ -204,10 +202,7 @@ mod tests {
             .get_participant(&media_id)
             .await
             .unwrap();
-        assert_eq!(
-            media.send_transport.as_ref().unwrap().id().to_string(),
-            f.sent.id
-        );
+        assert_eq!(media.send_transport.as_ref().unwrap().id(), f.sent.id);
         assert!(!media.send_transport.as_ref().unwrap().closed());
         drop(media);
         f.finish().await;
@@ -223,7 +218,7 @@ mod tests {
         // rather than yielding before it has acquired room control.
         let mut request = Box::pin(tokio::task::unconstrained(
             f.manager
-                .replace_recv_transport(&f.room, &f.member, &f.sender, &f.received.id, None),
+                .replace_recv_transport(&f.room, &f.member, &f.sender, f.received.id, None),
         ));
         assert!(futures_util::poll!(&mut request).is_pending());
         // spawn does not poll its task inline. On this current-thread runtime,
@@ -257,20 +252,19 @@ mod tests {
             .recv_transport
             .as_ref()
             .unwrap()
-            .id()
-            .to_string();
+            .id();
         assert_ne!(
             completed, f.received.id,
             "the cancelled caller completes its swap before any replay request"
         );
         let replacement = f
             .manager
-            .replace_recv_transport(&f.room, &f.member, &f.sender, &f.received.id, None)
+            .replace_recv_transport(&f.room, &f.member, &f.sender, f.received.id, None)
             .await
             .unwrap();
         let replay = f
             .manager
-            .replace_recv_transport(&f.room, &f.member, &f.sender, &f.received.id, None)
+            .replace_recv_transport(&f.room, &f.member, &f.sender, f.received.id, None)
             .await
             .unwrap();
         assert_eq!(replacement.id, replay.id);
@@ -278,12 +272,7 @@ mod tests {
         assert_ne!(replacement.id, f.received.id);
         assert!(
             f.manager
-                .is_current_recv_transport(
-                    &f.room,
-                    &f.member,
-                    &f.sender,
-                    replacement.id.parse().unwrap()
-                )
+                .is_current_recv_transport(&f.room, &f.member, &f.sender, replacement.id)
                 .await
         );
         f.finish().await;
@@ -303,7 +292,7 @@ mod tests {
             .unwrap();
         assert!(
             f.manager
-                .replace_recv_transport(&f.room, &f.member, &f.sender, &f.received.id, None)
+                .replace_recv_transport(&f.room, &f.member, &f.sender, f.received.id, None)
                 .await
                 .is_err()
         );
@@ -320,14 +309,8 @@ mod tests {
             ))
             .await
             .unwrap();
-        assert_eq!(
-            media.recv_transport.as_ref().unwrap().id().to_string(),
-            f.received.id
-        );
-        assert_eq!(
-            media.send_transport.as_ref().unwrap().id().to_string(),
-            f.sent.id
-        );
+        assert_eq!(media.recv_transport.as_ref().unwrap().id(), f.received.id);
+        assert_eq!(media.send_transport.as_ref().unwrap().id(), f.sent.id);
         drop(media);
         f.finish().await;
     }

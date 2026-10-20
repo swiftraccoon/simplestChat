@@ -225,7 +225,7 @@ impl RoomManager {
         target_participant_id: &ParticipantId,
     ) -> Result<()> {
         // Collect producer IDs to close (under room lock)
-        let (producers_to_close, target_media_session_id): (Vec<String>, uuid::Uuid) = {
+        let (producers_to_close, target_media_session_id): (Vec<ProducerId>, uuid::Uuid) = {
             let room_lock = self.get_room(room_id)?;
             let _control = control::lock_room(&room_lock).await;
             let mut room = room_lock.write().await;
@@ -242,11 +242,11 @@ impl RoomManager {
 
             // Collect video producers (camera and screen). An authorized retry
             // against an already-closed camera is a successful no-op.
-            let producers: Vec<String> = target
+            let producers: Vec<ProducerId> = target
                 .producers
                 .iter()
                 .filter(|(_, record)| record.kind == MediaKind::Video)
-                .map(|(id, _)| id.clone())
+                .map(|(id, _)| *id)
                 .collect();
             let target_media_session_id = target.media_session_id;
             if producers.is_empty() {
@@ -265,7 +265,7 @@ impl RoomManager {
             if let Err(e) = self
                 .media_server
                 .transport_manager()
-                .close_producer(&target_media_id, producer_id)
+                .close_producer(&target_media_id, *producer_id)
                 .await
             {
                 warn!(
@@ -291,12 +291,10 @@ impl RoomManager {
                 for pid in &producers_to_close {
                     room.producer_to_participant.remove(pid);
                     room.broadcast_all(&ServerMessage::ForceClosedProducer {
-                        producer_id: pid.clone(),
+                        producer_id: *pid,
                         reason: "Closed by moderator".to_string(),
                     });
-                    room.broadcast_all(&ServerMessage::ProducerClosed {
-                        producer_id: pid.clone(),
-                    });
+                    room.broadcast_all(&ServerMessage::ProducerClosed { producer_id: *pid });
                 }
             }
         }

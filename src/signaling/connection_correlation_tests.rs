@@ -2,7 +2,7 @@
 
 use super::heartbeat_tests::Fixture;
 use super::*;
-use crate::ids::fixtures::pid;
+use crate::ids::fixtures::{coid, pid};
 use serde_json::{Value, json};
 
 #[tokio::test]
@@ -289,14 +289,16 @@ async fn correlated_dispatch_and_decode_errors_echo_only_valid_request_ids() {
 async fn correlated_early_rate_rejection_echoes_the_rejected_request() {
     let mut fixture = Fixture::new().await;
     fixture.join().await.unwrap();
-    // Invalid transport IDs spend the same budget without allocating transports.
-    // Stop at the first rate rejection, before the repeated-abuse close policy.
+    // Unknown transport IDs spend the same budget without allocating transports
+    // (a malformed one would fail at decoding, before any budget). Stop at the
+    // first rate rejection, before the repeated-abuse close policy.
+    let missing = "00000000-0000-4000-8000-0000000000ff";
     let mut rate_limited = false;
     for sequence in 0..20 {
         let request_id = format!("ice-{sequence}");
         let rejected = fixture
             .request(
-                json!({"type": "restartIce", "requestId": request_id, "transportId": "missing"}),
+                json!({"type": "restartIce", "requestId": request_id, "transportId": missing}),
                 "error",
             )
             .await
@@ -375,7 +377,7 @@ fn correlated_reply_envelopes_do_not_duplicate_authentication_or_social_ids() {
         );
     }
     let message = ServerMessage::ConsumerResumed {
-        consumer_id: "consumer".into(),
+        consumer_id: coid("consumer"),
     };
     reply.send(&message).unwrap();
     send_json(&metrics, &sender, &message).unwrap();

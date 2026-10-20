@@ -199,6 +199,7 @@ uuid_id!(
 #[cfg(test)]
 pub(crate) mod fixtures {
     use super::{MessageId, ParticipantId, RoomId};
+    use mediasoup::prelude::{ConsumerId, ProducerId, TransportId};
     use uuid::Uuid;
 
     /// A stable UUID for a name: a literal UUID is itself, anything else is hashed
@@ -229,6 +230,32 @@ pub(crate) mod fixtures {
     /// A message identifier derived from a readable name.
     pub(crate) fn mid(name: &str) -> MessageId {
         MessageId::from(named(name))
+    }
+
+    /// A mediasoup identifier derived from a readable name (the types parse UUIDs).
+    fn media_id<T: std::str::FromStr>(name: &str) -> T
+    where
+        T::Err: std::fmt::Debug,
+    {
+        named(name)
+            .to_string()
+            .parse()
+            .expect("a UUID parses as a mediasoup identifier")
+    }
+
+    /// A transport identifier derived from a readable name.
+    pub(crate) fn trid(name: &str) -> TransportId {
+        media_id(name)
+    }
+
+    /// A producer identifier derived from a readable name.
+    pub(crate) fn prid(name: &str) -> ProducerId {
+        media_id(name)
+    }
+
+    /// A consumer identifier derived from a readable name.
+    pub(crate) fn coid(name: &str) -> ConsumerId {
+        media_id(name)
     }
 }
 

@@ -2168,7 +2168,7 @@ impl RoomManager {
                         .producers
                         .iter()
                         .map(|(id, ProducerRecord { kind, source })| ProducerMetadata {
-                            id: id.clone(),
+                            id: *id,
                             kind: *kind,
                             source: source.clone(),
                         })
@@ -2207,10 +2207,10 @@ impl RoomManager {
                 .filter(|id| {
                     self.media_server
                         .transport_manager()
-                        .find_producer_paused(id)
+                        .find_producer_paused(**id)
                         == Some(true)
                 })
-                .cloned()
+                .copied()
                 .collect(),
             text_muted: actor.punitive.text_muted,
             cam_banned: actor.punitive.cam_banned,
@@ -2220,7 +2220,7 @@ impl RoomManager {
                     actor.role,
                     room.settings.as_ref().is_some_and(|s| s.moderated),
                 ),
-            local_producer_ids: actor.producers.keys().cloned().collect(),
+            local_producer_ids: actor.producers.keys().copied().collect(),
             can_broadcast: Self::participant_can_produce(
                 room,
                 actor,

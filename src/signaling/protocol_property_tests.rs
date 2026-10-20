@@ -10,9 +10,11 @@ fn receive_replacement_requires_expected_transport_and_keeps_camel_case_wire_ide
     let expected = "00000000-0000-4000-8000-000000000001";
     let body = json!({"type":"replaceRecvTransport", "transportId":expected});
     let decoded: ClientMessage = serde_json::from_value(body.clone()).unwrap();
-    assert!(
-        matches!(&decoded, ClientMessage::ReplaceRecvTransport { transport_id } if transport_id == expected)
-    );
+    assert!(matches!(
+        &decoded,
+        ClientMessage::ReplaceRecvTransport { transport_id }
+            if transport_id.to_string() == expected
+    ));
     assert_eq!(serde_json::to_value(decoded).unwrap(), body);
     for invalid in [
         json!({"type":"replaceRecvTransport"}),

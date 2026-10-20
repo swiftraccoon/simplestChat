@@ -1,5 +1,5 @@
 use super::*;
-use crate::ids::fixtures::{pid, rid};
+use crate::ids::fixtures::{coid, pid, prid, rid, trid};
 
 #[tokio::test]
 async fn shutdown_aborts_owned_tasks_on_drop() {
@@ -268,42 +268,42 @@ fn unrelated_joins_do_not_use_the_password_challenge_allowance() {
 #[test]
 fn media_mutation_budgets_cover_all_client_driven_mediasoup_ipc() {
     assert!(is_media_mutation(&ClientMessage::Produce {
-        transport_id: Uuid::new_v4().to_string(),
+        transport_id: trid("transport"),
         kind: mediasoup::prelude::MediaKind::Audio,
         rtp_parameters: mediasoup::prelude::RtpParameters::default(),
         source: Some("microphone".to_string()),
     }));
     assert!(is_media_mutation(&ClientMessage::CloseProducer {
-        producer_id: Uuid::new_v4().to_string(),
+        producer_id: prid("producer"),
     }));
     assert!(is_media_mutation(&ClientMessage::PauseProducer {
-        producer_id: Uuid::new_v4().to_string(),
+        producer_id: prid("producer"),
     }));
     assert!(is_media_mutation(&ClientMessage::ResumeProducer {
-        producer_id: Uuid::new_v4().to_string(),
+        producer_id: prid("producer"),
     }));
     assert!(is_transport_mutation(&ClientMessage::CreateSendTransport));
     assert!(is_transport_mutation(&ClientMessage::CreateRecvTransport));
     assert!(is_transport_mutation(
         &ClientMessage::ReplaceRecvTransport {
-            transport_id: Uuid::new_v4().to_string(),
+            transport_id: trid("transport"),
         }
     ));
     assert!(is_transport_mutation(&ClientMessage::RestartIce {
-        transport_id: Uuid::new_v4().to_string(),
+        transport_id: trid("transport"),
     }));
     assert!(is_consumer_mutation(&ClientMessage::PauseConsumer {
-        consumer_id: Uuid::new_v4().to_string(),
+        consumer_id: coid("consumer"),
     }));
     assert!(is_consumer_mutation(&ClientMessage::CloseConsumer {
-        consumer_id: Uuid::new_v4().to_string(),
+        consumer_id: coid("consumer"),
     }));
     assert!(is_consumer_mutation(&ClientMessage::ResumeConsumer {
-        consumer_id: Uuid::new_v4().to_string(),
+        consumer_id: coid("consumer"),
     }));
     assert!(is_consumer_mutation(
         &ClientMessage::SetConsumerPreferredLayers {
-            consumer_id: Uuid::new_v4().to_string(),
+            consumer_id: coid("consumer"),
             spatial_layer: 1,
             temporal_layer: Some(1),
         }
@@ -339,14 +339,14 @@ fn consumer_and_frame_bursts_admit_the_configured_media_startup() {
         for index in 0..limit {
             for message in [
                 ClientMessage::Consume {
-                    producer_id: format!("producer-{index}"),
+                    producer_id: prid(&format!("producer-{index}")),
                     rtp_capabilities: Default::default(),
                 },
                 ClientMessage::ResumeConsumer {
-                    consumer_id: format!("consumer-{index}"),
+                    consumer_id: coid(&format!("consumer-{index}")),
                 },
                 ClientMessage::SetConsumerPreferredLayers {
-                    consumer_id: format!("consumer-{index}"),
+                    consumer_id: coid(&format!("consumer-{index}")),
                     spatial_layer: 1,
                     temporal_layer: None,
                 },
@@ -356,7 +356,7 @@ fn consumer_and_frame_bursts_admit_the_configured_media_startup() {
             }
         }
         let extra = ClientMessage::ResumeConsumer {
-            consumer_id: "extra".into(),
+            consumer_id: coid("extra"),
         };
         assert!(session.limit_exceeded(&extra, now), "burst remains bounded");
         let later = now + Duration::from_secs(1);
@@ -381,10 +381,10 @@ async fn grace_reconnect_does_not_restore_consumer_burst_capacity() {
     let token = Uuid::new_v4().to_string();
     let now = Instant::now();
     let consumer_mutation = ClientMessage::PauseConsumer {
-        consumer_id: Uuid::new_v4().to_string(),
+        consumer_id: coid("consumer"),
     };
     let transport_mutation = ClientMessage::RestartIce {
-        transport_id: Uuid::new_v4().to_string(),
+        transport_id: trid("transport"),
     };
     let mut entry = grace_entry(&token);
     entry.media_rate_state = MediaSessionRateState::with_consumer_limit(
@@ -446,7 +446,7 @@ async fn reconnect_rate_state_is_isolated_between_session_incarnations() {
     let replacement_token = Uuid::new_v4().to_string();
     let now = Instant::now();
     let mutation = ClientMessage::Produce {
-        transport_id: Uuid::new_v4().to_string(),
+        transport_id: trid("transport"),
         kind: mediasoup::prelude::MediaKind::Audio,
         rtp_parameters: mediasoup::prelude::RtpParameters::default(),
         source: Some("microphone".to_string()),
