@@ -314,7 +314,7 @@ pub(crate) struct SignalingServer {
     sign_in_failures: crate::auth::limiter::FailureLimiter,
     registration_limiter: Arc<crate::auth::limiter::WindowLimiter>,
     db_pool: Option<PgPool>,
-    jwt_secret: Option<String>,
+    jwt_secret: Option<crate::auth::jwt::JwtSecret>,
     ws_tickets: Arc<crate::auth::ws_tickets::TicketStore>,
     metrics_token: Option<String>,
     media_diagnostics: Option<Arc<media_diagnostics::MediaDiagnostics>>,
@@ -341,8 +341,16 @@ impl SignalingServer {
         let jwt_secret = config
             .auth
             .jwt_secret
-            .as_ref()
-            .map(|secret| secret.expose_secret().to_owned());
+            .clone()
+            .map(|secret| {
+                crate::auth::jwt::JwtSecret::new(secret).ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "JWT_SECRET must contain at least {} bytes",
+                        crate::config::MIN_SECRET_BYTES
+                    )
+                })
+            })
+            .transpose()?;
         if jwt_secret.is_some() {
             info!("JWT authentication enabled");
         } else {
@@ -495,8 +503,8 @@ impl SignalingServer {
             .cloned()
     }
 
-    pub(crate) fn jwt_secret(&self) -> Option<&str> {
-        self.jwt_secret.as_deref()
+    pub(crate) fn jwt_secret(&self) -> Option<&crate::auth::jwt::JwtSecret> {
+        self.jwt_secret.as_ref()
     }
 
     pub(crate) fn webauthn(&self) -> Option<&webauthn_rs::prelude::Webauthn> {
@@ -980,7 +988,7 @@ async fn ws_handler(
             let renewal_authenticator = authenticated_user.as_ref().and_then(|_| {
                 server.jwt_secret.clone().map(|secret| {
                     connection::RenewalAuthenticator::new(
-                        secret.into(),
+                        secret,
                         server.guards.auth.concurrency.clone(),
                     )
                 })

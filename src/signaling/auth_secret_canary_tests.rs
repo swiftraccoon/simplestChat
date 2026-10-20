@@ -113,7 +113,7 @@ async fn runtime_canary_auth_requests_keep_secrets_out_of_logs_metrics_diagnosti
         ("absent invite", absent_invite.as_str()),
         (
             "JWT signing key",
-            fixture.server.jwt_secret.as_deref().unwrap(),
+            fixture.server.jwt_secret.as_ref().unwrap().expose_secret(),
         ),
         (
             "metrics credential",

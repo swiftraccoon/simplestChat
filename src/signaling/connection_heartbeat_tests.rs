@@ -550,18 +550,19 @@ async fn expired_or_unverifiable_account_cannot_receive_heartbeats() {
 #[tokio::test]
 async fn renewal_transport_loss_and_drain_do_not_invalidate_credentials() {
     let fixture = Fixture::new().await;
-    let secret = "interrupted-renewal-fixture-secret-at-least-32-bytes";
+    let secret =
+        crate::auth::jwt::JwtSecret::from("interrupted-renewal-fixture-secret-at-least-32-bytes");
     let token = crate::auth::jwt::create_session_token(
         &Uuid::new_v4().to_string(),
         "Renewal fixture",
-        secret,
+        &secret,
         0,
         Uuid::new_v4(),
     )
     .unwrap();
-    let claims = crate::auth::jwt::validate_token(&token, secret).unwrap();
+    let claims = crate::auth::jwt::validate_token(&token, &secret).unwrap();
     let token = serde_json::from_value(serde_json::json!(token)).unwrap();
-    let authenticator = RenewalAuthenticator::new(secret.into(), Arc::new(Semaphore::new(1)));
+    let authenticator = RenewalAuthenticator::new(secret.clone(), Arc::new(Semaphore::new(1)));
     let (_notices, mut revocations) = broadcast::channel(4);
     let (closed_sender, closed_receiver) = mpsc::channel(1);
     drop(closed_receiver);
@@ -601,7 +602,8 @@ async fn authenticated_renewal_keeps_socket_and_membership_across_original_expir
     let account_id: Uuid = sqlx::query_scalar(
         "INSERT INTO users (email, display_name, password_hash) VALUES ($1, 'Renewal fixture', 'unused-fixture-hash') RETURNING id",
     ).bind(email).fetch_one(&pool).await.unwrap();
-    let secret = "same-socket-renewal-fixture-secret-at-least-32-bytes";
+    let secret =
+        crate::auth::jwt::JwtSecret::from("same-socket-renewal-fixture-secret-at-least-32-bytes");
     let session_id = crate::auth::session::create_session(
         &pool,
         &account_id,
@@ -613,12 +615,12 @@ async fn authenticated_renewal_keeps_socket_and_membership_across_original_expir
         &crate::auth::jwt::create_session_token(
             &account_id.to_string(),
             "Renewal fixture",
-            secret,
+            &secret,
             0,
             session_id,
         )
         .unwrap(),
-        secret,
+        &secret,
     )
     .unwrap();
     // Only this private handler fixture uses a short original credential. The
@@ -629,7 +631,7 @@ async fn authenticated_renewal_keeps_socket_and_membership_across_original_expir
         Some(original),
         Some(pool.clone()),
         Some(RenewalAuthenticator::new(
-            secret.into(),
+            secret.clone(),
             Arc::new(Semaphore::new(1)),
         )),
     )
@@ -646,7 +648,7 @@ async fn authenticated_renewal_keeps_socket_and_membership_across_original_expir
             let token = crate::auth::jwt::create_session_token(
                 &participant_id.to_string(),
                 "Renewal fixture",
-                secret,
+                &secret,
                 0,
                 session_id,
             )

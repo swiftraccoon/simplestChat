@@ -1,16 +1,40 @@
 #![forbid(unsafe_code)]
 
 use crate::auth::types::{AuthError, Claims};
+use crate::secret::SecretString;
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const TOKEN_LIFETIME_SECS: u64 = 15 * 60;
 const JWT_ISSUER: &str = "simplestchat";
 const JWT_AUDIENCE: &str = "simplestchat";
-pub(crate) const MIN_SECRET_BYTES: usize = 32;
+/// An HS256 signing secret that proved its length when it was built; the
+/// token functions take it instead of re-checking per call.
+#[derive(Clone, Debug)]
+pub(crate) struct JwtSecret(SecretString);
 
-pub(crate) fn secret_is_strong(secret: &str) -> bool {
-    secret.len() >= MIN_SECRET_BYTES
+impl JwtSecret {
+    /// `None` when the secret is shorter than the configuration minimum.
+    pub(crate) fn new(secret: SecretString) -> Option<Self> {
+        (secret.expose_secret().len() >= crate::config::MIN_SECRET_BYTES).then_some(Self(secret))
+    }
+
+    /// The protected value, for tests that sign a token by hand.
+    #[cfg(test)]
+    pub(crate) fn expose_secret(&self) -> &str {
+        self.0.expose_secret()
+    }
+
+    fn bytes(&self) -> &[u8] {
+        self.0.expose_secret().as_bytes()
+    }
+}
+
+#[cfg(test)]
+impl From<&str> for JwtSecret {
+    fn from(secret: &str) -> Self {
+        Self::new(SecretString::from(secret)).expect("test secrets hold at least 32 bytes")
+    }
 }
 
 /// The token a sign-in or refresh issues: bound to its refresh session, so
@@ -18,14 +42,10 @@ pub(crate) fn secret_is_strong(secret: &str) -> bool {
 pub(crate) fn create_session_token(
     user_id: &str,
     display_name: &str,
-    secret: &str,
+    secret: &JwtSecret,
     auth_version: i64,
     session: uuid::Uuid,
 ) -> Result<String, AuthError> {
-    if !secret_is_strong(secret) {
-        return Err(AuthError::NotConfigured);
-    }
-
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|_| AuthError::DatabaseError("System clock error".to_string()))?;
@@ -43,16 +63,12 @@ pub(crate) fn create_session_token(
     encode(
         &Header::new(Algorithm::HS256),
         &claims,
-        &EncodingKey::from_secret(secret.as_bytes()),
+        &EncodingKey::from_secret(secret.bytes()),
     )
     .map_err(|e| AuthError::DatabaseError(format!("JWT encode error: {e}")))
 }
 
-pub(crate) fn validate_token(token: &str, secret: &str) -> Result<Claims, AuthError> {
-    if !secret_is_strong(secret) {
-        return Err(AuthError::InvalidToken);
-    }
-
+pub(crate) fn validate_token(token: &str, secret: &JwtSecret) -> Result<Claims, AuthError> {
     let mut validation = Validation::new(Algorithm::HS256);
     // Access-token expiry is enforced exactly. Both issuer and verifier use the
     // local system clock, so the library's default 60-second grace is neither
@@ -64,7 +80,7 @@ pub(crate) fn validate_token(token: &str, secret: &str) -> Result<Claims, AuthEr
 
     let data = decode::<Claims>(
         token,
-        &DecodingKey::from_secret(secret.as_bytes()),
+        &DecodingKey::from_secret(secret.bytes()),
         &validation,
     )
     .map_err(|e| match e.kind() {
@@ -123,7 +139,10 @@ mod tests {
             )
             .unwrap();
             assert!(
-                matches!(validate_token(&token, secret), Err(AuthError::InvalidToken)),
+                matches!(
+                    validate_token(&token, &JwtSecret::from(secret)),
+                    Err(AuthError::InvalidToken)
+                ),
                 "missing {field}"
             );
         }
@@ -141,7 +160,7 @@ mod tests {
             )
             .unwrap();
             assert!(matches!(
-                validate_token(&token, secret),
+                validate_token(&token, &JwtSecret::from(secret)),
                 Err(AuthError::InvalidToken)
             ));
         }
@@ -155,7 +174,10 @@ mod tests {
             )
             .unwrap();
             assert!(
-                matches!(validate_token(&token, secret), Err(AuthError::InvalidToken)),
+                matches!(
+                    validate_token(&token, &JwtSecret::from(secret)),
+                    Err(AuthError::InvalidToken)
+                ),
                 "wrong {field}"
             );
         }
@@ -166,7 +188,10 @@ mod tests {
         )
         .unwrap();
         assert!(
-            matches!(validate_token(&token, secret), Err(AuthError::InvalidToken)),
+            matches!(
+                validate_token(&token, &JwtSecret::from(secret)),
+                Err(AuthError::InvalidToken)
+            ),
             "only HS256 is accepted"
         );
     }
@@ -175,14 +200,26 @@ mod tests {
     fn test_create_and_validate_token() {
         let secret = "test-secret-at-least-32-bytes-long!!";
         let session = uuid::Uuid::new_v4();
-        let token = create_session_token("user-123", "Alice", secret, 0, session).unwrap();
-        let claims = validate_token(&token, secret).unwrap();
+        let token = create_session_token("user-123", "Alice", &JwtSecret::from(secret), 0, session)
+            .unwrap();
+        let claims = validate_token(&token, &JwtSecret::from(secret)).unwrap();
         assert_eq!(claims.sub, "user-123");
         assert_eq!(claims.name, "Alice");
         assert_eq!(claims.sid, session);
-        let token =
-            create_session_token("user-123", "Alice", secret, 7, uuid::Uuid::new_v4()).unwrap();
-        assert_eq!(validate_token(&token, secret).unwrap().auth_version, 7);
+        let token = create_session_token(
+            "user-123",
+            "Alice",
+            &JwtSecret::from(secret),
+            7,
+            uuid::Uuid::new_v4(),
+        )
+        .unwrap();
+        assert_eq!(
+            validate_token(&token, &JwtSecret::from(secret))
+                .unwrap()
+                .auth_version,
+            7
+        );
     }
 
     #[test]
@@ -190,27 +227,30 @@ mod tests {
         let token = create_session_token(
             "user-123",
             "Alice",
-            "secret-1-at-least-32-bytes-long!!",
+            &JwtSecret::from("secret-1-at-least-32-bytes-long!!"),
             0,
             uuid::Uuid::new_v4(),
         )
         .unwrap();
-        let result = validate_token(&token, "secret-2-at-least-32-bytes-long!!");
+        let result = validate_token(
+            &token,
+            &JwtSecret::from("secret-2-at-least-32-bytes-long!!"),
+        );
         assert!(matches!(result, Err(AuthError::InvalidToken)));
     }
 
     #[test]
-    fn test_weak_secret_rejects() {
-        assert!(!secret_is_strong("secret"));
-        assert!(matches!(
-            create_session_token("user-123", "Alice", "secret", 0, uuid::Uuid::new_v4()),
-            Err(AuthError::NotConfigured)
-        ));
+    fn a_short_secret_never_becomes_a_signing_secret() {
+        assert!(JwtSecret::new(SecretString::from("secret")).is_none());
+        assert!(JwtSecret::new(SecretString::from("a-secret-of-exactly-thirty-two-b")).is_some());
     }
 
     #[test]
     fn test_garbage_token_rejects() {
-        let result = validate_token("not.a.jwt", "secret");
+        let result = validate_token(
+            "not.a.jwt",
+            &JwtSecret::from("garbage-token-test-secret-at-least-32-bytes"),
+        );
         assert!(matches!(result, Err(AuthError::InvalidToken)));
     }
 
@@ -238,7 +278,7 @@ mod tests {
         .unwrap();
 
         assert!(matches!(
-            validate_token(&token, secret),
+            validate_token(&token, &JwtSecret::from(secret)),
             Err(AuthError::TokenExpired)
         ));
     }

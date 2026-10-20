@@ -234,7 +234,8 @@ async fn database_logout_retires_the_access_token_issued_with_its_session() {
     .fetch_one(&pool)
     .await
     .unwrap();
-    let secret = "logout-revocation-test-secret-with-enough-bytes";
+    let secret =
+        crate::auth::jwt::JwtSecret::from("logout-revocation-test-secret-with-enough-bytes");
     let mut sessions = Vec::new();
     for _ in 0..2 {
         let refresh = generate_refresh_token().unwrap();
@@ -247,8 +248,8 @@ async fn database_logout_retires_the_access_token_issued_with_its_session() {
     }
     let subject = user_id.to_string();
     let token = |session: Uuid| {
-        let issued = create_session_token(&subject, "logout test", secret, 0, session).unwrap();
-        validate_token(&issued, secret).unwrap()
+        let issued = create_session_token(&subject, "logout test", &secret, 0, session).unwrap();
+        validate_token(&issued, &secret).unwrap()
     };
     let (first, second) = (token(sessions[0].1), token(sessions[1].1));
     assert_eq!(first.sid, sessions[0].1);

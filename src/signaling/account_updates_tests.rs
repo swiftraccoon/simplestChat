@@ -370,7 +370,14 @@ async fn authorization_database_account_updates_publish_committed_scoped_mutatio
     fixture.tokens[2] = jsonwebtoken::encode(
         &jsonwebtoken::Header::default(),
         &claims,
-        &jsonwebtoken::EncodingKey::from_secret(fixture.server.jwt_secret().unwrap().as_bytes()),
+        &jsonwebtoken::EncodingKey::from_secret(
+            fixture
+                .server
+                .jwt_secret()
+                .unwrap()
+                .expose_secret()
+                .as_bytes(),
+        ),
     )
     .unwrap();
     let mut token_expiry = Feed::open(&fixture, 2, 1).await;

@@ -60,12 +60,16 @@ async fn person(pool: &PgPool, name: &str) -> Claims {
     let token = crate::auth::jwt::create_session_token(
         &id.to_string(),
         name,
-        "discovery-test-secret-at-least-32-bytes",
+        &crate::auth::jwt::JwtSecret::from("discovery-test-secret-at-least-32-bytes"),
         0,
         sid,
     )
     .unwrap();
-    crate::auth::jwt::validate_token(&token, "discovery-test-secret-at-least-32-bytes").unwrap()
+    crate::auth::jwt::validate_token(
+        &token,
+        &crate::auth::jwt::JwtSecret::from("discovery-test-secret-at-least-32-bytes"),
+    )
+    .unwrap()
 }
 
 async fn cleanup(pool: &PgPool, ids: &[Uuid]) {

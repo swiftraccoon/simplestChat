@@ -501,7 +501,7 @@ async fn database_membership_handler_always_returns_a_private_cursor_page() {
     let token = crate::auth::jwt::create_session_token(
         &user.to_string(),
         "Page test",
-        secret,
+        &crate::auth::jwt::JwtSecret::from(secret),
         0,
         session_id,
     )
@@ -581,7 +581,9 @@ async fn database_password_and_passkey_signup_share_taken_email_budget() {
     )
     .unwrap();
     server.registration_enabled = true;
-    server.jwt_secret = Some(format!("{}{}", uuid::Uuid::new_v4(), uuid::Uuid::new_v4()));
+    server.jwt_secret = Some(crate::auth::jwt::JwtSecret::from(
+        format!("{}{}", uuid::Uuid::new_v4(), uuid::Uuid::new_v4()).as_str(),
+    ));
     server.webauthn = Some(Arc::new(
         webauthn_rs::prelude::WebauthnBuilder::new(
             "localhost",
@@ -664,8 +666,14 @@ async fn database_ticket_http_and_upgrade_enforce_single_use_and_logout() {
         .unwrap();
     transaction.commit().await.unwrap();
     let secret = "disposable-upgrade-test-secret-at-least-32-bytes";
-    let token =
-        jwt::create_session_token(&user.to_string(), "Upgrade test", secret, 0, sid).unwrap();
+    let token = jwt::create_session_token(
+        &user.to_string(),
+        "Upgrade test",
+        &jwt::JwtSecret::from(secret),
+        0,
+        sid,
+    )
+    .unwrap();
     let mut media = crate::media::config::MediaConfig::default();
     media.worker_config.num_workers = 1;
     media.webrtc_server_port_base = crate::media::worker_manager::reserve_worker_ports(1);

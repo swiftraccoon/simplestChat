@@ -579,7 +579,7 @@ async fn recovery_is_atomic_one_time_and_revokes_all_sessions() {
     let key_hash = recovery_hash(&key).unwrap();
     let id: Uuid = sqlx::query_scalar("INSERT INTO users (email, display_name, password_hash, recovery_key_hash) VALUES ($1, 'Recovery test', 'old-hash', $2) RETURNING id")
             .bind(&email).bind(&key_hash).fetch_one(&pool).await.unwrap();
-    let secret = "account-recovery-test-secret-at-least-32-bytes";
+    let secret = jwt::JwtSecret::from("account-recovery-test-secret-at-least-32-bytes");
     let original_session =
         session::create_session(&pool, &id, &session::generate_refresh_token().unwrap())
             .await
@@ -590,12 +590,12 @@ async fn recovery_is_atomic_one_time_and_revokes_all_sessions() {
     let old_token = jwt::create_session_token(
         &id.to_string(),
         "Recovery test",
-        secret,
+        &secret,
         0,
         original_session,
     )
     .unwrap();
-    let old_claims = jwt::validate_token(&old_token, secret).unwrap();
+    let old_claims = jwt::validate_token(&old_token, &secret).unwrap();
     assert!(
         jwt::validate_current_claims(&pool, &old_claims)
             .await
@@ -642,9 +642,9 @@ async fn recovery_is_atomic_one_time_and_revokes_all_sessions() {
             .await
             .unwrap();
     let current_token =
-        jwt::create_session_token(&id.to_string(), "Recovery test", secret, 1, new_session)
+        jwt::create_session_token(&id.to_string(), "Recovery test", &secret, 1, new_session)
             .unwrap();
-    let current_claims = jwt::validate_token(&current_token, secret).unwrap();
+    let current_claims = jwt::validate_token(&current_token, &secret).unwrap();
     assert!(
         jwt::validate_current_claims(&pool, &current_claims)
             .await

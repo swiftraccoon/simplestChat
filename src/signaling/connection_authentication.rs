@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::auth::jwt;
-use crate::secret::SecretString;
+use crate::auth::jwt::JwtSecret;
 use crate::signaling::protocol::AuthenticationToken;
 
 const RENEWAL_WINDOW: Duration = Duration::from_secs(60);
@@ -13,12 +13,12 @@ const RENEWAL_VALIDATION_TIMEOUT: Duration = Duration::from_secs(2);
 /// The signing secret is deliberately absent from `Debug` implementations.
 #[derive(Clone)]
 pub(crate) struct RenewalAuthenticator {
-    secret: SecretString,
+    secret: JwtSecret,
     concurrency: Arc<tokio::sync::Semaphore>,
 }
 
 impl RenewalAuthenticator {
-    pub(crate) fn new(secret: SecretString, concurrency: Arc<tokio::sync::Semaphore>) -> Self {
+    pub(crate) fn new(secret: JwtSecret, concurrency: Arc<tokio::sync::Semaphore>) -> Self {
         Self {
             secret,
             concurrency,
@@ -29,7 +29,7 @@ impl RenewalAuthenticator {
         if token.expose().is_empty() || token.expose().len() > 4_096 {
             return None;
         }
-        let candidate = jwt::validate_token(token.expose(), self.secret.expose_secret()).ok()?;
+        let candidate = jwt::validate_token(token.expose(), &self.secret).ok()?;
         renewal_matches(current, &candidate, unix_seconds()).then_some(candidate)
     }
 }
@@ -274,18 +274,18 @@ mod tests {
         }
 
         async fn renew_without_database(&mut self) -> RenewalOutcome {
-            let secret = "renewal-priority-fixture-secret-at-least-32-bytes";
+            let secret = JwtSecret::from("renewal-priority-fixture-secret-at-least-32-bytes");
             let token = jwt::create_session_token(
                 &self.current.sub,
                 &self.current.name,
-                secret,
+                &secret,
                 self.current.auth_version,
                 self.current.sid,
             )
             .unwrap();
             let token = serde_json::from_value(serde_json::json!(token)).unwrap();
             let authenticator =
-                RenewalAuthenticator::new(secret.into(), Arc::new(tokio::sync::Semaphore::new(1)));
+                RenewalAuthenticator::new(secret.clone(), Arc::new(tokio::sync::Semaphore::new(1)));
             renew_authentication(
                 &authenticator,
                 &self.current,
@@ -543,19 +543,19 @@ mod tests {
 
     #[test]
     fn renewal_validator_accepts_an_ordinary_refreshed_token() {
-        let secret = "ordinary-renewal-fixture-secret-at-least-32-bytes";
+        let secret = JwtSecret::from("ordinary-renewal-fixture-secret-at-least-32-bytes");
         let mut current = claims(unix_seconds() as usize + 60);
         let token = jwt::create_session_token(
             &current.sub,
             &current.name,
-            secret,
+            &secret,
             current.auth_version,
             current.sid,
         )
         .unwrap();
         let token: AuthenticationToken = serde_json::from_value(serde_json::json!(token)).unwrap();
         let auth =
-            RenewalAuthenticator::new(secret.into(), Arc::new(tokio::sync::Semaphore::new(1)));
+            RenewalAuthenticator::new(secret.clone(), Arc::new(tokio::sync::Semaphore::new(1)));
         let refreshed = auth.candidate(&current, &token).unwrap();
         assert_eq!(refreshed.sub, current.sub);
         assert!(refreshed.exp > current.exp);

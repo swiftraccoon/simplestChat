@@ -182,7 +182,7 @@ pub(crate) fn database_error(error: sqlx::Error) -> AuthError {
 
 fn user_insert_error(error: sqlx::Error) -> AuthError {
     if let sqlx::Error::Database(database_error) = &error
-        && database_error.code().as_deref() == Some("23505")
+        && database_error.is_unique_violation()
     {
         return AuthError::EmailAlreadyExists;
     }
@@ -191,7 +191,7 @@ fn user_insert_error(error: sqlx::Error) -> AuthError {
 
 pub(super) fn credential_insert_error(error: sqlx::Error) -> AuthError {
     if let sqlx::Error::Database(database_error) = &error
-        && database_error.code().as_deref() == Some("23505")
+        && database_error.is_unique_violation()
     {
         return AuthError::WebAuthnError("Credential already registered".into());
     }
@@ -284,9 +284,6 @@ pub(crate) async fn register(
     }
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
     let secret = server.jwt_secret().ok_or(AuthError::NotConfigured)?;
-    if !jwt::secret_is_strong(secret) {
-        return Err(AuthError::NotConfigured);
-    }
 
     let email = canonicalize_email(&req.email)?;
     validate_display_name(&req.display_name)?;
@@ -364,9 +361,6 @@ pub(crate) async fn login(
 ) -> Result<(HeaderMap, Json<AuthResponse>), AuthError> {
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
     let secret = server.jwt_secret().ok_or(AuthError::NotConfigured)?;
-    if !jwt::secret_is_strong(secret) {
-        return Err(AuthError::NotConfigured);
-    }
     let email = canonicalize_email(&req.email)?;
     // Only failures cost anything, and only this client's: knowing an email
     // no longer lets a stranger hold its owner out of password sign-in.
@@ -449,9 +443,6 @@ pub(crate) async fn refresh(
 ) -> Result<(HeaderMap, Json<AuthResponse>), AuthError> {
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
     let secret = server.jwt_secret().ok_or(AuthError::NotConfigured)?;
-    if !jwt::secret_is_strong(secret) {
-        return Err(AuthError::NotConfigured);
-    }
     let raw_token = refresh_token_from_headers(&headers).ok_or(AuthError::MissingToken)?;
     let _request_permit = acquire_auth_request(&server)?;
     let mut transaction = pool.begin().await.map_err(database_error)?;
@@ -548,10 +539,7 @@ pub(crate) async fn passkey_register_start(
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
     let webauthn = server.webauthn().ok_or(AuthError::NotConfigured)?;
     let store = server.challenge_store().ok_or(AuthError::NotConfigured)?;
-    let secret = server.jwt_secret().ok_or(AuthError::NotConfigured)?;
-    if !jwt::secret_is_strong(secret) {
-        return Err(AuthError::NotConfigured);
-    }
+    server.jwt_secret().ok_or(AuthError::NotConfigured)?;
     let email = canonicalize_email(&req.email)?;
     validate_display_name(&req.display_name)?;
     // Password and passkey signup share the same taken-email answer budget.
@@ -596,9 +584,6 @@ pub(crate) async fn passkey_register_finish(
     let webauthn = server.webauthn().ok_or(AuthError::NotConfigured)?;
     let store = server.challenge_store().ok_or(AuthError::NotConfigured)?;
     let secret = server.jwt_secret().ok_or(AuthError::NotConfigured)?;
-    if !jwt::secret_is_strong(secret) {
-        return Err(AuthError::NotConfigured);
-    }
     validate_ceremony_id(&body.ceremony_id)?;
     let _request_permit = acquire_auth_request(&server)?;
 
@@ -709,10 +694,7 @@ pub(crate) async fn passkey_login_start(
     let _pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
     let webauthn = server.webauthn().ok_or(AuthError::NotConfigured)?;
     let store = server.challenge_store().ok_or(AuthError::NotConfigured)?;
-    let secret = server.jwt_secret().ok_or(AuthError::NotConfigured)?;
-    if !jwt::secret_is_strong(secret) {
-        return Err(AuthError::NotConfigured);
-    }
+    server.jwt_secret().ok_or(AuthError::NotConfigured)?;
     let _request_permit = acquire_auth_request(&server)?;
 
     let (challenge, state) = webauthn
@@ -736,9 +718,6 @@ pub(crate) async fn passkey_login_finish(
     let webauthn = server.webauthn().ok_or(AuthError::NotConfigured)?;
     let store = server.challenge_store().ok_or(AuthError::NotConfigured)?;
     let secret = server.jwt_secret().ok_or(AuthError::NotConfigured)?;
-    if !jwt::secret_is_strong(secret) {
-        return Err(AuthError::NotConfigured);
-    }
     validate_ceremony_id(&body.ceremony_id)?;
     let _request_permit = acquire_auth_request(&server)?;
 

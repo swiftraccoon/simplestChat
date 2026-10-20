@@ -29,14 +29,17 @@ async fn database_session_management_preserves_ownership_current_session_and_rot
             let token = jwt::create_session_token(
                 &user.to_string(),
                 "Session test",
-                "session-management-test-secret-with-enough-bytes",
+                &jwt::JwtSecret::from("session-management-test-secret-with-enough-bytes"),
                 0,
                 id,
             )
             .unwrap();
             claims.push(
-                jwt::validate_token(&token, "session-management-test-secret-with-enough-bytes")
-                    .unwrap(),
+                jwt::validate_token(
+                    &token,
+                    &jwt::JwtSecret::from("session-management-test-secret-with-enough-bytes"),
+                )
+                .unwrap(),
             );
             sessions.push((id, refresh));
         }
