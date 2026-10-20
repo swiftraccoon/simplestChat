@@ -61,8 +61,7 @@ impl RoomManager {
                 webrtc_server,
                 &media_config.webrtc_transport_config,
             )
-            .await
-            .map_err(|e| anyhow::anyhow!(e))?;
+            .await?;
         if !self
             .is_current_media_session(room_id, participant_id, expected_sender, media_session_id)
             .await
@@ -103,8 +102,7 @@ impl RoomManager {
                 &media_participant_id,
                 &media_config.router_config,
             )
-            .await
-            .map_err(|e| anyhow::anyhow!(e))?;
+            .await?;
         let webrtc_server = self
             .media_server
             .get_webrtc_server_for_worker(worker_id)
@@ -121,8 +119,7 @@ impl RoomManager {
                 webrtc_server,
                 &media_config.webrtc_transport_config,
             )
-            .await
-            .map_err(|e| anyhow::anyhow!(e))?;
+            .await?;
         if let Some(lease) = lease
             && let Err(error) = self
                 .media_server
@@ -170,8 +167,7 @@ impl RoomManager {
             .media_server
             .transport_manager()
             .connect_transport(&media_participant_id, transport_id, dtls_parameters)
-            .await
-            .map_err(|e| anyhow::anyhow!(e))?;
+            .await?;
 
         if !connected {
             Self::refund_media_control_ipc(ipc_reservation).await;
@@ -236,8 +232,7 @@ impl RoomManager {
                 rtp_parameters,
                 AppData::default(),
             )
-            .await
-            .map_err(|e| anyhow::anyhow!(e))?;
+            .await?;
 
         let producer_id = producer.id();
 
@@ -460,8 +455,7 @@ impl RoomManager {
             .media_server
             .transport_manager()
             .resume_consumer(&media_participant_id, consumer_id)
-            .await
-            .map_err(|e| anyhow::anyhow!(e))?;
+            .await?;
 
         if !resumed {
             Self::refund_media_control_ipc(ipc_reservation).await;
@@ -496,8 +490,7 @@ impl RoomManager {
             .media_server
             .transport_manager()
             .pause_consumer(&media_participant_id, consumer_id)
-            .await
-            .map_err(|e| anyhow::anyhow!(e))?;
+            .await?;
 
         if !paused {
             Self::refund_media_control_ipc(ipc_reservation).await;
@@ -565,8 +558,7 @@ impl RoomManager {
         self.media_server
             .transport_manager()
             .close_producer(&media_participant_id, producer_id)
-            .await
-            .map_err(|e| anyhow::anyhow!(e))?;
+            .await?;
 
         // Remove from room's participant tracking, observer maps, and notify others (per-room write lock)
         let (active_obs, audio_obs, was_audio) = {
@@ -648,8 +640,7 @@ impl RoomManager {
             .media_server
             .transport_manager()
             .pause_producer(&media_participant_id, producer_id)
-            .await
-            .map_err(|e| anyhow::anyhow!(e))?;
+            .await?;
         if !changed {
             Self::refund_media_mutation(reservation).await;
             return Ok(());
@@ -709,8 +700,7 @@ impl RoomManager {
             .media_server
             .transport_manager()
             .resume_producer(&media_participant_id, producer_id)
-            .await
-            .map_err(|e| anyhow::anyhow!(e))?;
+            .await?;
         if !changed {
             Self::refund_media_mutation(reservation).await;
             return Ok(());
@@ -768,8 +758,7 @@ impl RoomManager {
                     temporal_layer,
                 },
             )
-            .await
-            .map_err(|e| anyhow::anyhow!(e))?;
+            .await?;
         if changed {
             self.metrics.inc_consumer_layer_request();
         } else {
@@ -794,11 +783,11 @@ impl RoomManager {
         let _ipc_reservation = self
             .reserve_media_control_ipc_for_sender(room_id, participant_id, expected_sender)
             .await?;
-        self.media_server
+        Ok(self
+            .media_server
             .transport_manager()
             .subscribe_bwe_events(&media_participant_id, bwe_sender)
-            .await
-            .map_err(|e| anyhow::anyhow!(e))
+            .await?)
     }
 
     /// Applies the receive transport's bandwidth tier as a layer ceiling to
@@ -825,8 +814,7 @@ impl RoomManager {
                 Some(expected_transport),
                 spatial_layer,
             )
-            .await
-            .map_err(|e| anyhow::anyhow!(e))?;
+            .await?;
         let mut written = 0;
         for consumer_id in pending {
             let reservation = self
@@ -834,8 +822,7 @@ impl RoomManager {
                 .await?;
             let changed = transports
                 .apply_layer_ceilings(&media_participant_id, consumer_id)
-                .await
-                .map_err(|e| anyhow::anyhow!(e))?;
+                .await?;
             if changed {
                 written += 1;
                 self.metrics.inc_consumer_layer_request();

@@ -62,21 +62,17 @@ impl MediaServer {
     }
 
     /// Creates a new router for a room
-    pub async fn create_router(&self, room_id: String) -> Result<String> {
+    pub async fn create_router(&self, room_id: String) -> MediaResult<String> {
         debug!("Creating router for room: {}", room_id);
         self.router_manager
             .create_router(room_id, self.config.router_config.clone())
             .await
-            .map_err(|e| anyhow::anyhow!(e))
     }
 
     /// Removes a router when a room is closed
-    pub async fn remove_router(&self, room_id: &str) -> Result<()> {
+    pub async fn remove_router(&self, room_id: &str) -> MediaResult<()> {
         debug!("Removing router for room: {}", room_id);
-        self.router_manager
-            .remove_router(room_id)
-            .await
-            .map_err(|e| anyhow::anyhow!(e))
+        self.router_manager.remove_router(room_id).await
     }
 
     /// Gets the worker manager for direct access if needed
@@ -103,11 +99,10 @@ impl MediaServer {
     pub async fn get_consumer_counter_for_room(
         &self,
         room_id: &str,
-    ) -> Result<Option<Arc<std::sync::atomic::AtomicUsize>>> {
+    ) -> MediaResult<Option<Arc<std::sync::atomic::AtomicUsize>>> {
         self.router_manager
             .get_consumer_counter_for_room(room_id)
             .await
-            .map_err(|e| anyhow::anyhow!(e))
     }
 
     /// The consumer counter of the worker that hosts a participant's receive
@@ -116,35 +111,24 @@ impl MediaServer {
         &self,
         room_id: &str,
         participant_id: &str,
-    ) -> Result<Option<Arc<std::sync::atomic::AtomicUsize>>> {
+    ) -> MediaResult<Option<Arc<std::sync::atomic::AtomicUsize>>> {
         self.router_manager
             .get_consumer_counter_for_participant(room_id, participant_id)
             .await
-            .map_err(|e| anyhow::anyhow!(e))
     }
 
     /// Gets the WebRtcServer of one worker
     pub async fn get_webrtc_server_for_worker(
         &self,
         worker_id: mediasoup::worker::WorkerId,
-    ) -> Result<WebRtcServer> {
-        self.worker_manager
-            .get_webrtc_server(worker_id)
-            .await
-            .map_err(|e| anyhow::anyhow!(e))
+    ) -> MediaResult<WebRtcServer> {
+        self.worker_manager.get_webrtc_server(worker_id).await
     }
 
     /// Gets the WebRtcServer for the worker that hosts a room's router
-    pub async fn get_webrtc_server_for_room(&self, room_id: &str) -> Result<WebRtcServer> {
-        let worker_id = self
-            .router_manager
-            .get_worker_id(room_id)
-            .await
-            .map_err(|e| anyhow::anyhow!(e))?;
-        self.worker_manager
-            .get_webrtc_server(worker_id)
-            .await
-            .map_err(|e| anyhow::anyhow!(e))
+    pub async fn get_webrtc_server_for_room(&self, room_id: &str) -> MediaResult<WebRtcServer> {
+        let worker_id = self.router_manager.get_worker_id(room_id).await?;
+        self.worker_manager.get_webrtc_server(worker_id).await
     }
 
     /// Attempt transport, router, and worker cleanup in order, allowing two

@@ -4,8 +4,10 @@
 
 use mediasoup::prelude::*;
 use mediasoup::types::data_structures::SocketFlags;
-use mediasoup::worker::{WorkerDtlsFiles, WorkerLogLevel, WorkerLogTag};
+use mediasoup::worker::{WorkerLogLevel, WorkerLogTag};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::num::NonZeroU8;
+use std::num::NonZeroU32;
 
 pub const DEFAULT_WEBRTC_SERVER_PORT_BASE: u16 = 40_000;
 pub const MAX_MEDIA_WORKERS: usize = 64;
@@ -241,9 +243,6 @@ impl MediaConfig {
     }
 }
 
-/// A libwebrtc field-trial string: `Name/Value/` pairs, letters, digits and
-/// a few punctuation characters, so a typo cannot smuggle anything else into
-/// the worker's configuration.
 /// `MEDIA_WORKER_LOG_LEVEL`: what the native worker logs (debug, warn, error or none).
 fn parse_worker_log_level(value: &str) -> anyhow::Result<WorkerLogLevel> {
     match value.trim() {
@@ -282,6 +281,9 @@ fn parse_worker_log_tags(value: &str) -> anyhow::Result<Vec<WorkerLogTag>> {
     Ok(tags)
 }
 
+/// A libwebrtc field-trial string: `Name/Value/` pairs, letters, digits and
+/// a few punctuation characters, so a typo cannot smuggle anything else into
+/// the worker's configuration.
 fn parse_field_trials(value: &str) -> anyhow::Result<String> {
     let value = value.trim();
     if value.is_empty() || value.len() > 2048 {
@@ -441,9 +443,12 @@ pub struct WorkerConfig {
     pub libwebrtc_field_trials: Option<String>,
     pub rtc_min_port: u16,
     pub rtc_max_port: u16,
-    pub dtls_certificate_file: Option<String>,
-    pub dtls_private_key_file: Option<String>,
 }
+
+/// Opus always runs at 48 kHz.
+const OPUS_CLOCK_RATE: NonZeroU32 = NonZeroU32::new(48_000).unwrap();
+/// RTP video clocks run at 90 kHz.
+const VIDEO_CLOCK_RATE: NonZeroU32 = NonZeroU32::new(90_000).unwrap();
 
 impl Default for WorkerConfig {
     fn default() -> Self {
@@ -460,8 +465,6 @@ impl Default for WorkerConfig {
             ],
             rtc_min_port: 10000,
             rtc_max_port: 59999,
-            dtls_certificate_file: None,
-            dtls_private_key_file: None,
         }
     }
 }
@@ -477,15 +480,6 @@ impl WorkerConfig {
             settings.libwebrtc_field_trials = Some(trials.clone());
         }
         settings.rtc_port_range = self.rtc_min_port..=self.rtc_max_port;
-
-        if let (Some(cert), Some(key)) = (&self.dtls_certificate_file, &self.dtls_private_key_file)
-        {
-            settings.dtls_files = Some(WorkerDtlsFiles {
-                certificate: cert.clone().into(),
-                private_key: key.clone().into(),
-            });
-        }
-
         settings
     }
 }
@@ -512,7 +506,7 @@ impl RouterConfig {
             RtpCodecCapability::Audio {
                 mime_type: MimeTypeAudio::Opus,
                 preferred_payload_type: Some(111),
-                clock_rate: NonZeroU32::new(48000).unwrap(),
+                clock_rate: OPUS_CLOCK_RATE,
                 channels: NonZeroU8::new(2).unwrap(),
                 parameters: RtpCodecParametersParameters::from([
                     ("minptime", 10_u32.into()),
@@ -524,7 +518,7 @@ impl RouterConfig {
             RtpCodecCapability::Video {
                 mime_type: MimeTypeVideo::Vp8,
                 preferred_payload_type: Some(96),
-                clock_rate: NonZeroU32::new(90000).unwrap(),
+                clock_rate: VIDEO_CLOCK_RATE,
                 parameters: RtpCodecParametersParameters::default(),
                 rtcp_feedback: vec![
                     RtcpFeedback::Nack,
@@ -538,7 +532,7 @@ impl RouterConfig {
             RtpCodecCapability::Video {
                 mime_type: MimeTypeVideo::Vp9,
                 preferred_payload_type: Some(98),
-                clock_rate: NonZeroU32::new(90000).unwrap(),
+                clock_rate: VIDEO_CLOCK_RATE,
                 parameters: RtpCodecParametersParameters::default(),
                 rtcp_feedback: vec![
                     RtcpFeedback::Nack,
@@ -552,7 +546,7 @@ impl RouterConfig {
             RtpCodecCapability::Video {
                 mime_type: MimeTypeVideo::H264,
                 preferred_payload_type: Some(102),
-                clock_rate: NonZeroU32::new(90000).unwrap(),
+                clock_rate: VIDEO_CLOCK_RATE,
                 parameters: RtpCodecParametersParameters::from([
                     ("level-asymmetry-allowed", 1_u32.into()),
                     ("packetization-mode", 1_u32.into()),
@@ -725,9 +719,6 @@ impl WebRtcTransportConfig {
         self.with_announced_address(public_ip)
     }
 }
-
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
-use std::num::NonZeroU32;
 
 #[cfg(test)]
 mod tests {
@@ -921,7 +912,7 @@ mod tests {
     }
 
     #[test]
-    fn media_port_base_is_explicit_and_bounded() {
+    fn field_trials_are_name_value_pairs_without_shell_characters() {
         assert_eq!(
             parse_field_trials(
                 " WebRTC-Bwe-AlrLimitedBackoff/Enabled/WebRTC-BweBackOffFactor/Enabled-0.92/ "
@@ -933,6 +924,10 @@ mod tests {
         assert!(parse_field_trials("WebRTC-Bwe-AlrLimitedBackoff/").is_err());
         assert!(parse_field_trials("WebRTC-X/Enabled; rm -rf/").is_err());
         assert!(parse_field_trials("").is_err());
+    }
+
+    #[test]
+    fn media_port_base_is_explicit_and_bounded() {
         assert_eq!(parse_webrtc_port_base("41000").unwrap(), 41000);
         assert!(parse_webrtc_port_base("0").is_err());
         assert!(parse_webrtc_port_base("65536").is_err());

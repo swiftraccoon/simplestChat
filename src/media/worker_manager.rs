@@ -646,14 +646,6 @@ impl WorkerManager {
     }
 }
 
-impl Drop for WorkerManager {
-    fn drop(&mut self) {
-        // Workers will be closed automatically when dropped
-        // This is just for logging
-        debug!("WorkerManager being dropped");
-    }
-}
-
 /// Reserves `count` contiguous UDP ports for a test pool. The sockets are
 /// released on return, just before the native listeners bind the ports.
 #[cfg(test)]

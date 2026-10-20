@@ -241,8 +241,7 @@ impl RoomManager {
                 .media_server
                 .router_manager()
                 .get_router(room_id.as_str())
-                .await
-                .map_err(|error| anyhow::anyhow!(error))?;
+                .await?;
 
             let active_speaker_observer = match router
                 .create_active_speaker_observer(ActiveSpeakerObserverOptions::default())
