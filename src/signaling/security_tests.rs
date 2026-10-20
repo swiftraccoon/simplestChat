@@ -915,3 +915,26 @@ fn websocket_ticket_protocol_rejects_bearers_duplicates_and_malformed_values() {
     assert!(Query::<WsParams>::try_from_uri(&"/ws?token=secret".parse().unwrap()).is_err());
     assert!(Query::<WsParams>::try_from_uri(&"/ws?ticket=secret".parse().unwrap()).is_err());
 }
+
+#[test]
+fn the_proxy_repeats_the_applications_fixed_security_headers() {
+    // Caddy owns transport security at the edge; every other fixed header the
+    // application sends appears once in the Caddyfile with the same value.
+    let caddyfile = include_str!("../../Caddyfile");
+    for (name, value) in SECURITY_HEADERS {
+        if name == "strict-transport-security" {
+            continue;
+        }
+        let lines: Vec<&str> = caddyfile
+            .lines()
+            .map(str::trim)
+            .filter(|line| line.to_ascii_lowercase().starts_with(&format!("{name} \"")))
+            .collect();
+        assert_eq!(lines.len(), 1, "one proxy line for {name}");
+        assert_eq!(
+            lines[0].split_once(' ').map(|(_, rest)| rest),
+            Some(format!("\"{value}\"").as_str()),
+            "{name}"
+        );
+    }
+}

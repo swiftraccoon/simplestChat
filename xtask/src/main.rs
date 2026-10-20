@@ -8,6 +8,7 @@ use anyhow::{Context, Result, bail};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
+mod http_policy;
 mod line_length;
 mod protocol_ts;
 mod test_env;
@@ -20,7 +21,9 @@ Commands:
                 than the ratchet in xtask/line-length-allowance.txt permits;
                 `--update` lowers the allowance to the current count.
   protocol-ts   Write web/src/protocol.generated.ts from the Rust wire types and limits;
-                `--check` fails when the committed file is stale.  test-postgres COMMAND [ARG ...]
+                `--check` fails when the committed file is stale.  http-policy   Write security/http-policy.json from the server's security headers
+                and content security policy; `--check` fails when it is stale.
+  test-postgres COMMAND [ARG ...]
                 Run COMMAND against an owned disposable PostgreSQL cluster
                 (TEST_POSTGRES_PORT, default 15434) exported as DATABASE_URL.
   test-server COMMAND [ARG ...]
@@ -49,6 +52,7 @@ fn run(arguments: &[String]) -> Result<ExitCode> {
     match command.as_str() {
         "line-length" => line_length::run(&root, rest).map(|()| ExitCode::SUCCESS),
         "protocol-ts" => protocol_ts::run(&root, rest).map(|()| ExitCode::SUCCESS),
+        "http-policy" => http_policy::run(&root, rest).map(|()| ExitCode::SUCCESS),
         "test-postgres" => test_env::run_postgres(&root, rest),
         "test-server" => test_env::run_server(&root, rest),
         "test-env" => test_env::run_env(&root, rest),

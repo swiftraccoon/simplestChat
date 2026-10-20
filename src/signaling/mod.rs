@@ -1215,44 +1215,40 @@ fn is_loopback_host(host: &str) -> bool {
 /// so a handler's tighter policy is what the browser receives.
 pub(crate) const CONTENT_SECURITY_POLICY: &str = "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; font-src 'self'";
 
+/// The fixed security headers every response carries. `security/http-policy.json`
+/// (written by `cargo run -q -p xtask -- http-policy`) carries this table and the
+/// policy above to the release fixture's response check, and a test holds the
+/// proxy's `Caddyfile` to the same values.
+pub(crate) const SECURITY_HEADERS: [(&str, &str); 7] = [
+    ("x-content-type-options", "nosniff"),
+    ("referrer-policy", "no-referrer"),
+    (
+        "strict-transport-security",
+        "max-age=31536000; includeSubDomains",
+    ),
+    (
+        "permissions-policy",
+        "camera=(self), microphone=(self), display-capture=(self), geolocation=()",
+    ),
+    ("x-frame-options", "DENY"),
+    ("cross-origin-opener-policy", "same-origin"),
+    ("cross-origin-resource-policy", "same-origin"),
+];
+
 async fn security_headers(request: Request<Body>, next: Next) -> Response {
     let mut response = next.run(request).await;
     let headers = response.headers_mut();
-    headers.insert(
-        header::X_CONTENT_TYPE_OPTIONS,
-        HeaderValue::from_static("nosniff"),
-    );
-    headers.insert(
-        header::REFERRER_POLICY,
-        HeaderValue::from_static("no-referrer"),
-    );
-    headers.insert(
-        header::STRICT_TRANSPORT_SECURITY,
-        HeaderValue::from_static("max-age=31536000; includeSubDomains"),
-    );
+    for (name, value) in SECURITY_HEADERS {
+        headers.insert(
+            header::HeaderName::from_static(name),
+            HeaderValue::from_static(value),
+        );
+    }
     // Download handlers set a tighter sandbox policy for untrusted file bytes.
     // The application policy supplies the default without replacing that boundary.
     headers
         .entry(header::CONTENT_SECURITY_POLICY)
         .or_insert_with(|| HeaderValue::from_static(CONTENT_SECURITY_POLICY));
-    headers.insert(
-        header::HeaderName::from_static("permissions-policy"),
-        HeaderValue::from_static(
-            "camera=(self), microphone=(self), display-capture=(self), geolocation=()",
-        ),
-    );
-    headers.insert(
-        header::HeaderName::from_static("x-frame-options"),
-        HeaderValue::from_static("DENY"),
-    );
-    headers.insert(
-        header::HeaderName::from_static("cross-origin-opener-policy"),
-        HeaderValue::from_static("same-origin"),
-    );
-    headers.insert(
-        header::HeaderName::from_static("cross-origin-resource-policy"),
-        HeaderValue::from_static("same-origin"),
-    );
     // Every JSON body, errors included, is account or policy state for one
     // caller; nothing in it may be served from a cache.
     if response

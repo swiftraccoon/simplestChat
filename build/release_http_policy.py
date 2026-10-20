@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ops/ansible/files"))
 import bounded_process
-from release_json import JsonObject, decode_json, object_value
+from release_json import JsonObject, decode_json, object_value, string_value
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -42,28 +42,28 @@ LABEL = "simplestchat.release-test"
 HEX_ID = re.compile(r"[a-f0-9]{64}")
 DOCKER = ("/usr/bin/docker", "--host", "unix:///var/run/docker.sock")
 ENV = {"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "LC_ALL": "C"}
-CSP = {
-    "default-src": "'self'",
-    "base-uri": "'none'",
-    "object-src": "'none'",
-    "frame-ancestors": "'none'",
-    "form-action": "'self'",
-    "script-src": "'self'",
-    "style-src": "'self' 'unsafe-inline'",
-    "img-src": "'self' data: blob:",
-    "media-src": "'self' blob:",
-    "connect-src": "'self'",
-    "font-src": "'self'",
-}
-FIXED_HEADERS = {
-    "x-content-type-options": "nosniff",
-    "x-frame-options": "DENY",
-    "referrer-policy": "no-referrer",
-    "cross-origin-opener-policy": "same-origin",
-    "cross-origin-resource-policy": "same-origin",
-    "permissions-policy": "camera=(self), microphone=(self), "
-    + "display-capture=(self), geolocation=()",
-}
+POLICY_PATH = Path(__file__).resolve().parents[1] / "security/http-policy.json"
+
+
+def reviewed_policy() -> tuple[dict[str, str], dict[str, str]]:
+    """Read the server's policy as `cargo run -q -p xtask -- http-policy` wrote it.
+
+    Caddy owns transport security at the edge, so the backend's HSTS header is
+    not part of the proxy response check.
+    """
+    document = object_value(decode_json(POLICY_PATH.read_text(encoding="utf-8")))
+    directives = {
+        key: string_value(value) for key, value in object_value(document["directives"]).items()
+    }
+    headers = {
+        key: string_value(value)
+        for key, value in object_value(document["headers"]).items()
+        if key != "strict-transport-security"
+    }
+    return directives, headers
+
+
+CSP, FIXED_HEADERS = reviewed_policy()
 
 
 class PolicyError(Exception):
