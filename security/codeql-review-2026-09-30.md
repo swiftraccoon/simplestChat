@@ -969,3 +969,20 @@ Complete-source SHA256 per rebound file:
 | 63 | `src/signaling/security_tests.rs:605:605:27:52` | `codeql:2b7a354c01f3045e6efc419e5a41e8a8e8a8b273ec28f7f5ab1269f9c449cda4` |
 | 69 | `src/signaling/security_tests.rs:165:165:75:87` | `codeql:3cc46216401cbf199caa79d88880e1616d823da2357b6f7b687808c4272f0cf7` |
 | dormant join | `src/room/dormant_join_tests.rs:102:102:57:79` | `codeql:783d7a6196a1d66de55a9cb7c08e3e3509c315dd71536ca7bfaf4e0be29ff03b` |
+
+## Source re-review: settings refusals typed (2026-10-20)
+
+`3320351` replaced the quota sentinel strings and their classifiers in `src/room/settings.rs`
+with typed refusals, which moved the four reviewed test-fixture findings fifteen lines up; no
+flagged line changed (verified by text at the new lines). Rebound with the line-mapping tool.
+
+Complete-source SHA256 per rebound file:
+
+- `src/room/settings.rs`: `ed06889dac33135b0fc1133bc2c3f62bafd02aef3ef473e450aee7b73b07bcd9`
+
+| Alert | Range | Fingerprint |
+|---|---|---|
+| 59 | `src/room/settings.rs:601:601:33:42` | `codeql:c161ed379d7507af5f1845156eee4eba620ae8e9b8482015bc13bac500baa500` |
+| 60 | `src/room/settings.rs:606:606:33:43` | `codeql:a788626023399a6f68538e55aef7a6cb75f6c0d2b126d8e5bf536236b1f11d18` |
+| 61 | `src/room/settings.rs:608:608:33:43` | `codeql:5f26c9f7ef67b3049aaf4306d7dfeee13b0f3aaaddb91c1d0d8592ada5c1196d` |
+| 62 | `src/room/settings.rs:611:611:33:45` | `codeql:e9f3e8158d018c450064f7671e35a74470d87cfa46f9049c7133c3eee56caa4b` |
