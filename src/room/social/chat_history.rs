@@ -3,6 +3,7 @@
 //! history before the room sees it.
 
 use super::*;
+use crate::room::refusal::RoomError;
 
 impl RoomManager {
     pub(super) async fn chat_history(
@@ -18,7 +19,7 @@ impl RoomManager {
             .settings
             .as_ref()
             .map_or(0, |settings| settings.history_retention_days);
-        query.validate().map_err(rejected)?;
+        query.validate().map_err(invalid)?;
         if days == 0 || !room.persisted {
             return Ok(SocialResponse::GetChatHistory(history::HistoryPage {
                 messages: Vec::new(),
@@ -97,7 +98,7 @@ impl RoomManager {
         .await
         .map_err(|_| failed("Read marker could not be saved"))?
         .map_err(|error| {
-            if matches!(error, sqlx::Error::RowNotFound) {
+            if matches!(error, RoomError::Database(sqlx::Error::RowNotFound)) {
                 unavailable("Message unavailable")
             } else {
                 error.into()
@@ -212,17 +213,14 @@ impl RoomManager {
                     ),
                 )
                 .await
-                .map_err(|error| {
-                    if let sqlx::Error::InvalidArgument(message) = error {
-                        rejected(&message)
-                    } else {
-                        error.into()
-                    }
+                .map_err(|error| match error {
+                    RoomError::Refused(refused) => super::refused(refused),
+                    RoomError::Database(error) => error.into(),
                 })?;
             self.account_updates().private_message(&edited);
             request.reacquire().await?;
         } else {
-            history::apply_edit(&mut edited, &edit).map_err(rejected)?;
+            history::apply_edit(&mut edited, &edit).map_err(invalid)?;
         }
         publish_edit(request.room(), &edited)?;
         drop(self.schedule_inbox_edit(&edited));
@@ -261,12 +259,9 @@ impl RoomManager {
                     history::set_pin(pool, room_id.as_str(), message, pinned),
                 )
                 .await
-                .map_err(|error| {
-                    if let sqlx::Error::InvalidArgument(message) = error {
-                        rejected(&message)
-                    } else {
-                        error.into()
-                    }
+                .map_err(|error| match error {
+                    RoomError::Refused(refused) => super::refused(refused),
+                    RoomError::Database(error) => error.into(),
                 })?;
             }
             let pins = tokio::time::timeout(
@@ -400,7 +395,7 @@ impl RoomManager {
                     .execute(&mut *transaction)
                     .await?;
                     record_event(&mut transaction, room_id, &event, MAX_MODERATION_EVENTS).await?;
-                    transaction.commit().await
+                    Ok(transaction.commit().await?)
                 })
                 .await?;
                 request.reacquire().await?;
@@ -414,8 +409,8 @@ impl RoomManager {
                         .bind(room_id)
                         .bind(message_id.as_uuid())
                         .execute(pool)
-                        .await
-                        .map(|_| ())
+                        .await?;
+                        Ok(())
                     })
                     .await?;
                     request.reacquire().await?;
@@ -485,12 +480,9 @@ impl RoomManager {
                     ),
                 )
                 .await
-                .map_err(|error| {
-                    if let sqlx::Error::InvalidArgument(message) = error {
-                        rejected(&message)
-                    } else {
-                        error.into()
-                    }
+                .map_err(|error| match error {
+                    RoomError::Refused(refused) => super::refused(refused),
+                    RoomError::Database(error) => error.into(),
                 })?;
             request.reacquire().await?;
             if let Some(message) = saved {

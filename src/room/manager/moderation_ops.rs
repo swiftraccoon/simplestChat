@@ -2,6 +2,7 @@
 //! requests, each committed through the room's control order.
 
 use super::super::*;
+use crate::room::refusal::RoomError;
 
 impl RoomManager {
     #[expect(
@@ -680,7 +681,7 @@ impl RoomManager {
                 )
                 .await
                 .map_err(|error| {
-                    if matches!(error, sqlx::Error::RowNotFound) {
+                    if matches!(error, RoomError::Database(sqlx::Error::RowNotFound)) {
                         return anyhow::anyhow!("Report not found");
                     }
                     warn!(%room_id, %error, "Failed to persist room ban");

@@ -268,7 +268,7 @@ impl RoomManager {
                         .execute(pool)
                         .await?;
                 if result.rows_affected() != 1 {
-                    return Err(sqlx::Error::RowNotFound);
+                    return Err(sqlx::Error::RowNotFound.into());
                 }
                 Ok(())
             })

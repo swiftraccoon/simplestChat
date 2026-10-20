@@ -153,7 +153,7 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
             .execute(Command::Role(outsider, roles::Role::Admin))
             .await;
         assert!(
-            matches!(missing, Err(sqlx::Error::InvalidArgument(_))),
+            matches!(missing, Err(RoomError::Refused(_))),
             "another room's roster is never an account lookup"
         );
         assert!(
@@ -257,7 +257,7 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
             moderation::ReportResolution::Dismissed,
         ))
         .await;
-        assert!(matches!(stale_report, Err(sqlx::Error::InvalidArgument(_))));
+        assert!(matches!(stale_report, Err(RoomError::Refused(_))));
         assert!(
             !room.read().await.deleting,
             "a resolved report is a definite rejection, not an uncertain write"
@@ -351,7 +351,7 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
                 .unwrap()
                 .execute(Command::Unban(ban))
                 .await;
-        assert!(matches!(stale_ban, Err(sqlx::Error::InvalidArgument(_))));
+        assert!(matches!(stale_ban, Err(RoomError::Refused(_))));
         assert!(
             !room.read().await.deleting,
             "an absent ban must not close a healthy room"

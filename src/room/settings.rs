@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 use crate::ids::RoomId;
+use crate::room::refusal::{Refusal, RoomError};
 use crate::signaling::protocol::ChatStyle;
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, PgPool};
@@ -178,27 +179,11 @@ pub(crate) const MAX_PARTICIPANTS: i32 = 10_000;
 pub(crate) const MAX_BROADCASTERS: i32 = 1_000;
 pub(crate) const MAX_PERSISTED_ROOMS_PER_OWNER: i64 = 100;
 
-const PERSISTED_ROOM_QUOTA_ERROR: &str = "persisted-room owner quota reached";
-const PERSISTED_ROOM_GLOBAL_QUOTA_ERROR: &str = "persisted-room global quota reached";
 const GLOBAL_ROOM_CREATION_LOCK: i64 = 7_349_872_340_910;
 
 /// The surrounding room manager deliberately exposes `sqlx::Error`, so use a
 /// private, recognizable error value to preserve that API while allowing the
 /// HTTP layer to distinguish an account quota from a database outage.
-pub(crate) fn is_persisted_room_quota_error(error: &sqlx::Error) -> bool {
-    matches!(
-        error,
-        sqlx::Error::InvalidArgument(message) if message == PERSISTED_ROOM_QUOTA_ERROR
-    )
-}
-
-pub(crate) fn is_global_persisted_room_quota_error(error: &sqlx::Error) -> bool {
-    matches!(
-        error,
-        sqlx::Error::InvalidArgument(message) if message == PERSISTED_ROOM_GLOBAL_QUOTA_ERROR
-    )
-}
-
 pub(crate) fn valid_room_id(room_id: &str) -> bool {
     RoomId::new(room_id).is_ok()
 }
@@ -258,7 +243,7 @@ pub(crate) fn validate_create_request(request: &CreateRoomRequest) -> Result<(),
 pub(crate) async fn load_room<'e>(
     executor: impl sqlx::PgExecutor<'e>,
     room_id: &RoomId,
-) -> Result<Option<(RoomSettings, Option<String>)>, sqlx::Error> {
+) -> Result<Option<(RoomSettings, Option<String>)>, RoomError> {
     let row = sqlx::query_as::<_, RoomRow>(
         "SELECT id, owner_id, display_name, password_hash, require_registration,
                 max_participants, max_broadcasters, allow_screen_sharing, allow_chat, allow_video,
@@ -307,7 +292,7 @@ pub(crate) async fn create_room(
     req: &CreateRoomRequest,
     password_hash: Option<&str>,
     max_persisted_rooms: i64,
-) -> Result<RoomSettings, sqlx::Error> {
+) -> Result<RoomSettings, RoomError> {
     let mut transaction = pool.begin().await?;
 
     // Serialize the global count across every application instance, then take
@@ -321,9 +306,7 @@ pub(crate) async fn create_room(
         .await?;
     if persisted_room_count >= max_persisted_rooms {
         transaction.rollback().await?;
-        return Err(sqlx::Error::InvalidArgument(
-            PERSISTED_ROOM_GLOBAL_QUOTA_ERROR.to_string(),
-        ));
+        return Err(Refusal::Unavailable("Persisted room capacity has been reached".into()).into());
     }
 
     // Serialize the per-owner count-and-insert sequence. A hash collision only
@@ -340,9 +323,11 @@ pub(crate) async fn create_room(
             .await?;
     if owned_room_count >= MAX_PERSISTED_ROOMS_PER_OWNER {
         transaction.rollback().await?;
-        return Err(sqlx::Error::InvalidArgument(
-            PERSISTED_ROOM_QUOTA_ERROR.to_string(),
-        ));
+        return Err(Refusal::Conflict(
+            format!("Persisted room quota reached (maximum {MAX_PERSISTED_ROOMS_PER_OWNER})")
+                .into(),
+        )
+        .into());
     }
 
     sqlx::query(
@@ -478,7 +463,7 @@ pub(crate) async fn update_room_settings(
     room_id: &RoomId,
     patch: &SettingsPatch,
     password_hash: Option<Option<String>>,
-) -> Result<(), sqlx::Error> {
+) -> Result<(), RoomError> {
     // One assignment per provided field; the builder numbers the parameters, so
     // the column and its value can never drift apart.
     let mut builder = sqlx::QueryBuilder::<sqlx::Postgres>::new("UPDATE rooms SET ");
@@ -516,7 +501,7 @@ pub(crate) async fn update_room_settings(
 
     let result = builder.build().execute(pool).await?;
     if result.rows_affected() != 1 {
-        return Err(sqlx::Error::RowNotFound);
+        return Err(sqlx::Error::RowNotFound.into());
     }
     Ok(())
 }
@@ -625,20 +610,6 @@ mod tests {
         assert!(validate_create_request(&request).is_ok());
         request.password = Some("password\n".to_string());
         assert!(validate_create_request(&request).is_err());
-    }
-
-    #[test]
-    fn persisted_room_quota_error_is_distinguishable() {
-        let quota_error = sqlx::Error::InvalidArgument(PERSISTED_ROOM_QUOTA_ERROR.to_string());
-        assert!(is_persisted_room_quota_error(&quota_error));
-        assert!(!is_global_persisted_room_quota_error(&quota_error));
-
-        let global_error =
-            sqlx::Error::InvalidArgument(PERSISTED_ROOM_GLOBAL_QUOTA_ERROR.to_string());
-        assert!(is_global_persisted_room_quota_error(&global_error));
-        assert!(!is_persisted_room_quota_error(&global_error));
-        assert!(!is_persisted_room_quota_error(&sqlx::Error::PoolClosed));
-        assert_eq!(MAX_PERSISTED_ROOMS_PER_OWNER, 100);
     }
 
     /// The owner id leaves with no payload but survives a JSON round-trip that carries it,

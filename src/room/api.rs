@@ -4,6 +4,7 @@ use crate::auth::{account, types::AuthError};
 use crate::ids::RoomId;
 use crate::room::DeleteRoomResult;
 use crate::room::community::RoomIdentityUpdate;
+use crate::room::refusal::RoomError;
 use crate::room::settings::{self, CreateRoomRequest, RoomSettings};
 use crate::signaling::SignalingServer;
 use crate::signaling::protocol::ChatStyle;
@@ -184,9 +185,16 @@ fn list_window(params: &ListParams) -> Result<(i64, i64), &'static str> {
     Ok((limit, offset))
 }
 
-pub(crate) fn room_database_error(error: sqlx::Error) -> Response {
-    crate::db::record_error(&error);
-    AuthError::DatabaseError(error.to_string()).into_response()
+pub(crate) fn room_database_error(error: impl Into<RoomError>) -> Response {
+    match error.into() {
+        RoomError::Refused(refusal) => {
+            (refusal.status(), refusal.message().to_owned()).into_response()
+        }
+        RoomError::Database(error) => {
+            crate::db::record_error(&error);
+            AuthError::DatabaseError(error.to_string()).into_response()
+        }
+    }
 }
 
 /// GET /api/rooms
@@ -406,26 +414,16 @@ pub(crate) async fn create_room(
             if server.room_manager().drain_signal().is_draining() {
                 return (StatusCode::SERVICE_UNAVAILABLE, "Server shutting down").into_response();
             }
-            if settings::is_global_persisted_room_quota_error(&error) {
-                return (
-                    StatusCode::SERVICE_UNAVAILABLE,
-                    "Persisted room capacity has been reached",
-                )
-                    .into_response();
+            match error {
+                RoomError::Refused(refusal) => {
+                    (refusal.status(), refusal.message().to_owned()).into_response()
+                }
+                RoomError::Database(error) => {
+                    crate::db::record_error(&error);
+                    warn!(room_id = %req.id, %error, "Failed to create room");
+                    AuthError::DatabaseError("room creation failed".to_string()).into_response()
+                }
             }
-            if settings::is_persisted_room_quota_error(&error) {
-                return (
-                    StatusCode::CONFLICT,
-                    format!(
-                        "Persisted room quota reached (maximum {})",
-                        settings::MAX_PERSISTED_ROOMS_PER_OWNER
-                    ),
-                )
-                    .into_response();
-            }
-            crate::db::record_error(&error);
-            warn!(room_id = %req.id, %error, "Failed to create room");
-            AuthError::DatabaseError("room creation failed".to_string()).into_response()
         })?
         .ok_or_else(|| {
             (
@@ -464,10 +462,15 @@ pub(crate) async fn delete_room(
         .room_manager()
         .delete_persisted_room(&room_id, &user_id)
         .await
-        .map_err(|error| {
-            crate::db::record_error(&error);
-            warn!(%room_id, %error, "Failed to delete room");
-            AuthError::DatabaseError("room deletion failed".to_string()).into_response()
+        .map_err(|error| match error {
+            RoomError::Refused(refusal) => {
+                (refusal.status(), refusal.message().to_owned()).into_response()
+            }
+            RoomError::Database(error) => {
+                crate::db::record_error(&error);
+                warn!(%room_id, %error, "Failed to delete room");
+                AuthError::DatabaseError("room deletion failed".to_string()).into_response()
+            }
         })?;
 
     match result {

@@ -7,6 +7,7 @@ use crate::auth::{
     account, routes,
     types::{AuthError, Claims},
 };
+use crate::room::refusal::{Refusal, RoomError};
 use crate::signaling::{SignalingServer, protocol::ChatEntry};
 use axum::{
     Json,
@@ -235,10 +236,6 @@ fn conversation_message(mut message: ChatEntry, account: bool) -> ChatEntry {
     message
 }
 
-fn invalid(message: &'static str) -> sqlx::Error {
-    sqlx::Error::InvalidArgument(message.into())
-}
-
 #[derive(Clone, sqlx::FromRow)]
 struct ChatAccount {
     id: Uuid,
@@ -270,9 +267,9 @@ async fn lock_private_accounts(
     connection: &mut PgConnection,
     sender: Uuid,
     recipient: Uuid,
-) -> Result<(ChatAccount, ChatAccount), sqlx::Error> {
+) -> Result<(ChatAccount, ChatAccount), RoomError> {
     if sender == recipient {
-        return Err(invalid("Private message unavailable"));
+        return Err(Refusal::Unavailable("Private message unavailable".into()).into());
     }
     let people: Vec<ChatAccount> = sqlx::query_as(
         "SELECT id,display_name,preferences,chat_color,chat_style,auth_version FROM users WHERE id=ANY($1) ORDER BY id FOR SHARE")
@@ -281,12 +278,12 @@ async fn lock_private_accounts(
         .iter()
         .find(|person| person.id == sender)
         .cloned()
-        .ok_or_else(|| invalid("Private message unavailable"))?;
+        .ok_or_else(|| Refusal::Unavailable("Private message unavailable".into()))?;
     let recipient = people
         .iter()
         .find(|person| person.id == recipient)
         .cloned()
-        .ok_or_else(|| invalid("Private message unavailable"))?;
+        .ok_or_else(|| Refusal::Unavailable("Private message unavailable".into()))?;
     Ok((sender, recipient))
 }
 
@@ -305,14 +302,14 @@ pub(crate) async fn persist_message(
     retention_days: i32,
     message: &ChatEntry,
     attachment_ids: &[Uuid],
-) -> Result<ChatEntry, sqlx::Error> {
+) -> Result<ChatEntry, RoomError> {
     let mut tx = pool.begin().await?;
     if let Some(recipient) = message.recipient_id {
         let sender = message.participant_id.as_uuid();
         let recipient = recipient.as_uuid();
         let (sender, recipient) = lock_private_accounts(&mut tx, sender, recipient).await?;
         if !sender_authenticated || !private_accounts_allow(&sender, &recipient) {
-            return Err(invalid("Private message unavailable"));
+            return Err(Refusal::Unavailable("Private message unavailable".into()).into());
         }
     }
     let saved = insert_message(
@@ -342,13 +339,13 @@ async fn insert_message(
     retention_days: i32,
     message: &ChatEntry,
     attachment_ids: &[Uuid],
-) -> Result<ChatEntry, sqlx::Error> {
+) -> Result<ChatEntry, RoomError> {
     let sender: Uuid = message.participant_id.as_uuid();
     let recipient = message.recipient_id.map(|id| id.as_uuid());
     let conversation = match (room, recipient) {
         (Some(room), None) => public_conversation(room),
         (None, Some(recipient)) if sender_authenticated => private_conversation(sender, recipient),
-        _ => return Err(invalid("Invalid saved conversation")),
+        _ => return Err(Refusal::Invalid("Invalid saved conversation".into()).into()),
     };
     // Serialize edits and quoted sends in one conversation so a reply cannot
     // commit a pre-edit excerpt after an edit has already updated older quotes.
@@ -373,12 +370,12 @@ async fn insert_message(
                         || existing.0.reply_to.as_ref().map(|reply| &reply.message_id)
                             != message.reply_to.as_ref().map(|reply| &reply.message_id))))
         {
-            return Err(invalid("Message ID was already used"));
+            return Err(Refusal::Conflict("Message ID was already used".into()).into());
         }
         return Ok(conversation_message(existing.0, recipient.is_some()));
     }
     if !attachment_ids.is_empty() && !sender_authenticated {
-        return Err(invalid("Sign in to attach files"));
+        return Err(Refusal::Forbidden("Sign in to attach files".into()).into());
     }
     message.attachments =
         crate::attachments::pending_metadata(connection, sender, attachment_ids).await?;
@@ -424,7 +421,7 @@ async fn insert_message(
                 || saved.0.reply_to.as_ref().map(|r| &r.message_id)
                     != message.reply_to.as_ref().map(|r| &r.message_id))
         {
-            return Err(invalid("Message ID was already used"));
+            return Err(Refusal::Conflict("Message ID was already used".into()).into());
         }
         return Ok(conversation_message(saved.0, recipient.is_some()));
     };
@@ -454,10 +451,12 @@ pub(crate) async fn page(
     account: Option<Uuid>,
     retention_days: i32,
     query: &HistoryQuery,
-) -> Result<HistoryPage, sqlx::Error> {
-    query.validate().map_err(invalid)?;
-    let cursor =
-        decode_cursor(query.before.as_deref().or(query.after.as_deref())).map_err(invalid)?;
+) -> Result<HistoryPage, RoomError> {
+    query
+        .validate()
+        .map_err(|message| Refusal::Invalid(message.into()))?;
+    let cursor = decode_cursor(query.before.as_deref().or(query.after.as_deref()))
+        .map_err(|message| Refusal::Invalid(message.into()))?;
     let limit = query.limit.unwrap_or(PAGE_LIMIT as u32) as usize;
     let read: Option<(Uuid, DateTime<Utc>)> = if let Some(account) = account {
         sqlx::query_as("SELECT message_id,sent_at FROM chat_read_cursors WHERE user_id=$1 AND conversation=$2 AND expires_at>now()")
@@ -563,7 +562,7 @@ pub(crate) async fn mark_read(
     conversation: &str,
     account: Uuid,
     message: Uuid,
-) -> Result<ReadResult, sqlx::Error> {
+) -> Result<ReadResult, RoomError> {
     let mut transaction = pool.begin().await?;
     let result: Option<Uuid> = sqlx::query_scalar(
         "INSERT INTO chat_read_cursors (user_id,conversation,message_id,sent_at,expires_at)
@@ -618,7 +617,7 @@ pub(crate) async fn save_reactions(
     pool: &PgPool,
     id: &MessageId,
     reactions: &[crate::signaling::protocol::ChatReaction],
-) -> Result<(), sqlx::Error> {
+) -> Result<(), RoomError> {
     let id: Uuid = id.as_uuid();
     sqlx::query("UPDATE chat_messages SET body=jsonb_set(body,'{reactions}',$2) WHERE id=$1 AND expires_at>now() AND body->>'removedAt' IS NULL")
         .bind(id).bind(SqlJson(reactions)).execute(pool).await?;
@@ -635,7 +634,7 @@ pub(crate) async fn react_public(
     participant: &ParticipantId,
     ignored: &[ParticipantId],
     emoji: &str,
-) -> Result<Option<ChatEntry>, sqlx::Error> {
+) -> Result<Option<ChatEntry>, RoomError> {
     let id: Uuid = id.as_uuid();
     let mut tx = pool.begin().await?;
     sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1,29))")
@@ -654,8 +653,8 @@ pub(crate) async fn react_public(
     let Some(SqlJson(mut message)) = saved else {
         return Ok(None);
     };
-    message.reactions =
-        super::social::toggle_reactions(&message.reactions, participant, emoji).map_err(invalid)?;
+    message.reactions = super::social::toggle_reactions(&message.reactions, participant, emoji)
+        .map_err(|message| Refusal::Invalid(message.into()))?;
     sqlx::query("UPDATE chat_messages SET body=jsonb_set(body,'{reactions}',$2) WHERE id=$1")
         .bind(id)
         .bind(SqlJson(&message.reactions))
@@ -669,7 +668,7 @@ pub(crate) async fn lookup_public(
     pool: &PgPool,
     room: &str,
     id: &MessageId,
-) -> Result<Option<(ChatEntry, bool)>, sqlx::Error> {
+) -> Result<Option<(ChatEntry, bool)>, RoomError> {
     let id: Uuid = id.as_uuid();
     let row: Option<(SqlJson<ChatEntry>,bool)> = sqlx::query_as(
         "SELECT body,sender_account IS NOT NULL FROM chat_messages WHERE room_id=$1 AND id=$2 AND expires_at>now()")
@@ -683,7 +682,7 @@ pub(crate) async fn remove_public(
     room: &str,
     id: &MessageId,
     removed_at: DateTime<Utc>,
-) -> Result<Option<(ChatEntry, bool)>, sqlx::Error> {
+) -> Result<Option<(ChatEntry, bool)>, RoomError> {
     let id: Uuid = id.as_uuid();
     sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1,29))")
         .bind(public_conversation(room))
@@ -719,7 +718,7 @@ async fn edit_in_transaction(
     guest_session: Option<Uuid>,
     message: Uuid,
     request: &EditRequest,
-) -> Result<ChatEntry, sqlx::Error> {
+) -> Result<ChatEntry, RoomError> {
     sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1,29))")
         .bind(conversation)
         .execute(&mut *connection)
@@ -737,7 +736,7 @@ async fn edit_in_transaction(
     .await?;
     let mut edited = conversation_message(saved.0, conversation.starts_with("pm:"));
     let old_revision = edited.revision;
-    apply_edit(&mut edited, request).map_err(invalid)?;
+    apply_edit(&mut edited, request).map_err(|message| Refusal::Invalid(message.into()))?;
     if old_revision != edited.revision {
         sqlx::query("UPDATE chat_messages SET body=$2 WHERE id=$1")
             .bind(message)
@@ -764,17 +763,17 @@ pub(crate) async fn edit_saved(
     guest_session: Option<Uuid>,
     original: &ChatEntry,
     request: &EditRequest,
-) -> Result<ChatEntry, sqlx::Error> {
+) -> Result<ChatEntry, RoomError> {
     let mut tx = pool.begin().await?;
     let conversation = if let Some(peer) = original.recipient_id {
         let peer = peer.as_uuid();
         let (sender, recipient) = lock_private_accounts(&mut tx, actor, peer).await?;
         if guest_session.is_some() || !private_accounts_allow(&sender, &recipient) {
-            return Err(invalid("Private message unavailable"));
+            return Err(Refusal::Unavailable("Private message unavailable".into()).into());
         }
         private_conversation(actor, peer)
     } else {
-        public_conversation(room.ok_or_else(|| invalid("Room unavailable"))?)
+        public_conversation(room.ok_or_else(|| Refusal::Unavailable("Room unavailable".into()))?)
     };
     let message = original.message_id.as_uuid();
     let edited = edit_in_transaction(
@@ -850,13 +849,24 @@ async fn save_private_edit(
     Ok(edited)
 }
 
-fn edit_error(error: sqlx::Error) -> AuthError {
+/// An HTTP route answers a refusal with its own status and a database failure
+/// with the shared account-service response.
+fn route_error(error: RoomError) -> AuthError {
     match error {
-        sqlx::Error::RowNotFound => AuthError::InvalidInput("Message unavailable"),
-        sqlx::Error::InvalidArgument(_) => {
+        RoomError::Refused(refusal) => AuthError::Refused(refusal),
+        RoomError::Database(error) => routes::database_error(error),
+    }
+}
+
+fn edit_error(error: impl Into<RoomError>) -> AuthError {
+    match error.into() {
+        RoomError::Database(sqlx::Error::RowNotFound) => {
+            AuthError::InvalidInput("Message unavailable")
+        }
+        RoomError::Refused(_) => {
             AuthError::InvalidInput("Message unavailable or changed; refresh before editing")
         }
-        other => routes::database_error(other),
+        RoomError::Database(other) => routes::database_error(other),
     }
 }
 
@@ -867,7 +877,7 @@ pub(crate) async fn private_message(
     own: Uuid,
     peer: Uuid,
     message: Uuid,
-) -> Result<Option<ChatEntry>, sqlx::Error> {
+) -> Result<Option<ChatEntry>, RoomError> {
     let saved: Option<SqlJson<ChatEntry>> = sqlx::query_scalar(
         "SELECT body FROM chat_messages WHERE conversation=$1 AND id=$2 AND expires_at>now() AND body->>'removedAt' IS NULL",
     ).bind(private_conversation(own, peer)).bind(message).fetch_optional(pool).await?;
@@ -880,7 +890,7 @@ async fn set_private_reaction_in_transaction(
     message: Uuid,
     actor: &ParticipantId,
     request: &SetReactionRequest,
-) -> Result<ChatEntry, sqlx::Error> {
+) -> Result<ChatEntry, RoomError> {
     sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1,29))")
         .bind(conversation)
         .execute(&mut *connection)
@@ -891,7 +901,7 @@ async fn set_private_reaction_in_transaction(
     let mut message = conversation_message(saved.0, true);
     message.reactions =
         super::social::set_reaction(&message.reactions, actor, &request.emoji, request.present)
-            .map_err(invalid)?;
+            .map_err(|message| Refusal::Invalid(message.into()))?;
     sqlx::query("UPDATE chat_messages SET body=jsonb_set(body,'{reactions}',$2) WHERE id=$1")
         .bind(message.message_id.as_uuid())
         .bind(SqlJson(&message.reactions))
@@ -980,7 +990,7 @@ async fn save_private_reaction(
 pub(crate) async fn pinned_messages(
     pool: &PgPool,
     room: &str,
-) -> Result<Vec<ChatEntry>, sqlx::Error> {
+) -> Result<Vec<ChatEntry>, RoomError> {
     let rows: Vec<SqlJson<ChatEntry>> = sqlx::query_scalar(
         "SELECT m.body FROM chat_pins p JOIN chat_messages m ON m.id=p.message_id
         WHERE p.room_id=$1 AND m.room_id=$1 AND m.expires_at>now() AND m.body->>'removedAt' IS NULL
@@ -997,7 +1007,7 @@ pub(crate) async fn set_pin(
     room: &str,
     message: &MessageId,
     pinned: bool,
-) -> Result<(), sqlx::Error> {
+) -> Result<(), RoomError> {
     let message: Uuid = message.as_uuid();
     let mut tx = pool.begin().await?;
     sqlx::query("SELECT id FROM rooms WHERE id=$1 FOR UPDATE")
@@ -1010,7 +1020,7 @@ pub(crate) async fn set_pin(
         let available:bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM chat_messages WHERE room_id=$1 AND id=$2 AND expires_at>now() AND body->>'removedAt' IS NULL)")
             .bind(room).bind(message).fetch_one(&mut *tx).await?;
         if !available {
-            return Err(sqlx::Error::RowNotFound);
+            return Err(sqlx::Error::RowNotFound.into());
         }
         let existing: bool = sqlx::query_scalar(
             "SELECT EXISTS(SELECT 1 FROM chat_pins WHERE room_id=$1 AND message_id=$2)",
@@ -1023,7 +1033,9 @@ pub(crate) async fn set_pin(
             let slot:Option<i64> = sqlx::query_scalar("SELECT s FROM generate_series(1::bigint,3::bigint) s WHERE NOT EXISTS(SELECT 1 FROM chat_pins WHERE room_id=$1 AND slot=s) ORDER BY s LIMIT 1")
                 .bind(room).fetch_optional(&mut *tx).await?;
             let slot = slot.ok_or_else(|| {
-                invalid("Unpin a message before pinning another; rooms keep up to three")
+                Refusal::Conflict(
+                    "Unpin a message before pinning another; rooms keep up to three".into(),
+                )
             })?;
             sqlx::query("INSERT INTO chat_pins(room_id,message_id,slot) VALUES($1,$2,$3)")
                 .bind(room)
@@ -1039,13 +1051,13 @@ pub(crate) async fn set_pin(
             .execute(&mut *tx)
             .await?;
     }
-    tx.commit().await
+    Ok(tx.commit().await?)
 }
 
 /// Public history stops being readable and is erased in the settings transaction.
-pub(crate) async fn set_retention(pool: &PgPool, room: &str, days: i32) -> Result<(), sqlx::Error> {
+pub(crate) async fn set_retention(pool: &PgPool, room: &str, days: i32) -> Result<(), RoomError> {
     if !ROOM_HISTORY_RETENTION_DAYS.contains(&days) {
-        return Err(invalid("Invalid history retention"));
+        return Err(Refusal::Invalid("Invalid history retention".into()).into());
     }
     let mut tx = pool.begin().await?;
     let updated =
@@ -1055,7 +1067,7 @@ pub(crate) async fn set_retention(pool: &PgPool, room: &str, days: i32) -> Resul
             .execute(&mut *tx)
             .await?;
     if updated.rows_affected() != 1 {
-        return Err(sqlx::Error::RowNotFound);
+        return Err(sqlx::Error::RowNotFound.into());
     }
     sqlx::query("DELETE FROM chat_messages WHERE room_id=$1 AND ($2=0 OR sent_at<=now()-make_interval(days=>$2))")
         .bind(room).bind(days).execute(&mut *tx).await?;
@@ -1071,7 +1083,7 @@ pub(crate) async fn set_retention(pool: &PgPool, room: &str, days: i32) -> Resul
             .execute(&mut *tx)
             .await?;
     }
-    tx.commit().await
+    Ok(tx.commit().await?)
 }
 
 pub(crate) async fn inbox(
@@ -1169,7 +1181,7 @@ pub(crate) async fn messages(
         &query,
     )
     .await
-    .map_err(routes::database_error)?;
+    .map_err(route_error)?;
     Ok((routes::no_store_headers(), Json(result)))
 }
 
@@ -1192,8 +1204,10 @@ pub(crate) async fn read(
         )
         .await
         .map_err(|error| match error {
-            sqlx::Error::RowNotFound => AuthError::InvalidInput("Message unavailable"),
-            other => routes::database_error(other),
+            RoomError::Database(sqlx::Error::RowNotFound) | RoomError::Refused(_) => {
+                AuthError::InvalidInput("Message unavailable")
+            }
+            RoomError::Database(other) => routes::database_error(other),
         })?;
         if result.advanced {
             server.room_manager().account_updates().changed(
@@ -1241,7 +1255,7 @@ async fn private_relationship(
     connection: &mut PgConnection,
     own: Uuid,
     peer: Uuid,
-) -> Result<bool, sqlx::Error> {
+) -> Result<bool, RoomError> {
     let conversation: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM chat_inbox WHERE user_id=$1 AND peer_id=$2 AND expires_at>now())")
         .bind(own).bind(peer).fetch_one(&mut *connection).await?;
     Ok(conversation || crate::auth::discovery::accepted_contact(connection, own, peer).await?)
@@ -1286,7 +1300,7 @@ pub(super) async fn save_private_message(
             let mut connection = pool.acquire().await.map_err(routes::database_error)?;
             private_relationship(&mut connection, own, peer)
                 .await
-                .map_err(routes::database_error)?
+                .map_err(route_error)?
         };
         if related {
             None
@@ -1311,10 +1325,8 @@ pub(super) async fn save_private_message(
     let (sender, recipient) = lock_private_accounts(&mut tx, own, peer)
         .await
         .map_err(|error| match error {
-            sqlx::Error::InvalidArgument(_) => {
-                AuthError::InvalidInput("Private message unavailable")
-            }
-            error => routes::database_error(error),
+            RoomError::Refused(_) => AuthError::InvalidInput("Private message unavailable"),
+            RoomError::Database(error) => routes::database_error(error),
         })?;
     if sender.auth_version != claims.auth_version {
         return Err(AuthError::InvalidToken);
@@ -1323,7 +1335,7 @@ pub(super) async fn save_private_message(
     if context.is_none()
         && !private_relationship(&mut tx, own, peer)
             .await
-            .map_err(routes::database_error)?
+            .map_err(route_error)?
     {
         return Err(AuthError::InvalidInput(
             "Add this person as a contact or start the conversation in a room",
@@ -1415,7 +1427,7 @@ pub(super) async fn save_private_message(
         &request.attachment_ids,
     )
     .await
-    .map_err(routes::database_error)?;
+    .map_err(route_error)?;
     validate_private_session(&mut tx, claims, own).await?;
     tx.commit().await.map_err(routes::database_error)?;
     Ok((saved, true))
@@ -1524,7 +1536,7 @@ pub(crate) fn spawn_retention(pool: PgPool) -> tokio::task::JoinHandle<()> {
                         .bind(CLEANUP_BATCH).execute(&pool).await?.rows_affected();
                     if attachments < CLEANUP_BATCH as u64 && messages < CLEANUP_BATCH as u64 && inbox < CLEANUP_BATCH as u64 && cursors < CLEANUP_BATCH as u64 { break; }
                 }
-                Ok::<_,sqlx::Error>(())
+                Ok::<_,RoomError>(())
             }).await;
             if !matches!(result, Ok(Ok(()))) {
                 tracing::warn!("Chat history cleanup incomplete; the next sweep retries");
@@ -2533,7 +2545,7 @@ mod tests {
             )
             .await;
             assert!(
-                matches!(rejected, Err(sqlx::Error::InvalidArgument(_))),
+                matches!(rejected, Err(RoomError::Refused(_))),
                 "room PM persistence observes the account preference saved by another device"
             );
         }

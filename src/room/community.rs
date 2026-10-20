@@ -4,6 +4,7 @@ use super::{RoomManager, control, settings};
 use crate::auth::account::{validate_image_data_url, validate_text};
 use crate::auth::types::AuthError;
 use crate::ids::RoomId;
+use crate::room::refusal::{Refusal, RoomError};
 use crate::signaling::protocol::{ChatStyle, ServerMessage, deserialize_appearance_style};
 use serde::Deserialize;
 use std::time::Duration;
@@ -76,11 +77,11 @@ impl RoomManager {
         room_id: &RoomId,
         owner_id: Uuid,
         identity: RoomIdentityUpdate,
-    ) -> Result<bool, sqlx::Error> {
+    ) -> Result<bool, RoomError> {
         let pool = self
             .db_pool
             .clone()
-            .ok_or_else(|| sqlx::Error::InvalidArgument("Database not configured".into()))?;
+            .ok_or_else(|| Refusal::Unavailable("Database not configured".into()))?;
         let room_id = room_id.to_owned();
         let manager = self.clone();
         let creation_guard = tokio::time::timeout(
@@ -93,9 +94,7 @@ impl RoomManager {
             return Ok(false);
         }
         if manager.identity_updates.read().contains(&room_id) {
-            return Err(sqlx::Error::Protocol(
-                "Room identity is busy; try again".into(),
-            ));
+            return Err(sqlx::Error::Protocol("Room identity is busy; try again".into()).into());
         }
         // Exclude creation of this one room for the update's duration. The
         // process-wide creation lock is released before any SQL so a database
@@ -173,7 +172,7 @@ impl RoomManager {
                     // A live room already verified this owner under control.
                     // Its missing durable row cannot leave cached policy live.
                     return if runtime.is_some() {
-                        Err(sqlx::Error::RowNotFound)
+                        Err(sqlx::Error::RowNotFound.into())
                     } else {
                         Ok(false)
                     };
@@ -192,7 +191,8 @@ impl RoomManager {
                         Err(sqlx::Error::Protocol(
                             "Room identity persistence deadline exceeded; commit status is unknown"
                                 .into(),
-                        ))
+                        )
+                        .into())
                     });
                 if let Err(error) = &result
                     && control::persistence_is_indeterminate(error)

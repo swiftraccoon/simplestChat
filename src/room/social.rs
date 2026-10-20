@@ -6,6 +6,7 @@ use crate::room::moderation::{
     Actor, MAX_MODERATION_EVENTS, ModerationAction, ModerationEvent, ModerationTargetId,
     ReportStatus, Target, record_event,
 };
+use crate::room::refusal::{Refusal, RoomError};
 use crate::signaling::protocol::{
     BanEntry, ChatEntry, ChatReaction, ChatReplyRef, ChatRetryOutcome, ChatRetryReason, ChatStyle,
     ChatStyleKind, ClientMessage, ErrorCode, MemberEntry, ModerationEventView, REACTIONS,
@@ -237,6 +238,10 @@ async fn save_chat_style(
     Ok(())
 }
 
+/// A typed refusal from the persistence layer, carried to the socket with its code.
+pub(super) fn refused(refused: Refusal) -> anyhow::Error {
+    refusal(refused.code(), refused.message())
+}
 fn refusal(code: ErrorCode, message: &str) -> anyhow::Error {
     SocialFailure {
         code,
@@ -264,41 +269,6 @@ fn timed_out(message: &str) -> anyhow::Error {
 }
 fn failed(message: &str) -> anyhow::Error {
     refusal(ErrorCode::RequestFailed, message)
-}
-/// Sentinel texts raised inside the persistence layer carry no code of their
-/// own; classify them by the words the layer uses.
-fn rejected(message: &str) -> anyhow::Error {
-    refusal(code_for_sentinel(message), message)
-}
-fn code_for_sentinel(message: &str) -> ErrorCode {
-    let lower = message.to_ascii_lowercase();
-    let has = |needles: &[&str]| needles.iter().any(|needle| lower.contains(needle));
-    if has(&["timed out"]) {
-        ErrorCode::TimedOut
-    } else if has(&["not found", "no longer", "has been removed", "unknown"]) {
-        ErrorCode::NotFound
-    } else if has(&["unavailable"]) {
-        ErrorCode::Unavailable
-    } else if has(&["rate limit", "please wait", "busy"]) {
-        ErrorCode::RateLimited
-    } else if has(&[
-        "not allowed",
-        "require",
-        "only ",
-        "sign in",
-        "capacity",
-        "cannot",
-        "insufficient",
-        "quota",
-    ]) {
-        ErrorCode::Forbidden
-    } else if has(&[
-        "invalid", "must", "already", "too long", "empty", "choose", "exceeds", "at most",
-    ]) {
-        ErrorCode::Invalid
-    } else {
-        ErrorCode::RequestFailed
-    }
 }
 
 /// Which room-wide budget a social request must reserve before it runs.
@@ -407,9 +377,11 @@ fn chat_persistence_failure(
     metrics: &ServerMetrics,
     sender: &mpsc::Sender<crate::OutboundJson>,
     client_message_id: &str,
-    error: sqlx::Error,
+    error: RoomError,
 ) -> Result<()> {
-    crate::db::record_error(&error);
+    if let RoomError::Database(error) = &error {
+        crate::db::record_error(error);
+    }
     if control::persistence_is_indeterminate(&error) {
         let _ = send(
             metrics,
@@ -583,7 +555,7 @@ fn prepare_reaction(
         participant_id,
         emoji,
     )
-    .map_err(rejected)
+    .map_err(invalid)
 }
 
 /// Shared by the runtime and transaction-locked saved-message paths. The
@@ -762,7 +734,7 @@ fn prepare_edit(
         }
     }
     let mut edited = entry.message.clone();
-    history::apply_edit(&mut edited, request).map_err(rejected)?;
+    history::apply_edit(&mut edited, request).map_err(invalid)?;
     Ok(Some(edited))
 }
 

@@ -36,7 +36,7 @@ HTTP / WebSocket
 | Bounded authenticated account invalidations outside rooms | `auth/updates.rs`, `auth/updates_tests.rs` |
 | Bounded file storage, message ownership and short-lived live-room download grants | `attachments.rs` |
 | Optional session-owned PM push, retained VAPID identity and bounded delivery queue | `push.rs` |
-| Ordered persistence and uncertain-write handling | `room/control.rs` |
+| Ordered persistence and uncertain-write handling | `room/control.rs`; `room/refusal.rs` (why an operation was refused: the class every persistence result carries, mapped once to the socket's error code and to an HTTP status) |
 | Persistent room/community API | `room/api.rs`, `room/community.rs`, `room/settings.rs` |
 | Membership-independent room administration and authorization | `room/administration.rs` |
 | Roles, invitations and moderation retention | `room/roles.rs`, `room/invites.rs`, `room/moderation.rs` |

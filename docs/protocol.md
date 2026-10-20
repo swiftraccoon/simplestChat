@@ -71,7 +71,14 @@ Login, passkeys and refresh remain owned by [AuthManager](../web/src/auth.ts).
 | `administrationSanction` | `POST /api/rooms/:id/administration/sanctions`, JSON `{targetParticipantId,kind,enabled,reason?}` | `{updated:true}` |
 
 Saved-room administration is account-authorized and does not require joining,
-creating a runtime room, media setup or capture. **My rooms → Manage room** selects
+creating a runtime room, media setup or capture. A refused administration
+request answers `{"error": message}` with the status of its refusal: `400`
+for an invalid request, `401` when the sign-in no longer authorizes it, `403`
+for insufficient permissions, `404` when the member, ban, report, participant
+or waiting room is gone, `409` when a ban table is full, `429` for a rate
+limit, `503` when the password service is busy or a change timed out; a
+database failure answers `503` with a fixed message. Clients switch on the
+status, never on the message. **My rooms → Manage room** selects
 the room independently of any current call. The screen names that selected room;
 edits to a different active room do not switch calls. An owner can still use the
 separate **Edit room** and **Invites** controls for identity and invitations.
@@ -525,8 +532,9 @@ this, or the room's state forbids it), `not_found` (the target does not exist or
 is no longer available), `rate_limited` (retry after a pause), `unavailable` (a
 dependency the request needs is down; retry later), `timed_out` (the operation
 did not finish in time and may or may not have applied) and `request_failed`
-(the server could not complete the request). An error with a `requestId`
-rejects only that pending request. Errors without IDs are connection or
+(the server could not complete the request). A refusal raised while saving
+carries its own class, so the code follows what happened rather than the words
+of the message. An error with a `requestId` rejects only that pending request. Errors without IDs are connection or
 uncorrelated command notifications and cannot settle a pending media/reconnect
 request; they can reach the join handler. `roomPasswordRequired` is a distinct
 retry/prompt result, while `roomClosed` is terminal room state.

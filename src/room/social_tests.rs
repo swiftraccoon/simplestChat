@@ -17,7 +17,7 @@ fn uncertain_chat_storage_never_becomes_a_definite_rejection() {
         &metrics,
         &sender,
         "uncertain",
-        sqlx::Error::Io(std::io::Error::from(std::io::ErrorKind::ConnectionAborted)),
+        sqlx::Error::Io(std::io::Error::from(std::io::ErrorKind::ConnectionAborted)).into(),
     )
     .unwrap();
     let result: Value = serde_json::from_str(&receiver.try_recv().unwrap()).unwrap();
@@ -25,9 +25,13 @@ fn uncertain_chat_storage_never_becomes_a_definite_rejection() {
     assert_eq!(result["outcome"], "unknown");
     assert_eq!(result["reason"], "storage_unconfirmed");
     assert_eq!(result["clientMessageId"], "uncertain");
-    let definite =
-        chat_persistence_failure(&metrics, &sender, "rejected", sqlx::Error::PoolTimedOut)
-            .unwrap_err();
+    let definite = chat_persistence_failure(
+        &metrics,
+        &sender,
+        "rejected",
+        sqlx::Error::PoolTimedOut.into(),
+    )
+    .unwrap_err();
     assert!(definite.downcast_ref::<SocialFailure>().is_some());
     assert!(receiver.try_recv().is_err());
     for _ in 0..2 {
@@ -35,7 +39,7 @@ fn uncertain_chat_storage_never_becomes_a_definite_rejection() {
             &metrics,
             &sender,
             "uncertain",
-            sqlx::Error::Io(std::io::Error::from(std::io::ErrorKind::ConnectionAborted)),
+            sqlx::Error::Io(std::io::Error::from(std::io::ErrorKind::ConnectionAborted)).into(),
         )
         .unwrap();
     }

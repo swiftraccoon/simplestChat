@@ -1,6 +1,7 @@
 //! Persisted room creation and deletion, worker recovery and shutdown.
 
 use super::super::*;
+use crate::room::refusal::RoomError;
 
 impl RoomManager {
     /// Atomically reserve a database-backed room ID against ad-hoc runtime room
@@ -12,16 +13,16 @@ impl RoomManager {
         owner_id: &uuid::Uuid,
         request: &settings::CreateRoomRequest,
         password_hash: Option<&str>,
-    ) -> std::result::Result<Option<settings::RoomSettings>, sqlx::Error> {
+    ) -> std::result::Result<Option<settings::RoomSettings>, RoomError> {
         if self.drain.is_draining() {
-            return Err(sqlx::Error::PoolClosed);
+            return Err(sqlx::Error::PoolClosed.into());
         }
         let _creation_guard =
             tokio::time::timeout(ROOM_CREATION_TIMEOUT, self.room_creation_lock.lock())
                 .await
                 .map_err(|_| room_creation_timeout("waiting for room creation"))?;
         if self.drain.is_draining() {
-            return Err(sqlx::Error::PoolClosed);
+            return Err(sqlx::Error::PoolClosed.into());
         }
         if self.deleting_rooms.read().contains_key(request.id.as_str()) {
             return Ok(None);
@@ -55,7 +56,7 @@ impl RoomManager {
         &self,
         room_id: &RoomId,
         requester_id: &uuid::Uuid,
-    ) -> std::result::Result<DeleteRoomResult, sqlx::Error> {
+    ) -> std::result::Result<DeleteRoomResult, RoomError> {
         let pool = self.db_pool.clone().ok_or(sqlx::Error::PoolClosed)?;
         let room_id = room_id.clone();
         let requester_id = *requester_id;
@@ -141,6 +142,7 @@ impl RoomManager {
                 Ok(Ok(result)) => result.rows_affected() == 1,
                 Ok(Err(error)) => {
                     drop(creation_guard);
+                    let error = RoomError::from(error);
                     if !control::persistence_is_indeterminate(&error) {
                         // PostgreSQL rejected the statement (or no connection
                         // was acquired), so no commit is possible.
@@ -303,9 +305,11 @@ impl RoomManager {
             Ok(DeleteRoomResult::Deleted)
         });
 
-        deletion
-            .await
-            .map_err(|error| sqlx::Error::Protocol(format!("room deletion task failed: {error}")))?
+        deletion.await.map_err(|error| {
+            RoomError::from(sqlx::Error::Protocol(format!(
+                "room deletion task failed: {error}"
+            )))
+        })?
     }
 
     /// Starts the task that turns media worker deaths into recovery: the

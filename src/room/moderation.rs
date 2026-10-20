@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 use crate::ids::{ParticipantId, RoomId};
+use crate::room::refusal::{Refusal, RoomError};
 use crate::room::roles::Role;
 use chrono::{DateTime, Utc};
 use mediasoup::prelude::MediaKind;
@@ -353,7 +354,7 @@ pub(crate) async fn record_event(
     room_id: &RoomId,
     event: &ModerationEvent,
     cap: usize,
-) -> Result<(), sqlx::Error> {
+) -> Result<(), RoomError> {
     let report_id = event
         .report_id
         .as_deref()
@@ -368,7 +369,7 @@ pub(crate) async fn record_event(
                 .fetch_optional(&mut *transaction)
                 .await?;
         if status.is_none() {
-            return Err(sqlx::Error::RowNotFound);
+            return Err(sqlx::Error::RowNotFound.into());
         }
         sqlx::query(
             "UPDATE room_reports SET status = 'resolved', resolved_at = now(), resolved_by = $3
@@ -505,7 +506,7 @@ impl RetentionReport {
 pub(crate) async fn retire_old(
     pool: &PgPool,
     config: RetentionConfig,
-) -> Result<RetentionReport, sqlx::Error> {
+) -> Result<RetentionReport, RoomError> {
     retire_old_batch(pool, config, RETENTION_BATCH_SIZE).await
 }
 
@@ -513,7 +514,7 @@ async fn retire_old_batch(
     pool: &PgPool,
     config: RetentionConfig,
     batch_size: i64,
-) -> Result<RetentionReport, sqlx::Error> {
+) -> Result<RetentionReport, RoomError> {
     let address_days = i32::try_from(config.address_days).unwrap_or(i32::MAX);
     let history_days = i32::try_from(config.history_days).unwrap_or(i32::MAX);
     let addresses_cleared = sqlx::query(
@@ -589,7 +590,7 @@ async fn retire_old_batch(
 async fn retention_sweep(
     pool: &PgPool,
     config: RetentionConfig,
-) -> Result<RetentionReport, sqlx::Error> {
+) -> Result<RetentionReport, RoomError> {
     let mut total = RetentionReport::default();
     for _ in 0..RETENTION_MAX_BATCHES {
         let batch = retire_old(pool, config).await?;
@@ -649,7 +650,7 @@ pub(crate) async fn persist_event(
     pool: &PgPool,
     room_id: &RoomId,
     event: &ModerationEvent,
-) -> Result<(), sqlx::Error> {
+) -> Result<(), RoomError> {
     let mut transaction = pool.begin().await?;
     record_event(&mut transaction, room_id, event, MAX_MODERATION_EVENTS).await?;
     transaction.commit().await?;
@@ -662,7 +663,7 @@ pub(crate) async fn list_events(
     room_id: &RoomId,
     offset: i64,
     limit: i64,
-) -> Result<Vec<ModerationEvent>, sqlx::Error> {
+) -> Result<Vec<ModerationEvent>, RoomError> {
     /// A moderation event as the log listing reads it.
     #[derive(sqlx::FromRow)]
     struct EventRow {
@@ -720,7 +721,7 @@ pub(crate) async fn load_punitive_state(
     user_id: Option<Uuid>,
     ip: Option<IpAddr>,
     authenticated: bool,
-) -> Result<PunitiveState, sqlx::Error> {
+) -> Result<PunitiveState, RoomError> {
     let ip = if authenticated {
         ip
     } else {
@@ -775,7 +776,7 @@ pub(crate) async fn set_punitive_state(
     reason: Option<&str>,
     applied_by: Uuid,
     event: &ModerationEvent,
-) -> Result<(), sqlx::Error> {
+) -> Result<(), RoomError> {
     let state = kind.as_db_str();
     let ip = if user_id.is_some() {
         ip
@@ -827,7 +828,8 @@ pub(crate) async fn set_punitive_state(
         } else {
             return Err(sqlx::Error::Protocol(
                 "punitive state has no durable identity".to_string(),
-            ));
+            )
+            .into());
         }
     } else if let Some(user_id) = user_id {
         sqlx::query(
@@ -851,9 +853,9 @@ pub(crate) async fn set_punitive_state(
         .execute(&mut *transaction)
         .await?;
     } else {
-        return Err(sqlx::Error::Protocol(
-            "punitive state has no durable identity".to_string(),
-        ));
+        return Err(
+            sqlx::Error::Protocol("punitive state has no durable identity".to_string()).into(),
+        );
     }
 
     record_event(&mut transaction, room_id, event, MAX_MODERATION_EVENTS).await?;
@@ -876,7 +878,7 @@ pub(crate) async fn persist_ban(
     expires_at: Option<chrono::DateTime<chrono::Utc>>,
     applied_by: Uuid,
     event: &ModerationEvent,
-) -> Result<(), sqlx::Error> {
+) -> Result<(), RoomError> {
     let ip = if user_id.is_some() {
         ip
     } else {
@@ -923,9 +925,7 @@ pub(crate) async fn persist_ban(
         .execute(&mut *transaction)
         .await?;
     } else {
-        return Err(sqlx::Error::InvalidArgument(
-            "ban has no durable identity".to_string(),
-        ));
+        return Err(Refusal::Invalid("ban has no durable identity".into()).into());
     }
     record_event(&mut transaction, room_id, event, MAX_MODERATION_EVENTS).await?;
     transaction.commit().await?;
@@ -941,7 +941,7 @@ pub(crate) async fn is_banned(
     user_id: Option<Uuid>,
     ip: Option<IpAddr>,
     authenticated: bool,
-) -> Result<bool, sqlx::Error> {
+) -> Result<bool, RoomError> {
     let ip = if authenticated {
         ip
     } else {
@@ -974,7 +974,7 @@ pub(crate) async fn remove_user_ban(
     room_id: &RoomId,
     user_id: Uuid,
     actor: Actor<'_>,
-) -> Result<bool, sqlx::Error> {
+) -> Result<bool, RoomError> {
     let mut transaction = pool.begin().await?;
     let result = sqlx::query(
         "DELETE FROM room_states WHERE room_id = $1 AND state = 'banned' AND user_id = $2",
@@ -1169,7 +1169,7 @@ mod tests {
         );
         assert!(matches!(
             persist_event(&pool, &room_id, &foreign).await,
-            Err(sqlx::Error::RowNotFound)
+            Err(RoomError::Database(sqlx::Error::RowNotFound))
         ));
         let (status,): (String,) = sqlx::query_as("SELECT status FROM room_reports WHERE id=$1")
             .bind(foreign_report)

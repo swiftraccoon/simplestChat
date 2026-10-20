@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 use crate::ids::RoomId;
+use crate::room::refusal::RoomError;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -93,7 +94,7 @@ pub(crate) async fn resolve_role(
     user_id: Option<&Uuid>,
     owner_id: &Uuid,
     is_authenticated: bool,
-) -> Result<Role, sqlx::Error> {
+) -> Result<Role, RoomError> {
     if let Some(uid) = user_id {
         if uid == owner_id {
             return Ok(Role::Owner);
@@ -124,7 +125,7 @@ pub(crate) async fn set_role(
     user_id: &Uuid,
     role: Role,
     granted_by: &Uuid,
-) -> Result<(), sqlx::Error> {
+) -> Result<(), RoomError> {
     if !role.is_stored() {
         sqlx::query("DELETE FROM room_roles WHERE room_id = $1 AND user_id = $2")
             .bind(room_id)

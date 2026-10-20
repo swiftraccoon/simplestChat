@@ -10,6 +10,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug)]
 pub(crate) enum AuthError {
     InvalidInput(&'static str),
+    /// A room operation refused the request; the refusal carries the status and text.
+    Refused(crate::room::refusal::Refusal),
     InvalidCredentials,
     InvalidPasskey,
     EmailAlreadyExists,
@@ -58,6 +60,13 @@ impl IntoResponse for AuthError {
         };
         let (status, message) = match self {
             AuthError::InvalidInput(message) => (StatusCode::BAD_REQUEST, message),
+            AuthError::Refused(refusal) => {
+                return (
+                    refusal.status(),
+                    Json(serde_json::json!({ "error": refusal.message() })),
+                )
+                    .into_response();
+            }
             AuthError::TooManyFailures(_) => {
                 (StatusCode::TOO_MANY_REQUESTS, "Too many failed attempts")
             }

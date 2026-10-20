@@ -9,6 +9,7 @@ use crate::auth::{
     types::{AuthError, Claims},
 };
 use crate::ids::{ParticipantId, RoomId};
+use crate::room::refusal::{Refusal, RoomError};
 use crate::signaling::{SignalingServer, protocol::ServerMessage};
 use axum::{
     Json,
@@ -28,10 +29,7 @@ const PAGE_SIZE: usize = 100;
 const MAX_OFFSET: u32 = 10_000;
 
 impl SettingsPatch {
-    fn apply(
-        &self,
-        current: &settings::RoomSettings,
-    ) -> Result<settings::RoomSettings, sqlx::Error> {
+    fn apply(&self, current: &settings::RoomSettings) -> Result<settings::RoomSettings, RoomError> {
         for (value, maximum) in [
             (self.max_participants, 10_000),
             (self.max_broadcasters, 1_000),
@@ -40,9 +38,10 @@ impl SettingsPatch {
                 .flatten()
                 .is_some_and(|value| !(1..=maximum).contains(&value))
             {
-                return Err(invalid(
-                    "Room limits must be positive and within server bounds",
-                ));
+                return Err(Refusal::Invalid(
+                    "Room limits must be positive and within server bounds".into(),
+                )
+                .into());
             }
         }
         if self
@@ -51,17 +50,19 @@ impl SettingsPatch {
             .and_then(Option::as_ref)
             .is_some_and(|value| !settings::valid_new_room_password(value.expose_secret()))
         {
-            return Err(invalid(
-                "Room password must be 8–256 bytes without control characters",
-            ));
+            return Err(Refusal::Invalid(
+                "Room password must be 8–256 bytes without control characters".into(),
+            )
+            .into());
         }
         let mut updated = current.clone();
         settings::apply_settings_update(&mut updated, self);
         if matches!((updated.max_broadcasters, updated.max_participants), (Some(broadcasters), Some(participants)) if broadcasters > participants)
         {
-            return Err(invalid(
-                "Maximum broadcasters cannot exceed maximum participants",
-            ));
+            return Err(Refusal::Invalid(
+                "Maximum broadcasters cannot exceed maximum participants".into(),
+            )
+            .into());
         }
         Ok(updated)
     }
@@ -74,10 +75,10 @@ pub(crate) struct PageQuery {
 }
 
 impl PageQuery {
-    fn offset(&self) -> Result<i64, sqlx::Error> {
+    fn offset(&self) -> Result<i64, RoomError> {
         let value = self.offset.unwrap_or(0);
         if value > MAX_OFFSET {
-            return Err(invalid("Invalid administration page"));
+            return Err(Refusal::Invalid("Invalid administration page".into()).into());
         }
         Ok(i64::from(value))
     }
@@ -132,29 +133,32 @@ pub(crate) struct ModerationRequest {
 }
 
 impl ModerationRequest {
-    fn validate(&self) -> Result<(), sqlx::Error> {
+    fn validate(&self) -> Result<(), RoomError> {
         if !matches!(self.action.as_str(), "kick" | "ban") {
-            return Err(invalid(
-                "Choose a participant and a supported moderation action",
-            ));
+            return Err(Refusal::Invalid(
+                "Choose a participant and a supported moderation action".into(),
+            )
+            .into());
         }
         if self
             .duration_seconds
             .is_some_and(|seconds| seconds == 0 || seconds > 10 * 365 * 24 * 3600)
             || (self.action == "kick" && self.duration_seconds.is_some())
         {
-            return Err(invalid(
-                "Ban duration must be between 1 second and 10 years",
-            ));
+            return Err(Refusal::Invalid(
+                "Ban duration must be between 1 second and 10 years".into(),
+            )
+            .into());
         }
         if self
             .reason
             .as_ref()
             .is_some_and(|reason| !moderation::valid_reason(reason))
         {
-            return Err(invalid(
-                "Moderation reason must be at most 256 bytes without control characters",
-            ));
+            return Err(Refusal::Invalid(
+                "Moderation reason must be at most 256 bytes without control characters".into(),
+            )
+            .into());
         }
         Ok(())
     }
@@ -204,41 +208,25 @@ struct Context {
     _control: Option<OwnedMutexGuard<()>>,
 }
 
-fn invalid(message: &str) -> sqlx::Error {
-    sqlx::Error::InvalidArgument(message.to_owned())
-}
-
 fn response_error(status: StatusCode, message: &'static str) -> api::RoomApiError {
     (status, private_headers(), Json(json!({"error": message})))
         .into_response()
         .into()
 }
 
-fn database_error(error: sqlx::Error) -> api::RoomApiError {
-    match error {
-        sqlx::Error::InvalidArgument(message) => {
-            let status = if matches!(
-                message.as_str(),
-                "Member not found in this room"
-                    | "Ban not found in this room"
-                    | "Open report not found in this room"
-            ) {
-                StatusCode::NOT_FOUND
-            } else if message == "Sign-in expired; sign in again" {
-                StatusCode::UNAUTHORIZED
-            } else if message == "Insufficient room permissions" {
-                StatusCode::FORBIDDEN
-            } else {
-                StatusCode::BAD_REQUEST
-            };
-            (status, private_headers(), Json(json!({"error": message})))
-                .into_response()
-                .into()
-        }
-        sqlx::Error::RowNotFound => {
+fn database_error(error: impl Into<RoomError>) -> api::RoomApiError {
+    match error.into() {
+        RoomError::Refused(refusal) => (
+            refusal.status(),
+            private_headers(),
+            Json(json!({"error": refusal.message()})),
+        )
+            .into_response()
+            .into(),
+        RoomError::Database(sqlx::Error::RowNotFound) => {
             response_error(StatusCode::NOT_FOUND, "Room or record not found")
         }
-        error => {
+        RoomError::Database(error) => {
             crate::db::record_error(&error);
             // PostgreSQL details can include the failed room row, including
             // its password hash. The aggregate error category is sufficient.
@@ -434,9 +422,9 @@ impl Context {
         })
     }
 
-    fn require(&self, minimum: roles::Role) -> Result<(), sqlx::Error> {
+    fn require(&self, minimum: roles::Role) -> Result<(), RoomError> {
         if self.role < minimum {
-            return Err(invalid("Insufficient room permissions"));
+            return Err(Refusal::Forbidden("Insufficient room permissions".into()).into());
         }
         Ok(())
     }
@@ -447,20 +435,20 @@ impl Context {
             .expect("admitted transaction remains owned")
     }
 
-    async fn recheck_expiry(&mut self) -> Result<(), sqlx::Error> {
+    async fn recheck_expiry(&mut self) -> Result<(), RoomError> {
         let session = self.session;
         let user = self.user;
         let expiry:Option<DateTime<Utc>>=sqlx::query_scalar("SELECT expires_at FROM sessions WHERE id=$1 AND user_id=$2 AND expires_at>clock_timestamp()")
             .bind(session).bind(user).fetch_optional(self.connection()).await?;
         self.session_expires_at =
-            expiry.ok_or_else(|| invalid("Sign-in expired; sign in again"))?;
+            expiry.ok_or_else(|| Refusal::Unauthorized("Sign-in expired; sign in again".into()))?;
         if Utc::now().timestamp() >= self.expires_at {
-            return Err(invalid("Sign-in expired; sign in again"));
+            return Err(Refusal::Unauthorized("Sign-in expired; sign in again".into()).into());
         }
         Ok(())
     }
 
-    async fn execute(mut self, command: Command) -> Result<Value, sqlx::Error> {
+    async fn execute(mut self, command: Command) -> Result<Value, RoomError> {
         let command = match command {
             Command::Lobby(target, request) => return self.lobby_action(target, request).await,
             command => command,
@@ -468,7 +456,10 @@ impl Context {
         if let Some(runtime) = self.runtime.as_ref() {
             let mut room = runtime.write().await;
             if !room.admin_mutations.reserve(std::time::Instant::now()) {
-                return Err(invalid("Room administration changes are rate limited"));
+                return Err(Refusal::RateLimited(
+                    "Room administration changes are rate limited".into(),
+                )
+                .into());
             }
         }
         let manager = self.manager.clone();
@@ -492,7 +483,8 @@ impl Context {
                 .unwrap_or_else(|_| {
                     Err(sqlx::Error::Protocol(
                         "Room administration commit status is unknown".into(),
-                    ))
+                    )
+                    .into())
                 });
             if result
                 .as_ref()
@@ -510,7 +502,7 @@ impl Context {
         Ok(response)
     }
 
-    async fn prepare(&mut self, command: Command) -> Result<(Publication, Value), sqlx::Error> {
+    async fn prepare(&mut self, command: Command) -> Result<(Publication, Value), RoomError> {
         match command {
             Command::Settings(patch) => self.settings_change(patch).await,
             Command::Role(target, role) => self.role_change(target, role).await,
@@ -528,20 +520,20 @@ impl Context {
         mut self,
         target: ParticipantId,
         request: LobbyRequest,
-    ) -> Result<Value, sqlx::Error> {
+    ) -> Result<Value, RoomError> {
         if !matches!(request.action.as_str(), "admit" | "deny")
             || request
                 .reason
                 .as_ref()
                 .is_some_and(|value| !moderation::valid_reason(value))
         {
-            return Err(invalid("Invalid waiting-room action"));
+            return Err(Refusal::Invalid("Invalid waiting-room action".into()).into());
         }
         self.recheck_expiry().await?;
         let control = self
             ._control
             .take()
-            .ok_or_else(|| invalid("The waiting room is no longer active"))?;
+            .ok_or_else(|| Refusal::NotFound("The waiting room is no longer active".into()))?;
         let expires = self.expires_at.min(self.session_expires_at.timestamp());
         let authorize = move || {
             anyhow::ensure!(
@@ -572,13 +564,16 @@ impl Context {
         };
         tokio::time::timeout(control::PERSISTENCE_TIMEOUT, operation)
             .await
-            .map_err(|_| invalid("Waiting-room change timed out; refresh this room"))?
+            .map_err(|_| {
+                Refusal::TimedOut("Waiting-room change timed out; refresh this room".into())
+            })?
             .map_err(|_| {
                 if Utc::now().timestamp() >= expires {
-                    invalid("Sign-in expired; sign in again")
+                    Refusal::Unauthorized("Sign-in expired; sign in again".into())
                 } else {
-                    invalid(
-                        "Waiting-room change failed; refresh and check room capacity and access",
+                    Refusal::Conflict(
+                        "Waiting-room change failed; refresh and check room capacity and access"
+                            .into(),
                     )
                 }
             })?;
@@ -593,35 +588,38 @@ impl Context {
     async fn sanction(
         &mut self,
         request: SanctionRequest,
-    ) -> Result<(Publication, Value), sqlx::Error> {
+    ) -> Result<(Publication, Value), RoomError> {
         let kind = match request.kind.as_str() {
             "camera" => moderation::PunitiveKind::CamBanned,
             "chat" => moderation::PunitiveKind::Muted,
-            _ => return Err(invalid("Choose a camera or chat restriction")),
+            _ => {
+                return Err(Refusal::Invalid("Choose a camera or chat restriction".into()).into());
+            }
         };
         if request
             .reason
             .as_ref()
             .is_some_and(|value| !moderation::valid_reason(value))
         {
-            return Err(invalid(
-                "Moderation reason must be at most 256 bytes without control characters",
-            ));
+            return Err(Refusal::Invalid(
+                "Moderation reason must be at most 256 bytes without control characters".into(),
+            )
+            .into());
         }
         let runtime = self
             .runtime
             .as_ref()
-            .ok_or_else(|| invalid("The participant is no longer in this room"))?;
+            .ok_or_else(|| Refusal::NotFound("The participant is no longer in this room".into()))?;
         let room = runtime.read().await;
         let person = room
             .participants
             .get(&request.target_participant_id)
-            .ok_or_else(|| invalid("The participant is no longer in this room"))?;
+            .ok_or_else(|| Refusal::NotFound("The participant is no longer in this room".into()))?;
         let participants =
             super::moderation_cohort(&room, &request.target_participant_id, self.role)
-                .map_err(|_| invalid("Insufficient room permissions"))?;
+                .map_err(|_| Refusal::Forbidden("Insufficient room permissions".into()))?;
         let lobby = super::guest_ip_lobby_cohort(&room, person.authenticated, person.ip, self.role)
-            .map_err(|_| invalid("Insufficient room permissions"))?;
+            .map_err(|_| Refusal::Forbidden("Insufficient room permissions".into()))?;
         let key = super::SanctionKey::for_identity(
             &request.target_participant_id,
             person.authenticated,
@@ -694,9 +692,10 @@ impl Context {
                 sqlx::query("DELETE FROM room_states WHERE room_id=$1 AND user_id IS NULL AND ip_address=$2::inet AND state=$3").bind(&room_id).bind(ip).bind(state).execute(self.connection()).await?;
             }
         } else {
-            return Err(invalid(
-                "The participant cannot be identified for a saved restriction",
-            ));
+            return Err(Refusal::Invalid(
+                "The participant cannot be identified for a saved restriction".into(),
+            )
+            .into());
         }
         moderation::record_event(
             self.connection(),
@@ -711,7 +710,7 @@ impl Context {
     async fn settings_change(
         &mut self,
         patch: SettingsPatch,
-    ) -> Result<(Publication, Value), sqlx::Error> {
+    ) -> Result<(Publication, Value), RoomError> {
         self.require(roles::Role::Admin)?;
         let updated = patch.apply(&self.settings)?;
         let hash = match patch.password.as_ref() {
@@ -722,7 +721,10 @@ impl Context {
                     if room.last_password_hash_at.is_some_and(|previous| {
                         now.duration_since(previous) < super::ROOM_PASSWORD_HASH_COOLDOWN
                     }) {
-                        return Err(invalid("Room password updates are rate limited"));
+                        return Err(Refusal::RateLimited(
+                            "Room password updates are rate limited".into(),
+                        )
+                        .into());
                     }
                     room.last_password_hash_at = Some(now);
                 }
@@ -731,15 +733,17 @@ impl Context {
                     .password_hash_work
                     .clone()
                     .try_acquire_owned()
-                    .map_err(|_| invalid("Password service is busy; try again"))?;
+                    .map_err(|_| {
+                        Refusal::Unavailable("Password service is busy; try again".into())
+                    })?;
                 let password = password.clone();
                 let hash = tokio::task::spawn_blocking(move || {
                     let _permit = permit;
                     crate::auth::password::hash_password(password.expose_secret())
                 })
                 .await
-                .map_err(|_| invalid("Password update failed"))?
-                .map_err(|_| invalid("Password update failed"))?;
+                .map_err(|_| Refusal::Unavailable("Password update failed".into()))?
+                .map_err(|_| Refusal::Unavailable("Password update failed".into()))?;
                 Some(Some(hash))
             }
             Some(None) => Some(None),
@@ -759,7 +763,7 @@ impl Context {
         &mut self,
         target: Uuid,
         new_role: roles::Role,
-    ) -> Result<(Publication, Value), sqlx::Error> {
+    ) -> Result<(Publication, Value), RoomError> {
         let room_id = self.room_id.clone();
         let current: Option<roles::Role> = sqlx::query_scalar("SELECT CASE WHEN $2=owner_id THEN 5 ELSE (SELECT role FROM room_roles WHERE room_id=$1 AND user_id=$2) END::smallint FROM rooms WHERE id=$1 AND ($2=owner_id OR EXISTS(SELECT 1 FROM room_roles WHERE room_id=$1 AND user_id=$2))")
             .bind(&room_id).bind(target).fetch_optional(self.connection()).await?;
@@ -774,9 +778,9 @@ impl Context {
         };
         let current = current
             .or(online)
-            .ok_or_else(|| invalid("Member not found in this room"))?;
+            .ok_or_else(|| Refusal::NotFound("Member not found in this room".into()))?;
         if new_role < roles::Role::User || !self.role.can_set_role(current, new_role) {
-            return Err(invalid("Insufficient room permissions"));
+            return Err(Refusal::Forbidden("Insufficient room permissions".into()).into());
         }
         let setter = self.user;
         if !new_role.is_stored() {
@@ -792,12 +796,13 @@ impl Context {
         Ok((Publication::Role(target, new_role), json!({"updated":true})))
     }
 
-    async fn unban(&mut self, id: Uuid) -> Result<(Publication, Value), sqlx::Error> {
+    async fn unban(&mut self, id: Uuid) -> Result<(Publication, Value), RoomError> {
         self.require(roles::Role::Admin)?;
         let room_id = self.room_id.clone();
         let row: Option<(Option<Uuid>,Option<String>,Option<String>)> = sqlx::query_as("DELETE FROM room_states s WHERE s.room_id=$1 AND s.id=$2 AND s.state='banned' RETURNING s.user_id,host(s.ip_address),(SELECT display_name FROM users WHERE id=s.user_id)")
             .bind(&room_id).bind(id).fetch_optional(self.connection()).await?;
-        let (user, ip, name) = row.ok_or_else(|| invalid("Ban not found in this room"))?;
+        let (user, ip, name) =
+            row.ok_or_else(|| Refusal::NotFound("Ban not found in this room".into()))?;
         let target = ParticipantId::from(user.unwrap_or(id));
         let actor = ParticipantId::from(self.user);
         let address = ip.and_then(|ip| ip.parse::<IpAddr>().ok());
@@ -834,13 +839,13 @@ impl Context {
         &mut self,
         id: Uuid,
         status: moderation::ReportResolution,
-    ) -> Result<(Publication, Value), sqlx::Error> {
+    ) -> Result<(Publication, Value), RoomError> {
         let room_id = self.room_id.clone();
         let actor = ParticipantId::from(self.user);
         let row: Option<(ParticipantId, String, bool)> = sqlx::query_as("UPDATE room_reports r SET status=$3,resolved_at=now(),resolved_by=$4 WHERE r.room_id=$1 AND r.id=$2 AND r.status='open' RETURNING r.target_participant_id,r.target_name,EXISTS(SELECT 1 FROM users u WHERE u.id::text=r.target_participant_id)")
             .bind(&room_id).bind(id).bind(status).bind(actor).fetch_optional(self.connection()).await?;
         let (target, name, authenticated) =
-            row.ok_or_else(|| invalid("Open report not found in this room"))?;
+            row.ok_or_else(|| Refusal::NotFound("Open report not found in this room".into()))?;
         let action = status.action();
         let event = moderation::ModerationEvent::new(
             action,
@@ -874,30 +879,30 @@ impl Context {
     async fn moderate(
         &mut self,
         request: ModerationRequest,
-    ) -> Result<(Publication, Value), sqlx::Error> {
+    ) -> Result<(Publication, Value), RoomError> {
         request.validate()?;
         let runtime = self
             .runtime
             .as_ref()
-            .ok_or_else(|| invalid("The participant is no longer in this room"))?;
+            .ok_or_else(|| Refusal::NotFound("The participant is no longer in this room".into()))?;
         let room = runtime.read().await;
         let target = room
             .participants
             .get(&request.target_participant_id)
-            .ok_or_else(|| invalid("The participant is no longer in this room"))?;
+            .ok_or_else(|| Refusal::NotFound("The participant is no longer in this room".into()))?;
         if !self.role.can_moderate(target.role) {
-            return Err(invalid("Insufficient room permissions"));
+            return Err(Refusal::Forbidden("Insufficient room permissions".into()).into());
         }
         let ban = request.action == "ban";
         let participants = if ban {
             super::moderation_cohort(&room, &request.target_participant_id, self.role)
-                .map_err(|_| invalid("Insufficient room permissions"))?
+                .map_err(|_| Refusal::Forbidden("Insufficient room permissions".into()))?
         } else {
             vec![request.target_participant_id]
         };
         let lobby = if ban {
             super::guest_ip_lobby_cohort(&room, target.authenticated, target.ip, self.role)
-                .map_err(|_| invalid("Insufficient room permissions"))?
+                .map_err(|_| Refusal::Forbidden("Insufficient room permissions".into()))?
         } else {
             Vec::new()
         };
@@ -916,14 +921,16 @@ impl Context {
                 .await
                 .social
                 .reserve_ban()
-                .map_err(|_| invalid("Room ban capacity reached"))?;
+                .map_err(|_| Refusal::Conflict("Room ban capacity reached".into()))?;
         }
         let room_id = self.room_id.clone();
         if let Some(report) = request.report_id {
             let target: Option<ParticipantId> = sqlx::query_scalar("SELECT target_participant_id FROM room_reports WHERE room_id=$1 AND id=$2 AND status='open' FOR UPDATE")
                 .bind(&room_id).bind(report).fetch_optional(self.connection()).await?;
             if target != Some(request.target_participant_id) {
-                return Err(invalid("Open report does not match this participant"));
+                return Err(
+                    Refusal::Invalid("Open report does not match this participant".into()).into(),
+                );
             }
         }
         let actor = ParticipantId::from(self.user);
@@ -968,9 +975,10 @@ impl Context {
                 sqlx::query("INSERT INTO room_states(room_id,user_id,state,ip_address,reason,expires_at,applied_by) VALUES($1,NULL,'banned',$2::inet,$3,$4,$5) ON CONFLICT(room_id,ip_address,state) WHERE user_id IS NULL AND ip_address IS NOT NULL DO UPDATE SET reason=EXCLUDED.reason,expires_at=EXCLUDED.expires_at,applied_by=EXCLUDED.applied_by")
                     .bind(&room_id).bind(ip).bind(&request.reason).bind(expiry).bind(actor).execute(self.connection()).await?;
             } else {
-                return Err(invalid(
-                    "The participant cannot be identified for a saved ban",
-                ));
+                return Err(Refusal::Invalid(
+                    "The participant cannot be identified for a saved ban".into(),
+                )
+                .into());
             }
         }
         moderation::record_event(
@@ -1353,7 +1361,7 @@ pub(crate) async fn list(
 }
 
 impl Context {
-    async fn list(&mut self, section: &str, offset: i64) -> Result<Value, sqlx::Error> {
+    async fn list(&mut self, section: &str, offset: i64) -> Result<Value, RoomError> {
         let room_id = self.room_id.clone();
         let mut rows: Vec<Value> = match section {
             "lobby"=> {
@@ -1383,7 +1391,7 @@ impl Context {
                 sqlx::query_scalar("SELECT jsonb_strip_nulls(jsonb_build_object('eventId',id,'action',action,'actorId',actor_id,'actorName',actor_name,'targetId',target_id,'targetName',target_name,'targetAuthenticated',target_authenticated,'reason',reason,'expiresAt',expires_at,'reportId',report_id,'createdAt',created_at,'targetIp',CASE WHEN $3 THEN host(target_ip) ELSE NULL END)) FROM moderation_events WHERE room_id=$1 ORDER BY created_at DESC,id LIMIT 101 OFFSET $2")
                     .bind(&room_id).bind(offset).bind(owner).fetch_all(self.connection()).await?
             }
-            _=>return Err(invalid("Invalid administration page")),
+            _=>return Err(Refusal::Invalid("Invalid administration page".into()).into()),
         };
         let has_more = rows.len() > PAGE_SIZE;
         rows.truncate(PAGE_SIZE);

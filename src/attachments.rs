@@ -1,6 +1,7 @@
 //! Bounded account uploads. Bytes stay in the existing database/backup boundary;
 //! access follows the live or durable message, never knowledge of a file UUID.
 use crate::ids::{ParticipantId, RoomId};
+use crate::room::refusal::{Refusal, RoomError};
 use crate::{
     auth::{
         account::authenticated_claims,
@@ -44,8 +45,8 @@ static GRANT_KEY: LazyLock<[u8; 32]> = LazyLock::new(|| {
 fn unavailable() -> AuthError {
     AuthError::InvalidInput("Attachment unavailable")
 }
-fn invalid() -> sqlx::Error {
-    sqlx::Error::InvalidArgument("Attachment unavailable".into())
+fn invalid() -> RoomError {
+    Refusal::NotFound("Attachment unavailable".into()).into()
 }
 
 pub(crate) fn valid_ids(ids: &[Uuid]) -> bool {
@@ -200,7 +201,7 @@ pub(crate) async fn pending_metadata(
     connection: &mut PgConnection,
     owner: Uuid,
     ids: &[Uuid],
-) -> Result<Vec<ChatAttachment>, sqlx::Error> {
+) -> Result<Vec<ChatAttachment>, RoomError> {
     if !valid_ids(ids) {
         return Err(invalid());
     }
@@ -225,7 +226,7 @@ pub(crate) async fn bind_durable(
     message: Uuid,
     room: Option<&str>,
     expires: DateTime<Utc>,
-) -> Result<(), sqlx::Error> {
+) -> Result<(), RoomError> {
     if ids.is_empty() {
         return Ok(());
     }
@@ -243,7 +244,7 @@ pub(crate) async fn bind_ephemeral(
     ids: &[Uuid],
     message: Uuid,
     room: &str,
-) -> Result<Vec<ChatAttachment>, sqlx::Error> {
+) -> Result<Vec<ChatAttachment>, RoomError> {
     let mut tx = pool.begin().await?;
     let metadata = pending_metadata(&mut tx, owner, ids).await?;
     sqlx::query("UPDATE attachments SET ephemeral_message_id=$2,room_id=$3,expires_at=now()+interval '24 hours' WHERE id=ANY($1)")
@@ -479,7 +480,7 @@ pub(crate) async fn download(
     Ok((response, Body::from_stream(body)))
 }
 
-pub(crate) async fn cleanup(pool: &PgPool) -> Result<u64, sqlx::Error> {
+pub(crate) async fn cleanup(pool: &PgPool) -> Result<u64, RoomError> {
     Ok(sqlx::query("DELETE FROM attachments WHERE id IN(SELECT id FROM attachments WHERE expires_at<=now() ORDER BY expires_at LIMIT 1000)")
         .execute(pool).await?.rows_affected())
 }

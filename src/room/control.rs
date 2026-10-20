@@ -7,6 +7,7 @@
 
 use super::{Room, RoomManager, ServerMessage, TokioRwLock, try_send_essential};
 use crate::ids::RoomId;
+use crate::room::refusal::RoomError;
 use crate::sync::Mutex;
 use std::future::Future;
 use std::sync::Arc;
@@ -49,13 +50,16 @@ pub(super) async fn lock_room(room: &Arc<TokioRwLock<Room>>) -> OwnedMutexGuard<
 
 /// A missing backing row is also unsafe: the runtime may describe a generation
 /// that no longer exists. Do not keep serving its cached authorization policy.
-pub(super) fn persistence_is_indeterminate(error: &sqlx::Error) -> bool {
+pub(super) fn persistence_is_indeterminate(error: &RoomError) -> bool {
     match error {
-        sqlx::Error::Database(error) => !postgres_rejection_is_definite(error.code().as_deref()),
-        sqlx::Error::PoolTimedOut | sqlx::Error::PoolClosed | sqlx::Error::InvalidArgument(_) => {
-            false
+        RoomError::Refused(_) => false,
+        RoomError::Database(sqlx::Error::Database(error)) => {
+            !postgres_rejection_is_definite(error.code().as_deref())
         }
-        _ => true,
+        RoomError::Database(
+            sqlx::Error::PoolTimedOut | sqlx::Error::PoolClosed | sqlx::Error::InvalidArgument(_),
+        ) => false,
+        RoomError::Database(_) => true,
     }
 }
 
@@ -134,8 +138,8 @@ impl RoomManager {
         &self,
         room_id: &RoomId,
         room: &Arc<TokioRwLock<Room>>,
-        persistence: impl Future<Output = Result<T, sqlx::Error>>,
-    ) -> Result<T, sqlx::Error> {
+        persistence: impl Future<Output = Result<T, RoomError>>,
+    ) -> Result<T, RoomError> {
         self.persist_room_until(
             room_id,
             room,
@@ -151,14 +155,15 @@ impl RoomManager {
         room_id: &RoomId,
         room: &Arc<TokioRwLock<Room>>,
         deadline: tokio::time::Instant,
-        persistence: impl Future<Output = Result<T, sqlx::Error>>,
-    ) -> Result<T, sqlx::Error> {
+        persistence: impl Future<Output = Result<T, RoomError>>,
+    ) -> Result<T, RoomError> {
         let result = tokio::time::timeout_at(deadline, persistence)
             .await
             .unwrap_or_else(|_| {
                 Err(sqlx::Error::Protocol(
                     "Room persistence deadline exceeded; commit status is unknown".into(),
-                ))
+                )
+                .into())
             });
         if let Err(error) = &result
             && persistence_is_indeterminate(error)

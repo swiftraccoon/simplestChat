@@ -6,6 +6,7 @@
 use super::*;
 use crate::ids::RoomId;
 use crate::ids::fixtures::{pid, rid};
+use crate::room::refusal::{Refusal, RoomError};
 use futures_util::FutureExt;
 use serde_json::Value;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
@@ -148,7 +149,7 @@ async fn persistence_timeout_drops_pending_sql_and_quarantines_before_control_re
         let pending = PendingWrite(cancelled.clone());
         let persistence = async move {
             let _pending = pending;
-            std::future::pending::<Result<(), sqlx::Error>>().await
+            std::future::pending::<Result<(), RoomError>>().await
         };
         let error = bounded(fixture.manager.persist_room_until(
             &fixture.room_id,
@@ -158,7 +159,10 @@ async fn persistence_timeout_drops_pending_sql_and_quarantines_before_control_re
         ))
         .await
         .unwrap_err();
-        assert!(matches!(error, sqlx::Error::Protocol(_)));
+        assert!(matches!(
+            error,
+            RoomError::Database(sqlx::Error::Protocol(_))
+        ));
         assert!(cancelled.load(Ordering::Relaxed));
         assert!(fixture.room.read().await.deleting);
         assert!(fixture.room.read().await.participants.is_empty());
@@ -218,7 +222,7 @@ async fn admitted_control_survives_caller_cancellation_and_publishes_before_its_
                     persistence.await?;
                     let room = manager.get_room(&id)?;
                     manager
-                        .persist_room(&id, &room, ready(Ok::<(), sqlx::Error>(())))
+                        .persist_room(&id, &room, ready(Ok::<(), RoomError>(())))
                         .await?;
                     room.write().await.settings.as_mut().unwrap().topic = Some("first".into());
                     Ok(())
@@ -486,9 +490,12 @@ async fn queued_control_rejects_tombstone_and_drain_before_starting_work() {
 async fn definite_persistence_failure_preserves_room_policy_and_control_capacity() {
     with_fixture(|fixture| async move {
         for error in [
-            sqlx::Error::PoolClosed,
-            sqlx::Error::PoolTimedOut,
-            sqlx::Error::InvalidArgument("controlled fixture rejection".into()),
+            RoomError::from(sqlx::Error::PoolClosed),
+            RoomError::from(sqlx::Error::PoolTimedOut),
+            RoomError::from(sqlx::Error::InvalidArgument(
+                "controlled fixture rejection".into(),
+            )),
+            Refusal::Invalid("controlled fixture refusal".into()).into(),
         ] {
             assert!(!control::persistence_is_indeterminate(&error));
             assert!(
@@ -497,7 +504,7 @@ async fn definite_persistence_failure_preserves_room_policy_and_control_capacity
                     .persist_room(
                         &fixture.room_id,
                         &fixture.room,
-                        ready(Err::<(), sqlx::Error>(error)),
+                        ready(Err::<(), RoomError>(error)),
                     )
                     .await
                     .is_err()
@@ -538,7 +545,9 @@ async fn indeterminate_persistence_quarantines_only_its_exact_room_incarnation()
             sqlx::Error::Protocol("fixture".into()),
             sqlx::Error::RowNotFound,
         ] {
-            assert!(control::persistence_is_indeterminate(&error));
+            assert!(control::persistence_is_indeterminate(&RoomError::from(
+                error
+            )));
         }
         let replacement = runtime_room(fixture.room_id.as_str());
         fixture
@@ -552,9 +561,9 @@ async fn indeterminate_persistence_quarantines_only_its_exact_room_incarnation()
                 .persist_room(
                     &fixture.room_id,
                     &fixture.room,
-                    ready(Err::<(), sqlx::Error>(sqlx::Error::Protocol(
-                        "fixture".into()
-                    ))),
+                    ready(Err::<(), RoomError>(
+                        sqlx::Error::Protocol("fixture".into()).into()
+                    )),
                 )
                 .await
                 .is_err()
@@ -574,7 +583,7 @@ async fn indeterminate_persistence_quarantines_only_its_exact_room_incarnation()
                 .persist_room(
                     &fixture.room_id,
                     &replacement,
-                    ready(Err::<(), sqlx::Error>(sqlx::Error::RowNotFound)),
+                    ready(Err::<(), RoomError>(sqlx::Error::RowNotFound.into())),
                 )
                 .await
                 .is_err()
@@ -827,16 +836,20 @@ async fn blocked_room_sql_keeps_chat_available_and_committed_control_outlives_it
         // policy or persisted topic should be quarantined or changed by it.
         let controlled = control::lock_room(installed_room.as_ref().unwrap()).await;
         let error = manager
-            .persist_room(
-                &room_id,
-                installed_room.as_ref().unwrap(),
-                sqlx::query("UPDATE rooms SET display_name=NULL WHERE id=$1")
-                    .bind(&room_id)
-                    .execute(&pool),
-            )
+            .persist_room(&room_id, installed_room.as_ref().unwrap(), async {
+                Ok::<_, RoomError>(
+                    sqlx::query("UPDATE rooms SET display_name=NULL WHERE id=$1")
+                        .bind(&room_id)
+                        .execute(&pool)
+                        .await?,
+                )
+            })
             .await
             .unwrap_err();
-        assert!(matches!(error, sqlx::Error::Database(_)));
+        assert!(matches!(
+            error,
+            RoomError::Database(sqlx::Error::Database(_))
+        ));
         assert!(!installed_room.as_ref().unwrap().read().await.deleting);
         drop(controlled);
     }))

@@ -11,6 +11,7 @@ mod manager;
 pub(crate) mod moderation;
 mod privacy;
 mod receive_replacement;
+pub(crate) mod refusal;
 pub(crate) mod roles;
 pub(crate) mod settings;
 pub use settings::{RoomSettings, SettingsPatch};
@@ -377,12 +378,12 @@ where
     }
 }
 
-fn room_delete_timeout(operation: &str) -> sqlx::Error {
-    sqlx::Error::Protocol(format!("room deletion timed out while {operation}"))
+fn room_delete_timeout(operation: &str) -> refusal::RoomError {
+    sqlx::Error::Protocol(format!("room deletion timed out while {operation}")).into()
 }
 
-fn room_creation_timeout(operation: &str) -> sqlx::Error {
-    sqlx::Error::Protocol(format!("room creation timed out while {operation}"))
+fn room_creation_timeout(operation: &str) -> refusal::RoomError {
+    sqlx::Error::Protocol(format!("room creation timed out while {operation}")).into()
 }
 
 pub(crate) struct IdentityUpdateGuard {
@@ -940,9 +941,13 @@ fn lobby_admission_state(
 /// higher-role guest sharing that address.
 /// A kick's history write failed: a missing report is the caller's mistake,
 /// anything else is the database's.
-fn moderation_history_error(error: sqlx::Error) -> anyhow::Error {
-    if matches!(error, sqlx::Error::RowNotFound) {
-        return anyhow::anyhow!("Report not found");
+fn moderation_history_error(error: refusal::RoomError) -> anyhow::Error {
+    match error {
+        refusal::RoomError::Refused(refused) => return social::refused(refused),
+        refusal::RoomError::Database(sqlx::Error::RowNotFound) => {
+            return anyhow::anyhow!("Report not found");
+        }
+        refusal::RoomError::Database(_) => {}
     }
     warn!(%error, "Failed to record a moderation history entry");
     anyhow::anyhow!("Moderation history could not be saved")
