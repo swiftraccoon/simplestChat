@@ -23,6 +23,7 @@ const SOURCES: &[&str] = &[
     "src/room/history.rs",
     "src/room/moderation.rs",
     "src/turn.rs",
+    "src/auth/account.rs",
 ];
 
 /// Rust type names whose TypeScript spelling differs from the Rust one.
@@ -63,6 +64,15 @@ const MEDIASOUP_TYPES: &[&str] = &[
     "RtpCapabilitiesFinalized",
     "IceParameters",
     "IceCandidate",
+];
+
+/// Limits the browser applies before the server does: each a `const` with an
+/// integer literal in the named source, emitted in this order with its doc comment.
+const CONSTANTS: &[(&str, &str)] = &[
+    ("src/auth/password_policy.rs", "MIN_PASSWORD_CHARS"),
+    ("src/auth/password_policy.rs", "MAX_PASSWORD_CHARS"),
+    ("src/auth/password_policy.rs", "MAX_PASSWORD_BYTES"),
+    ("src/auth/routes.rs", "MAX_DISPLAY_NAME_LEN"),
 ];
 
 const OUTPUT: &str = "web/src/protocol.generated.ts";
@@ -722,6 +732,68 @@ fn screaming(name: &str) -> String {
     singular + suffix
 }
 
+/// The listed integer limits, each with its doc comment, ahead of the types.
+fn render_constants(root: &Path) -> Result<String> {
+    let mut files: BTreeMap<&str, syn::File> = BTreeMap::new();
+    let mut out = String::new();
+    for &(source, name) in CONSTANTS {
+        if !files.contains_key(source) {
+            let text = std::fs::read_to_string(root.join(source))
+                .with_context(|| format!("reading {source}"))?;
+            let file = syn::parse_file(&text).with_context(|| format!("parsing {source}"))?;
+            files.insert(source, file);
+        }
+        let item = files[source]
+            .items
+            .iter()
+            .find_map(|item| match item {
+                syn::Item::Const(item) if item.ident == name => Some(item),
+                _ => None,
+            })
+            .with_context(|| format!("no constant `{name}` in {source}"))?;
+        let value = match &*item.expr {
+            syn::Expr::Lit(syn::ExprLit {
+                lit: syn::Lit::Int(value),
+                ..
+            }) => value.base10_digits().to_owned(),
+            _ => bail!("constant `{name}` in {source} is not an integer literal"),
+        };
+        match doc_lines(&item.attrs).as_slice() {
+            [] => {}
+            [line] => writeln!(out, "/** {line} */")?,
+            lines => {
+                writeln!(out, "/**")?;
+                for line in lines {
+                    writeln!(out, " * {line}")?;
+                }
+                writeln!(out, " */")?;
+            }
+        }
+        writeln!(out, "export const {name} = {value};")?;
+    }
+    if !out.is_empty() {
+        out.push('\n');
+    }
+    Ok(out)
+}
+
+/// The `///` lines of an item, trimmed.
+fn doc_lines(attrs: &[syn::Attribute]) -> Vec<String> {
+    attrs
+        .iter()
+        .filter_map(|attr| match &attr.meta {
+            syn::Meta::NameValue(meta) if meta.path.is_ident("doc") => match &meta.value {
+                syn::Expr::Lit(syn::ExprLit {
+                    lit: syn::Lit::Str(text),
+                    ..
+                }) => Some(text.value().trim().to_owned()),
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect()
+}
+
 fn generate(root: &Path) -> Result<String> {
     let definitions = load_definitions(root)?;
     let mut generator = Generator {
@@ -739,6 +811,8 @@ fn generate(root: &Path) -> Result<String> {
         ("SocialResponse", false),
         ("ClientMessage", true),
         ("ServerMessage", false),
+        ("ChatPreferences", false),
+        ("PreferencePatch", true),
     ];
     let mut body = String::new();
     let mut queue: Vec<(String, bool)> = roots
@@ -815,7 +889,7 @@ fn generate(root: &Path) -> Result<String> {
     )?;
     writeln!(
         out,
-        "// Do not edit: change src/signaling/protocol.rs (or the modules it uses) and regenerate."
+        "// Do not edit: change the Rust types and limits xtask/src/protocol_ts.rs lists and regenerate."
     )?;
     writeln!(out)?;
     if !generator.used_mediasoup.is_empty() {
@@ -852,6 +926,7 @@ fn generate(root: &Path) -> Result<String> {
         writeln!(out, "export type MediaKind = (typeof MEDIA_KINDS)[number];")?;
         writeln!(out)?;
     }
+    out.push_str(&render_constants(root)?);
     out.push_str(&body);
     Ok(out)
 }

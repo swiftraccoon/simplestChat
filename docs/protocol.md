@@ -1196,6 +1196,11 @@ When changing the contract:
   attributes decide the shape: `Option` without `skip_serializing_if` is
   `T | null` on the way out, a skipped option is an optional property, and a
   client may omit any `Option` or `default` field.
+- Limits the browser applies before the server does (password characters and
+  bytes, the display-name length) and the HTTP preference shapes are generated
+  too: `xtask/src/protocol_ts.rs` lists the constants (`CONSTANTS`) and the
+  HTTP roots (`ChatPreferences`, `PreferencePatch`), so a limit changes in Rust
+  and `protocol-ts` carries it over; never copy one by hand into `web/src`.
 - For HTTP changes, update the named method and endpoint decoder. For social
   changes, update both action maps and the action's decoder. Add valid/invalid
   runtime cases and [compile-time fixtures](../web/tests/type-contracts.ts);

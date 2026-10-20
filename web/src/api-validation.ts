@@ -1,5 +1,13 @@
-import { ROLES } from './protocol';
-import type { AccountProfile, ChatStyle, PublicProfile, Role, RoomListItem } from './protocol';
+import { ROLES, TIMESTAMP_FORMATS } from './protocol';
+import type {
+  AccountProfile,
+  ChatPreferences,
+  ChatStyle,
+  IgnoredPerson,
+  PublicProfile,
+  Role,
+  RoomListItem,
+} from './protocol';
 import { CHAT_PALETTE } from './avatar-colors';
 import {
   boolean,
@@ -186,25 +194,12 @@ export const decodeAccountProfile = object<AccountProfile>({
 export const decodeRecoveryKey = object<{ recovery_key: string }>({ recovery_key: text });
 
 /** An account's chat preferences as the server keeps them (src/auth/account.rs `ChatPreferences`). */
-export interface ChatPreferences {
-  allowPrivateMessages: boolean;
-  sounds: boolean;
-  largeText: boolean;
-  timestamps: string;
-  ignored: { id: string; name: string }[];
-}
-export type PreferencePatch = Partial<
-  Pick<ChatPreferences, 'allowPrivateMessages' | 'sounds' | 'largeText' | 'timestamps'>
-> & {
-  ignore?: { id: string; name: string };
-  unignore?: string;
-};
 export const decodeChatPreferences = object<ChatPreferences>({
   allowPrivateMessages: boolean,
   sounds: boolean,
   largeText: boolean,
-  timestamps: text,
-  ignored: list(object<{ id: string; name: string }>({ id: text, name: text })),
+  timestamps: choice(...TIMESTAMP_FORMATS),
+  ignored: list(object<IgnoredPerson>({ id: text, name: text })),
 });
 
 /** These fields are all serialized by src/room/api.rs, including nullable fields. */

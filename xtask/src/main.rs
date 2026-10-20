@@ -18,7 +18,7 @@ Commands:
   line-length   Fail when Rust production code has more lines over 100 columns
                 than the ratchet in xtask/line-length-allowance.txt permits;
                 `--update` lowers the allowance to the current count.
-  protocol-ts   Write web/src/protocol.generated.ts from the Rust wire types;
+  protocol-ts   Write web/src/protocol.generated.ts from the Rust wire types and limits;
                 `--check` fails when the committed file is stale.
 ";
 

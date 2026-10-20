@@ -1,5 +1,5 @@
 // Generated from the Rust wire types by `cargo run -q -p xtask -- protocol-ts`.
-// Do not edit: change src/signaling/protocol.rs (or the modules it uses) and regenerate.
+// Do not edit: change the Rust types and limits xtask/src/protocol_ts.rs lists and regenerate.
 
 import type {
   DtlsParameters,
@@ -12,6 +12,21 @@ import type {
 
 export const MEDIA_KINDS = ['audio', 'video'] as const;
 export type MediaKind = (typeof MEDIA_KINDS)[number];
+
+/** The fewest NFC-normalized characters a new password may have. */
+export const MIN_PASSWORD_CHARS = 15;
+/**
+ * The most NFC-normalized characters, counted as characters so scripts with multi-byte
+ * letters are neither admitted short nor refused long.
+ */
+export const MAX_PASSWORD_CHARS = 128;
+/** Bounds the hashing input; 128 characters of any script fit within it. */
+export const MAX_PASSWORD_BYTES = 512;
+/**
+ * The longest account display name in bytes; the profile form caps its field at as many
+ * characters (mirrored into the browser contract by `protocol-ts`).
+ */
+export const MAX_DISPLAY_NAME_LEN = 64;
 
 export const ERROR_CODES = [
   'invalid_message',
@@ -713,6 +728,23 @@ export type ServerMessage =
     }
   | { type: 'lobbyAdmitted'; requestId?: string };
 
+export interface ChatPreferences {
+  allowPrivateMessages: boolean;
+  sounds: boolean;
+  largeText: boolean;
+  timestamps: TimestampFormat;
+  ignored: IgnoredPerson[];
+}
+
+export interface PreferencePatch {
+  allowPrivateMessages?: boolean;
+  sounds?: boolean;
+  largeText?: boolean;
+  timestamps?: TimestampFormat;
+  ignore?: IgnoredPerson;
+  unignore?: string;
+}
+
 export interface BanEntry {
   banId: string;
   displayName: string;
@@ -905,6 +937,14 @@ export interface RoomSettings {
   topicStyle: ChatStyle;
   historyRetentionDays: number;
 }
+
+export interface IgnoredPerson {
+  id: string;
+  name: string;
+}
+
+export const TIMESTAMP_FORMATS = ['hover', 'time', 'time12', 'seconds', 'datetime'] as const;
+export type TimestampFormat = (typeof TIMESTAMP_FORMATS)[number];
 
 export const CHAT_STYLE_KINDS = ['accent', 'text', 'bubble'] as const;
 export type ChatStyleKind = (typeof CHAT_STYLE_KINDS)[number];

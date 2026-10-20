@@ -9,7 +9,7 @@ import { mountAccountSessions } from './account-sessions';
 import { mountSavedRooms, createFavoriteButton, offerContact } from './discovery';
 import { appearancePicker } from './appearance';
 import type { RoomClient } from './room';
-import { ROLES, asRole, rank } from './protocol';
+import { MAX_DISPLAY_NAME_LEN, ROLES, asRole, rank } from './protocol';
 import type { AccountProfile, PublicProfile, Role, RoomListItem } from './protocol';
 import type { RegistrationInvite, RoomInvite } from './api-validation';
 import {
@@ -569,7 +569,7 @@ export class CommunityUI {
         try {
           const profile = await api.accountProfile(token);
           if (!stillCurrent()) return body;
-          const name = input(profile.display_name, 'text', 64);
+          const name = input(profile.display_name, 'text', MAX_DISPLAY_NAME_LEN);
           const bio = el('textarea');
           bio.value = profile.bio;
           bio.maxLength = 1000;

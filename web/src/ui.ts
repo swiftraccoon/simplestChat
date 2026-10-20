@@ -1,11 +1,12 @@
+import { MAX_PASSWORD_BYTES, MAX_PASSWORD_CHARS, MIN_PASSWORD_CHARS } from './protocol';
 import type {
   AccountProfile,
   CreateRoomRequest,
+  PreferencePatch,
   RoomListItem,
   RoomSettingsPatch,
 } from './protocol';
 import {
-  type PreferencePatch,
   decodeAccountProfile,
   decodeAccountSessions,
   decodeServerCapabilities,
@@ -56,8 +57,14 @@ import type { Role } from './protocol';
 export function validatePassword(password: string, confirmation: string): void {
   const normalized = password.normalize('NFC');
   const length = Array.from(normalized).length;
-  if (new TextEncoder().encode(password).length > 512 || length < 15 || length > 128)
-    throw new Error('Use a password between 15 and 128 characters (maximum 512 UTF-8 bytes)');
+  if (
+    new TextEncoder().encode(password).length > MAX_PASSWORD_BYTES ||
+    length < MIN_PASSWORD_CHARS ||
+    length > MAX_PASSWORD_CHARS
+  )
+    throw new Error(
+      `Use a password between ${MIN_PASSWORD_CHARS} and ${MAX_PASSWORD_CHARS} characters (maximum ${MAX_PASSWORD_BYTES} UTF-8 bytes)`,
+    );
   // eslint-disable-next-line no-control-regex
   if (/[\u0000-\u001f\u007f-\u009f]/.test(normalized))
     throw new Error('Passwords cannot contain control characters');

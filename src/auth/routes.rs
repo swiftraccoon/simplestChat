@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+use crate::auth::password_policy::{MAX_PASSWORD_BYTES, validate_new_password};
 use crate::auth::{jwt, password, session, types::*};
 use crate::signaling::{ClientIp, SignalingServer};
 use axum::{
@@ -16,31 +17,9 @@ use webauthn_rs::prelude::*;
 
 const REFRESH_COOKIE_NAME: &str = "__Host-refresh_token";
 const MAX_EMAIL_LEN: usize = 255;
+/// The longest account display name in bytes; the profile form caps its field at as many
+/// characters (mirrored into the browser contract by `protocol-ts`).
 const MAX_DISPLAY_NAME_LEN: usize = 64;
-const MAX_PASSWORD_CHARS: usize = 128;
-/// Bounds the hashing input; 128 characters of any script fit within it.
-pub(super) const MAX_PASSWORD_BYTES: usize = 512;
-
-/// 15–128 NFC-normalized characters, counted as characters so scripts with multi-byte letters
-/// are neither admitted short nor refused long.
-pub(super) fn password_length_ok(password: &str) -> bool {
-    let normalized = password::normalize_selection(password);
-    let characters = normalized.chars().count();
-    (15..=MAX_PASSWORD_CHARS).contains(&characters) && password.len() <= MAX_PASSWORD_BYTES
-}
-/// Apply the same selection policy at signup, change and recovery. Login does
-/// not reapply selection rules, so existing credentials remain usable.
-pub(super) fn validate_new_password(value: &str) -> Result<(), AuthError> {
-    if !password_length_ok(value) || value.chars().any(char::is_control) {
-        return Err(AuthError::InvalidInput(
-            "Password must be 15–128 characters without control characters",
-        ));
-    }
-    if super::common_passwords::is_common(&password::normalize_selection(value)) {
-        return Err(AuthError::InvalidInput("Choose a less common password"));
-    }
-    Ok(())
-}
 
 const GLOBAL_USER_REGISTRATION_LOCK: i64 = 7_349_872_340_911;
 // A valid Argon2id hash using the same default work factors as real account
@@ -833,21 +812,6 @@ pub(super) async fn verify_discoverable_assertion(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn new_password_policy_counts_nfc_characters_and_allows_long_scripts() {
-        for password in [
-            "a".repeat(14),
-            "e\u{301}".repeat(14),
-            "x\n".repeat(8),
-            "a".repeat(129),
-        ] {
-            assert!(validate_new_password(&password).is_err());
-        }
-        for password in ["a".repeat(15), "e\u{301}".repeat(15), "語".repeat(128)] {
-            assert!(validate_new_password(&password).is_ok());
-        }
-    }
 
     #[test]
     fn passkey_login_start_accepts_no_account_selector() {

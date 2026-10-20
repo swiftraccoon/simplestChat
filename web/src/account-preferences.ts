@@ -1,4 +1,4 @@
-import type { ChatPreferences, PreferencePatch } from './api-validation';
+import type { ChatPreferences, PreferencePatch } from './protocol';
 import { api, ApiOutcomeUnknownError, asyncButton, el } from './ui';
 import { group, note, toggleRow } from './settings-sheet';
 import { accountUpdatesLive, onAccountUpdate } from './account-updates';

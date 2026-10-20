@@ -25,9 +25,7 @@ fn preferences_are_validated_without_resetting_unreadable_privacy() {
         ..ChatPreferences::default()
     };
     assert!(validate_preferences(&preferences, own).is_ok());
-    preferences.timestamps = "<script>".to_string();
-    assert!(validate_preferences(&preferences, own).is_err());
-    preferences.timestamps = "seconds".to_string();
+    preferences.timestamps = TimestampFormat::Seconds;
     preferences.ignored.push(IgnoredPerson {
         id: own.to_string(),
         name: "Me".to_string(),
@@ -65,7 +63,7 @@ fn preferences_are_validated_without_resetting_unreadable_privacy() {
     )
     .unwrap();
     assert!(stored.sounds && stored.allow_private_messages);
-    assert_eq!(stored.timestamps, "time12");
+    assert_eq!(stored.timestamps, TimestampFormat::Time12);
     assert!(stored_preferences(Some(serde_json::json!({ "sounds": "yes" })), own).is_err());
     assert!(matches!(
         stored_preferences(None, own),
@@ -91,6 +89,7 @@ fn preference_patches_reject_null_unknown_empty_and_ambiguous_intents() {
         serde_json::json!({"sounds": null}),
         serde_json::json!({"largeText": null}),
         serde_json::json!({"timestamps": null}),
+        serde_json::json!({"timestamps": "invalid"}),
         serde_json::json!({"ignore": null}),
         serde_json::json!({"unignore": null}),
         serde_json::json!({"ignored": []}),
@@ -100,7 +99,6 @@ fn preference_patches_reject_null_unknown_empty_and_ambiguous_intents() {
     }
     for value in [
         serde_json::json!({}),
-        serde_json::json!({"timestamps": "invalid"}),
         serde_json::json!({"ignore": {"id": own, "name": "Me"}}),
         serde_json::json!({"unignore": own}),
         serde_json::json!({"ignore": {"id": peer, "name": "Peer"}, "unignore": peer}),

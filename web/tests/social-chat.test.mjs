@@ -3,7 +3,7 @@ import { attachmentFixture } from './attachment-fixture.mjs';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { loadTypeScript } from './source-loader.mjs';
+import { loadProtocol, loadTypeScript } from './source-loader.mjs';
 import { deferred, flush, uiFixture } from './ui-fixture.mjs';
 
 const chatModule = await loadTypeScript('src/chat-store.ts');
@@ -233,6 +233,7 @@ async function fixture({
   });
   const { SocialChat } = await loadTypeScript('src/social-chat.ts', {
     modules: {
+      './protocol': await loadProtocol(),
       './attachments': attachmentState.module,
       './chat-store': chatModule,
       './ui': f.ui,

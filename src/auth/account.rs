@@ -14,7 +14,7 @@
 #![forbid(unsafe_code)]
 
 use super::{
-    jwt, routes, session,
+    jwt, password_policy, routes, session,
     sessions::lock_current_session,
     types::{AuthError, Claims},
 };
@@ -70,6 +70,18 @@ pub(crate) struct UpdateProfileRequest {
     pub profile_style: ChatStyle,
 }
 
+/// How a viewer sees message times: on hover, or always in one format.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum TimestampFormat {
+    Hover,
+    #[default]
+    Time,
+    Time12,
+    Seconds,
+    Datetime,
+}
+
 /// Chat preferences that follow an account across devices, in the browser's
 /// own shape (`Preferences` in web/src/social-chat.ts, camelCase). Desktop
 /// notification consent and the chat look stay where they are decided: the
@@ -80,7 +92,7 @@ pub(crate) struct ChatPreferences {
     pub allow_private_messages: bool,
     pub sounds: bool,
     pub large_text: bool,
-    pub timestamps: String,
+    pub timestamps: TimestampFormat,
     pub ignored: Vec<IgnoredPerson>,
 }
 
@@ -90,7 +102,7 @@ impl Default for ChatPreferences {
             allow_private_messages: true,
             sounds: false,
             large_text: false,
-            timestamps: "time".to_string(),
+            timestamps: TimestampFormat::Time,
             ignored: Vec::new(),
         }
     }
@@ -123,7 +135,7 @@ pub(crate) struct PreferencePatch {
     #[serde(deserialize_with = "present")]
     large_text: Option<bool>,
     #[serde(deserialize_with = "present")]
-    timestamps: Option<String>,
+    timestamps: Option<TimestampFormat>,
     #[serde(deserialize_with = "present")]
     ignore: Option<IgnoredPerson>,
     #[serde(deserialize_with = "present")]
@@ -183,16 +195,12 @@ impl PreferencePatch {
     }
 }
 
-const TIMESTAMP_FORMATS: [&str; 5] = ["hover", "time", "time12", "seconds", "datetime"];
 /// The same ceiling a room applies to a session's ignore list.
 const MAX_IGNORED: usize = 100;
 
 /// The browser's validation, repeated: a stored object must be one this build
 /// could have written, whatever client sent it.
 fn validate_preferences(preferences: &ChatPreferences, own_id: Uuid) -> Result<(), AuthError> {
-    if !TIMESTAMP_FORMATS.contains(&preferences.timestamps.as_str()) {
-        return Err(AuthError::InvalidInput("Unknown timestamp format"));
-    }
     if preferences.ignored.len() > MAX_IGNORED {
         return Err(AuthError::InvalidInput("Ignore list is full (100 people)"));
     }
@@ -666,7 +674,7 @@ pub(super) async fn verified_password_hash(
     claims: &Claims,
     password: String,
 ) -> Result<String, AuthError> {
-    if password.len() > routes::MAX_PASSWORD_BYTES {
+    if password.len() > password_policy::MAX_PASSWORD_BYTES {
         return Err(AuthError::InvalidCredentials);
     }
     if !server.allow_auth_principal(&claims.sub) {
@@ -712,7 +720,7 @@ pub(crate) async fn change_password(
     headers: HeaderMap,
     Json(request): Json<ChangePasswordRequest>,
 ) -> Result<(HeaderMap, StatusCode), AuthError> {
-    routes::validate_new_password(&request.new_password)?;
+    password_policy::validate_new_password(&request.new_password)?;
     let _permit = routes::acquire_auth_request(&server)?;
     let claims = authenticated_claims(&server, &headers).await?;
     let old_hash = verified_password_hash(&server, &claims, request.current_password).await?;
@@ -855,7 +863,7 @@ pub(crate) async fn redeem_recovery(
     if let Some(wait) = server.sign_in_wait(source_ip, &email) {
         return Err(AuthError::TooManyFailures(wait));
     }
-    routes::validate_new_password(&request.new_password)?;
+    password_policy::validate_new_password(&request.new_password)?;
     let hash = recovery_hash(request.recovery_key.trim())?;
     let _permit = routes::acquire_auth_request(&server)?;
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;

@@ -1,16 +1,19 @@
 import type { TelemetryHandler, TelemetryOutcome } from './telemetry-types';
 import type { RoomClient } from './room';
+import { TIMESTAMP_FORMATS } from './protocol';
 import type {
   ChatAttachment,
   ChatEntry,
+  ChatPreferences,
   ChatStyle,
   ChatStyleKind,
+  PreferencePatch,
   ServerMessage,
+  TimestampFormat,
 } from './protocol';
 import { AttachmentComposer, renderAttachments } from './attachments';
 import { ChatStore, ConversationInputs, type ChatItem } from './chat-store';
 import type { AccountPreferences } from './account-preferences';
-import type { ChatPreferences, PreferencePatch } from './api-validation';
 import { api, asyncButton, button, busy, el, modal } from './ui';
 import {
   actionRow,
@@ -36,15 +39,6 @@ import {
   notifyInboxChanged,
 } from './chat-history';
 
-/** How a viewer sees message times: on hover, or always in one format. */
-type TimestampFormat = 'hover' | 'time' | 'time12' | 'seconds' | 'datetime';
-const TIMESTAMP_FORMATS: readonly TimestampFormat[] = [
-  'hover',
-  'time',
-  'time12',
-  'seconds',
-  'datetime',
-];
 type Preferences = {
   allowPrivateMessages: boolean;
   sounds: boolean;
@@ -2214,9 +2208,7 @@ export class SocialChat {
       allowPrivateMessages: saved.allowPrivateMessages,
       sounds: saved.sounds,
       largeText: saved.largeText,
-      timestamps: TIMESTAMP_FORMATS.includes(saved.timestamps as TimestampFormat)
-        ? (saved.timestamps as TimestampFormat)
-        : 'time',
+      timestamps: saved.timestamps,
       ignored: saved.ignored.map((person) => ({ ...person })),
     };
     this.storePreferences(this.viewerKey);
@@ -2356,12 +2348,13 @@ export class SocialChat {
     timestamps.value = this.preferences.timestamps;
     const timestampRow = selectRow('Timestamps', timestamps);
     timestamps.addEventListener('change', () => {
-      if (!TIMESTAMP_FORMATS.includes(timestamps.value as TimestampFormat)) {
+      const format = timestamps.value as TimestampFormat;
+      if (!TIMESTAMP_FORMATS.includes(format)) {
         timestamps.value = this.preferences.timestamps;
         return;
       }
-      this.preferences = { ...this.preferences, timestamps: timestamps.value as TimestampFormat };
-      this.savePreferences(viewer, { timestamps: timestamps.value });
+      this.preferences = { ...this.preferences, timestamps: format };
+      this.savePreferences(viewer, { timestamps: format });
       this.render();
       markSaved(timestampRow);
     });

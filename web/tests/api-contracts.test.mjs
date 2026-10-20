@@ -528,6 +528,16 @@ for (const [name, request, path, method, valid] of endpoints) {
   });
 }
 
+test('chat preferences refuse a timestamp format the contract does not list', async () => {
+  const { ui, state } = await uiFixture();
+  state.response = {
+    ok: true,
+    status: 200,
+    json: async () => ({ ...preferences, timestamps: 'relative' }),
+  };
+  await assert.rejects(ui.api.accountPreferences('token'), /invalid data/);
+});
+
 test('directory counts are nullable when a room was busy at listing time', async () => {
   const { ui, state } = await uiFixture();
   state.response = {
