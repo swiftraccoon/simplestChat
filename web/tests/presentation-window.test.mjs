@@ -88,6 +88,28 @@ test('a valid slow layer waits for actual progress inside the original deadline'
   assert.equal(result.after.screenFrames - result.before.screenFrames, 2);
 });
 
+test('samples taken before the receiver reports statistics cannot anchor the window for good', async () => {
+  // Firefox answered empty statistics reports for seven seconds after a downlink
+  // change on a hosted runner (2026-10-20): the readable frames that followed
+  // must open the window on their own instead of being compared with the blanks.
+  const blank = {
+    screenFrames: 0,
+    cameraFrames: 0,
+    audioPackets: null,
+    audioSamples: null,
+    concealedSamples: null,
+  };
+  const f = fixture([1080], {
+    counters: (index) => (index < 3 ? blank : { ...nativeCounters(index), screenFrames: index }),
+    progresses: windows.presentationProgress,
+  });
+  const result = await f.run();
+  assert.equal(result.before.index, 3, 'the first sample with statistics opens the window');
+  assert.equal(result.after.index, 6);
+  assert.equal(result.durationMs, 1950);
+  assert.equal(result.observations.length, 4, 'retain only the accepted window');
+});
+
 test('a readable frozen layer exhausts the unchanged deadline despite camera and voice progress', async () => {
   const f = fixture([1080], {
     timeoutMs: 4000,

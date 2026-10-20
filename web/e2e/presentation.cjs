@@ -239,11 +239,14 @@ async function senderState(page) {
     await publisher.locator('#mic-btn').click();
     await profile(publisher, 'detail');
     await share(publisher);
+    // Firefox's publisher activates its largest screen encoding only as its own
+    // estimate ramps, which took 28 s on a hosted runner: the motion stage below
+    // already allows the same 45 s for the same requirement.
     await progressing(
       viewer,
       'detail-text-voice-camera',
       (read) => read.height === 1080,
-      30000,
+      45000,
       3000,
       publisher,
     );
