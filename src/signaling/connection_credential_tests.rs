@@ -1,5 +1,6 @@
 //! Deterministic credential-observation tests; no database or network failures.
 
+use super::authentication::unix_seconds;
 use super::*;
 use crate::ids::fixtures::{pid, rid};
 use std::future::{Future, pending, ready};

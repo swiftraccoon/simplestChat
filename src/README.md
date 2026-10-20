@@ -22,7 +22,7 @@ HTTP / WebSocket
 | Configuration, startup and database pool | `config.rs`, `app.rs`, `db.rs` |
 | Identifiers (room slug, participant, message and account UUIDs) | `ids.rs` |
 | Admission drain and bounded shutdown | `shutdown.rs`, `app.rs` |
-| Routes, origin/limits, WebSocket lifecycle | `signaling/mod.rs` (server state, guards and handlers; tests in `signaling/security_tests.rs`), `signaling/routes.rs` (the route tree and its per-group budgets), `signaling/connection.rs` (`connection_gates.rs` holds its per-connection budgets and their verdicts, `connection_token_bucket.rs` the bucket and refusal window; tests in `connection_gates_tests.rs`, `connection_security_tests.rs` and the other `connection_*_tests.rs` files) |
+| Routes, origin/limits, WebSocket lifecycle | `signaling/mod.rs` (server state, guards and handlers; tests in `signaling/security_tests.rs`), `signaling/routes.rs` (the route tree and its per-group budgets), `signaling/connection.rs` (`connection_gates.rs` holds its per-connection budgets and their verdicts, `connection_credentials.rs` its accepted credentials and their checks, `connection_token_bucket.rs` the bucket and refusal window; tests in `connection_gates_tests.rs`, `connection_security_tests.rs` and the other `connection_*_tests.rs` files) |
 | Dependency readiness | `signaling/readiness.rs`, `media/worker_manager.rs` |
 | Wire contract | `signaling/protocol.rs`; `cargo run -q -p xtask -- protocol-ts` generates [web/src/protocol.generated.ts](../web/src/protocol.generated.ts) from it |
 | Password/passkey auth and JWT validation | `auth/routes.rs`, `auth/password.rs`, `auth/webauthn.rs`, `auth/jwt.rs`, `auth/limiter.rs` (sign-in failure delays, registration window) |

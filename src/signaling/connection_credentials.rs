@@ -5,10 +5,18 @@
 //! verification is unavailable. This policy never authenticates a handshake or
 //! extends a token's accepted expiry; callers include that expiry in every wait.
 
+use super::authentication::{
+    self, RenewalAuthenticator, RenewalBudget, RenewalOutcome, renew_authentication, unix_seconds,
+};
 use crate::auth::jwt::validate_current_claims;
 use crate::auth::types::{AuthError, Claims};
+use crate::shutdown::DrainSignal;
+use crate::signaling::protocol::{AuthenticationToken, ServerMessage};
 use std::future::Future;
+use std::pin::Pin;
 use std::time::{Duration, Instant};
+use tokio::sync::{broadcast, mpsc};
+use tracing::{info, warn};
 
 /// Maximum uncertainty after the first observed database failure or timeout.
 const CREDENTIAL_UNAVAILABLE_WINDOW: Duration = Duration::from_secs(15);
@@ -138,6 +146,456 @@ async fn classify_validation(
         // An authoritative rejection must never become a retryable outcome,
         // even if it completes at the deadline.
         Ok(Err(_)) => CredentialStatus::Revoked,
+    }
+}
+
+/// How often an authenticated socket re-checks its account while it stays open.
+pub(super) const AUTH_REVALIDATE_INTERVAL: Duration = Duration::from_secs(5);
+
+/// Convert accepted wall-clock expiry once, retaining fractional-second precision.
+fn credential_expiry_deadline(exp: u64) -> Instant {
+    let now = Instant::now();
+    let remaining = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(Duration::ZERO, |elapsed| {
+            Duration::from_secs(exp).saturating_sub(elapsed)
+        });
+    now.checked_add(remaining).unwrap_or(now)
+}
+
+/// Revalidation waits are bounded independently of PostgreSQL's statement limit.
+/// Revocation notices and drain remain observable while the query is pending.
+/// `None` means drain, not invalid credentials. The caller supplies its original
+/// accepted expiry (and, for a retained session, its original grace deadline).
+pub(super) async fn revalidate_account(
+    pool: Option<&sqlx::PgPool>,
+    claims: &Claims,
+    continuity: &mut CredentialContinuity,
+    revocations: &mut tokio::sync::broadcast::Receiver<(String, i64)>,
+    drain: &crate::shutdown::DrainSignal,
+    hard_deadline: Instant,
+) -> Option<bool> {
+    let now = Instant::now();
+    if continuity.expired(now) || now >= hard_deadline || claims.exp as u64 <= unix_seconds() {
+        return Some(false);
+    }
+    let deadline = continuity
+        .deadline()
+        .map_or(hard_deadline, |limit| limit.min(hard_deadline))
+        .min(now + AUTH_REVALIDATE_INTERVAL);
+    let validation = account_credentials_current(pool, claims, deadline);
+    observe_account_validation(
+        validation,
+        claims,
+        continuity,
+        revocations,
+        drain,
+        hard_deadline,
+    )
+    .await
+}
+
+/// Query budget for one validation attempt, or `None` when the accepted
+/// credentials are already invalid before any query is issued.
+fn validation_deadline(
+    claims: &Claims,
+    continuity: &CredentialContinuity,
+    hard_deadline: Instant,
+) -> Option<Instant> {
+    let now = Instant::now();
+    if continuity.expired(now) || now >= hard_deadline || claims.exp as u64 <= unix_seconds() {
+        return None;
+    }
+    Some(
+        continuity
+            .deadline()
+            .map_or(hard_deadline, |limit| limit.min(hard_deadline))
+            .min(now + AUTH_REVALIDATE_INTERVAL),
+    )
+}
+
+/// Applies one completed validation. `None` means drain, not invalid
+/// credentials. Shared by the awaited form below and the connection loop's
+/// pending-validation arm so both apply identical policy.
+fn settle_account_validation(
+    result: CredentialStatus,
+    claims: &Claims,
+    continuity: &mut CredentialContinuity,
+    revocations: &mut tokio::sync::broadcast::Receiver<(String, i64)>,
+    drain: &crate::shutdown::DrainSignal,
+    hard_deadline: Instant,
+    deadline: Instant,
+) -> Option<bool> {
+    let now = Instant::now();
+    if drain.is_draining() {
+        return None;
+    }
+    if now >= hard_deadline || claims.exp as u64 <= unix_seconds() {
+        return Some(false);
+    }
+    let result = if !authentication::revocations_current(revocations, claims) {
+        CredentialStatus::Revoked
+    } else if result == CredentialStatus::Current && now >= deadline {
+        CredentialStatus::Unavailable
+    } else {
+        result
+    };
+    Some(retain_credentials(continuity, result, now))
+}
+
+/// Keep control-plane races testable without modifying a database or accepting
+/// injected validators at the public connection boundary.
+pub(super) async fn observe_account_validation(
+    validation: impl std::future::Future<Output = CredentialStatus>,
+    claims: &Claims,
+    continuity: &mut CredentialContinuity,
+    revocations: &mut tokio::sync::broadcast::Receiver<(String, i64)>,
+    drain: &crate::shutdown::DrainSignal,
+    hard_deadline: Instant,
+) -> Option<bool> {
+    let Some(deadline) = validation_deadline(claims, continuity, hard_deadline) else {
+        return Some(false);
+    };
+    tokio::pin!(validation);
+    let result = loop {
+        tokio::select! {
+            biased;
+            _ = drain.wait() => return None,
+            _ = tokio::time::sleep_until(deadline.into()) => break CredentialStatus::Unavailable,
+            notice = revocations.recv() => match notice {
+                Ok((subject, version)) if subject == claims.sub && claims.auth_version < version => break CredentialStatus::Revoked,
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => break CredentialStatus::Revoked,
+                // The in-flight query may predate a lost revocation. It cannot
+                // satisfy a fresh-validation requirement after notification loss.
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => break CredentialStatus::Revoked,
+                _ => {},
+            },
+            result = &mut validation => break result,
+        }
+    };
+    settle_account_validation(
+        result,
+        claims,
+        continuity,
+        revocations,
+        drain,
+        hard_deadline,
+        deadline,
+    )
+}
+
+/// Log only state transitions, never per-check credentials or database errors.
+fn retain_credentials(
+    continuity: &mut CredentialContinuity,
+    result: CredentialStatus,
+    now: Instant,
+) -> bool {
+    let was_unavailable = continuity.unavailable();
+    let accepted = continuity.observe(result, now);
+    if !was_unavailable && continuity.unavailable() && accepted {
+        warn!(
+            event = "authentication_validation_unavailable",
+            "Retaining established credentials within the bounded uncertainty allowance"
+        );
+    } else if was_unavailable && result == CredentialStatus::Current && accepted {
+        info!(
+            event = "authentication_validation_restored",
+            "Account validation recovered before its deadline"
+        );
+    }
+    accepted
+}
+
+/// The accepted credentials of one connection and everything that bounds them:
+/// the token's expiry, the continuity allowance, the periodic account check
+/// (polled as its own arm of the connection loop, so a slow database delays
+/// only the verdict, never frame dispatch) and the renewal budget. A guest
+/// socket has no claims and nothing here ever closes it.
+pub(super) struct CredentialSession {
+    claims: Option<Claims>,
+    exp: Option<u64>,
+    deadline: Option<Instant>,
+    continuity: CredentialContinuity,
+    /// The account check in flight, if any; the loop polls it as one arm.
+    pub(super) pending: Option<Pin<Box<dyn Future<Output = CredentialStatus> + Send>>>,
+    pending_deadline: Instant,
+    /// When the next periodic account check is due.
+    pub(super) next_check: Instant,
+    renewal_budget: RenewalBudget,
+    invalidated: bool,
+}
+
+impl CredentialSession {
+    pub(super) fn new(claims: Option<Claims>) -> Self {
+        let exp = claims.as_ref().map(|claims| claims.exp as u64);
+        Self {
+            claims,
+            exp,
+            deadline: exp.map(credential_expiry_deadline),
+            continuity: CredentialContinuity::default(),
+            pending: None,
+            pending_deadline: Instant::now(),
+            next_check: Instant::now(),
+            renewal_budget: RenewalBudget::new(),
+            invalidated: false,
+        }
+    }
+
+    pub(super) fn claims(&self) -> Option<&Claims> {
+        self.claims.as_ref()
+    }
+
+    /// The accepted token's absolute expiry, when the socket is authenticated.
+    pub(super) fn deadline(&self) -> Option<Instant> {
+        self.deadline
+    }
+
+    /// The continuity policy as it stands, for a retained reconnect grace.
+    pub(super) fn continuity(&self) -> CredentialContinuity {
+        self.continuity.clone()
+    }
+
+    /// Whether the credentials were rejected, revoked or outlived: such a
+    /// socket closes without reconnect grace.
+    pub(super) fn invalidated(&self) -> bool {
+        self.invalidated
+    }
+
+    pub(super) fn invalidate(&mut self) {
+        self.invalidated = true;
+    }
+
+    /// Whether the accepted token lifetime or the validation allowance has run out.
+    pub(super) fn expired(&self) -> bool {
+        let now = Instant::now();
+        self.exp.is_some_and(|exp| exp <= unix_seconds())
+            || self.deadline.is_some_and(|deadline| now >= deadline)
+            || self.continuity.expired(now)
+    }
+
+    fn hard_deadline(&self) -> Instant {
+        self.deadline.unwrap_or_else(Instant::now)
+    }
+
+    /// How long the next receive may wait: the idle allowance, capped by the
+    /// token's expiry and the continuity allowance. The JWT is a connection
+    /// credential, not only a handshake credential, so active traffic cannot
+    /// keep an authenticated socket alive past it.
+    pub(super) fn receive_deadline(&self, idle_remaining: Duration) -> Instant {
+        let now_unix = unix_seconds();
+        let timeout = self
+            .exp
+            .map(|exp| Duration::from_secs(exp.saturating_sub(now_unix)))
+            .map_or(idle_remaining, |remaining| remaining.min(idle_remaining));
+        let deadline = Instant::now() + timeout;
+        let deadline = self.deadline.map_or(deadline, |limit| limit.min(deadline));
+        self.continuity
+            .deadline()
+            .map_or(deadline, |limit| limit.min(deadline))
+    }
+
+    /// Apply a notice from the account hub. `true` means the socket must close:
+    /// its account was revoked at or above its version, or the hub is gone.
+    /// Lost notices discard the check in flight (it predates them) and demand
+    /// a fresh one.
+    pub(super) fn revoked_by(
+        &mut self,
+        notice: Result<(String, i64), broadcast::error::RecvError>,
+    ) -> bool {
+        match notice {
+            Ok((subject, minimum_version))
+                if self.claims.as_ref().is_some_and(|claims| {
+                    claims.sub == subject && claims.auth_version < minimum_version
+                }) =>
+            {
+                self.invalidated = true;
+                true
+            }
+            Err(broadcast::error::RecvError::Lagged(_)) => {
+                self.pending = None;
+                self.continuity.require_revalidation();
+                self.next_check = Instant::now();
+                false
+            }
+            Err(broadcast::error::RecvError::Closed) => {
+                self.invalidated = true;
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Start the periodic account check; `false` means the accepted
+    /// credentials are already invalid and the socket must close.
+    pub(super) fn begin_validation(&mut self, pool: Option<sqlx::PgPool>) -> bool {
+        let hard_deadline = self.hard_deadline();
+        let Some(claims) = self.claims.as_ref() else {
+            return true;
+        };
+        match validation_deadline(claims, &self.continuity, hard_deadline) {
+            Some(deadline) => {
+                self.pending_deadline = deadline;
+                self.pending = Some(Box::pin(account_credentials_current_owned(
+                    pool,
+                    claims.clone(),
+                    deadline,
+                )));
+                true
+            }
+            None => {
+                self.invalidated = true;
+                false
+            }
+        }
+    }
+
+    /// Apply the finished account check; `false` means the loop ends (the
+    /// credentials were rejected, or the server is draining).
+    pub(super) fn settle(
+        &mut self,
+        result: CredentialStatus,
+        revocations: &mut broadcast::Receiver<(String, i64)>,
+        drain: &DrainSignal,
+    ) -> bool {
+        self.pending = None;
+        let hard_deadline = self.hard_deadline();
+        let pending_deadline = self.pending_deadline;
+        if let Some(claims) = self.claims.as_ref() {
+            match settle_account_validation(
+                result,
+                claims,
+                &mut self.continuity,
+                revocations,
+                drain,
+                hard_deadline,
+                pending_deadline,
+            ) {
+                Some(true) => {}
+                Some(false) => {
+                    self.invalidated = true;
+                    return false;
+                }
+                None => return false,
+            }
+        }
+        self.next_check = Instant::now() + AUTH_REVALIDATE_INTERVAL;
+        true
+    }
+
+    /// Attempt a credential renewal within this socket's remaining lifetime.
+    pub(super) async fn renew(
+        &mut self,
+        authenticator: Option<&RenewalAuthenticator>,
+        token: &AuthenticationToken,
+        pool: Option<&sqlx::PgPool>,
+        revocations: &mut broadcast::Receiver<(String, i64)>,
+        drain: &DrainSignal,
+        sender: &mpsc::Sender<crate::OutboundJson>,
+    ) -> RenewalOutcome {
+        if !self.renewal_budget.allow(Instant::now()) {
+            return RenewalOutcome::Rejected;
+        }
+        let (Some(authenticator), Some(current)) = (authenticator, self.claims.as_ref()) else {
+            return RenewalOutcome::Rejected;
+        };
+        let hard_deadline = self.hard_deadline();
+        let deadline = self
+            .continuity
+            .deadline()
+            .map_or(hard_deadline, |limit| limit.min(hard_deadline));
+        let renewal = renew_authentication(
+            authenticator,
+            current,
+            token,
+            pool,
+            revocations,
+            drain,
+            sender,
+        );
+        let outcome = tokio::time::timeout_at(deadline.into(), renewal)
+            .await
+            .unwrap_or(RenewalOutcome::Close);
+        if Instant::now() >= deadline {
+            RenewalOutcome::Close
+        } else {
+            outcome
+        }
+    }
+
+    /// Adopt a renewal's outcome as the reply to send. `None` means the socket
+    /// closes: renewed or deferred credentials the continuity allowance refuses,
+    /// a close verdict, or an interrupted renewal.
+    pub(super) fn apply_renewal(
+        &mut self,
+        outcome: RenewalOutcome,
+        request_id: &str,
+    ) -> Option<ServerMessage> {
+        let now = Instant::now();
+        let unavailable = matches!(outcome, RenewalOutcome::Unavailable);
+        Some(match outcome {
+            RenewalOutcome::Renewed(claims) => {
+                if !retain_credentials(&mut self.continuity, CredentialStatus::Current, now) {
+                    self.invalidated = true;
+                    return None;
+                }
+                let expires_at = claims.exp as u64;
+                self.exp = Some(expires_at);
+                self.deadline = Some(credential_expiry_deadline(expires_at));
+                self.claims = Some(claims);
+                self.next_check = now + AUTH_REVALIDATE_INTERVAL;
+                ServerMessage::AuthenticationRenewed {
+                    request_id: request_id.to_owned(),
+                    expires_at,
+                }
+            }
+            RenewalOutcome::Rejected => ServerMessage::AuthenticationRenewalFailed {
+                request_id: request_id.to_owned(),
+            },
+            RenewalOutcome::Unavailable | RenewalOutcome::Busy => {
+                if unavailable
+                    && !retain_credentials(&mut self.continuity, CredentialStatus::Unavailable, now)
+                {
+                    self.invalidated = true;
+                    return None;
+                }
+                ServerMessage::AuthenticationRenewalDeferred {
+                    request_id: request_id.to_owned(),
+                    retry_after_ms: 3000,
+                    expires_at: self.exp.unwrap_or_default(),
+                }
+            }
+            RenewalOutcome::Close => {
+                self.invalidated = true;
+                return None;
+            }
+            RenewalOutcome::Interrupted => return None,
+        })
+    }
+
+    /// One last account check when a socket closes with its credentials still
+    /// accepted; a rejection denies the reconnect grace that would follow.
+    pub(super) async fn revalidate_on_disconnect(
+        &mut self,
+        pool: Option<&sqlx::PgPool>,
+        revocations: &mut broadcast::Receiver<(String, i64)>,
+        drain: &DrainSignal,
+    ) {
+        if self.invalidated {
+            return;
+        }
+        let hard_deadline = self.hard_deadline();
+        if let Some(claims) = self.claims.as_ref() {
+            self.invalidated = revalidate_account(
+                pool,
+                claims,
+                &mut self.continuity,
+                revocations,
+                drain,
+                hard_deadline,
+            )
+            .await
+                == Some(false);
+        }
     }
 }
 

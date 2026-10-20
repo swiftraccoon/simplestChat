@@ -28,13 +28,9 @@ use uuid::Uuid;
 #[path = "connection_authentication.rs"]
 mod authentication;
 pub(crate) use authentication::RenewalAuthenticator;
-use authentication::{RenewalBudget, RenewalOutcome, renew_authentication, unix_seconds};
 #[path = "connection_credentials.rs"]
 mod credentials;
-use credentials::{
-    CredentialContinuity, CredentialStatus, account_credentials_current,
-    account_credentials_current_owned,
-};
+use credentials::*;
 #[path = "connection_bandwidth.rs"]
 mod bandwidth;
 #[path = "connection_gates.rs"]
@@ -114,7 +110,6 @@ const IDLE_TIMEOUT: Duration = Duration::from_secs(300); // 5 minutes
 /// background-tab JavaScript timers. Unjoined sockets retain the idle cutoff.
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(30);
 const HEARTBEAT_MEMBERSHIP_TIMEOUT: Duration = Duration::from_millis(100);
-const AUTH_REVALIDATE_INTERVAL: Duration = Duration::from_secs(5);
 
 /// Internal timing policy keeps short socket regressions independent of process
 /// environment. Production always uses the fixed five-minute idle deadline.
@@ -504,160 +499,6 @@ fn reconnect_attempt_allowed(current_room_id: Option<&RoomId>, in_lobby: bool) -
     current_room_id.is_none() && !in_lobby
 }
 
-/// Convert accepted wall-clock expiry once, retaining fractional-second precision.
-fn credential_expiry_deadline(exp: u64) -> Instant {
-    let now = Instant::now();
-    let remaining = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(Duration::ZERO, |elapsed| {
-            Duration::from_secs(exp).saturating_sub(elapsed)
-        });
-    now.checked_add(remaining).unwrap_or(now)
-}
-
-/// Revalidation waits are bounded independently of PostgreSQL's statement limit.
-/// Revocation notices and drain remain observable while the query is pending.
-/// `None` means drain, not invalid credentials. The caller supplies its original
-/// accepted expiry (and, for a retained session, its original grace deadline).
-async fn revalidate_account(
-    pool: Option<&sqlx::PgPool>,
-    claims: &Claims,
-    continuity: &mut CredentialContinuity,
-    revocations: &mut tokio::sync::broadcast::Receiver<(String, i64)>,
-    drain: &crate::shutdown::DrainSignal,
-    hard_deadline: Instant,
-) -> Option<bool> {
-    let now = Instant::now();
-    if continuity.expired(now) || now >= hard_deadline || claims.exp as u64 <= unix_seconds() {
-        return Some(false);
-    }
-    let deadline = continuity
-        .deadline()
-        .map_or(hard_deadline, |limit| limit.min(hard_deadline))
-        .min(now + AUTH_REVALIDATE_INTERVAL);
-    let validation = account_credentials_current(pool, claims, deadline);
-    observe_account_validation(
-        validation,
-        claims,
-        continuity,
-        revocations,
-        drain,
-        hard_deadline,
-    )
-    .await
-}
-
-/// Query budget for one validation attempt, or `None` when the accepted
-/// credentials are already invalid before any query is issued.
-fn validation_deadline(
-    claims: &Claims,
-    continuity: &CredentialContinuity,
-    hard_deadline: Instant,
-) -> Option<Instant> {
-    let now = Instant::now();
-    if continuity.expired(now) || now >= hard_deadline || claims.exp as u64 <= unix_seconds() {
-        return None;
-    }
-    Some(
-        continuity
-            .deadline()
-            .map_or(hard_deadline, |limit| limit.min(hard_deadline))
-            .min(now + AUTH_REVALIDATE_INTERVAL),
-    )
-}
-
-/// Applies one completed validation. `None` means drain, not invalid
-/// credentials. Shared by the awaited form below and the connection loop's
-/// pending-validation arm so both apply identical policy.
-fn settle_account_validation(
-    result: CredentialStatus,
-    claims: &Claims,
-    continuity: &mut CredentialContinuity,
-    revocations: &mut tokio::sync::broadcast::Receiver<(String, i64)>,
-    drain: &crate::shutdown::DrainSignal,
-    hard_deadline: Instant,
-    deadline: Instant,
-) -> Option<bool> {
-    let now = Instant::now();
-    if drain.is_draining() {
-        return None;
-    }
-    if now >= hard_deadline || claims.exp as u64 <= unix_seconds() {
-        return Some(false);
-    }
-    let result = if !authentication::revocations_current(revocations, claims) {
-        CredentialStatus::Revoked
-    } else if result == CredentialStatus::Current && now >= deadline {
-        CredentialStatus::Unavailable
-    } else {
-        result
-    };
-    Some(retain_credentials(continuity, result, now))
-}
-
-/// Keep control-plane races testable without modifying a database or accepting
-/// injected validators at the public connection boundary.
-async fn observe_account_validation(
-    validation: impl std::future::Future<Output = CredentialStatus>,
-    claims: &Claims,
-    continuity: &mut CredentialContinuity,
-    revocations: &mut tokio::sync::broadcast::Receiver<(String, i64)>,
-    drain: &crate::shutdown::DrainSignal,
-    hard_deadline: Instant,
-) -> Option<bool> {
-    let Some(deadline) = validation_deadline(claims, continuity, hard_deadline) else {
-        return Some(false);
-    };
-    tokio::pin!(validation);
-    let result = loop {
-        tokio::select! {
-            biased;
-            _ = drain.wait() => return None,
-            _ = tokio::time::sleep_until(deadline.into()) => break CredentialStatus::Unavailable,
-            notice = revocations.recv() => match notice {
-                Ok((subject, version)) if subject == claims.sub && claims.auth_version < version => break CredentialStatus::Revoked,
-                Err(tokio::sync::broadcast::error::RecvError::Closed) => break CredentialStatus::Revoked,
-                // The in-flight query may predate a lost revocation. It cannot
-                // satisfy a fresh-validation requirement after notification loss.
-                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => break CredentialStatus::Revoked,
-                _ => {},
-            },
-            result = &mut validation => break result,
-        }
-    };
-    settle_account_validation(
-        result,
-        claims,
-        continuity,
-        revocations,
-        drain,
-        hard_deadline,
-        deadline,
-    )
-}
-
-/// Log only state transitions, never per-check credentials or database errors.
-fn retain_credentials(
-    continuity: &mut CredentialContinuity,
-    result: CredentialStatus,
-    now: Instant,
-) -> bool {
-    let was_unavailable = continuity.unavailable();
-    let accepted = continuity.observe(result, now);
-    if !was_unavailable && continuity.unavailable() && accepted {
-        warn!(
-            event = "authentication_validation_unavailable",
-            "Retaining established credentials within the bounded uncertainty allowance"
-        );
-    } else if was_unavailable && result == CredentialStatus::Current && accepted {
-        info!(
-            event = "authentication_validation_restored",
-            "Account validation recovered before its deadline"
-        );
-    }
-    accepted
-}
-
 /// Handles a single WebSocket connection
 #[expect(
     clippy::too_many_arguments,
@@ -704,7 +545,7 @@ async fn handle_connection_with_timing(
     grace_periods: GracePeriodMap,
     metrics: ServerMetrics,
     _permit: OwnedSemaphorePermit,
-    mut authenticated_user: Option<Claims>,
+    authenticated_user: Option<Claims>,
     client_ip: Option<std::net::IpAddr>,
     db_pool: Option<sqlx::PgPool>,
     mut auth_revocations: tokio::sync::broadcast::Receiver<(String, i64)>,
@@ -724,8 +565,7 @@ async fn handle_connection_with_timing(
     };
 
     let is_authenticated = authenticated_user.is_some();
-    let mut auth_exp = authenticated_user.as_ref().map(|claims| claims.exp as u64);
-    let mut auth_deadline = auth_exp.map(credential_expiry_deadline);
+    let mut session = CredentialSession::new(authenticated_user);
 
     let diagnostic_connection_id = Some(metrics.next_connection_id());
     info!(
@@ -852,34 +692,20 @@ async fn handle_connection_with_timing(
         .config()
         .max_consumers_per_participant;
     let mut gates = CommandGates::new(Instant::now(), consumer_limit);
-    let mut credentials_invalidated = false;
-    let mut credential_continuity = CredentialContinuity::default();
-    let mut next_auth_check = Instant::now();
-    // The periodic account check is polled as its own arm below, so a slow
-    // database delays only the verdict, never this socket's frame dispatch.
-    let mut pending_validation: Option<
-        std::pin::Pin<Box<dyn std::future::Future<Output = CredentialStatus> + Send>>,
-    > = None;
-    let mut pending_validation_deadline = Instant::now();
     let mut last_frame_received = Instant::now();
     let mut next_heartbeat = Instant::now() + timing.heartbeat_interval;
     let mut peer_close_received = false;
-    let mut renewal_budget = RenewalBudget::new();
 
     loop {
         // The JWT is a connection credential, not only a handshake credential.
         // Cap every receive wait by its absolute expiry so active traffic cannot
         // keep an authenticated socket alive indefinitely.
-        let now_unix = unix_seconds();
-        if auth_exp.is_some_and(|exp| exp <= now_unix)
-            || auth_deadline.is_some_and(|deadline| Instant::now() >= deadline)
-            || credential_continuity.expired(Instant::now())
-        {
+        if session.expired() {
             info!(
                 %participant_id,
                 "Accepted authentication lifetime or validation allowance expired; closing WebSocket"
             );
-            credentials_invalidated = true;
+            session.invalidate();
             break;
         }
         let idle_remaining = timing
@@ -895,16 +721,8 @@ async fn handle_connection_with_timing(
             }
             break;
         }
-        let receive_timeout = auth_exp
-            .map(|exp| Duration::from_secs(exp.saturating_sub(now_unix)))
-            .map_or(idle_remaining, |remaining| remaining.min(idle_remaining));
-        let receive_deadline = Instant::now() + receive_timeout;
         let receive_deadline =
-            auth_deadline.map_or(receive_deadline, |deadline| deadline.min(receive_deadline));
-        let receive_deadline = credential_continuity
-            .deadline()
-            .map_or(receive_deadline, |deadline| deadline.min(receive_deadline));
-        let receive_deadline = tokio::time::Instant::from_std(receive_deadline);
+            tokio::time::Instant::from_std(session.receive_deadline(idle_remaining));
 
         let receive_result = tokio::select! {
             biased;
@@ -912,52 +730,21 @@ async fn handle_connection_with_timing(
             _ = super::outbound::wait_for_resync(&mut reader_overflow) => break,
             _ = tx.closed() => break,
             notice = auth_revocations.recv(), if is_authenticated => {
-                match notice {
-                    Ok((subject, minimum_version)) if authenticated_user.as_ref().is_some_and(|claims| claims.sub == subject && claims.auth_version < minimum_version) => {
-                        credentials_invalidated = true;
-                        break;
-                    }
-                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
-                        // An in-flight query predates the lost notices and
-                        // cannot satisfy the fresh-validation requirement.
-                        pending_validation = None;
-                        credential_continuity.require_revalidation();
-                        next_auth_check = Instant::now();
-                    },
-                    Err(tokio::sync::broadcast::error::RecvError::Closed) => { credentials_invalidated = true; break; }
-                    _ => {}
+                if session.revoked_by(notice) {
+                    break;
                 }
                 continue;
             }
-            _ = tokio::time::sleep_until(next_auth_check.into()), if is_authenticated && pending_validation.is_none() => {
-                if let Some(claims) = authenticated_user.as_ref() {
-                    let hard_deadline = auth_deadline.unwrap_or_else(Instant::now);
-                    match validation_deadline(claims, &credential_continuity, hard_deadline) {
-                        Some(deadline) => {
-                            pending_validation_deadline = deadline;
-                            pending_validation = Some(Box::pin(account_credentials_current_owned(
-                                db_pool.clone(),
-                                claims.clone(),
-                                deadline,
-                            )));
-                        }
-                        None => { credentials_invalidated = true; break; }
-                    }
+            _ = tokio::time::sleep_until(session.next_check.into()), if is_authenticated && session.pending.is_none() => {
+                if !session.begin_validation(db_pool.clone()) {
+                    break;
                 }
                 continue;
             }
-            result = async { pending_validation.as_mut().expect("guarded by is_some").await }, if pending_validation.is_some() => {
-                pending_validation = None;
-                if let Some(claims) = authenticated_user.as_ref() {
-                    match settle_account_validation(result, claims, &mut credential_continuity,
-                        &mut auth_revocations, &drain, auth_deadline.unwrap_or_else(Instant::now),
-                        pending_validation_deadline) {
-                        Some(true) => {},
-                        Some(false) => { credentials_invalidated = true; break; },
-                        None => break,
-                    }
+            result = async { session.pending.as_mut().expect("guarded by is_some").await }, if session.pending.is_some() => {
+                if !session.settle(result, &mut auth_revocations, &drain) {
+                    break;
                 }
-                next_auth_check = Instant::now() + AUTH_REVALIDATE_INTERVAL;
                 continue;
             }
             result = tokio::time::timeout_at(receive_deadline, ws_receiver.next()) => result,
@@ -975,24 +762,15 @@ async fn handle_connection_with_timing(
                     let mut lookup_deadline = (tokio::time::Instant::now()
                         + timing.membership_timeout).min(receive_deadline);
                     if is_authenticated {
-                        lookup_deadline = lookup_deadline.min(next_auth_check.into());
+                        lookup_deadline = lookup_deadline.min(session.next_check.into());
                     }
                     let bound = tokio::select! {
                         biased;
                         _ = drain.wait() => break,
                         _ = tx.closed() => break,
                         notice = auth_revocations.recv(), if is_authenticated => {
-                            match notice {
-                                Ok((subject, minimum_version)) if authenticated_user.as_ref().is_some_and(|claims| claims.sub == subject && claims.auth_version < minimum_version) => {
-                                    credentials_invalidated = true;
-                                    break;
-                                }
-                                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
-                                    credential_continuity.require_revalidation();
-                                    next_auth_check = Instant::now();
-                                },
-                                Err(tokio::sync::broadcast::error::RecvError::Closed) => { credentials_invalidated = true; break; }
-                                _ => {}
+                            if session.revoked_by(notice) {
+                                break;
                             }
                             continue;
                         }
@@ -1015,15 +793,12 @@ async fn handle_connection_with_timing(
             Ok(Some(Ok(message))) => message,
             Ok(Some(Err(_))) | Ok(None) => break, // Stream error or closed
             Err(_) => {
-                if auth_exp.is_some_and(|exp| exp <= unix_seconds())
-                    || auth_deadline.is_some_and(|deadline| Instant::now() >= deadline)
-                    || credential_continuity.expired(Instant::now())
-                {
+                if session.expired() {
                     info!(
                         %participant_id,
                         "Accepted authentication lifetime or validation allowance expired; closing WebSocket"
                     );
-                    credentials_invalidated = true;
+                    session.invalidate();
                 } else if current_room_id.is_some() {
                     warn!("Idle timeout for participant {}", participant_id);
                 } else {
@@ -1034,11 +809,8 @@ async fn handle_connection_with_timing(
         };
         // A ready frame can win against timeout_at at the exact deadline.
         // Never dispatch it using an expired accepted credential or allowance.
-        if auth_exp.is_some_and(|exp| exp <= unix_seconds())
-            || auth_deadline.is_some_and(|deadline| Instant::now() >= deadline)
-            || credential_continuity.expired(Instant::now())
-        {
-            credentials_invalidated = true;
+        if session.expired() {
+            session.invalidate();
             break;
         }
         last_frame_received = Instant::now();
@@ -1139,85 +911,18 @@ async fn handle_connection_with_timing(
                         if let ClientMessage::RenewAuthentication { request_id, token } =
                             &client_msg
                         {
-                            let outcome = if renewal_budget.allow(Instant::now()) {
-                                match (renewal_authenticator.as_ref(), authenticated_user.as_ref())
-                                {
-                                    (Some(authenticator), Some(current)) => {
-                                        let renewal = renew_authentication(
-                                            authenticator,
-                                            current,
-                                            token,
-                                            db_pool.as_ref(),
-                                            &mut auth_revocations,
-                                            &drain,
-                                            &tx,
-                                        );
-                                        let deadline = auth_deadline.unwrap_or_else(Instant::now);
-                                        let deadline = credential_continuity
-                                            .deadline()
-                                            .map_or(deadline, |limit| limit.min(deadline));
-                                        let outcome =
-                                            tokio::time::timeout_at(deadline.into(), renewal)
-                                                .await
-                                                .unwrap_or(RenewalOutcome::Close);
-                                        if Instant::now() >= deadline {
-                                            RenewalOutcome::Close
-                                        } else {
-                                            outcome
-                                        }
-                                    }
-                                    _ => RenewalOutcome::Rejected,
-                                }
-                            } else {
-                                RenewalOutcome::Rejected
-                            };
-                            let response = match outcome {
-                                RenewalOutcome::Renewed(claims) => {
-                                    if !retain_credentials(
-                                        &mut credential_continuity,
-                                        CredentialStatus::Current,
-                                        Instant::now(),
-                                    ) {
-                                        credentials_invalidated = true;
-                                        break;
-                                    }
-                                    let expires_at = claims.exp as u64;
-                                    auth_exp = Some(expires_at);
-                                    auth_deadline = Some(credential_expiry_deadline(expires_at));
-                                    authenticated_user = Some(claims);
-                                    next_auth_check = Instant::now() + AUTH_REVALIDATE_INTERVAL;
-                                    ServerMessage::AuthenticationRenewed {
-                                        request_id: request_id.clone(),
-                                        expires_at,
-                                    }
-                                }
-                                RenewalOutcome::Rejected => {
-                                    ServerMessage::AuthenticationRenewalFailed {
-                                        request_id: request_id.clone(),
-                                    }
-                                }
-                                RenewalOutcome::Unavailable | RenewalOutcome::Busy => {
-                                    if matches!(outcome, RenewalOutcome::Unavailable)
-                                        && !retain_credentials(
-                                            &mut credential_continuity,
-                                            CredentialStatus::Unavailable,
-                                            Instant::now(),
-                                        )
-                                    {
-                                        credentials_invalidated = true;
-                                        break;
-                                    }
-                                    ServerMessage::AuthenticationRenewalDeferred {
-                                        request_id: request_id.clone(),
-                                        retry_after_ms: 3000,
-                                        expires_at: auth_exp.unwrap_or_default(),
-                                    }
-                                }
-                                RenewalOutcome::Close => {
-                                    credentials_invalidated = true;
-                                    break;
-                                }
-                                RenewalOutcome::Interrupted => break,
+                            let outcome = session
+                                .renew(
+                                    renewal_authenticator.as_ref(),
+                                    token,
+                                    db_pool.as_ref(),
+                                    &mut auth_revocations,
+                                    &drain,
+                                    &tx,
+                                )
+                                .await;
+                            let Some(response) = session.apply_renewal(outcome, request_id) else {
+                                break;
                             };
                             if send_json(&metrics, &tx, &response).is_err() {
                                 break;
@@ -1266,6 +971,10 @@ async fn handle_connection_with_timing(
                                 continue;
                             }
 
+                            // An owned subject: the session's check in flight must not be
+                            // shared across this await.
+                            let reconnect_subject =
+                                session.claims().map(|claims| claims.sub.clone());
                             let reconnect_started = Instant::now();
                             let operation = metrics
                                 .diagnostics()
@@ -1277,9 +986,7 @@ async fn handle_connection_with_timing(
                                         reconnect_id,
                                         reconnect_room,
                                         client_token.expose_secret(),
-                                        authenticated_user
-                                            .as_ref()
-                                            .map(|claims| claims.sub.as_str()),
+                                        reconnect_subject.as_deref(),
                                         &grace_periods,
                                         &room_manager,
                                         &tx,
@@ -1368,6 +1075,12 @@ async fn handle_connection_with_timing(
                         let is_join = matches!(&client_msg, ClientMessage::JoinRoom { .. });
                         let is_leave = matches!(&client_msg, ClientMessage::LeaveRoom);
                         let previous_reconnect_token = reconnect_token.clone();
+                        // Only an attachment grant reads the claims inside the owned
+                        // dispatch future, and it takes its own copy.
+                        let attachment_claims =
+                            matches!(&client_msg, ClientMessage::GetAttachmentAccess { .. })
+                                .then(|| session.claims().cloned())
+                                .flatten();
 
                         let start = Instant::now();
                         let operation = metrics
@@ -1385,7 +1098,7 @@ async fn handle_connection_with_timing(
                                         let pool = db_pool.as_ref().ok_or_else(|| anyhow::anyhow!("Database unavailable"))?;
                                         let access = crate::attachments::grant_access(
                                             &room_manager, pool, room_id, &participant_id, &tx,
-                                            authenticated_user.as_ref(), *attachment_id,
+                                            attachment_claims.as_ref(), *attachment_id,
                                         ).await.map_err(|_| anyhow::anyhow!("Attachment unavailable"))?;
                                         reply.send(&ServerMessage::SocialResponse {
                                             request_id: request_id.clone(),
@@ -1561,20 +1274,10 @@ async fn handle_connection_with_timing(
         );
     }
 
-    if !drain.is_draining()
-        && !credentials_invalidated
-        && let Some(claims) = authenticated_user.as_ref()
-    {
-        credentials_invalidated = revalidate_account(
-            db_pool.as_ref(),
-            claims,
-            &mut credential_continuity,
-            &mut auth_revocations,
-            &drain,
-            auth_deadline.unwrap_or_else(Instant::now),
-        )
-        .await
-            == Some(false);
+    if !drain.is_draining() {
+        session
+            .revalidate_on_disconnect(db_pool.as_ref(), &mut auth_revocations, &drain)
+            .await;
     }
 
     // On disconnect: lobby participants clean up immediately, room participants get grace period
@@ -1583,7 +1286,7 @@ async fn handle_connection_with_timing(
             // Global room drain clears both live and retained memberships. Do
             // not start a new grace timer or race its authoritative cleanup.
             debug!(%room_id, %participant_id, "Membership handed to server drain");
-        } else if in_lobby.load(Ordering::Acquire) || credentials_invalidated {
+        } else if in_lobby.load(Ordering::Acquire) || session.invalidated() {
             // Lobby and invalidated memberships do not receive reconnect grace.
             info!(
                 "Participant {} disconnected from room {}; lobby or expired/invalid credentials require immediate cleanup",
@@ -1606,17 +1309,17 @@ async fn handle_connection_with_timing(
             let pid = participant_id;
             let rid = room_id.clone();
             let timer_token = reconnect_token.clone();
-            let authenticated_subject =
-                authenticated_user.as_ref().map(|claims| claims.sub.clone());
+            let authenticated_subject = session.claims().map(|claims| claims.sub.clone());
             let timer_subject = authenticated_subject.clone();
             let timer_sender = tx.clone();
-            let timer_claims = authenticated_user.clone();
+            let timer_claims = session.claims().cloned();
             let timer_pool = db_pool.clone();
-            let mut timer_continuity = credential_continuity;
+            let mut timer_continuity = session.continuity();
             let timer_drain = drain.clone();
             let grace_deadline = disconnected_at + Duration::from_secs(30);
-            let grace_deadline =
-                auth_deadline.map_or(grace_deadline, |expiry| expiry.min(grace_deadline));
+            let grace_deadline = session
+                .deadline()
+                .map_or(grace_deadline, |expiry| expiry.min(grace_deadline));
             let (activate_timer, activation) = tokio::sync::oneshot::channel::<()>();
 
             let timer = tokio::spawn(async move {
@@ -1695,9 +1398,7 @@ async fn handle_connection_with_timing(
                 GraceEntry {
                     reconnect_token,
                     authenticated_subject,
-                    authenticated_version: authenticated_user
-                        .as_ref()
-                        .map(|claims| claims.auth_version),
+                    authenticated_version: session.claims().map(|claims| claims.auth_version),
                     media_rate_state: gates.into_media_state(),
                     sender: tx.clone(),
                     timer,

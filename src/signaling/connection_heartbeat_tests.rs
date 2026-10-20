@@ -2,6 +2,7 @@
 //! short private timing policy; no browser or public service is used. The one
 //! ignored authentication fixture requires the existing disposable test database.
 
+use super::authentication::{RenewalOutcome, renew_authentication, unix_seconds};
 use super::*;
 use crate::ids::ParticipantId;
 use crate::ids::fixtures::rid;
