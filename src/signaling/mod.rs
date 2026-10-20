@@ -249,6 +249,49 @@ impl Drop for IpConnectionPermit {
     }
 }
 
+/// The per-area request guards: each owns a rate table and a concurrency
+/// budget; all share the proxy secret, the allowed origins and the metrics.
+#[derive(Clone)]
+struct Guards {
+    ws_handshake: AuthGuard,
+    auth: AuthGuard,
+    account: AuthGuard,
+    profile: AuthGuard,
+    room_api: AuthGuard,
+    telemetry: AuthGuard,
+}
+
+impl Guards {
+    fn new(
+        config: &crate::config::Config,
+        trusted_proxy_secret: &Arc<Option<String>>,
+        allowed_origins: &Arc<Vec<String>>,
+        metrics: &ServerMetrics,
+    ) -> Self {
+        let rates = &config.rates;
+        let guard = |per_minute: u32, concurrency: usize| {
+            AuthGuard::new(
+                per_minute,
+                concurrency,
+                trusted_proxy_secret.clone(),
+                allowed_origins.clone(),
+                metrics.clone(),
+            )
+        };
+        Self {
+            ws_handshake: guard(rates.ws_handshakes_per_minute, 1),
+            auth: guard(rates.auth_requests_per_minute, rates.auth_concurrency),
+            account: guard(rates.account_requests_per_minute, rates.account_concurrency),
+            profile: guard(rates.profile_requests_per_minute, rates.auth_concurrency),
+            room_api: guard(
+                rates.room_api_requests_per_minute,
+                rates.room_api_concurrency,
+            ),
+            telemetry: guard(30, 8),
+        }
+    }
+}
+
 /// Signaling server state
 #[derive(Clone)]
 pub(crate) struct SignalingServer {
@@ -262,10 +305,7 @@ pub(crate) struct SignalingServer {
     /// `BIND_ADDR:PORT`.
     listen: std::net::SocketAddr,
     ip_connection_limiter: IpConnectionLimiter,
-    ws_handshake_guard: AuthGuard,
-    auth_guard: AuthGuard,
-    account_guard: AuthGuard,
-    profile_guard: AuthGuard,
+    guards: Guards,
     password_work: Arc<Semaphore>,
     max_password_work: usize,
     session_cleanup: crate::auth::session::SessionCleanup,
@@ -273,8 +313,6 @@ pub(crate) struct SignalingServer {
     room_creation_limiter: PrincipalRateLimiter,
     sign_in_failures: crate::auth::limiter::FailureLimiter,
     registration_limiter: Arc<crate::auth::limiter::WindowLimiter>,
-    room_api_guard: AuthGuard,
-    telemetry_guard: AuthGuard,
     db_pool: Option<PgPool>,
     jwt_secret: Option<String>,
     ws_tickets: Arc<crate::auth::ws_tickets::TicketStore>,
@@ -329,12 +367,9 @@ impl SignalingServer {
 
         let rates = &config.rates;
         let max_connections_per_ip = config.limits.max_connections_per_ip;
-        let auth_requests_per_minute = rates.auth_requests_per_minute;
         let auth_requests_per_account_per_minute = rates.auth_requests_per_account_per_minute;
         let registrations_per_ip_per_hour = rates.registrations_per_ip_per_hour;
         let auth_concurrency = rates.auth_concurrency;
-        let account_requests_per_minute = rates.account_requests_per_minute;
-        let account_concurrency = rates.account_concurrency;
         let password_workers = password_lane_capacity(
             config.limits.max_password_workers,
             auth_concurrency,
@@ -344,11 +379,7 @@ impl SignalingServer {
             password_workers,
             auth_concurrency, "Account password verification lane sized"
         );
-        let profile_requests_per_minute = rates.profile_requests_per_minute;
-        let room_api_requests_per_minute = rates.room_api_requests_per_minute;
-        let room_api_concurrency = rates.room_api_concurrency;
         let room_creations_per_account = rates.room_creations_per_account_per_minute;
-        let ws_handshakes_per_minute = rates.ws_handshakes_per_minute;
         let allowed_origins = Arc::new(config.network.allowed_origins.clone());
         let registration_enabled = config.auth.registration_enabled;
         let max_users = config.limits.max_users;
@@ -377,34 +408,7 @@ impl SignalingServer {
             max_connections,
             listen,
             ip_connection_limiter: IpConnectionLimiter::new(max_connections_per_ip),
-            ws_handshake_guard: AuthGuard::new(
-                ws_handshakes_per_minute,
-                1,
-                trusted_proxy_secret.clone(),
-                allowed_origins.clone(),
-                metrics.clone(),
-            ),
-            auth_guard: AuthGuard::new(
-                auth_requests_per_minute,
-                auth_concurrency,
-                trusted_proxy_secret.clone(),
-                allowed_origins.clone(),
-                metrics.clone(),
-            ),
-            account_guard: AuthGuard::new(
-                account_requests_per_minute,
-                account_concurrency,
-                trusted_proxy_secret.clone(),
-                allowed_origins.clone(),
-                metrics.clone(),
-            ),
-            profile_guard: AuthGuard::new(
-                profile_requests_per_minute,
-                auth_concurrency,
-                trusted_proxy_secret.clone(),
-                allowed_origins.clone(),
-                metrics.clone(),
-            ),
+            guards: Guards::new(config, &trusted_proxy_secret, &allowed_origins, &metrics),
             // Keep the permit alive inside each spawn_blocking Argon2 job. The
             // outer HTTP timeout may cancel a handler, but it must not release
             // capacity while that CPU-heavy job is still running.
@@ -418,20 +422,6 @@ impl SignalingServer {
                 registrations_per_ip_per_hour,
                 Duration::from_secs(3600),
             )),
-            room_api_guard: AuthGuard::new(
-                room_api_requests_per_minute,
-                room_api_concurrency,
-                trusted_proxy_secret.clone(),
-                allowed_origins.clone(),
-                metrics.clone(),
-            ),
-            telemetry_guard: AuthGuard::new(
-                30,
-                8,
-                trusted_proxy_secret.clone(),
-                allowed_origins.clone(),
-                metrics.clone(),
-            ),
             db_pool,
             jwt_secret,
             ws_tickets: Arc::new(crate::auth::ws_tickets::TicketStore::new()),
@@ -557,11 +547,11 @@ impl SignalingServer {
     }
 
     pub(crate) fn try_acquire_auth_request(&self) -> Option<tokio::sync::OwnedSemaphorePermit> {
-        self.auth_guard.try_acquire_concurrency()
+        self.guards.auth.try_acquire_concurrency()
     }
 
     pub(crate) fn try_acquire_account_request(&self) -> Option<tokio::sync::OwnedSemaphorePermit> {
-        self.account_guard.try_acquire_concurrency()
+        self.guards.account.try_acquire_concurrency()
     }
 
     /// A permit from the public media lane (avatars and room images). A page's
@@ -572,7 +562,7 @@ impl SignalingServer {
     ) -> Result<tokio::sync::OwnedSemaphorePermit, crate::auth::types::AuthError> {
         tokio::time::timeout(
             PROFILE_PERMIT_WAIT,
-            self.profile_guard.concurrency.clone().acquire_owned(),
+            self.guards.profile.concurrency.clone().acquire_owned(),
         )
         .await
         .ok()
@@ -581,7 +571,7 @@ impl SignalingServer {
     }
 
     pub(crate) fn try_acquire_room_api_request(&self) -> Option<tokio::sync::OwnedSemaphorePermit> {
-        self.room_api_guard.try_acquire_concurrency()
+        self.guards.room_api.try_acquire_concurrency()
     }
 
     pub(crate) fn try_acquire_password_work(&self) -> Option<tokio::sync::OwnedSemaphorePermit> {
@@ -910,7 +900,7 @@ async fn ws_handler(
         warn!(%client_ip, "Rejected WebSocket upgrade with disallowed Origin");
         return (StatusCode::FORBIDDEN, "Origin not allowed").into_response();
     }
-    if !server.ws_handshake_guard.allow(client_ip) {
+    if !server.guards.ws_handshake.allow(client_ip) {
         if server
             .metrics
             .telemetry()
@@ -991,7 +981,7 @@ async fn ws_handler(
                 server.jwt_secret.clone().map(|secret| {
                     connection::RenewalAuthenticator::new(
                         secret.into(),
-                        server.auth_guard.concurrency.clone(),
+                        server.guards.auth.concurrency.clone(),
                     )
                 })
             });

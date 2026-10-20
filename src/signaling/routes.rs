@@ -73,7 +73,7 @@ impl SignalingServer {
                 .route("/passkeys/enroll", post(crate::auth::passkeys::enroll))
                 .layer(DefaultBodyLimit::max(16 * 1024))
                 .layer(RequestBodyTimeoutLayer::new(HTTP_BODY_IDLE_TIMEOUT)),
-            &self.auth_guard,
+            &self.guards.auth,
         );
 
         // Account application traffic has a finite independent budget so inbox
@@ -141,7 +141,7 @@ impl SignalingServer {
                 )
                 .layer(DefaultBodyLimit::max(16 * 1024))
                 .layer(RequestBodyTimeoutLayer::new(HTTP_BODY_IDLE_TIMEOUT)),
-            &self.account_guard,
+            &self.guards.account,
         );
 
         // Opening consumes an account-data admission only until headers. The
@@ -149,7 +149,7 @@ impl SignalingServer {
         let account_update_routes = Router::new()
             .route("/api/auth/updates", get(crate::auth::updates::stream))
             .layer(middleware::from_fn_with_state(
-                self.account_guard.clone(),
+                self.guards.account.clone(),
                 guarded_api_request,
             ));
 
@@ -161,7 +161,7 @@ impl SignalingServer {
             .layer(DefaultBodyLimit::max(5 * 1024 * 1024))
             .layer(RequestBodyTimeoutLayer::new(HTTP_BODY_IDLE_TIMEOUT))
             .layer(middleware::from_fn_with_state(
-                self.account_guard.clone(),
+                self.guards.account.clone(),
                 guarded_api_request,
             ))
             .layer(TimeoutLayer::with_status_code(
@@ -228,14 +228,14 @@ impl SignalingServer {
                 )
                 .route("/{id}", delete(crate::room::api::delete_room))
                 .layer(RequestBodyTimeoutLayer::new(HTTP_BODY_IDLE_TIMEOUT)),
-            &self.room_api_guard,
+            &self.guards.room_api,
         );
 
         // A directory page's thumbnails share the avatar budget: they must never
         // spend the room API allowance the listing itself needs.
         let room_image_routes = budgeted(
             Router::new().route("/{id}/image", get(crate::room::api::room_image)),
-            &self.profile_guard,
+            &self.guards.profile,
         );
 
         let metrics = self.metrics.clone();
@@ -244,13 +244,13 @@ impl SignalingServer {
                 .route("/api/telemetry", post(telemetry::ingest))
                 .layer(DefaultBodyLimit::max(8 * 1024))
                 .layer(RequestBodyTimeoutLayer::new(HTTP_BODY_IDLE_TIMEOUT)),
-            &self.telemetry_guard,
+            &self.guards.telemetry,
         );
         // Beside the nested auth router, on its own address budget: a room's
         // avatars must never spend a viewer's sign-in and refresh allowance.
         let profile_routes = budgeted(
             Router::new().route("/{id}", get(crate::auth::account::public_profile)),
-            &self.profile_guard,
+            &self.guards.profile,
         );
         let routes = Router::new()
             .merge(attachment_upload_routes)

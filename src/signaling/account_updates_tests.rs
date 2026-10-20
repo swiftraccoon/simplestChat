@@ -628,19 +628,29 @@ async fn authorization_database_account_updates_bound_leases_and_close_on_revoca
 async fn authorization_database_account_data_and_credentials_have_independent_budgets_and_stream_permits()
  {
     let mut fixture = Fixture::new(1).await;
-    fixture.server.auth_guard.max_requests_per_minute = 2;
-    fixture.server.account_guard.max_requests_per_minute = 4;
+    fixture.server.guards.auth.max_requests_per_minute = 2;
+    fixture.server.guards.account.max_requests_per_minute = 4;
     let app = operation("GET", "/api/auth/inbox".into(), None);
     let ticket = operation("POST", "/api/auth/ws-ticket".into(), Some(json!({})));
-    let auth_capacity = fixture.server.auth_guard.concurrency.available_permits();
-    let app_capacity = fixture.server.account_guard.concurrency.available_permits();
+    let auth_capacity = fixture.server.guards.auth.concurrency.available_permits();
+    let app_capacity = fixture
+        .server
+        .guards
+        .account
+        .concurrency
+        .available_permits();
     let mut feed = Feed::open(&fixture, 0, 10).await;
     assert_eq!(
-        fixture.server.auth_guard.concurrency.available_permits(),
+        fixture.server.guards.auth.concurrency.available_permits(),
         auth_capacity
     );
     assert_eq!(
-        fixture.server.account_guard.concurrency.available_permits(),
+        fixture
+            .server
+            .guards
+            .account
+            .concurrency
+            .available_permits(),
         app_capacity
     );
     assert_eq!(
@@ -705,7 +715,7 @@ async fn authorization_database_account_data_and_credentials_have_independent_bu
         StatusCode::OK
     );
     // An open stream occupies neither ordinary semaphore for its lifetime.
-    let auth_permits: Vec<_> = (0..fixture.server.auth_guard.concurrency.available_permits())
+    let auth_permits: Vec<_> = (0..fixture.server.guards.auth.concurrency.available_permits())
         .map(|_| fixture.server.try_acquire_auth_request().unwrap())
         .collect();
     assert_eq!(
@@ -723,7 +733,12 @@ async fn authorization_database_account_data_and_credentials_have_independent_bu
         StatusCode::OK
     );
     drop(auth_permits);
-    let app_permits: Vec<_> = (0..fixture.server.account_guard.concurrency.available_permits())
+    let app_permits: Vec<_> = (0..fixture
+        .server
+        .guards
+        .account
+        .concurrency
+        .available_permits())
         .map(|_| fixture.server.try_acquire_account_request().unwrap())
         .collect();
     assert_eq!(
@@ -757,7 +772,12 @@ async fn authorization_database_account_updates_commit_completion_survives_aband
 {
     let fixture = Fixture::new(1).await;
     let mut feed = Feed::open(&fixture, 0, 20).await;
-    let capacity = fixture.server.account_guard.concurrency.available_permits();
+    let capacity = fixture
+        .server
+        .guards
+        .account
+        .concurrency
+        .available_permits();
     let mut blocker = fixture.pool.begin().await.unwrap();
     let pid: i32 = sqlx::query_scalar("SELECT pg_backend_pid()")
         .fetch_one(&mut *blocker)
@@ -803,7 +823,12 @@ async fn authorization_database_account_updates_commit_completion_survives_aband
     response.abort();
     assert!(response.await.unwrap_err().is_cancelled());
     assert_eq!(
-        fixture.server.account_guard.concurrency.available_permits(),
+        fixture
+            .server
+            .guards
+            .account
+            .concurrency
+            .available_permits(),
         capacity - 1,
         "abandoning the response must retain the owned mutation's resource lease"
     );

@@ -133,7 +133,7 @@ pub(super) async fn ingest(
     if !batch.valid() {
         return StatusCode::BAD_REQUEST;
     }
-    let Some(_permit) = server.telemetry_guard.try_acquire_concurrency() else {
+    let Some(_permit) = server.guards.telemetry.try_acquire_concurrency() else {
         return StatusCode::SERVICE_UNAVAILABLE;
     };
     server.metrics.telemetry().record_client(batch);
