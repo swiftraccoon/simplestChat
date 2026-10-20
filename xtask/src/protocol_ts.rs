@@ -347,8 +347,7 @@ impl Generator {
         &mut self,
         fields: &syn::FieldsNamed,
         rename_all: Option<&str>,
-        indent: &str,
-    ) -> Result<(Vec<String>, Vec<String>)> {
+    ) -> Result<(Vec<FieldText>, Vec<String>)> {
         let mut lines = Vec::new();
         let mut flattened = Vec::new();
         for field in &fields.named {
@@ -384,7 +383,10 @@ impl Generator {
             } else {
                 ("", text)
             };
-            lines.push(format!("{indent}{name}{marker}: {text};"));
+            lines.push(FieldText {
+                docs: doc_lines(&field.attrs),
+                text: format!("{name}{marker}: {text};"),
+            });
         }
         Ok((lines, flattened))
     }
@@ -437,20 +439,20 @@ fn render_struct(generator: &mut Generator, item: &syn::ItemStruct) -> Result<St
     let attrs = serde_attributes(&item.attrs)?;
     let name = Generator::ts_name(&item.ident.to_string());
     let mut out = String::new();
+    write_docs(&mut out, &doc_lines(&item.attrs), "")?;
     match &item.fields {
         syn::Fields::Named(fields) => {
-            let (lines, flattened) =
-                generator.fields_text(fields, attrs.rename_all.as_deref(), "  ")?;
+            let (lines, flattened) = generator.fields_text(fields, attrs.rename_all.as_deref())?;
             if flattened.is_empty() {
                 writeln!(out, "export interface {name} {{")?;
-                for line in lines {
-                    writeln!(out, "{line}")?;
+                for field in &lines {
+                    field.render(&mut out, "  ")?;
                 }
                 writeln!(out, "}}")?;
             } else {
                 writeln!(out, "export type {name} = {} & {{", flattened.join(" & "))?;
-                for line in lines {
-                    writeln!(out, "{line}")?;
+                for field in &lines {
+                    field.render(&mut out, "  ")?;
                 }
                 writeln!(out, "}};")?;
             }
@@ -477,7 +479,7 @@ fn render_enum(
     generator: &mut Generator,
     item: &syn::ItemEnum,
     social_actions: &mut Vec<String>,
-    social_requests: &mut Vec<(String, Vec<String>)>,
+    social_requests: &mut Vec<(String, Vec<FieldText>)>,
 ) -> Result<String> {
     let attrs = serde_attributes(&item.attrs)?;
     if attrs.untagged {
@@ -494,6 +496,7 @@ fn render_enum(
     let envelope = name == "ServerMessage";
     let rename_all = attrs.rename_all.as_deref();
     let mut out = String::new();
+    write_docs(&mut out, &doc_lines(&item.attrs), "")?;
     let all_unit = item
         .variants
         .iter()
@@ -555,30 +558,29 @@ fn render_enum(
                                 .rename_all
                                 .as_deref()
                                 .or(attrs.rename_all_fields.as_deref()),
-                            "      ",
                         )?;
-                        let has_request_id = lines
-                            .iter()
-                            .any(|line| line.trim_start().starts_with("requestId"));
+                        let has_request_id = lines.iter().any(|field| field.named("requestId"));
                         if client && social_actions.contains(&discriminant) {
                             let payload = lines
                                 .iter()
-                                .filter(|line| !line.trim_start().starts_with("requestId"))
-                                .map(|line| line.trim().to_owned())
+                                .filter(|field| !field.named("requestId"))
+                                .cloned()
                                 .collect::<Vec<_>>();
                             social_requests.push((discriminant.clone(), payload));
                         }
                         if envelope && !has_request_id {
-                            lines.insert(0, "      requestId?: string;".to_owned());
+                            lines.insert(0, FieldText::bare("requestId?: string;"));
                         }
                         if flattened.len() == 1 && generator.envelopes.contains_key(&flattened[0]) {
                             // The flattened action enum carries this variant's fields itself.
                             writeln!(out, "  | {}", flattened[0])?;
                             continue;
                         }
-                        let head = format!("      {tag}: '{discriminant}';");
-                        let body = std::iter::once(head).chain(lines).collect::<Vec<_>>();
-                        let object = format!("{{\n{}\n    }}", body.join("\n"));
+                        let mut body = format!("      {tag}: '{discriminant}';\n");
+                        for field in &lines {
+                            field.render(&mut body, "      ")?;
+                        }
+                        let object = format!("{{\n{body}    }}");
                         if flattened.is_empty() {
                             writeln!(out, "  | {object}")?;
                         } else {
@@ -617,9 +619,12 @@ fn render_enum(
                                 .rename_all
                                 .as_deref()
                                 .or(attrs.rename_all_fields.as_deref()),
-                            "    ",
                         )?;
-                        let object = format!("{{\n{}\n  }}", lines.join("\n"));
+                        let mut body = String::new();
+                        for field in &lines {
+                            field.render(&mut body, "    ")?;
+                        }
+                        let object = format!("{{\n{body}  }}");
                         if flattened.is_empty() {
                             writeln!(out, "  {key}: {object};")?;
                         } else {
@@ -758,23 +763,61 @@ fn render_constants(root: &Path) -> Result<String> {
             }) => value.base10_digits().to_owned(),
             _ => bail!("constant `{name}` in {source} is not an integer literal"),
         };
-        match doc_lines(&item.attrs).as_slice() {
-            [] => {}
-            [line] => writeln!(out, "/** {line} */")?,
-            lines => {
-                writeln!(out, "/**")?;
-                for line in lines {
-                    writeln!(out, " * {line}")?;
-                }
-                writeln!(out, " */")?;
-            }
-        }
+        write_docs(&mut out, &doc_lines(&item.attrs), "")?;
         writeln!(out, "export const {name} = {value};")?;
     }
     if !out.is_empty() {
         out.push('\n');
     }
     Ok(out)
+}
+
+/// One rendered field: its doc lines and its `name: type;` text, indented by
+/// whichever shape prints it.
+#[derive(Clone)]
+struct FieldText {
+    docs: Vec<String>,
+    text: String,
+}
+
+impl FieldText {
+    fn bare(text: &str) -> Self {
+        Self {
+            docs: Vec::new(),
+            text: text.to_owned(),
+        }
+    }
+
+    fn named(&self, name: &str) -> bool {
+        self.text.starts_with(name)
+    }
+
+    fn render(&self, out: &mut String, indent: &str) -> Result<()> {
+        write_docs(out, &self.docs, indent)?;
+        writeln!(out, "{indent}{}", self.text)?;
+        Ok(())
+    }
+}
+
+/// An item's `///` lines as JSDoc at the item's indent; Prettier leaves a
+/// `*`-aligned block alone, so this is its final shape.
+fn write_docs(out: &mut String, lines: &[String], indent: &str) -> Result<()> {
+    match lines {
+        [] => {}
+        [line] => writeln!(out, "{indent}/** {line} */")?,
+        lines => {
+            writeln!(out, "{indent}/**")?;
+            for line in lines {
+                if line.is_empty() {
+                    writeln!(out, "{indent} *")?;
+                } else {
+                    writeln!(out, "{indent} * {line}")?;
+                }
+            }
+            writeln!(out, "{indent} */")?;
+        }
+    }
+    Ok(())
 }
 
 /// The `///` lines of an item, trimmed.
@@ -821,7 +864,7 @@ fn generate(root: &Path) -> Result<String> {
         .collect();
     let mut rendered: BTreeSet<String> = BTreeSet::new();
     let mut social_actions: Vec<String> = Vec::new();
-    let mut social_requests: Vec<(String, Vec<String>)> = Vec::new();
+    let mut social_requests: Vec<(String, Vec<FieldText>)> = Vec::new();
     while let Some((name, client)) = queue.first().cloned() {
         queue.remove(0);
         if rendered.contains(&name) {
@@ -873,8 +916,8 @@ fn generate(root: &Path) -> Result<String> {
                 writeln!(body, "  {action}: undefined;")?;
             } else {
                 writeln!(body, "  {action}: {{")?;
-                for line in payload {
-                    writeln!(body, "    {line}")?;
+                for field in payload {
+                    field.render(&mut body, "    ")?;
                 }
                 writeln!(body, "  }};")?;
             }

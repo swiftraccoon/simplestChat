@@ -28,6 +28,10 @@ export const MAX_PASSWORD_BYTES = 512;
  */
 export const MAX_DISPLAY_NAME_LEN = 64;
 
+/**
+ * Why the server refused a frame or request. Clients switch on the code;
+ * `message` beside it is for people and may change at any time.
+ */
 export const ERROR_CODES = [
   'invalid_message',
   'invalid',
@@ -40,9 +44,22 @@ export const ERROR_CODES = [
 ] as const;
 export type ErrorCode = (typeof ERROR_CODES)[number];
 
+/**
+ * A participant's standing in a room, ordered from least to most trusted.
+ *
+ * One numbering serves every boundary: the wire carries the lowercase name,
+ * `room_roles.role` and `invites.role` store the discriminant (only
+ * `Member`..`Admin` are ever stored: `User` is the absence of a row and
+ * `Owner` is `rooms.owner_id`), and `invite_redemptions.granted_role` records
+ * what a redemption granted.
+ */
 export const ROLES = ['guest', 'user', 'member', 'moderator', 'admin', 'owner'] as const;
 export type Role = (typeof ROLES)[number];
 
+/**
+ * The reply to one social request, serialized beside the request id as
+ * `action` (the variant name) and `data` (the variant's fields).
+ */
 export interface SocialResponses {
   setChatPreferences: {
     allowPrivateMessages: boolean;
@@ -119,6 +136,7 @@ export type SocialResponse<A extends SocialAction = SocialAction> = {
   [K in A]: { type: 'socialResponse'; requestId: string; action: K; data: SocialResponses[K] };
 }[A];
 
+/** Client-to-Server messages */
 export type ClientMessage =
   | {
       type: 'renewAuthentication';
@@ -129,7 +147,9 @@ export type ClientMessage =
       type: 'joinRoom';
       roomId: string;
       participantName: string;
+      /** Required for password-protected rooms (Admin+ bypass) */
       password?: string;
+      /** A guest's chosen look; an account's saved one takes its place. */
       chatStyle?: ChatStyle;
     }
   | { type: 'leaveRoom' }
@@ -203,6 +223,7 @@ export type ClientMessage =
       attachmentIds?: string[];
       clientMessageId?: string;
       sequence?: number;
+      /** The retained message this one answers, in the same conversation. */
       replyTo?: string;
     }
   | {
@@ -395,6 +416,7 @@ export type ClientMessage =
       targetParticipantId: string;
     };
 
+/** Server-to-Client messages */
 export type ServerMessage =
   | {
       type: 'roomJoined';
@@ -403,7 +425,9 @@ export type ServerMessage =
       participants: ParticipantInfo[];
       reconnectToken: string;
       yourRole: Role;
+      /** The name the room knows this participant by; a guest's may carry a number. */
       yourName: string;
+      /** This participant's look: an account's saved one, or the guest's. */
       yourChatStyle: ChatStyle;
       roomSettings?: RoomSettings;
     }
@@ -728,6 +752,12 @@ export type ServerMessage =
     }
   | { type: 'lobbyAdmitted'; requestId?: string };
 
+/**
+ * Chat preferences that follow an account across devices, in the browser's
+ * own shape (`Preferences` in web/src/social-chat.ts, camelCase). Desktop
+ * notification consent and the chat look stay where they are decided: the
+ * device and the profile.
+ */
 export interface ChatPreferences {
   allowPrivateMessages: boolean;
   sounds: boolean;
@@ -736,6 +766,10 @@ export interface ChatPreferences {
   ignored: IgnoredPerson[];
 }
 
+/**
+ * An explicit field intent, never a replacement of a client's stale snapshot.
+ * Ignore operations are set/remove rather than toggles, so repeating one is safe.
+ */
 export interface PreferencePatch {
   allowPrivateMessages?: boolean;
   sounds?: boolean;
@@ -760,23 +794,32 @@ export interface ChatEntry {
   participantName: string;
   recipientId?: string;
   recipientName?: string;
+  /** True only for a retained conversation between two accounts, across rooms. */
   accountConversation?: boolean;
   content: string;
   attachments?: ChatAttachment[];
   sentAt: string;
+  /** Moderator removal erases content while retaining its place in the conversation. */
   removedAt?: string;
+  /** Monotonic body revision; removal remains terminal regardless of revision. */
   revision: number;
   editedAt?: string;
+  /** The sender's look when they sent it, so history keeps it after they leave. */
   chatStyle: ChatStyle;
   replyTo?: ChatReplyRef;
   reactions?: ChatReaction[];
 }
 
+/** One reaction on a message and who added it, oldest first. */
 export interface ChatReaction {
   emoji: string;
   participantIds: string[];
 }
 
+/**
+ * A participant's chosen look. No color means the automatic one every client
+ * derives from the participant's name.
+ */
 export interface ChatStyle {
   color: string | null;
   style: ChatStyleKind;
@@ -799,6 +842,10 @@ export interface MemberEntry {
   authenticated: boolean;
 }
 
+/**
+ * A moderation history entry as a viewer receives it; only an owner's view
+ * carries the target's address.
+ */
 export type ModerationEventEntry = ModerationEvent & {
   targetIp?: string;
 };
@@ -813,15 +860,22 @@ export interface ReportEntry {
   status: ReportStatus;
   createdAt: string;
   resolvedAt?: string;
+  /** The newest history entry that answered this report, if any did. */
   outcome?: ReportOutcome;
 }
 
+/** The two ways a moderator closes a report. */
 export const REPORT_RESOLUTIONS = ['resolved', 'dismissed'] as const;
 export type ReportResolution = (typeof REPORT_RESOLUTIONS)[number];
 
+/** Where a report stands: open until a moderator resolves or dismisses it. */
 export const REPORT_STATUSES = ['open', 'resolved', 'dismissed'] as const;
 export type ReportStatus = (typeof REPORT_STATUSES)[number];
 
+/**
+ * One consistent view of a room for a joining or resuming participant,
+ * captured under the room lock and serialized after releasing it.
+ */
 export interface RoomSnapshot {
   participants: ParticipantInfo[];
   messages: ChatEntry[];
@@ -850,6 +904,12 @@ export interface RetryChatMessage {
   replyTo?: string;
 }
 
+/**
+ * A partial settings change. An omitted field keeps its value; for the
+ * ceilings and the password `Some(None)` clears it. The socket and the HTTP
+ * administration API carry it, the room manager validates it, and the
+ * persistence layer binds only the fields it names.
+ */
 export interface SettingsPatch {
   moderated?: boolean;
   lobbyEnabled?: boolean;
@@ -867,6 +927,7 @@ export interface SettingsPatch {
   password?: string | null;
 }
 
+/** Audio level entry for a speaking participant */
 export interface AudioLevelEntry {
   participantId: string;
   volume: number;
@@ -879,6 +940,10 @@ export interface ChatAttachment {
   size: number;
 }
 
+/**
+ * The message a reply answers, quoted by the server when the reply was sent, so
+ * the quote survives the original leaving history and cannot be forged.
+ */
 export interface ChatReplyRef {
   messageId: string;
   participantId: string;
@@ -900,12 +965,14 @@ export const CHAT_RETRY_REASONS = [
 ] as const;
 export type ChatRetryReason = (typeof CHAT_RETRY_REASONS)[number];
 
+/** ICE server entry sent to clients */
 export interface IceServerEntry {
   urls: string[];
   username?: string;
   credential?: string;
 }
 
+/** Participant information for room state */
 export interface ParticipantInfo {
   id: string;
   name: string;
@@ -943,12 +1010,21 @@ export interface IgnoredPerson {
   name: string;
 }
 
+/** How a viewer sees message times: on hover, or always in one format. */
 export const TIMESTAMP_FORMATS = ['hover', 'time', 'time12', 'seconds', 'datetime'] as const;
 export type TimestampFormat = (typeof TIMESTAMP_FORMATS)[number];
 
+/**
+ * How a participant's color shows: a stripe beside their messages, their
+ * message text, or their whole bubble.
+ */
 export const CHAT_STYLE_KINDS = ['accent', 'text', 'bubble'] as const;
 export type ChatStyleKind = (typeof CHAT_STYLE_KINDS)[number];
 
+/**
+ * One entry of a room's moderation history. The target's address is for the
+ * owner only: it is never serialized with the entry, and `to_json` adds it.
+ */
 export interface ModerationEvent {
   eventId: string;
   action: ModerationAction;
@@ -974,12 +1050,14 @@ export interface SnapshotLobbyEntry {
   authenticated: boolean;
 }
 
+/** Producer metadata */
 export interface ProducerMetadata {
   id: string;
   kind: MediaKind;
   source?: string;
 }
 
+/** What a moderator did, as the history stores and serializes it. */
 export const MODERATION_ACTIONS = [
   'kick',
   'ban',
