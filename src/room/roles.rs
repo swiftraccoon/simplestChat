@@ -2,7 +2,7 @@
 
 use crate::ids::RoomId;
 use crate::room::refusal::RoomError;
-use sqlx::PgPool;
+use sqlx::{PgExecutor, PgPool};
 use uuid::Uuid;
 
 /// A participant's standing in a room, ordered from least to most trusted.
@@ -119,8 +119,33 @@ pub(crate) async fn resolve_role(
     Ok(Role::Guest)
 }
 
-pub(crate) async fn set_role(
-    pool: &PgPool,
+/// A member's saved role: the owner's, else the stored row's. `None` when the
+/// account is neither the owner nor on the room's roster, so a role change
+/// cannot probe which accounts exist.
+pub(crate) async fn current_role<'e>(
+    executor: impl PgExecutor<'e>,
+    room_id: &RoomId,
+    user_id: Uuid,
+) -> Result<Option<Role>, RoomError> {
+    Ok(sqlx::query_scalar::<_, Role>(
+        "SELECT CASE WHEN $2 = owner_id THEN $3
+                     ELSE (SELECT role FROM room_roles WHERE room_id = $1 AND user_id = $2)
+                END::smallint
+         FROM rooms
+         WHERE id = $1
+           AND ($2 = owner_id
+                OR EXISTS(SELECT 1 FROM room_roles WHERE room_id = $1 AND user_id = $2))",
+    )
+    .bind(room_id)
+    .bind(user_id)
+    .bind(Role::Owner)
+    .fetch_optional(executor)
+    .await?)
+}
+
+/// Store a member's role, or drop the row when the role is not a stored one.
+pub(crate) async fn set_role<'e>(
+    executor: impl PgExecutor<'e>,
     room_id: &RoomId,
     user_id: &Uuid,
     role: Role,
@@ -130,7 +155,7 @@ pub(crate) async fn set_role(
         sqlx::query("DELETE FROM room_roles WHERE room_id = $1 AND user_id = $2")
             .bind(room_id)
             .bind(user_id)
-            .execute(pool)
+            .execute(executor)
             .await?;
     } else {
         sqlx::query(
@@ -142,7 +167,7 @@ pub(crate) async fn set_role(
         .bind(user_id)
         .bind(role)
         .bind(granted_by)
-        .execute(pool)
+        .execute(executor)
         .await?;
     }
     Ok(())

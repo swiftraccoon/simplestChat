@@ -131,28 +131,19 @@ impl RoomManager {
             let applied_by = moderator_authenticated
                 .then(|| moderator_id.as_uuid())
                 .ok_or_else(|| anyhow::anyhow!("A registered moderator is required"))?;
-            let target_user = if target_authenticated {
-                Some(target_participant_id.as_uuid())
-            } else {
-                None
+            let sanction = moderation::Sanction {
+                identity: moderation::SanctionIdentity::of(
+                    target_participant_id,
+                    target_authenticated,
+                    target_ip,
+                )?,
+                reason,
+                applied_by,
             };
-            if target_user.is_none() && target_ip.is_none() {
-                anyhow::bail!("The target cannot be identified for a durable sanction");
-            }
             self.persist_room(
                 room_id,
                 &room_lock,
-                moderation::set_punitive_state(
-                    pool,
-                    room_id,
-                    target_user,
-                    target_ip,
-                    kind,
-                    enabled,
-                    reason,
-                    applied_by,
-                    &event,
-                ),
+                moderation::set_punitive_state(pool, room_id, sanction, kind, enabled, &event),
             )
             .await
             .map_err(|error| {
@@ -661,31 +652,30 @@ impl RoomManager {
                 let applied_by = moderator_authenticated
                     .then(|| moderator_id.as_uuid())
                     .ok_or_else(|| anyhow::anyhow!("A registered moderator is required"))?;
-                let target_user = target_authenticated.then(|| target_participant_id.as_uuid());
-                if target_user.is_none() && target_ip.is_none() {
-                    anyhow::bail!("The target cannot be identified for a durable ban");
-                }
+                let sanction = moderation::Sanction {
+                    identity: moderation::SanctionIdentity::of(
+                        target_participant_id,
+                        target_authenticated,
+                        target_ip,
+                    )?,
+                    reason,
+                    applied_by,
+                };
                 self.persist_room(
                     room_id,
                     &room_lock,
-                    moderation::persist_ban(
-                        pool,
-                        room_id,
-                        target_user,
-                        target_ip,
-                        reason,
-                        expires_at,
-                        applied_by,
-                        &event,
-                    ),
+                    moderation::persist_ban(pool, room_id, sanction, expires_at, &event),
                 )
                 .await
-                .map_err(|error| {
-                    if matches!(error, RoomError::Database(sqlx::Error::RowNotFound)) {
-                        return anyhow::anyhow!("Report not found");
+                .map_err(|error| match error {
+                    RoomError::Refused(refused) => crate::room::social::refused(refused),
+                    RoomError::Database(sqlx::Error::RowNotFound) => {
+                        anyhow::anyhow!("Report not found")
                     }
-                    warn!(%room_id, %error, "Failed to persist room ban");
-                    anyhow::anyhow!("Ban could not be saved")
+                    RoomError::Database(database) => {
+                        warn!(%room_id, error = %database, "Failed to persist room ban");
+                        anyhow::anyhow!("Ban could not be saved")
+                    }
                 })?;
             }
 

@@ -663,46 +663,23 @@ impl Context {
         };
         drop(room);
         let room_id = self.room_id.clone();
-        let user = publication
-            .authenticated
-            .then(|| request.target_participant_id.as_uuid());
-        let ip = if publication.authenticated {
-            publication.ip
-        } else {
-            publication.ip.map(crate::net::cohort)
-        }
-        .map(|ip| ip.to_string());
-        let state = if kind == moderation::PunitiveKind::CamBanned {
-            "cambanned"
-        } else {
-            "muted"
+        let sanction = moderation::Sanction {
+            identity: moderation::SanctionIdentity::of(
+                &request.target_participant_id,
+                publication.authenticated,
+                publication.ip,
+            )?,
+            reason: request.reason.as_deref(),
+            applied_by: self.user,
         };
-        let actor = self.user;
-        if let Some(user) = user {
-            if request.enabled {
-                sqlx::query("INSERT INTO room_states(room_id,user_id,state,ip_address,reason,applied_by) VALUES($1,$2,$3,$4::inet,$5,$6) ON CONFLICT(room_id,user_id,state) DO UPDATE SET ip_address=EXCLUDED.ip_address,reason=EXCLUDED.reason,expires_at=NULL,applied_by=EXCLUDED.applied_by")
-                    .bind(&room_id).bind(user).bind(state).bind(&ip).bind(&request.reason).bind(actor).execute(self.connection()).await?;
-            } else {
-                sqlx::query("DELETE FROM room_states WHERE room_id=$1 AND user_id=$2 AND state=$3")
-                    .bind(&room_id)
-                    .bind(user)
-                    .bind(state)
-                    .execute(self.connection())
-                    .await?;
-            }
-        } else if let Some(ip) = ip {
-            if request.enabled {
-                sqlx::query("INSERT INTO room_states(room_id,user_id,state,ip_address,reason,applied_by) VALUES($1,NULL,$2,$3::inet,$4,$5) ON CONFLICT(room_id,ip_address,state) WHERE user_id IS NULL AND ip_address IS NOT NULL DO UPDATE SET reason=EXCLUDED.reason,expires_at=NULL,applied_by=EXCLUDED.applied_by")
-                    .bind(&room_id).bind(state).bind(ip).bind(&request.reason).bind(actor).execute(self.connection()).await?;
-            } else {
-                sqlx::query("DELETE FROM room_states WHERE room_id=$1 AND user_id IS NULL AND ip_address=$2::inet AND state=$3").bind(&room_id).bind(ip).bind(state).execute(self.connection()).await?;
-            }
-        } else {
-            return Err(Refusal::Invalid(
-                "The participant cannot be identified for a saved restriction".into(),
-            )
-            .into());
-        }
+        moderation::write_punitive_state(
+            self.connection(),
+            &room_id,
+            sanction,
+            kind,
+            request.enabled,
+        )
+        .await?;
         moderation::record_event(
             self.connection(),
             &room_id,
@@ -771,8 +748,7 @@ impl Context {
         new_role: roles::Role,
     ) -> Result<(Publication, Value), RoomError> {
         let room_id = self.room_id.clone();
-        let current: Option<roles::Role> = sqlx::query_scalar("SELECT CASE WHEN $2=owner_id THEN 5 ELSE (SELECT role FROM room_roles WHERE room_id=$1 AND user_id=$2) END::smallint FROM rooms WHERE id=$1 AND ($2=owner_id OR EXISTS(SELECT 1 FROM room_roles WHERE room_id=$1 AND user_id=$2))")
-            .bind(&room_id).bind(target).fetch_optional(self.connection()).await?;
+        let current = roles::current_role(self.connection(), &room_id, target).await?;
         let online = if let Some(runtime) = self.runtime.as_ref() {
             let room = runtime.read().await;
             room.participants
@@ -789,54 +765,29 @@ impl Context {
             return Err(Refusal::Forbidden("Insufficient room permissions".into()).into());
         }
         let setter = self.user;
-        if !new_role.is_stored() {
-            sqlx::query("DELETE FROM room_roles WHERE room_id=$1 AND user_id=$2")
-                .bind(&room_id)
-                .bind(target)
-                .execute(self.connection())
-                .await?;
-        } else {
-            sqlx::query("INSERT INTO room_roles(room_id,user_id,role,granted_by) VALUES($1,$2,$3,$4) ON CONFLICT(room_id,user_id) DO UPDATE SET role=$3,granted_by=$4")
-                .bind(&room_id).bind(target).bind(new_role).bind(setter).execute(self.connection()).await?;
-        }
+        roles::set_role(self.connection(), &room_id, &target, new_role, &setter).await?;
         Ok((Publication::Role(target, new_role), json!({"updated":true})))
     }
 
     async fn unban(&mut self, id: Uuid) -> Result<(Publication, Value), RoomError> {
         self.require(roles::Role::Admin)?;
         let room_id = self.room_id.clone();
-        let row: Option<(Option<Uuid>,Option<String>,Option<String>)> = sqlx::query_as("DELETE FROM room_states s WHERE s.room_id=$1 AND s.id=$2 AND s.state='banned' RETURNING s.user_id,host(s.ip_address),(SELECT display_name FROM users WHERE id=s.user_id)")
-            .bind(&room_id).bind(id).fetch_optional(self.connection()).await?;
-        let (user, ip, name) =
-            row.ok_or_else(|| Refusal::NotFound("Ban not found in this room".into()))?;
-        let target = ParticipantId::from(user.unwrap_or(id));
         let actor = ParticipantId::from(self.user);
-        let address = ip.and_then(|ip| ip.parse::<IpAddr>().ok());
-        let event = moderation::ModerationEvent::new(
-            moderation::ModerationAction::Unban,
-            moderation::Actor {
-                id: &actor,
-                name: &self.actor_name,
-            },
-            moderation::Target {
-                id: target.into(),
-                name: name.as_deref().unwrap_or("Guest"),
-                authenticated: user.is_some(),
-                ip: address,
-            },
-            None,
-            None,
-            None,
-        );
-        moderation::record_event(
+        let actor_name = self.actor_name.clone();
+        let removed = moderation::remove_ban(
             self.connection(),
             &room_id,
-            &event,
-            moderation::MAX_MODERATION_EVENTS,
+            id,
+            moderation::Actor {
+                id: &actor,
+                name: &actor_name,
+            },
         )
-        .await?;
+        .await?
+        .ok_or_else(|| Refusal::NotFound("Ban not found in this room".into()))?;
+        let address = removed.user_id.is_none().then_some(removed.ip).flatten();
         Ok((
-            Publication::Unban(user, if user.is_none() { address } else { None }),
+            Publication::Unban(removed.user_id, address),
             json!({"removed":true}),
         ))
     }
@@ -848,34 +799,21 @@ impl Context {
     ) -> Result<(Publication, Value), RoomError> {
         let room_id = self.room_id.clone();
         let actor = ParticipantId::from(self.user);
-        let row: Option<(ParticipantId, String, bool)> = sqlx::query_as("UPDATE room_reports r SET status=$3,resolved_at=now(),resolved_by=$4 WHERE r.room_id=$1 AND r.id=$2 AND r.status='open' RETURNING r.target_participant_id,r.target_name,EXISTS(SELECT 1 FROM users u WHERE u.id::text=r.target_participant_id)")
-            .bind(&room_id).bind(id).bind(status).bind(actor).fetch_optional(self.connection()).await?;
-        let (target, name, authenticated) =
-            row.ok_or_else(|| Refusal::NotFound("Open report not found in this room".into()))?;
-        let action = status.action();
-        let event = moderation::ModerationEvent::new(
-            action,
-            moderation::Actor {
-                id: &actor,
-                name: &self.actor_name,
-            },
-            moderation::Target {
-                id: target.into(),
-                name: &name,
-                authenticated,
-                ip: None,
-            },
-            None,
-            None,
-            Some(id),
-        );
-        moderation::record_event(
+        let actor_name = self.actor_name.clone();
+        let resolved = moderation::resolve_report(
             self.connection(),
             &room_id,
-            &event,
-            moderation::MAX_MODERATION_EVENTS,
+            id,
+            status,
+            moderation::Actor {
+                id: &actor,
+                name: &actor_name,
+            },
         )
         .await?;
+        if !resolved {
+            return Err(Refusal::NotFound("Open report not found in this room".into()).into());
+        }
         Ok((
             Publication::None,
             json!({"reportId":id,"status":status.status()}),
@@ -930,15 +868,6 @@ impl Context {
                 .map_err(|_| Refusal::Conflict("Room ban capacity reached".into()))?;
         }
         let room_id = self.room_id.clone();
-        if let Some(report) = request.report_id {
-            let target: Option<ParticipantId> = sqlx::query_scalar("SELECT target_participant_id FROM room_reports WHERE room_id=$1 AND id=$2 AND status='open' FOR UPDATE")
-                .bind(&room_id).bind(report).fetch_optional(self.connection()).await?;
-            if target != Some(request.target_participant_id) {
-                return Err(
-                    Refusal::Invalid("Open report does not match this participant".into()).into(),
-                );
-            }
-        }
         let actor = ParticipantId::from(self.user);
         let expiry = request.duration_seconds.and_then(|duration| {
             Utc::now().checked_add_signed(chrono::Duration::seconds(duration as i64))
@@ -964,28 +893,16 @@ impl Context {
             request.report_id,
         );
         if ban {
-            let actor = self.user;
-            let user = publication
-                .authenticated
-                .then(|| request.target_participant_id.as_uuid());
-            let ip = if publication.authenticated {
-                publication.ip
-            } else {
-                publication.ip.map(crate::net::cohort)
-            }
-            .map(|ip| ip.to_string());
-            if let Some(user) = user {
-                sqlx::query("INSERT INTO room_states(room_id,user_id,state,ip_address,reason,expires_at,applied_by) VALUES($1,$2,'banned',$3::inet,$4,$5,$6) ON CONFLICT(room_id,user_id,state) DO UPDATE SET ip_address=EXCLUDED.ip_address,reason=EXCLUDED.reason,expires_at=EXCLUDED.expires_at,applied_by=EXCLUDED.applied_by")
-                    .bind(&room_id).bind(user).bind(&ip).bind(&request.reason).bind(expiry).bind(actor).execute(self.connection()).await?;
-            } else if let Some(ip) = ip {
-                sqlx::query("INSERT INTO room_states(room_id,user_id,state,ip_address,reason,expires_at,applied_by) VALUES($1,NULL,'banned',$2::inet,$3,$4,$5) ON CONFLICT(room_id,ip_address,state) WHERE user_id IS NULL AND ip_address IS NOT NULL DO UPDATE SET reason=EXCLUDED.reason,expires_at=EXCLUDED.expires_at,applied_by=EXCLUDED.applied_by")
-                    .bind(&room_id).bind(ip).bind(&request.reason).bind(expiry).bind(actor).execute(self.connection()).await?;
-            } else {
-                return Err(Refusal::Invalid(
-                    "The participant cannot be identified for a saved ban".into(),
-                )
-                .into());
-            }
+            let sanction = moderation::Sanction {
+                identity: moderation::SanctionIdentity::of(
+                    &request.target_participant_id,
+                    publication.authenticated,
+                    publication.ip,
+                )?,
+                reason: request.reason.as_deref(),
+                applied_by: self.user,
+            };
+            moderation::write_ban(self.connection(), &room_id, sanction, expiry).await?;
         }
         moderation::record_event(
             self.connection(),

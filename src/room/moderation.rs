@@ -33,6 +33,60 @@ impl PunitiveKind {
     }
 }
 
+/// Whom a saved sanction binds: an account (with the address it used, for the
+/// owner's history) or a guest's address cohort.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SanctionIdentity {
+    User { id: Uuid, ip: Option<IpAddr> },
+    Guest(IpAddr),
+}
+
+impl SanctionIdentity {
+    /// The durable identity of a participant: an account as itself, a guest as
+    /// its address cohort; a guest without an address cannot carry a saved sanction.
+    pub(crate) fn of(
+        participant: &ParticipantId,
+        authenticated: bool,
+        ip: Option<IpAddr>,
+    ) -> Result<Self, RoomError> {
+        if authenticated {
+            Ok(Self::User {
+                id: participant.as_uuid(),
+                ip,
+            })
+        } else if let Some(ip) = ip {
+            Ok(Self::Guest(crate::net::cohort(ip)))
+        } else {
+            Err(Refusal::Invalid(
+                "The participant cannot be identified for a saved sanction".into(),
+            )
+            .into())
+        }
+    }
+
+    fn user_id(self) -> Option<Uuid> {
+        match self {
+            Self::User { id, .. } => Some(id),
+            Self::Guest(_) => None,
+        }
+    }
+
+    fn address(self) -> Option<String> {
+        match self {
+            Self::User { ip, .. } => ip.map(|ip| ip.to_string()),
+            Self::Guest(ip) => Some(ip.to_string()),
+        }
+    }
+}
+
+/// One saved sanction: whom it binds, why, and which moderator applied it.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Sanction<'a> {
+    pub(crate) identity: SanctionIdentity,
+    pub(crate) reason: Option<&'a str>,
+    pub(crate) applied_by: Uuid,
+}
+
 /// Durable history entries kept per room; the oldest go when a new one arrives.
 pub(crate) const MAX_MODERATION_EVENTS: usize = 1000;
 
@@ -349,7 +403,7 @@ impl ModerationEvent {
 
 /// Append an event inside the caller's transaction. The room keeps its newest
 /// `cap` entries. An event that answers a report resolves that report if it is
-/// still open, and refuses a report from another room.
+/// still open, and refuses a report from another room or about someone else.
 pub(crate) async fn record_event(
     transaction: &mut PgConnection,
     room_id: &RoomId,
@@ -363,14 +417,20 @@ pub(crate) async fn record_event(
         .transpose()
         .map_err(|_| sqlx::Error::Protocol("invalid report id".to_string()))?;
     if let Some(report_id) = report_id {
-        let status: Option<String> =
-            sqlx::query_scalar("SELECT status FROM room_reports WHERE room_id = $1 AND id = $2")
-                .bind(room_id)
-                .bind(report_id)
-                .fetch_optional(&mut *transaction)
-                .await?;
-        if status.is_none() {
+        let target: Option<ParticipantId> = sqlx::query_scalar(
+            "SELECT target_participant_id FROM room_reports WHERE room_id = $1 AND id = $2",
+        )
+        .bind(room_id)
+        .bind(report_id)
+        .fetch_optional(&mut *transaction)
+        .await?;
+        let Some(target) = target else {
             return Err(sqlx::Error::RowNotFound.into());
+        };
+        if ModerationTargetId::from(target) != event.target_id {
+            return Err(
+                Refusal::Invalid("Open report does not match this participant".into()).into(),
+            );
         }
         sqlx::query(
             "UPDATE room_reports SET status = 'resolved', resolved_at = now(), resolved_by = $3
@@ -863,35 +923,20 @@ pub(crate) async fn load_punitive_state(
     })
 }
 
-/// Persist or remove a camera/chat sanction. Guest rows use the partial unique
-/// identity index installed by migration 012 so concurrent moderation cannot
-/// create duplicate state for one canonical IP cohort.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "sanction persistence keeps actor, target identity, and mutation fields explicit"
-)]
-pub(crate) async fn set_punitive_state(
-    pool: &PgPool,
+/// Save or lift a mute or camera ban inside the caller's transaction. Guest
+/// rows use the partial unique identity index installed by migration 012 so
+/// concurrent moderation cannot create duplicate state for one address cohort.
+pub(crate) async fn write_punitive_state(
+    connection: &mut PgConnection,
     room_id: &RoomId,
-    user_id: Option<Uuid>,
-    ip: Option<IpAddr>,
+    sanction: Sanction<'_>,
     kind: PunitiveKind,
     enabled: bool,
-    reason: Option<&str>,
-    applied_by: Uuid,
-    event: &ModerationEvent,
 ) -> Result<(), RoomError> {
     let state = kind.as_db_str();
-    let ip = if user_id.is_some() {
-        ip
-    } else {
-        ip.map(crate::net::cohort)
-    };
-    let ip = ip.map(|address| address.to_string());
-    let mut transaction = pool.begin().await?;
-
-    if enabled {
-        if let Some(user_id) = user_id {
+    let address = sanction.identity.address();
+    match (sanction.identity.user_id(), enabled) {
+        (Some(user_id), true) => {
             sqlx::query(
                 "INSERT INTO room_states
                     (room_id, user_id, state, ip_address, reason, applied_by)
@@ -905,12 +950,13 @@ pub(crate) async fn set_punitive_state(
             .bind(room_id)
             .bind(user_id)
             .bind(state)
-            .bind(&ip)
-            .bind(reason)
-            .bind(applied_by)
-            .execute(&mut *transaction)
+            .bind(&address)
+            .bind(sanction.reason)
+            .bind(sanction.applied_by)
+            .execute(&mut *connection)
             .await?;
-        } else if let Some(ip) = &ip {
+        }
+        (None, true) => {
             sqlx::query(
                 "INSERT INTO room_states
                     (room_id, user_id, state, ip_address, reason, applied_by)
@@ -924,73 +970,65 @@ pub(crate) async fn set_punitive_state(
             )
             .bind(room_id)
             .bind(state)
-            .bind(ip)
-            .bind(reason)
-            .bind(applied_by)
-            .execute(&mut *transaction)
+            .bind(&address)
+            .bind(sanction.reason)
+            .bind(sanction.applied_by)
+            .execute(&mut *connection)
             .await?;
-        } else {
-            return Err(sqlx::Error::Protocol(
-                "punitive state has no durable identity".to_string(),
-            )
-            .into());
         }
-    } else if let Some(user_id) = user_id {
-        sqlx::query(
-            "DELETE FROM room_states
-             WHERE room_id = $1 AND user_id = $2 AND state = $3",
-        )
-        .bind(room_id)
-        .bind(user_id)
-        .bind(state)
-        .execute(&mut *transaction)
-        .await?;
-    } else if let Some(ip) = &ip {
-        sqlx::query(
-            "DELETE FROM room_states
-             WHERE room_id = $1 AND user_id IS NULL AND state = $2
-               AND ip_address = $3::inet",
-        )
-        .bind(room_id)
-        .bind(state)
-        .bind(ip)
-        .execute(&mut *transaction)
-        .await?;
-    } else {
-        return Err(
-            sqlx::Error::Protocol("punitive state has no durable identity".to_string()).into(),
-        );
+        (Some(user_id), false) => {
+            sqlx::query(
+                "DELETE FROM room_states
+                 WHERE room_id = $1 AND user_id = $2 AND state = $3",
+            )
+            .bind(room_id)
+            .bind(user_id)
+            .bind(state)
+            .execute(&mut *connection)
+            .await?;
+        }
+        (None, false) => {
+            sqlx::query(
+                "DELETE FROM room_states
+                 WHERE room_id = $1 AND user_id IS NULL AND state = $2
+                   AND ip_address = $3::inet",
+            )
+            .bind(room_id)
+            .bind(state)
+            .bind(&address)
+            .execute(&mut *connection)
+            .await?;
+        }
     }
+    Ok(())
+}
 
+/// Save or lift a mute or camera ban with its history entry in one transaction.
+pub(crate) async fn set_punitive_state(
+    pool: &PgPool,
+    room_id: &RoomId,
+    sanction: Sanction<'_>,
+    kind: PunitiveKind,
+    enabled: bool,
+    event: &ModerationEvent,
+) -> Result<(), RoomError> {
+    let mut transaction = pool.begin().await?;
+    write_punitive_state(&mut transaction, room_id, sanction, kind, enabled).await?;
     record_event(&mut transaction, room_id, event, MAX_MODERATION_EVENTS).await?;
     transaction.commit().await?;
     Ok(())
 }
 
-/// Persist a ban to room_states. Registered targets are keyed by user_id;
-/// guests are keyed by their canonical IP cohort.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "a durable ban keeps identity, sanction fields and its history entry explicit"
-)]
-pub(crate) async fn persist_ban(
-    pool: &PgPool,
+/// Save a ban inside the caller's transaction: an account by its id, a guest by
+/// its address cohort.
+pub(crate) async fn write_ban(
+    connection: &mut PgConnection,
     room_id: &RoomId,
-    user_id: Option<Uuid>,
-    ip: Option<IpAddr>,
-    reason: Option<&str>,
-    expires_at: Option<chrono::DateTime<chrono::Utc>>,
-    applied_by: Uuid,
-    event: &ModerationEvent,
+    sanction: Sanction<'_>,
+    expires_at: Option<DateTime<Utc>>,
 ) -> Result<(), RoomError> {
-    let ip = if user_id.is_some() {
-        ip
-    } else {
-        ip.map(crate::net::cohort)
-    };
-    let ip = ip.map(|address| address.to_string());
-    let mut transaction = pool.begin().await?;
-    if let Some(user_id) = user_id {
+    let address = sanction.identity.address();
+    if let Some(user_id) = sanction.identity.user_id() {
         sqlx::query(
             "INSERT INTO room_states
                 (room_id, user_id, state, ip_address, reason, expires_at, applied_by)
@@ -1003,13 +1041,13 @@ pub(crate) async fn persist_ban(
         )
         .bind(room_id)
         .bind(user_id)
-        .bind(&ip)
-        .bind(reason)
+        .bind(&address)
+        .bind(sanction.reason)
         .bind(expires_at)
-        .bind(applied_by)
-        .execute(&mut *transaction)
+        .bind(sanction.applied_by)
+        .execute(&mut *connection)
         .await?;
-    } else if let Some(ip) = &ip {
+    } else {
         sqlx::query(
             "INSERT INTO room_states
                 (room_id, user_id, state, ip_address, reason, expires_at, applied_by)
@@ -1022,15 +1060,26 @@ pub(crate) async fn persist_ban(
                    applied_by = EXCLUDED.applied_by",
         )
         .bind(room_id)
-        .bind(ip)
-        .bind(reason)
+        .bind(&address)
+        .bind(sanction.reason)
         .bind(expires_at)
-        .bind(applied_by)
-        .execute(&mut *transaction)
+        .bind(sanction.applied_by)
+        .execute(&mut *connection)
         .await?;
-    } else {
-        return Err(Refusal::Invalid("ban has no durable identity".into()).into());
     }
+    Ok(())
+}
+
+/// Save a ban with its history entry in one transaction.
+pub(crate) async fn persist_ban(
+    pool: &PgPool,
+    room_id: &RoomId,
+    sanction: Sanction<'_>,
+    expires_at: Option<DateTime<Utc>>,
+    event: &ModerationEvent,
+) -> Result<(), RoomError> {
+    let mut transaction = pool.begin().await?;
+    write_ban(&mut transaction, room_id, sanction, expires_at).await?;
     record_event(&mut transaction, room_id, event, MAX_MODERATION_EVENTS).await?;
     transaction.commit().await?;
     Ok(())
@@ -1113,6 +1162,150 @@ pub(crate) async fn remove_user_ban(
     Ok(true)
 }
 
+/// The identity a deleted ban row bound.
+pub(crate) struct RemovedBan {
+    pub(crate) user_id: Option<Uuid>,
+    pub(crate) ip: Option<IpAddr>,
+}
+
+/// Delete one ban by its row id and record the lifting, inside the caller's
+/// transaction. `None` when no live ban row of this room has that id.
+pub(crate) async fn remove_ban(
+    connection: &mut PgConnection,
+    room_id: &RoomId,
+    ban_id: Uuid,
+    actor: Actor<'_>,
+) -> Result<Option<RemovedBan>, RoomError> {
+    let row: Option<(Option<Uuid>, Option<String>, Option<String>)> = sqlx::query_as(
+        "DELETE FROM room_states s
+         WHERE s.room_id = $1 AND s.id = $2 AND s.state = 'banned'
+         RETURNING s.user_id, host(s.ip_address),
+                   (SELECT display_name FROM users WHERE id = s.user_id)",
+    )
+    .bind(room_id)
+    .bind(ban_id)
+    .fetch_optional(&mut *connection)
+    .await?;
+    let Some((user_id, address, name)) = row else {
+        return Ok(None);
+    };
+    let ip = address.and_then(|address| address.parse::<IpAddr>().ok());
+    let target_id = user_id.map_or_else(
+        || ModerationTargetId::Ban(ban_id.to_string()),
+        |user_id| ModerationTargetId::from(ParticipantId::from(user_id)),
+    );
+    let event = ModerationEvent::new(
+        ModerationAction::Unban,
+        actor,
+        Target {
+            id: target_id,
+            name: name.as_deref().unwrap_or(if user_id.is_some() {
+                "Removed account"
+            } else {
+                "Guest"
+            }),
+            authenticated: user_id.is_some(),
+            ip,
+        },
+        None,
+        None,
+        None,
+    );
+    record_event(&mut *connection, room_id, &event, MAX_MODERATION_EVENTS).await?;
+    Ok(Some(RemovedBan { user_id, ip }))
+}
+
+/// Close an open report with the moderator's decision and record it, inside the
+/// caller's transaction; `false` when this room has no open report with that id.
+pub(crate) async fn resolve_report(
+    connection: &mut PgConnection,
+    room_id: &RoomId,
+    report_id: Uuid,
+    resolution: ReportResolution,
+    actor: Actor<'_>,
+) -> Result<bool, RoomError> {
+    let row: Option<(ParticipantId, String, bool)> = sqlx::query_as(
+        "UPDATE room_reports r SET status = $3, resolved_at = now(), resolved_by = $4
+         WHERE r.room_id = $1 AND r.id = $2 AND r.status = 'open'
+         RETURNING r.target_participant_id, r.target_name,
+                   EXISTS(SELECT 1 FROM users u WHERE u.id::text = r.target_participant_id)",
+    )
+    .bind(room_id)
+    .bind(report_id)
+    .bind(resolution)
+    .bind(actor.id)
+    .fetch_optional(&mut *connection)
+    .await?;
+    let Some((target, target_name, target_authenticated)) = row else {
+        return Ok(false);
+    };
+    let event = ModerationEvent::new(
+        resolution.action(),
+        actor,
+        Target {
+            id: target.into(),
+            name: &target_name,
+            authenticated: target_authenticated,
+            ip: None,
+        },
+        None,
+        None,
+        Some(report_id),
+    );
+    record_event(&mut *connection, room_id, &event, MAX_MODERATION_EVENTS).await?;
+    Ok(true)
+}
+
+/// File a report inside the caller's transaction. The room keeps at most `cap`
+/// reports: a closed one gives way to a new one, and a room full of open
+/// reports takes no more (`false`).
+pub(crate) async fn file_report(
+    connection: &mut PgConnection,
+    room_id: &RoomId,
+    report: &ReportEntry,
+    cap: usize,
+) -> Result<bool, RoomError> {
+    let report_id = Uuid::parse_str(&report.report_id)
+        .map_err(|_| sqlx::Error::Protocol("invalid report id".to_string()))?;
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 71339))")
+        .bind(room_id)
+        .execute(&mut *connection)
+        .await?;
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM room_reports WHERE room_id = $1")
+        .bind(room_id)
+        .fetch_one(&mut *connection)
+        .await?;
+    if count >= cap as i64 {
+        let removed = sqlx::query(
+            "DELETE FROM room_reports WHERE id IN (
+                SELECT id FROM room_reports WHERE room_id = $1 AND status <> 'open'
+                ORDER BY created_at, id LIMIT 1)",
+        )
+        .bind(room_id)
+        .execute(&mut *connection)
+        .await?
+        .rows_affected();
+        if removed == 0 {
+            return Ok(false);
+        }
+    }
+    sqlx::query(
+        "INSERT INTO room_reports
+            (id, room_id, reporter_id, reporter_name, target_participant_id, target_name, reason)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)",
+    )
+    .bind(report_id)
+    .bind(room_id)
+    .bind(report.reporter_id)
+    .bind(&report.reporter_name)
+    .bind(report.target_participant_id)
+    .bind(&report.target_name)
+    .bind(&report.reason)
+    .execute(&mut *connection)
+    .await?;
+    Ok(true)
+}
+
 /// Check if a participant can produce (not cam-banned, has correct role for moderated rooms)
 pub(crate) fn can_produce(
     state: &PunitiveState,
@@ -1152,6 +1345,29 @@ mod tests {
         assert_eq!(ModerationAction::parse("kicked"), None);
     }
     use crate::ids::fixtures::rid;
+
+    #[test]
+    fn a_saved_sanction_binds_an_account_or_a_guest_cohort() {
+        use crate::ids::fixtures::pid;
+        let account = pid("alice");
+        let address: IpAddr = "2001:db8:1:2:3:4:5:6".parse().unwrap();
+        assert_eq!(
+            SanctionIdentity::of(&account, true, Some(address)).unwrap(),
+            SanctionIdentity::User {
+                id: account.as_uuid(),
+                ip: Some(address)
+            }
+        );
+        assert_eq!(
+            SanctionIdentity::of(&account, false, Some(address)).unwrap(),
+            SanctionIdentity::Guest(crate::net::cohort(address))
+        );
+        let refused = SanctionIdentity::of(&account, false, None).unwrap_err();
+        assert_eq!(
+            refused.to_string(),
+            "The participant cannot be identified for a saved sanction"
+        );
+    }
 
     #[test]
     fn retention_periods_are_bounded_days_and_addresses_never_outlive_entries() {
@@ -1237,11 +1453,15 @@ mod tests {
         persist_ban(
             &pool,
             &room_id,
-            Some(member),
+            Sanction {
+                identity: SanctionIdentity::User {
+                    id: member,
+                    ip: None,
+                },
+                reason: Some("spam"),
+                applied_by: owner,
+            },
             None,
-            Some("spam"),
-            None,
-            owner,
             &ban,
         )
         .await
@@ -1281,6 +1501,26 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(status, "open");
+
+        // A report about someone else is refused as the caller's mistake.
+        let stranger = ParticipantId::random();
+        let mismatched = ModerationEvent::new(
+            ModerationAction::Kick,
+            actor,
+            Target {
+                id: stranger.into(),
+                name: "Someone else",
+                authenticated: false,
+                ip: None,
+            },
+            None,
+            None,
+            Some(report),
+        );
+        assert!(matches!(
+            persist_event(&pool, &room_id, &mismatched).await,
+            Err(RoomError::Refused(Refusal::Invalid(_)))
+        ));
 
         // Lifting the ban names the account as it is called now, once.
         assert!(

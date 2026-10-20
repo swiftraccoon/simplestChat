@@ -52,29 +52,16 @@ impl RoomManager {
                 .as_ref()
                 .ok_or_else(|| unavailable("Report service unavailable"))?;
             request.release();
-            let inserted = self.persist_room(room_id, request.room_lock, async {
-                let mut transaction = pool.begin().await?;
-                sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1,71339))")
-                    .bind(room_id)
-                    .execute(&mut *transaction)
-                    .await?;
-                let count: i64 =
-                    sqlx::query_scalar("SELECT COUNT(*) FROM room_reports WHERE room_id=$1")
-                        .bind(room_id)
-                        .fetch_one(&mut *transaction)
-                        .await?;
-                if count >= MAX_REPORTS as i64 {
-                    let removed=sqlx::query("DELETE FROM room_reports WHERE id IN (SELECT id FROM room_reports WHERE room_id=$1 AND status<>'open' ORDER BY created_at,id LIMIT 1)").bind(room_id).execute(&mut *transaction).await?.rows_affected();
-                    if removed == 0 {
-                        return Ok(false);
-                    }
-                }
-                sqlx::query("INSERT INTO room_reports(id,room_id,reporter_id,reporter_name,target_participant_id,target_name,reason) VALUES($1,$2,$3,$4,$5,$6,$7)")
-                    .bind(report_id).bind(room_id).bind(participant_id).bind(&report.reporter_name).bind(target_participant_id).bind(&report.target_name).bind(reason).execute(&mut *transaction).await?;
-                transaction.commit().await?;
-                Ok(true)
-            })
-            .await?;
+            let inserted = self
+                .persist_room(room_id, request.room_lock, async {
+                    let mut transaction = pool.begin().await?;
+                    let inserted =
+                        moderation::file_report(&mut transaction, room_id, &report, MAX_REPORTS)
+                            .await?;
+                    transaction.commit().await?;
+                    Ok(inserted)
+                })
+                .await?;
             if !inserted {
                 return Err(forbidden(
                     "Room report capacity reached; contact a moderator",
@@ -173,22 +160,19 @@ impl RoomManager {
             let resolved = self
                 .persist_room(room_id, request.room_lock, async {
                     let mut transaction = pool.begin().await?;
-                    let target: Option<(String, String, bool)> = sqlx::query_as("UPDATE room_reports r SET status=$3,resolved_at=now(),resolved_by=$4 WHERE r.room_id=$1 AND r.id=$2 AND r.status='open' RETURNING r.target_participant_id,r.target_name,EXISTS(SELECT 1 FROM users u WHERE u.id::text=r.target_participant_id)")
-                        .bind(room_id).bind(id).bind(status).bind(actor_id).fetch_optional(&mut *transaction).await?;
-                    let Some((target_id, target_name, target_authenticated)) = target else {
-                        return Ok(false);
-                    };
-                    let event = ModerationEvent::new(
-                        action,
-                        Actor { id: &actor_id, name: &actor_name },
-                        Target { id: ModerationTargetId::from_text(&target_id), name: &target_name, authenticated: target_authenticated, ip: None },
-                        None,
-                        None,
-                        Some(id),
-                    );
-                    record_event(&mut transaction, room_id, &event, MAX_MODERATION_EVENTS).await?;
+                    let resolved = moderation::resolve_report(
+                        &mut transaction,
+                        room_id,
+                        id,
+                        status,
+                        Actor {
+                            id: &actor_id,
+                            name: &actor_name,
+                        },
+                    )
+                    .await?;
                     transaction.commit().await?;
-                    Ok(true)
+                    Ok(resolved)
                 })
                 .await?;
             request.reacquire().await?;

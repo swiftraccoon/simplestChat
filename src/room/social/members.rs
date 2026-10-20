@@ -58,45 +58,28 @@ impl RoomManager {
                 .ok_or_else(|| unavailable("Ban service unavailable"))?;
             request.release();
             let actor_id = *participant_id;
-            let row: Option<(Option<Uuid>, Option<String>)> = self
+            let removed = self
                 .persist_room(room_id, request.room_lock, async {
                     let mut transaction = pool.begin().await?;
-                    let row: Option<(Option<Uuid>, Option<String>, Option<String>)> = sqlx::query_as("DELETE FROM room_states s WHERE s.room_id=$1 AND s.id=$2 AND s.state='banned' RETURNING s.user_id,host(s.ip_address),(SELECT u.display_name FROM users u WHERE u.id=s.user_id)")
-                        .bind(room_id).bind(id).fetch_optional(&mut *transaction).await?;
-                    let Some((uid, ip, name)) = row else {
-                        return Ok(None);
-                    };
-                    let target_id = uid.map_or_else(
-                        || ModerationTargetId::Ban(id.to_string()),
-                        |uid| ModerationTargetId::from(ParticipantId::from(uid)),
-                    );
-                    let event = ModerationEvent::new(
-                        ModerationAction::Unban,
-                        Actor { id: &actor_id, name: &actor_name },
-                        Target {
-                            id: target_id.clone(),
-                            name: name.as_deref().unwrap_or(if uid.is_some() { "Removed account" } else { "Guest" }),
-                            authenticated: uid.is_some(),
-                            ip: ip.as_deref().and_then(|ip| ip.parse().ok()),
+                    let removed = moderation::remove_ban(
+                        &mut transaction,
+                        room_id,
+                        id,
+                        Actor {
+                            id: &actor_id,
+                            name: &actor_name,
                         },
-                        None,
-                        None,
-                        None,
-                    );
-                    record_event(&mut transaction, room_id, &event, MAX_MODERATION_EVENTS).await?;
+                    )
+                    .await?;
                     transaction.commit().await?;
-                    Ok(Some((uid, ip)))
+                    Ok(removed)
                 })
                 .await?;
             request.reacquire().await?;
-            let (uid, ip) = row.ok_or_else(|| not_found("Ban not found"))?;
+            let removed = removed.ok_or_else(|| not_found("Ban not found"))?;
             (
-                uid.map(ParticipantId::from),
-                if uid.is_none() {
-                    ip.and_then(|ip| ip.parse::<IpAddr>().ok())
-                } else {
-                    None
-                },
+                removed.user_id.map(ParticipantId::from),
+                removed.user_id.is_none().then_some(removed.ip).flatten(),
                 Vec::new(),
             )
         } else {
@@ -246,11 +229,12 @@ impl RoomManager {
             .ok_or_else(|| unavailable("Member service unavailable"))?;
         request.release();
         // Absent targets must already belong to this room's roster; no account enumeration.
-        let current: Option<roles::Role> = tokio::time::timeout(
+        let current = tokio::time::timeout(
             control::PERSISTENCE_TIMEOUT,
-            sqlx::query_scalar("SELECT CASE WHEN $2=owner_id THEN 5 ELSE (SELECT role FROM room_roles WHERE room_id=$1 AND user_id=$2) END::smallint FROM rooms WHERE id=$1 AND ($2=owner_id OR EXISTS(SELECT 1 FROM room_roles WHERE room_id=$1 AND user_id=$2))")
-                .bind(room_id).bind(target).fetch_optional(pool),
-        ).await.map_err(|_| timed_out("Member service timed out"))??;
+            roles::current_role(pool, room_id, target),
+        )
+        .await
+        .map_err(|_| timed_out("Member service timed out"))??;
         let current = current.ok_or_else(|| not_found("Room member not found"))?;
         if !actor_role.can_set_role(current, new_role) {
             return Err(forbidden("Insufficient role permissions"));
