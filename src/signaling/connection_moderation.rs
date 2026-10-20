@@ -22,9 +22,7 @@ pub(super) async fn handle(
         ClientMessage::CloseCam {
             target_participant_id,
         } => {
-            let room_id = current_room_id
-                .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
+            let room_id = joined(current_room_id)?;
             room_manager
                 .close_cam(room_id, participant_id, sender, target_participant_id)
                 .await?;
@@ -34,9 +32,7 @@ pub(super) async fn handle(
             target_participant_id,
             reason,
         } => {
-            let room_id = current_room_id
-                .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
+            let room_id = joined(current_room_id)?;
             validate_durable_reason(reason.as_deref())?;
             room_manager
                 .cam_ban(
@@ -52,9 +48,7 @@ pub(super) async fn handle(
         ClientMessage::CamUnban {
             target_participant_id,
         } => {
-            let room_id = current_room_id
-                .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
+            let room_id = joined(current_room_id)?;
             room_manager
                 .cam_unban(room_id, participant_id, sender, target_participant_id)
                 .await?;
@@ -63,9 +57,7 @@ pub(super) async fn handle(
         ClientMessage::TextMute {
             target_participant_id,
         } => {
-            let room_id = current_room_id
-                .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
+            let room_id = joined(current_room_id)?;
             room_manager
                 .text_mute(room_id, participant_id, sender, target_participant_id)
                 .await?;
@@ -74,9 +66,7 @@ pub(super) async fn handle(
         ClientMessage::TextUnmute {
             target_participant_id,
         } => {
-            let room_id = current_room_id
-                .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
+            let room_id = joined(current_room_id)?;
             room_manager
                 .text_unmute(room_id, participant_id, sender, target_participant_id)
                 .await?;
@@ -87,9 +77,7 @@ pub(super) async fn handle(
             reason,
             report_id,
         } => {
-            let room_id = current_room_id
-                .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
+            let room_id = joined(current_room_id)?;
             validate_reason(reason.as_deref())?;
             let report_id = parse_report_id(report_id.as_deref())?;
             room_manager
@@ -110,9 +98,7 @@ pub(super) async fn handle(
             duration,
             report_id,
         } => {
-            let room_id = current_room_id
-                .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
+            let room_id = joined(current_room_id)?;
             validate_durable_reason(reason.as_deref())?;
             let report_id = parse_report_id(report_id.as_deref())?;
             room_manager
@@ -129,9 +115,7 @@ pub(super) async fn handle(
         }
 
         ClientMessage::Unban { target_user_id } => {
-            let room_id = current_room_id
-                .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
+            let room_id = joined(current_room_id)?;
             room_manager
                 .unban_participant(room_id, participant_id, sender, target_user_id)
                 .await?;
@@ -141,9 +125,7 @@ pub(super) async fn handle(
             target_participant_id,
             role,
         } => {
-            let room_id = current_room_id
-                .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
+            let room_id = joined(current_room_id)?;
             let new_role = *role;
             room_manager
                 .set_participant_role(
@@ -157,9 +139,7 @@ pub(super) async fn handle(
         }
 
         ClientMessage::RequestVoice => {
-            let room_id = current_room_id
-                .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
+            let room_id = joined(current_room_id)?;
             room_manager
                 .request_voice(room_id, participant_id, sender)
                 .await?;
@@ -167,18 +147,14 @@ pub(super) async fn handle(
 
         // === Room management ===
         ClientMessage::UpdateRoomSettings { patch } => {
-            let room_id = current_room_id
-                .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
+            let room_id = joined(current_room_id)?;
             room_manager
                 .update_room_settings(room_id, participant_id, sender, patch.clone())
                 .await?;
         }
 
         ClientMessage::SetTopic { topic } => {
-            let room_id = current_room_id
-                .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
+            let room_id = joined(current_room_id)?;
             room_manager
                 .set_topic(room_id, participant_id, sender, topic.clone())
                 .await?;
@@ -188,9 +164,7 @@ pub(super) async fn handle(
         ClientMessage::AdmitFromLobby {
             target_participant_id,
         } => {
-            let room_id = current_room_id
-                .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
+            let room_id = joined(current_room_id)?;
             room_manager
                 .admit_from_lobby(room_id, participant_id, sender, target_participant_id)
                 .await?;
@@ -199,9 +173,7 @@ pub(super) async fn handle(
         ClientMessage::DenyFromLobby {
             target_participant_id,
         } => {
-            let room_id = current_room_id
-                .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("Not in a room"))?;
+            let room_id = joined(current_room_id)?;
             room_manager
                 .deny_from_lobby(room_id, participant_id, sender, target_participant_id, None)
                 .await?;

@@ -359,6 +359,14 @@ fn begin_join_session(reconnect_token: &mut String) -> String {
     fresh
 }
 
+/// The room this socket has joined, or the refusal every room command gives
+/// a socket that has not.
+fn joined(current_room_id: &Option<RoomId>) -> anyhow::Result<&RoomId> {
+    current_room_id
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("Not in a room"))
+}
+
 fn reconnect_attempt_allowed(current_room_id: Option<&RoomId>, in_lobby: bool) -> bool {
     current_room_id.is_none() && !in_lobby
 }
