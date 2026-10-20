@@ -187,7 +187,7 @@ impl ParticipantMedia {
     /// Dropping a mediasoup handle is synchronous and non-blocking: the crate
     /// fires its close handlers and hands the native close request to its own
     /// executor. Spawning a task per handle would only add scheduler work.
-    pub async fn close_all(&mut self) {
+    pub fn close_all(&mut self) {
         // Consumers depend on transports, so they go first.
         for (id, consumer) in self.consumers.drain() {
             drop(consumer);

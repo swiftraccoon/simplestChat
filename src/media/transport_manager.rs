@@ -304,13 +304,7 @@ impl TransportManager {
 
         // Keep the per-participant lock across creation so disconnect cleanup
         // cannot complete and leave this transport in a detached media state.
-        let mut transport_options = WebRtcTransportOptions::new_with_server(webrtc_server);
-        transport_options.initial_available_outgoing_bitrate =
-            u64::from(config.initial_available_outgoing_bitrate);
-        transport_options.enable_udp = config.enable_udp;
-        transport_options.enable_tcp = config.enable_tcp;
-        transport_options.prefer_udp = config.prefer_udp;
-        transport_options.prefer_tcp = config.prefer_tcp;
+        let transport_options = Self::transport_options(webrtc_server, config);
         let transport = measure_result(Stage::MediaCreateTransport, async {
             let transport = router
                 .create_webrtc_transport(transport_options)
@@ -519,18 +513,28 @@ impl TransportManager {
                 .is_some_and(|transport| transport.id() == expected && !transport.closed())
     }
 
+    /// The options every transport of this server shares: the listener, the
+    /// transports' families and preferences and the starting estimate.
+    fn transport_options(
+        webrtc_server: WebRtcServer,
+        config: &WebRtcTransportConfig,
+    ) -> WebRtcTransportOptions {
+        let mut options = WebRtcTransportOptions::new_with_server(webrtc_server);
+        options.initial_available_outgoing_bitrate =
+            u64::from(config.initial_available_outgoing_bitrate);
+        options.enable_udp = config.enable_udp;
+        options.enable_tcp = config.enable_tcp;
+        options.prefer_udp = config.prefer_udp;
+        options.prefer_tcp = config.prefer_tcp;
+        options
+    }
+
     async fn build_recv_transport(
         router: &Router,
         webrtc_server: WebRtcServer,
         config: &WebRtcTransportConfig,
     ) -> MediaResult<WebRtcTransport> {
-        let mut transport_options = WebRtcTransportOptions::new_with_server(webrtc_server);
-        transport_options.initial_available_outgoing_bitrate =
-            u64::from(config.initial_available_outgoing_bitrate);
-        transport_options.enable_udp = config.enable_udp;
-        transport_options.enable_tcp = config.enable_tcp;
-        transport_options.prefer_udp = config.prefer_udp;
-        transport_options.prefer_tcp = config.prefer_tcp;
+        let transport_options = Self::transport_options(webrtc_server, config);
         measure_result(Stage::MediaCreateTransport, async {
             let transport = router
                 .create_webrtc_transport(transport_options)
