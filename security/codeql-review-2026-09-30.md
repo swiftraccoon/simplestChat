@@ -944,3 +944,28 @@ The 77 commits of 2026-10-19 were rewritten into the 17 thematic commits below a
 | `0dbe170` | fix(web): own a repeated Back while its history traversal is pending | `07049b2` |
 | `0510e91` | refactor(protocol): refuse unknown chat treatments instead of showing them as accent | `b19f471` |
 | `5ad95e3` | refactor: narrow the library's public surface and drop what nothing used | `0fbb7a5` |
+
+## Source re-review: poison-tolerant lock wrappers (2026-10-20)
+
+`f2c9572` replaced every per-site `unwrap_or_else(|e| e.into_inner())` recovery with
+`crate::sync::{Mutex, RwLock}`. The sweep removed lines above reviewed findings in
+`src/metrics.rs` (20 lines), `src/signaling/security_tests.rs` (3) and
+`src/room/dormant_join_tests.rs` (4); no flagged line changed, and each flagged range was
+verified by text at its new line. The dormant-join record lives only in the exceptions
+ledger (its identity came from the run-39348649191 policy report) and was recomputed with
+the same identity function; the others were rebound with the line-mapping tool.
+
+Complete-source SHA256 per rebound file:
+
+- `src/metrics.rs`: `0dd671b4e9e554ed2ca7db5d6de7739552b288d46684db9cbc5ddebb4f87e55b`
+- `src/signaling/security_tests.rs`: `77e2e49ab31070d917d0c1cd93c8049ec8e42b9ef367fc22b1d7064974687466`
+- `src/room/dormant_join_tests.rs`: `b4dc3ef6b41d56e62f5bd76c10356fc7fa99ebceeac4588abdb8abd5ae667bee`
+
+| Alert | Range | Fingerprint |
+|---|---|---|
+| 33 | `src/metrics.rs:1139:1139:13:21` | `codeql:ce9a3344d757493849e7d92070e76e9bff583aced680eb46b1b81d072aff66e3` |
+| 34 | `src/metrics.rs:1143:1143:13:21` | `codeql:14e51d4b7f28c26c00f31dfa87dd814221ce5a49ebeeb7f14dd47c2a82eb115c` |
+| 35 | `src/signaling/security_tests.rs:174:174:149:161` | `codeql:84d47a452fdd2f905bde48ccb8d851c263dd012a25f6174f2b5c5a2f95f69a01` |
+| 63 | `src/signaling/security_tests.rs:605:605:27:52` | `codeql:2b7a354c01f3045e6efc419e5a41e8a8e8a8b273ec28f7f5ab1269f9c449cda4` |
+| 69 | `src/signaling/security_tests.rs:165:165:75:87` | `codeql:3cc46216401cbf199caa79d88880e1616d823da2357b6f7b687808c4272f0cf7` |
+| dormant join | `src/room/dormant_join_tests.rs:102:102:57:79` | `codeql:783d7a6196a1d66de55a9cb7c08e3e3509c315dd71536ca7bfaf4e0be29ff03b` |
