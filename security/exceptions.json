@@ -603,21 +603,21 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:b32429a310d428dd1867181a654bea18670732cc0e3c2cc002fcfb4f115c62a8",
-      "scope": "src/signaling/connection_authorization_tests.rs:400:400:21:62",
+      "fingerprint": "codeql:b147d897a5eaafa9234e8e147a95051b6774e034bd3413c02e16dc0619c3f60b",
+      "scope": "src/signaling/connection_authorization_tests.rs:414:414:21:62",
       "owner": "swiftraccoon",
       "rationale": "The sink is an assertion diagnostic in the cfg(test)-only authorization dispatcher fixture. It formats local synthetic operation results and roles, not a production logger or account credential. The reviewed test calls use fixed fixture participants and messages.",
-      "reachability": "Exact CodeQL 2.27.1 query, primary range/message and whole-file SHA256 b4d2e8203b1e4105d8612bf7d59b94f516530f0cbc75722a2443dfa8a7054b13. At source revision 673c93fb2d09b5cdc932de2871c5493b26eb5186, an earlier nickname test gains real disposable-account setup and cleanup, shifting these dispatcher diagnostics by 39 lines. Both flagged lines and their enclosing authorization test functions are byte-identical to the prior reviewed source. Their rendered-message hashes are retained from actual analysis of revision 428576bda5f78167f169913940dcd9458539b5a4 in run 39096512724; only source identity and line locations are rebound by this static review. No new analysis, general test exclusion or remote dismissal is claimed. Changed source, location or query output requires another review.",
+      "reachability": "Exact CodeQL 2.27.1 query, primary range/message and whole-file SHA256 3f5988a9b094472e6c4e694de310592ae8c00771197b27bb071e058759456aec. At source revision 673c93fb2d09b5cdc932de2871c5493b26eb5186, an earlier nickname test gains real disposable-account setup and cleanup, shifting these dispatcher diagnostics by 39 lines. Both flagged lines and their enclosing authorization test functions are byte-identical to the prior reviewed source. Their rendered-message hashes are retained from actual analysis of revision 428576bda5f78167f169913940dcd9458539b5a4 in run 39096512724; only source identity and line locations are rebound by this static review. No new analysis, general test exclusion or remote dismissal is claimed. Changed source, location or query output requires another review.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-36"
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:0964708386424b46303ca05b80e49e55a7961eb888fa7c2025dfcc40a3b2c1f4",
-      "scope": "src/signaling/connection_authorization_tests.rs:447:447:17:51",
+      "fingerprint": "codeql:d509ae6eef8c777d03b280187969620704a981b5916cb2ea56e9f4db4e14befe",
+      "scope": "src/signaling/connection_authorization_tests.rs:463:463:17:51",
       "owner": "swiftraccoon",
       "rationale": "The sink is an assertion diagnostic in the cfg(test)-only authorization dispatcher fixture. It formats local synthetic operation results and roles, not a production logger or account credential. The reviewed test calls use fixed fixture participants and messages.",
-      "reachability": "Exact CodeQL 2.27.1 query, primary range/message and whole-file SHA256 b4d2e8203b1e4105d8612bf7d59b94f516530f0cbc75722a2443dfa8a7054b13. At source revision 673c93fb2d09b5cdc932de2871c5493b26eb5186, an earlier nickname test gains real disposable-account setup and cleanup, shifting these dispatcher diagnostics by 39 lines. Both flagged lines and their enclosing authorization test functions are byte-identical to the prior reviewed source. Their rendered-message hashes are retained from actual analysis of revision 428576bda5f78167f169913940dcd9458539b5a4 in run 39096512724; only source identity and line locations are rebound by this static review. No new analysis, general test exclusion or remote dismissal is claimed. Changed source, location or query output requires another review.",
+      "reachability": "Exact CodeQL 2.27.1 query, primary range/message and whole-file SHA256 3f5988a9b094472e6c4e694de310592ae8c00771197b27bb071e058759456aec. At source revision 673c93fb2d09b5cdc932de2871c5493b26eb5186, an earlier nickname test gains real disposable-account setup and cleanup, shifting these dispatcher diagnostics by 39 lines. Both flagged lines and their enclosing authorization test functions are byte-identical to the prior reviewed source. Their rendered-message hashes are retained from actual analysis of revision 428576bda5f78167f169913940dcd9458539b5a4 in run 39096512724; only source identity and line locations are rebound by this static review. No new analysis, general test exclusion or remote dismissal is claimed. Changed source, location or query output requires another review.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-37"
     },

@@ -816,15 +816,15 @@
       "toolVersion": "2.27.1",
       "path": "src/signaling/connection_authorization_tests.rs",
       "region": {
-        "start_line": 400,
-        "end_line": 400,
+        "start_line": 414,
+        "end_line": 414,
         "start_column": 21,
         "end_column": 62
       },
       "messageSha256": "675d34a78b7f7de9fe58b30d6a71296864c129f25144c999b769e79b1093a9f9",
-      "sourceSha256": "b4d2e8203b1e4105d8612bf7d59b94f516530f0cbc75722a2443dfa8a7054b13",
-      "scope": "src/signaling/connection_authorization_tests.rs:400:400:21:62",
-      "fingerprint": "codeql:b32429a310d428dd1867181a654bea18670732cc0e3c2cc002fcfb4f115c62a8",
+      "sourceSha256": "3f5988a9b094472e6c4e694de310592ae8c00771197b27bb071e058759456aec",
+      "scope": "src/signaling/connection_authorization_tests.rs:414:414:21:62",
+      "fingerprint": "codeql:b147d897a5eaafa9234e8e147a95051b6774e034bd3413c02e16dc0619c3f60b",
       "number": 36,
       "severity": "high",
       "state": "open",
@@ -832,24 +832,24 @@
       "rationale": "The sink is an assertion diagnostic in the cfg(test)-only authorization dispatcher fixture. It formats local synthetic operation results and roles, not a production logger or account credential. The reviewed test calls use fixed fixture participants and messages.",
       "observedRevision": "9eaabb7b5ab586ca694283afc1550055ef2c3136",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/36",
-      "sourceProvenanceRevision": "76e11139d1da29faedaf6c0a2f938418faee898d",
-      "sourceReviewBaseRevision": "006c9689554519e732b31aef9007cbc4aed83c84",
-      "sourceReviewBlob": "efb169bd13f2d833426378c99a6a600b29966b6b"
+      "sourceProvenanceRevision": "b9726e9f602e14039cdfa77fda336f6c77e2e7be",
+      "sourceReviewBaseRevision": "76e11139d1da29faedaf6c0a2f938418faee898d",
+      "sourceReviewBlob": "6306f3ddeef708a72c1595dffe4ec129d8375371"
     },
     {
       "rule": "rust/cleartext-logging",
       "toolVersion": "2.27.1",
       "path": "src/signaling/connection_authorization_tests.rs",
       "region": {
-        "start_line": 447,
-        "end_line": 447,
+        "start_line": 463,
+        "end_line": 463,
         "start_column": 17,
         "end_column": 51
       },
       "messageSha256": "675d34a78b7f7de9fe58b30d6a71296864c129f25144c999b769e79b1093a9f9",
-      "sourceSha256": "b4d2e8203b1e4105d8612bf7d59b94f516530f0cbc75722a2443dfa8a7054b13",
-      "scope": "src/signaling/connection_authorization_tests.rs:447:447:17:51",
-      "fingerprint": "codeql:0964708386424b46303ca05b80e49e55a7961eb888fa7c2025dfcc40a3b2c1f4",
+      "sourceSha256": "3f5988a9b094472e6c4e694de310592ae8c00771197b27bb071e058759456aec",
+      "scope": "src/signaling/connection_authorization_tests.rs:463:463:17:51",
+      "fingerprint": "codeql:d509ae6eef8c777d03b280187969620704a981b5916cb2ea56e9f4db4e14befe",
       "number": 37,
       "severity": "high",
       "state": "open",
@@ -857,9 +857,9 @@
       "rationale": "The sink is an assertion diagnostic in the cfg(test)-only authorization dispatcher fixture. It formats local synthetic operation results and roles, not a production logger or account credential. The reviewed test calls use fixed fixture participants and messages.",
       "observedRevision": "9eaabb7b5ab586ca694283afc1550055ef2c3136",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/37",
-      "sourceProvenanceRevision": "76e11139d1da29faedaf6c0a2f938418faee898d",
-      "sourceReviewBaseRevision": "006c9689554519e732b31aef9007cbc4aed83c84",
-      "sourceReviewBlob": "efb169bd13f2d833426378c99a6a600b29966b6b"
+      "sourceProvenanceRevision": "b9726e9f602e14039cdfa77fda336f6c77e2e7be",
+      "sourceReviewBaseRevision": "76e11139d1da29faedaf6c0a2f938418faee898d",
+      "sourceReviewBlob": "6306f3ddeef708a72c1595dffe4ec129d8375371"
     },
     {
       "rule": "rust/hard-coded-cryptographic-value",

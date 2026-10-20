@@ -986,3 +986,19 @@ Complete-source SHA256 per rebound file:
 | 60 | `src/room/settings.rs:606:606:33:43` | `codeql:a788626023399a6f68538e55aef7a6cb75f6c0d2b126d8e5bf536236b1f11d18` |
 | 61 | `src/room/settings.rs:608:608:33:43` | `codeql:5f26c9f7ef67b3049aaf4306d7dfeee13b0f3aaaddb91c1d0d8592ada5c1196d` |
 | 62 | `src/room/settings.rs:611:611:33:45` | `codeql:e9f3e8158d018c450064f7671e35a74470d87cfa46f9049c7133c3eee56caa4b` |
+
+## Source re-review: dispatcher context in the authorization tests (2026-10-20)
+
+The dispatcher commit bundled `handle_client_message`'s parameters into `Dispatch`, so the eight
+calls in `src/signaling/connection_authorization_tests.rs` build the struct; the reviewed fixture
+findings in that file moved with the longer calls and no flagged line changed (verified by text at
+the new lines). Rebound with the line-mapping tool.
+
+Complete-source SHA256 per rebound file:
+
+- `src/signaling/connection_authorization_tests.rs`: `3f5988a9b094472e6c4e694de310592ae8c00771197b27bb071e058759456aec`
+
+| Alert | Range | Fingerprint |
+|---|---|---|
+| 36 | `src/signaling/connection_authorization_tests.rs:414:414:21:62` | `codeql:b147d897a5eaafa9234e8e147a95051b6774e034bd3413c02e16dc0619c3f60b` |
+| 37 | `src/signaling/connection_authorization_tests.rs:463:463:17:51` | `codeql:d509ae6eef8c777d03b280187969620704a981b5916cb2ea56e9f4db4e14befe` |
