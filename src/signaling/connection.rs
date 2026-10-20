@@ -37,14 +37,17 @@ use credentials::{
 };
 #[path = "connection_bandwidth.rs"]
 mod bandwidth;
+#[path = "connection_gates.rs"]
+mod gates;
 #[path = "connection_media.rs"]
 mod media;
 #[path = "connection_moderation.rs"]
 mod moderation;
 #[path = "connection_token_bucket.rs"]
 mod token_bucket;
+use super::telemetry::WarningFamily;
 use bandwidth::BandwidthTierUpdate;
-use token_bucket::{TOKEN_US, TokenBucket, ViolationWindow};
+use gates::*;
 
 /// Bounded channel capacity per client.
 /// At 100 msg/s rate limit, 64 slots = 640ms of burst buffer.
@@ -132,101 +135,35 @@ impl Default for ConnectionTiming {
     }
 }
 
-/// Token bucket rate limiter: max tokens (burst capacity).
-const RATE_LIMIT_MAX_TOKENS: u64 = 100;
-/// Token bucket: refill rate in tokens per second.
-const RATE_LIMIT_REFILL_RATE: u64 = 100;
-/// Internal: max tokens in microseconds.
-const MAX_TOKENS_US: u64 = RATE_LIMIT_MAX_TOKENS * TOKEN_US;
-/// Repeated overruns indicate a sender that is ignoring backpressure. Stop
-/// reading it instead of spending an unbounded amount of CPU discarding frames.
-const RATE_LIMIT_VIOLATION_WINDOW: Duration = Duration::from_secs(10);
-const RATE_LIMIT_MAX_VIOLATIONS: u32 = 3;
-
-/// Chat is broadcast work, so it has a much smaller per-connection budget than
-/// ordinary point-to-point signaling.
-const CHAT_RATE_LIMIT_MAX_TOKENS: u64 = 5;
-const CHAT_RATE_LIMIT_REFILL_RATE: u64 = 2;
-const MAX_CHAT_TOKENS_US: u64 = CHAT_RATE_LIMIT_MAX_TOKENS * TOKEN_US;
-
-/// Producer mutations cross the mediasoup IPC boundary and may fan out to
-/// every participant. Keep their budget well below ordinary signaling while
-/// retaining enough burst capacity for microphone/camera/screen-share setup.
-const MEDIA_MUTATION_RATE_LIMIT_MAX_TOKENS: u64 = 8;
-const MEDIA_MUTATION_RATE_LIMIT_REFILL_RATE: u64 = 2;
-const MAX_MEDIA_MUTATION_TOKENS_US: u64 = MEDIA_MUTATION_RATE_LIMIT_MAX_TOKENS * TOKEN_US;
-const MEDIA_MUTATION_VIOLATION_WINDOW: Duration = Duration::from_secs(10);
-const MEDIA_MUTATION_MAX_VIOLATIONS: u32 = 3;
-
-/// A media session needs two transport creations and two DTLS connects during
-/// normal startup. Leave room for immediate ICE recovery, but prevent repeated
-/// transport/ICE requests from turning one socket into an IPC work generator.
-const TRANSPORT_MUTATION_RATE_LIMIT_MAX_TOKENS: u64 = 6;
-const TRANSPORT_MUTATION_RATE_LIMIT_REFILL_RATE: u64 = 1;
-const MAX_TRANSPORT_MUTATION_TOKENS_US: u64 = TRANSPORT_MUTATION_RATE_LIMIT_MAX_TOKENS * TOKEN_US;
-
-/// Permit create, resume and one layer selection for every configured consumer.
-/// Keep sustained churn bounded independently of the initial join burst.
-const CONSUMER_MUTATION_RATE_LIMIT_REFILL_RATE: u64 = 4;
-
-fn consumer_mutation_capacity(consumer_limit: usize) -> u64 {
-    u64::try_from(consumer_limit)
-        .unwrap_or(u64::MAX)
-        .saturating_mul(3 * TOKEN_US)
-}
-
-fn frame_capacity(consumer_capacity: u64) -> u64 {
-    // The outer frame limiter must also admit a full media setup, including
-    // join/capabilities and the independent producer/transport bursts.
-    consumer_capacity
-        .saturating_add(MAX_MEDIA_MUTATION_TOKENS_US)
-        .saturating_add(MAX_TRANSPORT_MUTATION_TOKENS_US)
-        .saturating_add(2 * TOKEN_US)
-        .max(MAX_TOKENS_US)
-}
-
-/// Moderation and room-settings messages can persist state or broadcast to an
-/// entire room. Keep them on a separate, human-scale budget so an authorized
-/// socket cannot turn those operations into DB or fan-out amplification.
-const ADMIN_MUTATION_RATE_LIMIT_MAX_TOKENS: u64 = 20;
-const ADMIN_MUTATION_RATE_LIMIT_REFILL_RATE: u64 = 5;
-const MAX_ADMIN_MUTATION_TOKENS_US: u64 = ADMIN_MUTATION_RATE_LIMIT_MAX_TOKENS * TOKEN_US;
-const ADMIN_MUTATION_VIOLATION_WINDOW: Duration = Duration::from_secs(10);
-const ADMIN_MUTATION_MAX_VIOLATIONS: u32 = 3;
-
-/// A voice request creates action UI for every moderator. It represents state
-/// a human must act on, so sending it more often than this is never useful.
-const VOICE_REQUEST_COOLDOWN: Duration = Duration::from_secs(5);
-
-/// Hashing a new room password is intentionally expensive. A connection may
-/// request it only occasionally, even if it recreates ad-hoc rooms to evade a
-/// per-room cooldown.
-const ROOM_PASSWORD_HASH_COOLDOWN: Duration = Duration::from_secs(30);
-
-#[derive(Default)]
-struct JoinAttemptState {
-    last_attempt: Option<Instant>,
-    password_challenge_room: Option<RoomId>,
-}
-
-impl JoinAttemptState {
-    fn allow(&mut self, room_id: &RoomId, has_password: bool, now: Instant) -> bool {
-        // One response to an issued password challenge belongs to the same
-        // interaction, even when a password manager answers immediately.
-        // RoomManager's shared IP and room/IP budgets still count both requests.
-        let answering_challenge = self
-            .password_challenge_room
-            .take()
-            .is_some_and(|pending| pending == *room_id && has_password);
-        if !answering_challenge
-            && self
-                .last_attempt
-                .is_some_and(|previous| now.duration_since(previous) < Duration::from_secs(1))
-        {
-            return false;
+/// Say why a socket is being closed for exceeding a command budget.
+fn log_command_close(
+    why: CloseReason,
+    participant_id: &ParticipantId,
+    metrics: &ServerMetrics,
+    connection_id: Option<u64>,
+) {
+    match why {
+        CloseReason::MediaMutations(violations) => warn!(
+            %participant_id,
+            media_mutation_violations = violations,
+            "Closing WebSocket after repeated media-mutation rate violations"
+        ),
+        CloseReason::AdminMutations(violations) => warn!(
+            %participant_id,
+            admin_mutation_violations = violations,
+            "Closing WebSocket after repeated room-administration rate violations"
+        ),
+        CloseReason::ChatFlood => {
+            if metrics
+                .telemetry()
+                .warning_should_log(WarningFamily::ChatRate)
+            {
+                warn!(
+                    connection_id,
+                    "Closing WebSocket for chat flooding; further instances counted in metrics"
+                );
+            }
         }
-        self.last_attempt = Some(now);
-        true
     }
 }
 
@@ -239,115 +176,6 @@ fn client_error_response(error: &anyhow::Error) -> ServerMessage {
             message: "Request could not be completed".to_string(),
         }
     }
-}
-
-fn is_media_mutation(message: &ClientMessage) -> bool {
-    matches!(
-        message,
-        ClientMessage::Produce { .. }
-            | ClientMessage::CloseProducer { .. }
-            | ClientMessage::PauseProducer { .. }
-            | ClientMessage::ResumeProducer { .. }
-    )
-}
-
-fn is_transport_mutation(message: &ClientMessage) -> bool {
-    matches!(
-        message,
-        ClientMessage::CreateSendTransport
-            | ClientMessage::CreateRecvTransport
-            | ClientMessage::ReplaceRecvTransport { .. }
-            | ClientMessage::ConnectTransport { .. }
-            | ClientMessage::RestartIce { .. }
-    )
-}
-
-fn is_consumer_mutation(message: &ClientMessage) -> bool {
-    matches!(
-        message,
-        ClientMessage::Consume { .. }
-            | ClientMessage::ResumeConsumer { .. }
-            | ClientMessage::PauseConsumer { .. }
-            | ClientMessage::CloseConsumer { .. }
-            | ClientMessage::SetConsumerPreferredLayers { .. }
-    )
-}
-
-/// Rate state for mediasoup operations that belong to one room/media session.
-///
-/// Unlike frame, chat, and administration limits, these buckets must survive a
-/// grace reconnect because the reconnect deliberately retains the underlying
-/// transports, producers, and consumers. Moving this state through the exact
-/// reconnect-token entry prevents a new socket from restoring full media burst
-/// capacity for an existing session.
-struct MediaSessionRateState {
-    media_mutations: TokenBucket,
-    transport_mutations: TokenBucket,
-    consumer_mutations: TokenBucket,
-    violations: ViolationWindow,
-}
-
-impl MediaSessionRateState {
-    fn new(consumer_limit: usize) -> Self {
-        Self::with_consumer_limit(Instant::now(), consumer_limit)
-    }
-
-    fn with_consumer_limit(now: Instant, consumer_limit: usize) -> Self {
-        Self {
-            media_mutations: TokenBucket::full(
-                now,
-                MEDIA_MUTATION_RATE_LIMIT_REFILL_RATE,
-                MAX_MEDIA_MUTATION_TOKENS_US,
-            ),
-            transport_mutations: TokenBucket::full(
-                now,
-                TRANSPORT_MUTATION_RATE_LIMIT_REFILL_RATE,
-                MAX_TRANSPORT_MUTATION_TOKENS_US,
-            ),
-            consumer_mutations: TokenBucket::full(
-                now,
-                CONSUMER_MUTATION_RATE_LIMIT_REFILL_RATE,
-                consumer_mutation_capacity(consumer_limit),
-            ),
-            violations: ViolationWindow::default(),
-        }
-    }
-
-    fn limit_exceeded(&mut self, message: &ClientMessage, now: Instant) -> bool {
-        if is_media_mutation(message) {
-            !self.media_mutations.try_consume(now)
-        } else if is_transport_mutation(message) {
-            !self.transport_mutations.try_consume(now)
-        } else if is_consumer_mutation(message) {
-            !self.consumer_mutations.try_consume(now)
-        } else {
-            false
-        }
-    }
-
-    fn record_violation(&mut self, now: Instant) -> u32 {
-        self.violations.record(now, MEDIA_MUTATION_VIOLATION_WINDOW)
-    }
-}
-
-fn is_admin_mutation(message: &ClientMessage) -> bool {
-    message.social_request().is_some()
-        || matches!(
-            message,
-            ClientMessage::CloseCam { .. }
-                | ClientMessage::CamBan { .. }
-                | ClientMessage::CamUnban { .. }
-                | ClientMessage::TextMute { .. }
-                | ClientMessage::TextUnmute { .. }
-                | ClientMessage::Kick { .. }
-                | ClientMessage::Ban { .. }
-                | ClientMessage::Unban { .. }
-                | ClientMessage::SetRole { .. }
-                | ClientMessage::UpdateRoomSettings { .. }
-                | ClientMessage::SetTopic { .. }
-                | ClientMessage::AdmitFromLobby { .. }
-                | ClientMessage::DenyFromLobby { .. }
-        )
 }
 
 /// Grace period entry for a disconnected participant
@@ -1023,27 +851,7 @@ async fn handle_connection_with_timing(
         .media_server()
         .config()
         .max_consumers_per_participant;
-    let mut frame_bucket = TokenBucket::full(
-        Instant::now(),
-        RATE_LIMIT_REFILL_RATE,
-        frame_capacity(consumer_mutation_capacity(consumer_limit)),
-    );
-    let mut frame_refusals = ViolationWindow::default();
-    let mut chat_bucket = TokenBucket::full(
-        Instant::now(),
-        CHAT_RATE_LIMIT_REFILL_RATE,
-        MAX_CHAT_TOKENS_US,
-    );
-    let mut media_rate_state = MediaSessionRateState::new(consumer_limit);
-    let mut admin_mutation_bucket = TokenBucket::full(
-        Instant::now(),
-        ADMIN_MUTATION_RATE_LIMIT_REFILL_RATE,
-        MAX_ADMIN_MUTATION_TOKENS_US,
-    );
-    let mut admin_mutation_refusals = ViolationWindow::default();
-    let mut last_room_password_hash: Option<Instant> = None;
-    let mut join_attempts = JoinAttemptState::default();
-    let mut last_voice_request: Option<Instant> = None;
+    let mut gates = CommandGates::new(Instant::now(), consumer_limit);
     let mut credentials_invalidated = false;
     let mut credential_continuity = CredentialContinuity::default();
     let mut next_auth_check = Instant::now();
@@ -1242,12 +1050,13 @@ async fn handle_connection_with_timing(
         // Every inbound frame consumes rate-limit capacity. Limiting only text
         // frames lets binary/control-frame floods bypass connection accounting.
         metrics.inc_messages_received();
-        let now = Instant::now();
-        if !frame_bucket.try_consume(now) {
+        if let FrameAdmission::Refused {
+            violations: rate_limit_violations,
+        } = gates.admit_frame(Instant::now())
+        {
             if matches!(&msg, Message::Close(_)) {
                 break;
             }
-            let rate_limit_violations = frame_refusals.record(now, RATE_LIMIT_VIOLATION_WINDOW);
             if rate_limit_violations == 1 {
                 if metrics
                     .telemetry()
@@ -1415,129 +1224,22 @@ async fn handle_connection_with_timing(
                             }
                             continue;
                         }
-                        let now = Instant::now();
-                        let media_limit_exceeded =
-                            media_rate_state.limit_exceeded(&client_msg, now);
-                        if media_limit_exceeded {
-                            let media_mutation_violations = media_rate_state.record_violation(now);
-                            let _ = reply.send(&ServerMessage::Error {
-                                code: ErrorCode::RateLimited,
-                                message: "Media changes are rate limited".to_string(),
-                            });
-                            if media_mutation_violations >= MEDIA_MUTATION_MAX_VIOLATIONS {
-                                warn!(
-                                    %participant_id,
-                                    media_mutation_violations,
-                                    "Closing WebSocket after repeated media-mutation rate violations"
-                                );
-                                break;
-                            }
-                            continue;
-                        }
-
-                        if is_admin_mutation(&client_msg) && !admin_mutation_bucket.try_consume(now)
-                        {
-                            let admin_mutation_violations = admin_mutation_refusals
-                                .record(now, ADMIN_MUTATION_VIOLATION_WINDOW);
-                            let _ = reply.send(
-                                &client_msg
-                                    .social_error(
-                                        ErrorCode::RateLimited,
-                                        "Room administration changes are rate limited",
-                                    )
-                                    .unwrap_or(ServerMessage::Error {
-                                        code: ErrorCode::RateLimited,
-                                        message: "Room administration changes are rate limited"
-                                            .to_string(),
-                                    }),
-                            );
-                            if admin_mutation_violations >= ADMIN_MUTATION_MAX_VIOLATIONS {
-                                warn!(
-                                    %participant_id,
-                                    admin_mutation_violations,
-                                    "Closing WebSocket after repeated room-administration rate violations"
-                                );
-                                break;
-                            }
-                            continue;
-                        }
-
-                        if matches!(
-                            &client_msg,
-                            ClientMessage::ChatMessage { .. }
-                                | ClientMessage::PrivateMessage { .. }
-                                | ClientMessage::RetryChatMessage(_)
-                        ) && !chat_bucket.try_consume(Instant::now())
-                        {
-                            if metrics
-                                .telemetry()
-                                .warning_should_log(super::telemetry::WarningFamily::ChatRate)
-                            {
-                                warn!(
-                                    connection_id = diagnostic_connection_id,
-                                    "Closing WebSocket for chat flooding; further instances counted in metrics"
-                                );
-                            }
-                            let _ = reply.send(
-                                &client_msg
-                                    .social_error(
-                                        ErrorCode::RateLimited,
-                                        "Chat rate limit exceeded",
-                                    )
-                                    .unwrap_or(ServerMessage::Error {
-                                        code: ErrorCode::RateLimited,
-                                        message: "Chat rate limit exceeded".to_string(),
-                                    }),
-                            );
-                            break;
-                        }
-
-                        if matches!(
-                            &client_msg,
-                            ClientMessage::UpdateRoomSettings {
-                                patch: SettingsPatch {
-                                    password: Some(Some(_)),
-                                    ..
-                                }
-                            }
-                        ) {
-                            let now = Instant::now();
-                            if last_room_password_hash.is_some_and(|previous| {
-                                now.duration_since(previous) < ROOM_PASSWORD_HASH_COOLDOWN
-                            }) {
-                                let _ = reply.send(&ServerMessage::Error {
-                                    code: ErrorCode::RateLimited,
-                                    message: "Room password updates are rate limited".to_string(),
-                                });
+                        match gates.admit(&client_msg, Instant::now()) {
+                            Admission::Allowed => {}
+                            Admission::Refused(response) => {
+                                let _ = reply.send(&response);
                                 continue;
                             }
-                            last_room_password_hash = Some(now);
-                        }
-
-                        if let ClientMessage::JoinRoom {
-                            room_id, password, ..
-                        } = &client_msg
-                            && !join_attempts.allow(room_id, password.is_some(), Instant::now())
-                        {
-                            let _ = reply.send(&ServerMessage::Error {
-                                code: ErrorCode::RateLimited,
-                                message: "Join attempts are rate limited".to_string(),
-                            });
-                            continue;
-                        }
-
-                        if matches!(&client_msg, ClientMessage::RequestVoice) {
-                            let now = Instant::now();
-                            if last_voice_request.is_some_and(|previous| {
-                                now.duration_since(previous) < VOICE_REQUEST_COOLDOWN
-                            }) {
-                                let _ = reply.send(&ServerMessage::Error {
-                                    code: ErrorCode::RateLimited,
-                                    message: "Voice requests are rate limited".to_string(),
-                                });
-                                continue;
+                            Admission::Close { response, why } => {
+                                log_command_close(
+                                    why,
+                                    &participant_id,
+                                    &metrics,
+                                    diagnostic_connection_id,
+                                );
+                                let _ = reply.send(&response);
+                                break;
                             }
-                            last_voice_request = Some(now);
                         }
 
                         // Handle reconnect specially — it must be processed before
@@ -1602,7 +1304,7 @@ async fn handle_connection_with_timing(
                             let fresh_reconnect_token = success.then(|| Uuid::new_v4().to_string());
 
                             if let Some(restored_media_rate_state) = restored_media_rate_state {
-                                media_rate_state = restored_media_rate_state;
+                                gates.restore_media(restored_media_rate_state);
                                 participant_id = *reconnect_id;
                                 current_room_id = Some(reconnect_room.clone());
 
@@ -1733,14 +1435,14 @@ async fn handle_connection_with_timing(
                             && current_room_id.is_some()
                             && reconnect_token != previous_reconnect_token
                         {
-                            media_rate_state = MediaSessionRateState::new(consumer_limit);
+                            gates.reset_media(Instant::now(), consumer_limit);
                         }
 
                         if let Err(e) = result {
                             if e.is::<RoomPasswordRequired>()
                                 && let ClientMessage::JoinRoom { room_id, .. } = &client_msg
                             {
-                                join_attempts.password_challenge_room = Some(room_id.clone());
+                                gates.note_password_challenge(room_id.clone());
                             }
                             // Invalid IDs, stale media state, and authorization
                             // failures are routine client-controlled outcomes.
@@ -1996,7 +1698,7 @@ async fn handle_connection_with_timing(
                     authenticated_version: authenticated_user
                         .as_ref()
                         .map(|claims| claims.auth_version),
-                    media_rate_state,
+                    media_rate_state: gates.into_media_state(),
                     sender: tx.clone(),
                     timer,
                 },
@@ -2648,3 +2350,7 @@ async fn handle_client_message(
 #[cfg(test)]
 #[path = "connection_security_tests.rs"]
 mod security_tests;
+
+#[cfg(test)]
+#[path = "connection_gates_tests.rs"]
+mod gates_tests;
