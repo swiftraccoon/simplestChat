@@ -45,7 +45,7 @@ observations. They complement the Gitleaks detector self-test: a working secret
 scanner does not prove the running application keeps credentials out of logs.
 
 ```sh
-build/with-test-postgres.sh \
+cargo run -q -p xtask -- test-postgres \
   cargo test --locked --lib runtime_canary \
   -- --include-ignored --test-threads=1
 ```
@@ -181,7 +181,10 @@ it does not use a browser, capture media or upload anything. See
 
 ## Disposable PostgreSQL and browser tests
 
-`build/with-test-server.sh` runs `target/debug/simplestChat` as it finds it, so
+The owned test environment is a Rust command: `cargo run -q -p xtask -- test-env`
+wraps `test-postgres` (a disposable loopback cluster) around `test-server` (an owned
+server with a clean configuration), and each runs alone too; `xtask/src/test_env/`
+holds them. `cargo run -q -p xtask -- test-server` runs `target/debug/simplestChat` as it finds it, so
 build first: a stale binary answers a new message type with "Invalid message
 format". The disposable server also opens registration and raises two
 per-address budgets for the five browsers a suite drives from one address
@@ -192,7 +195,7 @@ With PostgreSQL tools on `PATH`, use the owned bootstrap:
 
 ```sh
 cargo build --locked --bin simplestChat
-build/with-test-postgres.sh build/with-test-server.sh \
+cargo run -q -p xtask -- test-env \
   cargo test --locked --workspace -- --include-ignored --test-threads=1
 ```
 
@@ -211,7 +214,7 @@ Build the UI first; do not rebuild assets during a browser run.
 Run native WebAuthn ceremonies with Chromium's owned virtual authenticator:
 
 ```sh
-PASSKEY_E2E=1 build/with-test-postgres.sh build/with-test-server.sh \
+PASSKEY_E2E=1 cargo run -q -p xtask -- test-env \
   node web/e2e/passkey.cjs
 ```
 
@@ -253,7 +256,7 @@ session and verifies that refresh no longer restores it. Passkey-only Account
 controls must retain invitations, session management and forget-device actions:
 
 ```sh
-PASSKEY_E2E=1 build/with-test-postgres.sh build/with-test-server.sh \
+PASSKEY_E2E=1 cargo run -q -p xtask -- test-env \
   node web/e2e/passkey-management.cjs
 ```
 
@@ -281,7 +284,7 @@ Exercise call outcomes with real browser decoding on owned loopback services:
 
 ```sh
 CALL_OUTCOME_E2E=1 IMPAIR_SCRIPT=none IMPAIRED_PROFILES=baseline \
-  build/with-test-postgres.sh build/with-test-server.sh \
+  cargo run -q -p xtask -- test-env \
   node web/e2e/impaired-network.cjs
 ```
 
@@ -299,7 +302,7 @@ PMs through Messages with live delivery and recipient isolation. Run against the
 freshly rebuilt server and production UI with an owned disposable database:
 
 ```sh
-COMMUNITY_E2E=1 build/with-test-postgres.sh build/with-test-server.sh \
+COMMUNITY_E2E=1 cargo run -q -p xtask -- test-env \
   node web/e2e/community.cjs
 ```
 
@@ -328,7 +331,7 @@ automated browser and database checks above.
 Run the opt-in 20-minute session soak against a fresh local database and server:
 
 ```sh
-SESSION_SOAK_E2E=1 build/with-test-postgres.sh build/with-test-server.sh \
+SESSION_SOAK_E2E=1 cargo run -q -p xtask -- test-env \
   npm --prefix web/e2e run test:session-soak
 ```
 
@@ -371,7 +374,7 @@ See the [browser guide](../web/e2e/README.md#silent-ui-review) for scope and art
 After installing the browser tooling and building the UI:
 
 ```sh
-ACCESSIBILITY_E2E=1 build/with-test-postgres.sh build/with-test-server.sh \
+ACCESSIBILITY_E2E=1 cargo run -q -p xtask -- test-env \
   node web/e2e/accessibility.cjs
 ```
 
@@ -402,7 +405,7 @@ export DATABASE_URL='postgres://test_owner@127.0.0.1:15434/simplestchat_test?ssl
 export DISPOSABLE_TEST_DATABASE=1
 
 cargo build --locked --bin simplestChat
-build/with-test-server.sh cargo test --locked --workspace -- --include-ignored --test-threads=1
+cargo run -q -p xtask -- test-server cargo test --locked --workspace -- --include-ignored --test-threads=1
 ```
 
 Trust authentication is only for this disposable loopback cluster. The helper
@@ -834,7 +837,7 @@ delivery correctness; it does not set a performance budget.
 With the server/UI built and Chromium installed:
 
 ```sh
-LIFECYCLE_E2E=1 build/with-test-postgres.sh build/with-test-server.sh \
+LIFECYCLE_E2E=1 cargo run -q -p xtask -- test-env \
   node web/e2e/lifecycle.cjs
 ```
 

@@ -12,7 +12,7 @@ Complete the pinned Rust and OpenSSL setup in [development](development.md).
 The focused command creates and stops only its own local PostgreSQL cluster:
 
 ```sh
-build/with-test-postgres.sh \
+cargo run -q -p xtask -- test-postgres \
   cargo test --locked --lib authorization_ -- \
   --include-ignored --test-threads=1
 ```

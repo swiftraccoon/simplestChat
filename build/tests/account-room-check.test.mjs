@@ -174,7 +174,7 @@ test('the hosted account-room experiment is manual only and publishes an explici
   assert.ok(job, 'manual account-room job exists');
   assert.match(job, /github\.event_name == 'workflow_dispatch' && inputs\.only == 'account-room'/);
   assert.match(job, /postgres:18\.6-bookworm@sha256:/);
-  assert.match(job, /build\/with-test-server\.sh node build\/account-room-check\.mjs/);
+  assert.match(job, /cargo run --locked -q -p xtask -- test-server node build\/account-room-check\.mjs/);
   assert.match(job, /account-room-report\.json/);
   assert.doesNotMatch(job, /path:.*\*|accounts\.json|generator\.log/);
 });

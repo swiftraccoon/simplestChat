@@ -67,7 +67,7 @@ async function fixture(t, { installedWeb = true, installedOpenSsl = true, instal
   const toolchainBin = path.join(root, 'pinned toolchain', 'bin');
   const dispatcher = path.join(temporary, 'fake-tool.cjs');
   const log = path.join(temporary, 'commands.jsonl');
-  const helperNames = ['check-python.sh', 'check.sh', 'helper with spaces.sh', 'run-local.sh', 'with-test-server.sh'];
+  const helperNames = ['check-python.sh', 'check.sh', 'helper with spaces.sh', 'run-local.sh'];
   await Promise.all([
     mkdir(path.join(root, 'build/tests'), { recursive: true }),
     mkdir(path.join(root, 'load_tests'), { recursive: true }),

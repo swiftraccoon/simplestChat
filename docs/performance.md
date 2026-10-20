@@ -681,7 +681,7 @@ then run a release build:
 cargo build --locked --release --bin simplestChat
 PERFORMANCE_E2E=1 RUN_LABEL=local-sample \
   TEST_SERVER_BINARY="$PWD/target/release/simplestChat" \
-  build/with-test-server.sh node web/e2e/performance.cjs
+  cargo run -q -p xtask -- test-server node web/e2e/performance.cjs
 ```
 
 `browser-performance.json` records page startup, main-thread time, JS heap and
@@ -696,7 +696,7 @@ With release server/UI builds and the pinned Chromium tooling installed:
 
 ```sh
 UI_STRESS_E2E=1 TEST_SERVER_BINARY="$PWD/target/release/simplestChat" \
-  build/with-test-postgres.sh build/with-test-server.sh \
+  cargo run -q -p xtask -- test-env \
   npm --prefix web/e2e run test:stress
 ```
 

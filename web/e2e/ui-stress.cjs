@@ -1,5 +1,5 @@
 /**
- * Text-only, real-server UI stress. Run through build/with-test-server.sh with
+ * Text-only, real-server UI stress. Run through `cargo run -q -p xtask -- test-server` with
  * UI_STRESS_E2E=1 and a disposable database. UI_STRESS_PROFILE=smoke validates the
  * harness; only the default full profile rolls over the 300-message history.
  * No production origins, rate-limit overrides, fake replies, or capture devices.

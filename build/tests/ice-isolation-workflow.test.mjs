@@ -16,7 +16,7 @@ test('ICE isolation stays manual and runs both engines in one macOS job without 
   assert.deepEqual([...workflow.split('\njobs:\n')[1].matchAll(/^  ([\w-]+):$/gm)].map(match => match[1]), ['same-host']);
   assert.match(workflow, /runs-on: macos-26/);
   assert.match(workflow, /timeout-minutes: 15/);
-  assert.doesNotMatch(workflow, /matrix:|services:|cargo |with-test-server|with-test-postgres|community\.cjs/);
+  assert.doesNotMatch(workflow, /matrix:|services:|cargo |xtask -- test-|community\.cjs/);
 });
 
 test('ICE isolation retains read-only permissions and the existing pinned tooling', () => {

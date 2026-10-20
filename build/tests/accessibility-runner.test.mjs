@@ -191,6 +191,6 @@ test('failed accessibility launch exits nonzero with a private failure report', 
 test('CI invokes the accessibility smoke through owned services and preserves its own artifacts', async () => {
   const workflow = await readFile(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8');
   assert.match(workflow, /ACCESSIBILITY_E2E: ['"]1['"]/);
-  assert.match(workflow, /build\/with-test-server\.sh node web\/e2e\/accessibility\.cjs/);
+  assert.match(workflow, /cargo run --locked -q -p xtask -- test-server node web\/e2e\/accessibility\.cjs/);
   assert.match(workflow, /name: accessibility-e2e/);
 });

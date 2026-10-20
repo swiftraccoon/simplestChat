@@ -170,7 +170,7 @@ class VerifiedCacheTests(unittest.TestCase):
             "web/tests/layer-cap-cases.json",
             "build/shutdown-smoke.mjs",
             "build/diagnostics-smoke.mjs",
-            "build/with-test-server.sh",
+            "xtask/src/test_env/server.rs",
             "build/tests/fixture-server.mjs",
             "build/tests/nested/helper.test.mjs",
             "build/tests/shared-fixture.json",

@@ -16,7 +16,7 @@ npm --prefix web ci --ignore-scripts
 npm --prefix web run build
 npm --prefix web/e2e ci --ignore-scripts
 npm --prefix web/e2e run install:browser
-build/with-test-server.sh npm --prefix web/e2e test
+cargo run -q -p xtask -- test-server npm --prefix web/e2e test
 ```
 
 On Linux, install system dependencies with
@@ -39,7 +39,7 @@ Defaults and overrides:
 | `TEST_ANNOUNCE_IP`   | `127.0.0.1`; optional interface-owned IPv4            |
 
 The helper exports `BASE_URL`, `COMMUNITY_E2E=1` and `TEST_DATABASE_URL`.
-`build/with-test-server.sh true` checks migration/startup only. To use an
+`cargo run -q -p xtask -- test-server true` checks migration/startup only. To use an
 already-running disposable loopback server:
 
 ```sh
@@ -130,14 +130,14 @@ renewed video decoding.
 
 ```sh
 AUTH_CROSS_TAB_E2E=1 E2E_BROWSER=firefox \
-  build/with-test-server.sh node web/e2e/auth-cross-tab.cjs
+  cargo run -q -p xtask -- test-server node web/e2e/auth-cross-tab.cjs
 ROOM_CONTROL_E2E=1 E2E_BROWSER=firefox \
-  build/with-test-server.sh node web/e2e/room-control-confirmation.cjs
+  cargo run -q -p xtask -- test-server node web/e2e/room-control-confirmation.cjs
 MEDIA_CONTINUITY_E2E=1 E2E_BROWSER=chromium \
   TEST_ANNOUNCE_IP="$(node build/test-media-ip.mjs)" \
-  build/with-test-server.sh node web/e2e/media-continuity.cjs
+  cargo run -q -p xtask -- test-server node web/e2e/media-continuity.cjs
 CHAT_RETRY_E2E=1 \
-  build/with-test-server.sh node web/e2e/chat-retry.cjs
+  cargo run -q -p xtask -- test-server node web/e2e/chat-retry.cjs
 ```
 
 Native Firefox media requires an owned non-loopback IPv4 candidate in this
@@ -229,8 +229,8 @@ fresh server:
 ```sh
 npm --prefix web/e2e run install:browsers
 test_media_ip="$(node build/test-media-ip.mjs)"
-TEST_ANNOUNCE_IP="$test_media_ip" E2E_BROWSER=firefox build/with-test-server.sh npm --prefix web/e2e test
-TEST_ANNOUNCE_IP="$test_media_ip" E2E_BROWSER=webkit build/with-test-server.sh npm --prefix web/e2e test
+TEST_ANNOUNCE_IP="$test_media_ip" E2E_BROWSER=firefox cargo run -q -p xtask -- test-server npm --prefix web/e2e test
+TEST_ANNOUNCE_IP="$test_media_ip" E2E_BROWSER=webkit cargo run -q -p xtask -- test-server npm --prefix web/e2e test
 ```
 
 These engines may need LAN rather than loopback media candidates. The helper
@@ -315,7 +315,7 @@ To run the same suite through an owned local TURN relay, install coturn **4.18.0
 
 ```sh
 TEST_ANNOUNCE_IP="$(node build/test-media-ip.mjs)" TURN_E2E=1 E2E_BROWSER=chromium \
-  build/with-test-postgres.sh build/with-test-server.sh npm --prefix web/e2e test
+  cargo run -q -p xtask -- test-env npm --prefix web/e2e test
 ```
 
 Repeat with `E2E_BROWSER=firefox` and, on macOS, `webkit`. The helper generates its
@@ -406,7 +406,7 @@ default WebKit host-address privacy policy; the manual baseline remains availabl
 With the same pinned browser tooling, built UI and disposable-service setup:
 
 ```sh
-ACCESSIBILITY_E2E=1 build/with-test-postgres.sh build/with-test-server.sh \
+ACCESSIBILITY_E2E=1 cargo run -q -p xtask -- test-env \
   node web/e2e/accessibility.cjs
 ```
 
@@ -437,7 +437,7 @@ After building the server/UI and installing Chromium, run the optional gate with
 fresh owned services:
 
 ```sh
-LIFECYCLE_E2E=1 build/with-test-postgres.sh build/with-test-server.sh \
+LIFECYCLE_E2E=1 cargo run -q -p xtask -- test-env \
   node web/e2e/lifecycle.cjs
 ```
 
@@ -474,7 +474,7 @@ Build the release server/UI and install Chromium, then run with fresh services:
 
 ```sh
 UI_STRESS_E2E=1 TEST_SERVER_BINARY="$PWD/target/release/simplestChat" \
-  build/with-test-postgres.sh build/with-test-server.sh \
+  cargo run -q -p xtask -- test-env \
   npm --prefix web/e2e run test:stress
 ```
 
@@ -514,7 +514,7 @@ With the disposable database still running and the UI already built:
 cargo build --locked --release --bin simplestChat
 PERFORMANCE_E2E=1 RUN_LABEL=local-sample \
   TEST_SERVER_BINARY="$PWD/target/release/simplestChat" \
-  build/with-test-server.sh node web/e2e/performance.cjs
+  cargo run -q -p xtask -- test-server node web/e2e/performance.cjs
 ```
 
 `browser-performance.json` records navigation/paint, Chromium task/heap samples,

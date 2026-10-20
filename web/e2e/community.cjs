@@ -91,7 +91,7 @@ const report = {
 };
 // All fixture accounts share one loopback address. Keep their combined workload
 // within the real server guards instead of weakening limits or retrying writes.
-// Limits match the clean environment in with-test-server.sh and router defaults.
+// Limits match the harness's clean server environment (xtask test-server) and router defaults.
 const HTTP_WINDOW_MS = 61_000;
 const MAX_HTTP_PACING_MS = 90_000;
 const httpLanes = new Map(

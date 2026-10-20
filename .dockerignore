@@ -75,6 +75,9 @@ xtask/**
 !xtask/src/
 xtask/src/**
 !xtask/src/*.rs
+!xtask/src/test_env/
+xtask/src/test_env/**
+!xtask/src/test_env/*.rs
 !web/
 web/**
 !web/package.json

@@ -4608,7 +4608,10 @@ name = "xtask"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "serde",
+ "serde_json",
  "syn 3.0.6",
+ "tokio",
 ]
 
 [[package]]

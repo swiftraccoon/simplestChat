@@ -293,7 +293,7 @@ jobs:
           npm --prefix web/e2e exec -- playwright install --with-deps chromium
 
       - name: Migrate disposable test database with the real server
-        run: build/with-test-server.sh true
+        run: cargo run --locked -q -p xtask -- test-server true
 
       # The twenty-minute soak covers a real token refresh and expiry. Stopping
       # PostgreSQL for eight seconds at the midpoint exercises the bounded
@@ -322,7 +322,7 @@ jobs:
             echo "PostgreSQL started again at $(date -u +%FT%TZ)"
           ) &
           restarter=$!
-          build/with-test-server.sh npm --prefix web/e2e run test:session-soak
+          cargo run --locked -q -p xtask -- test-server npm --prefix web/e2e run test:session-soak
           wait "${restarter}"
 
       - name: Preserve soak diagnostics
@@ -387,7 +387,7 @@ jobs:
           SERVER_REVISION: ${{ github.sha }}
           TEST_SERVER_BINARY: ${{ github.workspace }}/target/release/simplestChat
           TEST_GENERATOR_BINARY: ${{ github.workspace }}/target/release/load_test
-        run: build/with-test-server.sh node build/account-room-check.mjs
+        run: cargo run --locked -q -p xtask -- test-server node build/account-room-check.mjs
 
       - name: Preserve bounded account-room evidence
         if: ${{ !cancelled() }}

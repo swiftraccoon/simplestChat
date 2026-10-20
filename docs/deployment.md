@@ -892,7 +892,7 @@ Run its focused tests with the PostgreSQL tools from the
 [database test setup](testing.md) on `PATH`:
 
 ```sh
-build/with-test-postgres.sh ops/ansible/.venv/bin/python -m unittest discover \
+cargo run -q -p xtask -- test-postgres ops/ansible/.venv/bin/python -m unittest discover \
   -s ops/ansible/tests -p test_issue_account_recovery.py -v
 ```
 

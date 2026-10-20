@@ -92,7 +92,7 @@ test('server fixture excludes relay ports but preserves explicit occupied-port o
     assert,
     path,
     repoRoot: '/owned-fixture',
-    helper: '/owned-fixture/helper',
+    xtask: '/owned-fixture/xtask',
     fixture: '/owned-fixture/server',
     os: { tmpdir: () => '/owned-fixture' },
     process: { execPath: '/owned-node', env: { PATH: '/owned-bin' } },

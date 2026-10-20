@@ -103,12 +103,18 @@ jobs:
           shellcheck ops/ansible/files/*.sh
           python -m unittest discover -s ops/ansible/tests -v
 
+      - name: Install the pinned Rust toolchain for the test harness
+        if: steps.verified.outputs.cache-hit != 'true'
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable (2026-10-01)
+        with:
+          toolchain: 1.99.0
+
       - name: Verify operational alert history in disposable PostgreSQL
         if: steps.verified.outputs.cache-hit != 'true'
         run: |
           postgres_bindir="$(pg_config --bindir)"
           export PATH="${postgres_bindir}:$PATH"
-          build/with-test-postgres.sh python -m unittest discover \
+          cargo run --locked -q -p xtask -- test-postgres python -m unittest discover \
             -s ops/ansible/tests -p test_monitoring_database.py -v
 
       - name: Verify isolated backup restoration with pinned PostgreSQL
@@ -119,7 +125,7 @@ jobs:
           docker pull docker.io/library/postgres:18.6-bookworm@sha256:3725f4e2499eef5134592b3b4ab79a543ed7f8e533b05b5b637af926630f6650
           postgres_bindir="$(pg_config --bindir)"
           export PATH="${postgres_bindir}:$PATH"
-          build/with-test-postgres.sh python -m unittest discover \
+          cargo run --locked -q -p xtask -- test-postgres python -m unittest discover \
             -s ops/ansible/tests -p test_restore_database.py -v
 
       - name: Verify server migration data preservation in disposable PostgreSQL
@@ -127,7 +133,7 @@ jobs:
         run: |
           postgres_bindir="$(pg_config --bindir)"
           export PATH="${postgres_bindir}:$PATH"
-          build/with-test-postgres.sh python -m unittest discover \
+          cargo run --locked -q -p xtask -- test-postgres python -m unittest discover \
             -s ops/ansible/tests -p test_migrate_public.py -v
 
       - name: Preserve isolated restore failure diagnostics
@@ -409,7 +415,7 @@ jobs:
 
       - name: Migrate disposable test database with the real server
         if: steps.verified.outputs.cache-hit != 'true'
-        run: build/with-test-server.sh true
+        run: cargo run --locked -q -p xtask -- test-server true
 
       # Include all PostgreSQL tests, not only the default unit suite.
       # Serialize native media-worker and room-session integration tests.
@@ -424,7 +430,7 @@ jobs:
           RUST_LOG: warn
           E2E_ARTIFACTS: ${{ runner.temp }}/media-smoke
         run: |
-          build/with-test-server.sh target/debug/load_test \
+          cargo run --locked -q -p xtask -- test-server target/debug/load_test \
             --server ws://127.0.0.1:3119/ws --clients 4 --rooms 1 --mode conference \
             --ramp-up 2 --warmup 10 --duration 8 --deadline-grace 20 \
             --output-dir "${E2E_ARTIFACTS}" --run-label ci-media-smoke \
@@ -643,7 +649,7 @@ jobs:
           key: ${{ steps.verified.outputs.cache-primary-key }}
 
       - name: Migrate disposable test database with the real server
-        run: build/with-test-server.sh true
+        run: cargo run --locked -q -p xtask -- test-server true
 
       - name: Build UI and install pinned browser tooling
         id: browser-tooling
@@ -662,7 +668,7 @@ jobs:
         run: |
           for browser in chromium firefox; do
             E2E_BROWSER="$browser" E2E_ARTIFACTS="${RUNNER_TEMP}/auth-lifecycle-${browser}" \
-              build/with-test-server.sh node web/e2e/auth-lifecycle.cjs
+              cargo run --locked -q -p xtask -- test-server node web/e2e/auth-lifecycle.cjs
           done
 
       - name: Preserve authentication lifecycle diagnostics
@@ -682,7 +688,7 @@ jobs:
         run: |
           for browser in chromium firefox; do
             E2E_BROWSER="$browser" E2E_ARTIFACTS="${RUNNER_TEMP}/account-tabs-${browser}" \
-              build/with-test-server.sh node web/e2e/auth-cross-tab.cjs
+              cargo run --locked -q -p xtask -- test-server node web/e2e/auth-cross-tab.cjs
           done
 
       - name: Confirm room controls and retain failed edits
@@ -693,7 +699,7 @@ jobs:
         run: |
           for browser in chromium firefox; do
             E2E_BROWSER="$browser" E2E_ARTIFACTS="${RUNNER_TEMP}/room-controls-${browser}" \
-              build/with-test-server.sh node web/e2e/room-control-confirmation.cjs
+              cargo run --locked -q -p xtask -- test-server node web/e2e/room-control-confirmation.cjs
           done
 
       - name: Real passkey registration and discoverable authentication
@@ -702,7 +708,7 @@ jobs:
         env:
           PASSKEY_E2E: "1"
           E2E_ARTIFACTS: ${{ runner.temp }}/passkey
-        run: build/with-test-server.sh node web/e2e/passkey.cjs
+        run: cargo run --locked -q -p xtask -- test-server node web/e2e/passkey.cjs
 
       - name: Preserve passkey verification diagnostics
         if: ${{ !cancelled() && matrix.group == 'accounts' && !env.ACT }}
@@ -719,7 +725,7 @@ jobs:
         env:
           PASSKEY_E2E: "1"
           E2E_ARTIFACTS: ${{ runner.temp }}/passkey-management
-        run: build/with-test-server.sh node web/e2e/passkey-management.cjs
+        run: cargo run --locked -q -p xtask -- test-server node web/e2e/passkey-management.cjs
 
       - name: Preserve passkey management diagnostics
         if: ${{ !cancelled() && matrix.group == 'accounts' && !env.ACT }}
@@ -783,7 +789,7 @@ jobs:
         timeout-minutes: 8
         env:
           E2E_ARTIFACTS: ${{ runner.temp }}/community-e2e
-        run: build/with-test-server.sh npm --prefix web/e2e test
+        run: cargo run --locked -q -p xtask -- test-server npm --prefix web/e2e test
 
       - name: Media continuity and device controls in Chromium and Firefox
         if: matrix.group == 'media'
@@ -796,7 +802,7 @@ jobs:
           test_media_ip="$(node build/test-media-ip.mjs)"
           for browser in chromium firefox; do
             TEST_ANNOUNCE_IP="$test_media_ip" E2E_BROWSER="$browser" E2E_ARTIFACTS="${RUNNER_TEMP}/media-continuity-${browser}" \
-              build/with-test-server.sh node web/e2e/media-continuity.cjs
+              cargo run --locked -q -p xtask -- test-server node web/e2e/media-continuity.cjs
           done
 
       - name: Reconcile interrupted chat sends without duplicate delivery
@@ -805,7 +811,7 @@ jobs:
         env:
           CHAT_RETRY_E2E: "1"
           E2E_ARTIFACTS: ${{ runner.temp }}/chat-retry
-        run: build/with-test-server.sh node web/e2e/chat-retry.cjs
+        run: cargo run --locked -q -p xtask -- test-server node web/e2e/chat-retry.cjs
 
       - name: Read presentations through constrained and recovered browser media
         if: ${{ !cancelled() && matrix.group == 'media' && steps.browser-tooling.outcome == 'success' }}
@@ -817,7 +823,7 @@ jobs:
           test_media_ip="$(node build/test-media-ip.mjs)"
           for browser in chromium firefox; do
             TEST_ANNOUNCE_IP="$test_media_ip" E2E_BROWSER="$browser" E2E_ARTIFACTS="${RUNNER_TEMP}/presentation-${browser}" \
-              build/with-test-server.sh node web/e2e/presentation.cjs
+              cargo run --locked -q -p xtask -- test-server node web/e2e/presentation.cjs
           done
 
       - name: Preserve presentation quality diagnostics
@@ -858,7 +864,7 @@ jobs:
           IMPAIR_SCRIPT: none
           IMPAIRED_PROFILES: baseline
           E2E_ARTIFACTS: ${{ runner.temp }}/call-outcomes
-        run: build/with-test-server.sh node web/e2e/impaired-network.cjs
+        run: cargo run --locked -q -p xtask -- test-server node web/e2e/impaired-network.cjs
 
       - name: Preserve call outcome diagnostics
         if: ${{ !cancelled() && matrix.group == 'media' && !env.ACT }}
@@ -878,7 +884,7 @@ jobs:
           E2E_ARTIFACTS: ${{ runner.temp }}/ui-stress
           SERVER_REVISION: ${{ github.sha }}
           FRONTEND_REVISION: ${{ github.sha }}
-        run: build/with-test-server.sh npm --prefix web/e2e run test:stress
+        run: cargo run --locked -q -p xtask -- test-server npm --prefix web/e2e run test:stress
 
       - name: Preserve UI stress diagnostics
         if: ${{ !cancelled() && matrix.group == 'stress' && !env.ACT }}
@@ -895,7 +901,7 @@ jobs:
         env:
           ACCESSIBILITY_E2E: "1"
           E2E_ARTIFACTS: ${{ runner.temp }}/accessibility-e2e
-        run: build/with-test-server.sh node web/e2e/accessibility.cjs
+        run: cargo run --locked -q -p xtask -- test-server node web/e2e/accessibility.cjs
 
       - name: Preserve accessibility diagnostics
         if: ${{ !cancelled() && matrix.group == 'accounts' && !env.ACT }}

@@ -102,7 +102,7 @@ jobs:
       - name: Check test helpers
         # TLS fixtures need the authenticated OpenSSL CLI, not macOS LibreSSL.
         run: |
-          bash -n build/with-test-postgres.sh build/with-test-server.sh
+          cargo build --locked -q -p xtask
           node --test build/tests/*.test.mjs load_tests/benchmark-local.test.mjs
 
       - name: Build server with both authenticated crypto libraries
@@ -129,7 +129,7 @@ jobs:
           TEST_BROWSER_HTTPS: '1'
           WEBKIT_TEST_NETWORK: ${{ matrix.browser == 'webkit' && '1' || '' }}
           E2E_ARTIFACTS: ${{ runner.temp }}/browser-compatibility
-        run: build/with-test-postgres.sh build/with-test-server.sh npm --prefix web/e2e test
+        run: cargo run --locked -q -p xtask -- test-env npm --prefix web/e2e test
 
       - name: Isolate native receive-only ICE gathering
         if: ${{ !cancelled() && (steps.community.outcome == 'success' || steps.community.outcome == 'failure') }}
@@ -149,7 +149,7 @@ jobs:
           TEST_BROWSER_HTTPS: '1'
           WEBKIT_TEST_NETWORK: ${{ matrix.browser == 'webkit' && '1' || '' }}
           E2E_ARTIFACTS: ${{ runner.temp }}/browser-compatibility/presentation
-        run: build/with-test-postgres.sh build/with-test-server.sh node web/e2e/presentation.cjs
+        run: cargo run --locked -q -p xtask -- test-env node web/e2e/presentation.cjs
 
       - name: Preserve browser, presentation and database diagnostics
         if: ${{ !cancelled() }}

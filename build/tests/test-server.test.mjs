@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import dgram from 'node:dgram';
 import { once } from 'node:events';
 import { existsSync } from 'node:fs';
@@ -11,7 +11,10 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import test from 'node:test';
 
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
-const helper = path.join(repoRoot, 'build/with-test-server.sh');
+// The harness is Rust: build it once with the caller's toolchain, then run the
+// binary under each test's reduced environment.
+execFileSync('cargo', ['build', '-q', '-p', 'xtask'], { cwd: repoRoot, stdio: 'inherit' });
+const xtask = path.join(repoRoot, 'target/debug/xtask');
 const fixture = fileURLToPath(new URL('./fixture-server.mjs', import.meta.url));
 const pinnedOpenSSL = process.env.OPENSSL_DIR || path.join(repoRoot, 'target/openssl-4.0.3');
 // Controller-only unit tests can supply the OS crypto fixture explicitly; the
@@ -59,7 +62,7 @@ async function run(t, environment = {}, command = [process.execPath, '-e', 'proc
   const turnPort = environment.TURN_E2E === '1' ? environment.TEST_TURN_PORT ?? '34790' : undefined;
   const serverPort = environment.TEST_SERVER_PORT ?? await unusedPort('tcp', [turnPort, environment.TEST_HTTPS_PORT]);
   const mediaPort = environment.TEST_MEDIA_PORT ?? await unusedPort('udp', [turnPort]);
-  const child = spawn('bash', [helper, ...command], {
+  const child = spawn(xtask, ['test-server', ...command], {
     cwd: repoRoot,
     env: {
       PATH: process.env.PATH,
@@ -114,16 +117,6 @@ async function shutdownFixture(t, behavior) {
 async function announcementFixture(t, expectedAddress) {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'simplestchat-announcement-test.'));
   t.after(() => rm(directory, { recursive: true, force: true }));
-  const networkMock = path.join(directory, 'network-interfaces.cjs');
-  // The mock applies to the Node preflight, not the env-isolated fake server.
-  // No production bypass or test-only environment hook is added to the helper.
-  await writeFile(networkMock, `
-    require('node:os').networkInterfaces = () => ({
-      loopback: [{ address: '127.0.0.1', family: 'IPv4', internal: true }],
-      fixture: [{ address: '192.0.2.73', family: 'IPv4', internal: false }],
-      unavailable: undefined,
-    });
-  `);
   const server = path.join(directory, 'announcement-server.mjs');
   await writeFile(server, `#!/usr/bin/env node
     import assert from 'node:assert/strict';
@@ -135,7 +128,13 @@ async function announcementFixture(t, expectedAddress) {
     await import(${JSON.stringify(pathToFileURL(fixture).href)});
   `);
   await chmod(server, 0o755);
-  return { NODE_OPTIONS: `--require ${JSON.stringify(networkMock)}`, TEST_SERVER_BINARY: server };
+  return { TEST_SERVER_BINARY: server };
+}
+
+/** An IPv4 address an interface of this machine owns, beyond loopback. */
+function interfaceAddress() {
+  return Object.values(os.networkInterfaces()).flat()
+    .find(address => address?.family === 'IPv4' && !address.internal)?.address;
 }
 
 function provenanceCommand(expectedAddress) {
@@ -256,7 +255,7 @@ test('HTTPS preflight rejects remote port overrides and preserves an occupied li
 test('helper rejects empty, nonliteral, and unassigned media announcements before spawning', async t => {
   const environment = await announcementFixture(t, 'must-not-launch');
   for (const address of ['', 'localhost', '127.0.0.1.example.test', '::1', '127.1', ' 127.0.0.1',
-    '0.0.0.0', '127.0.0.2', '203.0.113.77']) {
+    '0.0.0.0', '127.0.0.2', '203.0.113.77', '192.0.2.73']) {
     const result = await run(t, { ...environment, TEST_ANNOUNCE_IP: address });
     assert.equal(result.status, 2, `${JSON.stringify(address)}: ${result.output}`);
     assert.match(result.output, /Refusing TEST_ANNOUNCE_IP/);
@@ -273,8 +272,10 @@ test('helper retains the loopback default and accepts explicit loopback announce
 });
 
 test('helper accepts an interface-owned IPv4 announcement without widening HTTP or database access', async t => {
-  const environment = await announcementFixture(t, '192.0.2.73');
-  const result = await run(t, { ...environment, TEST_ANNOUNCE_IP: '192.0.2.73' }, provenanceCommand('192.0.2.73'));
+  const address = interfaceAddress();
+  if (!address) return t.skip('no non-loopback IPv4 interface on this machine');
+  const environment = await announcementFixture(t, address);
+  const result = await run(t, { ...environment, TEST_ANNOUNCE_IP: address }, provenanceCommand(address));
   assert.equal(result.status, 0, result.output);
   const log = await readFile(path.join(result.artifacts, 'server.log'), 'utf8');
   const pid = Number(log.match(/FIXTURE_PID=(\d+)/)?.[1]);
@@ -524,40 +525,8 @@ for (const statusBeforeCleanup of [0, 23]) {
   });
 }
 
-for (const [pid, waitStatus, interpretation] of [
-  ['', '', 'not_waited'],
-  ['12345', '127', 'unavailable_or_exit_127'],
-]) {
-  test(`cleanup rejects ${interpretation} without inventing successful evidence`, async t => {
-    const artifacts = await mkdtemp(path.join(os.tmpdir(), 'simplestchat-cleanup-status-test.'));
-    t.after(() => rm(artifacts, { recursive: true, force: true }));
-    const source = await readFile(helper, 'utf8');
-    const start = source.indexOf('cleanup() {');
-    const end = source.indexOf('\ntrap cleanup EXIT', start);
-    assert.ok(start >= 0 && end > start);
-    // Exercise the real cleanup function with unavailable shell bookkeeping.
-    // All kill/wait operations are intercepted; the fixture PID is never signaled.
-    const child = spawn('/bin/bash', ['-c', `${source.slice(start, end)}
-      server_pid="$1"
-      test_artifacts="$2"
-      fixture_wait_status="$3"
-      kill() { return 1; }
-      wait() { return "$fixture_wait_status"; }
-      true
-      cleanup
-    `, 'cleanup-fixture', pid, artifacts, waitStatus], { env: { PATH: process.env.PATH } });
-    let output = '';
-    child.stdout.on('data', chunk => { output += chunk; });
-    child.stderr.on('data', chunk => { output += chunk; });
-    const [status, signal] = await once(child, 'close');
-    assert.equal(signal, null, output);
-    assert.equal(status, 1, output);
-    const report = await shutdownReport({ artifacts });
-    assert.equal(report.waitStatus, waitStatus === '' ? null : Number(waitStatus));
-    assert.equal(report.waitStatusInterpretation, interpretation);
-    assert.equal(report.passed, false);
-  });
-}
+// Shutdown interpretation and the pass rule for unavailable bookkeeping are
+// unit tests in xtask/src/test_env/server.rs.
 
 test('helper reports an early server exit as failure', async t => {
   const result = await run(t, { TEST_SERVER_BINARY: '/usr/bin/false' });
