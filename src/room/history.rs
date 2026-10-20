@@ -20,6 +20,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::ids::{MessageId, ParticipantId, RoomId};
 use sqlx::{PgConnection, PgPool, types::Json as SqlJson};
+use sqlx::{Postgres, Transaction};
 use uuid::Uuid;
 
 pub(crate) const PM_RETENTION_DAYS: i32 = 90;
@@ -290,6 +291,64 @@ async fn lock_private_accounts(
 fn private_accounts_allow(sender: &ChatAccount, recipient: &ChatAccount) -> bool {
     sender.allows_private_messages_from(recipient.id)
         && recipient.allows_private_messages_from(sender.id)
+}
+
+/// One account's private-messaging write. Both accounts and the session row
+/// stay share-locked until the commit, so a logout, a credential reset or a
+/// preference change lands after this write or refuses it, never between its
+/// steps: the session is validated once, and the accepted claim's expiry
+/// checked again at the commit.
+struct PrivateWrite {
+    tx: Transaction<'static, Postgres>,
+    sender: ChatAccount,
+    recipient: ChatAccount,
+    conversation: String,
+}
+
+impl PrivateWrite {
+    async fn begin(
+        pool: &PgPool,
+        claims: &Claims,
+        own: Uuid,
+        peer: Uuid,
+        lock_error: impl FnOnce(RoomError) -> AuthError,
+    ) -> Result<Self, AuthError> {
+        let mut tx = pool.begin().await.map_err(routes::database_error)?;
+        let (sender, recipient) = lock_private_accounts(&mut tx, own, peer)
+            .await
+            .map_err(lock_error)?;
+        if sender.auth_version != claims.auth_version {
+            return Err(AuthError::InvalidToken);
+        }
+        validate_private_session(&mut tx, claims, own).await?;
+        Ok(Self {
+            tx,
+            sender,
+            recipient,
+            conversation: private_conversation(own, peer),
+        })
+    }
+
+    /// Whether both accounts accept private messages from each other.
+    fn allowed(&self) -> bool {
+        private_accounts_allow(&self.sender, &self.recipient)
+    }
+
+    /// Serialize with the conversation's other writers.
+    async fn lock_conversation(&mut self) -> Result<(), AuthError> {
+        sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1,29))")
+            .bind(&self.conversation)
+            .execute(&mut *self.tx)
+            .await
+            .map_err(routes::database_error)?;
+        Ok(())
+    }
+
+    /// Commit while the accepted claim is still unexpired.
+    async fn commit(self, claims: &Claims) -> Result<(), AuthError> {
+        account::ensure_unexpired_claim(claims)?;
+        self.tx.commit().await.map_err(routes::database_error)
+    }
 }
 
 /// A successful return means the durable write committed before live delivery.
@@ -823,29 +882,22 @@ async fn save_private_edit(
     account::ensure_unexpired_claim(claims)?;
     let own: Uuid = claims.sub.parse().map_err(|_| AuthError::InvalidToken)?;
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
-    let mut tx = pool.begin().await.map_err(routes::database_error)?;
-    let (sender, recipient) = lock_private_accounts(&mut tx, own, peer)
-        .await
-        .map_err(edit_error)?;
-    if sender.auth_version != claims.auth_version {
-        return Err(AuthError::InvalidToken);
-    }
-    validate_private_session(&mut tx, claims, own).await?;
-    if !private_accounts_allow(&sender, &recipient) {
+    let mut write = PrivateWrite::begin(pool, claims, own, peer, edit_error).await?;
+    if !write.allowed() {
         return Err(AuthError::InvalidInput("Private message unavailable"));
     }
-    let conversation = private_conversation(own, peer);
-    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1,29))")
-        .bind(&conversation)
-        .execute(&mut *tx)
-        .await
-        .map_err(routes::database_error)?;
-    validate_private_session(&mut tx, claims, own).await?;
-    let edited = edit_in_transaction(&mut tx, &conversation, own, None, message, &request)
-        .await
-        .map_err(edit_error)?;
-    validate_private_session(&mut tx, claims, own).await?;
-    tx.commit().await.map_err(routes::database_error)?;
+    write.lock_conversation().await?;
+    let edited = edit_in_transaction(
+        &mut write.tx,
+        &write.conversation,
+        own,
+        None,
+        message,
+        &request,
+    )
+    .await
+    .map_err(edit_error)?;
+    write.commit(claims).await?;
     Ok(edited)
 }
 
@@ -955,35 +1007,21 @@ async fn save_private_reaction(
         return Err(AuthError::InvalidInput("Private reaction unavailable"));
     }
     let pool = server.db_pool().ok_or(AuthError::NotConfigured)?;
-    let mut tx = pool.begin().await.map_err(routes::database_error)?;
-    let (sender, recipient) = lock_private_accounts(&mut tx, own, peer)
-        .await
-        .map_err(edit_error)?;
-    if sender.auth_version != claims.auth_version {
-        return Err(AuthError::InvalidToken);
-    }
-    validate_private_session(&mut tx, claims, own).await?;
-    if !private_accounts_allow(&sender, &recipient) {
+    let mut write = PrivateWrite::begin(pool, claims, own, peer, edit_error).await?;
+    if !write.allowed() {
         return Err(AuthError::InvalidInput("Private reaction unavailable"));
     }
-    let conversation = private_conversation(own, peer);
-    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1,29))")
-        .bind(&conversation)
-        .execute(&mut *tx)
-        .await
-        .map_err(routes::database_error)?;
-    validate_private_session(&mut tx, claims, own).await?;
+    write.lock_conversation().await?;
     let saved = set_private_reaction_in_transaction(
-        &mut tx,
-        &conversation,
+        &mut write.tx,
+        &write.conversation,
         message,
         &ParticipantId::from(own),
         &request,
     )
     .await
     .map_err(edit_error)?;
-    validate_private_session(&mut tx, claims, own).await?;
-    tx.commit().await.map_err(routes::database_error)?;
+    write.commit(claims).await?;
     Ok(saved)
 }
 
@@ -1320,20 +1358,13 @@ pub(super) async fn save_private_message(
     } else {
         None
     };
-    let conversation = private_conversation(own, peer);
-    let mut tx = pool.begin().await.map_err(routes::database_error)?;
-    let (sender, recipient) = lock_private_accounts(&mut tx, own, peer)
-        .await
-        .map_err(|error| match error {
-            RoomError::Refused(_) => AuthError::InvalidInput("Private message unavailable"),
-            RoomError::Database(error) => routes::database_error(error),
-        })?;
-    if sender.auth_version != claims.auth_version {
-        return Err(AuthError::InvalidToken);
-    }
-    validate_private_session(&mut tx, claims, own).await?;
+    let mut write = PrivateWrite::begin(pool, claims, own, peer, |error| match error {
+        RoomError::Refused(_) => AuthError::InvalidInput("Private message unavailable"),
+        RoomError::Database(error) => routes::database_error(error),
+    })
+    .await?;
     if context.is_none()
-        && !private_relationship(&mut tx, own, peer)
+        && !private_relationship(&mut write.tx, own, peer)
             .await
             .map_err(route_error)?
     {
@@ -1345,17 +1376,12 @@ pub(super) async fn save_private_message(
     // across multiple sessions. Retries do not consume a second send slot.
     sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1::text,17))")
         .bind(own.to_string())
-        .execute(&mut *tx)
+        .execute(&mut *write.tx)
         .await
         .map_err(routes::database_error)?;
-    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1,29))")
-        .bind(&conversation)
-        .execute(&mut *tx)
-        .await
-        .map_err(routes::database_error)?;
-    validate_private_session(&mut tx, claims, own).await?;
+    write.lock_conversation().await?;
     let existing:Option<SqlJson<ChatEntry>>=sqlx::query_scalar("SELECT body FROM chat_messages WHERE conversation=$1 AND sender_session=$2 AND client_message_id=$3 AND expires_at>now()")
-        .bind(&conversation).bind(own).bind(&request.client_message_id).fetch_optional(&mut *tx).await.map_err(routes::database_error)?;
+        .bind(&write.conversation).bind(own).bind(&request.client_message_id).fetch_optional(&mut *write.tx).await.map_err(routes::database_error)?;
     if let Some(existing) = existing {
         if (existing.0.edited_at.is_none() && existing.0.content != request.content)
             || existing.0.reply_to.as_ref().map(|reply| reply.message_id)
@@ -1370,21 +1396,20 @@ pub(super) async fn save_private_message(
         {
             return Err(AuthError::InvalidInput("Message ID was already used"));
         }
-        validate_private_session(&mut tx, claims, own).await?;
         return Ok((conversation_message(existing.0, true), false));
     }
-    if !private_accounts_allow(&sender, &recipient) {
+    if !write.allowed() {
         return Err(AuthError::InvalidInput("Private message unavailable"));
     }
     let recent:i64=sqlx::query_scalar("SELECT count(*) FROM (SELECT 1 FROM chat_messages WHERE sender_account=$1 AND sender_session=$1 AND recipient_account IS NOT NULL AND sent_at>now()-interval '1 minute' LIMIT 30) recent")
-        .bind(own).fetch_one(&mut *tx).await.map_err(routes::database_error)?;
+        .bind(own).fetch_one(&mut *write.tx).await.map_err(routes::database_error)?;
     if recent >= 30 {
         return Err(AuthError::RateLimited);
     }
     let reply_to = if let Some(id) = request.reply_to {
         let original: SqlJson<ChatEntry> = sqlx::query_scalar(
             "SELECT body FROM chat_messages WHERE conversation=$1 AND id=$2 AND expires_at>now() AND body->>'removedAt' IS NULL",
-        ).bind(&conversation).bind(id).fetch_one(&mut *tx).await.map_err(edit_error)?;
+        ).bind(&write.conversation).bind(id).fetch_one(&mut *write.tx).await.map_err(edit_error)?;
         Some(crate::signaling::protocol::ChatReplyRef {
             message_id: MessageId::from(id),
             participant_id: original.0.participant_id,
@@ -1395,18 +1420,18 @@ pub(super) async fn save_private_message(
         None
     };
     let style = crate::signaling::protocol::ChatStyle {
-        color: sender.chat_color,
-        style: crate::signaling::protocol::ChatStyleKind::named(&sender.chat_style)
+        color: write.sender.chat_color.clone(),
+        style: crate::signaling::protocol::ChatStyleKind::named(&write.sender.chat_style)
             .unwrap_or_default(),
     };
     let message = ChatEntry {
         message_id: MessageId::random(),
         client_message_id: request.client_message_id,
         participant_id: ParticipantId::from(own),
-        participant_name: sender.display_name.clone(),
+        participant_name: write.sender.display_name.clone(),
         recipient_id: Some(ParticipantId::from(peer)),
         account_conversation: Some(true),
-        recipient_name: Some(recipient.display_name.clone()),
+        recipient_name: Some(write.recipient.display_name.clone()),
         content: request.content,
         attachments: Vec::new(),
         sent_at: Utc::now(),
@@ -1418,7 +1443,7 @@ pub(super) async fn save_private_message(
         reactions: Vec::new(),
     };
     let saved = insert_message(
-        &mut tx,
+        &mut write.tx,
         None,
         own,
         true,
@@ -1428,8 +1453,7 @@ pub(super) async fn save_private_message(
     )
     .await
     .map_err(route_error)?;
-    validate_private_session(&mut tx, claims, own).await?;
-    tx.commit().await.map_err(routes::database_error)?;
+    write.commit(claims).await?;
     Ok((saved, true))
 }
 
