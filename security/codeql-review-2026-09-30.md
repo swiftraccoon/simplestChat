@@ -1024,3 +1024,18 @@ Complete-source SHA256 per rebound file:
 | 58 | `src/auth/routes.rs:917:917:44:68` | `codeql:3d5ebf0b5b9ec321b5cd1428c7eeeab26f4ab05f125e153a97230607339ff7eb` |
 | 63 | `src/signaling/security_tests.rs:607:607:27:52` | `codeql:547c379b4f460c2b18e43a1a21bf503ebb0c6d1c05da004a948fc83936d22ef0` |
 | 69 | `src/signaling/security_tests.rs:165:165:75:87` | `codeql:23b59d1e0c5e5141a087ea9d81cd51a7425f7226249d83e6b7a354dd8cdd6053` |
+
+## Source re-review: the password policy module (2026-10-20)
+
+The password policy moved out of `src/auth/routes.rs` into `auth::password_policy` (its
+constants, the length check and `validate_new_password`, with the policy test), so the reviewed
+dummy-hash assertion in the routes tests moved up again; the flagged line is byte-identical to the
+reviewed source (verified by text at the new line). Rebound with the line-mapping tool.
+
+Complete-source SHA256 per rebound file:
+
+- `src/auth/routes.rs`: `ca98f66fe94bc2446d8cee402922af9c49949c2bea3374e4d639ff419f63a4a0`
+
+| Alert | Range | Fingerprint |
+|---|---|---|
+| 58 | `src/auth/routes.rs:881:881:44:68` | `codeql:800f362cbc29f67b88046d0e444d90f0991126d3201a2e5054a4676e62af5dfe` |

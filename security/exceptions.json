@@ -823,11 +823,11 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:3d5ebf0b5b9ec321b5cd1428c7eeeab26f4ab05f125e153a97230607339ff7eb",
-      "scope": "src/auth/routes.rs:917:917:44:68",
+      "fingerprint": "codeql:800f362cbc29f67b88046d0e444d90f0991126d3201a2e5054a4676e62af5dfe",
+      "scope": "src/auth/routes.rs:881:881:44:68",
       "owner": "swiftraccoon",
       "rationale": "This cfg(test) assertion verifies the timing-equalization dummy password hash does not match an arbitrary public input. It provisions no account and is outside runtime credential selection.",
-      "reachability": "Exact CodeQL 2.27.1 query, primary range/message and complete-file SHA256 5dddd8fc78a3079d2b844c450087ae8741e97491c6c221bcdb9b45032cc21f44. Source re-reviewed at revision 4481e7f0e33969fcc822fe33919834d3ab962279: the flagged line and complete enclosing cfg(test) function are byte-identical to the actual analyzed source 82157a895bc710a3c382e356dac6ab3ad6e662a7. The added account-request permit helper shifts this unchanged dummy-hash test by eight lines. The rendered-message identity is retained from successful original analysis in run 39097391051; only source identity and line location are rebound by this static review. No new analysis, broader test/query exclusion or remote dismissal is claimed. Changed source, location or query output requires another review.",
+      "reachability": "Exact CodeQL 2.27.1 query, primary range/message and complete-file SHA256 ca98f66fe94bc2446d8cee402922af9c49949c2bea3374e4d639ff419f63a4a0. Source re-reviewed at revision 4481e7f0e33969fcc822fe33919834d3ab962279: the flagged line and complete enclosing cfg(test) function are byte-identical to the actual analyzed source 82157a895bc710a3c382e356dac6ab3ad6e662a7. The added account-request permit helper shifts this unchanged dummy-hash test by eight lines. The rendered-message identity is retained from successful original analysis in run 39097391051; only source identity and line location are rebound by this static review. No new analysis, broader test/query exclusion or remote dismissal is claimed. Changed source, location or query output requires another review.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-58"
     },

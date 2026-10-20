@@ -1366,15 +1366,15 @@
       "toolVersion": "2.27.1",
       "path": "src/auth/routes.rs",
       "region": {
-        "start_line": 917,
-        "end_line": 917,
+        "start_line": 881,
+        "end_line": 881,
         "start_column": 44,
         "end_column": 68
       },
       "messageSha256": "d6798191115c7adefc7f5ee1f720512e328f10329b99fba8c42e1a015eaa1afb",
-      "sourceSha256": "5dddd8fc78a3079d2b844c450087ae8741e97491c6c221bcdb9b45032cc21f44",
-      "scope": "src/auth/routes.rs:917:917:44:68",
-      "fingerprint": "codeql:3d5ebf0b5b9ec321b5cd1428c7eeeab26f4ab05f125e153a97230607339ff7eb",
+      "sourceSha256": "ca98f66fe94bc2446d8cee402922af9c49949c2bea3374e4d639ff419f63a4a0",
+      "scope": "src/auth/routes.rs:881:881:44:68",
+      "fingerprint": "codeql:800f362cbc29f67b88046d0e444d90f0991126d3201a2e5054a4676e62af5dfe",
       "number": 58,
       "severity": "critical",
       "state": "open",
@@ -1382,9 +1382,9 @@
       "rationale": "This cfg(test) assertion verifies the timing-equalization dummy password hash does not match an arbitrary public input. It provisions no account and is outside runtime credential selection.",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/58",
-      "sourceProvenanceRevision": "f3c1193ab814314f0a9b8ea1a02465f4af6b11e7",
-      "sourceReviewBaseRevision": "2d8250182c3080d7a9c53829f0bf294ce37bca5a",
-      "sourceReviewBlob": "2039bb8d86488ac4cef21b768db43d6a547e0770"
+      "sourceProvenanceRevision": "b33aaa57c5bd9388d2785d8b6dbf07bf32d179b7",
+      "sourceReviewBaseRevision": "f3c1193ab814314f0a9b8ea1a02465f4af6b11e7",
+      "sourceReviewBlob": "d44e26cc1b87825a169d9863881876802b007a31"
     },
     {
       "rule": "rust/hard-coded-cryptographic-value",
