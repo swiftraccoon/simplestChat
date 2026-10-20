@@ -1039,3 +1039,21 @@ Complete-source SHA256 per rebound file:
 | Alert | Range | Fingerprint |
 |---|---|---|
 | 58 | `src/auth/routes.rs:881:881:44:68` | `codeql:800f362cbc29f67b88046d0e444d90f0991126d3201a2e5054a4676e62af5dfe` |
+
+## Source re-review: the fixed security headers table (2026-10-20)
+
+The response policy commit replaced the middleware's seven header inserts in `src/signaling/mod.rs`
+with one `SECURITY_HEADERS` table and appended a Caddyfile header test to
+`src/signaling/security_tests.rs`, so both reviewed files changed; every flagged line is
+byte-identical to the reviewed source (verified by text at the new lines). Rebound with the
+line-mapping tool.
+
+Complete-source SHA256 per rebound file:
+
+- `src/signaling/security_tests.rs`: `fd3e73c082dfc1e6befaa2ac26eb24cf86804255062240912ee3556c7320b0ae`
+
+| Alert | Range | Fingerprint |
+|---|---|---|
+| 35 | `src/signaling/security_tests.rs:174:174:149:161` | `codeql:b96f08b24fe4ff252e9b8d806692aaed103bfcf2e8bb368e18a6c538f54bcce6` |
+| 63 | `src/signaling/security_tests.rs:607:607:27:52` | `codeql:812fd21cf1ff627beca2f93af8a8f1a518cdb4e8d815bfae87c61103105fba29` |
+| 69 | `src/signaling/security_tests.rs:165:165:75:87` | `codeql:ca53d4797be56dda81bb54bf21392febfea9bd265d1e5213b3754603aeab5f6a` |
