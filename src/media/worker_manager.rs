@@ -5,15 +5,15 @@
 use crate::media::config::{MediaConfig, clamped_socket_buffer, kernel_socket_buffer_max};
 use crate::media::types::{MediaError, MediaResult};
 use crate::saturation::{WorkerThreadInfo, WorkerThreads};
+use crate::sync::{Mutex, RwLock as SyncRwLock};
 use anyhow::Result;
 use mediasoup::prelude::*;
 use mediasoup::types::data_structures::SocketFlags;
 use mediasoup::worker::WorkerId;
 use std::collections::{HashMap, HashSet};
 use std::net::{IpAddr, Ipv4Addr};
-use std::sync::RwLock as StdRwLock;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
 use tokio::sync::{Mutex as TokioMutex, RwLock};
 use tracing::{debug, error, info, warn};
 
@@ -55,7 +55,7 @@ pub(crate) struct RouterLoadReservation {
 
 impl Drop for RouterLoadReservation {
     fn drop(&mut self) {
-        let mut load = self.worker_load.lock().unwrap_or_else(|e| e.into_inner());
+        let mut load = self.worker_load.lock();
         // A retired worker's entry may already have been removed. Its ID is
         // never reused, so this cannot decrement a replacement worker's load.
         if let Some(count) = load.get_mut(&self.worker_id) {
@@ -74,7 +74,7 @@ pub struct WorkerManager {
     // No native IPC or await is allowed while it is held.
     worker_load: Arc<Mutex<HashMap<WorkerId, usize>>>,
     webrtc_servers: Arc<RwLock<HashMap<WorkerId, WebRtcServer>>>,
-    worker_consumer_counts: Arc<StdRwLock<HashMap<WorkerId, Arc<AtomicUsize>>>>,
+    worker_consumer_counts: Arc<SyncRwLock<HashMap<WorkerId, Arc<AtomicUsize>>>>,
     config: Arc<MediaConfig>,
     mediasoup_worker_manager: Arc<mediasoup::worker_manager::WorkerManager>,
     /// Worker deaths are queued here for the room manager's recovery task.
@@ -82,10 +82,10 @@ pub struct WorkerManager {
     death_events: Mutex<Option<tokio::sync::mpsc::Receiver<WorkerId>>>,
     /// Each worker's position in the pool and native thread, for the
     /// per-worker CPU monitor.
-    worker_threads: StdRwLock<HashMap<WorkerId, WorkerThreadInfo>>,
+    worker_threads: SyncRwLock<HashMap<WorkerId, WorkerThreadInfo>>,
     /// Workers the saturation monitor reports as CPU saturated: placement
     /// avoids them and rooms on them refuse fresh joins.
-    saturated_workers: StdRwLock<HashSet<WorkerId>>,
+    saturated_workers: SyncRwLock<HashSet<WorkerId>>,
 }
 
 /// The listeners of one worker's WebRtcServer: UDP on its dedicated port and,
@@ -276,23 +276,20 @@ impl WorkerManager {
             workers: Arc::new(RwLock::new(workers)),
             worker_load: Arc::new(Mutex::new(worker_load)),
             webrtc_servers: Arc::new(RwLock::new(webrtc_servers)),
-            worker_consumer_counts: Arc::new(StdRwLock::new(worker_consumer_counts)),
+            worker_consumer_counts: Arc::new(SyncRwLock::new(worker_consumer_counts)),
             config,
             mediasoup_worker_manager,
             deaths,
             death_events: Mutex::new(Some(death_events)),
-            worker_threads: StdRwLock::new(worker_threads),
-            saturated_workers: StdRwLock::new(HashSet::new()),
+            worker_threads: SyncRwLock::new(worker_threads),
+            saturated_workers: SyncRwLock::new(HashSet::new()),
         })
     }
 
     /// Marks a worker as CPU saturated or not; the saturation monitor owns the
     /// decision, placement and admission only read it.
     pub fn set_worker_saturated(&self, worker_id: WorkerId, saturated: bool) {
-        let mut set = self
-            .saturated_workers
-            .write()
-            .unwrap_or_else(|e| e.into_inner());
+        let mut set = self.saturated_workers.write();
         if saturated {
             set.insert(worker_id);
         } else {
@@ -301,18 +298,12 @@ impl WorkerManager {
     }
 
     pub fn worker_saturated(&self, worker_id: WorkerId) -> bool {
-        self.saturated_workers
-            .read()
-            .unwrap_or_else(|e| e.into_inner())
-            .contains(&worker_id)
+        self.saturated_workers.read().contains(&worker_id)
     }
 
     /// The death queue, handed once to the recovery task that owns it.
     pub fn take_death_events(&self) -> Option<tokio::sync::mpsc::Receiver<WorkerId>> {
-        self.death_events
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .take()
+        self.death_events.lock().take()
     }
 
     /// Queues a death exactly as the native callback does, for recovery tests.
@@ -436,16 +427,9 @@ impl WorkerManager {
         let workers = self.workers.read().await;
         let servers = self.webrtc_servers.read().await;
 
-        let mut load = self.worker_load.lock().unwrap_or_else(|e| e.into_inner());
-        let consumer_counts = self
-            .worker_consumer_counts
-            .read()
-            .unwrap_or_else(|e| e.into_inner());
-        let saturated = self
-            .saturated_workers
-            .read()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone();
+        let mut load = self.worker_load.lock();
+        let consumer_counts = self.worker_consumer_counts.read();
+        let saturated = self.saturated_workers.read().clone();
         let candidates = |skip_saturated: bool| {
             workers
                 .iter()
@@ -509,10 +493,7 @@ impl WorkerManager {
 
     /// Gets the consumer counter for a specific worker (for real-time tracking)
     pub fn get_consumer_counter(&self, worker_id: WorkerId) -> Option<Arc<AtomicUsize>> {
-        let counts = self
-            .worker_consumer_counts
-            .read()
-            .unwrap_or_else(|e| e.into_inner());
+        let counts = self.worker_consumer_counts.read();
         counts.get(&worker_id).cloned()
     }
 
@@ -533,10 +514,7 @@ impl WorkerManager {
 
     /// Gets pending plus registered router counts for allocation tie-breaking.
     pub async fn get_load_distribution(&self) -> HashMap<WorkerId, usize> {
-        self.worker_load
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone()
+        self.worker_load.lock().clone()
     }
 
     /// Checks if a worker is still alive
@@ -613,23 +591,17 @@ impl WorkerManager {
         servers.remove(&dead_worker_id);
         servers.insert(new_worker_id, webrtc_server);
         {
-            let mut load = self.worker_load.lock().unwrap_or_else(|e| e.into_inner());
+            let mut load = self.worker_load.lock();
             load.remove(&dead_worker_id);
             load.insert(new_worker_id, 0);
         }
         {
-            let mut counts = self
-                .worker_consumer_counts
-                .write()
-                .unwrap_or_else(|e| e.into_inner());
+            let mut counts = self.worker_consumer_counts.write();
             counts.remove(&dead_worker_id);
             counts.insert(new_worker_id, Arc::new(AtomicUsize::new(0)));
         }
         {
-            let mut threads = self
-                .worker_threads
-                .write()
-                .unwrap_or_else(|e| e.into_inner());
+            let mut threads = self.worker_threads.write();
             threads.remove(&dead_worker_id);
             threads.insert(
                 new_worker_id,
@@ -640,10 +612,7 @@ impl WorkerManager {
                 },
             );
         }
-        self.saturated_workers
-            .write()
-            .unwrap_or_else(|e| e.into_inner())
-            .remove(&dead_worker_id);
+        self.saturated_workers.write().remove(&dead_worker_id);
         drop(old_worker);
 
         info!(
@@ -667,22 +636,10 @@ impl WorkerManager {
         // Workers are automatically closed when dropped
         workers.clear();
 
-        self.worker_load
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clear();
-        self.worker_consumer_counts
-            .write()
-            .unwrap_or_else(|e| e.into_inner())
-            .clear();
-        self.worker_threads
-            .write()
-            .unwrap_or_else(|e| e.into_inner())
-            .clear();
-        self.saturated_workers
-            .write()
-            .unwrap_or_else(|e| e.into_inner())
-            .clear();
+        self.worker_load.lock().clear();
+        self.worker_consumer_counts.write().clear();
+        self.worker_threads.write().clear();
+        self.saturated_workers.write().clear();
 
         info!("All workers shut down successfully");
         Ok(())
@@ -719,13 +676,8 @@ pub(crate) fn reserve_worker_ports(count: u16) -> u16 {
 
 impl WorkerThreads for WorkerManager {
     fn worker_threads(&self) -> Vec<WorkerThreadInfo> {
-        let mut threads: Vec<WorkerThreadInfo> = self
-            .worker_threads
-            .read()
-            .unwrap_or_else(|e| e.into_inner())
-            .values()
-            .copied()
-            .collect();
+        let mut threads: Vec<WorkerThreadInfo> =
+            self.worker_threads.read().values().copied().collect();
         threads.sort_by_key(|thread| thread.index);
         threads
     }
@@ -912,9 +864,9 @@ mod tests {
         });
         let mut context = std::task::Context::from_waker(std::task::Waker::noop());
         assert!(std::future::Future::poll(future.as_mut(), &mut context).is_pending());
-        assert_eq!(worker_load.lock().unwrap()[&worker_id], 1);
+        assert_eq!(worker_load.lock()[&worker_id], 1);
         drop(future);
-        assert_eq!(worker_load.lock().unwrap()[&worker_id], 0);
+        assert_eq!(worker_load.lock()[&worker_id], 0);
     }
 
     #[test]
@@ -927,12 +879,12 @@ mod tests {
             worker_load: Arc::clone(&worker_load),
         };
         {
-            let mut load = worker_load.lock().unwrap();
+            let mut load = worker_load.lock();
             load.remove(&old_id);
             load.insert(new_id, 4);
         }
         drop(reservation);
-        assert_eq!(*worker_load.lock().unwrap(), HashMap::from([(new_id, 4)]));
+        assert_eq!(*worker_load.lock(), HashMap::from([(new_id, 4)]));
     }
 
     #[test]

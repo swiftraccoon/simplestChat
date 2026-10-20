@@ -7,8 +7,9 @@
 
 use super::{Room, RoomManager, ServerMessage, TokioRwLock, try_send_essential};
 use crate::ids::RoomId;
+use crate::sync::Mutex;
 use std::future::Future;
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::OwnedMutexGuard;
 use tracing::{Instrument, warn};
@@ -33,7 +34,7 @@ impl RoomControl {
 
     /// End the exclusion now, before the owned task finishes.
     pub(crate) fn release(&self) {
-        drop(self.0.lock().unwrap_or_else(PoisonError::into_inner).take());
+        drop(self.0.lock().take());
     }
 }
 pub(super) const PERSISTENCE_TIMEOUT: Duration = Duration::from_secs(15);
@@ -97,7 +98,6 @@ impl RoomManager {
             anyhow::ensure!(
                 self.rooms
                     .read()
-                    .unwrap_or_else(|error| error.into_inner())
                     .get(room_id)
                     .is_some_and(|current| Arc::ptr_eq(current, &room)),
                 "Room is no longer active"
@@ -177,7 +177,6 @@ impl RoomManager {
             let mapped = self
                 .rooms
                 .read()
-                .unwrap_or_else(|error| error.into_inner())
                 .get(room_id)
                 .is_some_and(|current| Arc::ptr_eq(current, room_lock));
             if !mapped || room.deleting {
@@ -187,7 +186,6 @@ impl RoomManager {
             room.policy_revision = room.policy_revision.wrapping_add(1);
             self.deleting_rooms
                 .write()
-                .unwrap_or_else(|error| error.into_inner())
                 .entry(room_id.to_owned())
                 .or_insert_with(uuid::Uuid::new_v4);
             let notice = ServerMessage::RoomClosed {

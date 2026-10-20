@@ -39,6 +39,7 @@ use crate::shutdown::DrainSignal;
 use crate::signaling::protocol::{
     AudioLevelEntry, ChatStyle, ParticipantInfo, ProducerMetadata, ServerMessage,
 };
+use crate::sync::{Mutex, RwLock};
 use anyhow::Result;
 use mediasoup::active_speaker_observer::{ActiveSpeakerObserver, ActiveSpeakerObserverOptions};
 use mediasoup::audio_level_observer::{AudioLevelObserver, AudioLevelObserverOptions};
@@ -49,7 +50,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::hash::Hash;
 use std::net::IpAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex as StdMutex, RwLock as StdRwLock, Weak};
+use std::sync::{Arc, Weak};
 use tokio::sync::RwLock as TokioRwLock;
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
@@ -301,7 +302,7 @@ where
 
 #[derive(Clone)]
 struct SharedRateLimiter<K> {
-    table: Arc<StdMutex<RateTable<K>>>,
+    table: Arc<Mutex<RateTable<K>>>,
     max_attempts: u32,
 }
 
@@ -311,7 +312,7 @@ where
 {
     fn new(max_attempts: u32) -> Self {
         Self {
-            table: Arc::new(StdMutex::new(RateTable {
+            table: Arc::new(Mutex::new(RateTable {
                 entries: HashMap::new(),
                 order: std::collections::VecDeque::new(),
                 overflow: None,
@@ -321,7 +322,7 @@ where
     }
 
     fn allow(&self, key: K, now: std::time::Instant) -> bool {
-        let mut table = self.table.lock().unwrap_or_else(|error| error.into_inner());
+        let mut table = self.table.lock();
         table.reclaim_expired(now);
         if table.entries.len() >= MAX_TRACKED_JOIN_KEYS && !table.entries.contains_key(&key) {
             // Share a bounded overflow allowance; never renew a live identity's
@@ -372,11 +373,7 @@ where
 
     #[cfg(test)]
     fn tracked_keys(&self) -> usize {
-        self.table
-            .lock()
-            .unwrap_or_else(|error| error.into_inner())
-            .entries
-            .len()
+        self.table.lock().entries.len()
     }
 }
 
@@ -389,34 +386,29 @@ fn room_creation_timeout(operation: &str) -> sqlx::Error {
 }
 
 pub(crate) struct IdentityUpdateGuard {
-    updates: Arc<StdRwLock<HashSet<RoomId>>>,
+    updates: Arc<RwLock<HashSet<RoomId>>>,
     room_id: RoomId,
 }
 
 impl Drop for IdentityUpdateGuard {
     fn drop(&mut self) {
-        self.updates
-            .write()
-            .unwrap_or_else(|error| error.into_inner())
-            .remove(&self.room_id);
+        self.updates.write().remove(&self.room_id);
     }
 }
 
 fn release_deletion_reservation(
-    deleting_rooms: &StdRwLock<HashMap<RoomId, uuid::Uuid>>,
+    deleting_rooms: &RwLock<HashMap<RoomId, uuid::Uuid>>,
     room_id: &RoomId,
     token: uuid::Uuid,
 ) {
-    let mut deleting = deleting_rooms
-        .write()
-        .unwrap_or_else(|error| error.into_inner());
+    let mut deleting = deleting_rooms.write();
     if deleting.get(room_id) == Some(&token) {
         deleting.remove(room_id);
     }
 }
 
 fn release_deletion_reservation_after_router_teardown(
-    deleting_rooms: &StdRwLock<HashMap<RoomId, uuid::Uuid>>,
+    deleting_rooms: &RwLock<HashMap<RoomId, uuid::Uuid>>,
     room_id: &RoomId,
     token: uuid::Uuid,
     router_teardown_succeeded: bool,
@@ -428,7 +420,7 @@ fn release_deletion_reservation_after_router_teardown(
 
 async fn restore_failed_deletion(
     runtime_room: Option<Arc<TokioRwLock<Room>>>,
-    deleting_rooms: Arc<StdRwLock<HashMap<RoomId, uuid::Uuid>>>,
+    deleting_rooms: Arc<RwLock<HashMap<RoomId, uuid::Uuid>>>,
     room_id: RoomId,
     token: uuid::Uuid,
 ) {
@@ -1158,7 +1150,7 @@ fn record_banned_cohort(
 /// writes quarantine the exact runtime room until restart reloads durable state.
 #[derive(Clone)]
 pub(crate) struct RoomManager {
-    rooms: Arc<StdRwLock<HashMap<RoomId, Arc<TokioRwLock<Room>>>>>,
+    rooms: Arc<RwLock<HashMap<RoomId, Arc<TokioRwLock<Room>>>>>,
     media_server: Arc<MediaServer>,
     drain: DrainSignal,
     metrics: ServerMetrics,
@@ -1171,10 +1163,10 @@ pub(crate) struct RoomManager {
     room_creation_lock: Arc<tokio::sync::Mutex<()>>,
     /// Room IDs stay reserved while deletion tears down their old router and
     /// media state outside the creation lock.
-    deleting_rooms: Arc<StdRwLock<HashMap<RoomId, uuid::Uuid>>>,
+    deleting_rooms: Arc<RwLock<HashMap<RoomId, uuid::Uuid>>>,
     /// Rooms whose durable identity is mid-update: creation of that one room
     /// waits, instead of every room waiting on the process-wide creation lock.
-    identity_updates: Arc<StdRwLock<HashSet<RoomId>>>,
+    identity_updates: Arc<RwLock<HashSet<RoomId>>>,
     max_rooms: usize,
     max_persisted_rooms: i64,
     allow_ad_hoc_rooms: bool,
@@ -1195,8 +1187,8 @@ pub(crate) struct RoomManager {
 
 #[derive(Clone)]
 struct FailedJoinCleanup {
-    rooms: Arc<StdRwLock<HashMap<RoomId, Arc<TokioRwLock<Room>>>>>,
-    deleting_rooms: Arc<StdRwLock<HashMap<RoomId, uuid::Uuid>>>,
+    rooms: Arc<RwLock<HashMap<RoomId, Arc<TokioRwLock<Room>>>>>,
+    deleting_rooms: Arc<RwLock<HashMap<RoomId, uuid::Uuid>>>,
     room_creation_lock: Arc<tokio::sync::Mutex<()>>,
     media_server: Arc<MediaServer>,
 }
@@ -1272,7 +1264,6 @@ impl FailedJoinCleanup {
             && self
                 .rooms
                 .read()
-                .unwrap_or_else(|error| error.into_inner())
                 .get(&room_id)
                 .is_some_and(|candidate| Arc::ptr_eq(candidate, &room_lock));
 
@@ -1282,12 +1273,8 @@ impl FailedJoinCleanup {
             let deletion_token = uuid::Uuid::new_v4();
             self.deleting_rooms
                 .write()
-                .unwrap_or_else(|error| error.into_inner())
                 .insert(room_id.clone(), deletion_token);
-            let mut rooms = self
-                .rooms
-                .write()
-                .unwrap_or_else(|error| error.into_inner());
+            let mut rooms = self.rooms.write();
             if rooms
                 .get(&room_id)
                 .is_some_and(|candidate| Arc::ptr_eq(candidate, &room_lock))

@@ -17,6 +17,7 @@ pub(crate) mod telemetry;
 use crate::auth::webauthn::ChallengeStore;
 use crate::metrics::ServerMetrics;
 use crate::room::RoomManager;
+use crate::sync::Mutex;
 use crate::turn::TurnConfig;
 use axum::{
     Json, Router,
@@ -33,7 +34,7 @@ use std::{
     collections::{HashMap, hash_map::RandomState},
     hash::{BuildHasher, Hash, Hasher},
     net::{IpAddr, SocketAddr},
-    sync::{Arc, Mutex},
+    sync::Arc,
     time::{Duration, Instant},
 };
 use tokio::sync::Semaphore;
@@ -114,7 +115,7 @@ impl AuthGuard {
 
     fn allow_at(&self, ip: IpAddr, now: Instant) -> bool {
         let ip = crate::net::cohort(ip);
-        let mut table = self.entries.lock().unwrap_or_else(|e| e.into_inner());
+        let mut table = self.entries.lock();
         // At capacity, evict a cold cohort rather than imposing one stranger's
         // exhausted allowance on every untracked address. Global semaphores
         // remain independent of this best-effort per-address rate memory.
@@ -167,10 +168,7 @@ impl PrincipalRateLimiter {
     }
 
     fn allow_at(&self, principal: &str, now: Instant) -> bool {
-        let mut state = self
-            .state
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut state = self.state.lock();
         if now.duration_since(state.window_started) >= PRINCIPAL_RATE_WINDOW {
             state.counters.fill(0);
             state.window_started = now;
@@ -221,7 +219,7 @@ impl IpConnectionLimiter {
 
     fn try_acquire(&self, ip: IpAddr) -> Option<IpConnectionPermit> {
         let ip = crate::net::cohort(ip);
-        let mut counts = self.counts.lock().unwrap_or_else(|e| e.into_inner());
+        let mut counts = self.counts.lock();
         let count = counts.entry(ip).or_default();
         if *count >= self.max_per_ip {
             return None;
@@ -241,11 +239,7 @@ struct IpConnectionPermit {
 
 impl Drop for IpConnectionPermit {
     fn drop(&mut self) {
-        let mut counts = self
-            .limiter
-            .counts
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let mut counts = self.limiter.counts.lock();
         if let Some(count) = counts.get_mut(&self.ip) {
             *count = count.saturating_sub(1);
             if *count == 0 {

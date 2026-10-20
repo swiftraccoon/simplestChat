@@ -1607,7 +1607,6 @@ impl RoomManager {
         let rooms: Vec<_> = self
             .rooms
             .read()
-            .unwrap_or_else(|e| e.into_inner())
             .iter()
             .map(|(id, lock)| (id.clone(), lock.clone()))
             .collect();
@@ -1679,8 +1678,7 @@ impl RoomManager {
                             let Ok(_admission) = manager.drain.admit() else {
                                 return;
                             };
-                            let current_rooms =
-                                manager.rooms.read().unwrap_or_else(|e| e.into_inner());
+                            let current_rooms = manager.rooms.read();
                             if room.deleting
                                 || !current_rooms
                                     .get(&id)

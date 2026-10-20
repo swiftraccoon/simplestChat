@@ -5,7 +5,7 @@ use super::super::*;
 impl RoomManager {
     /// Gets current room count
     pub(crate) async fn room_count(&self) -> usize {
-        self.rooms.read().unwrap_or_else(|e| e.into_inner()).len()
+        self.rooms.read().len()
     }
 
     /// Count memberships (including disconnected grace sessions) only if every
@@ -19,7 +19,7 @@ impl RoomManager {
 
     pub(in crate::room) fn participant_count_snapshot(&self) -> (usize, bool) {
         let room_locks: Vec<Arc<TokioRwLock<Room>>> = {
-            let rooms = self.rooms.read().unwrap_or_else(|e| e.into_inner());
+            let rooms = self.rooms.read();
             rooms.values().cloned().collect()
         };
         Self::count_readable_participants(&room_locks)
@@ -44,7 +44,7 @@ impl RoomManager {
     /// state lock is held by a writer. Callers must not render `None` as empty:
     /// under load the busiest rooms are exactly the ones that are locked.
     pub(crate) fn participant_count_for_room(&self, room_id: &RoomId) -> Option<usize> {
-        let rooms = self.rooms.read().unwrap_or_else(|e| e.into_inner());
+        let rooms = self.rooms.read();
         rooms
             .get(room_id)
             .and_then(Self::readable_participant_count)
@@ -57,7 +57,7 @@ impl RoomManager {
     /// Every live room with its readable participant count (`None` while a
     /// writer holds the room), for directory ordering. Empty rooms are not live.
     pub(crate) fn live_room_counts(&self) -> Vec<(RoomId, Option<usize>)> {
-        let rooms = self.rooms.read().unwrap_or_else(|e| e.into_inner());
+        let rooms = self.rooms.read();
         Self::live_counts(rooms.iter())
     }
 

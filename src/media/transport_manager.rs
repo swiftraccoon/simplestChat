@@ -9,6 +9,7 @@ use crate::media::types::{
     TransportInfo,
 };
 use crate::signaling::protocol::ServerMessage;
+use crate::sync::RwLock;
 use anyhow::Result;
 use mediasoup::consumer::ConsumerType;
 use mediasoup::prelude::*;
@@ -17,7 +18,6 @@ use mediasoup_types::data_structures::DtlsState;
 use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::RwLock as StdRwLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::sync::Mutex as TokioMutex;
 use tokio::sync::mpsc;
@@ -145,17 +145,17 @@ fn application_bitrate(bitrate: u64) -> u32 {
 /// media state is protected by its own tokio::sync::Mutex (held across async operations
 /// but only blocking that specific participant).
 pub struct TransportManager {
-    participants: Arc<StdRwLock<HashMap<String, Arc<TokioMutex<ParticipantMedia>>>>>,
+    participants: Arc<RwLock<HashMap<String, Arc<TokioMutex<ParticipantMedia>>>>>,
     /// Index of producer paused state: producer_id -> paused.
     /// Maintained by pause_producer, resume_producer, close_producer, remove_participant.
-    paused_producers: Arc<StdRwLock<HashMap<ProducerId, bool>>>,
+    paused_producers: Arc<RwLock<HashMap<ProducerId, bool>>>,
     /// The concrete callback handle type is intentionally erased here because
     /// mediasoup does not re-export it. Retaining one handle per media-state
     /// keeps the callback active; replacing/dropping it unregisters the old
     /// reconnect subscription instead of leaking detached callbacks. A unique
     /// generation prevents cleanup of an old participant ID from touching a
     /// newly-created media state that happens to reuse that public ID.
-    bwe_trace_handlers: Arc<StdRwLock<HashMap<Uuid, Box<dyn Any + Send + Sync>>>>,
+    bwe_trace_handlers: Arc<RwLock<HashMap<Uuid, Box<dyn Any + Send + Sync>>>>,
     /// `MediaConfig::key_frame_request_delay_ms`, applied to video producers.
     key_frame_request_delay: u32,
     /// `MediaConfig::max_producers_per_participant`.
@@ -192,9 +192,9 @@ impl TransportManager {
     /// Creates a new TransportManager
     pub fn new() -> Self {
         Self {
-            participants: Arc::new(StdRwLock::new(HashMap::new())),
-            paused_producers: Arc::new(StdRwLock::new(HashMap::new())),
-            bwe_trace_handlers: Arc::new(StdRwLock::new(HashMap::new())),
+            participants: Arc::new(RwLock::new(HashMap::new())),
+            paused_producers: Arc::new(RwLock::new(HashMap::new())),
+            bwe_trace_handlers: Arc::new(RwLock::new(HashMap::new())),
             key_frame_request_delay: 0,
             producer_cap: super::config::DEFAULT_MAX_PRODUCERS_PER_PARTICIPANT,
             consumer_cap: super::config::DEFAULT_MAX_CONSUMERS_PER_PARTICIPANT,
@@ -218,30 +218,24 @@ impl TransportManager {
     }
 
     fn replace_bwe_trace_handler(&self, generation: Uuid, handler: Box<dyn Any + Send + Sync>) {
-        self.bwe_trace_handlers
-            .write()
-            .unwrap_or_else(|error| error.into_inner())
-            .insert(generation, handler);
+        self.bwe_trace_handlers.write().insert(generation, handler);
     }
 
     fn clear_bwe_trace_handler(&self, generation: Uuid) {
-        self.bwe_trace_handlers
-            .write()
-            .unwrap_or_else(|error| error.into_inner())
-            .remove(&generation);
+        self.bwe_trace_handlers.write().remove(&generation);
     }
 
     /// Gets or creates a participant entry (brief outer lock, no await)
     fn get_or_create_participant(&self, participant_id: &str) -> Arc<TokioMutex<ParticipantMedia>> {
         // Fast path: read lock
         {
-            let participants = self.participants.read().unwrap_or_else(|e| e.into_inner());
+            let participants = self.participants.read();
             if let Some(p) = participants.get(participant_id) {
                 return Arc::clone(p);
             }
         }
         // Slow path: write lock to insert
-        let mut participants = self.participants.write().unwrap_or_else(|e| e.into_inner());
+        let mut participants = self.participants.write();
         participants
             .entry(participant_id.to_string())
             .or_insert_with(|| {
@@ -257,7 +251,7 @@ impl TransportManager {
         &self,
         participant_id: &str,
     ) -> MediaResult<Arc<TokioMutex<ParticipantMedia>>> {
-        let participants = self.participants.read().unwrap_or_else(|e| e.into_inner());
+        let participants = self.participants.read();
         participants
             .get(participant_id)
             .cloned()
@@ -273,7 +267,7 @@ impl TransportManager {
         participant_id: &str,
         participant_lock: &Arc<TokioMutex<ParticipantMedia>>,
     ) -> bool {
-        let participants = self.participants.read().unwrap_or_else(|e| e.into_inner());
+        let participants = self.participants.read();
         participants
             .get(participant_id)
             .is_some_and(|current| Arc::ptr_eq(current, participant_lock))
@@ -667,10 +661,7 @@ impl TransportManager {
             }
         });
         if !pruned.is_empty() {
-            let mut index = self
-                .paused_producers
-                .write()
-                .unwrap_or_else(|e| e.into_inner());
+            let mut index = self.paused_producers.write();
             for id in &pruned {
                 index.remove(id);
             }
@@ -706,10 +697,7 @@ impl TransportManager {
 
         // Initialize paused index (producers start unpaused)
         {
-            let mut index = self
-                .paused_producers
-                .write()
-                .unwrap_or_else(|e| e.into_inner());
+            let mut index = self.paused_producers.write();
             index.insert(producer_id, false);
         }
 
@@ -886,10 +874,7 @@ impl TransportManager {
 
         // Update paused index
         {
-            let mut index = self
-                .paused_producers
-                .write()
-                .unwrap_or_else(|e| e.into_inner());
+            let mut index = self.paused_producers.write();
             index.insert(producer_id, true);
         }
 
@@ -923,10 +908,7 @@ impl TransportManager {
 
         // Update paused index
         {
-            let mut index = self
-                .paused_producers
-                .write()
-                .unwrap_or_else(|e| e.into_inner());
+            let mut index = self.paused_producers.write();
             index.insert(producer_id, false);
         }
 
@@ -941,10 +923,7 @@ impl TransportManager {
     /// Returns `Some(paused)` if found, `None` if the producer doesn't exist.
     /// O(1) lookup — no per-participant locking needed.
     pub fn find_producer_paused(&self, producer_id: ProducerId) -> Option<bool> {
-        let index = self
-            .paused_producers
-            .read()
-            .unwrap_or_else(|e| e.into_inner());
+        let index = self.paused_producers.read();
         index.get(&producer_id).copied()
     }
 
@@ -1192,7 +1171,7 @@ impl TransportManager {
         let started = std::time::Instant::now();
         let deadline = tokio::time::Instant::now() + Duration::from_secs(1);
         let participants: Vec<Arc<TokioMutex<ParticipantMedia>>> = {
-            let map = self.participants.read().unwrap_or_else(|e| e.into_inner());
+            let map = self.participants.read();
             let mut ids: Vec<&String> = map.keys().collect();
             ids.sort();
             ids.into_iter()
@@ -1304,10 +1283,7 @@ impl TransportManager {
 
         // Clean up paused index
         {
-            let mut index = self
-                .paused_producers
-                .write()
-                .unwrap_or_else(|e| e.into_inner());
+            let mut index = self.paused_producers.write();
             index.remove(&producer_id);
         }
 
@@ -1346,7 +1322,7 @@ impl TransportManager {
     pub async fn remove_participant(&self, participant_id: &str) -> MediaResult<()> {
         // Remove from outer map (brief write lock)
         let participant_lock = {
-            let mut participants = self.participants.write().unwrap_or_else(|e| e.into_inner());
+            let mut participants = self.participants.write();
             participants.remove(participant_id)
         };
 
@@ -1370,10 +1346,7 @@ impl TransportManager {
 
             // Clean up paused index for all this participant's producers
             {
-                let mut index = self
-                    .paused_producers
-                    .write()
-                    .unwrap_or_else(|e| e.into_inner());
+                let mut index = self.paused_producers.write();
                 for producer_id in participant.producers.keys() {
                     index.remove(producer_id);
                 }
@@ -1638,7 +1611,7 @@ impl TransportManager {
         info!("Closing all transports");
 
         let all_participants: Vec<(String, Arc<TokioMutex<ParticipantMedia>>)> = {
-            let mut participants = self.participants.write().unwrap_or_else(|e| e.into_inner());
+            let mut participants = self.participants.write();
             participants.drain().collect()
         };
 
@@ -1649,10 +1622,7 @@ impl TransportManager {
             debug!("Closed all transports for participant: {}", participant_id);
         }
 
-        self.paused_producers
-            .write()
-            .unwrap_or_else(|error| error.into_inner())
-            .clear();
+        self.paused_producers.write().clear();
 
         Ok(())
     }
@@ -1707,7 +1677,7 @@ mod tests {
         let available = Arc::new(TokioMutex::new(ParticipantMedia::new(
             "available".to_owned(),
         )));
-        manager.participants.write().unwrap().extend([
+        manager.participants.write().extend([
             ("busy".to_owned(), busy.clone()),
             ("available".to_owned(), available),
         ]);
@@ -1792,7 +1762,6 @@ mod tests {
             manager
                 .bwe_trace_handlers
                 .read()
-                .unwrap()
                 .contains_key(&new_generation),
             "cleanup of an old generation must retain a reused ID's handler"
         );
@@ -1813,7 +1782,6 @@ mod tests {
         manager
             .participants
             .write()
-            .unwrap()
             .insert(participant_id.to_string(), replacement.clone());
 
         assert!(!manager.participant_is_current(participant_id, &old));

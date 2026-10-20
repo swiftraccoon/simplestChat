@@ -37,11 +37,7 @@ async fn join(
 }
 
 async fn has_media_state(manager: &RoomManager, room_id: &RoomId) -> bool {
-    manager
-        .rooms
-        .read()
-        .unwrap_or_else(|error| error.into_inner())
-        .contains_key(room_id)
+    manager.rooms.read().contains_key(room_id)
         || manager
             .media_server
             .router_manager()

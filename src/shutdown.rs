@@ -2,8 +2,9 @@
 //! never hold one across an await. The process coordinator bounds each cleanup
 //! stage and reports incomplete work before tearing down its runtime.
 
+use crate::sync::Mutex;
 use std::future::Future;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, MutexGuard};
 use std::time::{Duration, Instant};
 use tokio::sync::watch;
 
@@ -26,10 +27,7 @@ impl Default for DrainSignal {
 impl DrainSignal {
     /// Atomically closes admission and wakes all current and future waiters.
     pub(crate) fn begin_draining(&self) {
-        let _guard = self
-            .admission
-            .lock()
-            .unwrap_or_else(|error| error.into_inner());
+        let _guard = self.admission.lock();
         self.state.send_replace(true);
     }
 
@@ -40,10 +38,7 @@ impl DrainSignal {
 
     /// Serialize a short in-memory admission commit with drain initiation.
     pub(crate) fn admit(&self) -> anyhow::Result<MutexGuard<'_, ()>> {
-        let guard = self
-            .admission
-            .lock()
-            .unwrap_or_else(|error| error.into_inner());
+        let guard = self.admission.lock();
         anyhow::ensure!(!self.is_draining(), "Server shutting down");
         Ok(guard)
     }

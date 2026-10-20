@@ -7,6 +7,7 @@
 //! Pause flags and worker counters are separate observations, not an atomic view.
 
 use super::types::ParticipantMedia;
+use crate::sync::RwLock;
 use futures_util::{StreamExt, stream};
 use mediasoup::consumer::{Consumer, ConsumerStat, ConsumerStats, WeakConsumer};
 use mediasoup::producer::{Producer, ProducerScore, ProducerStat, WeakProducer};
@@ -15,8 +16,8 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 use uuid::Uuid;
@@ -246,7 +247,7 @@ fn inventory(
     coverage: &mut SnapshotCoverage,
 ) -> Vec<PendingEntity> {
     let participants = match registry.try_read() {
-        Ok(participants) => {
+        Some(participants) => {
             coverage.participants_observed = participants.len().min(MAX_SAFE_INTEGER as usize);
             coverage.participant_limit_reached = participants.len() > MAX_PARTICIPANTS;
             participants
@@ -255,7 +256,7 @@ fn inventory(
                 .cloned()
                 .collect::<Vec<_>>()
         }
-        Err(_) => {
+        None => {
             coverage.registry_busy = true;
             return Vec::new();
         }
@@ -641,7 +642,7 @@ mod tests {
     #[test]
     fn registry_contention_is_explicit_and_never_waits() {
         let registry = ParticipantRegistry::default();
-        let _guard = registry.write().unwrap();
+        let _guard = registry.write();
         let mut coverage = SnapshotCoverage::default();
         let started = Instant::now();
         let pending = inventory(
@@ -660,7 +661,6 @@ mod tests {
         let participant = Arc::new(Mutex::new(ParticipantMedia::new("private-id".into())));
         registry
             .write()
-            .unwrap()
             .insert("private-id".into(), participant.clone());
         let guard = participant.lock().await;
         let busy = collect_snapshot(&registry, &context()).await;
@@ -671,7 +671,7 @@ mod tests {
         assert!(!serde_json::to_string(&busy).unwrap().contains("private-id"));
         drop(guard);
         for index in 0..MAX_PARTICIPANTS {
-            registry.write().unwrap().insert(
+            registry.write().insert(
                 index.to_string(),
                 Arc::new(Mutex::new(ParticipantMedia::new(index.to_string()))),
             );
@@ -687,7 +687,7 @@ mod tests {
     #[test]
     fn expired_inventory_deadline_never_visits_a_participant() {
         let registry = ParticipantRegistry::default();
-        registry.write().unwrap().insert(
+        registry.write().insert(
             "participant".into(),
             Arc::new(Mutex::new(ParticipantMedia::new("participant".into()))),
         );
@@ -1097,7 +1097,7 @@ mod tests {
             assert_eq!(expired.status, EntityStatus::NotCollected);
             assert_eq!(expired.paused, None);
 
-            registry.write().unwrap().clear();
+            registry.write().clear();
             drop(participant);
             drop(consumer);
             drop(producer);

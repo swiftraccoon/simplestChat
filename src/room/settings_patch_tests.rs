@@ -120,7 +120,6 @@ async fn wire_settings_set_omit_and_clear_are_persisted() {
         manager
             .rooms
             .write()
-            .unwrap()
             .insert(room_id.clone(), Arc::new(TokioRwLock::new(room)));
 
         apply_wire_patch(
@@ -184,7 +183,7 @@ async fn wire_settings_set_omit_and_clear_are_persisted() {
     .catch_unwind()
     .await;
 
-    manager.rooms.write().unwrap().remove(&room_id);
+    manager.rooms.write().remove(&room_id);
     let cleanup = tokio::time::timeout(Duration::from_secs(10), async {
         sqlx::query("DELETE FROM rooms WHERE id=$1 AND owner_id=$2")
             .bind(&room_id)

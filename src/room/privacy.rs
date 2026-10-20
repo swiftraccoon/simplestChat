@@ -102,7 +102,6 @@ impl RoomManager {
         let rooms: Vec<_> = self
             .rooms
             .read()
-            .unwrap_or_else(|error| error.into_inner())
             .iter()
             .filter(|(_, room)| {
                 room.try_read().map_or(true, |state| {
@@ -125,7 +124,6 @@ impl RoomManager {
                             || {
                                 self.rooms
                                     .read()
-                                    .unwrap_or_else(|error| error.into_inner())
                                     .get(&id)
                                     .is_some_and(|live| Arc::ptr_eq(live, &room))
                             },

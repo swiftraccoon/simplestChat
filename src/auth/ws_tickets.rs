@@ -7,6 +7,7 @@ use super::{
     types::{AuthError, Claims},
 };
 use crate::signaling::SignalingServer;
+use crate::sync::Mutex;
 use axum::{Json, extract::State, http::HeaderMap};
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use lru::LruCache;
@@ -15,7 +16,6 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
     num::NonZeroUsize,
-    sync::Mutex,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
@@ -99,10 +99,7 @@ impl TicketStore {
             .try_fill_bytes(&mut bytes)
             .map_err(|_| AuthError::ServiceBusy)?;
         let ticket = URL_SAFE_NO_PAD.encode(bytes);
-        let mut entries = self
-            .entries
-            .lock()
-            .unwrap_or_else(|error| error.into_inner());
+        let mut entries = self.entries.lock();
         // Lifetimes can differ near JWT expiry, so retire every expired entry
         // only at capacity. Normal issuance and consumption remain O(1).
         if entries.len() == entries.cap().get() {
@@ -135,7 +132,6 @@ impl TicketStore {
         let ticket = self
             .entries
             .lock()
-            .unwrap_or_else(|error| error.into_inner())
             .pop(&key(token))
             .ok_or(AuthError::InvalidToken)?;
         if ticket.deadline <= now || ticket.claims.exp as u64 <= epoch {
@@ -251,7 +247,7 @@ mod tests {
                 .count()
         });
         assert_eq!(winners, 1);
-        assert!(store.entries.lock().unwrap().is_empty());
+        assert!(store.entries.lock().is_empty());
     }
 
     #[tokio::test]

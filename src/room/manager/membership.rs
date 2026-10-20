@@ -90,12 +90,7 @@ impl RoomManager {
         let Some(pool) = &self.db_pool else {
             return Ok(None);
         };
-        if self
-            .rooms
-            .read()
-            .unwrap_or_else(|error| error.into_inner())
-            .contains_key(room_id)
-        {
+        if self.rooms.read().contains_key(room_id) {
             return Ok(None);
         }
         let loaded = tokio::time::timeout(
@@ -165,17 +160,12 @@ impl RoomManager {
         room_id: &RoomId,
     ) -> Result<PendingRoomJoin> {
         anyhow::ensure!(!self.drain.is_draining(), "Server shutting down");
-        if self
-            .deleting_rooms
-            .read()
-            .unwrap_or_else(|error| error.into_inner())
-            .contains_key(room_id)
-        {
+        if self.deleting_rooms.read().contains_key(room_id) {
             anyhow::bail!("Room is being deleted");
         }
         // Fast path: room exists (brief outer read lock)
         let existing_room = {
-            let rooms = self.rooms.read().unwrap_or_else(|e| e.into_inner());
+            let rooms = self.rooms.read();
             let existing = rooms.get(room_id).cloned();
             if existing.is_none() && rooms.len() >= self.max_rooms {
                 anyhow::bail!("Room capacity has been reached");
@@ -197,26 +187,16 @@ impl RoomManager {
 
         anyhow::ensure!(!self.drain.is_draining(), "Server shutting down");
 
-        if self
-            .deleting_rooms
-            .read()
-            .unwrap_or_else(|error| error.into_inner())
-            .contains_key(room_id)
-        {
+        if self.deleting_rooms.read().contains_key(room_id) {
             anyhow::bail!("Room is being deleted");
         }
-        if self
-            .identity_updates
-            .read()
-            .unwrap_or_else(|error| error.into_inner())
-            .contains(room_id)
-        {
+        if self.identity_updates.read().contains(room_id) {
             anyhow::bail!("Room settings are being updated; try again");
         }
 
         // Re-check now that we hold the creation lock
         let existing_room = {
-            let rooms = self.rooms.read().unwrap_or_else(|e| e.into_inner());
+            let rooms = self.rooms.read();
             let existing = rooms.get(room_id).cloned();
             if existing.is_none() && rooms.len() >= self.max_rooms {
                 anyhow::bail!("Room capacity has been reached");
@@ -354,7 +334,7 @@ impl RoomManager {
 
         // Publish the initialized room while the creation mutex is still held.
         let room_arc = {
-            let mut rooms = self.rooms.write().unwrap_or_else(|e| e.into_inner());
+            let mut rooms = self.rooms.write();
             // Every runtime-room insertion is serialized by
             // `room_creation_lock`, which is still held here.
             debug_assert!(!rooms.contains_key(room_id));
@@ -948,7 +928,7 @@ impl RoomManager {
 
         // Get room lock (brief outer read)
         let room_lock = {
-            let rooms = self.rooms.read().unwrap_or_else(|e| e.into_inner());
+            let rooms = self.rooms.read();
             match rooms.get(room_id) {
                 Some(r) => r.clone(),
                 None => return Ok(false),
@@ -1075,7 +1055,6 @@ impl RoomManager {
             let still_mapped = self
                 .rooms
                 .read()
-                .unwrap_or_else(|error| error.into_inner())
                 .get(room_id)
                 .is_some_and(|candidate| Arc::ptr_eq(candidate, &room_lock));
             let should_remove = still_mapped
@@ -1090,9 +1069,8 @@ impl RoomManager {
                 let deletion_token = uuid::Uuid::new_v4();
                 self.deleting_rooms
                     .write()
-                    .unwrap_or_else(|error| error.into_inner())
                     .insert(room_id.clone(), deletion_token);
-                let mut rooms = self.rooms.write().unwrap_or_else(|e| e.into_inner());
+                let mut rooms = self.rooms.write();
                 if rooms
                     .get(room_id)
                     .is_some_and(|candidate| Arc::ptr_eq(candidate, &room_lock))

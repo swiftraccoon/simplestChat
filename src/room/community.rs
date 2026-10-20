@@ -65,7 +65,7 @@ impl RoomManager {
     /// Broadcaster count for a room, or `None` when it is not live or its
     /// state lock is busy; see `participant_count_for_room`.
     pub(crate) fn broadcaster_count_for_room(&self, room_id: &RoomId) -> Option<usize> {
-        let rooms = self.rooms.read().unwrap_or_else(|error| error.into_inner());
+        let rooms = self.rooms.read();
         rooms
             .get(room_id)
             .and_then(Self::readable_broadcaster_count)
@@ -89,21 +89,10 @@ impl RoomManager {
         )
         .await
         .map_err(|_| sqlx::Error::Protocol("Room creation is busy; try again".into()))?;
-        if manager.drain.is_draining()
-            || manager
-                .deleting_rooms
-                .read()
-                .unwrap_or_else(|error| error.into_inner())
-                .contains_key(&room_id)
-        {
+        if manager.drain.is_draining() || manager.deleting_rooms.read().contains_key(&room_id) {
             return Ok(false);
         }
-        if manager
-            .identity_updates
-            .read()
-            .unwrap_or_else(|error| error.into_inner())
-            .contains(&room_id)
-        {
+        if manager.identity_updates.read().contains(&room_id) {
             return Err(sqlx::Error::Protocol(
                 "Room identity is busy; try again".into(),
             ));
@@ -113,12 +102,7 @@ impl RoomManager {
         // stall here cannot block every other room's first join.
         let identity_guard = manager.begin_identity_update(&room_id);
         drop(creation_guard);
-        let runtime = manager
-            .rooms
-            .read()
-            .unwrap_or_else(|error| error.into_inner())
-            .get(&room_id)
-            .cloned();
+        let runtime = manager.rooms.read().get(&room_id).cloned();
         let control_guard = match runtime.as_ref() {
             Some(room) => Some(
                 tokio::time::timeout(Duration::from_secs(5), control::lock_room(room))
@@ -218,7 +202,6 @@ impl RoomManager {
                     manager
                         .deleting_rooms
                         .write()
-                        .unwrap_or_else(|error| error.into_inner())
                         .entry(room_id.clone())
                         .or_insert_with(Uuid::new_v4);
                     tracing::warn!(

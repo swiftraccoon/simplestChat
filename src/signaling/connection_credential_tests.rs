@@ -347,7 +347,7 @@ async fn grace_activation_publishes_the_entry_before_immediately_ready_cleanup()
         .await
         .unwrap()
         .unwrap();
-    assert!(map.inner.read().unwrap().is_empty());
+    assert!(map.inner.read().is_empty());
     assert!(map.insert_activated(
         rid("credential-room"),
         pid("credential-participant"),
@@ -361,7 +361,7 @@ async fn grace_activation_publishes_the_entry_before_immediately_ready_cleanup()
             .unwrap(),
         "An activated cleanup must find and remove its already-published entry"
     );
-    assert!(map.inner.read().unwrap().is_empty());
+    assert!(map.inner.read().is_empty());
 }
 
 #[tokio::test]
@@ -398,5 +398,5 @@ async fn rejected_grace_insertion_aborts_the_owned_timer_without_activating_clea
         .expect("Rejected grace timer must stop");
     assert!(abort.is_finished());
     assert!(!activated.load(Ordering::Relaxed));
-    assert!(map.inner.read().unwrap().is_empty());
+    assert!(map.inner.read().is_empty());
 }

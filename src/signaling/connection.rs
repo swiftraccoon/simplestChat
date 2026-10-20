@@ -11,13 +11,13 @@ use crate::ids::{ParticipantId, RoomId};
 use crate::metrics::ServerMetrics;
 use crate::room::{JoinResult, RoomManager, RoomPasswordRequired, SettingsPatch, settings};
 use crate::secret::SecretString;
+use crate::sync::RwLock;
 use crate::turn::TurnConfig;
 use axum::extract::ws::{CloseFrame, Message, WebSocket, close_code};
 use futures_util::{Sink, SinkExt, Stream, StreamExt};
 use mediasoup::prelude::TransportId;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::RwLock as StdRwLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
@@ -364,7 +364,7 @@ type GraceEntries = HashMap<(RoomId, ParticipantId, String), GraceEntry>;
 /// Shared map of participants in grace period (disconnected but not yet removed)
 #[derive(Clone)]
 pub(crate) struct GracePeriodMap {
-    inner: Arc<StdRwLock<GraceEntries>>,
+    inner: Arc<RwLock<GraceEntries>>,
     max_entries: usize,
     closed: Arc<AtomicBool>,
 }
@@ -382,7 +382,7 @@ impl GracePeriodMap {
 
     pub(crate) fn with_capacity(max_entries: usize) -> Self {
         Self {
-            inner: Arc::new(StdRwLock::new(HashMap::new())),
+            inner: Arc::new(RwLock::new(HashMap::new())),
             max_entries: max_entries.max(1),
             closed: Arc::new(AtomicBool::new(false)),
         }
@@ -391,10 +391,7 @@ impl GracePeriodMap {
     /// Stop only this map's owned timers. Global room drain removes retained
     /// memberships; closing also rejects timers created concurrently afterwards.
     pub(super) fn close(&self) -> usize {
-        let mut map = self
-            .inner
-            .write()
-            .unwrap_or_else(|error| error.into_inner());
+        let mut map = self.inner.write();
         self.closed.store(true, Ordering::Release);
         let count = map.len();
         for (_, entry) in map.drain() {
@@ -408,10 +405,7 @@ impl GracePeriodMap {
         user_id: &str,
         minimum_version: i64,
     ) -> Vec<(RoomId, ParticipantId, mpsc::Sender<crate::OutboundJson>)> {
-        let mut map = self
-            .inner
-            .write()
-            .unwrap_or_else(|error| error.into_inner());
+        let mut map = self.inner.write();
         let mut removed = Vec::new();
         map.retain(|(room_id, participant_id, _), entry| {
             if entry.authenticated_subject.as_deref() == Some(user_id)
@@ -433,7 +427,7 @@ impl GracePeriodMap {
     /// participant. On capacity exhaustion the new timer is aborted and the
     /// caller must immediately remove that participant's room/media state.
     fn insert(&self, room_id: RoomId, participant_id: ParticipantId, entry: GraceEntry) -> bool {
-        let mut map = self.inner.write().unwrap_or_else(|e| e.into_inner());
+        let mut map = self.inner.write();
         let key = (room_id, participant_id, entry.reconnect_token.clone());
         if self.closed.load(Ordering::Acquire)
             || (map.len() >= self.max_entries && !map.contains_key(&key))
@@ -473,7 +467,7 @@ impl GracePeriodMap {
         reconnect_token: &str,
         authenticated_subject: Option<&str>,
     ) -> Option<GraceEntry> {
-        let mut map = self.inner.write().unwrap_or_else(|e| e.into_inner());
+        let mut map = self.inner.write();
         let key = (
             room_id.clone(),
             *participant_id,

@@ -4,9 +4,10 @@
 //! only after an essential enqueue fails. Repeated failures coalesce into one bit.
 
 use crate::OutboundJson;
+use crate::sync::Mutex;
 use std::collections::BTreeMap;
+use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Mutex, OnceLock};
 use tokio::sync::{mpsc, watch};
 
 struct Entry {
@@ -33,10 +34,7 @@ impl Registration {
 
 impl Drop for Registration {
     fn drop(&mut self) {
-        registrations()
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .remove(&self.id);
+        registrations().lock().remove(&self.id);
     }
 }
 
@@ -44,16 +42,13 @@ pub(crate) fn register(sender: &mpsc::Sender<OutboundJson>) -> Registration {
     static NEXT_ID: AtomicU64 = AtomicU64::new(1);
     let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
     let (resync, signal) = watch::channel(false);
-    registrations()
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .insert(
-            id,
-            Entry {
-                sender: sender.downgrade(),
-                resync,
-            },
-        );
+    registrations().lock().insert(
+        id,
+        Entry {
+            sender: sender.downgrade(),
+            resync,
+        },
+    );
     Registration { id, signal }
 }
 
@@ -66,7 +61,7 @@ pub(crate) async fn wait_for_resync(signal: &mut watch::Receiver<bool>) {
 /// Terminal for this socket; a resumed session receives a fresh room snapshot.
 /// Ephemeral speaker, layer and bandwidth hints must not call this function.
 pub(crate) fn request_resync(sender: &mpsc::Sender<OutboundJson>) {
-    let entries = registrations().lock().unwrap_or_else(|e| e.into_inner());
+    let entries = registrations().lock();
     for entry in entries.values() {
         if entry
             .sender
@@ -95,7 +90,7 @@ mod tests {
         assert!(!*second_registration.subscribe().borrow());
         let id = first_registration.id;
         drop(first_registration);
-        assert!(!registrations().lock().unwrap().contains_key(&id));
+        assert!(!registrations().lock().contains_key(&id));
     }
 
     #[test]

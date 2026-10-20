@@ -277,36 +277,20 @@ impl Context {
                 "Room creation is busy; try again",
             )
         })?;
-        if manager.drain.is_draining()
-            || manager
-                .deleting_rooms
-                .read()
-                .unwrap_or_else(|error| error.into_inner())
-                .contains_key(&room_id)
-        {
+        if manager.drain.is_draining() || manager.deleting_rooms.read().contains_key(&room_id) {
             return Err(response_error(
                 StatusCode::SERVICE_UNAVAILABLE,
                 "Room is unavailable",
             ));
         }
-        if manager
-            .identity_updates
-            .read()
-            .unwrap_or_else(|error| error.into_inner())
-            .contains(&room_id)
-        {
+        if manager.identity_updates.read().contains(&room_id) {
             return Err(response_error(
                 StatusCode::SERVICE_UNAVAILABLE,
                 "Room administration is busy; try again",
             ));
         }
         let identity = manager.begin_identity_update(&room_id);
-        let runtime = manager
-            .rooms
-            .read()
-            .unwrap_or_else(|error| error.into_inner())
-            .get(&room_id)
-            .cloned();
+        let runtime = manager.rooms.read().get(&room_id).cloned();
         drop(creation);
         let control = if let Some(runtime) = runtime.as_ref() {
             let guard =
@@ -424,7 +408,6 @@ impl Context {
                 || !manager
                     .rooms
                     .read()
-                    .unwrap_or_else(|error| error.into_inner())
                     .get(&room_id)
                     .is_some_and(|current| Arc::ptr_eq(current, runtime))
             {
@@ -518,7 +501,6 @@ impl Context {
                 manager
                     .deleting_rooms
                     .write()
-                    .unwrap_or_else(|error| error.into_inner())
                     .entry(room_id.clone())
                     .or_insert_with(Uuid::new_v4);
             }

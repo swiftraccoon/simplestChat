@@ -25,6 +25,7 @@ pub mod secret;
 pub mod shutdown;
 pub mod signaling;
 pub(crate) mod sizing;
+pub(crate) mod sync;
 pub mod turn;
 
 #[cfg(test)]

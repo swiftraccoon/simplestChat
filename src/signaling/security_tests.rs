@@ -47,14 +47,11 @@ fn ip_capacity_evicts_cold_buckets_without_shared_overflow_denial() {
         assert!(guard.allow_at(IpAddr::from([192, 0, 2, last]), started));
     }
     assert!(!guard.allow_at(victim, started));
-    let table = guard.entries.lock().unwrap();
+    let table = guard.entries.lock();
     assert_eq!(table.entries.len(), MAX_TRACKED_AUTH_IPS);
     drop(table);
     assert!(guard.allow_at(victim, started + PRINCIPAL_RATE_WINDOW));
-    assert_eq!(
-        guard.entries.lock().unwrap().entries.len(),
-        MAX_TRACKED_AUTH_IPS
-    );
+    assert_eq!(guard.entries.lock().entries.len(), MAX_TRACKED_AUTH_IPS);
 }
 
 #[tokio::test]

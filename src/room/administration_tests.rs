@@ -121,7 +121,7 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
         roles::set_role(&pool, &other_room, &outsider, roles::Role::Member, &owner)
             .await
             .unwrap();
-        assert!(manager.rooms.read().unwrap().get(&room_id).is_none());
+        assert!(manager.rooms.read().get(&room_id).is_none());
         let patch: SettingsPatch =
             serde_json::from_value(json!({"allowChat":false,"maxParticipants":12})).unwrap();
         Context::admit(manager.clone(), room_id.clone(), claims(owner, sessions[0]))
@@ -131,7 +131,7 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
             .await
             .unwrap();
         assert!(
-            manager.rooms.read().unwrap().get(&room_id).is_none(),
+            manager.rooms.read().get(&room_id).is_none(),
             "HTTP administration must not create a runtime room"
         );
         let (saved, hash) = settings::load_room(&pool, &room_id).await.unwrap().unwrap();
@@ -157,11 +157,7 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
             "another room's roster is never an account lookup"
         );
         assert!(
-            !manager
-                .deleting_rooms
-                .read()
-                .unwrap()
-                .contains_key(&room_id),
+            !manager.deleting_rooms.read().contains_key(&room_id),
             "a known missing member must not quarantine the saved room"
         );
 
@@ -182,11 +178,7 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
         let mut room = Room::new(room_id.clone(), Some(saved), true, hash);
         room.participants.insert(person.id, person);
         let room = Arc::new(RwLock::new(room));
-        manager
-            .rooms
-            .write()
-            .unwrap()
-            .insert(room_id.clone(), room.clone());
+        manager.rooms.write().insert(room_id.clone(), room.clone());
         Context::admit(manager.clone(), room_id.clone(), claims(owner, sessions[0]))
             .await
             .unwrap()
@@ -528,7 +520,7 @@ async fn account_administration_controls_dormant_and_live_rooms_without_membersh
     let outcome = AssertUnwindSafe(tokio::time::timeout(Duration::from_secs(50), proof))
         .catch_unwind()
         .await;
-    manager.rooms.write().unwrap().remove(&room_id);
+    manager.rooms.write().remove(&room_id);
     let cleanup = async {
         sqlx::query("DELETE FROM rooms WHERE id=ANY($1) AND owner_id=$2")
             .bind(vec![room_id, other_room])

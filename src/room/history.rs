@@ -1445,7 +1445,6 @@ impl super::RoomManager {
             || !self
                 .rooms
                 .read()
-                .unwrap_or_else(|error| error.into_inner())
                 .get(id)
                 .is_some_and(|current| std::sync::Arc::ptr_eq(current, &room))
         {
@@ -1477,13 +1476,7 @@ impl super::RoomManager {
             return;
         };
         let event = crate::OutboundJson::from(event);
-        let rooms: Vec<_> = self
-            .rooms
-            .read()
-            .unwrap_or_else(|error| error.into_inner())
-            .values()
-            .cloned()
-            .collect();
+        let rooms: Vec<_> = self.rooms.read().values().cloned().collect();
         for lock in rooms {
             let Ok(room) = lock.try_read() else {
                 continue;

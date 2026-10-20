@@ -2,6 +2,7 @@
 //! request paths, credentials, identities and arbitrary browser text never enter
 //! this store. Client reports are untrusted observations, never admission input.
 use super::SignalingServer;
+use crate::sync::Mutex;
 use axum::{
     Json,
     extract::{MatchedPath, State},
@@ -9,7 +10,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::{collections::BTreeMap, fmt::Write, sync::Mutex, time::Duration};
+use std::{collections::BTreeMap, fmt::Write, time::Duration};
 
 const MAX_CLIENT_SERIES: usize = 512;
 const MAX_HTTP_SERIES: usize = 256;
@@ -258,10 +259,7 @@ impl Telemetry {
     /// Only named repetitive admission warnings are coalesced. Errors and
     /// native media warnings retain their existing logging behavior.
     pub(crate) fn warning_should_log(&self, family: WarningFamily) -> bool {
-        self.warnings
-            .lock()
-            .unwrap_or_else(|error| error.into_inner())[family.index()]
-        .observe(std::time::Instant::now())
+        self.warnings.lock()[family.index()].observe(std::time::Instant::now())
     }
 
     /// Record one HTTP response under the router's matched template. Only
@@ -297,7 +295,7 @@ impl Telemetry {
             400..=499 => "4xx",
             _ => "5xx",
         };
-        let mut records = self.http.lock().unwrap_or_else(|error| error.into_inner());
+        let mut records = self.http.lock();
         let key = (route.to_owned(), method, status);
         if records.len() >= MAX_HTTP_SERIES && !records.contains_key(&key) {
             self.http_series_dropped.fetch_add(1, Ordering::Relaxed);
@@ -318,17 +316,13 @@ impl Telemetry {
         let operation = operation.label();
         self.signaling
             .lock()
-            .unwrap_or_else(|error| error.into_inner())
             .entry((operation, if accepted { "completed" } else { "rejected" }))
             .or_default()
             .observe(Some(duration), None);
     }
 
     fn record_client(&self, batch: ClientBatch) {
-        let mut records = self
-            .client
-            .lock()
-            .unwrap_or_else(|error| error.into_inner());
+        let mut records = self.client.lock();
         for event in batch.events {
             if records.len() >= MAX_CLIENT_SERIES
                 && !records.contains_key(&(event.name, event.outcome, batch.browser))
@@ -358,10 +352,7 @@ impl Telemetry {
             out,
             "# HELP simplestchat_warning_events_total Occurrences of explicitly coalesced admission-warning families\n# TYPE simplestchat_warning_events_total counter\n# HELP simplestchat_warning_logs_suppressed_total Repetitive admission warnings omitted after the first exemplar per family per minute\n# TYPE simplestchat_warning_logs_suppressed_total counter"
         );
-        let warnings = self
-            .warnings
-            .lock()
-            .unwrap_or_else(|error| error.into_inner());
+        let warnings = self.warnings.lock();
         for (family, window) in [
             "handshake_rate_limit",
             "frame_rate_limit",
@@ -400,36 +391,21 @@ impl Telemetry {
             out,
             "# HELP simplestchat_client_events_value_sum_total Sum of untrusted browser measurements; units are fixed by event name\n# TYPE simplestchat_client_events_value_sum_total counter\n# HELP simplestchat_client_events_value_observations_total Browser measurements received with a value\n# TYPE simplestchat_client_events_value_observations_total counter"
         );
-        for ((route, method, status), observation) in self
-            .http
-            .lock()
-            .unwrap_or_else(|error| error.into_inner())
-            .iter()
-        {
+        for ((route, method, status), observation) in self.http.lock().iter() {
             observation.render(
                 "simplestchat_http_requests",
                 &format!("route=\"{route}\",method=\"{method}\",status=\"{status}\""),
                 out,
             );
         }
-        for ((operation, outcome), observation) in self
-            .signaling
-            .lock()
-            .unwrap_or_else(|error| error.into_inner())
-            .iter()
-        {
+        for ((operation, outcome), observation) in self.signaling.lock().iter() {
             observation.render(
                 "simplestchat_signaling_operations",
                 &format!("operation=\"{operation}\",outcome=\"{outcome}\""),
                 out,
             );
         }
-        for ((name, outcome, browser), observation) in self
-            .client
-            .lock()
-            .unwrap_or_else(|error| error.into_inner())
-            .iter()
-        {
+        for ((name, outcome, browser), observation) in self.client.lock().iter() {
             observation.render(
                 "simplestchat_client_events",
                 &format!(
@@ -486,12 +462,12 @@ mod tests {
                 }
             }
         }
-        assert_eq!(telemetry.http.lock().unwrap().len(), MAX_HTTP_SERIES);
+        assert_eq!(telemetry.http.lock().len(), MAX_HTTP_SERIES);
         assert!(telemetry.http_series_dropped.load(Ordering::Relaxed) > 0);
         let dropped = telemetry.http_series_dropped.load(Ordering::Relaxed);
         telemetry.record_http_route("/api/synthetic/0", "GET", 101, Duration::from_millis(1));
         assert_eq!(
-            telemetry.http.lock().unwrap()[&("/api/synthetic/0".to_owned(), "GET", "1xx")].count,
+            telemetry.http.lock()[&("/api/synthetic/0".to_owned(), "GET", "1xx")].count,
             2
         );
         assert_eq!(
@@ -537,7 +513,7 @@ mod tests {
                 }
             }
         }
-        assert_eq!(telemetry.client.lock().unwrap().len(), MAX_CLIENT_SERIES);
+        assert_eq!(telemetry.client.lock().len(), MAX_CLIENT_SERIES);
         for operation in [
             OperationKind::JoinRoom,
             OperationKind::LeaveRoom,
@@ -673,7 +649,7 @@ mod tests {
                 }
             }
         }
-        assert_eq!(telemetry.client.lock().unwrap().len(), MAX_CLIENT_SERIES);
+        assert_eq!(telemetry.client.lock().len(), MAX_CLIENT_SERIES);
         assert_eq!(
             telemetry.client_series_dropped.load(Ordering::Relaxed),
             720 - MAX_CLIENT_SERIES as u64

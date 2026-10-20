@@ -65,13 +65,13 @@ fn boundary_properties_window_budgets_hold_until_the_exact_reset_instant() {
             assert_eq!(admitted, allowance as usize);
             assert!(!limiter.allow_at(address, boundary + duration - Duration::from_nanos(1)));
             assert_eq!(
-                limiter.entries.lock().unwrap().peek(&address).unwrap().used,
+                limiter.entries.lock().peek(&address).unwrap().used,
                 allowance
             );
         }
     }
     let limiter = WindowLimiter::new(u32::MAX, duration);
-    limiter.entries.lock().unwrap().put(
+    limiter.entries.lock().put(
         address,
         Window {
             started: start,
@@ -81,12 +81,9 @@ fn boundary_properties_window_budgets_hold_until_the_exact_reset_instant() {
     assert!(limiter.allow_at(address, start));
     assert!(!limiter.allow_at(address, start));
     assert_eq!(
-        limiter.entries.lock().unwrap().peek(&address).unwrap().used,
+        limiter.entries.lock().peek(&address).unwrap().used,
         u32::MAX
     );
     assert!(limiter.allow_at(address, start + duration));
-    assert_eq!(
-        limiter.entries.lock().unwrap().peek(&address).unwrap().used,
-        1
-    );
+    assert_eq!(limiter.entries.lock().peek(&address).unwrap().used, 1);
 }

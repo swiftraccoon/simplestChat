@@ -66,7 +66,6 @@ impl Fixture {
             .manager
             .participants
             .read()
-            .unwrap()
             .keys()
             .cloned()
             .collect::<Vec<_>>();
@@ -242,7 +241,7 @@ async fn receive_replacement_preserves_sender_and_producer_retires_consumers_and
         assert_eq!(stats[0].min_outgoing_bitrate, Some(100_000));
         assert_eq!(stats[0].max_outgoing_bitrate, Some(3_000_000));
     }
-    assert_eq!(f.manager.bwe_trace_handlers.read().unwrap().len(), 1);
+    assert_eq!(f.manager.bwe_trace_handlers.read().len(), 1);
     let replay = f
         .manager
         .replace_recv_transport("publisher-viewer", old_id, f.placement(), &f.config, None)

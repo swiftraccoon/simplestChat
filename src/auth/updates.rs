@@ -4,6 +4,7 @@ use super::{
     account, jwt,
     types::{AuthError, Claims},
 };
+use crate::sync::Mutex;
 use crate::{shutdown::DrainSignal, signaling::SignalingServer};
 use axum::{
     extract::State,
@@ -19,7 +20,7 @@ use std::{
     collections::HashMap,
     convert::Infallible,
     sync::{
-        Arc, Mutex,
+        Arc,
         atomic::{AtomicU64, Ordering},
     },
     time::Duration,
@@ -114,11 +115,7 @@ impl Hub {
     }
 
     fn subscribe(&self, account: Uuid) -> Result<Subscription, AuthError> {
-        let mut state = self
-            .inner
-            .state
-            .lock()
-            .unwrap_or_else(|error| error.into_inner());
+        let mut state = self.inner.state.lock();
         if state.total >= self.inner.capacity {
             return Err(AuthError::ServiceBusy);
         }
@@ -149,7 +146,6 @@ impl Hub {
             .inner
             .state
             .lock()
-            .unwrap_or_else(|error| error.into_inner())
             .accounts
             .get(&account)
             .map(|entry| entry.sender.clone());
@@ -181,11 +177,7 @@ impl Hub {
     }
 
     pub(crate) fn revalidate(&self, account: Uuid) {
-        let state = self
-            .inner
-            .state
-            .lock()
-            .unwrap_or_else(|error| error.into_inner());
+        let state = self.inner.state.lock();
         if let Some(entry) = state.accounts.get(&account) {
             entry.generation.fetch_add(1, Ordering::SeqCst);
             let _ = entry.sender.send(Notice::Revalidate);
@@ -200,11 +192,7 @@ struct Lease {
 
 impl Drop for Lease {
     fn drop(&mut self) {
-        let mut state = self
-            .inner
-            .state
-            .lock()
-            .unwrap_or_else(|error| error.into_inner());
+        let mut state = self.inner.state.lock();
         state.total -= 1;
         if let Some(entry) = state.accounts.get_mut(&self.account) {
             entry.subscribers -= 1;

@@ -22,7 +22,7 @@ fn boundary_properties_ticket_validity_requires_both_deadlines_and_exactly_one_u
                 let issued = store.issue_at(claims, now, EPOCH);
                 if remaining == 0 {
                     assert!(matches!(issued, Err(AuthError::TokenExpired)));
-                    assert!(store.entries.lock().unwrap().is_empty());
+                    assert!(store.entries.lock().is_empty());
                     continue;
                 }
                 let issued = issued.unwrap();
@@ -40,7 +40,7 @@ fn boundary_properties_ticket_validity_requires_both_deadlines_and_exactly_one_u
                     assert_eq!(ticket.claims.auth_version, 7);
                     assert_eq!(ticket.claims.sid, uuid::Uuid::from_u128(1));
                 }
-                assert!(store.entries.lock().unwrap().is_empty());
+                assert!(store.entries.lock().is_empty());
                 assert!(store.take_at(&issued.ticket, at, epoch).is_err());
             }
         }

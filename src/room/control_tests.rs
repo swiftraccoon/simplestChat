@@ -76,11 +76,7 @@ where
         .await
         .participants
         .insert(owner.id, owner.clone());
-    manager
-        .rooms
-        .write()
-        .unwrap()
-        .insert(room_id.clone(), room.clone());
+    manager.rooms.write().insert(room_id.clone(), room.clone());
     let fixture = Fixture {
         manager: manager.clone(),
         room_id,
@@ -171,7 +167,6 @@ async fn persistence_timeout_drops_pending_sql_and_quarantines_before_control_re
                 .manager
                 .deleting_rooms
                 .read()
-                .unwrap()
                 .contains_key(&fixture.room_id)
         );
         let notice: Value =
@@ -438,7 +433,6 @@ async fn queued_control_never_runs_against_a_same_id_replacement() {
             .manager
             .rooms
             .write()
-            .unwrap()
             .insert(fixture.room_id.clone(), replacement.clone());
         drop(held);
         assert!(bounded(pending).await.is_err());
@@ -525,7 +519,6 @@ async fn definite_persistence_failure_preserves_room_policy_and_control_capacity
                     .manager
                     .deleting_rooms
                     .read()
-                    .unwrap()
                     .contains_key(&fixture.room_id)
             );
             drop(bounded(control::lock_room(&fixture.room)).await);
@@ -552,7 +545,6 @@ async fn indeterminate_persistence_quarantines_only_its_exact_room_incarnation()
             .manager
             .rooms
             .write()
-            .unwrap()
             .insert(fixture.room_id.clone(), replacement.clone());
         assert!(
             fixture
@@ -573,7 +565,6 @@ async fn indeterminate_persistence_quarantines_only_its_exact_room_incarnation()
                 .manager
                 .deleting_rooms
                 .read()
-                .unwrap()
                 .contains_key(&fixture.room_id)
         );
 
@@ -594,7 +585,6 @@ async fn indeterminate_persistence_quarantines_only_its_exact_room_incarnation()
                 .manager
                 .deleting_rooms
                 .read()
-                .unwrap()
                 .contains_key(&fixture.room_id)
         );
         assert!(Arc::ptr_eq(
@@ -713,11 +703,7 @@ async fn blocked_room_sql_keeps_chat_available_and_committed_control_outlives_it
             room.participants.insert(owner.id, owner.clone());
             room.participants.insert(member.id, member.clone());
         }
-        manager
-            .rooms
-            .write()
-            .unwrap()
-            .insert(room_id.clone(), room.clone());
+        manager.rooms.write().insert(room_id.clone(), room.clone());
         installed_room = Some(room.clone());
         blocker = Some(pool.begin().await.unwrap());
         sqlx::query("SELECT id FROM rooms WHERE id=$1 FOR UPDATE")

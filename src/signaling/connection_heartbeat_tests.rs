@@ -682,7 +682,7 @@ async fn authenticated_renewal_keeps_socket_and_membership_across_original_expir
                 "membership identity changed"
             );
             anyhow::ensure!(
-                fixture.grace.inner.read().unwrap().is_empty(),
+                fixture.grace.inner.read().is_empty(),
                 "renewal entered reconnect grace"
             );
             let snapshot = fixture

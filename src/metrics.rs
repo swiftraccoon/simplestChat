@@ -122,10 +122,10 @@ struct Inner {
     joins_refused_saturated_total: AtomicU64,
     consumer_layer_requests_total: AtomicU64,
     /// Latest CPU saturation reading, published by the monitor task.
-    saturation: std::sync::RwLock<Option<SaturationSnapshot>>,
-    worker_cpu: std::sync::RwLock<Vec<WorkerCpuSnapshot>>,
+    saturation: crate::sync::RwLock<Option<SaturationSnapshot>>,
+    worker_cpu: crate::sync::RwLock<Vec<WorkerCpuSnapshot>>,
     /// Latest media quality sample, published by the sampler task.
-    quality: std::sync::RwLock<Option<crate::media::quality::QualitySample>>,
+    quality: crate::sync::RwLock<Option<crate::media::quality::QualitySample>>,
 
     // Gauge
     connections_active: AtomicU64,
@@ -173,9 +173,9 @@ impl ServerMetrics {
                 password_work_rejected: AtomicU64::new(0),
                 joins_refused_saturated_total: AtomicU64::new(0),
                 consumer_layer_requests_total: AtomicU64::new(0),
-                saturation: std::sync::RwLock::new(None),
-                worker_cpu: std::sync::RwLock::new(Vec::new()),
-                quality: std::sync::RwLock::new(None),
+                saturation: crate::sync::RwLock::new(None),
+                worker_cpu: crate::sync::RwLock::new(Vec::new()),
+                quality: crate::sync::RwLock::new(None),
                 connections_active: AtomicU64::new(0),
                 message_handling: Histogram::new(),
             }),
@@ -278,27 +278,15 @@ impl ServerMetrics {
 
     /// Publishes the latest per-worker CPU readings of the saturation monitor.
     pub(crate) fn set_worker_cpu(&self, workers: Vec<WorkerCpuSnapshot>) {
-        *self
-            .inner
-            .worker_cpu
-            .write()
-            .unwrap_or_else(|e| e.into_inner()) = workers;
+        *self.inner.worker_cpu.write() = workers;
     }
 
     pub(crate) fn set_saturation(&self, snapshot: SaturationSnapshot) {
-        *self
-            .inner
-            .saturation
-            .write()
-            .unwrap_or_else(|e| e.into_inner()) = Some(snapshot);
+        *self.inner.saturation.write() = Some(snapshot);
     }
 
     pub(crate) fn set_quality_sample(&self, sample: crate::media::quality::QualitySample) {
-        *self
-            .inner
-            .quality
-            .write()
-            .unwrap_or_else(|e| e.into_inner()) = Some(sample);
+        *self.inner.quality.write() = Some(sample);
     }
 
     pub(crate) fn inc_rooms_created(&self) {
@@ -561,12 +549,7 @@ impl ServerMetrics {
             "Worker requests that changed a consumer's preferred layers (viewer ceiling and bandwidth tier merged server-side)",
             i.consumer_layer_requests_total.load(Relaxed),
         );
-        if let Some(saturation) = i
-            .saturation
-            .read()
-            .unwrap_or_else(|e| e.into_inner())
-            .as_ref()
-        {
+        if let Some(saturation) = i.saturation.read().as_ref() {
             render_gauge(
                 &mut out,
                 "simplestchat_cpu_saturated",
@@ -616,11 +599,8 @@ impl ServerMetrics {
                 saturation.memory_fraction,
             );
         }
-        render_worker_cpu(
-            &mut out,
-            &i.worker_cpu.read().unwrap_or_else(|e| e.into_inner()),
-        );
-        let quality = i.quality.read().unwrap_or_else(|e| e.into_inner());
+        render_worker_cpu(&mut out, &i.worker_cpu.read());
+        let quality = i.quality.read();
         render_gauge(
             &mut out,
             "simplestchat_quality_sample_available",

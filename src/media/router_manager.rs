@@ -44,7 +44,7 @@ struct ViewerRouters {
 
 /// Media participant id to the worker of its receive transport, with the
 /// ticket of the lease that recorded it.
-type Placements = Arc<std::sync::Mutex<HashMap<String, (WorkerId, u64)>>>;
+type Placements = Arc<crate::sync::Mutex<HashMap<String, (WorkerId, u64)>>>;
 
 /// Records where a viewer's receive transport lives. It drops with the
 /// participant's media, so every removal path forgets the placement, and it
@@ -57,7 +57,7 @@ pub struct ViewerLease {
 
 impl Drop for ViewerLease {
     fn drop(&mut self) {
-        let mut placements = self.placements.lock().unwrap_or_else(|e| e.into_inner());
+        let mut placements = self.placements.lock();
         if placements
             .get(&self.participant_id)
             .is_some_and(|(_, ticket)| *ticket == self.ticket)
@@ -93,7 +93,7 @@ impl RouterManager {
         Self {
             routers: Arc::new(RwLock::new(HashMap::new())),
             viewer_routers: tokio::sync::Mutex::new(HashMap::new()),
-            placements: Arc::new(std::sync::Mutex::new(HashMap::new())),
+            placements: Arc::new(crate::sync::Mutex::new(HashMap::new())),
             next_lease_ticket: AtomicU64::new(1),
             worker_manager,
         }
@@ -134,10 +134,7 @@ impl RouterManager {
             }
             drop(viewers);
             // The placed router is gone (its worker died): place again below.
-            self.placements
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .remove(participant_id);
+            self.placements.lock().remove(participant_id);
         }
 
         let primary_consumers = self
@@ -192,7 +189,6 @@ impl RouterManager {
         let ticket = self.next_lease_ticket.fetch_add(1, Ordering::Relaxed);
         self.placements
             .lock()
-            .unwrap_or_else(|e| e.into_inner())
             .insert(participant_id.to_string(), (worker_id, ticket));
         ViewerLease {
             participant_id: participant_id.to_string(),
@@ -206,7 +202,6 @@ impl RouterManager {
     pub fn worker_for_participant(&self, participant_id: &str) -> Option<WorkerId> {
         self.placements
             .lock()
-            .unwrap_or_else(|e| e.into_inner())
             .get(participant_id)
             .map(|(worker_id, _)| *worker_id)
     }

@@ -33,13 +33,13 @@ fn account_update_queues_are_scoped_bounded_and_release_all_leases() {
         Err(broadcast::error::TryRecvError::Empty)
     ));
     drop(subscriptions);
-    let state = hub.inner.state.lock().unwrap();
+    let state = hub.inner.state.lock();
     assert_eq!(state.total, 1);
     assert!(!state.accounts.contains_key(&account));
     drop(state);
     drop(other);
-    assert_eq!(hub.inner.state.lock().unwrap().total, 0);
-    assert!(hub.inner.state.lock().unwrap().accounts.is_empty());
+    assert_eq!(hub.inner.state.lock().total, 0);
+    assert!(hub.inner.state.lock().accounts.is_empty());
 }
 
 #[test]
@@ -119,5 +119,5 @@ async fn account_update_absolute_lifetime_closes_a_quiet_stream_without_replayin
             .is_none()
     );
     drop(connection);
-    assert_eq!(hub.inner.state.lock().unwrap().total, 0);
+    assert_eq!(hub.inner.state.lock().total, 0);
 }

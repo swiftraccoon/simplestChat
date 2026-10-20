@@ -8,11 +8,12 @@
 //! work semaphores independently bound resource use under distributed traffic.
 
 use crate::net::cohort;
+use crate::sync::Mutex;
 use lru::LruCache;
 use std::hash::Hash;
 use std::net::IpAddr;
 use std::num::NonZeroUsize;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 #[cfg(test)]
@@ -117,7 +118,7 @@ impl FailureLimiter {
     }
 
     fn wait_at(&self, address: IpAddr, account: &str, now: Instant) -> Option<u64> {
-        let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
+        let mut state = self.state.lock();
         let pair = (cohort(address), account.to_owned());
         let wait = state.pairs.wait(&pair, now);
         if wait.is_zero() {
@@ -136,7 +137,7 @@ impl FailureLimiter {
     }
 
     fn record_failure_at(&self, address: IpAddr, account: &str, now: Instant) {
-        let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
+        let mut state = self.state.lock();
         state
             .pairs
             .record_failure((cohort(address), account.to_owned()), now);
@@ -144,7 +145,7 @@ impl FailureLimiter {
 
     /// A correct password proves the owner is present: forgive everything.
     pub(crate) fn record_success(&self, address: IpAddr, account: &str) {
-        let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
+        let mut state = self.state.lock();
         state.pairs.clear(&(cohort(address), account.to_owned()));
     }
 }
@@ -178,10 +179,7 @@ impl WindowLimiter {
     }
 
     fn allow_at(&self, address: IpAddr, now: Instant) -> bool {
-        let mut entries = self
-            .entries
-            .lock()
-            .unwrap_or_else(|error| error.into_inner());
+        let mut entries = self.entries.lock();
         let window = entries.get_or_insert_mut(cohort(address), || Window {
             started: now,
             used: 0,
@@ -313,7 +311,7 @@ mod tests {
         assert!(limiter.allow_at(HOME, now));
         assert!(!limiter.allow_at(HOME, now));
         assert!(limiter.allow_at(OTHER, now));
-        assert_eq!(limiter.entries.lock().unwrap().len(), MAX_TRACKED_KEYS);
+        assert_eq!(limiter.entries.lock().len(), MAX_TRACKED_KEYS);
     }
 
     #[test]

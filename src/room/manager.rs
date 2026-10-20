@@ -38,15 +38,15 @@ impl RoomManager {
         let media_server = Arc::new(MediaServer::new(media_config).await?);
 
         Ok(Self {
-            rooms: Arc::new(StdRwLock::new(HashMap::new())),
+            rooms: Arc::new(RwLock::new(HashMap::new())),
             media_server,
             drain: DrainSignal::default(),
             metrics,
             db_pool,
             account_updates: crate::auth::updates::Hub::with_capacity(account_update_capacity),
             room_creation_lock: Arc::new(tokio::sync::Mutex::new(())),
-            deleting_rooms: Arc::new(StdRwLock::new(HashMap::new())),
-            identity_updates: Arc::new(StdRwLock::new(HashSet::new())),
+            deleting_rooms: Arc::new(RwLock::new(HashMap::new())),
+            identity_updates: Arc::new(RwLock::new(HashSet::new())),
             max_rooms,
             max_persisted_rooms,
             allow_ad_hoc_rooms,
@@ -192,10 +192,7 @@ impl RoomManager {
     /// The marker lives as long as the returned guard, so an update task that
     /// outlives its HTTP caller keeps the exclusion until it completes.
     pub(crate) fn begin_identity_update(&self, room_id: &RoomId) -> IdentityUpdateGuard {
-        self.identity_updates
-            .write()
-            .unwrap_or_else(|error| error.into_inner())
-            .insert(room_id.to_owned());
+        self.identity_updates.write().insert(room_id.to_owned());
         IdentityUpdateGuard {
             updates: self.identity_updates.clone(),
             room_id: room_id.to_owned(),
@@ -204,7 +201,7 @@ impl RoomManager {
 
     /// Gets a room lock by ID (brief outer read lock, no await)
     pub(in crate::room) fn get_room(&self, room_id: &RoomId) -> Result<Arc<TokioRwLock<Room>>> {
-        let rooms = self.rooms.read().unwrap_or_else(|e| e.into_inner());
+        let rooms = self.rooms.read();
         rooms
             .get(room_id)
             .cloned()

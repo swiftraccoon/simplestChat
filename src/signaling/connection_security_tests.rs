@@ -42,7 +42,7 @@ async fn shutdown_cancels_retained_grace_and_rejects_late_timers() {
     })
     .await
     .unwrap();
-    assert!(map.inner.read().unwrap().is_empty());
+    assert!(map.inner.read().is_empty());
 }
 
 #[test]

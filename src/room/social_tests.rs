@@ -1399,11 +1399,7 @@ async fn database_first_account_pm_uses_room_authority_and_retries_after_departu
         .unwrap(),
     );
     let room = Arc::new(TokioRwLock::new(room));
-    manager
-        .rooms
-        .write()
-        .unwrap()
-        .insert(room_id.clone(), room.clone());
+    manager.rooms.write().insert(room_id.clone(), room.clone());
     let server = crate::signaling::SignalingServer::new(
         manager.clone(),
         metrics,
@@ -1548,7 +1544,7 @@ async fn database_first_account_pm_uses_room_authority_and_retries_after_departu
         count, 2,
         "same-ID retry and expired admission never create another row"
     );
-    manager.rooms.write().unwrap().remove(&room_id);
+    manager.rooms.write().remove(&room_id);
     manager.shutdown().await.unwrap();
     manager.media_server().shutdown().await.unwrap();
     sqlx::query("DELETE FROM chat_messages WHERE sender_account=$1 AND recipient_account=$2")
@@ -1910,7 +1906,7 @@ where
     drain(&mut receivers);
     let room_id = room.id.clone();
     let room = Arc::new(TokioRwLock::new(room));
-    manager.rooms.write().unwrap().insert(room_id, room.clone());
+    manager.rooms.write().insert(room_id, room.clone());
     let test = test(InboxEditFixture {
         manager: manager.clone(),
         room,
@@ -2101,7 +2097,6 @@ async fn inbox_edit_never_targets_a_replaced_or_deleting_room() {
                     .manager
                     .rooms
                     .write()
-                    .unwrap()
                     .insert(room_id.clone(), Arc::new(TokioRwLock::new(replacement)));
             } else {
                 fixture.room.write().await.deleting = true;
@@ -2125,7 +2120,6 @@ async fn inbox_edit_never_targets_a_replaced_or_deleting_room() {
                 .manager
                 .rooms
                 .write()
-                .unwrap()
                 .insert(room_id, fixture.room.clone());
         }
     })
@@ -2178,7 +2172,6 @@ async fn inbox_edit_reconciles_other_rooms_even_when_the_origin_response_fails()
             .manager
             .rooms
             .write()
-            .unwrap()
             .insert(rid("other-edit-room"), remote.clone());
         while fixture.alice.sender.capacity() > 0 {
             fixture
@@ -2254,7 +2247,6 @@ async fn message_removal_requires_moderation_and_never_targets_private_messages(
     manager
         .rooms
         .write()
-        .unwrap()
         .insert(room_id.clone(), room_lock.clone());
     let command = |message_id: &MessageId| ClientMessage::RemoveChatMessage {
         request_id: "remove".into(),
@@ -2548,7 +2540,6 @@ async fn database_public_message_removal_scrubs_durable_history_without_runtime_
     manager
         .rooms
         .write()
-        .unwrap()
         .insert(room_id.clone(), Arc::new(TokioRwLock::new(room)));
     let command = |id: &MessageId| ClientMessage::RemoveChatMessage {
         request_id: "remove".into(),
@@ -2688,7 +2679,6 @@ async fn database_reports_offline_roles_and_opaque_bans_are_room_scoped() {
     manager
         .rooms
         .write()
-        .unwrap()
         .insert(room_id.clone(), Arc::new(TokioRwLock::new(room)));
 
     manager

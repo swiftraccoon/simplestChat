@@ -1036,11 +1036,7 @@ async fn shutdown_reports_stalled_creation_and_room_locks_without_reopening_admi
         false,
         None,
     )));
-    manager
-        .rooms
-        .write()
-        .unwrap()
-        .insert(rid("stalled"), room.clone());
+    manager.rooms.write().insert(rid("stalled"), room.clone());
     let held_creation = manager.room_creation_lock.lock().await;
     let creation_result = manager
         .shutdown_with_budget(std::time::Duration::from_millis(5))
@@ -1362,7 +1358,7 @@ fn join_capacity_preserves_all_live_windows_and_bounds_overflow() {
         assert!(!limiter.allow(key, now));
     }
     assert_eq!(limiter.tracked_keys(), MAX_TRACKED_JOIN_KEYS);
-    let table = limiter.table.lock().unwrap();
+    let table = limiter.table.lock();
     assert_eq!(table.order.len(), MAX_TRACKED_JOIN_KEYS);
     drop(table);
     assert!(limiter.allow(0, now + JOIN_RATE_WINDOW));
@@ -1774,28 +1770,28 @@ fn deletion_tombstone_rejects_in_flight_room_commits() {
 
 #[test]
 fn only_the_owning_delete_task_releases_a_room_reservation() {
-    let deleting = StdRwLock::new(HashMap::new());
+    let deleting = RwLock::new(HashMap::new());
     let owner = uuid::Uuid::new_v4();
-    deleting.write().unwrap().insert(rid("room"), owner);
+    deleting.write().insert(rid("room"), owner);
 
     release_deletion_reservation(&deleting, &rid("room"), uuid::Uuid::new_v4());
-    assert_eq!(deleting.read().unwrap().get("room"), Some(&owner));
+    assert_eq!(deleting.read().get("room"), Some(&owner));
 
     release_deletion_reservation(&deleting, &rid("room"), owner);
-    assert!(!deleting.read().unwrap().contains_key("room"));
+    assert!(!deleting.read().contains_key("room"));
 }
 
 #[test]
 fn failed_router_teardown_retains_the_room_reservation() {
-    let deleting = StdRwLock::new(HashMap::new());
+    let deleting = RwLock::new(HashMap::new());
     let owner = uuid::Uuid::new_v4();
-    deleting.write().unwrap().insert(rid("room"), owner);
+    deleting.write().insert(rid("room"), owner);
 
     release_deletion_reservation_after_router_teardown(&deleting, &rid("room"), owner, false);
-    assert_eq!(deleting.read().unwrap().get("room"), Some(&owner));
+    assert_eq!(deleting.read().get("room"), Some(&owner));
 
     release_deletion_reservation_after_router_teardown(&deleting, &rid("room"), owner, true);
-    assert!(!deleting.read().unwrap().contains_key("room"));
+    assert!(!deleting.read().contains_key("room"));
 }
 
 #[test]

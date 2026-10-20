@@ -1,8 +1,9 @@
 #![forbid(unsafe_code)]
 
+use crate::sync::RwLock;
 use std::collections::HashMap;
 use std::net::IpAddr;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tracing::info;
 use uuid::Uuid;
@@ -119,7 +120,7 @@ impl ChallengeStore {
         source_ip: IpAddr,
     ) -> Option<String> {
         let source_ip = crate::net::cohort(source_ip);
-        let mut challenges = self.challenges.write().unwrap_or_else(|e| e.into_inner());
+        let mut challenges = self.challenges.write();
         challenges.retain_live();
 
         let principal_at_limit = challenges
@@ -168,7 +169,7 @@ impl ChallengeStore {
     }
 
     pub(crate) fn take_registration(&self, ceremony_id: &str) -> Option<RegistrationData> {
-        let mut challenges = self.challenges.write().unwrap_or_else(|e| e.into_inner());
+        let mut challenges = self.challenges.write();
         let challenge = challenges.registrations.remove(ceremony_id)?;
         (challenge.created_at.elapsed() < CHALLENGE_TTL).then_some(challenge.data)
     }
@@ -179,7 +180,7 @@ impl ChallengeStore {
         source_ip: IpAddr,
     ) -> Option<String> {
         let source_ip = crate::net::cohort(source_ip);
-        let mut challenges = self.challenges.write().unwrap_or_else(|e| e.into_inner());
+        let mut challenges = self.challenges.write();
         challenges.retain_live();
 
         let source_at_limit = challenges
@@ -208,7 +209,7 @@ impl ChallengeStore {
     }
 
     pub(crate) fn take_authentication(&self, ceremony_id: &str) -> Option<AuthenticationData> {
-        let mut challenges = self.challenges.write().unwrap_or_else(|e| e.into_inner());
+        let mut challenges = self.challenges.write();
         let challenge = challenges.authentications.remove(ceremony_id)?;
         (challenge.created_at.elapsed() < CHALLENGE_TTL).then_some(challenge.data)
     }
@@ -221,10 +222,7 @@ impl ChallengeStore {
         source_ip: IpAddr,
     ) -> Option<String> {
         let source_ip = crate::net::cohort(source_ip);
-        let mut challenges = self
-            .challenges
-            .write()
-            .unwrap_or_else(|error| error.into_inner());
+        let mut challenges = self.challenges.write();
         challenges.retain_live();
         let account = data.owner().0;
         if challenges.len() >= MAX_CHALLENGES
@@ -263,10 +261,7 @@ impl ChallengeStore {
         user_id: Uuid,
         auth_version: i64,
     ) -> Option<AccountChallenge> {
-        let mut challenges = self
-            .challenges
-            .write()
-            .unwrap_or_else(|error| error.into_inner());
+        let mut challenges = self.challenges.write();
         if challenges.accounts.get(id)?.data.owner() != (user_id, auth_version) {
             return None;
         }
@@ -348,7 +343,6 @@ mod tests {
         store
             .challenges
             .write()
-            .unwrap()
             .accounts
             .get_mut(&expired)
             .unwrap()
@@ -387,7 +381,6 @@ mod tests {
             store
                 .challenges
                 .write()
-                .unwrap()
                 .accounts
                 .get_mut(id)
                 .unwrap()
@@ -417,7 +410,6 @@ mod tests {
         store
             .challenges
             .write()
-            .unwrap()
             .accounts
             .get_mut(&expired)
             .unwrap()
@@ -544,10 +536,7 @@ mod tests {
             )
             .expect("same owner retry should replace one old challenge");
 
-        let challenges = store
-            .challenges
-            .read()
-            .unwrap_or_else(|error| error.into_inner());
+        let challenges = store.challenges.read();
         assert_eq!(challenges.registrations.len(), MAX_CHALLENGES_PER_PRINCIPAL);
         assert!(challenges.registrations.contains_key(&replacement_id));
         assert_eq!(
@@ -664,14 +653,7 @@ mod tests {
             }
         }
 
-        assert_eq!(
-            store
-                .challenges
-                .read()
-                .unwrap_or_else(|error| error.into_inner())
-                .len(),
-            MAX_CHALLENGES
-        );
+        assert_eq!(store.challenges.read().len(), MAX_CHALLENGES);
         assert!(
             store
                 .store_registration(
@@ -695,10 +677,7 @@ mod tests {
                 attacker_ip,
             )
             .expect("an existing owner may replace its own entry at capacity");
-        let challenges = store
-            .challenges
-            .read()
-            .unwrap_or_else(|error| error.into_inner());
+        let challenges = store.challenges.read();
         assert_eq!(challenges.len(), MAX_CHALLENGES);
         assert!(challenges.registrations.contains_key(&victim_id));
         assert!(!challenges.registrations.contains_key(&old_attacker_id));
@@ -723,13 +702,12 @@ mod tests {
         store
             .challenges
             .write()
-            .unwrap()
             .authentications
             .get_mut(&second)
             .unwrap()
             .created_at = Instant::now() - CHALLENGE_TTL;
         assert!(store.take_authentication(&second).is_none());
-        assert!(store.challenges.read().unwrap().authentications.is_empty());
+        assert!(store.challenges.read().authentications.is_empty());
     }
 
     #[test]
@@ -793,7 +771,7 @@ mod tests {
                 .store_authentication(authentication, IpAddr::from([203, 0, 113, 1]))
                 .is_none()
         );
-        assert_eq!(store.challenges.read().unwrap().len(), MAX_CHALLENGES);
+        assert_eq!(store.challenges.read().len(), MAX_CHALLENGES);
         assert!(store.take_registration(&original).is_some());
     }
 }

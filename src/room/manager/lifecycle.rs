@@ -23,20 +23,10 @@ impl RoomManager {
         if self.drain.is_draining() {
             return Err(sqlx::Error::PoolClosed);
         }
-        if self
-            .deleting_rooms
-            .read()
-            .unwrap_or_else(|error| error.into_inner())
-            .contains_key(request.id.as_str())
-        {
+        if self.deleting_rooms.read().contains_key(request.id.as_str()) {
             return Ok(None);
         }
-        if self
-            .rooms
-            .read()
-            .unwrap_or_else(|error| error.into_inner())
-            .contains_key(request.id.as_str())
-        {
+        if self.rooms.read().contains_key(request.id.as_str()) {
             return Ok(None);
         }
         let pool = self.db_pool.as_ref().ok_or(sqlx::Error::PoolClosed)?;
@@ -101,11 +91,7 @@ impl RoomManager {
             let creation_guard = tokio::time::timeout(ROOM_DELETE_TIMEOUT, creation_lock.lock())
                 .await
                 .map_err(|_| room_delete_timeout("waiting for room creation"))?;
-            let runtime_room = rooms
-                .read()
-                .unwrap_or_else(|error| error.into_inner())
-                .get(&room_id)
-                .cloned();
+            let runtime_room = rooms.read().get(&room_id).cloned();
             // Control precedes the deletion reservation: an earlier writer may
             // quarantine this incarnation while we wait for its SQL to finish.
             let control_guard = match runtime_room.as_ref() {
@@ -118,9 +104,7 @@ impl RoomManager {
             };
             let deletion_token = uuid::Uuid::new_v4();
             {
-                let mut deleting = deleting_rooms
-                    .write()
-                    .unwrap_or_else(|error| error.into_inner());
+                let mut deleting = deleting_rooms.write();
                 if deleting.contains_key(&room_id) {
                     return Ok(DeleteRoomResult::NotFound);
                 }
@@ -239,7 +223,7 @@ impl RoomManager {
             };
 
             if let Some(runtime_room) = runtime_room.as_ref() {
-                let mut rooms = rooms.write().unwrap_or_else(|error| error.into_inner());
+                let mut rooms = rooms.write();
                 if rooms
                     .get(&room_id)
                     .is_some_and(|candidate| Arc::ptr_eq(candidate, runtime_room))
@@ -414,7 +398,6 @@ impl RoomManager {
         if !self
             .rooms
             .read()
-            .unwrap_or_else(|error| error.into_inner())
             .get(room_id)
             .is_some_and(|current| Arc::ptr_eq(current, &room_lock))
         {
@@ -465,10 +448,7 @@ impl RoomManager {
             sessions
         };
         {
-            let mut rooms = self
-                .rooms
-                .write()
-                .unwrap_or_else(|error| error.into_inner());
+            let mut rooms = self.rooms.write();
             if rooms
                 .get(room_id)
                 .is_some_and(|candidate| Arc::ptr_eq(candidate, &room_lock))
@@ -479,7 +459,6 @@ impl RoomManager {
         let deletion_token = uuid::Uuid::new_v4();
         self.deleting_rooms
             .write()
-            .unwrap_or_else(|error| error.into_inner())
             .insert(room_id.to_owned(), deletion_token);
         drop(control_guard);
         drop(creation_guard);
@@ -530,24 +509,14 @@ impl RoomManager {
         use futures_util::StreamExt;
         use std::sync::atomic::AtomicUsize;
         self.drain.begin_draining();
-        let remaining = AtomicUsize::new(
-            self.rooms
-                .read()
-                .unwrap_or_else(|error| error.into_inner())
-                .len(),
-        );
+        let remaining = AtomicUsize::new(self.rooms.read().len());
         let acquired_creation = AtomicBool::new(false);
         let cleanup = async {
             // Wait for an earlier room creation to finish or roll back. Holding
             // this lock prevents any late publication after draining the map.
             let _creation = self.room_creation_lock.lock().await;
             acquired_creation.store(true, Ordering::Relaxed);
-            let all_rooms: Vec<_> = self
-                .rooms
-                .write()
-                .unwrap_or_else(|error| error.into_inner())
-                .drain()
-                .collect();
+            let all_rooms: Vec<_> = self.rooms.write().drain().collect();
             remaining.store(all_rooms.len(), Ordering::Relaxed);
             futures_util::stream::iter(all_rooms)
                 .for_each_concurrent(16, |(room_id, room_lock)| {
