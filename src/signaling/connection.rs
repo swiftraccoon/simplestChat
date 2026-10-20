@@ -1691,16 +1691,18 @@ async fn handle_connection_with_timing(
                                     } else {
                                         handle_client_message(
                                             &client_msg,
-                                            &participant_id,
-                                            &mut current_room_id,
-                                            &in_lobby,
-                                            &reply,
-                                            &room_manager,
-                                            &turn_config,
-                                            &mut reconnect_token,
-                                            &bwe_sender,
-                                            is_authenticated,
-                                            client_ip,
+                                            Dispatch {
+                                                participant_id: &participant_id,
+                                                current_room_id: &mut current_room_id,
+                                                in_lobby: &in_lobby,
+                                                reply: &reply,
+                                                room_manager: &room_manager,
+                                                turn_config: &turn_config,
+                                                reconnect_token: &mut reconnect_token,
+                                                bwe_sender: &bwe_sender,
+                                                is_authenticated,
+                                                client_ip,
+                                            },
                                         ).await
                                     }
                                 },
@@ -2303,24 +2305,39 @@ fn validate_durable_reason(reason: Option<&str>) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Handle a single client message
-#[expect(
-    clippy::too_many_arguments,
-    reason = "dispatcher borrows independently owned connection state"
-)]
-async fn handle_client_message(
-    message: &ClientMessage,
-    participant_id: &ParticipantId,
-    current_room_id: &mut Option<RoomId>,
-    in_lobby: &Arc<AtomicBool>,
-    reply: &ReplySender<'_>,
-    room_manager: &Arc<RoomManager>,
-    turn_config: &Option<Arc<TurnConfig>>,
-    reconnect_token: &mut String,
-    bwe_sender: &Option<mpsc::Sender<crate::media::types::ReceiveBandwidthEstimate>>,
+/// What one client command may read and change: this connection's identity and
+/// room membership, its reply channel and the services the dispatcher reaches.
+/// Every field borrows state the connection task owns for the whole socket.
+struct Dispatch<'a, 'r> {
+    participant_id: &'a ParticipantId,
+    current_room_id: &'a mut Option<RoomId>,
+    in_lobby: &'a Arc<AtomicBool>,
+    reply: &'a ReplySender<'r>,
+    room_manager: &'a Arc<RoomManager>,
+    turn_config: &'a Option<Arc<TurnConfig>>,
+    reconnect_token: &'a mut String,
+    bwe_sender: &'a Option<mpsc::Sender<crate::media::types::ReceiveBandwidthEstimate>>,
     is_authenticated: bool,
     client_ip: Option<std::net::IpAddr>,
+}
+
+/// Handle a single client message
+async fn handle_client_message(
+    message: &ClientMessage,
+    connection: Dispatch<'_, '_>,
 ) -> anyhow::Result<()> {
+    let Dispatch {
+        participant_id,
+        current_room_id,
+        in_lobby,
+        reply,
+        room_manager,
+        turn_config,
+        reconnect_token,
+        bwe_sender,
+        is_authenticated,
+        client_ip,
+    } = connection;
     let sender = reply.sender;
     let metrics = reply.metrics;
     // Block media/moderation operations for lobby participants
@@ -2739,8 +2756,9 @@ async fn handle_client_message(
         }
 
         ClientMessage::Reconnect { .. } | ClientMessage::RenewAuthentication { .. } => {
-            // Handled in the main message loop before dispatching here
-            // This branch should never be reached
+            // The connection loop answers these before dispatch; reaching this arm
+            // is a dispatcher bug, so refuse the request instead of ignoring it.
+            anyhow::bail!("Reconnect and renewal are answered before dispatch");
         }
 
         ClientMessage::RestartIce { transport_id } => {

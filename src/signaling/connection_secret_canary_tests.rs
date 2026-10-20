@@ -64,16 +64,18 @@ async fn runtime_canary_dispatch_keeps_messages_and_credentials_out_of_observati
                     Stage::Dispatch,
                     handle_client_message(
                         &message,
-                        &participant,
-                        &mut room,
-                        &lobby,
-                        &reply,
-                        &manager,
-                        &None,
-                        &mut reconnect,
-                        &None,
-                        false,
-                        None,
+                        Dispatch {
+                            participant_id: &participant,
+                            current_room_id: &mut room,
+                            in_lobby: &lobby,
+                            reply: &reply,
+                            room_manager: &manager,
+                            turn_config: &None,
+                            reconnect_token: &mut reconnect,
+                            bwe_sender: &None,
+                            is_authenticated: false,
+                            client_ip: None,
+                        },
                     ),
                 ))
                 .await;

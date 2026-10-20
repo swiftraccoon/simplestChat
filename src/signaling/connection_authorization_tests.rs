@@ -57,16 +57,18 @@ async fn authenticated_join_uses_requested_room_name_without_changing_identity()
             };
             handle_client_message(
                 &join,
-                &participant,
-                &mut room,
-                &lobby,
-                &reply,
-                &manager,
-                &None,
-                &mut reconnect,
-                &None,
-                true,
-                None,
+                Dispatch {
+                    participant_id: &participant,
+                    current_room_id: &mut room,
+                    in_lobby: &lobby,
+                    reply: &reply,
+                    room_manager: &manager,
+                    turn_config: &None,
+                    reconnect_token: &mut reconnect,
+                    bwe_sender: &None,
+                    is_authenticated: true,
+                    client_ip: None,
+                },
             )
             .await
             .unwrap();
@@ -141,16 +143,18 @@ async fn authenticated_join_validates_the_requested_room_name() {
         };
         let error = handle_client_message(
             &join,
-            &participant,
-            &mut room,
-            &lobby,
-            &reply,
-            &manager,
-            &None,
-            &mut reconnect,
-            &None,
-            true,
-            None,
+            Dispatch {
+                participant_id: &participant,
+                current_room_id: &mut room,
+                in_lobby: &lobby,
+                reply: &reply,
+                room_manager: &manager,
+                turn_config: &None,
+                reconnect_token: &mut reconnect,
+                bwe_sender: &None,
+                is_authenticated: true,
+                client_ip: None,
+            },
         )
         .await
         .unwrap_err();
@@ -180,16 +184,18 @@ async fn authorization_dispatch_rejects_every_room_operation_after_sender_or_mem
     let join = serde_json::from_value(serde_json::json!({"type":"joinRoom", "roomId":"policy-room", "participantName":"Policy fixture"})).unwrap();
     handle_client_message(
         &join,
-        &participant,
-        &mut room,
-        &lobby,
-        &reply,
-        &manager,
-        &None,
-        &mut reconnect,
-        &None,
-        false,
-        None,
+        Dispatch {
+            participant_id: &participant,
+            current_room_id: &mut room,
+            in_lobby: &lobby,
+            reply: &reply,
+            room_manager: &manager,
+            turn_config: &None,
+            reconnect_token: &mut reconnect,
+            bwe_sender: &None,
+            is_authenticated: false,
+            client_ip: None,
+        },
     )
     .await
     .unwrap();
@@ -220,16 +226,18 @@ async fn authorization_dispatch_rejects_every_room_operation_after_sender_or_mem
             let message = serde_json::from_value(row.body.clone()).unwrap();
             let error = handle_client_message(
                 &message,
-                &participant,
-                &mut room,
-                &lobby,
-                &reply,
-                &manager,
-                &None,
-                &mut reconnect,
-                &None,
-                false,
-                None,
+                Dispatch {
+                    participant_id: &participant,
+                    current_room_id: &mut room,
+                    in_lobby: &lobby,
+                    reply: &reply,
+                    room_manager: &manager,
+                    turn_config: &None,
+                    reconnect_token: &mut reconnect,
+                    bwe_sender: &None,
+                    is_authenticated: false,
+                    client_ip: None,
+                },
             )
             .await
             .unwrap_err();
@@ -280,16 +288,18 @@ async fn authorization_dispatch_lobby_policy_covers_every_decoded_operation() {
         let message = serde_json::from_value(row.body).unwrap();
         let error = handle_client_message(
             &message,
-            &participant,
-            &mut room,
-            &lobby,
-            &reply,
-            &manager,
-            &None,
-            &mut reconnect,
-            &None,
-            false,
-            None,
+            Dispatch {
+                participant_id: &participant,
+                current_room_id: &mut room,
+                in_lobby: &lobby,
+                reply: &reply,
+                room_manager: &manager,
+                turn_config: &None,
+                reconnect_token: &mut reconnect,
+                bwe_sender: &None,
+                is_authenticated: false,
+                client_ip: None,
+            },
         )
         .await
         .unwrap_err();
@@ -329,16 +339,18 @@ async fn authorization_dispatch_moderation_checks_actor_and_target_roles() {
         .unwrap();
         handle_client_message(
             &message,
-            &id,
-            &mut room,
-            &Arc::new(AtomicBool::new(false)),
-            &reply,
-            &manager,
-            &None,
-            &mut Uuid::new_v4().to_string(),
-            &None,
-            false,
-            None,
+            Dispatch {
+                participant_id: &id,
+                current_room_id: &mut room,
+                in_lobby: &Arc::new(AtomicBool::new(false)),
+                reply: &reply,
+                room_manager: &manager,
+                turn_config: &None,
+                reconnect_token: &mut Uuid::new_v4().to_string(),
+                bwe_sender: &None,
+                is_authenticated: false,
+                client_ip: None,
+            },
         )
         .await
         .unwrap();
@@ -382,16 +394,18 @@ async fn authorization_dispatch_moderation_checks_actor_and_target_roles() {
             ] {
                 let result = handle_client_message(
                     &message,
-                    actor,
-                    &mut Some(rid("policy-roles")),
-                    &Arc::new(AtomicBool::new(false)),
-                    &reply,
-                    &manager,
-                    &None,
-                    &mut String::new(),
-                    &None,
-                    false,
-                    None,
+                    Dispatch {
+                        participant_id: actor,
+                        current_room_id: &mut Some(rid("policy-roles")),
+                        in_lobby: &Arc::new(AtomicBool::new(false)),
+                        reply: &reply,
+                        room_manager: &manager,
+                        turn_config: &None,
+                        reconnect_token: &mut String::new(),
+                        bwe_sender: &None,
+                        is_authenticated: false,
+                        client_ip: None,
+                    },
                 )
                 .await;
                 assert_eq!(
@@ -429,16 +443,18 @@ async fn authorization_dispatch_moderation_checks_actor_and_target_roles() {
             let message = serde_json::from_value(row.body).unwrap();
             let result = handle_client_message(
                 &message,
-                actor,
-                &mut Some(rid("policy-roles")),
-                &Arc::new(AtomicBool::new(false)),
-                &reply,
-                &manager,
-                &None,
-                &mut String::new(),
-                &None,
-                false,
-                None,
+                Dispatch {
+                    participant_id: actor,
+                    current_room_id: &mut Some(rid("policy-roles")),
+                    in_lobby: &Arc::new(AtomicBool::new(false)),
+                    reply: &reply,
+                    room_manager: &manager,
+                    turn_config: &None,
+                    reconnect_token: &mut String::new(),
+                    bwe_sender: &None,
+                    is_authenticated: false,
+                    client_ip: None,
+                },
             )
             .await;
             assert_eq!(
