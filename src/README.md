@@ -45,6 +45,11 @@ HTTP / WebSocket
 | Prometheus metrics and TURN credentials | `metrics.rs`, `turn.rs` |
 | Opt-in local operation traces | `diagnostics.rs`; [capture and interpretation](../docs/diagnostics.md) |
 
+A module's unit tests live beside it as `<name>_tests.rs` once they outgrow a screen,
+declared from the module as `#[cfg(test)] #[path = "<name>_tests.rs"] mod tests;` so
+`use super::*` still reaches its private items (`room/history_tests.rs`,
+`media/transport_manager_tests.rs`, `auth/account_tests.rs`, `config_tests.rs`, …).
+
 Worker count is configurable (detected CPUs capped at 64 by default), not fixed
 at 16. Each worker has a dedicated WebRtcServer UDP port; each room has one
 primary router that holds every producer and the audio observers. New routers

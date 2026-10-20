@@ -18,7 +18,7 @@ For commands, options, and report definitions, see the
 | `main.rs` | The `load_test` binary: options, ramps, workloads, result files |
 | `metrics.rs` | Counters, signaling histograms, diagnostic collection |
 | `metrics/measurement.rs` | Shared interval, per-attempt readiness/coverage, consumer delivery checks |
-| `subscriptions.rs` | Bounded discovery deduplication, pending queues, and consumer-cap refill |
+| `subscriptions.rs` | Bounded discovery deduplication, pending queues, and consumer-cap refill (tests in `subscriptions_tests.rs`) |
 | `subscription_plan.rs` | Deterministic ring/hotspot publisher graphs and graph identity |
 | `receiver_stall.rs` | Opt-in bucket monitoring, shared capture budget, and scoped native capture |
 | `keyframe_tests.rs` | Native startup/stall controls and bounded owned cleanup (tests only) |
