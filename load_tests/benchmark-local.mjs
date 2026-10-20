@@ -3,8 +3,8 @@
 import { spawn, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createHash, randomBytes } from 'node:crypto';
-import { readFile, writeFile, mkdir, stat, lstat, readlink, open } from 'node:fs/promises';
-import { resolve, join } from 'node:path';
+import { readFile, readdir, writeFile, mkdir, stat, lstat, readlink, open } from 'node:fs/promises';
+import { resolve, relative, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import os from 'node:os';
 import net from 'node:net';
@@ -426,15 +426,20 @@ export async function verifyExecutable(binary, expectedSha256, role) {
   }
 }
 
-/** Fingerprint the generator's explicit runtime source inputs, not its build environment. */
+/** Fingerprint the generator crate's sources (every Rust file under `load_tests/src`, with its
+ * path), not its build environment: a new, moved or renamed module changes the identity. */
 export async function generatorSourceIdentity(root) {
-  const sources = await Promise.all(['load_tests/bin/load_test.rs', 'load_tests/clients/metrics.rs',
-    'load_tests/clients/measurement.rs', 'load_tests/clients/media_generator.rs',
-    'load_tests/clients/webrtc_client.rs', 'load_tests/clients/subscriptions.rs',
-    'load_tests/clients/subscription_plan.rs',
-    'load_tests/clients/receiver_stall.rs']
-    .map(file => readFile(join(root, file))));
-  return `sha256:${hash(Buffer.concat(sources))}`;
+  const crate = join(root, 'load_tests', 'src');
+  const files = (await readdir(crate, { recursive: true, withFileTypes: true }))
+    .filter(entry => entry.isFile() && entry.name.endsWith('.rs'))
+    .map(entry => relative(crate, join(entry.parentPath, entry.name)))
+    .sort(pathOrder);
+  if (files.length === 0) throw new Error(`No generator sources under ${crate}`);
+  const digest = createHash('sha256');
+  for (const file of files) {
+    digest.update(`${file}\0`).update(await readFile(join(crate, file))).update('\0');
+  }
+  return `sha256:${digest.digest('hex')}`;
 }
 
 const trackedSourcePaths = ['Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml', 'src', 'vendor', 'build/pip-constraints.txt'];

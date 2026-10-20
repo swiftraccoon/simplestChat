@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createHash } from 'node:crypto';
@@ -785,42 +785,38 @@ test('server and generator executables must match their recorded hashes', async 
   await assert.rejects(verifyExecutable(join(directory, 'missing'), expected, 'baseline server'), /ENOENT/);
 });
 
-test('generator source identity includes subscription and stall policies and requires every declared input', async t => {
+test('generator source identity covers every Rust source of the generator crate and nothing else', async t => {
   const directory = await mkdtemp(join(tmpdir(), 'simplestchat-generator-source.'));
   t.after(() => rm(directory, { recursive: true, force: true }));
-  const paths = ['load_tests/bin/load_test.rs', 'load_tests/clients/metrics.rs',
-    'load_tests/clients/measurement.rs', 'load_tests/clients/media_generator.rs',
-    'load_tests/clients/webrtc_client.rs', 'load_tests/clients/subscriptions.rs',
-    'load_tests/clients/subscription_plan.rs',
-    'load_tests/clients/receiver_stall.rs'];
-  const contents = paths.map(file => `// owned source fixture: ${file}\n`);
-  for (const [index, file] of paths.entries()) {
-    await mkdir(dirname(join(directory, file)), { recursive: true });
-    await writeFile(join(directory, file), contents[index]);
+  const crate = join(directory, 'load_tests', 'src');
+  await assert.rejects(generatorSourceIdentity(directory), /ENOENT/);
+  await mkdir(join(crate, 'metrics'), { recursive: true });
+  await assert.rejects(generatorSourceIdentity(directory), /No generator sources/);
+  const sources = {
+    'main.rs': '// owned source fixture: main\n',
+    'metrics.rs': '// owned source fixture: metrics\n',
+    'metrics/measurement.rs': '// owned source fixture: measurement\n',
+    'subscriptions.rs': '// owned source fixture: subscriptions\n',
+  };
+  for (const [file, content] of Object.entries(sources)) await writeFile(join(crate, file), content);
+  const expected = createHash('sha256');
+  const byteOrder = (left, right) => Buffer.compare(Buffer.from(left), Buffer.from(right));
+  for (const file of Object.keys(sources).sort(byteOrder)) {
+    expected.update(`${file}\0`).update(sources[file]).update('\0');
   }
   const original = await generatorSourceIdentity(directory);
-  assert.equal(original, `sha256:${createHash('sha256').update(contents.join('')).digest('hex')}`);
-  const subscriptions = join(directory, 'load_tests/clients/subscriptions.rs');
-  await writeFile(subscriptions, '// changed subscription dispatch policy\n');
+  assert.equal(original, `sha256:${expected.digest('hex')}`);
+  await writeFile(join(crate, 'subscriptions.rs'), '// changed subscription dispatch policy\n');
   const changed = await generatorSourceIdentity(directory);
-  assert.notEqual(changed, original, 'runtime subscription changes must alter generator provenance');
-  const receiverStall = join(directory, 'load_tests/clients/receiver_stall.rs');
-  await writeFile(receiverStall, '// changed stall capture policy\n');
-  const observed = await generatorSourceIdentity(directory);
-  assert.notEqual(observed, changed, 'runtime stall capture changes must alter generator provenance');
-  await writeFile(join(directory, 'load_tests/README.md'), 'documentation only\n');
-  assert.equal(await generatorSourceIdentity(directory), observed, 'documentation is outside runtime source scope');
-  await rm(receiverStall);
-  await assert.rejects(generatorSourceIdentity(directory), /ENOENT/);
-  await writeFile(receiverStall, '// restored required input\n');
-  const subscriptionPlan = join(directory, 'load_tests/clients/subscription_plan.rs');
-  await writeFile(subscriptionPlan, '// changed deterministic graph policy\n');
-  assert.notEqual(await generatorSourceIdentity(directory), observed, 'planned graph changes must alter generator provenance');
-  await rm(subscriptionPlan);
-  await assert.rejects(generatorSourceIdentity(directory), /ENOENT/);
-  await writeFile(subscriptionPlan, '// restored required graph input\n');
-  await rm(subscriptions);
-  await assert.rejects(generatorSourceIdentity(directory), /ENOENT/);
+  assert.notEqual(changed, original, 'runtime policy changes must alter generator provenance');
+  await writeFile(join(crate, 'receiver_stall.rs'), '// a module no list had to name\n');
+  const grown = await generatorSourceIdentity(directory);
+  assert.notEqual(grown, changed, 'a new module must alter generator provenance');
+  await writeFile(join(crate, 'README.md'), 'documentation only\n');
+  await writeFile(join(directory, 'load_tests', 'README.md'), 'documentation only\n');
+  assert.equal(await generatorSourceIdentity(directory), grown, 'documentation is outside runtime source scope');
+  await rename(join(crate, 'receiver_stall.rs'), join(crate, 'stall.rs'));
+  assert.notEqual(await generatorSourceIdentity(directory), grown, 'a renamed module must alter generator provenance');
 });
 
 test('source identity includes new Rust inputs and is unchanged by staging identical contents', async t => {

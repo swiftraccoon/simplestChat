@@ -395,7 +395,7 @@ class VerifiedCacheTests(unittest.TestCase):
             ".cargo/config.toml",
             "src/main.rs",
             "src/nested/fixture.txt",
-            "load_tests/clients/browser_profile.rs",
+            "load_tests/src/browser_profile.rs",
             "tests/authorization.rs",
             "new_target/module.rs",
             "web/new_target/helper.rs",
