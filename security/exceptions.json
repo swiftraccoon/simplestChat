@@ -593,11 +593,11 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:84d47a452fdd2f905bde48ccb8d851c263dd012a25f6174f2b5c5a2f95f69a01",
+      "fingerprint": "codeql:078b363a9dd1012fbe5a89ee1dd897e03bbb1371673b7b6047a9d5bb66d19d12",
       "scope": "src/signaling/security_tests.rs:174:174:149:161",
       "owner": "swiftraccoon",
       "rationale": "The sink is a cfg(test) assertion diagnostic for a locally constructed metrics snapshot. The values are numeric counters/gauges; a password-named metric does not contain an account password. No credential or production log sink is involved.",
-      "reachability": "Exact CodeQL 2.27.1 query, primary range/message and complete-file SHA256 77e2e49ab31070d917d0c1cd93c8049ec8e42b9ef367fc22b1d7064974687466. Source re-reviewed at revision 4481e7f0e33969fcc822fe33919834d3ab962279: the flagged line and complete enclosing cfg(test) function are byte-identical to the actual analyzed source 82157a895bc710a3c382e356dac6ab3ad6e662a7. Account-update routing, the independent account-data guard, atomic notification PATCH route and revocation hook shift this unchanged fixture by 48 lines. The rendered-message identity is retained from successful original analysis in run 39097391051; only source identity and line location are rebound by this static review. No new analysis, broader test/query exclusion or remote dismissal is claimed. Changed source, location or query output requires another review.",
+      "reachability": "Exact CodeQL 2.27.1 query, primary range/message and complete-file SHA256 5b8e7899e9632c74079280a0d497c04f130fe05c01a01bb05e575f7d216b0f72. Source re-reviewed at revision 4481e7f0e33969fcc822fe33919834d3ab962279: the flagged line and complete enclosing cfg(test) function are byte-identical to the actual analyzed source 82157a895bc710a3c382e356dac6ab3ad6e662a7. Account-update routing, the independent account-data guard, atomic notification PATCH route and revocation hook shift this unchanged fixture by 48 lines. The rendered-message identity is retained from successful original analysis in run 39097391051; only source identity and line location are rebound by this static review. No new analysis, broader test/query exclusion or remote dismissal is claimed. Changed source, location or query output requires another review.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-35"
     },
@@ -823,11 +823,11 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:ded994331d3d73a944b7ac87f1b2a370bbaf7785dbb9289da683ea808484d8a9",
-      "scope": "src/auth/routes.rs:938:938:44:68",
+      "fingerprint": "codeql:3d5ebf0b5b9ec321b5cd1428c7eeeab26f4ab05f125e153a97230607339ff7eb",
+      "scope": "src/auth/routes.rs:917:917:44:68",
       "owner": "swiftraccoon",
       "rationale": "This cfg(test) assertion verifies the timing-equalization dummy password hash does not match an arbitrary public input. It provisions no account and is outside runtime credential selection.",
-      "reachability": "Exact CodeQL 2.27.1 query, primary range/message and complete-file SHA256 7ae411376021d9b46c2d476d31767809fb9e9eb67ac66c2533326aa8887dba59. Source re-reviewed at revision 4481e7f0e33969fcc822fe33919834d3ab962279: the flagged line and complete enclosing cfg(test) function are byte-identical to the actual analyzed source 82157a895bc710a3c382e356dac6ab3ad6e662a7. The added account-request permit helper shifts this unchanged dummy-hash test by eight lines. The rendered-message identity is retained from successful original analysis in run 39097391051; only source identity and line location are rebound by this static review. No new analysis, broader test/query exclusion or remote dismissal is claimed. Changed source, location or query output requires another review.",
+      "reachability": "Exact CodeQL 2.27.1 query, primary range/message and complete-file SHA256 5dddd8fc78a3079d2b844c450087ae8741e97491c6c221bcdb9b45032cc21f44. Source re-reviewed at revision 4481e7f0e33969fcc822fe33919834d3ab962279: the flagged line and complete enclosing cfg(test) function are byte-identical to the actual analyzed source 82157a895bc710a3c382e356dac6ab3ad6e662a7. The added account-request permit helper shifts this unchanged dummy-hash test by eight lines. The rendered-message identity is retained from successful original analysis in run 39097391051; only source identity and line location are rebound by this static review. No new analysis, broader test/query exclusion or remote dismissal is claimed. Changed source, location or query output requires another review.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-58"
     },
@@ -873,11 +873,11 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:2b7a354c01f3045e6efc419e5a41e8a8e8a8b273ec28f7f5ab1269f9c449cda4",
-      "scope": "src/signaling/security_tests.rs:605:605:27:52",
+      "fingerprint": "codeql:547c379b4f460c2b18e43a1a21bf503ebb0c6d1c05da004a948fc83936d22ef0",
+      "scope": "src/signaling/security_tests.rs:607:607:27:52",
       "owner": "swiftraccoon",
       "rationale": "This fixed passphrase is inside the cfg(test) disposable-database registration enumeration-limiter test. It is used only with a unique fixture account and test-owned state, never a production identity.",
-      "reachability": "Exact CodeQL 2.27.1 query, primary range/message and complete-file SHA256 77e2e49ab31070d917d0c1cd93c8049ec8e42b9ef367fc22b1d7064974687466. Source re-reviewed at revision 4481e7f0e33969fcc822fe33919834d3ab962279: the flagged line and complete enclosing cfg(test) function are byte-identical to the actual analyzed source 82157a895bc710a3c382e356dac6ab3ad6e662a7. Account-update routing, the independent account-data guard, atomic notification PATCH route and revocation hook shift this unchanged fixture by 48 lines. The rendered-message identity is retained from successful original analysis in run 39097391051; only source identity and line location are rebound by this static review. No new analysis, broader test/query exclusion or remote dismissal is claimed. Changed source, location or query output requires another review.",
+      "reachability": "Exact CodeQL 2.27.1 query, primary range/message and complete-file SHA256 5b8e7899e9632c74079280a0d497c04f130fe05c01a01bb05e575f7d216b0f72. Source re-reviewed at revision 4481e7f0e33969fcc822fe33919834d3ab962279: the flagged line and complete enclosing cfg(test) function are byte-identical to the actual analyzed source 82157a895bc710a3c382e356dac6ab3ad6e662a7. Account-update routing, the independent account-data guard, atomic notification PATCH route and revocation hook shift this unchanged fixture by 48 lines. The rendered-message identity is retained from successful original analysis in run 39097391051; only source identity and line location are rebound by this static review. No new analysis, broader test/query exclusion or remote dismissal is claimed. Changed source, location or query output requires another review.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-63"
     },
@@ -933,11 +933,11 @@
     },
     {
       "scanner": "codeql",
-      "fingerprint": "codeql:3cc46216401cbf199caa79d88880e1616d823da2357b6f7b687808c4272f0cf7",
+      "fingerprint": "codeql:23b59d1e0c5e5141a087ea9d81cd51a7425f7226249d83e6b7a354dd8cdd6053",
       "scope": "src/signaling/security_tests.rs:165:165:75:87",
       "owner": "swiftraccoon",
       "rationale": "The sink is a cfg(test) assertion diagnostic for a response from the test-owned loopback HTTP server. The route returns fixed status/body bytes to test timeout and admission metrics; no external input or production logging path is used.",
-      "reachability": "Exact CodeQL 2.27.1 query, primary range/message and complete-file SHA256 77e2e49ab31070d917d0c1cd93c8049ec8e42b9ef367fc22b1d7064974687466. Source re-reviewed at revision 4481e7f0e33969fcc822fe33919834d3ab962279: the flagged line and complete enclosing cfg(test) function are byte-identical to the actual analyzed source 82157a895bc710a3c382e356dac6ab3ad6e662a7. Account-update routing, the independent account-data guard, atomic notification PATCH route and revocation hook shift this unchanged fixture by 48 lines. The rendered-message identity is retained from successful original analysis in run 39097391051; only source identity and line location are rebound by this static review. No new analysis, broader test/query exclusion or remote dismissal is claimed. Changed source, location or query output requires another review.",
+      "reachability": "Exact CodeQL 2.27.1 query, primary range/message and complete-file SHA256 5b8e7899e9632c74079280a0d497c04f130fe05c01a01bb05e575f7d216b0f72. Source re-reviewed at revision 4481e7f0e33969fcc822fe33919834d3ab962279: the flagged line and complete enclosing cfg(test) function are byte-identical to the actual analyzed source 82157a895bc710a3c382e356dac6ab3ad6e662a7. Account-update routing, the independent account-data guard, atomic notification PATCH route and revocation hook shift this unchanged fixture by 48 lines. The rendered-message identity is retained from successful original analysis in run 39097391051; only source identity and line location are rebound by this static review. No new analysis, broader test/query exclusion or remote dismissal is claimed. Changed source, location or query output requires another review.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#alert-69"
     },

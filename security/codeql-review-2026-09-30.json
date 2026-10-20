@@ -797,9 +797,9 @@
         "end_column": 161
       },
       "messageSha256": "f3a41a98c9e17d302a77434763ce9ae4e42f51df43895cdf2eb21c97ed1b9706",
-      "sourceSha256": "77e2e49ab31070d917d0c1cd93c8049ec8e42b9ef367fc22b1d7064974687466",
+      "sourceSha256": "5b8e7899e9632c74079280a0d497c04f130fe05c01a01bb05e575f7d216b0f72",
       "scope": "src/signaling/security_tests.rs:174:174:149:161",
-      "fingerprint": "codeql:84d47a452fdd2f905bde48ccb8d851c263dd012a25f6174f2b5c5a2f95f69a01",
+      "fingerprint": "codeql:078b363a9dd1012fbe5a89ee1dd897e03bbb1371673b7b6047a9d5bb66d19d12",
       "number": 35,
       "severity": "high",
       "state": "open",
@@ -807,9 +807,9 @@
       "rationale": "The sink is a cfg(test) assertion diagnostic for a locally constructed metrics snapshot. The values are numeric counters/gauges; a password-named metric does not contain an account password. No credential or production log sink is involved.",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/35",
-      "sourceProvenanceRevision": "f2c95724685ba3053be5d94543995177f0538500",
-      "sourceReviewBaseRevision": "167a4e5b58e6432bcbd9c87cae4eb6baf7f6ac37",
-      "sourceReviewBlob": "1988b00f1a9f5d5ab48a752f185b4fb2cfd2f6b4"
+      "sourceProvenanceRevision": "f3c1193ab814314f0a9b8ea1a02465f4af6b11e7",
+      "sourceReviewBaseRevision": "f2c95724685ba3053be5d94543995177f0538500",
+      "sourceReviewBlob": "cef3560d2d9e8657d21394fe74bf7d3029aae8e3"
     },
     {
       "rule": "rust/cleartext-logging",
@@ -1366,15 +1366,15 @@
       "toolVersion": "2.27.1",
       "path": "src/auth/routes.rs",
       "region": {
-        "start_line": 938,
-        "end_line": 938,
+        "start_line": 917,
+        "end_line": 917,
         "start_column": 44,
         "end_column": 68
       },
       "messageSha256": "d6798191115c7adefc7f5ee1f720512e328f10329b99fba8c42e1a015eaa1afb",
-      "sourceSha256": "7ae411376021d9b46c2d476d31767809fb9e9eb67ac66c2533326aa8887dba59",
-      "scope": "src/auth/routes.rs:938:938:44:68",
-      "fingerprint": "codeql:ded994331d3d73a944b7ac87f1b2a370bbaf7785dbb9289da683ea808484d8a9",
+      "sourceSha256": "5dddd8fc78a3079d2b844c450087ae8741e97491c6c221bcdb9b45032cc21f44",
+      "scope": "src/auth/routes.rs:917:917:44:68",
+      "fingerprint": "codeql:3d5ebf0b5b9ec321b5cd1428c7eeeab26f4ab05f125e153a97230607339ff7eb",
       "number": 58,
       "severity": "critical",
       "state": "open",
@@ -1382,9 +1382,9 @@
       "rationale": "This cfg(test) assertion verifies the timing-equalization dummy password hash does not match an arbitrary public input. It provisions no account and is outside runtime credential selection.",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/58",
-      "sourceProvenanceRevision": "2d8250182c3080d7a9c53829f0bf294ce37bca5a",
-      "sourceReviewBaseRevision": "551ce5db2ccf6a76de03f2d3e4bbce32e9f06196",
-      "sourceReviewBlob": "f3b76b57f68aabaf31d58e03694cc2c8253ad6dc"
+      "sourceProvenanceRevision": "f3c1193ab814314f0a9b8ea1a02465f4af6b11e7",
+      "sourceReviewBaseRevision": "2d8250182c3080d7a9c53829f0bf294ce37bca5a",
+      "sourceReviewBlob": "2039bb8d86488ac4cef21b768db43d6a547e0770"
     },
     {
       "rule": "rust/hard-coded-cryptographic-value",
@@ -1491,15 +1491,15 @@
       "toolVersion": "2.27.1",
       "path": "src/signaling/security_tests.rs",
       "region": {
-        "start_line": 605,
-        "end_line": 605,
+        "start_line": 607,
+        "end_line": 607,
         "start_column": 27,
         "end_column": 52
       },
       "messageSha256": "9a865ae340f22b08ac3d2ee38d165e24655ca92924b04f7a36c224ed4b3c215c",
-      "sourceSha256": "77e2e49ab31070d917d0c1cd93c8049ec8e42b9ef367fc22b1d7064974687466",
-      "scope": "src/signaling/security_tests.rs:605:605:27:52",
-      "fingerprint": "codeql:2b7a354c01f3045e6efc419e5a41e8a8e8a8b273ec28f7f5ab1269f9c449cda4",
+      "sourceSha256": "5b8e7899e9632c74079280a0d497c04f130fe05c01a01bb05e575f7d216b0f72",
+      "scope": "src/signaling/security_tests.rs:607:607:27:52",
+      "fingerprint": "codeql:547c379b4f460c2b18e43a1a21bf503ebb0c6d1c05da004a948fc83936d22ef0",
       "number": 63,
       "severity": "critical",
       "state": "open",
@@ -1507,9 +1507,9 @@
       "rationale": "This fixed passphrase is inside the cfg(test) disposable-database registration enumeration-limiter test. It is used only with a unique fixture account and test-owned state, never a production identity.",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/63",
-      "sourceProvenanceRevision": "f2c95724685ba3053be5d94543995177f0538500",
-      "sourceReviewBaseRevision": "167a4e5b58e6432bcbd9c87cae4eb6baf7f6ac37",
-      "sourceReviewBlob": "1988b00f1a9f5d5ab48a752f185b4fb2cfd2f6b4"
+      "sourceProvenanceRevision": "f3c1193ab814314f0a9b8ea1a02465f4af6b11e7",
+      "sourceReviewBaseRevision": "f2c95724685ba3053be5d94543995177f0538500",
+      "sourceReviewBlob": "cef3560d2d9e8657d21394fe74bf7d3029aae8e3"
     },
     {
       "rule": "rust/hard-coded-cryptographic-value",
@@ -1641,9 +1641,9 @@
         "end_column": 87
       },
       "messageSha256": "d46f9dd9e35359ee0e1f76406f350f66c4a01df130e8f29bfaca169997ada897",
-      "sourceSha256": "77e2e49ab31070d917d0c1cd93c8049ec8e42b9ef367fc22b1d7064974687466",
+      "sourceSha256": "5b8e7899e9632c74079280a0d497c04f130fe05c01a01bb05e575f7d216b0f72",
       "scope": "src/signaling/security_tests.rs:165:165:75:87",
-      "fingerprint": "codeql:3cc46216401cbf199caa79d88880e1616d823da2357b6f7b687808c4272f0cf7",
+      "fingerprint": "codeql:23b59d1e0c5e5141a087ea9d81cd51a7425f7226249d83e6b7a354dd8cdd6053",
       "number": 69,
       "severity": "medium",
       "state": "open",
@@ -1651,9 +1651,9 @@
       "rationale": "The sink is a cfg(test) assertion diagnostic for a response from the test-owned loopback HTTP server. The route returns fixed status/body bytes to test timeout and admission metrics; no external input or production logging path is used.",
       "observedRevision": "407ec7e96ee9e57c593ac367142e1016e4dbeac5",
       "alertUrl": "https://github.com/swiftraccoon/simplestChat/security/code-scanning/69",
-      "sourceProvenanceRevision": "f2c95724685ba3053be5d94543995177f0538500",
-      "sourceReviewBaseRevision": "167a4e5b58e6432bcbd9c87cae4eb6baf7f6ac37",
-      "sourceReviewBlob": "1988b00f1a9f5d5ab48a752f185b4fb2cfd2f6b4"
+      "sourceProvenanceRevision": "f3c1193ab814314f0a9b8ea1a02465f4af6b11e7",
+      "sourceReviewBaseRevision": "f2c95724685ba3053be5d94543995177f0538500",
+      "sourceReviewBlob": "cef3560d2d9e8657d21394fe74bf7d3029aae8e3"
     },
     {
       "rule": "rust/cleartext-logging",

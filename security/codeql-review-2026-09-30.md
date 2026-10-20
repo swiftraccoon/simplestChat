@@ -1002,3 +1002,25 @@ Complete-source SHA256 per rebound file:
 |---|---|---|
 | 36 | `src/signaling/connection_authorization_tests.rs:414:414:21:62` | `codeql:b147d897a5eaafa9234e8e147a95051b6774e034bd3413c02e16dc0619c3f60b` |
 | 37 | `src/signaling/connection_authorization_tests.rs:463:463:17:51` | `codeql:d509ae6eef8c777d03b280187969620704a981b5916cb2ea56e9f4db4e14befe` |
+
+## Source re-review: the JWT secret type (2026-10-20)
+
+The `JwtSecret` commit (`f3c1193`) removed the per-route secret-length checks from
+`src/auth/routes.rs` and rebuilt the secret fixture in `src/signaling/security_tests.rs`, so the
+reviewed dummy-hash assertion in the routes tests moved up 21 lines and the reviewed password
+fixture in the signaling tests moved down two; the two other signaling findings kept their lines.
+Every flagged line is byte-identical to the reviewed source (verified by text at the new lines
+against revisions `2d82501` and `f2c9572`). Rebound with the line-mapping tool; the recomputed
+identities match run 39391019557's Rust policy report with no mismatch.
+
+Complete-source SHA256 per rebound file:
+
+- `src/auth/routes.rs`: `5dddd8fc78a3079d2b844c450087ae8741e97491c6c221bcdb9b45032cc21f44`
+- `src/signaling/security_tests.rs`: `5b8e7899e9632c74079280a0d497c04f130fe05c01a01bb05e575f7d216b0f72`
+
+| Alert | Range | Fingerprint |
+|---|---|---|
+| 35 | `src/signaling/security_tests.rs:174:174:149:161` | `codeql:078b363a9dd1012fbe5a89ee1dd897e03bbb1371673b7b6047a9d5bb66d19d12` |
+| 58 | `src/auth/routes.rs:917:917:44:68` | `codeql:3d5ebf0b5b9ec321b5cd1428c7eeeab26f4ab05f125e153a97230607339ff7eb` |
+| 63 | `src/signaling/security_tests.rs:607:607:27:52` | `codeql:547c379b4f460c2b18e43a1a21bf503ebb0c6d1c05da004a948fc83936d22ef0` |
+| 69 | `src/signaling/security_tests.rs:165:165:75:87` | `codeql:23b59d1e0c5e5141a087ea9d81cd51a7425f7226249d83e6b7a354dd8cdd6053` |
