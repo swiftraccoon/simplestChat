@@ -39,7 +39,8 @@ HTTP / WebSocket
 | Ordered persistence and uncertain-write handling | `room/control.rs`; `room/refusal.rs` (why an operation was refused: the class every persistence result carries, mapped once to the socket's error code and to an HTTP status) |
 | Persistent room/community API | `room/api.rs`, `room/community.rs`, `room/settings.rs` |
 | Membership-independent room administration and authorization | `room/administration.rs` |
-| Roles, invitations and moderation retention | `room/roles.rs`, `room/invites.rs`, `room/moderation.rs` |
+| Roles, invitations and moderation retention | `room/roles.rs`, `room/invites.rs`, `room/moderation.rs` (the one writer of saved sanctions, reports and history) |
+| What a moderation decision changes in a live room | `room/publication.rs` (`publish_sanction`, `publish_removal`, `publish_role`, `publish_unban`; called by the socket operations and the HTTP context alike) |
 | Native worker/router/transport lifecycle | `media/worker_manager.rs`, `router_manager.rs`, `transport_manager.rs` |
 | Media configuration and types | `media/config.rs`, `media/types.rs` |
 | Prometheus metrics and TURN credentials | `metrics.rs`, `turn.rs` |

@@ -2,6 +2,7 @@
 //! requests, each committed through the room's control order.
 
 use super::super::*;
+use crate::room::publication::{RemovalPublication, SanctionPublication};
 use crate::room::refusal::RoomError;
 
 impl RoomManager {
@@ -157,47 +158,15 @@ impl RoomManager {
         if !persisted {
             room.social.record_moderation_event(event);
         }
-        apply_punitive_to_cohort(
-            &mut room,
-            &target_participant_ids,
-            &target_lobby_ids,
-            sanction_key,
+        let revoked = room.publish_sanction(&SanctionPublication {
+            target: *target_participant_id,
+            participants: target_participant_ids,
+            lobby: target_lobby_ids,
+            authenticated: target_authenticated,
+            ip: target_ip,
             kind,
             enabled,
-        );
-        room.policy_revision = room.policy_revision.wrapping_add(1);
-
-        for affected_participant_id in &target_participant_ids {
-            let notification = punitive_notification(kind, enabled, *affected_participant_id);
-            room.broadcast_all(&notification);
-        }
-        for affected_participant_id in &target_lobby_ids {
-            let notification = punitive_notification(kind, enabled, *affected_participant_id);
-            if let (Some(entry), Ok(json)) = (
-                room.lobby.get(affected_participant_id),
-                serde_json::to_string(&notification),
-            ) {
-                let _ = try_send_essential(
-                    &room.metrics,
-                    &entry.sender,
-                    crate::OutboundJson::from(json),
-                );
-            }
-        }
-
-        let revoked = if kind == moderation::PunitiveKind::CamBanned && enabled {
-            let mut revoked = Vec::new();
-            for affected_participant_id in &target_participant_ids {
-                revoked.extend(Self::revoke_unauthorized_producers(
-                    &mut room,
-                    Some(affected_participant_id),
-                    "Camera access revoked by moderator",
-                ));
-            }
-            revoked
-        } else {
-            Vec::new()
-        };
+        });
         let active_observer = room.active_speaker_observer.clone();
         let audio_observer = room.audio_level_observer.clone();
         drop(room);
@@ -443,6 +412,8 @@ impl RoomManager {
             if !moderator.role.can_moderate(target.role) {
                 anyhow::bail!("Insufficient permissions to kick this participant");
             }
+            let (target_authenticated, target_ip, target_name) =
+                (target.authenticated, target.ip, target.name.clone());
             let event = moderation::ModerationEvent::new(
                 moderation::ModerationAction::Kick,
                 moderation::Actor {
@@ -489,25 +460,20 @@ impl RoomManager {
                 room.social.record_moderation_event(event);
             }
 
-            // Broadcast kick to everyone (including the target) before removing
-            room.broadcast_all(&ServerMessage::ParticipantKicked {
-                participant_id: *target_participant_id,
+            room.publish_removal(RemovalPublication {
+                ban: false,
+                participants: vec![*target_participant_id],
+                lobby: Vec::new(),
+                authenticated: target_authenticated,
+                ip: target_ip,
+                name: target_name,
                 reason: reason.map(String::from),
-            });
-
-            let target = room
-                .participants
-                .remove(target_participant_id)
-                .expect("target was checked under the same room lock");
-            let target_media_session_id = target.media_session_id;
-            for producer_id in target.producers.keys() {
-                room.producer_to_participant.remove(producer_id);
-            }
-
-            // Broadcast leave to remaining participants
-            room.broadcast_participant_left(target_participant_id);
-            room.notify_lobby_status();
-            target_media_session_id
+                duration_seconds: None,
+            })
+            .into_iter()
+            .next()
+            .map(|session| session.media_session_id)
+            .expect("target was checked under the same room lock")
         };
 
         // Clean up media outside lock
@@ -590,10 +556,6 @@ impl RoomManager {
         if reason.is_some_and(|value| !moderation::valid_reason(value)) {
             anyhow::bail!("Ban reason must be at most 256 characters without control characters");
         }
-        let runtime_expiry = duration.and_then(|seconds| {
-            std::time::Instant::now().checked_add(std::time::Duration::from_secs(seconds))
-        });
-
         // The control guard pins authority and membership across unlocked SQL.
         // An unauthenticated target with an IP represents the entire live guest
         // cohort on that IP, matching the durable/in-memory ban key.
@@ -687,71 +649,26 @@ impl RoomManager {
                 }
                 room.social.record_moderation_event(event);
             }
-            // Add to ban list — prevents rejoining
-            let banned_ids: Vec<ParticipantId> = target_participant_ids
-                .iter()
-                .chain(target_lobby_ids.iter())
-                .cloned()
-                .collect();
-            record_banned_cohort(
-                &mut room,
-                &banned_ids,
-                target_authenticated,
-                target_ip,
-                runtime_expiry,
-            );
-            room.social.record_ban(
-                target_name,
-                target_authenticated,
-                banned_ids.clone(),
-                target_ip,
-                reason,
-                duration,
-            );
-            room.policy_revision = room.policy_revision.wrapping_add(1);
-
-            let mut target_sessions = Vec::with_capacity(target_participant_ids.len());
-            for affected_participant_id in &target_participant_ids {
-                // Notify every socket in the affected IP cohort before removing it.
-                room.broadcast_all(&ServerMessage::ParticipantBanned {
-                    participant_id: *affected_participant_id,
-                    reason: reason.map(String::from),
-                });
-
-                let target = room
-                    .participants
-                    .remove(affected_participant_id)
-                    .expect("moderation cohort is stable under the room control guard");
-                for producer_id in target.producers.keys() {
-                    room.producer_to_participant.remove(producer_id);
-                }
-                target_sessions.push((*affected_participant_id, target.media_session_id));
-
-                room.broadcast_participant_left(affected_participant_id);
-            }
-            // The payload has no per-recipient field: serialize it once for the
-            // whole cohort, as the other lobby fan-outs do.
-            let lobby_denied = serde_json::to_string(&ServerMessage::LobbyDenied {
-                reason: Some(reason.map_or_else(|| "Banned from room".to_string(), String::from)),
+            room.publish_removal(RemovalPublication {
+                ban: true,
+                participants: target_participant_ids,
+                lobby: target_lobby_ids,
+                authenticated: target_authenticated,
+                ip: target_ip,
+                name: target_name,
+                reason: reason.map(String::from),
+                duration_seconds: duration,
             })
-            .ok()
-            .map(crate::OutboundJson::from);
-            for affected_participant_id in target_lobby_ids {
-                if let Some(entry) = room.lobby.remove(&affected_participant_id)
-                    && let Some(json) = lobby_denied.clone()
-                {
-                    let _ = try_send_essential(&room.metrics, &entry.sender, json);
-                }
-            }
-            room.notify_lobby_status();
-            target_sessions
         };
         control.release();
 
         // Clean up media outside lock
-        for (affected_participant_id, media_session_id) in target_sessions {
-            let target_media_id =
-                Self::media_participant_id(room_id, &affected_participant_id, media_session_id);
+        for session in target_sessions {
+            let target_media_id = Self::media_participant_id(
+                room_id,
+                &session.participant_id,
+                session.media_session_id,
+            );
             if let Err(e) = self
                 .media_server
                 .transport_manager()
@@ -760,7 +677,7 @@ impl RoomManager {
             {
                 warn!(
                     "Failed to clean up media for banned participant {}: {}",
-                    affected_participant_id, e
+                    session.participant_id, e
                 );
             }
         }
@@ -996,26 +913,9 @@ impl RoomManager {
 
         let mut room = room_lock.write().await;
         room.ensure_live()?;
-        let target = room
-            .participants
-            .get_mut(target_participant_id)
-            .expect("role target is stable under the room control guard");
-        target.role = new_role;
-        room.notify_lobby_status();
-        room.policy_revision = room.policy_revision.wrapping_add(1);
-        let revoked = Self::revoke_unauthorized_producers(
-            &mut room,
-            Some(target_participant_id),
-            "Role no longer permits this producer",
-        );
+        let revoked = room.publish_role(target_participant_id, new_role, setter_name);
         let active_observer = room.active_speaker_observer.clone();
         let audio_observer = room.audio_level_observer.clone();
-
-        room.broadcast_all(&ServerMessage::RoleChanged {
-            participant_id: *target_participant_id,
-            new_role,
-            granted_by: setter_name,
-        });
         drop(room);
         control.release();
 

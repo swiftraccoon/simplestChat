@@ -114,29 +114,7 @@ impl RoomManager {
             ));
             (target_id, ban.guest_ip, ban.participant_ids)
         };
-        let room = request.room();
-        if let Some(uid) = &user_id {
-            room.banned_participants.remove(uid);
-        }
-        if let Some(ip) = guest_ip {
-            room.banned_guest_ips.remove(&ip);
-        }
-        let mut affected = ids;
-        room.social.bans.retain(|_, ban| {
-            let matches = user_id
-                .as_ref()
-                .is_some_and(|uid| ban.participant_ids.contains(uid))
-                || guest_ip.is_some_and(|ip| ban.guest_ip == Some(ip));
-            if matches {
-                affected.extend(ban.participant_ids.iter().cloned());
-            }
-            !matches
-        });
-        for id in affected {
-            room.banned_participants.remove(&id);
-            room.banned_guest_participants.remove(&id);
-        }
-        room.policy_revision = room.policy_revision.wrapping_add(1);
+        request.room().publish_unban(user_id, guest_ip, ids);
         Ok(SocialResponse::RemoveRoomBan { removed: true })
     }
 

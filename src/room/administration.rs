@@ -2,6 +2,7 @@
 //!
 //! Creation, runtime control and database authorization have one order. An
 //! admitted mutation owns its commit and publication even when HTTP disconnects.
+use super::publication::{RemovalPublication, SanctionPublication};
 use super::settings::SettingsPatch;
 use super::{IdentityUpdateGuard, Room, RoomManager, api, control, moderation, roles, settings};
 use crate::auth::{
@@ -118,16 +119,6 @@ pub(crate) struct SanctionRequest {
     pub reason: Option<String>,
 }
 
-struct SanctionPublication {
-    target: ParticipantId,
-    participants: Vec<ParticipantId>,
-    lobby: Vec<ParticipantId>,
-    authenticated: bool,
-    ip: Option<IpAddr>,
-    kind: moderation::PunitiveKind,
-    enabled: bool,
-}
-
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct ModerationRequest {
@@ -170,15 +161,6 @@ impl ModerationRequest {
     }
 }
 
-struct ModerationPublication {
-    request: ModerationRequest,
-    participants: Vec<ParticipantId>,
-    lobby: Vec<ParticipantId>,
-    authenticated: bool,
-    ip: Option<IpAddr>,
-    name: String,
-}
-
 enum Command {
     Settings(SettingsPatch),
     Role(Uuid, roles::Role),
@@ -193,7 +175,7 @@ enum Publication {
     Settings(settings::RoomSettings, Option<Option<String>>),
     Role(Uuid, roles::Role),
     Unban(Option<Uuid>, Option<IpAddr>),
-    Moderate(ModerationPublication),
+    Moderate(RemovalPublication),
     Sanction(SanctionPublication),
     None,
 }
@@ -850,13 +832,15 @@ impl Context {
         } else {
             Vec::new()
         };
-        let publication = ModerationPublication {
-            request: request.clone(),
+        let publication = RemovalPublication {
+            ban,
             participants,
             lobby,
             authenticated: target.authenticated,
             ip: target.ip,
             name: target.name.clone(),
+            reason: request.reason.clone(),
+            duration_seconds: request.duration_seconds,
         };
         drop(room);
         if ban {
@@ -920,123 +904,38 @@ impl Context {
         };
         let mut room = runtime.write().await;
         // Control and the creation marker still pin this exact generation.
-        let mut affected = None;
-        let mut revoked_override = None;
-        match publication {
+        let revoked = match publication {
             Publication::Settings(settings, password) => {
                 room.settings = Some(settings.clone());
                 if let Some(password) = password {
                     room.password_hash = password;
                 }
                 room.broadcast_all(&ServerMessage::RoomSettingsChanged { settings });
+                room.policy_revision = room.policy_revision.wrapping_add(1);
+                room.notify_lobby_status();
+                RoomManager::revoke_unauthorized_producers(
+                    &mut room,
+                    None,
+                    "Room policy no longer permits this producer",
+                )
             }
             Publication::Role(target, role) => {
-                let target = ParticipantId::from(target);
-                if let Some(person) = room.participants.get_mut(&target) {
-                    person.role = role;
-                }
-                if let Some(person) = room.lobby.get_mut(&target) {
-                    person.role = role;
-                }
-                room.broadcast_all(&ServerMessage::RoleChanged {
-                    participant_id: target,
-                    new_role: role,
-                    granted_by: self.user.to_string(),
-                });
-                affected = Some(target);
+                room.publish_role(&ParticipantId::from(target), role, self.user.to_string())
             }
             Publication::Unban(user, ip) => {
-                let user = user.map(ParticipantId::from);
-                let ids = room.social.forget_ban(user.as_ref(), ip);
-                if let Some(user) = user {
-                    room.banned_participants.remove(&user);
-                }
-                if let Some(ip) = ip {
-                    room.banned_guest_ips.remove(&ip);
-                }
-                for id in ids {
-                    room.banned_participants.remove(&id);
-                    room.banned_guest_participants.remove(&id);
-                }
-                room.policy_revision = room.policy_revision.wrapping_add(1);
+                room.publish_unban(user.map(ParticipantId::from), ip, Vec::new());
                 return;
             }
             Publication::Moderate(publication) => {
-                let ban = publication.request.action == "ban";
-                if ban {
-                    let ids: Vec<_> = publication
-                        .participants
-                        .iter()
-                        .chain(publication.lobby.iter())
-                        .cloned()
-                        .collect();
-                    let expiry = publication.request.duration_seconds.and_then(|duration| {
-                        std::time::Instant::now()
-                            .checked_add(std::time::Duration::from_secs(duration))
-                    });
-                    super::record_banned_cohort(
-                        &mut room,
-                        &ids,
-                        publication.authenticated,
-                        publication.ip,
-                        expiry,
-                    );
-                    room.social.record_ban(
-                        publication.name,
-                        publication.authenticated,
-                        ids,
-                        publication.ip,
-                        publication.request.reason.as_deref(),
-                        publication.request.duration_seconds,
-                    );
-                }
-                let mut sessions = Vec::new();
-                for id in publication.participants {
-                    let notice = if ban {
-                        ServerMessage::ParticipantBanned {
-                            participant_id: id,
-                            reason: publication.request.reason.clone(),
-                        }
-                    } else {
-                        ServerMessage::ParticipantKicked {
-                            participant_id: id,
-                            reason: publication.request.reason.clone(),
-                        }
-                    };
-                    room.broadcast_all(&notice);
-                    if let Some(person) = room.participants.remove(&id) {
-                        for producer in person.producers.keys() {
-                            room.producer_to_participant.remove(producer);
-                        }
-                        sessions.push((id, person.media_session_id));
-                        room.broadcast_participant_left(&id);
-                    }
-                }
-                if let Ok(notice) = serde_json::to_string(&ServerMessage::LobbyDenied {
-                    reason: Some(
-                        publication
-                            .request
-                            .reason
-                            .unwrap_or_else(|| "Banned from room".into()),
-                    ),
-                }) {
-                    let notice = crate::OutboundJson::from(notice);
-                    for id in publication.lobby {
-                        if let Some(person) = room.lobby.remove(&id) {
-                            let _ = super::try_send_essential(
-                                &room.metrics,
-                                &person.sender,
-                                notice.clone(),
-                            );
-                        }
-                    }
-                }
-                room.policy_revision = room.policy_revision.wrapping_add(1);
-                room.notify_lobby_status();
+                let sessions = room.publish_removal(publication);
                 drop(room);
                 self._control.take();
-                for (id, session) in sessions {
-                    let media = RoomManager::media_participant_id(&self.room_id, &id, session);
+                for session in sessions {
+                    let media = RoomManager::media_participant_id(
+                        &self.room_id,
+                        &session.participant_id,
+                        session.media_session_id,
+                    );
                     if let Err(error) = self
                         .manager
                         .media_server
@@ -1044,71 +943,14 @@ impl Context {
                         .remove_participant(&media)
                         .await
                     {
-                        tracing::warn!(%error,"Administered participant media cleanup failed");
+                        tracing::warn!(%error, "Administered participant media cleanup failed");
                     }
                 }
                 return;
             }
-            Publication::Sanction(publication) => {
-                let key = super::SanctionKey::for_identity(
-                    &publication.target,
-                    publication.authenticated,
-                    publication.ip,
-                );
-                super::apply_punitive_to_cohort(
-                    &mut room,
-                    &publication.participants,
-                    &publication.lobby,
-                    key,
-                    publication.kind,
-                    publication.enabled,
-                );
-                for id in &publication.participants {
-                    room.broadcast_all(&super::punitive_notification(
-                        publication.kind,
-                        publication.enabled,
-                        *id,
-                    ));
-                }
-                for id in &publication.lobby {
-                    if let (Some(person), Ok(notice)) = (
-                        room.lobby.get(id),
-                        serde_json::to_string(&super::punitive_notification(
-                            publication.kind,
-                            publication.enabled,
-                            *id,
-                        )),
-                    ) {
-                        let _ = super::try_send_essential(
-                            &room.metrics,
-                            &person.sender,
-                            crate::OutboundJson::from(notice),
-                        );
-                    }
-                }
-                let mut revoked = Vec::new();
-                if publication.kind == moderation::PunitiveKind::CamBanned && publication.enabled {
-                    for id in &publication.participants {
-                        revoked.extend(RoomManager::revoke_unauthorized_producers(
-                            &mut room,
-                            Some(id),
-                            "Camera access revoked by moderator",
-                        ));
-                    }
-                }
-                revoked_override = Some(revoked);
-            }
+            Publication::Sanction(publication) => room.publish_sanction(&publication),
             Publication::None => return,
-        }
-        room.policy_revision = room.policy_revision.wrapping_add(1);
-        room.notify_lobby_status();
-        let revoked = revoked_override.unwrap_or_else(|| {
-            RoomManager::revoke_unauthorized_producers(
-                &mut room,
-                affected.as_ref(),
-                "Room policy no longer permits this producer",
-            )
-        });
+        };
         let active = room.active_speaker_observer.clone();
         let audio = room.audio_level_observer.clone();
         drop(room);

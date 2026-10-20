@@ -10,6 +10,7 @@ pub(crate) mod invites;
 mod manager;
 pub(crate) mod moderation;
 mod privacy;
+mod publication;
 mod receive_replacement;
 pub(crate) mod refusal;
 pub(crate) mod roles;
