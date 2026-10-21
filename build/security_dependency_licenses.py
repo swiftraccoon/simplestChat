@@ -49,6 +49,11 @@ PYTHON_LOCKS = (
 # Identity includes the complete authenticated metadata and locked wheel hash.
 LEGACY_METADATA_LICENSES = {
     (
+        "certifi",
+        "2026.10.19",
+        "a5c0be3a42daeef0edfaf58e6ea5b7550f3e4e8eb35420f72e902df9bcf00f5c",
+    ): ("42d35340cc5b9ba78e818ddbff0c5b1c2b779de448a340fd1b989f5fa8670e1b", "MPL-2.0"),
+    (
         "basedpyright",
         "1.40.2",
         "913fdc12587d87d82fb487ecc3e5a209dabab7be28982168f86d04c8518b7b8c",
