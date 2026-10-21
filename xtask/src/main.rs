@@ -8,21 +8,28 @@ use anyhow::{Context, Result, bail};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
+mod check;
 mod http_policy;
 mod line_length;
 mod media_ip;
 mod protocol_ts;
+mod run_local;
 mod test_env;
+mod tooling;
 
 const USAGE: &str = "\
 Usage: cargo run -q -p xtask -- <command>
 
 Commands:
+  run           Build and run the local UI; --skip-web reuses web/dist.
+  check         Run installed-tool quality gates: [--web|--rust|--python|--helpers].
+                Default runs all groups, without installs or application services.
   line-length   Fail when Rust production code has more lines over 100 columns
                 than the ratchet in xtask/line-length-allowance.txt permits;
                 `--update` lowers the allowance to the current count.
   protocol-ts   Write web/src/protocol.generated.ts from the Rust wire types and limits;
-                `--check` fails when the committed file is stale.  http-policy   Write security/http-policy.json from the server's security headers
+                `--check` fails when the committed file is stale.
+  http-policy   Write security/http-policy.json from the server's security headers
                 and content security policy; `--check` fails when it is stale.
   media-ip      Print the owned IPv4 address of the default route's interface for a
                 non-loopback media announcement (TEST_ANNOUNCE_IP).
@@ -53,6 +60,8 @@ fn run(arguments: &[String]) -> Result<ExitCode> {
     };
     let root = repository_root()?;
     match command.as_str() {
+        "run" => run_local::run(&root, rest),
+        "check" => check::run(&root, rest),
         "line-length" => line_length::run(&root, rest).map(|()| ExitCode::SUCCESS),
         "protocol-ts" => protocol_ts::run(&root, rest).map(|()| ExitCode::SUCCESS),
         "http-policy" => http_policy::run(&root, rest).map(|()| ExitCode::SUCCESS),

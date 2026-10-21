@@ -48,11 +48,11 @@ protected against deletion and force pushes.
 After installing the pinned dependencies and native prerequisites, run:
 
 ```sh
-build/check.sh
+cargo run --locked -q -p xtask -- check
 build/check-security.sh fast
 ```
 
-CI also uses `build/check.sh`. It stops on the first failure and does not install
+CI also uses `cargo run --locked -q -p xtask -- check`. It stops on the first failure and does not install
 dependencies, start the application, or create a database. You can run
 `--web`, `--rust`, `--python`, or `--helpers` separately while iterating.
 

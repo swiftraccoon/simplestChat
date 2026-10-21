@@ -51,7 +51,7 @@ modify a global npm installation. A fresh download is at most 16 MiB and has a
 ## Guest-only local UI
 
 ```sh
-build/run-local.sh
+cargo run --locked -q -p xtask -- run
 ```
 
 Open `http://localhost:3000`. The launcher selects the pinned Rust toolchain,
@@ -63,7 +63,7 @@ Ctrl-C.
 To restart without reinstalling or rebuilding the web client:
 
 ```sh
-build/run-local.sh --skip-web
+cargo run --locked -q -p xtask -- run --skip-web
 ```
 
 Use the normal command after web changes. For hot reload, see
@@ -74,11 +74,14 @@ On macOS the launcher detects the default network interface, falling back to
 `en0`. Set `ANNOUNCE_IP` to a reachable LAN IPv4 address if a VPN or another
 interface makes that choice unsuitable; it is required on Linux.
 Browser media can need a LAN address even when the page is on localhost.
+Before installing or building, the launcher validates the local database URL
+and probes the chosen HTTP and media ports. It refuses occupied ports without
+stopping their owners. The server's final bind remains authoritative.
 
 To run a second instance, choose unused HTTP and media ports:
 
 ```sh
-PORT=3109 WEBRTC_SERVER_PORT_BASE=41000 build/run-local.sh --skip-web
+PORT=3109 WEBRTC_SERVER_PORT_BASE=41000 cargo run --locked -q -p xtask -- run --skip-web
 ```
 
 Joining a room does not start capture. Open **Settings → Camera & mic** (or
@@ -93,7 +96,7 @@ export DATABASE_URL='postgres://YOUR_USER:YOUR_PASSWORD@127.0.0.1:5432/simplestc
 export JWT_SECRET="$(openssl rand -hex 32)"
 export RUN_MIGRATIONS=true
 export REGISTRATION_ENABLED=true
-build/run-local.sh
+cargo run --locked -q -p xtask -- run
 ```
 
 Startup migrations change the database schema, so use a dedicated development

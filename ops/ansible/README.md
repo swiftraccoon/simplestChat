@@ -153,7 +153,7 @@ Offline checks require ShellCheck and `jq` in addition to the controller tools:
 
 ```sh
 ops/ansible/.venv/bin/pip install -r build/python-requirements.txt
-build/check-python.sh
+cargo run --locked -q -p xtask -- check --python
 export PATH="$PWD/ops/ansible/.venv/bin:$PATH"
 export ANSIBLE_CONFIG="$PWD/ops/ansible/ansible.cfg"
 ansible-lint --offline --strict ops/ansible

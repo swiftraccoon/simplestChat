@@ -81,13 +81,18 @@ jobs:
           python3 -m venv "${RUNNER_TEMP}/ansible-controller"
           "${RUNNER_TEMP}/ansible-controller/bin/pip" install -r build/python-requirements.txt
           echo "${RUNNER_TEMP}/ansible-controller/bin" >> "${GITHUB_PATH}"
+      - name: Install the pinned Rust toolchain for the test harness
+        if: steps.verified.outputs.cache-hit != 'true'
+        # The runner's rustup reads rust-toolchain.toml; the harness is xtask alone.
+        run: rustup toolchain install --profile minimal
+
       - name: Validate automation without contacting any host
         if: steps.verified.outputs.cache-hit != 'true'
         env:
           ANSIBLE_CONFIG: ${{ github.workspace }}/ops/ansible/ansible.cfg
           PYTHON_CHECK_ENV: ${{ runner.temp }}/ansible-controller
         run: |
-          build/check-python.sh
+          cargo run --locked -q -p xtask -- check --python
           ansible-lint --offline --strict ops/ansible
           ansible-lint --offline --strict security/vm/stage.yml
           ansible-playbook -i ops/ansible/inventory.example.yml ops/ansible/site.yml --syntax-check
@@ -102,11 +107,6 @@ jobs:
           ansible-playbook -i ops/ansible/inventory.example.yml ops/ansible/migration-data.yml --syntax-check
           shellcheck ops/ansible/files/*.sh
           python -m unittest discover -s ops/ansible/tests -v
-
-      - name: Install the pinned Rust toolchain for the test harness
-        if: steps.verified.outputs.cache-hit != 'true'
-        # The runner's rustup reads rust-toolchain.toml; the harness is xtask alone.
-        run: rustup toolchain install --profile minimal
 
       - name: Verify operational alert history in disposable PostgreSQL
         if: steps.verified.outputs.cache-hit != 'true'
@@ -225,11 +225,11 @@ jobs:
           echo "$RUNNER_TEMP/simplestchat-npm-12.2.0/bin" >> "$GITHUB_PATH"
 
       - name: Check helper syntax, safety and cleanup
-        run: build/check.sh --helpers
+        run: cargo run --locked -q -p xtask -- check --helpers
 
       - name: Check Rust formatting, lints and documentation
         if: steps.verified.outputs.cache-hit != 'true'
-        run: build/check.sh --rust
+        run: cargo run --locked -q -p xtask -- check --rust
 
       - name: Audit Rust dependencies
         run: |
@@ -950,8 +950,11 @@ jobs:
           node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"
           echo "$RUNNER_TEMP/simplestchat-npm-12.2.0/bin" >> "$GITHUB_PATH"
 
+      - name: Install the pinned Rust toolchain for the quality gate
+        run: rustup toolchain install --profile minimal
+
       - run: npm ci --ignore-scripts
-      - run: ../build/check.sh --web
+      - run: cargo run --locked -q -p xtask -- check --web
       - name: Audit web dependencies
         # Build-time packages execute against trusted source and are part of the
         # supply chain, so audit the complete lockfile rather than omitting dev.

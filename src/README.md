@@ -305,7 +305,7 @@ See [deployment](../docs/deployment.md) before opening a service to other users.
 ## Validation and dependency changes
 
 ```sh
-build/check.sh --rust
+cargo run --locked -q -p xtask -- check --rust
 cargo test --locked --workspace -- --test-threads=1
 ```
 

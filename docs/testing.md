@@ -3,22 +3,30 @@
 Run commands from the repository root after [development setup](development.md).
 Use disposable local services, never a shared or production database. Direct Cargo
 commands require the development setup's static OpenSSL and AWS-LC environment,
-including the matching AWS-LC Rust bindings. `build/check.sh --rust` checks both
+including the matching AWS-LC Rust bindings. `cargo run --locked -q -p xtask -- check --rust` checks both
 native prefixes before invoking Cargo.
 
 ## Fast checks
 
 ```sh
-build/check.sh
+cargo run --locked -q -p xtask -- check
 cargo test --locked --workspace -- --test-threads=1
 ```
 
-`build/check.sh` shares the CI quality gates: typed web lint, formatting,
+`cargo run --locked -q -p xtask -- check` shares the CI quality gates: typed web lint, formatting,
 source/helper tests, TypeScript/build, Rust Clippy, checked documentation, and
 strict Python lint/format/types. Use `--web`, `--rust`, `--helpers`, or `--python`
 for a focused group. It requires installed development dependencies and never
 starts application services. Native tests
 are deliberately separate from the source-quality gate.
+
+The Rust workspace tests include the migrated quality-gate and local-launcher
+regressions. For a tooling-only change, run them without the server's native
+test graph:
+
+```sh
+cargo test --locked -p xtask -- --test-threads=1
+```
 
 Rust tests include native media checks; database tests are opt-in. Serial
 execution reduces UDP port-allocation races. Web tests use mocked browser APIs;
@@ -104,7 +112,7 @@ Use Python 3.12 or newer and the pinned controller/checking environment:
 ```sh
 python3 -m venv ops/ansible/.venv
 ops/ansible/.venv/bin/pip install -r build/python-requirements.txt
-build/check-python.sh
+cargo run --locked -q -p xtask -- check --python
 PATH="$PWD/ops/ansible/.venv/bin:$PATH" \
   ops/ansible/.venv/bin/python -m unittest discover -s ops/ansible/tests -v
 ```
@@ -934,7 +942,7 @@ Record the OS and browser version, result and any reproduction steps for each:
 | iPhone | Kagi                                               |
 | iPad   | Safari                                             |
 
-On the Mac, run `build/run-local.sh`, open `http://localhost:3000` in Chrome
+On the Mac, run `cargo run --locked -q -p xtask -- run`, open `http://localhost:3000` in Chrome
 and Firefox, and join the same room with different names. Guest-only local mode
 is enough for media checks; account and room-management checks need the
 [disposable database setup](#disposable-postgresql-and-browser-tests).

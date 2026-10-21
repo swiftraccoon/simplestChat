@@ -42,7 +42,7 @@ class VerifiedCacheTests(unittest.TestCase):
             "src/main.rs",
             "docs/example.md",
             "vendor/worker.cpp",
-            "build/check.sh",
+            "xtask/src/check.rs",
             "build/native_security.py",
             "security/exceptions.json",
             "security/native/toolchain.json",
@@ -785,8 +785,7 @@ class VerifiedWorkflowTests(unittest.TestCase):
             step = next(step for step in lint if step.get("name") == name)
             self.assertNotIn("if", step)
             if name == "Check helper syntax, safety and cleanup":
-                self.assertEqual(step["run"], "build/check.sh --helpers")
-        self.assertIn("node --test build/tests/*.test.mjs ", (ROOT / "build/check.sh").read_text())
+                self.assertEqual(step["run"], "cargo run --locked -q -p xtask -- check --helpers")
         browser = objects(obj(jobs, "browser"), "steps")
         for step in browser:
             if "node web/e2e/" in string(step.get("run", "")):

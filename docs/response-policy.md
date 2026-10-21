@@ -6,7 +6,7 @@ implemented by `build/release_http_policy.py`; it uses only the Python standard
 library and the repository's bounded process helper, and it reads the expected
 headers and content security policy from `security/http-policy.json`, which
 `cargo run -q -p xtask -- http-policy` writes from the server's own definitions
-(`build/check.sh --rust` fails when that file is stale). It does not start another
+(`cargo run --locked -q -p xtask -- check --rust` fails when that file is stale). It does not start another
 application, compile an image, or invoke the public chat smoke.
 
 The harness supplies its exact application/Caddy container IDs, ownership token,

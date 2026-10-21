@@ -75,6 +75,12 @@ xtask/**
 !xtask/src/
 xtask/src/**
 !xtask/src/*.rs
+!xtask/src/check/
+xtask/src/check/**
+!xtask/src/check/*.rs
+!xtask/src/run_local/
+xtask/src/run_local/**
+!xtask/src/run_local/*.rs
 !xtask/src/test_env/
 xtask/src/test_env/**
 !xtask/src/test_env/*.rs

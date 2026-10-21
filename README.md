@@ -24,7 +24,8 @@ Shared watch sessions, recording and email verification are not implemented.
 Locally ([prerequisites](docs/development.md#prerequisites)):
 
 ```sh
-build/run-local.sh        # http://localhost:3000, guest rooms; --skip-web reuses the web build
+# http://localhost:3000, guest rooms; --skip-web reuses the web build
+cargo run --locked -q -p xtask -- run
 ```
 
 On a Debian 13 VPS, sized from the host's facts ([details](ops/ansible/PUBLIC.md)).
@@ -91,7 +92,7 @@ python3 build/capacity.py suggest --vcpus 4 --memory-gib 8 --included-egress-tb 
 After [build setup](docs/development.md):
 
 ```sh
-build/check.sh
+cargo run --locked -q -p xtask -- check
 ```
 
 This runs Rust, web and Python quality gates plus web/helper tests. Native Rust,

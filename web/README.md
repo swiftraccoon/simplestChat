@@ -55,7 +55,7 @@ closed on Back and never replay an action on Forward.
 
 ```sh
 npm ci --ignore-scripts --prefix web
-build/check.sh --web
+cargo run --locked -q -p xtask -- check --web
 ```
 
 This checks typed lint, formatting, source tests and both TypeScript projects,

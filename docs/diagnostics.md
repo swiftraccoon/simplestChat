@@ -14,7 +14,7 @@ repository root with a new private output directory:
 mkdir -p results
 diagnostic_dir=$(mktemp -d "$PWD/results/diagnostics.XXXXXX")
 DIAGNOSTICS_PATH="$diagnostic_dir/server-diagnostics.jsonl" \
-  build/run-local.sh --skip-web
+  cargo run --locked -q -p xtask -- run --skip-web
 ```
 
 Use only your own test session. Stop with Ctrl-C and wait for the server to exit
