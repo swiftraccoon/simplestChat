@@ -1,7 +1,7 @@
 import { accountUpdatesFixture } from './account-updates-fixture.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { loadProtocol, loadTypeScript } from './source-loader.mjs';
+import { loadProtocol, loadTypeScript } from './native-fixtures.mjs';
 import { deferred, flush, uiFixture } from './ui-fixture.mjs';
 import { loadAppearanceFixture } from './appearance-fixture.mjs';
 import { loadDiscoveryFixture } from './discovery-fixture.mjs';
@@ -174,6 +174,9 @@ async function fixture() {
         openPrivateInbox() {},
         onInboxChanged(listener) {
           state.inboxListener = listener;
+          return () => {
+            if (state.inboxListener === listener) state.inboxListener = null;
+          };
         },
       },
       './account-security': {
@@ -1076,14 +1079,18 @@ test('room-scoped actions mount in the room tools while account actions stay in 
       './protocol': await loadProtocol(),
       './account-updates': accountUpdatesFixture().module,
       './ui': { ...dom.ui, api: { ...dom.ui.api, inboxUnread: async () => ({ unreadCount: 0 }) } },
-      './settings-sheet': {},
       './room-administration': {
         administrationSections() {
           return [];
         },
       },
       './room-administration-api': { roomAdministrationApi: {} },
-      './chat-history': { openPrivateInbox() {}, onInboxChanged() {} },
+      './chat-history': {
+        openPrivateInbox() {},
+        onInboxChanged() {
+          return () => {};
+        },
+      },
       './discovery': await loadDiscoveryFixture(dom),
       './account-security': security,
       './account-sessions': await loadTypeScript('src/account-sessions.ts', {
@@ -1503,4 +1510,64 @@ test('a prior unread failure permits legacy repair even while the account feed s
   f.state.inboxListener();
   await flush();
   assert.equal(reads, 1, 'successful repair restores healthy-feed deduplication');
+});
+
+test('disposal releases account subscriptions and controls and aborts the owned unread request', async () => {
+  const f = await fixture();
+  await flush();
+  const pending = deferred();
+  let reads = 0;
+  let signal;
+  f.state.unread = (_token, requestSignal) => {
+    reads++;
+    signal = requestSignal;
+    return pending.promise;
+  };
+  const messageButton = f.header
+    .querySelectorAll('button')
+    .find((node) => node.textContent === 'Messages');
+  const inboxListener = f.state.inboxListener;
+  const unread = f.community.refreshMessages();
+  inboxListener();
+  assert.equal(reads, 1, 'an overlapping notification queues only one follow-up');
+  f.community.dispose();
+  f.community.dispose();
+  assert.equal(signal.aborted, true);
+  assert.equal(f.state.inboxListener, null, 'the shared inbox subscription is released');
+  assert.equal(f.header.children.length, 0);
+  assert.equal(f.loginActions.children.length, 0);
+  assert.equal(messageButton.isConnected, false);
+  f.updates.emit({ account: f.auth.userId, scope: 'inbox' });
+  inboxListener();
+  f.community.refresh();
+  await f.community.refreshMessages();
+  pending.resolve({ unreadCount: 99 });
+  await unread;
+  await flush();
+  assert.equal(reads, 1, 'retired delivery and completion cannot restart inbox reads');
+  assert.equal(messageButton.textContent, 'Messages');
+});
+
+test('disposal closes only owned dialogs and rejects late profile presentation', async () => {
+  const f = await fixture();
+  const pending = deferred();
+  f.state.handle = () => pending.promise;
+  const opening = f.community.showProfile('peer');
+  const owned = dialog(f, 'Profile');
+  const unrelated = f.ui.modal('Another owner');
+  assert.equal(owned.open, true);
+  f.community.dispose();
+  assert.equal(owned.open, false);
+  assert.equal(unrelated.dialog.open, true, 'another app surface keeps its owner');
+  pending.resolve({ ...f.profile, display_name: 'Late profile' });
+  await opening;
+  await flush();
+  assert.equal(owned.textContent.includes('Late profile'), false);
+  await f.community.showProfile('another-peer');
+  assert.equal(
+    f.document.querySelectorAll('dialog').length,
+    1,
+    'retired controls cannot open new dialogs',
+  );
+  unrelated.close();
 });

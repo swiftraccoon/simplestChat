@@ -1,90 +1,59 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { readFile } from 'node:fs/promises';
-import ts from '@typescript/typescript6';
-import { evaluateTypeScript } from './source-loader.mjs';
-
-const source = await readFile(new URL('../src/main.ts', import.meta.url), 'utf8');
-const ast = ts.createSourceFile('main.ts', source, ts.ScriptTarget.Latest, true);
-const functions = ['updateRestoreUI', 'handleRestoreState', 'restoreSavedSignIn'].map((name) => {
-  const declaration = ast.statements.find(
-    (node) => ts.isFunctionDeclaration(node) && node.name?.text === name,
-  );
-  assert.ok(declaration, `${name} must retain a named restoration boundary`);
-  return declaration.getText(ast);
-});
+import { capabilities as supported } from '../e2e/capabilities-fixture.cjs';
+import { homeScreenFixture } from './home-screen-fixture.mjs';
 
 function fixture({ accounts = true } = {}) {
-  const effects = [];
-  const tasks = [];
-  const requests = [];
-  const authRestoreNotice = { hidden: true };
-  const authRestoreStatus = { textContent: '' };
-  const authRestoreRetry = { disabled: false };
-  const document = {
-    activeElement: null,
-    getElementById: (id) => ({
-      focus() {
-        document.activeElement = this;
-        effects.push(`focus:${id}`);
-      },
-    }),
+  const f = homeScreenFixture({ capabilities: { ...supported, accounts } });
+  const effects = [],
+    requests = [];
+  const auth = f.services.auth;
+  auth.tryRestore = function () {
+    this.restoreState = 'checking';
+    this.canCheckSharedSession = false;
+    const request = Promise.withResolvers();
+    requests.push(request);
+    f.screen.handleRestoreState('checking');
+    return request.promise;
   };
-  const auth = {
-    restoreState: 'idle',
-    isLoggedIn: false,
-    canCheckSharedSession: true,
-    tryRestore() {
-      this.restoreState = 'checking';
-      this.canCheckSharedSession = false;
-      const request = Promise.withResolvers();
-      requests.push(request);
-      api.handleRestoreState('checking');
-      return request.promise;
-    },
+  f.services.community.refresh = () => effects.push('auth-ui');
+  f.services.signaling.connect = () => effects.push('guest-socket');
+  f.services.reviewPendingContact = () => effects.push('contact');
+  f.services.previewPendingInvite = () => {
+    effects.push('invitation');
+    return Promise.resolve();
   };
-  const api = evaluateTypeScript(
-    `let restoredAccount = false;
-     const pendingInvite = 'pending-invitation';
-     function updateAuthUI() { effects.push('auth-ui'); updateRestoreUI(); }
-     ${functions.join('\n')}
-     export { updateRestoreUI, handleRestoreState, restoreSavedSignIn };
-     export const accountChecked = () => restoredAccount;`,
-    {
-      globals: {
-        auth,
-        capabilities: { accounts },
-        document,
-        authRestoreNotice,
-        authRestoreStatus,
-        authRestoreRetry,
-        effects,
-        signaling: { connect: () => effects.push('guest-socket') },
-        reviewPendingContact: () => effects.push('contact'),
-        previewPendingInvite: () => {
-          effects.push('invitation');
-          return Promise.resolve();
-        },
-        observeUiTask: (task) => tasks.push(task),
-      },
-    },
-  );
+  f.services.hasPendingInvite = () => true;
+  for (const [name, id] of [
+    ['accountMenuBtn', 'account-menu-btn'],
+    ['signInBtn', 'sign-in-btn'],
+  ])
+    f.elements[name].focus = function () {
+      f.document.activeElement = this;
+      effects.push(`focus:${id}`);
+    };
   const notify = (state) => {
     auth.restoreState = state;
     auth.canCheckSharedSession = state !== 'checking';
-    api.handleRestoreState(state);
+    f.screen.handleRestoreState(state);
   };
   return {
-    ...api,
+    ...f.screen,
     auth,
     notify,
     effects,
-    tasks,
     requests,
-    document,
-    authRestoreNotice,
-    authRestoreStatus,
-    authRestoreRetry,
+    document: f.document,
+    get tasks() {
+      return f.observed.map(({ task }) => task);
+    },
+    accountChecked: () => f.store.restoredAccount,
+    authRestoreNotice: f.elements.authRestoreNotice,
+    authRestoreStatus: f.elements.authRestoreStatus,
+    authRestoreRetry: f.elements.authRestoreRetry,
+    accountMenuBtn: f.elements.accountMenuBtn,
+    signInBtn: f.elements.signInBtn,
+    services: f.services,
   };
 }
 
@@ -159,7 +128,7 @@ test('guest-only servers and a newer authentication operation cannot start a rec
 test('focus-triggered retirement prevents stale account intent from being finalized', () => {
   const f = fixture();
   f.document.activeElement = f.authRestoreRetry;
-  f.document.getElementById = () => ({ focus: () => f.notify('superseded') });
+  f.signInBtn.focus = () => f.notify('superseded');
   f.notify('unauthenticated');
   assert.equal(f.accountChecked(), false);
   assert.deepEqual(f.effects, []);
@@ -177,4 +146,12 @@ test('a later unconfirmed shared check defers account links again', async () => 
   f.notify('unavailable');
   assert.equal(f.accountChecked(), false);
   assert.deepEqual(f.effects, ['guest-socket']);
+});
+
+test('render-triggered retirement prevents a verified outcome from releasing account intent', () => {
+  const f = fixture();
+  f.services.community.refresh = () => f.notify('superseded');
+  f.notify('unauthenticated');
+  assert.equal(f.accountChecked(), false);
+  assert.deepEqual(f.effects, []);
 });

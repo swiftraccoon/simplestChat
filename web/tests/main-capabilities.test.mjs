@@ -1,58 +1,43 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { readFile } from 'node:fs/promises';
-import ts from '@typescript/typescript6';
 import { capabilities as supported } from '../e2e/capabilities-fixture.cjs';
-import { evaluateTypeScript } from './source-loader.mjs';
-
-const source = await readFile(new URL('../src/main.ts', import.meta.url), 'utf8');
-const ast = ts.createSourceFile('main.ts', source, ts.ScriptTarget.Latest, true);
-function functionSource(name) {
-  const declaration = ast.statements.find(
-    (node) => ts.isFunctionDeclaration(node) && node.name?.text === name,
-  );
-  assert.ok(declaration, `${name} must retain a named capability boundary`);
-  return declaration.getText(ast);
-}
+import { homeScreenFixture } from './home-screen-fixture.mjs';
 
 function discoveryFixture() {
+  const f = homeScreenFixture();
   const requests = [],
     effects = [],
     tasks = [];
-  const capabilitiesRetry = { disabled: false, hidden: true };
-  const serverMode = { hidden: true, textContent: '' };
-  const document = { activeElement: null };
-  const api = evaluateTypeScript(
-    `let capabilities = null;
-     let capabilitiesLoading = false;
-     function applyCapabilities(value) { capabilities = value; applied(value); }
-     ${functionSource('loadCapabilities')}
-     export { loadCapabilities };
-     export const state = () => ({ capabilities, loading: capabilitiesLoading });`,
-    {
-      globals: {
-        capabilitiesRetry,
-        serverMode,
-        document,
-        nameInput: { focus: () => effects.push('focus-name') },
-        api: {
-          capabilities() {
-            const response = Promise.withResolvers();
-            requests.push(response);
-            return response.promise;
-          },
-        },
-        applied: (value) => effects.push({ applied: value }),
-        navigation: { resumePendingJoin: () => effects.push('resume-join') },
-        previewPendingInvite: () => {
-          effects.push('preview-invite');
-          return Promise.resolve();
-        },
-        observeUiTask: (task, message) => tasks.push({ task, message }),
-      },
-    },
-  );
-  return { ...api, requests, effects, tasks, capabilitiesRetry, serverMode, document };
+  f.services.loadCapabilities = () => {
+    const response = Promise.withResolvers();
+    requests.push(response);
+    return response.promise;
+  };
+  f.services.authScreen.applyCapabilities = (value) => effects.push({ applied: value });
+  f.services.navigation.resumePendingJoin = () => effects.push('resume-join');
+  f.services.previewPendingInvite = () => {
+    effects.push('preview-invite');
+    return Promise.resolve();
+  };
+  const observe = f.services.observeUiTask;
+  f.services.observeUiTask = (task, message) => {
+    observe(task, message);
+    if (message === 'Invitation not reviewed') tasks.push({ task, message });
+  };
+  f.elements.nameInput.focus = () => effects.push('focus-name');
+  return {
+    ...f.screen,
+    requests,
+    effects,
+    tasks,
+    document: f.document,
+    capabilitiesRetry: f.elements.capabilitiesRetry,
+    serverMode: f.elements.serverMode,
+    state: () => ({
+      capabilities: f.store.capabilities,
+      loading: f.elements.capabilitiesRetry.disabled,
+    }),
+  };
 }
 
 test('capability discovery issues one read while pending and never reloads a known contract', async () => {
@@ -148,85 +133,51 @@ for (const [name, overrides, disabled] of [
   ['maximum room ID', { roomInput: { value: 'a'.repeat(128) } }, false],
 ]) {
   test(`join availability respects ${name}`, () => {
-    const joinBtn = { disabled: !disabled };
-    const { updateJoinBtn } = evaluateTypeScript(
-      `${functionSource('updateJoinBtn')} export { updateJoinBtn };`,
-      {
-        globals: {
-          capabilities: supported,
-          navigationPending: false,
-          departureInProgress: null,
-          room: null,
-          signaling: { connected: true },
-          nameInput: { value: '  Guest  ' },
-          roomInput: { value: '  room_A-2  ' },
-          ...overrides,
-          joinBtn,
-        },
-      },
+    const f = homeScreenFixture({ capabilities: supported });
+    Object.assign(
+      f.store,
+      Object.fromEntries(Object.entries(overrides).filter(([key]) => key in f.store)),
     );
-    updateJoinBtn();
-    assert.equal(joinBtn.disabled, disabled);
+    Object.assign(f.services.signaling, overrides.signaling);
+    Object.assign(f.elements.nameInput, { value: '  Guest  ' }, overrides.nameInput);
+    Object.assign(f.elements.roomInput, { value: '  room_A-2  ' }, overrides.roomInput);
+    f.elements.joinBtn.disabled = !disabled;
+    f.screen.updateJoinBtn();
+    assert.equal(f.elements.joinBtn.disabled, disabled);
+    f.screen.dispose();
   });
 }
 
 function authUiFixture(capabilities, signedIn) {
-  const nodes = Object.fromEntries(
-    [
-      'signInBtn',
-      'communityActions',
-      'roomBrowser',
-      'directoryToolbar',
-      'createRoomBtn',
-      'authBarGuest',
-      'authBarUser',
-      'authDisplayName',
-    ].map((name) => [name, { hidden: false }]),
-  );
+  const f = homeScreenFixture({ capabilities });
   const effects = [];
-  const nameInput = { value: '' };
-  const authAvatar = { textContent: '', dataset: {}, style: {} };
-  const { updateAuthUI } = evaluateTypeScript(
-    `${functionSource('updateAuthUI')} export { updateAuthUI };`,
-    {
-      globals: {
-        ...nodes,
-        capabilities,
-        auth: {
-          isLoggedIn: signedIn,
-          displayName: signedIn ? 'Restored account' : null,
-          userId: signedIn ? 'restored' : null,
-        },
-        nameInput,
-        authAvatar,
-        document: {
-          getElementById: (id) => {
-            assert.equal(id, 'community-actions');
-            return nodes.communityActions;
-          },
-        },
-        loadRoomBrowser: () => {
-          effects.push('directory');
-          return Promise.resolve();
-        },
-        observeUiTask() {},
-        updateJoinBtn: () => effects.push('join-controls'),
-        community: {
-          refresh: () => effects.push('community'),
-          decorateOwnAvatar: (node, id, name) => effects.push(`avatar:${id}:${name}`),
-        },
-        participantHovercard: { refresh() {} },
-        pwa: { accountChanged() {} },
-        notificationPreferences: { refresh: async () => {} },
-        accountPreferences: { refresh: async () => {} },
-        accountUpdates: { synchronize() {} },
-        appNavigation: { synchronize() {} },
-        refreshSavedRoomPicker() {},
-        updateRestoreUI() {},
-      },
+  Object.assign(f.services.auth, {
+    isLoggedIn: signedIn,
+    displayName: signedIn ? 'Restored account' : null,
+    userId: signedIn ? 'restored' : null,
+  });
+  f.services.directoryScreen.load = () => {
+    effects.push('directory');
+    return Promise.resolve();
+  };
+  f.services.community.refresh = () => effects.push('community');
+  f.services.community.decorateOwnAvatar = (_node, id, name) =>
+    effects.push(`avatar:${id}:${name}`);
+  let disabled = false;
+  Object.defineProperty(f.elements.joinBtn, 'disabled', {
+    get: () => disabled,
+    set: (value) => {
+      disabled = value;
+      effects.push('join-controls');
     },
-  );
-  return { updateAuthUI, nodes, effects, nameInput, authAvatar };
+  });
+  return {
+    updateAuthUI: f.screen.updateAuthUI,
+    nodes: f.elements,
+    effects,
+    nameInput: f.elements.nameInput,
+    authAvatar: f.elements.authAvatar,
+  };
 }
 
 for (const signedIn of [false, true]) {
@@ -289,79 +240,95 @@ test('known capabilities reveal only advertised account and directory actions', 
   assert.equal(creationDisabled.nodes.createRoomBtn.hidden, true);
 });
 
-function authDialogFixture(capabilities, canDismiss = true) {
-  const effects = [],
-    notices = [];
-  const dialogs = Object.fromEntries(
-    ['login', 'register'].map((name) => [
-      name,
-      {
-        hidden: true,
-        showModal: () => effects.push(`open-${name}`),
-      },
-    ]),
+test('home startup is explicit and a retired capability result cannot resume account or room intent', async () => {
+  const f = homeScreenFixture();
+  const response = Promise.withResolvers();
+  let reads = 0;
+  let restores = 0;
+  let resumed = 0;
+  f.services.loadCapabilities = () => {
+    reads++;
+    return response.promise;
+  };
+  f.services.auth.tryRestore = async () => {
+    restores++;
+    return 'unavailable';
+  };
+  f.services.navigation.resumePendingJoin = () => resumed++;
+  assert.equal(reads, 0);
+  assert.equal(restores, 0);
+  f.screen.start();
+  f.screen.start();
+  assert.equal(reads, 1);
+  assert.equal(restores, 1);
+  assert.equal(typeof f.state.restoreHandler, 'function');
+  f.screen.dispose();
+  f.screen.dispose();
+  assert.equal(f.state.restoreHandler, null);
+  response.resolve(supported);
+  await Promise.all(f.observed.map(({ task }) => task));
+  assert.equal(f.store.capabilities, null);
+  assert.equal(resumed, 0);
+  assert.equal(f.elements.serverMode.textContent, 'Checking server features…');
+  f.screen.start();
+  assert.equal(reads, 1);
+  assert.equal(restores, 1);
+  assert.deepEqual(f.errors, []);
+});
+
+test('home form events preserve pending join intent and disposal removes their actions', () => {
+  const f = homeScreenFixture({ capabilities: supported });
+  const effects = [];
+  f.services.navigation.resumePendingJoin = () => effects.push('resume');
+  f.services.navigation.cancelPendingJoin = () => effects.push('cancel');
+  f.elements.joinBtn.addEventListener('click', () => effects.push('join'));
+  f.elements.nameInput.value = 'Guest';
+  f.elements.roomInput.value = 'room-a';
+  f.elements.nameInput.dispatchEvent(new Event('input'));
+  assert.deepEqual(effects, ['resume']);
+  assert.equal(f.elements.joinBtn.disabled, false);
+  f.elements.roomInput.dispatchEvent(new Event('input'));
+  assert.deepEqual(effects, ['resume', 'cancel']);
+  assert.equal(f.store.roomSelectionVersion, 1);
+  const enter = () => Object.assign(new Event('keydown'), { key: 'Enter' });
+  f.elements.nameInput.dispatchEvent(enter());
+  f.elements.roomInput.dispatchEvent(enter());
+  assert.deepEqual(effects, ['resume', 'cancel', 'join', 'join']);
+  f.screen.dispose();
+  f.elements.roomInput.dispatchEvent(new Event('input'));
+  f.elements.nameInput.dispatchEvent(enter());
+  assert.equal(f.store.roomSelectionVersion, 1);
+  assert.deepEqual(effects, ['resume', 'cancel', 'join', 'join']);
+});
+
+test('a verified capability contract reaches auth controls before pending invite or join work', () => {
+  const f = homeScreenFixture();
+  const applied = [];
+  f.services.hasPendingInvite = () => true;
+  f.services.authScreen.applyCapabilities = (value, invited) => {
+    assert.equal(f.store.capabilities, value);
+    applied.push({ value, invited });
+  };
+  f.screen.applyCapabilities({ ...supported, accounts: false, roomDirectory: false });
+  assert.equal(f.elements.serverMode.hidden, false);
+  assert.equal(
+    f.elements.serverMode.textContent,
+    'Guest rooms are available. Enter your name and a room ID to join.',
   );
-  const { openAuthDialog } = evaluateTypeScript(
-    `${functionSource('openAuthDialog')} export { openAuthDialog };`,
-    {
-      globals: {
-        capabilities,
-        loginModal: dialogs.login,
-        registerModal: dialogs.register,
-        loginEmail: { focus: () => effects.push('focus-login') },
-        registerEmail: { focus: () => effects.push('focus-register') },
-        dismissAuth: () => {
-          effects.push('dismiss');
-          return canDismiss;
-        },
-        showToast: (...args) => notices.push(args),
-      },
-    },
+  f.screen.applyCapabilities({
+    ...supported,
+    accounts: false,
+    roomDirectory: false,
+    adHocRooms: false,
+  });
+  assert.equal(
+    f.elements.serverMode.textContent,
+    'Rooms are not available on this server yet. Contact its host for help.',
   );
-  return { openAuthDialog, dialogs, effects, notices };
-}
-
-test('unknown or unavailable account support cannot open login or registration', () => {
-  for (const capabilities of [null, { ...supported, accounts: false }]) {
-    const f = authDialogFixture(capabilities);
-    for (const dialog of Object.values(f.dialogs)) {
-      f.openAuthDialog(dialog);
-      assert.equal(dialog.hidden, true);
-    }
-    assert.deepEqual(f.effects, []);
-    assert.deepEqual(f.notices, []);
-  }
-});
-
-test('disabled registration reports its limit while keeping supported login available', () => {
-  const f = authDialogFixture({ ...supported, passwordRegistration: 'disabled' });
-  f.openAuthDialog(f.dialogs.register);
-  assert.equal(f.dialogs.register.hidden, true);
-  assert.deepEqual(f.effects, []);
-  assert.equal(f.notices.length, 1);
-  assert.match(f.notices[0][0], /registration is unavailable/i);
-  assert.equal(f.notices[0][2], 'error');
-  f.openAuthDialog(f.dialogs.login);
-  assert.equal(f.dialogs.login.hidden, false);
-  assert.deepEqual(f.effects, ['dismiss', 'open-login', 'focus-login']);
-});
-
-test('each advertised registration method can open registration and focus its form', () => {
-  for (const capabilities of [
-    supported,
-    { ...supported, passwordRegistration: 'disabled', passkeyRegistration: 'open' },
-  ]) {
-    const f = authDialogFixture(capabilities);
-    f.openAuthDialog(f.dialogs.register);
-    assert.equal(f.dialogs.register.hidden, false);
-    assert.deepEqual(f.effects, ['dismiss', 'open-register', 'focus-register']);
-    assert.deepEqual(f.notices, []);
-  }
-});
-
-test('known capabilities cannot bypass an auth attempt that refuses dismissal', () => {
-  const f = authDialogFixture(supported, false);
-  f.openAuthDialog(f.dialogs.login);
-  assert.equal(f.dialogs.login.hidden, true);
-  assert.deepEqual(f.effects, ['dismiss']);
+  assert.equal(applied.length, 2);
+  assert.equal(
+    applied.every(({ invited }) => invited),
+    true,
+  );
+  f.screen.dispose();
 });

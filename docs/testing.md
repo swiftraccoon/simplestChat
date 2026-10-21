@@ -24,6 +24,23 @@ Rust tests include native media checks; database tests are opt-in. Serial
 execution reduces UDP port-allocation races. Web tests use mocked browser APIs;
 the web build runs TypeScript checking and produces the production UI.
 
+Run the browser unit suite with `npm --prefix web test`. It uses Node 26's native
+TypeScript support and `--experimental-test-module-mocks`; the package script
+supplies that flag. A focused invocation from the repository root is:
+
+```sh
+node --experimental-test-module-mocks --test web/tests/chat-store.test.mjs
+```
+
+`web/tests/native-fixtures.mjs` imports actual source modules. Its small resolver
+handles the browser's extensionless imports and unit-test stylesheet no-ops;
+Node owns module linking, evaluation and dependency mocks. Each fixture captures
+its injected browser globals in its own module instances, so concurrent sessions
+remain independent. Tests may import unmocked dependencies normally. The compiler
+separately checks the strict browser project and positive/negative type-contract
+fixtures; native type stripping performs no type checking. Module mocking remains
+an experimental Node API, so use the pinned Node release when reproducing CI.
+
 Credential-continuity tests use bounded validation futures to distinguish
 database unavailability from revocation and exercise expiry, drain, notification
 loss and grace-registration races. Browser unit tests cover scheduled HTTP refresh

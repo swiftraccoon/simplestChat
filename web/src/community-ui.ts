@@ -94,6 +94,10 @@ interface Surface {
 
 export class CommunityUI {
   private readonly options: Options;
+  private disposed = false;
+  private readonly subscriptions: (() => void)[] = [];
+  private readonly dialogs = new Set<ReturnType<typeof modal>>();
+  private recoveryButton: HTMLButtonElement | null = null;
 
   private readonly messagesButton = button('Messages', () => {
     if (this.options.onOpenMessages) {
@@ -184,6 +188,7 @@ export class CommunityUI {
 
   constructor(options: Options) {
     this.options = options;
+
     const accountActions = document.getElementById('community-actions')!;
     accountActions.append(this.accountButton, this.messagesButton, this.roomsButton);
     // Room-scoped actions belong with the room tools; the header keeps account actions.
@@ -192,22 +197,63 @@ export class CommunityUI {
       this.manageButton,
     );
     const recovery = button('Recover with a saved key', () => this.openRecovery(), 'auth-link-btn');
+    this.recoveryButton = recovery;
     document.querySelector('#login-modal .auth-alt-actions')!.append(recovery);
-    onInboxChanged(() => {
-      if (accountUpdatesLive(this.options.auth.userId) && !this.inboxFailed) return;
-      this.refreshMessages().catch(() => {});
-    });
-    onAccountUpdate((update) => {
-      if (
-        update.account === this.options.auth.userId &&
-        (update.scope === 'ready' || update.scope === 'inbox')
-      )
+    this.subscriptions.push(
+      onInboxChanged(() => {
+        if (accountUpdatesLive(this.options.auth.userId) && !this.inboxFailed) return;
         this.refreshMessages().catch(() => {});
-    });
+      }),
+    );
+    this.subscriptions.push(
+      onAccountUpdate((update) => {
+        if (
+          update.account === this.options.auth.userId &&
+          (update.scope === 'ready' || update.scope === 'inbox')
+        )
+          this.refreshMessages().catch(() => {});
+      }),
+    );
     this.refresh();
   }
 
+  /** Retire this app's subscriptions, surfaces and pending presentation work. */
+  dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.generation++;
+    this.accountGeneration++;
+    this.inboxController.abort();
+    this.inboxPending = null;
+    this.inboxRefreshAgain = false;
+    for (const unsubscribe of this.subscriptions.splice(0)) unsubscribe();
+    for (const view of this.dialogs) view.dialog.close();
+    this.dialogs.clear();
+    for (const control of [
+      this.accountButton,
+      this.messagesButton,
+      this.roomsButton,
+      this.nicknameButton,
+      this.manageButton,
+      this.recoveryButton,
+    ])
+      control?.remove();
+    this.recoveryButton = null;
+    this.profiles.clear();
+    this.avatarVersions = new WeakMap();
+    for (const resume of this.profileWaiting.splice(0)) resume();
+    this.closeRoomContext();
+  }
+
+  private openModal(title: string, canDismiss?: () => boolean): ReturnType<typeof modal> {
+    const view = modal(title, canDismiss);
+    this.dialogs.add(view);
+    view.dialog.addEventListener('close', () => this.dialogs.delete(view), { once: true });
+    return view;
+  }
+
   refresh(): void {
+    if (this.disposed) return;
     const room = this.options.getRoom();
     const accountIdentity = this.options.auth.userId ?? '';
     const accountChanged = accountIdentity !== this.accountIdentity;
@@ -246,6 +292,7 @@ export class CommunityUI {
 
   /** Refreshes the existing header badge without revealing another account's unread state. */
   refreshMessages(): Promise<void> {
+    if (this.disposed) return Promise.resolve();
     const token = this.options.auth.jwt;
     const account = this.options.auth.userId;
     if (!token || !account || document.hidden) return Promise.resolve();
@@ -287,6 +334,7 @@ export class CommunityUI {
   }
 
   requestContact(peer: string): void {
+    if (this.disposed) return;
     offerContact(peer, {
       getToken: () => this.options.auth.jwt,
       getAccountId: () => this.options.auth.userId,
@@ -362,7 +410,8 @@ export class CommunityUI {
   }
 
   async showProfile(id: string): Promise<void> {
-    const view = modal('Profile');
+    if (this.disposed) return;
+    const view = this.openModal('Profile');
     this.profiles.delete(id); // Explicit profile visits refresh the cached account details.
     view.body.append(el('p', 'Loading profile…'));
     const profile = await this.loadProfile(id, false);
@@ -393,9 +442,10 @@ export class CommunityUI {
   }
 
   report(id: string, name: string): void {
+    if (this.disposed) return;
     const room = this.options.getRoom();
     if (!room) return;
-    const view = modal(`Report ${name}`);
+    const view = this.openModal(`Report ${name}`);
     const reason = el('textarea');
     reason.maxLength = 1000;
     reason.rows = 4;
@@ -416,7 +466,7 @@ export class CommunityUI {
             reason: reason.value.trim(),
           });
           view.close();
-          this.options.notify('Report sent to room moderators');
+          if (!this.disposed) this.options.notify('Report sent to room moderators');
         }),
       (error) => this.showError(view.error, error),
       'btn-primary',
@@ -426,12 +476,13 @@ export class CommunityUI {
 
   /** `reportId` names the open report the ban answers; `onDone` runs after it is applied. */
   ban(id: string, name: string, options: { reportId?: string; onDone?: () => void } = {}): void {
+    if (this.disposed) return;
     const room = this.options.getRoom();
     if (!room) return;
     let pending = false;
     const membership = room.membershipVersion;
     const current = () => this.options.getRoom() === room && room.membershipVersion === membership;
-    const view = modal(`Ban ${name}`, () => !pending);
+    const view = this.openModal(`Ban ${name}`, () => !pending);
     const reason = input('', 'text', 500);
     const duration = el('select');
     for (const [value, label] of [
@@ -468,7 +519,7 @@ export class CommunityUI {
             );
             pending = false;
             view.close();
-            options.onDone?.();
+            if (!this.disposed) options.onDone?.();
           } finally {
             pending = false;
             reason.disabled = false;
@@ -484,6 +535,7 @@ export class CommunityUI {
 
   /** At most eight profile reads in flight, with membership-owned queued requests. */
   private async loadProfile(id: string, cached = true): Promise<PublicProfile | null> {
+    if (this.disposed) return null;
     const generation = this.generation;
     while (this.profileActive >= 8) {
       await new Promise<void>((resolve) => {
@@ -498,7 +550,8 @@ export class CommunityUI {
     }
     this.profileActive++;
     try {
-      return await api.publicProfile(id);
+      const profile = await api.publicProfile(id);
+      return !this.disposed && generation === this.generation ? profile : null;
     } catch {
       return null;
     } finally {
@@ -835,7 +888,8 @@ export class CommunityUI {
   }
 
   private openRecovery(): void {
-    const view = modal('Recover account');
+    if (this.disposed) return;
+    const view = this.openModal('Recover account');
     const email = input('', 'email', 254);
     email.autocomplete = 'username';
     const key = input('', 'password', 512);
@@ -866,7 +920,8 @@ export class CommunityUI {
           });
           key.value = '';
           view.close();
-          this.options.notify('Password reset. Sign in with your new password.');
+          if (!this.disposed)
+            this.options.notify('Password reset. Sign in with your new password.');
         }),
       (error) => this.showError(view.error, error),
       'btn-primary',
@@ -875,9 +930,10 @@ export class CommunityUI {
   }
 
   private openNickname(): void {
+    if (this.disposed) return;
     const room = this.options.getRoom();
     if (!room) return;
-    const view = modal('Room nickname');
+    const view = this.openModal('Room nickname');
     const nickname = input(room.nickname, 'text', 64);
     view.body.append(
       field('Nickname', nickname),
@@ -897,7 +953,8 @@ export class CommunityUI {
   }
 
   private async openRooms(): Promise<void> {
-    const view = modal('My rooms');
+    if (this.disposed) return;
+    const view = this.openModal('My rooms');
     const token = this.options.auth.jwt;
     const account = this.options.auth.userId;
     const current = (): boolean =>
@@ -1110,7 +1167,8 @@ export class CommunityUI {
   }
 
   private deleteRoom(room: RoomListItem, done: () => void): void {
-    const view = modal('Delete room');
+    if (this.disposed) return;
+    const view = this.openModal('Delete room');
     const token = this.options.auth.jwt;
     const generation = this.generation;
     const confirmation = input('', 'text', 128);
@@ -1128,7 +1186,9 @@ export class CommunityUI {
           if (!view.dialog.open || generation !== this.generation) return;
           if (confirmation.value !== room.id) throw new Error('Type the exact room ID to confirm');
           await api.deleteRoom(room.id, token);
+          if (this.disposed) return;
           await this.options.onRoomDeleted(room.id);
+          if (this.disposed) return;
           view.close();
           this.options.onRoomsChanged();
           done();

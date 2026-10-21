@@ -207,6 +207,8 @@ test('container context explicitly admits build configs, help and PWA files with
     '!web/public/fonts/', 'web/public/fonts/**', '!web/public/fonts/outfit-latin.woff2',
     '!web/public/fonts/Outfit-OFL.txt',
     '!web/src/', 'web/src/**', '!web/src/*.ts', '!web/src/*.css',
+    '!web/src/screens/', 'web/src/screens/**', '!web/src/screens/*.ts',
+    '!web/src/chat/', 'web/src/chat/**', '!web/src/chat/*.ts',
   ].toSorted());
   for (const [index, rule] of ignoreRules.entries()) {
     if (rule.startsWith('!') && rule.endsWith('/') && rule !== '!vendor/') {
@@ -226,11 +228,12 @@ test('context matching covers parent inheritance and last-rule precedence', () =
   assert.throws(() => excluded('web/index.html', ['web/[ab].html']), /Unsupported/);
 });
 
-test('every Rust source and migration in the repository reaches the build context', () => {
+test('every Rust/browser source and migration in the repository reaches the build context', () => {
   // The context admits source directories one by one, so a new directory needs its own
   // rules: the Rust CI jobs build from the checkout and pass while only the image build
   // sees the hole (CI runs 39295831051 and 39302090481).
-  const sources = ['src/**/*.rs', 'load_tests/src/**/*.rs', 'xtask/src/**/*.rs', 'migrations/*.sql']
+  const sources = ['src/**/*.rs', 'load_tests/src/**/*.rs', 'xtask/src/**/*.rs', 'migrations/*.sql',
+    'web/src/**/*.ts', 'web/src/**/*.css']
     .flatMap(pattern => globSync(pattern, { cwd: root }));
   assert.ok(sources.length > 100, 'the source globs must find the crate sources');
   for (const filename of sources) {
@@ -251,6 +254,7 @@ test('context excludes local-only descendants while retaining production inputs'
     'web/node_modules/example/index.js', 'web/e2e/results/report.json',
     'web/scripts/CLAUDE.md', 'web/scripts/local-only.mjs',
     'web/public/private.env', 'web/public/unlisted.html', 'web/src/CLAUDE.md',
+    'web/src/screens/private.env', 'web/src/screens/CLAUDE.md', 'web/src/chat/private.env', 'web/src/chat/CLAUDE.md',
   ]) assert.equal(excluded(filename), true, `${filename} must stay outside the build context`);
   for (const filename of [
     'Dockerfile', '.dockerignore', 'Cargo.toml', 'Cargo.lock',
@@ -266,7 +270,7 @@ test('context excludes local-only descendants while retaining production inputs'
     'web/index.html', 'web/bundle-budget.json', 'web/scripts/check-bundle.mjs',
     'web/scripts/mediasoup-runtime.mjs',
     'web/public/help.html', 'web/public/help.css', ...pwaFiles,
-    'web/src/main.ts', 'web/src/style.css',
+    'web/src/main.ts', 'web/src/style.css', 'web/src/screens/room.ts', 'web/src/chat/composer.ts',
     'vendor/mediasoup-sys-0.19.0/subprojects/packagefiles/abseil-cpp/meson.build',
   ]) assert.equal(excluded(filename), false, `${filename} must remain available to the build`);
 });

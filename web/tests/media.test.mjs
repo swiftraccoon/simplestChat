@@ -1,24 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { readFile } from 'node:fs/promises';
-import ts from '@typescript/typescript6';
 import { Device as ShippedDevice } from '../node_modules/mediasoup-client/lib/Device.js';
-import { evaluateTypeScript, loadContractModules, loadTypeScript } from './source-loader.mjs';
+import { loadContractModules, loadTypeScript } from './native-fixtures.mjs';
+import { roomScreenFixture } from './room-screen-fixture.mjs';
 
 const signalingModule = await loadTypeScript('src/signaling.ts', {
   modules: await loadContractModules(),
 });
 const captureModule = await loadTypeScript('src/capture-preferences.ts');
 const screenModule = await loadTypeScript('src/screen-presentation.ts');
-const { mediaErrorMessage } = await loadTypeScript('src/media-controls.ts', {
-  modules: {
-    './receive-policy': await loadTypeScript('src/receive-policy.ts'),
-    './capture-preferences': captureModule,
-    './media-controls.css': {},
-    './settings-sheet': {},
-    './audio-output': {},
-  },
-});
 
 const { Producer } = await import(
   new URL('./Producer.js', import.meta.resolve('mediasoup-client'))
@@ -133,7 +123,7 @@ async function fixture(t) {
   };
   const { MediaManager } = await loadTypeScript('src/media.ts', {
     modules: {
-      '../node_modules/mediasoup-client/lib/Device.js': {},
+      '../node_modules/mediasoup-client/lib/Device.js': { Device: ShippedDevice },
       './signaling': signalingModule,
       './capture-preferences': await loadTypeScript('src/capture-preferences.ts', { globals }),
       './screen-presentation': await loadTypeScript('src/screen-presentation.ts', { globals }),
@@ -1641,40 +1631,26 @@ for (const stage of ['produce', 'replace']) {
 }
 
 async function pttFor(media) {
-  const source = await readFile(new URL('../src/main.ts', import.meta.url), 'utf8');
-  const ast = ts.createSourceFile('main.ts', source, ts.ScriptTarget.Latest, true);
-  const functions = ast.statements.filter(
-    (node) =>
-      ts.isFunctionDeclaration(node) && ['pttActivate', 'pttDeactivate'].includes(node.name?.text),
-  );
-  const buttons = [],
-    errors = [];
-  const api = evaluateTypeScript(
-    `
-    let pttHeld = false;
-    let pttActivation = 0;
-    ${functions.map((node) => node.getText(ast)).join('\n')}
-    export { pttActivate, pttDeactivate };
-    export function held() { return pttHeld; }
-  `,
-    {
-      globals: {
-        room: {
-          hasMedia: true,
-          get audioEnabled() {
-            return media.audioEnabled;
-          },
-          unmuteAudio: () => media.unmuteAudio(),
-          muteAudio: () => media.muteAudio(),
-        },
-        updateMicButton: (enabled) => buttons.push(enabled),
-        updateLocalTile() {},
-        showToast: (error) => errors.push(error),
-        mediaErrorMessage,
-      },
+  const f = await roomScreenFixture({
+    mode: 'ptt',
+    room: {
+      hasMedia: true,
+      unmuteAudio: () => media.unmuteAudio(),
+      muteAudio: () => media.muteAudio(),
     },
-  );
-  return { ...api, buttons, errors };
+  });
+  Object.defineProperty(f.store.room, 'audioEnabled', { get: () => media.audioEnabled });
+  const buttons = [];
+  f.services.setButtonContent = () => buttons.push(media.audioEnabled);
+  return {
+    pttActivate: f.controls.pttActivate,
+    pttDeactivate: f.controls.pttDeactivate,
+    held: () => f.state.publishing.pttHeld,
+    buttons,
+    get errors() {
+      return f.state.toasts.map(([message]) => message);
+    },
+  };
 }
 
 test('PTT release cancels a pending permission/capture result', async (t) => {

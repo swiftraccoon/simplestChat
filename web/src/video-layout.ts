@@ -57,15 +57,19 @@ export function calculateVideoLayout(
 }
 
 /** Observe this page-lifetime stage without reacting to our own style writes. */
-export function observeVideoLayout(grid: HTMLElement): void {
+export function observeVideoLayout(grid: HTMLElement): () => void {
+  let disposed = false;
+  let frame: number | null = null;
   let queued = false;
   const schedule = (): void => {
-    if (queued) return;
+    if (disposed || queued) return;
     queued = true;
-    requestAnimationFrame(layout);
+    frame = requestAnimationFrame(layout);
   };
   const layout = (): void => {
     queued = false;
+    frame = null;
+    if (disposed) return;
     const tiles = Array.from(grid.children).filter(
       (child): child is HTMLElement =>
         child instanceof HTMLElement && child.classList.contains('video-tile'),
@@ -83,7 +87,16 @@ export function observeVideoLayout(grid: HTMLElement): void {
       tile.style.setProperty('--video-tile-height', `${size.height}px`);
     });
   };
-  new ResizeObserver(schedule).observe(grid);
-  new MutationObserver(schedule).observe(grid, { childList: true });
+  const resize = new ResizeObserver(schedule);
+  const mutation = new MutationObserver(schedule);
+  resize.observe(grid);
+  mutation.observe(grid, { childList: true });
   schedule();
+  return () => {
+    disposed = true;
+    resize.disconnect();
+    mutation.disconnect();
+    if (frame !== null) cancelAnimationFrame(frame);
+    frame = null;
+  };
 }

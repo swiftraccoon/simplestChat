@@ -91,9 +91,27 @@ For complete guest/account setup and LAN ICE addressing see
 
 ## Module map
 
+`main.ts` validates the static shell once through `dom.ts`, then calls
+`startApp(elements, revision)` in `app.ts`. Importing the composition module starts
+no browser work. Its state stays inside that app instance; screens receive typed
+elements, live state getters and the services they need. `dispose()` retires the
+views, listeners, timers, observers and pending presentation, then begins leaving
+the active room. It preserves the shared browser sign-in. A non-persisted
+`pagehide` disposes the app; a back/forward-cache entry keeps its owners alive.
+
+`disposable.ts` supplies `createScope()` and `mount(parent, render)`. Bind listeners
+with the scope's `signal`, register other cleanup with `onDispose`, and still
+check owner identity after awaits: aborting a listener cannot cancel work that
+already started. Screens own their dialogs and async attempts, while room and
+account identities fence late results. Unit tests import these modules through
+Node's native TypeScript execution and module mocks.
+
 | Module                                                                                          | Responsibility                                                                                                                            |
 | ----------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/main.ts`                                                                                   | Application wiring, room shell and layout                                                                                                 |
+| `src/main.ts`, `app.ts`, `dom.ts`                                                               | Static-shell validation, explicit app startup and service composition                                                                     |
+| `src/screens/{home,auth,directory,create-room,invitations}.ts`                                  | Home and account entry, discovery, creation and invitation ownership                                                                      |
+| `src/screens/{room,room-media,room-layout,room-settings,settings,chrome}.ts`                    | Room UI, media controls, layout, confirmed settings and shared chrome                                                                     |
+| `src/disposable.ts`, `ui-tasks.ts`, `toasts.ts`                                                 | Shared listener/resource teardown and scoped async feedback                                                                               |
 | `src/video-layout.ts`                                                                           | Uniform media cells sized to the available stage                                                                                          |
 | `src/ui.ts`                                                                                     | Text-safe controls, dialogs and named HTTP API methods                                                                                    |
 | `src/participant-hovercard.ts`                                                                  | Shared participant cards for roster and chat names, profile loading ownership and pointer/keyboard/touch interaction                      |
@@ -103,7 +121,7 @@ For complete guest/account setup and LAN ICE addressing see
 | `src/account-preferences.ts`                                                                    | Account-owned privacy state, field PATCH intents, cross-device refresh and uncertain-save reconciliation, shared by home and room screens |
 | `src/account-updates.ts`                                                                        | Authenticated account invalidations, bounded SSE decoding, visibility ownership and reconnect repair                                      |
 | `src/pwa.ts`, `public/sw.js`, `public/manifest.webmanifest`                                     | Installation, optional generic PM push alerts and account-scoped subscription ownership; no offline cache                                 |
-| `src/signaling.ts`, `protocol.ts`, `protocol.generated.ts`                                      | WebSocket lifecycle and the generated server protocol                                                                               |
+| `src/signaling.ts`, `protocol.ts`, `protocol.generated.ts`                                      | WebSocket lifecycle and the generated server protocol                                                                                     |
 | `src/validation.ts`, `api-validation.ts`, `protocol-validation.ts`                              | Shared decoder primitives and HTTP/WebSocket response validation                                                                          |
 | `src/room.ts`, `room-navigation.ts`                                                             | Membership, confirmed room controls, lobby status and explicit room selection/departure                                                   |
 | `src/app-navigation.ts`                                                                         | Typed account destinations, identity-scoped surface history and Back/Forward restoration                                                  |
@@ -120,21 +138,13 @@ For complete guest/account setup and LAN ICE addressing see
 | `src/notification-preferences.ts`, `notification-validation.ts`                                 | Account-synced notification rules, conversation mute/snooze and quiet hours                                                               |
 | `src/layer-cap.ts`                                                                              | Simulcast layer a remote tile can use at its rendered size, with hysteresis                                                               |
 | `src/settings-sheet.ts`                                                                         | The settings sheet: one list, single-purpose screens, rows that apply at once                                                             |
-| `src/social-chat.ts`, `chat/*.ts`, `chat-store.ts`                                                           | Room/PM conversations, composer, bounded replay, removal tombstones and preferences                                                       |
+| `src/social-chat.ts`, `chat/*.ts`, `chat-store.ts`                                              | Chat coordination with separate store, rendering, composer, mentions, notifications and preference modules                                |
 | `src/chat-history.ts`                                                                           | Saved room history, retention controls, account PM inbox, search and shared read positions                                                |
 | `src/pm-composer.ts`, `pm-send-attempts.ts`, `chat-reactions.ts`                                | Durable account-PM attempts and quoted replies, plus shared reaction controls                                                             |
 | `src/discovery.ts`, `discovery-validation.ts`                                                   | Accepted contacts, explicit contact links, account favorites and recent room shortcuts                                                    |
 | `src/*.css`, `index.html`                                                                       | Layout, component styles and initial document                                                                                             |
 | `public/help.html`, `help.css`                                                                  | Zero-JavaScript user help, copied into the production output                                                                              |
 | `scripts/check-bundle.mjs`, `bundle-budget.json`                                                | Aggregate raw/gzip asset limits enforced by every production build                                                                        |
-
-`social-chat.ts` coordinates room/account membership, history, replay and read
-positions. The `chat/` modules own the store boundary, rendering, composer,
-mentions, notifications and preferences. They receive narrow live contexts;
-`dispose()` releases subscriptions, observers and listeners, while activation
-identity fences work already awaiting a result. `disposable.ts` provides
-shared listener signals and resource cleanup. Chat tests import the actual
-modules through `tests/native-fixtures.mjs`.
 
 Rust signaling types in [src/signaling/protocol.rs](../src/signaling/protocol.rs)
 are the wire contract's source of truth: `cargo run -q -p xtask -- protocol-ts`
@@ -392,8 +402,8 @@ workloads and deployment limits.
 `npm --prefix web test` runs Node source-level regressions with mocked browser
 APIs. `npm --prefix web run typecheck` invokes the actual TypeScript 7 compiler
 for browser source and Node/Vite tooling in separate ambient environments;
-the source-test loader deliberately uses a separate TypeScript 6 compatibility
-package with its compiler API. These are distinct validation paths. Native
+unit tests execute erasable TypeScript directly through Node 26's native loader
+and supported module mocks. No second TypeScript compiler is installed. Native
 type-aware Oxlint uses the same TypeScript project graph; JS test/harness files
 receive syntax/correctness lint, not full fixture type checking.
 Build scripts under `scripts/` use checked JavaScript with typed JSDoc and the

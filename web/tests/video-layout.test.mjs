@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { loadTypeScript } from './source-loader.mjs';
+import { loadTypeScript } from './native-fixtures.mjs';
 
 const { calculateVideoLayout } = await loadTypeScript('src/video-layout.ts');
 const landscape = 16 / 9;
@@ -80,4 +80,81 @@ test('resizing the stage resizes all cells together without exceeding its width'
     calculateVideoLayout(4, 600, 400, Number.NaN),
     calculateVideoLayout(4, 600, 400),
   );
+});
+
+test('layout disposal cancels its frame, disconnects observers and retires queued callbacks', async () => {
+  const observers = [];
+  const frames = new Map();
+  const cancelled = [];
+  const writes = [];
+  let frameId = 0;
+  class Observer {
+    disconnected = 0;
+    constructor(callback) {
+      this.callback = callback;
+      observers.push(this);
+    }
+    observe(target, options) {
+      this.target = target;
+      this.options = options;
+    }
+    disconnect() {
+      this.disconnected++;
+    }
+  }
+  class Element {
+    classList = { contains: (name) => name === 'video-tile' };
+    style = { setProperty: (...args) => writes.push(args) };
+  }
+  const grid = { children: [new Element()], clientWidth: 640, clientHeight: 360 };
+  const { observeVideoLayout } = await loadTypeScript('src/video-layout.ts', {
+    globals: {
+      HTMLElement: Element,
+      ResizeObserver: Observer,
+      MutationObserver: Observer,
+      requestAnimationFrame(callback) {
+        const id = ++frameId;
+        frames.set(id, callback);
+        return id;
+      },
+      cancelAnimationFrame(id) {
+        cancelled.push(id);
+        frames.delete(id);
+      },
+      getComputedStyle: () => ({
+        paddingLeft: '0',
+        paddingRight: '0',
+        paddingTop: '0',
+        paddingBottom: '0',
+        columnGap: '8',
+      }),
+    },
+  });
+  const dispose = observeVideoLayout(grid);
+  assert.deepEqual(
+    observers.map(({ target }) => target),
+    [grid, grid],
+  );
+  assert.deepEqual(observers[1].options, { childList: true });
+  observers.forEach(({ callback }) => callback());
+  assert.equal(frames.size, 1, 'observer signals coalesce into the initial frame');
+  const first = frames.get(1);
+  frames.delete(1);
+  first();
+  assert.equal(writes.length, 2, 'a live frame sizes the actual tile');
+  observers[0].callback();
+  const retired = frames.get(2);
+  dispose();
+  assert.deepEqual(cancelled, [2]);
+  assert.equal(frames.size, 0);
+  assert.deepEqual(
+    observers.map(({ disconnected }) => disconnected),
+    [1, 1],
+  );
+  retired();
+  observers.forEach(({ callback }) => callback());
+  assert.equal(writes.length, 2, 'a delivered retired frame cannot write tile styles');
+  assert.equal(frames.size, 0, 'retired observer delivery cannot schedule more frames');
+  dispose();
+  assert.deepEqual(cancelled, [2]);
 });

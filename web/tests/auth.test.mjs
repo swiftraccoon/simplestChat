@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { loadTypeScript } from './source-loader.mjs';
+import { loadTypeScript } from './native-fixtures.mjs';
 
 const REFRESH_MS = 12 * 60 * 1000;
 const REPLAY_MS = 2250;
@@ -1355,6 +1355,98 @@ test('dismissing an idle authentication dialog does not cancel a valid startup r
   assert.equal(await restore, 'restored');
   assert.equal(f.auth.userId, 'restored');
 });
+
+test('disposal preserves accepted identity without revoking or broadcasting the browser session', async (t) => {
+  const f = await fixture(t);
+  const mutations = [];
+  f.auth.setSessionMutationHandler(() => mutations.push('changed'));
+  await f.login('accepted');
+  const token = f.auth.jwt;
+  const oldRefresh = [...f.timers.values()][0].callback;
+  assert.deepEqual(mutations, ['changed']);
+  f.auth.dispose();
+  f.auth.dispose();
+  assert.equal(f.timers.size, 0);
+  assert.equal(f.auth.jwt, token);
+  assert.equal(f.auth.userId, 'accepted');
+  assert.equal(f.auth.isLoggedIn, true);
+  oldRefresh();
+  await flush();
+  assert.equal(f.requests.length, 1, 'disposing never sends logout or a queued refresh');
+  assert.deepEqual(mutations, ['changed']);
+  assert.deepEqual(f.changes, [[true, false]]);
+});
+
+test('disposal aborts a startup restore and refuses a late saved-session response', async (t) => {
+  const f = await fixture(t);
+  const pending = deferred();
+  const states = [];
+  f.auth.setOnRestoreStateChange((state) => states.push(state));
+  f.enqueue(pending.promise);
+  const restore = f.auth.tryRestore();
+  await flush();
+  const { signal } = f.requests[0].options;
+  f.auth.dispose();
+  assert.equal(signal.aborted, true);
+  assert.equal(await restore, 'superseded');
+  assert.equal(f.timers.size, 0);
+  pending.resolve(response(session('late')));
+  await flush();
+  assert.equal(f.auth.userId, null);
+  assert.deepEqual(states, ['checking'], 'retired callbacks receive no completion');
+  assert.deepEqual(f.changes, []);
+});
+
+test('disposal aborts pending sign-in without adopting its late cookie response or restarting timers', async (t) => {
+  const f = await fixture(t);
+  await f.login('accepted');
+  const token = f.auth.jwt;
+  const mutations = [];
+  f.auth.setSessionMutationHandler(() => mutations.push('changed'));
+  const pending = deferred();
+  f.enqueue(pending.promise);
+  const login = f.auth.login('replacement@example.test', 'password');
+  const rejected = assert.rejects(login, superseded);
+  await flush();
+  const { signal } = f.requests[1].options;
+  f.auth.dispose();
+  assert.equal(signal.aborted, true);
+  await rejected;
+  pending.resolve(response(session('replacement')));
+  await flush();
+  assert.equal(f.auth.jwt, token);
+  assert.equal(f.auth.userId, 'accepted');
+  assert.equal(f.timers.size, 0);
+  assert.equal(f.requests.length, 2);
+  assert.deepEqual(f.changes, [[true, false]]);
+  assert.deepEqual(mutations, []);
+});
+
+for (const lateResult of ['response', 'failure']) {
+  test(`disposal aborts scheduled refresh and its retention watchdog before a late ${lateResult}`, async (t) => {
+    const f = await fixture(t);
+    await f.login('accepted');
+    const token = f.auth.jwt;
+    const pending = deferred();
+    f.enqueue(pending.promise);
+    await f.fire(REFRESH_MS);
+    const { signal } = f.requests[1].options;
+    const retiredTimers = [...f.timers.values()].map(({ callback }) => callback);
+    assert.ok(retiredTimers.length > 0, 'the refresh owns a retention watchdog');
+    f.auth.dispose();
+    assert.equal(signal.aborted, true);
+    assert.equal(f.timers.size, 0);
+    if (lateResult === 'response') pending.resolve(response(session('replacement')));
+    else pending.reject(new Error('retired network failure'));
+    retiredTimers.forEach((callback) => callback());
+    await flush();
+    assert.equal(f.auth.jwt, token);
+    assert.equal(f.auth.userId, 'accepted');
+    assert.equal(f.timers.size, 0, 'late completion cannot schedule a retry');
+    assert.equal(f.requests.length, 2);
+    assert.deepEqual(f.changes, [[true, false]]);
+  });
+}
 
 test('authoritative cross-tab sign-out clears uncertainty and permits a fresh explicit sign-in', async (t) => {
   const f = await fixture(t);

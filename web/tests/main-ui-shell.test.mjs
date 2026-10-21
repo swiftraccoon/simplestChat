@@ -1,38 +1,41 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
-import ts from '@typescript/typescript6';
-import { evaluateTypeScript } from './source-loader.mjs';
+import { loadTypeScript } from './native-fixtures.mjs';
+import { createLocalPreferences, signOutAndForget } from '../src/local-preferences.ts';
+import { createDirectoryEntry } from '../src/room-entry.ts';
 import { createDOM } from './ui-fixture.mjs';
+import { roomScreenFixture } from './room-screen-fixture.mjs';
 
-async function functionSource(name) {
-  const source = await readFile(new URL('../src/main.ts', import.meta.url), 'utf8');
-  const ast = ts.createSourceFile('main.ts', source, ts.ScriptTarget.Latest, true);
-  const declaration = ast.statements.find(
-    (node) => ts.isFunctionDeclaration(node) && node.name?.text === name,
-  );
-  assert.ok(declaration, `${name} must remain a shared UI action`);
-  return declaration.getText(ast);
+async function toastFixture(globals) {
+  const { createToasts } = await loadTypeScript('src/toasts.ts', {
+    globals: { setTimeout: globals.setTimeout },
+  });
+  return createToasts(globals.document, globals.toastContainer);
 }
-
-async function roomEventSource(names) {
-  const source = await readFile(new URL('../src/main.ts', import.meta.url), 'utf8');
-  const ast = ts.createSourceFile('main.ts', source, ts.ScriptTarget.Latest, true);
-  let roomEvents;
-  function visit(node) {
-    if (ts.isNewExpression(node) && node.expression.getText(ast) === 'RoomClient')
-      roomEvents = node.arguments[1];
-    ts.forEachChild(node, visit);
-  }
-  visit(ast);
-  assert.ok(roomEvents && ts.isObjectLiteralExpression(roomEvents));
-  return names
-    .map((name) => {
-      const property = roomEvents.properties.find((node) => node.name?.getText(ast) === name);
-      assert.ok(property, `${name} must be wired to the room`);
-      return property.getText(ast);
-    })
-    .join(',');
+async function chromeFixture(globals) {
+  const bindings = globals.document ? { document: globals.document } : {};
+  const ui = await loadTypeScript('src/ui.ts', { globals: bindings });
+  const overrides = Object.fromEntries(
+    ['modal', 'el', 'button'].filter((name) => globals[name]).map((name) => [name, globals[name]]),
+  );
+  const chrome = await loadTypeScript('src/screens/chrome.ts', {
+    modules: { '../ui': { ...ui, ...overrides } },
+    globals: bindings,
+  });
+  return {
+    ...chrome,
+    announceRoomEntry: (name) =>
+      chrome.announceRoomEntry(globals.roomScreen, globals.showToast, name),
+    placeDiagnosticsButton: (inRoom) =>
+      chrome.placeDiagnosticsButton(
+        { homeTools: globals.homeTools, roomMoreRepair: globals.roomMoreRepair },
+        globals.diagnosticsButton,
+        inRoom,
+      ),
+    setupRoomMenu: () => chrome.setupMenu(globals.roomMoreBtn, globals.roomMoreMenu),
+    setupAccountMenu: () => chrome.setupMenu(globals.accountMenuBtn, globals.accountMenu),
+  };
 }
 
 function classListStub(initial = []) {
@@ -52,49 +55,28 @@ function classListStub(initial = []) {
 }
 
 test('microphone and camera tooltips describe turning a device on, never unmuting something that was never on', async () => {
-  const labels = [];
-  const api = evaluateTypeScript(
-    `let micMode = 'open';
-     ${await functionSource('updateMicButton')}
-     ${await functionSource('updateCamButton')}
-     export { updateMicButton, updateCamButton };`,
-    {
-      globals: {
-        micBtn: { classList: classListStub(), querySelector: () => null, appendChild() {} },
-        camBtn: { classList: classListStub() },
-        icons: { micOn: () => '', micOff: () => '', camOn: () => '', camOff: () => '' },
-        setButtonContent: (_button, _icon, tooltip) => labels.push(tooltip),
-        document: { createElement: () => ({}) },
-      },
-    },
+  const f = await roomScreenFixture();
+  f.controls.updateMicButton(false);
+  f.controls.updateMicButton(true);
+  f.controls.updateCamButton(false);
+  f.controls.updateCamButton(true);
+  assert.deepEqual(
+    f.state.buttonUpdates.map(({ tooltip }) => tooltip),
+    ['Turn on mic (M)', 'Turn off mic (M)', 'Turn on camera (V)', 'Turn off camera (V)'],
   );
-  api.updateMicButton(false);
-  api.updateMicButton(true);
-  api.updateCamButton(false);
-  api.updateCamButton(true);
-  assert.deepEqual(labels, [
-    'Turn on mic (M)',
-    'Turn off mic (M)',
-    'Turn on camera (V)',
-    'Turn off camera (V)',
-  ]);
+  f.controller.dispose();
 });
 
 test('role badges explain their symbol to pointer and assistive users', async () => {
-  const { document } = createDOM();
-  const { getRoleBadgeSpan } = evaluateTypeScript(
-    `const ROLE_SYMBOLS: Record<string, string> = { owner: '~', admin: '&', moderator: '@', member: '+' };
-     const ROLE_NAMES: Record<string, string> = { owner: 'Owner', admin: 'Admin', moderator: 'Moderator', member: 'Member' };
-     ${await functionSource('getRoleBadgeSpan')}
-     export { getRoleBadgeSpan };`,
-    { globals: { document } },
-  );
-  const badge = getRoleBadgeSpan('moderator');
+  const f = await roomScreenFixture();
+  const badge = f.controller.getRoleBadgeSpan('moderator');
   assert.equal(badge.textContent, '@');
   assert.equal(badge.title, 'Moderator');
   assert.equal(badge.getAttribute('role'), 'img', 'a labelled span needs a role');
   assert.equal(badge.getAttribute('aria-label'), 'Moderator');
-  assert.equal(getRoleBadgeSpan('guest'), null);
+  assert.equal(f.controller.getRoleBadgeSpan('guest'), null);
+  assert.equal(f.controller.getRoleBadgeSpan('user'), null);
+  f.controller.dispose();
 });
 
 test('toasts announce, mark errors, fade just before removal and dismiss on click', async () => {
@@ -109,16 +91,11 @@ test('toasts announce, mark errors, fade just before removal and dismiss on clic
   const timers = [];
   const toastContainer = document.createElement('div');
   document.body.append(toastContainer);
-  const { showToast } = evaluateTypeScript(
-    `${await functionSource('showToast')} export { showToast };`,
-    {
-      globals: {
-        document,
-        toastContainer,
-        setTimeout: (callback, delay) => timers.push({ callback, delay }),
-      },
-    },
-  );
+  const { showToast } = await toastFixture({
+    document,
+    toastContainer,
+    setTimeout: (callback, delay) => timers.push({ callback, delay }),
+  });
   showToast('Room link copied');
   showToast('Could not enable microphone', 8000, 'error');
   const [info, error] = toastContainer.children;
@@ -141,142 +118,15 @@ test('toasts announce, mark errors, fade just before removal and dismiss on clic
 test('entering a room moves focus into it and states that media stays off', async () => {
   const toasts = [];
   let focused = 0;
-  const { announceRoomEntry } = evaluateTypeScript(
-    `${await functionSource('announceRoomEntry')} export { announceRoomEntry };`,
-    {
-      globals: {
-        roomScreen: { focus: () => focused++ },
-        showToast: (message) => toasts.push(message),
-      },
-    },
-  );
+  const { announceRoomEntry } = await chromeFixture({
+    roomScreen: { focus: () => focused++ },
+    showToast: (message) => toasts.push(message),
+  });
   announceRoomEntry('Design review');
   assert.equal(focused, 1);
   assert.deepEqual(toasts, [
     'Joined Design review. Your camera and microphone stay off until you turn them on.',
   ]);
-});
-
-test('phone layouts collapse the chat panel to its tab bar without touching desktop widths', async () => {
-  const roomScreen = { classList: classListStub(), style: { setProperty() {} } };
-  // Each toggle keeps its icon; only the label span's text changes.
-  const toggle = () => {
-    const label = { textContent: '' };
-    return { label, setAttribute() {}, querySelector: () => label };
-  };
-  const rosterToggleBtn = toggle();
-  const chatToggleBtn = toggle();
-  const sidebarCollapseBtn = {
-    attributes: {},
-    setAttribute(k, v) {
-      this.attributes[k] = v;
-    },
-  };
-  const sidebar = {};
-  const window = { innerWidth: 375 };
-  const panelPreferences = {
-    rosterWidth: 220,
-    chatWidth: 320,
-    rosterCollapsed: false,
-    chatCollapsed: false,
-    mobilePanelCollapsed: true,
-  };
-  const { applyPanelPreferences } = evaluateTypeScript(
-    `${await functionSource('applyPanelPreferences')} export { applyPanelPreferences };`,
-    {
-      globals: {
-        window,
-        panelPreferences,
-        roomScreen,
-        rosterToggleBtn,
-        chatToggleBtn,
-        sidebarCollapseBtn,
-        usersTab: null,
-        getLayout: () => 'classic',
-        isDesktopLayout: () => window.innerWidth > 768,
-        isMobilePanelCollapsed: () =>
-          window.innerWidth <= 768 && panelPreferences.mobilePanelCollapsed,
-        selectSidebarTab() {},
-        document: {
-          getElementById: (id) => (id === 'sidebar' ? sidebar : null),
-          documentElement: { style: { setProperty() {} } },
-        },
-      },
-    },
-  );
-  applyPanelPreferences();
-  assert.equal(rosterToggleBtn.label.textContent, 'People');
-  assert.equal(chatToggleBtn.label.textContent, 'Chat');
-  assert.equal(roomScreen.classList.contains('mobile-panel-collapsed'), true);
-  assert.equal(sidebarCollapseBtn.attributes['aria-expanded'], 'false');
-  assert.equal(sidebar.inert, false, 'the tab bar stays usable while collapsed');
-  window.innerWidth = 1200;
-  applyPanelPreferences();
-  assert.equal(roomScreen.classList.contains('mobile-panel-collapsed'), false);
-  assert.equal(sidebarCollapseBtn.attributes['aria-expanded'], 'true');
-});
-
-test('the desktop layout ends where style.css starts stacking or splitting the room', async () => {
-  const css = await readFile(new URL('../src/style.css', import.meta.url), 'utf8');
-  const queries = [];
-  let matches = false;
-  const window = {
-    matchMedia(query) {
-      queries.push(query);
-      return { matches };
-    },
-  };
-  const { isDesktopLayout } = evaluateTypeScript(
-    `${await functionSource('isDesktopLayout')} export { isDesktopLayout };`,
-    { globals: { window } },
-  );
-  assert.equal(isDesktopLayout(), true);
-  matches = true;
-  assert.equal(isDesktopLayout(), false);
-  const parts = queries[0].split(',').map((part) => part.trim());
-  assert.ok(parts.some((part) => part.includes('orientation: landscape')));
-  for (const part of parts)
-    assert.ok(css.includes(`@media ${part} {`), `style.css has no @media ${part}`);
-});
-
-test('a landscape phone in the classic layout lists people in the sidebar tab', async () => {
-  const roomScreen = { classList: classListStub(), style: { setProperty() {} } };
-  const button = () => ({ setAttribute() {}, querySelector: () => ({}) });
-  const usersTab = { hidden: true, classList: { contains: () => false } };
-  let desktop = false;
-  const { applyPanelPreferences } = evaluateTypeScript(
-    `${await functionSource('applyPanelPreferences')} export { applyPanelPreferences };`,
-    {
-      globals: {
-        window: { innerWidth: 844 },
-        panelPreferences: {
-          rosterWidth: 220,
-          chatWidth: 320,
-          rosterCollapsed: false,
-          chatCollapsed: false,
-          mobilePanelCollapsed: false,
-        },
-        roomScreen,
-        rosterToggleBtn: button(),
-        chatToggleBtn: button(),
-        sidebarCollapseBtn: button(),
-        usersTab,
-        getLayout: () => 'classic',
-        isDesktopLayout: () => desktop,
-        isMobilePanelCollapsed: () => false,
-        selectSidebarTab() {},
-        document: {
-          getElementById: (id) => (id === 'sidebar' ? {} : null),
-          documentElement: { style: { setProperty() {} } },
-        },
-      },
-    },
-  );
-  applyPanelPreferences();
-  assert.equal(usersTab.hidden, false, 'the roster column is hidden, so the tab lists people');
-  desktop = true;
-  applyPanelPreferences();
-  assert.equal(usersTab.hidden, true, 'the desktop roster column lists them instead');
 });
 
 test('the diagnostics entry lives on the home card outside a room and in the More menu inside one', async () => {
@@ -287,10 +137,11 @@ test('the diagnostics entry lives on the home card outside a room and in the Mor
   roomTools.id = 'room-more-repair';
   const diagnosticsButton = document.createElement('button');
   document.body.append(home, roomTools);
-  const { placeDiagnosticsButton } = evaluateTypeScript(
-    `${await functionSource('placeDiagnosticsButton')} export { placeDiagnosticsButton };`,
-    { globals: { document, diagnosticsButton } },
-  );
+  const { placeDiagnosticsButton } = await chromeFixture({
+    diagnosticsButton,
+    homeTools: home,
+    roomMoreRepair: roomTools,
+  });
   placeDiagnosticsButton(false);
   assert.equal(diagnosticsButton.parentNode, home);
   placeDiagnosticsButton(true);
@@ -299,99 +150,35 @@ test('the diagnostics entry lives on the home card outside a room and in the Mor
   assert.equal(diagnosticsButton.parentNode, home);
 });
 
-test('room settings show whether a password is set and can remove it explicitly', async () => {
-  const fields = Object.fromEntries(
-    [
-      'rsModerated',
-      'rsLobby',
-      'rsScreen',
-      'rsChat',
-      'rsGuests',
-      'rsGuestsBroadcast',
-      'rsRequireReg',
-      'rsInviteOnly',
-      'rsSecret',
-      'rsVideo',
-      'rsPtt',
-      'rsMaxBroadcasters',
-      'rsMaxParticipants',
-      'rsTopic',
-      'rsPassword',
-    ].map((name) => [name, { checked: false, value: '' }]),
-  );
-  const rsPasswordRemove = { hidden: true };
-  const rsPasswordHint = { textContent: '' };
-  const patches = [];
-  const settings = {
-    moderated: false,
-    lobbyEnabled: false,
-    allowScreenSharing: true,
-    allowChat: true,
-    guestsAllowed: true,
-    guestsCanBroadcast: true,
-    requireRegistration: false,
-    inviteOnly: false,
-    secret: false,
-    allowVideo: true,
-    pushToTalk: false,
-    passwordProtected: true,
-  };
-  const api = evaluateTypeScript(
-    `let roomSettingsPending = false;
-     ${await functionSource('syncRoomScreen')}
-     ${await functionSource('removeRoomPassword')}
-     export { syncRoomScreen, removeRoomPassword };`,
-    {
-      globals: {
-        roomControls: Object.fromEntries(
-          Object.entries(fields).map(([name, node]) => [node.id ?? name, node]),
-        ),
-        roomPasswordState: { remove: rsPasswordRemove, hint: rsPasswordHint, row: null },
-        room: { roomSettings: settings },
-        applyRoomSetting: async (change) => {
-          await change({ updateRoomSettings: async (patch) => patches.push(patch) });
-        },
-      },
-    },
-  );
-  api.syncRoomScreen();
-  assert.equal(rsPasswordRemove.hidden, false);
-  assert.match(rsPasswordHint.textContent, /password is set/i);
-  settings.passwordProtected = false;
-  api.syncRoomScreen();
-  assert.equal(rsPasswordRemove.hidden, true);
-  assert.match(rsPasswordHint.textContent, /no password/i);
-  await api.removeRoomPassword();
-  assert.deepEqual(patches, [{ password: null }]);
-});
-
 test('being removed, denied or unable to join shows an owned dialog instead of a native alert', async () => {
   const notices = [];
   const alerts = [];
-  const api = evaluateTypeScript(
-    `let localTextMuted = false;
-     export const events = { ${await roomEventSource(['onModeration', 'onLobbyDenied'])} };
-     ${await functionSource('reportJoinFailure')}
-     export { reportJoinFailure };`,
-    {
-      globals: {
-        room: { localParticipantId: 'local', getParticipants: () => new Map() },
-        alert: (message) => alerts.push(message),
-        observeUiTask() {},
-        leaveCurrentRoom: async () => {},
-        applyRoomSettingsToUI() {},
-        showToast() {},
-        updateJoinBtn() {},
-        joinBtn: { textContent: '' },
-        console: { error() {} },
-        showRoomExitNotice: (title, message) => notices.push({ title, message }),
-      },
+  for (const [action, reason] of [
+    ['kicked', 'Be kind'],
+    ['banned', undefined],
+  ]) {
+    const f = await roomScreenFixture({ globals: { alert: (message) => alerts.push(message) } });
+    await f.connect({ localParticipantId: 'local' });
+    f.state.events.onModeration(action, 'local', reason);
+    await f.settled();
+    notices.push(...f.state.notices);
+    f.controller.dispose();
+  }
+  const denied = await roomScreenFixture({ globals: { alert: (message) => alerts.push(message) } });
+  await denied.connect();
+  denied.state.events.onLobbyDenied('Full today');
+  await denied.settled();
+  notices.push(...denied.state.notices);
+  denied.controller.dispose();
+  const failed = await roomScreenFixture({ globals: { alert: (message) => alerts.push(message) } });
+  await failed.connect({
+    join: async () => {
+      throw new Error('Room is full');
     },
-  );
-  api.events.onModeration('kicked', 'local', 'Be kind');
-  api.events.onModeration('banned', 'local');
-  api.events.onLobbyDenied('Full today');
-  api.reportJoinFailure(new Error('Room is full'));
+  });
+  await failed.settled();
+  notices.push(...failed.state.notices);
+  failed.controller.dispose();
   assert.deepEqual(alerts, []);
   assert.deepEqual(notices, [
     { title: 'Removed from the room', message: 'You were kicked from this room. Reason: Be kind' },
@@ -404,35 +191,30 @@ test('being removed, denied or unable to join shows an owned dialog instead of a
 test('the exit notice is an owned dialog with a single way back home', async () => {
   const { document } = createDOM();
   const views = [];
-  const { showRoomExitNotice } = evaluateTypeScript(
-    `${await functionSource('showRoomExitNotice')} export { showRoomExitNotice };`,
-    {
-      globals: {
-        document,
-        modal: (title) => {
-          const dialog = document.createElement('dialog');
-          const body = document.createElement('div');
-          dialog.append(body);
-          const view = { title, dialog, body, close: () => dialog.close() };
-          views.push(view);
-          return view;
-        },
-        el: (tag, text, className) => {
-          const node = document.createElement(tag);
-          if (text !== undefined) node.textContent = text;
-          if (className) node.className = className;
-          return node;
-        },
-        button: (text, action, className) => {
-          const node = document.createElement('button');
-          node.textContent = text;
-          node.className = className ?? '';
-          node.addEventListener('click', action);
-          return node;
-        },
-      },
+  const { showRoomExitNotice } = await chromeFixture({
+    document,
+    modal: (title) => {
+      const dialog = document.createElement('dialog');
+      const body = document.createElement('div');
+      dialog.append(body);
+      const view = { title, dialog, body, close: () => dialog.close() };
+      views.push(view);
+      return view;
     },
-  );
+    el: (tag, text, className) => {
+      const node = document.createElement(tag);
+      if (text !== undefined) node.textContent = text;
+      if (className) node.className = className;
+      return node;
+    },
+    button: (text, action, className) => {
+      const node = document.createElement('button');
+      node.textContent = text;
+      node.className = className ?? '';
+      node.addEventListener('click', action);
+      return node;
+    },
+  });
   showRoomExitNotice('Removed from the room', 'You were kicked from this room.');
   assert.equal(views.length, 1);
   assert.equal(views[0].title, 'Removed from the room');
@@ -453,25 +235,20 @@ test('copying a room link without clipboard access offers the link for manual co
     this.selected = true;
   };
   const bodies = [];
-  const { showCopyFallback } = evaluateTypeScript(
-    `${await functionSource('showCopyFallback')} export { showCopyFallback };`,
-    {
-      globals: {
-        document,
-        modal: (title) => {
-          const body = document.createElement('div');
-          bodies.push({ title, body });
-          return { dialog: document.createElement('dialog'), body, close() {} };
-        },
-        el: (tag, text, className) => {
-          const node = document.createElement(tag);
-          if (text !== undefined) node.textContent = text;
-          if (className) node.className = className;
-          return node;
-        },
-      },
+  const { showCopyFallback } = await chromeFixture({
+    document,
+    modal: (title) => {
+      const body = document.createElement('div');
+      bodies.push({ title, body });
+      return { dialog: document.createElement('dialog'), body, close() {} };
     },
-  );
+    el: (tag, text, className) => {
+      const node = document.createElement(tag);
+      if (text !== undefined) node.textContent = text;
+      if (className) node.className = className;
+      return node;
+    },
+  });
   showCopyFallback('https://example.test/#room');
   assert.equal(bodies[0].title, 'Copy room link');
   const field = bodies[0].body.querySelector('input');
@@ -481,19 +258,9 @@ test('copying a room link without clipboard access offers the link for manual co
   assert.equal(field.selected, true);
 });
 
-test('a room ID is suggested from the display name until the ID is edited by hand', async () => {
-  const { suggestRoomId } = evaluateTypeScript(
-    `${await functionSource('suggestRoomId')} export { suggestRoomId };`,
-  );
-  assert.equal(suggestRoomId('Design Review'), 'design-review');
-  assert.equal(suggestRoomId('  Café — Crème!! '), 'cafe-creme');
-  assert.equal(suggestRoomId('___'), '');
-  assert.equal(suggestRoomId('a'.repeat(200)).length, 64);
-});
-
-for (const [label, setup, toggleId, menuId] of [
-  ['More', 'setupRoomMenu', 'room-more-btn', 'room-more-menu'],
-  ['account', 'setupAccountMenu', 'account-menu-btn', 'account-menu'],
+for (const [label, setup, toggleName, menuName] of [
+  ['More', 'setupRoomMenu', 'roomMoreBtn', 'roomMoreMenu'],
+  ['account', 'setupAccountMenu', 'accountMenuBtn', 'accountMenu'],
 ]) {
   test(`the ${label} menu opens on its button, closes on a choice, Escape or a click away, and keeps focus sensible`, async () => {
     const state = { focused: null, documentClick: [] };
@@ -510,7 +277,11 @@ for (const [label, setup, toggleId, menuId] of [
         return this.attributes[key] ?? null;
       },
       addEventListener(type, handler, capture) {
-        this.listeners.push({ type, handler, capture: capture === true });
+        this.listeners.push({
+          type,
+          handler,
+          capture: capture === true || capture?.capture === true,
+        });
       },
       focus() {
         state.focused = this;
@@ -540,20 +311,13 @@ for (const [label, setup, toggleId, menuId] of [
             if (entry.type === type && entry.capture === phase) entry.handler(payload);
       if (type === 'click') for (const handler of state.documentClick) handler(payload);
     };
-    const { [setup]: setupMenu } = evaluateTypeScript(
-      `${await functionSource('setupMenu')}
-    ${await functionSource(setup)}
-    export { ${setup} };`,
-      {
-        globals: {
-          document: {
-            getElementById: (id) => ({ [toggleId]: toggle, [menuId]: menu })[id],
-            addEventListener: (type, handler) =>
-              type === 'click' && state.documentClick.push(handler),
-          },
-        },
+    const { [setup]: setupMenu } = await chromeFixture({
+      [toggleName]: toggle,
+      [menuName]: menu,
+      document: {
+        addEventListener: (type, handler) => type === 'click' && state.documentClick.push(handler),
       },
-    );
+    });
     setupMenu();
     fire(toggle, 'click');
     assert.equal(menu.hidden, false);
@@ -636,128 +400,52 @@ for (const [label, setup, toggleId, menuId] of [
   });
 }
 
-test('the favorites rail collapses to the left edge on its toggle and remembers the choice', async () => {
-  const stored = new Map([['simplestchat.directoryRail', 'collapsed']]);
-  const node = () => {
-    const self = {
-      hidden: false,
-      classes: new Set(),
-      attributes: {},
-      listeners: {},
-      setAttribute(key, value) {
-        self.attributes[key] = String(value);
-      },
-      addEventListener(type, handler) {
-        self.listeners[type] = handler;
-      },
-    };
-    self.classList = {
-      toggle: (name, on) => (on ? self.classes.add(name) : self.classes.delete(name)),
-    };
-    return self;
-  };
-  const rail = node();
-  const toggle = node();
-  const { setupDirectoryRail } = evaluateTypeScript(
-    `${await functionSource('setupDirectoryRail')} export { setupDirectoryRail };`,
-    {
-      globals: {
-        document: {
-          getElementById: (id) => ({ 'directory-rail': rail, 'directory-rail-toggle': toggle })[id],
-        },
-        readLocalPreference: (key) => stored.get(key) ?? null,
-        writeLocalPreference: (key, value) => stored.set(key, value),
-      },
-    },
-  );
-  setupDirectoryRail();
-  assert.equal(rail.classes.has('collapsed'), true, 'a remembered collapse applies at once');
-  assert.equal(toggle.attributes['aria-expanded'], 'false');
-  assert.equal(toggle.attributes['aria-label'], 'Show favorites and recent rooms');
-  toggle.listeners.click();
-  assert.equal(rail.classes.has('collapsed'), false);
-  assert.equal(toggle.attributes['aria-expanded'], 'true');
-  assert.equal(toggle.attributes['aria-label'], 'Hide favorites and recent rooms');
-  assert.equal(stored.get('simplestchat.directoryRail'), 'open');
-  toggle.listeners.click();
-  assert.equal(rail.classes.has('collapsed'), true);
-  assert.equal(stored.get('simplestchat.directoryRail'), 'collapsed');
-});
-
 test('one pinned tile fills the stage, and a tile that is gone cannot stay pinned', async () => {
-  const classes = () => {
-    const names = new Set();
-    return {
-      names,
-      toggle: (name, on) => (on ? names.add(name) : names.delete(name)),
-      contains: (name) => names.has(name),
-    };
-  };
-  const tile = () => {
-    const pin = {
-      attributes: {},
-      setAttribute(key, value) {
-        this.attributes[key] = value;
-      },
-    };
-    return { pin, dataset: {}, style: {}, classList: classes(), querySelector: () => pin };
-  };
-  const remoteTiles = new Map([
-    ['alice', tile()],
-    ['bob:screen', tile()],
-  ]);
-  const videoGrid = { classList: classes() };
-  const { setPinnedTile, pinned } = evaluateTypeScript(
-    `let pinnedTileKey = null;
-    let followedSpeaker = null;
-    ${await functionSource('orderVideoTiles')}
-    ${await functionSource('setPinnedTile')}
-    export { setPinnedTile };
-    export const pinned = () => pinnedTileKey;`,
-    { globals: { remoteTiles, videoGrid, room: { setPinnedRemoteVideo() {} } } },
-  );
-  setPinnedTile('bob:screen');
-  assert.equal(pinned(), 'bob:screen');
-  assert.equal(remoteTiles.get('bob:screen').classList.contains('pinned'), true);
-  assert.equal(remoteTiles.get('bob:screen').pin.attributes['aria-pressed'], 'true');
-  assert.equal(remoteTiles.get('alice').pin.attributes['aria-pressed'], 'false');
-  assert.equal(videoGrid.classList.contains('has-pinned'), true);
-  setPinnedTile('alice');
-  assert.equal(remoteTiles.get('bob:screen').classList.contains('pinned'), false, 'only one');
-  setPinnedTile('gone');
-  assert.equal(pinned(), null);
-  assert.equal(videoGrid.classList.contains('has-pinned'), false);
+  const f = await roomScreenFixture({ room: {} });
+  f.controls.renderDeferredVideo('alice', 'Alice', undefined, 'offscreen');
+  f.controls.renderDeferredVideo('bob', 'Bob', 'screen', 'offscreen');
+  const alice = f.controls.tiles.get('alice');
+  const screen = f.controls.tiles.get('bob:screen');
+  f.controls.setPinnedTile('bob:screen');
+  assert.equal(screen.classList.contains('pinned'), true);
+  assert.equal(screen.querySelector('.tile-pin').getAttribute('aria-pressed'), 'true');
+  assert.equal(alice.querySelector('.tile-pin').getAttribute('aria-pressed'), 'false');
+  assert.equal(f.elements.videoGrid.classList.contains('has-pinned'), true);
+  assert.equal(screen.style.order, '-3');
+  f.controls.setPinnedTile('alice');
+  assert.equal(screen.classList.contains('pinned'), false, 'only one');
+  assert.equal(alice.classList.contains('pinned'), true);
+  f.controls.setPinnedTile('gone');
+  assert.equal(alice.classList.contains('pinned'), false);
+  assert.equal(f.elements.videoGrid.classList.contains('has-pinned'), false);
+  f.controller.dispose();
 });
 
 test('following changes tile order while preserving shared screens, a manual pin and uniform dimensions', async () => {
-  const remoteTiles = new Map(
-    ['alice', 'bob', 'alice:screen', 'carol'].map((id) => [
+  const f = await roomScreenFixture();
+  await f.connect();
+  for (const id of ['alice', 'bob', 'alice:screen', 'carol']) {
+    f.controls.renderDeferredVideo(
+      id.split(':')[0],
       id,
-      {
-        dataset: id.endsWith(':screen') ? { videoSource: 'screen' } : {},
-        style: { width: '160px', height: '90px' },
-      },
-    ]),
-  );
-  const { follow } = evaluateTypeScript(
-    `
-    let pinnedTileKey = 'carol'; let followedSpeaker = null;
-    ${await functionSource('orderVideoTiles')}
-    export const follow = (id) => { followedSpeaker = id; orderVideoTiles(); };
-  `,
-    { globals: { remoteTiles } },
-  );
-  follow('bob');
-  assert.equal(remoteTiles.get('carol').style.order, '-3');
-  assert.equal(remoteTiles.get('alice:screen').style.order, '-2');
-  assert.equal(remoteTiles.get('bob').style.order, '-1');
-  assert.equal(remoteTiles.get('alice').style.order, '');
-  for (const tile of remoteTiles.values())
+      id.endsWith(':screen') ? 'screen' : undefined,
+      'offscreen',
+    );
+    Object.assign(f.controls.tiles.get(id).style, { width: '160px', height: '90px' });
+  }
+  f.controls.setPinnedTile('carol');
+  f.state.events.onFollowedSpeakerChanged('bob');
+  assert.equal(f.controls.tiles.get('carol').style.order, '-3');
+  assert.equal(f.controls.tiles.get('alice:screen').style.order, '-2');
+  assert.equal(f.controls.tiles.get('bob').style.order, '-1');
+  assert.equal(f.controls.tiles.get('alice').style.order, '');
+  for (const tile of f.controls.tiles.values())
     assert.deepEqual([tile.style.width, tile.style.height], ['160px', '90px']);
-  follow(null);
-  assert.equal(remoteTiles.get('carol').style.order, '-3');
+  f.state.events.onFollowedSpeakerChanged(null);
+  assert.equal(f.controls.tiles.get('carol').style.order, '-3');
   for (const id of ['alice', 'bob', 'alice:screen'])
-    assert.equal(remoteTiles.get(id).style.order, '');
+    assert.equal(f.controls.tiles.get(id).style.order, '');
+  f.controller.dispose();
 });
 
 test('forgetting this device clears every key the app wrote and nothing else', async () => {
@@ -778,16 +466,12 @@ test('forgetting this device clears every key the app wrote and nothing else', a
     key: (index) => [...stored.keys()][index] ?? null,
     removeItem: (key) => stored.delete(key),
   };
-  const { forgetThisDevice } = evaluateTypeScript(
-    `${await functionSource('forgetThisDevice')} export { forgetThisDevice };`,
-    { globals: { localStorage } },
-  );
-  forgetThisDevice();
+  const { forgetThisDevice } = await loadTypeScript('src/local-preferences.ts');
+  forgetThisDevice(localStorage);
   assert.deepEqual([...stored.keys()], ['someone-elses-key']);
 });
 
 test('blocked storage keeps optional preferences in memory without interrupting initialization', async () => {
-  const source = `const memoryPreferences = new Map(); ${await functionSource('readLocalPreference')} ${await functionSource('writeLocalPreference')} export { readLocalPreference, writeLocalPreference };`;
   for (const mode of ['get', 'read', 'write']) {
     const storage = {
       getItem: () => {
@@ -804,10 +488,8 @@ test('blocked storage keeps optional preferences in memory without interrupting 
         return storage;
       },
     };
-    // The VM global is accessed lazily, just like a browser's storage getter.
-    const api = evaluateTypeScript(source.replaceAll('localStorage.', 'browser.localStorage.'), {
-      globals: { browser: blocked },
-    });
+    // The storage getter remains lazy, so a blocked access cannot stop initialization.
+    const api = createLocalPreferences(() => blocked.localStorage);
     assert.equal(
       api.readLocalPreference('layout'),
       mode === 'get' || mode === 'read' ? null : 'saved',
@@ -819,27 +501,30 @@ test('blocked storage keeps optional preferences in memory without interrupting 
 
 for (const outcome of ['success', 'failure', 'replacement', 'blocked-storage']) {
   test(`ordinary sign-out clears saved identity only after owned success: ${outcome}`, async () => {
+    let epoch = 0;
     const task = Promise.withResolvers();
     const auth = { isLoggedIn: true, logout: () => task.promise };
     const memoryPreferences = new Map([['displayName', 'Before']]);
     const nameInput = { value: 'Before' };
     let forgotten = 0,
       reloaded = 0;
-    const api = evaluateTypeScript(
-      `let inviteAccountEpoch = 0; ${await functionSource('signOutAndForget')} export {signOutAndForget}; export function next() {inviteAccountEpoch++;}`,
-      {
-        globals: {
+    const api = {
+      signOutAndForget: () =>
+        signOutAndForget({
           auth,
-          memoryPreferences,
           nameInput,
-          forgetThisDevice: () => {
+          accountEpoch: () => epoch,
+          clearPreferences: () => memoryPreferences.clear(),
+          forgetDevice: () => {
             if (outcome === 'blocked-storage') throw new Error('Blocked');
             forgotten++;
           },
-          location: { reload: () => reloaded++ },
-        },
+          reload: () => reloaded++,
+        }),
+      next: () => {
+        epoch++;
       },
-    );
+    };
     const pending = api.signOutAndForget();
     assert.equal(forgotten, 0);
     assert.equal(nameInput.value, 'Before');
@@ -858,15 +543,16 @@ for (const outcome of ['success', 'failure', 'replacement', 'blocked-storage']) 
     assert.equal(reloaded, outcome === 'success' ? 1 : 0);
     assert.equal(memoryPreferences.size, ['success', 'blocked-storage'].includes(outcome) ? 0 : 1);
     assert.equal(nameInput.value, ['success', 'blocked-storage'].includes(outcome) ? '' : 'Before');
-    const source = await readFile(new URL('../src/main.ts', import.meta.url), 'utf8');
-    assert.match(source, /logoutBtn.addEventListener\('click', \(\) => \{\s*signOutAndForget\(\)/);
+    const source = await readFile(new URL('../src/app.ts', import.meta.url), 'utf8');
+    assert.match(
+      source,
+      /logoutBtn\.addEventListener\(\s*'click',\s*\(\) => \{\s*signOutAndForget\(\)/,
+    );
   });
 }
 
 test('room tiles get a stable tone from the room id, always from the warm palette', async () => {
-  const api = evaluateTypeScript(`${await functionSource('roomTone')} export { roomTone };`, {
-    globals: {},
-  });
+  const api = await loadTypeScript('src/room-entry.ts');
   const ids = ['lobby', 'reading-group', 'design-review', 'quiet-study', 'town-hall', 'x'];
   const tones = ids.map((id) => api.roomTone(id));
   for (const tone of tones) assert.match(tone, /^#[0-9a-f]{6}$/);
@@ -884,20 +570,15 @@ test('a directory tile enters its room once a name is known and only selects it 
     },
   };
   const auth = { displayName: '' };
-  const { enterRoomFromDirectory } = evaluateTypeScript(
-    `${await functionSource('enterRoomFromDirectory')} export { enterRoomFromDirectory };`,
-    {
-      globals: {
-        auth,
-        nameInput,
-        navigation: {
-          requestJoin: (id) => calls.push(['join', id]),
-          selectRoom: (id) => calls.push(['select', id]),
-        },
-        updateJoinBtn() {},
-      },
-    },
-  );
+  const { enterRoomFromDirectory } = {
+    enterRoomFromDirectory: createDirectoryEntry({
+      nameInput,
+      getDisplayName: () => auth.displayName,
+      requestJoin: (id) => calls.push(['join', id]),
+      selectRoom: (id) => calls.push(['select', id]),
+      updateJoin() {},
+    }),
+  };
   enterRoomFromDirectory('reading-group');
   assert.deepEqual(calls, [['select', 'reading-group']]);
   assert.equal(nameInput.focused, 1, 'without a name the tile asks the join bar for one');

@@ -1,122 +1,37 @@
 /** Real tile rendering and browser layout with synthetic canvas video, no devices or backend. */
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
 const path = require('node:path');
-const ts = require('@typescript/typescript6');
 
-function browserFixture() {
-  const source = fs.readFileSync(path.resolve(__dirname, '../src/main.ts'), 'utf8');
-  const ast = ts.createSourceFile('main.ts', source, ts.ScriptTarget.Latest, true);
-  const renderers = [
-    'ensureRemoteTile',
-    'renderRemoteTrack',
-    'removeRemoteTrack',
-    'updateVideoGridCount',
-    'setPinnedTile',
-    'orderVideoTiles',
-  ].map((name) => {
-    const declaration = ast.statements.find(
-      (node) => ts.isFunctionDeclaration(node) && node.name?.text === name,
-    );
-    assert.ok(declaration, `${name} must remain an actual shared UI function`);
-    return declaration.getText(ast);
-  });
-  const compile = (sourceText) =>
-    ts.transpileModule(sourceText, {
-      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
-    }).outputText;
-  const module = (name) => {
-    const filename = path.resolve(__dirname, `../src/${name}.ts`);
-    return compile(fs.readFileSync(filename, 'utf8'));
-  };
-  const layout = module('video-layout');
-  return `(() => {
-    const audio = (() => { const exports = {}; ${module('audio-output')} return exports; })();
-    const capture = (() => { const exports = {}; ${module('capture-preferences')} return exports; })();
-    const receivePolicy = (() => { const exports = {}; ${module('receive-policy')} return exports; })();
-    const controls = (() => {
-      const exports = {};
-      const require = (name) => {
-        if (name === './audio-output') return audio;
-        if (name === './capture-preferences') return capture;
-        if (name === './receive-policy') return receivePolicy;
-        if (['./settings-sheet', './media-controls.css'].includes(name)) return {};
-        throw new Error('Unexpected tile-control dependency: ' + name);
-      };
-      ${module('media-controls')}
-      return exports;
-    })();
-    const layout = (() => { const exports = {}; ${layout} return exports; })();
-    // Isolate the tested observer from the production page's existing instance.
-    const previousGrid = document.querySelector('#video-grid');
-    const videoGrid = previousGrid.cloneNode(false);
-    previousGrid.replaceWith(videoGrid);
-    const remoteTiles = new Map();
-    let pinnedTileKey = null;
-    let followedSpeaker = null;
-    let pictureInPictureVideo = null;
-    const tileVisibility = null;
-    const room = null;
-    const mediaControls = new controls.MediaControls({getRoom: () => null, notify: () => {}});
-    const telemetry = { record() {} };
-    const observeFirstVideoFrame = () => {};
-    const observeTileSize = () => {};
-    const stopObservingTileSize = () => {};
-    const showModerationMenu = () => {};
-    const participantColor = () => null;
-    const paintTile = () => {};
-    ${compile(renderers.join('\n'))}
-    videoGrid.replaceChildren();
-    layout.observeVideoLayout(videoGrid);
-    const videos = new Map();
-    let audioContext;
-    window.__mediaLayout = {
-      add(id, width, height, screen = false) {
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const context = canvas.getContext('2d');
-        const draw = () => {
-          context.fillStyle = screen ? '#366082' : '#4b7350';
-          context.fillRect(0, 0, canvas.width, canvas.height);
-          context.fillStyle = 'white';
-          context.font = '28px sans-serif';
-          context.fillText(id, 20, 45);
-        };
-        draw();
-        const stream = canvas.captureStream(10);
-        const track = stream.getVideoTracks()[0];
-        const timer = setInterval(draw, 100);
-        videos.set(id, {canvas, track, timer, screen, key: screen ? id + ':screen' : id});
-        renderRemoteTrack(id, id, track, 'video', screen ? 'screen' : 'camera');
+let fixtureBundle;
+
+/** Bundle actual modules for the browser without writing or replacing production assets. */
+async function browserFixture() {
+  fixtureBundle ??= (async () => {
+    const { build } = await import('vite');
+    const result = await build({
+      configFile: false,
+      root: path.resolve(__dirname, '..'),
+      logLevel: 'error',
+      build: {
+        write: false,
+        minify: false,
+        lib: {
+          entry: path.join(__dirname, 'media-layout-fixture.mjs'),
+          formats: ['iife'],
+          name: 'MediaLayoutFixture',
+        },
       },
-      addAudio(id) {
-        audioContext ??= new AudioContext();
-        const destination = audioContext.createMediaStreamDestination();
-        const track = destination.stream.getAudioTracks()[0];
-        videos.set(id, {track, destination, screen: false, key: id});
-        renderRemoteTrack(id, id, track, 'audio', 'microphone');
-      },
-      rotate(id, width, height) {
-        const {canvas} = videos.get(id);
-        canvas.width = width;
-        canvas.height = height;
-      },
-      remove(id) {
-        const entry = videos.get(id);
-        clearInterval(entry.timer);
-        entry.track.stop();
-        removeRemoteTrack(id, 'fixture-producer', entry.track.kind, entry.screen ? 'screen' : 'camera');
-        videos.delete(id);
-      },
-      pin(id) { setPinnedTile(id === null ? null : videos.get(id).key); },
-      async close() {
-        mediaControls.destroy();
-        for (const {track, timer} of videos.values()) { clearInterval(timer); track.stop(); }
-        if (audioContext) await audioContext.close();
-      },
-    };
-  })();`;
+    });
+    const outputs = Array.isArray(result) ? result : [result];
+    assert.equal(outputs.length, 1, 'one fixture output');
+    assert.ok('output' in outputs[0], 'completed fixture bundle');
+    const chunks = outputs[0].output.filter((entry) => entry.type === 'chunk');
+    assert.equal(chunks.length, 1, 'self-contained browser fixture');
+    // CSS emitted from the real module imports is intentionally omitted: the
+    // production page's built CSS is what these layout assertions exercise.
+    return chunks[0].code;
+  })();
+  return fixtureBundle;
 }
 
 async function geometry(page) {
@@ -170,7 +85,7 @@ async function mediaLayout(page, artifacts, report) {
     'Built production page/CSS with current source tile rendering, layout and controls; canvas video, no SFU or device capture.';
   await page.locator('.toast').evaluateAll((nodes) => nodes.forEach((node) => node.click()));
   // Propagate initialization failures before trying to use the fixture API.
-  await page.evaluate(browserFixture());
+  await page.evaluate(await browserFixture());
   await page.evaluate(() => {
     for (let index = 1; index <= 3; index++) window.__mediaLayout.add(`Camera ${index}`, 640, 360);
     window.__mediaLayout.add('Portrait share', 360, 640, true);

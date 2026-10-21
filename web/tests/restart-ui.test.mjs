@@ -1,28 +1,18 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import test from 'node:test';
-import { evaluateTypeScript } from './source-loader.mjs';
+import { loadTypeScript } from './native-fixtures.mjs';
 import { createDOM } from './ui-fixture.mjs';
 
 async function fixture() {
-  const source = await readFile(new URL('../src/main.ts', import.meta.url), 'utf8');
-  const start = source.indexOf('function showActionToast(');
-  const end = source.indexOf('// --- Moderation Context Menu ---', start);
-  assert.ok(start >= 0 && end > start, 'exercise the production action-notice implementation');
   const { document } = createDOM();
   const toastContainer = document.createElement('div');
   document.body.append(toastContainer);
   const timers = [];
-  const { showActionToast } = evaluateTypeScript(
-    `${source.slice(start, end)}\nexport { showActionToast };`,
-    {
-      globals: {
-        document,
-        toastContainer,
-        setTimeout: (callback, duration) => timers.push({ callback, duration }),
-      },
-    },
-  );
+  const { createToasts } = await loadTypeScript('src/toasts.ts', {
+    globals: { setTimeout: (callback, duration) => timers.push({ callback, duration }) },
+  });
+  const { showActionToast } = createToasts(document, toastContainer);
   return { showActionToast, toastContainer, timers };
 }
 
@@ -52,7 +42,13 @@ test('ordinary action notices retain their bounded controller-owned lifetime', a
 });
 
 test('action CSS does not hide a persistent retry before its controller dismisses it', async () => {
-  const source = await readFile(new URL('../src/style.css', import.meta.url), 'utf8');
+  const source = (
+    await Promise.all(
+      (await readdir(new URL('../src/', import.meta.url)))
+        .filter((name) => name.endsWith('.css'))
+        .map((name) => readFile(new URL(`../src/${name}`, import.meta.url), 'utf8')),
+    )
+  ).join('\n');
   const declaration = source.match(/\.toast-action\s*\{([^}]+)\}/)?.[1];
   assert.ok(declaration);
   assert.match(declaration, /animation:\s*toastIn\s+200ms\s+ease;/);

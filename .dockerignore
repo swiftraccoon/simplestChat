@@ -108,3 +108,9 @@ web/public/fonts/**
 web/src/**
 !web/src/*.ts
 !web/src/*.css
+!web/src/screens/
+web/src/screens/**
+!web/src/screens/*.ts
+!web/src/chat/
+web/src/chat/**
+!web/src/chat/*.ts

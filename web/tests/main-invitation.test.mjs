@@ -1,19 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { readFile } from 'node:fs/promises';
-import ts from '@typescript/typescript6';
-import { evaluateTypeScript } from './source-loader.mjs';
+import { loadTypeScript } from './native-fixtures.mjs';
 import { uiFixture, flush } from './ui-fixture.mjs';
-
-async function functionSource(name) {
-  const source = await readFile(new URL('../src/main.ts', import.meta.url), 'utf8');
-  const ast = ts.createSourceFile('main.ts', source, ts.ScriptTarget.Latest, true);
-  const declaration = ast.statements.find(
-    (node) => ts.isFunctionDeclaration(node) && node.name?.text === name,
-  );
-  assert.ok(declaration, `${name} must retain a named ownership boundary`);
-  return declaration.getText(ast);
-}
 
 async function fixture() {
   const f = await uiFixture();
@@ -27,29 +15,15 @@ async function fixture() {
     notifications = [],
     tasks = [],
     authDialogs = [];
-  const api = evaluateTypeScript(
-    `let pendingInvite = '${'a'.repeat(32)}';
-     let pendingInviteKind = 'room';
-     let inviteAccountEpoch = 0;
-     let inviteView = null;
-     let restoredAccount = true;
-     ${await functionSource('previewPendingInvite')}
-     export { previewPendingInvite };
-     export const view = () => inviteView;
-     export function accountChecked(value) { restoredAccount = value; }
-     export function nextAccountEpoch() { inviteAccountEpoch++; }
-     export function registration() { pendingInviteKind = 'registration'; }`,
-    {
-      globals: {
+  const store = { capabilities: { accounts: true }, restoredAccount: true, room: null };
+  const window = {
+    location: { href: `https://example.test/#invite=${'a'.repeat(32)}` },
+    history: { replaceState() {} },
+  };
+  const { createInvitations } = await loadTypeScript('src/screens/invitations.ts', {
+    modules: {
+      '../ui': {
         ...f.ui,
-        room: null,
-        capabilities: { accounts: true },
-        auth,
-        navigation,
-        loginModal: 'login',
-        registerModal: 'register',
-        openAuthDialog: (view) => authDialogs.push(view),
-        observeUiTask: (task) => tasks.push(task),
         api: {
           previewInvite: (token, code) => {
             previews.push({ token, code });
@@ -60,10 +34,33 @@ async function fixture() {
             return redemption.promise;
           },
         },
-        showToast: (...args) => notifications.push(args),
       },
     },
-  );
+    globals: { window },
+  });
+  const controller = createInvitations(store, {
+    auth,
+    navigation,
+    appNavigation: { preserveLocation() {}, retire() {} },
+    community: { requestContact() {} },
+    authScreen: { open: (kind) => authDialogs.push(kind), setRegistrationInvite() {} },
+    takeContactOffer: () => null,
+    notify: (...args) => notifications.push(args),
+    observe: (task) => tasks.push(task),
+  });
+  controller.readInviteLink();
+  const api = {
+    previewPendingInvite: controller.previewPendingInvite,
+    view: () => controller.view,
+    accountChecked: (value) => {
+      store.restoredAccount = value;
+    },
+    nextAccountEpoch: controller.accountChanged,
+    registration: () => {
+      window.location.href = `https://example.test/#register-invite=${'a'.repeat(32)}`;
+      controller.readInviteLink();
+    },
+  };
   return {
     ...api,
     auth,
@@ -79,7 +76,7 @@ async function fixture() {
     accept: () =>
       api
         .view()
-        .body.querySelectorAll('button')
+        ?.body.querySelectorAll('button')
         .find((button) => button.textContent === 'Accept invitation'),
   };
 }
@@ -202,59 +199,58 @@ for (const registration of [false, true]) {
   });
 }
 
+async function linkFixture(suffix) {
+  const f = await uiFixture();
+  const registerInvite = { value: '' },
+    replaced = [];
+  const window = {
+    location: { href: `https://example.test/${suffix}` },
+    history: { replaceState: (...args) => replaced.push(args[2]) },
+  };
+  const { createInvitations } = await loadTypeScript('src/screens/invitations.ts', {
+    modules: { '../ui': f.ui },
+    globals: { window },
+  });
+  const controller = createInvitations(
+    { capabilities: null, restoredAccount: false, room: null },
+    {
+      auth: { userId: null, jwt: null, isLoggedIn: false },
+      navigation: {},
+      appNavigation: {},
+      community: {},
+      authScreen: {
+        setRegistrationInvite: (code) => {
+          registerInvite.value = code;
+        },
+      },
+      takeContactOffer: () => null,
+      notify() {},
+      observe() {},
+    },
+  );
+  return { controller, registerInvite, replaced };
+}
 for (const [suffix, kind] of [
   [`#invite=${'a'.repeat(32)}`, 'room'],
   [`#register-invite=${'a'.repeat(32)}`, 'registration'],
 ]) {
   test(`invitation extraction removes the secret before room navigation: ${kind} ${suffix[0]}`, async () => {
-    const registerInvite = { value: '' },
-      replaced = [];
-    const api = evaluateTypeScript(
-      `let pendingInvite = null; let pendingInviteKind = 'room'; ${await functionSource('readInviteLink')} export {readInviteLink}; export const pending = () => ({code:pendingInvite,kind:pendingInviteKind});`,
-      {
-        globals: {
-          URL,
-          URLSearchParams,
-          registerInvite,
-          window: {
-            location: { href: `https://example.test/${suffix}` },
-            history: { replaceState: (...args) => replaced.push(args[2]) },
-          },
-          showToast: () => assert.fail('valid link'),
-        },
-      },
-    );
-    api.readInviteLink();
-    assert.equal(api.pending().kind, kind);
-    assert.equal(api.pending().code, registerInvite.value);
-    assert.equal(replaced[0], suffix.includes('#room') ? '/#room' : '/');
+    const { controller, registerInvite, replaced } = await linkFixture(suffix);
+    controller.readInviteLink();
+    assert.equal(controller.pendingKind, kind);
+    assert.equal(controller.pendingCode, registerInvite.value);
+    assert.equal(replaced[0], '/');
   });
 }
-
 for (const suffix of [
   `?invite=${'a'.repeat(32)}`,
   `#invite=${'a'.repeat(20)}`,
   `#invite=${'1'.repeat(32)}`,
 ]) {
   test(`unsupported invitation format cannot create a pending offer: ${suffix.slice(0, 12)}`, async () => {
-    const registerInvite = { value: '' };
-    const api = evaluateTypeScript(
-      `let pendingInvite = null; let pendingInviteKind = 'room'; ${await functionSource('readInviteLink')} export {readInviteLink}; export const pending = () => pendingInvite;`,
-      {
-        globals: {
-          URL,
-          URLSearchParams,
-          registerInvite,
-          window: {
-            location: { href: `https://example.test/${suffix}` },
-            history: { replaceState() {} },
-          },
-          showToast() {},
-        },
-      },
-    );
-    api.readInviteLink();
-    assert.equal(api.pending(), null);
+    const { controller, registerInvite } = await linkFixture(suffix);
+    controller.readInviteLink();
+    assert.equal(controller.pendingCode, null);
     assert.equal(registerInvite.value, '');
   });
 }

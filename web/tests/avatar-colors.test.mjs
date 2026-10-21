@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import ts from '@typescript/typescript6';
-import { evaluateTypeScript, loadTypeScript } from './source-loader.mjs';
+import { loadTypeScript } from './native-fixtures.mjs';
+import { roomScreenFixture } from './room-screen-fixture.mjs';
 
 const { avatarColors, chatColor, CHAT_PALETTE } = await loadTypeScript('src/avatar-colors.ts');
 
@@ -68,44 +68,51 @@ test('the reviewed low-contrast initial switches foreground without changing its
 });
 
 test('every initial renderer applies both colors, and a chosen color, from the shared helper', async () => {
-  const source = await readFile(new URL('../src/main.ts', import.meta.url), 'utf8');
-  const ast = ts.createSourceFile('main.ts', source, ts.ScriptTarget.Latest, true);
-  const assignments = [];
-  const visit = (node) => {
-    if (
-      ts.isCallExpression(node) &&
-      node.expression.getText(ast) === 'Object.assign' &&
-      node.arguments.length === 2 &&
-      ts.isCallExpression(node.arguments[1]) &&
-      node.arguments[1].expression.getText(ast) === 'avatarColors'
-    ) {
-      assignments.push(node.getText(ast));
+  const name = 'Accessibility Owner';
+  for (const chosen of [null, 'violet']) {
+    const person = {
+      id: 'remote',
+      name,
+      role: 'member',
+      authenticated: false,
+      producers: new Map(),
+      chatStyle: { color: chosen, style: 'accent' },
+    };
+    const participants = new Map([[person.id, person]]);
+    const f = await roomScreenFixture({
+      room: {
+        localParticipantId: 'local',
+        nickname: name,
+        audioEnabled: true,
+        chatStyle: person.chatStyle,
+        getParticipants: () => participants,
+      },
+    });
+    const expected = avatarColors(name, chosen);
+    const assertColors = (avatar) => {
+      assert.ok(avatar, 'each rendering path exposes its initial');
+      assert.deepEqual(
+        { background: avatar.style.background, color: avatar.style.color },
+        expected,
+      );
+    };
+    for (const layout of ['modern', 'classic']) {
+      f.services.roomLayout.layout = layout;
+      f.controller.renderParticipants(participants);
+      const list =
+        layout === 'classic'
+          ? f.document.getElementById('classic-users-panel').querySelector('.classic-user-list')
+          : f.elements.participantList;
+      assert.equal(list.querySelectorAll('.participant-avatar').length, 2);
+      for (const avatar of list.querySelectorAll('.participant-avatar')) assertColors(avatar);
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(ast);
-  // Both people lists share one renderer; every tile uses paintTile.
-  assert.equal(assignments.length, 2);
-  assert.doesNotMatch(source, /\bnameColor\b/);
-  for (const assignment of assignments) {
-    for (const chosen of [null, 'violet']) {
-      const initial = { style: {} };
-      const avatar = { style: {} };
-      evaluateTypeScript(assignment, {
-        globals: {
-          avatarColors,
-          initial,
-          avatar,
-          name: 'Accessibility Owner',
-          color: chosen,
-          p: { name: 'Accessibility Owner', ...(chosen && { chatStyle: { color: chosen } }) },
-        },
-      });
-      const applied = Object.keys(initial.style).length ? initial.style : avatar.style;
-      assert.deepEqual(applied, avatarColors('Accessibility Owner', chosen), assignment);
-    }
+    f.controls.updateLocalTile();
+    assertColors(f.document.getElementById('local-tile').querySelector('.avatar-initial'));
+    f.controls.renderDeferredVideo('remote', name, undefined, 'offscreen');
+    assertColors(f.controls.tiles.get('remote').querySelector('.avatar-initial'));
+    f.controller.dispose();
   }
-  assert.equal(avatarColors('Accessibility Owner', 'violet').background, CHAT_PALETTE.violet);
+  assert.equal(avatarColors(name, 'violet').background, CHAT_PALETTE.violet);
 });
 
 /** Relative luminance of a #rrggbb color. */

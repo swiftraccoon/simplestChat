@@ -14,7 +14,7 @@ not avoid the limit. The initial budgets leave room for small product changes:
 
 | Asset group | Uncompressed limit | Gzip limit |
 | ----------- | ------------------ | ---------- |
-| JavaScript  | 720 KiB            | 176 KiB    |
+| JavaScript  | 768 KiB            | 188 KiB    |
 | CSS         | 78 KiB             | 15 KiB     |
 | HTML        | 50 KiB             | 12.5 KiB   |
 
@@ -30,6 +30,19 @@ These gates constrain delivery and parsing size; they do **not** establish
 startup latency, memory use, media quality or server capacity. Images, fonts,
 source maps and other non-JS/CSS/HTML files are not covered by these budgets.
 Measure runtime performance separately with the workflows below.
+
+The October 21 web module and ownership refactor measures JavaScript at
+774,038 bytes raw / 188,621 gzip, against the unchanged `66b15a0` baseline's
+735,806 / 178,894: an increase of 38,232 / 9,727 bytes. Both builds use the same
+development revision marker. The app now validates the static element boundary,
+starts through an importable composition function, and gives screens and chat
+modules explicit state and resource ownership. Scope and owner checks suppress
+late callbacks after a screen, account or room retires. No production dependency,
+copied implementation or new asset was added; the call engine remains deferred.
+The extra bytes are the element validation, controller/service boundaries and
+resource cleanup. JavaScript limits increase to 768/188 KiB; CSS and HTML limits
+stay unchanged. These are delivery-size measurements; startup latency and runtime
+performance were not measured.
 
 The October 18 receive recovery, local Call health and explicit app-update changes
 measure JavaScript at 735,795 bytes raw / 178,765 gzip, against the unchanged

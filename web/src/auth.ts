@@ -67,6 +67,16 @@ export class AuthManager {
   private challengeGeneration: number | null = null;
   private telemetry: TelemetryHandler | undefined;
 
+  /** Retire local requests and timers without changing the shared browser session. */
+  dispose(): void {
+    this.onChange = null;
+    this.onRestoreStateChange = null;
+    this.sessionMutation = null;
+    this.telemetry = undefined;
+    this.beginAuthentication();
+    this.clearRefreshBudget();
+  }
+
   /** Notify other tabs that their shared HttpOnly cookie may have changed.
    * The callback carries no identity, token or credential. */
   setSessionMutationHandler(handler: (() => void) | null): void {
