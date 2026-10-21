@@ -448,7 +448,7 @@ jobs:
             --output-dir "${E2E_ARTIFACTS}" --run-label ci-media-smoke \
             --server-revision "${GITHUB_SHA}" --generator-revision "${GITHUB_SHA}"
 
-      # !env.ACT: build/ci-local.sh runs jobs with act, whose artifact server does
+      # !env.ACT: xtask ci-local runs jobs with act, whose artifact server does
       # not speak the upload-artifact v7 protocol; diagnostics stay in the job's log.
       - name: Preserve media smoke diagnostics
         if: ${{ !cancelled() && !env.ACT }}

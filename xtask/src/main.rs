@@ -11,6 +11,7 @@ use std::process::ExitCode;
 mod check;
 mod ci;
 mod ci_evidence;
+mod ci_local;
 mod http_policy;
 mod line_length;
 mod media_ip;
@@ -24,6 +25,8 @@ const USAGE: &str = "\
 Usage: cargo run -q -p xtask -- <command>
 
 Commands:
+  ci-local      Run all required local workflow jobs, or one explicitly partial job,
+                against only an owned disposable engine; see `ci-local --help`.
   run           Build and run the local UI; --skip-web reuses web/dist.
   check         Run installed-tool quality gates: [--web|--rust|--python|--helpers].
                 Default runs all groups, without installs or application services.
@@ -74,6 +77,7 @@ fn run(arguments: &[String]) -> Result<ExitCode> {
         "check" => check::run(&root, rest),
         "ci" => ci::run(&root, rest),
         "ci-evidence" => ci_evidence::run(&root, rest),
+        "ci-local" => ci_local::run(&root, rest),
         "line-length" => line_length::run(&root, rest).map(|()| ExitCode::SUCCESS),
         "protocol-ts" => protocol_ts::run(&root, rest).map(|()| ExitCode::SUCCESS),
         "http-policy" => http_policy::run(&root, rest).map(|()| ExitCode::SUCCESS),

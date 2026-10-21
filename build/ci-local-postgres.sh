@@ -3,7 +3,7 @@
 set -euo pipefail
 umask 077
 [[ "${ACT:-}" == true && "${LOCAL_CI_DISPOSABLE:-}" == 1 ]] || {
-  echo 'The PostgreSQL relay is only for build/ci-local.sh runners.' >&2; exit 2;
+  echo 'The PostgreSQL relay is only for disposable local CI runners.' >&2; exit 2;
 }
 [[ "$(uname -s)" == Linux && ( -f /.dockerenv || -f /run/.containerenv ) ]] || {
   echo 'Refusing the PostgreSQL relay outside a disposable job container.' >&2; exit 2;

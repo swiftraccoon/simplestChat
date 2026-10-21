@@ -614,7 +614,7 @@ Commit the candidate locally, then run the complete required workflow without a
 push or pull request:
 
 ```sh
-build/ci-local.sh all
+cargo run --locked -q -p xtask -- ci-local all
 ```
 
 The launcher uses [act](https://github.com/nektos/act) to execute
@@ -647,7 +647,7 @@ inside a dedicated disposable VM and identify its local socket explicitly:
 
 ```sh
 DOCKER_HOST=unix:///path/to/disposable/docker.sock \
-  build/ci-local.sh all --disposable-engine
+  cargo run --locked -q -p xtask -- ci-local all --disposable-engine
 ```
 
 AMD64 Linux uses the pinned Ubuntu 24.04 AMD64 runner and provides the same ISA
@@ -700,7 +700,8 @@ local aggregate runs `ci-evidence complete`. The Rust producer preserves the
 Python reference's JSON schema and bytes, reads the real workflow matrices, and
 needs no Python YAML environment. YAML parsing accepts aliases and merge keys
 with explicit document, depth and replay limits; includes and custom tags are
-rejected. `--base REF` selects the ancestor
+rejected. The local runner uses the same receipt identity and matrix validation.
+`--base REF` selects the ancestor
 used for changed-source checks; by default it uses the merge base with local
 `origin/main`, or `HEAD^`
 when already at that base. Update the tracking ref before validation when needed.
@@ -868,9 +869,9 @@ accepts a new directory. A single-job run is available for focused fixes and
 always reports that it is partial:
 
 ```sh
-build/ci-local.sh web
-build/ci-local.sh rust-lint
-build/ci-local.sh browser --matrix group:accounts
+cargo run --locked -q -p xtask -- ci-local web
+cargo run --locked -q -p xtask -- ci-local rust-lint
+cargo run --locked -q -p xtask -- ci-local browser --matrix group:accounts
 ```
 
 #### Recover inconsistent ARM CPU features
@@ -898,7 +899,7 @@ podman machine start simplestchat-ci
 
 [Fedora CoreOS documents kernel-argument changes through rpm-ostree](https://docs.fedoraproject.org/en-US/fedora-coreos/kernel-args/#_modifying_kernel_arguments_on_existing_systems).
 The launcher never changes kernel arguments or restarts an already running VM
-to repair this condition. Rerun `build/ci-local.sh all` after reboot; its preflight
+to repair this condition. Rerun `cargo run --locked -q -p xtask -- ci-local all` after reboot; its preflight
 checks the resulting feature flags, and the unchanged dependencies and lint rules
 must pass normally. These commands apply only to `simplestchat-ci`, not another
 project's VM or a shared engine.

@@ -4696,6 +4696,7 @@ name = "xtask"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "chrono",
  "regex",
  "rustix",
  "ryu-js",

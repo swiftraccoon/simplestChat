@@ -362,7 +362,7 @@ pub(crate) fn find_on_path(path: &str, tool: &str) -> Option<PathBuf> {
         })
 }
 
-/// Root may set up PostgreSQL only inside a disposable `build/ci-local.sh`
+/// Root may set up PostgreSQL only inside a disposable local CI
 /// runner, where the job's identity changes only for the owned database.
 fn disposable_root_runner(act: bool, disposable: bool, os: &str, container: bool) -> bool {
     act && disposable && os == "Linux" && container
@@ -380,7 +380,7 @@ async fn root_runner(path: &str) -> Result<Option<RootRunner>> {
         .any(|marker| Path::new(marker).is_file());
     if !disposable_root_runner(act, disposable, &os, container) {
         return Err(Stop::usage(
-            "Root PostgreSQL setup is only supported inside a disposable build/ci-local.sh runner.",
+            "Root PostgreSQL setup is only supported inside a disposable local CI runner.",
         )
         .into());
     }

@@ -3,7 +3,7 @@
 set -euo pipefail
 umask 077
 [[ "${ACT:-}" == true && "${LOCAL_CI_DISPOSABLE:-}" == 1 ]] || {
-  echo 'Private Docker setup is only for build/ci-local.sh runners.' >&2; exit 2;
+  echo 'Private Docker setup is only for disposable local CI runners.' >&2; exit 2;
 }
 [[ "$(uname -s)" == Linux && "$(uname -m)" =~ ^(x86_64|aarch64)$ ]] || {
   echo 'Private Docker requires a Linux AMD64 or ARM64 runner.' >&2; exit 2;

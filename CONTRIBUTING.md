@@ -17,7 +17,7 @@ The complete [local CI workflow](docs/testing.md#run-ci-locally) is available on
 the clean committed tree when full verification is needed:
 
 ```sh
-build/ci-local.sh all --base origin/main
+cargo run --locked -q -p xtask -- ci-local all --base origin/main
 ```
 
 The local runner executes the same correctness and security workflows in an
