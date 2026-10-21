@@ -18,10 +18,14 @@
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
-    <div id="app">
+    <div id="app" class="app">
       <header>
         <div class="header-left">
-          <h1><a id="home-link" href="/" aria-label="simplestChat home">simplestChat</a></h1>
+          <h1>
+            <a id="home-link" href="/" aria-label="simplestChat home" class="home-link"
+              >simplestChat</a
+            >
+          </h1>
           <span id="room-label" class="room-label" hidden></span>
           <button
             id="room-topic"
@@ -53,7 +57,12 @@
           </div>
         </div>
         <div class="header-right">
-          <button id="create-room-btn" class="btn-primary" title="Create Room" hidden>
+          <button
+            id="create-room-btn"
+            class="btn-primary create-room-btn"
+            title="Create Room"
+            hidden
+          >
             + Create Room
           </button>
           <a
@@ -65,12 +74,12 @@
             >Help</a
           >
           <!-- Account state: shown when logged out -->
-          <div id="auth-bar-guest" class="auth-bar">
+          <div id="auth-bar-guest" class="auth-bar auth-bar-guest">
             <button id="sign-in-btn" class="auth-link-btn" hidden>Sign in</button>
           </div>
           <!-- Account state: shown when logged in. The avatar opens the account's actions;
                inside a room they sit flat in the More menu instead. -->
-          <div id="auth-bar-user" class="auth-bar account-menu" hidden>
+          <div id="auth-bar-user" class="auth-bar account-menu auth-bar-user" hidden>
             <button
               id="account-menu-btn"
               class="account-menu-btn"
@@ -80,22 +89,22 @@
               aria-controls="account-menu"
             >
               <span id="auth-avatar" class="account-menu-avatar" aria-hidden="true"></span>
-              <span id="auth-display-name" class="account-name"></span>
+              <span id="auth-display-name" class="account-name auth-display-name"></span>
             </button>
             <div id="account-menu" class="account-menu-popup" hidden>
-              <div id="community-actions" hidden></div>
+              <div id="community-actions" hidden class="community-actions"></div>
               <hr class="account-menu-separator" />
-              <button id="logout-btn" type="button">Sign out</button>
+              <button id="logout-btn" type="button" class="logout-btn">Sign out</button>
             </div>
           </div>
           <span id="quality-indicator" class="quality-dot" hidden title="Connection quality"></span>
           <span id="connection-status" class="status disconnected">Disconnected</span>
         </div>
-        <div id="room-tools" hidden>
+        <div id="room-tools" hidden class="room-tools">
           <nav id="room-tools-right" class="room-tools-right" aria-label="Room tools">
             <button
               id="toggle-roster"
-              class="tool-button"
+              class="tool-button toggle-roster"
               type="button"
               aria-controls="classic-users-panel users-panel"
               aria-expanded="true"
@@ -104,7 +113,7 @@
             </button>
             <button
               id="toggle-chat"
-              class="tool-button"
+              class="tool-button toggle-chat"
               type="button"
               aria-controls="sidebar"
               aria-expanded="true"
@@ -114,7 +123,7 @@
             <div class="room-more">
               <button
                 id="room-more-btn"
-                class="tool-button"
+                class="tool-button room-more-btn"
                 type="button"
                 aria-expanded="false"
                 aria-controls="room-more-menu"
@@ -127,7 +136,7 @@
                     Invite
                   </button>
                 </div>
-                <div id="room-actions"></div>
+                <div id="room-actions" class="room-actions"></div>
                 <button id="mic-setup-btn" type="button">Mic setup</button>
                 <div id="room-volume-slot" class="room-volume-slot"></div>
                 <hr />
@@ -140,8 +149,8 @@
         </div>
       </header>
 
-      <main id="app-main">
-        <div id="join-screen">
+      <main id="app-main" class="app-main">
+        <div id="join-screen" class="join-screen">
           <div class="join-card">
             <p id="server-mode" class="field-hint" role="status" hidden></p>
             <button id="server-features-retry" class="auth-link-btn" type="button" hidden>
@@ -176,9 +185,11 @@
                 <div id="directory-rail-body" class="directory-rail-body"></div>
               </aside>
               <!-- Public rooms are discoverable without signing in. -->
-              <div id="room-browser" hidden>
+              <div id="room-browser" hidden class="room-browser">
                 <div id="room-list" class="room-list"></div>
-                <button id="room-load-more" class="btn-secondary" hidden>Load more</button>
+                <button id="room-load-more" class="btn-secondary room-load-more" hidden>
+                  Load more
+                </button>
               </div>
             </div>
 
@@ -197,24 +208,34 @@
           <aside id="home-settings-host" class="home-settings-host" hidden></aside>
         </div>
 
-        <div id="room-screen" class="layout-classic" tabindex="-1" hidden>
-          <div id="main-area">
-            <div id="video-grid"></div>
-            <nav id="controls" aria-label="Call controls">
+        <div id="room-screen" class="layout-classic room-screen" tabindex="-1" hidden>
+          <div id="main-area" class="main-area">
+            <div id="video-grid" class="video-grid"></div>
+            <nav id="controls" aria-label="Call controls" class="controls">
               <button id="mic-btn" aria-keyshortcuts="M" title="Toggle microphone"></button>
               <button id="cam-btn" aria-keyshortcuts="V" title="Toggle camera"></button>
-              <button id="screen-btn" aria-keyshortcuts="S" title="Share screen"></button>
-              <button id="hand-btn" title="Raise hand" hidden></button>
-              <button id="room-settings-btn" title="Room settings" hidden></button>
-              <button id="settings-btn" title="Settings"></button>
-              <button id="leave-btn" title="Leave room"></button>
+              <button
+                id="screen-btn"
+                aria-keyshortcuts="S"
+                title="Share screen"
+                class="screen-btn"
+              ></button>
+              <button id="hand-btn" title="Raise hand" hidden class="hand-btn"></button>
+              <button
+                id="room-settings-btn"
+                title="Room settings"
+                hidden
+                class="room-settings-btn"
+              ></button>
+              <button id="settings-btn" title="Settings" class="settings-btn"></button>
+              <button id="leave-btn" title="Leave room" class="leave-btn"></button>
             </nav>
           </div>
-          <aside id="sidebar" aria-label="Chat and people">
-            <div id="sidebar-tabs">
+          <aside id="sidebar" aria-label="Chat and people" class="sidebar">
+            <div id="sidebar-tabs" class="sidebar-tabs">
               <button class="tab active" data-tab="chat">Chat</button>
               <button class="tab" data-tab="users">People</button>
-              <button class="tab" data-tab="lobby" id="lobby-tab" hidden>Lobby</button>
+              <button class="tab lobby-tab" data-tab="lobby" id="lobby-tab" hidden>Lobby</button>
               <button
                 id="sidebar-collapse"
                 class="sidebar-collapse"
@@ -224,24 +245,26 @@
                 aria-label="Collapse the chat panel"
               ></button>
             </div>
-            <div id="sidebar-content">
-              <div id="chat-panel" class="tab-content active">
-                <div id="chat-messages"></div>
+            <div id="sidebar-content" class="sidebar-content">
+              <div id="chat-panel" class="tab-content active chat-panel">
+                <div id="chat-messages" class="chat-messages"></div>
                 <button
                   id="scroll-bottom-btn"
                   type="button"
                   aria-label="Scroll to newest messages"
                   hidden
+                  class="scroll-bottom-btn"
                 >
-                  <span id="unread-badge" hidden>0</span>
+                  <span id="unread-badge" hidden class="unread-badge">0</span>
                 </button>
-                <div id="chat-input-row">
+                <div id="chat-input-row" class="chat-input-row">
                   <textarea
                     id="chat-input"
                     rows="1"
                     aria-label="Message"
                     placeholder="Message · @mention"
                     autocomplete="off"
+                    class="chat-input"
                   ></textarea>
                   <button
                     id="chat-send-btn"
@@ -249,22 +272,23 @@
                     title="Send message"
                     aria-label="Send message"
                     hidden
+                    class="chat-send-btn"
                   ></button>
                 </div>
               </div>
-              <div id="users-panel" class="tab-content">
-                <ul id="participant-list"></ul>
+              <div id="users-panel" class="tab-content users-panel">
+                <ul id="participant-list" class="participant-list"></ul>
               </div>
               <div id="lobby-panel" class="tab-content">
-                <ul id="lobby-list"></ul>
+                <ul id="lobby-list" class="lobby-list"></ul>
                 <div id="lobby-empty" class="room-list-empty">No one waiting</div>
               </div>
-              <div id="settings-panel" class="tab-content"></div>
+              <div id="settings-panel" class="tab-content settings-panel"></div>
             </div>
           </aside>
         </div>
 
-        <div id="lobby-screen" hidden>
+        <div id="lobby-screen" hidden class="lobby-screen">
           <div class="lobby-card">
             <h2 id="lobby-room-name"></h2>
             <p id="lobby-topic"></p>
@@ -276,7 +300,13 @@
         </div>
       </main>
 
-      <div id="toast-container" role="status" aria-live="polite" aria-relevant="additions"></div>
+      <div
+        id="toast-container"
+        role="status"
+        aria-live="polite"
+        aria-relevant="additions"
+        class="toast-container"
+      ></div>
 
       <!-- Login Modal -->
       <dialog id="login-modal" class="modal-overlay" aria-labelledby="login-title" hidden>

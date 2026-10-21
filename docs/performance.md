@@ -32,8 +32,8 @@ source maps and other non-JS/CSS/HTML files are not covered by these budgets.
 Measure runtime performance separately with the workflows below.
 
 The October 21 web module and ownership refactor measures JavaScript at
-774,038 bytes raw / 188,621 gzip, against the unchanged `66b15a0` baseline's
-735,806 / 178,894: an increase of 38,232 / 9,727 bytes. Both builds use the same
+774,038 bytes raw / 188,624 gzip, against the unchanged `66b15a0` baseline's
+735,806 / 178,894: an increase of 38,232 / 9,730 bytes. Both builds use the same
 development revision marker. The app now validates the static element boundary,
 starts through an importable composition function, and gives screens and chat
 modules explicit state and resource ownership. Scope and owner checks suppress
@@ -41,8 +41,9 @@ late callbacks after a screen, account or room retires. No production dependency
 copied implementation or new asset was added; the call engine remains deferred.
 The extra bytes are the element validation, controller/service boundaries and
 resource cleanup. JavaScript limits increase to 768/188 KiB; CSS and HTML limits
-stay unchanged. These are delivery-size measurements; startup latency and runtime
-performance were not measured.
+stay unchanged. Layered CSS measures 77,118 / 15,288 and HTML 45,505 / 12,537.
+These are delivery-size measurements; startup latency and runtime performance
+were not measured.
 
 The October 18 receive recovery, local Call health and explicit app-update changes
 measure JavaScript at 735,795 bytes raw / 178,765 gzip, against the unchanged

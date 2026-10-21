@@ -2,12 +2,13 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-const stylesheet = await readFile(new URL('../src/style.css', import.meta.url), 'utf8');
+const [tokens, stylesheet] = await Promise.all(
+  ['tokens.css', 'components.css'].map((file) =>
+    readFile(new URL(`../src/${file}`, import.meta.url), 'utf8'),
+  ),
+);
 const colors = new Map(
-  [...stylesheet.matchAll(/^\s*(--[\w-]+):\s*(#[\da-f]{3,6});/gm)].map((match) => [
-    match[1],
-    match[2],
-  ]),
+  [...tokens.matchAll(/^\s*(--[\w-]+):\s*(#[\da-f]{3,6});/gm)].map((match) => [match[1], match[2]]),
 );
 
 function luminance(token) {

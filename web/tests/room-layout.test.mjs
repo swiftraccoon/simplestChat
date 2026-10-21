@@ -141,7 +141,7 @@ test('a landscape phone uses the people tab, and desktop CSS predicates remain i
   f.state.landscape = false;
   f.layout.apply();
   assert.equal(f.elements.usersTab.hidden, true);
-  const css = await readFile(new URL('../src/style.css', import.meta.url), 'utf8');
+  const css = await readFile(new URL('../src/screens.css', import.meta.url), 'utf8');
   const queries = [];
   const module = await loadTypeScript('src/screens/room-layout.ts', {
     modules: { '../disposable': { createScope }, '../icons': {} },

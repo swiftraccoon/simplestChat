@@ -10,7 +10,7 @@ test('the document exposes landmarks, a polite live region for toasts and page m
   assert.match(html, /<aside[^>]*id="sidebar"/);
   assert.match(
     html,
-    /<div id="toast-container" role="status" aria-live="polite"/,
+    /<div\s+id="toast-container"\s+role="status"\s+aria-live="polite"/,
     'toasts are announced without stealing focus',
   );
   assert.match(html, /<meta\s+name="description"/);

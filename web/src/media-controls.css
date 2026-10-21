@@ -1,201 +1,232 @@
-.media-controls-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 0.6rem;
-  padding: 0.4rem 0.65rem;
-  font-size: 0.8rem;
-}
-.media-controls-toolbar label {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  white-space: nowrap;
-  min-height: 44px;
-}
-.media-controls-toolbar input[type='range'] {
-  width: 6rem;
-}
-/* Media controls share the app's tokens; they are not a second colour system. */
-.media-controls-toolbar button,
-.personal-media-controls button,
-.personal-media-hidden-notice button,
-.personal-playback-blocked button {
-  background: var(--surface-2);
-  color: var(--text);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-md);
-  padding: 0.45rem 0.65rem;
-  cursor: pointer;
-  font: inherit;
-}
-.media-controls-toolbar button:hover,
-.personal-media-controls button:hover,
-.personal-media-hidden-notice button:hover,
-.personal-playback-blocked button:hover {
-  background: var(--surface-3);
-}
-.personal-media-controls :focus-visible,
-.media-controls-toolbar :focus-visible,
-.personal-playback-blocked :focus-visible,
-.personal-media-hidden-notice :focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
-}
-/* The private preview inside Camera & mic; the sheet block provides its surface. */
-.media-preview-video {
-  width: 100%;
-  max-height: 14rem;
-  object-fit: contain;
-  background: var(--bg);
-  border-radius: 8px;
-}
-.personal-media-controls {
-  position: absolute;
-  z-index: 5;
-  top: 0;
-  right: 0;
-  color: var(--text);
-  font-size: 0.75rem;
-  text-align: left;
-}
-.personal-media-controls summary {
-  display: grid;
-  place-items: center;
-  list-style: none;
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  cursor: pointer;
-  touch-action: manipulation;
-}
-.personal-media-controls summary > span {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  font-size: 1.25rem;
-  line-height: 1;
-  background: var(--scrim);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border-radius: 50%;
-}
-.personal-media-controls summary:hover > span,
-.personal-media-controls[open] summary > span {
-  background: var(--surface-3);
-}
-.personal-media-controls summary::-webkit-details-marker {
-  display: none;
-}
-.personal-media-panel {
-  display: none;
-  position: fixed;
-  inset: auto;
-  margin: 0;
-  flex-direction: column;
-  gap: 0.45rem;
-  background: var(--surface);
-  color: var(--text);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-float);
-  padding: 0.65rem;
-  width: min(15rem, calc(100vw - 1rem));
-  max-height: min(28rem, calc(100dvh - 1rem));
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-.personal-media-panel:popover-open {
-  display: flex;
-}
-.personal-media-title {
-  overflow-wrap: anywhere;
-  font-size: 0.85rem;
-}
-.personal-media-panel .tile-pin {
-  position: static;
-  opacity: 1;
-  width: 100%;
-  margin: 0;
-}
-.personal-media-panel button,
-.personal-media-panel select {
-  min-height: 44px;
-  flex-shrink: 0;
-}
-.personal-media-panel input[type='range'] {
-  min-height: 28px;
-}
-.personal-media-panel label {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-}
-.personal-media-panel input {
-  width: 100%;
-}
-.personal-media-panel button {
-  font-size: 0.75rem;
-}
-.personal-media-panel button:disabled,
-.personal-media-panel select:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-.personal-media-hidden > video,
-.personal-media-hidden > audio,
-.personal-media-hidden > .no-video-avatar {
-  visibility: hidden;
-}
-.personal-media-hidden-notice {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.65rem;
-  background: var(--surface-3);
-  color: var(--text);
-  padding: 2.4rem 0.6rem 1.7rem;
-  font-size: 0.8rem;
-  text-align: center;
-}
-.personal-playback-blocked {
-  position: absolute;
-  z-index: 4;
-  bottom: 1.9rem;
-  left: 0.6rem;
-  right: 0.6rem;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  padding: 0.6rem;
-  border-radius: var(--radius-md);
-  background: rgba(37, 37, 37, 0.97);
-  color: var(--text);
-  font-size: 0.8rem;
-  text-align: center;
-}
-/* A remote camera whose frames stopped; its last frame stays behind this. */
-.video-stalled-notice {
-  position: absolute;
-  z-index: 3;
-  bottom: 1.9rem;
-  left: 0.6rem;
-  right: 0.6rem;
-  padding: 0.45rem 0.6rem;
-  border-radius: var(--radius-md);
-  background: rgba(37, 37, 37, 0.97);
-  color: var(--text);
-  font-size: 0.8rem;
-  text-align: center;
-}
-@media (max-width: 480px) {
+@layer components {
   .media-controls-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    padding: 0.4rem 0.65rem;
+    font-size: 0.8rem;
+  }
+
+  .media-controls-toolbar label {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    white-space: nowrap;
+    min-height: 44px;
+  }
+
+  .media-controls-toolbar input[type='range'] {
+    width: 6rem;
+  }
+
+  /* Media controls share the app's tokens; they are not a second colour system. */
+
+  .media-controls-toolbar button,
+  .personal-media-controls button,
+  .personal-media-hidden-notice button,
+  .personal-playback-blocked button {
+    background: var(--surface-2);
+    color: var(--text);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md);
+    padding: 0.45rem 0.65rem;
+    cursor: pointer;
+    font: inherit;
+  }
+
+  .media-controls-toolbar button:hover,
+  .personal-media-controls button:hover,
+  .personal-media-hidden-notice button:hover,
+  .personal-playback-blocked button:hover {
+    background: var(--surface-3);
+  }
+
+  .personal-media-controls :focus-visible,
+  .media-controls-toolbar :focus-visible,
+  .personal-playback-blocked :focus-visible,
+  .personal-media-hidden-notice :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+  }
+
+  /* The private preview inside Camera & mic; the sheet block provides its surface. */
+
+  .media-preview-video {
+    width: 100%;
+    max-height: 14rem;
+    object-fit: contain;
+    background: var(--bg);
+    border-radius: 8px;
+  }
+
+  .personal-media-controls {
+    position: absolute;
+    z-index: var(--z-float);
+    top: 0;
+    right: 0;
+    color: var(--text);
+    font-size: 0.75rem;
+    text-align: left;
+  }
+
+  .personal-media-controls summary {
+    display: grid;
+    place-items: center;
+    list-style: none;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+
+  .personal-media-controls summary > span {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    font-size: 1.25rem;
+    line-height: 1;
+    background: var(--scrim);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-radius: 50%;
+  }
+
+  .personal-media-controls summary:hover > span,
+  .personal-media-controls[open] summary > span {
+    background: var(--surface-3);
+  }
+
+  .personal-media-controls summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .personal-media-panel {
+    display: none;
+    position: fixed;
+    inset: auto;
+    margin: 0;
+    flex-direction: column;
+    gap: 0.45rem;
+    background: var(--surface);
+    color: var(--text);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-float);
+    padding: 0.65rem;
+    width: min(15rem, calc(100vw - 1rem));
+    max-height: min(28rem, calc(100dvh - 1rem));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .personal-media-panel:popover-open {
+    display: flex;
+  }
+
+  .personal-media-title {
+    overflow-wrap: anywhere;
+    font-size: 0.85rem;
+  }
+
+  .personal-media-panel .tile-pin {
+    position: static;
+    opacity: 1;
+    width: 100%;
+    margin: 0;
+  }
+
+  .personal-media-panel button,
+  .personal-media-panel select {
+    min-height: 44px;
+    flex-shrink: 0;
+  }
+
+  .personal-media-panel input[type='range'] {
+    min-height: 28px;
+  }
+
+  .personal-media-panel label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+
+  .personal-media-panel input {
+    width: 100%;
+  }
+
+  .personal-media-panel button {
+    font-size: 0.75rem;
+  }
+
+  .personal-media-panel button:disabled,
+  .personal-media-panel select:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  .personal-media-hidden > video,
+  .personal-media-hidden > audio,
+  .personal-media-hidden > .no-video-avatar {
+    visibility: hidden;
+  }
+
+  .personal-media-hidden-notice {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
     justify-content: center;
+    gap: 0.65rem;
+    background: var(--surface-3);
+    color: var(--text);
+    padding: 2.4rem 0.6rem 1.7rem;
+    font-size: 0.8rem;
+    text-align: center;
+  }
+
+  .personal-playback-blocked {
+    position: absolute;
+    z-index: var(--z-resize);
+    bottom: 1.9rem;
+    left: 0.6rem;
+    right: 0.6rem;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.6rem;
+    border-radius: var(--radius-md);
+    background: rgba(37, 37, 37, 0.97);
+    color: var(--text);
+    font-size: 0.8rem;
+    text-align: center;
+  }
+
+  /* A remote camera whose frames stopped; its last frame stays behind this. */
+
+  .video-stalled-notice {
+    position: absolute;
+    z-index: var(--z-media-controls);
+    bottom: 1.9rem;
+    left: 0.6rem;
+    right: 0.6rem;
+    padding: 0.45rem 0.6rem;
+    border-radius: var(--radius-md);
+    background: rgba(37, 37, 37, 0.97);
+    color: var(--text);
+    font-size: 0.8rem;
+    text-align: center;
+  }
+
+  @media (max-width: 480px) {
+    .media-controls-toolbar {
+      justify-content: center;
+    }
   }
 }

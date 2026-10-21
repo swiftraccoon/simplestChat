@@ -1,0 +1,57 @@
+@layer tokens {
+  /* One warm black for every screen. Surfaces step up in the same hue; nothing is separated by a
+   line, and there is no accent hue: links and the primary action use the ink itself. */
+
+  :root {
+    color-scheme: dark;
+    --bg: #0b0a09;
+    --surface: #171513;
+    --surface-2: #1f1c19;
+    --surface-3: #2a2724;
+    --scrim: rgba(11, 10, 9, 0.65);
+    --border: #1f1c19;
+    /* Boundaries that still identify a control (toggles, underline fields) at 3:1 on the ground. */
+    --border-strong: rgba(243, 239, 233, 0.4);
+    --line: rgba(243, 239, 233, 0.4);
+    --text: #f3efe9;
+    --text-dim: #a8a39b;
+    --text-faint: #6f6a63;
+    --accent: #f3efe9;
+    --accent-hover: #ffffff;
+    --accent-fill: #f3efe9;
+    --accent-fill-hover: #ffffff;
+    --on-accent: #0b0a09;
+    --accent-glow: rgba(243, 239, 233, 0.22);
+    --danger: #ff8f7a;
+    --danger-hover: #ff7a61;
+    --danger-tint: rgba(255, 143, 122, 0.22);
+    --success: #a3d9a5;
+    --success-tint: rgba(163, 217, 165, 0.18);
+    --warning: #e8c37a;
+    --warning-tint: rgba(232, 195, 122, 0.2);
+    --status-ink: #0b0a09;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+    --radius-pill: 999px;
+    --transition-fast: 150ms ease;
+    --transition-normal: 250ms ease;
+    --shadow-panel: none;
+    --shadow-float: 0 16px 48px rgba(0, 0, 0, 0.5);
+    /* One chevron for every back and collapse control. */
+    --icon-chevron-left: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 5l-7 7 7 7'/%3E%3C/svg%3E");
+    /* Shared stacking scale; values preserve the existing local stacking contexts. */
+    --z-content: 1;
+    --z-raised: 2;
+    --z-media-controls: 3;
+    --z-resize: 4;
+    --z-float: 5;
+    --z-chat-picker: 6;
+    --z-header: 10;
+    --z-desktop-header: 12;
+    --z-moderation: 200;
+    --z-notice: 300;
+    --z-header-menu: 310;
+    --z-hovercard: 350;
+  }
+}
