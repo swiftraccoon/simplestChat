@@ -233,6 +233,16 @@
     },
     {
       "scanner": "cargo-audit",
+      "fingerprint": "RUSTSEC-2026-0374",
+      "scope": "basic-toml@0.1.10",
+      "owner": "swiftraccoon",
+      "rationale": "Unmaintained build-time template configuration parser.",
+      "reachability": "Reviewed full dependency graph at f2c2dd1: reached only through askama_derive 0.15.6, askama 0.15.6 and planus-codegen 1.3.0, a build dependency of the vendored mediasoup-sys 0.19.0, so it runs in a build script and is linked into no shipped binary; no patched release exists and askama_derive 0.16.1 still depends on it; exact version only, upstream replacement required on expiry.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md"
+    },
+    {
+      "scanner": "cargo-audit",
       "fingerprint": "RUSTSEC-2026-0097",
       "scope": "rand@0.7.3",
       "owner": "swiftraccoon",

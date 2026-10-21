@@ -241,6 +241,7 @@ The audit distinguishes these health warnings from vulnerability-class results:
 | `atty 0.2.14` | RUSTSEC-2021-0145 | Windows handle-alignment issue; supported production target is Linux |
 | `instant 0.1.13` | RUSTSEC-2024-0384 | Unmaintained target-specific timing dependency |
 | `paste 0.1.18` | RUSTSEC-2024-0436 | Unmaintained build-time procedural macro dependency |
+| `basic-toml 0.1.10` | RUSTSEC-2026-0374 | Unmaintained template configuration parser, reached only through the vendored worker's flatbuffers code generation at build time |
 | `rand 0.7.3` | RUSTSEC-2026-0097 | Narrow custom-logger/reseed interaction; no affected production path was identified in the supplied assessment |
 
 The gate runs against the current advisory database and permits only the exact
