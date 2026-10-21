@@ -798,7 +798,7 @@ jobs:
         run: |
           # Firefox native ICE needs an owned non-loopback candidate, even
           # when the HTTP origin and disposable database remain on loopback.
-          test_media_ip="$(node build/test-media-ip.mjs)"
+          test_media_ip="$(cargo run --locked -q -p xtask -- media-ip)"
           for browser in chromium firefox; do
             TEST_ANNOUNCE_IP="$test_media_ip" E2E_BROWSER="$browser" E2E_ARTIFACTS="${RUNNER_TEMP}/media-continuity-${browser}" \
               cargo run --locked -q -p xtask -- test-server node web/e2e/media-continuity.cjs
@@ -819,7 +819,7 @@ jobs:
           PRESENTATION_E2E: "1"
           PRESENTATION_IMPAIRMENT: "1"
         run: |
-          test_media_ip="$(node build/test-media-ip.mjs)"
+          test_media_ip="$(cargo run --locked -q -p xtask -- media-ip)"
           for browser in chromium firefox; do
             TEST_ANNOUNCE_IP="$test_media_ip" E2E_BROWSER="$browser" E2E_ARTIFACTS="${RUNNER_TEMP}/presentation-${browser}" \
               cargo run --locked -q -p xtask -- test-server node web/e2e/presentation.cjs

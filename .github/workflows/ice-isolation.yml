@@ -42,7 +42,9 @@ jobs:
         run: |
           npm --prefix web/e2e ci --ignore-scripts
           npm --prefix web/e2e exec -- playwright install webkit chromium
-          test_media_ip="$(node build/test-media-ip.mjs)"
+          # The runner's rustup reads rust-toolchain.toml; only the xtask tooling is built.
+          rustup toolchain install --profile minimal
+          test_media_ip="$(cargo run --locked -q -p xtask -- media-ip)"
           echo "TEST_ANNOUNCE_IP=${test_media_ip}" >> "${GITHUB_ENV}"
 
       - name: Record macOS version

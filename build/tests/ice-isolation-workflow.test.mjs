@@ -16,7 +16,7 @@ test('ICE isolation stays manual and runs both engines in one macOS job without 
   assert.deepEqual([...workflow.split('\njobs:\n')[1].matchAll(/^  ([\w-]+):$/gm)].map(match => match[1]), ['same-host']);
   assert.match(workflow, /runs-on: macos-26/);
   assert.match(workflow, /timeout-minutes: 15/);
-  assert.doesNotMatch(workflow, /matrix:|services:|cargo |xtask -- test-|community\.cjs/);
+  assert.doesNotMatch(workflow, /matrix:|services:|cargo build|--bin simplestChat|xtask -- test-|community\.cjs/);
 });
 
 test('ICE isolation retains read-only permissions and the existing pinned tooling', () => {
@@ -34,7 +34,7 @@ test('ICE isolation retains read-only permissions and the existing pinned toolin
   assert.match(tooling, /id: tooling/);
   assert.match(tooling, /npm --prefix web\/e2e ci --ignore-scripts/);
   assert.match(tooling, /npm --prefix web\/e2e exec -- playwright install webkit chromium/);
-  assert.match(tooling, /node build\/test-media-ip\.mjs/);
+  assert.match(tooling, /cargo run --locked -q -p xtask -- media-ip/);
 });
 
 test('both ICE probes run after successful tooling even when the preceding engine fails', () => {

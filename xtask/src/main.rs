@@ -10,6 +10,7 @@ use std::process::ExitCode;
 
 mod http_policy;
 mod line_length;
+mod media_ip;
 mod protocol_ts;
 mod test_env;
 
@@ -23,6 +24,8 @@ Commands:
   protocol-ts   Write web/src/protocol.generated.ts from the Rust wire types and limits;
                 `--check` fails when the committed file is stale.  http-policy   Write security/http-policy.json from the server's security headers
                 and content security policy; `--check` fails when it is stale.
+  media-ip      Print the owned IPv4 address of the default route's interface for a
+                non-loopback media announcement (TEST_ANNOUNCE_IP).
   test-postgres COMMAND [ARG ...]
                 Run COMMAND against an owned disposable PostgreSQL cluster
                 (TEST_POSTGRES_PORT, default 15434) exported as DATABASE_URL.
@@ -53,6 +56,7 @@ fn run(arguments: &[String]) -> Result<ExitCode> {
         "line-length" => line_length::run(&root, rest).map(|()| ExitCode::SUCCESS),
         "protocol-ts" => protocol_ts::run(&root, rest).map(|()| ExitCode::SUCCESS),
         "http-policy" => http_policy::run(&root, rest).map(|()| ExitCode::SUCCESS),
+        "media-ip" => media_ip::run(&root, rest).map(|()| ExitCode::SUCCESS),
         "test-postgres" => test_env::run_postgres(&root, rest),
         "test-server" => test_env::run_server(&root, rest),
         "test-env" => test_env::run_env(&root, rest),

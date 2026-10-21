@@ -134,7 +134,7 @@ AUTH_CROSS_TAB_E2E=1 E2E_BROWSER=firefox \
 ROOM_CONTROL_E2E=1 E2E_BROWSER=firefox \
   cargo run -q -p xtask -- test-server node web/e2e/room-control-confirmation.cjs
 MEDIA_CONTINUITY_E2E=1 E2E_BROWSER=chromium \
-  TEST_ANNOUNCE_IP="$(node build/test-media-ip.mjs)" \
+  TEST_ANNOUNCE_IP="$(cargo run -q -p xtask -- media-ip)" \
   cargo run -q -p xtask -- test-server node web/e2e/media-continuity.cjs
 CHAT_RETRY_E2E=1 \
   cargo run -q -p xtask -- test-server node web/e2e/chat-retry.cjs
@@ -228,7 +228,7 @@ fresh server:
 
 ```sh
 npm --prefix web/e2e run install:browsers
-test_media_ip="$(node build/test-media-ip.mjs)"
+test_media_ip="$(cargo run -q -p xtask -- media-ip)"
 TEST_ANNOUNCE_IP="$test_media_ip" E2E_BROWSER=firefox cargo run -q -p xtask -- test-server npm --prefix web/e2e test
 TEST_ANNOUNCE_IP="$test_media_ip" E2E_BROWSER=webkit cargo run -q -p xtask -- test-server npm --prefix web/e2e test
 ```
@@ -314,7 +314,7 @@ To run the same suite through an owned local TURN relay, install coturn **4.18.0
 (for example, `brew install coturn`) and run:
 
 ```sh
-TEST_ANNOUNCE_IP="$(node build/test-media-ip.mjs)" TURN_E2E=1 E2E_BROWSER=chromium \
+TEST_ANNOUNCE_IP="$(cargo run -q -p xtask -- media-ip)" TURN_E2E=1 E2E_BROWSER=chromium \
   cargo run -q -p xtask -- test-env npm --prefix web/e2e test
 ```
 
