@@ -7,16 +7,28 @@
     "npm": ">=12.2.0"
   },
   "scripts": {
-    "test": "node community.cjs",
-    "test:layout": "node homepage-layout.cjs",
-    "test:resilience": "node frontend-resilience.cjs",
-    "test:stress": "node ui-stress.cjs",
+    "test": "node runner-cli.cjs community",
+    "test:layout": "node runner-cli.cjs layout",
+    "test:resilience": "node runner-cli.cjs resilience",
+    "test:stress": "node runner-cli.cjs ui-stress",
     "test:session-soak": "node session-soak.cjs",
     "install:browser": "playwright install chromium",
-    "install:browsers": "playwright install chromium firefox webkit"
+    "install:browsers": "playwright install chromium firefox webkit",
+    "test:runner": "playwright test",
+    "test:auth-lifecycle": "node runner-cli.cjs auth-lifecycle",
+    "test:auth-cross-tab": "node runner-cli.cjs auth-cross-tab",
+    "test:room-control-confirmation": "node runner-cli.cjs room-control-confirmation",
+    "test:passkey": "node runner-cli.cjs passkey",
+    "test:passkey-management": "node runner-cli.cjs passkey-management",
+    "test:media-continuity": "node runner-cli.cjs media-continuity",
+    "test:chat-retry": "node runner-cli.cjs chat-retry",
+    "test:presentation": "node runner-cli.cjs presentation",
+    "test:impaired-network": "node runner-cli.cjs impaired-network",
+    "test:accessibility": "node runner-cli.cjs accessibility"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",
+    "@playwright/test": "1.64.0",
     "playwright": "1.64.0"
   },
   "packageManager": "npm@12.2.0"

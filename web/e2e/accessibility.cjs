@@ -215,7 +215,7 @@ async function escapeOnce(page) {
   }, shown);
 }
 
-async function run(env = process.env) {
+async function run(env = process.env, runner = {}) {
   const { base, options } = configuration(env);
   const artifacts =
     env.E2E_ARTIFACTS || fs.mkdtempSync(path.join(os.tmpdir(), 'simplestchat-accessibility.'));
@@ -262,7 +262,9 @@ async function run(env = process.env) {
       null,
       { timeout: 3000 },
     );
-    const result = await scanPage(page, name, AxeBuilder);
+    const result = await (runner.step
+      ? runner.step('accessibility ' + name, () => scanPage(page, name, AxeBuilder))
+      : scanPage(page, name, AxeBuilder));
     report.scans.push(result);
     save();
     console.log(
@@ -296,7 +298,9 @@ async function run(env = process.env) {
         'package.json',
       ),
     ).version;
-    browser = await playwright[options.name].launch(options.launchOptions);
+    browser = await (runner.launchBrowser
+      ? runner.launchBrowser(options.name, options.launchOptions)
+      : playwright[options.name].launch(options.launchOptions));
     const { default: AxeBuilder } = require('@axe-core/playwright');
     report.browserVersion = browser.version();
     const context = await browser.newContext({
@@ -550,7 +554,8 @@ async function run(env = process.env) {
     report.failure = 'Accessibility smoke did not pass; inspect scan results and the failed step.';
   } finally {
     try {
-      await browser?.close();
+      if (browser && runner.closeBrowser) await runner.closeBrowser(browser);
+      else await browser?.close();
     } catch (error) {
       originalError ??= error;
       report.cleanupFailed = true;
@@ -569,8 +574,11 @@ async function run(env = process.env) {
 }
 
 module.exports = { configuration, summarizeFindings, opaqueContrastRatio, scanPage, tags, run };
-if (require.main === module)
-  run().catch((error) => {
+if (require.main === module) {
+  try {
+    require('./runner-cli.cjs').run('accessibility');
+  } catch (error) {
     console.error(error.message);
     process.exitCode = 1;
-  });
+  }
+}

@@ -1,3 +1,15 @@
+const {
+  communityStartupReady,
+  navigateCommunityPage,
+  installCommunityCaptureObservation,
+  reconnectMediaIdentity,
+  waitForMediaStart,
+  advancingReconnectMedia,
+  createCommunityStep,
+  createTestNetworkOwnership,
+  closeCommunityClients,
+  httpRoute: classifyCommunityHttpRoute,
+} = require('./community-runtime.cjs');
 /**
  * Opt-in real-browser smoke. Use ONLY an isolated database/server: this creates
  * disposable accounts and creates/deletes its own uniquely named room.
@@ -29,1167 +41,877 @@ const { execFile } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-if (process.env.COMMUNITY_E2E !== '1')
-  throw new Error('Set COMMUNITY_E2E=1 against a disposable local server/database.');
-const base = process.env.BASE_URL || 'http://127.0.0.1:3109';
-if (!['localhost', '127.0.0.1', '[::1]'].includes(new URL(base).hostname))
-  throw new Error('This smoke is restricted to local test servers.');
-const { browserOptions, webKitTestNetworkEnabled } = require('./browser-options.cjs');
-const { collectPeerDiagnostics } = require('./peer-diagnostics.cjs');
-const { installPeerEventTracing } = require('./peer-events.cjs');
-const { installSignalingReconnectObservation } = require('./signaling-reconnect.cjs');
-const { installRelayPolicy, waitForRelayPaths } = require('./turn-relay.cjs');
-const { openAccountMenu, accountMenuButton, signOut } = require('./account-menu.cjs');
-const turnRelay = process.env.TURN_E2E === '1';
-const options = browserOptions(process.env.E2E_BROWSER);
-const webKitTestNetwork = webKitTestNetworkEnabled(options.name);
-const playwright = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
-const artifacts =
-  process.env.E2E_ARTIFACTS ||
-  fs.mkdtempSync(path.join(os.tmpdir(), 'simplestchat-community-e2e.'));
-fs.mkdirSync(artifacts, { recursive: true, mode: 0o700 });
-const runId = `e2e-${Date.now().toString(36)}`;
-const password = 'Disposable-browser-password-2026!';
-const clients = [];
-const additionalBrowsers = [];
-let browser;
-let activeStep = 'launch';
-const report = {
-  runId,
-  browser: options.name,
-  browserVersion: null,
-  playwrightVersion: require(
-    path.join(
-      path.dirname(require.resolve(process.env.PLAYWRIGHT_MODULE || 'playwright')),
-      'package.json',
-    ),
-  ).version,
-  platform: process.platform,
-  arch: process.arch,
-  baseUrl: base,
-  launchOptions: options.launchOptions,
-  contextOptions: options.contextOptions,
-  announcedIp: process.env.TEST_ANNOUNCE_IP || null,
-  turnRelay,
-  startedAt: new Date().toISOString(),
-  complete: false,
-  passed: false,
-  steps: [],
-  playbackRecoveries: [],
-  signalingReconnects: [],
-  limitations: [
-    'Push transport and permission use controlled fixtures; real OS notification delivery remains a manual device check.',
-    'Fake capture devices; not physical device or permission-prompt coverage.',
-    'External capture termination is simulated with stop() plus an ended event on an owned fake local-stream track.',
-    'Mobile checks resize a desktop viewport; they do not run a mobile browser.',
-    'Signaling recovery closes an owned WebSocket only; it is not a UDP outage or reconnect-grace-expiry test.',
-    'Interrupted setup closes a separate routed signaling connection after real transport creation; protocol replies and native RTC are not synthesized.',
-    turnRelay
-      ? 'TURN uses an owned local coturn relay and native relay-only ICE; no external NAT, TLS relay, or physical network outage is exercised.'
-      : 'ICE restarts use real legacy commands and native credential changes; no UDP failure or TURN relay is exercised.',
-  ],
-};
-// All fixture accounts share one loopback address. Keep their combined workload
-// within the real server guards instead of weakening limits or retrying writes.
-// Limits match the harness's clean server environment (xtask test-server) and router defaults.
-const HTTP_WINDOW_MS = 61_000;
-const MAX_HTTP_PACING_MS = 90_000;
-const httpLanes = new Map(
-  [
-    ['auth', 300, 100],
-    ['account', 300, 100],
-    ['rooms', 120, 40],
-    ['profiles', 600, 100],
-    ['telemetry', 30, 10],
-  ].map(([name, limit, reserve]) => [name, { limit, reserve, requests: [] }]),
-);
-const httpCounts = new Map();
-const httpPacing = [];
-let httpObserved = 0;
-let httpWaitMs = 0;
-const httpPathParts = new Set(
-  (
-    'api auth rooms register login refresh logout sessions others profile profiles invites ' +
-    'preferences password recovery key redeem passkey passkeys start finish authorize enroll ' +
-    'ws-ticket attachments inbox messages reactions read unread contacts saved-rooms mine ' +
-    'memberships preview identity image administration settings members bans reports history ' +
-    'moderation lobby sanctions notification-preferences notifications push subscriptions updates telemetry'
-  ).split(' '),
-);
-function httpRoute(request) {
-  const url = new URL(request.url());
-  if (url.origin !== new URL(base).origin || !url.pathname.startsWith('/api/')) return null;
-  const path = url.pathname;
-  const lane =
-    path.startsWith('/api/auth/profiles/') || /^\/api\/rooms\/[^/]+\/image$/.test(path)
-      ? 'profiles'
-      : [
-            'profile',
-            'preferences',
-            'attachments',
-            'contacts',
-            'saved-rooms',
-            'notification-preferences',
-            'inbox',
-            'push',
-            'updates',
-          ].some(
-            (prefix) => path === `/api/auth/${prefix}` || path.startsWith(`/api/auth/${prefix}/`),
-          )
-        ? 'account'
-        : path.startsWith('/api/auth/')
-          ? 'auth'
-          : path === '/api/rooms' || path.startsWith('/api/rooms/')
-            ? 'rooms'
-            : path === '/api/telemetry'
-              ? 'telemetry'
-              : null;
-  if (!lane) return null;
-  const method = ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'].includes(
-    request.method(),
-  )
-    ? request.method()
-    : 'OTHER';
-  // Only fixed route words survive. Never retain query strings, account/room
-  // identifiers, emails, headers, request bodies or invitation credentials.
-  const template = path
-    .split('/')
-    .map((part) => (!part || httpPathParts.has(part) ? part : ':id'))
-    .join('/');
-  const candidate = `${method} ${template}`;
-  const key = httpCounts.has(candidate) || httpCounts.size < 128 ? candidate : 'OTHER /api/:other';
-  if (!httpCounts.has(key)) httpCounts.set(key, { lane, requests: 0, statuses: {}, failed: 0 });
-  return { lane, count: httpCounts.get(key) };
-}
-function observeHttpRequest(request) {
-  const route = httpRoute(request);
-  if (!route) return;
-  httpObserved++;
-  route.count.requests++;
-  const requests = httpLanes.get(route.lane).requests;
-  requests.push(Date.now());
-  if (requests.length > 2000) requests.shift();
-}
-function observeHttpResponse(response) {
-  const route = httpRoute(response.request());
-  if (!route) return;
-  const status = response.status();
-  route.count.statuses[status] = (route.count.statuses[status] ?? 0) + 1;
-}
-async function paceHttpRequests() {
-  let pacing;
-  for (;;) {
-    assert.ok(httpObserved <= 5000, 'the owned HTTP workload must stay bounded');
-    const now = Date.now();
-    const recent = {};
-    let wait = 0;
-    for (const [name, lane] of httpLanes) {
-      while (lane.requests.length && now - lane.requests[0] >= HTTP_WINDOW_MS)
-        lane.requests.shift();
-      recent[name] = lane.requests.length;
-      const target = lane.limit - lane.reserve;
-      if (lane.requests.length > target)
-        wait = Math.max(
-          wait,
-          lane.requests[lane.requests.length - target - 1] + HTTP_WINDOW_MS - now,
-        );
-    }
-    if (wait <= 0) return;
-    if (!pacing) {
-      pacing = { beforeStep: activeStep, recent, waitedMs: 0 };
-      httpPacing.push(pacing);
-      console.log(`PACE shared HTTP workload before ${activeStep}: ${JSON.stringify(recent)}`);
-    }
-    const delay = Math.min(wait, 30_000);
-    assert.ok(
-      httpWaitMs + delay <= MAX_HTTP_PACING_MS,
-      'HTTP scenario pacing exceeds its 90-second workload bound',
-    );
-    saveReport();
-    await new Promise((resolve) => setTimeout(resolve, delay));
-    pacing.waitedMs += delay;
-    httpWaitMs += delay;
-  }
-}
-function communityStartupReady() {
-  return (
-    document.querySelector('.conversation-toolbar') !== null &&
-    document.querySelector('#sign-in-btn')?.hidden === false &&
-    document.querySelector('#connection-status')?.classList.contains('connected') === true
-  );
-}
-async function navigateCommunityPage(page, url) {
-  // The app may fetch directory/account updates while already interactive.
-  // Capabilities unhide Sign in; Connected is emitted only after auth restore
-  // and a real signaling connection. Global network idleness is not readiness.
-  await page.goto(url, { waitUntil: 'domcontentloaded' });
-  const item = clients.find((candidate) => candidate.page === page);
-  await item?.testNetwork?.ready();
-  await page.waitForFunction(communityStartupReady, null, { timeout: 10000 });
-}
-function saveReport() {
-  report.httpWorkload = {
-    observation:
-      'Native browser requests; controlled Push fetch is reported separately. Direct fixture API calls and helper tabs use reserved headroom.',
-    windowMs: HTTP_WINDOW_MS,
-    lanes: Object.fromEntries(
-      [...httpLanes].map(([name, lane]) => [name, { limit: lane.limit, reserve: lane.reserve }]),
-    ),
-    observedRequests: httpObserved,
-    pacingMs: httpWaitMs,
-    pacing: httpPacing,
-    endpoints: Object.fromEntries(
-      [...httpCounts].sort(([left], [right]) => left.localeCompare(right)),
-    ),
-  };
-  report.webKitTestNetwork = {
-    enabled: webKitTestNetwork,
-    pages: clients
-      .filter((item) => item.testNetwork)
-      .map((item) => ({
-        label: item.label,
-        setting: item.testNetwork.setting,
-        value: item.testNetwork.value,
-        playwrightVersion: item.testNetwork.playwrightVersion,
-        appliedCount: item.testNetwork.appliedCount(),
-        retired: item.testNetworkRetired === true,
-      })),
-  };
-  fs.writeFileSync(
-    path.join(artifacts, 'community-results.json'),
-    `${JSON.stringify(report, null, 2)}\n`,
-    { mode: 0o600 },
-  );
-}
-async function testNetworkReady() {
-  await Promise.all(
-    clients.filter((item) => !item.testNetworkRetired).map((item) => item.testNetwork?.ready()),
-  );
-}
-async function retireTestNetwork(page) {
-  const item = clients.find((candidate) => candidate.page === page);
-  assert.ok(item, 'only an owned community client may retire its test network');
-  if (!item.testNetwork || item.testNetworkRetired) return;
-  await item.testNetwork.ready();
-  await item.testNetwork.dispose();
-  item.testNetworkRetired = true;
-}
-async function deadline(work, milliseconds = 5000) {
-  let timer;
-  try {
-    return await Promise.race([
-      work,
-      new Promise((_, reject) => {
-        timer = setTimeout(
-          () => reject(new Error('Browser diagnostics deadline exceeded')),
-          milliseconds,
-        );
-      }),
-    ]);
-  } finally {
-    clearTimeout(timer);
-  }
-}
-async function savedPrivateRowCount(sender, recipient, clientMessageId) {
-  assert.equal(process.env.DISPOSABLE_TEST_DATABASE, '1');
-  let database;
-  try {
-    database = new URL(process.env.TEST_DATABASE_URL);
-  } catch {
-    throw new Error('Saved PM verification requires an owned test database URL');
-  }
-  assert.ok(
-    ['postgres:', 'postgresql:'].includes(database.protocol) &&
-      ['localhost', '127.0.0.1', '[::1]'].includes(database.hostname) &&
-      /^\/[A-Za-z0-9_]+_test$/.test(database.pathname) &&
-      ['', '?sslmode=disable'].includes(database.search) &&
-      !database.hash,
-    'Saved PM verification is restricted to a loopback test database',
-  );
-  for (const id of [sender, recipient, clientMessageId])
-    assert.match(id, /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i);
-  const count = await new Promise((resolve, reject) => {
-    const child = execFile(
-      'psql',
-      [
-        '-X',
-        '--no-password',
-        '--tuples-only',
-        '--no-align',
-        '--quiet',
-        '--set=ON_ERROR_STOP=1',
-        `--set=sender=${sender}`,
-        `--set=recipient=${recipient}`,
-        `--set=attempt=${clientMessageId}`,
-        '--file=-',
-      ],
-      {
-        env: {
-          PATH: process.env.PATH,
-          LC_ALL: 'C',
-          PGHOST: database.hostname.replace(/^\[|\]$/g, ''),
-          PGPORT: database.port || '5432',
-          PGDATABASE: database.pathname.slice(1),
-          PGUSER: decodeURIComponent(database.username),
-          PGPASSWORD: decodeURIComponent(database.password),
-          PGSSLMODE: 'disable',
-          PGCONNECT_TIMEOUT: '5',
-          PGPASSFILE: '/dev/null',
-          PGSERVICEFILE: '/dev/null',
-          PGOPTIONS: '-c default_transaction_read_only=on -c statement_timeout=5000',
-        },
-        timeout: 10000,
-        maxBuffer: 1024,
-      },
-      (error, stdout) => {
-        if (error) reject(new Error('Owned saved PM row verification failed'));
-        else resolve(stdout.trim());
-      },
-    );
-    child.stdin.on('error', () => reject(new Error('Owned saved PM query input failed')));
-    child.stdin.end(
-      "SELECT count(*) FROM chat_messages WHERE room_id IS NULL AND sender_account=:'sender'::uuid AND recipient_account=:'recipient'::uuid AND client_message_id=:'attempt';\n",
-    );
-  });
-  assert.match(count, /^\d+$/);
-  return Number(count);
-}
-async function step(name, work) {
-  activeStep = name;
-  const result = { name, passed: false };
-  report.steps.push(result);
-  await paceHttpRequests();
-  const requestsBefore = httpObserved;
-  saveReport();
-  await testNetworkReady();
-  const outcome = await work();
-  result.observedHttpRequests = httpObserved - requestsBefore;
-  await testNetworkReady();
-  if (outcome?.skip) {
-    result.skipped = true;
-    result.reason = outcome.skip;
-    saveReport();
-    console.log(`SKIP ${name}: ${outcome.skip}`);
-    return;
-  }
-  result.passed = true;
-  saveReport();
-  console.log(`PASS ${name}`);
-}
-async function client(label, mobile = false, configureContext, independentCapture = false) {
-  let clientBrowser = browser;
-  if (independentCapture) {
-    // WebKit silences existing capture when another tab starts using devices.
-    // An independent browser represents a second caller without that conflict.
-    clientBrowser = await playwright[options.name].launch(options.launchOptions);
-    additionalBrowsers.push(clientBrowser);
-  }
-  const context = await clientBrowser.newContext({
-    ...options.contextOptions,
-    viewport: mobile ? { width: 390, height: 844 } : { width: 1440, height: 1000 },
-  });
-  await configureContext?.(context);
-  const page = await context.newPage();
-  const entry = { label, context, page, errors: [], frames: [], warnings: [] };
-  clients.push(entry);
-  page.on('request', observeHttpRequest);
-  page.on('response', observeHttpResponse);
-  page.on('requestfailed', (request) => {
-    const route = httpRoute(request);
-    if (route) route.count.failed++;
-  });
-  if (webKitTestNetwork) {
-    const { installWebKitTestNetwork } = require('./webkit-test-network.cjs');
-    entry.testNetwork = await installWebKitTestNetwork(playwright, page, {
-      browserName: options.name,
-    });
-  }
-  // Every caller uses the same controlled push transport. Account rules still
-  // use the real server; native OS push delivery remains a manual device check.
-  await installPwaFixture(page);
-  page.setDefaultTimeout(10000);
-  if (turnRelay) await page.addInitScript(installRelayPolicy);
-  // Observe native peer connections for failure diagnostics; no SDP/media mocking.
-  await page.addInitScript(installPeerEventTracing, {
-    announcedIp: process.env.TEST_ANNOUNCE_IP || null,
-  });
-  await page.addInitScript(installSignalingReconnectObservation);
-  await page.addInitScript(() => {
-    const devices = navigator.mediaDevices;
-    const getUserMedia = devices.getUserMedia.bind(devices);
-    let requests = 0;
-    const observation = {
-      devices,
-      getUserMedia: (...args) => {
-        requests++;
-        return getUserMedia(...args);
-      },
-    };
-    devices.getUserMedia = observation.getUserMedia;
-    // Keep the instrumented DOM wrapper alive for this document. WebKit can
-    // otherwise discard an unrooted MediaDevices wrapper and its own properties.
-    window.__communityCaptureObservation = observation;
-    Object.defineProperty(window, '__communityCaptureRequests', {
-      get() {
-        if (
-          window.__communityCaptureObservation !== observation ||
-          navigator.mediaDevices !== devices ||
-          devices.getUserMedia !== observation.getUserMedia
-        ) {
-          throw new Error('Capture instrumentation was replaced');
-        }
-        return requests;
-      },
-    });
-  });
-  page.on('pageerror', (error) => entry.errors.push(error.stack || error.message));
-  page.on('console', (message) => {
-    if (['warning', 'error'].includes(message.type())) {
-      entry.warnings.push(message.text());
-      if (entry.warnings.length > 40) entry.warnings.shift();
-    }
-  });
-  page.on('websocket', (socket) => {
-    for (const direction of ['framesent', 'framereceived'])
-      socket.on(direction, (frame) => {
-        try {
-          const message = JSON.parse(String(frame.payload));
-          entry.frames.push({
-            direction,
-            type: message.type,
-            content: message.content,
-            message:
-              typeof message.message === 'string' ? message.message : message.message?.content,
-          });
-          if (entry.frames.length > 40) entry.frames.shift();
-        } catch {}
-      });
-  });
-  page.on('dialog', (dialog) => dialog.dismiss());
-  await navigateCommunityPage(page, base);
-  assert.deepEqual(entry.errors, [], `${label} startup page errors`);
-  return page;
-}
-async function visible(page, text) {
-  await page
-    .getByText(text, { exact: true })
-    .filter({ visible: true })
-    .last()
-    .waitFor({ state: 'visible' });
-}
-async function remotePlayback(page, kind) {
-  await page.waitForFunction(
-    (mediaKind) => {
-      const playing = [...document.querySelectorAll(`.video-tile:not(.local) ${mediaKind}`)].some(
-        (element) =>
-          !element.paused &&
-          (mediaKind === 'video'
-            ? element.videoWidth > 0
-            : element.readyState >= 2 && !element.muted && element.volume > 0),
-      );
-      const prompt = [...document.querySelectorAll('.personal-playback-blocked')].some(
-        (notice) => !notice.hidden,
-      );
-      return playing || prompt;
-    },
-    kind,
-    { timeout: 15000 },
-  );
-  const retry = page.locator('[data-control="retry-playback"]').filter({ visible: true });
-  if (await retry.count()) {
-    await retry.first().click();
-    report.playbackRecoveries.push({ kind, step: activeStep });
-  }
-  await page.waitForFunction(
-    (mediaKind) =>
-      [...document.querySelectorAll(`.video-tile:not(.local) ${mediaKind}`)].some(
-        (element) =>
-          !element.paused &&
-          (mediaKind === 'video'
-            ? element.videoWidth > 0
-            : element.readyState >= 2 && !element.muted && element.volume > 0),
+/** Runs one serial membership journey; browser/service ownership may be supplied by the test runner. */
+async function run(runner = {}) {
+  const env = runner.env ?? process.env;
+  if (env.COMMUNITY_E2E !== '1')
+    throw new Error('Set COMMUNITY_E2E=1 against a disposable local server/database.');
+  const base = env.BASE_URL || 'http://127.0.0.1:3109';
+  if (!['localhost', '127.0.0.1', '[::1]'].includes(new URL(base).hostname))
+    throw new Error('This smoke is restricted to local test servers.');
+  const { browserOptions, webKitTestNetworkEnabled } = require('./browser-options.cjs');
+  const { collectPeerDiagnostics } = require('./peer-diagnostics.cjs');
+  const { installPeerEventTracing } = require('./peer-events.cjs');
+  const { installSignalingReconnectObservation } = require('./signaling-reconnect.cjs');
+  const { installRelayPolicy, waitForRelayPaths } = require('./turn-relay.cjs');
+  const { openAccountMenu, accountMenuButton, signOut } = require('./account-menu.cjs');
+  const turnRelay = env.TURN_E2E === '1';
+  const options = browserOptions(env.E2E_BROWSER);
+  const webKitTestNetwork = webKitTestNetworkEnabled(options.name);
+  const playwright = require(env.PLAYWRIGHT_MODULE || 'playwright');
+  const artifacts =
+    runner.artifacts ||
+    env.E2E_ARTIFACTS ||
+    fs.mkdtempSync(path.join(os.tmpdir(), 'simplestchat-community-e2e.'));
+  fs.mkdirSync(artifacts, { recursive: true, mode: 0o700 });
+  const runId = `e2e-${Date.now().toString(36)}`;
+  const password = 'Disposable-browser-password-2026!';
+  const clients = [];
+  const additionalBrowsers = [];
+  let browser;
+  let activeStep = 'launch';
+  const report = {
+    runId,
+    browser: options.name,
+    browserVersion: null,
+    playwrightVersion: require(
+      path.join(
+        path.dirname(require.resolve(env.PLAYWRIGHT_MODULE || 'playwright')),
+        'package.json',
       ),
-    kind,
-    { timeout: 15000 },
+    ).version,
+    platform: process.platform,
+    arch: process.arch,
+    baseUrl: base,
+    launchOptions: options.launchOptions,
+    contextOptions: options.contextOptions,
+    announcedIp: env.TEST_ANNOUNCE_IP || null,
+    turnRelay,
+    startedAt: new Date().toISOString(),
+    complete: false,
+    passed: false,
+    steps: [],
+    playbackRecoveries: [],
+    signalingReconnects: [],
+    limitations: [
+      'Push transport and permission use controlled fixtures; real OS notification delivery remains a manual device check.',
+      'Fake capture devices; not physical device or permission-prompt coverage.',
+      'External capture termination is simulated with stop() plus an ended event on an owned fake local-stream track.',
+      'Mobile checks resize a desktop viewport; they do not run a mobile browser.',
+      'Signaling recovery closes an owned WebSocket only; it is not a UDP outage or reconnect-grace-expiry test.',
+      'Interrupted setup closes a separate routed signaling connection after real transport creation; protocol replies and native RTC are not synthesized.',
+      turnRelay
+        ? 'TURN uses an owned local coturn relay and native relay-only ICE; no external NAT, TLS relay, or physical network outage is exercised.'
+        : 'ICE restarts use real legacy commands and native credential changes; no UDP failure or TURN relay is exercised.',
+    ],
+  };
+  // All fixture accounts share one loopback address. Keep their combined workload
+  // within the real server guards instead of weakening limits or retrying writes.
+  // Limits match the harness's clean server environment (xtask test-server) and router defaults.
+  const HTTP_WINDOW_MS = 61_000;
+  const MAX_HTTP_PACING_MS = 90_000;
+  const httpLanes = new Map(
+    [
+      ['auth', 300, 100],
+      ['account', 300, 100],
+      ['rooms', 120, 40],
+      ['profiles', 600, 100],
+      ['telemetry', 30, 10],
+    ].map(([name, limit, reserve]) => [name, { limit, reserve, requests: [] }]),
   );
-  await page.waitForFunction(() =>
-    [...document.querySelectorAll('.personal-playback-blocked')].every((notice) => notice.hidden),
-  );
-}
-async function connected(page) {
-  await page.locator('#room-screen').waitFor({ state: 'visible' });
-  await page.waitForFunction(
-    () => document.querySelector('#connection-status').textContent === 'Connected',
-  );
-  await page
-    .getByRole('navigation', { name: 'Conversations', exact: true })
-    .waitFor({ state: 'visible' });
-}
-async function reconnectMediaIdentity(page, { allowIncomingVideoReplacement = false } = {}) {
-  return page.evaluateHandle((allowIncomingVideoReplacement) => {
-    const registry = window.__communityPeers;
-    if (!Array.isArray(registry) || registry.length === 0)
-      throw new Error('Native peer observation unavailable');
-    const captures = window.__communityCaptureRequests;
-    if (!Number.isSafeInteger(captures) || captures < 0)
-      throw new Error('Capture request observation unavailable');
-    const receivers = (peer) =>
-      peer
-        .getReceivers()
-        .map((receiver) => receiver.track)
-        .filter((track) => !allowIncomingVideoReplacement || track?.kind !== 'video');
-    const peers = registry.map((peer) => ({
-      peer,
-      closed: peer.connectionState === 'closed',
-      senders: peer.getSenders().map((sender) => sender.track),
-      receivers: receivers(peer),
-    }));
-    const liveTracks = peers
-      .flatMap(({ senders, receivers }) => [...senders, ...receivers])
-      .filter((track) => track?.readyState === 'live');
-    const localTracks = document.querySelector('#local-tile video')?.srcObject?.getTracks() || [];
-    const same = (before, after) =>
-      before.length === after.length && before.every((value, index) => value === after[index]);
-    return {
-      verify() {
-        if (
-          window.__communityPeers !== registry ||
-          !same(
-            peers.map(({ peer }) => peer),
-            registry,
-          )
-        )
-          throw new Error('Signaling recovery replaced or added native peers');
-        if (window.__communityCaptureRequests !== captures)
-          throw new Error('Signaling recovery requested new capture');
-        for (const entry of peers) {
-          // Unused directions legitimately remain New; already closed historical
-          // peers may also exist after earlier smoke steps.
-          if (!entry.closed && ['closed', 'failed'].includes(entry.peer.connectionState))
-            throw new Error('Signaling recovery closed or failed a retained native peer');
-          if (
-            !same(
-              entry.senders,
-              entry.peer.getSenders().map((sender) => sender.track),
-            ) ||
-            !same(entry.receivers, receivers(entry.peer))
-          )
-            throw new Error('Signaling recovery replaced native media tracks');
-        }
-        if (
-          liveTracks.some((track) => track.readyState !== 'live') ||
-          !same(
-            localTracks,
-            document.querySelector('#local-tile video')?.srcObject?.getTracks() || [],
-          )
-        )
-          throw new Error('Signaling recovery ended or replaced capture/receive tracks');
-        return { peers: peers.length, liveTracks: liveTracks.length, captureRequests: captures };
-      },
-      async sample() {
-        const audio = [...document.querySelectorAll('.video-tile:not(.local) audio')].filter(
+  const httpCounts = new Map();
+  const httpRoute = (request) => classifyCommunityHttpRoute(request, base, httpCounts);
+  const httpPacing = [];
+  let httpObserved = 0;
+  let httpWaitMs = 0;
+  const { testNetworkReady, retireTestNetwork } = createTestNetworkOwnership(clients);
+  const step = createCommunityStep({
+    report,
+    paceHttpRequests,
+    testNetworkReady,
+    saveReport,
+    get observedHttpRequests() {
+      return httpObserved;
+    },
+    setActiveStep(name) {
+      activeStep = name;
+    },
+    runStep: runner.step,
+  });
+
+  function observeHttpRequest(request) {
+    const route = httpRoute(request);
+    if (!route) return;
+    httpObserved++;
+    route.count.requests++;
+    const requests = httpLanes.get(route.lane).requests;
+    requests.push(Date.now());
+    if (requests.length > 2000) requests.shift();
+  }
+  function observeHttpResponse(response) {
+    const route = httpRoute(response.request());
+    if (!route) return;
+    const status = response.status();
+    route.count.statuses[status] = (route.count.statuses[status] ?? 0) + 1;
+  }
+  async function paceHttpRequests() {
+    let pacing;
+    for (;;) {
+      assert.ok(httpObserved <= 5000, 'the owned HTTP workload must stay bounded');
+      const now = Date.now();
+      const recent = {};
+      let wait = 0;
+      for (const [name, lane] of httpLanes) {
+        while (lane.requests.length && now - lane.requests[0] >= HTTP_WINDOW_MS)
+          lane.requests.shift();
+        recent[name] = lane.requests.length;
+        const target = lane.limit - lane.reserve;
+        if (lane.requests.length > target)
+          wait = Math.max(
+            wait,
+            lane.requests[lane.requests.length - target - 1] + HTTP_WINDOW_MS - now,
+          );
+      }
+      if (wait <= 0) return;
+      if (!pacing) {
+        pacing = { beforeStep: activeStep, recent, waitedMs: 0 };
+        httpPacing.push(pacing);
+        console.log(`PACE shared HTTP workload before ${activeStep}: ${JSON.stringify(recent)}`);
+      }
+      const delay = Math.min(wait, 30_000);
+      assert.ok(
+        httpWaitMs + delay <= MAX_HTTP_PACING_MS,
+        'HTTP scenario pacing exceeds its 90-second workload bound',
+      );
+      saveReport();
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      pacing.waitedMs += delay;
+      httpWaitMs += delay;
+    }
+  }
+
+  function saveReport() {
+    report.httpWorkload = {
+      observation:
+        'Native browser requests; controlled Push fetch is reported separately. Direct fixture API calls and helper tabs use reserved headroom.',
+      windowMs: HTTP_WINDOW_MS,
+      lanes: Object.fromEntries(
+        [...httpLanes].map(([name, lane]) => [name, { limit: lane.limit, reserve: lane.reserve }]),
+      ),
+      observedRequests: httpObserved,
+      pacingMs: httpWaitMs,
+      pacing: httpPacing,
+      endpoints: Object.fromEntries(
+        [...httpCounts].sort(([left], [right]) => left.localeCompare(right)),
+      ),
+    };
+    report.webKitTestNetwork = {
+      enabled: webKitTestNetwork,
+      pages: clients
+        .filter((item) => item.testNetwork)
+        .map((item) => ({
+          label: item.label,
+          setting: item.testNetwork.setting,
+          value: item.testNetwork.value,
+          playwrightVersion: item.testNetwork.playwrightVersion,
+          appliedCount: item.testNetwork.appliedCount(),
+          retired: item.testNetworkRetired === true,
+        })),
+    };
+    fs.writeFileSync(
+      path.join(artifacts, 'community-results.json'),
+      `${JSON.stringify(report, null, 2)}\n`,
+      { mode: 0o600 },
+    );
+  }
+
+  async function deadline(work, milliseconds = 5000) {
+    let timer;
+    try {
+      return await Promise.race([
+        work,
+        new Promise((_, reject) => {
+          timer = setTimeout(
+            () => reject(new Error('Browser diagnostics deadline exceeded')),
+            milliseconds,
+          );
+        }),
+      ]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  async function savedPrivateRowCount(sender, recipient, clientMessageId) {
+    assert.equal(env.DISPOSABLE_TEST_DATABASE, '1');
+    let database;
+    try {
+      database = new URL(env.TEST_DATABASE_URL);
+    } catch {
+      throw new Error('Saved PM verification requires an owned test database URL');
+    }
+    assert.ok(
+      ['postgres:', 'postgresql:'].includes(database.protocol) &&
+        ['localhost', '127.0.0.1', '[::1]'].includes(database.hostname) &&
+        /^\/[A-Za-z0-9_]+_test$/.test(database.pathname) &&
+        ['', '?sslmode=disable'].includes(database.search) &&
+        !database.hash,
+      'Saved PM verification is restricted to a loopback test database',
+    );
+    for (const id of [sender, recipient, clientMessageId])
+      assert.match(id, /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i);
+    const count = await new Promise((resolve, reject) => {
+      const child = execFile(
+        'psql',
+        [
+          '-X',
+          '--no-password',
+          '--tuples-only',
+          '--no-align',
+          '--quiet',
+          '--set=ON_ERROR_STOP=1',
+          `--set=sender=${sender}`,
+          `--set=recipient=${recipient}`,
+          `--set=attempt=${clientMessageId}`,
+          '--file=-',
+        ],
+        {
+          env: {
+            PATH: env.PATH,
+            LC_ALL: 'C',
+            PGHOST: database.hostname.replace(/^\[|\]$/g, ''),
+            PGPORT: database.port || '5432',
+            PGDATABASE: database.pathname.slice(1),
+            PGUSER: decodeURIComponent(database.username),
+            PGPASSWORD: decodeURIComponent(database.password),
+            PGSSLMODE: 'disable',
+            PGCONNECT_TIMEOUT: '5',
+            PGPASSFILE: '/dev/null',
+            PGSERVICEFILE: '/dev/null',
+            PGOPTIONS: '-c default_transaction_read_only=on -c statement_timeout=5000',
+          },
+          timeout: 10000,
+          maxBuffer: 1024,
+        },
+        (error, stdout) => {
+          if (error) reject(new Error('Owned saved PM row verification failed'));
+          else resolve(stdout.trim());
+        },
+      );
+      child.stdin.on('error', () => reject(new Error('Owned saved PM query input failed')));
+      child.stdin.end(
+        "SELECT count(*) FROM chat_messages WHERE room_id IS NULL AND sender_account=:'sender'::uuid AND recipient_account=:'recipient'::uuid AND client_message_id=:'attempt';\n",
+      );
+    });
+    assert.match(count, /^\d+$/);
+    return Number(count);
+  }
+
+  async function client(label, mobile = false, configureContext, independentCapture = false) {
+    let clientBrowser = browser;
+    if (independentCapture) {
+      // WebKit silences existing capture when another tab starts using devices.
+      // An independent browser represents a second caller without that conflict.
+      clientBrowser = await (runner.launchBrowser
+        ? runner.launchBrowser(options.name, options.launchOptions)
+        : playwright[options.name].launch(options.launchOptions));
+      additionalBrowsers.push(clientBrowser);
+    }
+    const context = await clientBrowser.newContext({
+      ...options.contextOptions,
+      viewport: mobile ? { width: 390, height: 844 } : { width: 1440, height: 1000 },
+    });
+    await configureContext?.(context);
+    const page = await context.newPage();
+    const entry = { label, context, page, errors: [], frames: [], warnings: [] };
+    clients.push(entry);
+    page.on('request', observeHttpRequest);
+    page.on('response', observeHttpResponse);
+    page.on('requestfailed', (request) => {
+      const route = httpRoute(request);
+      if (route) route.count.failed++;
+    });
+    if (webKitTestNetwork) {
+      const { installWebKitTestNetwork } = require('./webkit-test-network.cjs');
+      entry.testNetwork = await installWebKitTestNetwork(playwright, page, {
+        browserName: options.name,
+      });
+    }
+    // Every caller uses the same controlled push transport. Account rules still
+    // use the real server; native OS push delivery remains a manual device check.
+    await installPwaFixture(page);
+    page.setDefaultTimeout(10000);
+    if (turnRelay) await page.addInitScript(installRelayPolicy);
+    // Observe native peer connections for failure diagnostics; no SDP/media mocking.
+    await page.addInitScript(installPeerEventTracing, {
+      announcedIp: env.TEST_ANNOUNCE_IP || null,
+    });
+    await page.addInitScript(installSignalingReconnectObservation);
+    await page.addInitScript(installCommunityCaptureObservation);
+    page.on('pageerror', (error) => entry.errors.push(error.stack || error.message));
+    page.on('console', (message) => {
+      if (['warning', 'error'].includes(message.type())) {
+        entry.warnings.push(message.text());
+        if (entry.warnings.length > 40) entry.warnings.shift();
+      }
+    });
+    page.on('websocket', (socket) => {
+      for (const direction of ['framesent', 'framereceived'])
+        socket.on(direction, (frame) => {
+          try {
+            const message = JSON.parse(String(frame.payload));
+            entry.frames.push({
+              direction,
+              type: message.type,
+              content: message.content,
+              message:
+                typeof message.message === 'string' ? message.message : message.message?.content,
+            });
+            if (entry.frames.length > 40) entry.frames.shift();
+          } catch {}
+        });
+    });
+    page.on('dialog', (dialog) => dialog.dismiss());
+    await navigateCommunityPage(page, base, clients);
+    assert.deepEqual(entry.errors, [], `${label} startup page errors`);
+    return page;
+  }
+  async function visible(page, text) {
+    await page
+      .getByText(text, { exact: true })
+      .filter({ visible: true })
+      .last()
+      .waitFor({ state: 'visible' });
+  }
+  async function remotePlayback(page, kind) {
+    await page.waitForFunction(
+      (mediaKind) => {
+        const playing = [...document.querySelectorAll(`.video-tile:not(.local) ${mediaKind}`)].some(
           (element) =>
             !element.paused &&
-            !element.muted &&
-            element.volume > 0 &&
-            element.readyState >= 2 &&
-            element.srcObject?.getAudioTracks().some((track) => track.readyState === 'live'),
+            (mediaKind === 'video'
+              ? element.videoWidth > 0
+              : element.readyState >= 2 && !element.muted && element.volume > 0),
         );
-        if (audio.length !== 1) throw new Error('Expected one audible owned remote audio element');
-        const tracks = audio[0].srcObject.getAudioTracks();
-        if (tracks.length !== 1) throw new Error('Expected one owned remote audio track');
-        let videoReports = 0;
-        let audioReports = 0;
-        let framesDecoded = 0;
-        let audioStats;
-        let audioPlayout = null;
-        for (const { peer, closed } of peers) {
-          if (closed) continue;
-          const stats = await peer.getStats();
-          for (const stat of stats.values()) {
-            if (stat.type !== 'inbound-rtp') continue;
-            if (stat.kind === 'video' && Number.isFinite(stat.framesDecoded)) {
-              videoReports++;
-              framesDecoded += stat.framesDecoded;
-            }
-            if (stat.kind === 'audio' && stat.trackIdentifier === tracks[0].id) {
-              audioReports++;
-              audioStats = stat;
-              if (stat.playoutId !== undefined) {
-                audioPlayout = stats.get(stat.playoutId);
-                if (audioPlayout?.type !== 'media-playout' || audioPlayout.kind !== 'audio')
-                  throw new Error('Linked native audio playout statistics unavailable');
-              }
-            }
-          }
-        }
-        if (!videoReports || audioReports !== 1)
-          throw new Error(
-            `Expected decoded-video counters and one matching native audio report; received ${videoReports} video and ${audioReports} audio reports`,
-          );
-        const audioCounters = [
-          audioStats.packetsReceived,
-          audioStats.totalSamplesDuration,
-          audioStats.totalAudioEnergy,
-          audio[0].currentTime,
-        ];
-        if (audioPlayout) audioCounters.push(audioPlayout.totalSamplesDuration);
-        if (audioCounters.some((value) => !Number.isFinite(value) || value < 0))
-          throw new Error('Native audio progress counters unavailable or invalid');
-        return {
-          framesDecoded,
-          audioReportId: audioStats.id,
-          audioPackets: audioStats.packetsReceived,
-          audioSamplesTime: audioStats.totalSamplesDuration,
-          audioEnergy: audioStats.totalAudioEnergy,
-          audioTime: audio[0].currentTime,
-          audioPlayoutId: audioPlayout?.id ?? null,
-          audioPlayoutTime: audioPlayout?.totalSamplesDuration ?? null,
-          sampledAtMs: performance.now(),
-        };
+        const prompt = [...document.querySelectorAll('.personal-playback-blocked')].some(
+          (notice) => !notice.hidden,
+        );
+        return playing || prompt;
       },
-    };
-  }, allowIncomingVideoReplacement);
-}
-function mediaProgressDelta(before, after) {
-  if (
-    before.audioReportId !== after.audioReportId ||
-    before.audioPlayoutId !== after.audioPlayoutId
-  )
-    throw new Error('Native audio statistics changed identity during media observation');
-  return {
-    framesDecoded: after.framesDecoded - before.framesDecoded,
-    audioPackets: after.audioPackets - before.audioPackets,
-    audioSamplesSeconds: after.audioSamplesTime - before.audioSamplesTime,
-    audioEnergy: after.audioEnergy - before.audioEnergy,
-    audioSeconds: after.audioTime - before.audioTime,
-    audioPlayoutSeconds:
-      before.audioPlayoutTime === null || after.audioPlayoutTime === null
-        ? null
-        : after.audioPlayoutTime - before.audioPlayoutTime,
-    elapsedMs: after.sampledAtMs - before.sampledAtMs,
-  };
-}
-async function waitForMediaStart(page, identity) {
-  const until = performance.now() + 10000;
-  let lastError;
-  do {
-    try {
-      const sample = await identity.evaluate((state) => state.sample());
-      if (sample.audioPackets > 0 && sample.audioSamplesTime > 0.5 && sample.audioEnergy > 0)
-        return;
-    } catch (error) {
-      lastError = error;
+      kind,
+      { timeout: 15000 },
+    );
+    const retry = page.locator('[data-control="retry-playback"]').filter({ visible: true });
+    if (await retry.count()) {
+      await retry.first().click();
+      report.playbackRecoveries.push({ kind, step: activeStep });
     }
-    await page.waitForTimeout(200);
-  } while (performance.now() < until);
-  throw new Error('New remote media did not expose decoded audio statistics', {
-    cause: lastError,
-  });
-}
-async function advancingReconnectMedia(page, identity, milliseconds, ensureGap) {
-  if (ensureGap) await ensureGap();
-  const before = await identity.evaluate((state) => state.sample());
-  const samples = [before];
-  if (ensureGap) await ensureGap();
-  const until = performance.now() + milliseconds;
-  do {
-    await page.waitForTimeout(200);
-    if (ensureGap) await ensureGap();
-    const after = await identity.evaluate((state) => state.sample());
-    // Retain a bounded timeline on failure; one final stats snapshot cannot
-    // distinguish a stalled stream from a reset counter or playback timeline.
-    if (samples.length < 32) samples.push(after);
-    if (ensureGap) await ensureGap();
-    const delta = mediaProgressDelta(before, after);
-    // Chromium's HTML clock can freeze after capture replacement while decoded
-    // audio and device playout continue. Prefer linked native playout counters;
-    // retain the HTML clock for engines without them. The owned fake microphone
-    // emits a signal, so received packets or synthetic silence alone cannot pass.
-    if (
-      delta.framesDecoded > 0 &&
-      delta.audioPackets > 0 &&
-      delta.audioSamplesSeconds > 0.05 &&
-      delta.audioEnergy > 0 &&
-      (delta.audioPlayoutSeconds ?? delta.audioSeconds) > 0.05
-    )
-      return delta;
-  } while (performance.now() < until);
-  throw new Error(
-    ensureGap
-      ? 'No measured video/audio progress inside the observed signaling outage'
-      : 'No measured decoded video and audible audio progress',
-    { cause: { mediaProgress: samples } },
-  );
-}
-async function signalingReconnect(interrupted, publisher, receiver, direction) {
-  const evidence = { direction, passed: false };
-  report.signalingReconnects.push(evidence);
-  saveReport();
-  const identities = [];
-  try {
-    await deadline(
-      (async () => {
-        identities.push(await reconnectMediaIdentity(publisher));
-        identities.push(await reconnectMediaIdentity(receiver));
-        await waitForMediaStart(receiver, identities[1]);
-        evidence.before = await advancingReconnectMedia(receiver, identities[1], 3000);
-        const baseline = await interrupted.evaluate(() =>
-          window.__communitySignalingReconnect.snapshot(),
-        );
-        const closedAt = performance.now();
-        const requested = await interrupted.evaluate(() =>
-          window.__communitySignalingReconnect.closeCurrent(),
-        );
-        await interrupted.waitForFunction(
-          (ordinal) => {
-            const snapshot = window.__communitySignalingReconnect.snapshot();
-            return snapshot.events.some(
-              (event) => event.event === 'close' && event.socketOrdinal === ordinal,
-            );
-          },
-          requested.socketOrdinal,
-          { timeout: 1500 },
-        );
-        const ensureGap = async () => {
-          const snapshot = await interrupted.evaluate(() =>
+    await page.waitForFunction(
+      (mediaKind) =>
+        [...document.querySelectorAll(`.video-tile:not(.local) ${mediaKind}`)].some(
+          (element) =>
+            !element.paused &&
+            (mediaKind === 'video'
+              ? element.videoWidth > 0
+              : element.readyState >= 2 && !element.muted && element.volume > 0),
+        ),
+      kind,
+      { timeout: 15000 },
+    );
+    await page.waitForFunction(() =>
+      [...document.querySelectorAll('.personal-playback-blocked')].every((notice) => notice.hidden),
+    );
+  }
+  async function connected(page) {
+    await page.locator('#room-screen').waitFor({ state: 'visible' });
+    await page.waitForFunction(
+      () => document.querySelector('#connection-status').textContent === 'Connected',
+    );
+    await page
+      .getByRole('navigation', { name: 'Conversations', exact: true })
+      .waitFor({ state: 'visible' });
+  }
+
+  async function signalingReconnect(interrupted, publisher, receiver, direction) {
+    const evidence = { direction, passed: false };
+    report.signalingReconnects.push(evidence);
+    saveReport();
+    const identities = [];
+    try {
+      await deadline(
+        (async () => {
+          identities.push(await reconnectMediaIdentity(publisher));
+          identities.push(await reconnectMediaIdentity(receiver));
+          await waitForMediaStart(receiver, identities[1]);
+          evidence.before = await advancingReconnectMedia(receiver, identities[1], 3000);
+          const baseline = await interrupted.evaluate(() =>
             window.__communitySignalingReconnect.snapshot(),
           );
-          assert.equal(
-            snapshot.openSocketOrdinals.length,
-            0,
-            'Media sample must finish before signaling reopens',
+          const closedAt = performance.now();
+          const requested = await interrupted.evaluate(() =>
+            window.__communitySignalingReconnect.closeCurrent(),
           );
-          assert.equal(
-            snapshot.counters.receivedReconnectResult,
-            baseline.counters.receivedReconnectResult,
-            'Media sample must precede any reconnect result',
+          await interrupted.waitForFunction(
+            (ordinal) => {
+              const snapshot = window.__communitySignalingReconnect.snapshot();
+              return snapshot.events.some(
+                (event) => event.event === 'close' && event.socketOrdinal === ordinal,
+              );
+            },
+            requested.socketOrdinal,
+            { timeout: 1500 },
           );
-          assert.equal(
-            snapshot.events.filter((event) => event.event === 'open').length,
-            baseline.events.filter((event) => event.event === 'open').length,
-            'No recovery socket may have opened during the outage sample',
-          );
-        };
-        evidence.during = await advancingReconnectMedia(receiver, identities[1], 1000, ensureGap);
-        for (const identity of identities) await identity.evaluate((state) => state.verify());
-        await interrupted.waitForFunction(
-          (previous) => {
-            const snapshot = window.__communitySignalingReconnect.snapshot();
-            return (
-              snapshot.counters.reconnectSuccess > previous.reconnectSuccess &&
-              snapshot.counters.receivedRoomSnapshot > previous.receivedRoomSnapshot &&
-              snapshot.openSocketOrdinals.length === 1
+          const ensureGap = async () => {
+            const snapshot = await interrupted.evaluate(() =>
+              window.__communitySignalingReconnect.snapshot(),
             );
-          },
-          baseline.counters,
-          { timeout: Math.max(1, 10000 - (performance.now() - closedAt)) },
-        );
-        // Host-observed resume + room snapshot, including automation overhead;
-        // separate from the following decoded-media progress check.
-        evidence.resumeObservedMs = performance.now() - closedAt;
-        await connected(interrupted);
-        evidence.after = await advancingReconnectMedia(receiver, identities[1], 3000);
-        evidence.identities = [];
-        for (const identity of identities)
-          evidence.identities.push(await identity.evaluate((state) => state.verify()));
-        const restored = await interrupted.evaluate(() =>
-          window.__communitySignalingReconnect.snapshot(),
-        );
-        const delta = Object.fromEntries(
-          Object.entries(restored.counters).map(([key, value]) => [
-            key,
-            value - baseline.counters[key],
-          ]),
-        );
-        for (const key of [
-          'sentJoinRoom',
-          'sentCreateSendTransport',
-          'sentCreateRecvTransport',
-          'sentProduce',
-          'reconnectFailure',
-        ])
-          assert.equal(delta[key], 0, `Signaling recovery must not invoke ${key}`);
-        for (const key of [
-          'sentReconnect',
-          'receivedReconnectResult',
-          'reconnectSuccess',
-          'sentGetRoomSnapshot',
-          'receivedRoomSnapshot',
-        ])
-          assert.equal(delta[key], 1, `Expected one successful signaling recovery: ${key}`);
-        assert.equal(
-          restored.socketsObserved - baseline.socketsObserved,
-          1,
-          'Expected exactly one replacement signaling socket',
-        );
-        evidence.counters = delta;
-        const other = interrupted === publisher ? receiver : publisher;
-        await publicChat(interrupted);
-        await publicChat(other);
-        const message = `${runId}-reconnected-${direction}`;
-        await send(interrupted, message);
-        await visible(other, message);
-        evidence.passed = true;
-        saveReport();
-      })(),
-      25000,
-    );
-  } finally {
-    await deadline(
-      Promise.all(identities.map((identity) => identity.dispose().catch(() => {}))),
-    ).catch(() => {});
+            assert.equal(
+              snapshot.openSocketOrdinals.length,
+              0,
+              'Media sample must finish before signaling reopens',
+            );
+            assert.equal(
+              snapshot.counters.receivedReconnectResult,
+              baseline.counters.receivedReconnectResult,
+              'Media sample must precede any reconnect result',
+            );
+            assert.equal(
+              snapshot.events.filter((event) => event.event === 'open').length,
+              baseline.events.filter((event) => event.event === 'open').length,
+              'No recovery socket may have opened during the outage sample',
+            );
+          };
+          evidence.during = await advancingReconnectMedia(receiver, identities[1], 1000, ensureGap);
+          for (const identity of identities) await identity.evaluate((state) => state.verify());
+          await interrupted.waitForFunction(
+            (previous) => {
+              const snapshot = window.__communitySignalingReconnect.snapshot();
+              return (
+                snapshot.counters.reconnectSuccess > previous.reconnectSuccess &&
+                snapshot.counters.receivedRoomSnapshot > previous.receivedRoomSnapshot &&
+                snapshot.openSocketOrdinals.length === 1
+              );
+            },
+            baseline.counters,
+            { timeout: Math.max(1, 10000 - (performance.now() - closedAt)) },
+          );
+          // Host-observed resume + room snapshot, including automation overhead;
+          // separate from the following decoded-media progress check.
+          evidence.resumeObservedMs = performance.now() - closedAt;
+          await connected(interrupted);
+          evidence.after = await advancingReconnectMedia(receiver, identities[1], 3000);
+          evidence.identities = [];
+          for (const identity of identities)
+            evidence.identities.push(await identity.evaluate((state) => state.verify()));
+          const restored = await interrupted.evaluate(() =>
+            window.__communitySignalingReconnect.snapshot(),
+          );
+          const delta = Object.fromEntries(
+            Object.entries(restored.counters).map(([key, value]) => [
+              key,
+              value - baseline.counters[key],
+            ]),
+          );
+          for (const key of [
+            'sentJoinRoom',
+            'sentCreateSendTransport',
+            'sentCreateRecvTransport',
+            'sentProduce',
+            'reconnectFailure',
+          ])
+            assert.equal(delta[key], 0, `Signaling recovery must not invoke ${key}`);
+          for (const key of [
+            'sentReconnect',
+            'receivedReconnectResult',
+            'reconnectSuccess',
+            'sentGetRoomSnapshot',
+            'receivedRoomSnapshot',
+          ])
+            assert.equal(delta[key], 1, `Expected one successful signaling recovery: ${key}`);
+          assert.equal(
+            restored.socketsObserved - baseline.socketsObserved,
+            1,
+            'Expected exactly one replacement signaling socket',
+          );
+          evidence.counters = delta;
+          const other = interrupted === publisher ? receiver : publisher;
+          await publicChat(interrupted);
+          await publicChat(other);
+          const message = `${runId}-reconnected-${direction}`;
+          await send(interrupted, message);
+          await visible(other, message);
+          evidence.passed = true;
+          saveReport();
+        })(),
+        25000,
+      );
+    } finally {
+      await deadline(
+        Promise.all(identities.map((identity) => identity.dispose().catch(() => {}))),
+      ).catch(() => {});
+    }
   }
-}
-async function offlineViewerControls(publisher, receiver) {
-  const identities = [];
-  try {
-    identities.push(await reconnectMediaIdentity(publisher));
-    // Explicitly hiding a broadcast retires its video consumer. Only this
-    // scenario permits replacing incoming video; audio, capture and peers stay.
-    identities.push(
-      await reconnectMediaIdentity(receiver, { allowIncomingVideoReplacement: true }),
-    );
-    const before = await advancingReconnectMedia(receiver, identities[1], 3000);
-    const controls = receiver.locator('.personal-media-controls').first();
-    if (!(await controls.evaluate((element) => element.open)))
-      await controls.locator('summary').click();
-    const baseline = await receiver.evaluate(() => window.__communitySignalingReconnect.snapshot());
-    await receiver.getByRole('button', { name: 'Hide for me', exact: true }).first().click();
-    // Both server consumers must be paused before the socket closes; local
-    // playback alone cannot prove that the subsequent resume reached the server.
-    await receiver.waitForFunction(
-      (previous) =>
-        window.__communitySignalingReconnect.snapshot().counters.receivedConsumerPaused >=
-        previous + 2,
-      baseline.counters.receivedConsumerPaused,
-    );
-    await receiver.waitForFunction(
-      () => document.querySelectorAll('.video-tile:not(.local) video').length === 0,
-    );
-    const hidden = await receiver.evaluate(() => window.__communitySignalingReconnect.snapshot());
-    const requested = await receiver.evaluate(() =>
-      window.__communitySignalingReconnect.closeCurrent(),
-    );
-    await receiver.waitForFunction(
-      (ordinal) => {
-        const state = window.__communitySignalingReconnect.snapshot();
-        return (
-          state.openSocketOrdinals.length === 0 &&
-          state.events.some((event) => event.event === 'close' && event.socketOrdinal === ordinal)
-        );
-      },
-      requested.socketOrdinal,
-      { timeout: 1500 },
-    );
-    await receiver.getByRole('button', { name: 'Restore broadcast', exact: true }).first().click();
-    const changedOffline = await receiver.evaluate(() =>
-      window.__communitySignalingReconnect.snapshot(),
-    );
-    assert.equal(
-      changedOffline.openSocketOrdinals.length,
-      0,
-      'Restore must occur while signaling is offline',
-    );
-    assert.equal(
-      changedOffline.counters.receivedConsumerResumed,
-      hidden.counters.receivedConsumerResumed,
-    );
-    await receiver.waitForFunction(
-      (previous) => {
-        const state = window.__communitySignalingReconnect.snapshot();
-        return (
-          state.counters.reconnectSuccess > previous.reconnectSuccess &&
-          state.counters.receivedRoomSnapshot > previous.receivedRoomSnapshot &&
-          state.counters.receivedConsumerResumed >= previous.receivedConsumerResumed + 2
-        );
-      },
-      hidden.counters,
-      { timeout: 10000 },
-    );
-    await connected(receiver);
-    await remotePlayback(receiver, 'video');
-    // An accepted resume precedes renewed RTP. Unlike the continuous-media
-    // reconnect check, this scenario deliberately paused both server consumers.
-    await waitForMediaStart(receiver, identities[1]);
-    const after = await advancingReconnectMedia(receiver, identities[1], 3000);
-    for (const identity of identities) await identity.evaluate((state) => state.verify());
-    report.offlineViewerControls = { passed: true, before, after };
-  } finally {
-    for (const identity of identities) await identity.dispose();
+  async function offlineViewerControls(publisher, receiver) {
+    const identities = [];
+    try {
+      identities.push(await reconnectMediaIdentity(publisher));
+      // Explicitly hiding a broadcast retires its video consumer. Only this
+      // scenario permits replacing incoming video; audio, capture and peers stay.
+      identities.push(
+        await reconnectMediaIdentity(receiver, { allowIncomingVideoReplacement: true }),
+      );
+      const before = await advancingReconnectMedia(receiver, identities[1], 3000);
+      const controls = receiver.locator('.personal-media-controls').first();
+      if (!(await controls.evaluate((element) => element.open)))
+        await controls.locator('summary').click();
+      const baseline = await receiver.evaluate(() =>
+        window.__communitySignalingReconnect.snapshot(),
+      );
+      await receiver.getByRole('button', { name: 'Hide for me', exact: true }).first().click();
+      // Both server consumers must be paused before the socket closes; local
+      // playback alone cannot prove that the subsequent resume reached the server.
+      await receiver.waitForFunction(
+        (previous) =>
+          window.__communitySignalingReconnect.snapshot().counters.receivedConsumerPaused >=
+          previous + 2,
+        baseline.counters.receivedConsumerPaused,
+      );
+      await receiver.waitForFunction(
+        () => document.querySelectorAll('.video-tile:not(.local) video').length === 0,
+      );
+      const hidden = await receiver.evaluate(() => window.__communitySignalingReconnect.snapshot());
+      const requested = await receiver.evaluate(() =>
+        window.__communitySignalingReconnect.closeCurrent(),
+      );
+      await receiver.waitForFunction(
+        (ordinal) => {
+          const state = window.__communitySignalingReconnect.snapshot();
+          return (
+            state.openSocketOrdinals.length === 0 &&
+            state.events.some((event) => event.event === 'close' && event.socketOrdinal === ordinal)
+          );
+        },
+        requested.socketOrdinal,
+        { timeout: 1500 },
+      );
+      await receiver
+        .getByRole('button', { name: 'Restore broadcast', exact: true })
+        .first()
+        .click();
+      const changedOffline = await receiver.evaluate(() =>
+        window.__communitySignalingReconnect.snapshot(),
+      );
+      assert.equal(
+        changedOffline.openSocketOrdinals.length,
+        0,
+        'Restore must occur while signaling is offline',
+      );
+      assert.equal(
+        changedOffline.counters.receivedConsumerResumed,
+        hidden.counters.receivedConsumerResumed,
+      );
+      await receiver.waitForFunction(
+        (previous) => {
+          const state = window.__communitySignalingReconnect.snapshot();
+          return (
+            state.counters.reconnectSuccess > previous.reconnectSuccess &&
+            state.counters.receivedRoomSnapshot > previous.receivedRoomSnapshot &&
+            state.counters.receivedConsumerResumed >= previous.receivedConsumerResumed + 2
+          );
+        },
+        hidden.counters,
+        { timeout: 10000 },
+      );
+      await connected(receiver);
+      await remotePlayback(receiver, 'video');
+      // An accepted resume precedes renewed RTP. Unlike the continuous-media
+      // reconnect check, this scenario deliberately paused both server consumers.
+      await waitForMediaStart(receiver, identities[1]);
+      const after = await advancingReconnectMedia(receiver, identities[1], 3000);
+      for (const identity of identities) await identity.evaluate((state) => state.verify());
+      report.offlineViewerControls = { passed: true, before, after };
+    } finally {
+      for (const identity of identities) await identity.dispose();
+    }
   }
-}
-async function register(page, email, name) {
-  await page.locator('#sign-in-btn').click();
-  await page.locator('#login-to-register').click();
-  await page.locator('#register-email').fill(email);
-  await page.locator('#register-name').fill(name);
-  await page.locator('#register-password').fill(password);
-  await page.locator('#register-confirm').fill(password);
-  await page.locator('#register-submit').click();
-  await page.locator('#register-modal').waitFor({ state: 'hidden' });
-  await page.locator('#auth-bar-user').waitFor({ state: 'visible' });
-}
-async function login(page, email, value) {
-  if (!(await page.locator('#login-modal').isVisible())) await page.locator('#sign-in-btn').click();
-  await page.locator('#login-email').fill(email);
-  await page.locator('#login-password').fill(value);
-  await page.locator('#login-submit').click();
-  await page.locator('#login-modal').waitFor({ state: 'hidden' });
-  await page.locator('#auth-bar-user').waitFor({ state: 'visible' });
-}
-const lastJoin = new WeakMap();
-// The server admits at most 10 joins per address into one room per minute, and
-// every client here shares one address: joins pace themselves against that limit,
-// counting the room's creation and the rejoin an interrupted setup makes by itself.
-const JOIN_LIMIT = 10;
-const JOIN_WINDOW_MS = 61_000;
-const joinTimes = [];
-function recordJoin() {
-  joinTimes.push(Date.now());
-}
-async function paceJoins(page) {
-  while (joinTimes.length && Date.now() - joinTimes[0] >= JOIN_WINDOW_MS) joinTimes.shift();
-  if (joinTimes.length < JOIN_LIMIT) return;
-  await page.waitForTimeout(joinTimes[0] + JOIN_WINDOW_MS - Date.now());
-  joinTimes.shift();
-}
-async function join(page, name) {
-  const remaining = 1100 - (Date.now() - (lastJoin.get(page) || 0));
-  if (remaining > 0) await page.waitForTimeout(remaining);
-  await paceJoins(page);
-  await page.locator('#name-input').fill(name);
-  await page.locator('#room-input').fill(runId);
-  await page.locator('#join-btn').click();
-  lastJoin.set(page, Date.now());
-  recordJoin();
-  await connected(page);
-}
-async function leave(page) {
-  await page.locator('#leave-btn').click();
-  await page.locator('#join-screen').waitFor({ state: 'visible' });
-}
-const lastSend = new WeakMap();
-async function submitMessage(page) {
-  // Human-paced messages preserve the server's 2/s chat flood protection.
-  const remaining = 600 - (Date.now() - (lastSend.get(page) || 0));
-  if (remaining > 0) await page.waitForTimeout(remaining);
-  await page.locator('#chat-input').press('Enter');
-  lastSend.set(page, Date.now());
-}
-async function send(page, text) {
-  await page.locator('#chat-input').fill(text);
-  await submitMessage(page);
-}
-function privateConversation(page, name) {
-  return page.getByRole('dialog', { name: `Messages with ${name}`, exact: true });
-}
-async function sendPrivate(conversation, text) {
-  const composer = conversation.getByLabel('Private message', { exact: true });
-  await composer.fill(text);
-  await composer.press('Enter');
-}
-async function dismissUnconfirmed(page, conversation) {
-  await conversation.getByRole('button', { name: 'Dismiss unconfirmed send', exact: true }).click();
-  const confirmation = page.getByRole('dialog', { name: 'Dismiss unconfirmed send?', exact: true });
-  await confirmation.getByRole('button', { name: 'Dismiss', exact: true }).click();
-  await confirmation.waitFor({ state: 'hidden' });
-}
-async function publicChat(page) {
-  await page.locator('.conversation-tab[data-conversation-id="public"]').click();
-}
-async function action(page, name, label) {
-  const buttons = page.getByRole('button', { name: `Actions for ${name}`, exact: true });
-  await buttons.filter({ visible: true }).first().click();
-  await page.locator('#mod-menu').getByRole('button', { name: label, exact: true }).click();
-}
-async function header(page, name) {
-  // Joined-room account and room actions share the More menu.
-  const target = page.locator('#community-actions, #room-actions').getByRole('button', {
-    name: name === 'Messages' ? /^Messages(?:, .* unread)?$/ : name,
-    exact: name !== 'Messages',
-  });
-  if (!(await target.isVisible())) {
-    if (await page.locator('#room-screen').isVisible()) await openRoomMenu(page);
-    else await openAccountMenu(page);
+  async function register(page, email, name) {
+    await page.locator('#sign-in-btn').click();
+    await page.locator('#login-to-register').click();
+    await page.locator('#register-email').fill(email);
+    await page.locator('#register-name').fill(name);
+    await page.locator('#register-password').fill(password);
+    await page.locator('#register-confirm').fill(password);
+    await page.locator('#register-submit').click();
+    await page.locator('#register-modal').waitFor({ state: 'hidden' });
+    await page.locator('#auth-bar-user').waitFor({ state: 'visible' });
   }
-  await target.click();
-  // Account and room management open the settings sheet; the rest are dialogs.
-  if (name === 'Account' || name === 'Manage room') {
-    const region = sheet(page);
-    await region.waitFor({ state: 'visible' });
-    return region;
+  async function login(page, email, value) {
+    if (!(await page.locator('#login-modal').isVisible()))
+      await page.locator('#sign-in-btn').click();
+    await page.locator('#login-email').fill(email);
+    await page.locator('#login-password').fill(value);
+    await page.locator('#login-submit').click();
+    await page.locator('#login-modal').waitFor({ state: 'hidden' });
+    await page.locator('#auth-bar-user').waitFor({ state: 'visible' });
   }
-  return page.getByRole('dialog', { name, exact: true });
-}
-/** Opens the settings sheet on one screen, from a room or from the signed-in home page. */
-async function settingsScreen(page, label) {
-  if (!(await sheet(page).isVisible())) {
-    if (await page.locator('#room-screen').isVisible()) await page.locator('#settings-btn').click();
-    else await (await accountMenuButton(page, 'Account')).click();
+  const lastJoin = new WeakMap();
+  // The server admits at most 10 joins per address into one room per minute, and
+  // every client here shares one address: joins pace themselves against that limit,
+  // counting the room's creation and the rejoin an interrupted setup makes by itself.
+  const JOIN_LIMIT = 10;
+  const JOIN_WINDOW_MS = 61_000;
+  const joinTimes = [];
+  function recordJoin() {
+    joinTimes.push(Date.now());
   }
-  return sheetScreen(page, label);
-}
-/** Whether a room action is offered, read from the menu and leaving it closed. */
-async function roomMenuOffers(page, name) {
-  await openRoomMenu(page);
-  await page
-    .locator('#room-actions')
-    .getByRole('button', { name, exact: true })
-    .waitFor({ state: 'visible' });
-  await page.keyboard.press('Escape');
-}
-/** Dialogs close with Close; the settings sheet closes from its own header. */
-async function close(dialog) {
-  const page = dialog.page();
-  const managed = await dialog.evaluate(
-    (node) => node.id === 'settings-sheet' || node.classList.contains('community-dialog'),
-  );
-  const previous = managed
-    ? await page.evaluate(() => history.state?.simplestchatNavigation)
-    : null;
-  await dialog
-    .getByRole('button', { name: /^Close( settings)?$/ })
-    .first()
-    .click();
-  await dialog.waitFor({ state: 'hidden' });
-  if (typeof previous === 'number')
+  async function paceJoins(page) {
+    while (joinTimes.length && Date.now() - joinTimes[0] >= JOIN_WINDOW_MS) joinTimes.shift();
+    if (joinTimes.length < JOIN_LIMIT) return;
+    await page.waitForTimeout(joinTimes[0] + JOIN_WINDOW_MS - Date.now());
+    joinTimes.shift();
+  }
+  async function join(page, name) {
+    const remaining = 1100 - (Date.now() - (lastJoin.get(page) || 0));
+    if (remaining > 0) await page.waitForTimeout(remaining);
+    await paceJoins(page);
+    await page.locator('#name-input').fill(name);
+    await page.locator('#room-input').fill(runId);
+    await page.locator('#join-btn').click();
+    lastJoin.set(page, Date.now());
+    recordJoin();
+    await connected(page);
+  }
+  async function leave(page) {
+    await page.locator('#leave-btn').click();
+    await page.locator('#join-screen').waitFor({ state: 'visible' });
+  }
+  const lastSend = new WeakMap();
+  async function submitMessage(page) {
+    // Human-paced messages preserve the server's 2/s chat flood protection.
+    const remaining = 600 - (Date.now() - (lastSend.get(page) || 0));
+    if (remaining > 0) await page.waitForTimeout(remaining);
+    await page.locator('#chat-input').press('Enter');
+    lastSend.set(page, Date.now());
+  }
+  async function send(page, text) {
+    await page.locator('#chat-input').fill(text);
+    await submitMessage(page);
+  }
+  function privateConversation(page, name) {
+    return page.getByRole('dialog', { name: `Messages with ${name}`, exact: true });
+  }
+  async function sendPrivate(conversation, text) {
+    const composer = conversation.getByLabel('Private message', { exact: true });
+    await composer.fill(text);
+    await composer.press('Enter');
+  }
+  async function dismissUnconfirmed(page, conversation) {
+    await conversation
+      .getByRole('button', { name: 'Dismiss unconfirmed send', exact: true })
+      .click();
+    const confirmation = page.getByRole('dialog', {
+      name: 'Dismiss unconfirmed send?',
+      exact: true,
+    });
+    await confirmation.getByRole('button', { name: 'Dismiss', exact: true }).click();
+    await confirmation.waitFor({ state: 'hidden' });
+  }
+  async function publicChat(page) {
+    await page.locator('.conversation-tab[data-conversation-id="public"]').click();
+  }
+  async function action(page, name, label) {
+    const buttons = page.getByRole('button', { name: `Actions for ${name}`, exact: true });
+    await buttons.filter({ visible: true }).first().click();
+    await page.locator('#mod-menu').getByRole('button', { name: label, exact: true }).click();
+  }
+  async function header(page, name) {
+    // Joined-room account and room actions share the More menu.
+    const target = page.locator('#community-actions, #room-actions').getByRole('button', {
+      name: name === 'Messages' ? /^Messages(?:, .* unread)?$/ : name,
+      exact: name !== 'Messages',
+    });
+    if (!(await target.isVisible())) {
+      if (await page.locator('#room-screen').isVisible()) await openRoomMenu(page);
+      else await openAccountMenu(page);
+    }
+    await target.click();
+    // Account and room management open the settings sheet; the rest are dialogs.
+    if (name === 'Account' || name === 'Manage room') {
+      const region = sheet(page);
+      await region.waitFor({ state: 'visible' });
+      return region;
+    }
+    return page.getByRole('dialog', { name, exact: true });
+  }
+  /** Opens the settings sheet on one screen, from a room or from the signed-in home page. */
+  async function settingsScreen(page, label) {
+    if (!(await sheet(page).isVisible())) {
+      if (await page.locator('#room-screen').isVisible())
+        await page.locator('#settings-btn').click();
+      else await (await accountMenuButton(page, 'Account')).click();
+    }
+    return sheetScreen(page, label);
+  }
+  /** Whether a room action is offered, read from the menu and leaving it closed. */
+  async function roomMenuOffers(page, name) {
+    await openRoomMenu(page);
+    await page
+      .locator('#room-actions')
+      .getByRole('button', { name, exact: true })
+      .waitFor({ state: 'visible' });
+    await page.keyboard.press('Escape');
+  }
+  /** Dialogs close with Close; the settings sheet closes from its own header. */
+  async function close(dialog) {
+    const page = dialog.page();
+    const managed = await dialog.evaluate(
+      (node) => node.id === 'settings-sheet' || node.classList.contains('community-dialog'),
+    );
+    const previous = managed
+      ? await page.evaluate(() => history.state?.simplestchatNavigation)
+      : null;
+    await dialog
+      .getByRole('button', { name: /^Close( settings)?$/ })
+      .first()
+      .click();
+    await dialog.waitFor({ state: 'hidden' });
+    if (typeof previous === 'number')
+      await page.waitForFunction(
+        (entry) => history.state?.simplestchatNavigation !== entry,
+        previous,
+      );
+  }
+  async function preferences(page, allow) {
+    await page.getByRole('button', { name: 'Chat options', exact: true }).click();
+    const privacy = await sheetScreen(page, 'Privacy');
+    const toggle = privacy.getByLabel('Private messages from others', { exact: true });
+    if ((await toggle.isChecked()) !== allow) {
+      const stored = page.waitForResponse(
+        (response) =>
+          new URL(response.url()).pathname === '/api/auth/preferences' &&
+          response.request().method() === 'PATCH',
+      );
+      await toggle.setChecked(allow);
+      await stored;
+    }
+    await closeSheet(page);
+  }
+  async function roomHistory(page) {
+    await page.getByRole('button', { name: 'Chat options', exact: true }).click();
+    const look = await sheetScreen(page, 'Chat look');
+    await look.getByRole('button', { name: 'Room history', exact: true }).click();
+    const history = page.getByRole('dialog', { name: 'Room history', exact: true });
+    await history.waitFor({ state: 'visible' });
+    return history;
+  }
+  async function chatEnabled(page, value) {
     await page.waitForFunction(
-      (entry) => history.state?.simplestchatNavigation !== entry,
-      previous,
-    );
-}
-async function preferences(page, allow) {
-  await page.getByRole('button', { name: 'Chat options', exact: true }).click();
-  const privacy = await sheetScreen(page, 'Privacy');
-  const toggle = privacy.getByLabel('Private messages from others', { exact: true });
-  if ((await toggle.isChecked()) !== allow) {
-    const stored = page.waitForResponse(
-      (response) =>
-        new URL(response.url()).pathname === '/api/auth/preferences' &&
-        response.request().method() === 'PATCH',
-    );
-    await toggle.setChecked(allow);
-    await stored;
-  }
-  await closeSheet(page);
-}
-async function roomHistory(page) {
-  await page.getByRole('button', { name: 'Chat options', exact: true }).click();
-  const look = await sheetScreen(page, 'Chat look');
-  await look.getByRole('button', { name: 'Room history', exact: true }).click();
-  const history = page.getByRole('dialog', { name: 'Room history', exact: true });
-  await history.waitFor({ state: 'visible' });
-  return history;
-}
-async function chatEnabled(page, value) {
-  await page.waitForFunction(
-    (expected) => document.querySelector('#chat-input').disabled === !expected,
-    value,
-  );
-}
-const ACCESS_CONTROLS = [
-  '#rs-guests',
-  '#rs-require-reg',
-  '#rs-invite-only',
-  '#rs-secret',
-  '#rs-lobby',
-];
-async function roomSetting(page, id, checked) {
-  await page.locator('#room-settings-btn').click();
-  const region = await sheetScreen(
-    page,
-    ACCESS_CONTROLS.includes(id) ? 'Who can enter' : 'Chat & broadcasting',
-  );
-  const control = region.locator(id);
-  const changed = (await control.isChecked()) !== checked;
-  await control.setChecked(checked);
-  if (changed) {
-    // A switch updates before its correlated server acknowledgement. Closing
-    // early would leave the next change blocked by the pending save.
-    await page.waitForFunction(
-      () =>
-        document.querySelector('#settings-sheet .sheet-screen')?.getAttribute('aria-busy') ===
-        'false',
-    );
-    assert.equal(
-      await region.locator('#room-settings-result').textContent(),
-      'Change saved',
-      `${id} must be acknowledged before the scenario continues`,
+      (expected) => document.querySelector('#chat-input').disabled === !expected,
+      value,
     );
   }
-  assert.equal(await control.isChecked(), checked, `${id} must retain the requested value`);
-  await closeSheet(page);
-}
-async function dialogFitsViewport(page, dialog, footer) {
-  const fit = await dialog.evaluate((node) => {
-    const box = node.getBoundingClientRect();
-    return (
-      document.documentElement.scrollWidth <= innerWidth + 1 &&
-      node.scrollWidth <= node.clientWidth + 1 &&
-      box.left >= 0 &&
-      box.top >= 0 &&
-      box.right <= innerWidth + 1 &&
-      box.bottom <= innerHeight + 1
+  const ACCESS_CONTROLS = [
+    '#rs-guests',
+    '#rs-require-reg',
+    '#rs-invite-only',
+    '#rs-secret',
+    '#rs-lobby',
+  ];
+  async function roomSetting(page, id, checked) {
+    await page.locator('#room-settings-btn').click();
+    const region = await sheetScreen(
+      page,
+      ACCESS_CONTROLS.includes(id) ? 'Who can enter' : 'Chat & broadcasting',
     );
-  });
-  assert.equal(fit, true, 'page and dialog fit the viewport without horizontal overflow');
-  await footer.scrollIntoViewIfNeeded();
-  await footer.click({ trial: true });
-  assert.equal(
-    await footer.evaluate((node) => {
+    const control = region.locator(id);
+    const changed = (await control.isChecked()) !== checked;
+    await control.setChecked(checked);
+    if (changed) {
+      // A switch updates before its correlated server acknowledgement. Closing
+      // early would leave the next change blocked by the pending save.
+      await page.waitForFunction(
+        () =>
+          document.querySelector('#settings-sheet .sheet-screen')?.getAttribute('aria-busy') ===
+          'false',
+      );
+      assert.equal(
+        await region.locator('#room-settings-result').textContent(),
+        'Change saved',
+        `${id} must be acknowledged before the scenario continues`,
+      );
+    }
+    assert.equal(await control.isChecked(), checked, `${id} must retain the requested value`);
+    await closeSheet(page);
+  }
+  async function dialogFitsViewport(page, dialog, footer) {
+    const fit = await dialog.evaluate((node) => {
       const box = node.getBoundingClientRect();
       return (
+        document.documentElement.scrollWidth <= innerWidth + 1 &&
+        node.scrollWidth <= node.clientWidth + 1 &&
         box.left >= 0 &&
         box.top >= 0 &&
         box.right <= innerWidth + 1 &&
         box.bottom <= innerHeight + 1
       );
-    }),
-    true,
-    'dialog footer is reachable',
-  );
-}
-async function upload(page, dialog, room = false) {
-  const data = await page.evaluate(() => {
-    const canvas = document.createElement('canvas');
-    canvas.width = 64;
-    canvas.height = 64;
-    const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#6644cc';
-    ctx.fillRect(0, 0, 64, 64);
-    return canvas.toDataURL('image/png').split(',')[1];
-  });
-  await dialog
-    .getByLabel(room ? 'Room image (PNG, JPEG or WebP)' : 'Avatar (PNG, JPEG or WebP)', {
-      exact: true,
-    })
-    .setInputFiles({
-      name: 'test-raster.png',
-      mimeType: 'image/png',
-      buffer: Buffer.from(data, 'base64'),
     });
-  await dialog
-    .getByRole('img', { name: room ? 'Room image preview' : 'Avatar preview', exact: true })
-    .waitFor({ state: 'visible' });
-}
-async function setRole(owner, name, role) {
-  const dialog = await header(owner, 'Manage room');
-  const row = dialog
-    .locator('.management-entry')
-    .filter({ has: owner.getByRole('combobox', { name: `Role for ${name}`, exact: true }) });
-  await row.getByRole('combobox').selectOption(role);
-  await row.getByRole('button', { name: 'Update role', exact: true }).click();
-  if (role === 'user') await row.waitFor({ state: 'detached' });
-  else await dialog.getByText(new RegExp(`${name} · ${role}`)).waitFor();
-  await close(dialog);
-}
+    assert.equal(fit, true, 'page and dialog fit the viewport without horizontal overflow');
+    await footer.scrollIntoViewIfNeeded();
+    await footer.click({ trial: true });
+    assert.equal(
+      await footer.evaluate((node) => {
+        const box = node.getBoundingClientRect();
+        return (
+          box.left >= 0 &&
+          box.top >= 0 &&
+          box.right <= innerWidth + 1 &&
+          box.bottom <= innerHeight + 1
+        );
+      }),
+      true,
+      'dialog footer is reachable',
+    );
+  }
+  async function upload(page, dialog, room = false) {
+    const data = await page.evaluate(() => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 64;
+      canvas.height = 64;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#6644cc';
+      ctx.fillRect(0, 0, 64, 64);
+      return canvas.toDataURL('image/png').split(',')[1];
+    });
+    await dialog
+      .getByLabel(room ? 'Room image (PNG, JPEG or WebP)' : 'Avatar (PNG, JPEG or WebP)', {
+        exact: true,
+      })
+      .setInputFiles({
+        name: 'test-raster.png',
+        mimeType: 'image/png',
+        buffer: Buffer.from(data, 'base64'),
+      });
+    await dialog
+      .getByRole('img', { name: room ? 'Room image preview' : 'Avatar preview', exact: true })
+      .waitFor({ state: 'visible' });
+  }
+  async function setRole(owner, name, role) {
+    const dialog = await header(owner, 'Manage room');
+    const row = dialog
+      .locator('.management-entry')
+      .filter({ has: owner.getByRole('combobox', { name: `Role for ${name}`, exact: true }) });
+    await row.getByRole('combobox').selectOption(role);
+    await row.getByRole('button', { name: 'Update role', exact: true }).click();
+    if (role === 'user') await row.waitFor({ state: 'detached' });
+    else await dialog.getByText(new RegExp(`${name} · ${role}`)).waitFor();
+    await close(dialog);
+  }
 
-(async () => {
   saveReport();
   let cleanupFailure;
   try {
-    browser = await playwright[options.name].launch(options.launchOptions);
+    browser = await (runner.launchBrowser
+      ? runner.launchBrowser(options.name, options.launchOptions)
+      : playwright[options.name].launch(options.launchOptions));
     report.browserVersion = browser.version();
     saveReport();
     console.log(
@@ -3265,7 +2987,7 @@ async function setRole(owner, name, role) {
         });
         await register(invitee, inviteeEmail, 'E2E Invitee');
         await paceJoins(invitee);
-        await navigateCommunityPage(invitee, `${base}/#invite=${code}`);
+        await navigateCommunityPage(invitee, `${base}/#invite=${code}`, clients);
         const review = invitee.getByRole('dialog', { name: 'Review room invitation', exact: true });
         await review
           .getByText(`Room: E2E Edited Room (${runId}). Offered role: member.`, { exact: true })
@@ -3283,7 +3005,7 @@ async function setRole(owner, name, role) {
         const manage = await header(owner, 'Manage room');
         await visible(owner, 'E2E Invitee · member · online');
         await close(manage);
-        await navigateCommunityPage(invitee, `${base}/#invite=${code}`);
+        await navigateCommunityPage(invitee, `${base}/#invite=${code}`, clients);
         try {
           const review = invitee.getByRole('dialog', {
             name: 'Review room invitation',
@@ -3494,61 +3216,28 @@ async function setRole(owner, name, role) {
     console.error(`Failure screenshots: ${artifacts}`);
     throw error;
   } finally {
-    for (const item of clients) {
-      await deadline(
-        item.page
-          .locator('dialog[open]')
-          .evaluateAll((dialogs) => dialogs.forEach((dialog) => dialog.close())),
-      ).catch(() => {});
-      if (
-        await item.page
-          .locator('#leave-btn')
-          .isVisible()
-          .catch(() => false)
-      )
-        await item.page
-          .locator('#leave-btn')
-          .click()
-          .catch(() => {});
-    }
-    const networkClosures = await Promise.allSettled(
-      clients.map(async (item) => {
-        if (item.testNetworkRetired) return;
-        try {
-          await item.testNetwork?.ready();
-        } finally {
-          await item.testNetwork?.dispose();
-        }
-      }),
-    );
-    const failedNetworkClose = networkClosures.find((result) => result.status === 'rejected');
-    if (failedNetworkClose) {
-      report.complete = false;
-      report.passed = false;
-      report.cleanupError = 'Owned WebKit test-network lifecycle failed.';
-      cleanupFailure = failedNetworkClose.reason;
-    }
-    const closures = await Promise.allSettled(
-      [...(browser ? [browser] : []), ...additionalBrowsers].map(async (owned) => {
-        await owned.close();
-      }),
-    );
-    const failedClose = closures.find((result) => result.status === 'rejected');
-    if (failedClose) {
-      const error =
-        failedClose.reason instanceof Error
-          ? failedClose.reason
-          : new Error('An owned browser could not be closed');
-      report.complete = false;
-      report.passed = false;
-      report.cleanupError = error.message;
-      cleanupFailure = error;
-    }
-    report.finishedAt = new Date().toISOString();
-    saveReport();
+    cleanupFailure = await closeCommunityClients({
+      clients,
+      browser,
+      additionalBrowsers,
+      report,
+      deadline,
+      saveReport,
+      closeBrowser: runner.closeBrowser,
+    });
   }
+
   if (cleanupFailure) throw cleanupFailure;
-})().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+
+  return report;
+}
+
+module.exports = { run };
+if (require.main === module) {
+  try {
+    require('./runner-cli.cjs').run('community');
+  } catch (error) {
+    console.error(error.message);
+    process.exitCode = 1;
+  }
+}

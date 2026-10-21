@@ -208,7 +208,7 @@ class Guest {
   }
 }
 
-async function run(env = process.env) {
+async function run(env = process.env, runner = {}) {
   const config = configuration(env);
   process.kill(config.serverPid, 0); // Read-only liveness check of the helper-supplied PID.
   const artifacts =
@@ -288,7 +288,9 @@ async function run(env = process.env) {
   const started = performance.now();
   const closeBrowser = () =>
     (closePromise ??= browserServer
-      ? closeOwnedBrowser(browserServer, report, save)
+      ? runner.closeBrowser
+        ? runner.closeBrowser(browser, report, save)
+        : closeOwnedBrowser(browserServer, report, save)
       : Promise.resolve());
   const healthy = () => {
     check(!abort.signal.aborted, 'workload_deadline');
@@ -616,7 +618,7 @@ async function run(env = process.env) {
         save();
       } catch {}
       void browserServer?.kill().catch(() => {});
-      process.exit(1);
+      if (!runner.launchBrowser) process.exit(1);
     }, 30000);
   }, config.deadlineMs);
   try {
@@ -626,11 +628,19 @@ async function run(env = process.env) {
       'test_server_not_empty',
     );
     report.initialServer = baseline;
-    browserServer = await chromium.launchServer({
-      headless: true,
-      args: ['--disable-background-timer-throttling', '--disable-renderer-backgrounding'],
-    });
-    browser = await chromium.connect(browserServer.wsEndpoint());
+    if (runner.launchBrowser) {
+      browser = await runner.launchBrowser('chromium', {
+        headless: true,
+        args: ['--disable-background-timer-throttling', '--disable-renderer-backgrounding'],
+      });
+      browserServer = runner.browserServer(browser);
+    } else {
+      browserServer = await chromium.launchServer({
+        headless: true,
+        args: ['--disable-background-timer-throttling', '--disable-renderer-backgrounding'],
+      });
+      browser = await chromium.connect(browserServer.wsEndpoint());
+    }
     report.provenance.browser = browser.version();
     const owner = await makeClient('owner', { width: 1440, height: 1000 });
     const member = await makeClient('member', { width: 375, height: 812 });
@@ -975,7 +985,7 @@ async function run(env = process.env) {
         save();
       } catch {}
       void browserServer?.kill().catch(() => {});
-      process.exit(1);
+      if (!runner.launchBrowser) process.exit(1);
     }, 65000);
     abort.abort();
     for (const client of clients) client.gate.dispose();
@@ -1057,22 +1067,12 @@ async function run(env = process.env) {
 }
 
 if (require.main === module) {
-  run()
-    .then((report) => {
-      console.log(
-        JSON.stringify({
-          passed: report.passed,
-          profile: report.workload.profile,
-          acceptedMessages: report.traffic?.acceptedMessages ?? 0,
-          failure: report.failure ?? null,
-        }),
-      );
-      if (!report.passed) process.exitCode = 1;
-    })
-    .catch(() => {
-      console.error('UI stress configuration or final evidence could not be validated.');
-      process.exitCode = 1;
-    });
+  try {
+    require('./runner-cli.cjs').run('ui-stress');
+  } catch (error) {
+    console.error(error.message);
+    process.exitCode = 1;
+  }
 }
 
 module.exports = { run, Guest, cleanupWithin };

@@ -1,37 +1,33 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { runInNewContext } from 'node:vm';
+import accountTabs from '../e2e/auth-cross-tab.cjs';
 
-const source = await readFile(new URL('../e2e/auth-cross-tab.cjs', import.meta.url), 'utf8');
-const start = source.indexOf('function accountTabsFailure(');
-const end = source.indexOf('\nasync function startupRecovery(', start);
-assert.ok(start >= 0 && end > start);
-const diagnostic = runInNewContext(`${source.slice(start, end)}; accountTabsFailure`);
-const plain = (value) => JSON.parse(JSON.stringify(value));
+const { accountTabsFailure: diagnostic, installAccountUnloadReceipt } = accountTabs;
 
-test('the departing account document keeps its final counters across sign-out reload', () => {
-  const helperStart = source.indexOf('function installAccountUnloadReceipt(');
-  const helperEnd = source.indexOf('\nfunction accountSession(', helperStart);
-  assert.ok(helperStart >= 0 && helperEnd > helperStart);
+test('the departing account document keeps its final counters across sign-out reload', (t) => {
   let pagehide;
   const values = new Map();
   const evidence = { captures: 0, joins: 0, hints: [], privateValue: 'owned-secret' };
-  const install = runInNewContext(
-    `${source.slice(helperStart, helperEnd)}; installAccountUnloadReceipt`,
-    {
-      window: {
-        __crossTabEvidence: evidence,
-        addEventListener(name, callback, options) {
-          assert.equal(name, 'pagehide');
-          assert.equal(options.once, true);
-          pagehide = callback;
-        },
+  const globals = {
+    window: {
+      __crossTabEvidence: evidence,
+      addEventListener(name, callback, options) {
+        assert.equal(name, 'pagehide');
+        assert.equal(options.once, true);
+        pagehide = callback;
       },
-      sessionStorage: { setItem: (key, value) => values.set(key, value) },
     },
-  );
-  install('fixture-key');
+    sessionStorage: { setItem: (key, value) => values.set(key, value) },
+  };
+  for (const [name, value] of Object.entries(globals)) {
+    const previous = Object.getOwnPropertyDescriptor(globalThis, name);
+    Object.defineProperty(globalThis, name, { configurable: true, value });
+    t.after(() => {
+      if (previous) Object.defineProperty(globalThis, name, previous);
+      else delete globalThis[name];
+    });
+  }
+  installAccountUnloadReceipt('fixture-key');
   assert.equal(values.size, 0, 'the receipt must include changes made during sign out');
   evidence.hints.push({ version: 1, revision: 'a'.repeat(32) });
   evidence.captures = 1;
@@ -55,7 +51,7 @@ test('account tab failures retain the exact fixture frame and fixed phase withou
   error.stack =
     'owned-secret-path?token=owned-secret-token\n    at scenario (/private/owned-secret/auth-cross-tab.cjs:487:17)';
   const value = diagnostic(error, 'broadcast', 'rapid-room-hashes', 'firefox');
-  assert.deepEqual(plain(value), {
+  assert.deepEqual(value, {
     kind: 'account-tabs-failure',
     browser: 'firefox',
     check: 'broadcast',
@@ -73,7 +69,7 @@ test('unknown check metadata and non-context errors receive fixed labels', () =>
     'owned-secret-phase',
     'owned-secret-browser',
   );
-  assert.deepEqual(plain(value), {
+  assert.deepEqual(value, {
     kind: 'account-tabs-failure',
     browser: 'unknown',
     check: 'unknown',

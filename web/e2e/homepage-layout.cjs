@@ -301,15 +301,17 @@ async function reachable(locator) {
   );
 }
 
-async function run(env = process.env) {
+async function run(env = process.env, runner = {}) {
   const browserName = env.E2E_BROWSER || 'chromium';
   if (!['chromium', 'firefox', 'webkit'].includes(browserName))
     throw new Error('Unsupported E2E_BROWSER; expected chromium, firefox, or webkit.');
   const assets = productionAssets();
-  const artifacts = env.E2E_ARTIFACTS
-    ? path.resolve(env.E2E_ARTIFACTS)
-    : fs.mkdtempSync(path.join(os.tmpdir(), 'simplestchat-homepage-layout-'));
-  if (env.E2E_ARTIFACTS) fs.mkdirSync(artifacts, { mode: 0o700 });
+  const artifacts = runner.artifacts
+    ? path.resolve(runner.artifacts)
+    : env.E2E_ARTIFACTS
+      ? path.resolve(env.E2E_ARTIFACTS)
+      : fs.mkdtempSync(path.join(os.tmpdir(), 'simplestchat-homepage-layout-'));
+  if (!runner.artifacts && env.E2E_ARTIFACTS) fs.mkdirSync(artifacts, { mode: 0o700 });
   fs.chmodSync(artifacts, 0o700);
   const report = {
     startedAt: new Date().toISOString(),
@@ -334,6 +336,7 @@ async function run(env = process.env) {
       },
     );
   let browserServer;
+  let browser;
   let page;
   let deadline;
   let failed = false;
@@ -342,278 +345,301 @@ async function run(env = process.env) {
   try {
     const playwright = require(env.PLAYWRIGHT_MODULE || 'playwright');
     const engine = playwright[browserName];
-    browserServer = await engine.launchServer({ headless: true, timeout: 15000 });
-    const browser = await engine.connect(browserServer.wsEndpoint(), {
-      timeout: 10000,
-    });
+    if (runner.launchBrowser)
+      browser = await runner.launchBrowser(browserName, { headless: true, timeout: 15000 });
+    else {
+      browserServer = await engine.launchServer({ headless: true, timeout: 15000 });
+      browser = await engine.connect(browserServer.wsEndpoint(), { timeout: 10000 });
+    }
     report.browserVersion = browser.version();
     const scenarios = async () => {
       for (const viewport of viewports) {
         for (const signedIn of [false, true]) {
           const name = `${signedIn ? 'account' : 'guest'}-${viewport.width}x${viewport.height}`;
-          report.activeStep = name;
-          const context = await browser.newContext({
-            viewport,
-            permissions: [],
-            serviceWorkers: 'block',
-          });
-          await context.addInitScript(silentUiGuard);
-          let signalingConnections = 0;
-          let ticketRequests = 0;
-          await context.routeWebSocket(/.*/, (socket) => {
-            if (socket.url() !== `${origin.replace('http:', 'ws:')}/ws`) {
-              report.unexpectedRequests++;
-              socket.close();
-              return;
-            }
-            signalingConnections++;
-            report.signalingConnections++;
-            // Deliberately never connectToServer(): this is an in-process mock.
-            socket.onMessage(() => {
-              report.signalingMessages++;
+          const scenario = async () => {
+            report.activeStep = name;
+            const context = await browser.newContext({
+              viewport,
+              permissions: [],
+              serviceWorkers: 'block',
             });
-          });
-          let searches = 0;
-          await context.route('**/*', async (route) => {
-            const request = route.request();
-            const url = new URL(request.url());
-            const json = (status, body) =>
-              route.fulfill({
-                status,
-                contentType: 'application/json',
-                body: JSON.stringify(body),
+            await context.addInitScript(silentUiGuard);
+            let signalingConnections = 0;
+            let ticketRequests = 0;
+            await context.routeWebSocket(/.*/, (socket) => {
+              if (socket.url() !== `${origin.replace('http:', 'ws:')}/ws`) {
+                report.unexpectedRequests++;
+                socket.close();
+                return;
+              }
+              signalingConnections++;
+              report.signalingConnections++;
+              // Deliberately never connectToServer(): this is an in-process mock.
+              socket.onMessage(() => {
+                report.signalingMessages++;
               });
-            if (url.origin === origin) {
-              const asset = assets.get(url.pathname);
-              if (asset && request.method() === 'GET' && !url.search)
-                return route.fulfill({
-                  status: 200,
-                  contentType: asset.contentType,
-                  headers: {
-                    'Permissions-Policy':
-                      'camera=(), microphone=(), display-capture=(), autoplay=()',
-                  },
-                  body: asset.body,
+            });
+            let searches = 0;
+            await context.route('**/*', async (route) => {
+              const request = route.request();
+              const url = new URL(request.url());
+              const json = (status, body) =>
+                route.fulfill({
+                  status,
+                  contentType: 'application/json',
+                  body: JSON.stringify(body),
                 });
-              if (url.pathname === '/favicon.ico' && request.method() === 'GET')
-                return route.fulfill({ status: 204 });
-              if (/^\/api\/rooms\/[^/]+\/image$/.test(url.pathname) && request.method() === 'GET') {
-                assert.equal(
-                  url.search,
-                  '?v=0123456789abcdef',
-                  'images are fetched by their digest',
-                );
-                return route.fulfill({ status: 200, contentType: 'image/png', body: thumbnail });
-              }
-              if (url.pathname === '/api/capabilities') return json(200, capabilities);
-              if (url.pathname === '/api/auth/updates') {
-                assert.equal(signedIn, true, 'Guests must not open account streams');
-                assert.equal(request.method(), 'GET');
-                assert.equal(request.headers().authorization, 'Bearer owned-layout-fixture');
-                // Layout uses HTTP snapshots; real SSE delivery has its own
-                // hosted integration scenario. Exercise bounded fallback here.
-                return route.fulfill({ status: 429, headers: { 'Retry-After': '60' } });
-              }
-              if (url.pathname === '/api/auth/inbox/unread' && request.method() === 'GET') {
-                assert.equal(signedIn, true, 'Guests must not request account unread counts');
-                assert.equal(request.headers().authorization, 'Bearer owned-layout-fixture');
-                return json(200, { unreadCount: 7 });
-              }
-              if (url.pathname === '/api/auth/preferences' && request.method() === 'GET') {
-                assert.equal(signedIn, true, 'Guests must not request account privacy');
-                assert.equal(request.headers().authorization, 'Bearer owned-layout-fixture');
-                return json(200, {
-                  allowPrivateMessages: true,
-                  sounds: false,
-                  largeText: false,
-                  timestamps: 'time',
-                  ignored: [],
-                });
-              }
-              if (url.pathname === '/api/auth/saved-rooms' && request.method() === 'GET') {
-                assert.equal(signedIn, true, 'Guests must not request account room shortcuts');
-                assert.equal(request.headers().authorization, 'Bearer owned-layout-fixture');
-                // One short name whose star must sit beside it, one long name that wraps.
-                return json(200, {
-                  rooms: [
-                    {
-                      room: { ...rooms[0], display_name: 'Nature of Mind', topic: 'the path' },
-                      favorite: true,
-                      lastVisited: null,
+              if (url.origin === origin) {
+                const asset = assets.get(url.pathname);
+                if (asset && request.method() === 'GET' && !url.search)
+                  return route.fulfill({
+                    status: 200,
+                    contentType: asset.contentType,
+                    headers: {
+                      'Permissions-Policy':
+                        'camera=(), microphone=(), display-capture=(), autoplay=()',
                     },
-                    { room: rooms[1], favorite: false, lastVisited: '2026-10-10T00:00:00Z' },
-                  ],
-                });
+                    body: asset.body,
+                  });
+                if (url.pathname === '/favicon.ico' && request.method() === 'GET')
+                  return route.fulfill({ status: 204 });
+                if (
+                  /^\/api\/rooms\/[^/]+\/image$/.test(url.pathname) &&
+                  request.method() === 'GET'
+                ) {
+                  assert.equal(
+                    url.search,
+                    '?v=0123456789abcdef',
+                    'images are fetched by their digest',
+                  );
+                  return route.fulfill({ status: 200, contentType: 'image/png', body: thumbnail });
+                }
+                if (url.pathname === '/api/capabilities') return json(200, capabilities);
+                if (url.pathname === '/api/auth/updates') {
+                  assert.equal(signedIn, true, 'Guests must not open account streams');
+                  assert.equal(request.method(), 'GET');
+                  assert.equal(request.headers().authorization, 'Bearer owned-layout-fixture');
+                  // Layout uses HTTP snapshots; real SSE delivery has its own
+                  // hosted integration scenario. Exercise bounded fallback here.
+                  return route.fulfill({ status: 429, headers: { 'Retry-After': '60' } });
+                }
+                if (url.pathname === '/api/auth/inbox/unread' && request.method() === 'GET') {
+                  assert.equal(signedIn, true, 'Guests must not request account unread counts');
+                  assert.equal(request.headers().authorization, 'Bearer owned-layout-fixture');
+                  return json(200, { unreadCount: 7 });
+                }
+                if (url.pathname === '/api/auth/preferences' && request.method() === 'GET') {
+                  assert.equal(signedIn, true, 'Guests must not request account privacy');
+                  assert.equal(request.headers().authorization, 'Bearer owned-layout-fixture');
+                  return json(200, {
+                    allowPrivateMessages: true,
+                    sounds: false,
+                    largeText: false,
+                    timestamps: 'time',
+                    ignored: [],
+                  });
+                }
+                if (url.pathname === '/api/auth/saved-rooms' && request.method() === 'GET') {
+                  assert.equal(signedIn, true, 'Guests must not request account room shortcuts');
+                  assert.equal(request.headers().authorization, 'Bearer owned-layout-fixture');
+                  // One short name whose star must sit beside it, one long name that wraps.
+                  return json(200, {
+                    rooms: [
+                      {
+                        room: { ...rooms[0], display_name: 'Nature of Mind', topic: 'the path' },
+                        favorite: true,
+                        lastVisited: null,
+                      },
+                      { room: rooms[1], favorite: false, lastVisited: '2026-10-10T00:00:00Z' },
+                    ],
+                  });
+                }
+                if (
+                  url.pathname === '/api/auth/notification-preferences' &&
+                  request.method() === 'GET'
+                ) {
+                  assert.equal(
+                    signedIn,
+                    true,
+                    'Guests must not request account notification rules',
+                  );
+                  assert.equal(request.headers().authorization, 'Bearer owned-layout-fixture');
+                  return json(200, {
+                    privateMessages: true,
+                    mentions: true,
+                    quietHours: null,
+                    conversations: [],
+                  });
+                }
+                if (url.pathname.startsWith('/api/auth/profiles/') && request.method() === 'GET') {
+                  assert.equal(signedIn, true, 'Guests must not request account profiles');
+                  return json(200, {
+                    id: 'layout-owner',
+                    display_name: 'Account'.repeat(12),
+                    avatar_url: null,
+                    bio: '',
+                    profile_style: { color: null, style: 'accent' },
+                  });
+                }
+                if (url.pathname === '/api/auth/ws-ticket') {
+                  assert.equal(signedIn, true, 'Guests must not mint authenticated tickets');
+                  assert.equal(request.method(), 'POST');
+                  assert.deepEqual(request.postDataJSON(), {});
+                  assert.equal(request.headers().authorization, 'Bearer owned-layout-fixture');
+                  ticketRequests++;
+                  report.ticketRequests++;
+                  return json(200, { ticket: 'A'.repeat(43), expires_in: 30 });
+                }
+                if (url.pathname === '/api/auth/refresh' && request.method() === 'POST')
+                  return json(
+                    signedIn ? 200 : 401,
+                    signedIn
+                      ? {
+                          token: 'owned-layout-fixture',
+                          user: {
+                            id: 'layout-owner',
+                            email: 'layout@example.test',
+                            display_name: 'Account'.repeat(12),
+                          },
+                        }
+                      : { error: 'No refresh cookie' },
+                  );
+                if (url.pathname === '/api/rooms' && request.method() === 'GET') {
+                  searches++;
+                  const query = url.searchParams.get('q');
+                  if (query === 'error') return json(503, { error: 'Owned fixture unavailable' });
+                  if (query === 'empty') return json(200, []);
+                  if (query === 'featured') return json(200, [rooms[0]]);
+                  return json(
+                    200,
+                    url.searchParams.get('page') === '2' ? rooms.slice(20) : rooms.slice(0, 20),
+                  );
+                }
               }
-              if (
-                url.pathname === '/api/auth/notification-preferences' &&
-                request.method() === 'GET'
-              ) {
-                assert.equal(signedIn, true, 'Guests must not request account notification rules');
-                assert.equal(request.headers().authorization, 'Bearer owned-layout-fixture');
-                return json(200, {
-                  privateMessages: true,
-                  mentions: true,
-                  quietHours: null,
-                  conversations: [],
-                });
-              }
-              if (url.pathname.startsWith('/api/auth/profiles/') && request.method() === 'GET') {
-                assert.equal(signedIn, true, 'Guests must not request account profiles');
-                return json(200, {
-                  id: 'layout-owner',
-                  display_name: 'Account'.repeat(12),
-                  avatar_url: null,
-                  bio: '',
-                  profile_style: { color: null, style: 'accent' },
-                });
-              }
-              if (url.pathname === '/api/auth/ws-ticket') {
-                assert.equal(signedIn, true, 'Guests must not mint authenticated tickets');
-                assert.equal(request.method(), 'POST');
-                assert.deepEqual(request.postDataJSON(), {});
-                assert.equal(request.headers().authorization, 'Bearer owned-layout-fixture');
-                ticketRequests++;
-                report.ticketRequests++;
-                return json(200, { ticket: 'A'.repeat(43), expires_in: 30 });
-              }
-              if (url.pathname === '/api/auth/refresh' && request.method() === 'POST')
-                return json(
-                  signedIn ? 200 : 401,
-                  signedIn
-                    ? {
-                        token: 'owned-layout-fixture',
-                        user: {
-                          id: 'layout-owner',
-                          email: 'layout@example.test',
-                          display_name: 'Account'.repeat(12),
-                        },
-                      }
-                    : { error: 'No refresh cookie' },
-                );
-              if (url.pathname === '/api/rooms' && request.method() === 'GET') {
-                searches++;
-                const query = url.searchParams.get('q');
-                if (query === 'error') return json(503, { error: 'Owned fixture unavailable' });
-                if (query === 'empty') return json(200, []);
-                if (query === 'featured') return json(200, [rooms[0]]);
-                return json(
-                  200,
-                  url.searchParams.get('page') === '2' ? rooms.slice(20) : rooms.slice(0, 20),
-                );
-              }
-            }
-            report.unexpectedRequests++;
-            return route.abort('blockedbyclient');
-          });
-          page = await context.newPage();
-          page.setDefaultTimeout(5000);
-          page.setDefaultNavigationTimeout(5000);
-          page.on('pageerror', () => {
-            report.pageErrors++;
-          });
-          report.activeStep = `${name}-navigation`;
-          await page.goto(origin, { waitUntil: 'load' });
-          report.activeStep = `${name}-directory-ready`;
-          await page.waitForFunction(
-            () => document.querySelectorAll('#room-list .room-card').length === 20,
-          );
-          report.activeStep = `${name}-thumbnails-ready`;
-          await page.waitForFunction(() =>
-            [...document.images].every((image) => image.complete && image.naturalWidth > 0),
-          );
-          report.activeStep = `${name}-auth-ready`;
-          await page
-            .locator(signedIn ? '#auth-bar-user' : '#auth-bar-guest')
-            .waitFor({ state: 'visible' });
-          assert.equal(await page.locator('#create-room-btn').isVisible(), signedIn);
-          if (signedIn) {
-            // An account's saved rooms sit on the shelf under the toolbar, measured with the rest.
-            report.activeStep = `${name}-saved-rooms-ready`;
-            await page.waitForFunction(
-              () => document.querySelectorAll('.discovery-shelf .directory-room-row').length === 2,
-            );
-          }
-          report.activeStep = `${name}-signaling-ready`;
-          await page.locator('#connection-status.connected').waitFor({ state: 'visible' });
-          assert.equal(signalingConnections, 1, 'Each layout context owns one mocked connection');
-          assert.equal(ticketRequests, signedIn ? 1 : 0, 'Only accounts mint one startup ticket');
-          const inspect = async (state) => {
-            report.activeStep = `${name}-${state}`;
-            const result = await geometry(page);
-            await silentUiState(page);
-            report.checks.push({ name: report.activeStep, ...result });
-            save();
-            assert.deepEqual(result.problems, [], `${report.activeStep}: layout containment`);
-            assert.equal(result.mediaCalls, 0, 'Homepage must not access media devices');
-            expectShape(result, state, `${report.activeStep}: layout shape`);
-          };
-          await page.screenshot({ path: path.join(artifacts, `${name}.png`), fullPage: true });
-          await inspect('populated');
-          if (signedIn) {
-            const toggle = page.locator('#directory-rail-toggle');
-            await toggle.click();
-            await inspect('rail-collapsed');
-            await page.reload({ waitUntil: 'load' });
+              report.unexpectedRequests++;
+              return route.abort('blockedbyclient');
+            });
+            page = await context.newPage();
+            page.setDefaultTimeout(5000);
+            page.setDefaultNavigationTimeout(5000);
+            page.on('pageerror', () => {
+              report.pageErrors++;
+            });
+            report.activeStep = `${name}-navigation`;
+            await page.goto(origin, { waitUntil: 'load' });
+            report.activeStep = `${name}-directory-ready`;
             await page.waitForFunction(
               () => document.querySelectorAll('#room-list .room-card').length === 20,
             );
-            await page.waitForFunction(
-              () => document.querySelectorAll('.discovery-shelf .directory-room-row').length === 2,
+            report.activeStep = `${name}-thumbnails-ready`;
+            await page.waitForFunction(() =>
+              [...document.images].every((image) => image.complete && image.naturalWidth > 0),
             );
+            report.activeStep = `${name}-auth-ready`;
+            await page
+              .locator(signedIn ? '#auth-bar-user' : '#auth-bar-guest')
+              .waitFor({ state: 'visible' });
+            assert.equal(await page.locator('#create-room-btn').isVisible(), signedIn);
+            if (signedIn) {
+              // An account's saved rooms sit on the shelf under the toolbar, measured with the rest.
+              report.activeStep = `${name}-saved-rooms-ready`;
+              await page.waitForFunction(
+                () =>
+                  document.querySelectorAll('.discovery-shelf .directory-room-row').length === 2,
+              );
+            }
+            report.activeStep = `${name}-signaling-ready`;
             await page.locator('#connection-status.connected').waitFor({ state: 'visible' });
-            assert.equal(await page.locator('#directory-rail.collapsed').count(), 1, 'remembered');
-            await inspect('rail-remembered');
-            await toggle.click();
-            await inspect('rail-expanded');
-          }
-          await reachable(page.locator('#room-list .room-card').last());
-          await page.locator('#room-load-more').click();
-          await page.waitForFunction(
-            () => document.querySelectorAll('#room-list .room-card').length === 21,
-          );
-          await reachable(page.locator('#room-list .room-card').last());
-          if (signedIn) {
-            // A signed-in person's tile activation enters the room; layout runs stay on the
-            // home page, so the signed-in run selects through the join bar instead.
-            await page.locator('#room-input').fill(rooms[20].id);
-          } else {
-            await page.locator('#room-list .room-card').last().focus();
-            await page.keyboard.press('Enter');
-            assert.equal(await page.locator('#room-input').inputValue(), rooms[20].id);
-          }
-          await page.locator('#name-input').fill('Layout Guest');
-          for (const selector of ['#name-input', '#room-input', '#join-btn']) {
-            await reachable(page.locator(selector));
-            await page.locator(selector).focus();
-          }
-          const search = page.locator('#room-search-input');
-          const beforeMinimum = searches;
-          await search.fill('xy');
-          await page
-            .getByText('Enter at least 3 consecutive letters or numbers', { exact: true })
-            .waitFor();
-          assert.equal(searches, beforeMinimum, 'Short search must not request the API');
-          await inspect('minimum-search');
-          await search.fill('empty');
-          await page.getByText('No rooms match your search', { exact: true }).waitFor();
-          await inspect('empty');
-          await search.fill('error');
-          await page.locator('.directory-status').waitFor();
-          await inspect('unavailable');
-          await reachable(page.getByRole('button', { name: 'Retry directory' }));
-          await search.fill('featured');
-          await page.waitForFunction(
-            () => document.querySelectorAll('#room-list .room-card').length === 1,
-          );
-          await inspect('filtered');
-          assert.equal(report.pageErrors, 0, 'No unhandled production UI errors');
-          assert.equal(report.unexpectedRequests, 0, 'Every request must use an explicit fixture');
-          assert.equal(report.signalingMessages, 0, 'Layout checks must not join or publish');
-          await silentUiState(page);
-          await context.close();
-          page = null;
-          console.log(`PASS homepage ${name}`);
+            assert.equal(signalingConnections, 1, 'Each layout context owns one mocked connection');
+            assert.equal(ticketRequests, signedIn ? 1 : 0, 'Only accounts mint one startup ticket');
+            const inspect = async (state) => {
+              report.activeStep = `${name}-${state}`;
+              const result = await geometry(page);
+              await silentUiState(page);
+              report.checks.push({ name: report.activeStep, ...result });
+              save();
+              assert.deepEqual(result.problems, [], `${report.activeStep}: layout containment`);
+              assert.equal(result.mediaCalls, 0, 'Homepage must not access media devices');
+              expectShape(result, state, `${report.activeStep}: layout shape`);
+            };
+            await page.screenshot({ path: path.join(artifacts, `${name}.png`), fullPage: true });
+            await inspect('populated');
+            if (signedIn) {
+              const toggle = page.locator('#directory-rail-toggle');
+              await toggle.click();
+              await inspect('rail-collapsed');
+              await page.reload({ waitUntil: 'load' });
+              await page.waitForFunction(
+                () => document.querySelectorAll('#room-list .room-card').length === 20,
+              );
+              await page.waitForFunction(
+                () =>
+                  document.querySelectorAll('.discovery-shelf .directory-room-row').length === 2,
+              );
+              await page.locator('#connection-status.connected').waitFor({ state: 'visible' });
+              assert.equal(
+                await page.locator('#directory-rail.collapsed').count(),
+                1,
+                'remembered',
+              );
+              await inspect('rail-remembered');
+              await toggle.click();
+              await inspect('rail-expanded');
+            }
+            await reachable(page.locator('#room-list .room-card').last());
+            await page.locator('#room-load-more').click();
+            await page.waitForFunction(
+              () => document.querySelectorAll('#room-list .room-card').length === 21,
+            );
+            await reachable(page.locator('#room-list .room-card').last());
+            if (signedIn) {
+              // A signed-in person's tile activation enters the room; layout runs stay on the
+              // home page, so the signed-in run selects through the join bar instead.
+              await page.locator('#room-input').fill(rooms[20].id);
+            } else {
+              await page.locator('#room-list .room-card').last().focus();
+              await page.keyboard.press('Enter');
+              assert.equal(await page.locator('#room-input').inputValue(), rooms[20].id);
+            }
+            await page.locator('#name-input').fill('Layout Guest');
+            for (const selector of ['#name-input', '#room-input', '#join-btn']) {
+              await reachable(page.locator(selector));
+              await page.locator(selector).focus();
+            }
+            const search = page.locator('#room-search-input');
+            const beforeMinimum = searches;
+            await search.fill('xy');
+            await page
+              .getByText('Enter at least 3 consecutive letters or numbers', { exact: true })
+              .waitFor();
+            assert.equal(searches, beforeMinimum, 'Short search must not request the API');
+            await inspect('minimum-search');
+            await search.fill('empty');
+            await page.getByText('No rooms match your search', { exact: true }).waitFor();
+            await inspect('empty');
+            await search.fill('error');
+            await page.locator('.directory-status').waitFor();
+            await inspect('unavailable');
+            await reachable(page.getByRole('button', { name: 'Retry directory' }));
+            await search.fill('featured');
+            await page.waitForFunction(
+              () => document.querySelectorAll('#room-list .room-card').length === 1,
+            );
+            await inspect('filtered');
+            assert.equal(report.pageErrors, 0, 'No unhandled production UI errors');
+            assert.equal(
+              report.unexpectedRequests,
+              0,
+              'Every request must use an explicit fixture',
+            );
+            assert.equal(report.signalingMessages, 0, 'Layout checks must not join or publish');
+            await silentUiState(page);
+            await context.close();
+            page = null;
+            console.log(`PASS homepage ${name}`);
+          };
+          if (runner.step) await runner.step(name, scenario);
+          else await scenario();
         }
       }
     };
@@ -636,12 +662,15 @@ async function run(env = process.env) {
         .catch(() => {});
   } finally {
     clearTimeout(deadline);
-    const cancelWatchdog = startFinalizationWatchdog(report, save, () => {
-      browserServer?.process().kill('SIGKILL');
-      process.exit(1);
-    });
+    const cancelWatchdog = runner.closeBrowser
+      ? () => {}
+      : startFinalizationWatchdog(report, save, () => {
+          browserServer?.process().kill('SIGKILL');
+          process.exit(1);
+        });
     try {
-      if (browserServer) await closeOwnedBrowser(browserServer, report, save);
+      if (runner.closeBrowser && browser) await runner.closeBrowser(browser, report, save);
+      else if (browserServer) await closeOwnedBrowser(browserServer, report, save);
     } catch {
       failed = true;
     }
@@ -659,8 +688,11 @@ async function run(env = process.env) {
 }
 
 module.exports = { run, geometry, productionAssets };
-if (require.main === module)
-  run().catch((error) => {
+if (require.main === module) {
+  try {
+    require('./runner-cli.cjs').run('layout');
+  } catch (error) {
     console.error(error.message);
     process.exitCode = 1;
-  });
+  }
+}

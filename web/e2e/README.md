@@ -56,6 +56,39 @@ Background directory/account requests do not delay this readiness check. Startup
 does not reload the page to retry; page errors and all later interaction, auth
 and real-media assertions still fail the run.
 
+## Runner and artifacts
+
+Maintained suite commands dispatch the pinned `@playwright/test` runner. The
+runner fixture owns each BrowserServer, including connection failures, and
+requires observed clean shutdown. Rust `xtask test-env` continues to own the
+backend. Account, media and stress projects group the maintained CI suites;
+community remains one ordered journey with named steps. Importing a suite exposes
+its `run()` API without starting a browser or listener.
+
+The explicit macOS `WEBKIT_TEST_NETWORK=1` fixture uses an in-process launch:
+its audited page-initialization hook cannot operate through a remote connection.
+The adapter requires the exact Playwright 1.64.0 module, in-process connection,
+WebKit implementation and actual `ChildProcess`, then retains that process's
+native close/kill methods for the same observed-exit checks. Unexpected shapes
+fail before any page or network work. Lifecycle evidence records
+`in-process-webkit-test-network`; other launches use the public BrowserServer path.
+
+```sh
+npm --prefix web/e2e run test:runner -- --list
+E2E_BROWSER=firefox npm --prefix web/e2e run test:layout
+E2E_BROWSER=chromium npm --prefix web/e2e run test:resilience
+```
+
+Set `E2E_ARTIFACTS` to a private output directory and optionally `E2E_RETRIES` to
+0, 1 or 2 (default 0). Each test attempt retains its own owned-browser receipt
+and existing redacted suite evidence. The safe reporter writes JSON, HTML and a
+step timeline containing fixed labels, status and timings. Raw Playwright traces,
+videos and automatic screenshots stay disabled because they can include account
+credentials, message content and network parameters. Suite-specific screenshots
+keep their existing masking and fixture-data rules. Scheduled soak, canary and
+investigative performance drivers keep their standalone measurement lifetimes.
+See [runner commands and limits](../../docs/testing.md#browser-runner).
+
 ## Account, navigation, chat and media continuity
 
 The following opt-in fixtures require the same owned loopback services and

@@ -1,15 +1,9 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { runInNewContext } from 'node:vm';
 import tracing from '../e2e/signaling-reconnect.cjs';
-import menus from '../e2e/room-menu.cjs';
+import continuity from '../e2e/media-continuity.cjs';
 
-const source = await readFile(new URL('../e2e/media-continuity.cjs', import.meta.url), 'utf8');
-const start = source.indexOf('function installReceiveRecoveryObservation(');
-const end = source.indexOf('\n/** Native decode/playback counters', start);
-assert.ok(start >= 0 && end > start);
-const installSource = source.slice(start, end);
+const { installReceiveRecoveryObservation, openCallHealth } = continuity;
 
 for (const initiallyOpen of [false, true]) {
   test(`Call health uses the visible More control when initially ${initiallyOpen ? 'open' : 'closed'}`, async () => {
@@ -43,19 +37,13 @@ for (const initiallyOpen of [false, true]) {
         return dialog;
       },
     };
-    const helperStart = source.indexOf('async function openCallHealth(');
-    const helperEnd = source.indexOf('\nasync function receiverReplacement(', helperStart);
-    assert.ok(helperStart >= 0 && helperEnd > helperStart);
-    const openHealth = runInNewContext(`${source.slice(helperStart, helperEnd)}; openCallHealth`, {
-      openRoomMenu: menus.openRoomMenu,
-    });
-    assert.equal(await openHealth(page), dialog);
+    assert.equal(await openCallHealth(page), dialog);
     assert.equal(toggles, initiallyOpen ? 0 : 1);
     assert.equal(clicks, 1);
   });
 }
 
-function fixture(reconnectFirst = true) {
+function fixture(t, reconnectFirst = true) {
   const nativeCalls = [];
   class Peer {
     connectionState = 'connected';
@@ -109,16 +97,22 @@ function fixture(reconnectFirst = true) {
     URL,
     performance: { now: () => 1000 },
   };
-  const reconnect = `(${tracing.installSignalingReconnectObservation.toString()})();`;
-  runInNewContext(
-    `${reconnectFirst ? reconnect : ''}${installSource}; installReceiveRecoveryObservation();${reconnectFirst ? '' : reconnect}`,
-    globals,
-  );
+  for (const [name, value] of Object.entries(globals)) {
+    const previous = Object.getOwnPropertyDescriptor(globalThis, name);
+    Object.defineProperty(globalThis, name, { configurable: true, value });
+    t.after(() => {
+      if (previous) Object.defineProperty(globalThis, name, previous);
+      else delete globalThis[name];
+    });
+  }
+  if (reconnectFirst) tracing.installSignalingReconnectObservation();
+  installReceiveRecoveryObservation();
+  if (!reconnectFirst) tracing.installSignalingReconnectObservation();
   return { window, sender, receiver, Peer, nativeCalls };
 }
 
-test('one receive-only offer can hang while sending answers and subsequent native work stay untouched', async () => {
-  const f = fixture();
+test('one receive-only offer can hang while sending answers and subsequent native work stay untouched', async (t) => {
+  const f = fixture(t);
   const api = f.window.__receiveRecoveryObservation;
   assert.equal(api.baseline().sendingTracks, 3);
   api.arm();
@@ -142,8 +136,8 @@ test('one receive-only offer can hang while sending answers and subsequent nativ
 });
 
 for (const reconnectFirst of [true, false]) {
-  test(`fixed join/leave counters preserve the existing signaling observer when installed ${reconnectFirst ? 'after' : 'before'}`, () => {
-    const f = fixture(reconnectFirst);
+  test(`fixed join/leave counters preserve the existing signaling observer when installed ${reconnectFirst ? 'after' : 'before'}`, (t) => {
+    const f = fixture(t, reconnectFirst);
     f.window.__receiveRecoveryObservation.baseline();
     const socket = new f.window.WebSocket('ws://127.0.0.1/ws');
     assert.equal(
@@ -159,8 +153,8 @@ for (const reconnectFirst of [true, false]) {
   });
 }
 
-test('identity proof rejects changed sending tracks, capture, membership or a receiver that was not replaced', () => {
-  const f = fixture();
+test('identity proof rejects changed sending tracks, capture, membership or a receiver that was not replaced', (t) => {
+  const f = fixture(t);
   const api = f.window.__receiveRecoveryObservation;
   api.baseline();
   assert.equal(api.snapshot().senderPreserved, true);

@@ -226,6 +226,64 @@ For browser tests, replace the Cargo test command with
 `npm --prefix web/e2e test` after the [browser installation steps](../web/e2e/README.md).
 Build the UI first; do not rebuild assets during a browser run.
 
+### Browser runner
+
+Maintained browser suites use the pinned `@playwright/test` runner. The Rust
+`test-env` command owns PostgreSQL and the application; a runner fixture owns
+each browser process and requires a clean observed exit. Existing `node
+web/e2e/<suite>.cjs` commands remain compatible and select the same runner tests.
+Importing a suite exposes its in-process `run` function without launching it.
+
+```sh
+E2E_BROWSER=firefox cargo run --locked -q -p xtask -- test-env \
+  npm --prefix web/e2e test
+E2E_BROWSER=chromium npm --prefix web/e2e run test:layout
+E2E_BROWSER=firefox npm --prefix web/e2e run test:resilience
+npm --prefix web/e2e run test:runner -- --list
+AUTH_LIFECYCLE_E2E=1 cargo run --locked -q -p xtask -- test-env \
+  npm --prefix web/e2e run test:runner -- --project=accounts-chromium --grep=auth-lifecycle
+```
+
+Projects group account suites under `accounts-<engine>`, media suites under
+`media-<engine>`, and the bounded UI workload under `stress-chromium`.
+Community, layout and resilience have their own engine projects. Each suite
+keeps its explicit opt-in environment variable; selecting a group does not
+enable its other scenarios. Passkey fixtures require Chromium. Layout and
+resilience use intercepted local browser fixtures and own their frontend listener.
+Real-backend Firefox media also requires an interface-owned `TEST_ANNOUNCE_IP`,
+as described in the [browser guide](../web/e2e/README.md).
+
+Projects have bounded timeouts: accounts and layout three minutes, resilience
+two minutes, and community, media and stress ten minutes. `E2E_RETRIES=0` is the
+default; values `1` or `2` retry the complete test with fresh fixture ownership.
+The community membership journey remains serial, with its individual checks
+reported as runner steps.
+
+`E2E_ARTIFACTS` selects the private report directory; the Rust harness sets it
+for owned-service runs, and standalone runner commands create a fresh temporary
+directory. Reports include `runner-results.json`, `runner-results.html`, a safe
+`step-trace.json` timeline, each suite's bounded reports and redacted screenshots,
+and `browser-lifecycle.json` shutdown evidence beneath `test-results/`. Directories
+are private and report files use mode `0600`. Raw Playwright traces, video,
+automatic screenshots and action error logs are disabled because account and
+media API parameters can contain credentials. The step timeline retains fixed
+scenario names, timing and outcomes. Existing diagnostic, canary, soak and
+performance measurement commands retain their standalone execution paths.
+
+The WebKit follow-speaker reload issue remains open as of 2026-10-21 with
+Playwright 1.64.0 / WebKit 27.2 (r2370). One full owned community run passed
+44 checks with one documented measurement skip, but a bounded reload probe
+reproduced two fetch access-control `pageerror` events, including with the push
+fixture removed. A credential-free control loaded no application code: three
+native fetches returned 200 before navigation; during a held document
+replacement, three explicitly caught rejections produced three access-control
+`pageerror` events and zero DOM error/unhandled-rejection events. Browser and
+server exits were clean. This supports the engine mechanism described in
+[Playwright issue 43120](https://github.com/microsoft/playwright/issues/43120);
+the relationship to the application's intermittent reload failure remains an
+inference. Zero-page-error assertions remain enforced, with no ignored category
+or application workaround.
+
 ### Passkey verification
 
 Run native WebAuthn ceremonies with Chromium's owned virtual authenticator:
