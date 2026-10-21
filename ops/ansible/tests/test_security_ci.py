@@ -507,7 +507,8 @@ class SecurityWorkflowTests(unittest.TestCase):
                 recorder = next(
                     step
                     for step in steps
-                    if "ci-local-evidence.py record" in string(step.get("run", ""))
+                    if "cargo run --locked -q -p xtask -- ci-evidence record"
+                    in string(step.get("run", ""))
                 )
                 self.assertEqual(recorder["if"], "${{ env.ACT }}")
                 self.assertLess(steps.index(local), steps.index(recorder))

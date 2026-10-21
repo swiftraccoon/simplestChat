@@ -252,6 +252,7 @@ test('context excludes local-only descendants while retaining production inputs'
     'migrations/private.env', 'load_tests/notes.md', 'load_tests/src/CLAUDE.md',
     'load_tests/src/metrics/private.env', 'xtask/notes.md', 'xtask/src/CLAUDE.md', 'web/CLAUDE.md', 'web/.env',
     'xtask/src/check/private.env', 'xtask/src/run_local/private.env',
+    'xtask/src/ci/private.env', 'xtask/src/ci_evidence/private.env',
     'web/node_modules/example/index.js', 'web/e2e/results/report.json',
     'web/scripts/CLAUDE.md', 'web/scripts/local-only.mjs',
     'web/public/private.env', 'web/public/unlisted.html', 'web/src/CLAUDE.md',

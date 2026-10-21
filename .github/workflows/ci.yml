@@ -50,12 +50,18 @@ jobs:
         run: |
           git log -1 --format=%B "$COMMIT_REVISION" > "${RUNNER_TEMP}/commit-message"
           .githooks/commit-msg "${RUNNER_TEMP}/commit-message"
+      - name: Install the pinned Rust toolchain for CI receipts
+        # Key/receipt checks use xtask before native-library setup or cache reuse.
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable (2026-10-01)
+        with:
+          toolchain: 1.99.0
+
       - name: Fingerprint the exact automation inputs
         id: verified-inputs
         env:
           CI_CACHE_SCOPE: automation
         run: |
-          key="$(python3 build/ci_verified.py key --scope "$CI_CACHE_SCOPE")"
+          key="$(cargo run --locked -q -p xtask -- ci key --scope "$CI_CACHE_SCOPE")"
           printf 'key=%s\n' "$key" >> "$GITHUB_OUTPUT"
       - name: Restore a verified automation result
         id: verified
@@ -70,7 +76,7 @@ jobs:
           CI_CACHE_KEY: ${{ steps.verified-inputs.outputs.key }}
           CI_CACHE_DIRECTORY: ${{ runner.temp }}/ci-verified-automation
         run: |
-          python3 build/ci_verified.py verify --scope "$CI_CACHE_SCOPE" \
+          cargo run --locked -q -p xtask -- ci verify --scope "$CI_CACHE_SCOPE" \
             --key "$CI_CACHE_KEY" --directory "$CI_CACHE_DIRECTORY"
 
       - name: Install isolated controller checks
@@ -81,11 +87,6 @@ jobs:
           python3 -m venv "${RUNNER_TEMP}/ansible-controller"
           "${RUNNER_TEMP}/ansible-controller/bin/pip" install -r build/python-requirements.txt
           echo "${RUNNER_TEMP}/ansible-controller/bin" >> "${GITHUB_PATH}"
-      - name: Install the pinned Rust toolchain for the test harness
-        if: steps.verified.outputs.cache-hit != 'true'
-        # The runner's rustup reads rust-toolchain.toml; the harness is xtask alone.
-        run: rustup toolchain install --profile minimal
-
       - name: Validate automation without contacting any host
         if: steps.verified.outputs.cache-hit != 'true'
         env:
@@ -162,7 +163,7 @@ jobs:
           CI_CACHE_KEY: ${{ steps.verified-inputs.outputs.key }}
           CI_CACHE_DIRECTORY: ${{ runner.temp }}/ci-verified-automation
         run: |
-          python3 build/ci_verified.py save --scope "$CI_CACHE_SCOPE" \
+          cargo run --locked -q -p xtask -- ci save --scope "$CI_CACHE_SCOPE" \
             --key "$CI_CACHE_KEY" --directory "$CI_CACHE_DIRECTORY"
       - name: Save the exact automation success
         if: steps.verified.outputs.cache-hit != 'true'
@@ -183,12 +184,18 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Install the pinned Rust toolchain for CI receipts
+        # Key/receipt checks use xtask before native-library setup or cache reuse.
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable (2026-10-01)
+        with:
+          toolchain: 1.99.0
+
       - name: Fingerprint the exact rust-lint inputs
         id: verified-inputs
         env:
           CI_CACHE_SCOPE: rust-lint
         run: |
-          key="$(python3 build/ci_verified.py key --scope "$CI_CACHE_SCOPE")"
+          key="$(cargo run --locked -q -p xtask -- ci key --scope "$CI_CACHE_SCOPE")"
           printf 'key=%s\n' "$key" >> "$GITHUB_OUTPUT"
       - name: Restore a verified rust-lint result
         id: verified
@@ -203,7 +210,7 @@ jobs:
           CI_CACHE_KEY: ${{ steps.verified-inputs.outputs.key }}
           CI_CACHE_DIRECTORY: ${{ runner.temp }}/ci-verified-rust-lint
         run: |
-          python3 build/ci_verified.py verify --scope "$CI_CACHE_SCOPE" \
+          cargo run --locked -q -p xtask -- ci verify --scope "$CI_CACHE_SCOPE" \
             --key "$CI_CACHE_KEY" --directory "$CI_CACHE_DIRECTORY"
 
       - uses: ./.github/actions/native-toolchain
@@ -250,7 +257,7 @@ jobs:
           CI_CACHE_KEY: ${{ steps.verified-inputs.outputs.key }}
           CI_CACHE_DIRECTORY: ${{ runner.temp }}/ci-verified-rust-lint
         run: |
-          python3 build/ci_verified.py save --scope "$CI_CACHE_SCOPE" \
+          cargo run --locked -q -p xtask -- ci save --scope "$CI_CACHE_SCOPE" \
             --key "$CI_CACHE_KEY" --directory "$CI_CACHE_DIRECTORY"
       - name: Save the exact rust-lint success
         if: steps.verified.outputs.cache-hit != 'true'
@@ -291,12 +298,18 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Install the pinned Rust toolchain for CI receipts
+        # Key/receipt checks use xtask before native-library setup or cache reuse.
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable (2026-10-01)
+        with:
+          toolchain: 1.99.0
+
       - name: Fingerprint the exact rust-test inputs
         id: verified-inputs
         env:
           CI_CACHE_SCOPE: rust-test
         run: |
-          key="$(python3 build/ci_verified.py key --scope "$CI_CACHE_SCOPE")"
+          key="$(cargo run --locked -q -p xtask -- ci key --scope "$CI_CACHE_SCOPE")"
           printf 'key=%s\n' "$key" >> "$GITHUB_OUTPUT"
       - name: Restore a verified rust-test result
         id: verified
@@ -311,7 +324,7 @@ jobs:
           CI_CACHE_KEY: ${{ steps.verified-inputs.outputs.key }}
           CI_CACHE_DIRECTORY: ${{ runner.temp }}/ci-verified-rust-test
         run: |
-          python3 build/ci_verified.py verify --scope "$CI_CACHE_SCOPE" \
+          cargo run --locked -q -p xtask -- ci verify --scope "$CI_CACHE_SCOPE" \
             --key "$CI_CACHE_KEY" --directory "$CI_CACHE_DIRECTORY"
 
       - uses: ./.github/actions/native-toolchain
@@ -453,7 +466,7 @@ jobs:
           CI_CACHE_KEY: ${{ steps.verified-inputs.outputs.key }}
           CI_CACHE_DIRECTORY: ${{ runner.temp }}/ci-verified-rust-test
         run: |
-          python3 build/ci_verified.py save --scope "$CI_CACHE_SCOPE" \
+          cargo run --locked -q -p xtask -- ci save --scope "$CI_CACHE_SCOPE" \
             --key "$CI_CACHE_KEY" --directory "$CI_CACHE_DIRECTORY"
       - name: Save the exact rust-test success
         if: steps.verified.outputs.cache-hit != 'true'
@@ -576,12 +589,18 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Install the pinned Rust toolchain for CI receipts
+        # Key/receipt checks use xtask before native-library setup or cache reuse.
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable (2026-10-01)
+        with:
+          toolchain: 1.99.0
+
       - name: Fingerprint the exact backend inputs
         id: verified-inputs
         env:
           CI_CACHE_SCOPE: backend
         run: |
-          key="$(python3 build/ci_verified.py key --scope "$CI_CACHE_SCOPE")"
+          key="$(cargo run --locked -q -p xtask -- ci key --scope "$CI_CACHE_SCOPE")"
           printf 'key=%s\n' "$key" >> "$GITHUB_OUTPUT"
       - name: Restore a verified backend result
         id: verified
@@ -596,7 +615,7 @@ jobs:
           CI_CACHE_KEY: ${{ steps.verified-inputs.outputs.key }}
           CI_CACHE_DIRECTORY: ${{ runner.temp }}/ci-verified-backend
         run: |
-          python3 build/ci_verified.py verify --scope "$CI_CACHE_SCOPE" \
+          cargo run --locked -q -p xtask -- ci verify --scope "$CI_CACHE_SCOPE" \
             --key "$CI_CACHE_KEY" --directory "$CI_CACHE_DIRECTORY"
 
       - uses: ./.github/actions/native-toolchain
@@ -638,7 +657,7 @@ jobs:
           CI_CACHE_KEY: ${{ steps.verified-inputs.outputs.key }}
           CI_CACHE_DIRECTORY: ${{ runner.temp }}/ci-verified-backend
         run: |
-          python3 build/ci_verified.py save --scope "$CI_CACHE_SCOPE" \
+          cargo run --locked -q -p xtask -- ci save --scope "$CI_CACHE_SCOPE" \
             --key "$CI_CACHE_KEY" --directory "$CI_CACHE_DIRECTORY"
       - name: Save the exact backend success
         if: steps.verified.outputs.cache-hit != 'true'
@@ -924,7 +943,7 @@ jobs:
         if: ${{ env.ACT }}
         env:
           LOCAL_BROWSER_GROUP: ${{ matrix.group }}
-        run: python3 build/ci-local-evidence.py record --id "browser-$LOCAL_BROWSER_GROUP"
+        run: cargo run --locked -q -p xtask -- ci-evidence record --id "browser-$LOCAL_BROWSER_GROUP"
 
   web:
     name: Web lint + format + tests + typecheck + build
@@ -1493,6 +1512,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Install the pinned Rust toolchain for local execution receipts
+        if: ${{ env.ACT }}
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable (2026-10-01)
+        with:
+          toolchain: 1.99.0
       - name: Require healthy stored CodeQL analyses for this exact revision
         if: ${{ !env.ACT }}
         env:
@@ -1516,12 +1540,7 @@ jobs:
         if: ${{ env.ACT }}
         env:
           GATE_RESULTS: ${{ toJSON(needs) }}
-        run: |
-          python3 -m venv "$RUNNER_TEMP/local-ci-evidence-tools"
-          python3 build/ci-local-evidence.py requirements > "$RUNNER_TEMP/local-ci-yaml.txt"
-          "$RUNNER_TEMP/local-ci-evidence-tools/bin/pip" install --require-hashes --only-binary=:all: \
-            --no-deps --requirement "$RUNNER_TEMP/local-ci-yaml.txt"
-          "$RUNNER_TEMP/local-ci-evidence-tools/bin/python" build/ci-local-evidence.py complete
+        run: cargo run --locked -q -p xtask -- ci-evidence complete
 
   release-security:
     name: Attest the verified production release

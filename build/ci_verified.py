@@ -38,7 +38,6 @@ NATIVE_FILES = frozenset(
         "build/ci-local-act.json",
         "build/ci-local-act.patch",
         "build/ci-local-docker.sh",
-        "build/ci-local.sh",
         "build/ci_local_act.py",
         "build/ci_verified.py",
         "build/install-openssl.sh",
@@ -104,6 +103,17 @@ CODEQL_RUST_PREFIXES = (
 CODEQL_RUST_MANIFESTS = frozenset(
     {"Cargo.toml", "Cargo.lock", "rust-toolchain", "rust-toolchain.toml", "rust-project.json"}
 )
+# The compiled fingerprint implementation and its compiler inputs are part of
+# every closure. Retain the Python module too while security callers use its API.
+CI_TOOL_PREFIXES = ("xtask/", ".cargo/")
+CI_TOOL_FILES = frozenset({"Cargo.toml", "Cargo.lock", "rust-toolchain", "rust-toolchain.toml"})
+
+
+def ci_tool_input(name: str) -> bool:
+    """Bind the compiled tool before it can reuse a success from another implementation."""
+    return name.startswith(CI_TOOL_PREFIXES) or name in CI_TOOL_FILES
+
+
 BACKEND_PREFIXES = ("src/", "tests/", "load_tests/", "xtask/", "migrations/", "vendor/", ".cargo/")
 BACKEND_FILES = frozenset(
     {
@@ -114,7 +124,6 @@ BACKEND_FILES = frozenset(
         "build/install-openssl.sh",
         "build/install-aws-lc.sh",
         "build/pip-constraints.txt",
-        "build/ci-local.sh",
         "build/ci-local-act.json",
         "build/ci-local-act.patch",
         "build/ci_local_act.py",
@@ -304,12 +313,16 @@ def backend_dependencies(root: Path, directory: Path, name: str, *, built: bool)
 
 def native_security_input(name: str) -> bool:
     """Bind native sources, corpus, provenance checks and their actual execution helpers."""
-    return name.startswith(NATIVE_PREFIXES) or name in NATIVE_FILES
+    return ci_tool_input(name) or name.startswith(NATIVE_PREFIXES) or name in NATIVE_FILES
 
 
 def native_codeql_input(name: str) -> bool:
     """Bind the complete worker and its analysis helpers without unrelated CI tooling."""
-    return name.startswith(CODEQL_NATIVE_PREFIXES) or name in CODEQL_NATIVE_FILES
+    return (
+        ci_tool_input(name)
+        or name.startswith(CODEQL_NATIVE_PREFIXES)
+        or name in CODEQL_NATIVE_FILES
+    )
 
 
 def rust_codeql_input(name: str) -> bool:
@@ -321,7 +334,8 @@ def rust_codeql_input(name: str) -> bool:
     archived tracked inputs outside this closure are rejected before query reuse.
     """
     return (
-        name.endswith(".rs")
+        ci_tool_input(name)
+        or name.endswith(".rs")
         or name.rsplit("/", 1)[-1] in CODEQL_RUST_MANIFESTS
         or name.startswith(CODEQL_RUST_PREFIXES)
         or (name.startswith("web/tests/") and name.endswith(".json"))

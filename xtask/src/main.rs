@@ -9,6 +9,8 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 mod check;
+mod ci;
+mod ci_evidence;
 mod http_policy;
 mod line_length;
 mod media_ip;
@@ -25,6 +27,10 @@ Commands:
   run           Build and run the local UI; --skip-web reuses web/dist.
   check         Run installed-tool quality gates: [--web|--rust|--python|--helpers].
                 Default runs all groups, without installs or application services.
+  ci key|save|verify --scope SCOPE
+                Bind reusable CI successes to exact source and environment inputs;
+                CodeQL extraction keys never substitute for analyzed databases.
+  ci-evidence   Record or require complete executed local-CI matrix evidence.
   line-length   Fail when Rust production code has more lines over 100 columns
                 than the ratchet in xtask/line-length-allowance.txt permits;
                 `--update` lowers the allowance to the current count.
@@ -66,6 +72,8 @@ fn run(arguments: &[String]) -> Result<ExitCode> {
     match command.as_str() {
         "run" => run_local::run(&root, rest),
         "check" => check::run(&root, rest),
+        "ci" => ci::run(&root, rest),
+        "ci-evidence" => ci_evidence::run(&root, rest),
         "line-length" => line_length::run(&root, rest).map(|()| ExitCode::SUCCESS),
         "protocol-ts" => protocol_ts::run(&root, rest).map(|()| ExitCode::SUCCESS),
         "http-policy" => http_policy::run(&root, rest).map(|()| ExitCode::SUCCESS),

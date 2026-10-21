@@ -78,6 +78,12 @@ xtask/src/**
 !xtask/src/check/
 xtask/src/check/**
 !xtask/src/check/*.rs
+!xtask/src/ci/
+xtask/src/ci/**
+!xtask/src/ci/*.rs
+!xtask/src/ci_evidence/
+xtask/src/ci_evidence/**
+!xtask/src/ci_evidence/*.rs
 !xtask/src/run_local/
 xtask/src/run_local/**
 !xtask/src/run_local/*.rs

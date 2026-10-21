@@ -812,10 +812,10 @@ class VerifiedWorkflowTests(unittest.TestCase):
                 if not restores:
                     continue
                 verify = next(
-                    step for step in steps if "ci_verified.py verify" in string(step.get("run", ""))
+                    step for step in steps if "xtask -- ci verify" in string(step.get("run", ""))
                 )
                 save = next(
-                    step for step in steps if "ci_verified.py save" in string(step.get("run", ""))
+                    step for step in steps if "xtask -- ci save" in string(step.get("run", ""))
                 )
                 self.assertEqual(verify["if"], "steps.verified.outputs.cache-hit == 'true'")
                 self.assertEqual(save["if"], "steps.verified.outputs.cache-hit != 'true'")
@@ -823,7 +823,7 @@ class VerifiedWorkflowTests(unittest.TestCase):
                 for step in steps:
                     if step.get("id") == "verified":
                         self.assertNotIn("restore-keys", obj(step, "with"))
-                    if "ci_verified.py" in string(step.get("run", "")):
+                    if "xtask -- ci " in string(step.get("run", "")):
                         self.assertNotIn("${{", string(step, "run"))
 
 

@@ -694,7 +694,13 @@ owned VM before another run.
 The full gate requires a clean committed checkout and checks its identity again
 after execution. Completion receipts bind every required matrix entry and the
 successful aggregate to the current run and revision; dry runs or filtered
-matrices cannot report a complete local gate. `--base REF` selects the ancestor
+matrices cannot report a complete local gate. Workflow jobs publish those records
+with `cargo run --locked -q -p xtask -- ci-evidence record --id CHECK`; the final
+local aggregate runs `ci-evidence complete`. The Rust producer preserves the
+Python reference's JSON schema and bytes, reads the real workflow matrices, and
+needs no Python YAML environment. YAML parsing accepts aliases and merge keys
+with explicit document, depth and replay limits; includes and custom tags are
+rejected. `--base REF` selects the ancestor
 used for changed-source checks; by default it uses the merge base with local
 `origin/main`, or `HEAD^`
 when already at that base. Update the tracking ref before validation when needed.
@@ -807,6 +813,15 @@ reuse prepared images and verified compiled executables. Those artifacts are
 not CI success receipts and do not add a native-analysis prerequisite to the
 required graph. Every selected local runtime suite still executes against its
 bound executable; compilation and runtime evidence remain separate.
+
+CI fingerprints and success receipts run through `xtask ci key|save|verify`.
+The pinned toolchain is available before a cache lookup. Keys retain the existing
+SHA-256 framing, scope/trust/runner identities and receipt schema; the tracked
+compiled tool and its Cargo/toolchain inputs are included in every source closure.
+`--root <checkout>` selects an owned canonical checkout for local verification;
+it defaults to this repository. `save` and `verify` require an absolute receipt
+directory. Python remains the parity reference and supplies the current security
+helpers' source-closure API; scanner drivers retain their existing implementation.
 
 Browser jobs reuse backend executables only for the same bound inputs and after
 checking both executable and compiler dependency-file hashes. Backend keys bind

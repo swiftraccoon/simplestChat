@@ -77,6 +77,20 @@ remains pinned to `6bed0761d98439e5a578e2877258200ad565ba87`; the version matche
 boundary described above. This additional exact record expires on 2026-11-29;
 it does not exempt extraction, query completion, cache validation or findings.
 
+On 2026-10-21, compiled CI fingerprints and local execution receipts require
+the pinned Rust toolchain before cache lookup and native-library setup. The
+maintained local runner has no rustup; calling `rustup` directly cannot supply
+that bootstrap. Six exact installer-action locations were reviewed: the
+`automation`, `rust-lint`, `rust-test`, `browser` and local-only `required` jobs
+in `ci.yml`, and local-only `source-analysis` in `codeql.yml`. Each uses the
+already-reviewed immutable `89b12181fb390509a0842a86cc55eeb8eb928c1d` action with
+explicit Rust 1.99.0. Checkout still disables persisted credentials; repository
+source fixes all installer arguments. The official HTTPS bootstrap boundary
+and 2026-11-29 expiry remain unchanged. Three existing local-native-action
+review locations and the existing CodeQL Rust installer location move by one
+step; their action bytes, fingerprints and scope are otherwise unchanged.
+Receipt verification and all source/security gates remain blocking.
+
 ## Account-room action reference
 
 On 2026-10-18, the new manual-only account-room experiment produced one
@@ -254,6 +268,27 @@ The duplicate budget is an explicit inventory of the reviewed Cargo graph.
 `cargo deny` also checks licenses, allowed source origins, wildcard dependencies
 and the forbidden bundled-OpenSSL crate. Duplicate reductions pass; new groups
 or versions require a focused budget review. No dependency subtree is ignored.
+
+### Local-CI workflow parser (2026-10-21)
+
+The `xtask ci-evidence` migration pins `serde-saphyr 2.0.0` with only its
+deserializer feature. The [upstream release](https://docs.rs/crate/serde-saphyr/2.0.0)
+and packaged source were reviewed: this maintained parser uses `granit-parser`
+and forbids unsafe code in its own library. That statement does not cover its
+transitive dependencies. The dependency is confined to repository automation;
+it adds no production server or browser dependency and needs no advisory waiver.
+
+The caller first bounds each regular, nonsymlink workflow document to 1 MiB.
+Its [parser options](https://docs.rs/serde-saphyr/2.0.0/serde_saphyr/) explicitly
+limit structural depth to 64, aliases and anchors to 1,024 each, retained and
+replayed events to 100,000, and alias replay depth to 32. Only one YAML document
+is accepted. Include features are disabled and custom tags are rejected.
+Last-wins duplicate keys, YAML 1.1 booleans and merge keys retain the Python
+safe-loader policy; duplicate receipt publication and unknown receipt fields
+remain rejected. Tests compare real workflow receipts byte for byte with the
+Python reference and exercise matrix drift, stale identities, aliases, merges,
+duplicate keys, recursive aliases, depth limits, excess aliases, custom tags
+and multiple-document refusals. No dependency warning is suppressed.
 
 
 ### Dependency refresh (2026-10-05)

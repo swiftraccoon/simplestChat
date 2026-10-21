@@ -60,7 +60,7 @@ jobs:
           fi
       - name: Record successful local source checks
         if: ${{ env.ACT }}
-        run: python3 build/ci-local-evidence.py record --id security-fast
+        run: cargo run --locked -q -p xtask -- ci-evidence record --id security-fast
       - name: Preserve the redacted check summary
         if: ${{ always() && !env.ACT }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -124,7 +124,7 @@ jobs:
           done
       - name: Record the successful local mutation tier
         if: ${{ env.ACT }}
-        run: python3 build/ci-local-evidence.py record --id security-mutation
+        run: cargo run --locked -q -p xtask -- ci-evidence record --id security-mutation
       - name: Preserve compact test-quality evidence
         if: ${{ always() && !env.ACT }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

@@ -82,11 +82,17 @@ class PythonPolicyTests(unittest.TestCase):
         rust = next(
             step
             for step in steps
-            if step.get("name") == "Install the pinned Rust toolchain for the test harness"
+            if step.get("name") == "Install the pinned Rust toolchain for CI receipts"
         )
         self.assertLess(steps.index(rust), steps.index(gate))
-        self.assertEqual(rust["run"], "rustup toolchain install --profile minimal")
-        self.assertEqual(rust["if"], gate["if"])
+        self.assertEqual(
+            rust["uses"],
+            "dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d",
+        )
+        self.assertEqual(string(rust, "with", "toolchain"), "1.99.0")
+        self.assertNotIn("if", rust)
+        fingerprint = next(step for step in steps if step.get("id") == "verified-inputs")
+        self.assertLess(steps.index(rust), steps.index(fingerprint))
         command = string(gate, "run")
         self.assertLess(
             command.index("cargo run --locked -q -p xtask -- check --python"),
@@ -100,7 +106,7 @@ class PythonPolicyTests(unittest.TestCase):
         self.assertNotIn("if", job)
         self.assertEqual(gate["if"], "steps.verified.outputs.cache-hit != 'true'")
         verified = next(
-            step for step in steps if "ci_verified.py verify" in string(step.get("run", ""))
+            step for step in steps if "xtask -- ci verify" in string(step.get("run", ""))
         )
         self.assertEqual(verified["if"], "steps.verified.outputs.cache-hit == 'true'")
         self.assertEqual(string(verified, "env", "CI_CACHE_SCOPE"), "automation")

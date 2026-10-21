@@ -40,6 +40,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Install the pinned Rust toolchain for local execution receipts
+        if: ${{ env.ACT }}
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable (2026-10-01)
+        with:
+          toolchain: 1.99.0
       - name: Initialize the pinned analyzer
         if: ${{ !env.ACT && matrix.language != 'rust' }}
         id: init
@@ -157,7 +162,7 @@ jobs:
         if: ${{ env.ACT }}
         env:
           CODEQL_LANGUAGE: ${{ matrix.language }}
-        run: python3 build/ci-local-evidence.py record --id "codeql-$CODEQL_LANGUAGE"
+        run: cargo run --locked -q -p xtask -- ci-evidence record --id "codeql-$CODEQL_LANGUAGE"
       - name: Analyze and upload results
         if: ${{ !env.ACT && matrix.language != 'rust' }}
         uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
