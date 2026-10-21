@@ -12,6 +12,7 @@ mod check;
 mod http_policy;
 mod line_length;
 mod media_ip;
+mod performance_thresholds;
 mod protocol_ts;
 mod run_local;
 mod test_env;
@@ -33,6 +34,9 @@ Commands:
                 and content security policy; `--check` fails when it is stale.
   media-ip      Print the owned IPv4 address of the default route's interface for a
                 non-loopback media announcement (TEST_ANNOUNCE_IP).
+  performance-thresholds COMPARISON.json
+                Summarize a same-host benchmark comparison and enforce its
+                readiness/CPU/RSS regression budgets.
   test-postgres COMMAND [ARG ...]
                 Run COMMAND against an owned disposable PostgreSQL cluster
                 (TEST_POSTGRES_PORT, default 15434) exported as DATABASE_URL.
@@ -66,6 +70,7 @@ fn run(arguments: &[String]) -> Result<ExitCode> {
         "protocol-ts" => protocol_ts::run(&root, rest).map(|()| ExitCode::SUCCESS),
         "http-policy" => http_policy::run(&root, rest).map(|()| ExitCode::SUCCESS),
         "media-ip" => media_ip::run(&root, rest).map(|()| ExitCode::SUCCESS),
+        "performance-thresholds" => performance_thresholds::run(&root, rest),
         "test-postgres" => test_env::run_postgres(&root, rest),
         "test-server" => test_env::run_server(&root, rest),
         "test-env" => test_env::run_env(&root, rest),

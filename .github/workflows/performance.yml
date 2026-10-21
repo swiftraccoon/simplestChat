@@ -137,7 +137,7 @@ jobs:
 
       - name: Evaluate the regression budget
         if: ${{ !cancelled() }}
-        run: node build/performance-thresholds.mjs "${RUNNER_TEMP}/comparison/comparison.json"
+        run: cargo run --locked -q -p xtask -- performance-thresholds "${RUNNER_TEMP}/comparison/comparison.json"
 
       - name: Retain the comparison
         if: ${{ !cancelled() }}

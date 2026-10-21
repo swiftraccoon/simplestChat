@@ -372,14 +372,24 @@ The [Performance workflow](../.github/workflows/performance.yml) runs weekly and
 on demand. Its comparison job builds a baseline (`HEAD~1` unless a ref is
 given) and the candidate commit on one hosted runner, runs the ten-client
 conference (or the 30-client four-room `ring-v1` graph when selected) three
-alternating pairs deep, and fails when `build/performance-thresholds.mjs` finds
+alternating pairs deep, and fails when `xtask performance-thresholds` finds
 the candidate's median worse than the baseline's by more than 25 percent for
 receive-ready or send-ready P99 and server CPU, or 15 percent for server peak
 RSS, or when any run fails the runner's own gates. The budgets are wide on
 purpose: hosted runners are noisy and the comparison is relative to the
 baseline measured in the same run, so it catches changes of the size already
 recorded below, not single-digit drifts. The `comparison.json` and every run's
-evidence are retained as a workflow artifact for 30 days.
+evidence are retained as a workflow artifact for 30 days. Evaluate an existing
+comparison with:
+
+```sh
+cargo run --locked -q -p xtask -- performance-thresholds path/to/comparison.json
+```
+
+The reader preserves the comparison's scenario and metric order. It exits zero
+within budget, one for a violation or an unreadable/malformed document, and two
+for invalid command arguments. The benchmark runner still owns workload and
+shutdown checks; this command only reads its comparison.
 
 The same workflow's soak job runs the 20-minute authenticated session soak
 against the CI database and stops PostgreSQL for eight seconds at the midpoint
