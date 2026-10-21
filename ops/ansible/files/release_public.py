@@ -1500,7 +1500,9 @@ def deploy(  # noqa: PLR0913, PLR0915 - explicit opt-in settings; keep replaceme
         atomic(
             CONFIG / "images.json", dict(old, revision=manifest["revision"], serverImage=new_image)
         )
-        release_assets.select_version(ROOT / "browser-assets", manifest["revision"], owner=ROOT_UID)
+        _ = release_assets.select_version(
+            ROOT / "browser-assets", manifest["revision"], owner=ROOT_UID
+        )
         _ = runner.compose(
             "up",
             "--detach",
@@ -1546,7 +1548,9 @@ def deploy(  # noqa: PLR0913, PLR0915 - explicit opt-in settings; keep replaceme
                     atomic(
                         CONFIG / filename, (runner.attempt / ("before-" + filename)).read_bytes()
                     )
-                release_assets.select_version(ROOT / "browser-assets", old_revision, owner=ROOT_UID)
+                _ = release_assets.select_version(
+                    ROOT / "browser-assets", old_revision, owner=ROOT_UID
+                )
                 _ = runner.compose(
                     "up",
                     "--detach",
@@ -1759,7 +1763,7 @@ def prepare_maintenance(  # noqa: PLR0913, PLR0915 - explicit upgrade admission,
     atomic(CONFIG / "compose.public.yml", preview)
     atomic(CONFIG / "app.env", preview_env)
     atomic(CONFIG / "images.json", dict(old, revision=manifest["revision"], serverImage=new_image))
-    release_assets.select_version(ROOT / "browser-assets", manifest["revision"], owner=ROOT_UID)
+    _ = release_assets.select_version(ROOT / "browser-assets", manifest["revision"], owner=ROOT_UID)
     if browser_assets_upgrade:
         atomic(CONFIG / "Caddyfile", (CONFIG / "Caddyfile.candidate").read_bytes())
         (CONFIG / "Caddyfile").chmod(0o644)

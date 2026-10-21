@@ -213,9 +213,10 @@ class AssetsTests(unittest.TestCase):
             patch.object(Path, "replace", side_effect=OSError("fixture first publication failed")),
             self.assertRaises(OSError),
         ):
-            assets.initialize(self.root, owner=self.owner)
+            _ = assets.initialize(self.root, owner=self.owner)
         self.assertEqual(list(self.root.iterdir()), [])
-        assets.initialize(self.root, owner=self.owner)
+        self.assertTrue(assets.initialize(self.root, owner=self.owner))
+        self.assertFalse(assets.initialize(self.root, owner=self.owner))
         self.assertEqual(assets.read_store(self.root, self.owner), [])
 
     def test_index_records_exact_sha_size_and_public_modes(self) -> None:
@@ -259,7 +260,7 @@ class AssetsTests(unittest.TestCase):
     def test_proxy_union_is_relative_verified_and_selected_version_is_separate(self) -> None:
         """Staging cannot announce a candidate; selecting and rolling back can."""
         self.publish("a" * 40)
-        assets.select_version(self.root, "a" * 40, owner=self.owner)
+        _ = assets.select_version(self.root, "a" * 40, owner=self.owner)
         version = self.root / "public" / "app-version.json"
         old = version.read_bytes()
         _ = assets.publish(
@@ -270,16 +271,16 @@ class AssetsTests(unittest.TestCase):
         self.assertTrue(str(pointer.readlink()).startswith("../union-"))
         self.assertEqual((pointer / NAME).read_bytes(), CONTENT)
         self.assertEqual((pointer / "media-current123.js").read_bytes(), b"current")
-        assets.select_version(self.root, "b" * 40, owner=self.owner)
+        _ = assets.select_version(self.root, "b" * 40, owner=self.owner)
         self.assertIn(b"b" * 40, version.read_bytes())
-        assets.select_version(self.root, "a" * 40, owner=self.owner)
+        _ = assets.select_version(self.root, "a" * 40, owner=self.owner)
         self.assertEqual(version.read_bytes(), old)
         _ = assets.read_store(self.root, self.owner)
 
     def test_prune_expires_proxy_bytes_without_another_release(self) -> None:
         """The timer removes expired flat files, while preserving selected metadata."""
         self.publish("a" * 40)
-        assets.select_version(self.root, "a" * 40, owner=self.owner)
+        _ = assets.select_version(self.root, "a" * 40, owner=self.owner)
         assets.prune(self.root, NOW + assets.MAX_AGE, owner=self.owner)
         self.assertEqual(assets.read_store(self.root, self.owner), [])
         self.assertFalse((self.root / "public" / "assets" / NAME).exists())

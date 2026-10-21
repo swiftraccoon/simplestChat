@@ -856,8 +856,8 @@ class Harness:
             ROOT,
             FixtureIdentity(baseline["image"], baseline["revision"], self.token, POSTGRES, CADDY),
         )
-        release_assets.initialize(ROOT / "browser-assets")
-        release_assets.select_version(ROOT / "browser-assets", baseline["revision"])
+        _ = release_assets.initialize(ROOT / "browser-assets")
+        _ = release_assets.select_version(ROOT / "browser-assets", baseline["revision"])
         for name in ("postgres-admin-password", "pg_hba.conf", "init-database.sql"):
             os.chown(CONFIG / name, 999, 999)
         os.chown(CONFIG / "Caddyfile", 10001, 10001)

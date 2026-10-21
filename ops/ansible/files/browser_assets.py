@@ -18,7 +18,7 @@ class Arguments(argparse.Namespace):
 
 
 def main() -> int:
-    """Serialize expiry with deployment and emit only bounded numeric evidence."""
+    """Serialize expiry with deployment and emit only bounded status evidence."""
     parser = argparse.ArgumentParser(description=__doc__)
     _ = parser.add_argument("action", choices=("initialize", "prune"))
     _ = parser.add_argument("--revision")
@@ -32,15 +32,21 @@ def main() -> int:
         _ = os.umask(0o077)
         with workload_lock():
             root = ROOT / "browser-assets"
-            release_assets.initialize(root)
+            changed = release_assets.initialize(root, owner=ROOT_UID)
             if arguments.action == "prune":
-                release_assets.prune(root, int(time.time()))
+                release_assets.prune(root, int(time.time()), owner=ROOT_UID)
             elif arguments.revision is not None:
-                release_assets.select_version(root, arguments.revision)
-        _ = sys.stdout.write('{"passed":true}\n')
+                changed = (
+                    release_assets.select_version(root, arguments.revision, owner=ROOT_UID)
+                    or changed
+                )
+        receipt = {"passed": True}
+        if arguments.action == "initialize":
+            receipt["changed"] = changed
+        _ = sys.stdout.write(json.dumps(receipt, separators=(",", ":")) + "\n")
     except BlockingIOError:
         # A running release already owns publication and will perform pruning.
-        _ = sys.stdout.write('{"passed":true,"busy":true}\n')
+        _ = sys.stdout.write('{"passed":true,"busy":true,"changed":false}\n')
     except (OSError, ValueError, ReleaseError) as error:
         failure = (
             str(error) if isinstance(error, release_assets.AssetError) else "asset_operation_failed"

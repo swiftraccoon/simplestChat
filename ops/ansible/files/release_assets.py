@@ -38,6 +38,7 @@ MAX_FILES = 256
 MAX_GENERATIONS = 4
 MAX_CAPTURES = 2
 MAX_VERSION = 128
+PUBLIC_FILE_MODE = 0o644
 MAX_AGE = 7 * 86400
 CONTAINER_PATH = "/run/simplestchat-browser-assets"
 NAME = re.compile(
@@ -222,7 +223,7 @@ def write_file(path: Path, content: bytes) -> None:
         _ = stream.write(content)
         stream.flush()
         os.fsync(stream.fileno())
-    path.chmod(0o644)
+    path.chmod(PUBLIC_FILE_MODE)
 
 
 def sync_directory(path: Path) -> None:
@@ -378,14 +379,16 @@ def commit(  # noqa: C901, PLR0912, PLR0915 - one index/pointer transaction owns
     sync_directory(root)
 
 
-def initialize(root: Path, *, owner: int = 0) -> None:
-    """Create an empty verified store before the readonly proxy mount is started."""
+def initialize(root: Path, *, owner: int = 0) -> bool:
+    """Create an empty verified store; return whether its persistent state changed."""
     if not root.exists() and not root.is_symlink():
         root.mkdir(mode=0o755)
         root.chmod(0o755)
     generations = read_store(root, owner)
     if not (root / "index.json").exists():
         commit(root, [], {}, generations)
+        return True
+    return False
 
 
 def publish(
@@ -393,7 +396,7 @@ def publish(
 ) -> dict[str, int]:
     """Preserve selected+candidate assets; bound additional generations by count/age/bytes."""
     require(0 < len(captures) <= MAX_CAPTURES and timestamp >= 0, "asset_capture_count")
-    initialize(root, owner=owner)
+    _ = initialize(root, owner=owner)
     generations = read_store(root, owner)
     by_revision = {entry["revision"]: entry for entry in generations}
     selected: list[Generation] = []
@@ -445,17 +448,24 @@ def prune(root: Path, timestamp: int, *, owner: int = 0) -> None:
     )
 
 
-def select_version(root: Path, revision: str, *, owner: int = 0) -> None:
-    """Publish selected revision metadata at the same boundary as image selection."""
+def select_version(root: Path, revision: str, *, owner: int = 0) -> bool:
+    """Publish selected metadata only when bytes or mode differ; report that change."""
     require(REVISION.fullmatch(revision), "asset_selected_revision")
     _ = read_store(root, owner)
     public = root / "public"
+    version = public / "app-version.json"
+    content = json.dumps({"revision": revision}, separators=(",", ":")).encode() + b"\n"
+    if (
+        version.exists()
+        and version.read_bytes() == content
+        and stat.S_IMODE(version.stat().st_mode) == PUBLIC_FILE_MODE
+    ):
+        return False
     temporary = public / (".version-" + uuid.uuid4().hex)
     try:
-        write_file(
-            temporary, json.dumps({"revision": revision}, separators=(",", ":")).encode() + b"\n"
-        )
-        _ = temporary.replace(public / "app-version.json")
+        write_file(temporary, content)
+        _ = temporary.replace(version)
         sync_directory(public)
     finally:
         temporary.unlink(missing_ok=True)
+    return True

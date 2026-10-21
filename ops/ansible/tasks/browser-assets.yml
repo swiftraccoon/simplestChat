@@ -8,7 +8,8 @@
       - initialize
       - --revision
       - "{{ scpub_browser_assets_revision | default(scbench_revision) }}"
-  changed_when: true
+  register: scpub_browser_asset_initialization
+  changed_when: (scpub_browser_asset_initialization.stdout | from_json).changed
   when: not ansible_check_mode
 
 - name: Record the installed reviewed proxy capability on initial provisioning
