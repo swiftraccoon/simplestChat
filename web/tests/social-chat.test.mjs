@@ -3,7 +3,7 @@ import { attachmentFixture } from './attachment-fixture.mjs';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { loadProtocol, loadTypeScript } from './source-loader.mjs';
+import { loadProtocol, loadTypeScript } from './native-fixtures.mjs';
 import { deferred, flush, uiFixture } from './ui-fixture.mjs';
 
 const chatModule = await loadTypeScript('src/chat-store.ts');
@@ -28,6 +28,17 @@ async function fixture({
 } = {}) {
   const f = await uiFixture(httpRequest ? { fetch: httpRequest } : {});
   const attachmentState = attachmentFixture();
+  const listen = f.Node.prototype.addEventListener;
+  f.Node.prototype.addEventListener = function (type, callback, options = {}) {
+    listen.call(
+      this,
+      type,
+      (event) => {
+        if (!options.signal?.aborted) callback(event);
+      },
+      options,
+    );
+  };
   Object.defineProperties(f.Node.prototype, {
     options: {
       get() {
@@ -125,7 +136,10 @@ async function fixture({
   f.document.createTextNode = (text) => f.ui.el('text', text);
   f.document.hidden = false;
   const documentListeners = new Map();
-  f.document.addEventListener = (name, handler) => documentListeners.set(name, handler);
+  f.document.addEventListener = (name, handler, options = {}) =>
+    documentListeners.set(name, (event) => {
+      if (!options.signal?.aborted) handler(event);
+    });
   // The UI fixture's fetch stub keeps its own record; the chat state shadows it below.
   const http = f.state;
   const state = {
@@ -154,8 +168,10 @@ async function fixture({
   };
   const pointer = {
     matches: touch,
-    addEventListener: (_name, handler) => {
-      state.pointerChange = handler;
+    addEventListener: (_name, handler, options = {}) => {
+      state.pointerChange = (event) => {
+        if (!options.signal?.aborted) handler(event);
+      };
     },
   };
   class Notification {
@@ -231,9 +247,11 @@ async function fixture({
     modules: { './ui': f.ui, './settings-sheet.css': {} },
     globals: { document: f.document, setTimeout: () => 1, clearTimeout: () => {} },
   });
-  const { SocialChat } = await loadTypeScript('src/social-chat.ts', {
+  const sourceOptions = {
     modules: {
       './protocol': await loadProtocol(),
+      './disposable': await loadTypeScript('src/disposable.ts'),
+      './validation': await loadTypeScript('src/validation.ts'),
       './attachments': attachmentState.module,
       './chat-store': chatModule,
       './ui': f.ui,
@@ -250,6 +268,9 @@ async function fixture({
         },
         onHistoryEdit(listener) {
           state.editedListener = listener;
+          return () => {
+            state.editedListener = null;
+          };
         },
         onHistoryReaction(listener) {
           state.reactionListener = listener;
@@ -284,6 +305,9 @@ async function fixture({
           state.resize = callback;
         }
         observe() {}
+        disconnect() {
+          state.observerDisconnected = true;
+        }
       },
       TextEncoder,
       structuredClone,
@@ -301,6 +325,33 @@ async function fixture({
       },
       clearTimeout: (id) => timers.delete(id),
     },
+  };
+  const sharedModules = Object.fromEntries(
+    Object.entries(sourceOptions.modules).map(([name, module]) => [`../${name.slice(2)}`, module]),
+  );
+  const chatModules = {};
+  for (const concern of [
+    'store',
+    'format',
+    'mentions',
+    'notifications',
+    'render',
+    'composer',
+    'preferences',
+  ]) {
+    chatModules[`./${concern}`] = await loadTypeScript(`src/chat/${concern}.ts`, {
+      modules: { ...sharedModules, ...chatModules },
+      globals: sourceOptions.globals,
+    });
+  }
+  const { SocialChat } = await loadTypeScript('src/social-chat.ts', {
+    modules: {
+      ...sourceOptions.modules,
+      ...Object.fromEntries(
+        Object.entries(chatModules).map(([name, module]) => [`./chat/${name.slice(2)}`, module]),
+      ),
+    },
+    globals: sourceOptions.globals,
   });
   const { AccountPreferences } = await loadTypeScript('src/account-preferences.ts', {
     modules: {
@@ -491,7 +542,7 @@ test('an unconfirmed public send retries the same identity and reconciles a late
   await f.chat.activate();
   retrySession(f);
   f.chat.input.value = 'original text';
-  f.chat.send();
+  f.chat.composer.send();
   const original = f.chat.store.messages[0];
   expireSend(f);
   assert.equal(original.status, 'unknown');
@@ -533,7 +584,7 @@ test('an uncertain storage commit stays unknown and directs the sender to saved 
   await f.chat.activate();
   retrySession(f);
   f.chat.input.value = 'durable original';
-  f.chat.send();
+  f.chat.composer.send();
   const original = f.chat.store.messages[0];
   f.chat.handleEvent({
     type: 'messageRetryResult',
@@ -554,12 +605,12 @@ test('private retry retains original recipient even when another conversation is
   retrySession(f);
   f.chat.openPrivate('alice', 'Alice');
   f.chat.input.value = 'private original';
-  f.chat.send();
+  f.chat.composer.send();
   const original = f.chat.store.messages[0];
   expireSend(f);
   f.chat.switchConversation('public');
   f.chat.input.value = 'public draft';
-  f.chat.retry(original);
+  f.chat.composer.retry(original);
   assert.equal(f.state.sent.at(-1)[1].targetParticipantId, 'alice');
   assert.equal(f.state.sent.at(-1)[1].clientMessageId, original.clientMessageId);
   assert.equal(f.chat.input.value, 'public draft');
@@ -581,7 +632,7 @@ for (const boundary of ['expiry', 'membership', 'snapshot-session', 'identity', 
     await f.chat.activate();
     retrySession(f);
     f.chat.input.value = 'old original';
-    f.chat.send();
+    f.chat.composer.send();
     const original = f.chat.store.messages[0];
     expireSend(f);
     if (boundary === 'expiry') original.retry.expiresAt = 0;
@@ -593,7 +644,7 @@ for (const boundary of ['expiry', 'membership', 'snapshot-session', 'identity', 
       });
     if (boundary === 'identity') f.state.viewer = 'another-viewer';
     if (boundary === 'reset') f.chat.reset();
-    f.chat.retry(original);
+    f.chat.composer.retry(original);
     assert.equal(f.state.sent.length, 1);
     assert.equal(f.timers.size, 0);
   });
@@ -604,14 +655,14 @@ test('grace reconnect keeps retry identity but explicit membership activation re
   await f.chat.activate();
   retrySession(f);
   f.chat.input.value = 'original';
-  f.chat.send();
+  f.chat.composer.send();
   const original = f.chat.store.messages[0];
   expireSend(f);
   f.state.room.connected = false;
-  f.chat.retry(original);
+  f.chat.composer.retry(original);
   assert.equal(f.state.sent.length, 1);
   f.state.room.connected = true;
-  f.chat.retry(original);
+  f.chat.composer.retry(original);
   assert.equal(f.state.sent.length, 2);
   f.state.room.membershipVersion++;
   await f.chat.activate();
@@ -625,12 +676,12 @@ test('retry rejection stays unconfirmed and does not overwrite the next draft', 
   await f.chat.activate();
   retrySession(f);
   f.chat.input.value = 'original';
-  f.chat.send();
+  f.chat.composer.send();
   const original = f.chat.store.messages[0];
   expireSend(f);
   f.chat.input.value = 'new draft';
-  f.chat.retry(original);
-  f.chat.retry(original);
+  f.chat.composer.retry(original);
+  f.chat.composer.retry(original);
   assert.equal(f.state.sent.length, 2, 'only one retry may be pending');
   f.chat.handleEvent({
     type: 'socialError',
@@ -652,11 +703,11 @@ test('a rejection arriving after a retry timeout cannot mark the original as uns
   await f.chat.activate();
   retrySession(f);
   f.chat.input.value = 'original';
-  f.chat.send();
+  f.chat.composer.send();
   const original = f.chat.store.messages[0];
   const retryIdentity = original.retry;
   expireSend(f);
-  f.chat.retry(original);
+  f.chat.composer.retry(original);
   expireSend(f);
   f.chat.input.value = 'next draft';
   f.chat.handleEvent({
@@ -678,10 +729,10 @@ test('a full receipt window allows later same-ID checking without automatic retr
   await f.chat.activate();
   retrySession(f);
   f.chat.input.value = 'original';
-  f.chat.send();
+  f.chat.composer.send();
   const original = f.chat.store.messages[0];
   expireSend(f);
-  f.chat.retry(original);
+  f.chat.composer.retry(original);
   f.chat.handleEvent({
     type: 'messageRetryResult',
     clientMessageId: original.clientMessageId,
@@ -692,7 +743,7 @@ test('a full receipt window allows later same-ID checking without automatic retr
   assert.ok(original.retry);
   assert.equal(f.timers.size, 0);
   assert.equal(f.state.sent.length, 2);
-  f.chat.retry(original);
+  f.chat.composer.retry(original);
   assert.equal(f.state.sent.length, 3);
   assert.equal(f.state.sent.at(-1)[1].clientMessageId, original.clientMessageId);
   f.chat.reset();
@@ -706,7 +757,7 @@ test('a full snapshot renders once and unchanged replay performs no row allocati
   f.chat.handleEvent(snapshot(history));
   assert.equal(changes.renders, 1);
   assert.equal(changes.insertions, 300);
-  assert.equal(f.chat.rows.size, 300);
+  assert.equal(f.chat.renderer.rows.size, 300);
   assert.equal(createdRows(f).length, 300);
   assert.deepEqual(
     contents(f),
@@ -734,7 +785,7 @@ test('live append evicts only the oldest row and updates the new first-row group
   f.chat.receive(entry(300));
   assert.equal(changes.insertions, 1);
   assert.equal(createdRows(f).length, 301);
-  assert.equal(f.chat.rows.size, 300);
+  assert.equal(f.chat.renderer.rows.size, 300);
   assert.equal(retained[0].isConnected, false);
   assert.deepEqual(rows(f).slice(0, 299), retained.slice(1));
   assert.equal(retained[1].classList.contains('grouped'), false);
@@ -758,7 +809,7 @@ test('chronological insertion and acknowledgement moves preserve row identity an
   assert.equal(rows(f)[1], later);
   assert.equal(later.classList.contains('grouped'), false, 'two-minute gaps start a group');
   f.chat.input.value = 'pending between';
-  f.chat.send();
+  f.chat.composer.send();
   const pending = f.chat.store.messages.find((message) => message.status === 'pending');
   const pendingRow = rows(f)[1];
   assert.deepEqual(contents(f), ['Message earlier', 'pending between', 'Message later']);
@@ -770,7 +821,7 @@ test('chronological insertion and acknowledgement moves preserve row identity an
   assert.deepEqual(rows(f), [pendingRow, earlier, later]);
   assert.equal(changes.insertions, 1, 'only the acknowledged row changes chronological position');
   assert.equal(pendingRow.dataset.messageId, 'ack-first');
-  assert.equal(f.chat.pending.size, 0);
+  assert.equal(f.chat.composer.pending.size, 0);
   assert.equal(f.timers.size, 0);
   assert.equal(
     earlier.classList.contains('grouped'),
@@ -783,7 +834,7 @@ test('mutable acknowledgement and failure fields update the retained row without
   const f = await fixture();
   await f.chat.activate();
   f.chat.input.value = 'original draft';
-  f.chat.send();
+  f.chat.composer.send();
   const pending = f.chat.store.messages[0];
   const row = rows(f)[0];
   assert.match(row.textContent, /Sending/);
@@ -814,7 +865,7 @@ test('mutable acknowledgement and failure fields update the retained row without
     .find((node) => node.textContent === 'Edit & resend')
     .click();
   assert.equal(f.chat.input.value, 'original draft');
-  assert.equal(f.chat.composition.draft('public'), 'original draft');
+  assert.equal(f.chat.composer.composition.draft('public'), 'original draft');
   f.chat.handleEvent({
     type: 'messageAck',
     message: { ...pending, messageId: 'confirmed', participantName: 'Updated local name' },
@@ -828,7 +879,7 @@ test('mutable acknowledgement and failure fields update the retained row without
   assert.equal(f.document.activeElement, f.chat.input);
   row.querySelector('.sender').click();
   assert.deepEqual(f.state.actions.at(-1).slice(0, 2), ['local', 'Updated local name']);
-  assert.equal(f.chat.pending.size, 0);
+  assert.equal(f.chat.composer.pending.size, 0);
   assert.equal(f.timers.size, 0);
 });
 
@@ -860,12 +911,12 @@ test('immutable view fingerprints refresh edited text, sender actions and local 
 test('snapshot batching preserves privacy, acknowledgement cleanup and replay sound suppression', async () => {
   const f = await fixture();
   await f.chat.activate();
-  f.chat.preferences.allowPrivateMessages = false;
-  f.chat.preferences.sounds = true;
-  f.chat.preferences.ignored = [{ id: 'ignored', name: 'Ignored' }];
-  f.chat.playSound = () => assert.fail('Replay must not play sounds');
+  f.chat.privacy.preferences.allowPrivateMessages = false;
+  f.chat.privacy.preferences.sounds = true;
+  f.chat.privacy.preferences.ignored = [{ id: 'ignored', name: 'Ignored' }];
+  f.chat.notifications.playSound = () => assert.fail('Replay must not play sounds');
   f.chat.input.value = 'own pending';
-  f.chat.send();
+  f.chat.composer.send();
   const pending = { ...f.chat.store.messages[0], messageId: 'acknowledged' };
   const publicMessage = entry('accepted');
   const changes = observeRows(f);
@@ -879,13 +930,13 @@ test('snapshot batching preserves privacy, acknowledgement cleanup and replay so
     ]),
   );
   assert.equal(changes.renders, 1);
-  assert.equal(f.chat.pending.size, 0);
+  assert.equal(f.chat.composer.pending.size, 0);
   assert.equal(f.timers.size, 0);
   assert.deepEqual(contents(f), ['Message accepted', 'own pending']);
-  assert.equal(f.chat.rows.size, 2);
+  assert.equal(f.chat.renderer.rows.size, 2);
   assert.equal(f.chat.store.names.size, 0);
   f.chat.input.value = 'evicted pending';
-  f.chat.send();
+  f.chat.composer.send();
   const afterPending = Date.now() + 10_000;
   f.chat.handleEvent(
     snapshot(
@@ -896,8 +947,8 @@ test('snapshot batching preserves privacy, acknowledgement cleanup and replay so
       ),
     ),
   );
-  assert.equal(f.chat.rows.size, 300);
-  assert.equal(f.chat.pending.size, 0, 'batched eviction clears pending delivery timers');
+  assert.equal(f.chat.renderer.rows.size, 300);
+  assert.equal(f.chat.composer.pending.size, 0, 'batched eviction clears pending delivery timers');
   assert.equal(f.timers.size, 0);
   assert.equal(contents(f)[0], 'Message new-5');
 });
@@ -911,7 +962,7 @@ test('hidden conversations, ignore changes and privacy resets discard cached DOM
   await f.chat.toggleIgnore('alice', 'Alice', true);
   assert.deepEqual(rows(f), [bob]);
   assert.equal(alice.isConnected, false);
-  assert.equal(f.chat.rows.size, 1);
+  assert.equal(f.chat.renderer.rows.size, 1);
   await f.chat.toggleIgnore('alice', 'Alice', true);
   assert.notEqual(
     rows(f)[0],
@@ -923,14 +974,14 @@ test('hidden conversations, ignore changes and privacy resets discard cached DOM
   f.chat.receive(entry('private', { recipientId: 'local' }));
   f.chat.openPrivate('alice', 'Alice');
   const privateRow = rows(f)[0];
-  assert.equal(f.chat.rows.size, 1);
+  assert.equal(f.chat.renderer.rows.size, 1);
   assert.ok(publicRows.every((node) => !node.isConnected));
   f.chat.closePrivate();
   assert.equal(privateRow.isConnected, false);
-  assert.equal(f.chat.rows.size, 2);
+  assert.equal(f.chat.renderer.rows.size, 2);
   const beforeReset = rows(f);
   f.chat.reset();
-  assert.equal(f.chat.rows.size, 0);
+  assert.equal(f.chat.renderer.rows.size, 0);
   assert.equal(rows(f).length, 0);
   assert.ok(beforeReset.every((node) => !node.isConnected));
 });
@@ -1045,17 +1096,17 @@ test('composer height follows draft switches, generated text, recall, width and 
   const height = () => f.chat.input.style.getPropertyValue('height');
   const offset = () =>
     f.document.getElementById('chat-panel').style.getPropertyValue('--chat-composer-height');
-  f.chat.insertText('public\ndraft\nwith lines', 0, 0);
+  f.chat.composer.insertText('public\ndraft\nwith lines', 0, 0);
   assert.equal(height(), '78px');
   assert.equal(offset(), '94px');
   f.chat.openPrivate('alice', 'Alice');
   assert.equal(height(), 'auto');
-  f.chat.insertText('one\ntwo\nthree\nfour\nfive\nsix\nseven', 0, 0);
+  f.chat.composer.insertText('one\ntwo\nthree\nfour\nfive\nsix\nseven', 0, 0);
   assert.equal(height(), '158px');
   assert.equal(offset(), '154px', 'the newest-message button uses the capped composer height');
   f.chat.switchConversation('public');
   assert.equal(height(), '78px');
-  f.chat.send();
+  f.chat.composer.send();
   assert.equal(height(), 'auto');
   composerKey(f, { key: 'ArrowUp' });
   assert.equal(height(), '78px');
@@ -1064,7 +1115,7 @@ test('composer height follows draft switches, generated text, recall, width and 
   assert.equal(height(), '78px', 'width changes remeasure the current draft');
   f.chat.messages.scrollTop = 12;
   f.chat.seenAtBottom = false;
-  f.chat.insertText('\nmore', f.chat.input.value.length, f.chat.input.value.length);
+  f.chat.composer.insertText('\nmore', f.chat.input.value.length, f.chat.input.value.length);
   assert.equal(f.chat.messages.scrollTop, 12, 'growing a draft preserves the reading position');
   f.chat.reset();
   assert.equal(height(), 'auto');
@@ -1076,19 +1127,19 @@ test('private drafts, generated text, and sent recall stay isolated from public 
   f.chat.input.value = 'public draft';
   f.chat.openPrivate('alice', 'Alice');
   assert.equal(f.chat.input.value, '');
-  f.chat.insertText('private 😀', 0, 0);
+  f.chat.composer.insertText('private 😀', 0, 0);
   f.chat.switchConversation('public');
   assert.equal(f.chat.input.value, 'public draft');
   f.chat.input.value = '';
-  f.chat.composition.save('public', '');
+  f.chat.composer.composition.save('public', '');
   f.chat.switchConversation('alice');
   assert.equal(f.chat.input.value, 'private 😀');
-  f.chat.send();
+  f.chat.composer.send();
   f.chat.switchConversation('public');
-  f.chat.onKey({ key: 'ArrowUp', preventDefault() {} });
+  f.chat.composer.onKey({ key: 'ArrowUp', preventDefault() {} });
   assert.equal(f.chat.input.value, '');
   f.chat.switchConversation('alice');
-  f.chat.onKey({ key: 'ArrowUp', preventDefault() {} });
+  f.chat.composer.onKey({ key: 'ArrowUp', preventDefault() {} });
   assert.equal(f.chat.input.value, 'private 😀');
 });
 
@@ -1097,14 +1148,14 @@ test('a restarted guest keeps only the public draft within the same room and vie
   await f.chat.activate();
   f.chat.input.value = 'unsent public draft';
   f.chat.openPrivate('alice', 'Alice');
-  f.chat.insertText('private draft', 0, 0);
+  f.chat.composer.insertText('private draft', 0, 0);
   f.state.room.rejoiningAfterRestart = true;
   f.state.room.localParticipantId = 'replacement-guest';
   f.state.room.membershipVersion++;
   await f.chat.activate();
   assert.equal(f.chat.input.value, 'unsent public draft');
-  assert.equal(f.chat.composition.draft('public'), 'unsent public draft');
-  assert.equal(f.chat.composition.draft('alice'), '');
+  assert.equal(f.chat.composer.composition.draft('public'), 'unsent public draft');
+  assert.equal(f.chat.composer.composition.draft('alice'), '');
   assert.equal(f.chat.store.active, 'public');
   assert.deepEqual(f.state.sent, [], 'restoration never sends a draft');
 });
@@ -1124,26 +1175,26 @@ for (const change of ['viewer', 'room', 'instance', 'leave', 'ordinary-rejoin'])
     if (change === 'ordinary-rejoin') f.state.room.rejoiningAfterRestart = false;
     await f.chat.activate();
     assert.equal(f.chat.input.value, '');
-    assert.equal(f.chat.composition.draft('public'), '');
+    assert.equal(f.chat.composer.composition.draft('public'), '');
   });
 }
 
 test('generated mentions and emoji obey character and byte bounds and reset recall state', async () => {
   const f = await fixture();
   await f.chat.activate();
-  f.chat.composition.sent('public', 'previous');
-  f.chat.composition.recall('public', 'up', '');
+  f.chat.composer.composition.sent('public', 'previous');
+  f.chat.composer.composition.recall('public', 'up', '');
   f.chat.input.value = '@Al';
   f.chat.input.selectionStart = 3;
-  f.chat.onKey({ key: 'Tab', preventDefault() {} });
+  f.chat.composer.onKey({ key: 'Tab', preventDefault() {} });
   assert.equal(f.chat.input.value, '@Alice ');
-  assert.equal(f.chat.composition.draft('public'), '@Alice ');
-  assert.equal(f.chat.composition.isRecalling('public'), false);
+  assert.equal(f.chat.composer.composition.draft('public'), '@Alice ');
+  assert.equal(f.chat.composer.composition.isRecalling('public'), false);
   f.chat.input.value = 'x'.repeat(2000);
-  f.chat.insertText('😀', 2000, 2000);
+  f.chat.composer.insertText('😀', 2000, 2000);
   assert.equal(f.chat.input.value.length, 2000);
   f.chat.input.value = '界'.repeat(1400);
-  f.chat.insertText('😀', 1400, 1400);
+  f.chat.composer.insertText('😀', 1400, 1400);
   assert.equal(f.chat.input.value.length, 1400);
   assert.equal(f.state.notifications.length, 2);
 });
@@ -1155,14 +1206,14 @@ test('disconnected and offline conversations cannot create pending messages', as
   f.chat.participantsChanged();
   assert.equal(f.chat.input.disabled, true);
   f.chat.input.value = 'offline text';
-  f.chat.send();
-  assert.equal(f.chat.pending.size, 0);
+  f.chat.composer.send();
+  assert.equal(f.chat.composer.pending.size, 0);
   assert.equal(f.state.sent.length, 0);
   f.state.room.connected = true;
   f.chat.openPrivate('departed', 'Departed');
   assert.equal(f.chat.input.disabled, true);
   f.chat.input.value = 'undeliverable';
-  f.chat.send();
+  f.chat.composer.send();
   assert.equal(f.state.sent.length, 0);
 });
 
@@ -1185,7 +1236,7 @@ test('account PM entry points use the shared durable conversation while preservi
     incoming,
     'the open durable view receives an immediate refresh hint',
   );
-  const account = f.chat.conversationButtons.get('alice').node;
+  const account = f.chat.renderer.conversationButtons.get('alice').node;
   assert.equal(account.textContent, 'Alice1', 'an account in another room is not labelled offline');
   account.click();
   assert.deepEqual(f.state.openedAccountMessages.at(-1), ['alice', 'Alice']);
@@ -1213,7 +1264,7 @@ test('confirmed account-history reads clear only the current membership through 
   assert.equal(f.chat.store.unread.get('alice'), 2, 'foreign or session-only cursors are inert');
   f.state.privateReadListener('local', 'alice', older);
   assert.equal(f.chat.store.unread.get('alice'), 1);
-  assert.equal(f.chat.conversationButtons.get('alice').node.textContent, 'Alice1');
+  assert.equal(f.chat.renderer.conversationButtons.get('alice').node.textContent, 'Alice1');
   f.state.room.membershipVersion++;
   f.state.privateReadListener('local', 'alice', newer);
   assert.equal(
@@ -1234,7 +1285,7 @@ test('confirmed account-history reads clear only the current membership through 
   );
   f.state.privateReadListener('replacement-account', 'alice', replacement);
   assert.equal(f.chat.store.unread.has('alice'), false);
-  assert.equal(f.chat.conversationButtons.get('alice').node.textContent, 'Alice');
+  assert.equal(f.chat.renderer.conversationButtons.get('alice').node.textContent, 'Alice');
   f.chat.dispose();
   assert.equal(f.state.privateReadListener, null);
 });
@@ -1248,14 +1299,14 @@ test('an absent guest PM retains its session boundary and never becomes an accou
     type: 'privateMessageReceived',
     message: entry('guest-arrival', { recipientId: 'local' }),
   });
-  const guest = f.chat.conversationButtons.get('alice').node;
+  const guest = f.chat.renderer.conversationButtons.get('alice').node;
   assert.match(guest.textContent, /offline/);
   guest.click();
   assert.deepEqual(f.state.openedAccountMessages, []);
   assert.equal(f.chat.store.active, 'alice');
   assert.equal(f.chat.input.disabled, true);
   f.chat.input.value = 'Cannot send to a departed guest';
-  f.chat.send();
+  f.chat.composer.send();
   assert.equal(f.state.sent.length, 0);
 });
 
@@ -1267,7 +1318,7 @@ test('snapshot account-conversation capability is retired with its viewer and me
   f.chat.handleEvent(
     snapshot([entry('saved-account', { recipientId: 'local', accountConversation: true })]),
   );
-  f.chat.conversationButtons.get('alice').node.click();
+  f.chat.renderer.conversationButtons.get('alice').node.click();
   assert.equal(f.state.openedAccountMessages.length, 1);
   f.chat.reset();
   f.state.viewer = 'replacement-account';
@@ -1278,7 +1329,7 @@ test('snapshot account-conversation capability is retired with its viewer and me
     type: 'privateMessageReceived',
     message: entry('new-guest', { recipientId: 'local' }),
   });
-  f.chat.conversationButtons.get('alice').node.click();
+  f.chat.renderer.conversationButtons.get('alice').node.click();
   assert.equal(f.state.openedAccountMessages.length, 1);
   assert.equal(f.chat.input.disabled, true);
 });
@@ -1288,11 +1339,11 @@ test('closing a pending PM clears timers and a late acknowledgement cannot reope
   await f.chat.activate();
   f.chat.openPrivate('alice', 'Alice');
   f.chat.input.value = 'private';
-  f.chat.send();
+  f.chat.composer.send();
   const pending = { ...f.chat.store.messages[0] };
-  assert.equal(f.chat.pending.size, 1);
+  assert.equal(f.chat.composer.pending.size, 1);
   f.chat.closePrivate();
-  assert.equal(f.chat.pending.size, 0);
+  assert.equal(f.chat.composer.pending.size, 0);
   assert.equal(f.timers.size, 0);
   f.chat.handleEvent({ type: 'messageAck', message: { ...pending, messageId: 'server-ack' } });
   assert.equal(f.chat.store.names.size, 0);
@@ -1363,8 +1414,8 @@ test('leave cancels activation continuation and clears private drafts, audio, an
   const activating = f.chat.activate();
   f.chat.openPrivate('alice', 'Alice');
   f.chat.input.value = 'secret draft';
-  f.chat.preferences.sounds = true;
-  f.chat.resumeSoundFromGesture();
+  f.chat.privacy.preferences.sounds = true;
+  f.chat.notifications.resumeSoundFromGesture();
   f.chat.reset();
   f.state.room = null;
   pending.resolve({});
@@ -1372,8 +1423,8 @@ test('leave cancels activation continuation and clears private drafts, audio, an
   assert.equal(f.state.requests.length, 1, 'a departed viewer must not request replay');
   assert.equal(f.chat.store.localId, '');
   assert.equal(f.chat.input.value, '');
-  assert.equal(f.chat.composition.draft('alice'), '');
-  assert.equal(f.chat.audio, null);
+  assert.equal(f.chat.composer.composition.draft('alice'), '');
+  assert.equal(f.chat.notifications.audio, null);
 });
 
 test('late ignore success and failure cannot overwrite another viewer or persist under the wrong account', async () => {
@@ -1386,7 +1437,7 @@ test('late ignore success and failure cannot overwrite another viewer or persist
     f.chat.reset();
     f.state.viewer = 'account-b';
     f.chat.viewerKey = 'account-b';
-    f.chat.preferences = {
+    f.chat.privacy.preferences = {
       allowPrivateMessages: false,
       sounds: false,
       largeText: true,
@@ -1395,9 +1446,9 @@ test('late ignore success and failure cannot overwrite another viewer or persist
     if (succeeds) pending.resolve({});
     else pending.reject(new Error('Old request rejected'));
     await update.catch(() => {});
-    assert.equal(f.chat.preferences.allowPrivateMessages, false);
-    assert.equal(f.chat.preferences.largeText, true);
-    assert.equal(f.chat.preferences.ignored.length, 0);
+    assert.equal(f.chat.privacy.preferences.allowPrivateMessages, false);
+    assert.equal(f.chat.privacy.preferences.largeText, true);
+    assert.equal(f.chat.privacy.preferences.ignored.length, 0);
     assert.equal(f.state.storage.size, 0);
   }
 });
@@ -1438,14 +1489,14 @@ test('public and PM unread counts survive hidden panels, deduplicate replay, and
 test('conversation pills preserve drafts, unread counts and focused nodes across incoming messages', async () => {
   const f = await fixture();
   await f.chat.activate();
-  const publicChat = f.chat.conversationButtons.get('public').node;
+  const publicChat = f.chat.renderer.conversationButtons.get('public').node;
   assert.equal(publicChat.dataset.conversationId, 'public');
   assert.equal(publicChat.getAttribute('aria-pressed'), 'true');
-  assert.equal(f.chat.conversations.getAttribute('aria-label'), 'Conversations');
+  assert.equal(f.chat.renderer.conversations.getAttribute('aria-label'), 'Conversations');
   f.chat.input.value = 'public draft';
   f.chat.input.emit('input');
   f.chat.openPrivate('alice', 'Alice');
-  const privateChat = f.chat.conversationButtons.get('alice').node;
+  const privateChat = f.chat.renderer.conversationButtons.get('alice').node;
   assert.equal(privateChat.getAttribute('aria-pressed'), 'true');
   f.chat.input.value = 'private draft';
   f.chat.input.emit('input');
@@ -1453,8 +1504,8 @@ test('conversation pills preserve drafts, unread counts and focused nodes across
   assert.equal(f.chat.input.value, 'public draft');
   publicChat.focus();
   f.chat.receive(entry('new-pm', { recipientId: 'local' }));
-  assert.equal(f.chat.conversationButtons.get('public').node, publicChat);
-  assert.equal(f.chat.conversationButtons.get('alice').node, privateChat);
+  assert.equal(f.chat.renderer.conversationButtons.get('public').node, publicChat);
+  assert.equal(f.chat.renderer.conversationButtons.get('alice').node, privateChat);
   assert.equal(f.document.activeElement, publicChat);
   assert.equal(f.chat.input.value, 'public draft');
   assert.equal(privateChat.querySelector('.conversation-unread').textContent, '1');
@@ -1466,7 +1517,7 @@ test('conversation pills preserve drafts, unread counts and focused nodes across
   assert.equal(privateChat.getAttribute('aria-pressed'), 'true');
   f.chat.closeButton.focus();
   f.chat.closeButton.click();
-  assert.equal(f.chat.conversationButtons.has('alice'), false);
+  assert.equal(f.chat.renderer.conversationButtons.has('alice'), false);
   assert.equal(f.chat.input.value, 'public draft');
   assert.equal(f.document.activeElement, publicChat, 'closing PM restores reachable focus');
   assert.equal(f.chat.closeButton.hidden, true);
@@ -1481,14 +1532,18 @@ test('many conversation pills retain full accessible names and focus without reb
     f.participants.set(id, { id, name: `${longName}${index}` });
     f.chat.openPrivate(id, `${longName}${index}`);
   }
-  assert.equal(f.chat.conversations.children.length, 21);
-  const focused = f.chat.conversationButtons.get('person-10').node;
+  assert.equal(f.chat.renderer.conversations.children.length, 21);
+  const focused = f.chat.renderer.conversationButtons.get('person-10').node;
   focused.focus();
-  f.chat.conversations.scrollLeft = 100;
+  f.chat.renderer.conversations.scrollLeft = 100;
   f.chat.receive(entry('other-pm', { recipientId: 'local' }));
   assert.equal(f.document.activeElement, focused);
-  assert.equal(f.chat.conversations.scrollLeft, 100, 'incoming PM does not scroll away from focus');
-  assert.equal(f.chat.conversations.children.length, 22);
+  assert.equal(
+    f.chat.renderer.conversations.scrollLeft,
+    100,
+    'incoming PM does not scroll away from focus',
+  );
+  assert.equal(f.chat.renderer.conversations.children.length, 22);
   assert.ok(focused.getAttribute('aria-label').includes(`${longName}10`));
   assert.equal(focused.title, `${longName}10`);
   const settings = f.document
@@ -1500,7 +1555,7 @@ test('many conversation pills retain full accessible names and focus without reb
   settings.click();
   assert.deepEqual(f.state.openedSettings, ['chat-look']);
   f.chat.reset();
-  assert.equal(f.chat.conversations.children.length, 1);
+  assert.equal(f.chat.renderer.conversations.children.length, 1);
 });
 
 test('saved sound preferences unlock on the next gesture and audio failure is nonfatal', async () => {
@@ -1513,8 +1568,8 @@ test('saved sound preferences unlock on the next gesture and audio failure is no
   await flush();
   assert.equal(f.state.audioCreates, 1);
   assert.equal(f.state.audioResumes, 1);
-  f.chat.audio.state = 'running';
-  assert.doesNotThrow(() => f.chat.playSound(440));
+  f.chat.notifications.audio.state = 'running';
+  assert.doesNotThrow(() => f.chat.notifications.playSound(440));
   f.chat.receive(entry('still-works'));
   assert.equal(f.chat.store.messages.length, 1);
 });
@@ -1529,7 +1584,7 @@ test('a Sounds change resumes audio in its gesture, and leave prevents a late pr
   sounds.checked = true;
   sounds.emit('change');
   assert.equal(f.state.audioResumes, 1);
-  assert.equal(f.chat.preferences.sounds, true);
+  assert.equal(f.chat.privacy.preferences.sounds, true);
   const privacy = await f.screen('privacy');
   const allow = privacy.querySelectorAll('input').find((node) => node.type === 'checkbox');
   allow.checked = false;
@@ -1538,7 +1593,7 @@ test('a Sounds change resumes audio in its gesture, and leave prevents a late pr
   f.state.room = null;
   pending.resolve({});
   await flush();
-  assert.equal(f.chat.preferences.allowPrivateMessages, true);
+  assert.equal(f.chat.privacy.preferences.allowPrivateMessages, true);
   const stored = [...f.state.storage.values()].map((value) => JSON.parse(value));
   assert.ok(
     stored.some((entry) => entry.sounds === true),
@@ -1590,7 +1645,7 @@ test('the Chat look screen offers every timestamp format and applies the chosen 
   select.value = 'seconds';
   select.emit('change');
   await flush();
-  assert.equal(f.chat.preferences.timestamps, 'seconds');
+  assert.equal(f.chat.privacy.preferences.timestamps, 'seconds');
   assert.equal(select.parentNode.querySelector('.sheet-row-saved').textContent, 'Saved');
 });
 
@@ -1611,7 +1666,7 @@ test('replying to saved public history closes settings and returns a guest PM to
   assert.equal(f.state.closedScreens, 1);
   assert.equal(f.chat.store.active, 'public');
   f.chat.input.value = 'Answer from saved history';
-  f.chat.send();
+  f.chat.composer.send();
   await flush();
   assert.equal(f.state.sent.at(-1)[0], 'public');
   assert.equal(f.state.sent.at(-1)[4], original.messageId);
@@ -1626,15 +1681,19 @@ test('the timestamp format is remembered with the chat preferences, and nonsense
   f.state.storage.set(key, JSON.stringify({ timestamps: 'seconds' }));
   f.chat.reset();
   await f.chat.activate();
-  assert.equal(f.chat.preferences.timestamps, 'seconds');
+  assert.equal(f.chat.privacy.preferences.timestamps, 'seconds');
   f.state.storage.set(key, JSON.stringify({ timestamps: 'hover' }));
   f.chat.reset();
   await f.chat.activate();
-  assert.equal(f.chat.preferences.timestamps, 'hover', 'an explicit saved choice is preserved');
+  assert.equal(
+    f.chat.privacy.preferences.timestamps,
+    'hover',
+    'an explicit saved choice is preserved',
+  );
   f.state.storage.set(key, JSON.stringify({ timestamps: '<script>' }));
   f.chat.reset();
   await f.chat.activate();
-  assert.equal(f.chat.preferences.timestamps, 'time');
+  assert.equal(f.chat.privacy.preferences.timestamps, 'time');
 });
 
 test('join and leave notices show their own timestamp and follow the viewer format', async () => {
@@ -1665,7 +1724,7 @@ test('delivery state renders outside the hover-revealed timestamp so failures st
   const f = await fixture();
   await f.chat.activate();
   f.chat.input.value = 'status test';
-  f.chat.send();
+  f.chat.composer.send();
   const pending = f.chat.store.messages[0];
   const row = rows(f)[0];
   const sending = row.querySelector('.msg-status');
@@ -1721,7 +1780,7 @@ test('messages wear the look they were sent with, else the sender’s current on
   // A pending message of your own wears the look you have now.
   f.state.room.chatStyle = { color: 'violet', style: 'bubble' };
   f.chat.input.value = 'mine';
-  f.chat.send();
+  f.chat.composer.send();
   assert.deepEqual(look(rows(f).at(-1)), { style: 'bubble', color: CHAT_PALETTE.violet });
 });
 
@@ -1863,7 +1922,7 @@ test('reading resumes below a New messages divider that marks where unseen messa
   f.chat.render();
   assert.equal([...f.chat.messages.children].indexOf(divider()), at, 'it stays while shown');
   f.chat.input.value = 'caught up';
-  f.chat.send();
+  f.chat.composer.send();
   assert.equal(divider(), undefined, 'sending clears it');
 });
 
@@ -1873,7 +1932,7 @@ test('typing @ offers matching people to mention, chosen by keyboard or pointer 
   f.participants.set('alfie', { id: 'alfie', name: 'Alfie' });
   f.participants.set('bob', { id: 'bob', name: 'Bob' });
   f.participants.set('sal', { id: 'sal', name: 'Sal' });
-  const list = f.chat.mentionList;
+  const list = f.chat.composer.mentions.mentionList;
   const type = (value) => {
     f.chat.input.value = value;
     f.chat.input.selectionStart = f.chat.input.selectionEnd = value.length;
@@ -1922,7 +1981,7 @@ test('opted-in desktop notices announce mentions and private messages only while
     await flush();
   };
   await save(true);
-  assert.equal(f.chat.preferences.notifications, true);
+  assert.equal(f.chat.privacy.preferences.notifications, true);
   f.document.hidden = true;
   f.chat.receive(entry('plain'));
   f.chat.receive(entry('mention', { content: 'hey @Local, look' }));
@@ -1967,16 +2026,16 @@ test('notification previews require an explicit preference and stale notices can
   const active = f.chat.store.active;
   notice.onclick();
   assert.equal(f.chat.store.active, active);
-  assert.equal(f.chat.preferences.notificationPreviews, false);
+  assert.equal(f.chat.privacy.preferences.notificationPreviews, false);
 });
 
 test('existing desktop-notification opt-in does not opt in to previews', async () => {
   const f = await fixture();
   await f.chat.activate();
-  f.state.storage.set(f.chat.preferenceKey(), JSON.stringify({ notifications: true }));
-  f.chat.loadPreferences();
-  assert.equal(f.chat.preferences.notifications, true);
-  assert.equal(f.chat.preferences.notificationPreviews, false);
+  f.state.storage.set(f.chat.privacy.preferenceKey(), JSON.stringify({ notifications: true }));
+  f.chat.privacy.loadPreferences();
+  assert.equal(f.chat.privacy.preferences.notifications, true);
+  assert.equal(f.chat.privacy.preferences.notificationPreviews, false);
 });
 
 test('a browser that refuses notification permission leaves desktop notices off and says why', async () => {
@@ -1990,7 +2049,7 @@ test('a browser that refuses notification permission leaves desktop notices off 
   input.checked = true;
   input.emit('change');
   await flush();
-  assert.equal(f.chat.preferences.notifications, false);
+  assert.equal(f.chat.privacy.preferences.notifications, false);
   assert.equal(input.checked, false, 'a refused permission unchecks the row');
   assert.match(f.state.notifications.at(-1), /blocked for this site/);
 });
@@ -2069,22 +2128,22 @@ test('a reply quotes what it answers, travels with the send, and a quote finds t
       .querySelectorAll('button')
       .find((node) => node.getAttribute('aria-label') === 'Reply');
   replyButton().click();
-  assert.equal(f.chat.replyBar.hidden, false);
-  assert.match(f.chat.replyBar.textContent, /^Replying to AliceWhere are the slides\?/);
+  assert.equal(f.chat.composer.replyBar.hidden, false);
+  assert.match(f.chat.composer.replyBar.textContent, /^Replying to AliceWhere are the slides\?/);
   f.chat.input.value = 'Linked above';
-  f.chat.send();
+  f.chat.composer.send();
   assert.equal(f.state.sent.at(-1)[0], 'public');
   assert.equal(f.state.sent.at(-1).at(-1), 'server-1', 'the send names the message it answers');
   assert.equal(
     rows(f).at(-1).querySelector('.msg-reply').textContent,
     'Alice: Where are the slides?',
   );
-  assert.equal(f.chat.replyBar.hidden, true, 'sending clears the reply');
+  assert.equal(f.chat.composer.replyBar.hidden, true, 'sending clears the reply');
   replyButton().click();
   f.chat.input.emit('keydown', { key: 'Escape', preventDefault() {}, stopPropagation() {} });
-  assert.equal(f.chat.replyBar.hidden, true, 'Escape cancels it');
+  assert.equal(f.chat.composer.replyBar.hidden, true, 'Escape cancels it');
   f.chat.input.value = 'no reply';
-  f.chat.send();
+  f.chat.composer.send();
   assert.equal(f.state.sent.at(-1).at(-1), undefined);
   f.chat.receive(
     entry('3', {
@@ -2150,11 +2209,11 @@ test('an account viewer loads its saved preferences before the room hears its ig
   assert.equal(f.http.requests[0][0], '/api/auth/preferences');
   assert.equal(f.http.requests[0][1].method, 'GET');
   assert.equal(f.http.requests[0][1].headers.Authorization, 'Bearer jwt');
-  assert.equal(f.chat.preferences.timestamps, 'seconds');
-  assert.equal(f.chat.preferences.allowPrivateMessages, false);
-  assert.equal(f.chat.preferences.largeText, true);
+  assert.equal(f.chat.privacy.preferences.timestamps, 'seconds');
+  assert.equal(f.chat.privacy.preferences.allowPrivateMessages, false);
+  assert.equal(f.chat.privacy.preferences.largeText, true);
   assert.deepEqual(
-    f.chat.preferences.ignored.map((entry) => entry.id),
+    f.chat.privacy.preferences.ignored.map((entry) => entry.id),
     ['7d3f4d5a-1c2b-4e6f-8a9b-0c1d2e3f4a5b'],
     'account ignores follow the account snapshot',
   );
@@ -2202,7 +2261,7 @@ test('a failed preference load keeps the browser copy and says so once', async (
   f.state.storage.set('simplestchat.chat.v1.account-a', JSON.stringify({ timestamps: 'seconds' }));
   f.http.response = { ok: false, status: 503, text: async () => 'down' };
   await f.chat.activate();
-  assert.equal(f.chat.preferences.timestamps, 'seconds');
+  assert.equal(f.chat.privacy.preferences.timestamps, 'seconds');
   assert.deepEqual(f.state.notifications, [
     'Saved chat preferences could not be loaded; using this browser’s copy',
   ]);
@@ -2250,35 +2309,39 @@ test("a peer's typing shows in its own conversation only and expires on its own"
   let now = 5_000_000;
   Date.now = () => now;
   try {
-    assert.equal(f.chat.typingLine.hidden, true);
+    assert.equal(f.chat.composer.typingLine.hidden, true);
     f.chat.handleEvent({ type: 'participantTyping', participantId: 'alice' });
-    assert.equal(f.chat.typingLine.hidden, false);
-    assert.equal(f.chat.typingLine.textContent, 'Alice is typing…');
+    assert.equal(f.chat.composer.typingLine.hidden, false);
+    assert.equal(f.chat.composer.typingLine.textContent, 'Alice is typing…');
     f.chat.handleEvent({ type: 'participantTyping', participantId: 'bob' });
-    assert.equal(f.chat.typingLine.textContent, 'Alice and Bob are typing…');
+    assert.equal(f.chat.composer.typingLine.textContent, 'Alice and Bob are typing…');
     f.chat.handleEvent({ type: 'participantTyping', participantId: 'local' });
-    assert.equal(f.chat.typingLine.textContent, 'Alice and Bob are typing…', 'never yourself');
+    assert.equal(
+      f.chat.composer.typingLine.textContent,
+      'Alice and Bob are typing…',
+      'never yourself',
+    );
     // Private composing reaches only the private conversation with that person.
     f.chat.handleEvent({
       type: 'participantTyping',
       participantId: 'alice',
       targetParticipantId: 'local',
     });
-    assert.equal(f.chat.typingLine.textContent, 'Bob is typing…');
+    assert.equal(f.chat.composer.typingLine.textContent, 'Bob is typing…');
     f.chat.openPrivate('alice', 'Alice');
-    assert.equal(f.chat.typingLine.textContent, 'Alice is typing…');
+    assert.equal(f.chat.composer.typingLine.textContent, 'Alice is typing…');
     f.chat.switchConversation('public');
-    assert.equal(f.chat.typingLine.textContent, 'Bob is typing…');
+    assert.equal(f.chat.composer.typingLine.textContent, 'Bob is typing…');
     // Notices expire four seconds after they arrived.
     now += 4100;
     const [id, callback] = [...f.timers.entries()].at(-1);
     f.timers.delete(id);
     callback();
-    assert.equal(f.chat.typingLine.hidden, true);
+    assert.equal(f.chat.composer.typingLine.hidden, true);
     f.chat.handleEvent({ type: 'participantTyping', participantId: 'alice' });
-    assert.equal(f.chat.typingLine.hidden, false);
+    assert.equal(f.chat.composer.typingLine.hidden, false);
     f.chat.reset();
-    assert.equal(f.chat.typingLine.hidden, true);
+    assert.equal(f.chat.composer.typingLine.hidden, true);
   } finally {
     Date.now = realNow;
   }
@@ -2310,19 +2373,19 @@ test('same-looking display names hide IDs and account status but keep distinct a
   f.chat.openPrivate(first, 'Sam');
   f.chat.openPrivate(second, 'Sam');
   for (const id of [first, second]) {
-    const conversation = f.chat.conversationButtons.get(id).node;
+    const conversation = f.chat.renderer.conversationButtons.get(id).node;
     assert.equal(conversation.textContent, 'Sam');
     assert.equal(conversation.title, 'Sam');
     assert.equal(conversation.getAttribute('aria-label'), 'Sam');
     conversation.click();
     f.chat.input.value = `Hello ${id}`;
-    f.chat.send();
+    f.chat.composer.send();
     assert.equal(f.state.sent.at(-1)[0], 'private');
     assert.equal(f.state.sent.at(-1)[1], id);
   }
   f.participants.delete(first);
   f.chat.render();
-  const offline = f.chat.conversationButtons.get(first).node;
+  const offline = f.chat.renderer.conversationButtons.get(first).node;
   assert.equal(offline.textContent, 'Sam · offline');
   assert.equal(offline.title, 'Sam · offline');
   assert.equal(offline.getAttribute('aria-label'), 'Sam · offline');
@@ -2341,11 +2404,11 @@ test('own messages and the reply composer keep the recorded room nickname', asyn
     .find((node) => node.getAttribute('aria-label') === 'Reply')
     .click();
   assert.equal(
-    f.chat.replyBar.querySelector('.reply-bar-label').textContent,
+    f.chat.composer.replyBar.querySelector('.reply-bar-label').textContent,
     'Replying to Earlier nickname',
   );
   f.chat.input.value = 'New message';
-  f.chat.send();
+  f.chat.composer.send();
   assert.equal(rows(f).at(-1).querySelector('.chat-sender-button').textContent, 'Current nickname');
 });
 
@@ -2401,13 +2464,13 @@ test('ordinary members lack removal controls and live deletion cancels a quote d
       .find((node) => node.getAttribute('aria-label') === 'Remove message'),
     undefined,
   );
-  f.chat.startReply(f.chat.store.messages[0]);
+  f.chat.composer.startReply(f.chat.store.messages[0]);
   f.chat.handleEvent({
     type: 'chatMessageRemoved',
     messageId: 'server-remove',
     removedAt: '2026-10-07T12:00:00Z',
   });
-  assert.equal(f.chat.replyingTo, null);
+  assert.equal(f.chat.composer.replyingTo, null);
   assert.equal(f.chat.store.messages[0].content, '');
 });
 
@@ -2422,9 +2485,11 @@ test('retained reconnect drops pre-recovery public rows outside replay while pre
     message: entry('private', { recipientId: 'local' }),
   });
   f.chat.input.value = 'Pending public';
-  f.chat.send();
+  f.chat.composer.send();
   const pending = f.chat.store.messages.find((message) => message.status === 'pending');
-  f.chat.startReply(f.chat.store.messages.find((message) => message.messageId === 'server-gone'));
+  f.chat.composer.startReply(
+    f.chat.store.messages.find((message) => message.messageId === 'server-gone'),
+  );
   const membership = f.state.room.membershipVersion;
   f.chat.prepareSnapshotRecovery();
   f.chat.handleEvent({ type: 'chatReceived', ...entry('new-live') });
@@ -2443,7 +2508,7 @@ test('retained reconnect drops pre-recovery public rows outside replay while pre
   assert.ok(f.chat.store.messages.some((message) => message.messageId === 'server-private'));
   assert.ok(f.chat.store.messages.includes(pending));
   assert.equal(pending.status, 'pending');
-  assert.equal(f.chat.replyingTo, null);
+  assert.equal(f.chat.composer.replyingTo, null);
   assert.equal(f.chat.snapshotPublicIds, null);
   f.chat.handleEvent(snapshot([]));
   assert.ok(
@@ -2656,12 +2721,13 @@ const fileAttachment = {
 test('account notification rules gate both sounds and desktop notices without dropping messages', async () => {
   const f = await fixture();
   await f.chat.activate();
-  f.chat.preferences.sounds = true;
-  f.chat.preferences.notifications = await f.chat.notificationPermission(true);
+  f.chat.privacy.preferences.sounds = true;
+  f.chat.privacy.preferences.notifications =
+    await f.chat.notifications.notificationPermission(true);
   f.document.hidden = true;
   const sounds = [],
     checks = [];
-  f.chat.playSound = (tone) => sounds.push(tone);
+  f.chat.notifications.playSound = (tone) => sounds.push(tone);
   f.chat.options.allowsNotification = (kind, peer) => {
     checks.push([kind, peer]);
     return false;
@@ -2705,14 +2771,14 @@ test('attachment-only sends and unconfirmed retries preserve the original attach
   retrySession(f);
   const composer = f.attachmentState.composers[0];
   composer.files = [fileAttachment];
-  f.chat.send();
+  f.chat.composer.send();
   const original = f.chat.store.messages[0];
   assert.equal(original.content, '');
   assert.deepEqual(original.attachments, [fileAttachment]);
   assert.deepEqual(f.state.sent[0].at(-1), [fileAttachment.id]);
   assert.equal(composer.consumed, 1);
   expireSend(f);
-  f.chat.retry(original);
+  f.chat.composer.retry(original);
   assert.deepEqual(f.state.sent.at(-1)[1].attachmentIds, [fileAttachment.id]);
   assert.equal(f.state.sent.at(-1)[1].clientMessageId, original.clientMessageId);
 });
@@ -2724,7 +2790,7 @@ test('pending uploads prevent sending, and changing conversations discards pendi
   composer.files = [fileAttachment];
   composer.blocked = true;
   f.chat.input.value = 'draft';
-  f.chat.send();
+  f.chat.composer.send();
   assert.equal(f.state.sent.length, 0);
   assert.match(f.state.notifications.at(-1), /Wait for uploads/);
   f.chat.switchConversation('alice', 'Alice');
@@ -2757,3 +2823,78 @@ test('attachment renders use room-owned access grants and are disposed on remova
   assert.equal(next.disposed, true);
   assert.equal(next.options.current(), false);
 });
+
+test('chat disposal retires composer listeners, width observation and history subscriptions', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  f.chat.privacy.preferences.sounds = true;
+  f.documentListeners.get('pointerdown')();
+  assert.equal(f.state.audioCreates, 1);
+  f.chat.input.value = '@Al';
+  f.chat.input.selectionStart = 3;
+  f.chat.input.emit('input');
+  const staleMention = f.chat.composer.mentions.mentionList.querySelector('li');
+  assert.ok(staleMention);
+  f.chat.composer.noteRemoteTyping('alice', null);
+  f.chat.input.value = 'send before disposal';
+  f.chat.composer.send();
+  assert.equal(f.state.sent.length, 1);
+  assert.ok(f.timers.size > 0);
+
+  f.chat.dispose();
+  f.chat.dispose();
+  assert.equal(f.state.observerDisconnected, true);
+  assert.equal(f.state.editedListener, null);
+  assert.equal(f.state.reactionListener, null);
+  assert.equal(f.state.privateReadListener, null);
+  assert.equal(f.timers.size, 0);
+  assert.equal(f.chat.notifications.audio, null);
+  assert.equal(f.chat.composer.replyingTo, null);
+
+  const requests = f.state.requests.length;
+  await f.chat.activate();
+  f.chat.handleEvent({ type: 'chatReceived', ...entry('after-dispose') });
+  f.chat.system('retired room notice');
+  f.chat.openPrivate('alice', 'Alice');
+  assert.equal(f.chat.store.messages.length, 0);
+  assert.equal(f.chat.store.active, 'public');
+  assert.equal(f.state.requests.length, requests);
+  f.chat.input.value = 'keep after disposal';
+  f.chat.input.emit('input');
+  f.chat.input.emit('keydown', { key: 'Enter', preventDefault() {} });
+  f.chat.sendButton.click();
+  staleMention.click();
+  f.documentListeners.get('pointerdown')();
+  f.documentListeners.get('visibilitychange')();
+  const height = f.chat.input.style.getPropertyValue('height');
+  f.state.resize([{ contentRect: { width: 100 } }]);
+  assert.equal(f.chat.input.style.getPropertyValue('height'), height);
+  assert.equal(f.chat.input.value, 'keep after disposal');
+  assert.equal(f.state.sent.length, 1);
+  assert.equal(f.state.audioCreates, 1);
+  assert.equal(f.chat.composer.composition.draft('public'), '');
+});
+
+for (const result of ['success', 'failure']) {
+  test(`a late reaction ${result} belongs only to the activation that requested it`, async () => {
+    const f = await fixture();
+    await f.chat.activate();
+    const response = deferred();
+    f.state.handle = async (action) => (action === 'reactToMessage' ? response.promise : {});
+    f.chat.receive(entry('same-id'));
+    f.chat.renderer.react(f.chat.store.messages[0], '👍');
+    f.chat.reset();
+    await f.chat.activate();
+    f.chat.receive(entry('same-id', { content: 'replacement activation' }));
+    const notifications = f.state.notifications.length;
+    if (result === 'success')
+      response.resolve({
+        messageId: 'server-same-id',
+        reactions: [{ emoji: '👍', people: ['local'] }],
+      });
+    else response.reject(new Error('reaction from retired activation'));
+    await flush();
+    assert.deepEqual(f.chat.store.messages[0].reactions ?? [], []);
+    assert.equal(f.state.notifications.length, notifications);
+  });
+}

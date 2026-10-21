@@ -120,13 +120,21 @@ For complete guest/account setup and LAN ICE addressing see
 | `src/notification-preferences.ts`, `notification-validation.ts`                                 | Account-synced notification rules, conversation mute/snooze and quiet hours                                                               |
 | `src/layer-cap.ts`                                                                              | Simulcast layer a remote tile can use at its rendered size, with hysteresis                                                               |
 | `src/settings-sheet.ts`                                                                         | The settings sheet: one list, single-purpose screens, rows that apply at once                                                             |
-| `src/social-chat.ts`, `chat-store.ts`                                                           | Room/PM conversations, composer, bounded replay, removal tombstones and preferences                                                       |
+| `src/social-chat.ts`, `chat/*.ts`, `chat-store.ts`                                                           | Room/PM conversations, composer, bounded replay, removal tombstones and preferences                                                       |
 | `src/chat-history.ts`                                                                           | Saved room history, retention controls, account PM inbox, search and shared read positions                                                |
 | `src/pm-composer.ts`, `pm-send-attempts.ts`, `chat-reactions.ts`                                | Durable account-PM attempts and quoted replies, plus shared reaction controls                                                             |
 | `src/discovery.ts`, `discovery-validation.ts`                                                   | Accepted contacts, explicit contact links, account favorites and recent room shortcuts                                                    |
 | `src/*.css`, `index.html`                                                                       | Layout, component styles and initial document                                                                                             |
 | `public/help.html`, `help.css`                                                                  | Zero-JavaScript user help, copied into the production output                                                                              |
 | `scripts/check-bundle.mjs`, `bundle-budget.json`                                                | Aggregate raw/gzip asset limits enforced by every production build                                                                        |
+
+`social-chat.ts` coordinates room/account membership, history, replay and read
+positions. The `chat/` modules own the store boundary, rendering, composer,
+mentions, notifications and preferences. They receive narrow live contexts;
+`dispose()` releases subscriptions, observers and listeners, while activation
+identity fences work already awaiting a result. `disposable.ts` provides
+shared listener signals and resource cleanup. Chat tests import the actual
+modules through `tests/native-fixtures.mjs`.
 
 Rust signaling types in [src/signaling/protocol.rs](../src/signaling/protocol.rs)
 are the wire contract's source of truth: `cargo run -q -p xtask -- protocol-ts`

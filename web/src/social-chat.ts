@@ -1,35 +1,16 @@
-import type { TelemetryHandler, TelemetryOutcome } from './telemetry-types';
+import { createScope } from './disposable';
 import type { RoomClient } from './room';
-import { TIMESTAMP_FORMATS } from './protocol';
-import type {
-  ChatAttachment,
-  ChatEntry,
-  ChatPreferences,
-  ChatStyle,
-  ChatStyleKind,
-  PreferencePatch,
-  ServerMessage,
-  TimestampFormat,
-} from './protocol';
-import { AttachmentComposer, renderAttachments } from './attachments';
-import { ChatStore, ConversationInputs, type ChatItem } from './chat-store';
-import type { AccountPreferences } from './account-preferences';
-import { api, asyncButton, button, busy, el, modal } from './ui';
+import type { ChatEntry, ChatStyle, ServerMessage, TimestampFormat } from './protocol';
+import { ChatStore } from './chat/store';
+import type { SocialChatOptions } from './chat/context';
+import { ChatComposer } from './chat/composer';
+import { ChatRenderer } from './chat/render';
+import { ChatNotifications } from './chat/notifications';
+import { ChatPreferencesController } from './chat/preferences';
+import { AUTOMATIC_LOOK, excerpt } from './chat/format';
+import { api, button, el } from './ui';
+import type { SheetSection } from './settings-sheet';
 import {
-  actionRow,
-  group,
-  markSaved,
-  note,
-  selectRow,
-  toggleRow,
-  type ScreenContext,
-  type SheetSection,
-} from './settings-sheet';
-import { appendLinkedText, appendEditedLabel, editMessageDialog } from './chat-message-ui';
-import { CHAT_PALETTE, chatColor } from './avatar-colors';
-import { CHAT_REACTIONS } from './chat-reactions';
-import {
-  openRoomHistory,
   notifyHistoryRemoval,
   notifyHistoryEdit,
   onHistoryEdit,
@@ -38,139 +19,32 @@ import {
   onPrivateRead,
   notifyInboxChanged,
 } from './chat-history';
-
-type Preferences = {
-  allowPrivateMessages: boolean;
-  sounds: boolean;
-  /** Desktop notices for mentions and private messages while the tab is out of sight. */
-  notifications: boolean;
-  /** Explicitly reveals message content and sender on the operating system’s lock screen. */
-  notificationPreviews: boolean;
-  largeText: boolean;
-  timestamps: TimestampFormat;
-  /** The last look chosen here; a guest's next join asks for it. */
-  look: ChatStyle | null;
-  ignored: { id: string; name: string }[];
-};
-
-const LOOKS: readonly { kind: ChatStyleKind; label: string }[] = [
-  { kind: 'accent', label: 'Stripe' },
-  { kind: 'text', label: 'Colored text' },
-  { kind: 'bubble', label: 'Tinted bubble' },
-];
-const AUTOMATIC_LOOK: ChatStyle = { color: null, style: 'accent' };
 export { CHAT_REACTIONS } from './chat-reactions';
 
-/** The start of a message on one line, as a reply quotes it. */
-function excerpt(text: string): string {
-  const flat = text.split(/\s+/).join(' ').trim();
-  return flat.length > 140 ? `${flat.slice(0, 140).trimEnd()}…` : flat;
-}
-
-/** A stored or typed look reduced to the palette and the known styles, like the server does. */
-function validLook(value: unknown): ChatStyle | null {
-  if (typeof value !== 'object' || value === null) return null;
-  const { color, style } = value as Record<string, unknown>;
-  return {
-    color:
-      typeof color === 'string' && Object.prototype.hasOwnProperty.call(CHAT_PALETTE, color)
-        ? color
-        : null,
-    style: LOOKS.some((look) => look.kind === style) ? (style as ChatStyleKind) : 'accent',
-  };
-}
-
-const pad = (value: number): string => String(value).padStart(2, '0');
-
-/** A message time in the viewer's format, always in their local time. */
-function formatChatTime(date: Date, format: TimestampFormat): string {
-  const time = `${pad(date.getHours())}:${pad(date.getMinutes())}`;
-  switch (format) {
-    case 'time':
-      return time;
-    case 'time12':
-      return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
-    case 'seconds':
-      return `${time}:${pad(date.getSeconds())}`;
-    case 'datetime':
-      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${time}:${pad(date.getSeconds())}`;
-    case 'hover':
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  }
-}
-type Options = {
-  telemetry?: TelemetryHandler;
-  getRoom: () => RoomClient | null;
-  getViewerKey: () => string;
-  /** The account's bearer token, when the viewer has one: its preferences then follow it. */
-  getToken?: () => string | null;
-  accountPreferences?: AccountPreferences;
-  /** Account PMs share the durable inbox surface regardless of room presence. */
-  openAccountConversation?: (id: string, name: string) => void;
-  notify: (message: string) => void;
-  bindParticipantName: (anchor: HTMLButtonElement, id: string, name: string) => void;
-  allowsNotification?: (kind: 'private' | 'mention' | 'room', peerId?: string) => boolean;
-  mountConversationNotifications?: (
-    container: HTMLElement,
-    peerId: string,
-    current: () => boolean,
-  ) => void;
-  /** Opens the settings sheet at a section; the chat options button uses it. */
-  openSettings?: (section: string, opener: HTMLElement | null) => void;
-  /** Account notification rules and app alerts, appended to the Notifications screen. */
-  mountAccountNotifications?: (container: HTMLElement, current: () => boolean) => void;
-};
-type MessageRow = { node: HTMLElement; fingerprint: string; dispose: () => void };
-type ConversationButton = { node: HTMLButtonElement; name: HTMLElement; unread: HTMLElement };
-
+/** Coordinates membership, ordered event ingestion and conversation read ownership. */
 export class SocialChat {
-  private readonly options: Options;
+  private readonly options: SocialChatOptions;
 
-  private readonly attachments: AttachmentComposer;
+  private readonly events = createScope();
+  private readonly composer: ChatComposer;
+  private readonly renderer: ChatRenderer;
+  private readonly notifications: ChatNotifications;
+  private readonly privacy: ChatPreferencesController;
+  private readonly stopHistoryEdit: () => void;
   private readonly store = new ChatStore(300, 256 * 1024);
-  private readonly composition = new ConversationInputs();
   private readonly messages = document.getElementById('chat-messages')!;
   private readonly input = document.getElementById('chat-input') as HTMLTextAreaElement;
   private readonly inputRow = document.getElementById('chat-input-row')!;
   private readonly sendButton = document.getElementById('chat-send-btn') as HTMLButtonElement;
-  private readonly touchPointer = window.matchMedia('(any-pointer: coarse)');
-  private touchComposer = false;
-  private readonly conversations = el('nav', undefined, 'conversation-list');
-  private readonly conversationButtons = new Map<string, ConversationButton>();
   private readonly accountPeers = new Set<string>();
-  private visibleConversation = '';
   private readonly conversationStatus = el('span', '', 'conversation-status');
-  /** Who is composing in the visible conversation, until each notice expires. */
-  private readonly typingLine = el('div', '', 'typing-line');
-  private typing = new Map<string, { until: number; target: string | null }>();
-  private typingTimer: ReturnType<typeof setTimeout> | null = null;
-  private lastTypingSent = 0;
   private readonly closeButton = button('✕', () => {
     this.closePrivate();
-    this.conversationButtons.get('public')?.node.focus();
+    this.renderer.conversationButtons.get('public')?.node.focus();
   });
-  private readonly emojiPanel = el('div', undefined, 'emoji-panel');
-  private readonly pendingStarted = new Map<string, number>();
-  private readonly pending = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly savedRead = new Map<string, string>();
   private readController = new AbortController();
   private readTimer: ReturnType<typeof setTimeout> | null = null;
-  private readonly retrying = new Set<string>();
-  private chatSessionId: string | null = null;
-  private chatSequence = 0;
-  // Only the active conversation's visible, retained messages own DOM nodes.
-  private readonly rows = new Map<string, MessageRow>();
-  private preferences: Preferences = {
-    allowPrivateMessages: true,
-    sounds: false,
-    notifications: false,
-    notificationPreviews: false,
-    timestamps: 'time',
-    look: null,
-    largeText: false,
-    ignored: [],
-  };
-  private temporaryIgnored = new Map<string, string>();
   private scope = '';
   private activeRoom: RoomClient | null = null;
   private viewerKey = '';
@@ -179,26 +53,14 @@ export class SocialChat {
   private activationTask: Promise<void> | null = null;
   private activationSynced = false;
   private snapshotPublicIds: Set<string> | null = null;
-  private preferenceOperation = 0;
-  private preferenceBusy = false;
-  private readonly stopAccountPreferences: (() => void) | undefined;
   private readonly stopHistoryReaction: () => void;
   private readonly stopPrivateRead: () => void;
-  private accountPreferenceSnapshot = '';
   private disposed = false;
-  private audio: AudioContext | null = null;
-  private readonly desktopNotices = new Set<Notification>();
   private seenAtBottom = true;
   // Where reading last resumed: the first message that had arrived unseen.
   private dividerKey: string | null = null;
   private resumeKey: string | null = null;
   private readonly divider = el('div', undefined, 'chat-divider');
-  // People offered while an @mention is being typed, and the highlighted one.
-  private readonly mentionList = el('ul', undefined, 'mention-list');
-  private mentionOptions: { name: string; chatStyle?: ChatStyle }[] = [];
-  private mentionActive = 0;
-  // The message the next send answers, shown above the message box until sent or cancelled.
-  private replyingTo: ChatEntry | null = null;
   private readonly historyStart = el('div', undefined, 'chat-history-start');
   private readonly olderButton = button(
     'Earlier messages',
@@ -222,12 +84,122 @@ export class SocialChat {
   private historyCursor: string | null = null;
   private historyLoaded = false;
   private historyLoading = false;
-  private readonly replyBar = el('div', undefined, 'reply-bar');
 
-  constructor(options: Options) {
+  constructor(options: SocialChatOptions) {
     this.options = options;
+
+    const owner = this;
+    this.privacy = new ChatPreferencesController({
+      options,
+      store: this.store,
+      get activation() {
+        return owner.activation;
+      },
+      get viewerKey() {
+        return owner.viewerKey;
+      },
+      get activeRoom() {
+        return owner.activeRoom;
+      },
+      get disposed() {
+        return owner.disposed;
+      },
+      contextCurrent: (activation, room, viewer) => owner.contextCurrent(activation, room, viewer),
+      render: (force) => owner.render(force),
+      switchConversation: (id, name) => owner.switchConversation(id, name),
+      startReply: (message) => owner.composer.startReply(message),
+      notificationPermission: (wanted) => owner.notifications.notificationPermission(wanted),
+      closeDesktopNotices: () => owner.notifications.closeDesktopNotices(),
+      resumeSoundFromGesture: (enabled) => owner.notifications.resumeSoundFromGesture(enabled),
+      playSound: (frequency) => owner.notifications.playSound(frequency),
+    });
+    this.notifications = new ChatNotifications({
+      options,
+      store: this.store,
+      get preferences() {
+        return owner.privacy.preferences;
+      },
+      get activation() {
+        return owner.activation;
+      },
+      get activeRoom() {
+        return owner.activeRoom;
+      },
+      get viewerKey() {
+        return owner.viewerKey;
+      },
+      get disposed() {
+        return owner.disposed;
+      },
+      contextCurrent: (activation, room, viewer) => owner.contextCurrent(activation, room, viewer),
+      switchConversation: (id, name) => owner.switchConversation(id, name),
+    });
+    this.renderer = new ChatRenderer({
+      options,
+      store: this.store,
+      get preferences() {
+        return owner.privacy.preferences;
+      },
+      get activeRoom() {
+        return owner.activeRoom;
+      },
+      get activation() {
+        return owner.activation;
+      },
+      get viewerKey() {
+        return owner.viewerKey;
+      },
+      get pins() {
+        return owner.pins;
+      },
+      get replyingTo() {
+        return owner.composer.replyingTo;
+      },
+      get seenAtBottom() {
+        return owner.seenAtBottom;
+      },
+      accountPeers: this.accountPeers,
+      contextCurrent: (activation, room, viewer) => owner.contextCurrent(activation, room, viewer),
+      isIgnored: (id) => owner.privacy.isIgnored(id),
+      pinMessage: (message, pinned) => owner.pinMessage(message, pinned),
+      startReply: (message) => owner.composer.startReply(message),
+      cancelReply: () => owner.composer.cancelReply(),
+      render: (force) => owner.render(force),
+      retry: (message) => owner.composer.retry(message),
+      restoreDraft: (message) => owner.composer.restoreDraft(message),
+      switchConversation: (id, name) => owner.switchConversation(id, name),
+    });
+    this.composer = new ChatComposer({
+      elements: { input: this.input, inputRow: this.inputRow, sendButton: this.sendButton },
+      options,
+      store: this.store,
+      get activeRoom() {
+        return owner.activeRoom;
+      },
+      get activation() {
+        return owner.activation;
+      },
+      get viewerKey() {
+        return owner.viewerKey;
+      },
+      get membershipVersion() {
+        return owner.membershipVersion;
+      },
+      get seenAtBottom() {
+        return owner.seenAtBottom;
+      },
+      messages: this.messages,
+      contextCurrent: (activation, room, viewer) => owner.contextCurrent(activation, room, viewer),
+      render: (force) => owner.render(force),
+      switchConversation: (id, name) => owner.switchConversation(id, name),
+      clearDivider: () => {
+        owner.dividerKey = null;
+        owner.resumeKey = null;
+      },
+    });
+
     const toolbar = el('div', undefined, 'conversation-toolbar');
-    this.conversations.setAttribute('aria-label', 'Conversations');
+    this.renderer.conversations.setAttribute('aria-label', 'Conversations');
     this.closeButton.setAttribute('aria-label', 'Close PM');
     this.closeButton.title = 'Close PM';
     const optionsButton = button(
@@ -237,7 +209,7 @@ export class SocialChat {
     );
     optionsButton.setAttribute('aria-label', 'Chat options');
     optionsButton.title = 'Chat options';
-    toolbar.append(this.conversations, this.closeButton, this.pinsButton, optionsButton);
+    toolbar.append(this.renderer.conversations, this.closeButton, this.pinsButton, optionsButton);
     this.pinsButton.hidden = true;
     this.historyStart.append(this.pinsList, this.olderButton);
     this.stopHistoryReaction = onHistoryReaction((id, reactions) => {
@@ -255,11 +227,11 @@ export class SocialChat {
         return;
       if (this.store.markReadThrough(peer, cursor)) this.render();
     });
-    onHistoryEdit((message) => {
+    this.stopHistoryEdit = onHistoryEdit((message) => {
       if (this.store.editMessage(message)) this.render();
-      if (this.replyingTo?.messageId === message.messageId) {
-        const quote = this.replyBar.querySelector('.reply-bar-excerpt');
-        if (quote) quote.textContent = excerpt(this.replyingTo.content);
+      if (this.composer.replyingTo?.messageId === message.messageId) {
+        const quote = this.composer.replyBar.querySelector('.reply-bar-excerpt');
+        if (quote) quote.textContent = excerpt(this.composer.replyingTo.content);
       }
       this.pinsVersion++;
       this.pins = this.pins.map((pin) =>
@@ -268,110 +240,52 @@ export class SocialChat {
       this.renderPins();
     });
     document.getElementById('chat-panel')!.prepend(toolbar, this.conversationStatus);
-    this.typingLine.hidden = true;
-    this.typingLine.setAttribute('aria-live', 'polite');
-    document.getElementById('chat-input-row')?.before(this.typingLine);
-    const emojiButton = button(
-      '☺',
-      () => {
-        this.emojiPanel.hidden = !this.emojiPanel.hidden;
-      },
-      'emoji-toggle',
-    );
-    emojiButton.title = 'Choose emoji';
-    emojiButton.setAttribute('aria-label', 'Choose emoji');
-    for (const emoji of ['😀', '😂', '😊', '❤️', '👍', '👋', '🎉', '🔥', '🤔', '😢', '🙌', '💯']) {
-      this.emojiPanel.append(
-        button(
-          emoji,
-          () => {
-            this.insertText(
-              emoji,
-              this.input.selectionStart ?? this.input.value.length,
-              this.input.selectionEnd ?? this.input.value.length,
-            );
-            this.emojiPanel.hidden = true;
-            this.input.focus();
-          },
-          'emoji-choice',
-        ),
-      );
-    }
-    this.emojiPanel.hidden = true;
-    document.getElementById('chat-input-row')!.prepend(emojiButton);
-    document.getElementById('chat-input-row')!.before(this.emojiPanel);
-    this.input.maxLength = 2000;
-    this.mentionList.id = 'mention-list';
-    this.mentionList.setAttribute('role', 'listbox');
-    this.mentionList.setAttribute('aria-label', 'People to mention');
-    this.mentionList.hidden = true;
-    // Choosing with the pointer must leave focus in the message box.
-    this.mentionList.addEventListener('mousedown', (event) => event.preventDefault());
-    this.input.setAttribute('aria-autocomplete', 'list');
-    this.input.setAttribute('aria-controls', 'mention-list');
-    document.getElementById('chat-input-row')!.before(this.mentionList);
-    this.replyBar.hidden = true;
-    document.getElementById('chat-input-row')!.before(this.replyBar);
-    this.input.addEventListener('input', () => this.suggestMentions());
-    this.input.addEventListener('input', () => this.noteTyping());
-    this.input.addEventListener('blur', () => this.closeMentions());
-    this.input.addEventListener('keydown', (event) => this.onKey(event));
-    this.input.addEventListener('input', () =>
-      this.composition.save(this.store.active, this.input.value),
-    );
-    this.input.addEventListener('input', () => this.resizeInput());
-    this.touchPointer.addEventListener('change', () => this.updateComposerMode());
-    this.updateComposerMode();
-    let composerWidth = 0;
-    new ResizeObserver(([entry]) => {
-      const width = entry?.contentRect.width ?? 0;
-      if (width === composerWidth) return;
-      composerWidth = width;
-      this.resizeInput();
-    }).observe(this.input);
-    this.sendButton.addEventListener('click', () => this.send());
     this.messages.setAttribute('role', 'log');
     this.messages.setAttribute('aria-label', 'Conversation messages');
     this.divider.setAttribute('role', 'separator');
     this.divider.append(el('span', 'New messages'));
-    this.messages.addEventListener('scroll', () => {
-      const wasAtBottom = this.seenAtBottom;
-      this.seenAtBottom =
-        this.messages.scrollHeight - this.messages.scrollTop - this.messages.clientHeight < 48;
-      if (this.seenAtBottom && this.isVisible()) this.markActiveRead(!wasAtBottom);
-      this.updateBadges();
-    });
-    document.getElementById('scroll-bottom-btn')!.addEventListener('click', () => {
-      this.messages.scrollTop = this.messages.scrollHeight;
-      this.seenAtBottom = true;
-      if (this.isVisible()) this.markActiveRead(true);
-      this.updateBadges();
-    });
-    document.addEventListener('visibilitychange', () => {
-      if (!document.hidden) this.render();
-    });
-    document
-      .querySelector<HTMLButtonElement>('[data-tab="chat"]')
-      ?.addEventListener('click', () => queueMicrotask(() => this.render()));
-    document.addEventListener('pointerdown', () => this.resumeSoundFromGesture());
-    document.addEventListener('keydown', () => this.resumeSoundFromGesture());
-    this.attachments = new AttachmentComposer({
-      host: this.inputRow,
-      input: this.input,
-      getToken: () => this.options.getToken?.() ?? null,
-      current: () =>
-        this.activeRoom !== null &&
-        this.contextCurrent(this.activation, this.activeRoom, this.viewerKey),
-      notify: this.options.notify,
-    });
-    this.stopAccountPreferences = this.options.accountPreferences?.subscribe((account, saved) => {
-      if (saved && account === this.viewerKey && account === this.options.getViewerKey())
-        this.applyAccountPreferences(saved);
-    });
+    this.messages.addEventListener(
+      'scroll',
+      () => {
+        const wasAtBottom = this.seenAtBottom;
+        this.seenAtBottom =
+          this.messages.scrollHeight - this.messages.scrollTop - this.messages.clientHeight < 48;
+        if (this.seenAtBottom && this.isVisible()) this.markActiveRead(!wasAtBottom);
+        this.renderer.updateBadges();
+      },
+      { signal: this.events.signal },
+    );
+    document.getElementById('scroll-bottom-btn')!.addEventListener(
+      'click',
+      () => {
+        this.messages.scrollTop = this.messages.scrollHeight;
+        this.seenAtBottom = true;
+        if (this.isVisible()) this.markActiveRead(true);
+        this.renderer.updateBadges();
+      },
+      { signal: this.events.signal },
+    );
+    document.addEventListener(
+      'visibilitychange',
+      () => {
+        if (!document.hidden) this.render();
+      },
+      { signal: this.events.signal },
+    );
+    document.querySelector<HTMLButtonElement>('[data-tab="chat"]')?.addEventListener(
+      'click',
+      () =>
+        queueMicrotask(() => {
+          if (!this.disposed) this.render();
+        }),
+      { signal: this.events.signal },
+    );
+    this.privacy.subscribe();
     this.render();
   }
 
   async activate(): Promise<void> {
+    if (this.disposed) return;
     const room = this.options.getRoom();
     if (!room?.localParticipantId) return;
     const viewerKey = this.options.getViewerKey();
@@ -391,23 +305,23 @@ export class SocialChat {
         this.viewerKey === viewerKey
           ? this.store.active === 'public'
             ? this.input.value
-            : this.composition.draft('public')
+            : this.composer.composition.draft('public')
           : '';
       this.reset();
       this.scope = room.currentRoomId ?? '';
       this.activeRoom = room;
       this.viewerKey = viewerKey;
       this.store.localId = room.localParticipantId;
-      this.composition.save('public', publicDraft);
+      this.composer.composition.save('public', publicDraft);
       this.input.value = publicDraft;
-      this.loadPreferences();
+      this.privacy.loadPreferences();
     }
     if (this.membershipVersion !== room.membershipVersion) {
       this.prepareSnapshotRecovery();
-      this.retireDeliveryAttempts();
+      this.composer.retireDeliveryAttempts();
       this.activation++;
-      this.preferenceOperation++;
-      this.preferenceBusy = false;
+      this.privacy.preferenceOperation++;
+      this.privacy.preferenceBusy = false;
       this.membershipVersion = room.membershipVersion;
       this.activationSynced = false;
       this.activationTask = null;
@@ -421,10 +335,10 @@ export class SocialChat {
       let success = true;
       // An account's saved copy replaces this browser's before the room hears
       // the ignore list; a guest's push stays synchronous with the activation.
-      const token = this.accountToken(viewerKey);
+      const token = this.privacy.accountToken(viewerKey);
       if (token) {
         try {
-          await this.loadAccountPreferences(current);
+          await this.privacy.loadAccountPreferences(current);
         } catch {
           if (current())
             this.options.notify(
@@ -434,7 +348,11 @@ export class SocialChat {
         if (!current()) return;
       }
       try {
-        await this.pushPreferences(room, this.preferences, this.temporaryIgnored);
+        await this.privacy.pushPreferences(
+          room,
+          this.privacy.preferences,
+          this.privacy.temporaryIgnored,
+        );
       } catch (error) {
         success = false;
         if (current())
@@ -479,26 +397,19 @@ export class SocialChat {
   }
 
   reset(): void {
-    this.attachments.reset();
     this.readController.abort();
     this.readController = new AbortController();
     if (this.readTimer !== null) clearTimeout(this.readTimer);
     this.readTimer = null;
     this.savedRead.clear();
     this.activation++;
-    this.preferenceOperation++;
-    this.preferenceBusy = false;
+    this.privacy.reset();
     this.activationTask = null;
     this.activationSynced = false;
     this.snapshotPublicIds = null;
     this.membershipVersion = -1;
-    this.closeDesktopNotices();
-    for (const timer of this.pending.values()) clearTimeout(timer);
-    for (const id of this.pendingStarted.keys()) this.finishSend(id, 'superseded');
-    this.pending.clear();
-    this.retrying.clear();
-    this.chatSessionId = null;
-    this.chatSequence = 0;
+    this.notifications.reset();
+    this.composer.reset();
     this.store.reset();
     this.accountPeers.clear();
     this.pins = [];
@@ -507,52 +418,32 @@ export class SocialChat {
     this.historyCursor = null;
     this.historyLoaded = false;
     this.historyLoading = false;
-    for (const row of this.rows.values()) {
-      row.dispose();
-      row.node.remove();
-    }
-    this.rows.clear();
+    this.renderer.reset();
     this.dividerKey = null;
     this.resumeKey = null;
     this.divider.remove();
-    this.cancelReply();
-    this.composition.reset();
-    this.temporaryIgnored.clear();
-    this.typing.clear();
-    this.lastTypingSent = 0;
-    this.renderTyping();
-    this.accountPreferenceSnapshot = '';
     this.scope = '';
     this.activeRoom = null;
     this.viewerKey = '';
-    this.preferences = {
-      allowPrivateMessages: true,
-      sounds: false,
-      notifications: false,
-      notificationPreviews: false,
-      largeText: false,
-      timestamps: 'time',
-      look: null,
-      ignored: [],
-    };
     this.seenAtBottom = true;
-    this.emojiPanel.hidden = true;
-    this.input.value = '';
-    this.audio?.close().catch(() => {});
-    this.audio = null;
     this.render();
   }
 
   dispose(): void {
+    if (this.disposed) return;
     this.disposed = true;
-    this.stopAccountPreferences?.();
+    this.events.dispose();
+    this.privacy.dispose();
+    this.stopHistoryEdit();
     this.stopHistoryReaction();
     this.stopPrivateRead();
     this.reset();
-    this.attachments.dispose();
+    this.composer.dispose();
+    this.notifications.dispose();
   }
 
   handleEvent(message: ServerMessage): void {
+    if (this.disposed) return;
     const room = this.options.getRoom();
     if (
       room?.localParticipantId &&
@@ -581,15 +472,15 @@ export class SocialChat {
       // The reply has the original message ID, not a retry-attempt ID. Once
       // unconfirmed, a delayed rejection cannot prove the original was unsent.
       const unknown =
-        this.retrying.has(message.clientMessageId) ||
+        this.composer.retrying.has(message.clientMessageId) ||
         this.store.messages.some(
           (item) =>
             item.participantId === this.store.localId &&
             item.clientMessageId === message.clientMessageId &&
             item.status === 'unknown',
         );
-      this.finishSend(message.clientMessageId, unknown ? 'unknown' : 'denied');
-      this.clearPending(message.clientMessageId);
+      this.composer.finishSend(message.clientMessageId, unknown ? 'unknown' : 'denied');
+      this.composer.clearPending(message.clientMessageId);
       this.store.fail(
         message.clientMessageId,
         unknown ? `Delivery not confirmed. ${message.message}` : message.message,
@@ -599,9 +490,12 @@ export class SocialChat {
     } else if (message.type === 'socialResponse' && message.action === 'getRoomSnapshot') {
       const snapshot = message.data;
       if (snapshot.chatSessionId !== undefined) {
-        if (this.chatSessionId !== null && this.chatSessionId !== snapshot.chatSessionId)
-          this.retireDeliveryAttempts();
-        this.chatSessionId = snapshot.chatSessionId;
+        if (
+          this.composer.chatSessionId !== null &&
+          this.composer.chatSessionId !== snapshot.chatSessionId
+        )
+          this.composer.retireDeliveryAttempts();
+        this.composer.chatSessionId = snapshot.chatSessionId;
       }
       // Ingest synchronously so replay retains the same ordering, privacy and
       // acknowledgement semantics, then reconcile the bounded view just once.
@@ -613,14 +507,15 @@ export class SocialChat {
           ),
         );
         this.snapshotPublicIds = null;
-        if (this.replyingTo && discarded.has(this.replyingTo.messageId)) this.cancelReply();
+        if (this.composer.replyingTo && discarded.has(this.composer.replyingTo.messageId))
+          this.composer.cancelReply();
       }
       for (const entry of snapshot.messages) this.ingest(entry, true);
       this.refreshPins();
       this.render();
     } else if (message.type === 'messageRetryResult') {
-      this.finishSend(message.clientMessageId, 'unknown');
-      this.clearPending(message.clientMessageId);
+      this.composer.finishSend(message.clientMessageId, 'unknown');
+      this.composer.clearPending(message.clientMessageId);
       const explanations: Record<typeof message.reason, string> = {
         session_changed: 'The room session changed.',
         receipt_expired: 'The server no longer retains this confirmation.',
@@ -657,7 +552,7 @@ export class SocialChat {
       this.store.removeMessage(message.messageId, message.removedAt);
       this.pinsVersion++;
       this.pins = this.pins.filter((pin) => pin.messageId !== message.messageId);
-      if (this.replyingTo?.messageId === message.messageId) this.cancelReply();
+      if (this.composer.replyingTo?.messageId === message.messageId) this.composer.cancelReply();
       this.render();
     } else if (message.type === 'messageReactions') {
       notifyHistoryReaction(message.messageId, message.reactions);
@@ -666,65 +561,17 @@ export class SocialChat {
         this.store.names.set(message.participantId, message.nickname);
       this.render();
     } else if (message.type === 'participantTyping') {
-      this.noteRemoteTyping(message.participantId, message.targetParticipantId ?? null);
-    }
-  }
-
-  /** Composing in an open conversation tells its recipients, at most every 2.5 s. */
-  private noteTyping(): void {
-    const room = this.options.getRoom();
-    if (!room?.localParticipantId || !room.connected || !room.canChat || this.input.disabled)
-      return;
-    if (!this.input.value.trim()) return;
-    const now = Date.now();
-    if (now - this.lastTypingSent < 2500) return;
-    this.lastTypingSent = now;
-    room.sendTyping(this.store.active === 'public' ? undefined : this.store.active);
-  }
-
-  private noteRemoteTyping(id: string, target: string | null): void {
-    if (id === this.store.localId) return;
-    this.typing.set(id, { until: Date.now() + 4000, target });
-    this.renderTyping();
-  }
-
-  /** "Alice is typing…" for the visible conversation only; notices expire on their own. */
-  private renderTyping(): void {
-    const now = Date.now();
-    for (const [id, entry] of this.typing) if (entry.until <= now) this.typing.delete(id);
-    const room = this.options.getRoom();
-    const names: string[] = [];
-    for (const [id, entry] of this.typing) {
-      const visible =
-        this.store.active === 'public'
-          ? entry.target === null
-          : id === this.store.active && entry.target === this.store.localId;
-      if (!visible) continue;
-      const name = room?.getParticipants().get(id)?.name ?? this.store.names.get(id);
-      if (name) names.push(name);
-    }
-    this.typingLine.hidden = names.length === 0;
-    this.typingLine.textContent =
-      names.length === 0
-        ? ''
-        : names.length === 1
-          ? `${names[0]} is typing…`
-          : names.length === 2
-            ? `${names[0]} and ${names[1]} are typing…`
-            : 'Several people are typing…';
-    if (this.typingTimer !== null) clearTimeout(this.typingTimer);
-    this.typingTimer = null;
-    if (this.typing.size) {
-      const next = Math.min(...[...this.typing.values()].map((entry) => entry.until));
-      this.typingTimer = setTimeout(() => this.renderTyping(), Math.max(0, next - now));
+      this.composer.noteRemoteTyping(message.participantId, message.targetParticipantId ?? null);
     }
   }
 
   participantsChanged(): void {
+    if (this.disposed) return;
     this.render();
   }
 
   openPrivate(id: string, name: string): void {
+    if (this.disposed) return;
     if (id === this.store.localId) return;
     if (this.openAccountConversation(id, name)) return;
     if (this.store.names.size >= 100 && !this.store.names.has(id)) {
@@ -749,53 +596,8 @@ export class SocialChat {
     return true;
   }
 
-  isIgnored(id: string): boolean {
-    return (
-      this.preferences.ignored.some((entry) => entry.id === id) || this.temporaryIgnored.has(id)
-    );
-  }
-
-  async toggleIgnore(id: string, name: string, authenticated: boolean): Promise<void> {
-    const account = this.options.accountPreferences;
-    if (
-      account &&
-      this.options.getToken?.() &&
-      (authenticated || this.preferences.ignored.some((person) => person.id === id))
-    ) {
-      await account.change(this.isIgnored(id) ? { unignore: id } : { ignore: { id, name } });
-      return;
-    }
-    const room = this.options.getRoom();
-    if (!room?.localParticipantId) throw new Error('Join a room first');
-    if (id === room.localParticipantId) throw new Error('You cannot ignore yourself');
-    const activation = this.activation,
-      viewer = this.viewerKey;
-    const next = structuredClone(this.preferences);
-    const guests = new Map(this.temporaryIgnored);
-    if (this.isIgnored(id)) {
-      next.ignored = next.ignored.filter((entry) => entry.id !== id);
-      guests.delete(id);
-    } else {
-      if (next.ignored.length + guests.size >= 100)
-        throw new Error('Ignore list is full (100 people)');
-      if (authenticated) next.ignored.push({ id, name: name.slice(0, 128) });
-      else guests.set(id, name.slice(0, 128));
-    }
-    const operation = this.beginPreferenceUpdate();
-    try {
-      await this.pushPreferences(room, next, guests);
-      if (!this.contextCurrent(activation, room, viewer) || operation !== this.preferenceOperation)
-        return;
-      this.preferences = next;
-      this.temporaryIgnored = guests;
-      this.savePreferences(viewer);
-      this.render();
-    } finally {
-      if (operation === this.preferenceOperation) this.preferenceBusy = false;
-    }
-  }
-
   system(text: string): void {
+    if (this.disposed) return;
     if (!this.store.localId) return;
     const id = crypto.randomUUID();
     this.store.receive(
@@ -819,7 +621,7 @@ export class SocialChat {
   }
 
   private ingest(message: ChatEntry, replay: boolean): boolean {
-    if (!this.store.localId || this.isIgnored(message.participantId)) return false;
+    if (!this.store.localId || this.privacy.isIgnored(message.participantId)) return false;
     if (
       message.accountConversation &&
       message.recipientId &&
@@ -833,13 +635,13 @@ export class SocialChat {
     if (
       message.recipientId &&
       message.participantId !== this.store.localId &&
-      !this.preferences.allowPrivateMessages
+      !this.privacy.preferences.allowPrivateMessages
     )
       return false;
     const added = this.store.receive(message, replay);
     if (message.participantId === this.store.localId) {
-      this.finishSend(message.clientMessageId, 'ok');
-      this.clearPending(message.clientMessageId);
+      this.composer.finishSend(message.clientMessageId, 'ok');
+      this.composer.clearPending(message.clientMessageId);
     }
     if (added && message.participantId !== this.store.localId) {
       if (
@@ -848,340 +650,18 @@ export class SocialChat {
       )
         this.store.markUnread(message);
       const retained = this.store.messages.find((entry) => entry.messageId === message.messageId);
-      if (!replay && retained && !retained.removedAt && this.allowsNotification(retained)) {
-        if (this.preferences.sounds) this.playSound(retained.recipientId ? 700 : 440);
-        this.notifyDesktop(retained);
+      if (
+        !replay &&
+        retained &&
+        !retained.removedAt &&
+        this.notifications.allowsNotification(retained)
+      ) {
+        if (this.privacy.preferences.sounds)
+          this.notifications.playSound(retained.recipientId ? 700 : 440);
+        this.notifications.notifyDesktop(retained);
       }
     }
     return true;
-  }
-
-  /** An opted-in desktop notice for a mention or private message while the tab is out of sight. */
-  private notifyDesktop(message: ChatEntry): void {
-    if (!this.allowsNotification(message)) return;
-    if (!this.preferences.notifications || typeof Notification === 'undefined') return;
-    if (Notification.permission !== 'granted') return;
-    if (!document.hidden && document.hasFocus?.() !== false) return;
-    const nickname = this.options.getRoom()?.nickname;
-    const direct = Boolean(message.recipientId);
-    const mentioned = Boolean(
-      nickname && message.content.toLowerCase().includes(`@${nickname.toLowerCase()}`),
-    );
-    if (!direct && !mentioned) return;
-    try {
-      const activation = this.activation;
-      const room = this.activeRoom;
-      const viewer = this.viewerKey;
-      const preview = this.preferences.notificationPreviews;
-      const notice = new Notification(
-        preview
-          ? direct
-            ? `${message.participantName} sent you a private message`
-            : `${message.participantName} mentioned you`
-          : direct
-            ? 'New private message'
-            : 'You were mentioned',
-        {
-          body: preview ? message.content.slice(0, 160) : 'Open SimplestChat to read it.',
-          tag: message.messageId,
-        },
-      );
-      this.desktopNotices.add(notice);
-      // Bound resources even if the OS does not dispatch notification close events.
-      if (this.desktopNotices.size > 20) {
-        const oldest = this.desktopNotices.values().next().value;
-        oldest?.close();
-        if (oldest) this.desktopNotices.delete(oldest);
-      }
-      notice.onclose = () => this.desktopNotices.delete(notice);
-      notice.onclick = () => {
-        notice.close();
-        this.desktopNotices.delete(notice);
-        if (!room || !this.contextCurrent(activation, room, viewer)) return;
-        globalThis.focus?.();
-        if (direct) this.switchConversation(message.participantId, message.participantName);
-        else if (this.store.active !== 'public') this.switchConversation('public');
-        document.querySelector<HTMLButtonElement>('[data-tab="chat"]')?.click();
-      };
-    } catch {
-      /* Some browsers (Android Chrome) only notify through a service worker. */
-    }
-  }
-
-  private allowsNotification(message: ChatEntry): boolean {
-    const nickname = this.options.getRoom()?.nickname;
-    const kind = message.recipientId
-      ? 'private'
-      : nickname && message.content.toLowerCase().includes(`@${nickname.toLowerCase()}`)
-        ? 'mention'
-        : 'room';
-    return (
-      this.options.allowsNotification?.(
-        kind,
-        kind === 'private' ? message.participantId : undefined,
-      ) ?? true
-    );
-  }
-
-  private closeDesktopNotices(): void {
-    for (const notice of this.desktopNotices) notice.close();
-    this.desktopNotices.clear();
-  }
-
-  /** Asks during the click that enabled notices; resolves whether they may be shown. */
-  private notificationPermission(wanted: boolean): Promise<boolean> {
-    if (!wanted || typeof Notification === 'undefined') return Promise.resolve(false);
-    if (Notification.permission !== 'default')
-      return Promise.resolve(Notification.permission === 'granted');
-    return Notification.requestPermission().then(
-      (answer) => answer === 'granted',
-      () => false,
-    );
-  }
-
-  private send(): void {
-    const room = this.options.getRoom();
-    const content = this.input.value.trim();
-    if (
-      !room?.localParticipantId ||
-      !room.connected ||
-      (!content && !this.attachments.hasFiles) ||
-      this.input.disabled
-    )
-      return;
-    let attachments: ChatAttachment[];
-    try {
-      attachments = this.attachments.ready();
-    } catch (error) {
-      this.options.notify(error instanceof Error ? error.message : 'Attachments are not ready');
-      return;
-    }
-    if (new TextEncoder().encode(content).length > 4096) {
-      this.options.notify('Message is too long (maximum 4096 bytes)');
-      return;
-    }
-    if (this.pending.size >= 100) {
-      this.options.notify('Please wait for pending messages');
-      return;
-    }
-    const id = crypto.randomUUID();
-    if (this.chatSequence >= Number.MAX_SAFE_INTEGER) return;
-    const sequence = ++this.chatSequence;
-    const recipientId = this.store.active === 'public' ? undefined : this.store.active;
-    const recipientName = recipientId === undefined ? undefined : this.store.names.get(recipientId);
-    // Sending shows the conversation is caught up; the divider has served its purpose.
-    this.dividerKey = null;
-    this.resumeKey = null;
-    const answering =
-      this.replyingTo && this.store.conversation(this.replyingTo) === this.store.active
-        ? this.replyingTo
-        : null;
-    const retained = this.store.pending(
-      {
-        messageId: `pending:${id}`,
-        ...(answering && {
-          replyTo: {
-            messageId: answering.messageId,
-            participantId: answering.participantId,
-            participantName: answering.participantName,
-            excerpt: excerpt(answering.content),
-          },
-        }),
-        clientMessageId: id,
-        participantId: room.localParticipantId,
-        participantName: room.nickname,
-        ...(recipientId !== undefined && { recipientId }),
-        ...(recipientName !== undefined && { recipientName }),
-        content,
-        ...(attachments.length && { attachments }),
-        sentAt: new Date().toISOString(),
-        revision: 0,
-        // The look you have now; the acknowledgement carries the look the server stored.
-        chatStyle: room.chatStyle ?? AUTOMATIC_LOOK,
-      },
-      this.chatSessionId === null
-        ? undefined
-        : {
-            sequence,
-            chatSessionId: this.chatSessionId,
-            expiresAt: Date.now() + 300_000,
-          },
-    );
-    if (!retained) {
-      this.options.notify('This message could not be added to the conversation');
-      return;
-    }
-    this.startPending(id);
-    try {
-      const attachmentIds = attachments.length
-        ? attachments.map((attachment) => attachment.id)
-        : undefined;
-      if (recipientId)
-        room.sendPrivate(
-          recipientId,
-          content,
-          id,
-          sequence,
-          answering?.messageId,
-          ...(attachmentIds ? ([attachmentIds] as const) : ([] as const)),
-        );
-      else
-        room.sendChat(
-          content,
-          id,
-          sequence,
-          answering?.messageId,
-          ...(attachmentIds ? ([attachmentIds] as const) : ([] as const)),
-        );
-      this.attachments.consume();
-      this.composition.sent(this.store.active, content);
-      this.input.value = '';
-      this.cancelReply();
-    } catch (error) {
-      this.finishSend(id, 'error');
-      this.clearPending(id);
-      this.store.fail(id, error instanceof Error ? error.message : 'Send failed');
-    }
-    this.render(true);
-  }
-
-  private startPending(id: string): void {
-    this.pendingStarted.set(id, performance.now());
-    this.recordTelemetry({ name: 'chat_send', outcome: 'started' });
-    this.pending.set(
-      id,
-      setTimeout(() => {
-        this.finishSend(id, 'timeout');
-        this.pending.delete(id);
-        this.retrying.delete(id);
-        this.store.fail(
-          id,
-          this.store.messages.some((message) => message.clientMessageId === id && message.retry)
-            ? 'Delivery not confirmed. Retry checks whether this message was accepted; available for up to five minutes.'
-            : 'Delivery not confirmed. This send has no retry session; reconnecting may recover its acknowledgement.',
-          true,
-        );
-        this.render();
-      }, 12_000),
-    );
-  }
-
-  private retireDeliveryAttempts(): void {
-    for (const id of this.pending.keys()) this.clearPending(id);
-    this.store.retireAttempts();
-    this.chatSessionId = null;
-    this.chatSequence = 0;
-  }
-
-  private retry(message: ChatItem): void {
-    const room = this.options.getRoom();
-    if (message.status !== 'unknown' || !this.store.messages.includes(message)) return;
-    const attempt = message.retry;
-    if (
-      !attempt ||
-      Date.now() >= attempt.expiresAt ||
-      room !== this.activeRoom ||
-      room?.membershipVersion !== this.membershipVersion ||
-      this.viewerKey !== this.options.getViewerKey() ||
-      attempt.chatSessionId !== this.chatSessionId
-    ) {
-      delete message.retry;
-      this.store.fail(
-        message.clientMessageId,
-        'Delivery not confirmed. The retry window or room session ended.',
-        true,
-      );
-      this.render();
-      return;
-    }
-    if (!room.connected || this.pending.size >= 100) {
-      this.options.notify('Wait for the room connection before retrying');
-      return;
-    }
-    message.status = 'pending';
-    delete message.error;
-    this.startPending(message.clientMessageId);
-    this.retrying.add(message.clientMessageId);
-    try {
-      room.retryChat({
-        clientMessageId: message.clientMessageId,
-        sequence: attempt.sequence,
-        chatSessionId: attempt.chatSessionId,
-        content: message.content,
-        ...(message.recipientId !== undefined && { targetParticipantId: message.recipientId }),
-        ...(message.replyTo && { replyTo: message.replyTo.messageId }),
-        ...(message.attachments?.length && {
-          attachmentIds: message.attachments.map((attachment) => attachment.id),
-        }),
-      });
-    } catch {
-      this.finishSend(message.clientMessageId, 'unknown');
-      this.clearPending(message.clientMessageId);
-      this.store.fail(
-        message.clientMessageId,
-        'Delivery not confirmed. Wait for the connection and retry.',
-        true,
-      );
-    }
-    this.render();
-  }
-
-  private restoreDraft(message: ChatItem): void {
-    const room = this.options.getRoom();
-    if (
-      room !== this.activeRoom ||
-      room?.membershipVersion !== this.membershipVersion ||
-      this.viewerKey !== this.options.getViewerKey() ||
-      !this.store.messages.includes(message)
-    )
-      return;
-    const conversation = this.store.conversation(message);
-    const draft =
-      conversation === this.store.active ? this.input.value : this.composition.draft(conversation);
-    if (draft.trim() && draft !== message.content) {
-      this.options.notify('Keep or clear the existing draft before copying this message');
-      return;
-    }
-    this.switchConversation(conversation, message.recipientName);
-    this.input.value = message.content;
-    this.composition.save(conversation, message.content);
-    this.resizeInput();
-    if (message.attachments?.length)
-      this.options.notify(
-        'Attachments stay with the original message. Use Retry same message when available, or attach the files again for a new message.',
-      );
-    this.input.focus();
-    if (message.status === 'unknown')
-      this.options.notify(
-        'Delivery was not confirmed. Sending a new message may duplicate the original.',
-      );
-  }
-
-  private recordTelemetry(event: Parameters<TelemetryHandler>[0]): void {
-    try {
-      this.options.telemetry?.(event);
-    } catch {
-      /* Delivery state must not depend on its observer. */
-    }
-  }
-
-  private finishSend(id: string, outcome: TelemetryOutcome): void {
-    const started = this.pendingStarted.get(id);
-    if (started === undefined) return;
-    this.pendingStarted.delete(id);
-    this.recordTelemetry({
-      name: 'chat_send',
-      outcome,
-      durationMs: performance.now() - started,
-    });
-  }
-
-  private clearPending(id: string): void {
-    this.finishSend(id, 'superseded');
-    const timer = this.pending.get(id);
-    if (timer !== undefined) clearTimeout(timer);
-    this.pending.delete(id);
-    this.retrying.delete(id);
   }
 
   private render(forceScroll = false): void {
@@ -1191,14 +671,15 @@ export class SocialChat {
         .filter((message) => message.status === 'pending')
         .map((message) => message.clientMessageId),
     );
-    for (const id of this.pending.keys()) if (!pendingIds.has(id)) this.clearPending(id);
+    for (const id of this.composer.pending.keys())
+      if (!pendingIds.has(id)) this.composer.clearPending(id);
     const scrollTop = this.messages.scrollTop;
     const atBottom = this.seenAtBottom || forceScroll;
     const privateChat = this.store.active !== 'public';
     this.closeButton.hidden = !privateChat;
     // Public chat needs no permanent banner; its mention hint lives in the composer.
     this.conversationStatus.hidden = !privateChat;
-    this.renderTyping();
+    this.composer.renderTyping();
     this.conversationStatus.textContent = '';
     if (privateChat) {
       const peer = room?.getParticipants().get(this.store.active);
@@ -1213,7 +694,8 @@ export class SocialChat {
       !room.connected ||
       !room.canChat ||
       (privateChat &&
-        (!room.getParticipants().has(this.store.active) || this.isIgnored(this.store.active)));
+        (!room.getParticipants().has(this.store.active) ||
+          this.privacy.isIgnored(this.store.active)));
     this.input.disabled = disabled;
     this.sendButton.disabled = disabled;
     this.input.placeholder = disabled
@@ -1223,19 +705,22 @@ export class SocialChat {
       : privateChat
         ? 'Write a private message…'
         : 'Message · @mention';
-    this.messages.classList.toggle('large-chat-text', this.preferences.largeText);
-    this.messages.classList.toggle('timestamps-always', this.preferences.timestamps !== 'hover');
+    this.messages.classList.toggle('large-chat-text', this.privacy.preferences.largeText);
+    this.messages.classList.toggle(
+      'timestamps-always',
+      this.privacy.preferences.timestamps !== 'hover',
+    );
     const visible = this.store.messages.filter(
       (message) =>
         this.store.conversation(message) === this.store.active &&
-        !this.isIgnored(message.participantId),
+        !this.privacy.isIgnored(message.participantId),
     );
-    const keys = new Set(visible.map((message) => this.rowKey(message)));
-    for (const [key, row] of this.rows) {
+    const keys = new Set(visible.map((message) => this.renderer.rowKey(message)));
+    for (const [key, row] of this.renderer.rows) {
       if (!keys.has(key)) {
         row.dispose();
         row.node.remove();
-        this.rows.delete(key);
+        this.renderer.rows.delete(key);
       }
     }
     let previousSender: string | undefined;
@@ -1250,14 +735,14 @@ export class SocialChat {
     this.renderPins();
     let position = this.historyStart.nextSibling;
     for (const message of visible) {
-      const node = this.messageRow(message, room?.nickname);
+      const node = this.renderer.messageRow(message, room?.nickname);
       const time = Date.parse(message.sentAt);
       if (position === this.divider) position = position.nextSibling;
       // The divider starts a new block even within one sender's run.
       const grouped =
         previousSender === message.participantId &&
         time - previousTime < 120_000 &&
-        this.rowKey(message) !== this.dividerKey;
+        this.renderer.rowKey(message) !== this.dividerKey;
       if (node.classList.contains('grouped') !== grouped) node.classList.toggle('grouped', grouped);
       // Keep unchanged rows in place. insertBefore also handles the uncommon
       // chronological move when an acknowledgement updates a pending timestamp.
@@ -1267,21 +752,21 @@ export class SocialChat {
       previousTime = time;
     }
     this.placeDivider();
-    this.resizeInput();
+    this.composer.resizeInput();
     this.messages.scrollTop = atBottom ? this.messages.scrollHeight : scrollTop;
     if (forceScroll) {
       this.seenAtBottom = true;
       this.resumeKey = null;
     }
     if (this.resumeKey && this.isVisible()) {
-      const row = this.rows.get(this.resumeKey)?.node;
+      const row = this.renderer.rows.get(this.resumeKey)?.node;
       row?.scrollIntoView?.({ block: 'start' });
       this.seenAtBottom =
         this.messages.scrollHeight - this.messages.scrollTop - this.messages.clientHeight < 48;
       this.resumeKey = null;
     }
     if (this.seenAtBottom && this.isVisible() && this.markActiveRead()) this.placeDivider();
-    this.updateBadges();
+    this.renderer.updateBadges();
   }
 
   /**
@@ -1290,7 +775,7 @@ export class SocialChat {
    */
   private markActiveRead(placeNow = false): boolean {
     const first = this.store.firstUnread(this.store.active);
-    const key = first ? this.rowKey(first) : this.dividerKey;
+    const key = first ? this.renderer.rowKey(first) : this.dividerKey;
     this.store.markRead(this.store.active);
     this.scheduleSavedRead();
     if (key === this.dividerKey) return false;
@@ -1351,239 +836,13 @@ export class SocialChat {
 
   /** The divider sits above the first message that arrived unseen, while it is shown. */
   private placeDivider(): void {
-    const row = this.dividerKey ? this.rows.get(this.dividerKey)?.node : undefined;
+    const row = this.dividerKey ? this.renderer.rows.get(this.dividerKey)?.node : undefined;
     if (!row?.isConnected) {
       this.divider.remove();
       return;
     }
     if (this.divider.nextSibling !== row) this.messages.insertBefore(this.divider, row);
     row.classList.toggle('grouped', false);
-  }
-
-  private rowKey(message: ChatEntry): string {
-    // Match the store's correlation identity: the server replaces the provisional
-    // message ID on acknowledgement without replacing this visible message.
-    return JSON.stringify([
-      message.participantId,
-      message.clientMessageId,
-      message.recipientId ?? 'public',
-    ]);
-  }
-
-  private messageRow(message: ChatItem, nickname: string | undefined): HTMLElement {
-    const { messageId, participantId, participantName, content, sentAt, status, error } = message;
-    const local = participantId === this.store.localId;
-    const mentioned = Boolean(
-      nickname && !local && content.toLowerCase().includes(`@${nickname.toLowerCase()}`),
-    );
-    const look = participantId ? this.lookOf(message, local) : null;
-    const color = look ? chatColor(participantName, look.color) : '';
-    // ChatStore updates objects in place. Compare immutable display/action values,
-    // never object identity; grouping depends on adjacent visible rows instead.
-    const fingerprint = JSON.stringify([
-      messageId,
-      participantId,
-      participantName,
-      content,
-      sentAt,
-      status,
-      error,
-      local,
-      mentioned,
-      !!message.retry,
-      this.preferences.timestamps,
-      look?.style,
-      color,
-      message.replyTo,
-      message.reactions,
-      message.removedAt,
-      message.editedAt,
-      message.revision,
-      message.attachments,
-      this.canRemove(message),
-      this.pins.some((pin) => pin.messageId === messageId),
-    ]);
-    const key = this.rowKey(message);
-    const previous = this.rows.get(key);
-    if (previous?.fingerprint === fingerprint) return previous.node;
-    previous?.dispose();
-    const node = previous?.node ?? el('div');
-    node.className = `chat-msg${look ? ` look-${look.style}` : ' system'}${mentioned ? ' mentioned' : ''}`;
-    if (look) node.style.setProperty('--sender-color', color);
-    node.dataset['messageId'] = messageId;
-    node.replaceChildren();
-    if (participantId) {
-      const sender = el('button', participantName, 'sender chat-sender-button');
-      sender.type = 'button';
-      this.options.bindParticipantName(sender, participantId, participantName);
-      node.append(sender);
-    }
-    if (message.replyTo) {
-      const reply = message.replyTo;
-      const quote = button(
-        this.isIgnored(reply.participantId)
-          ? 'Reply to a message you have hidden'
-          : `${reply.participantName}: ${reply.excerpt}`,
-        () => this.showMessage(reply.messageId),
-        'msg-reply',
-      );
-      quote.title = 'Show the message this answers';
-      node.append(quote);
-    }
-    const text = el('div', undefined, 'msg-text');
-    if (message.removedAt) {
-      text.textContent = 'Message removed';
-      text.classList.add('muted');
-    } else appendLinkedText(text, content, mentioned ? `@${nickname}` : undefined);
-    node.append(text);
-    let dispose = (): void => {};
-    const room = this.activeRoom;
-    if (!message.removedAt && message.attachments?.length && room) {
-      const activation = this.activation;
-      const viewer = this.viewerKey;
-      const current = () =>
-        this.contextCurrent(activation, room, viewer) &&
-        this.rows.get(key)?.node === node &&
-        !message.removedAt;
-      dispose = renderAttachments(node, message.attachments, {
-        current,
-        authorization: async (attachmentId) => {
-          if (!current()) throw new Error('This conversation changed');
-          const grant = await room.requestSocial('getAttachmentAccess', { attachmentId });
-          return `Attachment ${grant.token}`;
-        },
-      });
-    }
-    this.appendReactions(node, message);
-    if (participantId && status === 'sent' && !message.removedAt) this.appendActions(node, message);
-    const meta = el('time', undefined, 'msg-time');
-    const date = new Date(sentAt);
-    meta.textContent = formatChatTime(date, this.preferences.timestamps);
-    meta.setAttribute('datetime', sentAt);
-    meta.title = date.toLocaleString();
-    node.append(meta);
-    appendEditedLabel(node, message);
-    if (participantId) {
-      // Delivery state stays visible even when the viewer chooses hover-only timestamps.
-      if (status === 'pending' || status === 'failed' || status === 'unknown') {
-        const state = el(
-          'div',
-          status === 'pending' ? 'Sending…' : (error ?? 'Delivery failed'),
-          'msg-status',
-        );
-        if (status !== 'pending') {
-          state.classList.add('delivery-error');
-          if (status === 'unknown' && message.retry)
-            state.append(button('Retry same message', () => this.retry(message), 'auth-link-btn'));
-          state.append(
-            button(
-              status === 'unknown' ? 'Copy to draft' : 'Edit & resend',
-              () => this.restoreDraft(message),
-              'auth-link-btn',
-            ),
-          );
-        }
-        node.append(state);
-      }
-    }
-    this.rows.set(key, { node, fingerprint, dispose });
-    return node;
-  }
-
-  /** Reaction chips; each toggles the viewer's own. Ignored people are left out. */
-  private appendReactions(node: HTMLElement, message: ChatItem): void {
-    const reactions = (message.reactions ?? [])
-      .map((reaction) => ({
-        emoji: reaction.emoji,
-        people: reaction.participantIds.filter((id) => !this.isIgnored(id)),
-      }))
-      .filter((reaction) => reaction.people.length);
-    if (!reactions.length) return;
-    const bar = el('div', undefined, 'msg-reactions');
-    for (const reaction of reactions) {
-      const chip = button(
-        `${reaction.emoji} ${reaction.people.length}`,
-        () => this.react(message, reaction.emoji),
-        'reaction-chip',
-      );
-      chip.setAttribute('aria-pressed', String(reaction.people.includes(this.store.localId ?? '')));
-      chip.title = reaction.people.map((id) => this.personName(id)).join(', ');
-      bar.append(chip);
-    }
-    node.append(bar);
-  }
-
-  /** React and Reply, floating above a message on hover, focus or a tap. */
-  private appendActions(node: HTMLElement, message: ChatItem): void {
-    const actions = el('div', undefined, 'msg-actions');
-    const picker = el('div', undefined, 'reaction-picker');
-    picker.hidden = true;
-    for (const emoji of CHAT_REACTIONS)
-      picker.append(
-        button(
-          emoji,
-          () => {
-            picker.hidden = true;
-            this.react(message, emoji);
-          },
-          'msg-action',
-        ),
-      );
-    const react = button(
-      '☺',
-      () => {
-        picker.hidden = !picker.hidden;
-      },
-      'msg-action',
-    );
-    const reply = button('↩', () => this.startReply(message), 'msg-action');
-    for (const [control, label] of [
-      [react, 'Add a reaction'],
-      [reply, 'Reply'],
-    ] as const) {
-      control.setAttribute('aria-label', label);
-      control.title = label;
-    }
-    actions.append(react, reply, picker);
-    if (message.participantId === this.store.localId) {
-      actions.append(button('Edit', () => this.editMessage(message), 'msg-action'));
-    }
-    if (this.canRemove(message)) {
-      const pinned = this.pins.some((pin) => pin.messageId === message.messageId);
-      actions.append(
-        button(pinned ? 'Unpin' : 'Pin', () => this.pinMessage(message, !pinned), 'msg-action'),
-      );
-    }
-    if (this.canRemove(message)) {
-      const remove = button('Remove', () => this.confirmRemoval(message), 'msg-action');
-      remove.setAttribute('aria-label', 'Remove message');
-      remove.title = 'Remove message for everyone';
-      actions.append(remove);
-    }
-    node.append(actions);
-    // Touch screens have no hover: a tap on the message shows its actions.
-    node.onclick = (event) => {
-      if (!(event.target as Element).closest('button, a')) node.classList.toggle('show-actions');
-    };
-  }
-
-  private editMessage(message: ChatItem): void {
-    const room = this.options.getRoom();
-    if (!room || message.participantId !== this.store.localId || message.removedAt) return;
-    const activation = this.activation;
-    const viewer = this.viewerKey;
-    editMessageDialog(message, {
-      current: () => this.contextCurrent(activation, room, viewer),
-      save: async (content, expectedRevision) =>
-        (
-          await room.requestSocial('editChatMessage', {
-            messageId: message.messageId,
-            content,
-            expectedRevision,
-          })
-        ).message,
-      changed: notifyHistoryEdit,
-    });
   }
 
   private pinMessage(message: ChatEntry, pinned: boolean): void {
@@ -1610,6 +869,7 @@ export class SocialChat {
 
   /** Refresh expiry-sensitive saved state when the app returns or while it is visible. */
   refreshSavedChat(): void {
+    if (this.disposed) return;
     if (document.hidden || !this.options.getRoom()?.localParticipantId) return;
     this.refreshPins();
   }
@@ -1645,7 +905,7 @@ export class SocialChat {
       entry.append(
         button(
           `${pin.participantName}: ${pin.content || pin.attachments?.map((attachment) => attachment.name).join(', ') || 'Message'}`,
-          () => this.showMessage(pin.messageId),
+          () => this.renderer.showMessage(pin.messageId),
           'chat-pinned-link',
         ),
       );
@@ -1693,7 +953,7 @@ export class SocialChat {
         // The live window is bounded by both message count and characters. Keep its
         // cursor unchanged and open saved context when older text cannot fit.
         this.render();
-        this.showMessage(missing.messageId);
+        this.renderer.showMessage(missing.messageId);
         return;
       }
       this.historyCursor = page.nextCursor;
@@ -1714,370 +974,31 @@ export class SocialChat {
     }
   }
 
-  private canRemove(message: ChatItem): boolean {
-    return (
-      !message.recipientId &&
-      !message.removedAt &&
-      ['moderator', 'admin', 'owner'].includes(this.options.getRoom()?.role ?? '')
-    );
-  }
-
-  private confirmRemoval(message: ChatItem): void {
-    const room = this.options.getRoom();
-    if (!room || !this.canRemove(message)) return;
-    const membership = room.membershipVersion;
-    const viewer = this.options.getViewerKey();
-    const current = (): boolean =>
-      this.options.getRoom() === room &&
-      room.membershipVersion === membership &&
-      this.options.getViewerKey() === viewer;
-    const dialog = modal('Remove message?');
-    dialog.body.append(
-      el(
-        'p',
-        'This removes the public message and its quoted text for everyone. A “Message removed” marker will remain.',
-      ),
-    );
-    const remove = asyncButton(
-      'Remove message',
-      async () => {
-        await busy(remove, dialog.error, async () => {
-          if (!current()) throw new Error('The room session changed.');
-          const result = await room.requestSocial('removeChatMessage', {
-            messageId: message.messageId,
-          });
-          if (current()) {
-            this.store.removeMessage(result.messageId, result.removedAt);
-            if (this.replyingTo?.messageId === result.messageId) this.cancelReply();
-            this.render();
-          }
-          dialog.close();
-        });
-      },
-      (error) =>
-        this.options.notify(error instanceof Error ? error.message : 'Could not remove message'),
-    );
-    dialog.body.append(button('Cancel', dialog.close), remove);
-  }
-
-  private react(message: ChatItem, emoji: string): void {
-    const room = this.options.getRoom();
-    if (!room) return;
-    room
-      .requestSocial('reactToMessage', { messageId: message.messageId, emoji })
-      .then((result) => {
-        if (this.store.setReactions(result.messageId, result.reactions)) this.render();
-      })
-      .catch((error: unknown) =>
-        this.options.notify(error instanceof Error ? error.message : 'Could not add the reaction'),
-      );
-  }
-
-  private personName(id: string): string {
-    const room = this.options.getRoom();
-    return (
-      (id === this.store.localId ? room?.nickname : room?.getParticipants().get(id)?.name) ??
-      'someone who left'
-    );
-  }
-
-  /** Answer a message: the next send quotes it. */
-  private startReply(message: ChatEntry): void {
-    this.replyingTo = message;
-    const cancel = button('✕', () => this.cancelReply(), 'reply-bar-cancel');
-    cancel.setAttribute('aria-label', 'Cancel reply');
-    this.replyBar.replaceChildren(
-      el('span', `Replying to ${message.participantName}`, 'reply-bar-label'),
-      el('span', excerpt(message.content), 'reply-bar-excerpt'),
-      cancel,
-    );
-    this.replyBar.hidden = false;
-    this.input.focus();
-  }
-
-  private cancelReply(): void {
-    this.replyingTo = null;
-    this.replyBar.hidden = true;
-    this.replyBar.replaceChildren();
-  }
-
-  /** Brings the message a reply quotes into view, if it is still in this chat. */
-  private showMessage(messageId: string): void {
-    const row = [...this.rows.values()].find(
-      (entry) => entry.node.dataset['messageId'] === messageId,
-    );
-    if (!row) {
-      const room = this.options.getRoom();
-      if (room?.roomSettings?.historyRetentionDays && this.store.active === 'public') {
-        const activation = this.activation;
-        const viewer = this.viewerKey;
-        openRoomHistory(
-          room,
-          () => this.contextCurrent(activation, room, viewer),
-          !!this.options.getToken?.(),
-          messageId,
-          (message) => {
-            this.switchConversation('public');
-            this.startReply(message);
-          },
-        );
-      } else this.options.notify('That message is no longer in this chat');
-      return;
-    }
-    row.node.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
-    row.node.classList.toggle('flash', true);
-    setTimeout(() => row.node.classList.toggle('flash', false), 1200);
-  }
-
-  /** The look a message was sent with; entries without one wear the sender's current look. */
-  private lookOf(message: ChatEntry, local: boolean): ChatStyle {
-    const room = this.options.getRoom();
-    const current = local
-      ? room?.chatStyle
-      : room?.getParticipants().get(message.participantId)?.chatStyle;
-    return message.chatStyle ?? current ?? AUTOMATIC_LOOK;
-  }
-
-  private updateBadges(): void {
-    const total = [...this.store.unread.values()].reduce((sum, count) => sum + count, 0);
-    document.title = total ? `(${Math.min(total, 999)}) simplestChat` : 'simplestChat';
-    const badge = document.getElementById('unread-badge')!;
-    const activeUnread = this.store.unread.get(this.store.active) ?? 0;
-    badge.textContent = String(activeUnread);
-    badge.hidden = !activeUnread;
-    document.getElementById('scroll-bottom-btn')!.hidden = this.seenAtBottom;
-    const tab = document.querySelector<HTMLButtonElement>('[data-tab="chat"]');
-    if (tab) {
-      let count = tab.querySelector('.conversation-unread');
-      if (!count) {
-        count = el('span', '', 'conversation-unread');
-        tab.append(count);
-      }
-      count.textContent = total ? ` ${total}` : '';
-    }
-    this.renderConversations();
-  }
-
-  /** Keep each button in place while labels and unread counts change around keyboard focus. */
-  private renderConversations(): void {
-    const names = new Map([['public', 'Public chat'], ...this.store.names]);
-    for (const [id, entry] of this.conversationButtons) {
-      if (names.has(id)) continue;
-      const focused = document.activeElement === entry.node;
-      entry.node.remove();
-      this.conversationButtons.delete(id);
-      if (focused) this.conversationButtons.get('public')?.node.focus();
-    }
-    for (const [id, name] of names) {
-      let entry = this.conversationButtons.get(id);
-      if (!entry) {
-        const node = button('', () => this.switchConversation(id), 'conversation-tab');
-        node.dataset['conversationId'] = id;
-        entry = {
-          node,
-          name: el('span', '', 'conversation-name'),
-          unread: el('span', '', 'conversation-unread'),
-        };
-        entry.unread.setAttribute('aria-hidden', 'true');
-        node.append(entry.name, entry.unread);
-        this.conversationButtons.set(id, entry);
-        this.conversations.append(node);
-      }
-      const privateChat = id !== 'public';
-      const offline =
-        privateChat &&
-        !this.accountPeers.has(id) &&
-        !this.options.getRoom()?.getParticipants().has(id);
-      const label = `${name}${offline ? ' · offline' : ''}`;
-      if (entry.name.textContent !== label) entry.name.textContent = label;
-      const unread = this.store.unread.get(id) ?? 0;
-      entry.unread.textContent = unread ? String(unread) : '';
-      entry.unread.hidden = !unread;
-      entry.node.title = label;
-      entry.node.setAttribute('aria-label', `${label}${unread ? `. ${unread} unread` : ''}`);
-      entry.node.setAttribute('aria-pressed', String(id === this.store.active));
-    }
-    if (this.visibleConversation !== this.store.active) {
-      this.visibleConversation = this.store.active;
-      this.conversationButtons
-        .get(this.store.active)
-        ?.node.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
-    }
-  }
-
-  private updateComposerMode(): void {
-    this.touchComposer = this.touchPointer.matches || navigator.maxTouchPoints > 0;
-    this.sendButton.hidden = !this.touchComposer;
-    const help = this.touchComposer
-      ? 'Enter adds a new line. Tap Send or press Ctrl/Cmd+Enter to send.'
-      : 'Enter to send. Shift+Enter for a new line.';
-    this.input.title = help;
-    this.input.setAttribute('aria-description', help);
-    this.input.setAttribute('enterkeyhint', this.touchComposer ? 'enter' : 'send');
-    this.resizeInput();
-  }
-
-  /** Let CSS cap the height at six lines; remeasure after every draft or width change. */
-  private resizeInput(): void {
-    if (!this.input.clientWidth) return;
-    this.input.style.setProperty('height', 'auto');
-    if (this.input.value) {
-      const border = this.input.offsetHeight - this.input.clientHeight;
-      this.input.style.setProperty('height', `${this.input.scrollHeight + border}px`);
-    }
-    document
-      .getElementById('chat-panel')!
-      .style.setProperty('--chat-composer-height', `${this.inputRow.offsetHeight}px`);
-    if (this.seenAtBottom) this.messages.scrollTop = this.messages.scrollHeight;
-  }
-
-  private onKey(event: KeyboardEvent): void {
-    // Safari may finish composition just before dispatching the confirming Enter.
-    // oxlint-disable-next-line typescript/no-deprecated
-    if (event.isComposing || event.keyCode === 229) return;
-    const sendKey =
-      event.key === 'Enter' &&
-      !event.shiftKey &&
-      !event.altKey &&
-      (!this.touchComposer || event.ctrlKey || event.metaKey);
-    // Tab completes a typed or pasted "@name" even before the list has opened.
-    if (event.key === 'Tab' && !this.mentionOptions.length) this.suggestMentions();
-    if (this.mentionOptions.length) {
-      const count = this.mentionOptions.length;
-      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-        event.preventDefault();
-        this.mentionActive =
-          (this.mentionActive + (event.key === 'ArrowDown' ? 1 : count - 1)) % count;
-        this.renderMentions();
-        return;
-      }
-      if ((sendKey && !event.ctrlKey && !event.metaKey) || event.key === 'Tab') {
-        event.preventDefault();
-        this.chooseMention(this.mentionActive);
-        return;
-      }
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        event.stopPropagation();
-        this.closeMentions();
-        return;
-      }
-    }
-    if (event.key === 'Escape' && this.replyingTo) {
-      event.preventDefault();
-      this.cancelReply();
-      return;
-    }
-    if (sendKey) {
-      event.preventDefault();
-      this.closeMentions();
-      this.send();
-    }
-    if (
-      event.key === 'ArrowUp' &&
-      (this.input.value === '' || this.composition.isRecalling(this.store.active))
-    ) {
-      event.preventDefault();
-      this.input.value = this.composition.recall(this.store.active, 'up', this.input.value);
-      this.resizeInput();
-    } else if (event.key === 'ArrowDown' && this.composition.isRecalling(this.store.active)) {
-      event.preventDefault();
-      this.input.value = this.composition.recall(this.store.active, 'down', this.input.value);
-      this.resizeInput();
-    }
-  }
-
-  /** The "@name" being typed just before the caret, if any. */
-  private mentionQuery(): { query: string; start: number; end: number } | null {
-    const end = this.input.selectionStart ?? this.input.value.length;
-    const match = /(?:^|\s)@([^@\s]*)$/.exec(this.input.value.slice(0, end));
-    return match ? { query: match[1]!, start: end - match[1]!.length - 1, end } : null;
-  }
-
-  /** Typing "@" and part of a name offers the people it could mean, best matches first. */
-  private suggestMentions(): void {
-    const typed = this.mentionQuery()?.query.toLowerCase();
-    const people =
-      typed === undefined ? [] : [...(this.options.getRoom()?.getParticipants().values() ?? [])];
-    const name = (person: { name: string }): string => person.name.toLowerCase();
-    const starts = people.filter((person) => name(person).startsWith(typed!));
-    const contains = people.filter(
-      (person) => !starts.includes(person) && name(person).includes(typed!),
-    );
-    this.mentionOptions = [...starts, ...contains].slice(0, 6);
-    this.mentionActive = 0;
-    this.renderMentions();
-  }
-
-  private renderMentions(): void {
-    const open = this.mentionOptions.length > 0;
-    this.mentionList.hidden = !open;
-    this.mentionList.replaceChildren(
-      ...this.mentionOptions.map((person, index) => {
-        const option = el('li');
-        option.id = `mention-option-${index}`;
-        option.setAttribute('role', 'option');
-        option.setAttribute('aria-selected', String(index === this.mentionActive));
-        const dot = el('span', undefined, 'mention-dot');
-        dot.style.setProperty('--person-color', chatColor(person.name, person.chatStyle?.color));
-        option.append(dot, el('span', person.name));
-        option.addEventListener('click', () => this.chooseMention(index));
-        return option;
-      }),
-    );
-    if (open)
-      this.input.setAttribute('aria-activedescendant', `mention-option-${this.mentionActive}`);
-    else this.input.removeAttribute('aria-activedescendant');
-  }
-
-  private chooseMention(index: number): void {
-    const person = this.mentionOptions[index];
-    const query = this.mentionQuery();
-    this.closeMentions();
-    if (person && query) this.insertText(`@${person.name} `, query.start, query.end);
-  }
-
-  private closeMentions(): void {
-    if (!this.mentionOptions.length) return;
-    this.mentionOptions = [];
-    this.renderMentions();
-  }
-
-  private insertText(text: string, start: number, end: number): void {
-    const next = this.input.value.slice(0, start) + text + this.input.value.slice(end);
-    if (next.length > 2000 || new TextEncoder().encode(next).length > 4096) {
-      this.options.notify('Message is too long');
-      return;
-    }
-    this.input.setRangeText(text, start, end, 'end');
-    this.composition.save(this.store.active, this.input.value);
-    this.resizeInput();
-  }
-
   private switchConversation(id: string, name?: string): void {
     if (id !== 'public' && this.openAccountConversation(id, name)) return;
-    if (id !== this.store.active) this.attachments.reset();
-    this.cancelReply();
-    this.composition.save(this.store.active, this.input.value);
+    if (id !== this.store.active) this.composer.attachments.reset();
+    this.composer.cancelReply();
+    this.composer.composition.save(this.store.active, this.input.value);
     const first = this.store.firstUnread(id);
-    this.dividerKey = first ? this.rowKey(first) : null;
+    this.dividerKey = first ? this.renderer.rowKey(first) : null;
     this.resumeKey = this.dividerKey;
     this.seenAtBottom = !first;
     this.store.open(id, name);
-    this.input.value = this.composition.draft(id);
+    this.input.value = this.composer.composition.draft(id);
     this.render(!first);
   }
 
   private closePrivate(): void {
     const id = this.store.active;
     if (id === 'public') return;
-    this.attachments.reset();
+    this.composer.attachments.reset();
     for (const message of this.store.messages) {
-      if (this.store.conversation(message) === id) this.clearPending(message.clientMessageId);
+      if (this.store.conversation(message) === id)
+        this.composer.clearPending(message.clientMessageId);
     }
     this.store.close(id);
-    this.composition.close(id);
-    this.input.value = this.composition.draft('public');
+    this.composer.composition.close(id);
+    this.input.value = this.composer.composition.draft('public');
     this.render(true);
   }
 
@@ -2092,6 +1013,7 @@ export class SocialChat {
 
   private contextCurrent(activation: number, room: RoomClient, viewer: string): boolean {
     return (
+      !this.disposed &&
       activation === this.activation &&
       this.options.getRoom() === room &&
       viewer === this.viewerKey &&
@@ -2102,557 +1024,24 @@ export class SocialChat {
     );
   }
 
-  private beginPreferenceUpdate(): number {
-    if (this.preferenceBusy) throw new Error('Please wait for the current chat preference update');
-    this.preferenceBusy = true;
-    return ++this.preferenceOperation;
+  isIgnored(id: string): boolean {
+    return this.privacy.isIgnored(id);
   }
 
-  private loadPreferences(): void {
-    this.preferences = {
-      allowPrivateMessages: true,
-      sounds: false,
-      notifications: false,
-      notificationPreviews: false,
-      largeText: false,
-      timestamps: 'time',
-      look: null,
-      ignored: [],
-    };
-    try {
-      const value = JSON.parse(
-        localStorage.getItem(this.preferenceKey()) ?? 'null',
-      ) as Partial<Preferences> | null;
-      if (!value) return;
-      this.preferences.allowPrivateMessages = value.allowPrivateMessages !== false;
-      this.preferences.sounds = value.sounds === true;
-      this.preferences.notifications = value.notifications === true;
-      this.preferences.notificationPreviews = value.notificationPreviews === true;
-      this.preferences.largeText = value.largeText === true;
-      if (TIMESTAMP_FORMATS.includes(value.timestamps as TimestampFormat))
-        this.preferences.timestamps = value.timestamps as TimestampFormat;
-      this.preferences.look = validLook(value.look);
-      const ignored = new Map<string, { id: string; name: string }>();
-      if (Array.isArray(value.ignored))
-        for (const entry of value.ignored) {
-          if (
-            typeof entry?.id !== 'string' ||
-            !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(entry.id) ||
-            entry.id === this.store.localId ||
-            typeof entry.name !== 'string'
-          )
-            continue;
-          ignored.set(entry.id, { id: entry.id, name: entry.name.slice(0, 128) });
-          if (ignored.size >= 100) break;
-        }
-      this.preferences.ignored = [...ignored.values()];
-    } catch {
-      /* Preferences are optional. */
-    }
+  toggleIgnore(id: string, name: string, authenticated: boolean): Promise<void> {
+    return this.privacy.toggleIgnore(id, name, authenticated);
   }
 
-  /** Local to this viewer: applies at once and needs no server. */
   setTimestampFormat(format: TimestampFormat): void {
-    if (!TIMESTAMP_FORMATS.includes(format)) return;
-    this.preferences = { ...this.preferences, timestamps: format };
-    this.savePreferences(this.viewerKey, { timestamps: format });
-    this.render();
+    this.privacy.setTimestampFormat(format);
   }
 
-  /** The look saved for whoever joins next, before the room has confirmed anything. */
   savedLook(): ChatStyle | null {
-    try {
-      const value = JSON.parse(
-        localStorage.getItem(this.preferenceKey(this.options.getViewerKey())) ?? 'null',
-      ) as Partial<Preferences> | null;
-      return validLook(value?.look);
-    } catch {
-      return null;
-    }
+    return this.privacy.savedLook();
   }
 
-  private preferenceKey(viewer = this.viewerKey): string {
-    return `simplestchat.chat.v1.${viewer}`;
-  }
-  private savePreferences(viewer = this.viewerKey, patch?: PreferencePatch): void {
-    if (viewer !== this.viewerKey || viewer !== this.options.getViewerKey()) return;
-    this.storePreferences(viewer);
-    if (patch && this.options.getToken?.())
-      this.options.accountPreferences?.change(patch).catch((error: unknown) => {
-        if (!this.disposed && viewer === this.options.getViewerKey())
-          this.options.notify(
-            error instanceof Error ? error.message : 'Preferences could not be saved',
-          );
-      });
-  }
-  private storePreferences(viewer: string): void {
-    try {
-      localStorage.setItem(this.preferenceKey(viewer), JSON.stringify(this.preferences));
-    } catch {
-      /* Browser-local consent and guest preferences remain usable. */
-    }
-  }
-  private accountToken(viewer: string): string | null {
-    return viewer === 'guest' ? null : (this.options.getToken?.() ?? null);
-  }
-  private async loadAccountPreferences(current: () => boolean): Promise<void> {
-    const account = this.options.accountPreferences;
-    if (!account) throw new Error('Account privacy is unavailable');
-    await account.refresh();
-    const saved = account.snapshot;
-    if (current() && saved) this.applyAccountPreferences(saved);
-  }
-  private applyAccountPreferences(saved: ChatPreferences): void {
-    const snapshot = JSON.stringify(saved);
-    if (snapshot === this.accountPreferenceSnapshot) return;
-    this.accountPreferenceSnapshot = snapshot;
-    this.preferences = {
-      ...this.preferences,
-      allowPrivateMessages: saved.allowPrivateMessages,
-      sounds: saved.sounds,
-      largeText: saved.largeText,
-      timestamps: saved.timestamps,
-      ignored: saved.ignored.map((person) => ({ ...person })),
-    };
-    this.storePreferences(this.viewerKey);
-    this.render();
-    const room = this.options.getRoom();
-    if (room && room === this.activeRoom)
-      this.pushPreferences(room, this.preferences, this.temporaryIgnored).catch(() => {});
-  }
-  private async pushPreferences(
-    room: RoomClient,
-    preferences: Preferences,
-    temporary: Map<string, string>,
-  ): Promise<void> {
-    await room.requestSocial('setChatPreferences', {
-      allowPrivateMessages: preferences.allowPrivateMessages,
-      ignoredParticipantIds: this.options.getToken?.()
-        ? [...temporary.keys()]
-        : [...preferences.ignored.map((entry) => entry.id), ...temporary.keys()],
-    });
-  }
-
-  /** The settings sheet's chat sections; every control applies as it changes. */
   sections(): SheetSection[] {
-    const available = (): boolean => Boolean(this.options.getRoom()?.localParticipantId);
-    return [
-      {
-        id: 'chat-look',
-        segment: 'you',
-        label: 'Chat look',
-        status: () => this.lookStatus(),
-        available,
-        screen: () => ({ title: 'Chat look', body: (context) => this.lookScreen(context) }),
-      },
-      {
-        id: 'notifications',
-        segment: 'you',
-        label: 'Notifications',
-        status: () => this.notificationStatus(),
-        available,
-        screen: () => ({
-          title: 'Notifications',
-          body: (context) => this.notificationScreen(context),
-        }),
-      },
-      {
-        id: 'privacy',
-        segment: 'you',
-        label: 'Privacy',
-        status: () => this.privacyStatus(),
-        available,
-        screen: () => ({ title: 'Privacy', body: (context) => this.privacyScreen(context) }),
-      },
-    ];
-  }
-
-  private lookStatus(): string {
-    const look = this.options.getRoom()?.chatStyle ?? AUTOMATIC_LOOK;
-    const style = LOOKS.find((entry) => entry.kind === look.style)?.label ?? 'Stripe';
-    const color = look.color
-      ? look.color.charAt(0).toUpperCase() + look.color.slice(1)
-      : 'Automatic';
-    return `${color} · ${style}`;
-  }
-
-  private notificationStatus(): string {
-    const parts = [
-      this.preferences.sounds ? 'Sounds' : null,
-      this.preferences.notifications ? 'Alerts' : null,
-    ].filter(Boolean);
-    return parts.length ? parts.join(' · ') : 'Off';
-  }
-
-  private privacyStatus(): string {
-    const ignored = this.preferences.ignored.length + this.temporaryIgnored.size;
-    const messages = this.preferences.allowPrivateMessages ? 'PMs on' : 'PMs off';
-    return ignored ? `${messages} · ${ignored} ignored` : messages;
-  }
-
-  /** A screen's feedback stops when the sheet leaves it; its work stops when the chat context changes. */
-  private screenContext(
-    context: ScreenContext,
-  ): { room: RoomClient; current: () => boolean; live: () => boolean; viewer: string } | null {
-    const room = this.options.getRoom();
-    if (!room?.localParticipantId) return null;
-    const activation = this.activation;
-    const viewer = this.viewerKey;
-    const live = (): boolean => this.contextCurrent(activation, room, viewer);
-    return { room, viewer, live, current: () => context.current() && live() };
-  }
-
-  private lookScreen(context: ScreenContext): HTMLElement {
-    const scope = this.screenContext(context);
-    const body = el('div', undefined, 'sheet-screen');
-    if (!scope) return body;
-    const { room, current, viewer, live } = scope;
-    const lookBlock = el('div', undefined, 'sheet-block chat-look-block');
-    let applying: Promise<void> = Promise.resolve();
-    const look = this.lookPicker(room, () => {
-      // A choice queues behind the one before it; leaving the screen must not drop it.
-      const chosen = look.chosen();
-      applying = applying.then(async () => {
-        if (!live()) return;
-        const before = room.chatStyle ?? AUTOMATIC_LOOK;
-        if (chosen.color === before.color && chosen.style === before.style) return;
-        try {
-          const applied = await room.setChatStyle(chosen);
-          if (!live()) return;
-          this.preferences = { ...this.preferences, look: applied };
-          this.savePreferences(viewer);
-          this.render();
-          if (current()) markSaved(lookBlock);
-        } catch (error) {
-          if (current())
-            this.options.notify(error instanceof Error ? error.message : 'Unable to save the look');
-        }
-      });
-    });
-    lookBlock.append(el('span', '', 'sheet-row-saved'), ...look.nodes);
-    const large = toggleRow('Larger chat text', this.preferences.largeText, (value) => {
-      this.preferences = { ...this.preferences, largeText: value };
-      this.savePreferences(viewer, { largeText: value });
-      this.render();
-      markSaved(large.row);
-    });
-    // Each choice is shown as it looks, in the viewer's own time.
-    const timestamps = el('select');
-    timestamps.dataset['preference'] = 'timestamps';
-    const now = new Date();
-    for (const format of TIMESTAMP_FORMATS) {
-      const option = el(
-        'option',
-        format === 'hover' ? 'Only when hovering' : formatChatTime(now, format),
-      );
-      option.value = format;
-      timestamps.append(option);
-    }
-    timestamps.value = this.preferences.timestamps;
-    const timestampRow = selectRow('Timestamps', timestamps);
-    timestamps.addEventListener('change', () => {
-      const format = timestamps.value as TimestampFormat;
-      if (!TIMESTAMP_FORMATS.includes(format)) {
-        timestamps.value = this.preferences.timestamps;
-        return;
-      }
-      this.preferences = { ...this.preferences, timestamps: format };
-      this.savePreferences(viewer, { timestamps: format });
-      this.render();
-      markSaved(timestampRow);
-    });
-    const rows: HTMLElement[] = [large.row, timestampRow];
-    if (room.roomSettings)
-      rows.push(
-        actionRow('Room history', () =>
-          openRoomHistory(
-            room,
-            current,
-            Boolean(this.options.getToken?.()),
-            undefined,
-            (message) => {
-              context.close();
-              this.switchConversation('public');
-              this.startReply(message);
-            },
-          ),
-        ),
-      );
-    body.append(lookBlock, group(null, rows));
-    return body;
-  }
-
-  private notificationScreen(context: ScreenContext): HTMLElement {
-    const scope = this.screenContext(context);
-    const body = el('div', undefined, 'sheet-screen');
-    if (!scope) return body;
-    const { room, current, viewer } = scope;
-    const sounds = toggleRow('Sounds', this.preferences.sounds, (value) => {
-      // Audio must start during the click that enabled it.
-      this.resumeSoundFromGesture(value);
-      if (!current()) return;
-      this.preferences = { ...this.preferences, sounds: value };
-      this.savePreferences(viewer, { sounds: value });
-      if (value) this.playSound(550);
-      markSaved(sounds.row);
-    });
-    const rows: HTMLElement[] = [sounds.row];
-    // Only where the browser can show desktop notices at all.
-    if (typeof Notification !== 'undefined') {
-      const notices = toggleRow(
-        'Alerts on this device',
-        this.preferences.notifications && Notification.permission === 'granted',
-        (value) => {
-          // Permission must be requested during the click, before any wait.
-          const allowed = this.notificationPermission(value);
-          allowed
-            .then((granted) => {
-              if (!current()) return;
-              if (value && !granted) {
-                notices.input.checked = false;
-                this.options.notify(
-                  'Notifications are blocked for this site in your browser settings',
-                );
-              }
-              this.preferences = { ...this.preferences, notifications: granted };
-              if (!granted) this.closeDesktopNotices();
-              previews.row.hidden = !granted;
-              this.savePreferences(viewer);
-              markSaved(notices.row);
-            })
-            .catch(() => {});
-        },
-      );
-      notices.input.dataset['preference'] = 'notifications';
-      const previews = toggleRow(
-        'Show message text',
-        this.preferences.notificationPreviews,
-        (value) => {
-          if (!current()) return;
-          this.preferences = { ...this.preferences, notificationPreviews: value };
-          if (!value) this.closeDesktopNotices();
-          this.savePreferences(viewer);
-          markSaved(previews.row);
-        },
-      );
-      previews.input.dataset['preference'] = 'notificationPreviews';
-      previews.row.hidden = !notices.input.checked;
-      rows.push(notices.row, previews.row);
-    }
-    body.append(
-      group(null, rows),
-      note('Alerts with message text can show on a lock screen; without it they stay generic.'),
-    );
-    // The open private conversation's own mute and snooze come first.
-    const peer = this.store.active;
-    if (
-      peer !== 'public' &&
-      this.options.getToken?.() &&
-      room.getParticipants().get(peer)?.authenticated
-    )
-      this.options.mountConversationNotifications?.(
-        body,
-        peer,
-        () => current() && this.store.active === peer,
-      );
-    if (this.options.getToken?.()) this.options.mountAccountNotifications?.(body, current);
-    return body;
-  }
-
-  private privacyScreen(context: ScreenContext): HTMLElement {
-    if (this.options.getToken?.() && this.options.accountPreferences) {
-      const body = el('div', undefined, 'sheet-screen');
-      const viewer = this.options.getViewerKey();
-      this.options.accountPreferences.mountPrivacy(
-        body,
-        () => context.current() && viewer === this.options.getViewerKey(),
-      );
-      return body;
-    }
-    const scope = this.screenContext(context);
-    const body = el('div', undefined, 'sheet-screen');
-    if (!scope) return body;
-    const { room, current, viewer } = scope;
-    const allow = toggleRow(
-      'Private messages from others',
-      this.preferences.allowPrivateMessages,
-      (value) => {
-        const previous = this.preferences.allowPrivateMessages;
-        let operation: number;
-        try {
-          operation = this.beginPreferenceUpdate();
-        } catch (error) {
-          allow.input.checked = previous;
-          this.options.notify(error instanceof Error ? error.message : 'Please wait');
-          return;
-        }
-        const next = { ...this.preferences, allowPrivateMessages: value };
-        this.pushPreferences(room, next, new Map(this.temporaryIgnored))
-          .then(() => {
-            if (!current() || operation !== this.preferenceOperation) return;
-            this.preferences = next;
-            this.savePreferences(viewer);
-            this.render();
-            markSaved(allow.row);
-          })
-          .catch((error: unknown) => {
-            if (!current() || operation !== this.preferenceOperation) return;
-            allow.input.checked = previous;
-            this.options.notify(
-              error instanceof Error ? error.message : 'Unable to save preferences',
-            );
-          })
-          .finally(() => {
-            if (operation === this.preferenceOperation) this.preferenceBusy = false;
-          });
-      },
-    );
-    const ignored = [
-      ...this.preferences.ignored,
-      ...[...this.temporaryIgnored].map(([id, name]) => ({ id, name })),
-    ];
-    const people: HTMLElement[] = [];
-    for (const person of ignored) {
-      const row = el('div', undefined, 'sheet-row sheet-row-person');
-      const restore = asyncButton(
-        'Unignore',
-        async () => {
-          if (!current()) return;
-          await this.toggleIgnore(person.id, person.name, false);
-          if (current() && !this.isIgnored(person.id)) row.remove();
-        },
-        (error) => {
-          if (current())
-            this.options.notify(
-              error instanceof Error ? error.message : 'Unable to restore messages',
-            );
-        },
-        'sheet-button',
-      );
-      row.append(el('span', person.name, 'sheet-row-label'), restore);
-      people.push(row);
-    }
-    body.append(
-      group(null, [allow.row]),
-      group(
-        'Ignored people',
-        people.length
-          ? people
-          : [note('No one is ignored. Use a person’s menu to ignore their messages.')],
-      ),
-      note(
-        this.accountToken(viewer)
-          ? 'Saved to your account, so they follow you to other devices. Guest ignores last for this room.'
-          : 'Saved in this browser. Guest ignores last for this room.',
-      ),
-    );
-    return body;
-  }
-
-  /** Swatches and styles for the local look, with a live preview row. */
-  private lookPicker(
-    room: RoomClient,
-    onChange?: () => void,
-  ): { nodes: HTMLElement[]; chosen: () => ChatStyle } {
-    const current = room.chatStyle ?? AUTOMATIC_LOOK;
-    const nickname = room.nickname;
-    const preview = el('div');
-    preview.append(
-      el('span', nickname, 'sender'),
-      el('div', 'This is how your messages look to everyone.', 'msg-text'),
-    );
-    const radio = (name: string, value: string, checked: boolean): HTMLInputElement => {
-      const node = el('input');
-      node.type = 'radio';
-      node.name = name;
-      node.value = value;
-      node.checked = checked;
-      node.addEventListener('change', () => {
-        show();
-        onChange?.();
-      });
-      return node;
-    };
-    const swatch = (value: string, color: string): HTMLInputElement => {
-      const node = radio('chat-color', value, (current.color ?? '') === value);
-      node.className = 'chat-swatch';
-      node.style.setProperty('--swatch', color);
-      return node;
-    };
-    const automatic = swatch('', chatColor(nickname, null));
-    const automaticLabel = el('label', undefined, 'chat-swatch-automatic');
-    automaticLabel.append(automatic, el('span', 'Automatic'));
-    // Two rows of eight follow the hue wheel: warm colors first, then cool.
-    const palette = el('div', undefined, 'chat-palette');
-    const swatches = el('div', undefined, 'chat-swatches');
-    swatches.append(automaticLabel, palette);
-    const colors = [automatic];
-    for (const [token, hex] of Object.entries(CHAT_PALETTE)) {
-      const node = swatch(token, hex);
-      const name = token.charAt(0).toUpperCase() + token.slice(1);
-      node.title = name;
-      node.setAttribute('aria-label', name);
-      colors.push(node);
-      palette.append(node);
-    }
-    const colorGroup = el('fieldset', undefined, 'chat-look-group');
-    colorGroup.append(el('legend', 'Color'), swatches);
-    const styles = LOOKS.map(({ kind, label }) => {
-      const node = radio('chat-look', kind, current.style === kind);
-      const wrapper = el('label', undefined, 'chat-look-choice');
-      wrapper.append(node, el('span', label));
-      return { node, wrapper };
-    });
-    const styleGroup = el('fieldset', undefined, 'chat-look-group');
-    styleGroup.append(el('legend', 'Style'), ...styles.map((style) => style.wrapper));
-    const chosen = (): ChatStyle =>
-      validLook({
-        color: colors.find((node) => node.checked)?.value,
-        style: styles.find((style) => style.node.checked)?.node.value,
-      }) ?? AUTOMATIC_LOOK;
-    const show = (): void => {
-      const look = chosen();
-      preview.className = `chat-msg chat-look-preview look-${look.style}`;
-      preview.style.setProperty('--sender-color', chatColor(nickname, look.color));
-    };
-    show();
-    return {
-      nodes: [colorGroup, styleGroup, preview],
-      chosen,
-    };
-  }
-
-  private resumeSoundFromGesture(enabled = this.preferences.sounds): void {
-    if (!enabled) return;
-    try {
-      if (!this.audio || this.audio.state === 'closed') this.audio = new AudioContext();
-      if (this.audio.state === 'suspended')
-        this.audio.resume().catch(() => {
-          // Notification sounds are optional; denied output must never block chat.
-        });
-    } catch {
-      /* Unsupported or denied audio must never block chat. */
-    }
-  }
-
-  private playSound(frequency: number): void {
-    if (!this.audio || this.audio.state !== 'running') return;
-    try {
-      const oscillator = this.audio.createOscillator();
-      const gain = this.audio.createGain();
-      oscillator.frequency.value = frequency;
-      gain.gain.setValueAtTime(0.06, this.audio.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, this.audio.currentTime + 0.12);
-      oscillator.connect(gain).connect(this.audio.destination);
-      oscillator.start();
-      oscillator.stop(this.audio.currentTime + 0.13);
-      oscillator.onended = () => {
-        oscillator.disconnect();
-        gain.disconnect();
-      };
-    } catch {
-      /* Output devices may disappear while the room is open. */
-    }
+    return this.privacy.sections();
   }
 }
 
