@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { loadContractModules, loadTypeScript } from './source-loader.mjs';
+import { loadContractModules, loadTypeScript } from './native-fixtures.mjs';
 import { flush, uiFixture } from './ui-fixture.mjs';
 
 /** The Camera & mic screen, with real preview, device and sheet modules over the text DOM. */

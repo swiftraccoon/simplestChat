@@ -18,6 +18,8 @@ function revision(value: unknown): value is string {
  * Duplicate hints coalesce; a newer hint immediately fences an older request.
  * Browser APIs can be unavailable without preventing sign-in. */
 export class AccountSessionSync {
+  private readonly options: SessionSyncOptions;
+
   private channel: BroadcastChannel | null = null;
   private storage: Storage | null = null;
   private readonly seen = new Set<string>();
@@ -26,7 +28,9 @@ export class AccountSessionSync {
   private disposed = false;
   private lastFocusCheck = -Infinity;
 
-  constructor(private readonly options: SessionSyncOptions) {
+  constructor(options: SessionSyncOptions) {
+    this.options = options;
+
     try {
       this.storage = window.localStorage;
       const marker = this.storage.getItem(MARKER);

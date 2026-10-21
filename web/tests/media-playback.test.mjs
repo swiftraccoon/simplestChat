@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { loadTypeScript } from './source-loader.mjs';
+import { loadTypeScript } from './native-fixtures.mjs';
 import { createDOM, deferred, flush } from './ui-fixture.mjs';
 
 const denied = () =>
@@ -102,9 +102,7 @@ async function fixture(t) {
       './receive-policy': await loadTypeScript('src/receive-policy.ts', {
         globals: { localStorage: storage },
       }),
-      './capture-preferences': {},
       './media-controls.css': {},
-      './settings-sheet': {},
       './audio-output': await loadTypeScript('src/audio-output.ts'),
     },
     globals: {

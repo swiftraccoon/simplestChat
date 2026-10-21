@@ -27,6 +27,8 @@ const timeMinute = (value: string): number => {
 /** One bounded account snapshot gates sounds and foreground notices. The server
  * independently applies this policy before empty-body push delivery. */
 export class NotificationPreferences {
+  private readonly options: Options;
+
   private account: string | null;
   private state: PreferenceState | null = null;
   private loadedAt = 0;
@@ -46,7 +48,9 @@ export class NotificationPreferences {
   private readonly views = new Set<() => boolean>();
   private readonly stopUpdates: () => void;
 
-  constructor(private readonly options: Options) {
+  constructor(options: Options) {
+    this.options = options;
+
     this.account = options.getAccountId();
     const refresh = () => {
       if (!document.hidden) this.refresh().catch(() => {});

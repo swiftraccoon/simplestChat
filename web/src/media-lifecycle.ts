@@ -15,6 +15,8 @@ interface MediaLifecycleOptions {
 
 /** Browser lifecycle hints never authorize capture, room entry, or a new speaker. */
 export class MediaLifecycle {
+  private readonly options: MediaLifecycleOptions;
+
   private timer: ReturnType<typeof setTimeout> | undefined;
   private disposed = false;
   private pageHidden = false;
@@ -45,7 +47,9 @@ export class MediaLifecycle {
     this.schedule();
   };
 
-  constructor(private readonly options: MediaLifecycleOptions) {
+  constructor(options: MediaLifecycleOptions) {
+    this.options = options;
+
     document.addEventListener('visibilitychange', this.visibility);
     window.addEventListener('pagehide', this.hide);
     window.addEventListener('pageshow', this.show);

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { loadTypeScript } from './source-loader.mjs';
+import { loadTypeScript } from './native-fixtures.mjs';
 import { mediasoupRuntime } from '../scripts/mediasoup-runtime.mjs';
 
 test('development serves auth and room APIs alongside WebSocket signaling', async () => {

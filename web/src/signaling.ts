@@ -29,6 +29,8 @@ const AUTHENTICATION_RENEWAL_MAX_ATTEMPTS = 3;
 const AUTHENTICATION_RENEWAL_JITTER_MS = 250;
 
 export class SignalingClient {
+  private readonly ticketProvider: TicketProvider;
+
   private ws: WebSocket | null = null;
   private telemetry: TelemetryHandler | undefined;
   private connectingAt = 0;
@@ -91,10 +93,9 @@ export class SignalingClient {
     }
   >();
 
-  constructor(
-    url: string,
-    private readonly ticketProvider: TicketProvider,
-  ) {
+  constructor(url: string, ticketProvider: TicketProvider) {
+    this.ticketProvider = ticketProvider;
+
     this.url = url;
   }
 

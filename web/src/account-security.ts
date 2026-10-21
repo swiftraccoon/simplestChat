@@ -38,6 +38,8 @@ const REPLACEMENT_MS = 300_000;
  * browser/network completion can create a new operation or adopt its result.
  */
 export class AccountSecurityFlow {
+  private readonly options: SecurityOptions;
+
   phase: Phase = 'idle';
   message = '';
   recoveryKey = '';
@@ -49,7 +51,9 @@ export class AccountSecurityFlow {
   private generation = 0;
   private disposed = false;
 
-  constructor(private readonly options: SecurityOptions) {}
+  constructor(options: SecurityOptions) {
+    this.options = options;
+  }
 
   get canDismiss(): boolean {
     return this.phase !== 'requesting' && this.phase !== 'uncertain';

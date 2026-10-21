@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { loadTypeScript } from './source-loader.mjs';
+import { loadTypeScript } from './native-fixtures.mjs';
 
 test('session creation remains visible through every dismissal route until completion', async () => {
   const { AuthDialogFlow } = await loadTypeScript('src/auth-dialog.ts');

@@ -9,13 +9,17 @@ const revisionPattern = /^[a-f0-9]{40}$/;
 /** A public build hint, independent of accounts. Updating always needs a click
  * outside a call; discovering a release cannot reload or retire media. */
 export class AppUpdates {
+  private readonly options: Options;
+
   private readonly events = new AbortController();
   private request: AbortController | null = null;
   private checkedAt = -Infinity;
   private disposed = false;
   private nextRevision: string | null = null;
 
-  constructor(private readonly options: Options) {
+  constructor(options: Options) {
+    this.options = options;
+
     const check = () => {
       this.check().catch(() => {});
     };

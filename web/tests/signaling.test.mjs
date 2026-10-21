@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { loadContractModules, loadTypeScript } from './source-loader.mjs';
+import { loadContractModules, loadTypeScript } from './native-fixtures.mjs';
 
 const validation = (await loadContractModules())['./protocol-validation'];
 const CLOCK_EPOCH_MS = 1_800_000_000_000;

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { loadTypeScript } from './source-loader.mjs';
+import { loadTypeScript } from './native-fixtures.mjs';
 import { deferred, flush } from './ui-fixture.mjs';
 
 test('producer closure updates local controls and still removes remote media', async () => {

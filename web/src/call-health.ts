@@ -229,6 +229,8 @@ function summarize(
 
 /** Bounded, consent-independent local observer. It never records or uploads observations. */
 export class CallHealth {
+  private readonly options: Options;
+
   private readonly evidence = new Map<object, Evidence>();
   private readonly inFlight = new WeakSet<object>();
   private readonly blocked = new WeakSet<HTMLMediaElement>();
@@ -245,7 +247,9 @@ export class CallHealth {
   };
   private last = '';
 
-  constructor(private readonly options: Options) {
+  constructor(options: Options) {
+    this.options = options;
+
     document.addEventListener('visibilitychange', this.visibility);
     this.timer = setInterval(() => this.sample(), 2_000);
   }

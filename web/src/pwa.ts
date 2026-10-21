@@ -87,6 +87,8 @@ async function registerWorker(): Promise<ServiceWorkerRegistration> {
 
 /** Install and optional generic PM alerts; no offline cache or background credentials. */
 export class PwaControls {
+  private readonly options: PwaOptions;
+
   private account: string | null;
   private generation = 0;
   private owner: PushOwner | null;
@@ -98,7 +100,9 @@ export class PwaControls {
   private refreshControls: (() => void) | null = null;
   private readonly controller = new AbortController();
 
-  constructor(private readonly options: PwaOptions) {
+  constructor(options: PwaOptions) {
+    this.options = options;
+
     this.account = options.getAccountId();
     const owner = readOwner();
     this.owner = owner?.accountId === this.account ? owner : null;

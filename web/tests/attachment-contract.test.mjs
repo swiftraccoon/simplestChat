@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { loadContractModules } from './source-loader.mjs';
+import { loadContractModules } from './native-fixtures.mjs';
 const { decodeAttachment, decodeChatEntry, decodeSocialData } = (await loadContractModules())[
   './protocol-validation'
 ];

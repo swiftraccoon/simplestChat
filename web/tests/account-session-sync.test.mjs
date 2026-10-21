@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { loadTypeScript } from './source-loader.mjs';
+import { loadTypeScript } from './native-fixtures.mjs';
 
 const key = 'simplestchat-account-change-v1';
 const marker = (number) => number.toString(16).padStart(32, '0');

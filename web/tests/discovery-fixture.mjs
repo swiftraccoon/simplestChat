@@ -1,5 +1,5 @@
 import { accountUpdatesFixture } from './account-updates-fixture.mjs';
-import { loadContractModules, loadTypeScript } from './source-loader.mjs';
+import { loadContractModules, loadTypeScript } from './native-fixtures.mjs';
 
 export async function loadDiscoveryFixture(fixture) {
   const contracts = await loadContractModules();

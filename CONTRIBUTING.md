@@ -92,7 +92,9 @@ properties, checked indexed access, unused-code checks, explicit override and
 return checking, unreachable-code rejection, checked side-effect imports and
 library declaration checking. Browser and Node tooling have separate ambient
 environments, with a shared strict baseline. A browser module must not acquire
-Node globals merely to satisfy the Vite configuration.
+Node globals merely to satisfy the Vite configuration. Browser sources use erasable
+TypeScript syntax so Node can execute the same modules in unit tests; constructor
+properties use explicit fields and assignments rather than parameter properties.
 Build scripts in `web/scripts/` are checked JavaScript with typed JSDoc; they
 use the strict Node-tooling project rather than bypassing it because of their
 file extension.
@@ -103,8 +105,11 @@ switches. Plain `void task()` is not rejection handling. JavaScript test and
 browser-harness files receive syntax/correctness lint; their mocked fixtures are
 not fully type checked. The source suite also compiles
 [contract fixtures](web/tests/type-contracts.ts) with the production compiler to
-check result inference and expected type errors. This is separate from the
-in-memory transpiler used to run source tests.
+check result inference and expected type errors. Unit tests execute the actual
+modules with Node 26's native TypeScript support and supported module mocks; type
+stripping does not replace the production compiler's checks. Browser fixtures
+capture their injected globals per module instance, preserving independent
+sessions without changing Node's shared globals.
 
 - Use installed library types instead of opaque `any` aliases. Accept external
   JSON as `unknown`, validate its complete relevant structure, then narrow it.

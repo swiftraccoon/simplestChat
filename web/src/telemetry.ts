@@ -86,6 +86,8 @@ export function failureOutcome(error: unknown): TelemetryOutcome {
 
 /** Best effort, same-origin, bounded reliability measurements, with no identity. */
 export class ClientTelemetry {
+  private readonly release: string;
+
   private pending: TelemetryEvent[] = [];
   private history: (TelemetryEvent & { atMs: number })[] = [];
   private mediaHistory: LocalMediaSample[] = [];
@@ -125,7 +127,9 @@ export class ClientTelemetry {
   private timer: ReturnType<typeof setInterval>;
   readonly browser = browserFamily(navigator.userAgent);
 
-  constructor(private readonly release: string) {
+  constructor(release: string) {
+    this.release = release;
+
     try {
       this.enabled = localStorage.getItem('reliabilityTelemetry') === 'true';
     } catch {

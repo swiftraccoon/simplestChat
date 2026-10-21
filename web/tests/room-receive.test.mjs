@@ -1,12 +1,7 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { evaluateTypeScript } from './source-loader.mjs';
+import { ReceiveScheduler } from '../src/receive-scheduler.ts';
 
-const source = await readFile(new URL('../src/room.ts', import.meta.url), 'utf8');
-const { ReceiveScheduler } = evaluateTypeScript(`${source}\nexport { ReceiveScheduler };`, {
-  modules: { './receive-policy': {} },
-});
 const flush = async () => {
   for (let i = 0; i < 12; i++) await Promise.resolve();
 };

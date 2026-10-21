@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { loadTypeScript } from './source-loader.mjs';
+import { loadTypeScript } from './native-fixtures.mjs';
 import { flush, uiFixture } from './ui-fixture.mjs';
 
 /** The text-only DOM gains the few element APIs the sheet relies on. */

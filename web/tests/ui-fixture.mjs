@@ -1,4 +1,4 @@
-import { loadContractModules, loadTypeScript } from './source-loader.mjs';
+import { loadContractModules, loadTypeScript } from './native-fixtures.mjs';
 
 export function deferred() {
   let resolve, reject;
@@ -10,6 +10,8 @@ export function deferred() {
 }
 
 export async function flush() {
+  // Native dynamic imports settle through the event loop, beyond promise jobs.
+  await new Promise((resolve) => setImmediate(resolve));
   for (let index = 0; index < 12; index++) await Promise.resolve();
 }
 

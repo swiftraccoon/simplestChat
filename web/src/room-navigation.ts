@@ -13,6 +13,8 @@ const invalidRoomIdCharacter = /[^A-Za-z0-9_-]/;
 
 /** Room links select a destination; joining and starting capture remain explicit. */
 export class RoomNavigation {
+  private readonly options: RoomNavigationOptions;
+
   private selected = '';
   private destination = '';
   private observedHash = '';
@@ -22,7 +24,9 @@ export class RoomNavigation {
   private intent = 0;
   private pendingJoin: string | null = null;
 
-  constructor(private readonly options: RoomNavigationOptions) {
+  constructor(options: RoomNavigationOptions) {
+    this.options = options;
+
     const initial = this.readHash();
     if (initial !== null) this.selected = this.destination = initial;
     else this.writeHash('', false);

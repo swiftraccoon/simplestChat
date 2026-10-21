@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { loadTypeScript } from './source-loader.mjs';
+import { loadTypeScript } from './native-fixtures.mjs';
 import { deferred, flush, uiFixture } from './ui-fixture.mjs';
 
 const first = '11111111-1111-4111-8111-111111111111';

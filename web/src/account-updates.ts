@@ -22,12 +22,16 @@ const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Small, bounded SSE decoder. Comments are heartbeats; partial events never apply. */
 export class AccountEventDecoder {
+  private readonly deliver: (update: WireUpdate) => void;
+
   private line = '';
   private data: string[] = [];
   private size = 0;
   private carriageReturn = false;
 
-  constructor(private readonly deliver: (update: WireUpdate) => void) {}
+  constructor(deliver: (update: WireUpdate) => void) {
+    this.deliver = deliver;
+  }
 
   push(chunk: string): void {
     for (const char of chunk) {
@@ -85,6 +89,8 @@ type Options = { getToken: () => string | null; getAccountId: () => string | nul
 /** Invalidation only: HTTP remains authoritative, including after every reconnect.
  * Credentials stay in the request header. A new identity retires every old callback. */
 export class AccountUpdates {
+  private readonly options: Options;
+
   private account: string | null = null;
   private token: string | null = null;
   private controller: AbortController | null = null;
@@ -95,7 +101,9 @@ export class AccountUpdates {
   private denied = false;
   private disposed = false;
 
-  constructor(private readonly options: Options) {
+  constructor(options: Options) {
+    this.options = options;
+
     const sync = () => this.synchronize();
     window.addEventListener('focus', sync, { signal: this.events.signal });
     document.addEventListener('visibilitychange', sync, { signal: this.events.signal });

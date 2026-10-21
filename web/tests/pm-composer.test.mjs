@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { setImmediate as nextTurn } from 'node:timers/promises';
 import { attachmentFixture } from './attachment-fixture.mjs';
-import { loadContractModules, loadTypeScript } from './source-loader.mjs';
+import { loadContractModules, loadTypeScript } from './native-fixtures.mjs';
 import { deferred, flush, uiFixture } from './ui-fixture.mjs';
 
 const modules = await loadContractModules();

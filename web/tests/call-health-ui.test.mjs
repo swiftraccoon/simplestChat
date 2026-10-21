@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createDOM } from './ui-fixture.mjs';
-import { loadTypeScript } from './source-loader.mjs';
+import { loadTypeScript } from './native-fixtures.mjs';
 
 test('Call health updates retain controls and invoke repair only on explicit actions', async () => {
   const dom = createDOM();

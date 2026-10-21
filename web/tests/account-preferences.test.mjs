@@ -1,7 +1,7 @@
 import { accountUpdatesFixture } from './account-updates-fixture.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { loadTypeScript } from './source-loader.mjs';
+import { loadTypeScript } from './native-fixtures.mjs';
 import { uiFixture, deferred, flush } from './ui-fixture.mjs';
 
 const defaults = () => ({

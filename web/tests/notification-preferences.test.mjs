@@ -1,7 +1,7 @@
 import { accountUpdatesFixture } from './account-updates-fixture.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { loadTypeScript } from './source-loader.mjs';
+import { loadTypeScript } from './native-fixtures.mjs';
 import { createDOM, deferred, flush } from './ui-fixture.mjs';
 
 const peer = '11111111-1111-4111-8111-111111111111';

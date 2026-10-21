@@ -93,6 +93,8 @@ interface Surface {
 }
 
 export class CommunityUI {
+  private readonly options: Options;
+
   private readonly messagesButton = button('Messages', () => {
     if (this.options.onOpenMessages) {
       this.options.onOpenMessages();
@@ -180,7 +182,8 @@ export class CommunityUI {
 
   private identity = '';
 
-  constructor(private readonly options: Options) {
+  constructor(options: Options) {
+    this.options = options;
     const accountActions = document.getElementById('community-actions')!;
     accountActions.append(this.accountButton, this.messagesButton, this.roomsButton);
     // Room-scoped actions belong with the room tools; the header keeps account actions.

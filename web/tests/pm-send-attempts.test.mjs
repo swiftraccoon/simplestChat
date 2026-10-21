@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { loadContractModules, loadTypeScript } from './source-loader.mjs';
+import { loadContractModules, loadTypeScript } from './native-fixtures.mjs';
 
 const modules = await loadContractModules();
 const load = () => loadTypeScript('src/pm-send-attempts.ts', { modules });

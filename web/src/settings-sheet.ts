@@ -90,6 +90,8 @@ function focusable(node: HTMLElement | null): node is HTMLElement {
 
 /** One settings surface: a root list and a stack of single-purpose screens. */
 export class SettingsSheet {
+  private readonly options: SettingsSheetOptions;
+
   readonly element: HTMLElement;
   private readonly title: HTMLElement;
   private readonly back: HTMLButtonElement;
@@ -104,7 +106,9 @@ export class SettingsSheet {
   private section: string | undefined;
   private restoringNavigation = false;
 
-  constructor(private readonly options: SettingsSheetOptions) {
+  constructor(options: SettingsSheetOptions) {
+    this.options = options;
+
     this.element = el('section', undefined, 'settings-sheet');
     this.element.id = 'settings-sheet';
     this.element.setAttribute('role', 'region');

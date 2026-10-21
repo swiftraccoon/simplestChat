@@ -1,10 +1,14 @@
 /** Speaker routing is local to this tab and never opens a capture device. */
 export class AudioOutput {
+  private readonly elements: () => HTMLMediaElement[];
+
   private deviceId = '';
   private generation = 0;
   private jobs = new WeakMap<HTMLMediaElement, Promise<void>>();
 
-  constructor(private readonly elements: () => HTMLMediaElement[]) {}
+  constructor(elements: () => HTMLMediaElement[]) {
+    this.elements = elements;
+  }
 
   get selected(): string {
     return this.deviceId;

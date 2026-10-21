@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { deferred, flush, uiFixture } from './ui-fixture.mjs';
-import { loadContractModules } from './source-loader.mjs';
+import { loadContractModules } from './native-fixtures.mjs';
 import { loadDiscoveryFixture } from './discovery-fixture.mjs';
 
 const OWN = '00000000-0000-4000-8000-000000000001';

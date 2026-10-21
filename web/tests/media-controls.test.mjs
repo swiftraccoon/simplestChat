@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { loadContractModules, loadTypeScript } from './source-loader.mjs';
+import { loadContractModules, loadTypeScript } from './native-fixtures.mjs';
 
 const signalingModule = await loadTypeScript('src/signaling.ts', {
   modules: await loadContractModules(),
@@ -103,7 +103,6 @@ async function fixture(t) {
       './receive-policy': await loadTypeScript('src/receive-policy.ts'),
       './capture-preferences': media,
       './media-controls.css': {},
-      './settings-sheet': {},
       './audio-output': await loadTypeScript('src/audio-output.ts'),
     },
     globals: {

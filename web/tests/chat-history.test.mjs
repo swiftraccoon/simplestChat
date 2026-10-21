@@ -2,7 +2,7 @@ import { accountUpdatesFixture } from './account-updates-fixture.mjs';
 import { attachmentFixture } from './attachment-fixture.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { loadContractModules, loadTypeScript } from './source-loader.mjs';
+import { loadContractModules, loadTypeScript } from './native-fixtures.mjs';
 import { deferred, flush, uiFixture } from './ui-fixture.mjs';
 import { loadDiscoveryFixture } from './discovery-fixture.mjs';
 

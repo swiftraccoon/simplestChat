@@ -36,6 +36,8 @@ export interface ParticipantHovercardOptions {
 
 /** A single, non-modal card shared by room names and historical chat names. */
 export class ParticipantHovercard {
+  private readonly options: ParticipantHovercardOptions;
+
   private readonly card = el('div', undefined, 'participant-hovercard');
   private readonly events = new AbortController();
   private readonly anchorObserver = new MutationObserver(() => {
@@ -51,7 +53,9 @@ export class ParticipantHovercard {
   private session: unknown;
   private participant: ParticipantHovercardData | null = null;
 
-  constructor(private readonly options: ParticipantHovercardOptions) {
+  constructor(options: ParticipantHovercardOptions) {
+    this.options = options;
+
     this.card.id = 'participant-hovercard';
     this.card.hidden = true;
     this.card.tabIndex = -1;

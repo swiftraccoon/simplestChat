@@ -16,6 +16,8 @@ type Listener = (account: string | null, state: ChatPreferences | null) => void;
  * Other devices invalidate via the account stream, with focus and bounded polling
  * repairing disconnected or failed reads. */
 export class AccountPreferences {
+  private readonly options: Options;
+
   private account: string | null = null;
   private state: ChatPreferences | null = null;
   private epoch = 0;
@@ -34,7 +36,9 @@ export class AccountPreferences {
   private dirty = false;
   private readonly stopUpdates: () => void;
 
-  constructor(private readonly options: Options) {
+  constructor(options: Options) {
+    this.options = options;
+
     const refresh = (): void => {
       if (!document.hidden) this.refresh().catch(() => {});
     };

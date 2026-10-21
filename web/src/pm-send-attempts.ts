@@ -82,10 +82,13 @@ function decode(value: unknown): PmSendAttempt {
 /** Caller holds PM_SEND_LOCK across begin/POST/clear. localStorage is not a CAS.
  * Read-only views may inspect without a lock. Unresolved entries never evict. */
 export class PmSendAttempts {
-  constructor(
-    private readonly storage: Pick<Storage, 'getItem' | 'setItem'>,
-    private readonly now: () => number = Date.now,
-  ) {}
+  private readonly storage: Pick<Storage, 'getItem' | 'setItem'>;
+  private readonly now: () => number;
+
+  constructor(storage: Pick<Storage, 'getItem' | 'setItem'>, now: () => number = Date.now) {
+    this.storage = storage;
+    this.now = now;
+  }
 
   private rows(): Stored[] {
     const raw = this.storage.getItem(PM_SEND_STORAGE_KEY) ?? '[]';

@@ -9,7 +9,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "test": "node --test tests/*.test.mjs",
+    "test": "node --experimental-test-module-mocks --test tests/*.test.mjs",
     "lint": "oxlint --type-aware --deny-warnings --report-unused-disable-directives-severity error .",
     "format:check": "prettier --check \"**/*.{ts,mts,cts,js,mjs,cjs,css,html,json,jsonc}\"",
     "format": "prettier --write \"**/*.{ts,mts,cts,js,mjs,cjs,css,html,json,jsonc}\"",

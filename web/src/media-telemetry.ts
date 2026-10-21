@@ -101,6 +101,11 @@ export function sampleChanges(
 
 /** Best effort client observations never drive server admission or media decisions. */
 export class MediaTelemetry {
+  private readonly sources: () => TelemetryMediaSource[];
+  private readonly record: TelemetryHandler;
+  private readonly calls: CallOutcomeTelemetry | undefined;
+  private readonly recordMedia: TelemetryMediaHandler | undefined;
+
   private readonly states = new Map<object, SourceState>();
   private readonly inFlight = new WeakSet<object>();
   private offset = 0;
@@ -113,11 +118,16 @@ export class MediaTelemetry {
   private readonly timer: ReturnType<typeof setInterval>;
 
   constructor(
-    private readonly sources: () => TelemetryMediaSource[],
-    private readonly record: TelemetryHandler,
-    private readonly calls?: CallOutcomeTelemetry,
-    private readonly recordMedia?: TelemetryMediaHandler,
+    sources: () => TelemetryMediaSource[],
+    record: TelemetryHandler,
+    calls?: CallOutcomeTelemetry,
+    recordMedia?: TelemetryMediaHandler,
   ) {
+    this.sources = sources;
+    this.record = record;
+    this.calls = calls;
+    this.recordMedia = recordMedia;
+
     this.record = (event) => {
       try {
         record(event);
@@ -281,6 +291,11 @@ const MAX_CALL_SOURCES = 64;
  * Audio sampling shares MediaTelemetry's opt-in, globally bounded native calls.
  */
 export class CallOutcomeTelemetry {
+  private readonly state: () => TelemetryCallState;
+  private readonly playback: () => TelemetryPlaybackSource[];
+  private readonly record: TelemetryHandler;
+  private readonly nextId: () => number;
+
   private attempt: CallAttempt | null = null;
   private disposed = false;
   private readonly timer: ReturnType<typeof setInterval>;
@@ -289,11 +304,16 @@ export class CallOutcomeTelemetry {
   };
 
   constructor(
-    private readonly state: () => TelemetryCallState,
-    private readonly playback: () => TelemetryPlaybackSource[],
-    private readonly record: TelemetryHandler,
-    private readonly nextId: () => number,
+    state: () => TelemetryCallState,
+    playback: () => TelemetryPlaybackSource[],
+    record: TelemetryHandler,
+    nextId: () => number,
   ) {
+    this.state = state;
+    this.playback = playback;
+    this.record = record;
+    this.nextId = nextId;
+
     this.timer = setInterval(() => this.check(), 1_000);
     document.addEventListener('visibilitychange', this.visibilityChanged);
   }

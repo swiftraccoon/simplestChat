@@ -1,12 +1,15 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { spawnSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
-import ts from '@typescript/typescript6';
 import {
   validateAndNormalizeRtpCapabilities,
   validateAndNormalizeRtpParameters,
 } from 'mediasoup-client/ortc';
-import { loadContractModules } from './source-loader.mjs';
+import { loadContractModules } from './native-fixtures.mjs';
 
 const { decodeServerMessage: decode } = (await loadContractModules())['./protocol-validation'];
 const invalid = /Invalid server message/;
@@ -353,35 +356,47 @@ const fixtures = [
   { type: 'lobbyAdmitted' },
 ];
 
-test('fixtures cover every ServerMessage discriminant and every SocialAction', async () => {
-  const source = ts.createSourceFile(
-    'protocol.generated.ts',
-    await readFile(new URL('../src/protocol.generated.ts', import.meta.url), 'utf8'),
-    ts.ScriptTarget.Latest,
-    true,
+test('fixtures cover every ServerMessage discriminant and every SocialAction', async (t) => {
+  const types = fixtures.map((value) => value.type);
+  assert.equal(new Set(types).size, types.length, 'each discriminant has one canonical fixture');
+  const directory = await mkdtemp(join(tmpdir(), 'simplestchat-protocol-coverage-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const fixture = join(directory, 'coverage.ts');
+  const protocol = fileURLToPath(new URL('../src/protocol.ts', import.meta.url));
+  await writeFile(
+    fixture,
+    `import type { ServerMessage, SocialAction } from ${JSON.stringify(protocol)};
+    export const messages = ${JSON.stringify(Object.fromEntries(types.map((type) => [type, true])))} satisfies Record<ServerMessage['type'], true>;
+    export const actions = ${JSON.stringify(Object.fromEntries(Object.keys(socialData).map((action) => [action, true])))} satisfies Record<SocialAction, true>;
+  `,
   );
-  const aliases = new Map(
-    source.statements.filter(ts.isTypeAliasDeclaration).map((node) => [node.name.text, node.type]),
+  const config = join(directory, 'tsconfig.json');
+  await writeFile(
+    config,
+    JSON.stringify({
+      extends: fileURLToPath(new URL('../tsconfig.app.json', import.meta.url)),
+      compilerOptions: {
+        types: [fileURLToPath(new URL('../node_modules/vite/client.d.ts', import.meta.url))],
+        tsBuildInfoFile: join(directory, 'coverage.tsbuildinfo'),
+      },
+      files: [fixture],
+      include: [],
+    }),
   );
-  const types = aliases.get('ServerMessage').types.map((node) => {
-    if (ts.isTypeReferenceNode(node) && node.typeName.getText(source) === 'SocialResponse')
-      return 'socialResponse';
-    let literal = node;
-    while (ts.isParenthesizedTypeNode(literal) || ts.isIntersectionTypeNode(literal)) {
-      literal = ts.isParenthesizedTypeNode(literal) ? literal.type : literal.types[0];
-    }
-    return literal.members.find((member) => member.name?.getText(source) === 'type').type.literal
-      .text;
-  });
-  assert.deepEqual(fixtures.map((value) => value.type).sort(), types.sort());
-  // `SocialAction` is `keyof SocialResponses`: the map's members are the actions.
-  const responses = source.statements
-    .filter(ts.isInterfaceDeclaration)
-    .find((node) => node.name.text === 'SocialResponses');
-  assert.deepEqual(
-    Object.keys(socialData).sort(),
-    responses.members.map((member) => member.name.getText(source)).sort(),
+  const result = spawnSync(
+    process.execPath,
+    [
+      fileURLToPath(new URL('../node_modules/typescript/bin/tsc', import.meta.url)),
+      '--project',
+      config,
+      '--pretty',
+      'false',
+    ],
+    { encoding: 'utf8', timeout: 30_000 },
   );
+  assert.equal(result.error, undefined, result.stderr);
+  assert.equal(result.signal, null, result.stderr);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
 });
 
 for (const fixture of fixtures) {

@@ -88,6 +88,9 @@ export class ConversationInputs {
 
 /** Bounded room-session text and unread state; never written to browser storage. */
 export class ChatStore {
+  private readonly maxMessages: number;
+  private readonly maxCharacters: number;
+
   readonly messages: ChatItem[] = [];
   readonly unread = new Map<string, number>();
   readonly names = new Map<string, string>();
@@ -98,10 +101,10 @@ export class ChatStore {
   active = 'public';
   localId = '';
 
-  constructor(
-    private readonly maxMessages = 500,
-    private readonly maxCharacters = 512 * 1024,
-  ) {}
+  constructor(maxMessages = 500, maxCharacters = 512 * 1024) {
+    this.maxMessages = maxMessages;
+    this.maxCharacters = maxCharacters;
+  }
 
   conversation(message: ChatEntry): string {
     if (!message.recipientId) return 'public';
@@ -476,7 +479,11 @@ export class ChatStore {
 
 /** Only unsent account PM drafts persist on this device, separated by account and peer. */
 export class SavedPmDrafts {
-  constructor(private readonly storage: Pick<Storage, 'getItem' | 'setItem'>) {}
+  private readonly storage: Pick<Storage, 'getItem' | 'setItem'>;
+
+  constructor(storage: Pick<Storage, 'getItem' | 'setItem'>) {
+    this.storage = storage;
+  }
   private entries(account: string): [string, string][] {
     try {
       const value: unknown = JSON.parse(

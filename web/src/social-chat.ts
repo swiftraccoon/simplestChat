@@ -124,6 +124,8 @@ type MessageRow = { node: HTMLElement; fingerprint: string; dispose: () => void 
 type ConversationButton = { node: HTMLButtonElement; name: HTMLElement; unread: HTMLElement };
 
 export class SocialChat {
+  private readonly options: Options;
+
   private readonly attachments: AttachmentComposer;
   private readonly store = new ChatStore(300, 256 * 1024);
   private readonly composition = new ConversationInputs();
@@ -222,7 +224,8 @@ export class SocialChat {
   private historyLoading = false;
   private readonly replyBar = el('div', undefined, 'reply-bar');
 
-  constructor(private readonly options: Options) {
+  constructor(options: Options) {
+    this.options = options;
     const toolbar = el('div', undefined, 'conversation-toolbar');
     this.conversations.setAttribute('aria-label', 'Conversations');
     this.closeButton.setAttribute('aria-label', 'Close PM');

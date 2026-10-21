@@ -4,11 +4,15 @@ export interface AuthDialogAttempt {
 
 /** A server may set a session cookie even if its fetch is aborted. */
 export class AuthDialogFlow {
+  private readonly retireCeremony: () => void;
+
   private attempt: AuthDialogAttempt | null = null;
   private creatingSession = false;
   private uncertain = false;
 
-  constructor(private readonly retireCeremony: () => void) {}
+  constructor(retireCeremony: () => void) {
+    this.retireCeremony = retireCeremony;
+  }
 
   begin(session: boolean): AuthDialogAttempt | null {
     if (this.attempt) return null;

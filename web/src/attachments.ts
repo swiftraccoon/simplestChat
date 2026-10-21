@@ -120,13 +120,17 @@ type PendingFile = {
 
 /** Pending files belong to this composer only; resets fence all late completions. */
 export class AttachmentComposer {
+  private readonly options: ComposerOptions;
+
   private readonly files: PendingFile[] = [];
   private readonly tray = el('div', undefined, 'attachment-tray');
   private readonly picker = el('input');
   private readonly attach: HTMLButtonElement;
   private disposed = false;
 
-  constructor(private readonly options: ComposerOptions) {
+  constructor(options: ComposerOptions) {
+    this.options = options;
+
     this.tray.setAttribute('aria-label', 'Attachments');
     this.picker.type = 'file';
     this.picker.multiple = true;

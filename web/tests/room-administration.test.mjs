@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { loadProtocol, loadTypeScript } from './source-loader.mjs';
+import { loadProtocol, loadTypeScript } from './native-fixtures.mjs';
 import { deferred, flush, uiFixture } from './ui-fixture.mjs';
 
 async function fixture(role = 'owner') {

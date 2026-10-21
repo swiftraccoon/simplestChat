@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import test from 'node:test';
-import { loadTypeScript } from './source-loader.mjs';
+import { loadTypeScript } from './native-fixtures.mjs';
 
 const automaticStyle = { color: null, style: 'accent' };
 
@@ -14,6 +14,8 @@ function deferred() {
   return { promise, resolve, reject };
 }
 async function flush() {
+  // Native dynamic imports settle through the event loop, beyond promise jobs.
+  await new Promise((resolve) => setImmediate(resolve));
   for (let i = 0; i < 12; i++) await Promise.resolve();
 }
 

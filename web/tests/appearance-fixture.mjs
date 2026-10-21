@@ -1,4 +1,4 @@
-import { loadTypeScript } from './source-loader.mjs';
+import { loadTypeScript } from './native-fixtures.mjs';
 
 /** The appearance controls use standard CSS/DOM APIs outside the text-only fixture. */
 export async function loadAppearanceFixture({ Node, ui }) {

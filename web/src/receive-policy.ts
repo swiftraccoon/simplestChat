@@ -28,15 +28,21 @@ export function saveFollowSpeaker(enabled: boolean): void {
 
 /** A new speaker must settle; retained focus changes at most once every five seconds. */
 export class SpeakerFollow {
+  private readonly changed: (participantId: string | null) => void;
+  private readonly now: () => number;
+
   private focused: string | null = null;
   private candidate: string | null = null;
   private changedAt = -Infinity;
   private timer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
-    private readonly changed: (participantId: string | null) => void,
-    private readonly now: () => number = () => performance.now(),
-  ) {}
+    changed: (participantId: string | null) => void,
+    now: () => number = () => performance.now(),
+  ) {
+    this.changed = changed;
+    this.now = now;
+  }
 
   get participantId(): string | null {
     return this.focused;

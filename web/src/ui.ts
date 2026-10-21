@@ -221,11 +221,12 @@ export async function busy(
 
 /** Retain HTTP status without exposing unchecked response objects to UI callers. */
 export class ApiError extends Error {
-  constructor(
-    message: string,
-    readonly status: number,
-  ) {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
     super(message);
+    this.status = status;
+
     this.name = 'ApiError';
   }
 }

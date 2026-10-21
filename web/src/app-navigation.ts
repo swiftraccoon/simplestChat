@@ -100,6 +100,8 @@ interface Options {
 
 /** One page-owned history stack. Its state contains no credentials or drafts. */
 export class AppNavigation {
+  private readonly options: Options;
+
   private surfaces: Surface[] = [];
   private readonly snapshots = new Map<number, Snapshot>();
   private readonly registrations = new WeakMap<Surface, object>();
@@ -116,7 +118,9 @@ export class AppNavigation {
   private account: string | null;
   private pending: AppLocation | null;
 
-  constructor(private readonly options: Options) {
+  constructor(options: Options) {
+    this.options = options;
+
     this.account = options.getAccountId();
     this.pending = parseAppLocation(window.location.hash);
   }

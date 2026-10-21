@@ -255,6 +255,9 @@ export function applyPersonalPlayback(
 
 /** Owns a preview capture independently from room producers. Closing invalidates late permissions. */
 export class MediaPreview {
+  private onStream: (stream: MediaStream | null) => void;
+  private onLevel: (level: number) => void;
+
   private generation = 0;
   private starting = false;
   private stream: MediaStream | null = null;
@@ -262,10 +265,10 @@ export class MediaPreview {
   private source: MediaStreamAudioSourceNode | null = null;
   private frame: number | null = null;
 
-  constructor(
-    private onStream: (stream: MediaStream | null) => void,
-    private onLevel: (level: number) => void,
-  ) {}
+  constructor(onStream: (stream: MediaStream | null) => void, onLevel: (level: number) => void) {
+    this.onStream = onStream;
+    this.onLevel = onLevel;
+  }
 
   get pending(): boolean {
     return this.starting;
@@ -348,6 +351,8 @@ export class MediaPreview {
 }
 
 export class MediaControls {
+  private options: MediaControlsOptions;
+
   private tiles = new Map<HTMLElement, TilePlayback>();
   private playback = new Map<string, PersonalPlaybackPreferences>();
   private toolbars = new Set<HTMLElement>();
@@ -370,7 +375,9 @@ export class MediaControls {
     ...(this.speakerTest ? [this.speakerTest.element] : []),
   ]);
 
-  constructor(private options: MediaControlsOptions) {}
+  constructor(options: MediaControlsOptions) {
+    this.options = options;
+  }
 
   /** Private previews and tones never resume themselves after backgrounding. */
   setPageActive(active: boolean): void {
