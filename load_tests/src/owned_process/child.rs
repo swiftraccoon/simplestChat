@@ -14,6 +14,15 @@ use std::time::{Duration, Instant};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::task::JoinHandle;
 
+#[derive(Debug)]
+pub(crate) struct CommandTimedOut;
+impl std::fmt::Display for CommandTimedOut {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("command_timed_out")
+    }
+}
+impl std::error::Error for CommandTimedOut {}
+
 #[derive(Debug, Clone, Serialize)]
 pub(crate) struct Exit {
     pub(crate) code: Option<i32>,
@@ -116,10 +125,9 @@ impl Child {
             return Err(error);
         }
         let status = peek(self.group.pid)?;
-        ensure!(
-            status.is_some() || Instant::now() < self.deadline,
-            "command_timed_out"
-        );
+        if status.is_none() && Instant::now() >= self.deadline {
+            return Err(CommandTimedOut.into());
+        }
         Ok(status)
     }
 

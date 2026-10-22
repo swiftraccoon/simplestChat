@@ -59,6 +59,16 @@ modules remain callable policy references for parity tests and existing imports.
 Neither the ordinary helper gate nor an offline report command compiles a
 generator or starts a benchmark workload.
 
+`./target/release/load_test bench impaired --output /absolute/private/new-run`
+owns the fixed four-room guest generator and one Linux loopback netem profile.
+It requires an explicitly disposable hosted or ACT Linux runner and exclusive
+authority over that interface. Completed generator exits 0 and 1 retain delivery
+counters as evidence; abnormal or incomplete runs and unproven cleanup fail.
+Measured execution is silent: inspect `impaired-summary.json` (eight numeric
+counters) and `impaired-exit.json` in the fresh private output directory.
+See [the impairment contract](../docs/performance.md#native-generator-under-impairment)
+for defaults, bounds, ownership assumptions and retained shell references.
+
 The same binary can read stopped server diagnostics without creating a runtime,
 joining a room or sending media:
 

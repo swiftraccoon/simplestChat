@@ -3,7 +3,7 @@
 //! bounded capacity commands.
 
 use crate::owned_process::{self, Cancellation, Destination, Limits, Request, Runner};
-use anyhow::{Result, ensure};
+use anyhow::Result;
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::ffi::OsString;
@@ -26,6 +26,49 @@ pub struct Output {
     pub exit: Exit,
     pub stdout: Vec<u8>,
     pub stderr: Vec<u8>,
+}
+
+#[derive(Debug)]
+struct Interrupted(u8);
+impl std::fmt::Display for Interrupted {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("Benchmark interrupted")
+    }
+}
+impl std::error::Error for Interrupted {}
+
+#[derive(Debug)]
+struct ObservedFailure(Exit);
+impl std::fmt::Display for ObservedFailure {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("Benchmark command failed before retirement completed")
+    }
+}
+impl std::error::Error for ObservedFailure {}
+
+/// Only an observed command outcome supplies a status; diagnostic text and
+/// elapsed cleanup time never manufacture a timeout or signal result.
+pub(crate) fn failure_status(error: &anyhow::Error) -> Option<u8> {
+    if let Some(interrupted) = error.downcast_ref::<Interrupted>() {
+        return Some(interrupted.0);
+    }
+    if let Some(interrupted) = error.downcast_ref::<owned_process::Interrupted>() {
+        return Some(interrupted.0);
+    }
+    if error.is::<owned_process::child::CommandTimedOut>() {
+        return Some(124);
+    }
+    error.downcast_ref::<ObservedFailure>().map(|failure| {
+        let exit = &failure.0;
+        exit.code.map_or_else(
+            || match exit.signal.as_deref() {
+                Some("SIGINT") => 130,
+                Some("SIGTERM") => 143,
+                _ => 1,
+            },
+            |code| u8::try_from(code).unwrap_or(1),
+        )
+    })
 }
 
 impl From<owned_process::child::Exit> for Exit {
@@ -130,6 +173,13 @@ impl NativeHost {
 /// Every error path still attempts cleanup; only fixed caller errors escape.
 pub async fn run(host: &dyn Host, command: Command) -> Result<Output> {
     let cleanup = command.cleanup;
+    if !cleanup {
+        tokio::select! {
+            biased;
+            code = host.cancelled() => return Err(Interrupted(code).into()),
+            _ = std::future::ready(()) => {},
+        }
+    }
     let mut child = host.spawn(command)?;
     let observed = loop {
         let poll = if cleanup {
@@ -137,7 +187,7 @@ pub async fn run(host: &dyn Host, command: Command) -> Result<Output> {
         } else {
             tokio::select! {
                 result = child.poll() => result,
-                _ = host.cancelled() => Err(anyhow::anyhow!("Benchmark interrupted")),
+                code = host.cancelled() => Err(Interrupted(code).into()),
             }
         };
         match poll {
@@ -149,7 +199,7 @@ pub async fn run(host: &dyn Host, command: Command) -> Result<Output> {
                 } else {
                     tokio::select! {
                         _ = tokio::time::sleep(Duration::from_millis(10)) => {},
-                        _ = host.cancelled() => break Err(anyhow::anyhow!("Benchmark interrupted")),
+                        code = host.cancelled() => break Err(Interrupted(code).into()),
                     }
                 }
             }
@@ -157,7 +207,12 @@ pub async fn run(host: &dyn Host, command: Command) -> Result<Output> {
     };
     let stopped = child.stop(Duration::from_secs(5)).await;
     let exit = observed?;
-    stopped?;
+    if let Err(error) = stopped {
+        if !exit.success() {
+            return Err(ObservedFailure(exit).into());
+        }
+        return Err(error);
+    }
     Ok(Output {
         exit,
         stdout: child.output().to_owned(),
@@ -176,10 +231,9 @@ fn destination(sink: Sink) -> Result<Destination> {
 #[async_trait::async_trait]
 impl Host for NativeHost {
     fn spawn(&self, command: Command) -> Result<Box<dyn Child>> {
-        ensure!(
-            command.cleanup || self.cancellation.code() == 0,
-            "Benchmark interrupted"
-        );
+        if !command.cleanup && self.cancellation.code() != 0 {
+            return Err(Interrupted(self.cancellation.code()).into());
+        }
         let stream = matches!(command.stdout, Sink::Stream);
         let stdout = if stream {
             Destination::capture()
@@ -202,11 +256,18 @@ impl Host for NativeHost {
             stderr: destination(command.stderr)?,
             cleanup: command.cleanup,
         };
-        let child = if stream {
-            runner.spawn_stream(&command.executable, &command.arguments, request)?
+        let result = if stream {
+            runner.spawn_stream(&command.executable, &command.arguments, request)
         } else {
-            runner.spawn(&command.executable, &command.arguments, request)?
+            runner.spawn(&command.executable, &command.arguments, request)
         };
+        let child = result.map_err(|error| {
+            if let Some(interrupted) = error.downcast_ref::<owned_process::Interrupted>() {
+                Interrupted(interrupted.0).into()
+            } else {
+                error
+            }
+        })?;
         Ok(Box::new(child))
     }
     async fn cancelled(&self) -> u8 {

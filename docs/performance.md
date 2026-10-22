@@ -502,7 +502,7 @@ the viewer's audio packet rate must show Opus DTX at work, and with
 UDP to and from the media port is dropped before anyone joins, so the
 publisher and the viewer must both connect over the server's ICE-TCP
 candidates and still exchange video. The same job then runs
-[`build/impaired-generator.sh`](../build/impaired-generator.sh): the 30-client
+`load_test bench impaired`: the 30-client
 four-room generator workload with five percent loss and jitter in both
 directions. The generator's exact-delivery gates describe a lossless loopback,
 so under impairment its summary and per-client reports are retained as
@@ -510,6 +510,88 @@ evidence (connections, validated consumers, keyframe requests, bandwidth
 estimates) and the step passes when the run completes and the server exits
 cleanly. Neither job measures production capacity or real device media
 quality.
+
+### Native generator under impairment
+
+The performance job invokes the already built generator explicitly:
+
+```sh
+./target/release/load_test bench impaired \
+  --server-bin "$PWD/target/release/simplestChat" \
+  --generator "$PWD/target/release/load_test" \
+  --output "$RUNNER_TEMP/impaired/generator"
+```
+
+The output parent must exist and the final directory must be new. The controller
+creates a private 0700 leaf, verifies its creator through an exclusive empty-file
+UID witness, and retains its identity until final close. It starts a clean,
+guest-only server on HTTP 3129/media UDP 41100 with one worker and no database.
+The workload preserves the shell reference's 30 clients, four rooms, 65-second
+ramp, 10-second warmup, 60-second measurement, conference media, 480p/30fps,
+four audio/video subscriptions and ring-v1 seed 17. `CLIENTS` accepts 1–10000 and
+`DURATION` accepts 3–3300 seconds. `--server-bin`/`--generator` override the existing
+`SIMPLESTCHAT_BIN`/`LOAD_TEST_BIN` defaults. Selected executable hashes are checked
+before invocation and summary admission; they do not authenticate a build or its
+runtime dependencies.
+
+`IMPAIR_LOSS`, `IMPAIR_DELAY_MS`, `IMPAIR_JITTER_MS` and `IMPAIR_DIRECTION` default
+to 5%, 50ms, 10ms and both directions. `IMPAIR_RATE_KBIT` defaults to zero.
+Only bounded ASCII decimals are accepted: loss at most 100%, delay/jitter at most
+60000ms and rate at most 10000000kbit/s, with at most six fractional digits.
+Nonzero delay/jitter below 0.001ms, rate below 0.008kbit/s, or jitter without delay
+are refused. These explicit refusals avoid profiles that silently round away.
+Media port/workers remain fixed regardless of ambient overrides, matching the
+reference wrapper. The supported bounded iproute2 JSON schema uses fractional
+loss, seconds and bytes/second, preserving every repeated native u32 match key.
+
+Actual impairment requires Linux and an explicit disposable runner context:
+GitHub Actions with `RUNNER_ENVIRONMENT=github-hosted`, or ACT with
+`LOCAL_CI_DISPOSABLE=1`. Ordinary local invocations are refused. These flags are
+caller declarations, not authenticated host ownership. The operator must own
+the selected network namespace/interface exclusively; no concurrent network
+administrator or fixture may mutate it. The controller binds the namespace
+and loopback index, observes a clean baseline before additive requests, and
+checks the requested qdisc/filter shape and observed signatures. It refuses
+observed foreign or changed state and attempts only handle-qualified cleanup
+after uncertain requests, followed by a clean readback. Identical-looking foreign
+replacement cannot be distinguished, and inspection/delete is not atomic CAS.
+No privileged, detached-session or whole-host cleanup is claimed.
+
+One cancellation owner covers readiness, the generator and every bounded CLI.
+Readiness has 20 seconds. The generator's external limit is `DURATION + 110`
+seconds, covering its existing `DURATION + 105` hard deadline. The entry-relative
+controller budget is `DURATION + 250` seconds, reserving 90 seconds for finalizers.
+Each traffic-control dispatch reserves 25 seconds for group/pipe settlement
+before admitting at most five seconds of command body. Near-expired work is not
+dispatched. All acquired finalizers are attempted; unavailable reserve or uncertain
+retirement fails rather than claiming cleanup. Each log stream is bounded to
+64 MiB, so combined stdout/stderr can occupy 128 MiB per log. Network CLI output
+and statistics are bounded to 64 KiB each. Existing owned groups retire before
+EOF and stopped-input reads; no server, generator or raw log is inherited output.
+Observed traffic-control exit statuses and typed cancellation/timeout outcomes
+survive later cleanup failures; an earlier failure retains precedence.
+
+Completed generator exits 0 and 1 retain the original eight delivery counters as
+evidence; delivery failure alone does not fail this impairment measurement.
+Admission also requires schema 2, `run.completed`, matching workload/executable
+metadata, all eight explicitly present unsigned counters, bounded nofollow
+summary input and a clean server exit. The old shell accepted any generator
+status whenever a summary existed. Refusing abnormal
+statuses, cancellation, incomplete summaries and unproven cleanup is a deliberate
+correction. Delivery verdicts do not establish decoded browser quality or capacity.
+
+Measured execution is silent, a console-output compatibility change. The fixed
+eight counters move to `impaired-summary.json`; `impaired-exit.json` records
+bounded exit/cleanup/admission observations before the final fence. Both use
+exclusive 0600 writes anchored to the retained output directory and explicit
+close; the summary input is opened relative to that same directory. Unknown and
+private fields never enter the projection. The final process status additionally covers directory
+close, late cancellation and deadline checks; artifact presence is not that proof.
+The original `build/impaired-generator.sh`, `build/impaired-check.sh` and
+`build/impair.sh` remain unchanged references. Browser profile transitions,
+iptables UDP blocking and macOS PF/dummynet remain on that separate track.
+Inert tool/process and reference-oracle tests do not establish actual kernel
+behavior, native media delivery or hosted runtime timing.
 
 ## Sizing a host
 

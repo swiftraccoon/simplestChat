@@ -222,7 +222,7 @@ jobs:
         run: IMPAIRED_PROFILES=baseline build/impaired-check.sh "${RUNNER_TEMP}/impaired/tcp"
 
       - name: Generator under five percent loss with jitter, both directions
-        run: build/impaired-generator.sh "${RUNNER_TEMP}/impaired/generator"
+        run: ./target/release/load_test bench impaired --output "${RUNNER_TEMP}/impaired/generator"
 
       - name: Retain the impaired-network evidence
         if: ${{ !cancelled() }}

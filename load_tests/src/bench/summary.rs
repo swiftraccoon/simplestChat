@@ -14,6 +14,10 @@ pub struct Summary {
     pub schema_version: u32,
     pub run: RunMetadata<Value, Value>,
     pub total_errors: u64,
+    #[serde(default)]
+    pub successful_connections: u64,
+    #[serde(default)]
+    pub total_packets_received: u64,
     pub failed_connections: u64,
     pub failed_consumers: u64,
     pub validated_consumers: u64,
@@ -35,6 +39,33 @@ pub struct Summary {
 }
 
 impl Summary {
+    /// The impairment controller retains completed delivery failures as
+    /// evidence. Its eight public counters reuse this selected summary parser;
+    /// legacy comparison summaries may omit counters through serde defaults.
+    pub fn impaired_projection(&self, original: &Value) -> Result<Value> {
+        for (name, expected) in [
+            ("successfulConnections", self.successful_connections),
+            ("failedConnections", self.failed_connections),
+            ("validatedConsumers", self.validated_consumers),
+            ("failedConsumers", self.failed_consumers),
+            ("keyframesRequested", self.keyframes_requested),
+            ("bandwidthEstimates", self.bandwidth_estimates),
+            ("totalPacketsReceived", self.total_packets_received),
+            ("totalErrors", self.total_errors),
+        ] {
+            anyhow::ensure!(
+                original.get(name).and_then(Value::as_u64) == Some(expected),
+                "Incomplete impaired generator counters"
+            );
+        }
+        Ok(json!({"successfulConnections":self.successful_connections,
+            "failedConnections":self.failed_connections,
+            "validatedConsumers":self.validated_consumers,"failedConsumers":self.failed_consumers,
+            "keyframesRequested":self.keyframes_requested,
+            "bandwidthEstimates":self.bandwidth_estimates,
+            "totalPacketsReceived":self.total_packets_received,"totalErrors":self.total_errors}))
+    }
+
     /// Coverage and owned process exits are checked separately by the caller.
     pub fn workload_passed(&self) -> bool {
         self.schema_version == 2

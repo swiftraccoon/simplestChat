@@ -6,6 +6,7 @@ pub mod clock;
 pub mod commands;
 pub mod comparison;
 pub mod environment;
+mod impaired;
 pub mod local;
 pub mod media_sampler;
 pub mod metrics;
@@ -40,12 +41,13 @@ pub fn run(arguments: &[std::ffi::OsString]) -> std::process::ExitCode {
     match arguments.first().and_then(|argument| argument.to_str()) {
         Some("local") => local::run(&arguments[1..]),
         Some("podman") => podman::run(&arguments[1..]),
+        Some("impaired") => impaired::run(&arguments[1..]),
         Some("--help" | "-h") if arguments.len() == 1 => {
-            println!("Usage: load_test bench local|podman [OPTIONS]");
+            println!("Usage: load_test bench local|podman|impaired [OPTIONS]");
             std::process::ExitCode::SUCCESS
         }
         _ => {
-            eprintln!("Usage: load_test bench local|podman [OPTIONS]");
+            eprintln!("Usage: load_test bench local|podman|impaired [OPTIONS]");
             std::process::ExitCode::from(2)
         }
     }
