@@ -6,6 +6,8 @@ network, engine, service, SSH or deployment command. Local unsigned artifact
 preparation can write a new private directory, as described below. Python remains
 the release runtime and the reference implementation. A separate read-only
 release preflight checks the fixed host paths without executing installed helpers.
+The browser-asset transaction commands described below can mutate only the fixed
+managed asset store while holding the existing workload lock.
 
 ```sh
 cargo run --locked -q -p simplestchat-ops -- release manifest --path /path/to/release.json
@@ -52,6 +54,7 @@ timestamp text remains unchanged.
 | `src/release/archive.rs`, `src/release/archive/` | Whole-transfer identity and bounded offline Docker/OCI metadata validation |
 | `src/release/archive/generator*.rs` | Separate generator profile with streamed config/layer graph identity |
 | `src/release/preflight*.rs` | Fixed read-only host admission and exact installed-helper byte checks |
+| `src/release/assets*.rs` | Ordered browser-asset capture, retention, publication and workload lock |
 
 The crate uses existing dependency versions and does not depend on the server,
 load generator, mediasoup or native TLS. The manual argument parser follows
@@ -144,6 +147,112 @@ must still serialize releases. The existing locked rustix 1.1.5 `process`,
 unsafe first-party code or external commands; no new package or version is
 introduced. Tests use actual owned files with synthetic ownership/identity and
 the retained Python oracle, never the actual host's protected release paths.
+
+## Browser asset filesystem transactions
+
+The complete local transaction API and CLI are available for eventual verified
+Ops distribution. The installed Python `release_assets.py`, `browser_assets.py`,
+release controller and Ansible tasks remain authoritative and unchanged. This
+unit does not copy from an image, run a workload, alter a proxy or establish
+installed/runtime compatibility. Never substitute an unverified development
+binary on a release host.
+
+```sh
+simplestchat-ops release assets capture --path /path/to/assets.tar
+simplestchat-ops release assets initialize [--revision REV]
+simplestchat-ops release assets inspect
+simplestchat-ops release assets publish --capture REV /path/to/assets.tar
+simplestchat-ops release assets publish --capture REV /first.tar --capture REV /second.tar
+simplestchat-ops release assets select --revision REV
+simplestchat-ops release assets prune
+```
+
+Only capture input paths are caller-selected. Managed operations require root
+on Linux and retain the fixed `/srv/simplestchat-public` and
+`/etc/simplestchat-public` directories with exact mode 0700. They create or verify
+`/run/simplestchat-bench` mode 0700 and its ordinary root-owned `workload.lock`
+mode 0600, then acquire the same nonblocking exclusive flock as Python. The lock
+inode and namespace are rechecked after flock. Both optional `current.json` and
+`release-state.json` journals must be at most 16 KiB, ordinary root-owned mode
+0600, have strict integer schema version 1 and `finalized:true`.
+Journal input is UTF-8 JSON text without BOM or raw NUL, matching Python's
+text-read gate on the supported host; escaped NUL in an unknown field is valid.
+No public root,
+owner, clock, recovery or lock-bypass option exists. Library callers borrow the
+same live `Workload` guard for `Store`; a future native release controller must
+reuse that guard rather than launch an independently locking CLI.
+
+`initialize` creates the store or validates it without rewriting valid existing
+bytes. Its receipt is `{"passed":true,"changed":true}` or `false`; an optional
+revision explicitly selects the independent public version. `prune` initializes
+first and returns only `{"passed":true}`. Flock contention returns zero only
+after owned closes succeed, with exactly
+`{"passed":true,"busy":true,"changed":false}`. Unlike Python's broad
+`BlockingIOError` handler, a later I/O or close failure cannot masquerade as busy.
+Other failures return 1 and a fixed private diagnostic; syntax returns 2. New
+inspect/publish/capture receipts disclose bounded counts, not paths, asset names,
+payloads, raw indexes or operating-system errors.
+
+Captures use the mature bounded tar reader without extracting paths. Limits are
+33 MiB per input, 8 MiB per file, 32 MiB of payload, 256 flat fingerprinted files,
+1024 physical headers, 128 KiB of accumulated names and one local GNU longname
+or PAX extension of at most 8 KiB per member. Effective paths are at most 262
+bytes and managed basenames at most 255 bytes. Ordinary and contiguous files
+are supported; optional root-directory slash aliases follow Python. Global or
+stacked extensions, sparse files, long links, size-changing PAX, special files,
+links, legacy null-type slash directories and physically truncated padding are
+named unsupported domains. Python accepts some broader tar forms. Existing
+shared JSON encoding/depth/value/duplicate/finite limits apply. Timestamps are
+unsigned 64-bit seconds with checked seven-day expiry rather than Python's
+unbounded integer range; raw integer `-0` remains zero. Schema-version equality
+preserves Python's acceptance of `true` and `1.0`, while times and sizes require
+integer tokens and reject booleans/floats.
+
+The store admits at most four generations, two required captures, a 256 KiB
+index and 32 MiB of declared generation payload before reading any asset.
+Every payload is checked against its declared size and SHA-256, including the
+hardlinked public union. Captures, generations and asset records preserve source
+insertion order. The compact index and final LF determine the union name from
+their original bytes. Equal index bytes are a complete filesystem no-op; valid
+existing numeric schema aliases are not rewritten by initialization. Historical
+generations sort newest first with stable ties. A shared URL must retain the
+same bytes; its union link uses the last generation's source inode while keeping
+the first insertion position. Hardlinks are intentional and accepted.
+
+Publication stages new mode-0755 directories and mode-0644 files, fsyncs them,
+replaces the index first, then the relative public pointer. Before a pointer
+rename becomes visible, failure attempts to restore the previous index and
+remove only newly admitted owned entries. After visibility, failures never roll
+back the live pointer or delete its union; failed final cleanup leaves evidence
+that a later read refuses. There is no adoption of unindexed/pending residue or
+automatic crash recovery. Existing ordinary asset files/directories need root
+ownership and no group/other write permission rather than exact 0644/0755;
+existing hardlinks and other protected modes remain valid. New writes explicitly
+set their fixed modes without changing the process umask.
+
+Selecting a version is separate from publishing/pruning. An unretained revision
+and an empty asset store are valid. Equal canonical version bytes at mode 0644
+are a no-op; a protected different mode, such as 0600, is repaired by replacement.
+Publish/prune preserve the selected version even after all generations expire.
+
+All reads/writes/removals use fixed components under retained directory
+descriptors. File identity, owner, modes, size, link count and timestamps are
+checked before/after reads and final namespace validation; expected hardlink and
+rename changes update witnesses. Rollback refuses observed foreign replacement
+entries. These are optimistic observations under the exclusive-owner assumption,
+not an atomic filesystem compare-and-swap or protection from another root.
+Final success follows a complete store revalidation, retained File close attempts
+and lock release/close; failed operations preserve their first known diagnostic.
+The locked rustix directory cursor has only RAII `closedir`, whose result cannot
+be observed through its safe API, so checked-close claims cover retained File
+owners and transient File probes, not that hidden cursor descriptor.
+
+This is a synchronous local filesystem command, with no signal cancellation,
+hard OS/filesystem/output wall-clock bound, crash durability receipt or runtime
+proof. A changed index/version may already be visible when a later fsync, close
+or output failure returns nonzero. The unchanged Python filesystem oracle and
+owned lock/tar/fault fixtures test this source-level contract; no real managed
+host paths, browser, container, database or network workload are used.
 
 ## Local executable inspection
 

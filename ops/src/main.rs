@@ -1,6 +1,7 @@
-//! Allowlisted local inspection and unsigned artifact preparation. Preparation
-//! writes only a new private output; no command, engine or network is started.
+//! Allowlisted local inspection, unsigned preparation and fixed browser-asset
+//! filesystem transactions. No child command, engine or network is started.
 
+mod assets_cli;
 mod preflight_cli;
 mod receipt_cli;
 
@@ -20,6 +21,11 @@ const USAGE: &str = concat!(
     "       simplestchat-ops release archive --manifest PATH --path PATH\n",
     "       simplestchat-ops release receipt --envelope PATH --receipt PATH\n",
     "       simplestchat-ops release preflight [--helpers-json JSON]\n",
+    "       simplestchat-ops release assets initialize [--revision REV]\n",
+    "       simplestchat-ops release assets prune|inspect\n",
+    "       simplestchat-ops release assets select --revision REV\n",
+    "       simplestchat-ops release assets capture --path TAR\n",
+    "       simplestchat-ops release assets publish --capture REV TAR [--capture REV TAR]\n",
     "       simplestchat-ops distribution inspect-executable --path PATH\n",
     "       simplestchat-ops distribution verify-pair --manifest PATH ",
     "--path PATH --selection PATH\n",
@@ -33,6 +39,13 @@ fn main() -> ExitCode {
     if args.len() == 1 && matches!(args[0].to_str(), Some("--help" | "-h")) {
         println!("{USAGE}");
         return ExitCode::SUCCESS;
+    }
+    if args.len() >= 2 && args[0] == "release" && args[1] == "assets" {
+        let code = assets_cli::run(&args[2..]);
+        if code == ExitCode::from(2) {
+            eprintln!("{USAGE}");
+        }
+        return code;
     }
     if args.len() >= 2 && args[0] == "release" && args[1] == "preflight" {
         if args.len() == 2 {
