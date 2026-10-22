@@ -6,8 +6,24 @@ import { deferred, flush, uiFixture } from './ui-fixture.mjs';
 import { loadAppearanceFixture } from './appearance-fixture.mjs';
 import { loadDiscoveryFixture } from './discovery-fixture.mjs';
 
-async function fixture() {
+async function fixture({ rejectStaticQueries = false } = {}) {
   const dom = await uiFixture();
+  const roomActions = dom.document.createElement('div');
+  roomActions.id = 'room-actions';
+  dom.document.body.append(roomActions);
+  const elements = {
+    communityActions: dom.header,
+    roomActions,
+    loginAltActions: dom.loginActions,
+  };
+  if (rejectStaticQueries) {
+    dom.document.getElementById = (id) => {
+      throw new Error(`Static shell was queried again: #${id}`);
+    };
+    dom.document.querySelector = (selector) => {
+      throw new Error(`Static shell was queried again: ${selector}`);
+    };
+  }
   const auth = { isLoggedIn: true, userId: 'account-a', jwt: 'token-a' };
   const profile = {
     id: 'account-a',
@@ -207,6 +223,7 @@ async function fixture() {
   state.openedSettings = [];
   state.accountChanges = 0;
   const community = new api.CommunityUI({
+    elements,
     openSettings: (section) => state.openedSettings.push(section),
     onAccountChanged: () => state.accountChanges++,
     auth,
@@ -222,7 +239,7 @@ async function fixture() {
       state.forgotten++;
     },
   });
-  return { ...dom, ...api, ui, auth, state, profile, community, updates };
+  return { ...dom, ...api, ui, auth, state, profile, community, updates, elements };
 }
 
 function dialog(fixture, title) {
@@ -1065,6 +1082,31 @@ for (const phase of ['pending', 'uncertain', 'recovery']) {
   });
 }
 
+test('community controls use the injected static hosts without querying the shell again', async () => {
+  const f = await fixture({ rejectStaticQueries: true });
+  try {
+    assert.deepEqual(
+      f.elements.communityActions.children.map((node) => node.textContent),
+      ['Account', 'Messages', 'My rooms'],
+    );
+    assert.deepEqual(
+      f.elements.roomActions.children.map((node) => node.textContent),
+      ['Nickname', 'Manage room'],
+    );
+    assert.equal(f.elements.loginAltActions.children[0].textContent, 'Recover with a saved key');
+    action(f.elements.communityActions, 'Account').click();
+    assert.deepEqual(f.state.openedSettings, ['profile']);
+    f.auth.userId = 'account-b';
+    f.auth.jwt = 'token-b';
+    f.community.refresh();
+    await f.community.refreshMessages();
+    assert.equal(f.state.accountChanges, 1);
+  } finally {
+    f.community.dispose();
+  }
+  for (const host of Object.values(f.elements)) assert.equal(host.children.length, 0);
+});
+
 test('room-scoped actions mount in the room tools while account actions stay in the header', async () => {
   const dom = await uiFixture();
   const roomActions = dom.document.createElement('div');
@@ -1108,6 +1150,11 @@ test('room-scoped actions mount in the room tools while account actions stay in 
     },
   });
   new api.CommunityUI({
+    elements: {
+      communityActions: dom.header,
+      roomActions,
+      loginAltActions: dom.loginActions,
+    },
     auth: { isLoggedIn: true, userId: 'account-a', jwt: 'token-a' },
     getRoom: () => null,
     notify() {},

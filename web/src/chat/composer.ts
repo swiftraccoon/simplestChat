@@ -14,6 +14,7 @@ interface ComposerContext {
     readonly input: HTMLTextAreaElement;
     readonly inputRow: HTMLElement;
     readonly sendButton: HTMLButtonElement;
+    readonly panel: HTMLDivElement;
   };
   readonly options: Pick<
     SocialChatOptions,
@@ -526,12 +527,10 @@ export class ChatComposer {
         `${this.context.elements.input.scrollHeight + border}px`,
       );
     }
-    document
-      .getElementById('chat-panel')!
-      .style.setProperty(
-        '--chat-composer-height',
-        `${this.context.elements.inputRow.offsetHeight}px`,
-      );
+    this.context.elements.panel.style.setProperty(
+      '--chat-composer-height',
+      `${this.context.elements.inputRow.offsetHeight}px`,
+    );
     if (this.context.seenAtBottom)
       this.context.messages.scrollTop = this.context.messages.scrollHeight;
   }

@@ -116,6 +116,19 @@ test('the static application boundary resolves actual markup with one query per 
     elements.loginModal,
     f.nodes.find((element) => element.id === 'login-modal'),
   );
+  assert.equal(
+    elements.chatInputRow,
+    f.nodes.find((element) => element.id === 'chat-input-row'),
+  );
+  assert.equal(
+    elements.roomActions,
+    f.nodes.find((element) => element.id === 'room-actions'),
+  );
+  assert.equal(
+    elements.loginAltActions,
+    f.nodes.find((element) => element.className === 'auth-alt-actions'),
+    'recovery actions use the login host, not the similar registration host',
+  );
   assert.equal(elements.sidebarTabs.length, 3);
   assert.equal(elements.tabContents.length, 4);
   assert.equal(
@@ -153,7 +166,15 @@ test('every required static ID reports its name when missing', () => {
 });
 
 test('wrong element types fail at the boundary with the selector and expected type', () => {
-  for (const id of ['name-input', 'join-btn', 'chat-input', 'login-modal', 'room-list']) {
+  for (const id of [
+    'name-input',
+    'join-btn',
+    'chat-input',
+    'chat-input-row',
+    'room-actions',
+    'login-modal',
+    'room-list',
+  ]) {
     const f = fixture();
     const element = f.nodes.find((node) => node.id === id);
     Object.setPrototypeOf(element, f.HTMLElement.prototype);
@@ -165,6 +186,21 @@ test('wrong element types fail at the boundary with the selector and expected ty
     f.HTMLElement.prototype,
   );
   assert.throws(() => queryElements(f.document), /#sidebar-tabs \.tab must be HTMLButtonElement/);
+});
+
+test('the nested login action host is required and typed independently of registration', () => {
+  for (const wrongType of [false, true]) {
+    const f = fixture();
+    const host = f.nodes.find((element) => element.className === 'auth-alt-actions');
+    if (wrongType) Object.setPrototypeOf(host, f.HTMLElement.prototype);
+    else host.className = '';
+    assert.throws(
+      () => queryElements(f.document),
+      wrongType
+        ? /#login-modal \.auth-alt-actions must be HTMLDivElement/
+        : /required element #login-modal \.auth-alt-actions is missing/,
+    );
+  }
 });
 
 test('a detached document reports one startup failure before querying elements', () => {

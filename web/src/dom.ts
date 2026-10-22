@@ -13,6 +13,7 @@ export interface Elements {
   readonly participantList: HTMLUListElement;
   readonly chatMessages: HTMLDivElement;
   readonly chatInput: HTMLTextAreaElement;
+  readonly chatInputRow: HTMLDivElement;
   readonly chatSendBtn: HTMLButtonElement;
   readonly micBtn: HTMLButtonElement;
   readonly camBtn: HTMLButtonElement;
@@ -85,6 +86,8 @@ export interface Elements {
   readonly toastContainer: HTMLDivElement;
   readonly sidebarCollapseBtn: HTMLButtonElement;
   readonly communityActions: HTMLDivElement;
+  readonly roomActions: HTMLDivElement;
+  readonly loginAltActions: HTMLDivElement;
   readonly roomVolumeSlot: HTMLDivElement;
   readonly homeSettingsHost: HTMLElement;
   readonly sidebarElement: HTMLElement;
@@ -189,6 +192,7 @@ export function queryElements(document: Document): Elements {
     participantList: required('#participant-list', view.HTMLUListElement),
     chatMessages: required('#chat-messages', view.HTMLDivElement),
     chatInput: required('#chat-input', view.HTMLTextAreaElement),
+    chatInputRow: required('#chat-input-row', view.HTMLDivElement),
     chatSendBtn: required('#chat-send-btn', view.HTMLButtonElement),
     micBtn: required('#mic-btn', view.HTMLButtonElement),
     camBtn: required('#cam-btn', view.HTMLButtonElement),
@@ -261,6 +265,8 @@ export function queryElements(document: Document): Elements {
     toastContainer: required('#toast-container', view.HTMLDivElement),
     sidebarCollapseBtn: required('#sidebar-collapse', view.HTMLButtonElement),
     communityActions: required('#community-actions', view.HTMLDivElement),
+    roomActions: required('#room-actions', view.HTMLDivElement),
+    loginAltActions: required('#login-modal .auth-alt-actions', view.HTMLDivElement),
     roomVolumeSlot: required('#room-volume-slot', view.HTMLDivElement),
     homeSettingsHost: required('#home-settings-host', view.HTMLElement),
     sidebarElement: required('#sidebar', view.HTMLElement),

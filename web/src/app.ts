@@ -584,6 +584,7 @@ function initializeApp(
       });
   }
   const socialChat = new SocialChat({
+    elements,
     accountPreferences,
     openAccountConversation,
     telemetry: telemetry.record,
@@ -607,6 +608,7 @@ function initializeApp(
   });
   cleanups.pwa = () => pwa.dispose();
   const community = new CommunityUI({
+    elements,
     onOpenMessages: openAccountMessages,
     openSettings: (section, opener) => settingsSheet.open({ section, opener }),
     onAccountChanged: () => settingsSheet.close({ force: true }),

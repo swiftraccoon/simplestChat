@@ -25,6 +25,7 @@ async function fixture({
   touchPoints = 0,
   httpRequest,
   accountMessages = false,
+  rejectStaticQueries = false,
 } = {}) {
   const f = await uiFixture(httpRequest ? { fetch: httpRequest } : {});
   const attachmentState = attachmentFixture();
@@ -130,9 +131,27 @@ async function fixture({
   f.document.getElementById('chat-panel').className = 'active';
   const tab = f.ui.button('Chat', () => {});
   f.document.body.append(tab);
-  const query = f.document.querySelector;
-  f.document.querySelector = (selector) =>
-    selector === '[data-tab="chat"]' ? tab : query(selector);
+  const elements = {
+    chatMessages: f.document.getElementById('chat-messages'),
+    chatInput: input,
+    chatInputRow: f.document.getElementById('chat-input-row'),
+    chatSendBtn: f.document.getElementById('chat-send-btn'),
+    chatPanel: f.document.getElementById('chat-panel'),
+    chatTab: tab,
+    scrollBottomBtn: f.document.getElementById('scroll-bottom-btn'),
+    unreadBadge: f.document.getElementById('unread-badge'),
+    roomScreen: f.document.getElementById('room-screen'),
+  };
+  if (rejectStaticQueries) {
+    f.document.getElementById = (id) => {
+      throw new Error(`Static shell was queried again: #${id}`);
+    };
+    const query = f.document.querySelector;
+    f.document.querySelector = (selector) => {
+      assert.equal(selector, 'dialog[open]', 'only dynamic open-dialog discovery remains local');
+      return query(selector);
+    };
+  }
   f.document.createTextNode = (text) => f.ui.el('text', text);
   f.document.hidden = false;
   const documentListeners = new Map();
@@ -373,6 +392,7 @@ async function fixture({
     notify: (text) => state.notifications.push(text),
   });
   const options = {
+    elements,
     getRoom: () => state.room,
     getViewerKey: () => state.viewer,
     getToken: () => state.token,
@@ -411,6 +431,7 @@ async function fixture({
     state,
     http,
     chat,
+    elements,
     remount: () => new SocialChat(options),
     accountPreferences,
     tab,
@@ -2900,6 +2921,39 @@ for (const result of ['success', 'failure']) {
     assert.equal(f.state.notifications.length, notifications);
   });
 }
+
+test('chat uses its injected shell for rendering, composing, visibility and notification actions', async () => {
+  const f = await fixture({ rejectStaticQueries: true });
+  try {
+    await f.chat.activate();
+    f.elements.chatInput.value = 'first line\nsecond line';
+    f.chat.composer.resizeInput();
+    assert.notEqual(f.elements.chatPanel.style.getPropertyValue('--chat-composer-height'), '');
+    f.chat.openPrivate('alice', 'Alice');
+    assert.equal(f.chat.store.active, 'alice');
+    assert.equal(f.document.activeElement, f.elements.chatInput);
+    f.elements.chatPanel.className = '';
+    f.chat.receive(entry('unseen', { recipientId: 'local', recipientName: 'Local' }));
+    assert.equal(f.elements.unreadBadge.hidden, false);
+    assert.equal(f.elements.unreadBadge.textContent, '1');
+    assert.match(f.elements.chatTab.textContent, /1/);
+    f.elements.chatPanel.className = 'active';
+    f.elements.scrollBottomBtn.click();
+    assert.equal(f.elements.unreadBadge.hidden, true);
+
+    await f.chat.notifications.notificationPermission(true);
+    f.chat.privacy.preferences.notifications = true;
+    f.document.hidden = true;
+    f.chat.receive(entry('desktop', { recipientId: 'local', recipientName: 'Local' }));
+    assert.equal(f.state.notices.length, 1);
+    let tabClicks = 0;
+    f.elements.chatTab.addEventListener('click', () => tabClicks++);
+    f.state.notices[0].onclick();
+    assert.equal(tabClicks, 1, 'the notice selects the injected chat tab');
+  } finally {
+    f.chat.dispose();
+  }
+});
 
 test('disposing and remounting chat removes only its controls and retires retained button callbacks', async () => {
   const f = await fixture();

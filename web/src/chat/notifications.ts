@@ -1,11 +1,13 @@
 import { createScope } from '../disposable';
 import type { ChatEntry } from '../protocol';
 import type { RoomClient } from '../room';
+import type { Elements } from '../dom';
 import type { ChatStore } from './store';
 import type { SocialChatOptions } from './context';
 import type { Preferences } from './preferences';
 
 interface NotificationContext {
+  readonly elements: Pick<Elements, 'chatTab'>;
   readonly options: Pick<SocialChatOptions, 'getRoom' | 'allowsNotification'>;
   readonly preferences: Preferences;
   readonly activation: number;
@@ -92,7 +94,7 @@ export class ChatNotifications {
         globalThis.focus?.();
         if (direct) this.context.switchConversation(message.participantId, message.participantName);
         else if (this.context.store.active !== 'public') this.context.switchConversation('public');
-        document.querySelector<HTMLButtonElement>('[data-tab="chat"]')?.click();
+        this.context.elements.chatTab.click();
       };
     } catch {
       /* Some browsers (Android Chrome) only notify through a service worker. */

@@ -1,5 +1,6 @@
 import type { ChatEntry, ChatStyle } from '../protocol';
 import type { RoomClient } from '../room';
+import type { Elements } from '../dom';
 import { renderAttachments } from '../attachments';
 import { asyncButton, button, busy, el, modal } from '../ui';
 import { appendLinkedText, appendEditedLabel, editMessageDialog } from '../chat-message-ui';
@@ -16,6 +17,7 @@ type ConversationButton = { node: HTMLButtonElement; name: HTMLElement; unread: 
 type MessageRow = { node: HTMLElement; fingerprint: string; dispose: () => void };
 
 interface RenderContext {
+  readonly elements: Pick<Elements, 'unreadBadge' | 'scrollBottomBtn' | 'chatTab'>;
   readonly options: Pick<
     SocialChatOptions,
     'getRoom' | 'getViewerKey' | 'getToken' | 'notify' | 'bindParticipantName'
@@ -410,20 +412,17 @@ export class ChatRenderer {
   updateBadges(): void {
     const total = [...this.context.store.unread.values()].reduce((sum, count) => sum + count, 0);
     document.title = total ? `(${Math.min(total, 999)}) simplestChat` : 'simplestChat';
-    const badge = document.getElementById('unread-badge')!;
+    const { unreadBadge: badge, scrollBottomBtn, chatTab: tab } = this.context.elements;
     const activeUnread = this.context.store.unread.get(this.context.store.active) ?? 0;
     badge.textContent = String(activeUnread);
     badge.hidden = !activeUnread;
-    document.getElementById('scroll-bottom-btn')!.hidden = this.context.seenAtBottom;
-    const tab = document.querySelector<HTMLButtonElement>('[data-tab="chat"]');
-    if (tab) {
-      let count = tab.querySelector('.conversation-unread');
-      if (!count) {
-        count = el('span', '', 'conversation-unread');
-        tab.append(count);
-      }
-      count.textContent = total ? ` ${total}` : '';
+    scrollBottomBtn.hidden = this.context.seenAtBottom;
+    let count = tab.querySelector('.conversation-unread');
+    if (!count) {
+      count = el('span', '', 'conversation-unread');
+      tab.append(count);
     }
+    count.textContent = total ? ` ${total}` : '';
     this.renderConversations();
   }
 

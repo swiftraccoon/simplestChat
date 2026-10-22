@@ -1,8 +1,22 @@
 import type { AccountPreferences } from '../account-preferences';
+import type { Elements } from '../dom';
 import type { RoomClient } from '../room';
 import type { TelemetryHandler } from '../telemetry-types';
 
 export type SocialChatOptions = {
+  /** Validated static shell; dynamic message and composer nodes stay chat-owned. */
+  elements: Pick<
+    Elements,
+    | 'chatMessages'
+    | 'chatInput'
+    | 'chatInputRow'
+    | 'chatSendBtn'
+    | 'chatPanel'
+    | 'chatTab'
+    | 'scrollBottomBtn'
+    | 'unreadBadge'
+    | 'roomScreen'
+  >;
   telemetry?: TelemetryHandler;
   getRoom: () => RoomClient | null;
   getViewerKey: () => string;

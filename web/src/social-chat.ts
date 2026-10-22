@@ -32,10 +32,10 @@ export class SocialChat {
   private readonly privacy: ChatPreferencesController;
   private readonly stopHistoryEdit: () => void;
   private readonly store = new ChatStore(300, 256 * 1024);
-  private readonly messages = document.getElementById('chat-messages')!;
-  private readonly input = document.getElementById('chat-input') as HTMLTextAreaElement;
-  private readonly inputRow = document.getElementById('chat-input-row')!;
-  private readonly sendButton = document.getElementById('chat-send-btn') as HTMLButtonElement;
+  private readonly messages: HTMLDivElement;
+  private readonly input: HTMLTextAreaElement;
+  private readonly inputRow: HTMLDivElement;
+  private readonly sendButton: HTMLButtonElement;
   private readonly accountPeers = new Set<string>();
   private readonly conversationStatus = el('span', '', 'conversation-status');
   private readonly closeButton = button('✕', () => {
@@ -90,6 +90,10 @@ export class SocialChat {
 
   constructor(options: SocialChatOptions) {
     this.options = options;
+    this.messages = options.elements.chatMessages;
+    this.input = options.elements.chatInput;
+    this.inputRow = options.elements.chatInputRow;
+    this.sendButton = options.elements.chatSendBtn;
 
     const owner = this;
     this.privacy = new ChatPreferencesController({
@@ -117,6 +121,7 @@ export class SocialChat {
       playSound: (frequency) => owner.notifications.playSound(frequency),
     });
     this.notifications = new ChatNotifications({
+      elements: options.elements,
       options,
       store: this.store,
       get preferences() {
@@ -138,6 +143,7 @@ export class SocialChat {
       switchConversation: (id, name) => owner.switchConversation(id, name),
     });
     this.renderer = new ChatRenderer({
+      elements: options.elements,
       options,
       store: this.store,
       get preferences() {
@@ -173,7 +179,12 @@ export class SocialChat {
       switchConversation: (id, name) => owner.switchConversation(id, name),
     });
     this.composer = new ChatComposer({
-      elements: { input: this.input, inputRow: this.inputRow, sendButton: this.sendButton },
+      elements: {
+        input: this.input,
+        inputRow: this.inputRow,
+        sendButton: this.sendButton,
+        panel: options.elements.chatPanel,
+      },
       options,
       store: this.store,
       get activeRoom() {
@@ -249,7 +260,7 @@ export class SocialChat {
       );
       this.renderPins();
     });
-    document.getElementById('chat-panel')!.prepend(toolbar, this.conversationStatus);
+    options.elements.chatPanel.prepend(toolbar, this.conversationStatus);
     this.messages.setAttribute('role', 'log');
     this.messages.setAttribute('aria-label', 'Conversation messages');
     this.divider.setAttribute('role', 'separator');
@@ -265,7 +276,7 @@ export class SocialChat {
       },
       { signal: this.events.signal },
     );
-    document.getElementById('scroll-bottom-btn')!.addEventListener(
+    options.elements.scrollBottomBtn.addEventListener(
       'click',
       () => {
         this.messages.scrollTop = this.messages.scrollHeight;
@@ -282,7 +293,7 @@ export class SocialChat {
       },
       { signal: this.events.signal },
     );
-    document.querySelector<HTMLButtonElement>('[data-tab="chat"]')?.addEventListener(
+    options.elements.chatTab.addEventListener(
       'click',
       () =>
         queueMicrotask(() => {
@@ -589,7 +600,7 @@ export class SocialChat {
       return;
     }
     this.switchConversation(id, name);
-    document.querySelector<HTMLButtonElement>('[data-tab="chat"]')?.click();
+    this.options.elements.chatTab.click();
     this.render();
     this.input.focus();
   }
@@ -1018,8 +1029,8 @@ export class SocialChat {
     return (
       !document.hidden &&
       !document.querySelector('dialog[open]') &&
-      document.getElementById('room-screen')?.hidden === false &&
-      document.getElementById('chat-panel')?.classList.contains('active') === true
+      this.options.elements.roomScreen.hidden === false &&
+      this.options.elements.chatPanel.classList.contains('active')
     );
   }
 

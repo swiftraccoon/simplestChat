@@ -1,4 +1,5 @@
 import type { AuthManager } from './auth';
+import type { Elements } from './dom';
 import { accountUpdatesLive, onAccountUpdate } from './account-updates';
 import { avatarColors } from './avatar-colors';
 import { openPrivateInbox, onInboxChanged } from './chat-history';
@@ -36,6 +37,8 @@ import {
 } from './settings-sheet';
 
 interface Options {
+  /** Required static hosts are validated once before this controller is mounted. */
+  elements: Pick<Elements, 'communityActions' | 'roomActions' | 'loginAltActions'>;
   onOpenMessages?: () => void;
   /** Opens the settings sheet at a section; the Account button uses it. */
   openSettings?: (section: string, opener: HTMLElement | null) => void;
@@ -189,16 +192,13 @@ export class CommunityUI {
   constructor(options: Options) {
     this.options = options;
 
-    const accountActions = document.getElementById('community-actions')!;
+    const { communityActions: accountActions, roomActions, loginAltActions } = options.elements;
     accountActions.append(this.accountButton, this.messagesButton, this.roomsButton);
     // Room-scoped actions belong with the room tools; the header keeps account actions.
-    (document.getElementById('room-actions') ?? accountActions).append(
-      this.nicknameButton,
-      this.manageButton,
-    );
+    roomActions.append(this.nicknameButton, this.manageButton);
     const recovery = button('Recover with a saved key', () => this.openRecovery(), 'auth-link-btn');
     this.recoveryButton = recovery;
-    document.querySelector('#login-modal .auth-alt-actions')!.append(recovery);
+    loginAltActions.append(recovery);
     this.subscriptions.push(
       onInboxChanged(() => {
         if (accountUpdatesLive(this.options.auth.userId) && !this.inboxFailed) return;
