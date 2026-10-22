@@ -231,6 +231,14 @@ refuses an occupied port and retains its private temporary directory for
 diagnostics. Set `TEST_POSTGRES_PORT` when another local service owns that port.
 The trust-authenticated database is disposable, never a shared development DB.
 
+Each harness test command owns a fresh process group. It retains the leader's
+identity through final group cleanup, including when that leader exits normally
+and leaves descendants, then reaps it. INT/TERM keeps the existing ten-second
+test-command cleanup grace and returns 130/143; unproven group cleanup cannot
+pass or hide an existing test failure. These signals use the shared numeric
+process owner, without a `kill` command lookup. Groups do not cover children
+that start a separate session or external resources owned by the selected test.
+
 For browser tests, replace the Cargo test command with
 `npm --prefix web/e2e test` after the [browser installation steps](../web/e2e/README.md).
 Build the UI first; do not rebuild assets during a browser run.

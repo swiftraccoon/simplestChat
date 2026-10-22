@@ -5,7 +5,7 @@
 
 use super::Stop;
 use super::postgres::{create_private_directory, find_on_path, parse_port, tail, temp_root};
-use super::process::{self, Termination, shell_status};
+use super::process::{self, Termination};
 use anyhow::{Context, Result};
 use serde::Serialize;
 use std::fs::{self, OpenOptions};
@@ -15,7 +15,6 @@ use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::Duration;
 use tokio::process::{Child, Command};
-use tokio::signal::unix::{SignalKind, signal};
 use tokio::time::sleep;
 
 const DEFAULT_SERVER_PORT: &str = "3119";
@@ -515,7 +514,7 @@ relay-threads=1\nuser-quota=8\ntotal-quota=64\nlog-file=stdout\nlog-min-level=wa
     /// of an earlier run's credentials inherited; INT or TERM stops it and
     /// reports 130 or 143.
     async fn run_child(&mut self, command: &[String], server_pid: u32) -> Result<i32> {
-        let mut child = Command::new(&command[0]);
+        let mut child = std::process::Command::new(&command[0]);
         child.args(&command[1..]);
         child
             .env_remove("TEST_METRICS_TOKEN")
@@ -532,18 +531,7 @@ relay-threads=1\nuser-quota=8\ntotal-quota=64\nlog-file=stdout\nlog-min-level=wa
         if let Some(token) = &self.plan.metrics_token {
             child.env("TEST_METRICS_TOKEN", token);
         }
-        let mut child = child
-            .spawn()
-            .with_context(|| format!("starting {}", command[0]))?;
-        let mut terminate = signal(SignalKind::terminate())?;
-        let mut interrupt = signal(SignalKind::interrupt())?;
-        let interrupted = tokio::select! {
-            result = child.wait() => return Ok(shell_status(result?)),
-            _ = interrupt.recv() => 130,
-            _ = terminate.recv() => 143,
-        };
-        process::terminate(&mut child, CHILD_GRACE).await;
-        Ok(interrupted)
+        process::run_test_child(child, CHILD_GRACE).await
     }
 
     async fn cleanup(&mut self, mut status: i32) -> i32 {

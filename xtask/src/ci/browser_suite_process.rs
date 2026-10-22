@@ -5,147 +5,13 @@
 //! when it has already exited and left descendants. Only then may it be reaped.
 
 use super::Invocation;
+pub(in crate::ci) use crate::owned_process::{Group, Signals, exited};
 use crate::tooling::{self, Failure, Result};
-use rustix::process::{Pid, Signal as ProcessSignal, WaitId, WaitIdOptions};
+use rustix::process::Signal as ProcessSignal;
 use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::process::Stdio;
-use std::time::{Duration, Instant};
-use tokio::signal::unix::{Signal, SignalKind};
-
-pub(in crate::ci) struct Signals {
-    interrupt: Option<Signal>,
-    terminate: Option<Signal>,
-    injected: Option<tokio::sync::mpsc::UnboundedReceiver<u8>>,
-}
-
-impl Signals {
-    pub(in crate::ci) fn new() -> Result<Self> {
-        Ok(Self {
-            interrupt: Some(tokio::signal::unix::signal(SignalKind::interrupt()).map_err(io)?),
-            terminate: Some(tokio::signal::unix::signal(SignalKind::terminate()).map_err(io)?),
-            injected: None,
-        })
-    }
-
-    #[cfg(test)]
-    pub(in crate::ci) fn injected(receiver: tokio::sync::mpsc::UnboundedReceiver<u8>) -> Self {
-        Self {
-            interrupt: None,
-            terminate: None,
-            injected: Some(receiver),
-        }
-    }
-
-    pub(in crate::ci) async fn next(&mut self) -> u8 {
-        if let Some(receiver) = &mut self.injected {
-            return match receiver.recv().await {
-                Some(code) => code,
-                None => std::future::pending().await,
-            };
-        }
-        tokio::select! {
-            _ = self.interrupt.as_mut().expect("registered interrupt").recv() => 130,
-            _ = self.terminate.as_mut().expect("registered terminate").recv() => 143,
-        }
-    }
-
-    pub(in crate::ci) async fn pending(&mut self) -> Option<u8> {
-        tokio::select! {
-            biased;
-            code = self.next() => Some(code),
-            _ = tokio::task::yield_now() => None,
-        }
-    }
-}
-
-fn io(_: std::io::Error) -> Failure {
-    Failure::new(1, "Browser harness supervision failed.")
-}
-
-pub(in crate::ci) async fn exited(pid: Pid) -> Result<()> {
-    loop {
-        match rustix::process::waitid(
-            WaitId::Pid(pid),
-            WaitIdOptions::EXITED | WaitIdOptions::NOHANG | WaitIdOptions::NOWAIT,
-        ) {
-            Ok(Some(_)) => return Ok(()),
-            Ok(None) | Err(rustix::io::Errno::INTR) => {}
-            Err(_) => return Err(Failure::new(1, "Browser harness wait failed.")),
-        }
-        tokio::time::sleep(Duration::from_millis(10)).await;
-    }
-}
-
-pub(super) fn reserved(pid: Pid) -> bool {
-    loop {
-        match rustix::process::waitid(
-            WaitId::Pid(pid),
-            WaitIdOptions::EXITED | WaitIdOptions::NOHANG | WaitIdOptions::NOWAIT,
-        ) {
-            Ok(_) => return true,
-            Err(rustix::io::Errno::INTR) => {}
-            Err(_) => return false,
-        }
-    }
-}
-
-/// Standard Child has no background reaper. Disarm before waiting so a late
-/// destructor can never signal a process-group ID after its reservation ends.
-pub(in crate::ci) struct Group {
-    child: Option<std::process::Child>,
-    pid: Pid,
-}
-
-impl Group {
-    pub(in crate::ci) fn new(child: std::process::Child) -> Self {
-        let pid = i32::try_from(child.id())
-            .ok()
-            .and_then(Pid::from_raw)
-            .expect("spawned owned child has a positive process identity");
-        Self {
-            child: Some(child),
-            pid,
-        }
-    }
-
-    pub(in crate::ci) fn pid(&self) -> Pid {
-        self.pid
-    }
-
-    pub(in crate::ci) fn child(&mut self) -> &mut std::process::Child {
-        self.child.as_mut().expect("owned unreaped child")
-    }
-
-    pub(in crate::ci) async fn reap(&mut self) -> Result<std::process::ExitStatus> {
-        let mut child = self.child.take().expect("owned unreaped child");
-        tokio::task::spawn_blocking(move || child.wait())
-            .await
-            .map_err(|_| Failure::new(1, "Browser harness reap failed."))?
-            .map_err(io)
-    }
-}
-
-impl Drop for Group {
-    fn drop(&mut self) {
-        let Some(mut child) = self.child.take() else {
-            return;
-        };
-        if reserved(self.pid) {
-            let _ = rustix::process::kill_process_group(self.pid, ProcessSignal::KILL);
-        }
-        // No group signal follows try_wait, which can release the reservation.
-        let deadline = Instant::now() + Duration::from_secs(5);
-        while Instant::now() < deadline {
-            match child.try_wait() {
-                Ok(Some(_)) => return,
-                Ok(None) => std::thread::sleep(Duration::from_millis(5)),
-                Err(error) if error.kind() == std::io::ErrorKind::Interrupted => {}
-                Err(_) => return,
-            }
-        }
-    }
-}
+use std::time::Duration;
 
 pub(super) async fn run(
     root: &Path,
@@ -177,14 +43,8 @@ pub(super) async fn run(
             "Cannot start the owned browser test harness.",
         )
     })?;
-    let pid = i32::try_from(child.id())
-        .ok()
-        .and_then(Pid::from_raw)
-        .expect("spawned owned child has a positive process identity");
-    let mut group = Group {
-        child: Some(child),
-        pid,
-    };
+    let mut group = Group::new(child);
+    let pid = group.pid();
     drop(command);
     let result = tokio::select! {
         biased;

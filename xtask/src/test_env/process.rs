@@ -1,14 +1,82 @@
 //! Owned child processes for the test harness: clean environments, process
 //! groups, bounded termination and the status a shell would report.
 //!
-//! The workspace forbids unsafe code, so signals go through `kill(1)` rather
-//! than a `kill(2)` binding; the few signals a run sends do not justify one.
+//! Test commands use the shared unreaped stdChild owner; group signals never
+//! depend on PATH or follow release of the leader's identity reservation.
 
 use std::os::unix::process::ExitStatusExt;
 use std::process::{ExitStatus, Stdio};
 use std::time::Duration;
 use tokio::process::{Child, Command};
 use tokio::time::sleep;
+
+/// Run one test command in a fresh group. Even an ordinarily exited leader may
+/// have descendants; finish that reserved group before reaping the leader.
+pub(crate) async fn run_test_child(
+    command: std::process::Command,
+    grace: Duration,
+) -> anyhow::Result<i32> {
+    let mut signals = crate::owned_process::Signals::new()?;
+    run_test_child_with_cleanup(command, grace, &mut signals, crate::owned_process::finish).await
+}
+
+async fn run_test_child_with_cleanup<F>(
+    mut command: std::process::Command,
+    grace: Duration,
+    signals: &mut crate::owned_process::Signals,
+    finish: impl FnOnce(rustix::process::Pid) -> F,
+) -> anyhow::Result<i32>
+where
+    F: std::future::Future<Output = bool>,
+{
+    use crate::owned_process::{Group, exited};
+    use std::os::unix::process::CommandExt;
+
+    if let Some(code) = signals.pending().await {
+        return Ok(i32::from(code));
+    }
+    command.process_group(0);
+    let mut owner = Group::new(command.spawn()?);
+    let pid = owner.pid();
+    // Standard Command retains its configured file descriptors after spawn.
+    drop(command);
+    let primary = tokio::select! {
+        biased;
+        code = signals.next() => {
+            let _ = rustix::process::kill_process_group(pid, rustix::process::Signal::TERM);
+            let _ = tokio::time::timeout(grace, exited(pid)).await;
+            Ok(Some(i32::from(code)))
+        },
+        result = exited(pid) => result.map(|()| None),
+    };
+    let cleaned = finish(pid).await;
+    let terminal = tokio::time::timeout(Duration::from_secs(5), exited(pid)).await;
+    if !matches!(terminal, Ok(Ok(()))) {
+        eprintln!("Owned test command termination could not be confirmed.");
+        // Leave the guard armed for its bounded final attempt. Preserve a
+        // known interrupt status, but uncertain cleanup can never pass.
+        return Ok(primary.ok().flatten().unwrap_or(1));
+    }
+    let reaped = match owner.reap().await {
+        Ok(status) => status,
+        Err(error) => {
+            return match primary {
+                Ok(Some(code)) => Ok(code),
+                _ => Err(error.into()),
+            };
+        }
+    };
+    let mut status = primary?.unwrap_or_else(|| shell_status(reaped));
+    if status == 0
+        && let Some(code) = signals.pending().await
+    {
+        status = i32::from(code);
+    }
+    if !cleaned {
+        eprintln!("Owned test command group cleanup could not be confirmed.");
+    }
+    Ok(if status == 0 && !cleaned { 1 } else { status })
+}
 
 /// The status a shell reports for a finished child: its exit code, or 128 plus
 /// the signal that ended it.
@@ -31,11 +99,6 @@ pub(crate) async fn signal(target: i32, signal: &str) -> bool {
         .status()
         .await
         .is_ok_and(|status| status.success())
-}
-
-/// Whether a process or (negative id) process group still has a live member.
-pub(crate) async fn alive(target: i32) -> bool {
-    signal(target, "0").await
 }
 
 /// What termination of an owned child attempted and observed, recorded apart
@@ -82,19 +145,6 @@ pub(crate) async fn wait_for_exit(child: &mut Child, limit: Duration) -> bool {
     }
 }
 
-/// Stop a whole process group: TERM, wait up to `grace`, then KILL.
-pub(crate) async fn terminate_group(group: i32, grace: Duration) {
-    let _ = signal(-group, "TERM").await;
-    let started = tokio::time::Instant::now();
-    while alive(-group).await {
-        if started.elapsed() >= grace {
-            let _ = signal(-group, "KILL").await;
-            break;
-        }
-        sleep(Duration::from_millis(100)).await;
-    }
-}
-
 /// Thirty-two random bytes as lowercase hex, from the operating system.
 pub(crate) fn random_hex() -> std::io::Result<String> {
     use std::io::Read;
@@ -102,3 +152,7 @@ pub(crate) fn random_hex() -> std::io::Result<String> {
     std::fs::File::open("/dev/urandom")?.read_exact(&mut bytes)?;
     Ok(bytes.iter().map(|byte| format!("{byte:02x}")).collect())
 }
+
+#[cfg(test)]
+#[path = "process_tests.rs"]
+mod tests;

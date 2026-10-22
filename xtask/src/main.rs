@@ -16,6 +16,7 @@ mod ci_retention;
 mod http_policy;
 mod line_length;
 mod media_ip;
+mod owned_process;
 mod performance_thresholds;
 mod protocol_ts;
 mod run_local;

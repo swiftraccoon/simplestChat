@@ -11,7 +11,6 @@ use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::Duration;
 use tokio::process::Command;
-use tokio::signal::unix::{SignalKind, signal};
 
 const DEFAULT_PORT: &str = "15434";
 const DATABASE: &str = "simplestchat_test";
@@ -206,7 +205,7 @@ impl Cluster {
     /// removed, so an inherited service can never receive its writes; a
     /// signal to this process stops the whole group and reports 130 or 143.
     async fn run_child(&self, command: &[String], database_url: &str) -> Result<i32> {
-        let mut child = Command::new(&command[0]);
+        let mut child = std::process::Command::new(&command[0]);
         child.args(&command[1..]);
         child.env_clear();
         for (name, value) in std::env::vars_os() {
@@ -217,24 +216,8 @@ impl Cluster {
         child
             .env("DATABASE_URL", database_url)
             .env("TEST_DATABASE_URL", database_url)
-            .env("DISPOSABLE_TEST_DATABASE", "1")
-            .process_group(0);
-        let mut child = child
-            .spawn()
-            .with_context(|| format!("starting {}", command[0]))?;
-        let group = i32::try_from(child.id().unwrap_or(0)).unwrap_or(0);
-        let mut terminate = signal(SignalKind::terminate())?;
-        let mut interrupt = signal(SignalKind::interrupt())?;
-        let interrupted = tokio::select! {
-            result = child.wait() => return Ok(shell_status(result?)),
-            _ = interrupt.recv() => 130,
-            _ = terminate.recv() => 143,
-        };
-        if group > 0 {
-            process::terminate_group(group, CHILD_GRACE).await;
-        }
-        let _ = child.wait().await;
-        Ok(interrupted)
+            .env("DISPOSABLE_TEST_DATABASE", "1");
+        process::run_test_child(child, CHILD_GRACE).await
     }
 
     async fn cleanup(&mut self, mut status: i32) -> i32 {
