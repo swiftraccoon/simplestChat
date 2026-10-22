@@ -189,17 +189,20 @@ prepared-helper hash checks and app-only replacement flow.
 After building the server, run the same process-lifecycle smoke used by CI:
 
 ```sh
-cargo build --locked --bin simplestChat
-node build/shutdown-smoke.mjs --binary "$PWD/target/debug/simplestChat"
+cargo build --locked --workspace --all-targets --profile test
+./target/debug/load_test bench shutdown-smoke --binary "$PWD/target/debug/simplestChat"
 ```
 
 The smoke starts its own guest-only server on unused ports, checks `/ready`,
 and verifies that a client-initiated close finishes cleanly with code 1000.
-It then opens a separate connection, joins a room, and sends `SIGTERM` only to
-that child. It requires the temporary `serverRestarting` notice (and rejects
+It then opens a separate connection, joins a room, and retires its reserved
+process group while concurrently draining WebSocket messages. It requires the
+temporary `serverRestarting` notice with reason `Server shutting down` (and rejects
 terminal `roomClosed`), clean WebSocket close code
-1001 and exit status zero within its 20-second deadline. It never connects to
-an existing server or database.
+1001 and exit status zero within 20 seconds, including observed group retirement
+and both output pipes. This is stricter than the retained JavaScript reference's
+leader-exit timestamp. The smoke connects only to its own allocated loopback
+ports and supplies a fixed guest environment without database or auth credentials.
 Native tests separately cover drain races, stalled cleanup and readiness probe
 failures. See [shutdown guarantees and limits](configuration.md#shutdown).
 
@@ -238,14 +241,57 @@ To validate the server's actual diagnostic JSONL schema with the same owned
 guest-only workflow, also run by CI:
 
 ```sh
-node build/diagnostics-smoke.mjs --binary "$PWD/target/debug/simplestChat" --generator "$PWD/target/debug/load_test"
+./target/debug/load_test bench diagnostics-smoke --binary "$PWD/target/debug/simplestChat"
 ```
 
 This additionally requires complete recorder coverage, successful `join_room`
-and `room_lock_wait` records, and clean server exit. It prints and retains a new
-private `results/diagnostics-smoke.*` directory, including failure artifacts;
-it does not use a browser, capture media or upload anything. See
+and `room_lock_wait` records, and clean server exit. It retains a new private
+`results/diagnostics-smoke.*` directory, including failure artifacts. The recorder
+must already exist at readiness; its original private inode is retained through
+positive writer retirement, then the typed Rust reader consumes a duplicate FD.
+It does not use a browser, capture media or upload anything. See
 [diagnostic interpretation](diagnostics.md#read-the-results).
+
+Both commands accept `--output /absolute/fresh-directory` with a UTF-8 path; an existing output
+is refused. The directory is 0700 and regular artifacts are 0600. The diagnostic
+files remain `server-diagnostics.jsonl`, `server-diagnostics-report.json` and
+`diagnostics-smoke.json`; bounded `server.log` appears on failure. Both modes
+also retain `shutdown-retirement.json`; shutdown mode writes `shutdown-smoke.json`.
+The reused directory owner retains its `.creator` witness. Core shutdown and
+diagnostic report fields retain their reference meanings, with the named timing
+correction above. Retirement facts cover reserved-group signals, leader reap and
+owned streams; they do not prove absence of escaped descendants. Reports are
+observations before final file/namespace closes; only command exit 0 confirms all
+required final checks. They are neither durable receipts nor locks against later
+same-UID changes.
+
+Runtime presentation is artifact-only, with no stdout parity claim. Exit codes
+are 0 for complete success, 1 for failed/incomplete observations or unproven
+cleanup, 2 for invalid arguments, 124 for observed deadlines, and 130/143 for
+observed INT/TERM. An earlier failure survives later cancellation. Native final
+signal fences deliberately correct the references' generic cancellation exit
+and shutdown's late-cancellation success. The original JS files remain references;
+inert tests execute their byte-pinned copies and compare full core results.
+Hosted CI retains both smoke directories alongside media evidence in the
+existing guarded seven-day `media-smoke` artifact upload; ACT and cancelled
+jobs keep the existing upload exclusion.
+
+The entry scheduling budget is 240 seconds: 150 active plus 90 for finalization.
+Stage slots are readiness 20, each connection/join 20, peer close 5, drain 20 and
+stopped-recorder reading 30 seconds, all capped by remaining active time. Final
+retirement includes a 20-second leader grace, up to three Darwin inspection
+paths of 2 seconds plus 5 seconds settlement each, a 5-second terminal wait,
+three 5-second stream tasks and a possible 5-second guard fallback (66 seconds),
+plus 2 seconds per retained socket and final file/signal checks. The synchronous
+reader runs in an awaited blocking worker with sticky abort checks; cancellation
+never detaches it or skips its file closes. Readiness bodies are capped at 4096
+bytes with redirects/proxies disabled; typed WebSocket messages/frames are 64 KiB
+with 128 frames per socket. A clean close requires the complete close handshake
+and protocol termination, rather than trusting a close frame alone. HTTP and
+pending-connect library handles use their normal RAII cleanup; returned sockets
+are explicitly closed. These are source scheduling/refusal bounds, not hard OS,
+filesystem, reap or cold-build guarantees. The real server/network path remains
+unmeasured by the inert oracle and fake-host checks.
 
 ## Disposable PostgreSQL and browser tests
 

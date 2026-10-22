@@ -20,6 +20,59 @@ from release_json import json_value
 class PythonPolicyTests(unittest.TestCase):
     """Keep shared strict settings, tool pins and CI gate wiring aligned."""
 
+    def test_guest_smokes_use_the_prebuilt_owner_after_the_guarded_workspace_build(self) -> None:
+        """Retain cache guards while moving both complete operations to the same binary."""
+        workflow = yaml_value(
+            (ROOT / ".github/workflows/ci.yml").read_text(), scalars_as_strings=True
+        )
+        jobs = obj(workflow, "jobs")
+        candidates = [
+            objects(obj(jobs, name), "steps")
+            for name in jobs
+            if isinstance(jobs[name], dict) and "steps" in obj(jobs, name)
+        ]
+        steps = next(
+            steps
+            for steps in candidates
+            if any(step.get("name") == "Verify readiness and graceful shutdown" for step in steps)
+        )
+        build = next(
+            step
+            for step in steps
+            if step.get("name") == "Build server, load generator and test harnesses"
+        )
+        self.assertEqual(
+            string(build, "run"), "cargo build --locked --workspace --all-targets --profile test"
+        )
+        for kind, name in (
+            ("shutdown", "Verify readiness and graceful shutdown"),
+            ("diagnostics", "Verify bounded local operation diagnostics"),
+        ):
+            step = next(step for step in steps if step.get("name") == name)
+            self.assertEqual(
+                string(step, "run"),
+                f"./target/debug/load_test bench {kind}-smoke "
+                + '--binary "$PWD/target/debug/simplestChat" '
+                + f'--output "$RUNNER_TEMP/{kind}-smoke"',
+            )
+            self.assertLess(steps.index(build), steps.index(step))
+            self.assertEqual(step["if"], build["if"])
+            self.assertNotIn("env", step)
+            self.assertNotIn("continue-on-error", step)
+
+        upload = next(
+            step for step in steps if step.get("name") == "Preserve media smoke diagnostics"
+        )
+        self.assertEqual(string(upload, "if"), "${{ !cancelled() && !env.ACT }}")
+        self.assertEqual(string(upload, "with", "retention-days"), "7")
+        self.assertEqual(
+            string(upload, "with", "path").splitlines(),
+            [
+                f"${{{{ runner.temp }}}}/{name}"
+                for name in ("media-smoke", "shutdown-smoke", "diagnostics-smoke")
+            ],
+        )
+
     def test_offline_configuration_validators_keep_existing_jobs_guards_and_fixed_inputs(
         self,
     ) -> None:

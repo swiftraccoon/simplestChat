@@ -94,6 +94,16 @@ disposable Linux/interface authority and reviewed iptables 1.8.10 output.
 See [the TCP contract](../docs/performance.md#guest-browser-ice-tcp-with-scoped-linux-udp-blocking)
 for supported backends, four-step dialogue, bounds and unverified runtime limits.
 
+`./target/debug/load_test bench shutdown-smoke --binary /absolute/server` and
+`bench diagnostics-smoke --binary /absolute/server` own the complete guest-only
+readiness, peer close, room join and graceful drain operation. They retain bounded
+private artifacts, use one process/signal owner and require observed group and
+stream retirement before reading diagnostics. `--output` selects a fresh absolute
+directory. The diagnostics reader runs in process after writer retirement; no
+generator subprocess is required. See [the smoke contract](../docs/testing.md#readiness-and-shutdown)
+for exact report fields, status/timing corrections, bounds and runtime limits.
+Implementation lives in `src/bench/smoke/`; byte-retained JS oracles are test-only.
+
 The same binary can read stopped server diagnostics without creating a runtime,
 joining a room or sending media:
 

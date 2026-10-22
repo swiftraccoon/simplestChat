@@ -286,12 +286,27 @@ impl Reader {
         true
     }
 
-    fn read_file(&mut self, file: &mut File) -> std::io::Result<()> {
+    fn read_file(
+        &mut self,
+        file: &mut File,
+        checkpoint: &mut impl FnMut() -> bool,
+        admitted: Option<u64>,
+    ) -> std::io::Result<()> {
         let mut pending = Vec::new();
         let mut buffer = [0; 64 * 1024];
         let mut bytes_read = 0;
         loop {
-            let count = file.read(&mut buffer)?;
+            if !checkpoint() {
+                return Err(std::io::ErrorKind::Interrupted.into());
+            }
+            let remaining = admitted
+                .map(|length| length.saturating_sub(bytes_read as u64))
+                .unwrap_or(buffer.len() as u64);
+            if remaining == 0 {
+                break;
+            }
+            let limit = remaining.min(buffer.len() as u64) as usize;
+            let count = file.read(&mut buffer[..limit])?;
             if count == 0 {
                 break;
             }
@@ -307,6 +322,9 @@ impl Reader {
                 .position(|byte| *byte == b'\n')
                 .map(|offset| offset + start)
             {
+                if !checkpoint() {
+                    return Err(std::io::ErrorKind::Interrupted.into());
+                }
                 if !self.consume(&pending[start..end]) {
                     return Ok(());
                 }
@@ -518,26 +536,57 @@ pub fn read(path: &Path, max_records: usize) -> Result<DiagnosticReport, &'stati
         Err(nix::errno::Errno::ELOOP) => reader.issue("unsafe_file"),
         Err(_) => reader.issue("file_unreadable"),
         Ok(fd) => {
-            let mut file = File::from(fd);
-            match file.metadata() {
-                Err(_) => reader.issue("file_unreadable"),
-                Ok(info) if !info.is_file() || info.mode() & 0o077 != 0 => {
-                    reader.issue("unsafe_file")
-                }
-                Ok(info) if info.len() > ((max_records + 1) * (LINE_BYTES + 1)) as u64 => {
-                    reader.issue("file_limit")
-                }
-                Ok(_) => {
-                    reader.report.coverage.available = true;
-                    if reader.read_file(&mut file).is_err() {
-                        reader.issue("file_unreadable");
-                    }
-                }
-            }
-            if nix::unistd::close(file).is_err() {
-                reader.issue("file_close_failed");
-            }
+            read_into(
+                &mut reader,
+                File::from(fd),
+                max_records,
+                &mut || true,
+                false,
+            );
         }
     }
     Ok(reader.finish())
+}
+
+/// Parse a caller-retained stopped recorder without reopening its pathname.
+/// The file is consumed and explicitly closed on every returned path. The
+/// caller separately binds original/visible metadata and writer retirement.
+pub(crate) fn read_owned(
+    file: File,
+    max_records: usize,
+    mut checkpoint: impl FnMut() -> bool,
+) -> Result<DiagnosticReport, &'static str> {
+    if !(1..=MAX_RECORDS).contains(&max_records) {
+        let _ = nix::unistd::close(file);
+        return Err("Invalid diagnostic record bound");
+    }
+    let mut reader = Reader::new(max_records);
+    read_into(&mut reader, file, max_records, &mut checkpoint, true);
+    Ok(reader.finish())
+}
+
+fn read_into(
+    reader: &mut Reader,
+    mut file: File,
+    max_records: usize,
+    checkpoint: &mut impl FnMut() -> bool,
+    clip_initial: bool,
+) {
+    match file.metadata() {
+        Err(_) => reader.issue("file_unreadable"),
+        Ok(info) if !info.is_file() || info.mode() & 0o077 != 0 => reader.issue("unsafe_file"),
+        Ok(info) if info.len() > ((max_records + 1) * (LINE_BYTES + 1)) as u64 => {
+            reader.issue("file_limit")
+        }
+        Ok(info) => {
+            reader.report.coverage.available = true;
+            let admitted = clip_initial.then_some(info.len());
+            if reader.read_file(&mut file, checkpoint, admitted).is_err() {
+                reader.issue("file_unreadable");
+            }
+        }
+    }
+    if nix::unistd::close(file).is_err() {
+        reader.issue("file_close_failed");
+    }
 }

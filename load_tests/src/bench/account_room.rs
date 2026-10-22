@@ -4,7 +4,7 @@
 mod config;
 mod controller;
 mod database;
-mod files;
+pub(super) mod files;
 mod http;
 mod measure;
 mod policy;

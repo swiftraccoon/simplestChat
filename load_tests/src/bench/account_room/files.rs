@@ -41,7 +41,7 @@ fn close(file: File) -> Result<()> {
     Ok(())
 }
 
-pub(super) struct Directory {
+pub(in crate::bench) struct Directory {
     path: PathBuf,
     file: Option<File>,
     parent: Option<File>,
@@ -273,6 +273,45 @@ impl Directory {
         closed?;
         Ok(bytes)
     }
+    /// Admit a private server-created input at the original directory FD.
+    /// Its caller retains the returned file until that writer has retired.
+    pub(in crate::bench) fn open_input(
+        &self,
+        name: &str,
+        maximum: u64,
+    ) -> Result<(File, Metadata)> {
+        ensure!(
+            !name.is_empty() && !name.contains('/'),
+            "invalid_input_basename"
+        );
+        self.check()?;
+        let file = File::from(openat(self.descriptor(), name, READ, Mode::empty())?);
+        let admitted = (|| {
+            let stamp = file.metadata()?;
+            ensure!(
+                stamp.is_file()
+                    && stamp.nlink() == 1
+                    && stamp.len() <= maximum
+                    && stamp.mode() & 0o7777 == 0o600
+                    && stamp.uid() == self.stamp.uid(),
+                "private_input_refused"
+            );
+            let visible = File::from(openat(self.descriptor(), name, READ, Mode::empty())?);
+            let observed = visible.metadata();
+            let closed = close(visible);
+            ensure!(same(&stamp, &observed?), "private_input_changed");
+            closed?;
+            self.check()?;
+            Ok(stamp)
+        })();
+        match admitted {
+            Ok(stamp) => Ok((file, stamp)),
+            Err(error) => {
+                let _ = close(file);
+                Err(error)
+            }
+        }
+    }
     pub fn json(&self, name: &str, value: &impl serde::Serialize) -> Result<()> {
         let mut bytes = serde_json::to_vec_pretty(value)?;
         bytes.push(b'\n');
@@ -333,7 +372,7 @@ impl Directory {
     }
 }
 
-pub(super) struct Record {
+pub(in crate::bench) struct Record {
     file: Option<File>,
     name: String,
     initial: Metadata,

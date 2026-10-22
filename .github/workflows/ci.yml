@@ -314,11 +314,11 @@ jobs:
 
       - name: Verify readiness and graceful shutdown
         if: steps.verified.outputs.cache-hit != 'true'
-        run: node build/shutdown-smoke.mjs --binary "$PWD/target/debug/simplestChat"
+        run: ./target/debug/load_test bench shutdown-smoke --binary "$PWD/target/debug/simplestChat" --output "$RUNNER_TEMP/shutdown-smoke"
 
       - name: Verify bounded local operation diagnostics
         if: steps.verified.outputs.cache-hit != 'true'
-        run: node build/diagnostics-smoke.mjs --binary "$PWD/target/debug/simplestChat" --generator "$PWD/target/debug/load_test"
+        run: ./target/debug/load_test bench diagnostics-smoke --binary "$PWD/target/debug/simplestChat" --output "$RUNNER_TEMP/diagnostics-smoke"
 
       - name: Verify native security patches
         if: steps.verified.outputs.cache-hit != 'true'
@@ -348,13 +348,16 @@ jobs:
             --server-revision "${GITHUB_SHA}" --generator-revision "${GITHUB_SHA}"
 
       # !env.ACT: xtask ci-local runs jobs with act, whose artifact server does
-      # not speak the upload-artifact v7 protocol; diagnostics stay in the job's log.
+      # not speak the upload-artifact v7 protocol; retained files stay on its runner.
       - name: Preserve media smoke diagnostics
         if: ${{ !cancelled() && !env.ACT }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: media-smoke
-          path: ${{ runner.temp }}/media-smoke
+          path: |
+            ${{ runner.temp }}/media-smoke
+            ${{ runner.temp }}/shutdown-smoke
+            ${{ runner.temp }}/diagnostics-smoke
           if-no-files-found: ignore
           retention-days: 7
 
