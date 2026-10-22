@@ -1,7 +1,9 @@
 #![forbid(unsafe_code)]
 
-//! Offline capacity planning and bounded load-test/server diagnostic reports.
-//! These modules do not construct a runtime, connect to a server or run workloads.
+//! Offline planning, bounded diagnostic readers and explicit capacity measurement.
+//! Importing these modules starts no runtime, connection, engine or workload;
+//! only an explicit `capacity run` command constructs the measurement runtime.
 
 pub mod capacity;
+mod capacity_run;
 pub mod report;

@@ -4,13 +4,13 @@ use super::{format::general, json::Json};
 use anyhow::{Result, ensure};
 use std::collections::BTreeMap;
 
-pub(super) const MIB: f64 = 1_048_576.0;
-pub(super) const WORKLOADS: [&str; 3] = ["meetings", "large-meeting", "webinar"];
+pub(crate) const MIB: f64 = 1_048_576.0;
+pub(crate) const WORKLOADS: [&str; 3] = ["meetings", "large-meeting", "webinar"];
 const MEMORY_HEADROOM: f64 = 2.0;
 
 #[derive(Clone, Debug, PartialEq)]
-pub(super) struct Profile {
-    pub(super) meeting_size: i64,
+pub(crate) struct Profile {
+    pub(crate) meeting_size: i64,
     capture: String,
     speakers: i64,
     viewport_width: i64,
@@ -36,7 +36,7 @@ impl Default for Profile {
 }
 
 impl Profile {
-    pub(super) fn read(report: &Json) -> Result<Self> {
+    pub(crate) fn read(report: &Json) -> Result<Self> {
         let measurement = &report["measurement"];
         measurement.object("measurement")?;
         let browser = &measurement["browser"];
@@ -64,7 +64,7 @@ impl Profile {
         })
     }
 
-    pub(super) fn describe(&self) -> String {
+    pub(crate) fn describe(&self) -> String {
         let media = if self.audio_only {
             "audio only"
         } else {
@@ -86,16 +86,16 @@ impl Profile {
 }
 
 #[derive(Clone, Debug)]
-pub(super) struct Ceiling {
-    pub(super) size: Option<i64>,
-    pub(super) egress_mbps: f64,
-    pub(super) memory_bytes: i64,
-    pub(super) workers: i64,
+pub(crate) struct Ceiling {
+    pub(crate) size: Option<i64>,
+    pub(crate) egress_mbps: f64,
+    pub(crate) memory_bytes: i64,
+    pub(crate) workers: i64,
 }
 
-pub(super) type Ceilings = BTreeMap<String, Ceiling>;
+pub(crate) type Ceilings = BTreeMap<String, Ceiling>;
 
-pub(super) fn reference() -> Ceilings {
+pub(crate) fn reference() -> Ceilings {
     [
         ("meetings", 85, 85.0 * 2.39, 170, 1),
         ("large-meeting", 28, 28.0 * 3.0, 84, 2),
@@ -116,7 +116,7 @@ pub(super) fn reference() -> Ceilings {
     .collect()
 }
 
-pub(super) fn ceilings(report: &Json) -> Result<Ceilings> {
+pub(crate) fn ceilings(report: &Json) -> Result<Ceilings> {
     let entries = report["ceilings"].object("ceilings")?;
     let mut result = BTreeMap::new();
     for name in WORKLOADS {
@@ -150,29 +150,32 @@ pub(super) fn ceilings(report: &Json) -> Result<Ceilings> {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(super) struct Host {
-    pub(super) vcpus: i64,
-    pub(super) memory_mib: i64,
-    pub(super) port_mbps: f64,
+pub(crate) struct Host {
+    pub(crate) vcpus: i64,
+    pub(crate) memory_mib: i64,
+    pub(crate) port_mbps: f64,
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(super) struct Deployment {
-    pub(super) cpus: f64,
-    pub(super) memory_mib: i64,
+pub(crate) struct Deployment {
+    pub(crate) cpus: f64,
+    pub(crate) memory_mib: i64,
 }
 
 impl Deployment {
-    pub(super) fn workers(self) -> i64 {
+    pub(crate) fn workers(self) -> i64 {
         self.cpus.floor().clamp(1.0, 64.0) as i64
     }
 }
 
 #[derive(Debug)]
-pub(super) struct Projection {
-    pub(super) participants: i64,
-    pub(super) limited_by: &'static str,
-    pub(super) mbps_per_participant: f64,
+pub(crate) struct Projection {
+    pub(crate) per_core: f64,
+    pub(crate) cpu_participants: i64,
+    pub(crate) memory_limit_mib: i64,
+    pub(crate) participants: i64,
+    pub(crate) limited_by: &'static str,
+    pub(crate) mbps_per_participant: f64,
 }
 
 fn floor(value: f64) -> Result<i64> {
@@ -183,12 +186,15 @@ fn floor(value: f64) -> Result<i64> {
     Ok(value.floor() as i64)
 }
 
-pub(super) fn project(ceilings: &Ceilings, deployment: Deployment) -> Result<Projection> {
+pub(crate) fn project(ceilings: &Ceilings, deployment: Deployment) -> Result<Projection> {
     let Some(meetings) = ceilings
         .get("meetings")
         .filter(|value| value.size.is_some_and(|size| size != 0))
     else {
         return Ok(Projection {
+            per_core: 0.0,
+            cpu_participants: 0,
+            memory_limit_mib: 0,
             participants: 0,
             limited_by: "cpu",
             mbps_per_participant: 0.0,
@@ -199,6 +205,7 @@ pub(super) fn project(ceilings: &Ceilings, deployment: Deployment) -> Result<Pro
     let cpu_participants = floor(per_core * deployment.workers() as f64)?;
     let mut participants = cpu_participants;
     let mut limited_by = "cpu";
+    let mut needed = 0.0;
     if meetings.memory_bytes != 0 {
         let per_participant = meetings.memory_bytes as f64 / size * MEMORY_HEADROOM;
         let memory_participants = floor(deployment.memory_mib as f64 * MIB / per_participant)?;
@@ -206,8 +213,30 @@ pub(super) fn project(ceilings: &Ceilings, deployment: Deployment) -> Result<Pro
             participants = memory_participants;
             limited_by = "memory";
         }
+        needed = per_participant * participants as f64;
     }
+    for (name, ceiling) in ceilings {
+        if name == "meetings" || ceiling.memory_bytes == 0 {
+            continue;
+        }
+        let spread = deployment.workers() as f64 / ceiling.workers.max(1) as f64;
+        let scale = if name == "webinar" {
+            spread.max(1.0)
+        } else {
+            1.0
+        };
+        needed = needed.max(ceiling.memory_bytes as f64 * scale * MEMORY_HEADROOM);
+    }
+    let memory_limit_mib = if needed != 0.0 {
+        let rounded = (needed / MIB / 256.0).ceil() * 256.0;
+        floor(rounded)?.max(512).min(deployment.memory_mib)
+    } else {
+        0
+    };
     Ok(Projection {
+        per_core,
+        cpu_participants,
+        memory_limit_mib,
         participants,
         limited_by,
         mbps_per_participant: meetings.egress_mbps / size,
@@ -215,18 +244,18 @@ pub(super) fn project(ceilings: &Ceilings, deployment: Deployment) -> Result<Pro
 }
 
 #[derive(Debug)]
-pub(super) struct Suggestion {
-    pub(super) deployment: Deployment,
-    pub(super) meetings: i64,
-    pub(super) meeting_limit: &'static str,
-    pub(super) viewers: i64,
-    pub(super) viewer_limit: &'static str,
-    pub(super) room: i64,
-    pub(super) connections: i64,
+pub(crate) struct Suggestion {
+    pub(crate) deployment: Deployment,
+    pub(crate) meetings: i64,
+    pub(crate) meeting_limit: &'static str,
+    pub(crate) viewers: i64,
+    pub(crate) viewer_limit: &'static str,
+    pub(crate) room: i64,
+    pub(crate) connections: i64,
 }
 
 impl Suggestion {
-    pub(super) fn settings(&self) -> Vec<String> {
+    pub(crate) fn settings(&self) -> Vec<String> {
         let deployment = self.deployment;
         vec![
             format!("SIMPLESTCHAT_CPUS={}", general(deployment.cpus)),
@@ -249,22 +278,33 @@ impl Suggestion {
     }
 }
 
-pub(super) fn suggest(
+/// Host resources left after the proxy, database and system reserve.
+pub(crate) fn deployment(
+    host_cpus: i64,
+    host_mib: i64,
+    cpus: Option<f64>,
+    memory: Option<i64>,
+) -> Result<Deployment> {
+    let reserve = 1024.max((host_mib as f64 * 0.25) as i64);
+    let result = Deployment {
+        cpus: cpus
+            .filter(|value| *value != 0.0)
+            .unwrap_or((host_cpus as f64 - 1.0).max(1.0)),
+        memory_mib: memory
+            .filter(|value| *value != 0)
+            .unwrap_or((host_mib - reserve).max(512)),
+    };
+    ensure!(result.cpus.is_finite(), "app CPUs must be finite");
+    Ok(result)
+}
+
+pub(crate) fn suggest(
     host: Host,
     ceilings: &Ceilings,
     cpus: Option<f64>,
     memory: Option<i64>,
 ) -> Result<Suggestion> {
-    let reserve = 1024.max((host.memory_mib as f64 * 0.25) as i64);
-    let deployment = Deployment {
-        cpus: cpus
-            .filter(|value| *value != 0.0)
-            .unwrap_or((host.vcpus as f64 - 1.0).max(1.0)),
-        memory_mib: memory
-            .filter(|value| *value != 0)
-            .unwrap_or((host.memory_mib - reserve).max(512)),
-    };
-    ensure!(deployment.cpus.is_finite(), "app CPUs must be finite");
+    let deployment = deployment(host.vcpus, host.memory_mib, cpus, memory)?;
     let projection = project(ceilings, deployment)?;
     let mut meetings = projection.participants;
     let mut meeting_limit = projection.limited_by;

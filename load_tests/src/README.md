@@ -19,7 +19,8 @@ For commands, options, and report definitions, see the
 | `lib.rs`, `report/` | Offline bounded diagnostic readers and report command; no workload or runtime startup |
 | `report/lifecycle*.rs` | Calendar/phase anchors, strict marker decoding, anonymous lifecycle state, private file/stream bounds |
 | `report/media*.rs`, `report/receiver_stall*.rs` | Strict snapshot/identity validation, independently clocked counter and stall correlation, bounded offline inputs |
-| `capacity.rs`, `capacity/` | Offline host suggestions and ranked cost comparisons, typed resource/workload policy, bounded calibration JSON and Python-reference parity |
+| `capacity.rs`, `capacity/` | Offline host suggestions and ranked cost comparisons, shared resource/workload policy, bounded calibration JSON and Python-reference parity |
+| `capacity_run/` | Explicit isolated host measurements: workload/search policy, CPU windows, owned process/container cleanup, bounded artifacts, typed reports and fake-engine/oracle regressions |
 | `metrics.rs` | Counters, signaling histograms, diagnostic collection |
 | `metrics/measurement.rs` | Shared interval, per-attempt readiness/coverage, consumer delivery checks |
 | `subscriptions.rs` | Bounded discovery deduplication, pending queues, and consumer-cap refill (tests in `subscriptions_tests.rs`) |

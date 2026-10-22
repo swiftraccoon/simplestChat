@@ -1,6 +1,6 @@
 //! Python's report formats: six-significant-digit `g`, fixed and grouped decimals.
 
-pub(super) fn general(value: f64) -> String {
+pub(crate) fn general(value: f64) -> String {
     if !value.is_finite() {
         return repr(value);
     }
@@ -26,7 +26,7 @@ fn trim(mut value: String) -> String {
     value
 }
 
-pub(super) fn repr(value: f64) -> String {
+pub(crate) fn repr(value: f64) -> String {
     if value.is_nan() {
         return "nan".into();
     }
@@ -45,7 +45,7 @@ pub(super) fn repr(value: f64) -> String {
     }
 }
 
-pub(super) fn grouped(value: f64) -> String {
+pub(crate) fn grouped(value: f64) -> String {
     let text = format!("{value:.0}");
     let mut result = String::new();
     let (sign, digits) = text

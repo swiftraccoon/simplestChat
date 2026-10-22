@@ -467,11 +467,12 @@ The [load-test binary](../load_tests/README.md#build-and-run) provides offline
 `capacity suggest` and `capacity compare` commands for sizing hosts and ranking
 the same workload's reports. They read local files and calculate recommendations
 without starting a runtime, server, container or workload. Their output matches
-the retained [`build/capacity.py`](../build/capacity.py) reference, which still
-provides the measured `run` and the managed deployment's calculation API.
+the retained [`build/capacity.py`](../build/capacity.py) reference and the managed
+deployment's calculation API.
 
-Measuring a host needs Docker or Podman and Python 3.10 or later on Linux
-(Podman's VM on a Mac works for trials). Python `run` starts the
+The same binary provides `capacity run` for explicit measurements. It needs
+Docker or Podman and the built images on Linux (Podman's VM on a Mac works for
+trials). `run` starts the
 production image as an owned, loopback-only container under a CPU quota and the
 load-test image in its network namespace with the [browser
 profile](../load_tests/README.md#the-browser-profile), which models the web
@@ -520,7 +521,7 @@ the ceiling, which the guard enforces by refusing joins that clients retry.
 ```sh
 podman build --target production -t localhost/simplestchat-production:dev .
 podman build --target loadtest -t localhost/simplestchat-loadtest:dev .
-python3 build/capacity.py run --server-image localhost/simplestchat-production:dev \
+./target/release/load_test capacity run --server-image localhost/simplestchat-production:dev \
   --generator-image localhost/simplestchat-loadtest:dev \
   --label example-vps --monthly-price 6.80 \
   --egress-price-per-gb 0.01 --included-egress-tb 20
@@ -535,8 +536,25 @@ Use `--env` to print only environment settings. Both offline commands retain
 the original CPU, memory, port-headroom and workload-shape policy. Calibration
 reads preserve the reference's 128 MiB regular-file bound and refuse final
 symlinks; numeric tokens retain Python rounding and its legacy nonfinite JSON
-values. The old Python workload runner and Ansible filter remain the reference
-for subsequent migration work.
+values. The Python runner and Ansible filter remain the reference, including
+for the managed remote controller. The Rust run policy is checked against the
+Python parser, judging, search, report, projection and pricing fixtures; its
+process and container ownership tests use fake engines rather than a live load.
+
+Measured runs create fresh private directories, journal creation intent and
+immutable IDs, and inspect the exact name, image and run label before stopping
+or removing a container. Both verified containers are stopped before artifact
+transfer. Interruption preserves completed observations, marks incomplete
+windows invalid, writes a partial calibration and attempts both removals; an
+uncertain identity stays in the ownership journal.
+The engine process has bounded concurrent stdout/stderr and a reserved process
+group, including when its future is dropped. Artifact transfer is capped at
+144 MiB; a maintained streaming tar parser admits only the documented summary
+and client-result basenames after validating the whole archive. Headers, PAX
+metadata and result bodies have separate limits; links, sparse entries and
+duplicate PAX keys are refused. Malformed counter overflows and invalid quotas
+fail before they can become measurements. No file from an incomplete transfer
+is treated as a valid result.
 
 The default remains five-person audio/video meetings with one active speaker
 per room and no chat traffic. To measure thirty continuously active microphones
@@ -550,7 +568,7 @@ On a dedicated six-vCPU test host, an initial single-room measurement can give
 the server one CPU and one worker, leaving 4.8 CPUs to the generator:
 
 ```sh
-python3 build/capacity.py run --server-image localhost/simplestchat-production:dev \
+./target/release/load_test capacity run --server-image localhost/simplestchat-production:dev \
   --generator-image localhost/simplestchat-loadtest:dev \
   --workloads meetings --meeting-size 30 --first-size 30 --steps 1 \
   --audio-only --speakers 30 --chat-interval-ms 30000 \

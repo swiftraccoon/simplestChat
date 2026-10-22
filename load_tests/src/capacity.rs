@@ -1,4 +1,4 @@
-//! Offline host suggestions and cost comparisons; no runtime or workload side effects.
+//! Capacity command dispatch; suggest/compare remain offline and run is explicit.
 
 use anyhow::{Result, ensure};
 use std::ffi::OsString;
@@ -6,9 +6,9 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-mod format;
-mod json;
-mod model;
+pub(crate) mod format;
+pub(crate) mod json;
+pub(crate) mod model;
 mod presentation;
 #[cfg(test)]
 mod tests;
@@ -16,7 +16,8 @@ mod tests;
 const USAGE: &str = "Usage: load_test capacity suggest --vcpus N --memory-gib GIB \
 [--port-mbps MBPS] [--calibration PATH] [--included-egress-tb TB] \
 [--app-cpus CPUS] [--app-memory-mib MIB] [--env]\n\
-       load_test capacity compare REPORT.json [REPORT.json ...]";
+       load_test capacity compare REPORT.json [REPORT.json ...]\n\
+       load_test capacity run --server-image IMAGE --generator-image IMAGE [OPTIONS]";
 
 #[derive(Default)]
 struct Options {
@@ -154,8 +155,11 @@ fn execute(command: Command) -> Result<String> {
     }
 }
 
-/// Run pure sizing or report comparison without starting Tokio or any workload.
+/// Dispatch capacity commands; only an explicit `run` starts the measurement runtime.
 pub fn run(arguments_: &[OsString]) -> ExitCode {
+    if arguments_.first().is_some_and(|value| value == "run") {
+        return crate::capacity_run::run(&arguments_[1..]);
+    }
     if arguments_
         .iter()
         .any(|argument| argument == "--help" || argument == "-h")

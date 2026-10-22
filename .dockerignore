@@ -75,6 +75,9 @@ load_tests/src/report/**
 !load_tests/src/capacity/
 load_tests/src/capacity/**
 !load_tests/src/capacity/*.rs
+!load_tests/src/capacity_run/
+load_tests/src/capacity_run/**
+!load_tests/src/capacity_run/*.rs
 !xtask/
 xtask/**
 !xtask/Cargo.toml

@@ -17,7 +17,7 @@ use std::path::Path;
 const MAX_RESULT: u64 = 128 * 1024 * 1024;
 
 #[derive(Clone, Debug)]
-pub(super) enum Json {
+pub(crate) enum Json {
     Null,
     Bool(bool),
     Number(String),
@@ -27,7 +27,7 @@ pub(super) enum Json {
 }
 
 impl Json {
-    pub(super) fn object(&self, what: &str) -> Result<&BTreeMap<String, Self>> {
+    pub(crate) fn object(&self, what: &str) -> Result<&BTreeMap<String, Self>> {
         if let Self::Object(value) = self {
             Ok(value)
         } else {
@@ -35,7 +35,15 @@ impl Json {
         }
     }
 
-    pub(super) fn number(&self, what: &str) -> Result<f64> {
+    pub(crate) fn array(&self, what: &str) -> Result<&[Self]> {
+        if let Self::Array(value) = self {
+            Ok(value)
+        } else {
+            anyhow::bail!("{what} must be a JSON list")
+        }
+    }
+
+    pub(crate) fn number(&self, what: &str) -> Result<f64> {
         if let Self::Number(value) = self {
             Ok(match value.as_str() {
                 "NaN" => f64::NAN,
@@ -48,7 +56,7 @@ impl Json {
         }
     }
 
-    pub(super) fn integer(&self, what: &str) -> Result<i64> {
+    pub(crate) fn integer(&self, what: &str) -> Result<i64> {
         let number = self.number(what)?;
         ensure!(
             number.is_finite() && number >= i64::MIN as f64 && number < -(i64::MIN as f64),
@@ -57,7 +65,7 @@ impl Json {
         Ok(number as i64)
     }
 
-    pub(super) fn string(&self) -> Option<&str> {
+    pub(crate) fn string(&self) -> Option<&str> {
         if let Self::String(value) = self {
             Some(value)
         } else {
@@ -65,11 +73,11 @@ impl Json {
         }
     }
 
-    pub(super) fn is_true(&self) -> bool {
+    pub(crate) fn is_true(&self) -> bool {
         matches!(self, Self::Bool(true))
     }
 
-    pub(super) fn get(&self, key: &str) -> Option<&Self> {
+    pub(crate) fn get(&self, key: &str) -> Option<&Self> {
         if let Self::Object(value) = self {
             value.get(key)
         } else {
@@ -77,7 +85,7 @@ impl Json {
         }
     }
 
-    pub(super) fn display(&self) -> String {
+    pub(crate) fn display(&self) -> String {
         match self {
             Self::Null => "None".into(),
             Self::Bool(value) => if *value { "True" } else { "False" }.into(),
@@ -121,7 +129,7 @@ impl Index<&str> for Json {
     }
 }
 
-pub(super) fn read(path: &Path) -> Result<Json> {
+pub(crate) fn read(path: &Path) -> Result<Json> {
     let file = File::from(open(
         path,
         OFlag::O_RDONLY | OFlag::O_NOFOLLOW | OFlag::O_NONBLOCK | OFlag::O_CLOEXEC,
@@ -195,7 +203,7 @@ fn numeric(token: &str) -> bool {
     position == bytes.len()
 }
 
-pub(super) fn parse(bytes: &[u8]) -> Result<Json> {
+pub(crate) fn parse(bytes: &[u8]) -> Result<Json> {
     let bytes = bytes.strip_prefix(&[0xef, 0xbb, 0xbf]).unwrap_or(bytes);
     let source = std::str::from_utf8(bytes)?;
     let mut strings = BTreeSet::new();

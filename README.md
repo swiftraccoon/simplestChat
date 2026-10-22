@@ -60,12 +60,13 @@ This default update waits for successful CI and verifies its signed artifact.
 An explicitly requested deployment without that wait uses
 [`--force`](ops/ansible/RELEASES.md#explicit-force-deployment).
 
-Preview host sizing before provisioning. For a plain Compose deployment, follow
+Preview host sizing before provisioning with the [built load-test binary](load_tests/README.md#build-and-run).
+For a plain Compose deployment, follow
 the [deployment guide](docs/deployment.md#production-setup), which covers the private
 configuration file, database or guest-room policy, and HTTPS proxy.
 
 ```sh
-python3 build/capacity.py suggest --vcpus 4 --memory-gib 8 --included-egress-tb 5
+./target/release/load_test capacity suggest --vcpus 4 --memory-gib 8 --included-egress-tb 5
 ```
 
 ## Project guide

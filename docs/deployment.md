@@ -216,7 +216,7 @@ The [built load-test binary](../load_tests/README.md#build-and-run), invoked as
 `MEDIA_WORKERS`, `SIMPLESTCHAT_CPUS`, `SIMPLESTCHAT_MEMORY_LIMIT`,
 `MAX_CONNECTIONS`, `MAX_ROOMS` and `RTC_PORT_END` for that host with what they
 carry per room shape, from ceilings measured on a 4-vCPU reference VPS or from a
-`build/capacity.py run` report of your own host, which also gives
+`load_test capacity run` report of your own host, which also gives
 `MAX_PARTICIPANTS_PER_ROOM` and the socket-buffer sysctls
 ([sizing a host](performance.md#sizing-a-host)). The managed deployment derives
 the same numbers from the host's facts and the inventory overrides any of them

@@ -392,3 +392,23 @@ shrinks from 41 to 31 groups: exact bit-vec 0.8.0, foldhash 0.1.5 and hashbrown
 0.15.5 branches follow bit-set 0.8 and string-interner 0.19's published constraints.
 Nineteen obsolete version exemptions are removed from `deny.toml`; no wildcard
 version or source exemption is added.
+
+### Capacity artifact archive reader (2026-10-21)
+
+The load generator pins `tar` 0.4.46 with default features disabled. Its
+[seekable entry reader](https://docs.rs/tar/0.4.46/tar/struct.Archive.html#method.entries_with_seek)
+validates tar/PAX metadata; the application never calls an unpack operation or
+applies archive paths, ownership, modes or timestamps to the host. Physical
+headers are bounded before extended metadata is parsed: eight headers, eight
+KiB per PAX body, 144 MiB per archive, 128 MiB per result file and eight MiB per
+summary. Exactly the fixed result basenames may be written, through a fresh
+0700 directory descriptor and exclusive 0600 files. Required members, types,
+duplicate names and terminal blocks are checked before any result is written;
+the host manifest is published after successful transfer, validation and hashes.
+
+Links, sparse entries, ambiguous duplicate PAX keys and path redirection are
+refused. The duplicate-key refusal is deliberate: the retained Python reader
+uses the last PAX value, while this tar reader uses the first. Ordinary tar/PAX
+fixtures retain reference parity. Tests use owned archives, including metadata
+and size attacks; they do not contact an engine. This dependency assessment
+adds no advisory or license exception.
