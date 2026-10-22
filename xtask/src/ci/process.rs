@@ -67,16 +67,21 @@ impl<'a> Native<'a> {
         mut request: Command,
         finalizer: &impl Finalizer,
     ) -> Result<Vec<u8>> {
+        let mdns = request.mdns.clone();
+        let mdns_admission = mdns.as_ref().map(|v| v.begin()).transpose();
         let (io, admission) = OwnedIo::take(&mut request);
         let owned_io = io.combined.is_some() || io.separate.is_some() || io.input.is_some();
         let cleanup = request.cleanup;
-        let result = match admission {
+        let result = match admission.and(mdns_admission.map(|_| ())) {
             Ok(()) => self.execute_body(request, &io, finalizer).await,
             Err(error) => Err(error),
         };
         // This runs on setup/spawn errors too. A body-local Group guard finishes
         // its fallback before these bounded EOF and explicit-close attempts.
         let closed = io.finish().await;
+        if let Some(mdns) = mdns {
+            mdns.closed(closed.is_ok());
+        }
         let output = result?;
         closed?;
         if owned_io && !cleanup {
@@ -226,21 +231,28 @@ impl<'a> Native<'a> {
             };
             Ok::<_, Failure>(bytes)
         };
+        let mut mdns_timeout = false;
+        let mut mdns_interrupted = None;
         let outcome = if request.cleanup {
             match tokio::time::timeout(request.timeout, completed).await {
                 Ok(result) => result,
-                Err(_) => Err(Failure::new(124, "Production image command timed out.")),
+                Err(_) => {
+                    mdns_timeout = true;
+                    Err(Failure::new(124, "Production image command timed out."))
+                }
             }
         } else {
             tokio::select! {
                 biased;
                 code = self.signals.next() => {
                     self.interrupted = Some(code);
+                    mdns_interrupted=Some(code);
                     Err(Failure::new(code,"Production image command interrupted."))
                 },
                 result = tokio::time::timeout(request.timeout,completed) => match result {
                     Ok(result)=>result,
-                    Err(_)=>Err(Failure::new(124,"Production image command timed out.")),
+                    Err(_)=>{mdns_timeout=true;
+                        Err(Failure::new(124,"Production image command timed out."))},
                 },
             }
         };
@@ -262,6 +274,17 @@ impl<'a> Native<'a> {
         let (cleaned, reaped) = finalizer.finish(&mut group).await;
         if cleaned && reaped.is_ok() {
             self.cleanup_passed = prior_cleanup;
+        }
+        if let Some(mdns) = &request.mdns {
+            mdns.outcome(
+                reaped
+                    .as_ref()
+                    .ok()
+                    .and_then(std::process::ExitStatus::code),
+                mdns_timeout,
+                mdns_interrupted,
+                cleaned && reaped.is_ok(),
+            );
         }
         // Preserve a known timeout/interruption even if terminal observation or
         // reap subsequently fails. Unproven cleanup remains a sticky false flag.
@@ -397,6 +420,7 @@ fn executable(request: &Command) -> Result<&std::ffi::OsStr> {
         request.comparison.is_some(),
         request.zstd.is_some(),
         request.load_image.is_some(),
+        request.mdns.is_some(),
     ]
     .into_iter()
     .filter(|present| *present)
@@ -414,6 +438,12 @@ fn executable(request: &Command) -> Result<&std::ffi::OsStr> {
             | Program::ComparisonCargo
             | Program::ComparisonBenchmark
             | Program::Zstd
+            | Program::MdnsInterfaces
+            | Program::MdnsPlist
+            | Program::MdnsLaunch
+            | Program::MdnsLogs
+            | Program::MdnsCompiler
+            | Program::MdnsProbe
     );
     if proofs == 0 && !selected {
         return Ok(std::ffi::OsStr::new(request.program.name()));
@@ -432,6 +462,15 @@ fn executable(request: &Command) -> Result<&std::ffi::OsStr> {
         Program::CargoAudit => request.executable.as_ref().map(|value| value.validate()),
         Program::Node => request.node.as_ref().map(|value| value.validate()),
         Program::Zstd => request.zstd.as_ref().map(|value| value.validate()),
+        Program::MdnsInterfaces
+        | Program::MdnsPlist
+        | Program::MdnsLaunch
+        | Program::MdnsLogs
+        | Program::MdnsCompiler
+        | Program::MdnsProbe => request
+            .mdns
+            .as_ref()
+            .map(|value| value.validate(request.program)),
         Program::DtlsPython => request.dtls.as_ref().map(|value| value.validate(false)),
         Program::DtlsWorker => request.dtls.as_ref().map(|value| value.validate(true)),
         Program::OpsCargo => request

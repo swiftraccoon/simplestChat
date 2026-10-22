@@ -53,6 +53,7 @@ Commands:
                 container-smoke checks immutable production startup and database assertions.
                 validate-config runs fixed Promtool or Caddy validation in an owned container.
                 load-generator-image builds and retains the unsigned manual generator image.
+                mdns owns the opt-in macOS service snapshot and disposable registration diagnostic.
                 database-check runs monitoring, restore or migration in owned PostgreSQL.
                 session-soak supervises the fixed workload and runner-owned database outage.
                 performance-compare owns the three builds, worktree and fixed six-run comparison.

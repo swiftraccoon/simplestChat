@@ -359,6 +359,79 @@ are explicitly closed. These are source scheduling/refusal bounds, not hard OS,
 filesystem, reap or cold-build guarantees. The real server/network path remains
 unmeasured by the inert oracle and fake-host checks.
 
+### Opt-in macOS mDNS diagnostics
+
+On an explicitly selected Mac, `MDNS_DIAGNOSTIC_E2E=1`, `TEST_ANNOUNCE_IP`
+(an assigned IPv4 address) and a private `E2E_ARTIFACTS` directory enable:
+
+```sh
+cargo run --locked -q -p xtask -- ci mdns preflight --artifact-only
+cargo run --locked -q -p xtask -- ci mdns snapshot --artifact-only
+```
+
+The complete controller retains the original C registration probe and JavaScript
+as references. It reads `/sbin/ifconfig -a`, the fixed system mDNS plist, only an
+allowlisted launchctl label, and the original narrowly scoped unified-log query.
+Interface counts follow Node 26's BSD adapter: IPv4 records on interfaces with
+both `UP` and `RUNNING`, including aliases; `LOOPBACK` determines whether a record
+is internal, matching the pinned Node 26.10.0
+[BSD adapter](https://github.com/nodejs/node/blob/v26.10.0/deps/uv/src/unix/bsd-ifaddrs.c).
+Only bounded names/flags determine eligibility; optional metric/MTU/tail text is
+not treated as address ownership. No address-range heuristic substitutes for
+those flags. Preflight
+then invokes the selected `/usr/bin/cc` with the original literal flags, and the
+fresh probe with an assigned address and random UUID. The probe keeps its own
+five-second registration deadline and explicit deallocation observation. C source
+bytes are bounded, retained and rehashed around compilation/finalization; selected
+tool metadata and paths are revalidated. These are optimistic local observations,
+not authentication of a compiler, SDK or installed runtime.
+
+Both modes preserve system-before-registration ordering and write only fixed
+stages, numeric errors, interface counts and timestamps. The shared artifact
+directory may contain browser reports; fixed `mdns-*-results.json` files use
+exclusive anchored creation with mode 0600, without replacing prior evidence.
+Raw command stdout/stderr each have a 512 KiB limit in a fresh private temporary
+directory outside the upload directory. All admitted CLI groups, captures, source
+and executable descriptors settle, and exact temporary cleanup is attempted,
+before `passed` is computed. A selected temporary parent equal to or beneath the
+physical artifact directory is refused, including symlink aliases.
+Unknown entries or replacements prevent success;
+foreign names are never recursively removed. The report is a prepublication
+observation: its own final write/close, a later signal or the final deadline can
+still fail. CLI zero is authoritative, not a durable successful-close receipt.
+
+Artifact-only mode has a 55-second internal policy beneath the unchanged
+one-minute CI steps. Only one CLI is active at a time. Each admission deducts
+25 seconds for that child's settlement and five for files/final fences, then
+clips the original 5/15/8-second command caps to remaining body time. The nominal
+Darwin child tail is grace 1, inventory/settlement 7, terminal observation 5,
+armed fallback 5 and parallel pipe completion 3 seconds. Original full preflight
+caps including interface inspection sum 43 seconds; the 25-second active window
+does not promise they all fit. Earlier completed commands release their slots;
+short remaining time refuses with 124. Local mode without `--artifact-only`
+keeps JSON stdout through the existing owned replay, reserves its 25-second slot
+and uses a 90-second entry policy. These are scheduling/admission allowances,
+not hard bounds on the OS, filesystem, reap, SDK compilation or cold CI startup.
+The existing pinned Rust bootstrap precedes both workflow calls.
+The caller directory is captured once: relative artifact/TMPDIR paths and PATH
+entries use it, while the retained C source stays anchored in the workspace.
+
+Ordinary command failures remain diagnostic observations and do not skip later
+reads/probes when time and cleanup proof permit. Actual exit 124 does not imply
+`timedOut`; a private closed-role Native record distinguishes observed timeout,
+interruption, settled exit, group cleanup and pipe finalization. Native timeout,
+INT and TERM return 124/130/143 as explicit corrections to the reference's
+generic failure status. Known earlier failures remain primary. Supported input
+adds bounded finite UTF-8 numeric JSON, finite ifconfig grammar/counts and safe
+integer counters; malformed encodings, numeric overflow and surrogate-only
+strings may refuse even if JavaScript could parse them. Unknown private fields
+are omitted. C source is at most 64 KiB, an interface listing has at most 4096
+headers/IPv4 records and 4096 bytes per line, names at most 64 bytes, log input
+at most 32769 split lines and 4096 distinct codes per category, and the sanitized
+record at most 128 KiB. The byte-retained actual JS/tests, fake compiler/system adapters,
+virtual clocks and inert Native children cover source behavior; real mDNS, OS
+snapshot, C compilation, registration and hosted runtime are unmeasured here.
+
 ## Disposable PostgreSQL and browser tests
 
 The owned test environment is a Rust command: `cargo run -q -p xtask -- test-env`

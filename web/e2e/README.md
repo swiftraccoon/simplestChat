@@ -414,6 +414,15 @@ stages, numeric error counts and interface counts are retained; raw logs,
 addresses and host names are discarded. These mDNS diagnostics change no OS or
 browser settings.
 
+The two mDNS workflow steps now use `cargo run --locked -q -p xtask -- ci mdns
+preflight|snapshot --artifact-only`. Both modes are one owned Rust transaction;
+the original `build/test-mdns.mjs` and native C probe remain byte-retained
+references. Existing opt-in, assigned-address, private artifact names, ordering
+and one-minute steps are preserved. Remaining-time admission can refuse with
+124; no cold compiler/runtime timing is asserted. Local callers can omit
+`--artifact-only` for bounded JSON stdout under a 90-second entry policy. See
+`docs/testing.md` for cleanup, privacy, parser and scheduling boundaries.
+
 A separate WebKit comparison explicitly disables `ICECandidateFilteringEnabled`
 for each fresh owned test page using the pinned browser's Inspector protocol.
 Its requested and applied setting is recorded separately from the unchanged

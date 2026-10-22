@@ -22,6 +22,12 @@ pub(super) enum Program {
     ComparisonCargo,
     ComparisonBenchmark,
     Zstd,
+    MdnsInterfaces,
+    MdnsPlist,
+    MdnsLaunch,
+    MdnsLogs,
+    MdnsCompiler,
+    MdnsProbe,
 }
 impl Program {
     pub(super) fn name(self) -> &'static str {
@@ -43,6 +49,12 @@ impl Program {
             Self::ComparisonCargo => "cargo",
             Self::ComparisonBenchmark => "load_test",
             Self::Zstd => "zstd",
+            Self::MdnsInterfaces => "/sbin/ifconfig",
+            Self::MdnsPlist => "/usr/bin/plutil",
+            Self::MdnsLaunch => "/bin/launchctl",
+            Self::MdnsLogs => "/usr/bin/log",
+            Self::MdnsCompiler => "/usr/bin/cc",
+            Self::MdnsProbe => "owned-mdns-probe",
         }
     }
 }
@@ -84,6 +96,7 @@ pub(super) struct Command {
     /// Matching manual-owner Git/Docker role. Legacy bare requests stay valid;
     /// that owner's capture boundary must attach its selected proof every time.
     pub load_image: Option<std::sync::Arc<super::load_generator_image::tools::Invocation>>,
+    pub mdns: Option<std::sync::Arc<super::mdns::tools::Invocation>>,
 }
 impl Command {
     pub(super) fn capture(program: Program, args: &[&str]) -> Self {
@@ -106,6 +119,7 @@ impl Command {
             comparison: None,
             zstd: None,
             load_image: None,
+            mdns: None,
         }
     }
 }

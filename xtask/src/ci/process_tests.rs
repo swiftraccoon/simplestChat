@@ -1045,3 +1045,158 @@ async fn factored_replay_refuses_missing_proof_or_pending_outcome_without_dispat
         assert!(!fixture.path.join("dispatched").exists());
     }
 }
+
+#[tokio::test]
+async fn mdns_evidence_distinguishes_actual_exit124_from_observed_timeout() {
+    use crate::ci::mdns::tools::{FixtureTool, Role};
+    for timed_out in [false, true] {
+        let fixture = Fixture::new(if timed_out { IDLE } else { "sys.exit(124)" });
+        let proof = FixtureTool::new(Role::Probe, &fixture.path.join("docker")).unwrap();
+        let (mut command, descriptors) = fixture.separate(128, 128);
+        command.program = Program::MdnsProbe;
+        command.mdns = Some(proof.invocation.clone());
+        if timed_out {
+            command.timeout = Duration::from_millis(250);
+        }
+        let mut native = fixture.native(signals());
+        assert_eq!(native.run(command).await.unwrap_err().code, 124);
+        let observed = proof.invocation.observed().unwrap();
+        assert!(observed.settled && observed.group_closed && observed.io_closed);
+        assert_eq!(observed.timed_out, timed_out);
+        if !timed_out {
+            assert_eq!(observed.exit, Some(124));
+        }
+        assert_eq!(observed.interrupted, None);
+        closed(&descriptors);
+        proof.finish().unwrap();
+    }
+}
+
+#[tokio::test]
+async fn mdns_admission_spawn_and_final_stream_failures_never_acquire_clean_evidence() {
+    use crate::ci::mdns::tools::{FixtureTool, Role};
+    for mode in ["missing", "role", "spawn", "stream"] {
+        let fixture = Fixture::new("os.write(1,b'FINAL!');sys.exit(42)");
+        if mode == "spawn" {
+            // A missing literal interpreter fails spawn without depending on
+            // platform-specific ENOEXEC shell fallback for an unknown format.
+            fs::write(
+                fixture.path.join("docker"),
+                b"#!/no/such/mdns-fixture-interpreter\n",
+            )
+            .unwrap();
+        }
+        let proof = FixtureTool::new(Role::Probe, &fixture.path.join("docker")).unwrap();
+        let (mut command, descriptors) = fixture.separate(128, 128);
+        command.program = if mode == "role" {
+            Program::MdnsCompiler
+        } else {
+            Program::MdnsProbe
+        };
+        if mode != "missing" {
+            command.mdns = Some(proof.invocation.clone());
+        }
+        let mut native = fixture.native(signals());
+        let result = if mode == "stream" {
+            native
+                .execute_with(command, &ChangeFinalLog(fixture.path.join("stdout.bin")))
+                .await
+        } else {
+            native.run(command).await
+        };
+        assert_eq!(
+            result.unwrap_err().code,
+            match mode {
+                "stream" => 42,
+                "spawn" => 127,
+                _ => 1,
+            }
+        );
+        let evidence = proof.invocation.observed().unwrap();
+        if mode == "stream" {
+            assert!(evidence.settled && evidence.group_closed && !evidence.io_closed);
+            assert_eq!(evidence.exit, Some(42));
+        } else {
+            assert!(!evidence.settled && !evidence.group_closed);
+        }
+        assert!(!evidence.timed_out);
+        closed(&descriptors);
+        proof.finish().unwrap();
+    }
+}
+
+#[tokio::test]
+async fn mdns_proofs_refuse_extra_capsules_reuse_and_changed_selected_binding() {
+    use crate::ci::mdns::tools::{FixtureTool, Role};
+    for mode in ["extra", "reuse", "replacement"] {
+        let fixture = Fixture::new("(root/'dispatched').write_text('unexpected')");
+        let proof = FixtureTool::new(Role::Probe, &fixture.path.join("docker")).unwrap();
+        let (mut command, descriptors) = fixture.separate(128, 128);
+        command.program = Program::MdnsProbe;
+        command.mdns = Some(proof.invocation.clone());
+        let extra = if mode == "extra" {
+            Some(Arc::new(
+                crate::ci::release_checks::files::Executable::open(&fixture.path.join("docker"))
+                    .unwrap(),
+            ))
+        } else {
+            None
+        };
+        command.node = extra.clone();
+        if mode == "reuse" {
+            proof.invocation.begin().unwrap();
+        }
+        if mode == "replacement" {
+            fs::rename(fixture.path.join("docker"), fixture.path.join("retained")).unwrap();
+            fs::write(fixture.path.join("docker"), b"#!/bin/sh\nexit 0\n").unwrap();
+            fs::set_permissions(
+                fixture.path.join("docker"),
+                fs::Permissions::from_mode(0o700),
+            )
+            .unwrap();
+        }
+        let mut native = fixture.native(signals());
+        assert_eq!(native.run(command).await.unwrap_err().code, 1);
+        assert!(!fixture.path.join("dispatched").exists());
+        if mode == "reuse" {
+            proof.invocation.outcome(Some(0), false, None, true);
+            proof.invocation.closed(true);
+            assert!(proof.invocation.observed().is_err());
+        } else {
+            let observed = proof.invocation.observed().unwrap();
+            assert!(!observed.settled);
+            assert!(observed.io_closed);
+        }
+        if let Some(extra) = extra {
+            Arc::try_unwrap(extra).unwrap().close().unwrap();
+        }
+        closed(&descriptors);
+        proof.finish().unwrap();
+    }
+}
+
+#[tokio::test]
+async fn mdns_actual_interruption_stays_distinct_after_group_and_pipe_settlement() {
+    use crate::ci::mdns::tools::{FixtureTool, Role};
+    for code in [130, 143] {
+        let fixture = Fixture::new(IDLE);
+        let proof = FixtureTool::new(Role::Probe, &fixture.path.join("docker")).unwrap();
+        let (mut command, descriptors) = fixture.separate(128, 128);
+        command.program = Program::MdnsProbe;
+        command.mdns = Some(proof.invocation.clone());
+        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+        let mut native = fixture.native(Signals::injected(receiver));
+        let cancel = async {
+            ready(&fixture.path.join("ready")).await;
+            sender.send(code).unwrap();
+        };
+        let (result, ()) = tokio::join!(native.run(command), cancel);
+        assert_eq!(result.unwrap_err().code, code);
+        let evidence = proof.invocation.observed().unwrap();
+        assert_eq!(evidence.interrupted, Some(code));
+        assert!(!evidence.timed_out);
+        assert!(evidence.settled && evidence.group_closed && evidence.io_closed);
+        closed(&descriptors);
+        proof.finish().unwrap();
+    }
+}

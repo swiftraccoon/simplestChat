@@ -30,6 +30,7 @@ mod inputs;
 mod install_compose;
 mod io;
 mod load_generator_image;
+mod mdns;
 mod native_dtls;
 mod native_security;
 mod npm_path;
@@ -61,6 +62,7 @@ const USAGE: &str = "usage: cargo run --locked -q -p xtask -- ci key|save|verify
        cargo run --locked -q -p xtask -- ci container-smoke\n\
        cargo run --locked -q -p xtask -- ci validate-config promtool|caddy\n\
        cargo run --locked -q -p xtask -- ci load-generator-image\n\
+       cargo run --locked -q -p xtask -- ci mdns preflight|snapshot [--artifact-only]\n\
        cargo run --locked -q -p xtask -- ci database-check monitoring|restore|migration\n\
        cargo run --locked -q -p xtask -- ci session-soak\n\
        cargo run --locked -q -p xtask -- ci performance-compare\n\
@@ -323,6 +325,9 @@ pub(crate) fn run_ops_artifact(arguments: &[String]) -> Result<ExitCode> {
 }
 
 pub(crate) fn run(root: &Path, arguments: &[String]) -> Result<ExitCode> {
+    if arguments.first().is_some_and(|arg| arg == "mdns") {
+        return mdns::run(root, &arguments[1..]);
+    }
     if arguments
         .first()
         .is_some_and(|arg| arg == "load-generator-image")

@@ -55,7 +55,7 @@ jobs:
         env:
           MDNS_DIAGNOSTIC_E2E: '1'
           E2E_ARTIFACTS: ${{ runner.temp }}/ice-isolation
-        run: node build/test-mdns.mjs preflight
+        run: cargo run --locked -q -p xtask -- ci mdns preflight --artifact-only
 
       - name: WebKit receive-only ICE
         if: ${{ !cancelled() && steps.tooling.outcome == 'success' }}
@@ -89,7 +89,7 @@ jobs:
         env:
           MDNS_DIAGNOSTIC_E2E: '1'
           E2E_ARTIFACTS: ${{ runner.temp }}/ice-isolation
-        run: node build/test-mdns.mjs snapshot
+        run: cargo run --locked -q -p xtask -- ci mdns snapshot --artifact-only
 
       - name: Preserve both browser reports
         if: ${{ !cancelled() }}

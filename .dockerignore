@@ -176,6 +176,14 @@ xtask/src/ci/config_validation/**
 xtask/src/ci/load_generator_image/**
 !xtask/src/ci/load_generator_image/*.rs
 !xtask/src/ci/load_generator_image/reference-build.sh
+!xtask/src/ci/mdns/
+xtask/src/ci/mdns/**
+!xtask/src/ci/mdns/*.rs
+!xtask/src/ci/mdns/oracle.mjs
+!xtask/src/ci/mdns/reference/
+xtask/src/ci/mdns/reference/**
+!xtask/src/ci/mdns/reference/test-mdns.mjs
+!xtask/src/ci/mdns/reference/test-mdns.test.mjs
 !xtask/src/ci/codeql_cache/
 xtask/src/ci/codeql_cache/**
 !xtask/src/ci/codeql_cache/*.rs

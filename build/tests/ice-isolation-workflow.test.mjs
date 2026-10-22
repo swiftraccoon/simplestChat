@@ -74,7 +74,7 @@ test('owned mDNS preflight and scoped after snapshot preserve diagnostics withou
     assert.ok(diagnostic.includes("if: ${{ !cancelled() && steps.tooling.outcome == 'success' }}"));
     assert.match(diagnostic, /timeout-minutes: 1/);
     assert.match(diagnostic, /MDNS_DIAGNOSTIC_E2E: '1'/);
-    assert.ok(diagnostic.includes(`run: node build/test-mdns.mjs ${mode}`));
+    assert.ok(diagnostic.includes(`run: cargo run --locked -q -p xtask -- ci mdns ${mode} --artifact-only`));
     assert.doesNotMatch(diagnostic, /sudo|defaults|killall|capture|continue-on-error/);
   }
   assert.ok(workflow.indexOf('name: Inspect mDNS') < workflow.indexOf('name: WebKit receive-only ICE'));
