@@ -1430,26 +1430,17 @@ jobs:
       contents: read
       security-events: read # Validate stored analyses, including read-only fork PR tokens.
     steps:
-      - name: Require every declared gate to finish successfully
-        env:
-          GATE_RESULTS: ${{ toJSON(needs) }}
-        run: |
-          python3 - <<'PYTHON'
-          import json
-          import os
-          results = json.loads(os.environ["GATE_RESULTS"])
-          expected = {"automation", "rust-lint", "rust-test", "native-dtls", "browser", "web", "image-database", "deployment", "security", "codeql"}
-          if set(results) != expected or any(item["result"] != "success" for item in results.values()):
-              raise SystemExit("A required security or correctness gate failed or did not run")
-          PYTHON
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Install the pinned Rust toolchain for local execution receipts
-        if: ${{ env.ACT }}
+      - name: Install the pinned Rust toolchain for required workflow policy
         uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable (2026-10-01)
         with:
           toolchain: 1.99.0
+      - name: Require every declared gate to finish successfully
+        env:
+          GATE_RESULTS: ${{ toJSON(needs) }}
+        run: cargo run --locked -q -p xtask -- ci required
       - name: Require healthy stored CodeQL analyses for this exact revision
         if: ${{ !env.ACT }}
         env:

@@ -148,12 +148,10 @@ test("local evidence workflow calls the compiled producer with no Python YAML bo
     );
   }
   assert.match(ci, /cargo run --locked -q -p xtask -- ci-evidence complete/);
-  for (const source of [ci.slice(ci.indexOf("\n  required:"))]) {
-    assert.match(
-      source,
-      /Install the pinned Rust toolchain for local execution receipts\n\s+if: \$\{\{ env\.ACT \}\}\n\s+uses: dtolnay\/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d/,
-    );
-  }
+  assert.match(
+    ci.slice(ci.indexOf("\n  required:")),
+    /Install the pinned Rust toolchain for required workflow policy\n\s+uses: dtolnay\/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d/,
+  );
   assert.match(
     codeql,
     /Install the pinned Rust toolchain for compiled cache tooling\n\s+if: \$\{\{ env\.ACT \|\| matrix\.language == 'rust' \}\}\n\s+uses: dtolnay\/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d/,

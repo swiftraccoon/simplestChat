@@ -1824,10 +1824,10 @@
     {
       "scanner": "zizmor",
       "fingerprint": "superfluous-actions:0fb2d712953646c2c07edb9a959b25649b214c63cb1143b35266a007af663b35",
-      "scope": ".github/workflows/ci.yml#jobs/required/steps/2/uses",
+      "scope": ".github/workflows/ci.yml#jobs/required/steps/1/uses",
       "owner": "swiftraccoon",
-      "rationale": "Exact-input CI keys and local execution receipts now run through compiled xtask before native-library setup or cache reuse. The maintained local act image has no rustup, so this immutable installer action is required to bootstrap rustup and install the repository's exact Rust 1.99.0 toolchain.",
-      "reachability": "Reviewed 2026-10-21 for only this exact step and immutable action reference. Checkout disables persisted credentials; the explicit repository-controlled toolchain and the reviewed official HTTPS rustup bootstrap are unchanged. CI key/receipt verification and every source/security gate remain blocking. No artifact, pull-request value or restored cache selects installer source or arguments.",
+      "rationale": "Canonical required-job aggregation now runs through compiled xtask on hosted and local runners before stored-analysis health and local execution evidence. This immutable installer supplies the repository's exact Rust 1.99.0 toolchain, including rustup bootstrap in the maintained local act image.",
+      "reachability": "Re-reviewed 2026-10-21 for this exact moved installer location and unchanged immutable action. Checkout disables persisted credentials; installer arguments remain fixed repository values. The official HTTPS rustup bootstrap boundary and expiry are unchanged. The installer now also runs on hosted required jobs; no step or job token is supplied to compilation. All ten canonical gates, hosted stored-analysis health and local execution evidence remain blocking. No artifact, pull-request value or restored cache selects installer source or arguments.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md#github-actions-portability-findings"
     },

@@ -122,10 +122,16 @@ class SecurityWorkflowTests(unittest.TestCase):
         self.assertEqual(set(strings(gate, "needs")), GATES)
         self.assertEqual(set(obj(ci, "jobs")) - {"required", "release-security"}, GATES)
         steps = objects(gate, "steps")
-        self.assertEqual(at(steps[0], "env", "GATE_RESULTS"), "${{ toJSON(needs) }}")
-        command = string(steps[0], "run")
-        self.assertIn("set(results) != expected", command)
-        self.assertIn('item["result"] != "success"', command)
+        aggregate = next(
+            step
+            for step in steps
+            if step.get("name") == "Require every declared gate to finish successfully"
+        )
+        self.assertEqual(aggregate["env"], {"GATE_RESULTS": "${{ toJSON(needs) }}"})
+        self.assertEqual(string(aggregate, "run"), "cargo run --locked -q -p xtask -- ci required")
+        self.assertNotIn("if", aggregate)
+        self.assertNotIn("continue-on-error", aggregate)
+        self.assertEqual(steps.index(aggregate), 2)
         self.assertNotIn("continue-on-error", gate)
 
     def test_aggregate_checks_stored_codeql_health_before_signing(self) -> None:
@@ -134,8 +140,17 @@ class SecurityWorkflowTests(unittest.TestCase):
         self.assertEqual(gate["permissions"], {"contents": "read", "security-events": "read"})
         self.assertEqual(gate["timeout-minutes"], "7")
         steps = objects(gate, "steps")
-        self.assertTrue(string(steps[1], "uses").startswith("actions/checkout@"))
-        self.assertEqual(at(steps[1], "with", "persist-credentials"), "false")
+        self.assertTrue(string(steps[0], "uses").startswith("actions/checkout@"))
+        self.assertEqual(at(steps[0], "with", "persist-credentials"), "false")
+        bootstrap = steps[1]
+        self.assertEqual(
+            bootstrap["uses"],
+            "dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d",
+        )
+        self.assertEqual(bootstrap["with"], {"toolchain": "1.99.0"})
+        self.assertNotIn("if", bootstrap)
+        self.assertNotIn("env", bootstrap)
+        self.assertNotIn("env", gate)
         health = next(
             step
             for step in steps
@@ -144,6 +159,7 @@ class SecurityWorkflowTests(unittest.TestCase):
         self.assertEqual(health["env"], {"GH_TOKEN": "${{ github.token }}"})
         self.assertEqual(health["if"], "${{ !env.ACT }}")
         self.assertNotIn("continue-on-error", health)
+        self.assertGreater(steps.index(health), 2)
         command = string(health, "run")
         self.assertIn("python3 build/security_codeql_triage.py health", command)
         for argument in (

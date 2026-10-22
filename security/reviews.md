@@ -91,6 +91,15 @@ review locations and the existing CodeQL Rust installer location move by one
 step; their action bytes, fingerprints and scope are otherwise unchanged.
 Receipt verification and all source/security gates remain blocking.
 
+The compiled required-job policy moves that job's installer to
+`ci.yml#jobs/required/steps/1/uses` and also uses it on hosted runners. Checkout
+still disables persisted credentials, followed by the same immutable action and
+explicit Rust 1.99.0. No token is supplied to compilation. The policy requires
+success from exactly the ten declared correctness/security jobs; hosted stored
+CodeQL health and local execution evidence remain separate blocking checks.
+The official HTTPS bootstrap boundary, action fingerprint and 2026-11-29 expiry
+are unchanged. Added hosted compilation cost has not been measured on GitHub.
+
 The cache-retention port adds one exact installer-action review at
 `cache-retention.yml#jobs/retain/steps/1/uses`. It uses that same immutable action
 and explicit Rust 1.99.0 to build the maintenance binary before the scoped

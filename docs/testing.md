@@ -701,6 +701,7 @@ Python reference's JSON schema and bytes, reads the real workflow matrices, and
 needs no Python YAML environment. YAML parsing accepts aliases and merge keys
 with explicit document, depth and replay limits; includes and custom tags are
 rejected. The local runner uses the same receipt identity and matrix validation.
+
 `--base REF` selects the ancestor
 used for changed-source checks; by default it uses the merge base with local
 `origin/main`, or `HEAD^`
@@ -714,6 +715,15 @@ The analyzer cache stays outside Cargo's `target/`, which Rust caching restores
 and cleans recursively. Existing authenticated bundles can be moved from
 `target/codeql-tools` to `.cache/codeql-tools` while no local CI run is active;
 the same receipts and analyzer/query checks apply at the new location.
+
+The shared `cargo run --locked -q -p xtask -- ci required` policy reads
+`GATE_RESULTS` once and requires successful results from exactly the ten canonical
+workflow jobs. It rejects missing, skipped, cancelled or failed jobs, duplicate
+job/result fields, malformed JSON and input above 64 KiB. Other job metadata and
+outputs cannot establish success and are never printed. Both hosted and local
+aggregate jobs install pinned Rust before this policy; hosted CodeQL health and
+local execution evidence still run afterward. The added hosted compilation cost
+has not been measured on GitHub.
 
 The four local CodeQL scans enforce the same first-party source scope, security
 query suites, exact finding reviews and completed-query health. `vendor/` is
