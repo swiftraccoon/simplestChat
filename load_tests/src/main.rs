@@ -19,6 +19,7 @@ use tokio_tungstenite::{connect_async, tungstenite::Message};
 
 use simplestchat::ids::RoomId;
 use simplestchat::signaling::protocol::{ClientMessage, ServerMessage, SocialResponse};
+use simplestchat_load_test::RunMetadata;
 
 mod media_generator;
 
@@ -1465,11 +1466,11 @@ fn write_timeout_results(
             "skippedShortTailAttempts": 0, "missingCoverageAttempts": 0,
             "requestedChurners": config.churner_count()?, "validatedChurners": 0,
         },
-        "run": {
-            "completed": false, "passed": false,
-            "failureReasons": ["Hard deadline exceeded; detailed metrics unavailable"],
-            "startedAt": started_at, "finishedAt": chrono::Utc::now().to_rfc3339(),
-            "configuration": config, "provenance": provenance,
+        "run": RunMetadata {
+            completed: false, passed: false,
+            failure_reasons: vec!["Hard deadline exceeded; detailed metrics unavailable".into()],
+            started_at: started_at.to_owned(), finished_at: chrono::Utc::now().to_rfc3339(),
+            configuration: config, provenance,
         },
     });
     let json = serde_json::to_vec_pretty(&report)?;
@@ -1612,11 +1613,15 @@ fn write_results_sync(
     if let Some(chat) = chat {
         report["chat"] = serde_json::to_value(chat)?;
     }
-    report["run"] = serde_json::json!({
-        "completed": completed, "passed": passed, "failureReasons": failures,
-        "startedAt": started_at, "finishedAt": chrono::Utc::now().to_rfc3339(),
-        "configuration": config, "provenance": provenance,
-    });
+    report["run"] = serde_json::to_value(RunMetadata {
+        completed,
+        passed,
+        failure_reasons: failures,
+        started_at: started_at.to_owned(),
+        finished_at: chrono::Utc::now().to_rfc3339(),
+        configuration: config,
+        provenance,
+    })?;
     std::fs::write(
         config.output_dir.join("load_test_results.json"),
         serde_json::to_vec_pretty(&all_metrics)?,

@@ -16,6 +16,9 @@ For commands, options, and report definitions, see the
 | `chat_load.rs` | Scheduled public chat, acknowledgments, complete room fanout and retained-message comparison inventory |
 | `datagram_counter.rs` | Actual UDP datagram counts for socket-drop measurements |
 | `main.rs` | The `load_test` binary: options, ramps, workloads, result files |
+| `evidence.rs`, `plan.rs` | Pure shared generator wire contracts and deterministic graph planning |
+| `owned_process/` | Reserved process groups, bounded pipes, long-lived child ownership and cancellation |
+| `bench/` | Shared comparison policy, scoped provenance, bounded observations and fixed-protocol report adapters |
 | `lib.rs`, `report/` | Offline bounded diagnostic readers and report command; no workload or runtime startup |
 | `report/lifecycle*.rs` | Calendar/phase anchors, strict marker decoding, anonymous lifecycle state, private file/stream bounds |
 | `report/media*.rs`, `report/receiver_stall*.rs` | Strict snapshot/identity validation, independently clocked counter and stall correlation, bounded offline inputs |

@@ -1,7 +1,17 @@
 //! Bound both subprocess streams and retain the owned group leader until cleanup.
 
-use super::process_group::Group;
-use super::process_io::{Destination, read_limited};
+use self::group::Group;
+pub(crate) use self::io::Destination;
+use self::io::read_limited;
+pub(crate) mod child;
+#[cfg(test)]
+mod child_tests;
+mod cleanup;
+mod group;
+pub(crate) mod io;
+#[cfg(test)]
+pub(crate) use cleanup::zombie_rows;
+
 use anyhow::Result;
 use nix::unistd::Pid;
 use rustix::process::{WaitId, WaitIdOptions, waitid};
@@ -16,18 +26,18 @@ use std::time::Duration;
 use tokio::io::AsyncWriteExt;
 
 #[derive(Clone, Default)]
-pub(super) struct Cancellation(Arc<AtomicU8>);
+pub(crate) struct Cancellation(Arc<AtomicU8>);
 
 impl Cancellation {
-    pub(super) fn cancel(&self, code: u8) {
+    pub(crate) fn cancel(&self, code: u8) {
         let _ = self
             .0
             .compare_exchange(0, code, Ordering::SeqCst, Ordering::SeqCst);
     }
-    pub(super) fn code(&self) -> u8 {
+    pub(crate) fn code(&self) -> u8 {
         self.0.load(Ordering::SeqCst)
     }
-    pub(super) async fn cancelled(&self) -> u8 {
+    pub(crate) async fn cancelled(&self) -> u8 {
         loop {
             let code = self.code();
             if code != 0 {
@@ -39,7 +49,7 @@ impl Cancellation {
 }
 
 #[derive(Debug)]
-pub(super) struct Interrupted(pub(super) u8);
+pub(crate) struct Interrupted(pub(crate) u8);
 impl std::fmt::Display for Interrupted {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter.write_str("capacity interrupted")
@@ -48,10 +58,10 @@ impl std::fmt::Display for Interrupted {
 impl std::error::Error for Interrupted {}
 
 #[derive(Clone, Copy)]
-pub(super) struct Limits {
-    pub(super) timeout: Duration,
-    pub(super) stdout: u64,
-    pub(super) stderr: u64,
+pub(crate) struct Limits {
+    pub(crate) timeout: Duration,
+    pub(crate) stdout: u64,
+    pub(crate) stderr: u64,
 }
 
 impl Default for Limits {
@@ -64,13 +74,13 @@ impl Default for Limits {
     }
 }
 
-pub(super) struct Request {
-    pub(super) limits: Limits,
-    pub(super) input: Vec<u8>,
-    pub(super) stdout: Destination,
-    pub(super) stderr: Destination,
+pub(crate) struct Request {
+    pub(crate) limits: Limits,
+    pub(crate) input: Vec<u8>,
+    pub(crate) stdout: Destination,
+    pub(crate) stderr: Destination,
     /// Only verified owned-resource cleanup may continue after cancellation.
-    pub(super) cleanup: bool,
+    pub(crate) cleanup: bool,
 }
 
 impl Default for Request {
@@ -86,21 +96,21 @@ impl Default for Request {
 }
 
 #[derive(Debug)]
-pub(super) struct Output {
-    pub(super) status: i32,
-    pub(super) stdout: Vec<u8>,
-    pub(super) stderr: Vec<u8>,
+pub(crate) struct Output {
+    pub(crate) status: i32,
+    pub(crate) stdout: Vec<u8>,
+    pub(crate) stderr: Vec<u8>,
 }
 
 #[derive(Clone)]
-pub(super) struct Runner {
-    pub(super) directory: PathBuf,
-    pub(super) environment: BTreeMap<OsString, OsString>,
-    pub(super) cancellation: Cancellation,
+pub(crate) struct Runner {
+    pub(crate) directory: PathBuf,
+    pub(crate) environment: BTreeMap<OsString, OsString>,
+    pub(crate) cancellation: Cancellation,
 }
 
 impl Runner {
-    pub(super) async fn run(
+    pub(crate) async fn run(
         &self,
         executable: &Path,
         arguments: &[String],
@@ -157,7 +167,7 @@ impl Runner {
         };
         // Even a successful leader can leave descendants after closing its
         // pipes. Reclaim the exact reserved group before releasing that PID.
-        let cleanup = super::process_cleanup::stop(&mut group).await;
+        let cleanup = self::cleanup::stop(&mut group).await;
         let (stdout, stderr, status) = match (result, cleanup) {
             (Ok(output), Ok(())) => output,
             (Err(error), Ok(())) => return Err(error),
@@ -176,7 +186,7 @@ impl Runner {
     }
 }
 
-pub(super) fn peek(pid: Pid) -> Result<Option<i32>> {
+pub(crate) fn peek(pid: Pid) -> Result<Option<i32>> {
     let pid = rustix::process::Pid::from_raw(pid.as_raw())
         .ok_or_else(|| anyhow::anyhow!("command_identity_unavailable"))?;
     let value = waitid(
@@ -190,7 +200,7 @@ pub(super) fn peek(pid: Pid) -> Result<Option<i32>> {
     }))
 }
 
-pub(super) async fn exited(pid: Pid) -> Result<i32> {
+pub(crate) async fn exited(pid: Pid) -> Result<i32> {
     loop {
         match peek(pid) {
             Ok(Some(status)) => return Ok(status),

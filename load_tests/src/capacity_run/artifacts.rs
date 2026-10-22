@@ -24,7 +24,7 @@ const SUMMARY: &str = "load_test_summary.json";
 const RESULTS: &str = "load_test_results.json";
 const TIMEOUT: &str = "load_test_timeout.json";
 
-fn regular(path: &Path, maximum: u64) -> Result<File> {
+pub(crate) fn regular(path: &Path, maximum: u64) -> Result<File> {
     let file = File::from(open(
         path,
         OFlag::O_RDONLY | OFlag::O_NOFOLLOW | OFlag::O_NONBLOCK | OFlag::O_CLOEXEC,

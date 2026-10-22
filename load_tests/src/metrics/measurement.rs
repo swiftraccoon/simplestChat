@@ -1,6 +1,7 @@
 //! Shared measurement window, per-attempt readiness and coverage, and consumer delivery checks.
 
 use serde::{Deserialize, Serialize};
+pub use simplestchat_load_test::{MeasurementMetrics, PlannedSubscriptionEdge};
 use std::collections::HashMap;
 use std::time::Instant;
 
@@ -26,16 +27,6 @@ impl MeasurementWindow {
         (now >= self.start && now < self.end)
             .then(|| now.duration_since(self.start).as_secs() as usize)
     }
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MeasurementMetrics {
-    pub duration_ms: u64,
-    pub packets_queued: u64,
-    pub packets_received: u64,
-    pub bytes_queued: u64,
-    pub bytes_received: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -90,15 +81,6 @@ pub struct PlannedSubscriptionCoverage {
     /// Unknown ownership is a separate attempt failure, never a fallback edge.
     pub realized: Vec<PlannedSubscriptionEdge>,
     pub passed: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PlannedSubscriptionEdge {
-    pub publisher_client_id: String,
-    pub producer_id: String,
-    pub consumer_id: String,
-    pub is_audio: bool,
 }
 
 pub(super) struct PlannedCoverageEvaluation {

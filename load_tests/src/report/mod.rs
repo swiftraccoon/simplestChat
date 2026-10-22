@@ -16,6 +16,50 @@ mod media_schema;
 mod receiver_stall;
 mod receiver_stall_evidence;
 
+/// Reuse the offline reader's complete fixed snapshot contract at the live
+/// loopback sampler boundary. No unvalidated response is retained as evidence.
+pub(crate) fn validate_media_snapshot(value: &serde_json::Value) -> anyhow::Result<()> {
+    media_schema::snapshot(value)
+}
+
+/// Independent fixed-protocol oracle for the selected generator's offline
+/// command. Benchmark callers invoke that executable too, then require semantic
+/// equality before any child-controlled output crosses the artifact boundary.
+pub(crate) fn benchmark_report(
+    mode: &str,
+    path: &Path,
+    input: &serde_json::Value,
+    admitted: bool,
+    expected: u32,
+) -> anyhow::Result<serde_json::Value> {
+    match mode {
+        "diagnostics" => Ok(serde_json::to_value(
+            diagnostics::read(path, diagnostics::MAX_RECORDS).map_err(anyhow::Error::msg)?,
+        )?),
+        "lifecycle" => Ok(serde_json::to_value(lifecycle::read(
+            path,
+            &serde_json::to_string(input)?,
+            Some(f64::from(expected)),
+        ))?),
+        "media" | "receiver-stall" => {
+            let mut samples = input.clone();
+            let mut results = if admitted {
+                media_input::results(path).unwrap_or(serde_json::Value::Null)
+            } else {
+                serde_json::Value::Null
+            };
+            media::normalize_numbers(&mut samples);
+            media::normalize_numbers(&mut results);
+            Ok(if mode == "media" {
+                media::analyze(&samples, &results).report
+            } else {
+                receiver_stall::correlate(&samples, &results)
+            })
+        }
+        _ => anyhow::bail!("Unknown benchmark report command"),
+    }
+}
+
 const USAGE: &str = "Usage: load_test report diagnostics PATH [--max-records 1..100000]";
 
 /// Print one sanitized report. Exit 0 means complete coverage, 1 means incomplete

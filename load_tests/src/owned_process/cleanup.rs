@@ -1,7 +1,7 @@
 //! Terminate only a process group whose unreaped leader still reserves its ID.
 
-use super::process::exited;
-use super::process_group::Group;
+use super::exited;
+use super::group::Group;
 use anyhow::Result;
 #[cfg(target_os = "macos")]
 use anyhow::bail;
@@ -11,11 +11,39 @@ use nix::unistd::Pid;
 use std::time::Duration;
 
 pub(super) async fn stop(group: &mut Group) -> Result<()> {
+    stop_with_grace(group, Duration::from_secs(5))
+        .await
+        .map(|_| ())
+}
+
+pub(super) async fn stop_with_grace(
+    group: &mut Group,
+    grace: Duration,
+) -> Result<std::process::ExitStatus> {
     let pid = group.pid;
     let terminate = signal(pid, Signal::SIGTERM).await;
-    let _ = tokio::time::timeout(Duration::from_secs(5), exited(pid)).await;
+    let _ = tokio::time::timeout(grace, exited(pid)).await;
     let kill = signal(pid, Signal::SIGKILL).await;
     let exited = tokio::time::timeout(Duration::from_secs(5), exited(pid)).await;
+    // Darwin can reject TERM just before NOWAIT exposes the leader's exit.
+    // Reconcile that earlier EPERM only while the unreaped leader still
+    // reserves its ID and a fresh complete group inspection proves all-zombie.
+    #[cfg(target_os = "macos")]
+    let (terminate, kill) = if (permission_error(&terminate) || permission_error(&kill))
+        && matches!(&exited, Ok(Ok(_)))
+        && zombie_group(pid).await
+    {
+        let reconcile = |result: Result<()>| {
+            if permission_error(&result) {
+                Ok(())
+            } else {
+                result
+            }
+        };
+        (reconcile(terminate), reconcile(kill))
+    } else {
+        (terminate, kill)
+    };
     // The standard child has no background reaper. Reap only after NOWAIT
     // proves exit; until then the leader continues to reserve this exact PGID.
     let reaped = if matches!(exited, Ok(Ok(_))) {
@@ -26,8 +54,15 @@ pub(super) async fn stop(group: &mut Group) -> Result<()> {
     terminate?;
     kill?;
     exited.map_err(|_| anyhow::anyhow!("command_reap_timed_out"))??;
-    reaped.expect("exit was proved before reaping")?;
-    Ok(())
+    reaped.expect("exit was proved before reaping")
+}
+
+#[cfg(target_os = "macos")]
+fn permission_error(result: &Result<()>) -> bool {
+    result
+        .as_ref()
+        .err()
+        .is_some_and(|error| error.downcast_ref::<Errno>() == Some(&Errno::EPERM))
 }
 
 async fn signal(pid: Pid, signal: Signal) -> Result<()> {
@@ -41,14 +76,14 @@ async fn signal(pid: Pid, signal: Signal) -> Result<()> {
 
 #[cfg(target_os = "macos")]
 fn leader_exited(pid: Pid) -> bool {
-    matches!(super::process::peek(pid), Ok(Some(_)))
+    matches!(super::peek(pid), Ok(Some(_)))
 }
 
 /// Darwin excludes zombies from group signaling. Confirm every reported member
 /// is a zombie before accepting EPERM; inspect no arguments or environment.
 #[cfg(target_os = "macos")]
 async fn zombie_group(pid: Pid) -> bool {
-    use super::process_io::{Destination, read_limited};
+    use super::io::{Destination, read_limited};
     use std::process::Stdio;
     use tokio::process::Command;
     if !leader_exited(pid) {
@@ -90,7 +125,7 @@ async fn zombie_group(pid: Pid) -> bool {
 }
 
 #[cfg(any(target_os = "macos", test))]
-pub(super) fn zombie_rows(bytes: &[u8], pid: Pid) -> bool {
+pub(crate) fn zombie_rows(bytes: &[u8], pid: Pid) -> bool {
     let Ok(source) = std::str::from_utf8(bytes) else {
         return false;
     };

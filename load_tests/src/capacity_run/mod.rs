@@ -4,7 +4,7 @@
 //! calls use bounded structured argv and retain their process-group identity
 //! until cleanup; every container creation is journaled before it is attempted.
 
-mod artifacts;
+pub(crate) mod artifacts;
 #[cfg(test)]
 mod boundary_tests;
 mod clock;
@@ -13,7 +13,7 @@ mod conclude;
 mod context;
 mod controller;
 mod engine;
-mod files;
+pub(crate) mod files;
 #[cfg(test)]
 mod fixtures;
 mod host;
@@ -24,10 +24,6 @@ mod ownership;
 mod parsers;
 #[cfg(test)]
 mod policy_tests;
-mod process;
-mod process_cleanup;
-mod process_group;
-mod process_io;
 #[cfg(test)]
 mod process_tests;
 mod report;
@@ -38,6 +34,8 @@ mod step;
 mod types;
 mod watch;
 
+use crate::owned_process as process;
+use crate::owned_process::io as process_io;
 use anyhow::Result;
 use std::ffi::OsString;
 use std::process::ExitCode;

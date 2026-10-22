@@ -3,21 +3,21 @@
 use anyhow::{Result, bail};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 
-pub(super) enum Destination {
+pub(crate) enum Destination {
     Capture(Vec<u8>),
     File(tokio::fs::File),
 }
 
 impl Destination {
-    pub(super) fn capture() -> Self {
+    pub(crate) fn capture() -> Self {
         Self::Capture(Vec::new())
     }
-    pub(super) fn file(file: std::fs::File) -> Self {
+    pub(crate) fn file(file: std::fs::File) -> Self {
         Self::File(tokio::fs::File::from_std(file))
     }
 }
 
-pub(super) async fn read_limited(
+pub(crate) async fn read_limited(
     mut reader: impl AsyncRead + Unpin,
     mut destination: Destination,
     limit: u64,

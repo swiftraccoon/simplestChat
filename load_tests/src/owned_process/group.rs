@@ -20,11 +20,13 @@ impl Group {
     pub(super) fn child(&mut self) -> &mut Child {
         self.child.as_mut().expect("owned child")
     }
+    pub(super) fn reserved(&self) -> bool {
+        self.child.is_some()
+    }
     /// Called only after NOWAIT proved a terminal state. Disarm before wait so
     /// even an unexpected wait error cannot cause a later signal to a reused ID.
-    pub(super) fn reap(&mut self) -> Result<()> {
-        self.child.take().expect("owned unreaped child").wait()?;
-        Ok(())
+    pub(super) fn reap(&mut self) -> Result<std::process::ExitStatus> {
+        Ok(self.child.take().expect("owned unreaped child").wait()?)
     }
 }
 impl Drop for Group {

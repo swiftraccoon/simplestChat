@@ -5,6 +5,7 @@ use std::time::Instant;
 
 mod measurement;
 pub use measurement::*;
+pub use simplestchat_load_test::LatencyStats;
 
 /// Metrics collected during a test client session
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -86,21 +87,6 @@ const MAX_RECEIVER_STALL_BYTES: usize = 256 * 1024;
 #[serde(rename_all = "camelCase")]
 pub struct SignalingLatencyReport {
     pub operations: HashMap<String, LatencyStats>,
-}
-
-/// Latency statistics for a single operation type
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LatencyStats {
-    pub count: usize,
-    pub min_ms: u64,
-    pub max_ms: u64,
-    pub avg_ms: u64,
-    pub p50_ms: u64,
-    pub p95_ms: u64,
-    pub p99_ms: u64,
-    /// Exact millisecond frequencies; aggregation never takes percentiles of medians.
-    pub histogram_ms: std::collections::BTreeMap<u64, u64>,
 }
 
 /// Real-time metrics collector (thread-safe)

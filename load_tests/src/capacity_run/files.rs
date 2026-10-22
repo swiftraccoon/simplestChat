@@ -8,7 +8,7 @@ use std::io::Write;
 use std::os::unix::fs::DirBuilderExt;
 use std::path::Path;
 
-pub(super) fn directory(path: &Path) -> Result<()> {
+pub(crate) fn directory(path: &Path) -> Result<()> {
     if let Some(parent) = path.parent().filter(|value| !value.as_os_str().is_empty()) {
         std::fs::create_dir_all(parent)?;
     }
@@ -16,7 +16,7 @@ pub(super) fn directory(path: &Path) -> Result<()> {
     Ok(())
 }
 
-pub(super) fn private_file(path: &Path) -> Result<File> {
+pub(crate) fn private_file(path: &Path) -> Result<File> {
     Ok(File::from(open(
         path,
         OFlag::O_WRONLY | OFlag::O_CREAT | OFlag::O_EXCL | OFlag::O_NOFOLLOW | OFlag::O_CLOEXEC,
@@ -24,7 +24,7 @@ pub(super) fn private_file(path: &Path) -> Result<File> {
     )?))
 }
 
-pub(super) fn replace(directory: &Path, name: &str, bytes: &[u8]) -> Result<()> {
+pub(crate) fn replace(directory: &Path, name: &str, bytes: &[u8]) -> Result<()> {
     ensure!(
         matches!(name, "ownership.json" | "calibration.json"),
         "invalid journal name"

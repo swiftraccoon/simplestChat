@@ -85,13 +85,18 @@ async fn a_successful_leader_cannot_leave_a_detached_pipe_closing_descendant() {
             Path::new("/bin/sh"),
             &[
                 "-c".into(),
-                "(sleep 0.3; printf leaked > leaked) </dev/null >/dev/null 2>&1 & exit 0".into(),
+                concat!(
+                    "(while [ ! -f release ]; do sleep 0.01; done; ",
+                    "printf leaked > leaked) </dev/null >/dev/null 2>&1 & exit 0"
+                )
+                .into(),
             ],
             Request::default(),
         )
         .await
         .unwrap();
     assert_eq!(output.status, 0);
+    std::fs::write(directory.0.join("release"), b"release").unwrap();
     tokio::time::sleep(Duration::from_millis(400)).await;
     assert!(!directory.0.join("leaked").exists());
 }
@@ -145,7 +150,7 @@ async fn cancellation_stops_the_owned_group_and_cleanup_can_still_run() {
 #[test]
 fn darwin_zombie_exception_requires_exact_unreaped_group_members() {
     let pid = nix::unistd::Pid::from_raw(1234);
-    assert!(super::process_cleanup::zombie_rows(
+    assert!(crate::owned_process::zombie_rows(
         b"1234 1234 Z\n1235 1234 Z+\n",
         pid
     ));
@@ -157,7 +162,7 @@ fn darwin_zombie_exception_requires_exact_unreaped_group_members() {
         b"1234 1234 Z\n1234 1234 Z\n",
         b"01234 1234 Z\n",
     ] {
-        assert!(!super::process_cleanup::zombie_rows(bytes, pid));
+        assert!(!crate::owned_process::zombie_rows(bytes, pid));
     }
 }
 
@@ -180,8 +185,12 @@ async fn aborting_the_future_drops_guard_kills_group_and_preserves_unrelated_chi
                 Path::new("/bin/sh"),
                 &[
                     "-c".into(),
-                    "printf ready > ready; (sleep 0.3; printf leaked > leaked) & sleep 30; wait"
-                        .into(),
+                    concat!(
+                        "(printf ready > ready; ",
+                        "while [ ! -f release ]; do sleep 0.01; done; ",
+                        "printf leaked > leaked) & sleep 30; wait"
+                    )
+                    .into(),
                 ],
                 Request::default(),
             )
@@ -194,6 +203,9 @@ async fn aborting_the_future_drops_guard_kills_group_and_preserves_unrelated_chi
     }
     task.abort();
     assert!(task.await.unwrap_err().is_cancelled());
+    // The descendant cannot perform its observable write before abort/reap.
+    // A scheduler pause must not turn this ownership test into a timer race.
+    std::fs::write(directory.0.join("release"), b"release").unwrap();
     tokio::time::sleep(Duration::from_millis(400)).await;
     assert!(!directory.0.join("leaked").exists());
     assert!(unrelated.try_wait().unwrap().is_none());
