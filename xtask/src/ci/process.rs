@@ -69,16 +69,24 @@ impl<'a> Native<'a> {
     ) -> Result<Vec<u8>> {
         let mdns = request.mdns.clone();
         let mdns_admission = mdns.as_ref().map(|v| v.begin()).transpose();
+        let retained_ops = request.retained_ops.clone();
+        let retained_admission = retained_ops.as_ref().map(|v| v.begin()).transpose();
         let (io, admission) = OwnedIo::take(&mut request);
         let owned_io = io.combined.is_some() || io.separate.is_some() || io.input.is_some();
         let cleanup = request.cleanup;
-        let result = match admission.and(mdns_admission.map(|_| ())) {
+        let result = match admission
+            .and(mdns_admission.map(|_| ()))
+            .and(retained_admission.map(|_| ()))
+        {
             Ok(()) => self.execute_body(request, &io, finalizer).await,
             Err(error) => Err(error),
         };
         // This runs on setup/spawn errors too. A body-local Group guard finishes
         // its fallback before these bounded EOF and explicit-close attempts.
         let closed = io.finish().await;
+        if let Some(proof) = retained_ops {
+            proof.observed_io(closed.as_ref().ok().cloned().flatten());
+        }
         if let Some(mdns) = mdns {
             mdns.closed(closed.is_ok());
         }
@@ -113,12 +121,16 @@ impl<'a> Native<'a> {
                 "CI file output requires bounded stderr capture.",
             ));
         }
-        let (root, environment) = match request.comparison.as_ref() {
-            Some(invocation) => invocation.context(
-                comparison_role(request.program)
-                    .ok_or_else(|| Failure::new(1, "CI comparison role invalid."))?,
-            )?,
-            None => (self.root, self.environment),
+        let (root, environment) = if let Some(proof) = &request.retained_ops {
+            proof.context(request.program, &request.arguments)?
+        } else {
+            match request.comparison.as_ref() {
+                Some(invocation) => invocation.context(
+                    comparison_role(request.program)
+                        .ok_or_else(|| Failure::new(1, "CI comparison role invalid."))?,
+                )?,
+                None => (self.root, self.environment),
+            }
         };
         let mut command =
             tooling::command(root, environment, executable(&request)?, &request.arguments);
@@ -151,6 +163,12 @@ impl<'a> Native<'a> {
             command.stdout(Stdio::piped()).stderr(Stdio::piped());
         } else {
             command.stdout(Stdio::inherit()).stderr(Stdio::inherit());
+        }
+        if let Some(proof) = &request.retained_ops {
+            if !request.cleanup {
+                self.ready().await?;
+            }
+            proof.validate(request.program, &request.arguments)?;
         }
         let child = command.spawn().map_err(|error| {
             Failure::new(
@@ -330,7 +348,7 @@ impl OwnedIo {
         )
     }
 
-    async fn finish(self) -> Result<()> {
+    async fn finish(self) -> Result<Option<super::ops_artifact::verify::tools::Captures>> {
         let input_closed = self
             .input
             .map(|file| {
@@ -365,17 +383,35 @@ async fn finish_log(log: Option<super::bounded_log::Log>, message: &str) -> Resu
     Ok(())
 }
 
-async fn finish_separate(logs: Option<SeparateLogs>) -> Result<()> {
+async fn finish_separate(
+    logs: Option<SeparateLogs>,
+) -> Result<Option<super::ops_artifact::verify::tools::Captures>> {
     if let Some(logs) = logs {
         let message = "CI separate log completion is unproven.";
-        let (stdout, stderr) = tokio::join!(
-            finish_log(Some(logs.stdout), message),
-            finish_log(Some(logs.stderr), message)
-        );
-        stdout?;
-        stderr?;
+        let (stdout, stderr) = tokio::join!(logs.stdout.finish(), logs.stderr.finish());
+        let completed = |result: Result<super::bounded_log::Finished>| {
+            result.and_then(|value| {
+                if value.complete {
+                    Ok(value)
+                } else {
+                    Err(Failure::new(1, message))
+                }
+            })
+        };
+        let stdout = completed(stdout)?;
+        let stderr = completed(stderr)?;
+        use super::ops_artifact::verify::tools::{Captures, Seal};
+        let seal = |value: super::bounded_log::Finished| Seal {
+            sha256: value.sha256,
+            bytes: value.bytes,
+            metadata: value.metadata,
+        };
+        return Ok(Some(Captures {
+            stdout: seal(stdout),
+            stderr: seal(stderr),
+        }));
     }
-    Ok(())
+    Ok(None)
 }
 
 /// Settle admitted bounded output and retained input before a caller refuses
@@ -386,7 +422,7 @@ pub(super) async fn settle_unforwarded(mut request: Command) -> Result<()> {
     let (io, admission) = OwnedIo::take(&mut request);
     drop(request);
     let closed = io.finish().await;
-    admission.and(closed)
+    admission.and(closed.map(|_| ()))
 }
 
 fn input_stdio(input: &File) -> Result<File> {
@@ -421,6 +457,7 @@ fn executable(request: &Command) -> Result<&std::ffi::OsStr> {
         request.zstd.is_some(),
         request.load_image.is_some(),
         request.mdns.is_some(),
+        request.retained_ops.is_some(),
     ]
     .into_iter()
     .filter(|present| *present)
@@ -434,6 +471,7 @@ fn executable(request: &Command) -> Result<&std::ffi::OsStr> {
             | Program::OpsCargo
             | Program::OpsRustc
             | Program::OpsGit
+            | Program::OpsGh
             | Program::ComparisonGit
             | Program::ComparisonCargo
             | Program::ComparisonBenchmark
@@ -482,6 +520,10 @@ fn executable(request: &Command) -> Result<&std::ffi::OsStr> {
             .as_ref()
             .map(|value| value.validate(super::ops_artifact::recipe::Role::Rustc)),
         Program::OpsGit => request.source_git.as_ref().map(|value| value.validate()),
+        Program::OpsGh => request
+            .retained_ops
+            .as_ref()
+            .map(|value| value.validate(request.program, &request.arguments)),
         Program::ComparisonGit | Program::ComparisonCargo | Program::ComparisonBenchmark => {
             request.comparison.as_ref().map(|value| {
                 value.validate(comparison_role(request.program).expect("comparison role"))

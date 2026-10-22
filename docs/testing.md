@@ -54,6 +54,14 @@ They never invoke Cargo, a compiler or imported crate/build-script code. Tests
 also fence known cancellation/deadline outcomes and descriptor-budget unwind;
 an explicitly authorized real cache extraction is separate from those fixtures.
 
+The [retained Ops verifier](../ops/README.md#flat-retained-ops-verification) has
+complete owned-file/fake-verifier transaction tests, selected inert Native `gh`
+fixtures, same-length seal-mutation refusals, descriptor-budget checks and
+virtual-clock/cancellation cases. These run no real attestation verifier, GitHub
+API, trust-root acquisition, candidate or installer. Successful synthetic JSON is
+explicitly a supplied observation, never cryptographic evidence. Actual online
+interoperability, trusted Ops signing and Debian runtime evidence remain separate.
+
 Rust tests include native media checks; database tests are opt-in. Serial
 execution reduces UDP port-allocation races. Web tests use mocked browser APIs;
 the web build runs TypeScript checking and produces the production UI.

@@ -30,7 +30,7 @@ Commands:
   ci-local      Run all required local workflow jobs, or one explicitly partial job,
                 against only an owned disposable engine; see `ci-local --help`.
   run           Build and run the local UI; --skip-web reuses web/dist.
-  ops-artifact  Export local source, hydrate offline registry, or build an unsigned Ops candidate;
+  ops-artifact  Export source, hydrate registry, build unsigned Ops, or verify retained Ops;
                 fixed recipe only, with no signing, installation or candidate execution.
   check         Run installed-tool quality gates: [--web|--rust|--python|--helpers].
                 Default runs all groups, without installs or application services.

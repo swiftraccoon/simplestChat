@@ -18,13 +18,15 @@ mod resolution;
 pub(crate) mod source;
 #[cfg(test)]
 mod tests;
+pub(in crate::ci) mod verify;
 
 use crate::tooling::{Failure, Result};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::time::{Duration, Instant};
 
-const USAGE: &str = "usage: cargo run --locked -q -p xtask -- ops-artifact build|source|registry \
+const USAGE: &str = "usage: cargo run --locked -q -p xtask -- ops-artifact \
+build|source|registry|verify-retained \
 --request PATH --request-sha256 SHA256";
 
 pub(super) fn run(arguments: &[String]) -> anyhow::Result<std::process::ExitCode> {
@@ -36,11 +38,14 @@ pub(super) fn run(arguments: &[String]) -> anyhow::Result<std::process::ExitCode
         eprintln!("{USAGE}");
         return Ok(std::process::ExitCode::from(2));
     };
-    if !matches!(operation.as_str(), "build" | "source" | "registry")
-        || request_flag != "--request"
+    if !matches!(
+        operation.as_str(),
+        "build" | "source" | "registry" | "verify-retained"
+    ) || request_flag != "--request"
         || sha_flag != "--request-sha256"
         || !namespace::path(std::path::Path::new(path))
         || !digest(selected)
+        || (operation == "verify-retained" && !verify::request_path(std::path::Path::new(path)))
     {
         eprintln!("{USAGE}");
         return Ok(std::process::ExitCode::from(2));
@@ -49,7 +54,9 @@ pub(super) fn run(arguments: &[String]) -> anyhow::Result<std::process::ExitCode
         .enable_all()
         .build()?;
     let result = runtime.block_on(async {
-        if operation == "source" {
+        if operation == "verify-retained" {
+            verify::native(std::path::Path::new(path), selected).await
+        } else if operation == "source" {
             source::native(std::path::Path::new(path), selected)
                 .await
                 .map_err(|error| Failure::new(error.code, "Ops source export is unproven."))

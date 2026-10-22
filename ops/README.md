@@ -1097,3 +1097,123 @@ I/O, scheduling or close operations. Synthetic tests include inert bytes labelle
 as compressed blobs deliberately: the verified fact is the stored-byte graph,
 not valid compression, inner-layer decoding, Docker loader acceptance, image
 execution, build provenance, signing readiness or ABI/runtime compatibility.
+
+## Flat retained Ops verification
+
+The controller-local transaction is:
+
+```sh
+cargo run --locked -q -p xtask -- ops-artifact verify-retained \
+  --request /absolute/request.json --request-sha256 ORIGINAL_REQUEST_SHA256
+```
+
+The original request is at most 16 KiB and has exactly `schemaVersion: 1`,
+`selection`, `directory`, `output` and `authentication: "gh-token"`. `selection`
+uses the existing seven Ops identity fields. The repository is fixed to
+`swiftraccoon/simplestChat`; run and attempt are positive integers at most
+9007199254740991. All received paths are absolute UTF-8, contain no control or
+dot components and have at most sixteen ordinary components. Source and output
+namespaces must be disjoint. Original source inode identity is also compared
+against output-parent ancestors before creation, including filesystem case
+aliases. Output is a new leaf; existing paths refuse.
+An explicitly captured, nonempty `GH_TOKEN` is mandatory before output or tool
+admission. The token never belongs in the request, artifacts or public output.
+
+The retained input is a private current-user 0700 directory with exactly the
+unsigned assembly's `simplestchat-ops`, four metadata files (`ops-release.json`,
+`ops-evidence.json`, `ops-predicate.json`, `ops-preparation.json`), zero to sixteen
+generated evidence files and one additional `ops-attestation.jsonl`. Every file
+is regular, current-user, single-link and exactly 0600. The binary is at most
+256 MiB, each evidence file at most 1 MiB, each metadata record at most 64 KiB
+and the bundle at most 8 MiB. The complete flat input has at most 22 members and
+281 MiB. Links, directories, extra files, conflicting names and empty required
+files refuse. All seven selected claims and the small-record hash graph must
+match before binary admission or output creation.
+
+One selected caller-trusted `gh` executable supporting version 2.102.0 performs
+four fixed calls: version, repository API, exact run-attempt API, then attestation
+verification of the original copied preparation file and retained bundle. The
+compiled repository and owner IDs are 1155881649 and 47705353. Fresh API results
+must describe that repository, owner, revision, run and attempt, successful
+completed `CI`, `push`, `main`, and matching non-fork repository/head-repository
+identities. Workflow paths admit only `.github/workflows/ci.yml` and its exact
+`@main` or `@refs/heads/main` suffix. This is a fresh invocation observation, not
+a guarantee about HTTP cache freshness.
+
+The signed certificate must independently carry the fixed numeric IDs as
+strings, the exact CI/main SAN, GitHub OIDC issuer extension, repository/owner
+URIs, selected source and signer digests, source ref, run invocation, push trigger
+and `github-hosted` runner environment. The certificate issuer DN cannot replace
+the OIDC extension. The returned verified statement must have exactly three
+unique fixed subjects: preparation, manifest and binary. Their SHA-256 values
+must match the original retained bytes; its predicate must match the retained
+predicate graph. Only timestamp-authority or transparency-log timestamp entries
+are accepted; current-time entries refuse. Unverified top-level
+attestation JSON never supplies authority.
+
+One preparation verification covers the complete returned signed statement;
+the controller separately checks every required subject and payload. This
+follows the pinned [gh digest policy](https://github.com/cli/cli/blob/v2.102.0/pkg/cmd/attestation/verification/policy.go)
+and [Sigstore whole-envelope and digest-membership verification](https://github.com/sigstore/sigstore-go/blob/v1.3.0/pkg/verify/signature.go).
+The returned statement is parsed and reserialized, not byte-identical signed
+JSON. The pure Ops policy API interprets supplied successful-verifier output;
+calling that API with fabricated JSON establishes no cryptographic execution.
+
+Each command uses fresh private HOME, GH_CONFIG_DIR, XDG and temporary
+directories with an explicit environment allowlist. Ambient configuration,
+debugging, proxies, CA overrides and alternative tokens are excluded.
+`GH_TELEMETRY=disabled` prevents the pinned gh runtime's detached telemetry
+helper. Anonymous API mode is deliberately unsupported: empty configuration
+does not pass gh's API authentication gate, and a host-only configuration can
+fall back to an ambient OS keyring. The selected token avoids that fallback.
+The default maintained GitHub/Public Good trust providers may access the
+network; gh can continue if one provider cannot initialize. This is an online
+profile, with no custom-root override, offline or revocation claim. The tool's
+retained path/stamps are observed, not authenticated executable provenance.
+
+After policy acceptance, binary and evidence are copied and independently
+read back. The unchanged borrowed-manifest ELF pair verifier runs under an
+explicit helper descriptor allowance. Full original and staged inventories,
+file hashes and sorted member frames are rechecked before publication. Original
+directory bindings and full file stamps survive owner closure; re-opening must
+match those original witnesses. Directory sibling timestamps may change.
+This detects observed mutations optimistically; it does not lock same-user
+files or prevent later tool/runtime changes.
+
+The 600-second entry schedule reserves fixed command bodies of 5/30/30/120
+seconds, four 45-second settlement slots, one aggregate 120-second filesystem
+budget, 25 seconds for bounded replay and 20 seconds for file/final fences:
+530 seconds plus 70 seconds of scheduling slack. Admission checks retain the
+whole remaining tail and each actual hash pass consumes the same aggregate
+budget. The filesystem worker has sticky abort checkpoints and is always
+joined, including after cancellation. The existing ELF inspector has admission
+and final fences, with no prompt intra-helper interruption claim. OS I/O,
+scheduling, close and reap stalls are not hard bounded.
+
+The shared 128-token descriptor budget covers Rust owners, probes/cursors and
+reserved helper allowances, excluding inherited/runtime registrations and gh
+internals. Native dispatch reserves sixteen tokens only when existing owners
+use at most 48; the unchanged ELF helper reserves 64 with at most 24 retained.
+Directory cursor closure is RAII and has no observable syscall-close result.
+Every retained File owner attempts explicit close. Both command capture seals
+come from the original final writer metadata/hash/count after all I/O finalizers;
+same-length edits before first read refuse. Existing reserved-group and pipe
+retirement is required, with no claim about escaped sessions or all host work.
+
+The fresh output retains copied input, private paired command captures and the
+private work/cache tree. Opaque runtime cache names are not recursively deleted
+or treated as a complete internal write inventory. Public output contains only
+fixed identity/hash/count observations. `verification-observation.json` records
+prepublication observations: its own write/close, replay or a final signal or
+deadline can still make the command fail. Only final CLI zero includes those
+fences. Fixed failures reveal no private paths, logical evidence names, JSON or
+token values; observed process/control statuses remain primary.
+
+This unit downloads no artifact and establishes no artifact-ID/ZIP transport
+relationship. Current CI emits no Ops signing attestation, so no present Ops
+release acceptance is claimed. The server ten-file signer contract, Python
+runtime paths and workflows remain unchanged. Build provenance assertions,
+opaque evidence truth, actual tool/network interoperability, static Linux
+build, Debian 13 ABI/runtime behavior and install authority require separate
+evidence. All included transaction and Native fixtures are inert and owned;
+they run no real gh verification, GitHub request, root acquisition or candidate.

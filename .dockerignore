@@ -205,6 +205,9 @@ xtask/src/ci/ops_artifact/source/**
 !xtask/src/ci/ops_artifact/registry/
 xtask/src/ci/ops_artifact/registry/**
 !xtask/src/ci/ops_artifact/registry/*.rs
+!xtask/src/ci/ops_artifact/verify/
+xtask/src/ci/ops_artifact/verify/**
+!xtask/src/ci/ops_artifact/verify/*.rs
 !xtask/src/ci_evidence/
 xtask/src/ci_evidence/**
 !xtask/src/ci_evidence/*.rs

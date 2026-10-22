@@ -8,6 +8,8 @@ mod pair;
 #[cfg(test)]
 #[path = "distribution_manifest_tests.rs"]
 mod tests;
+#[path = "distribution_verification.rs"]
+pub mod verification;
 
 use crate::{
     files,

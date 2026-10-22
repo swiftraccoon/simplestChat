@@ -25,6 +25,19 @@ const DESCRIPTORS: usize = 128;
 pub(super) struct Budget(Arc<AtomicUsize>);
 pub(super) struct Permit(Budget);
 impl Budget {
+    /// Reserve a whole helper allowance before acquisition. The retained limit
+    /// includes all live owners/probes already represented by this budget.
+    pub fn reserve_with_limit(&self, count: usize, retained_limit: usize) -> Result<Vec<Permit>> {
+        self.0
+            .try_update(Ordering::SeqCst, Ordering::SeqCst, |n| {
+                (n <= retained_limit)
+                    .then(|| n.checked_add(count))
+                    .flatten()
+                    .filter(|n| *n <= DESCRIPTORS)
+            })
+            .map_err(|_| failure(1))?;
+        Ok((0..count).map(|_| Permit(self.clone())).collect())
+    }
     pub fn reserve(&self, count: usize) -> Result<Vec<Permit>> {
         (0..count).map(|_| self.permit()).collect()
     }
@@ -169,7 +182,48 @@ pub(super) struct Chain {
     pub path: PathBuf,
     budget: Budget,
 }
+/// Original non-FD directory bindings. Sibling creation may change timestamps;
+/// re-opening never replaces these original identity/authority observations.
+#[derive(Clone)]
+pub(super) struct ChainWitness {
+    path: PathBuf,
+    stamps: Vec<Metadata>,
+}
+impl ChainWitness {
+    /// Physical identity comparison, including case aliases on supported
+    /// filesystems. The source leaf's ORIGINAL inode must not be an output
+    /// parent ancestor; lexical component comparison alone is insufficient.
+    pub fn leaf_in(&self, other: &Self) -> bool {
+        self.stamps.last().is_some_and(|leaf| {
+            other
+                .stamps
+                .iter()
+                .any(|ancestor| leaf.dev() == ancestor.dev() && leaf.ino() == ancestor.ino())
+        })
+    }
+    pub fn reopen(&self, budget: &Budget) -> Result<Chain> {
+        let chain = Chain::open(&self.path, budget)?;
+        let matched = chain.stamps.len() == self.stamps.len()
+            && chain
+                .stamps
+                .iter()
+                .zip(&self.stamps)
+                .all(|(a, b)| binding(a, b));
+        if !matched {
+            let _ = chain.finish();
+            return Err(failure(1));
+        }
+        Ok(chain)
+    }
+}
 impl Chain {
+    pub fn witness(&self) -> Result<ChainWitness> {
+        self.verify()?;
+        Ok(ChainWitness {
+            path: self.path.clone(),
+            stamps: self.stamps.clone(),
+        })
+    }
     pub fn open(pathname: &Path, budget: &Budget) -> Result<Self> {
         if !path(pathname) {
             return Err(failure(1));
@@ -362,12 +416,27 @@ impl OwnedRun {
     pub fn local(pathname: &Path, budget: &Budget) -> Result<Self> {
         Self::create_with(pathname, budget, false)
     }
+    pub fn local_witness(pathname: &Path, budget: &Budget, parent: &ChainWitness) -> Result<Self> {
+        if Some(parent.path.as_path()) != pathname.parent() {
+            return Err(failure(1));
+        }
+        let parent = parent.reopen(budget)?;
+        Self::create_in(pathname, budget, false, parent)
+    }
     #[cfg(test)]
     pub fn fixture(pathname: &Path, budget: &Budget) -> Result<Self> {
         Self::local(pathname, budget)
     }
     fn create_with(pathname: &Path, budget: &Budget, controlled: bool) -> Result<Self> {
         let parent = Chain::open(pathname.parent().ok_or_else(|| failure(1))?, budget)?;
+        Self::create_in(pathname, budget, controlled, parent)
+    }
+    fn create_in(
+        pathname: &Path,
+        budget: &Budget,
+        controlled: bool,
+        parent: Chain,
+    ) -> Result<Self> {
         if controlled {
             parent.controlled()?;
         } else {

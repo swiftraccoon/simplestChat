@@ -18,6 +18,7 @@ pub(super) enum Program {
     OpsCargo,
     OpsRustc,
     OpsGit,
+    OpsGh,
     ComparisonGit,
     ComparisonCargo,
     ComparisonBenchmark,
@@ -45,6 +46,7 @@ impl Program {
             Self::OpsCargo => "cargo",
             Self::OpsRustc => "rustc",
             Self::OpsGit => "git",
+            Self::OpsGh => "gh",
             Self::ComparisonGit => "git",
             Self::ComparisonCargo => "cargo",
             Self::ComparisonBenchmark => "load_test",
@@ -97,6 +99,7 @@ pub(super) struct Command {
     /// that owner's capture boundary must attach its selected proof every time.
     pub load_image: Option<std::sync::Arc<super::load_generator_image::tools::Invocation>>,
     pub mdns: Option<std::sync::Arc<super::mdns::tools::Invocation>>,
+    pub retained_ops: Option<std::sync::Arc<super::ops_artifact::verify::tools::Invocation>>,
 }
 impl Command {
     pub(super) fn capture(program: Program, args: &[&str]) -> Self {
@@ -120,6 +123,7 @@ impl Command {
             zstd: None,
             load_image: None,
             mdns: None,
+            retained_ops: None,
         }
     }
 }
