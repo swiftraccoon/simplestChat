@@ -361,6 +361,27 @@ log markers are separate from the bounded operation recorder; they do not have
 its loss accounting or privacy contract. Raw logs contain UUIDs, and the enabled
 legacy INFO messages can contain room-scoped identifiers; keep them private.
 
+The benchmark uses the selected generator's offline lifecycle reader after both
+owned processes stop. To reread a completed run without starting a workload:
+
+```sh
+./target/release/load_test report lifecycle /absolute/private/server.log \
+  --expected-participants 4 < /absolute/private/lifecycle-timeline.json
+```
+
+Timeline JSON travels over stdin, with a 64 KiB and five-second input bound;
+an inherited pipe that stays open cannot keep the command running. Terminal
+input is refused. The reader emits the same coverage JSON and 0/1/2 exit policy
+as the operation reader. The benchmark retains its in-memory timeline when
+writing the timeline artifact fails, then marks that artifact failure separately.
+Calendar validation, nanosecond ordering and the 250 ms tolerance follow the
+JavaScript reference. Verify the already-built executable without a workload:
+
+```sh
+LOAD_TEST_REPORT_BINARY="$PWD/target/debug/load_test" \
+  node --test load_tests/lifecycle-report-parity.test.mjs
+```
+
 Read `server-lifecycle-report.json` alongside `lifecycle-timeline.json` and the
 delivery report. The timeline retains runner wall-clock anchors and independent
 monotonic offsets. The report uses the generator's reported start and configured

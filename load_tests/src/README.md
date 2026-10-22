@@ -17,6 +17,7 @@ For commands, options, and report definitions, see the
 | `datagram_counter.rs` | Actual UDP datagram counts for socket-drop measurements |
 | `main.rs` | The `load_test` binary: options, ramps, workloads, result files |
 | `lib.rs`, `report/` | Offline bounded diagnostic readers and report command; no workload or runtime startup |
+| `report/lifecycle*.rs` | Calendar/phase anchors, strict marker decoding, anonymous lifecycle state, private file/stream bounds |
 | `capacity.rs`, `capacity/` | Offline host suggestions and ranked cost comparisons, typed resource/workload policy, bounded calibration JSON and Python-reference parity |
 | `metrics.rs` | Counters, signaling histograms, diagnostic collection |
 | `metrics/measurement.rs` | Shared interval, per-attempt readiness/coverage, consumer delivery checks |

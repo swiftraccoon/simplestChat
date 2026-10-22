@@ -12,7 +12,7 @@ import dgram from 'node:dgram';
 import { setTimeout as delay } from 'node:timers/promises';
 import { readDiagnosticReportWithGenerator } from './report-command.mjs';
 import { createMediaSampler, fetchMediaSnapshot, readGeneratorResults, correlateMediaDiagnostics } from './media-diagnostic-report.mjs';
-import { readLifecycleReport } from './lifecycle-diagnostic-report.mjs';
+import { readLifecycleReportWithGenerator } from './lifecycle-report-command.mjs';
 import { correlateReceiverStalls } from './receiver-stall-report.mjs';
 
 const exec = promisify(execFile);
@@ -398,6 +398,16 @@ export async function collectServerDiagnostics(options, directory, server, readR
   return readReport(join(directory, 'server-diagnostics.jsonl'));
 }
 
+/** The timeline remains caller-owned evidence even if saving its artifact failed.
+ * Never race either owned process while collecting post-cleanup markers.
+ */
+export async function collectLifecycleDiagnostics(options, directory, server, generator, timeline, expectedParticipants,
+  readReport = (path, timeline, settings) => readLifecycleReportWithGenerator(options.generator, path, timeline, settings)) {
+  if (!diagnosticPolicy(options).requireSnapshots) return null;
+  if ((server && !server.result) || (generator && !generator.result)) throw new Error('Lifecycle diagnostics require stopped owned processes');
+  return readReport(join(directory, 'server.log'), timeline, { expectedParticipants });
+}
+
 /** Failure counts describe incomplete diagnostics, not unusable identities.
  * Completed failing workloads remain evidence; foreign/timeout artifacts do not.
  */
@@ -678,7 +688,10 @@ async function runOne(options, variant, scenario, repetition, manifest) {
       let mediaReport;
       let lifecycleReport;
       if (lifecycle) {
-        try { lifecycleReport = await readLifecycleReport(join(directory, 'server.log'), lifecycle.timeline, { expectedParticipants: scenario.clients }); }
+        try {
+          await verifyExecutable(options.generator, manifest.generator.binarySha256, 'Generator');
+          lifecycleReport = await collectLifecycleDiagnostics(options, directory, server, generator, lifecycle.timeline, scenario.clients);
+        }
         catch { lifecycleReport = { schemaVersion: 1, coverage: { available: false, complete: false, issues: ['lifecycle_report_failed'] } }; }
         if (!lifecycleTimelineSaved) {
           lifecycleReport.coverage.complete = false;
@@ -821,7 +834,9 @@ async function main() {
     diagnosticReferenceSha256: hash(await readFile(new URL('./diagnostic-report.mjs', import.meta.url))),
     mediaDiagnosticReporterSha256: hash(await readFile(new URL('./media-diagnostic-report.mjs', import.meta.url))),
     receiverStallReporterSha256: hash(await readFile(new URL('./receiver-stall-report.mjs', import.meta.url))),
-    lifecycleDiagnosticReporterSha256: hash(await readFile(new URL('./lifecycle-diagnostic-report.mjs', import.meta.url))),
+    lifecycleDiagnosticReporterSha256: hash(await readFile(new URL('./lifecycle-report-command.mjs', import.meta.url))),
+    lifecycleDiagnosticReaderCommand: ['report', 'lifecycle'],
+    lifecycleDiagnosticReferenceSha256: hash(await readFile(new URL('./lifecycle-diagnostic-report.mjs', import.meta.url))),
     limitations: ['Co-located server/generator: not production capacity.', 'Resource summaries require samples covering the measurement window to within 1.5 s with at most 10% failed samples; a run failing that gate has no comparison row.', 'Source-tree hashes cover the listed versioned and nonignored untracked inputs, not ignored/ancestor Cargo configuration, environment flags, toolchains or external native libraries; record those build inputs separately.', 'Symlinks are identified by their link target, not external target contents. Source snapshots and independently frozen binary hashes do not attest that a binary was built from that snapshot.', 'Diagnostic runs skip resource sampling and never produce performance comparisons; full diagnostics change logging, while capture-only retains error-only logs.', 'ps sampled every~500ms in performance mode; RSS is sampled peak and CPU is total user+system for each process, including in-process media workers.', 'CPU window excludes first/last partial sampling intervals. Process launch/hash overhead causes a small offset from the generator clock; no child-process resource attribution.', 'Synthetic queued RTP is not confirmed egress; receive counts do not measure loss without expected fan-out.', 'Latency/CPU differences are descriptive, not an established regression budget.'] };
   await json(join(options.output, 'manifest.json'), manifest);
   const rows = [];

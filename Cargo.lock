@@ -3399,6 +3399,7 @@ dependencies = [
  "mediasoup-types",
  "nix",
  "rand 0.10.3",
+ "regex",
  "reqwest",
  "rtc",
  "serde",

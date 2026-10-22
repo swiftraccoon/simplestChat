@@ -64,6 +64,17 @@ report, and exit 2 means invalid arguments. See the
 The local benchmark invokes this reader through its explicit `--generator`
 binary. Ordinary helper checks do not compile a native generator.
 
+Read lifecycle markers with the run's timeline on bounded stdin:
+
+```sh
+./target/release/load_test report lifecycle /absolute/private/server.log \
+  --expected-participants 4 < /absolute/private/lifecycle-timeline.json
+```
+
+This command retains anonymous phase and cleanup evidence, with the same
+coverage exit policy. See the
+[lifecycle contract and reference parity check](../docs/diagnostics.md#compare-explicit-leave-with-disconnect).
+
 The binary also sizes a host and compares compatible calibration reports offline:
 
 ```sh

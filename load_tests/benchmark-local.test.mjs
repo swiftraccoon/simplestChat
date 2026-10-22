@@ -6,7 +6,7 @@ import { promisify } from 'node:util';
 import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { cpuSeconds, linuxProcessSample, resourceSummary, comparison, parseOptions, command, captureArguments, finishCapture, diagnosticPolicy, createLifecycleTimeline, lifecycleWorkload, serverDiagnosticEnvironment, diagnosticRunStatus, performanceRunStatus, runFinalizers, collectServerDiagnostics, verifyExecutable, generatorSourceIdentity, sourceTreeIdentity, identity, serverRevisionLabel, stop, SERVER_SHUTDOWN_GRACE_MS, subscriptionArguments, expectedSubscriptionPlan, verifySubscriptionReport, admitsDiagnosticEvidence, collectReceiverStallDiagnostics } from './benchmark-local.mjs';
+import { cpuSeconds, linuxProcessSample, resourceSummary, comparison, parseOptions, command, captureArguments, finishCapture, diagnosticPolicy, createLifecycleTimeline, lifecycleWorkload, serverDiagnosticEnvironment, diagnosticRunStatus, performanceRunStatus, runFinalizers, collectServerDiagnostics, collectLifecycleDiagnostics, verifyExecutable, generatorSourceIdentity, sourceTreeIdentity, identity, serverRevisionLabel, stop, SERVER_SHUTDOWN_GRACE_MS, subscriptionArguments, expectedSubscriptionPlan, verifySubscriptionReport, admitsDiagnosticEvidence, collectReceiverStallDiagnostics } from './benchmark-local.mjs';
 import { DIAGNOSTIC_LIMITS, readDiagnosticReport } from './diagnostic-report.mjs';
 import { MEDIA_BODY_LIMIT, MEDIA_SAMPLE_LATENESS_MS, validateMediaSnapshot, mediaReference, fetchMediaSnapshot,
   mediaSampleSchedule, createMediaSampler, readGeneratorResults, correlateMediaDiagnostics } from './media-diagnostic-report.mjs';
@@ -49,6 +49,26 @@ test('server diagnostic reading requires a stopped owned process and never occur
   await assert.rejects(collectServerDiagnostics(full, '/owned', running, read), /after the owned server stops/);
   assert.equal(reads, 0);
   assert.deepEqual(await collectServerDiagnostics(full, '/owned', { result: { code: 0 } }, read), { fixture: true });
+  assert.equal(reads, 1);
+});
+
+test('lifecycle reporting uses the live timeline after both owned processes stop, independent of an artifact save', async () => {
+  let reads = 0;
+  const timeline = { schemaVersion: 1, events: [], workload: null };
+  const read = async (path, actual, settings) => {
+    reads++; assert.equal(path, '/owned/server.log'); assert.equal(actual, timeline);
+    assert.deepEqual(settings, { expectedParticipants: 2 }); return { fixture: true };
+  };
+  for (const options of [{ purpose: 'performance' }, { purpose: 'diagnostic', diagnosticDetail: 'capture-only' }]) {
+    assert.equal(await collectLifecycleDiagnostics(options, '/owned', {}, {}, timeline, 2, read), null);
+  }
+  const full = { purpose: 'diagnostic', diagnosticDetail: 'full' };
+  const stopped = { result: { code: 1 } };
+  for (const [server, generator] of [[{}, stopped], [stopped, {}]]) {
+    await assert.rejects(collectLifecycleDiagnostics(full, '/owned', server, generator, timeline, 2, read), /stopped owned processes/);
+  }
+  assert.equal(reads, 0);
+  assert.deepEqual(await collectLifecycleDiagnostics(full, '/owned', stopped, stopped, timeline, 2, read), { fixture: true });
   assert.equal(reads, 1);
 });
 
