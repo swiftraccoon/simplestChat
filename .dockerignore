@@ -28,6 +28,13 @@ security/runtime/**
 !security/runtime/nsswitch.conf
 !ops/
 ops/**
+!ops/Cargo.toml
+!ops/src/
+ops/src/**
+!ops/src/*.rs
+!ops/src/release/
+ops/src/release/**
+!ops/src/release/*.rs
 !ops/ansible/
 ops/ansible/**
 !ops/ansible/files/

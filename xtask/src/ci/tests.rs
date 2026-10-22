@@ -812,3 +812,49 @@ fn backend_default_and_unicode_environment_values_match_python_json() {
         .insert("HOME".to_owned(), String::new());
     assert_key_parity(&fixture, Scope::Backend);
 }
+
+#[test]
+fn operations_workspace_inputs_change_rust_keys_with_exact_python_parity() {
+    let fixture = Fixture::new();
+    let inputs = [
+        "Cargo.toml",
+        "ops/Cargo.toml",
+        "ops/src/lib.rs",
+        "ops/src/release/manifest.rs",
+        "ops/src/release/manifest_tests.rs",
+    ];
+    for path in inputs {
+        fixture.write(path, b"original operations input\n");
+    }
+    fixture.git(&["add", "."]);
+    for scope in [
+        Scope::RustLint,
+        Scope::RustTest,
+        Scope::Backend,
+        Scope::CodeqlRust,
+    ] {
+        let original = assert_key_parity(&fixture, scope);
+        for path in inputs {
+            fixture.write(path, b"changed operations input\n");
+            assert_ne!(
+                assert_key_parity(&fixture, scope),
+                original,
+                "{} {path}",
+                scope.name()
+            );
+            fixture.write(path, b"original operations input\n");
+        }
+        fixture.write("ops/src/new_policy.rs", b"new tracked policy\n");
+        assert_eq!(assert_key_parity(&fixture, scope), original);
+        fixture.git(&["add", "ops/src/new_policy.rs"]);
+        assert_ne!(
+            assert_key_parity(&fixture, scope),
+            original,
+            "{} new policy",
+            scope.name()
+        );
+        fixture.git(&["rm", "--cached", "--quiet", "ops/src/new_policy.rs"]);
+        fs::remove_file(fixture.context.root.join("ops/src/new_policy.rs")).unwrap();
+        assert_eq!(assert_key_parity(&fixture, scope), original);
+    }
+}

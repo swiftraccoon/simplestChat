@@ -260,6 +260,9 @@ fn rust_embedded_inputs_are_checked_and_native_generated_inputs_remain_allowed()
     let (database, source, mut manifest) = source_fixture(&fixture, "rust");
     let names = [
         "src/main.rs",
+        "ops/Cargo.toml",
+        "ops/src/json.rs",
+        "ops/src/release/manifest.rs",
         "web/new_target/helper.rs",
         "web/tests/shared.json",
         "migrations/001.sql",
@@ -287,8 +290,15 @@ fn rust_embedded_inputs_are_checked_and_native_generated_inputs_remain_allowed()
             .collect::<Vec<_>>(),
     );
     archive::source_integrity(&database, &source, &manifest, "rust").unwrap();
-    manifest.insert("migrations/001.sql".into(), json!("0".repeat(64)));
-    assert!(archive::source_integrity(&database, &source, &manifest, "rust").is_err());
+    for name in [
+        "migrations/001.sql",
+        "ops/src/release/manifest.rs",
+        "ops/Cargo.toml",
+    ] {
+        let expected = manifest.insert(name.into(), json!("0".repeat(64))).unwrap();
+        assert!(archive::source_integrity(&database, &source, &manifest, "rust").is_err());
+        manifest.insert(name.into(), expected);
+    }
     let (database, source, manifest) = source_fixture(&fixture, "c-cpp");
     let mut all = manifest
         .keys()

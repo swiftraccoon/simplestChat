@@ -128,6 +128,7 @@ ENV PIP_CONSTRAINT=/opt/simplestchat/pip-constraints.txt
 COPY Cargo.toml Cargo.lock ./
 COPY load_tests/Cargo.toml load_tests/Cargo.toml
 COPY xtask/Cargo.toml xtask/Cargo.toml
+COPY ops/Cargo.toml ops/Cargo.toml
 COPY vendor ./vendor
 COPY build/security_vendor.py ./build/
 COPY ops/ansible/files/bounded_process.py ops/ansible/files/release_json.py ./ops/ansible/files/
@@ -138,17 +139,21 @@ RUN python3 build/security_vendor.py verify --cache /tmp/vendor-cache --output /
 # so a source-only build compiles this crate alone instead of the whole graph.
 # The member stubs stay in place: Cargo loads every workspace manifest, and
 # the load-test stage copies the real sources over them.
-RUN mkdir -p src load_tests/src xtask/src \
+RUN mkdir -p src load_tests/src xtask/src ops/src \
     && printf '#![allow(non_snake_case)]\nfn main() {}\n' > src/main.rs \
     && printf '#![allow(non_snake_case)]\n' > src/lib.rs \
     && printf 'fn main() {}\n' > load_tests/src/main.rs \
     && printf 'fn main() {}\n' > xtask/src/main.rs \
+    && printf 'fn main() {}\n' > ops/src/main.rs \
     && /opt/security-tools/bin/cargo-auditable auditable build --locked --release --bin simplestChat \
     && rm -rf src \
         target/release/simplestChat \
         target/release/deps/simplestChat-* target/release/deps/libsimplestchat-* \
         target/release/.fingerprint/simplestChat-* target/release/.fingerprint/simplestchat-*
 COPY src ./src
+# Keep the workspace member real in build-only layers; no ops binary is built
+# or copied into the production runtime image.
+COPY ops/src ./ops/src
 COPY migrations/*.sql ./migrations/
 RUN python3 build/security_tools.py path cargo-auditable --directory /opt/security-tools \
     && /opt/security-tools/bin/cargo-auditable auditable build --locked --release --bin simplestChat \

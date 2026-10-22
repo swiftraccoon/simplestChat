@@ -788,8 +788,8 @@ class SecurityWorkflowTests(unittest.TestCase):
             with self.subTest(scanner=scanner):
                 self.assertNotEqual(self.project_image_reviews(modified), original)
 
-    def test_image_cache_keys_include_both_current_policy_inputs(self) -> None:
-        """Saving under a policy-specific key complements the Dockerfile layer dependency."""
+    def test_image_cache_keys_include_policy_and_operations_inputs(self) -> None:
+        """Policy and operations inputs bind both image caches beside Docker layer checks."""
         steps = objects(obj(workflow("ci.yml"), "jobs", "deployment"), "steps")
         steps.extend(objects(obj(workflow("load-generator-image.yml"), "jobs", "image"), "steps"))
         caches = [
@@ -803,7 +803,12 @@ class SecurityWorkflowTests(unittest.TestCase):
         self.assertEqual(len(caches), 2)
         for config in caches:
             key = string(config, "key")
-            for source in ("security/exceptions.json", "security/image-policy.json"):
+            for source in (
+                "security/exceptions.json",
+                "security/image-policy.json",
+                "ops/Cargo.toml",
+                "ops/src/**",
+            ):
                 self.assertIn(f"'{source}'", key)
             # A broad fallback is safe only with the checked Dockerfile mount
             # dependency and the existing trust/architecture namespace guard.

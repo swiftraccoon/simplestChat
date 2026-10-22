@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 
 pub(crate) const MAX_WIDTH: usize = 100;
 const ALLOWANCE_FILE: &str = "xtask/line-length-allowance.txt";
-const ROOTS: [&str; 3] = ["src", "load_tests/src", "xtask/src"];
+const ROOTS: [&str; 4] = ["src", "load_tests/src", "xtask/src", "ops/src"];
 
 pub(crate) fn run(root: &Path, arguments: &[String]) -> Result<()> {
     let update = match arguments {
@@ -141,5 +141,42 @@ mod tests {
     fn a_cfg_test_item_that_is_not_a_module_stays_in_production_text() {
         let text = "#[cfg(test)]\nuse std::fmt;\nfn a() {}\n";
         assert_eq!(production_lines(text).len(), 3);
+    }
+
+    #[test]
+    fn operations_sources_share_the_existing_production_width_ratchet() {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        struct Fixture(PathBuf);
+        impl Drop for Fixture {
+            fn drop(&mut self) {
+                fs::remove_dir_all(&self.0).unwrap();
+            }
+        }
+        let fixture = Fixture(std::env::temp_dir().join(format!(
+            "operations width {} {}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        )));
+        fs::create_dir(&fixture.0).unwrap();
+        for directory in ["src", "load_tests/src", "xtask/src", "ops/src/release"] {
+            fs::create_dir_all(fixture.0.join(directory)).unwrap();
+        }
+        fs::write(fixture.0.join(ALLOWANCE_FILE), "0\n").unwrap();
+        let source = fixture.0.join("ops/src/release/manifest.rs");
+        fs::write(&source, "x".repeat(MAX_WIDTH + 1)).unwrap();
+        let error = run(&fixture.0, &[]).unwrap_err().to_string();
+        assert!(error.contains("1 production lines"));
+        assert_eq!(
+            fs::read_to_string(fixture.0.join(ALLOWANCE_FILE)).unwrap(),
+            "0\n"
+        );
+        fs::write(&source, "x".repeat(MAX_WIDTH)).unwrap();
+        fs::write(
+            fixture.0.join("ops/src/release/manifest_tests.rs"),
+            "x".repeat(200),
+        )
+        .unwrap();
+        run(&fixture.0, &[]).unwrap();
     }
 }

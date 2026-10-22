@@ -20,12 +20,13 @@ for a focused group. It requires installed development dependencies and never
 starts application services. Native tests
 are deliberately separate from the source-quality gate.
 
-The Rust workspace tests include the migrated quality-gate and local-launcher
-regressions. For a tooling-only change, run them without the server's native
-test graph:
+The Rust workspace tests include the operations manifest policy checks and the
+migrated quality-gate and local-launcher regressions. For tooling-only changes,
+run the relevant crate without the server's native test graph:
 
 ```sh
 cargo test --locked -p xtask -- --test-threads=1
+cargo test --locked -p simplestchat-ops
 ```
 
 Rust tests include native media checks; database tests are opt-in. Serial

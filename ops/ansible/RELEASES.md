@@ -18,6 +18,21 @@ host and CI. Older versions can omit service `env_file` values from configuratio
 hashes and reject unchanged containers. CI verifies the same version for both
 the runner user and the root-run release helper.
 
+## Inspect local release metadata
+
+The read-only [operations policy tool](../README.md) validates the current
+`release.json` schema and prints a diagnostic projection plus the original file's
+SHA-256 and byte count:
+
+```sh
+cargo run --locked -q -p simplestchat-ops -- release manifest --path /path/to/release.json
+```
+
+This validates metadata only; it does not authenticate an image archive or
+signature and cannot authorize deployment. It starts no host operation. The
+Python release commands below remain the supported runtime. No operations
+binary is installed on the host or included in the production image yet.
+
 ## Browser assets across replacement and rollback
 
 The managed proxy serves the selected app first. If that app returns 404 for an

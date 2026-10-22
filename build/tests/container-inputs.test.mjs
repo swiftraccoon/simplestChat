@@ -232,7 +232,7 @@ test('every Rust/browser source and migration in the repository reaches the buil
   // The context admits source directories one by one, so a new directory needs its own
   // rules: the Rust CI jobs build from the checkout and pass while only the image build
   // sees the hole (CI runs 39295831051 and 39302090481).
-  const sources = ['src/**/*.rs', 'load_tests/src/**/*.rs', 'xtask/src/**/*.rs', 'migrations/*.sql',
+  const sources = ['ops/src/**/*.rs', 'src/**/*.rs', 'load_tests/src/**/*.rs', 'xtask/src/**/*.rs', 'migrations/*.sql',
     'web/src/**/*.ts', 'web/src/**/*.css']
     .flatMap(pattern => globSync(pattern, { cwd: root }));
   assert.ok(sources.length > 100, 'the source globs must find the crate sources');
@@ -245,6 +245,8 @@ test('every Rust/browser source and migration in the repository reaches the buil
 test('context excludes local-only descendants while retaining production inputs', () => {
   for (const filename of [
     '.env', 'CLAUDE.md', 'results/local/report.json',
+    'ops/private.env', 'ops/src/private.env', 'ops/src/release/private.env',
+    'ops/tests/private.env', 'ops/README.md',
     'build/CLAUDE.md', 'build/private.env', 'src/CLAUDE.md', 'src/auth/private.env',
     'security/private.env', 'security/notes.json', 'security/runtime/private.env',
     'src/media/CLAUDE.md', 'src/room/notes.md', 'src/room/manager/notes.md', 'src/room/social/notes.md',
@@ -273,6 +275,7 @@ test('context excludes local-only descendants while retaining production inputs'
     'src/main.rs', 'src/auth/mod.rs', 'src/media/mod.rs', 'src/room/mod.rs', 'src/room/manager/membership.rs',
     'src/room/social/members.rs',
     'src/signaling/mod.rs', 'migrations/001_initial.sql',
+    'ops/Cargo.toml', 'ops/src/main.rs', 'ops/src/release/manifest.rs',
     'load_tests/Cargo.toml', 'load_tests/src/main.rs', 'load_tests/src/metrics/measurement.rs',
     'xtask/Cargo.toml', 'xtask/src/main.rs',
     'web/package.json', 'web/package-lock.json', 'web/tsconfig.json',
@@ -283,4 +286,21 @@ test('context excludes local-only descendants while retaining production inputs'
     'web/src/main.ts', 'web/src/style.css', 'web/src/screens/room.ts', 'web/src/chat/composer.ts',
     'vendor/mediasoup-sys-0.19.0/subprojects/packagefiles/abseil-cpp/meson.build',
   ]) assert.equal(excluded(filename), false, `${filename} must remain available to the build`);
+});
+
+
+test('ops workspace inputs remain narrow and no ops binary enters the production image', () => {
+  const opsRules = ignoreRules.filter(rule => rule.replace(/^!/, '').startsWith('ops'));
+  assert.deepEqual(opsRules.toSorted(), [
+    '!ops/', 'ops/**', '!ops/Cargo.toml', '!ops/src/', 'ops/src/**', '!ops/src/*.rs',
+    '!ops/src/release/', 'ops/src/release/**', '!ops/src/release/*.rs',
+    '!ops/ansible/', 'ops/ansible/**', '!ops/ansible/files/', 'ops/ansible/files/**',
+    '!ops/ansible/files/bounded_process.py', '!ops/ansible/files/release_json.py',
+  ].toSorted());
+  assert.match(dockerfile, /^COPY ops\/Cargo\.toml ops\/Cargo\.toml$/m);
+  assert.match(dockerfile, /^COPY ops\/src \.\/ops\/src$/m);
+  assert.match(dockerfile, /> ops\/src\/main\.rs/);
+  const runtime = dockerfile.slice(dockerfile.indexOf(' AS runtime-base'));
+  assert.doesNotMatch(runtime, /^COPY .*ops\/src|^COPY .*simplestchat-ops/m);
+  assert.doesNotMatch(dockerfile, /cargo[^\n]*build[^\n]*(?:-p|--bin) simplestchat-ops/);
 });
