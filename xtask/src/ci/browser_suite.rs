@@ -15,9 +15,9 @@ use std::process::ExitCode;
 use std::time::Duration;
 
 #[path = "browser_suite_cleanup.rs"]
-mod cleanup;
+pub(super) mod cleanup;
 #[path = "browser_suite_process.rs"]
-mod process;
+pub(super) mod process;
 
 const USAGE: &str = "usage: cargo run --locked -q -p xtask -- ci browser-suite \
 auth-lifecycle|auth-cross-tab|room-control-confirmation|media-continuity|presentation";

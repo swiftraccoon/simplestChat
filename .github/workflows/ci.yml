@@ -969,8 +969,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install the pinned Rust toolchain for local evidence copies
-        if: ${{ env.ACT }}
+      - name: Install the pinned Rust toolchain for CI image policy
         uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable (2026-10-01)
         with:
           toolchain: 1.99.0
@@ -1079,65 +1078,7 @@ jobs:
         shell: bash
         env:
           CACHE_PRIMARY_HIT: ${{ steps.production-cache.outputs.cache-hit }}
-        run: |
-          set -euo pipefail
-          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
-          test -z "$(git status --porcelain=v1 --untracked-files=all)"
-          # The container driver retains exported layer caches on both runner
-          # stores; --load hands the finished image to the runner's daemon.
-          driver_options=()
-          if [[ "${ACT:-}" == true && "$(uname -m)" == aarch64 ]]; then
-            [[ "${LOCAL_CI_DISPOSABLE:-}" == 1 ]] || exit 2
-            # BuildKit's AMD64 probe rejects Rosetta, then injects its bundled
-            # QEMU, which crashes the pinned Rust compiler. Keep the native
-            # BuildKit 0.33.1 ARM64 manifest and delegate AMD64 to kernel binfmt.
-            builder_context="$(mktemp -d "${RUNNER_TEMP}/buildkit-rosetta.XXXXXXXX")"
-            printf '%s\n' \
-              'FROM docker.io/moby/buildkit@sha256:3ad6bb9bc8c78c0069d03247adb9a59b3b43d68e55353e876e558b888c6c1768' \
-              'RUN test -x /usr/bin/buildkit-qemu-x86_64 && rm /usr/bin/buildkit-qemu-x86_64' \
-              > "${builder_context}/Dockerfile"
-            timeout --signal=TERM --kill-after=10s 3m \
-              docker buildx build --builder default --platform linux/arm64 --load \
-                --iidfile "${builder_context}/image.iid" "${builder_context}"
-            builder_id="$(<"${builder_context}/image.iid")"
-            [[ "${builder_id}" =~ ^sha256:[a-f0-9]{64}$ ]] || exit 1
-            test "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "${builder_id}")" = linux/arm64
-            driver_options=(--driver-opt "image=${builder_id}")
-          fi
-          docker buildx rm --force simplestchat-ci 2>/dev/null || true
-          docker buildx create --name simplestchat-ci --driver docker-container ${driver_options[@]+"${driver_options[@]}"} --use
-          cache_dir="${RUNNER_TEMP}/buildx-cache"
-          cache_from=()
-          if [[ -f "${cache_dir}/index.json" ]]; then
-            cache_from=(--cache-from "type=local,src=${cache_dir}")
-          fi
-          cache_to=()
-          if [[ "${CACHE_PRIMARY_HIT}" != true ]]; then
-            cache_to=(--cache-to "type=local,dest=${cache_dir}-next,mode=max")
-          fi
-          timeout --signal=TERM --kill-after=2m 50m \
-            docker buildx build --pull --load --target production --platform linux/amd64 \
-              --provenance=false --sbom=false \
-              ${cache_from[@]+"${cache_from[@]}"} \
-              ${cache_to[@]+"${cache_to[@]}"} \
-              --build-arg "SOURCE_REVISION=${GITHUB_SHA}" \
-              --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
-              --iidfile "${RUNNER_TEMP}/production.iid" \
-              --tag "${PRODUCTION_IMAGE}" .
-          # Exact hits cannot be published again; avoid exporting unused layers.
-          # Otherwise replace, rather than append, to bound the cache's growth.
-          if [[ "${CACHE_PRIMARY_HIT}" != true ]]; then
-            rm -rf "${cache_dir}"
-            mv "${cache_dir}-next" "${cache_dir}"
-          fi
-          # The release fixture requires an empty engine; the builder's
-          # BuildKit container must not outlive the build.
-          docker buildx rm --force simplestchat-ci
-          production_id="$(<"${RUNNER_TEMP}/production.iid")"
-          [[ "${production_id}" =~ ^sha256:[a-f0-9]{64}$ ]]
-          # Every following smoke, export and fixture uses this exact image,
-          # not the mutable build tag. The exporter never rebuilds it.
-          printf 'PRODUCTION_IMAGE=%s\n' "${production_id}" >> "${GITHUB_ENV}"
+        run: cargo run --locked -q -p xtask -- ci production-image build
 
       # Persist completed layers before later checks can fail. This cache is
       # build input only; image verification and release gates still run below.
@@ -1150,45 +1091,7 @@ jobs:
 
       - name: Verify production image contents and user
         shell: bash
-        run: |
-          set -euo pipefail
-
-          configured_user="$(
-            docker image inspect --format '{{.Config.User}}' "${PRODUCTION_IMAGE}"
-          )"
-          test "${configured_user}" = "10001:10001"
-
-          shopt -s nullglob
-          migration_names=()
-          for migration in migrations/*.sql; do
-            migration_names+=("${migration##*/}")
-          done
-          test "${#migration_names[@]}" -gt 0
-
-          docker run --rm \
-            --network none \
-            --read-only \
-            --cap-drop ALL \
-            --security-opt no-new-privileges \
-            --entrypoint /bin/sh \
-            "${PRODUCTION_IMAGE}" -eu -c '
-              test "$(id -u)" = 10001
-              test "$(id -g)" = 10001
-              test "$(stat -c %u /app/simplestChat)" = 0
-              test "$(stat -c %u /app/web/dist/index.html)" = 0
-              test "$(stat -c %u /app/migrations)" = 0
-              test -x /app/simplestChat
-              test -s /app/web/dist/index.html
-              test ! -e /app/load_test
-
-              actual_migrations="$(
-                find /app/migrations -maxdepth 1 -type f -name "*.sql" | wc -l
-              )"
-              test "${actual_migrations}" -eq "$#"
-              for migration do
-                test -s "/app/migrations/${migration}"
-              done
-            ' verify-image "${migration_names[@]}"
+        run: cargo run --locked -q -p xtask -- ci production-image verify
 
       - name: Production startup, migration and database-backed API smoke
         timeout-minutes: 5

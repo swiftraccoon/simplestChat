@@ -3,7 +3,7 @@
 use super::process::reserved;
 use rustix::process::{Pid, Signal};
 
-pub(super) async fn finish(pid: Pid) -> bool {
+pub(in crate::ci) async fn finish(pid: Pid) -> bool {
     if !reserved(pid) {
         return false;
     }

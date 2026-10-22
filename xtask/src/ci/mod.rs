@@ -20,6 +20,7 @@ mod github_output;
 mod inputs;
 mod io;
 mod native_security;
+mod production_image;
 mod receipts;
 mod required;
 #[cfg(test)]
@@ -29,7 +30,8 @@ const USAGE: &str = "usage: cargo run --locked -q -p xtask -- ci key|save|verify
 --scope SCOPE [--github-output] [--key KEY --directory PATH] [--root CHECKOUT]\n\
        cargo run --locked -q -p xtask -- ci native-security|automation|codeql-cache|required\n\
        cargo run --locked -q -p xtask -- ci browser-suite SUITE\n\
-       cargo run --locked -q -p xtask -- ci copy-evidence KIND";
+       cargo run --locked -q -p xtask -- ci copy-evidence KIND\n\
+       cargo run --locked -q -p xtask -- ci production-image build|verify";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Scope {
@@ -256,6 +258,12 @@ fn print_key(context: &Context, scope: Scope, github_output: bool) -> Result<()>
 }
 
 pub(crate) fn run(root: &Path, arguments: &[String]) -> Result<ExitCode> {
+    if arguments
+        .first()
+        .is_some_and(|argument| argument == "production-image")
+    {
+        return production_image::run(root, &arguments[1..]);
+    }
     if arguments
         .first()
         .is_some_and(|argument| argument == "copy-evidence")

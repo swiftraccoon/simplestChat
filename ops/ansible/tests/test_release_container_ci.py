@@ -1,8 +1,6 @@
 """Offline policy checks for disposable-host release integration in CI."""
 
-import re
 import subprocess
-import tempfile
 import unittest
 from functools import cached_property
 from pathlib import Path
@@ -86,11 +84,11 @@ class ReleaseContainerCiTests(unittest.TestCase):
         indexes = [self.steps.index(self.step(name)) for name in expected]
         self.assertEqual(indexes, sorted(indexes))
         build = string(self.step("Build production container"), "run")
-        self.assertIn('--tag "${PRODUCTION_IMAGE}" .', build)
+        self.assertEqual(build, "cargo run --locked -q -p xtask -- ci production-image build")
         build_steps = [
             step
             for step in self.steps
-            if re.search(r"\bdocker\s+(?:build|buildx\s+build)\b", string(step.get("run", "")))
+            if "ci production-image build" in string(step.get("run", ""))
         ]
         self.assertEqual(build_steps, [self.step("Build production container")])
 
@@ -99,18 +97,7 @@ class ReleaseContainerCiTests(unittest.TestCase):
         build = self.step("Build production container")
         self.assertEqual(build["shell"], "bash")
         command = string(build, "run")
-        self.assertTrue(command.startswith("set -euo pipefail\n"))
-        self.assertIn('test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"', command)
-        self.assertIn('test -z "$(git status --porcelain=v1 --untracked-files=all)"', command)
-        self.assertIn('--label "org.opencontainers.image.revision=${GITHUB_SHA}"', command)
-        self.assertIn('--iidfile "${RUNNER_TEMP}/production.iid"', command)
-        self.assertIn('production_id="$(<"${RUNNER_TEMP}/production.iid")"', command)
-        self.assertIn('[[ "${production_id}" =~ ^sha256:[a-f0-9]{64}$ ]]', command)
-        self.assertIn(
-            'printf \'PRODUCTION_IMAGE=%s\\n\' "${production_id}" >> "${GITHUB_ENV}"', command
-        )
-        self.assertLess(command.index("git status"), command.index("docker build"))
-        self.assertLess(command.index("docker build"), command.index('"${GITHUB_ENV}"'))
+        self.assertEqual(command, "cargo run --locked -q -p xtask -- ci production-image build")
         for step in self.steps[self.steps.index(build) + 1 :]:
             self.assertNotIn(
                 "PRODUCTION_IMAGE",
@@ -118,7 +105,7 @@ class ReleaseContainerCiTests(unittest.TestCase):
                 "Do not replace the checked immutable ID",
             )
         verify = string(self.step("Verify production image contents and user"), "run")
-        self.assertIn('"${PRODUCTION_IMAGE}" -eu -c', verify)
+        self.assertEqual(verify, "cargo run --locked -q -p xtask -- ci production-image verify")
         smoke = self.step("Production startup, migration and database-backed API smoke")
         self.assertEqual(smoke["run"], "build/test-container.sh")
         self.assertIn(
@@ -127,98 +114,22 @@ class ReleaseContainerCiTests(unittest.TestCase):
         )
         self.assertIn('--image "${PRODUCTION_IMAGE}"', string(self.step(INTEGRATION), "run"))
 
-    def run_builder_selection(
-        self,
-        machine: str,
-        *,
-        act: str = "true",
-        overrides: dict[str, str] | None = None,
-    ) -> tuple[subprocess.CompletedProcess[str], list[str]]:
-        """Execute actual workflow routing with Docker calls replaced by inert records."""
-        command = string(self.step("Build production container"), "run")
-        _, marker, selection = command.partition("driver_options=()\n")
-        self.assertTrue(marker)
-        selection, marker, _ = selection.partition('cache_dir="')
-        self.assertTrue(marker)
-        mocks = r"""
-uname() { printf '%s\n' "$TEST_MACHINE"; }
-timeout() { shift 3; "$@"; }
-docker() {
-  printf '%s ' "$@" >> "$RUNNER_TEMP/docker-calls"
-  printf '\n' >> "$RUNNER_TEMP/docker-calls"
-  case "$1 $2" in
-    'buildx build')
-      [[ "$TEST_BUILD_STATUS" == 0 ]] || return "$TEST_BUILD_STATUS"
-      while (($#)); do
-        if [[ "$1" == --iidfile ]]; then
-          shift
-          printf '%s\n' "$TEST_IMAGE_ID" > "$1"
-          break
-        fi
-        shift
-      done
-      ;;
-    'image inspect') printf '%s\n' "$TEST_IMAGE_ARCH" ;;
-  esac
-}
-"""
-        (ROOT / "results").mkdir(exist_ok=True)
-        with tempfile.TemporaryDirectory(prefix="builder-routing.", dir=ROOT / "results") as path:
-            result = subprocess.run(  # noqa: S603 -- Actual local block, inert shell mocks only.
-                ["/bin/bash", "-c", mocks + "set -euo pipefail\ndriver_options=()\n" + selection],
-                env={
-                    "RUNNER_TEMP": path,
-                    "ACT": act,
-                    "LOCAL_CI_DISPOSABLE": "1",
-                    "TEST_MACHINE": machine,
-                    "TEST_IMAGE_ID": "sha256:" + "a" * 64,
-                    "TEST_IMAGE_ARCH": "linux/arm64",
-                    "TEST_BUILD_STATUS": "0",
-                    **(overrides or {}),
-                },
-                capture_output=True,
-                text=True,
-                check=False,
-                timeout=5,
-            )
-            calls = Path(path) / "docker-calls"
-            return result, calls.read_text().splitlines() if calls.exists() else []
-
-    def test_local_arm_builder_changes_only_the_disposable_native_driver_image(self) -> None:
-        """Hosted and local AMD64 keep their driver; ARM uses a validated immutable image."""
-        for machine, act, derived in (
-            ("aarch64", "true", True),
-            ("x86_64", "true", False),
-            ("x86_64", "", False),
-            ("aarch64", "", False),
-        ):
-            with self.subTest(machine=machine, act=act):
-                result, calls = self.run_builder_selection(machine, act=act)
-                self.assertEqual(result.returncode, 0, result.stderr)
-                creates = [call for call in calls if call.startswith("buildx create ")]
-                self.assertEqual(len(creates), 1)
-                self.assertIn("--driver docker-container", creates[0])
-                self.assertEqual("--driver-opt image=sha256:" in creates[0], derived)
-                self.assertEqual(any(call.startswith("buildx build ") for call in calls), derived)
-                if derived:
-                    self.assertIn("--builder default --platform linux/arm64 --load", calls[0])
-                    self.assertIn("image=sha256:" + "a" * 64, creates[0])
-
-    def test_local_builder_rejects_missing_opt_in_failed_build_and_untrusted_image(self) -> None:
-        """Failures cannot fall through to the bundled emulator or a mutable image tag."""
-        cases = (
-            {"LOCAL_CI_DISPOSABLE": ""},
-            {"TEST_BUILD_STATUS": "42"},
-            {"TEST_IMAGE_ID": "floating:tag"},
-            {"TEST_IMAGE_ARCH": "linux/amd64"},
+    def test_image_policy_has_pinned_rust_on_hosted_and_disposable_ci(self) -> None:
+        """The compiled policy runs in both contexts without changing action scope."""
+        installer = self.steps[1]
+        self.assertEqual(installer["name"], "Install the pinned Rust toolchain for CI image policy")
+        self.assertNotIn("if", installer)
+        self.assertEqual(
+            installer["uses"], "dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d"
         )
-        for options in cases:
-            with self.subTest(options=options):
-                result, calls = self.run_builder_selection("aarch64", overrides=options)
-                self.assertNotEqual(result.returncode, 0)
-                self.assertFalse(any(call.startswith("buildx create ") for call in calls))
-                if options.get("LOCAL_CI_DISPOSABLE") == "":
-                    self.assertEqual(calls, [])
+        self.assertEqual(at(installer, "with", "toolchain"), "1.99.0")
+        image_database = objects(self.workflow, "jobs", "image-database", "steps")
+        local = next(
+            step
+            for step in image_database
+            if step.get("name") == "Install the pinned Rust toolchain for local evidence copies"
+        )
+        self.assertEqual(local["if"], "${{ env.ACT }}")
 
     def test_push_export_never_rebuilds_and_publication_waits_for_required_checks(self) -> None:
         """Verify push export never rebuilds and publication waits for required checks."""
@@ -592,8 +503,8 @@ docker() {
         self.assertNotIn("env", retention)
         self.assertNotIn("continue-on-error", retention)
 
-    def test_local_evidence_bootstraps_only_in_owned_runner_jobs(self) -> None:
-        """The same pinned compiler precedes all three copies without changing hosted steps."""
+    def test_pinned_compiler_precedes_image_policy_and_all_guarded_local_evidence(self) -> None:
+        """Image policy always compiles; local-only evidence copies retain their guards."""
         for job_name, copies in (
             ("image-database", {"image-database"}),
             ("deployment", {"release-container", "release-checks"}),
@@ -604,7 +515,10 @@ docker() {
                 bootstrap["uses"],
                 "dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d",
             )
-            self.assertEqual(bootstrap["if"], "${{ env.ACT }}")
+            if job_name == "image-database":
+                self.assertEqual(bootstrap["if"], "${{ env.ACT }}")
+            else:
+                self.assertNotIn("if", bootstrap)
             self.assertEqual(bootstrap["with"], {"toolchain": "1.99.0"})
             self.assertNotIn("env", bootstrap)
             self.assertNotIn("permissions", bootstrap)

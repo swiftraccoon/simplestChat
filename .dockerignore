@@ -102,6 +102,9 @@ xtask/src/check/**
 !xtask/src/ci/
 xtask/src/ci/**
 !xtask/src/ci/*.rs
+!xtask/src/ci/production_image/
+xtask/src/ci/production_image/**
+!xtask/src/ci/production_image/*.rs
 !xtask/src/ci/codeql_cache/
 xtask/src/ci/codeql_cache/**
 !xtask/src/ci/codeql_cache/*.rs

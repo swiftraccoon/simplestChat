@@ -13,14 +13,14 @@ use std::process::Stdio;
 use std::time::{Duration, Instant};
 use tokio::signal::unix::{Signal, SignalKind};
 
-pub(super) struct Signals {
+pub(in crate::ci) struct Signals {
     interrupt: Option<Signal>,
     terminate: Option<Signal>,
     injected: Option<tokio::sync::mpsc::UnboundedReceiver<u8>>,
 }
 
 impl Signals {
-    pub(super) fn new() -> Result<Self> {
+    pub(in crate::ci) fn new() -> Result<Self> {
         Ok(Self {
             interrupt: Some(tokio::signal::unix::signal(SignalKind::interrupt()).map_err(io)?),
             terminate: Some(tokio::signal::unix::signal(SignalKind::terminate()).map_err(io)?),
@@ -29,7 +29,7 @@ impl Signals {
     }
 
     #[cfg(test)]
-    pub(super) fn injected(receiver: tokio::sync::mpsc::UnboundedReceiver<u8>) -> Self {
+    pub(in crate::ci) fn injected(receiver: tokio::sync::mpsc::UnboundedReceiver<u8>) -> Self {
         Self {
             interrupt: None,
             terminate: None,
@@ -37,7 +37,7 @@ impl Signals {
         }
     }
 
-    pub(super) async fn next(&mut self) -> u8 {
+    pub(in crate::ci) async fn next(&mut self) -> u8 {
         if let Some(receiver) = &mut self.injected {
             return match receiver.recv().await {
                 Some(code) => code,
@@ -50,7 +50,7 @@ impl Signals {
         }
     }
 
-    pub(super) async fn pending(&mut self) -> Option<u8> {
+    pub(in crate::ci) async fn pending(&mut self) -> Option<u8> {
         tokio::select! {
             biased;
             code = self.next() => Some(code),
@@ -63,7 +63,7 @@ fn io(_: std::io::Error) -> Failure {
     Failure::new(1, "Browser harness supervision failed.")
 }
 
-async fn exited(pid: Pid) -> Result<()> {
+pub(in crate::ci) async fn exited(pid: Pid) -> Result<()> {
     loop {
         match rustix::process::waitid(
             WaitId::Pid(pid),
@@ -92,13 +92,32 @@ pub(super) fn reserved(pid: Pid) -> bool {
 
 /// Standard Child has no background reaper. Disarm before waiting so a late
 /// destructor can never signal a process-group ID after its reservation ends.
-struct Group {
+pub(in crate::ci) struct Group {
     child: Option<std::process::Child>,
     pid: Pid,
 }
 
 impl Group {
-    async fn reap(&mut self) -> Result<std::process::ExitStatus> {
+    pub(in crate::ci) fn new(child: std::process::Child) -> Self {
+        let pid = i32::try_from(child.id())
+            .ok()
+            .and_then(Pid::from_raw)
+            .expect("spawned owned child has a positive process identity");
+        Self {
+            child: Some(child),
+            pid,
+        }
+    }
+
+    pub(in crate::ci) fn pid(&self) -> Pid {
+        self.pid
+    }
+
+    pub(in crate::ci) fn child(&mut self) -> &mut std::process::Child {
+        self.child.as_mut().expect("owned unreaped child")
+    }
+
+    pub(in crate::ci) async fn reap(&mut self) -> Result<std::process::ExitStatus> {
         let mut child = self.child.take().expect("owned unreaped child");
         tokio::task::spawn_blocking(move || child.wait())
             .await

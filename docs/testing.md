@@ -614,7 +614,35 @@ test command with ignored tests included and one test thread. A browser-only
 binary cache cannot substitute for that test graph. The production image caches
 completed application layers as well as warmed dependencies, with a new cache
 key whenever its build inputs change. BuildKit validates fallback layers against
-the current inputs. The release fixture's controller installs in the
+the current inputs. The native image policy commands are:
+
+```sh
+cargo run --locked -q -p xtask -- ci production-image build
+cargo run --locked -q -p xtask -- ci production-image verify
+```
+
+They require Linux and either a GitHub-hosted runner or explicit
+`ACT=true LOCAL_CI_DISPOSABLE=1`. Ordinary local invocation refuses engine work.
+The pinned Rust bootstrap runs on both CI paths. Build checks the exact
+`GITHUB_SHA` and a clean checkout before any engine operation, journals a fresh
+unique builder before creation, and always attempts its cleanup. It preserves
+the 50-minute build timeout and two-minute forced-stop grace; the ARM64 native
+BuildKit bootstrap retains its three-minute timeout and ten-second grace.
+The source guard runs again after cleanup. Only a canonical immutable image ID
+with a matching revision label and `SOURCE_REVISION` image configuration reaches
+`GITHUB_ENV`, after builder cleanup. Existing runner
+output files are append-only and must be regular files. Cache hits import layers
+without exporting; misses promote a completed export only after success.
+Verification checks the same source revision and immutable image, user
+`10001:10001`, root-owned application/assets/migrations, the complete migration
+inventory and absence of the load generator. Its fixed guest shell runs with
+network disabled, read-only root, all capabilities dropped and no new privileges.
+The verification container has a journaled unique name and owner label; start
+and cleanup use its inspected immutable ID. Cleanup refuses a changed identity.
+SIGINT/SIGTERM return 130/143, timeouts return 124, invalid context returns 2,
+and command failures preserve their exit status. Owned fake process tests check
+these boundaries without contacting an engine; they do not establish real
+container-build parity. The release fixture's controller installs in the
 background while the image builds.
 [CI](../.github/workflows/ci.yml) also runs formatting, locked Rust builds/tests,
 web tests/build, readiness/shutdown and pinned Chromium integration tests, dependency audits, native
@@ -674,9 +702,10 @@ the Mac launcher enables its registered Rosetta interpreter for AMD64 production
 commands and disables the competing QEMU handler. The packaged QEMU crashes when
 querying the pinned AMD64 Rust compiler. Local ARM64 production builds derive a
 digest-pinned native BuildKit image with only its bundled AMD64 QEMU removed,
-so build commands use the kernel's Rosetta registration. The existing container
-builder and exported layer cache remain in use. Authenticated OpenSSL extraction uses
-Python's filtered tar reader, which works with Rosetta. These ARM64 test runs
+so build commands use the kernel's Rosetta registration. The container driver and
+exported layer cache remain in use, with a fresh journaled builder name for each
+invocation; no pre-existing fixed-name builder is deleted. Authenticated OpenSSL
+extraction uses Python's filtered tar reader, which works with Rosetta. These ARM64 test runs
 exercise the same checks but do not claim identical ISA coverage to GitHub.
 The default signed deployment requires the hosted AMD64 workflow. An explicit
 owner-requested [`--force` deployment](../ops/ansible/RELEASES.md) is a separate,
