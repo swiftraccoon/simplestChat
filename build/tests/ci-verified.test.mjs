@@ -134,3 +134,68 @@ test('CI CLI validates the complete restored receipt before acknowledging reuse'
   assert.equal(refused.status, 1);
   assert.match(refused.stderr, /ci_cache_codeql_requires_database/);
 });
+
+test('CI key appends the same fixed output for each workflow scope without stdout or shell expansion', (t) => {
+  const f = fixture(t);
+  for (const scope of ['automation', 'rust-lint', 'rust-test', 'backend']) {
+    const key = f.run(['key', '--scope', scope]);
+    assert.equal(key.status, 0, key.stderr);
+    const filename = path.join(f.root, `output ${scope} $(touch unowned); literal`);
+    writeFileSync(filename, 'prior=preserved\n');
+    const published = f.run(['key', '--scope', scope, '--github-output'], {
+      GITHUB_OUTPUT: filename,
+    });
+    assert.equal(published.status, 0, published.stderr);
+    assert.equal(published.stdout, '');
+    assert.equal(published.stderr, '');
+    assert.equal(readFileSync(filename, 'utf8'), `prior=preserved\nkey=${key.stdout}`);
+  }
+  const key = f.run(['key', '--scope', 'rust-test'], {
+    GITHUB_EVENT_NAME: 'pull_request',
+  });
+  const filename = path.join(f.root, 'untrusted-output');
+  writeFileSync(filename, '');
+  const published = f.run(['key', '--scope', 'rust-test', '--github-output'], {
+    GITHUB_OUTPUT: filename,
+    GITHUB_EVENT_NAME: 'pull_request',
+  });
+  assert.equal(published.status, 0, published.stderr);
+  assert.equal(readFileSync(filename, 'utf8'), `key=${key.stdout}`);
+  assert.match(key.stdout, /^ci-verified-v1-rust-test-untrusted-[a-f0-9]{64}\n$/);
+});
+
+test('CI output mode refuses missing, unsafe or invalid requests without publishing or leaking paths', (t) => {
+  const f = fixture(t);
+  const output = path.join(f.root, 'private-output-sentinel');
+  writeFileSync(output, 'prior=preserved\n');
+  const alias = path.join(f.root, 'output-alias');
+  symlinkSync(output, alias);
+  const missing = path.join(f.root, 'private-missing-sentinel');
+  for (const [filename, reason] of [
+    ['', 'ci_cache_github_output_missing'],
+    ['private-relative-sentinel', 'ci_cache_github_output_path'],
+    [missing, 'ci_cache_github_output_open'],
+    [alias, 'ci_cache_github_output_open'],
+    [f.root, 'ci_cache_github_output_open'],
+  ]) {
+    const result = f.run(['key', '--scope', 'rust-test', '--github-output'], {
+      GITHUB_OUTPUT: filename,
+    });
+    assert.equal(result.status, 1);
+    assert.equal(result.stdout, '');
+    assert.equal(result.stderr, `CI cache rejected: ${reason}\n`);
+    assert.doesNotMatch(result.stderr, /private-.*-sentinel/);
+    assert.equal(readFileSync(output, 'utf8'), 'prior=preserved\n');
+  }
+  for (const args of [
+    ['save', '--scope', 'rust-test', '--github-output'],
+    ['verify', '--scope', 'rust-test', '--github-output'],
+    ['key', '--scope', 'unknown', '--github-output'],
+    ['key', '--scope', 'rust-test', '--github-output', '--github-output'],
+  ]) {
+    const result = f.run(args, { GITHUB_OUTPUT: output });
+    assert.equal(result.status, 2);
+    assert.equal(result.stdout, '');
+    assert.equal(readFileSync(output, 'utf8'), 'prior=preserved\n');
+  }
+});

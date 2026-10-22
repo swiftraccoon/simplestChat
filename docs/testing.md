@@ -901,6 +901,17 @@ it defaults to this repository. `save` and `verify` require an absolute receipt
 directory. Python remains the parity reference and supplies the current security
 helpers' source-closure API; scanner drivers retain their existing implementation.
 
+The four standard workflow fingerprint steps use
+`cargo run --locked -q -p xtask -- ci key --scope "$CI_CACHE_SCOPE" --github-output`.
+This computes the same scoped key and appends exactly one `key=...` line to the
+runner-provided `GITHUB_OUTPUT`, without printing the key on stdout. The file must
+already exist at an absolute path and be regular; the command appends without
+creating, truncating or following its final symlink. Missing output configuration,
+unsafe/open failures, failed fingerprints and write/close errors fail the step
+with fixed labels. The flag applies only to `key`; ordinary `ci key` still prints
+its key for local use. Cache namespaces, restore/save guards and success receipts
+retain their existing policy. Python image-database cache hints remain separate.
+
 `cargo run --locked -q -p xtask -- ci automation` runs the installed Python
 quality gate first, then offline Ansible lint, every maintained controller
 playbook's syntax check, ShellCheck and operations unit tests. Each command's

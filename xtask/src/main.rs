@@ -32,6 +32,7 @@ Commands:
   check         Run installed-tool quality gates: [--web|--rust|--python|--helpers].
                 Default runs all groups, without installs or application services.
   ci            Exact-input CI keys and success receipts: key|save|verify --scope SCOPE.
+                key --github-output appends the fixed key output to GITHUB_OUTPUT.
                 native-security verifies dependency pins, overlays and server linkage.
                 automation runs installed controller quality, syntax and unit checks.
                 codeql-cache keys and validates analyzed databases with fresh receipts.

@@ -16,6 +16,7 @@ mod browser_suite;
 mod codeql_cache;
 mod evidence_copy;
 mod fingerprint;
+mod github_output;
 mod inputs;
 mod io;
 mod native_security;
@@ -25,7 +26,7 @@ mod required;
 mod tests;
 
 const USAGE: &str = "usage: cargo run --locked -q -p xtask -- ci key|save|verify \
---scope SCOPE [--key KEY --directory PATH] [--root CHECKOUT]\n\
+--scope SCOPE [--github-output] [--key KEY --directory PATH] [--root CHECKOUT]\n\
        cargo run --locked -q -p xtask -- ci native-security|automation|codeql-cache|required\n\
        cargo run --locked -q -p xtask -- ci browser-suite SUITE\n\
        cargo run --locked -q -p xtask -- ci copy-evidence KIND";
@@ -200,6 +201,7 @@ struct Options {
     key: String,
     directory: PathBuf,
     root: PathBuf,
+    github_output: bool,
 }
 
 fn options(root: &Path, arguments: &[String]) -> Option<Options> {
@@ -208,24 +210,49 @@ fn options(root: &Path, arguments: &[String]) -> Option<Options> {
     let mut key = String::new();
     let mut directory = PathBuf::from(".");
     let mut checkout = root.to_path_buf();
+    let mut github_output = false;
+    let mut receipt_arguments = false;
     let mut arguments = arguments.iter();
     while let Some(argument) = arguments.next() {
         match argument.as_str() {
             "key" | "save" | "verify" if operation.is_none() => operation = Some(argument.clone()),
             "--scope" => scope = Some(Scope::parse(arguments.next()?)?),
-            "--key" => key = arguments.next()?.clone(),
-            "--directory" => directory = PathBuf::from(arguments.next()?),
+            "--github-output" if !github_output => github_output = true,
+            "--key" => {
+                key = arguments.next()?.clone();
+                receipt_arguments = true;
+            }
+            "--directory" => {
+                directory = PathBuf::from(arguments.next()?);
+                receipt_arguments = true;
+            }
             "--root" => checkout = PathBuf::from(arguments.next()?),
             _ => return None,
         }
     }
+    let operation = operation?;
+    if github_output && (operation != "key" || receipt_arguments) {
+        return None;
+    }
     Some(Options {
-        operation: operation?,
+        operation,
         scope: scope?,
         key,
         directory,
         root: checkout,
+        github_output,
     })
+}
+
+fn print_key(context: &Context, scope: Scope, github_output: bool) -> Result<()> {
+    if github_output {
+        let target = github_output::Target::open(context)?;
+        let key = fingerprint::key(context, scope)?;
+        target.append(scope, context.trusted(), &key)
+    } else {
+        println!("{}", fingerprint::key(context, scope)?);
+        Ok(())
+    }
 }
 
 pub(crate) fn run(root: &Path, arguments: &[String]) -> Result<ExitCode> {
@@ -279,7 +306,7 @@ pub(crate) fn run(root: &Path, arguments: &[String]) -> Result<ExitCode> {
     let work = || -> Result<()> {
         let context = Context::current(&options.root)?;
         if options.operation == "key" {
-            println!("{}", fingerprint::key(&context, options.scope)?);
+            print_key(&context, options.scope, options.github_output)?;
         } else {
             require(
                 options.directory.is_absolute() && !options.directory.is_symlink(),

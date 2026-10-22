@@ -61,8 +61,7 @@ jobs:
         env:
           CI_CACHE_SCOPE: automation
         run: |
-          key="$(cargo run --locked -q -p xtask -- ci key --scope "$CI_CACHE_SCOPE")"
-          printf 'key=%s\n' "$key" >> "$GITHUB_OUTPUT"
+          cargo run --locked -q -p xtask -- ci key --scope "$CI_CACHE_SCOPE" --github-output
       - name: Restore a verified automation result
         id: verified
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -180,8 +179,7 @@ jobs:
         env:
           CI_CACHE_SCOPE: rust-lint
         run: |
-          key="$(cargo run --locked -q -p xtask -- ci key --scope "$CI_CACHE_SCOPE")"
-          printf 'key=%s\n' "$key" >> "$GITHUB_OUTPUT"
+          cargo run --locked -q -p xtask -- ci key --scope "$CI_CACHE_SCOPE" --github-output
       - name: Restore a verified rust-lint result
         id: verified
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -294,8 +292,7 @@ jobs:
         env:
           CI_CACHE_SCOPE: rust-test
         run: |
-          key="$(cargo run --locked -q -p xtask -- ci key --scope "$CI_CACHE_SCOPE")"
-          printf 'key=%s\n' "$key" >> "$GITHUB_OUTPUT"
+          cargo run --locked -q -p xtask -- ci key --scope "$CI_CACHE_SCOPE" --github-output
       - name: Restore a verified rust-test result
         id: verified
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -533,8 +530,7 @@ jobs:
         env:
           CI_CACHE_SCOPE: backend
         run: |
-          key="$(cargo run --locked -q -p xtask -- ci key --scope "$CI_CACHE_SCOPE")"
-          printf 'key=%s\n' "$key" >> "$GITHUB_OUTPUT"
+          cargo run --locked -q -p xtask -- ci key --scope "$CI_CACHE_SCOPE" --github-output
       - name: Restore a verified backend result
         id: verified
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
