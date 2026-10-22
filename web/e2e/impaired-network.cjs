@@ -161,8 +161,12 @@ async function runSuite(runner = {}) {
       { mode: 0o600 },
     );
   }
-  function impair(action, profile = {}) {
+  async function impair(action, profile = {}, phase) {
     if (!impairmentEnabled) return;
+    // The adaptive Rust owner holds one live lease across all awaited phases.
+    // Ordinary reference invocations retain the existing literal shell helper.
+    if (runner.impair) return runner.impair(action, profile, phase);
+    if (impairScript === 'rust-owned') throw new Error('Owned impairment control is unavailable');
     const output = executeImpairment('sh', [impairScript, action], {
       env: {
         ...env,
@@ -525,7 +529,7 @@ async function runSuite(runner = {}) {
     try {
       // With UDP dropped before anyone joins, ICE can only succeed over the
       // server's TCP candidates; every client and both directions prove it.
-      if (blockUdp) impair('block-udp');
+      if (blockUdp) await impair('block-udp');
       const publisher = await client('publisher');
       if (callOutcomes) await expectCall(publisher, 'call_join', 'no_media_expected');
       // The explicit camera control requests its device directly.
@@ -577,8 +581,8 @@ async function runSuite(runner = {}) {
           phase.assertions.push({ label, passed: Boolean(condition), detail: detail ?? null });
           return Boolean(condition);
         };
-        if (name === 'recovery' || !profile.env) impair('clear');
-        else impair('apply', profile.env);
+        if (name === 'recovery' || !profile.env) await impair('clear', {}, name);
+        else await impair('apply', profile.env, name);
         let latecomer = null;
         if (profile.join) {
           const joinStarted = performance.now();
@@ -877,7 +881,7 @@ async function runSuite(runner = {}) {
     } finally {
       for (const action of blockUdp ? ['clear', 'unblock-udp'] : ['clear']) {
         try {
-          impair(action);
+          await impair(action);
         } catch (error) {
           report.passed = false;
           report.failure ??= { message: `impairment ${action} failed: ${error.message}` };

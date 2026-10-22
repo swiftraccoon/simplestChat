@@ -99,6 +99,21 @@ fn number(environment: &Environment, key: &str, default: u32, maximum: u32) -> R
     }
 }
 
+pub(super) fn authorize(environment: &Environment, system: &str) -> Result<()> {
+    let authorized = system == "linux"
+        && if text(environment, "ACT") == Some("true") {
+            text(environment, "LOCAL_CI_DISPOSABLE") == Some("1")
+        } else {
+            text(environment, "GITHUB_ACTIONS") == Some("true")
+                && text(environment, "RUNNER_ENVIRONMENT") == Some("github-hosted")
+        };
+    ensure!(
+        authorized,
+        "Impaired loopback requires an explicit disposable Linux runner"
+    );
+    Ok(())
+}
+
 impl Plan {
     pub fn parse(
         root: &Path,
@@ -106,17 +121,7 @@ impl Plan {
         environment: Environment,
         system: &str,
     ) -> Result<Self> {
-        let authorized = system == "linux"
-            && if text(&environment, "ACT") == Some("true") {
-                text(&environment, "LOCAL_CI_DISPOSABLE") == Some("1")
-            } else {
-                text(&environment, "GITHUB_ACTIONS") == Some("true")
-                    && text(&environment, "RUNNER_ENVIRONMENT") == Some("github-hosted")
-            };
-        ensure!(
-            authorized,
-            "Impaired loopback requires an explicit disposable Linux runner"
-        );
+        authorize(&environment, system)?;
         let mut values = BTreeMap::new();
         for pair in arguments.chunks(2) {
             ensure!(pair.len() == 2, "Invalid impaired options");

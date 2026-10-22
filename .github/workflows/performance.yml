@@ -197,10 +197,7 @@ jobs:
       # downlink degrades while signaling and the publisher's uplink stay clean.
       - name: Browser viewer under loss, a bandwidth cap and recovery
         shell: bash
-        run: |
-          set -euo pipefail
-          sudo tc qdisc add dev lo root netem loss 0% && sudo tc qdisc del dev lo root
-          build/impaired-check.sh "${RUNNER_TEMP}/impaired/browser"
+        run: ./target/release/load_test bench browser-adaptive --output "${RUNNER_TEMP}/impaired/browser"
 
       # The generator's exact-delivery gates describe a lossless loopback; under
       # impairment its reports are evidence and the step passes when the run

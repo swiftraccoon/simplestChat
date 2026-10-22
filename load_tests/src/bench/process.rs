@@ -2,6 +2,9 @@
 //! host, while native ownership uses the same unreaped process-group guard as
 //! bounded capacity commands.
 
+#[path = "process_control.rs"]
+mod control;
+
 use crate::owned_process::{self, Cancellation, Destination, Limits, Request, Runner};
 use anyhow::Result;
 use serde::Serialize;
@@ -147,9 +150,25 @@ impl Child for owned_process::child::Child {
     }
 }
 
+/// The parent endpoint of one inherited standard-input duplex stream. Reads
+/// deliver at most the supplied buffer and are cancellation safe. Writes must
+/// be awaited to completion; a dropped write is never retried as a new request.
+/// The invocation closes this endpoint after retiring its controlled child.
+#[async_trait::async_trait]
+pub trait Control: Send {
+    async fn read(&mut self, buffer: &mut [u8]) -> Result<usize>;
+    async fn write(&mut self, bytes: &[u8]) -> Result<()>;
+    fn finish(self: Box<Self>) -> Result<()>;
+}
+
 #[async_trait::async_trait]
 pub trait Host: Send + Sync {
     fn spawn(&self, command: Command) -> Result<Box<dyn Child>>;
+    /// Only explicit consumers can request the closed duplex stdin mode.
+    /// Existing hosts and byte-input callers retain their previous behavior.
+    fn spawn_controlled(&self, _command: Command) -> Result<(Box<dyn Child>, Box<dyn Control>)> {
+        anyhow::bail!("Controlled command mode unavailable")
+    }
     async fn cancelled(&self) -> u8;
 }
 
@@ -228,17 +247,40 @@ fn destination(sink: Sink) -> Result<Destination> {
     }
 }
 
-#[async_trait::async_trait]
-impl Host for NativeHost {
-    fn spawn(&self, command: Command) -> Result<Box<dyn Child>> {
+impl NativeHost {
+    fn spawn_mode(
+        &self,
+        command: Command,
+        input: Option<std::os::unix::net::UnixStream>,
+    ) -> Result<Box<dyn Child>> {
         if !command.cleanup && self.cancellation.code() != 0 {
+            if let Some(input) = input {
+                let _ = nix::unistd::close(input);
+            }
             return Err(Interrupted(self.cancellation.code()).into());
         }
         let stream = matches!(command.stdout, Sink::Stream);
         let stdout = if stream {
             Destination::capture()
         } else {
-            destination(command.stdout)?
+            match destination(command.stdout) {
+                Ok(value) => value,
+                Err(error) => {
+                    if let Some(input) = input {
+                        let _ = nix::unistd::close(input);
+                    }
+                    return Err(error);
+                }
+            }
+        };
+        let stderr = match destination(command.stderr) {
+            Ok(value) => value,
+            Err(error) => {
+                if let Some(input) = input {
+                    let _ = nix::unistd::close(input);
+                }
+                return Err(error);
+            }
         };
         let runner = Runner {
             directory: command.directory,
@@ -253,10 +295,12 @@ impl Host for NativeHost {
             },
             input: command.input,
             stdout,
-            stderr: destination(command.stderr)?,
+            stderr,
             cleanup: command.cleanup,
         };
-        let result = if stream {
+        let result = if let Some(input) = input {
+            runner.spawn_controlled(&command.executable, &command.arguments, request, input)
+        } else if stream {
             runner.spawn_stream(&command.executable, &command.arguments, request)
         } else {
             runner.spawn(&command.executable, &command.arguments, request)
@@ -269,6 +313,41 @@ impl Host for NativeHost {
             }
         })?;
         Ok(Box::new(child))
+    }
+}
+
+#[async_trait::async_trait]
+impl Host for NativeHost {
+    fn spawn(&self, command: Command) -> Result<Box<dyn Child>> {
+        self.spawn_mode(command, None)
+    }
+    fn spawn_controlled(&self, command: Command) -> Result<(Box<dyn Child>, Box<dyn Control>)> {
+        anyhow::ensure!(
+            command.input.is_empty(),
+            "Controlled command requires empty input"
+        );
+        anyhow::ensure!(
+            !matches!(&command.stdout, Sink::Stream),
+            "Controlled command requires captured or file stdout"
+        );
+        if !command.cleanup && self.cancellation.code() != 0 {
+            return Err(Interrupted(self.cancellation.code()).into());
+        }
+        let (parent, child) = std::os::unix::net::UnixStream::pair()?;
+        let control = match control::NativeControl::new(parent) {
+            Ok(control) => control,
+            Err(error) => {
+                let _ = nix::unistd::close(child);
+                return Err(error);
+            }
+        };
+        match self.spawn_mode(command, Some(child)) {
+            Ok(child) => Ok((child, Box::new(control))),
+            Err(error) => {
+                let _ = Box::new(control).finish();
+                Err(error)
+            }
+        }
     }
     async fn cancelled(&self) -> u8 {
         self.cancellation.cancelled().await

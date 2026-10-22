@@ -12,7 +12,46 @@ pub(super) const BUDGET: Duration = Duration::from_secs(720);
 pub(super) const NODE_BUDGET: Duration = Duration::from_secs(600);
 pub(super) const RESERVE: Duration = Duration::from_secs(90);
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum Mode {
+    Mechanics,
+    Adaptive,
+}
+impl Mode {
+    pub fn adaptive(self) -> bool {
+        self == Self::Adaptive
+    }
+    pub fn budget(self) -> Duration {
+        if self.adaptive() {
+            Duration::from_secs(960)
+        } else {
+            BUDGET
+        }
+    }
+    pub fn reserve(self) -> Duration {
+        if self.adaptive() {
+            Duration::from_secs(300)
+        } else {
+            RESERVE
+        }
+    }
+    pub fn stem(self) -> &'static str {
+        if self.adaptive() {
+            "browser-adaptive"
+        } else {
+            "browser-mechanics"
+        }
+    }
+}
+
+pub(super) struct KernelTools {
+    pub tc: Selected,
+    pub sudo: Selected,
+}
+
 pub(super) struct Plan {
+    pub mode: Mode,
+    pub kernel: Option<KernelTools>,
     pub root: PathBuf,
     pub output: PathBuf,
     pub environment: Environment,
@@ -45,6 +84,25 @@ fn fixed(environment: &Environment, key: &str, allowed: &[&str]) -> Result<()> {
 
 impl Plan {
     pub fn parse(root: &Path, arguments: &[OsString], environment: Environment) -> Result<Self> {
+        Self::parse_mode(
+            root,
+            arguments,
+            environment,
+            Mode::Mechanics,
+            std::env::consts::OS,
+        )
+    }
+
+    pub fn parse_mode(
+        root: &Path,
+        arguments: &[OsString],
+        environment: Environment,
+        mode: Mode,
+        system: &str,
+    ) -> Result<Self> {
+        if mode.adaptive() {
+            super::super::plan::authorize(&environment, system)?;
+        }
         for key in [
             "IMPAIRED_BLOCK_UDP",
             "CANARY_MODE",
@@ -63,9 +121,26 @@ impl Plan {
         for (key, expected) in [
             ("BASE_URL", "http://127.0.0.1:3109"),
             ("E2E_BROWSER", "chromium"),
-            ("IMPAIR_SCRIPT", "none"),
-            ("IMPAIRED_PROFILES", "baseline,silentAudio"),
-            ("IMPAIRED_SILENT_AUDIO", "1"),
+            (
+                "IMPAIR_SCRIPT",
+                if mode.adaptive() {
+                    "rust-owned"
+                } else {
+                    "none"
+                },
+            ),
+            (
+                "IMPAIRED_PROFILES",
+                if mode.adaptive() {
+                    "baseline,lossy,constrained,severe,recovery,lossyJoin"
+                } else {
+                    "baseline,silentAudio"
+                },
+            ),
+            (
+                "IMPAIRED_SILENT_AUDIO",
+                if mode.adaptive() { "0" } else { "1" },
+            ),
             ("IMPAIR_UDP_PORT", "41100"),
             ("IMPAIR_WORKERS", "1"),
             ("IMPAIR_DIRECTION", "downlink"),
@@ -128,7 +203,7 @@ impl Plan {
             Some(value) => Selected::open(absolute(root, value))?,
             None => tool(root, &environment, "node")?,
         };
-        let entry = root.join("web/e2e/browser-mechanics.cjs");
+        let entry = root.join(format!("web/e2e/{}.cjs", mode.stem()));
         let entry_hash = entry_hash(&entry)?;
         ensure!(
             [root, &output, &server.path, &node.path, &entry]
@@ -136,7 +211,17 @@ impl Plan {
                 .all(|path| path.to_str().is_some_and(|value| value.len() <= 4096)),
             "Invalid mechanics path"
         );
+        let kernel = if mode.adaptive() {
+            Some(KernelTools {
+                tc: tool(root, &environment, "tc")?,
+                sudo: tool(root, &environment, "sudo")?,
+            })
+        } else {
+            None
+        };
         Ok(Self {
+            mode,
+            kernel,
             root: root.to_owned(),
             output,
             environment,
@@ -151,6 +236,10 @@ impl Plan {
     pub fn verify(&self) -> Result<()> {
         self.server.verify()?;
         self.node.verify()?;
+        if let Some(kernel) = &self.kernel {
+            kernel.tc.verify()?;
+            kernel.sudo.verify()?;
+        }
         ensure!(
             entry_hash(&self.entry)? == self.entry_hash,
             "Mechanics entry changed"
@@ -217,17 +306,39 @@ impl Plan {
             ("BASE_URL", "http://127.0.0.1:3109"),
             ("IMPAIR_UDP_PORT", "41100"),
             ("IMPAIR_WORKERS", "1"),
-            ("IMPAIR_SCRIPT", "none"),
+            (
+                "IMPAIR_SCRIPT",
+                if self.mode.adaptive() {
+                    "rust-owned"
+                } else {
+                    "none"
+                },
+            ),
             ("E2E_BROWSER", "chromium"),
-            ("IMPAIRED_PROFILES", "baseline,silentAudio"),
-            ("IMPAIRED_SILENT_AUDIO", "1"),
+            (
+                "IMPAIRED_PROFILES",
+                if self.mode.adaptive() {
+                    "baseline,lossy,constrained,severe,recovery,lossyJoin"
+                } else {
+                    "baseline,silentAudio"
+                },
+            ),
+            (
+                "IMPAIRED_SILENT_AUDIO",
+                if self.mode.adaptive() { "0" } else { "1" },
+            ),
             ("TEST_BROWSER_HTTPS", "0"),
         ] {
             environment.insert(key.into(), value.into());
         }
         environment.insert("E2E_ARTIFACTS".into(), self.output.clone().into_os_string());
         environment.insert(
-            "BROWSER_MECHANICS_RUN_ID".into(),
+            if self.mode.adaptive() {
+                "BROWSER_ADAPTIVE_RUN_ID"
+            } else {
+                "BROWSER_MECHANICS_RUN_ID"
+            }
+            .into(),
             self.run_id.clone().into(),
         );
         environment

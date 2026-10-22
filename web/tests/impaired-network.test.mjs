@@ -5,7 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 import impairment from '../e2e/impaired-network.cjs';
 
-function fixture(t, environment = {}, execute = () => '') {
+function fixture(t, environment = {}, execute = () => '', runnerOptions = {}) {
   const artifacts = fs.mkdtempSync(path.join(os.tmpdir(), 'impaired-suite-fixture.'));
   t.after(() => fs.rmSync(artifacts, { recursive: true, force: true }));
   const commands = [];
@@ -87,6 +87,7 @@ function fixture(t, environment = {}, execute = () => '') {
           commands.push(command);
           return execute(command);
         },
+        ...runnerOptions,
       }),
   };
 }
@@ -169,4 +170,63 @@ test('mechanics-only mode never dispatches impairment commands', async (t) => {
   assert.equal(f.commands.length, 0);
   assert.equal(f.report().passed, true);
   assert.equal(fs.existsSync(path.join(f.artifacts, 'impairment.log')), false);
+});
+
+test('owned callbacks are awaited before phase collection and browser finalization', async (t) => {
+  const applied = Promise.withResolvers();
+  const apply = Promise.withResolvers();
+  const cleared = Promise.withResolvers();
+  const clear = Promise.withResolvers();
+  const original = new Error('owned phase refused');
+  const calls = [];
+  const f = fixture(
+    t,
+    { IMPAIR_SCRIPT: 'rust-owned', IMPAIRED_PROFILES: 'lossy' },
+    () => assert.fail('owned callback must not execute a shell'),
+    {
+      async impair(action, profile, phase) {
+        calls.push({ action, profile, phase });
+        if (action === 'apply') {
+          applied.resolve();
+          await apply.promise;
+          throw original;
+        }
+        cleared.resolve();
+        await clear.promise;
+        throw new Error('later clear refused');
+      },
+    },
+  );
+  const task = f.run();
+  await applied.promise;
+  assert.equal(f.browserClosed(), false);
+  assert.equal(calls.length, 1);
+  apply.resolve();
+  await cleared.promise;
+  assert.equal(f.browserClosed(), false, 'the final clear remains owned and awaited');
+  clear.resolve();
+  await assert.rejects(task, (error) => error === original);
+  assert.deepEqual(calls, [
+    {
+      action: 'apply',
+      profile: { IMPAIR_LOSS: '5', IMPAIR_DELAY_MS: '50', IMPAIR_JITTER_MS: '10' },
+      phase: 'lossy',
+    },
+    { action: 'clear', profile: {}, phase: undefined },
+  ]);
+  assert.equal(f.report().passed, false);
+  assert.equal(f.report().failure.message, original.message);
+  assert.equal(f.browserClosed(), true);
+  assert.ok(f.contexts.every((context) => context.closed));
+  assert.deepEqual(f.commands, []);
+});
+
+test('the owned marker refuses a missing callback without shell fallback', async (t) => {
+  const f = fixture(t, { IMPAIR_SCRIPT: 'rust-owned', IMPAIRED_PROFILES: 'lossy' }, () =>
+    assert.fail('owned marker must never become a helper pathname'),
+  );
+  await assert.rejects(f.run(), /Owned impairment control is unavailable/);
+  assert.deepEqual(f.commands, []);
+  assert.equal(f.report().passed, false);
+  assert.equal(f.browserClosed(), true);
 });

@@ -3,7 +3,7 @@
 use super::{
     controller::{Failure, Services},
     netem,
-    plan::{self, Plan},
+    plan::{self, Environment, Plan, Selected},
 };
 use crate::bench::process::{self, Command, Sink};
 use anyhow::{Result, ensure};
@@ -11,6 +11,7 @@ use serde::Serialize;
 use std::fs::File;
 use std::io::Read;
 use std::os::unix::fs::MetadataExt;
+use std::path::Path;
 use std::time::Duration;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -56,6 +57,25 @@ pub(super) struct Observation {
     state: serde_json::Value,
 }
 
+/// Selected command context shared by generator and browser phase owners.
+/// Profile ownership lives in Lease, never in a mutable caller snapshot.
+pub(super) struct Kernel<'a> {
+    pub root: &'a Path,
+    pub environment: Environment,
+    pub tc: &'a Selected,
+    pub sudo: &'a Selected,
+}
+impl<'a> From<&'a Plan> for Kernel<'a> {
+    fn from(plan: &'a Plan) -> Self {
+        Self {
+            root: &plan.root,
+            environment: plan.base(),
+            tc: &plan.tc,
+            sudo: &plan.sudo,
+        }
+    }
+}
+
 pub(super) struct Lease {
     identity: Identity,
     attempted: bool,
@@ -63,10 +83,20 @@ pub(super) struct Lease {
     signature: Option<String>,
     pub observations: Vec<Observation>,
     pub process_cleanup_passed: bool,
+    active: Option<netem::Profile>,
+    observation_limit: usize,
 }
 
 impl Lease {
     pub fn new(services: &Services<'_>) -> Result<Self> {
+        Self::with_limit(services, 8)
+    }
+
+    pub fn with_limit(services: &Services<'_>, observation_limit: usize) -> Result<Self> {
+        ensure!(
+            (8..=64).contains(&observation_limit),
+            "Invalid impairment observation limit"
+        );
         Ok(Self {
             identity: services.authority.observe()?,
             attempted: false,
@@ -74,6 +104,8 @@ impl Lease {
             signature: None,
             observations: Vec::new(),
             process_cleanup_passed: true,
+            active: None,
+            observation_limit,
         })
     }
 
@@ -87,7 +119,7 @@ impl Lease {
 
     async fn call(
         &mut self,
-        plan: &Plan,
+        plan: &Kernel<'_>,
         services: &Services<'_>,
         arguments: Vec<String>,
         mutation: bool,
@@ -127,8 +159,8 @@ impl Lease {
             Command {
                 executable,
                 arguments,
-                directory: plan.root.clone(),
-                environment: plan.base(),
+                directory: plan.root.to_owned(),
+                environment: plan.environment.clone(),
                 timeout,
                 stdout_limit: plan::CLI_LIMIT,
                 stderr_limit: plan::CLI_LIMIT,
@@ -163,7 +195,7 @@ impl Lease {
 
     async fn inspect(
         &mut self,
-        plan: &Plan,
+        plan: &Kernel<'_>,
         services: &Services<'_>,
         action: &'static str,
         cleanup: bool,
@@ -185,8 +217,13 @@ impl Lease {
                 .await?,
             );
         }
-        let state = netem::inspect(&values[0], &values[1], &plan.profile)?;
-        ensure!(self.observations.len() < 8, "Impairment observation limit");
+        let clean_profile = netem::Profile::parse(&Environment::new())?;
+        let profile = self.active.as_ref().unwrap_or(&clean_profile);
+        let state = netem::inspect(&values[0], &values[1], profile)?;
+        ensure!(
+            self.observations.len() < self.observation_limit,
+            "Impairment observation limit"
+        );
         self.observations.push(Observation {
             action,
             state: state.evidence.clone(),
@@ -194,12 +231,19 @@ impl Lease {
         Ok(state)
     }
 
-    pub async fn apply(
+    pub async fn apply_profile(
         &mut self,
-        plan: &Plan,
+        plan: &Kernel<'_>,
+        profile: &netem::Profile,
         services: &Services<'_>,
         deadline: f64,
     ) -> Result<()> {
+        ensure!(!self.attempted, "Previous impairment remains active");
+        // The exact profile becomes the cleanup decoder before mutation. It
+        // is retained even when installation or the following readback fails.
+        self.active = Some(profile.clone());
+        self.installed = false;
+        self.signature = None;
         let before = self
             .inspect(plan, services, "before-apply", false, deadline)
             .await?;
@@ -209,7 +253,7 @@ impl Lease {
         );
         self.attempted = true;
         let mut failure = None;
-        for arguments in plan.profile.additions() {
+        for arguments in profile.additions() {
             if let Err(error) = self
                 .call(plan, services, arguments, true, false, deadline)
                 .await
@@ -239,9 +283,9 @@ impl Lease {
 
     /// A clean readback is distinct from CLI-group retirement. Under the
     /// exclusive-owner assumption, only our observed unchanged shape is removed.
-    pub async fn clear(
+    pub async fn clear_kernel(
         &mut self,
-        plan: &Plan,
+        plan: &Kernel<'_>,
         services: &Services<'_>,
         deadline: f64,
     ) -> Result<()> {
@@ -287,9 +331,56 @@ impl Lease {
         Ok(())
     }
 
+    /// Observe the interface even after an earlier clear completed. No delete
+    /// is issued for a state that was not admitted by this live lease.
+    pub async fn clean(
+        &mut self,
+        kernel: &Kernel<'_>,
+        services: &Services<'_>,
+        cleanup: bool,
+        deadline: f64,
+    ) -> Result<()> {
+        let state = self
+            .inspect(kernel, services, "clean", cleanup, deadline)
+            .await?;
+        ensure!(
+            state.clean && !self.attempted,
+            "Impairment clean state unproven"
+        );
+        Ok(())
+    }
+
+    pub async fn apply(
+        &mut self,
+        plan: &Plan,
+        services: &Services<'_>,
+        deadline: f64,
+    ) -> Result<()> {
+        self.apply_profile(&Kernel::from(plan), &plan.profile, services, deadline)
+            .await
+    }
+    pub async fn clear(
+        &mut self,
+        plan: &Plan,
+        services: &Services<'_>,
+        deadline: f64,
+    ) -> Result<()> {
+        self.clear_kernel(&Kernel::from(plan), services, deadline)
+            .await
+    }
     pub async fn statistics(
         &mut self,
         plan: &Plan,
+        services: &Services<'_>,
+        deadline: f64,
+    ) -> Result<Vec<u8>> {
+        self.statistics_kernel(&Kernel::from(plan), services, deadline)
+            .await
+    }
+
+    pub async fn statistics_kernel(
+        &mut self,
+        plan: &Kernel<'_>,
         services: &Services<'_>,
         deadline: f64,
     ) -> Result<Vec<u8>> {

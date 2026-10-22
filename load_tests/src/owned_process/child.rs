@@ -7,6 +7,8 @@ use nix::sys::signal::Signal;
 use nix::unistd::Pid;
 use rustix::process::{WaitId, WaitIdOptions, waitid};
 use serde::Serialize;
+use std::os::fd::OwnedFd;
+use std::os::unix::net::UnixStream;
 use std::os::unix::process::{CommandExt, ExitStatusExt};
 use std::path::Path;
 use std::process::{Command, Stdio};
@@ -211,6 +213,13 @@ impl Drop for Child {
     }
 }
 
+// Byte input remains the default for every existing caller. Duplex is a closed
+// standard-stdin mode; arbitrary descriptor numbers or pre-exec hooks are absent.
+enum InputMode {
+    Bytes,
+    Duplex(UnixStream),
+}
+
 impl Runner {
     pub(crate) fn spawn(
         &self,
@@ -218,7 +227,7 @@ impl Runner {
         arguments: &[String],
         request: Request,
     ) -> Result<Child> {
-        self.spawn_owned(executable, arguments, request, false)
+        self.spawn_owned(executable, arguments, request, false, InputMode::Bytes)
     }
 
     pub(crate) fn spawn_stream(
@@ -231,7 +240,30 @@ impl Runner {
             matches!(&request.stdout, super::Destination::Capture(bytes) if bytes.is_empty()),
             "command_stream_requires_empty_capture_sink"
         );
-        self.spawn_owned(executable, arguments, request, true)
+        self.spawn_owned(executable, arguments, request, true, InputMode::Bytes)
+    }
+
+    /// Transfer the child half of one anonymous Unix stream to standard stdin.
+    /// The caller retains the other half until group retirement and explicitly
+    /// closes it. Byte input is forbidden, preserving its existing writer owner.
+    pub(crate) fn spawn_controlled(
+        &self,
+        executable: &Path,
+        arguments: &[String],
+        request: Request,
+        input: UnixStream,
+    ) -> Result<Child> {
+        if !request.input.is_empty() {
+            let _ = nix::unistd::close(input);
+            anyhow::bail!("command_duplex_requires_empty_input");
+        }
+        self.spawn_owned(
+            executable,
+            arguments,
+            request,
+            false,
+            InputMode::Duplex(input),
+        )
     }
 
     fn spawn_owned(
@@ -240,10 +272,19 @@ impl Runner {
         arguments: &[String],
         request: Request,
         stream: bool,
+        input: InputMode,
     ) -> Result<Child> {
         if !request.cleanup && self.cancellation.code() != 0 {
+            if let InputMode::Duplex(input) = input {
+                let _ = nix::unistd::close(input);
+            }
             return Err(Interrupted(self.cancellation.code()).into());
         }
+        let duplex = matches!(&input, InputMode::Duplex(_));
+        let stdin = match input {
+            InputMode::Bytes => Stdio::piped(),
+            InputMode::Duplex(input) => Stdio::from(OwnedFd::from(input)),
+        };
         let mut command = Command::new(executable);
         command
             .args(arguments)
@@ -251,7 +292,7 @@ impl Runner {
             .env_clear()
             .envs(&self.environment)
             .process_group(0)
-            .stdin(Stdio::piped())
+            .stdin(stdin)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
         let child = command.spawn()?;
@@ -260,13 +301,23 @@ impl Runner {
             .filter(|pid| *pid > 1)
             .ok_or_else(|| anyhow::anyhow!("command_identity_unavailable"))?;
         let mut group = Group::new(child, Pid::from_raw(raw));
-        let mut stdin = tokio::process::ChildStdin::from_std(group.child().stdin.take().unwrap())?;
+        let stdin = if duplex {
+            None
+        } else {
+            Some(tokio::process::ChildStdin::from_std(
+                group.child().stdin.take().unwrap(),
+            )?)
+        };
         let stdout = tokio::process::ChildStdout::from_std(group.child().stdout.take().unwrap())?;
         let stderr = tokio::process::ChildStderr::from_std(group.child().stderr.take().unwrap())?;
-        let stdin = tokio::spawn(async move {
-            stdin.write_all(&request.input).await?;
-            drop(stdin);
-            Ok(())
+        // Admit every stream before creating a task. A failed conversion must
+        // not drop a detached stdin writer outside Child's cancellation owner.
+        let stdin = stdin.map(|mut stdin| {
+            tokio::spawn(async move {
+                stdin.write_all(&request.input).await?;
+                drop(stdin);
+                Ok(())
+            })
         });
         let (stdout, reader) = if stream {
             (
@@ -291,7 +342,7 @@ impl Runner {
         Ok(Child {
             group,
             deadline: Instant::now() + request.limits.timeout,
-            stdin: Some(stdin),
+            stdin,
             stdout,
             stderr: Some(tokio::spawn(read_limited(
                 stderr,

@@ -77,6 +77,15 @@ receipt after the Node command retires. `--server-bin` and `--node` select exist
 executables. See [the mechanics contract](../docs/performance.md#guest-browser-mechanics-and-dtx)
 for supported environment inputs, watchdogs, private evidence and limits.
 
+`./target/release/load_test bench browser-adaptive --output /absolute/private/new-run`
+reuses that browser/server owner and one retained Linux netem lease for the six
+fixed adaptation phases. Node awaits bounded phase requests over inherited
+anonymous duplex stdin; Rust owns each verified transition and final clear.
+It requires the explicit disposable Linux/interface authority used by `bench impaired`.
+UDP block/unblock and macOS PF remain shell references. See
+[the adaptive contract](../docs/performance.md#guest-browser-adaptation-under-linux-netem)
+for fixed profiles, budgets, private evidence and ownership/runtime limits.
+
 The same binary can read stopped server diagnostics without creating a runtime,
 joining a room or sending media:
 

@@ -43,12 +43,19 @@ pub fn run(arguments: &[std::ffi::OsString]) -> std::process::ExitCode {
         Some("podman") => podman::run(&arguments[1..]),
         Some("impaired") => impaired::run(&arguments[1..]),
         Some("browser-mechanics") => impaired::run_browser(&arguments[1..]),
+        Some("browser-adaptive") => impaired::run_browser_adaptive(&arguments[1..]),
         Some("--help" | "-h") if arguments.len() == 1 => {
-            println!("Usage: load_test bench local|podman|impaired|browser-mechanics [OPTIONS]");
+            println!(concat!(
+                "Usage: load_test bench local|podman|impaired|",
+                "browser-mechanics|browser-adaptive [OPTIONS]"
+            ));
             std::process::ExitCode::SUCCESS
         }
         _ => {
-            eprintln!("Usage: load_test bench local|podman|impaired|browser-mechanics [OPTIONS]");
+            eprintln!(concat!(
+                "Usage: load_test bench local|podman|impaired|",
+                "browser-mechanics|browser-adaptive [OPTIONS]"
+            ));
             std::process::ExitCode::from(2)
         }
     }

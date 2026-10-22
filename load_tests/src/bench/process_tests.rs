@@ -81,3 +81,93 @@ async fn cancellation_refuses_new_work_but_allows_explicit_owned_cleanup() {
     assert!(!directory.join("unowned").exists());
     std::fs::remove_dir_all(directory).unwrap();
 }
+
+#[tokio::test]
+async fn inherited_unix_stdin_is_duplex_and_capture_remains_separate_until_retirement() {
+    use super::process::Host;
+    let directory = std::env::temp_dir().join(format!("benchmark-duplex-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir(&directory).unwrap();
+    let node = std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
+        .map(|path| path.join("node"))
+        .find(|path| path.is_file())
+        .expect("Pinned Node is required by helper fixtures");
+    let host = NativeHost::default();
+    let mut request = command(&directory);
+    request.executable = node;
+    request.arguments = vec![
+        "-e".into(),
+        concat!(
+            "const net=require('node:net');",
+            "const s=new net.Socket({fd:0,readable:true,writable:true});",
+            "let data='';s.setEncoding('utf8');s.on('data',chunk=>{data+=chunk;",
+            "if(data==='request\\n'){s.write('ack\\n');s.end(()=>s.destroy());",
+            "process.stdout.write('{\"receipt\":true}');}});"
+        )
+        .into(),
+    ];
+    let (mut child, mut control) = host.spawn_controlled(request).unwrap();
+    // A cancelled waiting read has consumed no bytes; the same retained owner
+    // can subsequently deliver every fragment without restarting a frame.
+    let mut waiting = [0; 2];
+    assert!(
+        tokio::time::timeout(Duration::from_millis(10), control.read(&mut waiting))
+            .await
+            .is_err()
+    );
+    control.write(b"req").await.unwrap();
+    control.write(b"uest\n").await.unwrap();
+    let mut bytes = Vec::new();
+    tokio::time::timeout(Duration::from_secs(3), async {
+        while bytes.len() < 4 {
+            let mut buffer = [0; 2];
+            let count = control.read(&mut buffer).await.unwrap();
+            assert!(count > 0);
+            bytes.extend_from_slice(&buffer[..count]);
+        }
+    })
+    .await
+    .unwrap();
+    assert_eq!(bytes, b"ack\n");
+    tokio::time::timeout(Duration::from_secs(3), async {
+        loop {
+            if child.poll().await.unwrap().is_some() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    })
+    .await
+    .unwrap();
+    assert!(
+        child
+            .stop(Duration::from_millis(20))
+            .await
+            .unwrap()
+            .success()
+    );
+    assert_eq!(child.output(), b"{\"receipt\":true}");
+    control.finish().unwrap();
+    std::fs::remove_dir_all(directory).unwrap();
+}
+
+#[tokio::test]
+async fn controlled_mode_refuses_byte_input_and_cancelled_dispatch_before_spawning() {
+    use super::process::Host;
+    let directory =
+        std::env::temp_dir().join(format!("benchmark-duplex-refusal-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir(&directory).unwrap();
+    let host = NativeHost::default();
+    let mut input = command(&directory);
+    input.input = b"must not dispatch".to_vec();
+    assert!(host.spawn_controlled(input).is_err());
+    host.cancel(143);
+    let error = host.spawn_controlled(command(&directory)).err().unwrap();
+    assert_eq!(super::process::failure_status(&error), Some(143));
+    assert!(!directory.join("owned.pid").exists());
+    // Spawn failure still settles the parent's admitted AsyncFd endpoint.
+    let host = NativeHost::default();
+    let mut missing = command(&directory);
+    missing.executable = directory.join("missing");
+    assert!(host.spawn_controlled(missing).is_err());
+    std::fs::remove_dir_all(directory).unwrap();
+}

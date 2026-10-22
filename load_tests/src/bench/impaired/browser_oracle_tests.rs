@@ -1,7 +1,7 @@
 //! The unchanged launcher is exercised only with owned inert fixture tools.
 
 use super::{
-    plan::Plan,
+    plan::{Mode, Plan},
     tests::{Fault, Fixture, executable},
 };
 use crate::bench::process::{self, Command, NativeHost, Sink};
@@ -12,11 +12,28 @@ fn python(path: &Path, contents: &str) {
 }
 
 #[tokio::test]
-async fn unchanged_launcher_proves_guest_env_dtx_inputs_status_and_named_cleanup_corrections() {
+async fn unchanged_launcher_proves_guest_env_profile_inputs_status_and_cleanup_corrections() {
     let repository = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    for (node_status, server_status) in [(0, 0), (42, 0), (130, 0), (0, 42)] {
+    for (mode, node_status, server_status) in [
+        (Mode::Mechanics, 0, 0),
+        (Mode::Mechanics, 42, 0),
+        (Mode::Mechanics, 130, 0),
+        (Mode::Mechanics, 0, 42),
+        (Mode::Adaptive, 0, 0),
+        (Mode::Adaptive, 42, 0),
+        (Mode::Adaptive, 143, 0),
+        (Mode::Adaptive, 0, 42),
+    ] {
         let (fixture, mut plan) = Fixture::new(Fault::None, node_status);
         fs::create_dir(fixture.root.join("build")).unwrap();
+        if mode.adaptive() {
+            executable(&fixture.root.join("tc"), b"owned inert tc selection");
+            fs::write(
+                fixture.root.join("web/e2e/browser-adaptive.cjs"),
+                b"owned inert entry",
+            )
+            .unwrap();
+        }
         for name in ["impaired-check.sh", "impair.sh"] {
             fs::copy(
                 repository.join("build").join(name),
@@ -86,17 +103,38 @@ with (pathlib.Path({root})/'kernel.jsonl').open('a') as output:
         environment.insert("PATH".into(), std::env::join_paths(paths).unwrap());
         environment.insert("TMPDIR".into(), fixture.root.clone().into_os_string());
         for (name, value) in [
-            ("IMPAIR_SCRIPT", "none"),
-            ("IMPAIRED_PROFILES", "baseline,silentAudio"),
-            ("IMPAIRED_SILENT_AUDIO", "1"),
+            (
+                "IMPAIR_SCRIPT",
+                if mode.adaptive() {
+                    "rust-owned"
+                } else {
+                    "none"
+                },
+            ),
+            (
+                "IMPAIRED_PROFILES",
+                if mode.adaptive() {
+                    "baseline,lossy,constrained,severe,recovery,lossyJoin"
+                } else {
+                    "baseline,silentAudio"
+                },
+            ),
+            (
+                "IMPAIRED_SILENT_AUDIO",
+                if mode.adaptive() { "0" } else { "1" },
+            ),
             ("E2E_BROWSER", "chromium"),
         ] {
             environment.insert(name.into(), value.into());
         }
-        plan = Plan::parse(
+        environment.insert("ACT".into(), "true".into());
+        environment.insert("LOCAL_CI_DISPOSABLE".into(), "1".into());
+        plan = Plan::parse_mode(
             &fixture.root,
             &["--output".into(), plan.output.clone().into_os_string()],
             environment.clone(),
+            mode,
+            "linux",
         )
         .unwrap();
         let output = process::run(

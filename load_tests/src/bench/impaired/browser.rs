@@ -1,4 +1,10 @@
-//! A guest-only server and one owned Node mechanics journey; no kernel lease.
+//! A guest-only server and one Node journey, with an optional live Linux phase lease.
+
+#[path = "adaptive_control.rs"]
+mod adaptive;
+#[cfg(test)]
+#[path = "adaptive_tests.rs"]
+mod adaptive_tests;
 
 #[cfg(test)]
 #[path = "browser_oracle_tests.rs"]
@@ -9,14 +15,18 @@ mod plan;
 #[path = "browser_tests.rs"]
 mod tests;
 
-use super::{controller, output::Output};
+use super::{
+    controller,
+    output::Output,
+    state::{Authority, Kernel, Lease, NativeAuthority},
+};
 use crate::bench::{
     clock::{Clock, RealClock},
-    process::{self, Child, Command, Exit, Host, NativeHost, Sink},
+    process::{Child, Command, Control, Exit, Host, NativeHost, Sink},
     sampling::{NativePorts, Ports},
 };
 use anyhow::{Result, ensure};
-use plan::{BUDGET, NODE_BUDGET, Plan, RESERVE};
+use plan::{Mode, NODE_BUDGET, Plan};
 use serde::{Deserialize, Serialize};
 use std::{ffi::OsString, fmt, time::Duration};
 
@@ -30,16 +40,15 @@ const RECEIPT_LIMIT: u64 = 16 * 1024;
 struct Failure(u8);
 impl fmt::Display for Failure {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str("Browser mechanics check failed.")
+        formatter.write_str("Browser check failed.")
     }
 }
 impl std::error::Error for Failure {}
 
 fn code(error: &anyhow::Error) -> u8 {
-    error.downcast_ref::<Failure>().map_or_else(
-        || process::failure_status(error).unwrap_or(1),
-        |failure| failure.0,
-    )
+    error
+        .downcast_ref::<Failure>()
+        .map_or_else(|| controller::exit_code(error), |failure| failure.0)
 }
 fn fail(primary: &mut u8, next: u8) {
     if *primary == 0 {
@@ -67,6 +76,7 @@ struct Services<'a> {
     clock: &'a dyn Clock,
     ports: &'a dyn Ports,
     readiness: &'a dyn controller::Readiness,
+    authority: &'a dyn Authority,
 }
 
 fn present<'de, D, T>(deserializer: D) -> std::result::Result<Option<T>, D::Error>
@@ -153,6 +163,7 @@ impl Receipt {
 
 struct Owned {
     child: Box<dyn Child>,
+    control: Option<Box<dyn Control>>,
 }
 fn spawn(
     plan: &Plan,
@@ -162,9 +173,9 @@ fn spawn(
     uncertain: &mut bool,
 ) -> Result<Owned> {
     plan.verify()?;
-    let required = NODE_BUDGET + RESERVE;
+    let required = NODE_BUDGET + plan.mode.reserve();
     ensure!(
-        BUDGET.as_secs_f64() * 1000.0 - services.clock.elapsed_ms()
+        plan.mode.budget().as_secs_f64() * 1000.0 - services.clock.elapsed_ms()
             >= required.as_secs_f64() * 1000.0,
         Failure(124)
     );
@@ -182,7 +193,7 @@ fn spawn(
         (Sink::File(log), Sink::File(errors))
     };
     *uncertain = true;
-    let child = services.host.spawn(Command {
+    let command = Command {
         executable: if node {
             &plan.node.path
         } else {
@@ -200,7 +211,11 @@ fn spawn(
         } else {
             plan.server_environment()
         },
-        timeout: if node { NODE_BUDGET } else { BUDGET },
+        timeout: if node {
+            NODE_BUDGET
+        } else {
+            plan.mode.budget()
+        },
         stdout_limit: if node {
             RECEIPT_LIMIT
         } else {
@@ -211,9 +226,15 @@ fn spawn(
         stdout,
         stderr,
         cleanup: false,
-    })?;
+    };
+    let (child, control) = if node && plan.mode.adaptive() {
+        let (child, channel) = services.host.spawn_controlled(command)?;
+        (child, Some(channel))
+    } else {
+        (services.host.spawn(command)?, None)
+    };
     *uncertain = false;
-    Ok(Owned { child })
+    Ok(Owned { child, control })
 }
 
 async fn ready(services: &Services<'_>, server: &mut Owned) -> Result<()> {
@@ -238,7 +259,14 @@ async fn ready(services: &Services<'_>, server: &mut Owned) -> Result<()> {
     }
 }
 
-async fn journey(services: &Services<'_>, server: &mut Owned, node: &mut Owned) -> Result<()> {
+async fn journey(
+    plan: &Plan,
+    services: &Services<'_>,
+    server: &mut Owned,
+    node: &mut Owned,
+    mut session: Option<&mut adaptive::Session>,
+    mut lease: Option<&mut Lease>,
+) -> Result<()> {
     let limit = services.clock.elapsed_ms() + NODE_BUDGET.as_secs_f64() * 1000.0;
     loop {
         check(services.host).await?;
@@ -255,7 +283,50 @@ async fn journey(services: &Services<'_>, server: &mut Owned, node: &mut Owned) 
             ensure!(exit.success(), Failure(controller::status(&exit).max(1)));
             return Ok(());
         }
-        services.clock.sleep(Duration::from_millis(50)).await;
+        if let Some(session) = session.as_deref_mut() {
+            let request = tokio::select! {
+                biased;
+                code = services.host.cancelled() => return Err(Failure(code).into()),
+                request = tokio::time::timeout(Duration::from_millis(50),
+                    session.poll(plan, services.clock)) => match request {
+                        Ok(request) => request?,
+                        Err(_) => continue,
+                    },
+            };
+            if let Some(request) = request {
+                let tools = plan.kernel.as_ref().unwrap();
+                let kernel = Kernel {
+                    root: &plan.root,
+                    environment: plan.base(),
+                    tc: &tools.tc,
+                    sudo: &tools.sudo,
+                };
+                let services = adaptive::services(services);
+                let lease = lease.as_deref_mut().unwrap();
+                // Once a mutation is admitted, await all its owned commands.
+                // Outer signal reception updates Host; it never drops this future.
+                let operation: Result<()> = async {
+                    lease.clear_kernel(&kernel, &services, limit).await?;
+                    if matches!(request.phase.as_str(), "baseline" | "recovery" | "finish") {
+                        lease.clean(&kernel, &services, false, limit).await
+                    } else {
+                        let profile = adaptive::profile(&request.phase)?;
+                        lease
+                            .apply_profile(&kernel, &profile, &services, limit)
+                            .await
+                    }
+                }
+                .await;
+                let status = operation.as_ref().err().map_or(0, controller::exit_code);
+                let replied = session.reply(plan, status).await;
+                operation?;
+                replied?;
+            } else {
+                services.clock.sleep(Duration::from_millis(10)).await;
+            }
+        } else {
+            services.clock.sleep(Duration::from_millis(50)).await;
+        }
     }
 }
 
@@ -293,7 +364,7 @@ async fn execute_owned(plan: &Plan, services: &Services<'_>) -> Result<()> {
     closed?;
     pending?;
     ensure!(
-        services.clock.elapsed_ms() < BUDGET.as_secs_f64() * 1000.0,
+        services.clock.elapsed_ms() < plan.mode.budget().as_secs_f64() * 1000.0,
         Failure(124)
     );
     Ok(())
@@ -303,12 +374,46 @@ async fn execute_inner(plan: &Plan, services: &Services<'_>, output: &Output) ->
     let (mut server, mut node) = (None, None);
     let mut primary = 0;
     let mut uncertain = false;
+    let mut session = None;
+    let kernel_services = adaptive::services(services);
+    let mut lease = if plan.mode.adaptive() {
+        Some(Lease::with_limit(&kernel_services, 64)?)
+    } else {
+        None
+    };
+    let kernel = plan.kernel.as_ref().map(|tools| Kernel {
+        root: &plan.root,
+        environment: plan.base(),
+        tc: &tools.tc,
+        sudo: &tools.sudo,
+    });
     let body: Result<()> = async {
+        if let Some(lease) = &mut lease {
+            lease
+                .clean(
+                    kernel.as_ref().unwrap(),
+                    &kernel_services,
+                    false,
+                    (plan.mode.budget() - plan.mode.reserve()).as_secs_f64() * 1000.0,
+                )
+                .await?;
+        }
         server = Some(spawn(plan, services, output, false, &mut uncertain)?);
         ready(services, server.as_mut().unwrap()).await?;
         check(services.host).await?;
         node = Some(spawn(plan, services, output, true, &mut uncertain)?);
-        journey(services, server.as_mut().unwrap(), node.as_mut().unwrap()).await
+        if let Some(channel) = node.as_mut().unwrap().control.take() {
+            session = Some(adaptive::Session::new(channel));
+        }
+        journey(
+            plan,
+            services,
+            server.as_mut().unwrap(),
+            node.as_mut().unwrap(),
+            session.as_mut(),
+            lease.as_mut(),
+        )
+        .await
     }
     .await;
     if let Err(error) = body {
@@ -324,6 +429,44 @@ async fn execute_inner(plan: &Plan, services: &Services<'_>, output: &Output) ->
     let mut process_closed = stopped_node.is_ok() && !uncertain;
     if let Err(error) = &stopped_node {
         fail(&mut primary, code(error));
+    }
+    let control_passed = if let Some(session) = &mut session {
+        match session.settle().await {
+            Ok(()) => true,
+            Err(error) => {
+                fail(&mut primary, code(&error));
+                false
+            }
+        }
+    } else {
+        !plan.mode.adaptive()
+    };
+    if !control_passed {
+        fail(&mut primary, 1);
+    }
+    // The parent capability remains alive through Node group/sink retirement.
+    if let Some(session) = session.take()
+        && let Err(error) = session.finish()
+    {
+        process_closed = false;
+        fail(&mut primary, code(&error));
+    }
+    let mut kernel_closed = true;
+    if let Some(lease) = &mut lease {
+        let deadline = plan.mode.budget().as_secs_f64() * 1000.0;
+        let cleared = lease
+            .clear_kernel(kernel.as_ref().unwrap(), &kernel_services, deadline)
+            .await;
+        let observed = lease
+            .clean(kernel.as_ref().unwrap(), &kernel_services, true, deadline)
+            .await;
+        kernel_closed = cleared.is_ok() && observed.is_ok();
+        for result in [cleared, observed] {
+            if let Err(error) = result {
+                fail(&mut primary, controller::exit_code(&error));
+            }
+        }
+        process_closed &= lease.process_cleanup_passed;
     }
     let stopped_server = retire(&mut server, Duration::from_secs(5)).await;
     process_closed &= stopped_server.is_ok();
@@ -344,7 +487,14 @@ async fn execute_inner(plan: &Plan, services: &Services<'_>, output: &Output) ->
         .map(|stopped| Receipt::read(&stopped.stdout, plan));
     if let Some(Ok(receipt)) = &receipt
         && output
-            .json("browser-mechanics-owner.json", receipt)
+            .json(
+                if plan.mode.adaptive() {
+                    "browser-adaptive-owner.json"
+                } else {
+                    "browser-mechanics-owner.json"
+                },
+                receipt,
+            )
             .is_err()
     {
         fail(&mut primary, 1);
@@ -352,7 +502,7 @@ async fn execute_inner(plan: &Plan, services: &Services<'_>, output: &Output) ->
     let browser_closed = receipt
         .as_ref()
         .is_some_and(|value| value.as_ref().is_ok_and(Receipt::passed));
-    if !process_closed || !browser_closed {
+    if !process_closed || !browser_closed || !kernel_closed || !control_passed {
         fail(&mut primary, 1);
     }
     if plan.verify().is_err() {
@@ -361,12 +511,22 @@ async fn execute_inner(plan: &Plan, services: &Services<'_>, output: &Output) ->
     let evidence = serde_json::json!({"schemaVersion":1,"runId":plan.run_id,
         "serverBinarySha256":plan.server.hash,"nodeBinarySha256":plan.node.hash,
         "entrySha256":plan.entry_hash,"processCleanupPassed":process_closed,
-        "browserReceiptPassed":browser_closed,"statusBeforeFinalFence":primary,
+        "browserReceiptPassed":browser_closed,"kernelCleanupPassed":kernel_closed,
+        "controlSequencePassed":control_passed,
+        "observations":lease.as_ref().map(|lease| &lease.observations),
+        "statusBeforeFinalFence":primary,
         "nodeExit":stopped_node.as_ref().ok().and_then(Option::as_ref).map(|value| &value.exit),
         "serverExit":stopped_server.as_ref().ok().and_then(Option::as_ref)
             .map(|value| &value.exit)});
     if output
-        .json("browser-mechanics-exit.json", &evidence)
+        .json(
+            if plan.mode.adaptive() {
+                "browser-adaptive-exit.json"
+            } else {
+                "browser-mechanics-exit.json"
+            },
+            &evidence,
+        )
         .is_err()
     {
         fail(&mut primary, 1);
@@ -374,7 +534,7 @@ async fn execute_inner(plan: &Plan, services: &Services<'_>, output: &Output) ->
     if let Err(error) = check(services.host).await {
         fail(&mut primary, code(&error));
     }
-    if services.clock.elapsed_ms() >= BUDGET.as_secs_f64() * 1000.0 {
+    if services.clock.elapsed_ms() >= plan.mode.budget().as_secs_f64() * 1000.0 {
         fail(&mut primary, 124);
     }
     ensure!(primary == 0, Failure(primary));
@@ -382,8 +542,21 @@ async fn execute_inner(plan: &Plan, services: &Services<'_>, output: &Output) ->
 }
 
 pub(super) fn run(arguments: &[OsString]) -> std::process::ExitCode {
+    run_mode(arguments, Mode::Mechanics)
+}
+pub(super) fn run_adaptive(arguments: &[OsString]) -> std::process::ExitCode {
+    run_mode(arguments, Mode::Adaptive)
+}
+fn run_mode(arguments: &[OsString], mode: Mode) -> std::process::ExitCode {
     if arguments == [OsString::from("--help")] || arguments == [OsString::from("-h")] {
-        println!("{USAGE}");
+        if mode.adaptive() {
+            println!(concat!(
+                "Usage: load_test bench browser-adaptive --output DIR ",
+                "[--server-bin BIN] [--node BIN]"
+            ));
+        } else {
+            println!("{USAGE}");
+        }
         return std::process::ExitCode::SUCCESS;
     }
     let result: Result<()> = (|| {
@@ -397,14 +570,25 @@ pub(super) fn run(arguments: &[OsString]) -> std::process::ExitCode {
             let host = NativeHost::default();
             let clock = RealClock::default();
             let root = std::env::current_dir()?;
-            let plan = Plan::parse(&root, arguments, std::env::vars_os().collect())
-                .map_err(|_| Failure(2))?;
+            let plan = if mode.adaptive() {
+                Plan::parse_mode(
+                    &root,
+                    arguments,
+                    std::env::vars_os().collect(),
+                    mode,
+                    std::env::consts::OS,
+                )
+            } else {
+                Plan::parse(&root, arguments, std::env::vars_os().collect())
+            }
+            .map_err(|_| Failure(2))?;
             let readiness = NativeReadiness(controller::NativeReadiness::new()?);
             let services = Services {
                 host: &host,
                 clock: &clock,
                 ports: &NativePorts,
                 readiness: &readiness,
+                authority: &NativeAuthority,
             };
             let operation = execute(&plan, &services);
             tokio::pin!(operation);

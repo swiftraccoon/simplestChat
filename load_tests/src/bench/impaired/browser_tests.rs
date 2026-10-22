@@ -125,6 +125,7 @@ impl Fixture {
             clock: self,
             ports: self,
             readiness: self,
+            authority: &NativeAuthority,
         }
     }
     fn evidence(&self) -> Value {

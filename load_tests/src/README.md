@@ -23,10 +23,10 @@ For commands, options, and report definitions, see the
 | `report/media*.rs`, `report/receiver_stall*.rs` | Strict snapshot/identity validation, independently clocked counter and stall correlation, bounded offline inputs |
 | `capacity.rs`, `capacity/` | Offline host suggestions and ranked cost comparisons, shared resource/workload policy, bounded calibration JSON, pure VPS request/evidence policy and Python-reference parity |
 | `capacity_run/` | Explicit isolated host measurements: workload/search policy, CPU windows, owned process/container cleanup, bounded artifacts, typed reports and fake-engine/oracle regressions |
-| `owned_process/` | Reserved child process groups, bounded pipes, cancellation and exact cleanup shared by explicit measurement backends |
+| `owned_process/` | Reserved child process groups, bounded pipes, closed byte/duplex stdin modes, cancellation and exact cleanup shared by explicit measurement backends |
 | `bench/podman/` | Production-shape comparison policy, namespace-local command arguments, cgroup/thread samplers, verified container ownership and bounded transfer finalizers |
 | `bench/impaired/` | One disposable Linux loopback profile, fixed guest generator evidence, observed kernel-state lease and stopped-input admission |
-| `bench/impaired/browser*` | Guest-only mechanics/DTX launcher, strict stopped-Node BrowserServer receipt and private lifecycle evidence; no kernel lease |
+| `bench/impaired/browser*`, `adaptive*` | Shared guest browser owner, mechanics/DTX and live Linux adaptive lease, bounded phase dialogue, strict stopped-Node BrowserServer receipt and private evidence |
 | `metrics.rs` | Counters, signaling histograms, diagnostic collection |
 | `metrics/measurement.rs` | Shared interval, per-attempt readiness/coverage, consumer delivery checks |
 | `subscriptions.rs` | Bounded discovery deduplication, pending queues, and consumer-cap refill (tests in `subscriptions_tests.rs`) |

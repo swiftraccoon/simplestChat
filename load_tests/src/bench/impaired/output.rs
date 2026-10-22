@@ -125,6 +125,8 @@ impl Output {
                     | "impaired-summary.json"
                     | "browser-mechanics-exit.json"
                     | "browser-mechanics-owner.json"
+                    | "browser-adaptive-owner.json"
+                    | "browser-adaptive-exit.json"
             ),
             "Invalid impaired output"
         );

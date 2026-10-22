@@ -588,10 +588,91 @@ close; the summary input is opened relative to that same directory. Unknown and
 private fields never enter the projection. The final process status additionally covers directory
 close, late cancellation and deadline checks; artifact presence is not that proof.
 The original `build/impaired-generator.sh`, `build/impaired-check.sh` and
-`build/impair.sh` remain unchanged references. Browser profile transitions,
-iptables UDP blocking and macOS PF/dummynet remain on that separate track.
+`build/impair.sh` remain unchanged references. The Linux browser transitions below reuse this lease. iptables UDP blocking
+and macOS PF/dummynet remain on the separate reference track.
 Inert tool/process and reference-oracle tests do not establish actual kernel
 behavior, native media delivery or hosted runtime timing.
+
+### Guest browser adaptation under Linux netem
+
+The maintained adaptive step uses the existing Node scenario with one live Rust
+loopback lease:
+
+```sh
+./target/release/load_test bench browser-adaptive \
+  --output /absolute/private/new-adaptive-run
+```
+
+It requires Linux and the same explicit disposable hosted/ACT runner declaration
+and exclusive namespace/interface authority as `bench impaired`. Those
+assertions are caller authority, not authentication. Namespace/ifindex binding,
+selected tool hashes and observed state/signatures fence every mutation. They
+refuse observed changes; an identical foreign replacement remains
+indistinguishable. Concurrent interface controllers are unsupported. There is
+no atomic compare-and-swap or authenticated kernel ownership claim.
+
+The guest-only server, ports, supported server/runtime overrides, selected
+executables and private artifact rules match the mechanics launcher below.
+Chromium uses fake tone audio and the existing six phases and assertions:
+
+| Phase | Impairment | Observation window |
+| --- | --- | --- |
+| `baseline` | Clean | 15 seconds |
+| `lossy` | Downlink 5% loss, 50 ms delay, 10 ms jitter | 25 seconds |
+| `constrained` | Downlink 400 kbit/s, 30 ms delay | 45 seconds |
+| `severe` | Downlink 150 kbit/s, 30 ms delay | 45 seconds |
+| `recovery` | Clean | 45 seconds |
+| `lossyJoin` | Both directions, 5% loss, 50 ms delay, 10 ms jitter | 20 seconds |
+
+Decoded frames, observed loss/NACK, reduced frame rate, spatial downgrade,
+recovery and the late viewer's 30-second first-frame deadline remain Node
+assertions. Node awaits a fixed phase callback instead of spawning `impair.sh`.
+`IMPAIR_SCRIPT=rust-owned` requires that callback and never falls back to a
+shell. Custom phases, impairment values, UDP blocking, canary/foreign rooms,
+conflicting browser/audio settings and `NODE_OPTIONS` are refused.
+
+One anonymous Unix stream is inherited as Node's duplex standard input; final
+BrowserServer receipt JSON stays on captured stdout. There is no listening
+socket, pathname, stored PID, remote command or cross-process kernel journal.
+Seven ordered canonical JSON-line requests (six phases plus final clear) have
+1024-byte frame caps, one outstanding request and one 600-second channel
+watchdog. Partial frames have a two-second bound. Missing, duplicate, extra,
+malformed, out-of-order or closed-peer dialogue cannot acknowledge success.
+Only fixed profiles are accepted. An acknowledgment follows settled CLI groups
+and verified readback. Rust keeps the exact old profile through clear, and the
+new profile before its first mutation, including uncertain partial installs.
+An admitted mutation is awaited through retirement rather than select-dropped.
+
+Readiness retains its 20-second window; the Node body remains 600 seconds. The
+adaptive entry schedules 960 seconds with a 300-second finalization reserve
+before dispatch. The conservative schedule allows seven kernel cleanup/readback
+CLIs at 30 seconds each, 45 seconds for Node, 30 for the server and two for
+control EOF, leaving 13 seconds for final fences/closes.
+Each kernel CLI admits at most five seconds of body time after reserving its
+established group/sink settlement allowance. Node receives 20 seconds of
+cooperative termination grace and the server five. These are watchdog/refusal
+policies, not hard OS wall-time guarantees. The performance job remains 60
+minutes; cold/runtime timing has not been measured for this port.
+
+After Node group retirement, Rust requires terminal control EOF, explicitly
+closes its endpoint, attempts lease cleanup with final clean readback, and
+retires the server. Only a full phase dialogue, strict same-invocation browser
+receipt, clean server exit, proven CLI-group cleanup and all final artifact
+closes/signal/deadline fences allow zero. Known earlier failures retain their
+status over later cleanup errors. Measured Rust output is silent. The retained
+output directory contains private bounded logs, `browser-adaptive-owner.json`
+and fixed `browser-adaptive-exit.json` observations; their presence is not final
+process success. Existing scenario artifact writes remain trusted Node runtime
+and pathname operations. Browser ownership describes admitted BrowserServers,
+not arbitrary detached SDK descendants or privileged/kernel resource closure.
+
+The unchanged shell scripts remain references for UDP block/unblock and macOS
+PF/dummynet. This launcher removes the old unconditional trap's UDP unblock
+and the workflow's temporary unowned root-qdisc probe; it never touches
+iptables. The old wrapper also ignored a failed server wait, now a failure.
+Inert socketpair/process, fake-command and unchanged-shell oracles verify only
+policy, protocol and lifecycle behavior. They do not establish actual Linux
+qdisc presentation, browser media recovery, privileged cleanup or hosted runtime.
 
 ### Guest browser mechanics and DTX
 
@@ -654,12 +735,13 @@ describes only the BrowserServers admitted by that invocation. Neither claims
 arbitrary detached SDK descendants, privileged resources or whole-host cleanup.
 Existing scenario artifact writes remain trusted runtime/path operations.
 
-The unchanged `build/impaired-check.sh` remains the reference for other profiles.
+The unchanged `build/impaired-check.sh` remains the reference for UDP blocking
+and platform profiles outside the maintained Linux adaptive path.
 Its trap calls kernel clear/unblock even with impairment disabled and ignores
 server wait failures. The mechanics launcher deliberately makes no such kernel
-calls and refuses a failed server shutdown. Adaptive netem transitions, ICE-TCP
-blocking and PF/dummynet still use their original references pending complete
-phase/block/platform parity and observed-state ownership. Inert fake-tool and
+calls and refuses a failed server shutdown. ICE-TCP UDP blocking and
+PF/dummynet still use their original references pending complete block/platform
+parity and observed-state ownership. Inert fake-tool and
 actual-shell oracles establish command/policy behavior only; no actual browser,
 server, kernel or hosted runtime timing is claimed by these checks.
 
