@@ -83,17 +83,20 @@ const privateEnvironment = () => Object.fromEntries(
 /** Exit 1 retains an incomplete coverage report; all other process/format
  * failures use a fixed label rather than exposing paths or child output.
  */
-export async function readDiagnosticReportWithGenerator(generator, path, { execute = executeFile } = {}) {
+export async function readDiagnosticReportWithGenerator(generator, path, { execute = executeFile, signal } = {}) {
+  if (signal?.aborted) throw new Error('diagnostic_report_command_failed');
   let stdout, status = 0;
   try {
     ({ stdout } = await execute(generator, ['report', 'diagnostics', path], {
       env: privateEnvironment(), maxBuffer: 2 * 1024 * 1024, timeout: 30000, killSignal: 'SIGKILL',
+      ...(signal ? { signal } : {}),
     }));
   } catch (error) {
     if (error.code !== 1 || error.killed || error.signal) throw new Error('diagnostic_report_command_failed');
     stdout = error.stdout;
     status = 1;
   }
+  if (signal?.aborted) throw new Error('diagnostic_report_command_failed');
   try {
     const report = JSON.parse(stdout);
     if (!validReport(report) ||

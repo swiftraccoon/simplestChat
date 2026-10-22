@@ -1,13 +1,20 @@
 import { spawn as spawnCommand } from 'node:child_process';
-import { chmod, mkdir, mkdtemp, realpath, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, realpath, unlink, writeFile } from 'node:fs/promises';
 import { isAbsolute, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { runShutdownSmoke } from './shutdown-smoke.mjs';
-import { readDiagnosticReport } from '../load_tests/diagnostic-report.mjs';
+import { readDiagnosticReportWithGenerator } from '../load_tests/report-command.mjs';
 
-const usage = 'Usage: node build/diagnostics-smoke.mjs --binary /absolute/path/to/simplestChat';
+const usage = 'Usage: node build/diagnostics-smoke.mjs --binary /absolute/path/to/simplestChat --generator /absolute/path/to/load_test';
 const validBinary = binary => typeof binary === 'string' && isAbsolute(binary);
 const saveJson = (path, value) => writeFile(path, `${JSON.stringify(value, null, 2)}\n`, { flag: 'wx', mode: 0o600 });
+
+async function replaceCancelledResult(path, value) {
+  // Retire only this owned result entry, then recreate it exclusively. Never
+  // truncate or follow a substituted final symlink while withdrawing success.
+  await unlink(path).catch(error => { if (error.code !== 'ENOENT') throw error; });
+  await saveJson(path, value);
+}
 
 async function privateDirectory() {
   const root = fileURLToPath(new URL('../results/', import.meta.url));
@@ -20,10 +27,12 @@ async function privateDirectory() {
 /** Reuse the owned guest-only shutdown workflow, adding only a private recorder path.
  * Original smoke failures remain the cause even if diagnostic preservation also fails.
  */
-export async function runDiagnosticsSmoke({ binary, signal } = {}, dependencies = {}) {
-  if (!validBinary(binary)) throw new Error(usage);
+export async function runDiagnosticsSmoke({ binary, generator, signal } = {}, dependencies = {}) {
+  if (!validBinary(binary) || !validBinary(generator)) throw new Error(usage);
+  if (signal?.aborted) throw new Error('Diagnostics smoke cancelled');
   const { run = runShutdownSmoke, spawn = spawnCommand, createDirectory = privateDirectory,
-    readReport = readDiagnosticReport, save = saveJson, saveLog = writeFile } = dependencies;
+    executeReport, readReport = path => readDiagnosticReportWithGenerator(generator, path, { execute: executeReport, signal }),
+    save = saveJson, saveLog = writeFile } = dependencies;
   const directory = await createDirectory();
   const path = join(directory, 'server-diagnostics.jsonl');
   let serverStopped = true, serverExit = null, shutdown = null, smokeFailure, report = null;
@@ -42,6 +51,7 @@ export async function runDiagnosticsSmoke({ binary, signal } = {}, dependencies 
 
   // The shared smoke owns all cleanup. Do not race a writer if its cleanup failed.
   if (!serverStopped) artifactIssues.push('server_not_stopped');
+  else if (signal?.aborted) artifactIssues.push('smoke_cancelled');
   else {
     try { report = await readReport(path); }
     catch { artifactIssues.push('diagnostic_read_failed'); }
@@ -55,7 +65,7 @@ export async function runDiagnosticsSmoke({ binary, signal } = {}, dependencies 
       await saveLog(join(directory, 'server.log'), Buffer.from(smokeFailure.serverOutput).subarray(-32768), { flag: 'wx', mode: 0o600 });
     } catch { artifactIssues.push('server_log_write_failed'); }
   }
-  const workloadPassed = !smokeFailure && shutdown?.ready === true && shutdown.joined === true &&
+  const workloadPassed = !signal?.aborted && !smokeFailure && shutdown?.ready === true && shutdown.joined === true &&
     shutdown.serverRestarting === true && shutdown.closeCode === 1001 && shutdown.exitCode === 0;
   const serverShutdownPassed = serverExit?.code === 0 && serverExit.signal === null;
   const diagnosticCoverageComplete = report?.coverage.complete === true;
@@ -69,8 +79,15 @@ export async function runDiagnosticsSmoke({ binary, signal } = {}, dependencies 
     workloadPassed, serverShutdownPassed, diagnosticCoverageComplete, evidence,
     records: report?.records ?? 0, serverExit, shutdownMs: shutdown?.shutdownMs ?? null,
     diagnosticCoverage: report?.coverage ?? null, artifactIssues, artifactDirectory: directory };
-  try { await save(join(directory, 'diagnostics-smoke.json'), result); }
+  const resultPath = join(directory, 'diagnostics-smoke.json');
+  try { await save(resultPath, result); }
   catch { result.passed = false; artifactIssues.push('smoke_result_write_failed'); }
+  if (signal?.aborted) {
+    result.passed = false;
+    if (!artifactIssues.includes('smoke_cancelled')) artifactIssues.push('smoke_cancelled');
+    try { await replaceCancelledResult(resultPath, result); }
+    catch { if (!artifactIssues.includes('smoke_result_write_failed')) artifactIssues.push('smoke_result_write_failed'); }
+  }
   if (!result.passed) {
     const error = new Error('Diagnostics smoke failed', { cause: smokeFailure });
     error.result = result;
@@ -81,14 +98,15 @@ export async function runDiagnosticsSmoke({ binary, signal } = {}, dependencies 
 
 export async function runCli({ args = [], stdout = process.stdout, stderr = process.stderr, run = runDiagnosticsSmoke } = {}) {
   if (args.length === 1 && ['--help', '-h'].includes(args[0])) { stdout.write(`${usage}\n`); return 0; }
-  if (args.length !== 2 || args[0] !== '--binary' || !validBinary(args[1])) { stderr.write(`${usage}\n`); return 2; }
+  if (args.length !== 4 || args[0] !== '--binary' || !validBinary(args[1]) ||
+      args[2] !== '--generator' || !validBinary(args[3])) { stderr.write(`${usage}\n`); return 2; }
   const cancellation = new AbortController();
   const cancel = () => cancellation.abort();
   process.once('SIGINT', cancel);
   process.once('SIGTERM', cancel);
   try {
-    const result = await run({ binary: args[1], signal: cancellation.signal });
-    if (result.passed !== true) {
+    const result = await run({ binary: args[1], generator: args[3], signal: cancellation.signal });
+    if (cancellation.signal.aborted || result.passed !== true) {
       const error = new Error('Diagnostics smoke failed'); error.result = result; throw error;
     }
     stdout.write(`PASS diagnostics smoke: ${result.records} records; join and lock timing verified. Private artifacts: ${result.artifactDirectory}\n`);

@@ -325,7 +325,7 @@ jobs:
 
       - name: Verify bounded local operation diagnostics
         if: steps.verified.outputs.cache-hit != 'true'
-        run: node build/diagnostics-smoke.mjs --binary "$PWD/target/debug/simplestChat"
+        run: node build/diagnostics-smoke.mjs --binary "$PWD/target/debug/simplestChat" --generator "$PWD/target/debug/load_test"
 
       - name: Verify native security patches
         if: steps.verified.outputs.cache-hit != 'true'

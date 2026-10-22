@@ -213,7 +213,7 @@ To validate the server's actual diagnostic JSONL schema with the same owned
 guest-only workflow, also run by CI:
 
 ```sh
-node build/diagnostics-smoke.mjs --binary "$PWD/target/debug/simplestChat"
+node build/diagnostics-smoke.mjs --binary "$PWD/target/debug/simplestChat" --generator "$PWD/target/debug/load_test"
 ```
 
 This additionally requires complete recorder coverage, successful `join_room`

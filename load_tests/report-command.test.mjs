@@ -35,6 +35,26 @@ test('exit1 preserves incomplete report evidence for the existing coverage judge
   assert.deepEqual(await readDiagnosticReportWithGenerator(binary, '/owned recorder'), expected);
 });
 
+test('the same cancellation signal fences generator admission and late successful output', async () => {
+  const cancelled = new AbortController();
+  cancelled.abort('PRIVATE cancellation reason');
+  let calls = 0;
+  const refusal = error => error.message === 'diagnostic_report_command_failed' && error.cause === undefined &&
+    !String(error).includes('PRIVATE');
+  await assert.rejects(readDiagnosticReportWithGenerator('/owned/generator', '/owned/recorder', {
+    signal: cancelled.signal, execute: async () => { calls++; assert.fail('already cancelled'); },
+  }), refusal);
+  assert.equal(calls, 0);
+  const pending = new AbortController();
+  await assert.rejects(readDiagnosticReportWithGenerator('/owned/generator', '/owned/recorder', {
+    signal: pending.signal, execute: async (_binary, _args, options) => {
+      assert.equal(options.signal, pending.signal);
+      pending.abort('PRIVATE cancellation reason');
+      return { stdout: JSON.stringify(report(true)), stderr: 'PRIVATE output' };
+    },
+  }), refusal);
+});
+
 test('process and malformed output errors do not retain child output or paths', async t => {
   for (const body of [
     "process.stderr.write('PRIVATE credentials'); process.exitCode = 2;",
