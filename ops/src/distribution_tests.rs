@@ -4,9 +4,7 @@ use super::*;
 use crate::test_support::Fixture;
 use std::{fs, os::unix::fs::symlink};
 
-#[path = "distribution_fixture.rs"]
-mod fixture;
-use fixture::*;
+use super::fixture::*;
 
 fn inspect_bytes(bytes: &[u8]) -> Result<ExecutableIdentity, Failure> {
     let directory = Fixture::new();

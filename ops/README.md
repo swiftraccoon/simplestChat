@@ -43,6 +43,7 @@ timestamp text remains unchanged.
 | `src/json.rs` | Serde grammar, duplicate keys, numeric tokens and bounded decoding |
 | `src/files.rs` | Descriptor-bound regular-file snapshot and change detection |
 | `src/distribution.rs`, `src/distribution_elf.rs` | Original executable identity and bounded ELF linkage facts |
+| `src/distribution_manifest.rs`, `src/distribution_pair.rs` | Separate Ops declarations, selected identity and pinned local executable pair |
 | `src/release/manifest.rs` | Existing release schema, migration checksums and real UTC dates |
 | `src/release/archive.rs`, `src/release/archive/` | Whole-transfer identity and bounded offline Docker/OCI metadata validation |
 
@@ -125,6 +126,77 @@ must also control the existing global `/usr/lib64` RPATH flags. Distribution
 readiness remains incomplete until an actual controlled musl artifact, its
 separate authenticated attestation, harmless checks on an owned Debian 13 host,
 and installation/bootstrap ownership evidence exist. Python remains the runtime.
+
+## Separate Ops artifact manifest and local pair
+
+`ops-release.json` is a new, separate schema. It does not extend the signed
+server artifact, server `release.json`, its ten-file allowlist or its predicate.
+The prospective Ops artifact name is
+`simplestchat-ops-<revision>-<target>`; this slice publishes no artifact or archive.
+
+| Exact field | Schema 1 rule |
+| --- | --- |
+| `schemaVersion` | Integer 1 |
+| `artifactType` | `simplestchat-ops` |
+| `repository` | ASCII owner/repository: owner 1–39 alphanumeric/hyphen bytes; repository 1–100 alphanumeric/dot/underscore/hyphen bytes; each starts alphanumeric |
+| `revision` | Forty lowercase hexadecimal characters |
+| `packageVersion` | Decimal `MAJOR.MINOR.PATCH`, each component 0–4294967295 with no leading zeros except zero itself; at most 32 bytes |
+| `protocolVersion` | Integer 1, a declared CLI compatibility version |
+| `target` | `x86_64-unknown-linux-musl` |
+| `buildRunId`, `runAttempt` | Positive signed 64-bit integers |
+| `binary` | Exactly `name`, `sha256`, `bytes`; name is `simplestchat-ops`, digest is lowercase SHA-256, byte count is a positive integer at most 256 MiB |
+| `inputDigests` | Object with 1–64 declared name-to-SHA-256 entries |
+| `evidenceDigests` | Object with 0–16 declared name-to-SHA-256 entries |
+
+Digest names are canonical relative ASCII paths of at most 128 bytes using only
+alphanumerics and `/._-`; empty, `.` and `..` components are refused. Digests
+are exactly 64 lowercase hexadecimal characters. These maps are declarations:
+validation does not locate/read/hash their named files or assess build-input
+coverage. Empty evidence is permitted and does not imply attestation. The
+initial package-version profile is narrower than general SemVer: prerelease
+and build suffixes are refused. Package, protocol, schema and source revision
+remain distinct identities; none is inferred by executing the candidate.
+
+Manifest inputs are nonempty regular files up to 64 KiB, with shared strict
+duplicate-key/type decoding, UTF-8/16/32 handling, a 128 KiB decoded UTF-8 cap
+and the existing depth/value limits. Unknown fields and floats/booleans in
+integer fields are refused. `ArtifactManifest` retains the original encoded
+bytes and SHA independently from validated fields. Its manual Debug omits raw
+bytes and digest-map names. Use that same object after authenticating its
+original SHA: `verify_pair(&manifest, binary_path, &selection)` never reopens
+the manifest path. This avoids authenticating one document and then interpreting
+a replacement. There is no signature verification in this API.
+
+Inspect a local pair against an explicit caller-owned selection:
+
+```sh
+cargo run --locked -q -p simplestchat-ops -- distribution verify-pair \
+  --manifest /path/to/ops-release.json --path /path/to/simplestchat-ops \
+  --selection /path/to/selection.json
+```
+
+Argument order is exact. The selection JSON has exactly the seven source fields
+`repository`, `revision`, `packageVersion`, `protocolVersion`, `target`,
+`buildRunId` and `runAttempt`, with the same field rules, at most 16 KiB encoded
+and 32 KiB decoded. It is caller input, not proof of a signature or observed
+GitHub identity. All seven identities must match before the executable is read.
+The executable must match the declared original SHA/count through the existing
+inspector, with x86-64 architecture and no interpreter, DT_NEEDED or loader-hook
+entries. Those limited static-linkage facts are compatible with the declared
+target; they do not prove which libc/toolchain built the file or that it runs.
+
+Success prints only `manifestSha256`, `manifestBytes`, bounded `claims` and the
+existing `executable` facts. Claims contain the declared identities and
+`inputDigestCount`/`evidenceDigestCount`; map names/entries and raw bytes stay
+private. Success includes no `passed`, signed, musl-provenance or runtime-ready
+assertion. Failure is exit 1 and only
+`{"passed":false,"failure":"invalid_ops_artifact"}`; invalid arguments return 2.
+All file reads keep the existing snapshot/close guarantees. This is not a lock
+against later writes: subsequent execution/installation must rebind its current
+bytes. No candidate is executed, fetched, unpacked, installed or transported.
+Python remains the supported runtime, and authenticated distribution readiness
+is still incomplete. Tests assert this new contract directly; no Python parity
+is claimed for a schema Python does not implement.
 
 ## Pure release evidence policy
 

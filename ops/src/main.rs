@@ -5,6 +5,7 @@ mod receipt_cli;
 
 use simplestchat_ops::{
     distribution,
+    distribution::manifest::{ArtifactManifest, Selection, verify_pair},
     release::{archive::verify_archive, manifest::Manifest},
 };
 use std::ffi::OsString;
@@ -16,7 +17,9 @@ const USAGE: &str = concat!(
     "Usage: simplestchat-ops release manifest --path PATH\n",
     "       simplestchat-ops release archive --manifest PATH --path PATH\n",
     "       simplestchat-ops release receipt --envelope PATH --receipt PATH\n",
-    "       simplestchat-ops distribution inspect-executable --path PATH",
+    "       simplestchat-ops distribution inspect-executable --path PATH\n",
+    "       simplestchat-ops distribution verify-pair --manifest PATH ",
+    "--path PATH --selection PATH",
 );
 
 fn main() -> ExitCode {
@@ -25,7 +28,22 @@ fn main() -> ExitCode {
         println!("{USAGE}");
         return ExitCode::SUCCESS;
     }
-    let (result, failure) = if args.len() == 4
+    let (result, failure) = if args.len() == 8
+        && args[0] == "distribution"
+        && args[1] == "verify-pair"
+        && args[2] == "--manifest"
+        && args[4] == "--path"
+        && args[6] == "--selection"
+    {
+        let result = ArtifactManifest::read(Path::new(&args[3]))
+            .and_then(|manifest| {
+                let selection = Selection::read(Path::new(&args[7]))?;
+                verify_pair(&manifest, Path::new(&args[5]), &selection)
+            })
+            .map_err(|_| ())
+            .and_then(|pair| serde_json::to_value(pair).map_err(|_| ()));
+        (result, "invalid_ops_artifact")
+    } else if args.len() == 4
         && args[0] == "distribution"
         && args[1] == "inspect-executable"
         && args[2] == "--path"
@@ -77,6 +95,9 @@ fn main() -> ExitCode {
         Ok(value) => value,
         Err(()) => {
             let bytes = match failure {
+                "invalid_ops_artifact" => {
+                    b"{\"passed\":false,\"failure\":\"invalid_ops_artifact\"}\n".as_slice()
+                }
                 "invalid_executable" => {
                     b"{\"passed\":false,\"failure\":\"invalid_executable\"}\n".as_slice()
                 }

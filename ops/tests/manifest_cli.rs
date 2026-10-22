@@ -111,6 +111,8 @@ fn usage_and_help_never_read_a_manifest_or_start_another_command() {
                 "       simplestchat-ops release archive --manifest PATH --path PATH\n",
                 "       simplestchat-ops release receipt --envelope PATH --receipt PATH\n",
                 "       simplestchat-ops distribution inspect-executable --path PATH\n",
+                "       simplestchat-ops distribution verify-pair --manifest PATH ",
+                "--path PATH --selection PATH\n",
             )
             .as_bytes()
         );
