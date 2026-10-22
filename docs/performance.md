@@ -940,7 +940,13 @@ Use `--env` to print only environment settings. Both offline commands retain
 the original CPU, memory, port-headroom and workload-shape policy. Calibration
 reads preserve the reference's 128 MiB regular-file bound and refuse final
 symlinks; numeric tokens retain Python rounding and its legacy nonfinite JSON
-values. The Python runner and Ansible filter remain the reference, including
+values. Multi-report `compare` conservatively refuses NaN-valued workload
+profiles. Python 3.13+ also refuses them; Python 3.12 and earlier can merge those
+profiles through dataclass tuple identity checks on the decoder's shared NaN
+object. The [dataclass equality change](https://docs.python.org/3/library/dataclasses.html)
+is tested explicitly without changing Rust's refusal. Single-report legacy NaN
+output retains full reference parity on these versions.
+The Python runner and Ansible filter remain the reference, including
 for the managed remote controller. The Rust run policy is checked against the
 Python parser, judging, search, report, projection and pricing fixtures; its
 process and container ownership tests use fake engines rather than a live load.

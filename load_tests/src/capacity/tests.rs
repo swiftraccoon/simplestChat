@@ -27,6 +27,36 @@ fn oracle(arguments: &[&str]) -> std::process::Output {
         .unwrap()
 }
 
+fn versioned_oracle(arguments: &[&str]) -> ((u32, u32), std::process::Output) {
+    // The version belongs to the same interpreter invocation as the unchanged
+    // CLI. Only its fixed, at-most-16-byte header is removed from stderr.
+    let program = r"
+import json,runpy,sys
+from pathlib import Path
+sys.stderr.write(json.dumps(list(sys.version_info[:2]),separators=(',',':'))+'\n')
+sys.stderr.flush()
+sys.argv=sys.argv[1:]
+sys.path[0]=str(Path(sys.argv[0]).parent)
+runpy.run_path(sys.argv[0],run_name='__main__')
+";
+    let mut output = Process::new("python3")
+        .env("PYTHONDONTWRITEBYTECODE", "1")
+        .args(["-c", program])
+        .arg(source().join("build/capacity.py"))
+        .args(arguments)
+        .output()
+        .unwrap();
+    let end = output.stderr.iter().position(|b| *b == b'\n').unwrap();
+    assert!(end < 16, "the interpreter version header is bounded");
+    let [major, minor]: [u32; 2] = serde_json::from_slice(&output.stderr[..end]).unwrap();
+    assert!(
+        major == 3 && minor >= 10,
+        "the oracle requires Python 3.10+"
+    );
+    output.stderr.drain(..=end);
+    ((major, minor), output)
+}
+
 #[test]
 fn original_reference_suggestions_respect_workers_memory_ports_and_explicit_quotas() {
     let ceilings = model::reference();
@@ -429,11 +459,13 @@ fn comparison_rejects_mixed_profiles_before_emitting_any_rankings() {
 }
 
 #[test]
-fn legacy_nonfinite_profile_values_keep_reference_comparison_identity() {
+fn legacy_nonfinite_comparisons_keep_native_refusal_and_versioned_python_identity() {
     let fixture = Fixture::new();
     let mut paths = Vec::new();
+    let mut finite_paths = Vec::new();
     for name in ["first", "second"] {
         let mut report = calibration(name, None);
+        finite_paths.push(fixture.write(&format!("{name}-finite.json"), &report));
         report["measurement"]["browser"]["pixelRatio"] = serde_json::Value::Null;
         let path = fixture.write(&format!("{name}.json"), &report);
         let source = fs::read_to_string(&path)
@@ -447,16 +479,34 @@ fn legacy_nonfinite_profile_values_keep_reference_comparison_identity() {
         paths[0].to_str().unwrap(),
         paths[1].to_str().unwrap(),
     ];
-    let expected = oracle(&args);
-    assert!(!expected.status.success());
-    assert!(expected.stdout.is_empty());
-    assert_eq!(
-        format!("capacity: {}\n", native(&args).unwrap_err()).as_bytes(),
-        expected.stderr
+    let refusal = concat!(
+        "cannot compare costs across different workload shapes; use reports with ",
+        "the same meeting size, media, speakers, browser settings and chat interval"
     );
+    assert_eq!(native(&args).unwrap_err().to_string(), refusal);
+    let (version, expected) = versioned_oracle(&args);
+    if version >= (3, 13) {
+        assert_eq!(expected.status.code(), Some(1));
+        assert!(expected.stdout.is_empty());
+        assert_eq!(format!("capacity: {refusal}\n").as_bytes(), expected.stderr);
+    } else {
+        // Before 3.13, dataclass tuple equality treats the decoder's shared NaN
+        // object as equal by identity. Rust deliberately retains its refusal.
+        assert_eq!(expected.status.code(), Some(0));
+        assert!(expected.stderr.is_empty());
+        let finite = native(&[
+            "compare",
+            finite_paths[0].to_str().unwrap(),
+            finite_paths[1].to_str().unwrap(),
+        ])
+        .unwrap();
+        assert_eq!(finite.as_bytes(), expected.stdout);
+    }
     let single = ["compare", paths[0].to_str().unwrap()];
-    let expected = oracle(&single);
-    assert!(expected.status.success());
+    let (single_version, expected) = versioned_oracle(&single);
+    assert_eq!(single_version, version);
+    assert_eq!(expected.status.code(), Some(0));
+    assert!(expected.stderr.is_empty());
     assert_eq!(native(&single).unwrap().as_bytes(), expected.stdout);
 }
 
