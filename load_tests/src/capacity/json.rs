@@ -3,6 +3,10 @@
 //! Serde owns structural JSON parsing. A lexical adapter retains number tokens
 //! for correctly rounded f64 conversion and the reference's NaN/Infinity values;
 //! it neither accepts comments/JSON5 nor reinterprets strings or object keys.
+//! Inputs are limited to 128 MiB and one million combined numeric tokens and
+//! distinct strings. The internal adapted JSON is limited to 256 MiB and 16 times
+//! the input size (with a 64 KiB floor). These bounds are checked before adapting;
+//! marker length depends on the bounded item count, never on user string length.
 
 use anyhow::{Result, ensure};
 use nix::fcntl::{OFlag, open};
@@ -15,6 +19,9 @@ use std::ops::Index;
 use std::path::Path;
 
 const MAX_RESULT: u64 = 128 * 1024 * 1024;
+const MAX_ADAPTED: usize = 256 * 1024 * 1024;
+const MAX_ITEMS: usize = 1_000_000;
+const MIN_MARKER: &str = "@capacity:0:";
 
 #[derive(Clone, Debug)]
 pub(crate) enum Json {
@@ -204,8 +211,15 @@ fn numeric(token: &str) -> bool {
 }
 
 pub(crate) fn parse(bytes: &[u8]) -> Result<Json> {
+    parse_bounded(bytes, MAX_ADAPTED, MAX_ITEMS)
+}
+
+fn parse_bounded(bytes: &[u8], maximum: usize, items: usize) -> Result<Json> {
+    ensure!(bytes.len() as u64 <= MAX_RESULT, "JSON input too large");
     let bytes = bytes.strip_prefix(&[0xef, 0xbb, 0xbf]).unwrap_or(bytes);
     let source = std::str::from_utf8(bytes)?;
+    let budget = maximum.min(source.len().saturating_mul(16).max(64 * 1024));
+    ensure!(source.len() <= budget, "adapted JSON too large");
     let mut strings = BTreeSet::new();
     let mut tokens = Vec::new();
     let mut position = 0;
@@ -221,7 +235,11 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<Json> {
             }
             ensure!(position < bytes.len(), "unterminated JSON string");
             position += 1;
-            strings.insert(serde_json::from_slice::<String>(&bytes[start..position])?);
+            let value = serde_json::from_slice::<String>(&bytes[start..position])?;
+            if !strings.contains(&value) {
+                ensure!(strings.len() + tokens.len() < items, "too many JSON items");
+                strings.insert(value);
+            }
         } else if matches!(bytes[position], b'-' | b'0'..=b'9' | b'N' | b'I') {
             while position < bytes.len() && !b" \t\r\n,]}:".contains(&bytes[position]) {
                 position += 1;
@@ -235,6 +253,15 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<Json> {
                     != Some(b':'),
                 "JSON object keys must be strings"
             );
+            ensure!(strings.len() + tokens.len() < items, "too many JSON items");
+            // Bound inventory growth during scanning, before storing another token.
+            let minimum = (tokens.len() + 1)
+                .checked_mul(MIN_MARKER.len() + 2)
+                .and_then(|extra| source.len().checked_add(extra));
+            ensure!(
+                minimum.is_some_and(|size| size <= budget),
+                "adapted JSON too large"
+            );
             tokens.push(Token {
                 start,
                 end: position,
@@ -243,18 +270,34 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<Json> {
             position += 1;
         }
     }
-    let mut prefix = "@capacity:".to_owned();
-    while strings.iter().any(|value| value.starts_with(&prefix)) {
-        prefix.push(':');
-    }
+    // Candidate prefixes are disjoint: each collision consumes a distinct string.
+    // A range lookup examines only the first possible match, including decoded
+    // object keys; long user strings cannot increase marker width or search cost.
+    let prefix = (0..=strings.len())
+        .map(|counter| format!("@capacity:{counter}:"))
+        .find(|prefix| {
+            !strings
+                .range(prefix.clone()..)
+                .next()
+                .is_some_and(|value| value.starts_with(prefix))
+        })
+        .ok_or_else(|| anyhow::anyhow!("JSON marker unavailable"))?;
+    let adapted_size = tokens
+        .len()
+        .checked_mul(prefix.len() + 2)
+        .and_then(|extra| source.len().checked_add(extra))
+        .filter(|size| *size <= budget)
+        .ok_or_else(|| anyhow::anyhow!("adapted JSON too large"))?;
     let mut adapted = String::new();
+    adapted.try_reserve_exact(adapted_size)?;
     let mut previous = 0;
     for token in tokens {
         adapted.push_str(&source[previous..token.start]);
-        adapted.push_str(&serde_json::to_string(&format!(
-            "{prefix}{}",
-            &source[token.start..token.end]
-        ))?);
+        // Validated numeric tokens and the marker are ASCII without escapes.
+        adapted.push('"');
+        adapted.push_str(&prefix);
+        adapted.push_str(&source[token.start..token.end]);
+        adapted.push('"');
         previous = token.end;
     }
     adapted.push_str(&source[previous..]);
@@ -284,4 +327,79 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<Json> {
         }
     }
     Ok(convert(serde_json::from_str(&adapted)?, &prefix))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn long_private_collision_strings_cannot_amplify_numeric_tokens() {
+        let private = format!("@capacity:{}PRIVATE", ":".repeat(2048));
+        let source = format!(
+            "[{},{}]",
+            serde_json::to_string(&private).unwrap(),
+            vec!["0"; 2000].join(",")
+        );
+        // The old marker grew with `private`, producing over 4 MiB here.
+        let Json::Array(values) = parse_bounded(source.as_bytes(), 64 * 1024, MAX_ITEMS).unwrap()
+        else {
+            panic!("expected array")
+        };
+        assert!(matches!(&values[0], Json::String(value) if value == &private));
+        assert_eq!(values.len(), 2001);
+        assert!(
+            values[1..]
+                .iter()
+                .all(|value| matches!(value, Json::Number(n) if n == "0"))
+        );
+    }
+
+    #[test]
+    fn decoded_keys_and_values_cannot_collide_with_retained_numeric_tokens() {
+        let source = br#"{"\u0040capacity:0:key":["\u0040capacity:1:NaN","@capacity:2:",
+            -0,1.00,1e+03,9007199254740993,NaN,Infinity,-Infinity]}"#;
+        let value = parse(source).unwrap();
+        let Json::Array(values) = &value["@capacity:0:key"] else {
+            panic!("expected array")
+        };
+        assert!(matches!(&values[0], Json::String(v) if v == "@capacity:1:NaN"));
+        assert!(matches!(&values[1], Json::String(v) if v == "@capacity:2:"));
+        for (value, expected) in values[2..].iter().zip([
+            "-0",
+            "1.00",
+            "1e+03",
+            "9007199254740993",
+            "NaN",
+            "Infinity",
+            "-Infinity",
+        ]) {
+            assert!(matches!(value, Json::Number(token) if token == expected));
+        }
+    }
+
+    #[test]
+    fn adapted_size_and_lexical_inventories_are_bounded_before_construction() {
+        assert_eq!(
+            parse_bounded(b"[0,0]", 20, MAX_ITEMS)
+                .unwrap_err()
+                .to_string(),
+            "adapted JSON too large"
+        );
+        assert_eq!(
+            parse_bounded(br#"["key",0,1]"#, 1024, 2)
+                .unwrap_err()
+                .to_string(),
+            "too many JSON items"
+        );
+        assert_eq!(
+            parse_bounded(br#"["a","b","c"]"#, 1024, 2)
+                .unwrap_err()
+                .to_string(),
+            "too many JSON items"
+        );
+        assert!(parse_bounded(br#"["a","a",0]"#, 1024, 2).is_ok());
+        let source = format!("[{}]", vec!["0"; 10_000].join(","));
+        assert!(parse(source.as_bytes()).is_ok());
+    }
 }
