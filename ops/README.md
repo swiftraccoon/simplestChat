@@ -1,6 +1,7 @@
 # Operations policy tools
 
-`simplestchat-ops` currently validates one local release manifest. It has no
+`simplestchat-ops` validates local release manifests and receiver receipts.
+It has no
 network, engine, service, SSH or deployment command. Python remains the release
 runtime and the reference implementation.
 
@@ -37,14 +38,14 @@ timestamp text remains unchanged.
 
 | Module | Responsibility |
 | --- | --- |
-| `src/main.rs` | The single allowlisted CLI form and fixed output failures |
+| `src/main.rs` | Allowlisted CLI forms and fixed output failures |
 | `src/json.rs` | Serde grammar, duplicate keys, numeric tokens and bounded decoding |
 | `src/files.rs` | Descriptor-bound regular-file snapshot and change detection |
 | `src/release/manifest.rs` | Existing release schema, migration checksums and real UTC dates |
 
 The crate uses existing dependency versions and does not depend on the server,
 load generator, mediasoup or native TLS. The manual argument parser follows
-`xtask` for this one command and avoids adding a CLI framework dependency.
+`xtask` for this small command surface and avoids adding a CLI framework dependency.
 
 No binary is installed by Ansible or added to the production image. Host
 execution requires a separate attested operations artifact, an inspected static
@@ -55,3 +56,53 @@ result as the [Rust linkage reference](https://doc.rust-lang.org/reference/linka
 recommends. The existing signed server artifact and its ten-file contract stay
 unchanged. Python's controller-supplied preflight remains the bootstrap trust
 boundary until binary provenance, ABI and installation ownership are established.
+
+## Pure release evidence policy
+
+Inspect collected receiver evidence locally:
+
+```sh
+cargo run --locked -q -p simplestchat-ops -- release receipt --envelope /path/to/envelope.json --receipt /path/to/fetch-outcome.json
+```
+
+The exact argument order is required. Success prints only `receipt` (the sixteen
+allowed fields), `envelopeSha256`, `envelopeBytes`, `receiptSha256` and
+`receiptBytes`. Both identities describe original snapshot bytes, including their
+encoding and whitespace. Exit 0 means the receipt is consistent with the supplied
+envelope; a consistent failed receipt remains failed in that projection. It does
+not authenticate a signature or prove transport/process success or durable writes.
+Failure returns exit 1 with only
+`{"passed":false,"failure":"invalid_release_receipt"}`. Invalid arguments return
+exit 2. The reader enforces the same regular-file, size, symlink and change guards
+as manifest inspection. Python remains the release runtime.
+
+`release::trust` validates the current claim, proof and receiver envelope against
+explicit selected identities. The predicate has twelve exact fields and binds
+eight file digests; the proof binds the four existing verification subjects.
+These are schema and relationship checks. They never invoke `gh`, authenticate
+a signature, observe GitHub API identity, or authorize a host operation. Python
+remains the operational reference and transport.
+
+`Document<T>` retains the exact original encoded bytes and SHA-256 separately
+from its typed projection. Unknown receipt fields remain private in those source
+bytes and are omitted from the public sixteen-field `ReceiverReceipt` projection.
+Its success consistency check requires matching revision/artifact/ZIP identities,
+`passed`, `settled`, `finalized`, complete status/phase, exact byte count, no failure,
+and both declared archive/manifest digests. The owning operation must still prove
+its process exit status, current byte bindings and durable publication. A decoded
+journal `finalized` bit alone proves none of those actions.
+
+`HelperSet` preserves the exact Python base/fetch/force source-helper declarations.
+`PreflightReceipt` models the producer's three-field output, including its strict
+prepared boolean and selected helper request. This is stronger than the current
+Ansible two-field assertion; it does not establish a fresh run, root/OS/path
+checks or a held lock. No installed binary or runtime callsite consumes these
+new library APIs yet.
+
+Claims/proofs accept at most 64 MiB, envelopes/journals/preflight receipts 16 KiB,
+and receiver receipts 64 KiB. Helper requests retain the 4,096-character argument
+limit, with a bounded UTF-8/16/32 byte envelope. Each JSON decode has a matching
+encoded limit and at most twice that decoded UTF-8 budget, plus the existing
+128-container/100,000-value bounds. Numeric tokens retain their original spelling;
+strict integer fields never accept booleans or floats. Unknown receipt fields
+cannot appear in fixed error text or the public projection.

@@ -11,6 +11,7 @@ pub mod release;
 /// become error text; callers may retain private evidence separately.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {
+    Policy(release::trust::Failure),
     Input,
     Changed,
     Json,
@@ -30,6 +31,7 @@ pub enum Error {
 impl Error {
     pub fn code(self) -> &'static str {
         match self {
+            Self::Policy(failure) => failure.code(),
             Self::Input => "manifest_input_refused",
             Self::Changed => "manifest_input_changed",
             Self::Json => "invalid_json",

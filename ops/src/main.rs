@@ -1,6 +1,7 @@
-//! The first operations command reads one local manifest; it has no installed
-//! host or release runtime callsite. A manual parser keeps this small surface
-//! consistent with xtask without adding a CLI framework dependency.
+//! Allowlisted read-only operations. No installed host/runtime callsite exists;
+//! the manual parser cannot start another command, engine or network operation.
+
+mod receipt_cli;
 
 use simplestchat_ops::release::manifest::Manifest;
 use std::ffi::OsString;
@@ -8,7 +9,10 @@ use std::io::Write;
 use std::path::Path;
 use std::process::ExitCode;
 
-const USAGE: &str = "Usage: simplestchat-ops release manifest --path PATH";
+const USAGE: &str = concat!(
+    "Usage: simplestchat-ops release manifest --path PATH\n",
+    "       simplestchat-ops release receipt --envelope PATH --receipt PATH",
+);
 
 fn main() -> ExitCode {
     let args: Vec<OsString> = std::env::args_os().skip(1).collect();
@@ -16,28 +20,50 @@ fn main() -> ExitCode {
         println!("{USAGE}");
         return ExitCode::SUCCESS;
     }
-    if args.len() != 4 || args[0] != "release" || args[1] != "manifest" || args[2] != "--path" {
+    let (result, failure) = if args.len() == 4
+        && args[0] == "release"
+        && args[1] == "manifest"
+        && args[2] == "--path"
+    {
+        let result = Manifest::read(Path::new(&args[3]))
+            .map(|manifest| {
+                serde_json::json!({
+                    "manifest": manifest.fields(), "manifestSha256": manifest.sha256(),
+                    "manifestBytes": manifest.as_json().len(),
+                })
+            })
+            .map_err(|_| ());
+        (result, "invalid_release_manifest")
+    } else if args.len() == 6
+        && args[0] == "release"
+        && args[1] == "receipt"
+        && args[2] == "--envelope"
+        && args[4] == "--receipt"
+    {
+        (
+            receipt_cli::inspect(Path::new(&args[3]), Path::new(&args[5])),
+            "invalid_release_receipt",
+        )
+    } else {
         eprintln!("{USAGE}");
         return ExitCode::from(2);
-    }
-    let result = Manifest::read(Path::new(&args[3]));
-    let bytes = match result {
-        Ok(manifest) => serde_json::to_vec(&serde_json::json!({
-            "manifest": manifest.fields(), "manifestSha256": manifest.sha256(),
-            "manifestBytes": manifest.as_json().len(),
-        }))
-        .expect("validated manifest serialization"),
-        Err(_) => {
-            let _ = std::io::stdout()
-                .lock()
-                .write_all(b"{\"passed\":false,\"failure\":\"invalid_release_manifest\"}\n");
+    };
+    let value = match result {
+        Ok(value) => value,
+        Err(()) => {
+            let bytes = match failure {
+                "invalid_release_receipt" => {
+                    b"{\"passed\":false,\"failure\":\"invalid_release_receipt\"}\n".as_slice()
+                }
+                _ => b"{\"passed\":false,\"failure\":\"invalid_release_manifest\"}\n".as_slice(),
+            };
+            let _ = std::io::stdout().lock().write_all(bytes);
             return ExitCode::FAILURE;
         }
     };
     let mut output = std::io::stdout().lock();
-    if output
-        .write_all(&bytes)
-        .and_then(|()| output.write_all(b"\n"))
+    if serde_json::to_writer(&mut output, &value)
+        .and_then(|()| output.write_all(b"\n").map_err(serde_json::Error::io))
         .is_err()
     {
         ExitCode::FAILURE

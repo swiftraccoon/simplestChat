@@ -1,8 +1,9 @@
 //! Serde owns JSON grammar and structural validation. Borrowed RawValues retain
 //! numeric spelling while a map visitor rejects decoded duplicate keys at every
 //! depth. Finite float conversion matches Python, and integers remain distinct.
-//! The manifest input bound, explicit depth limit of 128 and 100,000-value budget bound
-//! the repeated structural visits of nested borrowed containers.
+//! Each caller selects an encoded byte bound; decoded UTF-8 is limited to twice
+//! that bound. An explicit depth limit of 128 and 100,000-value budget bound the
+//! repeated structural visits of nested borrowed containers.
 
 use crate::Error;
 use serde::de::{MapAccess, SeqAccess, Visitor};
@@ -15,12 +16,15 @@ const MAX_DEPTH: usize = 128;
 const MAX_VALUES: usize = 100_000;
 const MAX_DECODED: usize = 2 * 1024 * 1024;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub(crate) enum Json {
     Object(BTreeMap<String, Self>, Vec<String>),
     String(String),
     Integer(String),
-    Other,
+    Float(String),
+    Bool(bool),
+    Null,
+    Array(Vec<Self>),
 }
 impl Json {
     pub(crate) fn string(&self) -> Option<&str> {
@@ -28,6 +32,120 @@ impl Json {
             Some(value)
         } else {
             None
+        }
+    }
+    pub(crate) fn object(&self) -> Option<&BTreeMap<String, Self>> {
+        if let Self::Object(value, _) = self {
+            Some(value)
+        } else {
+            None
+        }
+    }
+    pub(crate) fn get(&self, key: &str) -> Option<&Self> {
+        self.object()?.get(key)
+    }
+    pub(crate) fn array(&self) -> Option<&[Self]> {
+        if let Self::Array(value) = self {
+            Some(value)
+        } else {
+            None
+        }
+    }
+    pub(crate) fn truthiness(&self) -> bool {
+        match self {
+            Self::Null => false,
+            Self::Bool(value) => *value,
+            Self::String(value) => !value.is_empty(),
+            Self::Integer(value) => !matches!(value.as_str(), "0" | "-0"),
+            Self::Float(value) => value.parse::<f64>().expect("validated finite float") != 0.0,
+            Self::Array(value) => !value.is_empty(),
+            Self::Object(value, _) => !value.is_empty(),
+        }
+    }
+    /// Python's recursive JSON equality, including numeric booleans and exact
+    /// integer-vs-float comparison. Never round an arbitrary integer into f64.
+    pub(crate) fn semantic_eq(&self, other: &Self) -> bool {
+        fn integer(value: &Json) -> Option<&str> {
+            match value {
+                Json::Integer(v) => Some(if v == "-0" { "0" } else { v }),
+                Json::Bool(true) => Some("1"),
+                Json::Bool(false) => Some("0"),
+                _ => None,
+            }
+        }
+        if let (Some(a), Some(b)) = (integer(self), integer(other)) {
+            return a == b;
+        }
+        let float = |v: &Self| {
+            if let Self::Float(v) = v {
+                v.parse::<f64>().ok()
+            } else {
+                None
+            }
+        };
+        if let (Some(a), Some(b)) = (float(self), float(other)) {
+            return a == b;
+        }
+        for (a, b) in [(self, other), (other, self)] {
+            if let (Some(a), Some(b)) = (integer(a), float(b)) {
+                return b.fract() == 0.0
+                    && if b == 0.0 {
+                        a == "0"
+                    } else {
+                        a == format!("{b:.0}")
+                    };
+            }
+        }
+        if let Some(a) = self.array() {
+            return other.array().is_some_and(|b| {
+                a.len() == b.len() && a.iter().zip(b).all(|(a, b)| a.semantic_eq(b))
+            });
+        }
+        match (self, other) {
+            (Self::Null, Self::Null) => true,
+            (Self::String(a), Self::String(b)) => a == b,
+            (Self::Object(a, _), Self::Object(b, _)) => {
+                a.len() == b.len()
+                    && a.iter()
+                        .all(|(key, a)| b.get(key).is_some_and(|b| a.semantic_eq(b)))
+            }
+            _ => false,
+        }
+    }
+    pub(crate) fn integer(&self) -> Option<i64> {
+        if let Self::Integer(value) = self {
+            value.parse().ok()
+        } else {
+            None
+        }
+    }
+    pub(crate) fn number(&self) -> Option<f64> {
+        match self {
+            Self::Integer(v) | Self::Float(v) => v.parse().ok(),
+            _ => None,
+        }
+    }
+    pub(crate) fn boolean(&self) -> Option<bool> {
+        if let Self::Bool(value) = self {
+            Some(*value)
+        } else {
+            None
+        }
+    }
+}
+impl serde::Serialize for Json {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            Self::Object(value, _) => value.serialize(serializer),
+            Self::Array(value) => value.serialize(serializer),
+            Self::String(value) => value.serialize(serializer),
+            Self::Integer(value) | Self::Float(value) => {
+                let raw =
+                    RawValue::from_string(value.clone()).map_err(serde::ser::Error::custom)?;
+                raw.serialize(serializer)
+            }
+            Self::Bool(value) => value.serialize(serializer),
+            Self::Null => serializer.serialize_none(),
         }
     }
 }
@@ -108,13 +226,14 @@ fn convert(raw: &RawValue, remaining: &mut usize, depth: usize) -> Result<Json, 
             Ok(Json::Object(result, order))
         }
         Some(b'[') => {
+            let mut values = Vec::new();
             for value in serde_json::from_str::<Array<'_>>(source)
                 .map_err(|_| Error::Json)?
                 .0
             {
-                convert(value, remaining, depth + 1)?;
+                values.push(convert(value, remaining, depth + 1)?);
             }
-            Ok(Json::Other)
+            Ok(Json::Array(values))
         }
         Some(b'"') => serde_json::from_str(source)
             .map(Json::String)
@@ -130,13 +249,15 @@ fn convert(raw: &RawValue, remaining: &mut usize, depth: usize) -> Result<Json, 
             if !source.parse::<f64>().map_err(|_| Error::Json)?.is_finite() {
                 return Err(Error::Json);
             }
-            Ok(Json::Other)
+            Ok(Json::Float(source.into()))
         }
-        _ => Ok(Json::Other),
+        Some(b't') => Ok(Json::Bool(true)),
+        Some(b'f') => Ok(Json::Bool(false)),
+        _ => Ok(Json::Null),
     }
 }
 
-fn text(bytes: &[u8]) -> Result<Cow<'_, str>, Error> {
+fn text(bytes: &[u8], maximum: usize) -> Result<Cow<'_, str>, Error> {
     // Match json.detect_encoding: four-byte BOMs precede two-byte BOMs,
     // followed by null-pattern detection for BOM-less UTF16/UTF32 input.
     let (width, little, skip) = if bytes.starts_with(&[0xff, 0xfe, 0, 0]) {
@@ -171,7 +292,7 @@ fn text(bytes: &[u8]) -> Result<Cow<'_, str>, Error> {
     }
     let mut output = String::new();
     // UTF16 BMP scalars need at most three UTF8 bytes per two source bytes;
-    // UTF32 requires no expansion. A fixed2MiB decoded bound covers both.
+    // UTF32 requires no expansion. Twice the encoded byte budget covers both.
     output
         .try_reserve(bytes.len().saturating_mul(2))
         .map_err(|_| Error::Json)?;
@@ -196,15 +317,29 @@ fn text(bytes: &[u8]) -> Result<Cow<'_, str>, Error> {
             output.push(char::from_u32(unit).ok_or(Error::Json)?);
         }
     }
-    if output.len() > MAX_DECODED {
+    if output.len() > maximum {
         return Err(Error::Json);
     }
     Ok(Cow::Owned(output))
 }
 
 pub(crate) fn decode(bytes: &[u8]) -> Result<Json, Error> {
-    let source = text(bytes)?;
+    decode_limited(bytes, MAX_DECODED / 2)
+}
+
+pub(crate) fn decode_limited(bytes: &[u8], maximum: usize) -> Result<Json, Error> {
+    if bytes.is_empty() || bytes.len() > maximum {
+        return Err(Error::Json);
+    }
+    let source = text(bytes, maximum.saturating_mul(2))?;
     let raw = serde_json::from_str::<&RawValue>(&source).map_err(|_| Error::Json)?;
     let mut remaining = MAX_VALUES;
     convert(raw, &mut remaining, 0)
+}
+
+pub(crate) fn character_count(bytes: &[u8], maximum: usize) -> Result<usize, Error> {
+    if bytes.is_empty() || bytes.len() > maximum {
+        return Err(Error::Json);
+    }
+    Ok(text(bytes, maximum.saturating_mul(2))?.chars().count())
 }
