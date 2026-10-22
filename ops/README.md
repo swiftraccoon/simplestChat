@@ -2,8 +2,9 @@
 
 `simplestchat-ops` validates local release manifests, receiver receipts and
 Docker/OCI image archives, and inspects local executable identities. It has no
-network, engine, service, SSH or deployment command. Python remains the release
-runtime and the reference implementation.
+network, engine, service, SSH or deployment command. Local unsigned artifact
+preparation can write a new private directory, as described below. Python remains
+the release runtime and the reference implementation.
 
 ```sh
 cargo run --locked -q -p simplestchat-ops -- release manifest --path /path/to/release.json
@@ -45,6 +46,7 @@ timestamp text remains unchanged.
 | `src/distribution.rs`, `src/distribution_elf.rs` | Original executable identity and bounded ELF linkage facts |
 | `src/distribution_build_plan.rs`, `src/distribution_inventory.rs` | Nonexecuting build recipe and selected original-byte inventory |
 | `src/distribution_manifest.rs`, `src/distribution_pair.rs` | Separate Ops declarations, selected identity and pinned local executable pair |
+| `src/distribution_assembly.rs`, `src/distribution_assembly_files.rs` | Fresh local unsigned signing inputs and measured payload bytes |
 | `src/release/manifest.rs` | Existing release schema, migration checksums and real UTC dates |
 | `src/release/archive.rs`, `src/release/archive/` | Whole-transfer identity and bounded offline Docker/OCI metadata validation |
 
@@ -285,6 +287,88 @@ binary digest, signature or runtime-readiness claim. Failure is exit 1 and only
 `{"passed":false,"failure":"invalid_ops_build_plan"}`; invalid arguments return 2.
 The existing Ops artifact and server release contracts are unchanged. This is
 a new plan contract tested directly, not a Python producer receipt or oracle.
+
+## Local unsigned artifact preparation
+
+Prepare signing inputs from a local pair without building, signing, running or
+installing the candidate:
+
+```sh
+cargo run --locked -q -p simplestchat-ops -- distribution prepare-artifact \
+  --manifest /path/to/ops-release.json --path /path/to/simplestchat-ops \
+  --selection /path/to/selection.json --evidence /path/to/evidence-sources.json \
+  --output /path/to/new-private-output
+```
+
+Argument order is exact. The manifest and seven-field selection keep their
+existing schema. `evidence-sources.json` is a separate caller-selected JSON object
+mapping each declared evidence logical name to an absolute local source path.
+For example, `{"build/receipt.json":"/private/evidence/receipt.json"}` selects
+bytes; it does not authenticate the receipt or interpret a build-success bit.
+The mapping has at most sixteen entries, 16 KiB encoded and 32 KiB decoded.
+Logical names use the manifest's existing conservative relative ASCII grammar.
+The exact name set must match `evidenceDigests`; every SHA is compared against
+the copied original bytes. Evidence must be nonempty regular nonlink files, at
+most 1 MiB each and 16 MiB in total. Empty evidence is allowed and means no
+evidence bytes were supplied. `inputDigests` remain unmeasured declarations.
+
+All seven identities are compared before binary or output access. The library
+borrows the retained `ArtifactManifest`, never reopens its old path, and copies
+its original bytes unchanged. Binary and evidence paths must be absolute,
+control-free, nonlink walks of at most 32 components. Sources use the existing
+descriptor-bound Snapshot reader and checked streaming. Output is a fresh 0700
+directory beneath an existing nonlink parent; even an empty existing directory
+is refused. Its names are fixed and flat, with exclusive 0600 files:
+
+- `simplestchat-ops` and original `ops-release.json`;
+- zero to sixteen `ops-evidence-00.bin` through `ops-evidence-15.bin`, ordered by
+  logical name, plus the private `ops-evidence.json` mapping;
+- `ops-predicate.json` and the last unsigned inventory `ops-preparation.json`.
+
+Before writing each payload, its exclusively created empty file's kernel-assigned
+creator owner must match the retained fresh directory's owner. Directory/file
+identity, modes and owner/group remain bound afterward. This is a local file
+ownership check, not authentication of the caller or its selected claims.
+
+The writer explicitly closes each payload, reopens only its exact inode/full
+stamp through Snapshot, and hashes the actual stored bytes. This catches a
+same-length destination write before the writer's initial metadata sample.
+Namespace, file stamps and the complete fixed output inventory are rechecked.
+The existing pair/ELF policy then validates the closed copied binary against the
+retained manifest. Sources, writer descriptors and output directory owners close
+before CLI success. During assembly, at most 32 shared output owners and
+sequential bounded source/destination readers keep retained file descriptors
+below 100; directory cursors and binding probes add bounded transient handles.
+
+The new predicate type is
+`https://github.com/swiftraccoon/simplestChat/attestations/ops-artifact/v1`.
+Its `ops-artifact-identity` document binds the original manifest, selected claims,
+inspected executable facts, and measured payload/index SHA/counts. The final
+`ops-unsigned-artifact` inventory also binds that predicate. Neither document is
+a signature, authenticated source/build observation, producer receipt, musl
+provenance proof or runtime/installation authorization. Opaque copied evidence
+is not assessed for those properties. The current server predicate and ten-file
+release contract are unchanged; no workflow or production callsite consumes the
+new format.
+
+Success prints only bounded selected claims, manifest/preparation original SHA
+and byte counts, payload/evidence counts and fixed outstanding prerequisites.
+Logical names, input paths and raw evidence stay out of stdout, Debug and fixed
+errors. Failure returns exit 1 and exactly
+`{"passed":false,"failure":"invalid_ops_preparation"}`; invalid arguments return
+2. Partial private evidence is retained. Earlier failures never create the final
+inventory, and observed later failures attempt to unlink only that inventory's
+own inode; foreign replacements are preserved. Filesystem errors can prevent
+rollback, so the inventory deliberately contains no success/readiness bit and
+its presence cannot establish operation success. CLI status includes the final
+namespace and close checks. This is not atomic multi-file publication, a lock or
+a power-loss durability claim.
+
+A real controlled musl build, authenticated source/toolchain/host/registry inputs,
+complete Cargo I/O closure, trusted-workflow attestation and fresh controller
+verification, owned Debian runtime checks, and transport/bootstrap/install
+ownership remain prerequisites. Tests use inert ELF bytes and owned filesystem
+faults for this new contract; no Python parity is claimed.
 
 ## Pure release evidence policy
 

@@ -196,6 +196,8 @@ fn arguments_are_fixed_and_do_not_select_another_operation() {
                 "--path PATH --selection PATH\n",
                 "       simplestchat-ops distribution build-plan ",
                 "--selection PATH --source-root PATH\n",
+                "       simplestchat-ops distribution prepare-artifact --manifest PATH ",
+                "--path PATH --selection PATH --evidence PATH --output PATH\n",
             )
             .as_bytes()
         );

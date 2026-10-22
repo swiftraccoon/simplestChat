@@ -115,6 +115,8 @@ fn usage_and_help_never_read_a_manifest_or_start_another_command() {
                 "--path PATH --selection PATH\n",
                 "       simplestchat-ops distribution build-plan ",
                 "--selection PATH --source-root PATH\n",
+                "       simplestchat-ops distribution prepare-artifact --manifest PATH ",
+                "--path PATH --selection PATH --evidence PATH --output PATH\n",
             )
             .as_bytes()
         );

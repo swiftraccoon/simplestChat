@@ -1,4 +1,5 @@
-//! Read-only release policy with no server, engine, network or service dependency.
+//! Local release policy and unsigned artifact preparation, without server,
+//! engine, network, service or candidate-execution dependencies.
 //!
 //! Validated metadata is not signature evidence or authorization to deploy. Python
 //! remains the release runtime until independent parity and distribution checks.

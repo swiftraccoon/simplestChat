@@ -1,6 +1,6 @@
 [package]
 name = "simplestchat-ops"
-description = "Bounded, read-only operations policy tools"
+description = "Bounded local operations policy and unsigned artifact tools"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

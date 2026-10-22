@@ -1,10 +1,11 @@
-//! Allowlisted read-only operations. No installed host/runtime callsite exists;
-//! the manual parser cannot start another command, engine or network operation.
+//! Allowlisted local inspection and unsigned artifact preparation. Preparation
+//! writes only a new private output; no command, engine or network is started.
 
 mod receipt_cli;
 
 use simplestchat_ops::{
     distribution,
+    distribution::manifest::assembly::{EvidenceSources, prepare_artifact},
     distribution::manifest::{ArtifactManifest, Selection, verify_pair},
     release::{archive::verify_archive, manifest::Manifest},
 };
@@ -20,7 +21,9 @@ const USAGE: &str = concat!(
     "       simplestchat-ops distribution inspect-executable --path PATH\n",
     "       simplestchat-ops distribution verify-pair --manifest PATH ",
     "--path PATH --selection PATH\n",
-    "       simplestchat-ops distribution build-plan --selection PATH --source-root PATH",
+    "       simplestchat-ops distribution build-plan --selection PATH --source-root PATH\n",
+    "       simplestchat-ops distribution prepare-artifact --manifest PATH --path PATH ",
+    "--selection PATH --evidence PATH --output PATH",
 );
 
 fn main() -> ExitCode {
@@ -29,7 +32,32 @@ fn main() -> ExitCode {
         println!("{USAGE}");
         return ExitCode::SUCCESS;
     }
-    let (result, failure) = if args.len() == 6
+    let (result, failure) = if args.len() == 12
+        && args[0] == "distribution"
+        && args[1] == "prepare-artifact"
+        && args[2] == "--manifest"
+        && args[4] == "--path"
+        && args[6] == "--selection"
+        && args[8] == "--evidence"
+        && args[10] == "--output"
+    {
+        let result = ArtifactManifest::read(Path::new(&args[3]))
+            .map_err(|_| ())
+            .and_then(|manifest| {
+                let selected = Selection::read(Path::new(&args[7])).map_err(|_| ())?;
+                let evidence = EvidenceSources::read(Path::new(&args[9])).map_err(|_| ())?;
+                prepare_artifact(
+                    &manifest,
+                    Path::new(&args[5]),
+                    &selected,
+                    &evidence,
+                    Path::new(&args[11]),
+                )
+                .map_err(|_| ())
+            })
+            .and_then(|value| serde_json::to_value(value).map_err(|_| ()));
+        (result, "invalid_ops_preparation")
+    } else if args.len() == 6
         && args[0] == "distribution"
         && args[1] == "build-plan"
         && args[2] == "--selection"
@@ -109,6 +137,9 @@ fn main() -> ExitCode {
         Ok(value) => value,
         Err(()) => {
             let bytes = match failure {
+                "invalid_ops_preparation" => {
+                    b"{\"passed\":false,\"failure\":\"invalid_ops_preparation\"}\n".as_slice()
+                }
                 "invalid_ops_build_plan" => {
                     b"{\"passed\":false,\"failure\":\"invalid_ops_build_plan\"}\n".as_slice()
                 }

@@ -1,6 +1,8 @@
 //! Schema 1 for a separate Ops artifact. Build/source/version/digest declarations
 //! are claims, not inspected provenance, cryptographic proof or install authority.
 
+#[path = "distribution_assembly.rs"]
+pub mod assembly;
 #[path = "distribution_pair.rs"]
 mod pair;
 #[cfg(test)]
