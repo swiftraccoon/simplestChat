@@ -3,7 +3,14 @@ import test from 'node:test';
 import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { admitsDiagnosticEvidence, collectReceiverStallDiagnostics, runFinalizers } from '../../load_tests/benchmark-local.mjs';
+import { admitsDiagnosticEvidence, collectReceiverStallDiagnostics as collectNativeReceiverStallDiagnostics, runFinalizers } from '../../load_tests/benchmark-local.mjs';
+import { correlateReceiverStalls } from '../../load_tests/receiver-stall-report.mjs';
+
+// Ordinary helpers retain the reference reader as an injected boundary. The
+// actual writer and finalizers still run; native command parity is opt-in.
+const collectReceiverStallDiagnostics = (options, directory, server, generator, samples, results, persist) =>
+  collectNativeReceiverStallDiagnostics(options, directory, server, generator, samples, results, persist,
+    async (_path, samples, settings) => correlateReceiverStalls(samples, settings.admitted ? results : null));
 
 const generatorSha256 = 'a'.repeat(64);
 const options = { purpose: 'diagnostic', diagnosticDetail: 'full', departure: 'abrupt', rampUp: 3, warmup: 10, duration: 15 };

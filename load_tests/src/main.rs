@@ -4655,6 +4655,7 @@ fn print_usage() {
     println!("  cargo run --locked -p simplestchat-load-test --bin load_test -- [OPTIONS]");
     println!("  load_test report diagnostics PATH [--max-records N]");
     println!("  load_test report lifecycle LOG_PATH --expected-participants N < TIMELINE.json");
+    println!("  load_test report media|receiver-stall RESULTS_PATH < SAMPLES.json");
     println!("  load_test capacity suggest --vcpus N --memory-gib GIB [OPTIONS]");
     println!("  load_test capacity compare REPORT.json [REPORT.json ...]");
     println!("\nOptions:");

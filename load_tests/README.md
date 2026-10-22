@@ -75,6 +75,20 @@ This command retains anonymous phase and cleanup evidence, with the same
 coverage exit policy. See the
 [lifecycle contract and reference parity check](../docs/diagnostics.md#compare-explicit-leave-with-disconnect).
 
+Correlate retained media samples after shutdown with either offline reader:
+
+```sh
+./target/release/load_test report media /absolute/private/load_test_results.json \
+  < /absolute/private/media-samples.json
+./target/release/load_test report receiver-stall /absolute/private/load_test_results.json \
+  < /absolute/private/media-samples.json
+```
+
+The input is an ordered JSON array of sample objects. These commands start no
+runtime or workload; incomplete or unsupported coverage stays available on
+stdout with exit 1. See the [bounds, privacy contract and reference parity
+check](../docs/diagnostics.md#server-forwarding-snapshots).
+
 The binary also sizes a host and compares compatible calibration reports offline:
 
 ```sh

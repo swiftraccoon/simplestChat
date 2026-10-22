@@ -11,9 +11,9 @@ import net from 'node:net';
 import dgram from 'node:dgram';
 import { setTimeout as delay } from 'node:timers/promises';
 import { readDiagnosticReportWithGenerator } from './report-command.mjs';
-import { createMediaSampler, fetchMediaSnapshot, readGeneratorResults, correlateMediaDiagnostics } from './media-diagnostic-report.mjs';
+import { createMediaSampler, fetchMediaSnapshot, readGeneratorResults } from './media-diagnostic-report.mjs';
 import { readLifecycleReportWithGenerator } from './lifecycle-report-command.mjs';
-import { correlateReceiverStalls } from './receiver-stall-report.mjs';
+import { readMediaReportWithGenerator, readReceiverStallReportWithGenerator } from './media-report-command.mjs';
 
 const exec = promisify(execFile);
 const hash = value => createHash('sha256').update(value).digest('hex');
@@ -422,12 +422,23 @@ export function admitsDiagnosticEvidence(summary, options, generatorSha256, time
  * It performs no native requests and cannot replace the original failure.
  */
 export async function collectReceiverStallDiagnostics(options, directory, server, generator, samples, results,
-  persist = (path, report) => writeFile(path, `${JSON.stringify(report, null, 2)}\n`, { flag: 'wx', mode: 0o600 })) {
+  persist = (path, report) => writeFile(path, `${JSON.stringify(report, null, 2)}\n`, { flag: 'wx', mode: 0o600 }),
+  readReport = (path, samples, settings) => readReceiverStallReportWithGenerator(options.generator, path, samples, settings)) {
   if (!diagnosticPolicy(options).requireSnapshots) return null;
   if ((server && !server.result) || (generator && !generator.result)) throw new Error('Stall diagnostics require stopped owned processes');
-  const report = correlateReceiverStalls(samples, results);
+  const report = await readReport(join(directory, 'load_test_results.json'), samples, { admitted: results !== undefined && results !== null });
   await persist(join(directory, 'receiver-stall-report.json'), report);
   return report;
+}
+
+/** Scheduled native counters retain their own coverage judgement. Rejected
+ * workload artifacts cannot be re-admitted by the offline reader.
+ */
+export async function collectMediaDiagnostics(options, directory, server, generator, samples, results,
+  readReport = (path, samples, settings) => readMediaReportWithGenerator(options.generator, path, samples, settings)) {
+  if (!diagnosticPolicy(options).requireSnapshots) return null;
+  if ((server && !server.result) || (generator && !generator.result)) throw new Error('Media diagnostics require stopped owned processes');
+  return readReport(join(directory, 'load_test_results.json'), samples, { admitted: results !== undefined && results !== null });
 }
 
 export async function verifyExecutable(binary, expectedSha256, role) {
@@ -682,6 +693,7 @@ async function runOne(options, variant, scenario, repetition, manifest) {
         }
       } catch {}
     }, async () => {
+      if (diagnostics.requireSnapshots) await verifyExecutable(options.generator, manifest.generator.binarySha256, 'Generator');
       stallReport = await collectReceiverStallDiagnostics(options, directory, server, generator, mediaSamples, generatorResults);
       stallReportWritten = diagnostics.requireSnapshots;
     }, async () => {
@@ -705,7 +717,10 @@ async function runOne(options, variant, scenario, repetition, manifest) {
         }
       }
       if (diagnostics.requireSnapshots) {
-        try { mediaReport = correlateMediaDiagnostics(mediaSamples, generatorResults); }
+        try {
+          await verifyExecutable(options.generator, manifest.generator.binarySha256, 'Generator');
+          mediaReport = await collectMediaDiagnostics(options, directory, server, generator, mediaSamples, generatorResults);
+        }
         catch { mediaReport = { schemaVersion: 1, coverage: { available: false, complete: false, issues: ['media_report_failed'] }, samples: [], consumers: [] }; }
         try {
           await writeFile(join(directory, 'server-media-report.json'), `${JSON.stringify(mediaReport, null, 2)}\n`, { flag: 'wx', mode: 0o600 });
@@ -832,8 +847,12 @@ async function main() {
     diagnosticReporterSha256: hash(await readFile(new URL('./report-command.mjs', import.meta.url))),
     diagnosticReaderCommand: ['report', 'diagnostics'],
     diagnosticReferenceSha256: hash(await readFile(new URL('./diagnostic-report.mjs', import.meta.url))),
-    mediaDiagnosticReporterSha256: hash(await readFile(new URL('./media-diagnostic-report.mjs', import.meta.url))),
-    receiverStallReporterSha256: hash(await readFile(new URL('./receiver-stall-report.mjs', import.meta.url))),
+    mediaDiagnosticReporterSha256: hash(await readFile(new URL('./media-report-command.mjs', import.meta.url))),
+    mediaDiagnosticReaderCommand: ['report', 'media'],
+    mediaDiagnosticReferenceSha256: hash(await readFile(new URL('./media-diagnostic-report.mjs', import.meta.url))),
+    receiverStallReporterSha256: hash(await readFile(new URL('./media-report-command.mjs', import.meta.url))),
+    receiverStallReaderCommand: ['report', 'receiver-stall'],
+    receiverStallReferenceSha256: hash(await readFile(new URL('./receiver-stall-report.mjs', import.meta.url))),
     lifecycleDiagnosticReporterSha256: hash(await readFile(new URL('./lifecycle-report-command.mjs', import.meta.url))),
     lifecycleDiagnosticReaderCommand: ['report', 'lifecycle'],
     lifecycleDiagnosticReferenceSha256: hash(await readFile(new URL('./lifecycle-diagnostic-report.mjs', import.meta.url))),

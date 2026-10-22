@@ -174,6 +174,46 @@ or incomplete samples remain visible as incomplete coverage. The rollup reports
 `mediaDiagnosticCoverageComplete` separately from workload and shutdown results.
 Sampling failures must not erase the generator's original failure.
 
+After both owned processes stop, the runner invokes the frozen generator's
+offline readers. To correlate retained files without starting a workload:
+
+```sh
+./target/debug/load_test report media /absolute/private/load_test_results.json \
+  < /absolute/private/media-samples.json
+./target/debug/load_test report receiver-stall /absolute/private/load_test_results.json \
+  < /absolute/private/media-samples.json
+```
+
+`media-samples.json` is the JSON array of retained `server-media-sample-*.json`
+objects in observation order. Stdin must close within five seconds and fit in
+12 MiB; terminals are refused. Results must be a regular file of at most 32 MiB;
+final symlinks, FIFOs and other special files are refused without blocking.
+Neither command constructs a runtime or opens network connections. Exit 0 means
+`coverage.complete` is true; exit 1 retains incomplete or legacy unsupported
+coverage on stdout, and exit 2 means invalid arguments. Output failures exit 1.
+The runner passes `--results-unavailable` when workload provenance or timeout
+checks rejected the result; the offline reader cannot re-admit that artifact.
+
+Report subprocesses admit only the fixed output schema and vocabulary, with
+bounded numbers and hashes. Private RTC fields, identity strings, arbitrary
+child output and native error text never enter reports through this boundary.
+Sample input, process output and execution time remain bounded. The readers
+accept representable Unicode JSON emitted by the typed Rust generator. Numeric
+overflow such as `1e400`, an unpaired UTF-16 escape or nesting beyond the JSON
+parser's depth limit produces unavailable evidence, including in otherwise
+ignored fields. The JavaScript reference can accept those ignored values; these
+deliberate refusals are tested separately from parity over supported retained
+artifacts. Decimal timings use the correctly rounded float parser. The JSON
+parser's arbitrary-precision mode and special object interpretation stay off.
+
+The JavaScript correlators remain the oracle; live collection remains in the
+runner. Compare an already-built executable without running a workload:
+
+```sh
+LOAD_TEST_REPORT_BINARY="$PWD/target/debug/load_test" \
+  node --test load_tests/media-report-parity.test.mjs
+```
+
 Use a non-churn workload when complete native correlation is required. The three
 scheduled samples cannot reliably observe each short-lived churn session twice;
 missing pairs correctly make coverage incomplete even when delivery checks pass.

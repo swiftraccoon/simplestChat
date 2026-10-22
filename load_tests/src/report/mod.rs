@@ -8,6 +8,13 @@ use std::process::ExitCode;
 
 pub mod diagnostics;
 pub mod lifecycle;
+mod media;
+mod media_correlation;
+mod media_generator;
+mod media_input;
+mod media_schema;
+mod receiver_stall;
+mod receiver_stall_evidence;
 
 const USAGE: &str = "Usage: load_test report diagnostics PATH [--max-records 1..100000]";
 
@@ -17,6 +24,12 @@ const USAGE: &str = "Usage: load_test report diagnostics PATH [--max-records 1..
 pub fn run(args: &[OsString]) -> ExitCode {
     if args.first().is_some_and(|arg| arg == "lifecycle") {
         return run_lifecycle(&args[1..]);
+    }
+    if args
+        .first()
+        .is_some_and(|arg| arg == "media" || arg == "receiver-stall")
+    {
+        return run_media(args);
     }
     if args.len() == 1 && (args[0] == "--help" || args[0] == "-h") {
         println!("{USAGE}");
@@ -56,7 +69,7 @@ fn run_lifecycle(args: &[OsString]) -> ExitCode {
         eprintln!("{LIFECYCLE_USAGE}");
         return ExitCode::from(2);
     }
-    let input = read_timeline_stdin().unwrap_or_else(|| "null".to_owned());
+    let input = read_bounded_stdin(lifecycle::TIMELINE_BYTES).unwrap_or_else(|| "null".to_owned());
     let report = lifecycle::read(Path::new(&args[0]), &input, expected);
     let mut stdout = std::io::stdout().lock();
     if serde_json::to_writer(&mut stdout, &report).is_err() || writeln!(stdout).is_err() {
@@ -70,10 +83,10 @@ fn run_lifecycle(args: &[OsString]) -> ExitCode {
     }
 }
 
-/// The owned parent closes stdin after one timeline. Refuse a terminal, bound
+/// The owned parent closes stdin after one JSON document. Refuse a terminal, bound
 /// bytes and time, and temporarily use nonblocking reads so an unclosed FIFO or
 /// inherited pipe cannot keep the offline command alive indefinitely.
-fn read_timeline_stdin() -> Option<String> {
+fn read_bounded_stdin(maximum: usize) -> Option<String> {
     use nix::fcntl::{FcntlArg, OFlag, fcntl};
     let stdin = std::io::stdin();
     if stdin.is_terminal() {
@@ -93,7 +106,7 @@ fn read_timeline_stdin() -> Option<String> {
             match input.read(&mut buffer) {
                 Ok(0) => return String::from_utf8(bytes).ok(),
                 Ok(count) => {
-                    if bytes.len() + count > lifecycle::TIMELINE_BYTES {
+                    if bytes.len() + count > maximum {
                         return None;
                     }
                     bytes.extend_from_slice(&buffer[..count]);
@@ -108,6 +121,44 @@ fn read_timeline_stdin() -> Option<String> {
     })();
     fcntl(&stdin, FcntlArg::F_SETFL(original)).ok()?;
     result
+}
+
+const MEDIA_USAGE: &str = "Usage: load_test report media|receiver-stall RESULTS_PATH [--results-unavailable] < SAMPLES.json";
+
+fn run_media(args: &[OsString]) -> ExitCode {
+    if args.len() == 2 && (args[1] == "--help" || args[1] == "-h") {
+        println!("{MEDIA_USAGE}");
+        return ExitCode::SUCCESS;
+    }
+    if !(args.len() == 2 || args.len() == 3 && args[2] == "--results-unavailable") {
+        eprintln!("{MEDIA_USAGE}");
+        return ExitCode::from(2);
+    }
+    let mut samples = read_bounded_stdin(media_input::SAMPLE_BYTES)
+        .and_then(|input| serde_json::from_str(&input).ok())
+        .unwrap_or(serde_json::Value::Null);
+    let mut results = if args.len() == 2 {
+        media_input::results(Path::new(&args[1])).unwrap_or(serde_json::Value::Null)
+    } else {
+        serde_json::Value::Null
+    };
+    media::normalize_numbers(&mut samples);
+    media::normalize_numbers(&mut results);
+    let report = if args[0] == "media" {
+        media::analyze(&samples, &results).report
+    } else {
+        receiver_stall::correlate(&samples, &results)
+    };
+    let mut stdout = std::io::stdout().lock();
+    if serde_json::to_writer(&mut stdout, &report).is_err() || writeln!(stdout).is_err() {
+        eprintln!("Media report output failed.");
+        return ExitCode::FAILURE;
+    }
+    if report["coverage"]["complete"] == true {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
+    }
 }
 
 fn arguments(args: &[OsString]) -> Option<(&Path, usize)> {

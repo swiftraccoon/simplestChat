@@ -6,10 +6,11 @@ import { promisify } from 'node:util';
 import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { cpuSeconds, linuxProcessSample, resourceSummary, comparison, parseOptions, command, captureArguments, finishCapture, diagnosticPolicy, createLifecycleTimeline, lifecycleWorkload, serverDiagnosticEnvironment, diagnosticRunStatus, performanceRunStatus, runFinalizers, collectServerDiagnostics, collectLifecycleDiagnostics, verifyExecutable, generatorSourceIdentity, sourceTreeIdentity, identity, serverRevisionLabel, stop, SERVER_SHUTDOWN_GRACE_MS, subscriptionArguments, expectedSubscriptionPlan, verifySubscriptionReport, admitsDiagnosticEvidence, collectReceiverStallDiagnostics } from './benchmark-local.mjs';
+import { cpuSeconds, linuxProcessSample, resourceSummary, comparison, parseOptions, command, captureArguments, finishCapture, diagnosticPolicy, createLifecycleTimeline, lifecycleWorkload, serverDiagnosticEnvironment, diagnosticRunStatus, performanceRunStatus, runFinalizers, collectServerDiagnostics, collectLifecycleDiagnostics, verifyExecutable, generatorSourceIdentity, sourceTreeIdentity, identity, serverRevisionLabel, stop, SERVER_SHUTDOWN_GRACE_MS, subscriptionArguments, expectedSubscriptionPlan, verifySubscriptionReport, admitsDiagnosticEvidence, collectReceiverStallDiagnostics, collectMediaDiagnostics } from './benchmark-local.mjs';
 import { DIAGNOSTIC_LIMITS, readDiagnosticReport } from './diagnostic-report.mjs';
 import { MEDIA_BODY_LIMIT, MEDIA_SAMPLE_LATENESS_MS, validateMediaSnapshot, mediaReference, fetchMediaSnapshot,
   mediaSampleSchedule, createMediaSampler, readGeneratorResults, correlateMediaDiagnostics } from './media-diagnostic-report.mjs';
+import { correlateReceiverStalls } from './receiver-stall-report.mjs';
 
 const exec = promisify(execFile);
 
@@ -70,6 +71,39 @@ test('lifecycle reporting uses the live timeline after both owned processes stop
   assert.equal(reads, 0);
   assert.deepEqual(await collectLifecycleDiagnostics(full, '/owned', stopped, stopped, timeline, 2, read), { fixture: true });
   assert.equal(reads, 1);
+});
+
+test('media readers retain owner admission and refuse live processes before reading or persisting', async () => {
+  const full = { purpose: 'diagnostic', diagnosticDetail: 'full' };
+  const stopped = { result: { code: 1 } };
+  const samples = [{ fixture: true }];
+  let reads = 0, writes = 0;
+  let expectedAdmission = true;
+  const report = { coverage: { available: true, complete: false } };
+  const read = async (path, actual, settings) => {
+    reads++; assert.equal(path, '/owned/load_test_results.json'); assert.equal(actual, samples);
+    assert.deepEqual(settings, { admitted: expectedAdmission }); return report;
+  };
+  const persist = async (path, actual) => {
+    writes++; assert.equal(path, '/owned/receiver-stall-report.json'); assert.equal(actual, report);
+  };
+  for (const options of [{ purpose: 'performance' }, { purpose: 'diagnostic', diagnosticDetail: 'capture-only' }]) {
+    assert.equal(await collectMediaDiagnostics(options, '/owned', {}, {}, samples, [], read), null);
+    assert.equal(await collectReceiverStallDiagnostics(options, '/owned', {}, {}, samples, [], persist, read), null);
+  }
+  for (const [server, generator] of [[{}, stopped], [stopped, {}]]) {
+    await assert.rejects(collectMediaDiagnostics(full, '/owned', server, generator, samples, [], read), /stopped owned processes/);
+    await assert.rejects(collectReceiverStallDiagnostics(full, '/owned', server, generator, samples, [], persist, read), /stopped owned processes/);
+  }
+  assert.equal(reads, 0); assert.equal(writes, 0);
+  for (const results of [[], undefined, null]) {
+    expectedAdmission = results !== undefined && results !== null;
+    assert.equal(await collectMediaDiagnostics(full, '/owned', stopped, stopped, samples, results, read), report);
+    assert.equal(await collectReceiverStallDiagnostics(full, '/owned', stopped, stopped, samples, results, persist, read), report);
+  }
+  assert.equal(reads, 6); assert.equal(writes, 3);
+  await assert.rejects(collectReceiverStallDiagnostics(full, '/owned', stopped, stopped, samples, null,
+    async () => { throw new Error('retained artifact failure'); }, read), /retained artifact failure/);
 });
 
 test('diagnostic coverage failure remains distinct from successful media workload', () => {
@@ -649,7 +683,8 @@ for (const mode of ['ring-v1', 'hotspot-v1']) test(`${mode} validation failure r
           const summary = await readGeneratorResults(join(directory, 'load_test_summary.json'));
           assert.equal(admitsDiagnosticEvidence(summary, f.options, generatorSha256, false), true);
           const results = await readGeneratorResults(join(directory, 'load_test_results.json'));
-          await collectReceiverStallDiagnostics(f.options, directory, server, generator, [], results);
+          await collectReceiverStallDiagnostics(f.options, directory, server, generator, [], results,
+            undefined, async (_path, samples) => correlateReceiverStalls(samples, results));
           events.push('stall report retained');
         },
         () => { throw artifactError; },
