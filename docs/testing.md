@@ -45,6 +45,15 @@ required for those local plumbing fixtures. No clone, fetch, build, candidate,
 engine or host operation runs. Export observations do not authenticate acquisition
 or replace eventual trusted CI and Debian runtime evidence.
 
+The [offline registry hydrator](../ops/README.md#offline-lock-bound-registry-hydration)
+uses tiny inert gzip/tar archives and owned filesystem faults. Focused tests
+check original lock/archive SHA binding before parsing, mature TOML depth and
+duplicate refusal, complete gzip/tar framing, safe paths and extension budgets,
+actual stored-byte Cargo checksums, normalized modes and independent inventory.
+They never invoke Cargo, a compiler or imported crate/build-script code. Tests
+also fence known cancellation/deadline outcomes and descriptor-budget unwind;
+an explicitly authorized real cache extraction is separate from those fixtures.
+
 Rust tests include native media checks; database tests are opt-in. Serial
 execution reduces UDP port-allocation races. Web tests use mocked browser APIs;
 the web build runs TypeScript checking and produces the production UI.

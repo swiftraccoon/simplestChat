@@ -288,6 +288,115 @@ binary digest, signature or runtime-readiness claim. Failure is exit 1 and only
 The existing Ops artifact and server release contracts are unchanged. This is
 a new plan contract tested directly, not a Python producer receipt or oracle.
 
+## Offline lock-bound registry hydration
+
+Prepare a Cargo directory source from explicitly selected local cache archives:
+
+```sh
+cargo run --locked -q -p xtask -- ops-artifact registry \
+  --request /controlled/registry-request.json --request-sha256 ORIGINAL_REQUEST_SHA256
+```
+
+The UTF-8 JSON request has exactly these fields and at most 64 KiB. Its original
+bytes must match the selected lowercase SHA-256:
+
+```json
+{
+  "schemaVersion": 1,
+  "lock": {
+    "path": "/controlled/materials/Cargo.lock",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "archivesRoot": "/controlled/cache/crates",
+  "output": "/controlled/fresh-registry-output"
+}
+```
+
+All paths are absolute, canonical in spelling, and walked without following
+links. The three material/output paths have at most 20 components. Output must
+be absent, including an existing empty directory, and outside the request,
+lockfile and archive-root namespaces. The archive root is one explicitly selected
+flat directory; the importer does not discover Cargo Home or acquire materials.
+
+The selected original lockfile is at most 4 MiB. The maintained TOML parser's
+80-level recursion guard remains enabled, and duplicate TOML keys are refused.
+The supported profile is lock version 4, with `version` and `package` fields;
+package fields are `name`, `version`, optional `source`, `checksum` and
+`dependencies`. There are at most 4,096 package records and 1,024 registry
+selections. Packages with no source/checksum remain external path packages.
+Every sourced package must select exactly the ordinary crates.io registry URL
+and a lowercase SHA-256 checksum. Git/alternate registries, missing checksums,
+duplicate output identities and unknown lock fields refuse. Names are bounded
+ASCII alphanumeric/hyphen/underscore tokens; versions are bounded digit-leading
+ASCII alphanumeric/dot/hyphen/plus/underscore tokens without `..`. This is a
+conservative filename profile, not a general SemVer implementation or resolver.
+
+Each selected `<name>-<version>.crate` is a regular, single-link, nofollow file.
+The complete original bytes, count, retained file stamp and visible namespace
+binding are checked and the descriptor explicitly closed before gzip or tar
+processing. Its actual SHA-256 must equal the lock checksum. A bounded mature
+gzip reader validates CRC/ISIZE and consumes exactly one whole member; trailing
+bytes, concatenated gzip members and truncation refuse. A mature raw tar pass
+bounds physical headers and GNU-longname bodies before interpreted entries are
+read. Only ordinary files, directories and bounded GNU-longname extensions are
+supported. PAX/global/longlink/sparse/device/link records refuse. Two zero blocks
+and entirely zero terminal padding are required; appended tar data refuses.
+
+Every effective name stays below the exact selected crate root. Absolute,
+dot/parent/empty components, controls, backslashes, duplicate paths,
+file/directory conflicts and a root `.cargo-checksum.json` or descendants refuse.
+Trailing slashes are admitted only for directory records. Implied and explicit
+directories count before any crate payload is written. The normalized
+`Cargo.toml` must declare the selected package name/version; no manifest code,
+build script or installer runs. Regular crate-relative `.git` payloads are
+ordinary checksum-covered data; this operation never discovers or invokes Git.
+The separate source exporter's `.git` refusal remains unchanged.
+
+Limits are 16 MiB per compressed archive, 128 MiB compressed in aggregate,
+128 MiB expanded tar per archive, 1 GiB expanded tar/output, 16 MiB per payload,
+8,192 effective nodes per archive, 65,536 total output nodes and 16 MiB of member
+names. Names have at most 1,024 bytes and 16 components. Raw headers are capped
+at 16,384 per archive; GNU-longname bodies at 8 KiB each and 1 MiB per archive.
+The complete-tree verification reader additionally retains its existing bounded
+entry/name/file profile, with aggregate file bytes narrowed to 1 GiB here.
+
+The fresh 0700 output contains only `registry/`. Descendant directories are
+0700 and files 0600, or 0700 when the archive declares an executable bit; host
+owner, timestamps, special modes and links are not restored. Exact written
+bytes are read back and bound to retained stamps. Each generated
+`.cargo-checksum.json` has `package` equal to the original archive checksum and
+`files` mapping every actual regular payload's relative name to its SHA-256,
+excluding the generated checksum itself. Cargo's
+[directory-source checksum metadata](https://doc.rust-lang.org/cargo/reference/source-replacement.html)
+detects accidental changes; it is not an origin signature. An independent
+full-tree scan must equal the expected `ops-producer-tree-v1` inventory, including
+generated checksums and empty directories; added, missing or changed members
+refuse. The registry subtree can be selected as `kit/registry` when preparing a
+separate curated kit and measuring its complete kit pin.
+
+Standard output is one bounded `ops-offline-registry-observation` with original
+request/lock hashes and counts, package count, aggregate archive identity/counts,
+and output tree identity. `ops-registry-archives-v1` hashes its NUL-terminated
+profile, then sorted crate-directory records: big-endian u32 UTF-8 name length,
+name bytes, raw 32-byte archive SHA-256 and big-endian u64 archive byte count.
+No input paths, archive content or credentials are printed. No success marker
+is written into partial output; final exit 0 is required. Partial output is
+retained on refusal for private inspection and is not signing authority.
+
+The importer dispatches no Cargo, compiler, imported crate code, installer or
+network command. One Signals/deadline owner covers admission through explicit
+input/output close attempts and the existing bounded final replay. The shared
+128-descriptor budget covers retained directory/file owners and transient
+cursors; inherited/runtime descriptors are outside that accounting. The
+18-minute active/2-minute finalization watchdog is not a hard bound on filesystem,
+OS scheduling or reap stalls, and hosted timing is unmeasured. Snapshot checks
+detect observed mutation; they are neither locks nor exclusion of later
+same-user changes. This measures only a caller-selected lock/archive/output
+relationship. Registry origin, Git/source authentication, target/feature graph,
+complete Cargo I/O closure, authenticated compiler/runtime and a ready builder
+kit remain separate obligations. Existing producer/source/server contracts and
+production Python callsites are unchanged.
+
 ## Selected local Git source export
 
 Export one selected local commit without checking out, compiling or executing its

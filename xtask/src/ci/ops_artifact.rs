@@ -12,6 +12,7 @@ mod namespace;
 #[cfg(test)]
 mod native_tests;
 pub(super) mod recipe;
+mod registry;
 mod request;
 mod resolution;
 pub(crate) mod source;
@@ -23,7 +24,7 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::time::{Duration, Instant};
 
-const USAGE: &str = "usage: cargo run --locked -q -p xtask -- ops-artifact build|source \
+const USAGE: &str = "usage: cargo run --locked -q -p xtask -- ops-artifact build|source|registry \
 --request PATH --request-sha256 SHA256";
 
 pub(super) fn run(arguments: &[String]) -> anyhow::Result<std::process::ExitCode> {
@@ -35,7 +36,7 @@ pub(super) fn run(arguments: &[String]) -> anyhow::Result<std::process::ExitCode
         eprintln!("{USAGE}");
         return Ok(std::process::ExitCode::from(2));
     };
-    if !matches!(operation.as_str(), "build" | "source")
+    if !matches!(operation.as_str(), "build" | "source" | "registry")
         || request_flag != "--request"
         || sha_flag != "--request-sha256"
         || !namespace::path(std::path::Path::new(path))
@@ -52,6 +53,12 @@ pub(super) fn run(arguments: &[String]) -> anyhow::Result<std::process::ExitCode
             source::native(std::path::Path::new(path), selected)
                 .await
                 .map_err(|error| Failure::new(error.code, "Ops source export is unproven."))
+        } else if operation == "registry" {
+            registry::native(std::path::Path::new(path), selected)
+                .await
+                .map_err(|error| {
+                    Failure::new(error.code, "Ops offline registry hydration is unproven.")
+                })
         } else {
             execute::native(std::path::Path::new(path), selected).await
         }

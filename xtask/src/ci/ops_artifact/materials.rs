@@ -436,11 +436,22 @@ pub(super) async fn measure<E: Executor, C: Clock>(
     executor: &mut E,
     deadline: &Deadline<'_, C>,
 ) -> Result<Identity> {
+    measure_bounded(path, budget, executor, deadline, KIT_BYTES).await
+}
+
+/// Reuse the complete-tree reader with a caller's narrower aggregate byte cap.
+pub(super) async fn measure_bounded<E: Executor, C: Clock>(
+    path: &std::path::Path,
+    budget: &Budget,
+    executor: &mut E,
+    deadline: &Deadline<'_, C>,
+    maximum: u64,
+) -> Result<Identity> {
     let root = Chain::open(path, budget)?;
     let measured = scan(
         root.file(),
         None,
-        KIT_BYTES,
+        maximum.min(KIT_BYTES),
         budget,
         &mut Limits::default(),
         executor,

@@ -582,3 +582,35 @@ source revision and authenticated compiler/registry/runtime inputs are separate
 future obligations. Structured unresolved recipe slots cannot start a child or
 substitute an ambient executable. Neither the plan nor an empty evidence map
 is a producer receipt, authenticated provenance or a musl/runtime claim.
+
+### Offline Ops registry parsing (2026-10-22)
+
+The offline registry importer pins maintained `toml` 1.1.8+spec-1.1.0 with
+defaults disabled and only `parse`, `serde` and `std`. Its
+[published feature list](https://docs.rs/crate/toml/1.1.8%2Bspec-1.1.0/features) and the
+locked crate source were reviewed: MSRV 1.85, MIT OR Apache-2.0, and the default
+80-level deserializer RecursionGuard remains enabled (`unbounded` is absent).
+The narrow lockfile schema also caps original input at 4 MiB, package/registry
+counts, identity strings and output names. Duplicate keys and deep arrays or
+dotted tables have meaningful refusal tests; no replacement TOML parser exists.
+The lock adds only this package, `serde_spanned` 1.1.2, `toml_datetime`
+1.1.2+spec-1.1.0, `toml_parser` 1.1.5+spec-1.1.0 and the optional locked
+`toml_writer` 1.1.3+spec-1.1.0; existing `winnow` is unchanged. On the review
+date the primary RustSec package-directory queries for these five names returned
+404. That is a dated database observation, not an absence-of-vulnerabilities
+claim; the ordinary locked advisory/license gates remain required. No advisory
+waiver, license exception or production-server runtime edge is introduced.
+
+The direct `tar` edge reuses already locked 0.4.46 with defaults disabled and
+the existing `flate2` Rust backend. Complete original compressed bytes must
+match the caller-selected lock checksum before either mature parser sees them.
+Single-member gzip EOF/CRC/ISIZE and unconsumed-input checks are distinct from
+raw tar header/extension budgets and complete zero terminal-padding checks.
+Only regular files, directories and bounded GNU-longname records are admitted;
+PAX, links, sparse and special entries refuse. No `unpack` API, archive ownership
+restoration, imported-code execution or material acquisition is used. Fresh
+nofollow descriptor-bound outputs are normalized, read back and independently
+inventoried before explicit closes and bounded fixed public replay. The
+[Cargo directory-source contract](https://doc.rust-lang.org/cargo/reference/source-replacement.html)
+does not authenticate registry origin or establish a resolved build graph,
+toolchain readiness, compiler sandbox or complete filesystem/network isolation.

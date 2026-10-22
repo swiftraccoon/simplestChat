@@ -24,5 +24,7 @@ serde_json = { version = "1.0.151", features = ["raw_value"] }
 sha2 = "0.11.0"
 simplestchat-ops = { path = "../ops" }
 syn = { version = "=3.0.6", features = ["full"] }
+tar = { version = "=0.4.46", default-features = false }
 tokio = { version = "1.53.2", features = ["full"] }
+toml = { version = "=1.1.8", default-features = false, features = ["parse", "serde", "std"] }
 url = "2.5.8"
