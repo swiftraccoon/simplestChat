@@ -261,6 +261,20 @@ resilience use intercepted local browser fixtures and own their frontend listene
 Real-backend Firefox media also requires an interface-owned `TEST_ANNOUNCE_IP`,
 as described in the [browser guide](../web/e2e/README.md).
 
+The five two-browser CI steps use
+`cargo run --locked -q -p xtask -- ci browser-suite SUITE`, where `SUITE` is
+`auth-lifecycle`, `auth-cross-tab`, `room-control-confirmation`, `media-continuity`
+or `presentation`. This runs Chromium then Firefox through the existing owned
+`test-server` harness, stopping at the first failure and preserving its status.
+Use the same explicit suite opt-in, installed browser tooling, built application
+and disposable database required by the individual suite. `RUNNER_TEMP` must name
+an existing absolute directory; each browser retains the workflow's existing
+artifact subdirectory there. The two media suites resolve one interface-owned
+announcement before starting either browser. INT/TERM stops the active harness
+and allows up to 45 seconds for its normal cleanup before terminating remaining
+members of that owned process group; an interrupted plan never starts the next
+browser or publishes successful coverage.
+
 Projects have bounded timeouts: accounts and layout three minutes, resilience
 two minutes, and community, media and stress ten minutes. `E2E_RETRIES=0` is the
 default; values `1` or `2` retry the complete test with fresh fixture ownership.

@@ -36,6 +36,7 @@ Commands:
                 automation runs installed controller quality, syntax and unit checks.
                 codeql-cache keys and validates analyzed databases with fresh receipts.
                 required rejects any missing or unsuccessful canonical workflow job.
+                browser-suite runs a maintained suite in Chromium then Firefox.
                 CodeQL extraction keys never substitute for analyzed databases.
   ci-evidence   Record or require complete executed local-CI matrix evidence.
   ci-retention  Print an allowlisted main-cache retention plan; --apply requires

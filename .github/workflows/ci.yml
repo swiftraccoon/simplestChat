@@ -616,11 +616,7 @@ jobs:
         timeout-minutes: 4
         env:
           AUTH_LIFECYCLE_E2E: "1"
-        run: |
-          for browser in chromium firefox; do
-            E2E_BROWSER="$browser" E2E_ARTIFACTS="${RUNNER_TEMP}/auth-lifecycle-${browser}" \
-              cargo run --locked -q -p xtask -- test-server node web/e2e/auth-lifecycle.cjs
-          done
+        run: cargo run --locked -q -p xtask -- ci browser-suite auth-lifecycle
 
       - name: Preserve authentication lifecycle diagnostics
         if: ${{ !cancelled() && matrix.group == 'accounts' && !env.ACT }}
@@ -636,22 +632,14 @@ jobs:
         timeout-minutes: 4
         env:
           AUTH_CROSS_TAB_E2E: "1"
-        run: |
-          for browser in chromium firefox; do
-            E2E_BROWSER="$browser" E2E_ARTIFACTS="${RUNNER_TEMP}/account-tabs-${browser}" \
-              cargo run --locked -q -p xtask -- test-server node web/e2e/auth-cross-tab.cjs
-          done
+        run: cargo run --locked -q -p xtask -- ci browser-suite auth-cross-tab
 
       - name: Confirm room controls and retain failed edits
         if: matrix.group == 'accounts'
         timeout-minutes: 4
         env:
           ROOM_CONTROL_E2E: "1"
-        run: |
-          for browser in chromium firefox; do
-            E2E_BROWSER="$browser" E2E_ARTIFACTS="${RUNNER_TEMP}/room-controls-${browser}" \
-              cargo run --locked -q -p xtask -- test-server node web/e2e/room-control-confirmation.cjs
-          done
+        run: cargo run --locked -q -p xtask -- ci browser-suite room-control-confirmation
 
       - name: Real passkey registration and discoverable authentication
         if: matrix.group == 'accounts'
@@ -747,14 +735,9 @@ jobs:
         timeout-minutes: 4
         env:
           MEDIA_CONTINUITY_E2E: "1"
-        run: |
-          # Firefox native ICE needs an owned non-loopback candidate, even
-          # when the HTTP origin and disposable database remain on loopback.
-          test_media_ip="$(cargo run --locked -q -p xtask -- media-ip)"
-          for browser in chromium firefox; do
-            TEST_ANNOUNCE_IP="$test_media_ip" E2E_BROWSER="$browser" E2E_ARTIFACTS="${RUNNER_TEMP}/media-continuity-${browser}" \
-              cargo run --locked -q -p xtask -- test-server node web/e2e/media-continuity.cjs
-          done
+        # The command selects one owned non-loopback announcement for Firefox;
+        # HTTP and the disposable database remain on loopback.
+        run: cargo run --locked -q -p xtask -- ci browser-suite media-continuity
 
       - name: Reconcile interrupted chat sends without duplicate delivery
         if: matrix.group == 'accounts'
@@ -770,12 +753,7 @@ jobs:
         env:
           PRESENTATION_E2E: "1"
           PRESENTATION_IMPAIRMENT: "1"
-        run: |
-          test_media_ip="$(cargo run --locked -q -p xtask -- media-ip)"
-          for browser in chromium firefox; do
-            TEST_ANNOUNCE_IP="$test_media_ip" E2E_BROWSER="$browser" E2E_ARTIFACTS="${RUNNER_TEMP}/presentation-${browser}" \
-              cargo run --locked -q -p xtask -- test-server node web/e2e/presentation.cjs
-          done
+        run: cargo run --locked -q -p xtask -- ci browser-suite presentation
 
       - name: Preserve presentation quality diagnostics
         if: ${{ !cancelled() && matrix.group == 'media' && !env.ACT }}

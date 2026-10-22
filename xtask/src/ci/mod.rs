@@ -12,6 +12,7 @@ use std::time::Duration;
 use tokio::io::AsyncReadExt;
 
 mod automation;
+mod browser_suite;
 mod codeql_cache;
 mod fingerprint;
 mod inputs;
@@ -24,7 +25,8 @@ mod tests;
 
 const USAGE: &str = "usage: cargo run --locked -q -p xtask -- ci key|save|verify \
 --scope SCOPE [--key KEY --directory PATH] [--root CHECKOUT]\n\
-       cargo run --locked -q -p xtask -- ci native-security|automation|codeql-cache|required";
+       cargo run --locked -q -p xtask -- ci native-security|automation|codeql-cache|required\n\
+       cargo run --locked -q -p xtask -- ci browser-suite SUITE";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Scope {
@@ -225,6 +227,12 @@ fn options(root: &Path, arguments: &[String]) -> Option<Options> {
 }
 
 pub(crate) fn run(root: &Path, arguments: &[String]) -> Result<ExitCode> {
+    if arguments
+        .first()
+        .is_some_and(|argument| argument == "browser-suite")
+    {
+        return browser_suite::run(root, &arguments[1..]);
+    }
     if arguments
         .first()
         .is_some_and(|argument| argument == "required")

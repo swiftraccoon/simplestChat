@@ -70,7 +70,7 @@ pub(crate) fn run(_root: &Path, arguments: &[String]) -> Result<()> {
     }
 }
 
-async fn detect() -> Result<Ipv4Addr> {
+pub(crate) async fn detect() -> Result<Ipv4Addr> {
     let platform = Platform::current()?;
     let (command, arguments) = platform.route_command();
     let output = read_tool(

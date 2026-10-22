@@ -183,6 +183,65 @@ class SecurityWorkflowTests(unittest.TestCase):
             ],
         )
 
+    def test_browser_suite_commands_preserve_groups_opt_ins_timeouts_and_failure_guard(
+        self,
+    ) -> None:
+        """Typed two-browser plans keep the existing job orchestration and suite opt-ins."""
+        steps = objects(obj(workflow("ci.yml"), "jobs", "browser"), "steps")
+        expected = [
+            (
+                "Authentication dialog and diagnostic privacy in Chromium and Firefox",
+                "auth-lifecycle",
+                "accounts",
+                "4",
+                {"AUTH_LIFECYCLE_E2E": "1"},
+            ),
+            (
+                "Shared account state and room navigation in Chromium and Firefox",
+                "auth-cross-tab",
+                "accounts",
+                "4",
+                {"AUTH_CROSS_TAB_E2E": "1"},
+            ),
+            (
+                "Confirm room controls and retain failed edits",
+                "room-control-confirmation",
+                "accounts",
+                "4",
+                {"ROOM_CONTROL_E2E": "1"},
+            ),
+            (
+                "Media continuity and device controls in Chromium and Firefox",
+                "media-continuity",
+                "media",
+                "4",
+                {"MEDIA_CONTINUITY_E2E": "1"},
+            ),
+            (
+                "Read presentations through constrained and recovered browser media",
+                "presentation",
+                "media",
+                "6",
+                {"PRESENTATION_E2E": "1", "PRESENTATION_IMPAIRMENT": "1"},
+            ),
+        ]
+        for name, suite, group, timeout, environment in expected:
+            with self.subTest(suite=suite):
+                step = next(step for step in steps if step.get("name") == name)
+                self.assertEqual(
+                    step["run"], f"cargo run --locked -q -p xtask -- ci browser-suite {suite}"
+                )
+                guard = (
+                    "${{ !cancelled() && matrix.group == 'media' && "
+                    + "steps.browser-tooling.outcome == 'success' }}"
+                    if suite == "presentation"
+                    else f"matrix.group == '{group}'"
+                )
+                self.assertEqual(step["if"], guard)
+                self.assertEqual(step["env"], environment)
+                self.assertEqual(step["timeout-minutes"], timeout)
+                self.assertNotIn("continue-on-error", step)
+
     def test_signing_only_follows_all_main_push_gates(self) -> None:
         """PRs and partial CI runs cannot request a signing identity."""
         ci = workflow("ci.yml")
