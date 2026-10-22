@@ -762,6 +762,7 @@ class VerifiedWorkflowTests(unittest.TestCase):
                 self.assertNotIn("--all-targets", arguments)
                 continue
             self.assertIn("--all-targets", arguments)
+            self.assertIn("--all-features", arguments)
             self.assertIn("--profile", arguments)
             self.assertEqual(arguments[arguments.index("--profile") + 1], "test")
             execute = next(
@@ -769,7 +770,8 @@ class VerifiedWorkflowTests(unittest.TestCase):
             )
             self.assertEqual(
                 string(execute, "run"),
-                "cargo test --locked --workspace -- --include-ignored --test-threads=1",
+                "cargo test --locked --workspace --all-features "
+                + "-- --include-ignored --test-threads=1",
             )
             self.assertLess(steps.index(build), steps.index(execute))
             self.assertEqual(build["if"], execute["if"])

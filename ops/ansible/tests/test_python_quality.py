@@ -87,7 +87,8 @@ class PythonPolicyTests(unittest.TestCase):
             if step.get("name") == "Build server, load generator and test harnesses"
         )
         self.assertEqual(
-            string(build, "run"), "cargo build --locked --workspace --all-targets --profile test"
+            string(build, "run"),
+            "cargo build --locked --workspace --all-targets --all-features --profile test",
         )
         for kind, name in (
             ("shutdown", "Verify readiness and graceful shutdown"),

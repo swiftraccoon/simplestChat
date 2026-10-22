@@ -41,12 +41,13 @@ test('the server starts from an emptied environment with the fixed opt-in profil
     source,
     /\.current_dir\(&self\.plan\.workdir\)\n\s+\.env_clear\(\)\n\s+\.envs\(server_env\)/,
   );
+  assert.match(source, /presentation: flag\(environment, "PRESENTATION_E2E"\)/);
   assert.match(
     source,
-    /let presentation = flag\("PRESENTATION_E2E"\)|presentation: flag\("PRESENTATION_E2E"\)/,
+    /fn flag\(environment: &Environment, name: &str\) -> bool \{\n\s+env\(environment, name\)\.is_some_and\(\|value\| value == "1"\)/,
   );
   assert.match(
     source,
-    /fn flag\(name: &str\) -> bool \{\n\s+env\(name\)\.is_some_and\(\|value\| value == "1"\)/,
+    /fn env\(environment: &Environment, name: &str\) -> Option<String> \{\n\s+environment\n\s+\.get\(OsStr::new\(name\)\)/,
   );
 });

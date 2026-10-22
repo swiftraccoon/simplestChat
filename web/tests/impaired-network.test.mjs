@@ -1,9 +1,58 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import impairment from '../e2e/impaired-network.cjs';
+import { fileURLToPath } from 'node:url';
+import { compileFunction } from 'node:vm';
+
+const source = new URL('../e2e/impaired-network.cjs', import.meta.url);
+const require = createRequire(source);
+const playwright = new Proxy(Object.freeze({}), {
+  get() {
+    assert.fail('Inert impairment fixtures cannot use a Playwright API');
+  },
+});
+const dependencies = new Set([
+  'node:assert/strict',
+  'node:fs',
+  'node:os',
+  'node:path',
+  './browser-options.cjs',
+  './peer-events.cjs',
+  './signaling-reconnect.cjs',
+  './canary-correlation.cjs',
+]);
+function fixtureRequire(name) {
+  if (name === 'playwright') return playwright;
+  if (name === 'node:child_process')
+    return { execFileSync: () => assert.fail('Inert impairment fixtures cannot spawn a command') };
+  assert.ok(dependencies.has(name), 'the fixture has no dependency fallback');
+  return require(name);
+}
+// Execute the unchanged CommonJS source with the existing injected browser and
+// impairment callbacks. Its eager Playwright lookup resolves only this stub,
+// so ordinary web unit tests need no e2e dependency installation or browser.
+const module = { exports: {} };
+compileFunction(fs.readFileSync(source, 'utf8'), ['require', 'module', 'exports', '__dirname'], {
+  filename: fileURLToPath(source),
+})(fixtureRequire, module, module.exports, path.dirname(fileURLToPath(source)));
+const impairment = module.exports;
+
+test('inert suite dependencies cannot load Playwright or dispatch a native command', async (t) => {
+  assert.throws(() => fixtureRequire('playwright').chromium, /cannot use a Playwright API/);
+  assert.throws(
+    () => fixtureRequire('node:child_process').execFileSync('unexpected'),
+    /cannot spawn a command/,
+  );
+  assert.throws(() => fixtureRequire('unexpected-dependency'), /no dependency fallback/);
+  const f = fixture(t, { PLAYWRIGHT_MODULE: 'unexpected-browser-module' });
+  await assert.rejects(f.run(), /no dependency fallback/);
+  assert.equal(f.browserClosed(), false);
+  assert.deepEqual(f.contexts, []);
+  assert.deepEqual(f.commands, []);
+});
 
 function fixture(t, environment = {}, execute = () => '', runnerOptions = {}) {
   const artifacts = fs.mkdtempSync(path.join(os.tmpdir(), 'impaired-suite-fixture.'));

@@ -1,16 +1,48 @@
 import assert from "node:assert/strict";
 import { ChildProcess } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
+import { compileFunction } from "node:vm";
 
 const require = createRequire(import.meta.url);
 const { launchOwnedWebKit } = require("../../web/e2e/runner-webkit-owner.cjs");
-const {
-  createBrowserOwner,
-} = require("../../web/e2e/runner-browser-owner.cjs");
 const { closeOwnedBrowser } = require("../../web/e2e/lifecycle-cleanup.cjs");
 const metadata = { version: "1.64.0", platform: "darwin" };
 const fixedFailure = /Owned in-process WebKit browser configuration failed\./;
+
+function browserOwnerFixture(playwright) {
+  const source = new URL(
+    "../../web/e2e/runner-browser-owner.cjs",
+    import.meta.url,
+  );
+  const sourceRequire = createRequire(source);
+  const module = { exports: {} };
+  const requested = [];
+  // Execute the actual identity check without resolving an installed browser
+  // package. Only the two unchanged lifecycle helpers may import normally.
+  compileFunction(
+    readFileSync(source, "utf8"),
+    ["require", "module", "exports"],
+    {
+      filename: fileURLToPath(source),
+    },
+  )(
+    (name) => {
+      requested.push(name);
+      if (name === "playwright") return playwright;
+      assert.ok(
+        ["./lifecycle-cleanup.cjs", "./runner-webkit-owner.cjs"].includes(name),
+        "the inert owner has no package or dependency fallback",
+      );
+      return sourceRequire(name);
+    },
+    module,
+    module.exports,
+  );
+  return { ...module.exports, requested };
+}
 
 function fixture() {
   const calls = [];
@@ -176,6 +208,9 @@ test("refused browser cleanup failures stay fixed and cannot become passing owne
 
 test("opt-in runner refuses a replacement Playwright module before any launch or page work", async () => {
   const f = fixture();
+  const { createBrowserOwner, requested } = browserOwnerFixture(
+    Object.freeze({}),
+  );
   const owner = createBrowserOwner({
     browserName: "webkit",
     playwright: f.playwright,
@@ -184,4 +219,9 @@ test("opt-in runner refuses a replacement Playwright module before any launch or
   });
   await assert.rejects(owner.launchBrowser("webkit", {}), fixedFailure);
   assert.deepEqual(f.calls, []);
+  assert.deepEqual(requested, [
+    "./lifecycle-cleanup.cjs",
+    "./runner-webkit-owner.cjs",
+    "playwright",
+  ]);
 });
