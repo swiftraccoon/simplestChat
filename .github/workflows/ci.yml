@@ -116,14 +116,7 @@ jobs:
 
       - name: Verify production alert rule behavior with pinned Prometheus
         if: steps.verified.outputs.cache-hit != 'true'
-        run: |
-          docker run --rm --network=none --read-only --cap-drop=ALL \
-            --security-opt=no-new-privileges:true --memory=128m --cpus=0.25 --pids-limit=64 \
-            --tmpfs /tmp:rw,nosuid,nodev,noexec,size=64m \
-            --volume "$PWD/ops/ansible:/work:ro" --workdir /work/tests \
-            --entrypoint /bin/promtool \
-            quay.io/prometheus/prometheus:v3.15.0@sha256:efd719c99d83b060d9daefdcf00360461adf279f45ef5391f8d111892118753e \
-            test rules monitoring-rules.test.yml
+        run: cargo run --locked -q -p xtask -- ci validate-config promtool
 
       - name: Record the successful automation verification
         if: steps.verified.outputs.cache-hit != 'true'
@@ -971,23 +964,7 @@ jobs:
       - name: Validate Caddyfile
         env:
           TRUSTED_PROXY_SECRET: ci-only-proxy-secret-00000000000000000000000000000000
-        run: |
-          # The official image marks /usr/bin/caddy with NET_BIND_SERVICE.
-          # Retain only that capability so Linux can execute the binary while
-          # the validation container remains otherwise isolated.
-          docker run --rm \
-            --network none \
-            --read-only \
-            --cap-drop ALL \
-            --cap-add NET_BIND_SERVICE \
-            --security-opt no-new-privileges \
-            --tmpfs /config:rw,nosuid,nodev,noexec,size=16m \
-            --tmpfs /data:rw,nosuid,nodev,noexec,size=16m \
-            --env TRUSTED_PROXY_SECRET \
-            --mount type=bind,src="${PWD}/Caddyfile",dst=/etc/caddy/Caddyfile,readonly \
-            --entrypoint /usr/bin/caddy \
-            "${CADDY_IMAGE}" \
-            validate --config /etc/caddy/Caddyfile --adapter caddyfile
+        run: cargo run --locked -q -p xtask -- ci validate-config caddy
 
       # Publish newly compiled application layers when build inputs change.
       # A dependency-only immutable key otherwise keeps restoring the first

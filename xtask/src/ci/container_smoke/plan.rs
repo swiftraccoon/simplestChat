@@ -19,6 +19,7 @@ pub(super) const WATCHDOG: Duration = Duration::from_secs(300);
 pub(super) const RESERVE: Duration = Duration::from_secs(60);
 // Scheduled terminal observation, armed-group fallback and combined EOF/stop,
 // including Darwin's bounded zombie-only proof. Not an OS/filesystem wall bound.
+#[cfg(test)]
 pub(super) const SETTLEMENT_ALLOWANCE: Duration = Duration::from_secs(20);
 pub(super) const POLL: Duration = Duration::from_millis(500);
 

@@ -271,6 +271,7 @@ test('context excludes local-only descendants while retaining production inputs'
     'xtask/src/ci/release_checks/private.env',
     'xtask/src/ci/image_cache/private.env',
     'xtask/src/ci/container_smoke/private.env',
+    'xtask/src/ci/config_validation/private.env',
     'xtask/src/ci/native_dtls/private.env',
     'xtask/src/ci/performance_compare/private.env',
     'xtask/src/ci/performance_compare/unlisted.sh',

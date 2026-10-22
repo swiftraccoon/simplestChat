@@ -20,6 +20,57 @@ from release_json import json_value
 class PythonPolicyTests(unittest.TestCase):
     """Keep shared strict settings, tool pins and CI gate wiring aligned."""
 
+    def test_offline_configuration_validators_keep_existing_jobs_guards_and_fixed_inputs(
+        self,
+    ) -> None:
+        """Replace only the two container command bodies after the pinned Rust bootstrap."""
+        workflow = yaml_value(
+            (ROOT / ".github/workflows/ci.yml").read_text(), scalars_as_strings=True
+        )
+        for kind, job_name, step_name, timeout in (
+            (
+                "promtool",
+                "automation",
+                "Verify production alert rule behavior with pinned Prometheus",
+                "10",
+            ),
+            ("caddy", "deployment", "Validate Caddyfile", "95"),
+        ):
+            job = obj(workflow, "jobs", job_name)
+            self.assertEqual(string(job, "timeout-minutes"), timeout)
+            steps = objects(job, "steps")
+            step = next(step for step in steps if step.get("name") == step_name)
+            self.assertEqual(
+                string(step, "run"),
+                "cargo run --locked -q -p xtask -- ci validate-config " + kind,
+            )
+            compiler = next(
+                item
+                for item in steps
+                if item.get("uses")
+                == "dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d"
+            )
+            self.assertLess(steps.index(compiler), steps.index(step))
+            self.assertEqual(obj(compiler, "with"), {"toolchain": "1.99.0"})
+            self.assertNotIn("if", compiler)
+            self.assertNotIn("continue-on-error", step)
+            self.assertNotIn("timeout-minutes", step)
+            if kind == "promtool":
+                self.assertEqual(step["if"], "steps.verified.outputs.cache-hit != 'true'")
+                self.assertNotIn("env", step)
+            else:
+                self.assertNotIn("if", step)
+                self.assertEqual(
+                    obj(step, "env"),
+                    {"TRUSTED_PROXY_SECRET": "ci-only-proxy-secret-" + "0" * 32},
+                )
+                self.assertEqual(
+                    string(job, "env", "CADDY_IMAGE"),
+                    "ghcr.io/swiftraccoon/simplestchat-caddy:2.11.7-"
+                    + "73c81fdbfe625d3df3989ba807064c81fbe2c071@sha256:"
+                    + "23c127cb8945a1de0c6753010614b50af1643bbcf93ab8a9a7d7461efd50b7c0",
+                )
+
     def test_branch_subject_checks_the_head_before_any_cached_gate(self) -> None:
         """Keep the typed byte-policy check unconditional after the existing bootstrap."""
         workflow = yaml_value(

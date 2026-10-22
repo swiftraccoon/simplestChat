@@ -51,6 +51,7 @@ Commands:
                 release-controller overlaps bounded controller preparation with the image build.
                 commit-subject checks the branch tip against the local hook's byte grammar.
                 container-smoke checks immutable production startup and database assertions.
+                validate-config runs fixed Promtool or Caddy validation in an owned container.
                 database-check runs monitoring, restore or migration in owned PostgreSQL.
                 session-soak supervises the fixed workload and runner-owned database outage.
                 performance-compare owns the three builds, worktree and fixed six-run comparison.

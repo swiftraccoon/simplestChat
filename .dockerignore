@@ -139,6 +139,9 @@ xtask/src/ci/image_cache/**
 !xtask/src/ci/container_smoke/
 xtask/src/ci/container_smoke/**
 !xtask/src/ci/container_smoke/*.rs
+!xtask/src/ci/config_validation/
+xtask/src/ci/config_validation/**
+!xtask/src/ci/config_validation/*.rs
 !xtask/src/ci/codeql_cache/
 xtask/src/ci/codeql_cache/**
 !xtask/src/ci/codeql_cache/*.rs

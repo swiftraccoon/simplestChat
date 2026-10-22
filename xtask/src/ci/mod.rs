@@ -18,6 +18,8 @@ mod browser_suite;
 mod codeql_cache;
 mod command;
 mod commit_subject;
+mod config_validation;
+mod container_engine;
 mod container_smoke;
 mod database_check;
 mod evidence_copy;
@@ -56,6 +58,7 @@ const USAGE: &str = "usage: cargo run --locked -q -p xtask -- ci key|save|verify
        cargo run --locked -q -p xtask -- ci release-controller start|wait\n\
        cargo run --locked -q -p xtask -- ci commit-subject\n\
        cargo run --locked -q -p xtask -- ci container-smoke\n\
+       cargo run --locked -q -p xtask -- ci validate-config promtool|caddy\n\
        cargo run --locked -q -p xtask -- ci database-check monitoring|restore|migration\n\
        cargo run --locked -q -p xtask -- ci session-soak\n\
        cargo run --locked -q -p xtask -- ci performance-compare\n\
@@ -318,6 +321,12 @@ pub(crate) fn run_ops_artifact(arguments: &[String]) -> Result<ExitCode> {
 }
 
 pub(crate) fn run(root: &Path, arguments: &[String]) -> Result<ExitCode> {
+    if arguments
+        .first()
+        .is_some_and(|arg| arg == "validate-config")
+    {
+        return config_validation::run(root, &arguments[1..]);
+    }
     if arguments
         .first()
         .is_some_and(|argument| argument == "performance-compare")

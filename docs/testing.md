@@ -755,6 +755,54 @@ clock tests and the unchanged `build/test-container.sh` oracle cover the policy.
 The oracle records the env-shebang Bash choice/version. Bash3.2's `errexit` can
 ignore the old failed `[[ ]]` port check; Rust always refuses non-loopback ports.
 
+### Offline configuration validators
+
+CI uses `cargo run --locked -q -p xtask -- ci validate-config promtool` and
+`ci validate-config caddy` in the existing automation and deployment steps. Both
+require the captured hosted or explicitly disposable Linux context and
+`RUNNER_TEMP`. Caddy also requires the workflow's exact `CADDY_IMAGE` and literal
+CI-only proxy secret. Image pins, guest argv, mounts, network isolation, capabilities,
+tmpfs and Promtool resource limits match the retained shell command fixtures;
+Caddy gains no new CPU, memory or PID limit. The commands do not build images.
+
+Docker context selection resolves to one local Unix endpoint, then every
+operation checks its opaque engine identity. This is an equality observation,
+not daemon authentication. A successful bounded repository catalog permits a
+pull of only the fixed selector when its digest is absent. Distinct tag aliases
+may share one immutable ID; malformed rows, repeated tag/digest identities or
+contradictory target IDs refuse. Failed commands, log completion or close errors
+never authorize a pull. The selector is inspected again before immutable-ID
+creation. Intent precedes create; exact name, nonce label, ID and image must
+agree before removal. Empty lookup after an uncertain create is not absence
+proof. Normal completion requires an independently inspected terminal guest
+status, exact-resource removal and a successful subsequent absence observation.
+
+The 570-second scheduling policy gives active work 120 seconds and reserves
+450 seconds for settlement. The complete failure path admits at most 15 cleanup
+CLIs with five-second bodies, one-second grace and 20-second settlement allowances,
+plus bounded output replay and final fences. Every dispatch checks its remaining
+allowance. This is a watchdog and refusal policy, not a hard bound on OS, reap or
+filesystem stalls. Existing ten-minute automation and 95-minute deployment job
+budgets are unchanged; earlier job setup and cold compilation/pulls can consume
+them. Hosted cold timing and actual image execution remain unmeasured.
+
+Selected inputs are the two current Promtool YAML files or `Caddyfile`, each at
+most 1MiB, opened without symlink ancestors/finals and rechecked before explicit
+close. Their framed original-byte hash is an optimistic selected-input observation,
+not an authenticated revision or include/I/O closure. Private artifacts remain
+under `RUNNER_TEMP/simplestchat-config-validation-KIND-TOKEN`, with a fresh 0700
+leaf and exclusive 0600 fixed-name files. Metadata is capped at 64KiB (context
+discovery at 4KiB), guest logs at 2MiB and admitted command logs at 96 files.
+Both channels use one bounded combined pipe, and admitted CLI groups retire
+before final EOF drain, explicit log close and anchored readback. This does not
+bound the engine's own log storage or prove closure of detached/privileged groups.
+Raw daemon/configuration output stays private; console output is a fixed bounded
+guest-status projection. `config-validation.json` records prepublication facts;
+its presence is not final CLI success. Zero additionally requires all input and
+output closes, CLI/resource proof, bounded replay, pending-signal and deadline
+fences. Owned fake processes/files/engines and the actual retained shell commands
+provide inert coverage; no real engine or validator workload was run for this port.
+
 ### App-only releases and rollback
 
 The workflow's unchanged 11-minute release step uses
