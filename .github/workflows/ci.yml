@@ -178,7 +178,7 @@ jobs:
         with:
           cache-key: rust-check
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 26.10.0
           cache: npm
@@ -289,7 +289,7 @@ jobs:
         if: ${{ env.ACT && steps.verified.outputs.cache-hit != 'true' }}
         run: build/ci-local-postgres.sh
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         if: steps.verified.outputs.cache-hit != 'true'
         with:
           node-version: 26.10.0
@@ -533,7 +533,7 @@ jobs:
         if: ${{ env.ACT }}
         run: build/ci-local-postgres.sh
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 26.10.0
           cache: npm
@@ -840,7 +840,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           # Node is build/test-only; deployment runs Rust, not Node.
           node-version: 26.10.0
@@ -1018,7 +1018,7 @@ jobs:
         timeout-minutes: 5
         run: cargo run --locked -q -p xtask -- ci release-controller wait
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 26.10.0
           cache: npm
