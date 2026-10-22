@@ -885,8 +885,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Install the pinned Rust toolchain for local evidence copies
-        if: ${{ env.ACT }}
+      - name: Install the pinned Rust toolchain for CI database cache policy
         uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable (2026-10-01)
         with:
           toolchain: 1.99.0
@@ -895,15 +894,7 @@ jobs:
         run: build/ci-local-docker.sh
       - name: Fingerprint the vulnerability database download cache
         id: image-database-inputs
-        run: |
-          prefix="$(python3 build/security_image_cache.py --prefix)"
-          if ! key="$(python3 build/security_image_cache.py)"; then
-            # A metadata hint cannot replace or block the real online updater.
-            printf '%s\n' 'Database cache hint unavailable; the online updater will check current upstream data.' >&2
-            key="$prefix"
-          fi
-          printf 'key=%s\n' "$key" >> "$GITHUB_OUTPUT"
-          printf 'prefix=%s\n' "$prefix" >> "$GITHUB_OUTPUT"
+        run: cargo run --locked -q -p xtask -- ci image-cache hint
       - name: Restore vulnerability database download bytes
         id: image-database
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -921,9 +912,7 @@ jobs:
             --output "${RUNNER_TEMP}/image-database-preparation" \
             --tools-directory "${RUNNER_TEMP}/image-database-preparation/tools" \
             --database-cache "${RUNNER_TEMP}/image-database-cache"
-          key="$(python3 build/security_image_cache.py \
-            --status "${RUNNER_TEMP}/image-database-preparation/database-status.json")"
-          printf 'key=%s\n' "$key" >> "$GITHUB_OUTPUT"
+          cargo run --locked -q -p xtask -- ci image-cache status preparation
       - name: Save refreshed vulnerability database download bytes
         if: ${{ success() && (steps.image-database.outputs.cache-hit != 'true' || steps.prepared-image-database.outputs.key != steps.image-database-inputs.outputs.key) }}
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -1144,15 +1133,7 @@ jobs:
 
       - name: Fingerprint the vulnerability database download cache
         id: image-database-inputs
-        run: |
-          prefix="$(python3 build/security_image_cache.py --prefix)"
-          if ! key="$(python3 build/security_image_cache.py)"; then
-            # A metadata hint cannot replace or block the real online updater.
-            printf '%s\n' 'Database cache hint unavailable; the online updater will check current upstream data.' >&2
-            key="$prefix"
-          fi
-          printf 'key=%s\n' "$key" >> "$GITHUB_OUTPUT"
-          printf 'prefix=%s\n' "$prefix" >> "$GITHUB_OUTPUT"
+        run: cargo run --locked -q -p xtask -- ci image-cache hint
 
       - name: Restore vulnerability database download bytes
         id: image-database
@@ -1171,9 +1152,7 @@ jobs:
             --image-tools "${RUNNER_TEMP}/release-checks/tools" \
             --image-database-cache "${RUNNER_TEMP}/image-database-cache" \
             --output "${RUNNER_TEMP}/production-security"
-          key="$(python3 build/security_image_cache.py \
-            --status "${RUNNER_TEMP}/production-security/image/database-status.json")"
-          printf 'key=%s\n' "$key" >> "$GITHUB_OUTPUT"
+          cargo run --locked -q -p xtask -- ci image-cache status production
 
       # The scanner always checks upstream updates and current age/hash before
       # running the full image policy. This stores data, never scan success.

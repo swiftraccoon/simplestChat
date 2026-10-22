@@ -19,6 +19,7 @@ mod command;
 mod evidence_copy;
 mod fingerprint;
 mod github_output;
+mod image_cache;
 mod inputs;
 mod install_compose;
 mod io;
@@ -41,7 +42,8 @@ const USAGE: &str = "usage: cargo run --locked -q -p xtask -- ci key|save|verify
        cargo run --locked -q -p xtask -- ci production-image build|verify\n\
        cargo run --locked -q -p xtask -- ci install-compose\n\
        cargo run --locked -q -p xtask -- ci audit-rust\n\
-       cargo run --locked -q -p xtask -- ci npm-path";
+       cargo run --locked -q -p xtask -- ci npm-path\n\
+       cargo run --locked -q -p xtask -- ci image-cache hint|status preparation|status production";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Scope {
@@ -268,6 +270,12 @@ fn print_key(context: &Context, scope: Scope, github_output: bool) -> Result<()>
 }
 
 pub(crate) fn run(root: &Path, arguments: &[String]) -> Result<ExitCode> {
+    if arguments
+        .first()
+        .is_some_and(|argument| argument == "image-cache")
+    {
+        return image_cache::run(root, &arguments[1..]);
+    }
     if arguments
         .first()
         .is_some_and(|argument| argument == "npm-path")

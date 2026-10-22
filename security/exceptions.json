@@ -1856,8 +1856,8 @@
       "fingerprint": "superfluous-actions:0fb2d712953646c2c07edb9a959b25649b214c63cb1143b35266a007af663b35",
       "scope": ".github/workflows/ci.yml#jobs/image-database/steps/1/uses",
       "owner": "swiftraccoon",
-      "rationale": "Fixed local evidence-copy policies run through compiled xtask, including after earlier job-step failure. The maintained local act image has no rustup; this immutable action bootstraps the repository's exact Rust 1.99.0 toolchain only for local execution.",
-      "reachability": "Reviewed 2026-10-21 for this exact installer location and unchanged immutable action. The existing ACT guard excludes hosted execution. Checkout disables persisted credentials; compiler arguments are fixed repository values, with no token or restored artifact selecting the installer. The official HTTPS rustup bootstrap boundary and expiry are unchanged. Diagnostic admission remains fixed, bounded, private and non-overwriting; every required security, freshness and release gate remains blocking.",
+      "rationale": "Database-byte cache output policies run through compiled xtask on hosted and local runners. The maintained local act image also needs rustup for compiled evidence preservation after earlier job-step failure. This immutable action supplies the repository's exact Rust 1.99.0 toolchain.",
+      "reachability": "Re-reviewed 2026-10-21 for this exact installer location and unchanged immutable action. The installer now also runs on hosted image-database jobs. Checkout disables persisted credentials; compiler arguments are fixed repository values, with no token or restored artifact selecting the installer. The official HTTPS rustup bootstrap boundary and expiry are unchanged. Cache output admission, diagnostic preservation and every required security, freshness and release gate remain blocking; no database-byte hint substitutes for a current online update or scan.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md#github-actions-portability-findings"
     },

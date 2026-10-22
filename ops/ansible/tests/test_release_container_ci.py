@@ -123,12 +123,13 @@ class ReleaseContainerCiTests(unittest.TestCase):
         )
         self.assertEqual(at(installer, "with", "toolchain"), "1.99.0")
         image_database = objects(self.workflow, "jobs", "image-database", "steps")
-        local = next(
-            step
-            for step in image_database
-            if step.get("name") == "Install the pinned Rust toolchain for local evidence copies"
+        database = image_database[1]
+        self.assertEqual(
+            database["name"], "Install the pinned Rust toolchain for CI database cache policy"
         )
-        self.assertEqual(local["if"], "${{ env.ACT }}")
+        self.assertNotIn("if", database)
+        self.assertEqual(database["uses"], installer["uses"])
+        self.assertEqual(database["with"], installer["with"])
 
     def test_push_export_never_rebuilds_and_publication_waits_for_required_checks(self) -> None:
         """Verify push export never rebuilds and publication waits for required checks."""
@@ -456,10 +457,7 @@ class ReleaseContainerCiTests(unittest.TestCase):
                 bootstrap["uses"],
                 "dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d",
             )
-            if job_name == "image-database":
-                self.assertEqual(bootstrap["if"], "${{ env.ACT }}")
-            else:
-                self.assertNotIn("if", bootstrap)
+            self.assertNotIn("if", bootstrap)
             self.assertEqual(bootstrap["with"], {"toolchain": "1.99.0"})
             self.assertNotIn("env", bootstrap)
             self.assertNotIn("permissions", bootstrap)

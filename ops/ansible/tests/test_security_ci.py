@@ -899,10 +899,14 @@ class SecurityWorkflowTests(unittest.TestCase):
             fingerprint = next(
                 step for step in current if step.get("id") == "image-database-inputs"
             )
-            self.assertIn(
-                "python3 build/security_image_cache.py --prefix", string(fingerprint, "run")
+            self.assertEqual(
+                "cargo run --locked -q -p xtask -- ci image-cache hint", string(fingerprint, "run")
             )
-            self.assertIn("--status ", string(producer, "run"))
+            kind = "preparation" if producer["id"] == "prepared-image-database" else "production"
+            self.assertEqual(
+                string(producer, "run").splitlines()[-1],
+                f"cargo run --locked -q -p xtask -- ci image-cache status {kind}",
+            )
             save = next(
                 step
                 for step in current
@@ -918,49 +922,38 @@ class SecurityWorkflowTests(unittest.TestCase):
                 at(save, "with", "key"), f"${{{{ steps.{producer['id']}.outputs.key }}}}"
             )
 
-    def test_database_hint_failure_preserves_fresh_preparation_and_scan(self) -> None:
-        """Run the actual lookup wrappers through a descriptor hit and unavailable hint."""
-        prefix = "grype-db-v2-main-" + "a" * 64 + "-"
-        key = prefix + "b" * 64
-        stubs = r"""
-python3() {
-  [[ "$1" == build/security_image_cache.py ]] || return 2
-  if [[ "${2:-}" == --prefix ]]; then
-    printf '%s\n' "$FIXTURE_PREFIX"
-  elif [[ "$#" == 1 && "$FIXTURE_HINT" == available ]]; then
-    printf '%s\n' "$FIXTURE_KEY"
-  else
-    return 1
-  fi
-}
-"""
-        for job in ("image-database", "deployment"):
-            steps = objects(workflow("ci.yml"), "jobs", job, "steps")
-            fingerprint = next(step for step in steps if step.get("id") == "image-database-inputs")
-            for hint in ("available", "unavailable"):
-                with (
-                    self.subTest(job=job, hint=hint),
-                    tempfile.TemporaryDirectory(dir=ROOT / "results") as temporary,
-                ):
-                    output = Path(temporary) / "output"
-                    script = "set -euo pipefail\n" + stubs + string(fingerprint, "run")
-                    result = subprocess.run(  # noqa: S603 -- Exact maintained wrapper and inert fixture stubs.
-                        ["/bin/bash", "-c", script],
-                        env={
-                            "GITHUB_OUTPUT": str(output),
-                            "FIXTURE_PREFIX": prefix,
-                            "FIXTURE_KEY": key,
-                            "FIXTURE_HINT": hint,
-                        },
-                        check=True,
-                        capture_output=True,
-                        timeout=5,
-                    )
-                    expected = key if hint == "available" else prefix
-                    self.assertEqual(output.read_text(), f"key={expected}\nprefix={prefix}\n")
-                    self.assertEqual(
-                        b"Database cache hint unavailable" in result.stderr, hint == "unavailable"
-                    )
+    def test_database_cache_output_policy_preserves_guards_budgets_and_compiler_scope(self) -> None:
+        """Typed output glue keeps both reference workloads and their timing/guards."""
+        ci = workflow("ci.yml")
+        for job_name, producer_id, kind, minutes in (
+            ("image-database", "prepared-image-database", "preparation", "20"),
+            ("deployment", "scanned-image-database", "production", "25"),
+        ):
+            job = obj(ci, "jobs", job_name)
+            steps = objects(job, "steps")
+            bootstrap = steps[1]
+            self.assertEqual(
+                bootstrap["uses"],
+                "dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d",
+            )
+            self.assertEqual(at(bootstrap, "with", "toolchain"), "1.99.0")
+            self.assertNotIn("if", bootstrap)
+            self.assertNotIn("env", bootstrap)
+            hint = next(step for step in steps if step.get("id") == "image-database-inputs")
+            self.assertNotIn("if", hint)
+            self.assertNotIn("continue-on-error", hint)
+            self.assertEqual(hint["run"], "cargo run --locked -q -p xtask -- ci image-cache hint")
+            self.assertLess(steps.index(bootstrap), steps.index(hint))
+            producer = next(step for step in steps if step.get("id") == producer_id)
+            self.assertNotIn("if", producer)
+            self.assertNotIn("continue-on-error", producer)
+            self.assertEqual(producer["timeout-minutes"], minutes)
+            lines = string(producer, "run").splitlines()
+            self.assertEqual(
+                lines[-1], f"cargo run --locked -q -p xtask -- ci image-cache status {kind}"
+            )
+            self.assertNotIn("GITHUB_OUTPUT", string(producer, "run"))
+        self.assertEqual(obj(ci, "jobs", "image-database")["timeout-minutes"], "25")
 
     def test_image_build_exports_layers_only_when_the_primary_cache_is_missing(self) -> None:
         """Wire the native cache policy to the same hit signal and completed-only save."""
@@ -1023,10 +1016,15 @@ python3() {
                         producer = next(
                             step for step in steps if step.get("id") == actual_key.group(1)
                         )
-                        self.assertIn(
-                            "python3 build/security_image_cache.py", string(producer, "run")
+                        kind = (
+                            "preparation"
+                            if producer["id"] == "prepared-image-database"
+                            else "production"
                         )
-                        self.assertIn("--status ", string(producer, "run"))
+                        self.assertEqual(
+                            string(producer, "run").splitlines()[-1],
+                            f"cargo run --locked -q -p xtask -- ci image-cache status {kind}",
+                        )
                         restore = next(step for step in steps if step.get("id") == "image-database")
                         self.assertEqual(config["path"], at(restore, "with", "path"))
                         config = obj(restore, "with")
@@ -1056,8 +1054,9 @@ python3() {
                     fingerprint = next(
                         step for step in steps if step.get("id") == "image-database-inputs"
                     )
-                    self.assertIn(
-                        "python3 build/security_image_cache.py", string(fingerprint, "run")
+                    self.assertEqual(
+                        "cargo run --locked -q -p xtask -- ci image-cache hint",
+                        string(fingerprint, "run"),
                     )
                     continue
                 if string(step, "uses").startswith("Swatinem/rust-cache@"):

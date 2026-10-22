@@ -104,10 +104,11 @@ The local evidence-copy commands add exact installer reviews at
 `ci.yml#jobs/image-database/steps/1/uses` and
 `ci.yml#jobs/deployment/steps/1/uses`. Both follow checkout with persisted
 credentials disabled and use the same immutable action and explicit Rust 1.99.0.
-The image-database installer remains under the existing local `ACT` guard.
-The deployment installer also runs on hosted runners because production-image
-build and verification now use compiled, repository-controlled policies. The
-maintained local image needs the same installer to supply rustup before compiled
+Both installers now also run on hosted runners: image-database uses compiled
+cache-output policy, and deployment uses compiled production-image build and
+verification policy. The database hint still delegates to the existing Python
+reference; it neither produces cache bytes nor replaces an online update/scan.
+The maintained local image needs the same installer to supply rustup before compiled
 evidence preservation can run, including after an earlier job-step failure.
 No token or restored artifact selects the installer or its arguments. All
 original copy guards and required security, freshness and release checks remain

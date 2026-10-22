@@ -1007,7 +1007,8 @@ creating, truncating or following its final symlink. Missing output configuratio
 unsafe/open failures, failed fingerprints and write/close errors fail the step
 with fixed labels. The flag applies only to `key`; ordinary `ci key` still prints
 its key for local use. Cache namespaces, restore/save guards and success receipts
-retain their existing policy. Python image-database cache hints remain separate.
+retain their existing policy. Database-byte selectors use the separate image-cache
+publisher described below.
 
 `cargo run --locked -q -p xtask -- ci automation` runs the installed Python
 quality gate first, then offline Ansible lint, every maintained controller
@@ -1052,12 +1053,41 @@ ceiling. Vulnerability matching waits for all three branches. Neither overlap
 establishes a measured five-minute job budget.
 
 The image gate also caches Grype database download bytes under a scanner-specific,
-daily key with separate main and untrusted namespaces. Every invocation still
-runs the online updater, verifies the database hash and allowed age, and performs
+archive-generation key with separate main and untrusted namespaces. Every
+invocation still runs the online updater, verifies the database hash and allowed age, and performs
 the full vulnerability scan and current policy checks. Restored bytes have a
 bounded file inventory and checked hashes; a malformed cache fails validation.
 No image scan verdict is cached. Local image checks can use the same path with
 `--image-database-cache <absolute-directory>`.
+
+The two CI jobs use `ci image-cache hint` to publish the same Python reference's
+prefix and optional metadata hint. Prefix failure remains fatal. A failed hint
+falls back to that exact prefix with the existing warning only after its owned
+CLI group is proven stopped/reaped; cancellation or uncertain cleanup fails.
+Malformed successful replies fail before publication. Trust must match the
+current main/pull-request boundary, and every scanner/generation digest must be
+64 lowercase hexadecimal characters. These keys select download bytes; the
+Python online updater and scanner remain unchanged.
+
+After successful preparation or production scanning, respectively,
+`ci image-cache status preparation` and `ci image-cache status production`
+resolve only the fixed status paths beneath `RUNNER_TEMP`, using the unchanged
+Python `--status` reference. Both key and prefix are validated before one fixed
+record is appended to the runner's existing absolute regular `GITHUB_OUTPUT`
+file. It never creates/truncates that file or follows a final symlink; its
+retained descriptor closes on success or failure. Received command output and
+paths are not printed. Every Python selector has a 30-second bound and
+five-second forced-stop grace, and only owned CLI-process-group cleanup is
+proven. A timed-out hint may fall back after successful cleanup; status failures
+remain fatal. SIGINT/SIGTERM return 130/143 and cannot become a cache miss.
+
+The image-database compiler bootstrap now also runs on hosted CI, at the same
+reviewed action location and immutable Rust pin. Its 25-minute job and the
+20-minute preparation / 25-minute production scan steps retain their guards and
+budgets, including cold compilation. Hosted cold-start cost is unmeasured.
+Owned fake selectors and pure Python-oracle fixtures verify output/fallback
+policy without registry, updater, scanner or engine work; they do not establish
+online freshness, cache integrity or Linux runtime parity.
 
 Action and build caches persist under `target/act`. Each invocation writes a
 private directory under `results/` containing its event, workflow log, source

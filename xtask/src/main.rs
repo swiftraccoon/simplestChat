@@ -43,6 +43,7 @@ Commands:
                 install-compose installs the authenticated Compose release in explicit CI.
                 audit-rust installs verified audit tooling and applies the advisory policy.
                 npm-path publishes the pinned npm bin directory through the runner file.
+                image-cache publishes validated database-byte cache selectors.
                 CodeQL extraction keys never substitute for analyzed databases.
   ci-evidence   Record or require complete executed local-CI matrix evidence.
   ci-retention  Print an allowlisted main-cache retention plan; --apply requires

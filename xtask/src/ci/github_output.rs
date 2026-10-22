@@ -15,7 +15,14 @@ impl Target {
     /// truncate, follow a final symlink or wait for a special-file peer. Open
     /// before fingerprinting so a missing runner boundary launches no Git child.
     pub(super) fn open(context: &Context) -> Result<Self> {
-        let value = context.env("GITHUB_OUTPUT");
+        Self::open_value(context.env("GITHUB_OUTPUT"))
+    }
+
+    pub(super) fn open_environment(environment: &crate::tooling::Environment) -> Result<Self> {
+        Self::open_value(super::runner::text(environment, "GITHUB_OUTPUT"))
+    }
+
+    fn open_value(value: &str) -> Result<Self> {
         require(!value.is_empty(), "ci_cache_github_output_missing")?;
         let path = Path::new(value);
         require(path.is_absolute(), "ci_cache_github_output_path")?;
@@ -26,19 +33,37 @@ impl Target {
         )
         .map_err(|_| anyhow::anyhow!("ci_cache_github_output_open"))?;
         let file = File::from(descriptor);
-        require(
-            file.metadata().is_ok_and(|metadata| metadata.is_file()),
-            "ci_cache_github_output_regular",
-        )?;
+        if !file.metadata().is_ok_and(|metadata| metadata.is_file()) {
+            nix::unistd::close(file)
+                .map_err(|_| anyhow::anyhow!("ci_cache_github_output_close"))?;
+            anyhow::bail!("ci_cache_github_output_regular");
+        }
         Ok(Self(file))
     }
 
     /// Append only after the entire key is validated. Explicitly close even on
     /// a write failure; the first failure wins and no path or OS error escapes.
     pub(super) fn append(self, scope: Scope, trusted: bool, key: &str) -> Result<()> {
-        let record = record(scope, trusted, key)?;
+        match record(scope, trusted, key) {
+            Ok(record) => self.append_bytes(&record),
+            Err(error) => {
+                let _ = self.close();
+                Err(error)
+            }
+        }
+    }
+
+    pub(super) fn append_image(self, selection: &super::image_cache::Selection) -> Result<()> {
+        self.append_bytes(selection.record())
+    }
+
+    pub(super) fn close(self) -> Result<()> {
+        nix::unistd::close(self.0).map_err(|_| anyhow::anyhow!("ci_cache_github_output_close"))
+    }
+
+    fn append_bytes(self, record: &[u8]) -> Result<()> {
         let mut file = self.0;
-        let written = write(&mut file, &record);
+        let written = write(&mut file, record);
         let closed =
             nix::unistd::close(file).map_err(|_| anyhow::anyhow!("ci_cache_github_output_close"));
         written?;
