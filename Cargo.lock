@@ -3397,6 +3397,7 @@ dependencies = [
  "hex",
  "mediasoup",
  "mediasoup-types",
+ "nix",
  "rand 0.10.3",
  "reqwest",
  "rtc",

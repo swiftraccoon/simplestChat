@@ -5,7 +5,7 @@ import { open } from 'node:fs/promises';
 export const DIAGNOSTIC_LIMITS = Object.freeze({ records: 100000, lineBytes: 1024 });
 const operations = new Set(['join_room', 'leave_room', 'reconnect', 'router_capabilities',
   'create_send_transport', 'create_recv_transport', 'connect_transport', 'produce', 'consume',
-  'resume_consumer', 'pause_consumer', 'pause_producer', 'resume_producer', 'close_producer',
+  'resume_consumer', 'pause_consumer', 'close_consumer', 'pause_producer', 'resume_producer', 'close_producer',
   'restart_ice', 'set_preferred_layers', 'chat', 'private_message', 'room_action', 'socket_write',
   'shutdown_notification']);
 const stages = new Set(['room_creation_lock_wait', 'room_lock_wait', 'room_policy_lookup',

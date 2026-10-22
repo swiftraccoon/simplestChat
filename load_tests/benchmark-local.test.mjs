@@ -241,6 +241,14 @@ test('diagnostic percentiles use raw samples, keep outcomes separate and never a
   assert.equal(JSON.stringify(report).includes('operationId'), false);
 });
 
+test('server close_consumer diagnostics remain accepted rather than breaking coverage', async t => {
+  const f = await diagnosticFixture(t, jsonLines([diagnosticRecord({ operation: 'close_consumer' }), diagnosticSummary(1)]));
+  const report = await readDiagnosticReport(f.path);
+  assert.equal(report.coverage.complete, true);
+  assert.equal(report.operations[0].operation, 'close_consumer');
+  assert.equal(report.operations[0].count, 1);
+});
+
 test('missing and partial recorder output cannot establish complete coverage', async t => {
   const f = await diagnosticFixture(t, jsonLines([diagnosticRecord()]));
   const missing = await readDiagnosticReport(join(f.directory, 'absent'));

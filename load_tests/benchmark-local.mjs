@@ -10,7 +10,7 @@ import os from 'node:os';
 import net from 'node:net';
 import dgram from 'node:dgram';
 import { setTimeout as delay } from 'node:timers/promises';
-import { readDiagnosticReport } from './diagnostic-report.mjs';
+import { readDiagnosticReportWithGenerator } from './report-command.mjs';
 import { createMediaSampler, fetchMediaSnapshot, readGeneratorResults, correlateMediaDiagnostics } from './media-diagnostic-report.mjs';
 import { readLifecycleReport } from './lifecycle-diagnostic-report.mjs';
 import { correlateReceiverStalls } from './receiver-stall-report.mjs';
@@ -392,7 +392,7 @@ export function performanceRunStatus(rows) {
   return { workloadPassed, serverShutdownPassed, passed: workloadPassed && serverShutdownPassed };
 }
 
-export async function collectServerDiagnostics(options, directory, server, readReport = readDiagnosticReport) {
+export async function collectServerDiagnostics(options, directory, server, readReport = path => readDiagnosticReportWithGenerator(options.generator, path)) {
   if (!diagnosticPolicy(options).requireSnapshots) return null;
   if (server && !server.result) throw new Error('Server diagnostics must be read after the owned server stops');
   return readReport(join(directory, 'server-diagnostics.jsonl'));
@@ -702,6 +702,9 @@ async function runOne(options, variant, scenario, repetition, manifest) {
           console.error('Server media diagnostic report could not be saved; coverage is incomplete.');
         }
       }
+      // Reporting executes the selected generator again after it stops. Bind
+      // that invocation to the same frozen executable as the workload.
+      if (diagnostics.requireSnapshots) await verifyExecutable(options.generator, manifest.generator.binarySha256, 'Generator');
       const diagnosticReport = await collectServerDiagnostics(options, directory, server);
       if (diagnosticReport) {
         await json(join(directory, 'server-diagnostics-report.json'), diagnosticReport);
@@ -813,7 +816,9 @@ async function main() {
     servers: { baseline: await identity(options.baselineRoot, options.baselineBin), candidate: await identity(options.candidateRoot, options.candidateBin) },
     generator: { binary: options.generator, binarySha256: hash(await readFile(options.generator)), sourceRoot: options.generatorSourceRoot, sourceIdentity: await generatorSourceIdentity(options.generatorSourceRoot) },
     orchestratorSha256: hash(await readFile(new URL(import.meta.url))),
-    diagnosticReporterSha256: hash(await readFile(new URL('./diagnostic-report.mjs', import.meta.url))),
+    diagnosticReporterSha256: hash(await readFile(new URL('./report-command.mjs', import.meta.url))),
+    diagnosticReaderCommand: ['report', 'diagnostics'],
+    diagnosticReferenceSha256: hash(await readFile(new URL('./diagnostic-report.mjs', import.meta.url))),
     mediaDiagnosticReporterSha256: hash(await readFile(new URL('./media-diagnostic-report.mjs', import.meta.url))),
     receiverStallReporterSha256: hash(await readFile(new URL('./receiver-stall-report.mjs', import.meta.url))),
     lifecycleDiagnosticReporterSha256: hash(await readFile(new URL('./lifecycle-diagnostic-report.mjs', import.meta.url))),

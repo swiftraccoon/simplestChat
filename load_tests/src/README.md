@@ -16,6 +16,7 @@ For commands, options, and report definitions, see the
 | `chat_load.rs` | Scheduled public chat, acknowledgments, complete room fanout and retained-message comparison inventory |
 | `datagram_counter.rs` | Actual UDP datagram counts for socket-drop measurements |
 | `main.rs` | The `load_test` binary: options, ramps, workloads, result files |
+| `lib.rs`, `report/` | Offline bounded diagnostic readers and report command; no workload or runtime startup |
 | `metrics.rs` | Counters, signaling histograms, diagnostic collection |
 | `metrics/measurement.rs` | Shared interval, per-attempt readiness/coverage, consumer delivery checks |
 | `subscriptions.rs` | Bounded discovery deduplication, pending queues, and consumer-cap refill (tests in `subscriptions_tests.rs`) |

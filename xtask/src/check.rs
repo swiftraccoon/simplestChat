@@ -199,5 +199,6 @@ fn helpers(root: &Path, environment: &Environment) -> tooling::Result<()> {
     let mut arguments = vec![OsString::from("--test")];
     arguments.extend(matching(root, "build/tests", ".test.mjs")?);
     arguments.push("load_tests/benchmark-local.test.mjs".into());
+    arguments.push("load_tests/report-command.test.mjs".into());
     tooling::run(root, environment, "node", arguments)
 }

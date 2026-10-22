@@ -627,8 +627,22 @@ impl Default for TestConfig {
     }
 }
 
+fn main() -> std::process::ExitCode {
+    let args: Vec<_> = std::env::args_os().collect();
+    if args.get(1).is_some_and(|arg| arg == "report") {
+        return simplestchat_load_test::report::run(&args[2..]);
+    }
+    match run_workload() {
+        Ok(()) => std::process::ExitCode::SUCCESS,
+        Err(error) => {
+            eprintln!("Error: {error:?}");
+            std::process::ExitCode::FAILURE
+        }
+    }
+}
+
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn run_workload() -> Result<()> {
     // Initialize tracing
     tracing_subscriber::fmt()
         .with_env_filter(
@@ -4635,7 +4649,8 @@ fn extract_rtp_parameters(
 fn print_usage() {
     println!("Load Test for SimplestChat");
     println!("\nUsage:");
-    println!("  cargo run --features load-test --bin load_test -- [OPTIONS]");
+    println!("  cargo run --locked -p simplestchat-load-test --bin load_test -- [OPTIONS]");
+    println!("  load_test report diagnostics PATH [--max-records N]");
     println!("\nOptions:");
     println!("  -c, --clients <N>          Number of concurrent clients (default: 5)");
     println!("  -d, --duration <SECS>      Shared measurement duration, 3–3600s (default: 30)");

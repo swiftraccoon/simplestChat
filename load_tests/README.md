@@ -51,6 +51,19 @@ and repeated baseline/candidate comparisons, use the
 cgroup throttling, per-thread attribution and netem impairment inside a Linux
 VM, use [`benchmark-podman.mjs`](../docs/performance.md#production-shape-and-impaired-networks).
 
+The same binary can read stopped server diagnostics without creating a runtime,
+joining a room or sending media:
+
+```sh
+./target/release/load_test report diagnostics /absolute/private/server-diagnostics.jsonl
+```
+
+Exit 0 means complete recorder coverage; exit 1 retains an incomplete JSON
+report, and exit 2 means invalid arguments. See the
+[reader contract and reference parity check](../docs/diagnostics.md#read-the-results).
+The local benchmark invokes this reader through its explicit `--generator`
+binary. Ordinary helper checks do not compile a native generator.
+
 ### Linux container
 
 Docker host networking reaches your owned local test server; reports are written

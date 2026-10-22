@@ -42,19 +42,39 @@ the recorder only after server shutdown. It uses a 10,000-record cap and a
 
 ## Read the results
 
-The runner writes `server-diagnostics-report.json`. To summarize a manually
-recorded session after shutdown:
+The runner writes `server-diagnostics-report.json` using the explicitly selected
+generator binary's offline reader. To summarize a manually recorded session
+after shutdown, build the generator with the
+[native prerequisites](../load_tests/README.md#build-and-run) installed:
 
 ```sh
-node --input-type=module - "$diagnostic_dir/server-diagnostics.jsonl" <<'JS'
-import { readDiagnosticReport } from './load_tests/diagnostic-report.mjs';
-const report = await readDiagnosticReport(process.argv[2]);
-console.log(JSON.stringify(report, null, 2));
-process.exitCode = report.coverage.complete ? 0 : 1;
-JS
+cargo build --locked -p simplestchat-load-test --bin load_test
+./target/debug/load_test report diagnostics "$diagnostic_dir/server-diagnostics.jsonl"
 ```
 
-This standalone check verifies recording only; retain the server exit status separately.
+The command starts no runtime or workload. It exits 0 for complete coverage,
+1 for incomplete coverage while retaining the JSON report on stdout, and 2 for
+invalid arguments. An output failure also exits 1. This standalone check verifies
+recording only; retain the server exit status separately. The input must be a
+private regular file; final symlinks and special files are refused without
+blocking. Lines, records and bytes remain bounded throughout reading.
+
+The pure JavaScript reader remains the reference during migration. Compare the
+already-built binary against its fixtures without running a workload:
+
+```sh
+LOAD_TEST_REPORT_BINARY="$PWD/target/debug/load_test" \
+  node --test load_tests/report-parity.test.mjs
+```
+
+Ordinary helper checks do not build the generator; this explicit parity gate
+requires `LOAD_TEST_REPORT_BINARY` and skips its native cases when it is unset.
+
+The migration also corrects an existing vocabulary mismatch: the server emits
+`close_consumer`, which the earlier JavaScript reader rejected. The reference,
+native reader and subprocess report boundary now accept it; historical stage
+names remain accepted. These private server and reader vocabularies are still
+maintained separately; a shared generated contract remains a follow-up.
 
 The report groups raw durations by operation, stage and outcome, with counts
 and nearest-rank p50/p95/p99 in milliseconds. Nested stages can overlap or repeat:

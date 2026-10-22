@@ -137,6 +137,7 @@ impl Fixture {
             "build/tests/first.test.mjs",
             "build/tests/second.test.mjs",
             "load_tests/benchmark-local.test.mjs",
+            "load_tests/report-command.test.mjs",
         ] {
             fixture.write(name, "never execute this fixture\n");
         }
@@ -564,7 +565,8 @@ fn helper_checks_each_script_individually_and_expands_test_paths() {
             "--test",
             "build/tests/first.test.mjs",
             "build/tests/second.test.mjs",
-            "load_tests/benchmark-local.test.mjs"
+            "load_tests/benchmark-local.test.mjs",
+            "load_tests/report-command.test.mjs"
         ]
     );
     assert!(
@@ -589,7 +591,8 @@ fn helper_test_filenames_with_spaces_stay_one_argument() {
             "build/tests/first.test.mjs",
             "build/tests/second.test.mjs",
             "build/tests/test with spaces.test.mjs",
-            "load_tests/benchmark-local.test.mjs"
+            "load_tests/benchmark-local.test.mjs",
+            "load_tests/report-command.test.mjs"
         ]
     );
 }
