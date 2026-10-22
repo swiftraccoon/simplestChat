@@ -87,6 +87,571 @@ fn close(file: File) {
     nix::unistd::close(file).unwrap();
 }
 
+impl Fixture {
+    fn separate(&self, stdout_maximum: u64, stderr_maximum: u64) -> (Command, Vec<i32>) {
+        use std::os::fd::AsRawFd;
+        let mut descriptors = Vec::new();
+        let mut log = |name, maximum| {
+            let file = OpenOptions::new()
+                .create_new(true)
+                .write(true)
+                .mode(0o600)
+                .open(self.path.join(name))
+                .unwrap();
+            descriptors.push(file.as_raw_fd());
+            let log = Log::start(file, maximum).unwrap();
+            descriptors.extend(log.pipe_fds());
+            log
+        };
+        let logs = SeparateLogs {
+            stdout: log("stdout.bin", stdout_maximum),
+            stderr: log("stderr.log", stderr_maximum),
+        };
+        let mut command = Command::capture(Program::Docker, &["literal-argument"]);
+        command.capture = None;
+        command.separate_logs = Some(Arc::new(logs));
+        command.timeout = Duration::from_secs(3);
+        command.grace = Duration::from_millis(20);
+        (command, descriptors)
+    }
+    fn input(&self, bytes: &[u8], offset: u64) -> (Arc<File>, i32) {
+        use std::os::fd::AsRawFd;
+        fs::write(self.path.join("input.bin"), bytes).unwrap();
+        let mut file = File::open(self.path.join("input.bin")).unwrap();
+        file.seek(std::io::SeekFrom::Start(offset)).unwrap();
+        let descriptor = file.as_raw_fd();
+        (Arc::new(file), descriptor)
+    }
+}
+fn closed(descriptors: &[i32]) {
+    for descriptor in descriptors {
+        assert!(
+            !Path::new(&format!("/dev/fd/{descriptor}")).exists(),
+            "descriptor {descriptor} was not closed"
+        );
+    }
+}
+
+#[tokio::test]
+async fn selected_zstd_keeps_binary_stdout_separate_and_consumes_current_input_cursor() {
+    let fixture = Fixture::new(concat!(
+        "assert sys.argv[1:]==['literal-argument']\n",
+        "os.write(1,sys.stdin.buffer.read())\n",
+        "os.write(2,b'PRIVATE_STDERR\\x00\\xff')"
+    ));
+    let proof = Arc::new(
+        crate::ci::release_checks::files::Executable::open(&fixture.path.join("docker")).unwrap(),
+    );
+    let payload: Vec<u8> = (0..=255).collect();
+    let source = [b"skip".as_slice(), &payload].concat();
+    let (input, input_fd) = fixture.input(&source, 4);
+    let (mut command, mut descriptors) = fixture.separate(512, 128);
+    command.program = Program::Zstd;
+    command.zstd = Some(proof.clone());
+    command.stdin = Some(input);
+    descriptors.push(input_fd);
+    // The proof must select its retained target even with no ambient zstd.
+    let environment = Environment::from([("FIXTURE_ROOT".into(), fixture.path.clone().into())]);
+    let mut native = Native::new(&fixture.path, &environment, signals());
+    assert!(native.run(command).await.unwrap().is_empty());
+    assert!(native.cleanup_passed());
+    assert_eq!(fs::read(fixture.path.join("stdout.bin")).unwrap(), payload);
+    assert_eq!(
+        fs::read(fixture.path.join("stderr.log")).unwrap(),
+        b"PRIVATE_STDERR\x00\xff"
+    );
+    closed(&descriptors);
+    Arc::try_unwrap(proof).unwrap().close().unwrap();
+}
+
+#[tokio::test]
+async fn separate_mode_retires_descendants_before_finishing_both_pipe_eofs() {
+    use std::os::unix::process::CommandExt;
+    let mut unrelated = std::process::Command::new("/bin/sleep");
+    unrelated.arg("30").process_group(0);
+    let unrelated = Group::new(unrelated.spawn().unwrap());
+    let fixture = Fixture::new(concat!(
+        "child=os.fork()\n",
+        "if child==0:\n",
+        " signal.signal(signal.SIGTERM,signal.SIG_IGN)\n",
+        " (root/'worker.ready').write_text('ready')\n",
+        " while True:time.sleep(.01)\n",
+        "while not (root/'worker.ready').exists():time.sleep(.005)\n",
+        "os.write(1,b'binary\\x00\\xff')\n",
+        "os.write(2,b'private diagnostic')"
+    ));
+    let (command, descriptors) = fixture.separate(128, 128);
+    let mut native = fixture.native(signals());
+    assert!(native.run(command).await.unwrap().is_empty());
+    assert!(native.cleanup_passed());
+    assert!(!crate::owned_process::exited_now(unrelated.pid()).unwrap());
+    assert_eq!(
+        fs::read(fixture.path.join("stdout.bin")).unwrap(),
+        b"binary\x00\xff"
+    );
+    assert_eq!(
+        fs::read(fixture.path.join("stderr.log")).unwrap(),
+        b"private diagnostic"
+    );
+    closed(&descriptors);
+    drop(unrelated);
+}
+
+#[tokio::test]
+async fn either_separate_stream_overflow_refuses_success_and_closes_both_logs() {
+    for stream in [1, 2] {
+        let fixture = Fixture::new(&format!(
+            concat!(
+                "try:\n",
+                " while True:os.write({stream},b'PRIVATE_OUTPUT'*1024)\n",
+                "except BrokenPipeError:\n",
+                " while True:time.sleep(.01)"
+            ),
+            stream = stream
+        ));
+        let (command, descriptors) = fixture.separate(8, 8);
+        let mut native = fixture.native(signals());
+        let error = native.run(command).await.unwrap_err();
+        assert_eq!(error.code, 1);
+        assert!(!error.message.contains("PRIVATE"));
+        assert!(native.cleanup_passed());
+        assert_eq!(
+            fs::metadata(fixture.path.join(if stream == 1 {
+                "stdout.bin"
+            } else {
+                "stderr.log"
+            }))
+            .unwrap()
+            .len(),
+            8
+        );
+        closed(&descriptors);
+    }
+}
+
+#[tokio::test]
+async fn separate_known_statuses_survive_unproven_retirement_and_close_input() {
+    for code in [124, 130, 143] {
+        let fixture = Fixture::new(IDLE);
+        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+        let mut native = fixture.native(Signals::injected(receiver));
+        let (mut command, mut descriptors) = fixture.separate(128, 128);
+        let (input, input_fd) = fixture.input(b"owned input", 0);
+        command.stdin = Some(input);
+        descriptors.push(input_fd);
+        if code == 124 {
+            command.timeout = Duration::from_secs(1);
+        }
+        let cancel = async {
+            ready(&fixture.path.join("ready")).await;
+            if code != 124 {
+                sender.send(code).unwrap();
+            }
+        };
+        let (result, ()) = tokio::join!(native.execute_with(command, &Unproven), cancel);
+        assert_eq!(result.unwrap_err().code, code);
+        assert!(!native.cleanup_passed());
+        closed(&descriptors);
+    }
+    for code in [0, 42, 130, 143] {
+        let fixture = Fixture::new(&format!("raise SystemExit({code})"));
+        let (command, descriptors) = fixture.separate(128, 128);
+        let mut native = fixture.native(signals());
+        let error = native
+            .execute_with(command, &UnprovenCleanup)
+            .await
+            .unwrap_err();
+        assert_eq!(error.code, if code == 0 { 1 } else { code });
+        assert!(!native.cleanup_passed());
+        closed(&descriptors);
+    }
+}
+
+struct ChangeFinalLog(PathBuf);
+impl Finalizer for ChangeFinalLog {
+    async fn finish(&self, group: &mut Group) -> (bool, Result<std::process::ExitStatus>) {
+        let result = Finalize.finish(group).await;
+        // The parent's writer remains owned until Log.finish. Wait for the
+        // bounded reader's actual write, then change its final length before
+        // EOF. This deterministically fails final metadata without leaking a
+        // child or relying on a scheduling delay.
+        tokio::time::timeout(Duration::from_secs(3), async {
+            while fs::metadata(&self.0).unwrap().len() != 6 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        let file = OpenOptions::new().write(true).open(&self.0).unwrap();
+        file.set_len(7).unwrap();
+        close(file);
+        result
+    }
+}
+
+#[tokio::test]
+async fn final_sink_failure_attempts_peer_closes_and_preserves_known_primary() {
+    for code in [0, 42, 124, 130, 143] {
+        let fixture = Fixture::new(&format!(
+            concat!(
+                "os.write(1,b'logged')\n",
+                "signal.signal(signal.SIGTERM,signal.SIG_IGN)\n",
+                "signal.signal(signal.SIGINT,signal.SIG_IGN)\n",
+                "(root/'ready').write_text('ready')\n",
+                "if {code} in (0,42):raise SystemExit({code})\n",
+                "while True:time.sleep(.01)"
+            ),
+            code = code
+        ));
+        let (mut command, mut descriptors) = fixture.separate(128, 128);
+        let (input, input_fd) = fixture.input(b"owned input", 0);
+        command.stdin = Some(input);
+        descriptors.push(input_fd);
+        if code == 124 {
+            command.timeout = Duration::from_secs(1);
+        }
+        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+        let mut native = fixture.native(Signals::injected(receiver));
+        let cancel = async {
+            if matches!(code, 130 | 143) {
+                ready(&fixture.path.join("ready")).await;
+                sender.send(code).unwrap();
+            }
+        };
+        let finalizer = ChangeFinalLog(fixture.path.join("stdout.bin"));
+        let (result, ()) = tokio::join!(native.execute_with(command, &finalizer), cancel);
+        assert_eq!(result.unwrap_err().code, if code == 0 { 1 } else { code });
+        assert!(native.cleanup_passed());
+        closed(&descriptors);
+    }
+}
+
+#[tokio::test]
+async fn paired_setup_and_spawn_refusals_settle_every_unique_owner_without_dispatch() {
+    for failure in [
+        "capture",
+        "combined",
+        "stdout",
+        "role",
+        "missing",
+        "permission",
+        "cancel",
+    ] {
+        use std::os::fd::AsRawFd;
+        let fixture = Fixture::new("(root/'dispatched').write_text('unexpected')");
+        let (mut command, mut descriptors) = fixture.separate(128, 128);
+        let (input, input_fd) = fixture.input(b"owned input", 0);
+        command.stdin = Some(input);
+        descriptors.push(input_fd);
+        let expected = match failure {
+            "capture" => {
+                command.capture = Some(8);
+                1
+            }
+            "combined" => {
+                let log = fixture.log(128);
+                descriptors.extend(log.pipe_fds());
+                command.combined_log = Some(Arc::new(log));
+                1
+            }
+            "stdout" => {
+                let file = OpenOptions::new()
+                    .create_new(true)
+                    .write(true)
+                    .mode(0o600)
+                    .open(fixture.path.join("legacy-sink"))
+                    .unwrap();
+                descriptors.push(file.as_raw_fd());
+                command.stdout = Some(Arc::new(file));
+                1
+            }
+            "role" => {
+                command.program = Program::Zstd;
+                1
+            }
+            "missing" => {
+                fs::remove_file(fixture.path.join("docker")).unwrap();
+                127
+            }
+            "permission" => {
+                fs::set_permissions(
+                    fixture.path.join("docker"),
+                    fs::Permissions::from_mode(0o600),
+                )
+                .unwrap();
+                126
+            }
+            _ => 143,
+        };
+        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+        if failure == "cancel" {
+            sender.send(143).unwrap();
+        }
+        let mut native = fixture.native(Signals::injected(receiver));
+        assert_eq!(native.run(command).await.unwrap_err().code, expected);
+        assert!(!fixture.path.join("dispatched").exists());
+        assert!(native.cleanup_passed());
+        closed(&descriptors);
+    }
+}
+
+#[tokio::test]
+async fn invalid_or_borrowed_input_cannot_skip_unique_peer_log_settlement() {
+    use std::os::fd::AsRawFd;
+    for kind in ["writable", "directory", "pipe", "borrowed"] {
+        let fixture = Fixture::new("(root/'dispatched').write_text('unexpected')");
+        let (mut command, mut descriptors) = fixture.separate(128, 128);
+        let (file, writer) = match kind {
+            "writable" => (
+                OpenOptions::new()
+                    .create_new(true)
+                    .read(true)
+                    .write(true)
+                    .open(fixture.path.join("input.bin"))
+                    .unwrap(),
+                None,
+            ),
+            "directory" => (File::open(&fixture.path).unwrap(), None),
+            "pipe" => {
+                let (read, write) = nix::unistd::pipe().unwrap();
+                (File::from(read), Some(File::from(write)))
+            }
+            _ => {
+                fs::write(fixture.path.join("input.bin"), b"input").unwrap();
+                (File::open(fixture.path.join("input.bin")).unwrap(), None)
+            }
+        };
+        let input_fd = file.as_raw_fd();
+        let mut retained = None;
+        let input = Arc::new(file);
+        if kind == "borrowed" {
+            retained = Some(input.clone());
+        } else {
+            descriptors.push(input_fd);
+        }
+        command.stdin = Some(input);
+        let mut native = fixture.native(signals());
+        assert_eq!(native.run(command).await.unwrap_err().code, 1);
+        assert!(!fixture.path.join("dispatched").exists());
+        closed(&descriptors);
+        if let Some(input) = retained {
+            assert!(Path::new(&format!("/dev/fd/{input_fd}")).exists());
+            close(Arc::try_unwrap(input).unwrap());
+        }
+        if let Some(writer) = writer {
+            close(writer);
+        }
+    }
+}
+
+#[tokio::test]
+async fn unforwarded_and_borrowed_log_refusals_close_unique_input_and_sink_peers() {
+    for borrowed in [false, true] {
+        let fixture = Fixture::new("(root/'dispatched').write_text('unexpected')");
+        let (mut command, mut descriptors) = fixture.separate(128, 128);
+        let (input, input_fd) = fixture.input(b"input", 0);
+        command.stdin = Some(input);
+        descriptors.push(input_fd);
+        let retained = if borrowed {
+            Some(command.separate_logs.as_ref().unwrap().clone())
+        } else {
+            None
+        };
+        let result = settle_unforwarded(command).await;
+        assert_eq!(result.is_err(), borrowed);
+        assert!(!fixture.path.join("dispatched").exists());
+        if let Some(logs) = retained {
+            // Only the unique input was acquired. Borrowed log ownership stays
+            // outside Native until this caller supplies the final owner.
+            closed(&[input_fd]);
+            finish_separate(Some(Arc::try_unwrap(logs).unwrap()))
+                .await
+                .unwrap();
+        }
+        closed(&descriptors);
+    }
+}
+
+#[tokio::test]
+async fn zstd_proof_is_disjoint_and_parent_stdio_clone_closes_before_body_settlement() {
+    use std::os::unix::fs::MetadataExt;
+    let fixture = Fixture::new(concat!(
+        "(root/'ready').write_text('ready')\n",
+        "while not (root/'release').exists():time.sleep(.005)\n",
+        "os.write(1,sys.stdin.buffer.read())"
+    ));
+    let proof = Arc::new(
+        crate::ci::release_checks::files::Executable::open(&fixture.path.join("docker")).unwrap(),
+    );
+    let (mut command, mut descriptors) = fixture.separate(128, 128);
+    let (input, input_fd) = fixture.input(b"bound input", 0);
+    // Darwin's fdescfs stat reports its own device number; compare aliases
+    // within the same descriptor namespace instead of to the file's st_dev.
+    let stamp = fs::metadata(format!("/dev/fd/{input_fd}")).unwrap();
+    command.stdin = Some(input);
+    command.program = Program::Zstd;
+    command.zstd = Some(proof.clone());
+    descriptors.push(input_fd);
+    let mut native = fixture.native(signals());
+    let release = async {
+        ready(&fixture.path.join("ready")).await;
+        let aliases = fs::read_dir("/dev/fd")
+            .unwrap()
+            .filter_map(|entry| fs::metadata(entry.ok()?.path()).ok())
+            .filter(|value| value.dev() == stamp.dev() && value.ino() == stamp.ino())
+            .count();
+        assert_eq!(aliases, 1, "transferred stdio clone remained in the parent");
+        fs::write(fixture.path.join("release"), b"release").unwrap();
+    };
+    let (result, ()) = tokio::join!(native.run(command), release);
+    result.unwrap();
+    closed(&descriptors);
+    Arc::try_unwrap(proof).unwrap().close().unwrap();
+
+    for role in [Program::Zstd, Program::Node] {
+        let fixture = Fixture::new("(root/'dispatched').write_text('unexpected')");
+        let proof = Arc::new(
+            crate::ci::release_checks::files::Executable::open(&fixture.path.join("docker"))
+                .unwrap(),
+        );
+        let (mut command, descriptors) = fixture.separate(128, 128);
+        command.program = role;
+        if role == Program::Zstd {
+            command.node = Some(proof.clone());
+        } else {
+            command.zstd = Some(proof.clone());
+        }
+        let mut native = fixture.native(signals());
+        assert_eq!(native.run(command).await.unwrap_err().code, 1);
+        assert!(!fixture.path.join("dispatched").exists());
+        closed(&descriptors);
+        Arc::try_unwrap(proof).unwrap().close().unwrap();
+    }
+}
+
+fn manual_tools(fixture: &Fixture) -> crate::ci::load_generator_image::tools::Tools {
+    for name in ["git", "zstd"] {
+        fs::copy(fixture.path.join("docker"), fixture.path.join(name)).unwrap();
+    }
+    crate::ci::load_generator_image::tools::Tools::select(&fixture.path, &fixture.environment)
+        .unwrap()
+}
+
+#[tokio::test]
+async fn manual_git_and_docker_use_retained_selection_after_path_poisoning() {
+    let fixture = Fixture::new(concat!(
+        "assert sys.argv[1:]==['literal-argument']\n",
+        "os.write(1,Path(sys.argv[0]).name.encode())\n",
+        "os.write(2,b'PRIVATE_SELECTED_DIAGNOSTIC')"
+    ));
+    let tools = manual_tools(&fixture);
+    for program in [Program::Git, Program::Docker] {
+        let invocation = tools.invocation(program).unwrap();
+        assert_eq!(
+            invocation.validate(program).unwrap(),
+            fixture.path.join(program.name())
+        );
+    }
+    let zstd = tools.zstd();
+    assert_eq!(zstd.validate().unwrap(), fixture.path.join("zstd"));
+    drop(zstd);
+    let poison = fixture.path.join("poison");
+    fs::create_dir(&poison).unwrap();
+    for name in ["git", "docker"] {
+        let file = poison.join(name);
+        fs::write(
+            &file,
+            "#!/usr/bin/python3\nraise SystemExit('unexpected PATH fallback')\n",
+        )
+        .unwrap();
+        fs::set_permissions(file, fs::Permissions::from_mode(0o700)).unwrap();
+    }
+    let mut environment = fixture.environment.clone();
+    environment.insert("PATH".into(), poison.into());
+    let mut native = Native::new(&fixture.path, &environment, signals());
+    for program in [Program::Git, Program::Docker] {
+        let directory = fixture.path.join(program.name());
+        let logs = fixture.path.join(format!("logs-{}", program.name()));
+        fs::create_dir(&logs).unwrap();
+        let local = Fixture {
+            path: logs,
+            environment: Environment::new(),
+        };
+        let (mut command, descriptors) = local.separate(128, 128);
+        command.program = program;
+        command.load_image = tools.invocation(program);
+        native.run(command).await.unwrap();
+        assert_eq!(
+            fs::read(local.path.join("stdout.bin")).unwrap(),
+            directory.file_name().unwrap().as_encoded_bytes()
+        );
+        assert_eq!(
+            fs::read(local.path.join("stderr.log")).unwrap(),
+            b"PRIVATE_SELECTED_DIAGNOSTIC"
+        );
+        closed(&descriptors);
+    }
+    assert!(native.cleanup_passed());
+    tools.finish().unwrap();
+}
+
+#[tokio::test]
+async fn manual_tool_capsules_refuse_cross_roles_and_multiple_proofs_before_dispatch() {
+    for case in ["git-as-docker", "docker-as-git", "extra-proof", "node"] {
+        let fixture = Fixture::new("(root/'dispatched').write_text('unexpected')");
+        let tools = manual_tools(&fixture);
+        let (mut command, mut descriptors) = fixture.separate(128, 128);
+        let (input, input_fd) = fixture.input(b"owned input", 0);
+        command.stdin = Some(input);
+        descriptors.push(input_fd);
+        match case {
+            "git-as-docker" => {
+                command.program = Program::Docker;
+                command.load_image = tools.invocation(Program::Git);
+            }
+            "docker-as-git" => {
+                command.program = Program::Git;
+                command.load_image = tools.invocation(Program::Docker);
+            }
+            "extra-proof" => {
+                command.program = Program::Git;
+                command.load_image = tools.invocation(Program::Git);
+                command.zstd = Some(tools.zstd());
+            }
+            _ => {
+                command.program = Program::Node;
+                command.load_image = tools.invocation(Program::Git);
+            }
+        }
+        let mut native = fixture.native(signals());
+        assert_eq!(native.run(command).await.unwrap_err().code, 1);
+        assert!(!fixture.path.join("dispatched").exists());
+        assert!(native.cleanup_passed());
+        closed(&descriptors);
+        tools.finish().unwrap();
+    }
+}
+
+#[tokio::test]
+async fn changed_manual_tool_binding_refuses_without_ambient_fallback() {
+    for program in [Program::Git, Program::Docker] {
+        let fixture = Fixture::new("(root/'dispatched').write_text('unexpected')");
+        let tools = manual_tools(&fixture);
+        let selected = fixture.path.join(program.name());
+        fs::rename(&selected, selected.with_extension("retained")).unwrap();
+        fs::write(&selected, b"#!/usr/bin/python3\nraise SystemExit(0)\n").unwrap();
+        fs::set_permissions(selected, fs::Permissions::from_mode(0o700)).unwrap();
+        let (mut command, descriptors) = fixture.separate(128, 128);
+        command.program = program;
+        command.load_image = tools.invocation(program);
+        let mut native = fixture.native(signals());
+        assert_eq!(native.run(command).await.unwrap_err().code, 1);
+        assert!(!fixture.path.join("dispatched").exists());
+        closed(&descriptors);
+        assert!(tools.finish().is_err());
+    }
+}
+
 #[tokio::test]
 async fn combined_mode_keeps_ordered_streams_private_and_closes_before_success() {
     let fixture = Fixture::new(

@@ -21,6 +21,7 @@ use std::{
 pub(in crate::ci) enum Scope {
     Smoke,
     Validation,
+    LoadImage,
 }
 impl Scope {
     pub fn failure(self) -> Failure {
@@ -29,6 +30,7 @@ impl Scope {
             match self {
                 Self::Smoke => "Container smoke evidence rejected.",
                 Self::Validation => "Configuration validation evidence rejected.",
+                Self::LoadImage => "Load image evidence rejected.",
             },
         )
     }
@@ -38,6 +40,7 @@ impl Scope {
             match self {
                 Self::Smoke => "Container smoke watchdog expired.",
                 Self::Validation => "Configuration validation watchdog expired.",
+                Self::LoadImage => "Load image watchdog expired.",
             },
         )
     }
@@ -49,6 +52,7 @@ impl Scope {
                 Self::Validation => {
                     "Configuration validation requires a local Unix Docker endpoint."
                 }
+                Self::LoadImage => "Load image requires a local Unix Docker endpoint.",
             },
         )
     }
@@ -58,6 +62,7 @@ impl Scope {
             match self {
                 Self::Smoke => "Container smoke context selection invalid.",
                 Self::Validation => "Configuration validation context selection invalid.",
+                Self::LoadImage => "Load image context selection invalid.",
             },
         )
     }
@@ -65,6 +70,7 @@ impl Scope {
         match self {
             Self::Smoke => "Container smoke command and log settlement failed.",
             Self::Validation => "Configuration command and log settlement failed.",
+            Self::LoadImage => "Load image command and log settlement failed.",
         }
     }
 }
@@ -95,6 +101,18 @@ impl Policy {
             scope: Scope::Validation,
             watchdog: Duration::from_secs(570),
             reserve: Duration::from_secs(450),
+            settlement: Duration::from_secs(20),
+            metadata_timeout: Duration::from_secs(5),
+            metadata_grace: Duration::from_secs(1),
+        }
+    }
+    /// The complete owner separately reserves its 1500-second build tail.
+    /// This final-fence reserve keeps postbuild work interruptible.
+    pub fn load_image() -> Self {
+        Self {
+            scope: Scope::LoadImage,
+            watchdog: Duration::from_secs(2700),
+            reserve: Duration::from_secs(30),
             settlement: Duration::from_secs(20),
             metadata_timeout: Duration::from_secs(5),
             metadata_grace: Duration::from_secs(1),
@@ -254,23 +272,11 @@ pub(in crate::ci) struct Core<'a, E, C> {
     policy: Policy,
 }
 impl<'a, E: Executor, C: Clock> Core<'a, E, C> {
-    async fn rejected(mut command: Command, error: Failure, scope: Scope) -> Result<Vec<u8>> {
+    async fn rejected(command: Command, error: Failure, scope: Scope) -> Result<Vec<u8>> {
         // Admission can fail before Native receives the sink. Retire its one
         // owner here too; Drop alone would abort the log task without proving
         // EOF and explicit descriptor closes. Keep the primary status fixed.
-        let settled = match command.combined_log.take() {
-            Some(log) => match std::sync::Arc::try_unwrap(log) {
-                Ok(log) => log.finish().await.and_then(|value| {
-                    if value.complete {
-                        Ok(())
-                    } else {
-                        Err(scope.failure())
-                    }
-                }),
-                Err(_) => Err(scope.failure()),
-            },
-            None => Ok(()),
-        };
+        let settled = super::process::settle_unforwarded(command).await;
         match settled {
             Ok(()) => Err(error),
             Err(_) => Err(Failure::new(error.code, scope.log_failure())),

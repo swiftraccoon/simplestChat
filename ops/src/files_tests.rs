@@ -135,3 +135,81 @@ fn checked_stream_never_returns_bytes_or_seeks_after_a_retained_stamp_changes() 
     assert!(reader.seek(SeekFrom::Start(0)).is_err());
     assert_eq!(snapshot.verify(), Err(Error::Changed));
 }
+
+#[test]
+fn verify_failure_still_attempts_every_retained_close_and_preserves_its_primary() {
+    let root = Fixture::new();
+    let path = root.0.join("archive.tar");
+    fs::write(&path, b"original").unwrap();
+    let snapshot = Snapshot::open(&path, 8).unwrap();
+    let expected = snapshot.directories.len() + 1;
+    fs::write(&path, b"MUTATION").unwrap();
+    let mut closed = 0;
+    let result = snapshot.finish_with(|file| {
+        nix::unistd::close(file).unwrap();
+        closed += 1;
+        if closed <= 2 {
+            Err(Error::Input)
+        } else {
+            Ok(())
+        }
+    });
+    assert_eq!(result, Err(Error::Changed));
+    assert_eq!(closed, expected);
+}
+
+#[test]
+fn acquired_visible_probe_closes_even_when_its_metadata_or_retained_lookup_fails() {
+    let root = Fixture::new();
+    let path = root.0.join("archive.tar");
+    fs::write(&path, b"original").unwrap();
+    for failed in [1, 2] {
+        let snapshot = Snapshot::open(&path, 8).unwrap();
+        let mut reads = 0;
+        let mut closed = 0;
+        let result = snapshot.verify_using(
+            |file| {
+                reads += 1;
+                if reads == failed {
+                    Err(Error::Changed)
+                } else {
+                    file.metadata().map_err(|_| Error::Changed)
+                }
+            },
+            |file| {
+                nix::unistd::close(file).unwrap();
+                closed += 1;
+                Ok(())
+            },
+        );
+        assert_eq!(result, Err(Error::Changed));
+        assert_eq!(closed, 1);
+        snapshot.finish().unwrap();
+    }
+}
+
+#[test]
+fn failed_snapshot_admission_attempts_all_acquired_closes_despite_close_errors() {
+    let root = Fixture::new();
+    let path = root.0.join("oversized");
+    fs::write(&path, b"private").unwrap();
+    let mut closed = 0;
+    let result = Snapshot::open_with(&path, 1, |file| {
+        nix::unistd::close(file).unwrap();
+        closed += 1;
+        Err(Error::Input)
+    });
+    assert!(matches!(result, Err(Error::Input)));
+    assert_eq!(closed, path.components().count());
+    let path = root.0.join("missing/inner/file");
+    let mut closed = 0;
+    assert!(matches!(
+        Snapshot::open_with(&path, 8, |file| {
+            nix::unistd::close(file).unwrap();
+            closed += 1;
+            Err(Error::Input)
+        }),
+        Err(Error::Input)
+    ));
+    assert_eq!(closed, root.0.components().count());
+}

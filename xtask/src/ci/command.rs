@@ -21,6 +21,7 @@ pub(super) enum Program {
     ComparisonGit,
     ComparisonCargo,
     ComparisonBenchmark,
+    Zstd,
 }
 impl Program {
     pub(super) fn name(self) -> &'static str {
@@ -41,8 +42,18 @@ impl Program {
             Self::ComparisonGit => "git",
             Self::ComparisonCargo => "cargo",
             Self::ComparisonBenchmark => "load_test",
+            Self::Zstd => "zstd",
         }
     }
+}
+
+/// Independently bounded stdout bytes and private stderr. Native takes the one
+/// owner and attempts both finalizers after retiring the command's group.
+/// Callers retain distinct-file namespace, stamp and readback authority.
+#[derive(Debug)]
+pub(super) struct SeparateLogs {
+    pub stdout: super::bounded_log::Log,
+    pub stderr: super::bounded_log::Log,
 }
 
 #[derive(Debug, Clone)]
@@ -56,12 +67,23 @@ pub(super) struct Command {
     pub stdout: Option<std::sync::Arc<std::fs::File>>,
     /// Unique owner; both streams are bounded and closed after group retirement.
     pub combined_log: Option<std::sync::Arc<super::bounded_log::Log>>,
+    /// Mutually exclusive with capture, stdout and combined_log.
+    pub separate_logs: Option<std::sync::Arc<SeparateLogs>>,
+    /// Unique regular read-only input, consumed from its current cursor. The
+    /// caller binds size and source stamps; Native explicitly closes this File.
+    /// Its child-stdio duplicate is owned and closed by the standard library,
+    /// which exposes no checked close result for that transferred descriptor.
+    pub stdin: Option<std::sync::Arc<std::fs::File>>,
     pub executable: Option<std::sync::Arc<super::selected_executable::Executable>>,
     pub node: Option<std::sync::Arc<super::release_checks::files::Executable>>,
     pub dtls: Option<std::sync::Arc<super::native_dtls::files::Executable>>,
     pub ops: Option<std::sync::Arc<super::ops_artifact::recipe::Tool>>,
     pub source_git: Option<std::sync::Arc<super::ops_artifact::source::Git>>,
     pub comparison: Option<std::sync::Arc<super::performance_compare::files::Invocation>>,
+    pub zstd: Option<std::sync::Arc<super::release_checks::files::Executable>>,
+    /// Matching manual-owner Git/Docker role. Legacy bare requests stay valid;
+    /// that owner's capture boundary must attach its selected proof every time.
+    pub load_image: Option<std::sync::Arc<super::load_generator_image::tools::Invocation>>,
 }
 impl Command {
     pub(super) fn capture(program: Program, args: &[&str]) -> Self {
@@ -74,12 +96,16 @@ impl Command {
             cleanup: false,
             stdout: None,
             combined_log: None,
+            separate_logs: None,
+            stdin: None,
             executable: None,
             node: None,
             dtls: None,
             ops: None,
             source_git: None,
             comparison: None,
+            zstd: None,
+            load_image: None,
         }
     }
 }

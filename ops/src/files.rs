@@ -73,6 +73,16 @@ impl Seek for CheckedStream<'_> {
 
 impl Snapshot {
     pub(crate) fn open(path: &Path, maximum: u64) -> Result<Self, Error> {
+        Self::open_with(path, maximum, |file| {
+            nix::unistd::close(file).map_err(|_| Error::Input)
+        })
+    }
+
+    fn open_with(
+        path: &Path,
+        maximum: u64,
+        mut close: impl FnMut(File) -> Result<(), Error>,
+    ) -> Result<Self, Error> {
         let mut names: Vec<OsString> = Vec::new();
         for component in path.components() {
             match component {
@@ -92,29 +102,48 @@ impl Snapshot {
         let mut directories = vec![File::from(
             open(root, FLAGS | OFlag::O_DIRECTORY, Mode::empty()).map_err(|_| Error::Input)?,
         )];
-        for name in &names[..names.len() - 1] {
-            let next = openat(
-                directories.last().unwrap(),
-                name.as_os_str(),
-                FLAGS | OFlag::O_DIRECTORY,
-                Mode::empty(),
-            )
-            .map_err(|_| Error::Input)?;
-            directories.push(File::from(next));
-        }
-        let file = File::from(
-            openat(
-                directories.last().unwrap(),
-                names.last().unwrap().as_os_str(),
-                FLAGS,
-                Mode::empty(),
-            )
-            .map_err(|_| Error::Input)?,
-        );
-        let before = file.metadata().map_err(|_| Error::Input)?;
-        if !before.is_file() || before.len() == 0 || before.len() > maximum {
-            return Err(Error::Input);
-        }
+        let admitted = (|| {
+            for name in &names[..names.len() - 1] {
+                let next = openat(
+                    directories.last().unwrap(),
+                    name.as_os_str(),
+                    FLAGS | OFlag::O_DIRECTORY,
+                    Mode::empty(),
+                )
+                .map_err(|_| Error::Input)?;
+                directories.push(File::from(next));
+            }
+            let file = File::from(
+                openat(
+                    directories.last().unwrap(),
+                    names.last().unwrap().as_os_str(),
+                    FLAGS,
+                    Mode::empty(),
+                )
+                .map_err(|_| Error::Input)?,
+            );
+            let before = match file.metadata() {
+                Ok(value) => value,
+                Err(_) => {
+                    let _ = close(file);
+                    return Err(Error::Input);
+                }
+            };
+            if !before.is_file() || before.len() == 0 || before.len() > maximum {
+                let _ = close(file);
+                return Err(Error::Input);
+            }
+            Ok((file, before))
+        })();
+        let (file, before) = match admitted {
+            Ok(value) => value,
+            Err(error) => {
+                for directory in directories.into_iter().rev() {
+                    let _ = close(directory);
+                }
+                return Err(error);
+            }
+        };
         Ok(Self {
             file,
             directories,
@@ -137,6 +166,17 @@ impl Snapshot {
     }
 
     pub(crate) fn verify(&self) -> Result<(), Error> {
+        self.verify_using(
+            |file| file.metadata().map_err(|_| Error::Changed),
+            |file| nix::unistd::close(file).map_err(|_| Error::Input),
+        )
+    }
+
+    fn verify_using(
+        &self,
+        mut metadata: impl FnMut(&File) -> Result<Metadata, Error>,
+        mut close: impl FnMut(File) -> Result<(), Error>,
+    ) -> Result<(), Error> {
         if !same(
             &self.before,
             &self.file.metadata().map_err(|_| Error::Input)?,
@@ -153,19 +193,21 @@ impl Snapshot {
                 )
                 .map_err(|_| Error::Changed)?,
             );
-            let metadata = visible.metadata().map_err(|_| Error::Changed)?;
-            let unchanged = if index + 1 == self.names.len() {
-                metadata.is_file() && same(&self.before, &metadata)
-            } else {
-                let retained = self.directories[index + 1]
-                    .metadata()
-                    .map_err(|_| Error::Changed)?;
-                metadata.is_dir()
-                    && retained.dev() == metadata.dev()
-                    && retained.ino() == metadata.ino()
-                    && retained.mode() == metadata.mode()
-            };
-            nix::unistd::close(visible).map_err(|_| Error::Input)?;
+            let observed = (|| {
+                let observed = metadata(&visible)?;
+                Ok(if index + 1 == self.names.len() {
+                    observed.is_file() && same(&self.before, &observed)
+                } else {
+                    let retained = metadata(&self.directories[index + 1])?;
+                    observed.is_dir()
+                        && retained.dev() == observed.dev()
+                        && retained.ino() == observed.ino()
+                        && retained.mode() == observed.mode()
+                })
+            })();
+            let closed = close(visible);
+            let unchanged = observed?;
+            closed?;
             if !unchanged {
                 return Err(Error::Changed);
             }
@@ -180,11 +222,12 @@ impl Snapshot {
     }
 
     fn finish_with(self, mut close: impl FnMut(File) -> Result<(), Error>) -> Result<(), Error> {
-        self.verify()?;
+        let verified = self.verify();
         let mut failed = close(self.file).is_err();
         for directory in self.directories.into_iter().rev() {
             failed |= close(directory).is_err();
         }
+        verified?;
         if failed { Err(Error::Input) } else { Ok(()) }
     }
 }

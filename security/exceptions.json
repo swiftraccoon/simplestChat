@@ -114,6 +114,16 @@
     {
       "scanner": "zizmor",
       "fingerprint": "superfluous-actions:0fb2d712953646c2c07edb9a959b25649b214c63cb1143b35266a007af663b35",
+      "scope": ".github/workflows/load-generator-image.yml#jobs/image/steps/1/uses",
+      "owner": "swiftraccoon",
+      "rationale": "The manual image workflow runs a compiled xtask owner before Docker authority. This immutable installer supplies the repository's explicit Rust 1.99.0 toolchain instead of depending on the runner's preinstalled version.",
+      "reachability": "Reviewed 2026-10-22 for only this exact new step and unchanged immutable action. Checkout disables persisted credentials; toolchain inputs are fixed repository values and no token is supplied. The existing official HTTPS rustup bootstrap, bounded checksum-propagation retries and 2026-11-29 expiry are unchanged. The owner retains blocking source, process, resource, payload and publication checks. No artifact or restored cache selects installer source or arguments; cold hosted compilation time remains unmeasured.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md#github-actions-portability-findings"
+    },
+    {
+      "scanner": "zizmor",
+      "fingerprint": "superfluous-actions:0fb2d712953646c2c07edb9a959b25649b214c63cb1143b35266a007af663b35",
       "scope": ".github/workflows/security.yml#jobs/security-fast/steps/2/uses",
       "owner": "swiftraccoon",
       "rationale": "The maintained local act image has no rustup; its fast security prerequisites failed with command not found. This existing pinned installer bootstraps rustup and installs the repository's exact Rust toolchain before the shared checks.",

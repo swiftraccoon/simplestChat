@@ -24,6 +24,11 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Install Rust for the manual image owner
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable (2026-10-01)
+        with:
+          toolchain: 1.99.0
+
       - name: Restore the production image layer cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -35,30 +40,7 @@ jobs:
 
       - name: Build the load-test image
         shell: bash
-        run: |
-          set -euo pipefail
-          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
-          docker buildx rm --force simplestchat-loadtest 2>/dev/null || true
-          docker buildx create --name simplestchat-loadtest --driver docker-container --use
-          cache_dir="${RUNNER_TEMP}/buildx-cache"
-          cache_from=()
-          if [[ -f "${cache_dir}/index.json" ]]; then
-            cache_from=(--cache-from "type=local,src=${cache_dir}")
-          fi
-          timeout --signal=TERM --kill-after=2m 40m \
-            docker buildx build --pull --load --target loadtest --platform linux/amd64 \
-              --provenance=false --sbom=false \
-              "${cache_from[@]}" \
-              --build-arg "SOURCE_REVISION=${GITHUB_SHA}" \
-              --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
-              --tag simplestchat-loadtest:ci .
-          docker buildx rm --force simplestchat-loadtest
-          mkdir -p "${RUNNER_TEMP}/loadtest-image"
-          docker save simplestchat-loadtest:ci \
-            | zstd -T0 -3 -o "${RUNNER_TEMP}/loadtest-image/simplestchat-loadtest-${GITHUB_SHA}.tar.zst"
-          docker image inspect --format '{{.Id}}' simplestchat-loadtest:ci \
-            > "${RUNNER_TEMP}/loadtest-image/image-id.txt"
-          ls -la "${RUNNER_TEMP}/loadtest-image"
+        run: cargo run --locked -q -p xtask -- ci load-generator-image
 
       - name: Retain the image
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

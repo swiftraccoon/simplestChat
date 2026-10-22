@@ -755,6 +755,80 @@ clock tests and the unchanged `build/test-container.sh` oracle cover the policy.
 The oracle records the env-shebang Bash choice/version. Bash3.2's `errexit` can
 ignore the old failed `[[ ]]` port check; Rust always refuses non-loopback ports.
 
+### Manual generator image ownership
+
+The manually dispatched `load-generator-image.yml` keeps its Linux/amd64
+`loadtest` target, fixed tag, restore-only layer cache, 45-minute job and two
+uploaded filenames. After the pinned Rust 1.99 bootstrap it runs
+`cargo run --locked -q -p xtask -- ci load-generator-image`. Bootstrap and cold
+compile timing have not been measured; they consume the same external job
+budget. This command requires an explicit hosted GitHub Linux runner or an
+ACT runner marked `LOCAL_CI_DISPOSABLE=1`. It captures one environment and signal
+registration, clears Git context overrides, and observes the selected checkout's
+clean HEAD before and after the recipe. Selected Git, Docker and Zstd paths and
+metadata remain bound through their final closes. These observations do not
+authenticate executable bytes, Git configuration, source closure or the runtime.
+Checkout and temporary paths must be UTF-8 and comma-free for the fixed cache
+CSV argument; literal spaces and shell text remain ordinary path bytes.
+
+The owner freezes one local Unix Docker endpoint and opaque daemon identity,
+creates private Docker/Buildx configurations and records nonce builder/node,
+container and labeled-volume intent before mutation. It validates the BuildKit
+container's immutable ID, name, owner environment marker and exact state-volume
+mount. Retirement inspects references, removes only the admitted exact container
+and matching unreferenced volume, independently observes their absence, and
+removes the private builder record with `--keep-daemon --keep-state`. An empty
+lookup after an uncertain creation is unproved. Foreign replacements and changed
+labels, mounts, references or daemon identity refuse success. These are
+optimistic observations under exclusive caller-trusted engine authority, not
+atomic ownership or whole-engine cleanup. Formatter shapes are source-checked
+against Docker CLI 28.5.1 and Buildx 0.29.1/0.30.1; this is not a claim of
+observed hosted-engine compatibility. The nonce builder deliberately replaces
+the old shell's unconditional deletion of a fixed builder name.
+
+The scheduling policy admits at most 2,700 seconds from command entry. The
+40-minute build remains an upper cap; its actual body is clipped after reserving
+120 seconds of grace, 20 seconds of settlement and a 1,500-second tail. Thus an
+immediate build has at most 1,060 seconds, less preparation time. The tail accounts
+for 27 actual cleanup CLIs (including daemon checks) at 26 seconds each, four
+image observation CLIs at 104 seconds total, the save command's additional
+26-second daemon check, three binary phases at 141 seconds each, two final Git
+CLIs at 52 seconds, a shared 120-second hashing/graph budget, 25-second bounded
+output replay and 30 seconds of closing/fences: 1,482 seconds with 18 seconds of
+slack. Every dispatch rechecks remaining admission. Groups retire before final
+EOF drain and explicit owned-file closes, including normal-exit descendants.
+Hash workers retain the same async signal owner, cooperatively stop at chunk/
+header/graph checkpoints and are always awaited before return. These are
+watchdogs and scheduling allowances; OS, filesystem and reap stalls have no
+hard wall-clock guarantee.
+
+Export uses separately bounded binary stdout (8 GiB raw, 9 GiB compressed) and
+private stderr (2 MiB), with metadata capped at 64 KiB and build logs at 64 MiB.
+The closed Ops generator profile checks the original tar hash, runtime/revision,
+fixed tag and every selected authoritative graph payload. Classic image IDs bind
+the config hash and ordered raw layer DiffIDs; containerd IDs bind a verified
+root descriptor and complete one-platform stored graph. Optional classic OCI
+extensions must also be self-contained; a classic export retaining compressed
+registration descriptors without their compressed payloads is refused. Unused
+Docker `LayerSources` registration hints are outside that authority graph. No
+layer is unpacked or loaded. General multi-platform/store/version compatibility
+and hosted export acceptance remain unrun. The server archive verifier is
+unchanged.
+
+Compression and decompression use the selected Zstd executable, retained read-only
+inputs and independent bounded outputs. The roundtrip raw hash/count must match
+the verified export. Only the sealed compressed archive and exact observed
+`image-id.txt` line enter the fresh final directory. Known child/guest failures,
+130/143 cancellation and proven 124 timeouts remain primary over later cleanup
+failures. Zero additionally requires group proof, joined hash workers, readback,
+all owned closes and final signal/deadline checks. Final artifact visibility can
+precede a late directory-close failure; presence alone is not CLI completion.
+Private nonce directories/configurations/logs remain for failure evidence; no
+raw tool or daemon output is publicly replayed. Engine daemon log storage is not
+bounded by these CLI stream limits. Tests use synthetic tar bytes, owned fake
+executables and the unchanged retained shell literal, without builds, downloads,
+compression, engine or image workloads.
+
 ### Offline configuration validators
 
 CI uses `cargo run --locked -q -p xtask -- ci validate-config promtool` and

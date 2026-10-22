@@ -50,6 +50,7 @@ timestamp text remains unchanged.
 | `src/distribution_assembly.rs`, `src/distribution_assembly_files.rs` | Fresh local unsigned signing inputs and measured payload bytes |
 | `src/release/manifest.rs` | Existing release schema, migration checksums and real UTC dates |
 | `src/release/archive.rs`, `src/release/archive/` | Whole-transfer identity and bounded offline Docker/OCI metadata validation |
+| `src/release/archive/generator*.rs` | Separate generator profile with streamed config/layer graph identity |
 | `src/release/preflight*.rs` | Fixed read-only host admission and exact installed-helper byte checks |
 
 The crate uses existing dependency versions and does not depend on the server,
@@ -898,3 +899,92 @@ its debug output contains their length only. Tiny owned archive/CLI fixtures
 compare the actual Python validator and test bounds, supported extensions,
 explicit refusals, ordering, mutation and close failures. These checks start no
 engine and do not prove deployment, image execution or ABI compatibility.
+
+## Generator image archive identity
+
+The manual load-generator image owner uses the separate library profile
+`release::archive::verify_generator_archive(path, &selection)`.
+`GeneratorSelection::new(observed_image_id, revision)` admits one canonical
+`sha256:` digest and a lowercase 40-digit source revision. The caller owns the
+selected daemon/image observation; this constructor supplies no authentication.
+The image tag is fixed to `simplestchat-loadtest:ci`, platform to `linux/amd64`,
+user to `10001:10001`, work directory to `/results`, Entrypoint to
+`["/app/load_test"]` and Cmd to `["--help"]`. The revision label and exactly one
+`SOURCE_REVISION=` environment entry must agree with the selected revision.
+Other private config/environment values are never returned or logged.
+
+The existing server `verify_archive`/CLI, signed release ten-file contract and
+Python policy are unchanged. This generator profile does not create a public
+CLI or accept a server manifest as a substitute for a selected image identity.
+It returns only measured transfer SHA-256/byte count, observed image ID, config
+SHA-256, optional selected root digest, fixed format/platform/tag/revision and
+layer count. The transfer getters let the owner compare the subsequent zstd
+round trip without decoding a public JSON projection.
+
+For a classic Docker export, the selected ID must equal the hash of the actual
+original config bytes. Every ordered `manifest.json` raw layer is streamed and
+its hash must equal the corresponding config `rootfs.diff_ids` entry. Layer
+names, distribution hints or filenames never substitute for hashing the stored
+raw bytes. A present legacy `repositories` map must contain exactly the fixed
+repository/tag and its final raw DiffID. Docker's classic exporter writes raw
+layer streams, while optional distribution descriptors can refer to compressed
+representations; these are different identities.
+[Moby's classic exporter](https://github.com/moby/moby/blob/v28.5.1/image/tarexport/save.go)
+and [its raw-layer verifier](https://github.com/moby/moby/blob/v28.5.1/layer/ro_layer.go)
+describe that distinction.
+
+The Docker compatibility manifest's optional `LayerSources` field is ignored
+distribution-registration metadata, not authoritative payload proof. The whole
+transfer hash covers its original bytes, but the verifier does not validate,
+register, fetch or load these hints. Contradictory hint digests or URLs cannot
+replace actual config/raw-layer hashing. This scope does not establish how a
+later Docker loader will register distribution metadata.
+
+For a containerd export, the selected ID must instead equal the actual verified
+outer descriptor digest in `index.json`. It can identify a parent index rather
+than the config. A complete one-branch graph, at most eight index/manifest
+descriptors deep, must reach the same Docker-compatible config and ordered
+stored layers. Every blob referenced by that selected authoritative OCI graph
+must be present
+and match both descriptor SHA-256 and integer size. The top descriptor requires
+both exact annotations: `io.containerd.image.name` is
+`docker.io/library/simplestchat-loadtest:ci`, and
+`org.opencontainers.image.ref.name` is `ci`. Alternative values for these keys, multiple
+images/branches, foreign platforms, remote URLs, embedded data, artifact subjects,
+cycles and incomplete graphs refuse. The supported media types are OCI/Docker
+schema-2 indexes and image manifests/configs, raw tar layers, gzip layers and
+OCI zstd layers. Raw OCI layers also agree with config DiffIDs. Compressed
+payload hashes describe stored bytes and are not equated to uncompressed
+DiffIDs. See the
+[containerd exporter](https://github.com/containerd/containerd/blob/v2.1.4/core/images/archive/exporter.go)
+and [OCI DiffID definition](https://github.com/opencontainers/image-spec/blob/v1.1.1/config.md#layer-diffid).
+
+An optional OCI extension is checked in full even when the selected identity is
+a classic config ID. In particular, some classic exports retain compressed
+distribution descriptors while saving only raw layer bytes. Those extensions
+are not self-contained under this profile and are refused; this is not general
+compatibility with every valid Docker export. No `docker save --platform` is
+added to change the observed parent identity. The verifier never fetches a
+missing descriptor or silently ignores an advertised OCI graph.
+
+The original uncompressed archive is at most 8 GiB, JSON members at most 1 MiB,
+and an image has 1–1024 layers. Existing mature tar raw-extension preflight,
+100,000-member/200,000-header, 8 KiB individual extension/name and 16 MiB total
+name limits apply. The generator additionally refuses file-name trailing slash
+aliases and file/parent conflicts, and requires at least two terminal zero
+blocks followed only by aligned zero padding. It streams hashes with 64 KiB
+buffers; layer payloads cannot enter metadata allocations. The retained snapshot
+checks reads/seeks and namespace bindings, then attempts every retained close
+even if verification already failed. Failed constructor/probe admissions also
+attempt closes before returning. This is optimistic change detection, not a
+filesystem lock against later same-user writes.
+
+`verify_generator_archive_with_checkpoint` adds synchronous checkpoints at
+hash chunks, headers and graph steps. A false callback returns
+`archive_budget_exhausted`; the caller retains any already observed timeout or
+signal status as its primary outcome. Final checkpoints occur after explicit
+snapshot closure. These admissions do not guarantee a wall-clock bound on OS
+I/O, scheduling or close operations. Synthetic tests include inert bytes labelled
+as compressed blobs deliberately: the verified fact is the stored-byte graph,
+not valid compression, inner-layer decoding, Docker loader acceptance, image
+execution, build provenance, signing readiness or ABI/runtime compatibility.

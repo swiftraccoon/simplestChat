@@ -167,6 +167,21 @@ cache reuse binds the expanded Rust/Cargo/config/workflow inputs and restores
 no native executable. Cold hosted compilation and real native runtime remain
 unmeasured for this port.
 
+The manual generator-image owner adds one exact informational installer review
+at `load-generator-image.yml#jobs/image/steps/1/uses`. Credential-free checkout
+is followed by the same immutable `89b12181fb390509a0842a86cc55eeb8eb928c1d`
+action and explicit Rust 1.99.0 before compilation or Docker authority. The
+[reviewed action source](https://github.com/dtolnay/rust-toolchain/blob/89b12181fb390509a0842a86cc55eeb8eb928c1d/action.yml)
+retains its official HTTPS rustup bootstrap when absent and bounded retries for
+official-server checksum propagation failures; this does not independently pin
+the bootstrap installer bytes. No token, artifact or restored cache selects
+installer source or arguments. This location keeps the existing fingerprint
+and 2026-11-29 expiry. The fixed build/cache/artifact recipe and all source,
+process, resource, payload and publication checks remain blocking. The job
+ceiling remains 45 minutes; cold bootstrap and compilation time are unmeasured.
+This review adds no native-toolchain or candidate installer and does not apply
+to another workflow location or action reference.
+
 ## Account-room action reference
 
 On 2026-10-18, the new manual-only account-room experiment produced one

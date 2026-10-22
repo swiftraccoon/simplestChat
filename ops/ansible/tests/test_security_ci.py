@@ -918,6 +918,33 @@ class SecurityWorkflowTests(unittest.TestCase):
             with self.subTest(scanner=scanner):
                 self.assertNotEqual(self.project_image_reviews(modified), original)
 
+    def test_manual_load_image_keeps_bootstrap_and_artifact_contract(self) -> None:
+        """The manual owner follows bootstrap and keeps the fixed cache/artifact boundary."""
+        job = obj(workflow("load-generator-image.yml"), "jobs", "image")
+        self.assertEqual(string(job, "timeout-minutes"), "45")
+        steps = objects(job, "steps")
+        self.assertEqual(len(steps), 5)
+        self.assertEqual(obj(steps[0], "with")["persist-credentials"], "false")
+        self.assertEqual(
+            string(steps[1], "uses"),
+            "dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d",
+        )
+        self.assertEqual(obj(steps[1], "with"), {"toolchain": "1.99.0"})
+        self.assertNotIn("if", steps[1])
+        self.assertTrue(string(steps[2], "uses").startswith("actions/cache/restore@"))
+        self.assertEqual(string(steps[3], "shell"), "bash")
+        self.assertEqual(
+            string(steps[3], "run"),
+            "cargo run --locked -q -p xtask -- ci load-generator-image",
+        )
+        self.assertNotIn("if", steps[3])
+        upload = obj(steps[4], "with")
+        self.assertEqual(string(upload, "name"), "simplestchat-loadtest-${{ github.sha }}")
+        self.assertEqual(string(upload, "path"), "${{ runner.temp }}/loadtest-image")
+        self.assertEqual(string(upload, "if-no-files-found"), "error")
+        self.assertEqual(string(upload, "compression-level"), "0")
+        self.assertEqual(string(upload, "retention-days"), "7")
+
     def test_image_cache_keys_include_policy_and_operations_inputs(self) -> None:
         """Policy and operations inputs bind both image caches beside Docker layer checks."""
         steps = objects(obj(workflow("ci.yml"), "jobs", "deployment"), "steps")

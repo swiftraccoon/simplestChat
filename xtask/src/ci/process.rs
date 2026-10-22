@@ -1,6 +1,6 @@
 //! Bounded native commands reuse the browser supervisor's reserved group guard.
 
-use super::command::Command;
+use super::command::{Command, SeparateLogs};
 use crate::ci::browser_suite::{
     cleanup,
     process::{Group, Signals, exited},
@@ -8,6 +8,8 @@ use crate::ci::browser_suite::{
 use crate::tooling::Environment;
 use crate::tooling::{self, Failure, Result};
 use rustix::process::Signal;
+use std::fs::File;
+use std::io::Seek;
 use std::path::Path;
 use std::process::Stdio;
 use std::time::Duration;
@@ -65,30 +67,19 @@ impl<'a> Native<'a> {
         mut request: Command,
         finalizer: &impl Finalizer,
     ) -> Result<Vec<u8>> {
-        let combined = request
-            .combined_log
-            .take()
-            .map(std::sync::Arc::try_unwrap)
-            .transpose()
-            .map_err(|_| Failure::new(1, "CI combined log must have one owner."))?;
-        let combined_mode = combined.is_some();
+        let (io, admission) = OwnedIo::take(&mut request);
+        let owned_io = io.combined.is_some() || io.separate.is_some() || io.input.is_some();
         let cleanup = request.cleanup;
-        let result = self.execute_body(request, &combined, finalizer).await;
+        let result = match admission {
+            Ok(()) => self.execute_body(request, &io, finalizer).await,
+            Err(error) => Err(error),
+        };
         // This runs on setup/spawn errors too. A body-local Group guard finishes
         // its fallback before these bounded EOF and explicit-close attempts.
-        let logged = match combined {
-            Some(log) => log.finish().await.and_then(|value| {
-                if value.complete {
-                    Ok(())
-                } else {
-                    Err(Failure::new(1, "CI combined log completion is unproven."))
-                }
-            }),
-            None => Ok(()),
-        };
+        let closed = io.finish().await;
         let output = result?;
-        logged?;
-        if combined_mode && !cleanup {
+        closed?;
+        if owned_io && !cleanup {
             self.ready().await?;
         }
         Ok(output)
@@ -97,14 +88,19 @@ impl<'a> Native<'a> {
     async fn execute_body(
         &mut self,
         mut request: Command,
-        combined: &Option<super::bounded_log::Log>,
+        io: &OwnedIo,
         finalizer: &impl Finalizer,
     ) -> Result<Vec<u8>> {
         if !request.cleanup {
             self.ready().await?;
         }
-        if combined.is_some() && (request.stdout.is_some() || request.capture.is_some()) {
+        if io.combined.is_some() && (request.stdout.is_some() || request.capture.is_some()) {
             return Err(Failure::new(1, "CI combined output requires its own mode."));
+        }
+        if io.separate.is_some()
+            && (io.combined.is_some() || request.stdout.is_some() || request.capture.is_some())
+        {
+            return Err(Failure::new(1, "CI separate output requires its own mode."));
         }
         if request.stdout.is_some() && request.capture.is_none() {
             return Err(Failure::new(
@@ -123,13 +119,20 @@ impl<'a> Native<'a> {
             tooling::command(root, environment, executable(&request)?, &request.arguments);
         use std::os::unix::process::CommandExt;
         command.process_group(0).stdin(Stdio::null());
+        if let Some(input) = &io.input {
+            command.stdin(Stdio::from(input_stdio(input)?));
+        }
         let sink = request
             .stdout
             .take()
             .map(std::sync::Arc::try_unwrap)
             .transpose()
             .map_err(|_| Failure::new(1, "CI output sink must have one owner."))?;
-        if let Some(log) = combined {
+        if let Some(logs) = &io.separate {
+            command
+                .stdout(Stdio::from(logs.stdout.writer()?))
+                .stderr(Stdio::from(logs.stderr.writer()?));
+        } else if let Some(log) = &io.combined {
             command
                 .stdout(Stdio::from(log.writer()?))
                 .stderr(Stdio::from(log.writer()?));
@@ -189,12 +192,21 @@ impl<'a> Native<'a> {
         };
         let mut reader = Reader(reader);
         let completed = async {
-            let bytes = if let Some(log) = combined {
+            let bytes = if io.combined.is_some() || io.separate.is_some() {
                 loop {
-                    if log.failed() {
+                    if io.combined.as_ref().is_some_and(|log| log.failed())
+                        || io
+                            .separate
+                            .as_ref()
+                            .is_some_and(|logs| logs.stdout.failed() || logs.stderr.failed())
+                    {
                         return Err(Failure::new(
                             1,
-                            "CI combined log exceeded its bound or failed.",
+                            if io.separate.is_some() {
+                                "CI separate log exceeded its bound or failed."
+                            } else {
+                                "CI combined log exceeded its bound or failed."
+                            },
                         ));
                     }
                     tokio::select! {
@@ -266,6 +278,112 @@ impl<'a> Native<'a> {
     }
 }
 
+struct OwnedIo {
+    combined: Option<super::bounded_log::Log>,
+    separate: Option<SeparateLogs>,
+    input: Option<File>,
+}
+impl OwnedIo {
+    fn take(request: &mut Command) -> (Self, Result<()>) {
+        // A borrowed peer refuses dispatch, but cannot skip unique peer closes.
+        let (combined, combined_admission) = owner(
+            request.combined_log.take(),
+            "CI combined log must have one owner.",
+        );
+        let (separate, separate_admission) = owner(
+            request.separate_logs.take(),
+            "CI separate logs must have one owner.",
+        );
+        let (input, input_admission) = owner(request.stdin.take(), "CI input must have one owner.");
+        (
+            Self {
+                combined,
+                separate,
+                input,
+            },
+            combined_admission
+                .and(separate_admission)
+                .and(input_admission),
+        )
+    }
+
+    async fn finish(self) -> Result<()> {
+        let input_closed = self
+            .input
+            .map(|file| {
+                nix::unistd::close(file).map_err(|_| Failure::new(1, "CI input close failed."))
+            })
+            .transpose();
+        let (combined, separate) = tokio::join!(
+            finish_log(self.combined, "CI combined log completion is unproven."),
+            finish_separate(self.separate)
+        );
+        input_closed?;
+        combined?;
+        separate
+    }
+}
+
+fn owner<T>(value: Option<std::sync::Arc<T>>, message: &str) -> (Option<T>, Result<()>) {
+    match value.map(std::sync::Arc::try_unwrap) {
+        Some(Ok(value)) => (Some(value), Ok(())),
+        Some(Err(_)) => (None, Err(Failure::new(1, message))),
+        None => (None, Ok(())),
+    }
+}
+
+async fn finish_log(log: Option<super::bounded_log::Log>, message: &str) -> Result<()> {
+    if let Some(log) = log {
+        let value = log.finish().await?;
+        if !value.complete {
+            return Err(Failure::new(1, message));
+        }
+    }
+    Ok(())
+}
+
+async fn finish_separate(logs: Option<SeparateLogs>) -> Result<()> {
+    if let Some(logs) = logs {
+        let message = "CI separate log completion is unproven.";
+        let (stdout, stderr) = tokio::join!(
+            finish_log(Some(logs.stdout), message),
+            finish_log(Some(logs.stderr), message)
+        );
+        stdout?;
+        stderr?;
+    }
+    Ok(())
+}
+
+/// Settle admitted bounded output and retained input before a caller refuses
+/// forwarding. No CLI runs. Unique peers close even when another is borrowed;
+/// external aliases remain their caller's responsibility. The legacy stdout
+/// File mode is unchanged and is not used by these paired-output commands.
+pub(super) async fn settle_unforwarded(mut request: Command) -> Result<()> {
+    let (io, admission) = OwnedIo::take(&mut request);
+    drop(request);
+    let closed = io.finish().await;
+    admission.and(closed)
+}
+
+fn input_stdio(input: &File) -> Result<File> {
+    let invalid = || Failure::new(1, "CI retained input invalid.");
+    if !input.metadata().map_err(|_| invalid())?.is_file()
+        || rustix::fs::fcntl_getfl(input)
+            .map_err(|_| invalid())?
+            .intersection(rustix::fs::OFlags::ACCMODE)
+            != rustix::fs::OFlags::RDONLY
+    {
+        return Err(invalid());
+    }
+    // CUR+0 verifies seekability without resetting the caller-selected cursor.
+    let mut retained = input;
+    retained.stream_position().map_err(|_| invalid())?;
+    let flags = rustix::io::fcntl_getfd(input).map_err(|_| invalid())?;
+    rustix::io::fcntl_setfd(input, flags | rustix::io::FdFlags::CLOEXEC).map_err(|_| invalid())?;
+    input.try_clone().map_err(|_| invalid())
+}
+
 /// Each selected role admits exactly one matching proof; no proof permits a
 /// fallback to PATH or substitution into another executable role.
 fn executable(request: &Command) -> Result<&std::ffi::OsStr> {
@@ -277,6 +395,8 @@ fn executable(request: &Command) -> Result<&std::ffi::OsStr> {
         request.ops.is_some(),
         request.source_git.is_some(),
         request.comparison.is_some(),
+        request.zstd.is_some(),
+        request.load_image.is_some(),
     ]
     .into_iter()
     .filter(|present| *present)
@@ -293,6 +413,7 @@ fn executable(request: &Command) -> Result<&std::ffi::OsStr> {
             | Program::ComparisonGit
             | Program::ComparisonCargo
             | Program::ComparisonBenchmark
+            | Program::Zstd
     );
     if proofs == 0 && !selected {
         return Ok(std::ffi::OsStr::new(request.program.name()));
@@ -304,8 +425,13 @@ fn executable(request: &Command) -> Result<&std::ffi::OsStr> {
         ));
     }
     let path = match request.program {
+        Program::Git | Program::Docker => request
+            .load_image
+            .as_ref()
+            .map(|value| value.validate(request.program)),
         Program::CargoAudit => request.executable.as_ref().map(|value| value.validate()),
         Program::Node => request.node.as_ref().map(|value| value.validate()),
+        Program::Zstd => request.zstd.as_ref().map(|value| value.validate()),
         Program::DtlsPython => request.dtls.as_ref().map(|value| value.validate(false)),
         Program::DtlsWorker => request.dtls.as_ref().map(|value| value.validate(true)),
         Program::OpsCargo => request

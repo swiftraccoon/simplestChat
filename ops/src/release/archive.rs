@@ -1,10 +1,17 @@
-//! Offline Docker/OCI archive validation. Only bounded JSON metadata is read;
-//! layers are never unpacked or run. A successful result describes the original
-//! transfer and selected config, not signatures or deployment authorization.
+//! Offline Docker/OCI archive validation. The signed-server profile reads bounded
+//! JSON metadata; the separate generator profile also streams referenced payload
+//! hashes. Layers are never unpacked or run. Results describe measured transfers
+//! and selected identities, not signatures or deployment authorization.
 
 mod docker;
+mod generator;
 mod index;
 mod oci;
+
+pub use generator::{
+    GeneratorIdentity, GeneratorSelection, verify_generator_archive,
+    verify_generator_archive_with_checkpoint,
+};
 
 use super::manifest::Manifest;
 use crate::files::Snapshot;
@@ -59,6 +66,7 @@ pub enum ArchiveError {
     User,
     Revision,
     Command,
+    Budget,
 }
 impl ArchiveError {
     pub fn code(self) -> &'static str {
@@ -101,6 +109,7 @@ impl ArchiveError {
             Self::User => "archive_user",
             Self::Revision => "archive_revision",
             Self::Command => "archive_command",
+            Self::Budget => "archive_budget_exhausted",
         }
     }
 }
@@ -187,6 +196,14 @@ fn sha256(bytes: &[u8]) -> String {
         .iter()
         .map(|b| format!("{b:02x}"))
         .collect()
+}
+
+fn checkpoint(check: &mut impl FnMut() -> bool) -> Result<()> {
+    if check() {
+        Ok(())
+    } else {
+        Err(ArchiveError::Budget)
+    }
 }
 
 fn archive_hash(snapshot: &mut Snapshot) -> Result<String> {
