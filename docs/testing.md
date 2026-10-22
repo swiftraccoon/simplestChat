@@ -10,7 +10,7 @@ native prefixes before invoking Cargo.
 
 ```sh
 cargo run --locked -q -p xtask -- check
-cargo test --locked --workspace -- --test-threads=1
+cargo test --locked --workspace --all-features -- --test-threads=1
 ```
 
 `cargo run --locked -q -p xtask -- check` shares the CI quality gates: typed web lint, formatting,
@@ -28,6 +28,7 @@ run the relevant crate without the server's native test graph:
 cargo test --locked -p xtask -- --test-threads=1
 cargo test --locked -p simplestchat-ops
 cargo test --locked -p xtask ci::ops_artifact -- --test-threads=1
+cargo test --locked -p xtask --features public-smoke ci::public_smoke -- --test-threads=1
 ```
 
 The [local Ops producer](../ops/README.md#controlled-local-unsigned-producer) has
@@ -1925,8 +1926,14 @@ manual checklist on real browsers and devices before a release.
 From a checkout with the pinned Rust toolchain, the opt-in client is:
 
 ```sh
-cargo run --locked -q -p xtask -- public-smoke --origin https://chat.example.com --room lobby
+cargo run --locked -q -p xtask --features public-smoke -- public-smoke --origin https://chat.example.com --room lobby
 ```
+
+The explicit `public-smoke` Cargo feature enables the native TLS client. It needs
+the platform's native TLS development prerequisites (the pinned OpenSSL prefix
+on Linux). Default `xtask` builds omit that client so CI setup and input keys can
+run before native-library installation. CI tests and Rust quality checks enable
+all features, including the inert client tests.
 
 Use only a deployment you own or are authorized to test. This operation joins
 **two guests and writes exactly one public test message** in the selected room.

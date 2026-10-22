@@ -310,7 +310,7 @@ jobs:
       # profile too; every test still executes in the test step below.
       - name: Build server, load generator and test harnesses
         if: steps.verified.outputs.cache-hit != 'true'
-        run: cargo build --locked --workspace --all-targets --profile test
+        run: cargo build --locked --workspace --all-targets --all-features --profile test
 
       - name: Verify readiness and graceful shutdown
         if: steps.verified.outputs.cache-hit != 'true'
@@ -332,7 +332,7 @@ jobs:
       # Serialize native media-worker and room-session integration tests.
       - name: Test (including PostgreSQL recovery, refresh and moderation)
         if: steps.verified.outputs.cache-hit != 'true'
-        run: cargo test --locked --workspace -- --include-ignored --test-threads=1
+        run: cargo test --locked --workspace --all-features -- --include-ignored --test-threads=1
 
       - name: Synthetic media delivery correctness smoke
         if: steps.verified.outputs.cache-hit != 'true'

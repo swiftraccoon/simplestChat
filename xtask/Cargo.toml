@@ -9,13 +9,17 @@ publish.workspace = true
 [lints]
 workspace = true
 
+[features]
+# CI keys and setup commands must compile before the pinned native libraries exist.
+public-smoke = ["dep:futures-util", "dep:reqwest", "dep:tokio-tungstenite"]
+
 [dependencies]
 anyhow = "1.0.104"
 chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
-futures-util = "0.3.34"
+futures-util = { version = "0.3.34", optional = true }
 flate2 = { version = "=1.1.10", default-features = false, features = ["rust_backend"] }
 nix = { version = "0.31.3", default-features = false }
-reqwest = { version = "0.13.5", default-features = false, features = ["native-tls"] }
+reqwest = { version = "0.13.5", default-features = false, features = ["native-tls"], optional = true }
 rawzip = "=0.5.2"
 regex = "1.13.1"
 rustix = { version = "1.1.5", features = ["fs", "process", "system"] }
@@ -27,7 +31,7 @@ sha2 = "0.11.0"
 simplestchat-ops = { path = "../ops" }
 syn = { version = "=3.0.6", features = ["full"] }
 tar = { version = "=0.4.46", default-features = false }
-tokio-tungstenite = { version = "0.30.0", features = ["native-tls"] }
+tokio-tungstenite = { version = "0.30.0", features = ["native-tls"], optional = true }
 tokio = { version = "1.53.2", features = ["full"] }
 toml = { version = "=1.1.8", default-features = false, features = ["parse", "serde", "std"] }
 url = "2.5.8"

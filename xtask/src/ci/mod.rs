@@ -38,6 +38,7 @@ mod ops_artifact;
 mod performance_compare;
 mod process;
 mod production_image;
+#[cfg(feature = "public-smoke")]
 mod public_smoke;
 mod receipts;
 mod release_checks;
@@ -321,8 +322,16 @@ pub(crate) fn run_container_smoke(root: &Path, arguments: &[String]) -> Result<E
     container_smoke::run_local(root, arguments)
 }
 
+#[cfg(feature = "public-smoke")]
 pub(crate) fn run_public_smoke(arguments: &[String]) -> Result<ExitCode> {
     public_smoke::run(arguments)
+}
+
+#[cfg(not(feature = "public-smoke"))]
+pub(crate) fn run_public_smoke(_arguments: &[String]) -> Result<ExitCode> {
+    bail!(
+        "public-smoke requires: cargo run --locked -q -p xtask --features public-smoke -- public-smoke --help"
+    )
 }
 
 pub(crate) fn run_ops_artifact(arguments: &[String]) -> Result<ExitCode> {

@@ -281,10 +281,7 @@ async function runtime(options = {}, cli = null) {
     }
   }
   const fetch = async (url, init) => {
-    check(
-      typeof url === "string" && url.startsWith(ORIGIN),
-      "same origin fetch",
-    );
+    check(typeof url === "string", "string fetch URL");
     const parsed = new URL(url);
     check(
       parsed.origin === ORIGIN && !parsed.search && !parsed.hash,

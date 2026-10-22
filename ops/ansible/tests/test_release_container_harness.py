@@ -411,6 +411,26 @@ class HarnessTestCase(unittest.TestCase):
 class HarnessInputTests(HarnessTestCase):
     """Keep CLI opt-in and private output allocation independent of service effects."""
 
+    def test_new_evidence_is_private_even_with_permissive_umask_and_never_replaces(self) -> None:
+        """The generic writer has no public-mode input or overwrite path."""
+        path = self.directory / "private-evidence.json"
+        initial_umask = os.umask(0)
+        try:
+            harness_module.write_new(path, {"private": "retained"})
+        finally:
+            _ = os.umask(initial_umask)
+        original = path.read_bytes()
+        before = path.stat()
+        self.assertEqual(stat.S_IMODE(before.st_mode), 0o600)
+        with self.assertRaises(FileExistsError):
+            harness_module.write_new(path, {"private": "replacement"})
+        self.assertEqual(path.read_bytes(), original)
+        after = path.stat()
+        self.assertEqual(after.st_ino, before.st_ino)
+        self.assertEqual(after.st_mode, before.st_mode)
+        self.assertEqual(after.st_mtime_ns, before.st_mtime_ns)
+        self.assertEqual(after.st_ctime_ns, before.st_ctime_ns)
+
     def test_socket_directory_remains_traversable_under_private_process_umask(self) -> None:
         """Retain the shared socket traversal mode despite the restrictive parent umask."""
         initial_umask = os.umask(0o077)

@@ -170,13 +170,13 @@ def require(condition: object, message: str) -> None:
         raise CheckError(message)
 
 
-def write_new(path: Path, value: JsonValue, mode: int = 0o600) -> None:
-    """Publish new evidence exclusively without replacing retained files."""
+def write_new(path: Path, value: JsonValue) -> None:
+    """Create private evidence exclusively without replacing retained files."""
     data = json.dumps(value, indent=2) + "\n" if isinstance(value, (dict, list)) else value
     if not isinstance(data, str):
         message = "Fixture evidence must be text or a JSON object/array"
         raise TypeError(message)
-    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, mode)
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
         _ = stream.write(data)
 
@@ -755,7 +755,9 @@ class Harness:
         self.ca_path = (
             Path("/usr/local/share/ca-certificates") / f"simplestchat-release-test-{self.token}.crt"
         )
-        write_new(self.ca_path, ca.read_text(encoding="utf-8"), mode=0o644)
+        # The privileged updater reads this private source and exports the
+        # nonsecret public certificate into its system trust bundle.
+        write_new(self.ca_path, ca.read_text(encoding="utf-8"))
         self.ca_digest = sha256_file(self.ca_path)
         _ = self.commands.run(["/usr/sbin/update-ca-certificates"], timeout=30)
 
@@ -1472,7 +1474,9 @@ def main(arguments: Sequence[str] | None = None) -> int:
         harness.report["passed"] = harness.report["passed"] and harness.report["cleanupPassed"]
         harness.report["seconds"] = round(time.monotonic() - started, 3)
         harness.report["lastNonzeroCommand"] = harness.commands.last_failure
-        write_new(output / "report.json", harness.report, mode=0o644)
+        write_new(output / "report.json", harness.report)
+        # Only this sanitized fixed-name report is exported for the unprivileged
+        # artifact uploader. Generic evidence and fixture CA sources stay 0600.
         (output / "report.json").chmod(0o644)
         output.chmod(0o755)
         print(json.dumps(harness.report))  # noqa: T201 - Public sanitized CI report.

@@ -7,6 +7,47 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 static NEXT: AtomicUsize = AtomicUsize::new(0);
+
+#[test]
+fn bootstrap_linux_graph_excludes_native_tls_until_the_client_feature_is_selected() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let graph = |features: &[&str]| {
+        let output = std::process::Command::new(env!("CARGO"))
+            .args([
+                "tree",
+                "--locked",
+                "--offline",
+                "-p",
+                "xtask",
+                "--target",
+                "x86_64-unknown-linux-gnu",
+                "--edges",
+                "normal,build",
+                "--prefix",
+                "none",
+            ])
+            .args(features)
+            .current_dir(root)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8(output.stdout).unwrap()
+    };
+    let bootstrap = graph(&[]);
+    for dependency in ["native-tls v", "openssl v", "openssl-sys v", "aws-lc-sys v"] {
+        assert!(
+            !bootstrap.lines().any(|line| line.starts_with(dependency)),
+            "bootstrap unexpectedly requires {dependency}"
+        );
+    }
+    let client = graph(&["--features", "public-smoke"]);
+    assert!(client.lines().any(|line| line.starts_with("openssl-sys v")));
+}
+
 const ENVIRONMENT_KEYS: &[&str] = &[
     "PATH",
     "RUSTC",
@@ -407,6 +448,7 @@ fn rust_pins_native_inputs_all_target_clippy_and_warning_free_private_docs() {
             "--locked",
             "--workspace",
             "--all-targets",
+            "--all-features",
             "--no-deps",
             "--",
             "-D",
@@ -439,6 +481,7 @@ fn rust_pins_native_inputs_all_target_clippy_and_warning_free_private_docs() {
             "doc",
             "--locked",
             "--workspace",
+            "--all-features",
             "--no-deps",
             "--document-private-items"
         ]

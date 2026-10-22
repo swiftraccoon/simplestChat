@@ -260,7 +260,7 @@ Open `https://chat.example.com` in your browser. For a bounded protocol check,
 run from your checkout with the pinned Rust toolchain:
 
 ```sh
-cargo run --locked -q -p xtask -- public-smoke --origin https://chat.example.com --room lobby
+cargo run --locked -q -p xtask --features public-smoke -- public-smoke --origin https://chat.example.com --room lobby
 ```
 
 This joins two guests and **writes one public test message**, then leaves and

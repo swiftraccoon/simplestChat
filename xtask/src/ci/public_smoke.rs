@@ -17,7 +17,7 @@ mod tests;
 use controller::{Cancellation, Clock, Services};
 use std::{process::ExitCode, time::Instant};
 
-const HELP: &str = "Usage: cargo run --locked -q -p xtask -- public-smoke \
+const HELP: &str = "Usage: cargo run --locked -q -p xtask --features public-smoke -- public-smoke \
 --origin https://chat.example.com [--room lobby] [--output FRESH_ABSOLUTE_DIRECTORY]
 
 Use only a deployment you own or are authorized to test. The HTTPS origin must
