@@ -101,8 +101,25 @@ struct TurnShutdown {
 
 pub(crate) async fn run(root: &Path, command: &[String], environment: &Environment) -> Result<i32> {
     let mut signals = Signals::new()?;
-    let plan = plan(root, command, environment, &mut signals).await?;
-    helper::check(&mut signals).await?;
+    run_with_companion(
+        root,
+        command,
+        environment,
+        &mut signals,
+        &mut super::NoCompanion,
+    )
+    .await
+}
+
+pub(crate) async fn run_with_companion(
+    root: &Path,
+    command: &[String],
+    environment: &Environment,
+    signals: &mut Signals,
+    companion: &mut impl super::Companion,
+) -> Result<i32> {
+    let plan = plan(root, command, environment, signals).await?;
+    helper::check(signals).await?;
     preflight(&plan)?;
     fs::create_dir_all(&plan.artifacts)
         .with_context(|| format!("creating {}", plan.artifacts.display()))?;
@@ -113,19 +130,26 @@ pub(crate) async fn run(root: &Path, command: &[String], environment: &Environme
         turn_config: None,
         https: None,
     };
-    let status = match harness.start_and_run(command, &mut signals).await {
+    let status = match harness
+        .start_and_run_with_companion(command, signals, companion)
+        .await
+    {
         Ok(status) => status,
         Err(error) => {
             if let Some(stop) = error.downcast_ref::<Stop>() {
                 eprintln!("{}", stop.message);
                 i32::from(stop.code)
+            } else if let Some(failure) = error.downcast_ref::<crate::tooling::Failure>() {
+                eprintln!("Owned test companion failed.");
+                i32::from(failure.code)
             } else {
                 eprintln!("xtask: {error:#}");
                 1
             }
         }
     };
-    Ok(harness.finish(status, &mut signals).await)
+    let status = companion.finish(status, signals).await;
+    Ok(harness.finish(status, signals).await)
 }
 
 fn env(environment: &Environment, name: &str) -> Option<String> {
@@ -326,7 +350,17 @@ fn preflight(plan: &Plan) -> Result<()> {
 }
 
 impl Harness {
+    #[cfg(test)]
     async fn start_and_run(&mut self, command: &[String], signals: &mut Signals) -> Result<i32> {
+        self.start_and_run_with_companion(command, signals, &mut super::NoCompanion)
+            .await
+    }
+    async fn start_and_run_with_companion(
+        &mut self,
+        command: &[String],
+        signals: &mut Signals,
+        companion: &mut impl super::Companion,
+    ) -> Result<i32> {
         let artifacts = self.plan.artifacts.clone();
         let mut server_env: Vec<(String, String)> = vec![("PATH".into(), self.plan.path.clone())];
         if self.plan.presentation {
@@ -415,7 +449,9 @@ impl Harness {
             self.https = Some(Service::spawn(child).context("starting the HTTPS proxy")?);
             self.await_https_ready(signals).await?;
         }
-        let status = self.run_child(command, server_pid, signals).await?;
+        let status = self
+            .run_child_with_companion(command, server_pid, signals, companion)
+            .await?;
         if status != 0 {
             return Ok(status);
         }
@@ -536,11 +572,22 @@ relay-threads=1\nuser-quota=8\ntotal-quota=64\nlog-file=stdout\nlog-min-level=wa
     /// Run the test command with the owned environment exported and nothing
     /// of an earlier run's credentials inherited; INT or TERM stops it and
     /// reports 130 or 143.
+    #[cfg(test)]
     async fn run_child(
         &mut self,
         command: &[String],
         server_pid: u32,
         signals: &mut Signals,
+    ) -> Result<i32> {
+        self.run_child_with_companion(command, server_pid, signals, &mut super::NoCompanion)
+            .await
+    }
+    async fn run_child_with_companion(
+        &mut self,
+        command: &[String],
+        server_pid: u32,
+        signals: &mut Signals,
+        companion: &mut impl super::Companion,
     ) -> Result<i32> {
         let mut child = std::process::Command::new(&command[0]);
         child.args(&command[1..]);
@@ -561,7 +608,7 @@ relay-threads=1\nuser-quota=8\ntotal-quota=64\nlog-file=stdout\nlog-min-level=wa
         if let Some(token) = &self.plan.metrics_token {
             child.env("TEST_METRICS_TOKEN", token);
         }
-        process::run_test_child(child, CHILD_GRACE, signals).await
+        process::run_test_child_with_companion(child, CHILD_GRACE, signals, companion).await
     }
 
     /// Cleanup cannot be cancelled midway. Observe a pending interruption only

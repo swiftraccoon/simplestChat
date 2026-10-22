@@ -35,6 +35,7 @@ mod release_controller;
 mod required;
 mod runner;
 mod selected_executable;
+mod session_soak;
 #[cfg(test)]
 mod tests;
 
@@ -50,6 +51,7 @@ const USAGE: &str = "usage: cargo run --locked -q -p xtask -- ci key|save|verify
        cargo run --locked -q -p xtask -- ci release-controller start|wait\n\
        cargo run --locked -q -p xtask -- ci commit-subject\n\
        cargo run --locked -q -p xtask -- ci database-check monitoring|restore|migration\n\
+       cargo run --locked -q -p xtask -- ci session-soak\n\
        cargo run --locked -q -p xtask -- ci npm-path\n\
        cargo run --locked -q -p xtask -- ci controller-path\n\
        cargo run --locked -q -p xtask -- ci image-cache hint|status preparation|status production";
@@ -279,6 +281,12 @@ fn print_key(context: &Context, scope: Scope, github_output: bool) -> Result<()>
 }
 
 pub(crate) fn run(root: &Path, arguments: &[String]) -> Result<ExitCode> {
+    if arguments
+        .first()
+        .is_some_and(|argument| argument == "session-soak")
+    {
+        return session_soak::run(root, &arguments[1..]);
+    }
     if arguments
         .first()
         .is_some_and(|argument| argument == "commit-subject")

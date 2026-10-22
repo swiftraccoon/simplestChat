@@ -307,3 +307,80 @@ Path(__file__).with_name('captured.json').write_text(json.dumps(value))
         assert_eq!(observed["ownedToken"], metrics);
     }
 }
+
+#[tokio::test]
+async fn companion_finalization_follows_workload_retirement_before_server_cleanup_on_failure() {
+    struct Order {
+        root: PathBuf,
+        action_failure: bool,
+        finished: bool,
+    }
+    impl crate::test_env::Companion for Order {
+        async fn wait(&self) {
+            if self.action_failure {
+                ready(&self.root.join("test-workload.ready")).await;
+            } else {
+                std::future::pending::<()>().await;
+            }
+        }
+        async fn advance(&mut self, _: &mut Signals) -> Result<()> {
+            Err(Stop {
+                code: 130,
+                message: "Owned companion interruption.".into(),
+            }
+            .into())
+        }
+        async fn finish(&mut self, status: i32, _: &mut Signals) -> i32 {
+            assert!(self.root.join("test-workload.term").exists());
+            assert!(!self.root.join("server.term").exists());
+            self.finished = true;
+            status
+        }
+    }
+    for action_failure in [false, true] {
+        let fixture = Fixture::new();
+        let mut environment = fixture.environment();
+        for key in ["PASSKEY_E2E", "PRESENTATION_E2E", "LIFECYCLE_E2E"] {
+            environment.remove(std::ffi::OsStr::new(key));
+        }
+        environment.insert("E2E_ARTIFACTS".into(), fixture.root.clone().into());
+        fixture.tool(
+            "curl",
+            r#"import time
+from pathlib import Path
+while not Path(__file__).with_name('server.ready').exists():time.sleep(.005)
+"#,
+        );
+        let workload = fixture.tool(
+            "test-workload",
+            if action_failure {
+                IDLE
+            } else {
+                r#"from pathlib import Path
+Path(__file__).with_name('test-workload.term').write_text('finished')
+raise SystemExit(23)
+"#
+            },
+        );
+        let mut order = Order {
+            root: fixture.root.clone(),
+            action_failure,
+            finished: false,
+        };
+        let (_sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+        let mut signals = Signals::injected(receiver);
+        let result = run_with_companion(
+            &fixture.root,
+            &[workload.to_string_lossy().into_owned()],
+            &environment,
+            &mut signals,
+            &mut order,
+        )
+        .await
+        .unwrap();
+        assert_eq!(result, if action_failure { 130 } else { 23 });
+        assert!(order.finished);
+        assert!(fixture.root.join("server.term").exists());
+        assert_eq!(fixture.report("server-shutdown.json")["passed"], true);
+    }
+}

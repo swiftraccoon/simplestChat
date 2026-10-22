@@ -47,6 +47,7 @@ Commands:
                 release-controller overlaps bounded controller preparation with the image build.
                 commit-subject checks the branch tip against the local hook's byte grammar.
                 database-check runs monitoring, restore or migration in owned PostgreSQL.
+                session-soak supervises the fixed workload and runner-owned database outage.
                 npm-path publishes the pinned npm bin directory through the runner file.
                 controller-path publishes the installed automation controller bin directory.
                 image-cache publishes validated database-byte cache selectors.

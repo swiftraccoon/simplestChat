@@ -1,5 +1,8 @@
 //! Inert fork fixtures with explicit release-file handshakes, never services.
 
+#[path = "companion_tests.rs"]
+mod companion_tests;
+
 use super::*;
 use crate::owned_process::{self, Group, Signals};
 use std::process::Stdio;

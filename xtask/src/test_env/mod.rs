@@ -7,6 +7,7 @@
 //! command's own status is preserved; cleanup trouble turns success into 1 but
 //! never hides a failure; INT and TERM clean up and exit 130 or 143.
 
+mod companion;
 mod helper;
 mod postgres;
 mod process;
@@ -18,6 +19,7 @@ use crate::{
     tooling::{self, Environment},
 };
 use anyhow::Result;
+pub(crate) use companion::{Companion, NoCompanion};
 use std::path::Path;
 use std::process::ExitCode;
 
@@ -90,6 +92,30 @@ pub(crate) async fn postgres_with_environment(
 pub(crate) fn run_server(root: &Path, command: &[String]) -> Result<ExitCode> {
     let environment = tooling::inherited_env();
     execute(server::run(root, command, &environment))
+}
+
+/// Compose a fixed CI workload directly, with one captured environment and one
+/// signal owner. The companion is finalized before the owned server retires.
+pub(crate) async fn server_with_environment(
+    root: &Path,
+    command: &[String],
+    environment: &Environment,
+    signals: &mut Signals,
+    companion: &mut impl Companion,
+) -> Result<i32> {
+    server::run_with_companion(root, command, environment, signals, companion).await
+}
+
+/// Reuse the harness's bounded fresh CLI-group owner, without another runtime
+/// or signal registration. Cleanup calls ignore cancellation until settlement.
+pub(crate) async fn helper_with_signals(
+    command: std::process::Command,
+    timeout: std::time::Duration,
+    capture: Option<u64>,
+    signals: Option<&mut Signals>,
+) -> Result<(i32, Vec<u8>)> {
+    let output = helper::run(command, timeout, capture, signals).await?;
+    Ok((output.status, output.stdout))
 }
 
 /// Both services for one command: the server harness runs as the cluster's

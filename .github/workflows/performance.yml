@@ -309,21 +309,10 @@ jobs:
           E2E_ARTIFACTS: ${{ runner.temp }}/session-soak
           SERVER_REVISION: ${{ github.sha }}
           FRONTEND_REVISION: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-          container="$(docker ps -q --filter publish=5432)"
-          test -n "${container}"
-          (
-            sleep 600
-            echo "Stopping PostgreSQL at $(date -u +%FT%TZ)"
-            docker stop "${container}"
-            sleep 8
-            docker start "${container}"
-            echo "PostgreSQL started again at $(date -u +%FT%TZ)"
-          ) &
-          restarter=$!
-          cargo run --locked -q -p xtask -- test-server npm --prefix web/e2e run test:session-soak
-          wait "${restarter}"
+          SOAK_POSTGRES_ID: ${{ job.services.postgres.id }}
+          SOAK_POSTGRES_NETWORK: ${{ job.services.postgres.network }}
+          SOAK_POSTGRES_PORT: ${{ job.services.postgres.ports['5432'] }}
+        run: cargo run --locked -q -p xtask -- ci session-soak
 
       - name: Preserve soak diagnostics
         if: ${{ !cancelled() }}

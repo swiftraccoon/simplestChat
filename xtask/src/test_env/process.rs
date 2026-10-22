@@ -19,10 +19,39 @@ pub(crate) async fn run_test_child(
 }
 
 async fn run_test_child_with_cleanup<F>(
+    command: std::process::Command,
+    grace: Duration,
+    signals: &mut crate::owned_process::Signals,
+    finish: impl FnOnce(rustix::process::Pid) -> F,
+) -> anyhow::Result<i32>
+where
+    F: std::future::Future<Output = bool>,
+{
+    run_child(command, grace, signals, finish, &mut super::NoCompanion).await
+}
+
+pub(crate) async fn run_test_child_with_companion(
+    command: std::process::Command,
+    grace: Duration,
+    signals: &mut crate::owned_process::Signals,
+    companion: &mut impl super::Companion,
+) -> anyhow::Result<i32> {
+    run_child(
+        command,
+        grace,
+        signals,
+        crate::owned_process::finish,
+        companion,
+    )
+    .await
+}
+
+async fn run_child<F>(
     mut command: std::process::Command,
     grace: Duration,
     signals: &mut crate::owned_process::Signals,
     finish: impl FnOnce(rustix::process::Pid) -> F,
+    companion: &mut impl super::Companion,
 ) -> anyhow::Result<i32>
 where
     F: std::future::Future<Output = bool>,
@@ -38,28 +67,45 @@ where
     let pid = owner.pid();
     // Standard Command retains its configured file descriptors after spawn.
     drop(command);
-    let primary = tokio::select! {
-        biased;
-        code = signals.next() => {
-            let _ = rustix::process::kill_process_group(pid, rustix::process::Signal::TERM);
-            let _ = tokio::time::timeout(grace, exited(pid)).await;
-            Ok(Some(i32::from(code)))
-        },
-        result = exited(pid) => result.map(|()| None),
+    let primary = loop {
+        let event = tokio::select! {
+            biased;
+            code = signals.next() => Some(Ok(Some(i32::from(code)))),
+            result = exited(pid) => Some(result.map(|()| None).map_err(anyhow::Error::from)),
+            () = companion.wait() => None,
+        };
+        if let Some(event) = event {
+            if matches!(event, Ok(None)) {
+                companion.workload_ended();
+            }
+            break event;
+        }
+        if let Err(error) = companion.advance(signals).await {
+            break Err(error);
+        }
     };
+    if !matches!(primary, Ok(None)) {
+        let _ = rustix::process::kill_process_group(pid, rustix::process::Signal::TERM);
+        let _ = tokio::time::timeout(grace, exited(pid)).await;
+    }
     let cleaned = finish(pid).await;
     let terminal = tokio::time::timeout(Duration::from_secs(5), exited(pid)).await;
     if !matches!(terminal, Ok(Ok(()))) {
         eprintln!("Owned test command termination could not be confirmed.");
         // Leave the guard armed for its bounded final attempt. Preserve a
         // known interrupt status, but uncertain cleanup can never pass.
-        return Ok(primary.ok().flatten().unwrap_or(1));
+        return match primary {
+            Ok(Some(code)) => Ok(code),
+            Err(error) => Err(error),
+            Ok(None) => Ok(1),
+        };
     }
     let reaped = match owner.reap().await {
         Ok(status) => status,
         Err(error) => {
             return match primary {
                 Ok(Some(code)) => Ok(code),
+                Err(primary) => Err(primary),
                 _ => Err(error.into()),
             };
         }

@@ -1315,6 +1315,49 @@ retaining bounded diagnostics and informational memory trends. It is not part of
 default CI or a substitute for physical-device checks. See
 [configuration and evidence limits](../web/e2e/README.md#repeated-session-lifecycle-check).
 
+### Session soak with a database interruption
+
+The scheduled performance job uses `cargo run --locked -q -p xtask -- ci
+session-soak` for the fixed full twenty-minute profile. The workflow passes its
+PostgreSQL service ID, network and published port through the documented
+[Actions job context](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#job-context).
+The supervisor binds the fixed disposable database URLs to port 5432, pins the
+local Unix Docker transport and rechecks the observed opaque daemon identity,
+immutable image, full container ID, service network and published port before
+mutation. Daemon ID equality is an observation, not authentication or a global
+uniqueness proof. Ordinary host and mismatched-database contexts are refused.
+
+One captured environment and registered signal owner pass directly through
+the existing server harness, workload and Docker helpers. No nested Cargo,
+background restarter or detached task owns cancellation. The 600-second delay
+begins at supervisor entry; eight seconds begin only after a positively stopped
+inspection. The same service must subsequently be observed running and healthy.
+Failed or interrupted stop attempts receive bounded restoration attempts,
+including polling transitional/starting states, before server cleanup. An
+observed healthy state after an uncertain engine request does not prove that
+no delayed daemon action can occur. The runner still owns service disposal.
+
+The active fallback watchdog is 37 minutes beneath the unchanged 40-minute step;
+the first workload-terminal observation must precede it. Cleanup may use the
+reserve: restoration is scheduled against a 90-second deadline ending 40 seconds
+before the entry-relative step boundary. Each 5-second inspection or 20-second
+stop/start body is capped by remaining time minus 14 seconds for CLI settlement.
+Workload/server retirement receive separate scheduling allowances. Calls that
+cannot fit are refused, and uncertain restoration or cleanup cannot pass. The
+last step-relative deadline and pending signals are checked after harness
+cleanup. These allowances do not bound OS/filesystem stalls, cold compilation
+or external job cancellation; hosted runtime remains unmeasured.
+
+The fixed JSON supervision projection goes to command output after harness
+cleanup. It contains only observed booleans and the harness status, and is not
+a durable receipt or runner-disposal proof. `dockerCliGroupsSettled` covers
+Docker helper groups; the overall status separately gates harness cleanup. It contains no container
+ID, daemon identity, database URL or child output. Existing browser and server
+artifacts retain their original locations. Known nonzero outcomes survive
+restoration failures; success requires the scheduled outage, positive observed
+restoration and successful CLI/harness settlement. Inert child and fake
+clock/engine tests do not establish real soak or container behavior.
+
 ## Manual release checklist
 
 ### Real-browser targets
