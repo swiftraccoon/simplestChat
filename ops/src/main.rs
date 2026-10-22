@@ -3,7 +3,7 @@
 
 mod receipt_cli;
 
-use simplestchat_ops::release::manifest::Manifest;
+use simplestchat_ops::release::{archive::verify_archive, manifest::Manifest};
 use std::ffi::OsString;
 use std::io::Write;
 use std::path::Path;
@@ -11,6 +11,7 @@ use std::process::ExitCode;
 
 const USAGE: &str = concat!(
     "Usage: simplestchat-ops release manifest --path PATH\n",
+    "       simplestchat-ops release archive --manifest PATH --path PATH\n",
     "       simplestchat-ops release receipt --envelope PATH --receipt PATH",
 );
 
@@ -44,6 +45,17 @@ fn main() -> ExitCode {
             receipt_cli::inspect(Path::new(&args[3]), Path::new(&args[5])),
             "invalid_release_receipt",
         )
+    } else if args.len() == 6
+        && args[0] == "release"
+        && args[1] == "archive"
+        && args[2] == "--manifest"
+        && args[4] == "--path"
+    {
+        let result = Manifest::read(Path::new(&args[3]))
+            .map_err(|_| ())
+            .and_then(|manifest| verify_archive(Path::new(&args[5]), &manifest).map_err(|_| ()))
+            .and_then(|archive| serde_json::to_value(archive.identity()).map_err(|_| ()));
+        (result, "invalid_release_archive")
     } else {
         eprintln!("{USAGE}");
         return ExitCode::from(2);
@@ -54,6 +66,9 @@ fn main() -> ExitCode {
             let bytes = match failure {
                 "invalid_release_receipt" => {
                     b"{\"passed\":false,\"failure\":\"invalid_release_receipt\"}\n".as_slice()
+                }
+                "invalid_release_archive" => {
+                    b"{\"passed\":false,\"failure\":\"invalid_release_archive\"}\n".as_slice()
                 }
                 _ => b"{\"passed\":false,\"failure\":\"invalid_release_manifest\"}\n".as_slice(),
             };

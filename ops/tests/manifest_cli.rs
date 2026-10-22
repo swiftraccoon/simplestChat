@@ -106,7 +106,12 @@ fn usage_and_help_never_read_a_manifest_or_start_another_command() {
         assert!(output.stdout.is_empty());
         assert_eq!(
             output.stderr,
-            b"Usage: simplestchat-ops release manifest --path PATH\n       simplestchat-ops release receipt --envelope PATH --receipt PATH\n"
+            concat!(
+                "Usage: simplestchat-ops release manifest --path PATH\n",
+                "       simplestchat-ops release archive --manifest PATH --path PATH\n",
+                "       simplestchat-ops release receipt --envelope PATH --receipt PATH\n",
+            )
+            .as_bytes()
         );
     }
     let output = cli(&["--help".as_ref()]);

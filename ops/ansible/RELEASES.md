@@ -33,6 +33,22 @@ signature and cannot authorize deployment. It starts no host operation. The
 Python release commands below remain the supported runtime. No operations
 binary is installed on the host or included in the production image yet.
 
+The same tool can inspect the original uncompressed image archive against that
+validated manifest without extracting, loading or running it:
+
+```sh
+cargo run --locked -q -p simplestchat-ops -- release archive \
+  --manifest /path/to/release.json --path /path/to/image.tar
+```
+
+Its fixed diagnostic projection includes the original archive SHA-256 and byte
+count, config SHA-256, revision, tag and platform. It omits the image config,
+which may contain private environment values. This checks transfer integrity
+and the existing Docker/OCI metadata policy; it does not authenticate signatures,
+validate filesystem-layer contents independently or authorize deployment. The
+[archive domain and resource limits](../README.md#offline-image-archives) are
+explicit. Python remains the supported release runtime.
+
 ## Browser assets across replacement and rollback
 
 The managed proxy serves the selected app first. If that app returns 404 for an

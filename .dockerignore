@@ -35,6 +35,9 @@ ops/src/**
 !ops/src/release/
 ops/src/release/**
 !ops/src/release/*.rs
+!ops/src/release/archive/
+ops/src/release/archive/**
+!ops/src/release/archive/*.rs
 !ops/ansible/
 ops/ansible/**
 !ops/ansible/files/

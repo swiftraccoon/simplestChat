@@ -246,7 +246,7 @@ test('context excludes local-only descendants while retaining production inputs'
   for (const filename of [
     '.env', 'CLAUDE.md', 'results/local/report.json',
     'ops/private.env', 'ops/src/private.env', 'ops/src/release/private.env',
-    'ops/tests/private.env', 'ops/README.md',
+    'ops/tests/private.env', 'ops/src/release/archive/private.env', 'ops/README.md',
     'build/CLAUDE.md', 'build/private.env', 'src/CLAUDE.md', 'src/auth/private.env',
     'security/private.env', 'security/notes.json', 'security/runtime/private.env',
     'src/media/CLAUDE.md', 'src/room/notes.md', 'src/room/manager/notes.md', 'src/room/social/notes.md',
@@ -295,6 +295,7 @@ test('ops workspace inputs remain narrow and no ops binary enters the production
   assert.deepEqual(opsRules.toSorted(), [
     '!ops/', 'ops/**', '!ops/Cargo.toml', '!ops/src/', 'ops/src/**', '!ops/src/*.rs',
     '!ops/src/release/', 'ops/src/release/**', '!ops/src/release/*.rs',
+    '!ops/src/release/archive/', 'ops/src/release/archive/**', '!ops/src/release/archive/*.rs',
     '!ops/ansible/', 'ops/ansible/**', '!ops/ansible/files/', 'ops/ansible/files/**',
     '!ops/ansible/files/bounded_process.py', '!ops/ansible/files/release_json.py',
   ].toSorted());

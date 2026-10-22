@@ -80,3 +80,58 @@ fn ancestor_replacement_is_detected_without_reading_outside_the_retained_directo
         b"private"
     );
 }
+
+#[test]
+fn streaming_snapshots_recheck_every_phase_and_report_close_failures() {
+    use std::io::{Read, Seek};
+    let root = Fixture::new();
+    let path = root.0.join("archive.tar");
+    fs::write(&path, b"original").unwrap();
+    let mut snapshot = Snapshot::open(&path, 8).unwrap();
+    assert_eq!(snapshot.length(), 8);
+    let mut bytes = [0; 8];
+    snapshot.file_mut().read_exact(&mut bytes).unwrap();
+    snapshot.verify().unwrap();
+    snapshot.file_mut().rewind().unwrap();
+    snapshot.file_mut().read_exact(&mut bytes).unwrap();
+    assert_eq!(&bytes, b"original");
+    let expected_closes = snapshot.directories.len() + 1;
+    let mut closed = 0;
+    let result = snapshot.finish_with(|file| {
+        nix::unistd::close(file).unwrap();
+        closed += 1;
+        if closed == 1 {
+            Err(Error::Input)
+        } else {
+            Ok(())
+        }
+    });
+    assert_eq!(result, Err(Error::Input));
+    assert_eq!(
+        closed, expected_closes,
+        "close failure must not skip retained directories"
+    );
+    let snapshot = Snapshot::open(&path, 8).unwrap();
+    fs::write(&path, b"MUTATION").unwrap();
+    assert_eq!(snapshot.verify(), Err(Error::Changed));
+    assert_eq!(snapshot.finish(), Err(Error::Changed));
+}
+
+#[test]
+fn checked_stream_never_returns_bytes_or_seeks_after_a_retained_stamp_changes() {
+    use std::io::{Read, Seek, SeekFrom};
+    let root = Fixture::new();
+    let path = root.0.join("archive.tar");
+    fs::write(&path, b"original").unwrap();
+    let mut snapshot = Snapshot::open(&path, 8).unwrap();
+    let mut reader = snapshot.checked_stream();
+    let mut byte = [0];
+    reader.read_exact(&mut byte).unwrap();
+    assert_eq!(byte, [b'o']);
+    fs::write(&path, b"MUTATION").unwrap();
+    let mut untouched = [0xff];
+    assert!(reader.read(&mut untouched).is_err());
+    assert_eq!(untouched, [0xff]);
+    assert!(reader.seek(SeekFrom::Start(0)).is_err());
+    assert_eq!(snapshot.verify(), Err(Error::Changed));
+}

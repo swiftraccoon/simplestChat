@@ -446,3 +446,28 @@ removes a failed manifest only while its name still identifies the owned inode.
 Owned race fixtures cover directory replacement and extracted-file mutation
 during the final archive digest. These snapshots do not lock out subsequent
 writes by another process running as the same filesystem owner.
+
+### Offline release archive reader (2026-10-21)
+
+The operations crate reuses the exact `tar` 0.4.46 dependency with default
+features disabled for read-only Docker/OCI validation. It never extracts or
+loads an image. The original archive is limited to 8 GiB and hashed before
+metadata interpretation. Retained directory/file descriptors bind the read to
+its initial identity; checks before and after reads and seeks refuse changes
+between the raw admission pass and the normal mature-reader pass. Successful
+validation includes final binding checks and explicit descriptor closes.
+
+Admission limits are 100,000 logical members, 200,000 physical headers, 8 KiB
+per local extension/name, 16 MiB of aggregate names and 1 MiB per JSON member.
+One local PAX or GNU long-name extension is supported before a member. Global
+PAX, sparse entries, links, ambiguous or combined extensions, duplicate PAX
+keys and PAX size redirection are refused. These are explicit supported-domain
+limits; they do not claim every archive accepted by Python's tarfile reader.
+
+Docker/OCI metadata policy retains the Python reference, including field types,
+validation order, selected config and ordered layer identities. Whole-transfer
+hashing does not add independent layer-payload digest checks. Diagnostics expose
+only fixed identity fields; config bytes can contain private environment values
+and remain outside serialization and Debug output. Tests use owned tiny archives,
+Python oracles and mutation fixtures, with no engine or real image. No new
+dependency version, advisory waiver or license exception is added.
