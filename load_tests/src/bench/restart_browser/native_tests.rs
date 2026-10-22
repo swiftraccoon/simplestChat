@@ -250,6 +250,19 @@ async fn actual_node_phase_and_fd0_drive_both_owned_guest_lifetimes_to_zero() {
     assert_eq!(report["phase"], "complete");
     assert_eq!(report["draftPreserved"], true);
     assert_eq!(
+        report["navigationCountsBeforeRestart"],
+        serde_json::json!([1, 1])
+    );
+    for index in 0..2 {
+        assert_eq!(report["recoveryPages"][index]["navigations"], 1);
+        assert_eq!(report["pages"][index]["navigations"], 2);
+        assert_eq!(
+            report["recoveryPages"][index]["received"]["serverRestarting"],
+            1
+        );
+        assert_eq!(report["pages"][index]["received"]["serverRestarting"], 2);
+    }
+    assert_eq!(
         report["messageDelivery"],
         serde_json::json!({"before":true,"after":true})
     );

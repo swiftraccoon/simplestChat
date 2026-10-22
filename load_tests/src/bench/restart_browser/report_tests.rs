@@ -17,6 +17,7 @@ fn complete() -> Value {
             "forceKillRequested":false,"exitStatusObserved":true,
             "exitCode":0,"signalCode":null}],
         "observation":{"browser":"chromium","phase":"complete","pages":[page,page],
+            "recoveryPages":[page,page],
             "captureCalls":[{"user":0,"display":0},{"user":0,"display":0}],
             "pageErrors":0,"blockedExternalRequests":0,"browserVersion":"inert-browser-1",
             "rejoinMilliseconds":100,"draftPreserved":true,
@@ -54,6 +55,7 @@ fn every_selected_object_requires_its_fields_and_refuses_unknown_fields() {
         "/records/0",
         "/observation",
         "/observation/pages/0",
+        "/observation/recoveryPages/0",
         "/observation/captureCalls/0",
         "/observation/messageDelivery",
     ] {
@@ -121,6 +123,7 @@ fn complete_phase_needs_observed_timing_version_draft_delivery_and_navigation() 
         "draftPreserved",
         "messageDelivery",
         "navigationCountsBeforeRestart",
+        "recoveryPages",
     ] {
         let mut value = complete();
         value["observation"][key] = Value::Null;
@@ -129,10 +132,14 @@ fn complete_phase_needs_observed_timing_version_draft_delivery_and_navigation() 
     for (pointer, replacement) in [
         ("/observation/phase", json!("after_restart")),
         ("/observation/pages/0/received/roomJoined", json!(1)),
-        ("/observation/pages/0/received/serverRestarting", json!(0)),
+        (
+            "/observation/recoveryPages/0/received/serverRestarting",
+            json!(0),
+        ),
+        ("/observation/recoveryPages/0/received/roomJoined", json!(1)),
         ("/observation/pages/0/received/roomClosed", json!(1)),
         ("/observation/pages/0/malformedFrames", json!(1)),
-        ("/observation/pages/0/navigations", json!(2)),
+        ("/observation/recoveryPages/0/navigations", json!(0)),
         ("/observation/pageErrors", json!(1)),
         ("/observation/blockedExternalRequests", json!(1)),
         ("/observation/captureCalls/0/user", json!(1)),
@@ -159,6 +166,7 @@ fn identities_bounds_and_counter_names_are_checked_before_success() {
         ("/cancelled", json!(1)),
         ("/browserCount", json!(0)),
         ("/observation/pages/0/sockets", json!(SAFE + 1)),
+        ("/observation/recoveryPages/0/sockets", json!(SAFE + 1)),
         ("/observation/captureCalls/0/user", json!(SAFE + 1)),
         ("/observation/rejoinMilliseconds", json!(SAFE + 1)),
         ("/observation/browserVersion", json!("x".repeat(257))),
@@ -175,16 +183,85 @@ fn identities_bounds_and_counter_names_are_checked_before_success() {
         assert!(read(&value).is_err());
     }
     let mut value = complete();
-    let map = value["observation"]["pages"][0]["sent"]
-        .as_object_mut()
-        .unwrap();
-    map.clear();
-    for length in 1..=64 {
-        map.insert("a".repeat(length), 0.into());
+    for pages in ["pages", "recoveryPages"] {
+        let map = value["observation"][pages][0]["sent"]
+            .as_object_mut()
+            .unwrap();
+        map.clear();
+        for length in 1..=64 {
+            map.insert("a".repeat(length), 0.into());
+        }
     }
     assert!(read(&value).unwrap().passed());
     value["observation"]["pages"][0]["sent"]["other"] = 0.into();
     assert!(read(&value).is_err());
+}
+
+#[test]
+fn final_leave_and_shutdown_counters_do_not_replace_the_recovery_assertion_boundary() {
+    let mut value = complete();
+    for index in 0..2 {
+        value["observation"]["pages"][index]["navigations"] = 2.into();
+        value["observation"]["pages"][index]["received"]["serverRestarting"] = 2.into();
+        value["observation"]["pages"][index]["sent"]["afterRecovery"] = 1.into();
+    }
+    let receipt = read(&value).unwrap();
+    assert!(receipt.passed());
+    let retained = receipt.observation();
+    assert_eq!(retained["recoveryPages"][0]["navigations"], 1);
+    assert_eq!(retained["pages"][0]["navigations"], 2);
+    assert_eq!(
+        retained["recoveryPages"][0]["received"]["serverRestarting"],
+        1
+    );
+    assert_eq!(retained["pages"][0]["received"]["serverRestarting"], 2);
+    for key in ["roomJoined", "serverRestarting"] {
+        let mut bad = value.clone();
+        bad["observation"]["recoveryPages"][0]["received"][key] = 0.into();
+        cannot_pass(&bad);
+    }
+    let mut final_join = value;
+    final_join["observation"]["pages"][0]["received"]["roomJoined"] = 3.into();
+    cannot_pass(&final_join);
+}
+
+#[test]
+fn checkpoint_shape_and_final_counter_consistency_are_mandatory() {
+    for checkpoint in [Value::Null, json!([]), json!({}), json!(true)] {
+        let mut value = complete();
+        value["observation"]["recoveryPages"] = checkpoint;
+        cannot_pass(&value);
+    }
+    let mut missing = complete();
+    missing["observation"]
+        .as_object_mut()
+        .unwrap()
+        .remove("recoveryPages");
+    assert!(read(&missing).is_err());
+    for (field, lower) in [
+        ("sockets", json!(1)),
+        ("navigations", json!(0)),
+        ("received/roomJoined", json!(1)),
+        ("received/serverRestarting", json!(0)),
+        ("sent/joinRoom", json!(1)),
+    ] {
+        let mut value = complete();
+        *value
+            .pointer_mut(&format!("/observation/pages/0/{field}"))
+            .unwrap() = lower;
+        assert!(read(&value).is_err(), "Final counter decreased: {field}");
+    }
+    for field in ["roomClosed", "malformedFrames"] {
+        let mut value = complete();
+        if field == "roomClosed" {
+            value["observation"]["recoveryPages"][0]["received"][field] = 1.into();
+            value["observation"]["pages"][0]["received"][field] = 1.into();
+        } else {
+            value["observation"]["recoveryPages"][0][field] = 1.into();
+            value["observation"]["pages"][0][field] = 1.into();
+        }
+        cannot_pass(&value);
+    }
 }
 
 #[test]

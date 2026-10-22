@@ -56,6 +56,23 @@ struct Page {
     sent: Counts,
     malformed_frames: u64,
 }
+impl Page {
+    fn extends(&self, previous: &Self) -> bool {
+        self.sockets >= previous.sockets
+            && self.navigations >= previous.navigations
+            && self.malformed_frames >= previous.malformed_frames
+            && previous
+                .received
+                .0
+                .iter()
+                .all(|(key, count)| self.received.0.get(key).is_some_and(|v| v >= count))
+            && previous
+                .sent
+                .0
+                .iter()
+                .all(|(key, count)| self.sent.0.get(key).is_some_and(|v| v >= count))
+    }
+}
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct Capture {
@@ -74,6 +91,8 @@ struct Observation {
     browser: String,
     phase: String,
     pages: Vec<Page>,
+    #[serde(deserialize_with = "present")]
+    recovery_pages: Option<Vec<Page>>,
     capture_calls: Vec<Capture>,
     page_errors: u64,
     blocked_external_requests: u64,
@@ -133,6 +152,14 @@ impl Receipt {
                 && usize::from(value.browser_count) == value.records.len()
                 && value.cancelled.is_none_or(|v| matches!(v, 130 | 143))
                 && o.pages.len() <= 2
+                && o.recovery_pages.as_ref().is_none_or(|pages| {
+                    pages.len() == 2
+                        && o.pages.len() == 2
+                        && o.pages
+                            .iter()
+                            .zip(pages)
+                            .all(|(after, before)| after.extends(before))
+                })
                 && o.capture_calls.len() <= 2
                 && matches!(
                     o.phase.as_str(),
@@ -147,9 +174,12 @@ impl Receipt {
                 && o.navigation_counts_before_restart
                     .as_ref()
                     .is_none_or(|v| v.len() == 2 && v.iter().all(|n| *n <= SAFE))
-                && o.pages.iter().all(|p| p.sockets <= SAFE
-                    && p.navigations <= SAFE
-                    && p.malformed_frames <= SAFE)
+                && o.pages
+                    .iter()
+                    .chain(o.recovery_pages.iter().flatten())
+                    .all(|p| {
+                        p.sockets <= SAFE && p.navigations <= SAFE && p.malformed_frames <= SAFE
+                    })
                 && o.capture_calls
                     .iter()
                     .all(|p| p.user <= SAFE && p.display <= SAFE)
@@ -177,7 +207,6 @@ impl Receipt {
             && o.capture_calls.len() == 2
             && o.pages.iter().all(|p| {
                 p.received.0.get("roomJoined") == Some(&2)
-                    && p.received.0.get("serverRestarting") == Some(&1)
                     && p.received.0.get("roomClosed").copied().unwrap_or(0) == 0
                     && p.malformed_frames == 0
             })
@@ -192,14 +221,22 @@ impl Receipt {
             && o.message_delivery
                 .as_ref()
                 .is_some_and(|v| v.before && v.after)
-            && o.navigation_counts_before_restart
-                .as_ref()
-                .is_some_and(|before| {
-                    o.pages
-                        .iter()
-                        .map(|p| p.navigations)
-                        .eq(before.iter().copied())
-                })
+            && o.recovery_pages.as_ref().is_some_and(|pages| {
+                pages.iter().all(|p| {
+                    p.received.0.get("roomJoined") == Some(&2)
+                        && p.received.0.get("serverRestarting") == Some(&1)
+                        && p.received.0.get("roomClosed").copied().unwrap_or(0) == 0
+                        && p.malformed_frames == 0
+                }) && o
+                    .navigation_counts_before_restart
+                    .as_ref()
+                    .is_some_and(|before| {
+                        pages
+                            .iter()
+                            .map(|p| p.navigations)
+                            .eq(before.iter().copied())
+                    })
+            })
     }
     pub fn browser_cleanup(&self) -> bool {
         self.browser_cleanup_passed

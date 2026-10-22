@@ -454,7 +454,7 @@ pub(super) async fn execute(cfg: Config, s: &Services<'_>) -> Result<Outcome> {
         fail(&mut primary, 1);
     }
     let mut report = receipt.as_ref().map(Receipt::observation).unwrap_or(json!({
-        "browser":cfg.browser,"phase":"setup","pages":[],"captureCalls":[],
+        "browser":cfg.browser,"phase":"setup","pages":[],"recoveryPages":null,"captureCalls":[],
         "pageErrors":0,"blockedExternalRequests":0,"browserVersion":null,
         "rejoinMilliseconds":null,"draftPreserved":null,"messageDelivery":null,
         "navigationCountsBeforeRestart":null}));

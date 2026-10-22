@@ -113,7 +113,10 @@ function fixture(options = {}) {
             socket.send({ type: 'joinRoom' });
             if (!options.noInitialJoin) socket.receive({ type: 'roomJoined' });
             if (options.malformed) socket.emit('framereceived', { payload: 'PRIVATE_INVALID' });
-          } else assert.equal(selector, '#leave-btn');
+          } else {
+            assert.equal(selector, '#leave-btn');
+            if (options.advanceFinalCounters) page.emit('framenavigated', page.frame);
+          }
         },
         async waitFor(value) {
           assert.ok(['#room-screen', '#join-screen'].includes(selector));
@@ -215,6 +218,11 @@ function fixture(options = {}) {
             );
         }
       }
+      if (phase === 'stop-second' && options.advanceFinalCounters)
+        for (const page of state.pages) {
+          page.socket.receive({ type: 'serverRestarting' });
+          page.socket.send({ type: 'afterRecovery' });
+        }
     },
     cancel(code) {
       state.cancellations.push(code);
@@ -283,6 +291,7 @@ test('the complete fixed browser journey preserves every assertion and three-tra
     assert.equal(result.receipt.observation.draftPreserved, true);
     assert.deepEqual(result.receipt.observation.messageDelivery, { before: true, after: true });
     assert.deepEqual(result.receipt.observation.navigationCountsBeforeRestart, [1, 1]);
+    assert.deepEqual(result.receipt.observation.recoveryPages, result.receipt.observation.pages);
     assert.deepEqual(
       result.receipt.observation.pages.map((page) => page.received),
       [
@@ -315,6 +324,38 @@ test('the complete fixed browser journey preserves every assertion and three-tra
       user: 4,
       display: 1,
     });
+  }
+});
+
+test('the immutable recovery checkpoint precedes leave navigation and final shutdown events', async () => {
+  const f = fixture({ advanceFinalCounters: true });
+  const result = await f.run();
+  assert.equal(result.status, 0);
+  assert.equal(result.receipt.phasePassed, true);
+  assert.equal(result.receipt.browserCleanupPassed, true);
+  const { pages, recoveryPages, navigationCountsBeforeRestart } = result.receipt.observation;
+  assert.deepEqual(navigationCountsBeforeRestart, [1, 1]);
+  assert.deepEqual(
+    recoveryPages.map((page) => page.navigations),
+    [1, 1],
+  );
+  assert.deepEqual(
+    pages.map((page) => page.navigations),
+    [2, 2],
+  );
+  for (let index = 0; index < 2; index++) {
+    assert.equal(recoveryPages[index].received.roomJoined, 2);
+    assert.equal(recoveryPages[index].received.serverRestarting, 1);
+    assert.equal(pages[index].received.serverRestarting, 2);
+    assert.equal(recoveryPages[index].sent.afterRecovery, undefined);
+    assert.equal(pages[index].sent.afterRecovery, 1);
+    assert.notEqual(recoveryPages[index], pages[index]);
+    assert.notEqual(recoveryPages[index].received, pages[index].received);
+    assert.notEqual(recoveryPages[index].sent, pages[index].sent);
+    pages[index].received.roomJoined = 99;
+    pages[index].sent.joinRoom = 99;
+    assert.equal(recoveryPages[index].received.roomJoined, 2);
+    assert.equal(recoveryPages[index].sent.joinRoom, 1);
   }
 });
 

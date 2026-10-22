@@ -65,7 +65,10 @@ class Page extends EventEmitter {
       },
       click: async () => {
         if (selector === "#join-btn") connect(this);
-        else assert.equal(selector, "#leave-btn");
+        else {
+          assert.equal(selector, "#leave-btn");
+          this.emit("framenavigated", this.frame);
+        }
       },
       waitFor: async (options) => {
         assert.ok(["#room-screen", "#join-screen"].includes(selector));
@@ -145,6 +148,8 @@ const control = {
     if (name === "stop-first")
       for (const page of pages) page.wire.receive("serverRestarting");
     if (name === "start-second") for (const page of pages) connect(page);
+    if (name === "stop-second")
+      for (const page of pages) page.wire.receive("serverRestarting");
     if (name === "stop-second" && mode === "extra")
       await new Promise((resolve, reject) => {
         socket.write("x\n", (error) => (error ? reject(error) : resolve()));

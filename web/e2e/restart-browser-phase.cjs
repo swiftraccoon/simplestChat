@@ -95,6 +95,7 @@ async function run({
     browser: config.browser,
     phase: 'setup',
     pages: [],
+    recoveryPages: null,
     captureCalls: [],
     pageErrors: 0,
     blockedExternalRequests: 0,
@@ -325,6 +326,9 @@ async function run({
       observation.pages.map((page) => page.navigations),
       navigationCounts,
     );
+    // Leave navigation and the second server's shutdown keep updating the live
+    // counters. Retain the exact recovery assertion boundary independently.
+    observation.recoveryPages = structuredClone(observation.pages);
     assert.equal(await cross(() => pages[0].locator('#chat-input').inputValue()), draft);
     observation.draftPreserved = true;
     observation.phase = 'after_restart';

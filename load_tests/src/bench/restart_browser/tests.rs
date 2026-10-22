@@ -89,6 +89,38 @@ async fn complete_three_phase_owner_preserves_identity_environment_and_artifacts
         );
     }
 }
+
+#[tokio::test]
+async fn recovery_checkpoint_controls_the_verdict_while_final_counters_remain_observations() {
+    for (option, expected) in [
+        ("advanceFinalCounters", 0),
+        ("invalidRecoveryPages", 1),
+        ("missingRecoveryPages", 1),
+    ] {
+        let mut fixture = Fixture::new(json!({option:true}));
+        let result = fixture.run().await.unwrap();
+        assert_eq!(result.code, expected, "{option}");
+        assert_eq!(fixture.state.sequence.load(Ordering::SeqCst), 3);
+        assert!(fixture.state.control_closed.load(Ordering::SeqCst));
+        if expected == 0 {
+            assert_eq!(result.report["recoveryPages"][0]["navigations"], 1);
+            assert_eq!(result.report["pages"][0]["navigations"], 2);
+            assert_eq!(
+                result.report["recoveryPages"][0]["received"]["serverRestarting"],
+                1
+            );
+            assert_eq!(result.report["pages"][0]["received"]["serverRestarting"], 2);
+        }
+        let trace = fixture.state.trace.lock().unwrap();
+        for owner in 0..3 {
+            assert!(
+                trace
+                    .iter()
+                    .any(|event| event == &format!("stop_end_{owner}"))
+            );
+        }
+    }
+}
 #[tokio::test]
 async fn unknown_cleanup_streams_receipt_and_endpoint_never_supply_success() {
     for option in [

@@ -440,7 +440,7 @@ impl Child for FakeChild {
 fn browser(options: &Value) -> (Value, u8, bool, bool) {
     let flag = |key: &str| options[key] == true;
     let mut observation = json!({"browser":options["browser"].as_str().unwrap_or("chromium"),
-        "phase":"complete","pages":[],"captureCalls":[],"pageErrors":0,
+        "phase":"complete","pages":[],"recoveryPages":null,"captureCalls":[],"pageErrors":0,
         "blockedExternalRequests":0,"browserVersion":"inert-browser-1",
         "rejoinMilliseconds":0,"draftPreserved":true,"messageDelivery":{"before":true,"after":true},
         "navigationCountsBeforeRestart":[1,1]});
@@ -514,6 +514,22 @@ fn browser(options: &Value) -> (Value, u8, bool, bool) {
             "navigations":if flag("navigateOnRestart"){2}else{1},"received":received,"sent":sent,
             "malformedFrames":u8::from(flag("malformed"))}),
         );
+    }
+    if rejoined && !flag("navigateOnRestart") {
+        observation["recoveryPages"] = pages.clone().into();
+    }
+    if flag("advanceFinalCounters") {
+        for page in &mut pages {
+            page["navigations"] = (page["navigations"].as_u64().unwrap() + 1).into();
+            page["received"]["serverRestarting"] = 2.into();
+            page["sent"]["afterRecovery"] = 1.into();
+        }
+    }
+    if flag("invalidRecoveryPages") {
+        observation["recoveryPages"][0]["received"]["serverRestarting"] = 0.into();
+    }
+    if flag("missingRecoveryPages") {
+        observation.as_object_mut().unwrap().remove("recoveryPages");
     }
     observation["pages"] = pages.into();
     observation["pageErrors"] = u8::from(flag("pageError") || flag("lateCleanupPageError")).into();
