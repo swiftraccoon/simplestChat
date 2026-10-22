@@ -19,6 +19,10 @@ use std::{ffi::OsString, process::ExitCode};
 const USAGE: &str =
     "Usage: load_test bench impaired --output DIR [--server-bin BIN] [--generator BIN]";
 
+pub(super) fn run_browser_tcp(arguments: &[OsString]) -> ExitCode {
+    browser::run_tcp(arguments)
+}
+
 pub(super) fn run_browser_adaptive(arguments: &[OsString]) -> ExitCode {
     browser::run_adaptive(arguments)
 }

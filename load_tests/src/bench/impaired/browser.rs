@@ -1,5 +1,11 @@
 //! A guest-only server and one Node journey, with an optional live Linux phase lease.
 
+#[cfg(test)]
+#[path = "browser_tcp_tests.rs"]
+mod tcp_tests;
+#[path = "udp_block.rs"]
+mod udp;
+
 #[path = "adaptive_control.rs"]
 mod adaptive;
 #[cfg(test)]
@@ -227,7 +233,7 @@ fn spawn(
         stderr,
         cleanup: false,
     };
-    let (child, control) = if node && plan.mode.adaptive() {
+    let (child, control) = if node && plan.mode.controlled() {
         let (child, channel) = services.host.spawn_controlled(command)?;
         (child, Some(channel))
     } else {
@@ -259,14 +265,26 @@ async fn ready(services: &Services<'_>, server: &mut Owned) -> Result<()> {
     }
 }
 
+struct PhaseOwners<'a> {
+    session: Option<&'a mut adaptive::Session>,
+    lease: Option<&'a mut Lease>,
+    udp: Option<&'a mut udp::Lease>,
+    output: &'a Output,
+}
+
 async fn journey(
     plan: &Plan,
     services: &Services<'_>,
     server: &mut Owned,
     node: &mut Owned,
-    mut session: Option<&mut adaptive::Session>,
-    mut lease: Option<&mut Lease>,
+    phases: PhaseOwners<'_>,
 ) -> Result<()> {
+    let PhaseOwners {
+        mut session,
+        mut lease,
+        mut udp,
+        output,
+    } = phases;
     let limit = services.clock.elapsed_ms() + NODE_BUDGET.as_secs_f64() * 1000.0;
     loop {
         check(services.host).await?;
@@ -301,23 +319,40 @@ async fn journey(
                     tc: &tools.tc,
                     sudo: &tools.sudo,
                 };
-                let services = adaptive::services(services);
-                let lease = lease.as_deref_mut().unwrap();
-                // Once a mutation is admitted, await all its owned commands.
-                // Outer signal reception updates Host; it never drops this future.
-                let operation: Result<()> = async {
-                    lease.clear_kernel(&kernel, &services, limit).await?;
-                    if matches!(request.phase.as_str(), "baseline" | "recovery" | "finish") {
-                        lease.clean(&kernel, &services, false, limit).await
-                    } else {
-                        let profile = adaptive::profile(&request.phase)?;
-                        lease
-                            .apply_profile(&kernel, &profile, &services, limit)
-                            .await
+                // Admitted operations settle all CLI groups before any reply.
+                // The same live owner remains authoritative through Node retirement.
+                let operation: Result<()> = if let Some(udp) = udp.as_deref_mut() {
+                    match request.phase.as_str() {
+                        "block" => udp.install(plan, services, output, limit).await,
+                        "unblock" => udp.clear(plan, services, limit).await,
+                        "baseline" | "finish" => {
+                            let clean = lease
+                                .as_deref_mut()
+                                .unwrap()
+                                .clean(&kernel, &adaptive::services(services), false, limit)
+                                .await;
+                            let held = udp.held(plan, services, limit).await;
+                            clean.and(held)
+                        }
+                        _ => Err(anyhow::anyhow!("Invalid TCP phase")),
                     }
-                }
-                .await;
-                let status = operation.as_ref().err().map_or(0, controller::exit_code);
+                } else {
+                    let services = adaptive::services(services);
+                    let lease = lease.as_deref_mut().unwrap();
+                    async {
+                        lease.clear_kernel(&kernel, &services, limit).await?;
+                        if matches!(request.phase.as_str(), "baseline" | "recovery" | "finish") {
+                            lease.clean(&kernel, &services, false, limit).await
+                        } else {
+                            let profile = adaptive::profile(&request.phase)?;
+                            lease
+                                .apply_profile(&kernel, &profile, &services, limit)
+                                .await
+                        }
+                    }
+                    .await
+                };
+                let status = operation.as_ref().err().map_or(0, code);
                 let replied = session.reply(plan, status).await;
                 operation?;
                 replied?;
@@ -376,7 +411,7 @@ async fn execute_inner(plan: &Plan, services: &Services<'_>, output: &Output) ->
     let mut uncertain = false;
     let mut session = None;
     let kernel_services = adaptive::services(services);
-    let mut lease = if plan.mode.adaptive() {
+    let mut lease = if plan.mode.controlled() {
         Some(Lease::with_limit(&kernel_services, 64)?)
     } else {
         None
@@ -387,7 +422,20 @@ async fn execute_inner(plan: &Plan, services: &Services<'_>, output: &Output) ->
         tc: &tools.tc,
         sudo: &tools.sudo,
     });
+    let mut udp = if plan.mode.tcp() {
+        Some(udp::Lease::new(plan, services)?)
+    } else {
+        None
+    };
     let body: Result<()> = async {
+        if let Some(udp) = &mut udp {
+            udp.prepare(
+                plan,
+                services,
+                (plan.mode.budget() - plan.mode.reserve()).as_secs_f64() * 1000.0,
+            )
+            .await?;
+        }
         if let Some(lease) = &mut lease {
             lease
                 .clean(
@@ -403,15 +451,23 @@ async fn execute_inner(plan: &Plan, services: &Services<'_>, output: &Output) ->
         check(services.host).await?;
         node = Some(spawn(plan, services, output, true, &mut uncertain)?);
         if let Some(channel) = node.as_mut().unwrap().control.take() {
-            session = Some(adaptive::Session::new(channel));
+            session = Some(if plan.mode.tcp() {
+                adaptive::Session::tcp(channel)
+            } else {
+                adaptive::Session::new(channel)
+            });
         }
         journey(
             plan,
             services,
             server.as_mut().unwrap(),
             node.as_mut().unwrap(),
-            session.as_mut(),
-            lease.as_mut(),
+            PhaseOwners {
+                session: session.as_mut(),
+                lease: lease.as_mut(),
+                udp: udp.as_mut(),
+                output,
+            },
         )
         .await
     }
@@ -439,7 +495,7 @@ async fn execute_inner(plan: &Plan, services: &Services<'_>, output: &Output) ->
             }
         }
     } else {
-        !plan.mode.adaptive()
+        !plan.mode.controlled()
     };
     if !control_passed {
         fail(&mut primary, 1);
@@ -452,15 +508,32 @@ async fn execute_inner(plan: &Plan, services: &Services<'_>, output: &Output) ->
         fail(&mut primary, code(&error));
     }
     let mut kernel_closed = true;
+    if let Some(udp) = &mut udp {
+        let deadline = plan.mode.budget().as_secs_f64() * 1000.0;
+        for result in [
+            udp.clear(plan, services, deadline).await,
+            udp.absent(plan, services, deadline).await,
+        ] {
+            if let Err(error) = result {
+                kernel_closed = false;
+                fail(&mut primary, code(&error));
+            }
+        }
+        process_closed &= udp.process_cleanup_passed;
+    }
     if let Some(lease) = &mut lease {
         let deadline = plan.mode.budget().as_secs_f64() * 1000.0;
-        let cleared = lease
-            .clear_kernel(kernel.as_ref().unwrap(), &kernel_services, deadline)
-            .await;
+        let cleared = if plan.mode.tcp() {
+            Ok(())
+        } else {
+            lease
+                .clear_kernel(kernel.as_ref().unwrap(), &kernel_services, deadline)
+                .await
+        };
         let observed = lease
             .clean(kernel.as_ref().unwrap(), &kernel_services, true, deadline)
             .await;
-        kernel_closed = cleared.is_ok() && observed.is_ok();
+        kernel_closed &= cleared.is_ok() && observed.is_ok();
         for result in [cleared, observed] {
             if let Err(error) = result {
                 fail(&mut primary, controller::exit_code(&error));
@@ -480,6 +553,12 @@ async fn execute_inner(plan: &Plan, services: &Services<'_>, output: &Output) ->
             fail(&mut primary, controller::status(&stopped.exit));
         }
     }
+    if let Some(udp) = &mut udp
+        && let Err(error) = udp.close(plan, services)
+    {
+        kernel_closed = false;
+        fail(&mut primary, code(&error));
+    }
     let receipt = stopped_node
         .as_ref()
         .ok()
@@ -488,7 +567,9 @@ async fn execute_inner(plan: &Plan, services: &Services<'_>, output: &Output) ->
     if let Some(Ok(receipt)) = &receipt
         && output
             .json(
-                if plan.mode.adaptive() {
+                if plan.mode.tcp() {
+                    "browser-tcp-owner.json"
+                } else if plan.mode.adaptive() {
                     "browser-adaptive-owner.json"
                 } else {
                     "browser-mechanics-owner.json"
@@ -513,6 +594,7 @@ async fn execute_inner(plan: &Plan, services: &Services<'_>, output: &Output) ->
         "entrySha256":plan.entry_hash,"processCleanupPassed":process_closed,
         "browserReceiptPassed":browser_closed,"kernelCleanupPassed":kernel_closed,
         "controlSequencePassed":control_passed,
+        "udpFilter":udp.as_ref().map(udp::Lease::evidence),
         "observations":lease.as_ref().map(|lease| &lease.observations),
         "statusBeforeFinalFence":primary,
         "nodeExit":stopped_node.as_ref().ok().and_then(Option::as_ref).map(|value| &value.exit),
@@ -520,7 +602,9 @@ async fn execute_inner(plan: &Plan, services: &Services<'_>, output: &Output) ->
             .map(|value| &value.exit)});
     if output
         .json(
-            if plan.mode.adaptive() {
+            if plan.mode.tcp() {
+                "browser-tcp-exit.json"
+            } else if plan.mode.adaptive() {
                 "browser-adaptive-exit.json"
             } else {
                 "browser-mechanics-exit.json"
@@ -547,9 +631,17 @@ pub(super) fn run(arguments: &[OsString]) -> std::process::ExitCode {
 pub(super) fn run_adaptive(arguments: &[OsString]) -> std::process::ExitCode {
     run_mode(arguments, Mode::Adaptive)
 }
+pub(super) fn run_tcp(arguments: &[OsString]) -> std::process::ExitCode {
+    run_mode(arguments, Mode::Tcp)
+}
 fn run_mode(arguments: &[OsString], mode: Mode) -> std::process::ExitCode {
     if arguments == [OsString::from("--help")] || arguments == [OsString::from("-h")] {
-        if mode.adaptive() {
+        if mode.tcp() {
+            println!(concat!(
+                "Usage: load_test bench browser-tcp --output DIR ",
+                "[--server-bin BIN] [--node BIN]"
+            ));
+        } else if mode.adaptive() {
             println!(concat!(
                 "Usage: load_test bench browser-adaptive --output DIR ",
                 "[--server-bin BIN] [--node BIN]"
@@ -570,7 +662,7 @@ fn run_mode(arguments: &[OsString], mode: Mode) -> std::process::ExitCode {
             let host = NativeHost::default();
             let clock = RealClock::default();
             let root = std::env::current_dir()?;
-            let plan = if mode.adaptive() {
+            let plan = if mode.controlled() {
                 Plan::parse_mode(
                     &root,
                     arguments,

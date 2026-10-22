@@ -588,8 +588,8 @@ close; the summary input is opened relative to that same directory. Unknown and
 private fields never enter the projection. The final process status additionally covers directory
 close, late cancellation and deadline checks; artifact presence is not that proof.
 The original `build/impaired-generator.sh`, `build/impaired-check.sh` and
-`build/impair.sh` remain unchanged references. The Linux browser transitions below reuse this lease. iptables UDP blocking
-and macOS PF/dummynet remain on the separate reference track.
+`build/impair.sh` remain unchanged references. The Linux browser transitions below reuse this lease. The separate Linux TCP
+journey owns scoped UDP rules; macOS PF/dummynet remains a shell reference.
 Inert tool/process and reference-oracle tests do not establish actual kernel
 behavior, native media delivery or hosted runtime timing.
 
@@ -673,6 +673,81 @@ iptables. The old wrapper also ignored a failed server wait, now a failure.
 Inert socketpair/process, fake-command and unchanged-shell oracles verify only
 policy, protocol and lifecycle behavior. They do not establish actual Linux
 qdisc presentation, browser media recovery, privileged cleanup or hosted runtime.
+
+### Guest browser ICE-TCP with scoped Linux UDP blocking
+
+```sh
+./target/release/load_test bench browser-tcp \
+  --output /absolute/private/new-tcp-run
+```
+
+This fixed guest-only Chromium baseline uses fake tone audio, one media worker
+on port 41100 and server ICE-TCP enabled. Node retains every existing TCP-pair
+and decoded-video assertion. The owner requires the same explicit disposable
+Linux and exclusive namespace/interface authority as the adaptive journey.
+It admits only the reviewed `iptables v1.8.10 (legacy)` and
+`iptables v1.8.10 (nf_tables)` formatters; selected executable hashes and version
+text are observations, not authenticated plugin, interpreter or kernel closure.
+The finite readback forms are based on the pinned
+[upstream formatter source](https://fuchsia.googlesource.com/third_party/git.netfilter.org/iptables/+/8ae55c2a331e932c0aeef8c6c138bf60deb9fd42/).
+Other versions, unsupported listing forms, concurrent controllers and macOS PF
+are outside this command's supported domain. Inert fixtures establish no actual
+hosted kernel, browser media or runtime timing result.
+
+One retained namespace descriptor prevents reuse of that observed namespace
+inode during the lease; namespace/loopback observations and selected tools are
+rechecked before commands. All filter-table reads use fixed noninteractive sudo
+and `iptables -w 2 -t filter -S`, with bounded 256 KiB capture. The private
+baseline keeps unrelated rule remainders opaque and preserves per-chain order;
+only its hash and counts enter evidence. No general shell grammar is parsed or
+received rule text executed. Every mutation uses literal arguments.
+
+Before the first mutation, the private intent records a unique 28-character
+chain and tags containing the full local run UUID. Installation creates that
+chain, two UDP source/destination-port DROP rules, then a head INPUT jump
+restricted to loopback UDP. Every positive acknowledgment follows settled CLI
+groups and verified readback. The four awaited requests are block, baseline
+clear, final clear and unblock. Both clears only verify the clean qdisc and
+held UDP block; unblock removes the actual firewall rules before the scenario
+closes its browser. A failed prefix may request final clear/unblock, but cannot
+be a complete successful dialogue.
+
+Cleanup inspects before each exact tagged deletion and removes only the empty,
+unreferenced generated chain. Unknown members/references or observed baseline,
+identity or signature changes refuse deletion. There is no flush, global delete,
+name-only foreign cleanup or stored journal authority. Identical-looking foreign
+replacement is indistinguishable: exclusive controller authority and no
+concurrent mutations are explicit assumptions, not an atomic compare-and-swap
+or authenticated kernel-ownership guarantee. Uncertain commands trigger bounded
+best-effort reconciliation; unavailable proof prevents zero.
+
+The entry schedules 1200 seconds, with a 600-second Node body and 450-second
+finalization reserve. Initial version/baseline and two qdisc/filter observations
+fit the 150-second admission window with 20 seconds of readiness. The final
+schedule allows twelve CLI slots at 30 seconds (inspect/delete and independent
+absence/qdisc checks), 45 seconds for Node, 30 for the server, two for terminal
+control EOF and 13 for closes/fences. Each CLI reserves 25 seconds of established
+group/sink settlement before admitting up to five seconds of body; the two-second
+iptables lock wait is inside that body. Node/server cooperative graces remain
+20/five seconds. These are watchdog/admission policies, not hard OS wall bounds;
+the workflow remains 60 minutes and cold/runtime timing is unmeasured.
+
+After Node retirement, terminal control EOF and explicit endpoint close precede
+independent scoped absence/clean-qdisc readbacks and server retirement. Known
+prior failure statuses retain precedence. CLI-group proof does not establish
+closure of arbitrary detached or privileged descendants. All owned process and final file,
+namespace and output closes plus pending signal/deadline checks gate zero.
+Measured Rust execution is silent; private `browser-tcp-intent.json`,
+`browser-tcp-owner.json` and fixed `browser-tcp-exit.json` contain only bounded
+selected identity, receipt and cleanup observations. Raw filter rules never
+enter these artifacts. Artifact presence is not final process/close proof.
+Existing Node scenario artifact writes retain their trusted runtime/path scope;
+BrowserServer proof covers admitted servers, not arbitrary detached SDK children.
+
+The original `build/impaired-check.sh` and `build/impair.sh` remain unchanged
+references, including the macOS PF path. Replacing untagged pre-deletes and the
+old unconditional tc/unblock trap with scoped owned cleanup is intentional;
+this TCP command never mutates qdisc state or removes unrelated UDP rules.
 
 ### Guest browser mechanics and DTX
 

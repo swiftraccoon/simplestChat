@@ -82,9 +82,17 @@ reuses that browser/server owner and one retained Linux netem lease for the six
 fixed adaptation phases. Node awaits bounded phase requests over inherited
 anonymous duplex stdin; Rust owns each verified transition and final clear.
 It requires the explicit disposable Linux/interface authority used by `bench impaired`.
-UDP block/unblock and macOS PF remain shell references. See
+macOS PF remains a shell reference. See
 [the adaptive contract](../docs/performance.md#guest-browser-adaptation-under-linux-netem)
 for fixed profiles, budgets, private evidence and ownership/runtime limits.
+
+`./target/release/load_test bench browser-tcp --output /absolute/private/new-run`
+reuses that owner for the fixed Linux ICE-TCP journey. One live lease blocks only
+loopback UDP to/from media port 41100 through a unique tagged chain, verifies
+every transition and refuses observed foreign cleanup. It requires explicit
+disposable Linux/interface authority and reviewed iptables 1.8.10 output.
+See [the TCP contract](../docs/performance.md#guest-browser-ice-tcp-with-scoped-linux-udp-blocking)
+for supported backends, four-step dialogue, bounds and unverified runtime limits.
 
 The same binary can read stopped server diagnostics without creating a runtime,
 joining a room or sending media:

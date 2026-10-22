@@ -216,7 +216,7 @@ jobs:
         env:
           IMPAIRED_BLOCK_UDP: "1"
           WEBRTC_SERVER_TCP: "true"
-        run: IMPAIRED_PROFILES=baseline build/impaired-check.sh "${RUNNER_TEMP}/impaired/tcp"
+        run: ./target/release/load_test bench browser-tcp --output "${RUNNER_TEMP}/impaired/tcp"
 
       - name: Generator under five percent loss with jitter, both directions
         run: ./target/release/load_test bench impaired --output "${RUNNER_TEMP}/impaired/generator"

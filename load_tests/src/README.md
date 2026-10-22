@@ -26,7 +26,7 @@ For commands, options, and report definitions, see the
 | `owned_process/` | Reserved child process groups, bounded pipes, closed byte/duplex stdin modes, cancellation and exact cleanup shared by explicit measurement backends |
 | `bench/podman/` | Production-shape comparison policy, namespace-local command arguments, cgroup/thread samplers, verified container ownership and bounded transfer finalizers |
 | `bench/impaired/` | One disposable Linux loopback profile, fixed guest generator evidence, observed kernel-state lease and stopped-input admission |
-| `bench/impaired/browser*`, `adaptive*` | Shared guest browser owner, mechanics/DTX and live Linux adaptive lease, bounded phase dialogue, strict stopped-Node BrowserServer receipt and private evidence |
+| `bench/impaired/browser*`, `adaptive*` | Shared guest browser owner, mechanics/DTX, live Linux adaptive/UDP leases, bounded phase dialogue, strict stopped-Node BrowserServer receipt and private evidence |
 | `metrics.rs` | Counters, signaling histograms, diagnostic collection |
 | `metrics/measurement.rs` | Shared interval, per-attempt readiness/coverage, consumer delivery checks |
 | `subscriptions.rs` | Bounded discovery deduplication, pending queues, and consumer-cap refill (tests in `subscriptions_tests.rs`) |

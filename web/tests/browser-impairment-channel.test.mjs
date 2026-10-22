@@ -20,7 +20,7 @@ const steps = [
   ],
   ['clear', {}, undefined, null],
 ];
-function fixture({ writeError, throwWrite = false } = {}) {
+function fixture({ writeError, throwWrite = false, mode } = {}) {
   const frames = [];
   const timers = new Map();
   let time = 0;
@@ -38,6 +38,7 @@ function fixture({ writeError, throwWrite = false } = {}) {
     };
   const channel = createChannel({
     runId,
+    mode,
     stream,
     now: () => time,
     setTimer(callback, milliseconds) {
@@ -251,4 +252,81 @@ test('cancellation and write failures retire the stream, timer and every listene
     });
     await refuses(f);
   }
+});
+
+const tcpSteps = [['block-udp'], ['clear', {}, 'baseline'], ['clear'], ['unblock-udp']];
+
+test('TCP control requires block, baseline, final clear and unblock in that exact order', async () => {
+  const f = fixture({ mode: 'tcp' });
+  for (const [index, values] of tcpSteps.entries()) {
+    const task = f.channel.impair(...values);
+    assert.equal(f.timers.size, 1);
+    f.ack(index + 1);
+    await task;
+  }
+  assert.deepEqual(
+    f.frames.map((raw) => JSON.parse(raw)),
+    ['block', 'baseline', 'finish', 'unblock'].map((phase, index) => ({
+      schemaVersion: 1,
+      runId,
+      sequence: index + 1,
+      phase,
+      action: tcpSteps[index][0],
+      profile: null,
+    })),
+  );
+  await f.channel.finish();
+  f.assertClosed();
+});
+
+test('TCP failing prefixes allow final clear and unblock without claiming full completion', async () => {
+  for (const prefix of [0, 1]) {
+    const f = fixture({ mode: 'tcp' });
+    if (prefix) {
+      const blocked = f.channel.impair('block-udp');
+      f.ack(1);
+      await blocked;
+    }
+    for (const [index, action] of ['clear', 'unblock-udp'].entries()) {
+      const task = f.channel.impair(action);
+      f.ack(prefix + index + 1);
+      await task;
+    }
+    assert.deepEqual(
+      f.frames.slice(prefix).map((raw) => JSON.parse(raw).phase),
+      ['finish', 'unblock'],
+    );
+    await refuses(f);
+  }
+});
+
+test('TCP control refuses profile overrides, premature unblock and duplicate finalization', async () => {
+  for (const values of [
+    ['unblock-udp'],
+    ['clear', {}, 'baseline'],
+    ['block-udp', {}, 'block'],
+    ['block-udp', { IMPAIR_LOSS: '0' }],
+    ['apply', steps[1][1], 'lossy'],
+  ]) {
+    const f = fixture({ mode: 'tcp' });
+    await assert.rejects(f.channel.impair(...values));
+    assert.deepEqual(f.frames, []);
+    await refuses(f);
+  }
+  const f = fixture({ mode: 'tcp' });
+  const cleared = f.channel.impair('clear');
+  f.ack(1);
+  await cleared;
+  await assert.rejects(f.channel.impair('clear'));
+  assert.equal(f.frames.length, 1);
+  await refuses(f);
+  const stream = new Duplex({
+    read() {},
+    write(_bytes, _encoding, callback) {
+      callback();
+    },
+  });
+  assert.throws(() => createChannel({ runId, mode: 'foreign', stream }));
+  assert.equal(stream.listenerCount('data'), 0, 'invalid modes admit no stream owner');
+  stream.destroy();
 });

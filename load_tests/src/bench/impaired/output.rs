@@ -125,6 +125,9 @@ impl Output {
                     | "impaired-summary.json"
                     | "browser-mechanics-exit.json"
                     | "browser-mechanics-owner.json"
+                    | "browser-tcp-intent.json"
+                    | "browser-tcp-owner.json"
+                    | "browser-tcp-exit.json"
                     | "browser-adaptive-owner.json"
                     | "browser-adaptive-exit.json"
             ),

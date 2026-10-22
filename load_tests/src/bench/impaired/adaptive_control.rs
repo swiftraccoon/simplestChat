@@ -46,6 +46,8 @@ pub(super) struct Session {
     finished: bool,
     acknowledged: bool,
     eof: bool,
+    steps: u8,
+    finalizing: bool,
 }
 impl Session {
     pub fn new(channel: Box<dyn Control>) -> Self {
@@ -57,10 +59,18 @@ impl Session {
             finished: false,
             acknowledged: false,
             eof: false,
+            steps: 7,
+            finalizing: false,
+        }
+    }
+    pub fn tcp(channel: Box<dyn Control>) -> Self {
+        Self {
+            steps: 4,
+            ..Self::new(channel)
         }
     }
     pub fn passed(&self) -> bool {
-        self.sequence == 7 && self.finished && self.acknowledged && self.buffer.is_empty()
+        self.sequence == self.steps && self.finished && self.acknowledged && self.buffer.is_empty()
     }
     /// A single cancellation-safe read; callers can poll child status between
     /// reads. A partial frame has its own2s deadline, independent of phase idle.
@@ -104,28 +114,57 @@ impl Session {
             request.schema_version == 1
                 && request.run_id == plan.run_id
                 && request.sequence == self.sequence + 1
-                && request.sequence <= 7,
+                && request.sequence <= self.steps,
             "Invalid adaptive control sequence"
         );
         let finalizing = request.phase == "finish";
-        ensure!(
-            finalizing
-                || PHASES
-                    .get(usize::from(self.sequence))
-                    .is_some_and(|phase| *phase == request.phase),
-            "Out-of-order adaptive phase"
-        );
-        let clear = matches!(request.phase.as_str(), "baseline" | "recovery" | "finish");
-        ensure!(
-            if clear {
-                request.action == "clear" && request.profile.is_none()
-            } else {
-                request.action == "apply" && request.profile.as_ref() == Some(&request.phase)
-            },
-            "Invalid adaptive phase action"
-        );
+        if plan.mode.tcp() {
+            let expected = ["block", "baseline", "finish", "unblock"];
+            ensure!(
+                finalizing && !self.finalizing
+                    || self.finalizing && request.phase == "unblock"
+                    || !self.finalizing
+                        && expected
+                            .get(usize::from(self.sequence))
+                            .is_some_and(|phase| *phase == request.phase),
+                "Out-of-order TCP phase"
+            );
+            ensure!(
+                request.profile.is_none()
+                    && request.action
+                        == match request.phase.as_str() {
+                            "block" => "block-udp",
+                            "unblock" => "unblock-udp",
+                            "baseline" | "finish" => "clear",
+                            _ => anyhow::bail!("Invalid TCP phase"),
+                        },
+                "Invalid TCP phase action"
+            );
+        } else {
+            ensure!(
+                finalizing
+                    || PHASES
+                        .get(usize::from(self.sequence))
+                        .is_some_and(|phase| *phase == request.phase),
+                "Out-of-order adaptive phase"
+            );
+            let clear = matches!(request.phase.as_str(), "baseline" | "recovery" | "finish");
+            ensure!(
+                if clear {
+                    request.action == "clear" && request.profile.is_none()
+                } else {
+                    request.action == "apply" && request.profile.as_ref() == Some(&request.phase)
+                },
+                "Invalid adaptive phase action"
+            );
+        }
         self.sequence = request.sequence;
-        self.finished = finalizing;
+        self.finalizing |= finalizing;
+        self.finished = if plan.mode.tcp() {
+            request.phase == "unblock"
+        } else {
+            finalizing
+        };
         self.acknowledged = false;
         self.buffer.clear();
         self.partial_since = None;

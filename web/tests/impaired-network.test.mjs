@@ -230,3 +230,61 @@ test('the owned marker refuses a missing callback without shell fallback', async
   assert.equal(f.report().passed, false);
   assert.equal(f.browserClosed(), true);
 });
+
+test('owned UDP block settles before clients and both final callbacks precede browser closure', async (t) => {
+  const blocked = Promise.withResolvers();
+  const block = Promise.withResolvers();
+  const cleared = Promise.withResolvers();
+  const clear = Promise.withResolvers();
+  const unblocked = Promise.withResolvers();
+  const unblock = Promise.withResolvers();
+  const original = new Error('owned UDP block refused');
+  const calls = [];
+  const f = fixture(
+    t,
+    { IMPAIR_SCRIPT: 'rust-owned', IMPAIRED_PROFILES: 'baseline', IMPAIRED_BLOCK_UDP: '1' },
+    () => assert.fail('owned UDP callbacks cannot dispatch a shell'),
+    {
+      async impair(action, profile, phase) {
+        calls.push({ action, profile, phase });
+        if (action === 'block-udp') {
+          blocked.resolve();
+          await block.promise;
+          throw original;
+        }
+        if (action === 'clear') {
+          cleared.resolve();
+          await clear.promise;
+        } else {
+          assert.equal(action, 'unblock-udp');
+          unblocked.resolve();
+          await unblock.promise;
+        }
+      },
+    },
+  );
+  const task = f.run();
+  await blocked.promise;
+  assert.equal(f.contexts.length, 0, 'no publisher or viewer is admitted before the block settles');
+  assert.equal(f.browserClosed(), false);
+  block.resolve();
+  await cleared.promise;
+  assert.equal(f.browserClosed(), false);
+  clear.resolve();
+  await unblocked.promise;
+  assert.equal(f.browserClosed(), false, 'the UDP unblock remains awaited');
+  unblock.resolve();
+  await assert.rejects(task, (error) => error === original);
+  assert.deepEqual(
+    calls,
+    ['block-udp', 'clear', 'unblock-udp'].map((action) => ({
+      action,
+      profile: {},
+      phase: undefined,
+    })),
+  );
+  assert.equal(f.browserClosed(), true);
+  assert.equal(f.report().passed, false);
+  assert.equal(f.report().failure.message, original.message);
+  assert.deepEqual(f.commands, []);
+});

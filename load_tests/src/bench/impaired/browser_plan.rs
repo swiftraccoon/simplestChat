@@ -16,27 +16,40 @@ pub(super) const RESERVE: Duration = Duration::from_secs(90);
 pub(super) enum Mode {
     Mechanics,
     Adaptive,
+    Tcp,
 }
 impl Mode {
     pub fn adaptive(self) -> bool {
         self == Self::Adaptive
     }
+    pub fn controlled(self) -> bool {
+        self != Self::Mechanics
+    }
+    pub fn tcp(self) -> bool {
+        self == Self::Tcp
+    }
     pub fn budget(self) -> Duration {
-        if self.adaptive() {
+        if self.tcp() {
+            Duration::from_secs(1200)
+        } else if self.adaptive() {
             Duration::from_secs(960)
         } else {
             BUDGET
         }
     }
     pub fn reserve(self) -> Duration {
-        if self.adaptive() {
+        if self.tcp() {
+            Duration::from_secs(450)
+        } else if self.adaptive() {
             Duration::from_secs(300)
         } else {
             RESERVE
         }
     }
     pub fn stem(self) -> &'static str {
-        if self.adaptive() {
+        if self.tcp() {
+            "browser-tcp"
+        } else if self.adaptive() {
             "browser-adaptive"
         } else {
             "browser-mechanics"
@@ -47,6 +60,7 @@ impl Mode {
 pub(super) struct KernelTools {
     pub tc: Selected,
     pub sudo: Selected,
+    pub iptables: Option<Selected>,
 }
 
 pub(super) struct Plan {
@@ -100,11 +114,10 @@ impl Plan {
         mode: Mode,
         system: &str,
     ) -> Result<Self> {
-        if mode.adaptive() {
+        if mode.controlled() {
             super::super::plan::authorize(&environment, system)?;
         }
         for key in [
-            "IMPAIRED_BLOCK_UDP",
             "CANARY_MODE",
             "CANARY_FORCE_RELAY",
             "CALL_OUTCOME_E2E",
@@ -115,6 +128,14 @@ impl Plan {
         ] {
             fixed(&environment, key, &["0"])?;
         }
+        fixed(
+            &environment,
+            "IMPAIRED_BLOCK_UDP",
+            &[if mode.tcp() { "1" } else { "0" }],
+        )?;
+        if mode.tcp() {
+            fixed(&environment, "WEBRTC_SERVER_TCP", &["true"])?;
+        }
         for key in ["IMPAIRED_ROOM", "CANARY_CORRELATION_FILE", "NODE_OPTIONS"] {
             fixed(&environment, key, &[])?;
         }
@@ -123,7 +144,7 @@ impl Plan {
             ("E2E_BROWSER", "chromium"),
             (
                 "IMPAIR_SCRIPT",
-                if mode.adaptive() {
+                if mode.controlled() {
                     "rust-owned"
                 } else {
                     "none"
@@ -131,7 +152,9 @@ impl Plan {
             ),
             (
                 "IMPAIRED_PROFILES",
-                if mode.adaptive() {
+                if mode.tcp() {
+                    "baseline"
+                } else if mode.adaptive() {
                     "baseline,lossy,constrained,severe,recovery,lossyJoin"
                 } else {
                     "baseline,silentAudio"
@@ -139,7 +162,7 @@ impl Plan {
             ),
             (
                 "IMPAIRED_SILENT_AUDIO",
-                if mode.adaptive() { "0" } else { "1" },
+                if mode.controlled() { "0" } else { "1" },
             ),
             ("IMPAIR_UDP_PORT", "41100"),
             ("IMPAIR_WORKERS", "1"),
@@ -211,10 +234,15 @@ impl Plan {
                 .all(|path| path.to_str().is_some_and(|value| value.len() <= 4096)),
             "Invalid mechanics path"
         );
-        let kernel = if mode.adaptive() {
+        let kernel = if mode.controlled() {
             Some(KernelTools {
                 tc: tool(root, &environment, "tc")?,
                 sudo: tool(root, &environment, "sudo")?,
+                iptables: if mode.tcp() {
+                    Some(tool(root, &environment, "iptables")?)
+                } else {
+                    None
+                },
             })
         } else {
             None
@@ -239,6 +267,9 @@ impl Plan {
         if let Some(kernel) = &self.kernel {
             kernel.tc.verify()?;
             kernel.sudo.verify()?;
+            if let Some(iptables) = &kernel.iptables {
+                iptables.verify()?;
+            }
         }
         ensure!(
             entry_hash(&self.entry)? == self.entry_hash,
@@ -286,6 +317,9 @@ impl Plan {
         ] {
             environment.insert(key.into(), value.into());
         }
+        if self.mode.tcp() {
+            environment.insert("WEBRTC_SERVER_TCP".into(), "true".into());
+        }
         environment
     }
 
@@ -308,7 +342,7 @@ impl Plan {
             ("IMPAIR_WORKERS", "1"),
             (
                 "IMPAIR_SCRIPT",
-                if self.mode.adaptive() {
+                if self.mode.controlled() {
                     "rust-owned"
                 } else {
                     "none"
@@ -317,7 +351,9 @@ impl Plan {
             ("E2E_BROWSER", "chromium"),
             (
                 "IMPAIRED_PROFILES",
-                if self.mode.adaptive() {
+                if self.mode.tcp() {
+                    "baseline"
+                } else if self.mode.adaptive() {
                     "baseline,lossy,constrained,severe,recovery,lossyJoin"
                 } else {
                     "baseline,silentAudio"
@@ -325,15 +361,21 @@ impl Plan {
             ),
             (
                 "IMPAIRED_SILENT_AUDIO",
-                if self.mode.adaptive() { "0" } else { "1" },
+                if self.mode.controlled() { "0" } else { "1" },
             ),
             ("TEST_BROWSER_HTTPS", "0"),
         ] {
             environment.insert(key.into(), value.into());
         }
+        if self.mode.tcp() {
+            environment.insert("WEBRTC_SERVER_TCP".into(), "true".into());
+            environment.insert("IMPAIRED_BLOCK_UDP".into(), "1".into());
+        }
         environment.insert("E2E_ARTIFACTS".into(), self.output.clone().into_os_string());
         environment.insert(
-            if self.mode.adaptive() {
+            if self.mode.tcp() {
+                "BROWSER_TCP_RUN_ID"
+            } else if self.mode.adaptive() {
                 "BROWSER_ADAPTIVE_RUN_ID"
             } else {
                 "BROWSER_MECHANICS_RUN_ID"

@@ -1,5 +1,5 @@
 /**
- * Fixed Chromium mechanics/DTX and adaptive journeys. Rust owns the server, this
+ * Fixed Chromium mechanics/DTX, adaptive and ICE-TCP journeys. Rust owns the server, this
  * CLI group, stdout capture and receipt publication; this adapter owns only the
  * BrowserServers admitted through createBrowserOwner. Runtime modules and the
  * existing suite's private artifact path remain caller-selected trust inputs.
@@ -30,6 +30,25 @@ const ADAPTIVE = {
   IMPAIRED_PROFILES: 'baseline,lossy,constrained,severe,recovery,lossyJoin',
   IMPAIRED_SILENT_AUDIO: '0',
 };
+const TCP = {
+  ...MECHANICS,
+  IMPAIR_SCRIPT: 'rust-owned',
+  IMPAIRED_PROFILES: 'baseline',
+  IMPAIRED_SILENT_AUDIO: '0',
+  IMPAIRED_BLOCK_UDP: '1',
+  WEBRTC_SERVER_TCP: 'true',
+};
+const CONFIGURATIONS = { mechanics: MECHANICS, adaptive: ADAPTIVE, tcp: TCP };
+const RUN_IDS = {
+  mechanics: 'BROWSER_MECHANICS_RUN_ID',
+  adaptive: 'BROWSER_ADAPTIVE_RUN_ID',
+  tcp: 'BROWSER_TCP_RUN_ID',
+};
+const LABELS = {
+  mechanics: 'Browser mechanics',
+  adaptive: 'Browser adaptive',
+  tcp: 'Browser ICE-TCP',
+};
 const FORBIDDEN = [
   'CANARY_MODE',
   'CANARY_FORCE_RELAY',
@@ -41,13 +60,17 @@ const FORBIDDEN = [
   'NODE_OPTIONS',
 ];
 function configuration(kind, input) {
-  if (kind !== 'mechanics' && kind !== 'adaptive')
+  if (!Object.hasOwn(CONFIGURATIONS, kind))
     throw new Error('Browser journey configuration is invalid.');
-  const fixed = kind === 'mechanics' ? MECHANICS : ADAPTIVE;
-  const runIdKey = kind === 'mechanics' ? 'BROWSER_MECHANICS_RUN_ID' : 'BROWSER_ADAPTIVE_RUN_ID';
+  const fixed = CONFIGURATIONS[kind];
+  const runIdKey = RUN_IDS[kind];
   const env = { ...input };
   for (const name of FORBIDDEN)
-    if (env[name] !== undefined && env[name] !== '')
+    if (
+      !(kind === 'tcp' && name === 'IMPAIRED_BLOCK_UDP') &&
+      env[name] !== undefined &&
+      env[name] !== ''
+    )
       throw new Error('Browser mechanics configuration is invalid.');
   for (const [name, value] of Object.entries(fixed))
     if (env[name] !== undefined && env[name] !== '' && env[name] !== value)
@@ -137,8 +160,8 @@ async function run(
   } = {},
 ) {
   const captured = configuration(kind, env);
-  if (kind === 'adaptive' && typeof impair !== 'function')
-    throw new Error('Browser adaptive control is unavailable.');
+  if (kind !== 'mechanics' && typeof impair !== 'function')
+    throw new Error(`${LABELS[kind]} control is unavailable.`);
   let owner;
   let records = [];
   let recordsValid = false;
@@ -209,7 +232,7 @@ async function run(
     await suite({
       env: captured,
       artifacts: captured.E2E_ARTIFACTS,
-      ...(kind === 'adaptive' ? { impair } : {}),
+      ...(kind !== 'mechanics' ? { impair } : {}),
       launchBrowser(name, options) {
         if (retirement || cancelled !== null || name !== 'chromium' || launchCount !== 0)
           return Promise.reject(new Error('Browser mechanics admission is closed.'));
@@ -240,7 +263,7 @@ async function run(
   if (!phasePassed || !browserCleanupPassed) fail(new Error('Browser mechanics failed.'));
   const receipt = {
     schemaVersion: 1,
-    runId: captured[kind === 'mechanics' ? 'BROWSER_MECHANICS_RUN_ID' : 'BROWSER_ADAPTIVE_RUN_ID'],
+    runId: captured[RUN_IDS[kind]],
     completed: true,
     phasePassed,
     browserCleanupPassed,
@@ -271,11 +294,7 @@ async function publish(result, options = {}, kind = 'mechanics') {
   const stderr = options.stderr ?? process.stderr;
   try {
     await write(stdout, `${JSON.stringify(result.receipt)}\n`);
-    if (result.status !== 0)
-      await write(
-        stderr,
-        kind === 'adaptive' ? 'Browser adaptive failed.\n' : 'Browser mechanics failed.\n',
-      );
+    if (result.status !== 0) await write(stderr, `${LABELS[kind] ?? LABELS.mechanics} failed.\n`);
   } catch {
     if (result.status === 0) throw new Error('Browser mechanics publication failed.');
   }

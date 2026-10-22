@@ -12,6 +12,12 @@ const STEPS = [
   ['lossyJoin', 'apply', 'lossyJoin'],
   ['finish', 'clear', null],
 ];
+const TCP_STEPS = [
+  ['block', 'block-udp', null],
+  ['baseline', 'clear', null],
+  ['finish', 'clear', null],
+  ['unblock', 'unblock-udp', null],
+];
 const PROFILES = {
   lossy: { IMPAIR_LOSS: '5', IMPAIR_DELAY_MS: '50', IMPAIR_JITTER_MS: '10' },
   constrained: { IMPAIR_RATE_KBIT: '400', IMPAIR_DELAY_MS: '30' },
@@ -34,24 +40,33 @@ const statusOf = (error) => (error instanceof ControlFailure ? error.status : 1)
 /**
  * Own FD0 exclusively as a Unix duplex stream, never as process.stdin too.
  * The injected stream/clock/timers are inert test seams. One overall deadline
- * includes all seven awaited requests; Rust's Node watchdog is the outer bound.
+ * includes every awaited request; Rust's Node watchdog is the outer bound.
  * No pathname, endpoint, arbitrary argv or numeric profile is accepted.
  */
 function createChannel({
   runId,
+  mode = 'adaptive',
   stream,
   now = () => performance.now(),
   setTimer = setTimeout,
   clearTimer = clearTimeout,
 } = {}) {
-  if (typeof runId !== 'string' || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(runId))
+  if (
+    !['adaptive', 'tcp'].includes(mode) ||
+    typeof runId !== 'string' ||
+    !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(runId)
+  )
     throw new ControlFailure(1);
+  const tcp = mode === 'tcp';
+  const steps = tcp ? TCP_STEPS : STEPS;
   stream ??= new Socket({ fd: 0, readable: true, writable: true });
   const deadline = now() + BUDGET;
   let buffer = Buffer.alloc(0);
   let pending;
   let sequence = 0;
   let finished = false;
+  let finalizing = false;
+  let ordered = true;
   let closing = false;
   let closed = false;
   let terminal;
@@ -118,7 +133,9 @@ function createChannel({
     pending = undefined;
     clearTimer(request.timer);
     sequence = request.sequence;
-    finished = request.phase === 'finish';
+    ordered &&= request.ordered;
+    finalizing ||= request.phase === 'finish';
+    finished = request.phase === (tcp ? 'unblock' : 'finish');
     buffer = Buffer.alloc(0);
     request.resolve();
   };
@@ -142,9 +159,23 @@ function createChannel({
   return {
     impair(action, values = {}, phaseName) {
       if (terminal) return Promise.reject(terminal);
-      const phase = phaseName === undefined ? 'finish' : phaseName;
-      const expected = STEPS[sequence];
-      const profile = PROFILES[phase] ?? {};
+      const implicit =
+        tcp && action === 'block-udp'
+          ? 'block'
+          : tcp && action === 'unblock-udp'
+            ? 'unblock'
+            : 'finish';
+      const phase = phaseName === undefined ? implicit : phaseName;
+      const expected = steps[sequence];
+      const inOrder = phase === expected?.[0] && action === expected?.[1];
+      const finalClear = phase === 'finish' && phaseName === undefined && action === 'clear';
+      const finalUnblock =
+        tcp &&
+        finalizing &&
+        phase === 'unblock' &&
+        phaseName === undefined &&
+        action === 'unblock-udp';
+      const profile = tcp ? {} : (PROFILES[phase] ?? {});
       if (
         pending ||
         closing ||
@@ -153,8 +184,9 @@ function createChannel({
         typeof values !== 'object' ||
         values === null ||
         Array.isArray(values) ||
-        (phase !== 'finish' && (phase !== expected[0] || action !== expected[1])) ||
-        (phase === 'finish' && (phaseName !== undefined || action !== 'clear')) ||
+        (finalizing ? !finalUnblock : !finalClear && !inOrder) ||
+        (phase === 'finish' && !finalClear) ||
+        (tcp && phase !== 'baseline' && phaseName !== undefined) ||
         Object.keys(values).sort().join(',') !== Object.keys(profile).sort().join(',') ||
         !Object.entries(profile).every(([key, value]) => values[key] === value)
       )
@@ -168,7 +200,7 @@ function createChannel({
         sequence: number,
         phase,
         action,
-        profile: phase === 'finish' ? null : expected[2],
+        profile: finalClear ? null : expected[2],
       })}\n`;
       if (Buffer.byteLength(frame) > LIMIT) return Promise.reject(fail());
       return new Promise((resolve, reject) => {
@@ -177,6 +209,7 @@ function createChannel({
           reject,
           sequence: number,
           phase,
+          ordered: inOrder,
           timer: setTimer(() => fail(124), remaining),
         };
         try {
@@ -194,7 +227,7 @@ function createChannel({
     finish() {
       retirement ??= (async () => {
         closing = true;
-        if (pending || !finished || sequence !== STEPS.length) fail();
+        if (pending || !finished || !ordered || sequence !== steps.length) fail();
         if (!closed) stream.destroy();
         await closeWait;
         if (terminal) throw terminal;

@@ -22,10 +22,16 @@ pub(super) struct Identity {
 
 pub(super) trait Authority: Send + Sync {
     fn observe(&self) -> Result<Identity>;
+    fn pin(&self) -> Result<Option<File>> {
+        Ok(None)
+    }
 }
 
 pub(super) struct NativeAuthority;
 impl Authority for NativeAuthority {
+    fn pin(&self) -> Result<Option<File>> {
+        Ok(Some(File::open("/proc/self/ns/net")?))
+    }
     fn observe(&self) -> Result<Identity> {
         let namespace = File::open("/proc/self/ns/net")?;
         let stamp = namespace.metadata();
