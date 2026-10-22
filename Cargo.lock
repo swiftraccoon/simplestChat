@@ -4051,7 +4051,9 @@ checksum = "17a073bfed563fa236697a068031408a93cd9522e08abf9933ead3e73411bd71"
 dependencies = [
  "futures-util",
  "log",
+ "native-tls",
  "tokio",
+ "tokio-native-tls",
  "tungstenite 0.30.0",
 ]
 
@@ -4286,6 +4288,7 @@ dependencies = [
  "http",
  "httparse",
  "log",
+ "native-tls",
  "rand 0.10.3",
  "sha1 0.11.0",
  "thiserror 2.0.21",
@@ -4842,9 +4845,11 @@ dependencies = [
  "anyhow",
  "chrono",
  "flate2",
+ "futures-util",
  "nix",
  "rawzip",
  "regex",
+ "reqwest",
  "rustix",
  "ryu-js",
  "serde",
@@ -4855,6 +4860,7 @@ dependencies = [
  "syn 3.0.6",
  "tar",
  "tokio",
+ "tokio-tungstenite 0.30.0",
  "toml",
  "url",
 ]

@@ -1918,3 +1918,88 @@ Use an owner and a guest in separate browser contexts:
 
 Headless tests use fake devices and resized desktop viewports. Complete the
 manual checklist on real browsers and devices before a release.
+
+
+## Manual public protocol smoke
+
+From a checkout with the pinned Rust toolchain, the opt-in client is:
+
+```sh
+cargo run --locked -q -p xtask -- public-smoke --origin https://chat.example.com --room lobby
+```
+
+Use only a deployment you own or are authorized to test. This operation joins
+**two guests and writes exactly one public test message** in the selected room.
+It performs the ten established checks: health, readiness, homepage, security
+headers, same-origin static assets, private-endpoint denial, guest joins, matching
+chat acknowledgment and delivery, first-leave observation, and clean WebSocket
+shutdown. Both guests leave. The protocol has no leave acknowledgment; only the
+first leave is independently observed by the second guest. No account, camera,
+microphone, media, browser rendering, passkey, TURN or capacity workload runs.
+Native WebSockets do not establish browser Origin-policy enforcement.
+
+The origin must be an explicit HTTPS origin without credentials, path, query or
+fragment. Room names contain 1–128 ASCII letters, digits, underscores or hyphens.
+There are no retries, redirects, proxy discovery, cookies, authentication headers,
+WebSocket Origin headers or subprotocols. TLS uses the platform native verifier
+and its normal trust configuration; disabling certificate or hostname verification
+is unavailable. `NODE_TLS_REJECT_UNAUTHORIZED=0` is refused. The mature HTTP and
+WebSocket libraries own their internal DNS/TLS/HTTP resources through their normal
+Drop boundaries; the client does not claim independently observed closure of every
+internal descriptor, task or remote operation.
+
+The HTTP representation profile explicitly requests `Accept-Encoding: identity`
+and refuses other content encodings. The old Node client could decode additional
+encodings. Transfer framing is decoded by the mature HTTP implementation. Health,
+readiness and each of three denied endpoints accept at most 4 KiB, the homepage
+128 KiB, and each of at most six JS/CSS assets 2 MiB. At most twelve requests accept
+12 MiB + 148 KiB of body data, with only one body retained at a time. Accepted
+headers are capped at 64 fields and 64 KiB after the mature parser; these are not
+bounds on every allocation inside that parser. Duplicate headers are joined as
+Node Headers.get joins them. HTTP text uses UTF-8 replacement, JSON duplicate
+keys use the last value, and unknown private fields/numeric spellings are omitted.
+Selected JSON strings must be representable as Unicode scalar strings; selected
+lone UTF-16 surrogates are refused where Node can retain them.
+
+Each socket accepts 256 KiB frames and complete messages, at most 4096 yielded
+messages including controls, and 8 MiB of yielded payload per guest. Hidden wire
+continuation frames are not separately counted. The client retains both socket
+owners through all failures, queues the public message at most once, and counts
+queue acceptance separately from flush/delivery. A positive close requires the
+1000 close exchange, flush and protocol EOF. A forced transport drop is negative.
+Late terminal protocol errors are refused even during cleanup; this is stricter
+than the old event waiter after its last work observation.
+
+The scheduling window is 35 seconds of work, one shared 5-second cleanup window
+for both socket finalizers, and a 45-second entry limit including artifact and
+final fences. Each HTTP request has an 8-second local limit. Same-clock checks
+before and after positive observations refuse exact or late boundaries. Already
+admitted socket finalizers are always joined, including after cancellation. This
+is a scheduling/watchdog policy, not a hard bound on OS stalls, filesystem calls,
+TLS/DNS internals or executor descheduling. No additional cleanup timeout is
+added per guest. The old loose timer acceptance, local timeout status, and forced
+250 ms stdout-exit behavior are not retained.
+
+Presentation is artifact-only. A fresh private 0700 directory defaults to
+`results/public-smoke.<UUID>` under the captured caller directory; a new default
+`results` parent is also 0700. `--output FRESH_ABSOLUTE_DIRECTORY` selects another
+fresh leaf. Its existing ancestors must be physical paths without symlinks, with
+at most 24 path components; on macOS use the physical temporary path rather than
+`/tmp` or `/var` aliases. Existing parents retain their permissions. The successful
+payload is a 0600 `summary.json` (a bounded private `summary.json.part` may remain
+after failed publication), containing the original schema-1 core fields,
+fixed check/counter/failure facts and public origin/room/run attribution. No chat
+content, participant IDs, raw frames, response bodies or arbitrary errors are
+retained. Publication keeps the original file through rename, validates bounded
+readback, then checks original file/namespace witnesses through explicit closure.
+These checks are optimistic observations, not an atomic namespace lock.
+
+Exit codes are 0 for final success, 1 for an assertion/transport/artifact refusal,
+2 for arguments, 124 for an observed deadline, and 130/143 for observed INT/TERM.
+The old JS CLI flattened failures to 1. `summary.json` is a prepublication
+observation: a later publication, file/directory close, signal or deadline can
+return nonzero after a positive saved observation. Final CLI 0 is authoritative.
+The unchanged `build/public-smoke.mjs` and its seven tests remain pinned
+executable references. Inert VM oracles exercise their complete operation and CLI;
+owned fake HTTP/sockets and mature duplex WebSocket fixtures test the native
+controller. These source tests make no claim of a real deployment/TLS/browser run.

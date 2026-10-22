@@ -402,7 +402,7 @@ maintenance. Inspect the named attempt and owned containers before recovery;
 deleting the journal is not proof that daemon-side work has stopped.
 
 After success, verify normal browser use. The bounded
-[`build/public-smoke.mjs`](../../build/public-smoke.mjs) check writes one labeled
+[`xtask public-smoke`](../../docs/testing.md#manual-public-protocol-smoke) check writes one labeled
 public message and verifies two guest connections; it does not test media.
 
 ## Schema and configuration changes: the maintenance release

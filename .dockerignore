@@ -176,6 +176,14 @@ xtask/src/ci/config_validation/**
 xtask/src/ci/load_generator_image/**
 !xtask/src/ci/load_generator_image/*.rs
 !xtask/src/ci/load_generator_image/reference-build.sh
+!xtask/src/ci/public_smoke/
+xtask/src/ci/public_smoke/**
+!xtask/src/ci/public_smoke/*.rs
+!xtask/src/ci/public_smoke/oracle.mjs
+!xtask/src/ci/public_smoke/reference/
+xtask/src/ci/public_smoke/reference/**
+!xtask/src/ci/public_smoke/reference/public-smoke.mjs
+!xtask/src/ci/public_smoke/reference/public-smoke.test.mjs
 !xtask/src/ci/mdns/
 xtask/src/ci/mdns/**
 !xtask/src/ci/mdns/*.rs

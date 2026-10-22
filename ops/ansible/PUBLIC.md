@@ -257,16 +257,19 @@ do not delete migration evidence to bypass a failed deployment.
 ## Verify and operate
 
 Open `https://chat.example.com` in your browser. For a bounded protocol check,
-run from your checkout with Node 22.12+:
+run from your checkout with the pinned Rust toolchain:
 
 ```sh
-node build/public-smoke.mjs --origin https://chat.example.com --room lobby
+cargo run --locked -q -p xtask -- public-smoke --origin https://chat.example.com --room lobby
 ```
 
 This joins two guests and **writes one public test message**, then leaves and
 closes both connections. It checks trusted HTTPS, assets, private-endpoint denial,
 and WebSocket text delivery. It does not use a camera or microphone or validate
 media, browser rendering, or capacity. Run it only against your own test site.
+The private `results/public-smoke.<UUID>/summary.json` records observations; the
+CLI exit status also requires final artifact closure and deadline/signal fences.
+See [the supported smoke domain](../../docs/testing.md#manual-public-protocol-smoke).
 
 The root-only Compose wrapper always selects this project's private configuration:
 

@@ -38,6 +38,7 @@ mod ops_artifact;
 mod performance_compare;
 mod process;
 mod production_image;
+mod public_smoke;
 mod receipts;
 mod release_checks;
 mod release_controller;
@@ -318,6 +319,10 @@ pub(crate) async fn replay_media_ip(
 
 pub(crate) fn run_container_smoke(root: &Path, arguments: &[String]) -> Result<ExitCode> {
     container_smoke::run_local(root, arguments)
+}
+
+pub(crate) fn run_public_smoke(arguments: &[String]) -> Result<ExitCode> {
+    public_smoke::run(arguments)
 }
 
 pub(crate) fn run_ops_artifact(arguments: &[String]) -> Result<ExitCode> {
