@@ -721,8 +721,44 @@ and cleanup use its inspected immutable ID. Cleanup refuses a changed identity.
 SIGINT/SIGTERM return 130/143, timeouts return 124, invalid context returns 2,
 and command failures preserve their exit status. Owned fake process tests check
 these boundaries without contacting an engine; they do not establish real
-container-build parity. The release fixture's controller installs in the
-background while the image builds.
+container-build parity. The release fixture's controller preparation overlaps
+the image build through two commands:
+
+```sh
+cargo run --locked -q -p xtask -- ci release-controller start
+cargo run --locked -q -p xtask -- ci release-controller wait
+```
+
+The launcher creates an origin-bound private namespace and hands off to a
+detached broker before publishing its commit. The worker dispatches no installer
+before that commit. A ten-second precommit lease bounds an incomplete handoff;
+publication uncertainty cannot authorize the launcher to signal a detached
+worker by PID. The broker retains the original four apt/venv/pip commands,
+inherited tracking/PIP environment and pinned requirements, whose descriptor
+and namespace binding remain checked through installation. The venv and later
+Python invocation keep their existing paths.
+
+Private records are capped at 16 KiB, commit/cancel requests at 4 KiB, and actual
+combined log bytes at 64 MiB. Descriptor walks admit at most 24 path components.
+The worker has a 90-minute fallback watchdog, including a 20-second cleanup
+reserve; this does not prove the remaining time in the 95-minute job. The
+five-minute collector verifies closed log/status hashes before replaying the
+original bytes through an owned bounded replay process. Failed installers still
+fail collection with status 1; observed cancellation/deadline results remain
+130/143/124. Malformed settlement cannot erase an already chosen interruption.
+
+Prepared evidence covers settled installer CLI groups and the closed
+requirements/log/status facts. It does not certify worker exit or the later
+publisher-directory closes. The collector checks its own namespace/source
+closes and final signal/deadline fences. No numeric PID is signaled across
+steps. Sudo/root/sessioned descendants and engine resources remain outside the
+CLI-group claim; a missing terminal record is unproven preparation. If later
+steps skip collection, the worker watchdog and runner disposal remain separate
+boundaries. Owned inert-command tests exercise the protocol without installing
+packages or claiming hosted-runner cancellation parity.
+The initial cold `xtask` compilation precedes the overlap; no hosted Linux
+startup cost or installer timing has been measured for this port.
+
 [CI](../.github/workflows/ci.yml) also runs formatting, locked Rust builds/tests,
 web tests/build, readiness/shutdown and pinned Chromium integration tests, dependency audits, native
 dependency guards and production-image non-root/loader checks.

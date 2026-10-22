@@ -30,6 +30,7 @@ mod process;
 mod production_image;
 mod receipts;
 mod release_checks;
+mod release_controller;
 mod required;
 mod runner;
 mod selected_executable;
@@ -45,6 +46,7 @@ const USAGE: &str = "usage: cargo run --locked -q -p xtask -- ci key|save|verify
        cargo run --locked -q -p xtask -- ci install-compose\n\
        cargo run --locked -q -p xtask -- ci audit-rust\n\
        cargo run --locked -q -p xtask -- ci release-checks\n\
+       cargo run --locked -q -p xtask -- ci release-controller start|wait\n\
        cargo run --locked -q -p xtask -- ci database-check monitoring|restore|migration\n\
        cargo run --locked -q -p xtask -- ci npm-path\n\
        cargo run --locked -q -p xtask -- ci controller-path\n\
@@ -275,6 +277,12 @@ fn print_key(context: &Context, scope: Scope, github_output: bool) -> Result<()>
 }
 
 pub(crate) fn run(root: &Path, arguments: &[String]) -> Result<ExitCode> {
+    if arguments
+        .first()
+        .is_some_and(|argument| argument == "release-controller")
+    {
+        return release_controller::run(root, &arguments[1..]);
+    }
     if arguments
         .first()
         .is_some_and(|argument| argument == "database-check")

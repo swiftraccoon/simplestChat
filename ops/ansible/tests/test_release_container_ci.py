@@ -221,19 +221,12 @@ class ReleaseContainerCiTests(unittest.TestCase):
     ) -> None:
         """Verify dependencies use existing pinned controller requirements in an isolated venv."""
         start = self.step(PREPARE_START)
-        command = string(start, "run")
-        for line in (
-            "set -euo pipefail\n",
-            "sudo apt-get update\n",
-            "sudo apt-get install -y python3-venv openssl curl ca-certificates util-linux\n",
-            'python3 -m venv "${RUNNER_TEMP}/release-container-controller"\n',
-            '"${RUNNER_TEMP}/release-container-controller/bin/pip" '
-            + "install -r ops/ansible/requirements.txt\n",
-            "set +e\n",
-            'echo "$?" > "${RUNNER_TEMP}/release-container-controller.status"\n',
-        ):
-            self.assertIn(line, command)
-        self.assertTrue(command.rstrip().endswith("< /dev/null > /dev/null 2>&1 &"))
+        self.assertEqual(
+            string(start, "run"),
+            "cargo run --locked -q -p xtask -- ci release-controller start",
+        )
+        # Actual owned inert-command Rust fixtures retain the four ordered
+        # apt/venv/pip argv, pinned requirements, environment and short circuit.
         # The controller build overlaps the image build instead of following it.
         self.assertLess(
             self.steps.index(start), self.steps.index(self.step("Build production container"))
@@ -242,13 +235,7 @@ class ReleaseContainerCiTests(unittest.TestCase):
         self.assertEqual(prepare["timeout-minutes"], "5")
         self.assertEqual(
             prepare["run"],
-            (
-                'until [[ -f "${RUNNER_TEMP}/release-container-controller.status" ]]; '
-                + "do sleep 1; done\n"
-                + 'cat "${RUNNER_TEMP}/release-container-controller.log"\n'
-                + 'test "$(<"${RUNNER_TEMP}/release-container-controller.status")" = 0\n'
-                + 'test -x "${RUNNER_TEMP}/release-container-controller/bin/python"\n'
-            ),
+            "cargo run --locked -q -p xtask -- ci release-controller wait",
         )
         for step in (start, prepare):
             self.assertNotIn("continue-on-error", step)

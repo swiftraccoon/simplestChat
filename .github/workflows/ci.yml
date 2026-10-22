@@ -951,23 +951,10 @@ jobs:
       # The release fixture's controller needs about twenty seconds of apt and
       # pip work that shares nothing with the image build. Start it here and
       # collect it after the build instead of paying for it on the critical path.
-      # Its output goes to files: an inherited step pipe would make the runner
-      # wait for the background job before ending this step.
+      # The origin-bound broker retains bounded output for the collection step.
+      # The launcher hands off before returning; it makes no worker-exit claim.
       - name: Start the isolated release-container controller build
-        run: |
-          {
-            # Drop the inherited -e here so a failure still writes its status;
-            # an || list would instead disable -e inside the subshell.
-            set +e
-            (
-              set -euo pipefail
-              sudo apt-get update
-              sudo apt-get install -y python3-venv openssl curl ca-certificates util-linux
-              python3 -m venv "${RUNNER_TEMP}/release-container-controller"
-              "${RUNNER_TEMP}/release-container-controller/bin/pip" install -r ops/ansible/requirements.txt
-            ) > "${RUNNER_TEMP}/release-container-controller.log" 2>&1
-            echo "$?" > "${RUNNER_TEMP}/release-container-controller.status"
-          } < /dev/null > /dev/null 2>&1 &
+        run: cargo run --locked -q -p xtask -- ci release-controller start
 
       - name: Install checksum-pinned production Compose
         timeout-minutes: 3
@@ -1049,11 +1036,7 @@ jobs:
 
       - name: Install isolated release-container checks
         timeout-minutes: 5
-        run: |
-          until [[ -f "${RUNNER_TEMP}/release-container-controller.status" ]]; do sleep 1; done
-          cat "${RUNNER_TEMP}/release-container-controller.log"
-          test "$(<"${RUNNER_TEMP}/release-container-controller.status")" = 0
-          test -x "${RUNNER_TEMP}/release-container-controller/bin/python"
+        run: cargo run --locked -q -p xtask -- ci release-controller wait
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:

@@ -44,6 +44,7 @@ Commands:
                 install-compose installs the authenticated Compose release in explicit CI.
                 audit-rust installs verified audit tooling and applies the advisory policy.
                 release-checks discovers pinned Chromium and runs the isolated release coordinator.
+                release-controller overlaps bounded controller preparation with the image build.
                 database-check runs monitoring, restore or migration in owned PostgreSQL.
                 npm-path publishes the pinned npm bin directory through the runner file.
                 controller-path publishes the installed automation controller bin directory.
