@@ -83,7 +83,10 @@ struct Fixture {
 
 impl Fixture {
     fn new(fault: Fault) -> (Self, Options, Manifest) {
-        let root = std::env::temp_dir().join(format!("benchmark-local-{}", uuid::Uuid::new_v4()));
+        let root = std::env::temp_dir()
+            .canonicalize()
+            .unwrap()
+            .join(format!("benchmark-local-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir(&root).unwrap();
         let server = root.join("server fixture");
         let generator = root.join("generator fixture");
@@ -213,6 +216,20 @@ struct Process {
 
 #[async_trait::async_trait]
 impl Child for Process {
+    fn retirement(&self) -> Option<crate::bench::process::Retirement> {
+        self.retired.then_some(crate::bench::process::Retirement {
+            term_attempted: true,
+            term_sent: true,
+            kill_attempted: true,
+            kill_sent: false,
+            leader_terminal_before_cleanup: Some(true),
+            leader_grace_expired: Some(false),
+            wait_code: Some(0),
+            wait_signal: None,
+            group_cleanup_passed: true,
+            streams_closed: true,
+        })
+    }
     fn pid(&self) -> u32 {
         if self.role == "server" { 1001 } else { 1002 }
     }
@@ -687,4 +704,53 @@ async fn rejected_results_remain_unavailable_for_every_poststop_reader() {
     assert_eq!(row["receiverStallReport"]["available"], false);
     assert_eq!(fixture.journal.lock().unwrap().reports.len(), 4);
     fixture.clean();
+}
+
+#[tokio::test]
+async fn ci_receipt_requires_six_existing_workload_finalizers_and_keeps_cleanup_failure() {
+    for fault in [Fault::None, Fault::ServerStop] {
+        let (fixture, mut options, manifest) = Fixture::new(fault);
+        options.purpose = options::Purpose::Performance;
+        let environment = BTreeMap::new();
+        let observed = super::receipt::ObservedHost::new(&fixture);
+        observed.bind_output(&options.output).unwrap();
+        let mut services = fixture.services(&environment);
+        services.host = &observed;
+        for repetition in 1..=3 {
+            for variant in ["baseline", "candidate"] {
+                let row = run_one(Context {
+                    options: &options,
+                    scenario: &options.scenarios[0],
+                    variant,
+                    repetition,
+                    manifest: &manifest,
+                    services: &services,
+                })
+                .await;
+                if row.is_ok() {
+                    observed.completed_run();
+                }
+                if fault == Fault::None {
+                    assert_eq!(row.unwrap()["passed"], true);
+                } else {
+                    assert!(row.is_err());
+                }
+            }
+        }
+        let receipt = observed.receipt(
+            "12345678-1234-4234-8234-123456789abc",
+            fault == Fault::None,
+            fault == Fault::None,
+        );
+        observed.publish(&receipt).unwrap();
+        let value =
+            artifacts::read_json(&options.output.join("comparison-owner.json"), 16384).unwrap();
+        assert_eq!(value["passed"], fault == Fault::None);
+        assert_eq!(value["runs"], if fault == Fault::None { 6 } else { 0 });
+        let journal = fixture.journal.lock().unwrap();
+        assert!(journal.active.is_empty());
+        assert_eq!(journal.stopped.len(), 12);
+        drop(journal);
+        fixture.clean();
+    }
 }

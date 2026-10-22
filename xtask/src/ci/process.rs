@@ -112,12 +112,15 @@ impl<'a> Native<'a> {
                 "CI file output requires bounded stderr capture.",
             ));
         }
-        let mut command = tooling::command(
-            self.root,
-            self.environment,
-            executable(&request)?,
-            &request.arguments,
-        );
+        let (root, environment) = match request.comparison.as_ref() {
+            Some(invocation) => invocation.context(
+                comparison_role(request.program)
+                    .ok_or_else(|| Failure::new(1, "CI comparison role invalid."))?,
+            )?,
+            None => (self.root, self.environment),
+        };
+        let mut command =
+            tooling::command(root, environment, executable(&request)?, &request.arguments);
         use std::os::unix::process::CommandExt;
         command.process_group(0).stdin(Stdio::null());
         let sink = request
@@ -235,7 +238,13 @@ impl<'a> Native<'a> {
             } else {
                 Signal::TERM
             };
-            let _ = rustix::process::kill_process_group(pid, signal);
+            if request.program == super::command::Program::ComparisonBenchmark {
+                // bench local owns fresh nested groups: allow its cooperative
+                // finalizers before this outer CLI group can be escalated.
+                let _ = rustix::process::kill_process(pid, signal);
+            } else {
+                let _ = rustix::process::kill_process_group(pid, signal);
+            }
             let _ = tokio::time::timeout(request.grace, exited(pid)).await;
         }
         let (cleaned, reaped) = finalizer.finish(&mut group).await;
@@ -267,6 +276,7 @@ fn executable(request: &Command) -> Result<&std::ffi::OsStr> {
         request.dtls.is_some(),
         request.ops.is_some(),
         request.source_git.is_some(),
+        request.comparison.is_some(),
     ]
     .into_iter()
     .filter(|present| *present)
@@ -280,6 +290,9 @@ fn executable(request: &Command) -> Result<&std::ffi::OsStr> {
             | Program::OpsCargo
             | Program::OpsRustc
             | Program::OpsGit
+            | Program::ComparisonGit
+            | Program::ComparisonCargo
+            | Program::ComparisonBenchmark
     );
     if proofs == 0 && !selected {
         return Ok(std::ffi::OsStr::new(request.program.name()));
@@ -304,10 +317,27 @@ fn executable(request: &Command) -> Result<&std::ffi::OsStr> {
             .as_ref()
             .map(|value| value.validate(super::ops_artifact::recipe::Role::Rustc)),
         Program::OpsGit => request.source_git.as_ref().map(|value| value.validate()),
+        Program::ComparisonGit | Program::ComparisonCargo | Program::ComparisonBenchmark => {
+            request.comparison.as_ref().map(|value| {
+                value.validate(comparison_role(request.program).expect("comparison role"))
+            })
+        }
         _ => None,
     }
     .ok_or_else(|| Failure::new(1, "CI execution requires its validated executable role."))??;
     Ok(path.as_os_str())
+}
+
+fn comparison_role(
+    program: super::command::Program,
+) -> Option<super::performance_compare::files::Role> {
+    use super::{command::Program, performance_compare::files::Role};
+    match program {
+        Program::ComparisonGit => Some(Role::Git),
+        Program::ComparisonCargo => Some(Role::Cargo),
+        Program::ComparisonBenchmark => Some(Role::Benchmark),
+        _ => None,
+    }
 }
 
 pub(super) trait Finalizer {

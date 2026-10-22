@@ -31,6 +31,7 @@ mod native_dtls;
 mod native_security;
 mod npm_path;
 mod ops_artifact;
+mod performance_compare;
 mod process;
 mod production_image;
 mod receipts;
@@ -57,6 +58,7 @@ const USAGE: &str = "usage: cargo run --locked -q -p xtask -- ci key|save|verify
        cargo run --locked -q -p xtask -- ci container-smoke\n\
        cargo run --locked -q -p xtask -- ci database-check monitoring|restore|migration\n\
        cargo run --locked -q -p xtask -- ci session-soak\n\
+       cargo run --locked -q -p xtask -- ci performance-compare\n\
        cargo run --locked -q -p xtask -- ci native-dtls [--record-success]\n\
        cargo run --locked -q -p xtask -- ci npm-path\n\
        cargo run --locked -q -p xtask -- ci controller-path\n\
@@ -316,6 +318,12 @@ pub(crate) fn run_ops_artifact(arguments: &[String]) -> Result<ExitCode> {
 }
 
 pub(crate) fn run(root: &Path, arguments: &[String]) -> Result<ExitCode> {
+    if arguments
+        .first()
+        .is_some_and(|argument| argument == "performance-compare")
+    {
+        return performance_compare::run(root, &arguments[1..]);
+    }
     if arguments
         .first()
         .is_some_and(|argument| argument == "native-dtls")

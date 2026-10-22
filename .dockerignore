@@ -97,6 +97,9 @@ load_tests/src/bench/**
 !load_tests/src/bench/local/
 load_tests/src/bench/local/**
 !load_tests/src/bench/local/*.rs
+!load_tests/src/bench/local/receipt/
+load_tests/src/bench/local/receipt/**
+!load_tests/src/bench/local/receipt/*.rs
 !load_tests/src/bench/impaired/
 load_tests/src/bench/impaired/**
 !load_tests/src/bench/impaired/*.rs
@@ -142,6 +145,12 @@ xtask/src/ci/codeql_cache/**
 !xtask/src/ci/native_dtls/
 xtask/src/ci/native_dtls/**
 !xtask/src/ci/native_dtls/*.rs
+!xtask/src/ci/performance_compare/
+xtask/src/ci/performance_compare/**
+!xtask/src/ci/performance_compare/*.rs
+!xtask/src/ci/performance_compare/reference-baseline.sh
+!xtask/src/ci/performance_compare/reference-build.sh
+!xtask/src/ci/performance_compare/reference-comparison.sh
 !xtask/src/ci/ops_artifact/
 xtask/src/ci/ops_artifact/**
 !xtask/src/ci/ops_artifact/*.rs

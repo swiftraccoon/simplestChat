@@ -1427,6 +1427,45 @@ for the budgets and their limits, and
 [production shape and impaired networks](performance.md#production-shape-and-impaired-networks)
 for the Podman capacity runs and the local impairment helpers.
 
+The hosted Linux comparison uses
+`cargo run --locked -q -p xtask -- ci performance-compare`. It captures the
+environment once, resolves the baseline before recording worktree creation
+intent, and preserves the baseline Cargo working directory, inherited native
+toolchain settings and shared candidate `target`. The saved baseline binary is
+copied, read back and closed before the exact shared-target source is unlinked.
+The candidate server and generator then build in their original order. The
+10/30/100-client profiles, one/two-worker choices, three alternating repetitions,
+ramp/warmup/measurement intervals and ring graph stay fixed. The selected Cargo
+path is invoked as selected, including a rustup shim's basename; this is not a
+compiler, build-script or source-origin authentication boundary.
+
+Each CLI has a reserved process group and a bounded private combined log. Git
+metadata is read back through its original anchored file binding (4 MiB); build
+and comparison logs each allow 64 MiB. After any dispatched worktree add, cleanup
+reconciles a complete successful Git inventory and only removes this invocation's
+exact detached revision and retained directory. Missing, foreign or ambiguous
+ownership cannot authorize deletion. Positive Linux removal also requires the
+retained directory's link count to reach zero. Failed cleanup cannot return zero.
+
+The comparison receives a generated `BENCH_CI_RUN_ID`; ordinary `bench local`
+commands omit it. Its fixed `comparison-owner.json` is an exclusive private
+completion observation bound to that ID, all six finished runs and actual owned
+native group/stream retirement, including auxiliary commands. The outer owner
+checks it after every admitted comparison settlement, independently of CLI status.
+A missing or invalid receipt leaves inner closure unknown; it supplies no PID
+authority or proof about escaped sessions, privileged resources or the host.
+The outer CLI group alone cannot close the benchmark's separate service groups.
+
+The owner admits commands within 90 minutes with a five-minute finalization
+reserve, including three bounded Git cleanup slots. It reserves 90 seconds for
+cooperative benchmark cleanup and 20 seconds of CLI settlement scheduling space;
+before launch the six measurement intervals must still fit (450/810/1632 seconds
+for 10/30/100 clients). These are admission policies, not bounds on OS scheduling,
+filesystem operations, reap or cold compilation. The unchanged 90-minute job also
+includes earlier setup and unmeasured compilation. Fixed profile, inert process
+and retained Bash-reference fixtures do not establish hosted build or workload
+timing. Threshold evaluation and artifact retention retain their existing guards.
+
 For the separate fixed thirty-account, twenty-minute media/chat measurement,
 dispatch `gh workflow run performance.yml --ref main -f only=account-room`.
 Its measured command is `./target/release/load_test bench account-room`; the

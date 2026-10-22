@@ -18,6 +18,9 @@ pub(super) enum Program {
     OpsCargo,
     OpsRustc,
     OpsGit,
+    ComparisonGit,
+    ComparisonCargo,
+    ComparisonBenchmark,
 }
 impl Program {
     pub(super) fn name(self) -> &'static str {
@@ -35,6 +38,9 @@ impl Program {
             Self::OpsCargo => "cargo",
             Self::OpsRustc => "rustc",
             Self::OpsGit => "git",
+            Self::ComparisonGit => "git",
+            Self::ComparisonCargo => "cargo",
+            Self::ComparisonBenchmark => "load_test",
         }
     }
 }
@@ -55,6 +61,7 @@ pub(super) struct Command {
     pub dtls: Option<std::sync::Arc<super::native_dtls::files::Executable>>,
     pub ops: Option<std::sync::Arc<super::ops_artifact::recipe::Tool>>,
     pub source_git: Option<std::sync::Arc<super::ops_artifact::source::Git>>,
+    pub comparison: Option<std::sync::Arc<super::performance_compare::files::Invocation>>,
 }
 impl Command {
     pub(super) fn capture(program: Program, args: &[&str]) -> Self {
@@ -72,6 +79,7 @@ impl Command {
             dtls: None,
             ops: None,
             source_git: None,
+            comparison: None,
         }
     }
 }

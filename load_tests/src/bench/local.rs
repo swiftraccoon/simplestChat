@@ -3,6 +3,7 @@
 
 mod controller;
 mod finalize;
+mod receipt;
 mod step;
 
 #[cfg(test)]
@@ -35,21 +36,28 @@ pub(super) fn run(arguments: &[OsString]) -> ExitCode {
         let directory = std::env::current_dir()?;
         let options = super::options::parse(arguments, &directory)?;
         let environment = std::env::vars_os().collect();
+        let run_id = receipt::run_id(&environment)?;
         let host = Arc::new(NativeHost::default());
+        let observed = receipt::ObservedHost::new(host.as_ref());
+        let selected_host: &dyn super::process::Host = if run_id.is_some() {
+            &observed
+        } else {
+            host.as_ref()
+        };
         let clock = RealClock::default();
         let metrics = HttpMetrics::new()?;
         let media = HttpMedia::new()?;
-        let resources = NativeResources::new(host.as_ref(), directory.clone(), &environment);
+        let resources = NativeResources::new(selected_host, directory.clone(), &environment);
         let generator_sha256 = super::provenance::hash_file(&options.generator)?.0;
         let reports = NativeReports {
-            host: host.as_ref(),
+            host: selected_host,
             generator: options.generator.clone(),
             generator_sha256,
             directory: directory.clone(),
             environment: super::commands::clean(&environment),
         };
         let services = Services {
-            host: host.as_ref(),
+            host: selected_host,
             clock: &clock,
             metrics: &metrics,
             resources: &resources,
@@ -63,6 +71,17 @@ pub(super) fn run(arguments: &[OsString]) -> ExitCode {
             .build()?;
         let executable = std::env::current_exe()?;
         runtime.block_on(async {
+            if let Some(run_id) = run_id {
+                return receipt::execute(
+                    &run_id,
+                    &options,
+                    &services,
+                    &executable,
+                    &host,
+                    &observed,
+                )
+                .await;
+            }
             use tokio::signal::unix::{SignalKind, signal};
             let mut interrupt = signal(SignalKind::interrupt())?;
             let mut terminate = signal(SignalKind::terminate())?;

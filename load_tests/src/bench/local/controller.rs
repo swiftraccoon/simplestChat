@@ -95,7 +95,28 @@ pub async fn execute(
     services: &Services<'_>,
     executable: &Path,
 ) -> Result<Value> {
+    execute_inner(options, services, executable, None).await
+}
+
+pub(super) async fn execute_recorded(
+    options: &Options,
+    services: &Services<'_>,
+    executable: &Path,
+    observed: &super::receipt::ObservedHost<'_>,
+) -> Result<Value> {
+    execute_inner(options, services, executable, Some(observed)).await
+}
+
+async fn execute_inner(
+    options: &Options,
+    services: &Services<'_>,
+    executable: &Path,
+    observed: Option<&super::receipt::ObservedHost<'_>>,
+) -> Result<Value> {
     artifacts::directory(&options.output)?;
+    if let Some(observed) = observed {
+        observed.bind_output(&options.output)?;
+    }
     let mut rows = Vec::new();
     let outcome: Result<Value> = async {
         let manifest = manifest(options, services, executable).await?;
@@ -108,17 +129,19 @@ pub async fn execute(
                     ["candidate", "baseline"]
                 };
                 for variant in order {
-                    rows.push(
-                        super::run_one(Context {
-                            options,
-                            scenario,
-                            variant,
-                            repetition,
-                            manifest: &manifest,
-                            services,
-                        })
-                        .await?,
-                    );
+                    let row = super::run_one(Context {
+                        options,
+                        scenario,
+                        variant,
+                        repetition,
+                        manifest: &manifest,
+                        services,
+                    })
+                    .await?;
+                    if let Some(observed) = observed {
+                        observed.completed_run();
+                    }
+                    rows.push(row);
                 }
             }
         }
