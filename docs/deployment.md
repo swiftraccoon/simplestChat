@@ -23,8 +23,9 @@ use the capacity runner on a disposable host to validate the intended workload
 before admitting that many users. The runner generates load and is a separate,
 explicitly operated measurement step, not part of ordinary setup.
 
-The Python adviser and managed Ansible deployment share `build/capacity.py`'s
-calculation through a controller-side filter. It bounds meeting and webinar
+The Rust `load_test capacity suggest` adviser preserves `build/capacity.py`'s
+calculation; the managed Ansible deployment uses that Python reference through
+a controller-side filter. Oracle tests compare their results. The model bounds meeting and webinar
 estimates by CPU, measured per-participant memory with a twofold allowance, and
 80% of the sold network port. Default workers are bounded at 64 and generated
 room ceilings at 10,000, matching runtime constraints. A calibrated
@@ -53,7 +54,7 @@ transfer consumption alongside CPU. Fast overload can outrun a sampling guard.
    join refusals, per-worker CPU, pool acquisition time and sustained egress.
    Distinguish many small meetings from one publishing grid or one presenter
    with viewers. Each puts pressure on a different resource.
-2. Produce candidate settings with `build/capacity.py suggest`, then run the
+2. Produce candidate settings with `load_test capacity suggest`, then run the
    binary's offline `--check-config` with the intended environment. Validate the
    host's CPU quota, memory ceiling, worker UDP range, announced addresses,
    firewall, TURN limits and transfer budget together.
@@ -210,7 +211,8 @@ sees the proxy through a Docker bridge.
 Size the app from the host, not from any particular VPS: one media worker per
 CPU given to the app, all but one CPU of a dedicated host, and the memory beyond
 a quarter (at least 1 GiB) kept for the database, the proxy and the system.
-`build/capacity.py suggest --vcpus N --memory-gib M [--port-mbps 1000]` prints
+The [built load-test binary](../load_tests/README.md#build-and-run), invoked as
+`load_test capacity suggest --vcpus N --memory-gib M [--port-mbps 1000]`, prints
 `MEDIA_WORKERS`, `SIMPLESTCHAT_CPUS`, `SIMPLESTCHAT_MEMORY_LIMIT`,
 `MAX_CONNECTIONS`, `MAX_ROOMS` and `RTC_PORT_END` for that host with what they
 carry per room shape, from ceilings measured on a 4-vCPU reference VPS or from a

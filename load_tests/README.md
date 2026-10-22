@@ -64,6 +64,23 @@ report, and exit 2 means invalid arguments. See the
 The local benchmark invokes this reader through its explicit `--generator`
 binary. Ordinary helper checks do not compile a native generator.
 
+The binary also sizes a host and compares compatible calibration reports offline:
+
+```sh
+./target/release/load_test capacity suggest --vcpus 8 --memory-gib 16 --port-mbps 1000
+./target/release/load_test capacity compare results/capacity.*/calibration.json
+```
+
+These commands initialize no runtime or workload. `suggest --env` prints only
+environment settings; `--calibration PATH` uses that compatible measured report.
+The pure policy and output match the retained Python reference. Measurement and
+the managed deployment filter still use Python; see [host sizing](../docs/performance.md#sizing-a-host).
+The explicit compiled-command parity check reuses an already-built executable:
+
+```sh
+LOAD_TEST_CAPACITY_BINARY="$PWD/target/release/load_test" node --test load_tests/capacity-parity.test.mjs
+```
+
 ### Linux container
 
 Docker host networking reaches your owned local test server; reports are written

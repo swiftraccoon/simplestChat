@@ -463,9 +463,15 @@ quality.
 
 ## Sizing a host
 
-[`build/capacity.py`](../build/capacity.py) answers how many people a given
-server carries and what each costs, on any Linux host with Docker or Podman and
-Python 3.10 or later (Podman's VM on a Mac works for trials). `run` starts the
+The [load-test binary](../load_tests/README.md#build-and-run) provides offline
+`capacity suggest` and `capacity compare` commands for sizing hosts and ranking
+the same workload's reports. They read local files and calculate recommendations
+without starting a runtime, server, container or workload. Their output matches
+the retained [`build/capacity.py`](../build/capacity.py) reference, which still
+provides the measured `run` and the managed deployment's calculation API.
+
+Measuring a host needs Docker or Podman and Python 3.10 or later on Linux
+(Podman's VM on a Mac works for trials). Python `run` starts the
 production image as an owned, loopback-only container under a CPU quota and the
 load-test image in its network namespace with the [browser
 profile](../load_tests/README.md#the-browser-profile), which models the web
@@ -518,13 +524,19 @@ python3 build/capacity.py run --server-image localhost/simplestchat-production:d
   --generator-image localhost/simplestchat-loadtest:dev \
   --label example-vps --monthly-price 6.80 \
   --egress-price-per-gb 0.01 --included-egress-tb 20
-python3 build/capacity.py compare results/capacity.*/calibration.json
-python3 build/capacity.py suggest --vcpus 8 --memory-gib 16 --port-mbps 1000
+./target/release/load_test capacity compare results/capacity.*/calibration.json
+./target/release/load_test capacity suggest --vcpus 8 --memory-gib 16 --port-mbps 1000
 ```
 
 Prices and transfer allowances above are illustrative inputs. Substitute the
 host's actual plan. Add `--calibration /path/to/calibration.json` to `suggest`
 to use a compatible measured report instead of the reference figures.
+Use `--env` to print only environment settings. Both offline commands retain
+the original CPU, memory, port-headroom and workload-shape policy. Calibration
+reads preserve the reference's 128 MiB regular-file bound and refuse final
+symlinks; numeric tokens retain Python rounding and its legacy nonfinite JSON
+values. The old Python workload runner and Ansible filter remain the reference
+for subsequent migration work.
 
 The default remains five-person audio/video meetings with one active speaker
 per room and no chat traffic. To measure thirty continuously active microphones

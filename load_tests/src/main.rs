@@ -632,6 +632,9 @@ fn main() -> std::process::ExitCode {
     if args.get(1).is_some_and(|arg| arg == "report") {
         return simplestchat_load_test::report::run(&args[2..]);
     }
+    if args.get(1).is_some_and(|arg| arg == "capacity") {
+        return simplestchat_load_test::capacity::run(&args[2..]);
+    }
     match run_workload() {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(error) => {
@@ -4651,6 +4654,8 @@ fn print_usage() {
     println!("\nUsage:");
     println!("  cargo run --locked -p simplestchat-load-test --bin load_test -- [OPTIONS]");
     println!("  load_test report diagnostics PATH [--max-records N]");
+    println!("  load_test capacity suggest --vcpus N --memory-gib GIB [OPTIONS]");
+    println!("  load_test capacity compare REPORT.json [REPORT.json ...]");
     println!("\nOptions:");
     println!("  -c, --clients <N>          Number of concurrent clients (default: 5)");
     println!("  -d, --duration <SECS>      Shared measurement duration, 3–3600s (default: 30)");
