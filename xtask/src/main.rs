@@ -30,8 +30,9 @@ Commands:
   run           Build and run the local UI; --skip-web reuses web/dist.
   check         Run installed-tool quality gates: [--web|--rust|--python|--helpers].
                 Default runs all groups, without installs or application services.
-  ci key|save|verify --scope SCOPE
-                Bind reusable CI successes to exact source and environment inputs;
+  ci            Exact-input CI keys and success receipts: key|save|verify --scope SCOPE.
+                native-security verifies dependency pins, overlays and server linkage.
+                automation runs installed controller quality, syntax and unit checks.
                 CodeQL extraction keys never substitute for analyzed databases.
   ci-evidence   Record or require complete executed local-CI matrix evidence.
   line-length   Fail when Rust production code has more lines over 100 columns

@@ -824,6 +824,19 @@ it defaults to this repository. `save` and `verify` require an absolute receipt
 directory. Python remains the parity reference and supplies the current security
 helpers' source-closure API; scanner drivers retain their existing implementation.
 
+`cargo run --locked -q -p xtask -- ci automation` runs the installed Python
+quality gate first, then offline Ansible lint, every maintained controller
+playbook's syntax check, ShellCheck and operations unit tests. Each command's
+arguments are explicit and the first failure stops the gate. It installs no
+tools and applies no playbook to a host.
+
+`cargo run --locked -q -p xtask -- ci native-security` verifies the native
+dependency versions, source pins and overlay hashes used by the Rust test job,
+then scans the built server for the required and forbidden OpenSSL versions and
+checks Linux linkage with `ldd`. It reads local inputs and runs the fixed Cargo
+inventory/linkage commands; it performs no installation or native compilation.
+The Linux CI step runs it after building the server.
+
 Browser jobs reuse backend executables only for the same bound inputs and after
 checking both executable and compiler dependency-file hashes. Backend keys bind
 all Rust targets (including `load_tests`), embedded source/fixture trees, Cargo

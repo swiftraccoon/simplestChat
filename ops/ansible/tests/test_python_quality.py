@@ -76,7 +76,7 @@ class PythonPolicyTests(unittest.TestCase):
         gate = next(
             step
             for step in steps
-            if "cargo run --locked -q -p xtask -- check --python" in string(step.get("run", ""))
+            if "cargo run --locked -q -p xtask -- ci automation" in string(step.get("run", ""))
         )
         self.assertLess(steps.index(install), steps.index(gate))
         rust = next(
@@ -94,10 +94,7 @@ class PythonPolicyTests(unittest.TestCase):
         fingerprint = next(step for step in steps if step.get("id") == "verified-inputs")
         self.assertLess(steps.index(rust), steps.index(fingerprint))
         command = string(gate, "run")
-        self.assertLess(
-            command.index("cargo run --locked -q -p xtask -- check --python"),
-            command.index("python -m unittest discover"),
-        )
+        self.assertEqual(command, "cargo run --locked -q -p xtask -- ci automation")
         self.assertEqual(
             string(gate, "env", "PYTHON_CHECK_ENV"), "${{ runner.temp }}/ansible-controller"
         )

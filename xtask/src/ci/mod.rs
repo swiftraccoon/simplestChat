@@ -11,15 +11,18 @@ use std::process::{ExitCode, Stdio};
 use std::time::Duration;
 use tokio::io::AsyncReadExt;
 
+mod automation;
 mod fingerprint;
 mod inputs;
 mod io;
+mod native_security;
 mod receipts;
 #[cfg(test)]
 mod tests;
 
 const USAGE: &str = "usage: cargo run --locked -q -p xtask -- ci key|save|verify \
---scope SCOPE [--key KEY --directory PATH] [--root CHECKOUT]";
+--scope SCOPE [--key KEY --directory PATH] [--root CHECKOUT]\n\
+       cargo run --locked -q -p xtask -- ci native-security|automation";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Scope {
@@ -220,6 +223,18 @@ fn options(root: &Path, arguments: &[String]) -> Option<Options> {
 }
 
 pub(crate) fn run(root: &Path, arguments: &[String]) -> Result<ExitCode> {
+    if arguments
+        .first()
+        .is_some_and(|argument| argument == "automation")
+    {
+        return automation::run(root, &arguments[1..]);
+    }
+    if arguments
+        .first()
+        .is_some_and(|argument| argument == "native-security")
+    {
+        return native_security::run(root, &arguments[1..]);
+    }
     if arguments
         .iter()
         .any(|argument| argument == "--help" || argument == "-h")

@@ -92,22 +92,7 @@ jobs:
         env:
           ANSIBLE_CONFIG: ${{ github.workspace }}/ops/ansible/ansible.cfg
           PYTHON_CHECK_ENV: ${{ runner.temp }}/ansible-controller
-        run: |
-          cargo run --locked -q -p xtask -- check --python
-          ansible-lint --offline --strict ops/ansible
-          ansible-lint --offline --strict security/vm/stage.yml
-          ansible-playbook -i ops/ansible/inventory.example.yml ops/ansible/site.yml --syntax-check
-          ansible-playbook -i ops/ansible/inventory.example.yml ops/ansible/public.yml --syntax-check
-          ansible-playbook -i ops/ansible/inventory.example.yml ops/ansible/release.yml --syntax-check
-          ansible-playbook -i ops/ansible/inventory.example.yml ops/ansible/host-hardening.yml --syntax-check
-          ansible-playbook -i ops/ansible/inventory.example.yml ops/ansible/proxy-config.yml --syntax-check
-          ansible-playbook -i ops/ansible/inventory.example.yml ops/ansible/reboot.yml --syntax-check
-          ansible-playbook -i ops/ansible/inventory.example.yml ops/ansible/turn.yml --syntax-check
-          ansible-playbook -i ops/ansible/inventory.example.yml ops/ansible/monitoring.yml --syntax-check
-          ansible-playbook -i ops/ansible/inventory.example.yml ops/ansible/migration-prepare.yml --syntax-check
-          ansible-playbook -i ops/ansible/inventory.example.yml ops/ansible/migration-data.yml --syntax-check
-          shellcheck ops/ansible/files/*.sh
-          python -m unittest discover -s ops/ansible/tests -v
+        run: cargo run --locked -q -p xtask -- ci automation
 
       - name: Verify operational alert history in disposable PostgreSQL
         if: steps.verified.outputs.cache-hit != 'true'
@@ -371,59 +356,7 @@ jobs:
 
       - name: Verify native security patches
         if: steps.verified.outputs.cache-hit != 'true'
-        run: |
-          cargo tree --locked -i lru | grep -F 'lru v0.18.5'
-          cargo tree --locked -i mediasoup-sys \
-            | grep -Eq 'mediasoup-sys v0\.19\.0 \(.*/vendor/mediasoup-sys-0\.19\.0\)$'
-          grep -Fq 'source_filename = abseil-cpp-20260817.0.tar.gz' \
-            vendor/mediasoup-sys-0.19.0/subprojects/abseil-cpp.wrap
-          grep -Fq 'source_hash = f7e05179df39c45434cad433f5783840bb3788ef322976f9138bc6b72b3a107d' \
-            vendor/mediasoup-sys-0.19.0/subprojects/abseil-cpp.wrap
-          grep -Fq 'patch_directory = abseil-cpp' \
-            vendor/mediasoup-sys-0.19.0/subprojects/abseil-cpp.wrap
-          echo '9d09ed3cbdd418c92ad582d590bce139873f7aed4468ce6cae31e4fd412b52ae  vendor/mediasoup-sys-0.19.0/subprojects/packagefiles/abseil-cpp/meson.build' \
-            | sha256sum --check --strict
-          echo '7939f4c45423cec4a18236ad0a88570e33508dd7462e07b1038001f90ece65fb  vendor/mediasoup-sys-0.19.0/subprojects/packagefiles/abseil-cpp/LICENSE.build' \
-            | sha256sum --check --strict
-          if grep -Fq 'source_filename = abseil-cpp-20240722.0.tar.gz' \
-            vendor/mediasoup-sys-0.19.0/subprojects/abseil-cpp.wrap; then
-            echo 'vulnerable Abseil 20240722.0 source remains configured' >&2
-            exit 1
-          fi
-          if grep -Fq 'source_fallback_url' \
-            vendor/mediasoup-sys-0.19.0/subprojects/abseil-cpp.wrap; then
-            echo 'Abseil source fallback must remain disabled' >&2
-            exit 1
-          fi
-          grep -Fq 'source_hash = ccbce58684691de1e7d51f5e87786266b37d06ab66e9dfe2d0ec106fe50aace0' \
-            vendor/mediasoup-sys-0.19.0/subprojects/flatbuffers.wrap
-          echo 'f8a08600662c6e46444257137838143c1a7f31156a7640948ba5583784286705  vendor/mediasoup-sys-0.19.0/subprojects/packagefiles/flatbuffers/meson.build' \
-            | sha256sum --check --strict
-          grep -Fq 'source_hash = cb0d6dd2128d5a95bd242c6cc982a24fe608fa93da57b6b4ec763b0018c53e64' \
-            vendor/mediasoup-sys-0.19.0/subprojects/libuv.wrap
-          grep -Fq 'source_hash = 06c262f9d7e1ff94d92e0359f89cc5d8632f32dfffb5e176a10516c509f5e5f2' \
-            vendor/mediasoup-sys-0.19.0/subprojects/unordered-dense.wrap
-          grep -Fq 'source_hash = 0957cae5821b17ce07f0833aaa52b5137643a8382203221f363a8303c109af34' \
-            vendor/mediasoup-sys-0.19.0/subprojects/catch2.wrap
-          echo '4ea34585b52222502e7cb9ffd963d9a0ff3c06a7c3251d6d09461490bd069056  vendor/mediasoup-sys-0.19.0/subprojects/packagefiles/libuv/meson.build' \
-            | sha256sum --check --strict
-          echo 'dc02dc5b7d5bd069782529f59012e7ac25b53325b7783609c77a3b36ca819a7c  vendor/mediasoup-sys-0.19.0/subprojects/packagefiles/libuv/meson_options.txt' \
-            | sha256sum --check --strict
-          echo 'cba566c9f026b7c23c2460c4262ddd420e4da63986a892653d4c15a0f9e6943d  vendor/mediasoup-sys-0.19.0/subprojects/packagefiles/libuv/link_file_in_build_dir.py' \
-            | sha256sum --check --strict
-          echo '7939f4c45423cec4a18236ad0a88570e33508dd7462e07b1038001f90ece65fb  vendor/mediasoup-sys-0.19.0/subprojects/packagefiles/libuv/LICENSE.build' \
-            | sha256sum --check --strict
-          echo '67fc3f19a4f3352e2383293cd68e36c899b7b59445d3bd7bf54f3523ac9a5166  vendor/mediasoup-sys-0.19.0/subprojects/packagefiles/ankerl-unordered-dense/meson.build' \
-            | sha256sum --check --strict
-          strings target/debug/simplestChat | grep -Fq 'OpenSSL 4.0.3 29 Sep 2026'
-          if strings target/debug/simplestChat | grep -Fq 'OpenSSL 3.0.8'; then
-            echo 'vulnerable bundled OpenSSL 3.0.8 found in server binary' >&2
-            exit 1
-          fi
-          if ldd target/debug/simplestChat | grep -Eq 'lib(ssl|crypto)\.so'; then
-            echo 'server binary links dynamically to OpenSSL' >&2
-            exit 1
-          fi
+        run: cargo run --locked -q -p xtask -- ci native-security
 
       - name: Migrate disposable test database with the real server
         if: steps.verified.outputs.cache-hit != 'true'
