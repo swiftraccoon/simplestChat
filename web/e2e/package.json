@@ -27,7 +27,7 @@
     "test:accessibility": "node runner-cli.cjs accessibility"
   },
   "devDependencies": {
-    "@axe-core/playwright": "4.13.0",
+    "@axe-core/playwright": "4.14.0",
     "@playwright/test": "1.64.0",
     "playwright": "1.64.0"
   },
