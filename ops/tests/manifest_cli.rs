@@ -113,6 +113,8 @@ fn usage_and_help_never_read_a_manifest_or_start_another_command() {
                 "       simplestchat-ops distribution inspect-executable --path PATH\n",
                 "       simplestchat-ops distribution verify-pair --manifest PATH ",
                 "--path PATH --selection PATH\n",
+                "       simplestchat-ops distribution build-plan ",
+                "--selection PATH --source-root PATH\n",
             )
             .as_bytes()
         );

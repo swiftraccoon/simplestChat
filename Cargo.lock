@@ -3492,6 +3492,7 @@ dependencies = [
  "nix",
  "object",
  "regex-syntax",
+ "rustix",
  "serde",
  "serde_json",
  "sha2 0.11.0",

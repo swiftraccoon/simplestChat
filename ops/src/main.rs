@@ -19,7 +19,8 @@ const USAGE: &str = concat!(
     "       simplestchat-ops release receipt --envelope PATH --receipt PATH\n",
     "       simplestchat-ops distribution inspect-executable --path PATH\n",
     "       simplestchat-ops distribution verify-pair --manifest PATH ",
-    "--path PATH --selection PATH",
+    "--path PATH --selection PATH\n",
+    "       simplestchat-ops distribution build-plan --selection PATH --source-root PATH",
 );
 
 fn main() -> ExitCode {
@@ -28,7 +29,20 @@ fn main() -> ExitCode {
         println!("{USAGE}");
         return ExitCode::SUCCESS;
     }
-    let (result, failure) = if args.len() == 8
+    let (result, failure) = if args.len() == 6
+        && args[0] == "distribution"
+        && args[1] == "build-plan"
+        && args[2] == "--selection"
+        && args[4] == "--source-root"
+    {
+        let result = Selection::read(Path::new(&args[3]))
+            .map_err(|_| ())
+            .and_then(|selection| {
+                distribution::build_plan::inspect(&selection, Path::new(&args[5])).map_err(|_| ())
+            })
+            .and_then(|plan| serde_json::to_value(plan).map_err(|_| ()));
+        (result, "invalid_ops_build_plan")
+    } else if args.len() == 8
         && args[0] == "distribution"
         && args[1] == "verify-pair"
         && args[2] == "--manifest"
@@ -95,6 +109,9 @@ fn main() -> ExitCode {
         Ok(value) => value,
         Err(()) => {
             let bytes = match failure {
+                "invalid_ops_build_plan" => {
+                    b"{\"passed\":false,\"failure\":\"invalid_ops_build_plan\"}\n".as_slice()
+                }
                 "invalid_ops_artifact" => {
                     b"{\"passed\":false,\"failure\":\"invalid_ops_artifact\"}\n".as_slice()
                 }

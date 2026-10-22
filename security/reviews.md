@@ -531,3 +531,23 @@ provenance, signed source identity or ABI/runtime compatibility. An actual
 controlled musl build, authenticated separate artifact and owned Debian 13
 runtime evidence remain prerequisites before host installation or replacement
 of Python. Global production RPATH flags remain unchanged by this slice.
+
+### Local Ops source inventory (2026-10-22)
+
+The nonexecuting Ops build-plan inventory adds a direct edge to already locked
+`rustix` 1.1.5 with defaults disabled and only `fs`/`std`. It adds no package,
+version, advisory waiver or license exception. The existing first-party tooling
+already uses this maintained dependency's descriptor-relative
+[directory reader](https://github.com/bytecodealliance/rustix/blob/v1.1.5/src/backend/libc/fs/dir.rs).
+It avoids a new unsafe/getdents parser or path-based recursive enumeration.
+Directory names, counts, depth, retained descriptors, file sizes and aggregate
+bytes are bounded before further traversal/allocation. Retained nofollow file
+and directory bindings, original-byte hashes and explicit File close attempts
+precede success; the reader's transient internal cursor uses its RAII close.
+Namespace checks detect observed changes, not atomicity or same-user exclusion.
+
+Only the fixed selected-input profile is measured. Complete Cargo I/O closure,
+source revision and authenticated compiler/registry/runtime inputs are separate
+future obligations. Structured unresolved recipe slots cannot start a child or
+substitute an ambient executable. Neither the plan nor an empty evidence map
+is a producer receipt, authenticated provenance or a musl/runtime claim.

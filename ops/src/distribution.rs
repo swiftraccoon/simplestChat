@@ -1,6 +1,8 @@
 //! Local executable identity and bounded ELF linkage facts. This module never
 //! runs a candidate or proves its source, libc provenance or host compatibility.
 
+#[path = "distribution_build_plan.rs"]
+pub mod build_plan;
 #[path = "distribution_elf.rs"]
 mod elf;
 #[cfg(test)]

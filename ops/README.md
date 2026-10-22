@@ -43,6 +43,7 @@ timestamp text remains unchanged.
 | `src/json.rs` | Serde grammar, duplicate keys, numeric tokens and bounded decoding |
 | `src/files.rs` | Descriptor-bound regular-file snapshot and change detection |
 | `src/distribution.rs`, `src/distribution_elf.rs` | Original executable identity and bounded ELF linkage facts |
+| `src/distribution_build_plan.rs`, `src/distribution_inventory.rs` | Nonexecuting build recipe and selected original-byte inventory |
 | `src/distribution_manifest.rs`, `src/distribution_pair.rs` | Separate Ops declarations, selected identity and pinned local executable pair |
 | `src/release/manifest.rs` | Existing release schema, migration checksums and real UTC dates |
 | `src/release/archive.rs`, `src/release/archive/` | Whole-transfer identity and bounded offline Docker/OCI metadata validation |
@@ -197,6 +198,93 @@ bytes. No candidate is executed, fetched, unpacked, installed or transported.
 Python remains the supported runtime, and authenticated distribution readiness
 is still incomplete. Tests assert this new contract directly; no Python parity
 is claimed for a schema Python does not implement.
+
+## Nonexecuting Ops build plan
+
+Prepare a local plan without starting Cargo or executing a candidate:
+
+```sh
+cargo run --locked -q -p simplestchat-ops -- distribution build-plan \
+  --selection /path/to/selection.json --source-root /path/to/source
+```
+
+Argument order is exact. The selection has the same seven-field caller-owned
+shape as `verify-pair`; it is a declaration, not an authenticated GitHub/source
+observation. The library separates `collect_inputs(source_root)` from the pure
+`plan(&selection, &inventory)`. `inspect` composes them. No command is started,
+toolchain resolved, registry accessed, artifact generated or candidate run.
+
+The `workspace-ops-v1` inventory selects original bytes of `Cargo.toml`,
+`Cargo.lock`, `rust-toolchain.toml`, `.cargo/config.toml`, the Ops/load-test/xtask
+manifests, the two current mediasoup path-patch manifests, and every regular
+`*.rs` under `ops/src`. This covers the current named workspace discovery
+manifests, not complete Cargo/compiler I/O closure. The tool does not interpret
+TOML, resolve changed workspace members/path patches, or read other workspace,
+vendor or registry source. A later builder must audit the complete input closure
+instead of treating this fixed selection as one. Implicit `ops/build.rs`, an
+`ops/.cargo` directory and legacy `.cargo/config` are refused rather than silently
+omitted from this profile. Other unselected paths are not source inputs here.
+
+At most 64 files are selected, each at most 1 MiB except `Cargo.lock` at 4 MiB,
+with a 16 MiB original-byte total. Empty selected files are recorded accurately;
+the inventory does not establish that a manifest parses or source compiles.
+Source traversal has at most eight descendant directory levels and 16 selected
+directory owners, including the source root. Selected source names are bounded
+ASCII components; links and special files are refused. Enumerations have a
+combined 8,192-entry/1 MiB name budget and 255-byte entry-name limit. Source-path
+ancestors have at most 32 retained owners, shared across every file. The bound
+is 112 retained File handles plus transient enumeration/binding handles, rather
+than one ancestor chain per file.
+
+Retained descriptor-relative directories are enumerated with rustix's mature
+`Dir` reader. Files, selected directory stamps/membership and visible bindings
+are rechecked across collection. Outside ancestors bind inode/device, mode and
+owner/group without freezing unrelated siblings. Every retained File close is
+attempted explicitly, including after validation failure; rustix's temporary
+cursor is RAII-closed internally, with no fallible close API. This detects
+observed mutation/replacement; it is neither an atomic snapshot nor a lock.
+
+The canonical SHA-256 frame is the ASCII bytes
+`simplestchat-ops-source-inventory-v1` plus NUL, a big-endian u32 file count, then
+entries sorted by relative ASCII path. Each entry is big-endian u16 path length,
+path bytes, big-endian u64 original byte count and the 32 raw bytes of that
+file's SHA-256. Names are part of the digest but stay private. Public inventory
+output and Debug contain only the profile, SHA, count and byte total. This
+measures selected bytes; it does not prove their relationship to the declared
+revision or cleanliness of a Git tree.
+
+The recipe uses typed unresolved executable/directory slots and literal argv,
+never a shell template. It selects Rust 1.99.0, an x86-64 GNU Linux host toolchain,
+and `build --frozen --release -p simplestchat-ops --bin simplestchat-ops --target
+x86_64-unknown-linux-musl --target-dir` followed by the owned target-directory
+slot. Its clear-then-set environment contains explicit Cargo/home/temp, compiler,
+linker and authenticated host-tools directory slots. No ambient PATH fallback
+is authorized. Target encoded rustflags select static CRT, baseline x86-64 CPU,
+self-contained linking and the `ld.lld` flavor. They replace this workspace's
+global GNU RPATH through Cargo's documented
+[flag precedence](https://doc.rust-lang.org/cargo/reference/config.html#buildrustflags).
+Explicit `--target` keeps those target flags away from host proc macros. Rust's
+[linker options](https://doc.rust-lang.org/rustc/codegen-options/index.html#link-self-contained)
+describe those selections; no successful link or resulting linkage is inferred.
+
+Cargo also reads ancestor and CargoHome configuration, including legacy files
+and included configuration. Consequently clearing environment variables alone
+does not isolate a build. Before resolving this plan, an owner must create a
+fresh staging tree with controlled ancestors/config, rebind inventoried bytes,
+authenticate actual Cargo/rustc/rust-lld/target components and host-tool/runtime
+inputs, authenticate a prepopulated registry, isolate CargoHome, audit the full
+input closure and own an empty target directory. Cargo's
+[`--frozen`](https://doc.rust-lang.org/cargo/commands/cargo-build.html#manifest-options)
+means locked plus offline; it neither authenticates cached bytes nor proves a
+build-script sandbox. Build process, closed outputs, ELF/pair checks, provenance
+and Debian runtime evidence are still unmeasured prerequisites.
+
+Success prints only `schemaVersion`, `kind`, bounded `claims`, `inventory`, the
+unresolved `recipe` and fixed `prerequisites`. It has no passed/build-success,
+binary digest, signature or runtime-readiness claim. Failure is exit 1 and only
+`{"passed":false,"failure":"invalid_ops_build_plan"}`; invalid arguments return 2.
+The existing Ops artifact and server release contracts are unchanged. This is
+a new plan contract tested directly, not a Python producer receipt or oracle.
 
 ## Pure release evidence policy
 
