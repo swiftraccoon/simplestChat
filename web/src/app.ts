@@ -1,5 +1,5 @@
 import type { Elements } from './dom';
-import { createScope, type Disposable } from './disposable';
+import { createScope, type Disposable, type Scope } from './disposable';
 import {
   createLocalPreferences,
   forgetThisDevice,
@@ -45,11 +45,79 @@ import { api, button, modal, setModalNavigation } from './ui';
 import { observeVideoLayout } from './video-layout';
 import type { ServerCapabilities } from './api-validation';
 
+// Reserve dependency order before construction; fill each slot immediately when
+// its resource is returned. A failed constructor still owns its own partial work.
+const CLEANUP_ORDER = [
+  'telemetry',
+  'auth',
+  'signaling',
+  'videoLayout',
+  'callHealthButton',
+  'toasts',
+  'callTelemetry',
+  'mediaTelemetry',
+  'callHealth',
+  'appUpdates',
+  'appUpdateNotice',
+  'accountSync',
+  'accountUpdates',
+  'accountPreferences',
+  'notificationPreferences',
+  'pwa',
+  'socialChat',
+  'community',
+  'participantHovercard',
+  'mediaLifecycle',
+  'mediaControls',
+  'inboxRefresh',
+  'modalNavigation',
+  'navigation',
+  'directoryScreen',
+  'createRoomScreen',
+  'home',
+  'authScreen',
+  'invitations',
+  'chrome',
+  'roomLayout',
+  'roomSettingsScreen',
+  'appSettings',
+  'callHealthView',
+  'roomController',
+  'departure',
+] as const;
+type AppCleanups = Partial<Record<(typeof CLEANUP_ORDER)[number], () => void>>;
+
 /** Mount one app on a validated static shell; dispose retires its views and starts room departure.
- * A persisted pagehide keeps the instance alive for back/forward-cache restoration. */
+ * A persisted pagehide keeps the instance alive for back/forward-cache restoration.
+ * Failed composition retires every resource already returned by a constructor. */
 export function startApp(elements: Elements, revision: string): Disposable {
   const scope = createScope();
+  const cleanups: AppCleanups = {};
+  for (const name of CLEANUP_ORDER) scope.onDispose(() => cleanups[name]?.());
+  try {
+    initializeApp(elements, revision, scope, cleanups);
+    return scope;
+  } catch (error) {
+    try {
+      scope.dispose();
+    } catch (cleanupError) {
+      throw Object.assign(new Error('App initialization and cleanup failed.'), {
+        cause: error,
+        cleanupError,
+      });
+    }
+    throw error;
+  }
+}
+
+function initializeApp(
+  elements: Elements,
+  revision: string,
+  scope: Scope,
+  cleanups: AppCleanups,
+): void {
   const telemetry = new ClientTelemetry(revision);
+  cleanups.telemetry = () => telemetry.dispose();
   window.addEventListener('error', () => telemetry.record({ name: 'js_error', outcome: 'error' }), {
     signal: scope.signal,
   });
@@ -71,7 +139,12 @@ export function startApp(elements: Elements, revision: string): Disposable {
     roomVolumeSlot,
   } = elements;
   const stopVideoLayout = observeVideoLayout(videoGrid);
+  cleanups.videoLayout = stopVideoLayout;
   const callHealthButton = button('Call health', openCallHealth, 'call-health-button');
+  cleanups.callHealthButton = () => {
+    callHealthButton.before(qualityIndicator);
+    callHealthButton.remove();
+  };
   callHealthButton.id = 'call-health-btn';
   callHealthButton.hidden = true;
   qualityIndicator.before(callHealthButton);
@@ -79,6 +152,7 @@ export function startApp(elements: Elements, revision: string): Disposable {
   qualityIndicator.setAttribute('aria-hidden', 'true');
 
   const toasts = createToasts(document, elements.toastContainer);
+  cleanups.toasts = () => toasts.dispose();
   const { showToast, showActionToast } = toasts;
   const { observeUiTask, asyncUiAction } = createUiTasks({
     owner: () => ({ room, accountId: auth.userId }),
@@ -100,6 +174,7 @@ export function startApp(elements: Elements, revision: string): Disposable {
     observe: observeUiTask,
     asyncAction: asyncUiAction,
   });
+  cleanups.chrome = () => chrome.dispose();
   const {
     diagnosticsButton,
     showKeyboardShortcuts,
@@ -113,6 +188,7 @@ export function startApp(elements: Elements, revision: string): Disposable {
   // --- Auth ---
   let capabilities: ServerCapabilities | null = null;
   const auth = new AuthManager();
+  cleanups.auth = () => auth.dispose();
   auth.setTelemetryHandler(telemetry.record);
   const authScreen = new AuthScreen({
     elements,
@@ -125,6 +201,7 @@ export function startApp(elements: Elements, revision: string): Disposable {
       invitations.spendRegistrationInvite(code);
     },
   });
+  cleanups.authScreen = () => authScreen.dispose();
 
   const home = createHomeScreen(
     elements,
@@ -211,6 +288,7 @@ export function startApp(elements: Elements, revision: string): Disposable {
       asyncUiAction,
     },
   );
+  cleanups.home = () => home.dispose();
   const { updateAuthUI, updateJoinBtn } = home;
 
   let restoredAccount = false;
@@ -247,6 +325,7 @@ export function startApp(elements: Elements, revision: string): Disposable {
       observe: observeUiTask,
     },
   );
+  cleanups.invitations = () => invitations.dispose();
   /** An account-room action keeps its explicit join intent until signaling is ready. */
   function openRoomFromDialog(id: string): void {
     if (!auth.isLoggedIn || room?.currentRoomId === id) return;
@@ -289,6 +368,11 @@ export function startApp(elements: Elements, revision: string): Disposable {
 
   // --- State ---
   let room: RoomClient | null = null;
+  cleanups.departure = () => {
+    const departing = room;
+    room = null;
+    departing?.leave().catch(() => console.error('Could not finish leaving the room'));
+  };
   let selectedRoomId = '';
   const mediaControls = new MediaControls({
     getRoom: () => room,
@@ -299,6 +383,7 @@ export function startApp(elements: Elements, revision: string): Disposable {
     },
     talkRow: () => roomController.buildTalkRow(),
   });
+  cleanups.mediaControls = () => mediaControls.destroy();
   mediaControls.mountToolbar(roomVolumeSlot);
 
   const roomLayout = createRoomLayout(elements, {
@@ -308,12 +393,14 @@ export function startApp(elements: Elements, revision: string): Disposable {
       if (room) roomController.renderParticipants(room.getParticipants());
     },
   });
+  cleanups.roomLayout = () => roomLayout.dispose();
 
   const roomSettingsScreen = new RoomSettingsScreen({
     store: { getRoom: () => room },
     notify: showToast,
     asyncAction: asyncUiAction,
   });
+  cleanups.roomSettingsScreen = () => roomSettingsScreen.dispose();
 
   const appSettings = createAppSettings(
     elements,
@@ -356,6 +443,7 @@ export function startApp(elements: Elements, revision: string): Disposable {
       showKeyboardShortcuts,
     },
   );
+  cleanups.appSettings = () => appSettings.dispose();
   const settingsSheet = appSettings.sheet;
   let navigationPending = false;
   let roomSelectionVersion = 0;
@@ -370,6 +458,7 @@ export function startApp(elements: Elements, revision: string): Disposable {
     const reply = await api.websocketTicket(token, signal);
     return { ticket: reply.ticket, expiresIn: reply.expires_in };
   });
+  cleanups.signaling = () => signaling.disconnect();
   signaling.setTelemetryHandler(telemetry.record);
   const callTelemetry = new CallOutcomeTelemetry(
     () =>
@@ -396,13 +485,16 @@ export function startApp(elements: Elements, revision: string): Disposable {
     telemetry.record,
     () => telemetry.nextAttemptId(),
   );
+  cleanups.callTelemetry = () => callTelemetry.dispose();
   const mediaTelemetry = new MediaTelemetry(
     () => (telemetry.sharingEnabled ? (room?.telemetrySources() ?? []) : []),
     telemetry.record,
     callTelemetry,
     telemetry.recordMediaSample,
   );
+  cleanups.mediaTelemetry = () => mediaTelemetry.dispose();
   let callHealthView: ReturnType<typeof modal> | null = null;
+  cleanups.callHealthView = () => callHealthView?.close();
   let updateCallHealthView: ((snapshot: CallHealthSnapshot) => void) | null = null;
   const callHealth = new CallHealth({
     context: () =>
@@ -417,18 +509,22 @@ export function startApp(elements: Elements, revision: string): Disposable {
     playback: () => roomController.playbackElements(),
     changed: renderCallHealth,
   });
+  cleanups.callHealth = () => callHealth.dispose();
   const appUpdateNotice = createAppUpdateNotice(toastContainer, () => appUpdates.reloadWhenIdle());
+  cleanups.appUpdateNotice = () => appUpdateNotice.dispose();
   const appUpdates = new AppUpdates({
     revision,
     inCall: () => room !== null || departureInProgress !== null || navigationPending,
     available: appUpdateNotice.renderAppUpdateAvailable,
     reload: () => location.reload(),
   });
+  cleanups.appUpdates = () => appUpdates.dispose();
   const notificationPreferences = new NotificationPreferences({
     getToken: () => auth.jwt,
     getAccountId: () => auth.userId,
     notify: (message) => showToast(message),
   });
+  cleanups.notificationPreferences = () => notificationPreferences.dispose();
   const mountConversationNotifications = (
     container: HTMLElement,
     peerId: string,
@@ -440,11 +536,13 @@ export function startApp(elements: Elements, revision: string): Disposable {
     getToken: () => auth.jwt,
     getAccountId: () => auth.userId,
   });
+  cleanups.accountUpdates = () => accountUpdates.dispose();
   const accountPreferences = new AccountPreferences({
     getToken: () => auth.jwt,
     getAccountId: () => auth.userId,
     notify: (message) => showToast(message),
   });
+  cleanups.accountPreferences = () => accountPreferences.dispose();
   const mountConversationPrivacy = (
     container: HTMLElement,
     peerId: string,
@@ -499,6 +597,7 @@ export function startApp(elements: Elements, revision: string): Disposable {
     openSettings: (section, opener) => settingsSheet.open({ section, opener }),
     mountAccountNotifications: (container, current) => pwa.mountAccount(container, current),
   });
+  cleanups.socialChat = () => socialChat.dispose();
   const pwa = new PwaControls({
     getToken: () => auth.jwt,
     getAccountId: () => auth.userId,
@@ -506,6 +605,7 @@ export function startApp(elements: Elements, revision: string): Disposable {
       notificationPreferences.mountAccount(container, current),
     openMessages: openAccountMessages,
   });
+  cleanups.pwa = () => pwa.dispose();
   const community = new CommunityUI({
     onOpenMessages: openAccountMessages,
     openSettings: (section, opener) => settingsSheet.open({ section, opener }),
@@ -532,6 +632,7 @@ export function startApp(elements: Elements, revision: string): Disposable {
       auth.forgetSession();
     },
   });
+  cleanups.community = () => community.dispose();
 
   let hovercardOwner: RoomClient | null = null;
   let hovercardMembership = -1;
@@ -590,6 +691,7 @@ export function startApp(elements: Elements, revision: string): Disposable {
       roomController.showModerationMenu(id, name, bounds.left, bounds.bottom);
     },
   });
+  cleanups.participantHovercard = () => participantHovercard.destroy();
 
   // A hidden tab outside a room lets the server's idle close stand instead of
   // reconnecting every five minutes; the page reconnects when it is shown again.
@@ -603,6 +705,7 @@ export function startApp(elements: Elements, revision: string): Disposable {
     refreshDevices: () => mediaControls.refreshDevices(),
     resumeSignaling: () => signaling.resumeDeferredReconnect(),
   });
+  cleanups.mediaLifecycle = () => mediaLifecycle.dispose();
   const refreshSavedMessages = () => {
     if (document.visibilityState === 'hidden') return;
     if (!accountUpdatesLive(auth.userId) || community.messagesNeedRefresh)
@@ -610,6 +713,7 @@ export function startApp(elements: Elements, revision: string): Disposable {
     socialChat.refreshSavedChat();
   };
   const inboxRefresh = setInterval(refreshSavedMessages, 30_000);
+  cleanups.inboxRefresh = () => clearInterval(inboxRefresh);
   document.addEventListener('visibilitychange', refreshSavedMessages, { signal: scope.signal });
   signaling.setOnStatusChange((status) => {
     if (scope.signal.aborted) return;
@@ -666,6 +770,7 @@ export function startApp(elements: Elements, revision: string): Disposable {
       tone: roomTone,
     },
   );
+  cleanups.directoryScreen = () => directoryScreen.dispose();
   const createRoomScreen = new CreateRoomScreen({
     elements,
     store: {
@@ -694,6 +799,7 @@ export function startApp(elements: Elements, revision: string): Disposable {
       joinBtn.click();
     },
   });
+  cleanups.createRoomScreen = () => createRoomScreen.dispose();
 
   const appNavigation = new AppNavigation({
     getRoom: () => room?.currentRoomId ?? selectedRoomId,
@@ -712,6 +818,7 @@ export function startApp(elements: Elements, revision: string): Disposable {
       },
     }),
   );
+  cleanups.modalNavigation = stopModalNavigation;
   const roomController = mountRoomScreen(
     elements,
     {
@@ -814,6 +921,7 @@ export function startApp(elements: Elements, revision: string): Disposable {
       },
     },
   );
+  cleanups.roomController = () => roomController.dispose();
 
   const navigation = new RoomNavigation({
     readRoom: () => appNavigation.readRoom(),
@@ -847,6 +955,7 @@ export function startApp(elements: Elements, revision: string): Disposable {
       return true;
     },
   });
+  cleanups.navigation = () => navigation.dispose();
 
   const accountSync = new AccountSessionSync({
     reconcile: () => auth.reconcileSharedSession(),
@@ -856,6 +965,7 @@ export function startApp(elements: Elements, revision: string): Disposable {
     },
     canCheck: () => auth.canCheckSharedSession,
   });
+  cleanups.accountSync = () => accountSync.dispose();
   auth.setSessionMutationHandler(() => accountSync.publish());
 
   home.start();
@@ -942,53 +1052,6 @@ export function startApp(elements: Elements, revision: string): Disposable {
     );
   }
 
-  // Register resources in dependency order; disposal retires views before services.
-  for (const cleanup of [
-    () => telemetry.dispose(),
-    () => auth.dispose(),
-    () => signaling.disconnect(),
-    stopVideoLayout,
-    () => {
-      callHealthButton.before(qualityIndicator);
-      callHealthButton.remove();
-    },
-    () => toasts.dispose(),
-    () => callTelemetry.dispose(),
-    () => mediaTelemetry.dispose(),
-    () => callHealth.dispose(),
-    () => appUpdates.dispose(),
-    () => appUpdateNotice.dispose(),
-    () => accountSync.dispose(),
-    () => accountUpdates.dispose(),
-    () => accountPreferences.dispose(),
-    () => notificationPreferences.dispose(),
-    () => pwa.dispose(),
-    () => socialChat.dispose(),
-    () => community.dispose(),
-    () => participantHovercard.destroy(),
-    () => mediaLifecycle.dispose(),
-    () => mediaControls.destroy(),
-    () => clearInterval(inboxRefresh),
-    stopModalNavigation,
-    () => navigation.dispose(),
-    () => directoryScreen.dispose(),
-    () => createRoomScreen.dispose(),
-    () => home.dispose(),
-    () => authScreen.dispose(),
-    () => invitations.dispose(),
-    () => chrome.dispose(),
-    () => roomLayout.dispose(),
-    () => roomSettingsScreen.dispose(),
-    () => appSettings.dispose(),
-    () => callHealthView?.close(),
-    () => roomController.dispose(),
-    () => {
-      const departing = room;
-      room = null;
-      departing?.leave().catch(() => console.error('Could not finish leaving the room'));
-    },
-  ])
-    scope.onDispose(cleanup);
   window.addEventListener(
     'pagehide',
     (event) => {
@@ -996,5 +1059,4 @@ export function startApp(elements: Elements, revision: string): Disposable {
     },
     { signal: scope.signal },
   );
-  return scope;
 }
