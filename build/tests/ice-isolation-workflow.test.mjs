@@ -34,7 +34,15 @@ test('ICE isolation retains read-only permissions and the existing pinned toolin
   assert.match(tooling, /id: tooling/);
   assert.match(tooling, /npm --prefix web\/e2e ci --ignore-scripts/);
   assert.match(tooling, /npm --prefix web\/e2e exec -- playwright install webkit chromium/);
-  assert.match(tooling, /cargo run --locked -q -p xtask -- media-ip/);
+  assert.match(tooling, /cargo run --locked -q -p xtask -- media-ip --github-env/);
+});
+
+test('both media announcement steps use the fixed owned runner-file publisher', () => {
+  for (const source of [workflow, compatibility]) {
+    assert.equal([...source.matchAll(/cargo run --locked -q -p xtask -- media-ip --github-env/g)].length, 1);
+    assert.doesNotMatch(source, /test_media_ip=|echo\s+["']TEST_ANNOUNCE_IP=|media-ip\)"/);
+    assert.ok(source.indexOf('toolchain: 1.99.0') < source.indexOf('xtask -- media-ip --github-env'));
+  }
 });
 
 test('both ICE probes run after successful tooling even when the preceding engine fails', () => {

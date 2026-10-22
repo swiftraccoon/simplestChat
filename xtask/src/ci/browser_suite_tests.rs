@@ -206,6 +206,68 @@ fn invalid_invocation_and_artifact_roots_refuse_before_a_child_starts() {
     assert!(CLEANUP_GRACE >= Duration::from_secs(30));
 }
 
+struct FutureDetector<F>(Option<F>);
+impl<F: std::future::Future<Output = anyhow::Result<Ipv4Addr>>> crate::media_ip::Detector
+    for FutureDetector<F>
+{
+    async fn detect(&mut self, signals: &mut Signals) -> tooling::Result<Ipv4Addr> {
+        tokio::select! {
+            biased;
+            code = signals.next() => Err(Failure::new(code, "Inert detector interrupted.")),
+            result = self.0.take().unwrap() => result.map_err(|_| Failure::new(1,
+                "Inert detector failed.")),
+        }
+    }
+}
+
+#[tokio::test]
+async fn native_detector_retires_its_query_before_cancelled_browser_preparation_returns() {
+    let mut fixture = Fixture::new("sys.exit(0)");
+    let source = concat!(
+        "#!/usr/bin/python3\n",
+        "import os,signal,sys,time\nfrom pathlib import Path\n",
+        "root=Path(os.environ['FIXTURE_ROOT'])\n",
+        "def finish(*_):\n (root/'query-retired').write_text('observed');sys.exit(0)\n",
+        "signal.signal(signal.SIGTERM,finish)\n",
+        "(root/'query-ready').touch()\n",
+        "while True:time.sleep(.01)\n"
+    );
+    for name in ["route", "ip"] {
+        let path = fixture.root.join(name);
+        fs::write(&path, source).unwrap();
+        fs::set_permissions(path, fs::Permissions::from_mode(0o700)).unwrap();
+    }
+    fixture
+        .environment
+        .insert("PATH".into(), fixture.root.clone().into_os_string());
+    let mut detector = crate::media_ip::NativeDetector {
+        root: &fixture.root,
+        environment: &fixture.environment,
+    };
+    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+    let mut signals = Signals::injected(receiver);
+    let cancel = async {
+        ready(&fixture.root.join("query-ready")).await;
+        sender.send(143).unwrap();
+    };
+    let (result, ()) = tokio::join!(
+        prepare(
+            Suite::Presentation,
+            &fixture.environment,
+            &fixture.executable,
+            &mut signals,
+            &mut detector
+        ),
+        cancel
+    );
+    assert_eq!(result.err().unwrap().code, 143);
+    assert_eq!(
+        fs::read_to_string(fixture.root.join("query-retired")).unwrap(),
+        "observed"
+    );
+    assert!(fixture.events().is_empty());
+}
+
 #[tokio::test]
 async fn actual_fake_harness_receives_literal_arguments_and_runs_chromium_then_firefox() {
     let fixture = Fixture::new("sys.exit(0)");
@@ -385,7 +447,7 @@ async fn address_resolution_is_once_for_media_never_for_account_suites_and_failu
             &fixture.environment,
             &fixture.executable,
             &mut idle_signals(),
-            detector,
+            &mut FutureDetector(Some(detector)),
         )
         .await
         .unwrap();
@@ -399,7 +461,7 @@ async fn address_resolution_is_once_for_media_never_for_account_suites_and_failu
         &fixture.environment,
         &fixture.executable,
         &mut idle_signals(),
-        async { anyhow::bail!("fixture route unavailable") },
+        &mut FutureDetector(Some(async { anyhow::bail!("fixture route unavailable") })),
     )
     .await
     .err()
@@ -409,7 +471,7 @@ async fn address_resolution_is_once_for_media_never_for_account_suites_and_failu
 }
 
 #[tokio::test]
-async fn cancellation_drops_the_owned_address_probe_and_pending_signals_cannot_launch_a_browser() {
+async fn detector_receives_the_same_signal_and_pending_signals_cannot_launch_a_browser() {
     struct Probe(std::sync::Arc<std::sync::atomic::AtomicBool>);
     impl Drop for Probe {
         fn drop(&mut self) {
@@ -431,13 +493,14 @@ async fn cancellation_drops_the_owned_address_probe_and_pending_signals_cannot_l
         observed.await.unwrap();
         sender.send(143).unwrap();
     };
+    let mut detector = FutureDetector(Some(detector));
     let (result, ()) = tokio::join!(
         prepare(
             Suite::Presentation,
             &fixture.environment,
             &fixture.executable,
             &mut signals,
-            detector
+            &mut detector
         ),
         cancel
     );

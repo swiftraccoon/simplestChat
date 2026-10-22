@@ -358,6 +358,31 @@ resilience use intercepted local browser fixtures and own their frontend listene
 Real-backend Firefox media also requires an interface-owned `TEST_ANNOUNCE_IP`,
 as described in the [browser guide](../web/e2e/README.md).
 
+`cargo run --locked -q -p xtask -- media-ip` prints that address through a bounded
+owned output process. `media-ip --github-env` instead appends only
+`TEST_ANNOUNCE_IP=<IPv4>` to the captured existing `GITHUB_ENV` file. The file must
+be absolute, regular, singly linked, owned by the current user, at most 1 MiB
+including the new line, and not writable by group or other users. Existing
+contents must be UTF-8 with LF termination and no NUL or CR. Symlinks, changed
+identity and malformed files refuse publication. Retained descriptor checks
+assume the caller exclusively owns that runner file; they are optimistic checks,
+not a lock. A line can already be visible when a later close, signal or identity
+check fails, so its presence alone does not certify successful completion.
+
+Both modes capture the environment once and use one INT/TERM registration.
+The unchanged Linux and Darwin parsers read only the default interface's route
+and IPv4 listing. Each query has a three-second body timeout and a 64 KiB stdout
+limit plus one overflow sentinel byte. Every acquired CLI group receives a
+retirement attempt before its captured pipe's final EOF drain and explicit close,
+including normal leader exit with inherited pipe writers. Successful output
+requires positive group-retirement proof. The detector schedules two 25-second query slots
+within 60 seconds; the standalone command schedules 90 seconds, including a
+30-second output slot and final checks. These are admission/watchdog policies,
+not hard OS, reap or filesystem timing guarantees. Known INT/TERM and timeout
+outcomes retain 130/143/124. They do not prove closure of privileged or detached
+processes outside the owned group. Cold compilation and hosted route/runtime
+behavior have not been measured by the inert regression fixtures.
+
 The five two-browser CI steps use
 `cargo run --locked -q -p xtask -- ci browser-suite SUITE`, where `SUITE` is
 `auth-lifecycle`, `auth-cross-tab`, `room-control-confirmation`, `media-continuity`

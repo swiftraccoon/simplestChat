@@ -355,17 +355,55 @@ async fn read(reader: impl tokio::io::AsyncRead + Unpin, maximum: u64) -> Result
     Ok(bytes)
 }
 
-impl Executor for Native<'_> {
-    async fn replay(
-        &mut self,
-        bytes: &[u8],
-        stderr: bool,
-        deadline: std::time::Instant,
-    ) -> Result<()> {
-        self.ready().await?;
-        let executable = std::env::current_exe()
-            .map_err(|_| Failure::new(1, "CI output replay executable unavailable."))?;
-        let proof = super::release_checks::files::Executable::open(&executable)?;
+/// Same retained executable proof and existing replay owner for all callers.
+/// The caller keeps its original Signals registration through final fences.
+pub(super) struct ReplayOutcome {
+    pub result: Result<()>,
+    admitted: bool,
+    settled: bool,
+}
+pub(super) async fn replay_output(
+    root: &Path,
+    environment: &Environment,
+    signals: &mut Signals,
+    bytes: &[u8],
+    stderr: bool,
+    deadline: std::time::Instant,
+) -> ReplayOutcome {
+    let executable = std::env::current_exe();
+    match executable {
+        Ok(executable) => {
+            replay_selected(
+                root,
+                environment,
+                signals,
+                bytes,
+                stderr,
+                deadline,
+                &executable,
+            )
+            .await
+        }
+        Err(_) => ReplayOutcome {
+            admitted: false,
+            settled: false,
+            result: Err(Failure::new(1, "CI output replay executable unavailable.")),
+        },
+    }
+}
+async fn replay_selected(
+    root: &Path,
+    environment: &Environment,
+    signals: &mut Signals,
+    bytes: &[u8],
+    stderr: bool,
+    deadline: std::time::Instant,
+    executable: &Path,
+) -> ReplayOutcome {
+    let mut admitted = false;
+    let mut settled = false;
+    let result = async {
+        let proof = super::release_checks::files::Executable::open(executable)?;
         let selected = match proof.validate() {
             Ok(path) => path.to_owned(),
             Err(error) => {
@@ -374,8 +412,8 @@ impl Executor for Native<'_> {
             }
         };
         let mut command = tooling::command(
-            self.root,
-            self.environment,
+            root,
+            environment,
             selected,
             ["ci", "release-controller", "__replay"],
         );
@@ -385,22 +423,51 @@ impl Executor for Native<'_> {
             command.stdout(Stdio::inherit());
         }
         command.stderr(Stdio::null());
-        let prior = self.cleanup_passed;
-        self.cleanup_passed = false;
+        // Preserve Native's existing sticky-proof boundary, including refusal
+        // inside the replay owner before its own dispatch.
+        admitted = true;
         let replay =
-            super::release_controller::replay::run(command, bytes, &mut self.signals, deadline)
-                .await;
-        if replay.is_ok() {
-            self.cleanup_passed = prior;
+            super::release_controller::replay::run(command, bytes, signals, deadline).await;
+        settled = replay.is_ok();
+        let validated = proof.validate().map(|_| ());
+        let closed = proof.close();
+        replay.and(validated).and(closed)
+    }
+    .await;
+    ReplayOutcome {
+        result,
+        admitted,
+        settled,
+    }
+}
+
+impl Executor for Native<'_> {
+    async fn replay(
+        &mut self,
+        bytes: &[u8],
+        stderr: bool,
+        deadline: std::time::Instant,
+    ) -> Result<()> {
+        self.ready().await?;
+        let prior = self.cleanup_passed;
+        let replay = replay_output(
+            self.root,
+            self.environment,
+            &mut self.signals,
+            bytes,
+            stderr,
+            deadline,
+        )
+        .await;
+        if replay.admitted {
+            self.cleanup_passed = prior && replay.settled;
         }
-        if let Err(error) = &replay
+        if let Err(error) = &replay.result
             && matches!(error.code, 130 | 143)
         {
             self.interrupted = Some(error.code);
         }
-        let validated = proof.validate().map(|_| ());
-        let closed = proof.close();
-        replay.and(validated).and(closed)?;
+        replay.result?;
         self.ready().await
     }
     fn cleanup_passed(&self) -> bool {

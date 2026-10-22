@@ -411,3 +411,72 @@ async fn replay_unfit_deadline_cannot_dispatch_and_pending_interrupt_has_precede
         assert!(!fixture.path.join("dispatched").exists());
     }
 }
+
+#[tokio::test]
+async fn factored_replay_keeps_literal_role_bytes_and_selected_executable_proof() {
+    for changed in [false, true] {
+        let body = concat!(
+            "assert sys.argv[1:]==['ci','release-controller','__replay']\n",
+            "(root/'replayed').write_bytes(sys.stdin.buffer.read())\n"
+        );
+        let fixture = Fixture::new(&format!(
+            "{body}{}",
+            if changed {
+                "with Path(sys.argv[0]).open('a') as output:output.write('# changed\\n')"
+            } else {
+                ""
+            }
+        ));
+        let outcome = replay_selected(
+            &fixture.path,
+            &fixture.environment,
+            &mut signals(),
+            b"192.0.2.44\n",
+            false,
+            std::time::Instant::now() + Duration::from_secs(30),
+            &fixture.path.join("docker"),
+        )
+        .await;
+        assert!(outcome.admitted && outcome.settled);
+        assert_eq!(outcome.result.is_ok(), !changed);
+        assert_eq!(
+            fs::read(fixture.path.join("replayed")).unwrap(),
+            b"192.0.2.44\n"
+        );
+    }
+}
+
+#[tokio::test]
+async fn factored_replay_refuses_missing_proof_or_pending_outcome_without_dispatch() {
+    let fixture = Fixture::new("(root/'dispatched').write_text('unexpected')");
+    let missing = replay_selected(
+        &fixture.path,
+        &fixture.environment,
+        &mut signals(),
+        b"fixed\n",
+        false,
+        std::time::Instant::now() + Duration::from_secs(30),
+        &fixture.path.join("missing"),
+    )
+    .await;
+    assert!(!missing.admitted && !missing.settled && missing.result.is_err());
+    for code in [124, 130, 143] {
+        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+        if code != 124 {
+            sender.send(code).unwrap();
+        }
+        let outcome = replay_selected(
+            &fixture.path,
+            &fixture.environment,
+            &mut Signals::injected(receiver),
+            b"fixed\n",
+            false,
+            std::time::Instant::now(),
+            &fixture.path.join("docker"),
+        )
+        .await;
+        assert!(outcome.admitted && !outcome.settled);
+        assert_eq!(outcome.result.unwrap_err().code, code);
+        assert!(!fixture.path.join("dispatched").exists());
+    }
+}

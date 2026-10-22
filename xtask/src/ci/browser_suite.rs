@@ -159,26 +159,21 @@ async fn execute(
     Ok(())
 }
 
-/// Resolve the shared address once, before either harness can start. Dropping a
-/// cancelled detector future releases its existing owned read-only probe.
+/// Resolve the shared address once with the same captured context/signal owner.
+/// The detector settles its admitted CLI groups before returning cancellation.
 async fn prepare(
     suite: Suite,
     environment: &Environment,
     executable: &Path,
     signals: &mut Signals,
-    detector: impl std::future::Future<Output = Result<Ipv4Addr>>,
+    detector: &mut impl crate::media_ip::Detector,
 ) -> tooling::Result<Vec<Invocation>> {
     artifact_root(environment)?;
+    if let Some(code) = signals.pending().await {
+        return Err(Failure::new(code, "Browser suite interrupted."));
+    }
     let media_ip = if suite.needs_media_ip() {
-        Some(tokio::select! {
-            biased;
-            code = signals.next() => {
-                return Err(Failure::new(code, "Browser suite interrupted."));
-            },
-            result = detector => result.map_err(|error| {
-                Failure::new(1, format!("Cannot select test media IP: {error:#}"))
-            })?,
-        })
+        Some(detector.detect(signals).await?)
     } else {
         None
     };
@@ -208,7 +203,10 @@ pub(super) fn run(root: &Path, arguments: &[String]) -> Result<ExitCode> {
             &environment,
             &executable,
             &mut signals,
-            crate::media_ip::detect(),
+            &mut crate::media_ip::NativeDetector {
+                root,
+                environment: &environment,
+            },
         )
         .await?;
         execute(root, &invocations, &mut signals, CLEANUP_GRACE).await

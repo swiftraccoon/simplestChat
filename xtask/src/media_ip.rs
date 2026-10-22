@@ -5,12 +5,20 @@
 //! loopback. Only routing and interface state is read: no DNS, no probes,
 //! no configuration changes.
 
+use crate::{
+    owned_process::Signals,
+    tooling::{self, Environment, Failure},
+};
 use anyhow::{Context, Result, anyhow, bail};
 use std::net::Ipv4Addr;
 use std::path::Path;
-use std::process::Stdio;
-use std::time::Duration;
-use tokio::process::Command;
+use std::process::{ExitCode, Stdio};
+use std::time::{Duration, Instant};
+#[path = "media_ip_files.rs"]
+mod files;
+#[cfg(test)]
+#[path = "media_ip_owner_tests.rs"]
+mod owner_tests;
 
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(3);
 const OUTPUT_LIMIT: usize = 64 * 1024;
@@ -54,66 +62,230 @@ impl Platform {
     }
 }
 
-pub(crate) fn run(_root: &Path, arguments: &[String]) -> Result<()> {
-    if !arguments.is_empty() {
-        bail!("Usage: cargo run -q -p xtask -- media-ip");
+const QUERY_SLOT: Duration = Duration::from_secs(25);
+const REPLAY_SLOT: Duration = Duration::from_secs(30);
+const FINAL_FENCE: Duration = Duration::from_secs(5);
+const INVOCATION: Duration = Duration::from_secs(90);
+const DETECTION: Duration = Duration::from_secs(60);
+const USAGE: &str = "usage: cargo run --locked -q -p xtask -- media-ip [--github-env]";
+fn failure(code: u8) -> Failure {
+    Failure::new(
+        code,
+        "Cannot select or publish the test media IPv4 address.",
+    )
+}
+fn mapped(error: anyhow::Error) -> Failure {
+    let code = error
+        .downcast_ref::<crate::test_env::Stop>()
+        .map(|stop| stop.code)
+        .or_else(|| error.downcast_ref::<Failure>().map(|failure| failure.code))
+        .unwrap_or(1);
+    failure(code)
+}
+async fn check(signals: &mut Signals, deadline: Instant) -> tooling::Result<()> {
+    if let Some(code) = signals.pending().await {
+        return Err(failure(code));
     }
+    admission(deadline, Duration::ZERO)
+}
+fn admission(deadline: Instant, required: Duration) -> tooling::Result<()> {
+    if deadline
+        .checked_duration_since(Instant::now())
+        .is_none_or(|left| left <= required)
+    {
+        return Err(failure(124));
+    }
+    Ok(())
+}
+
+pub(crate) fn run(_root: &Path, arguments: &[String]) -> Result<ExitCode> {
+    if arguments.len() == 1 && matches!(arguments[0].as_str(), "--help" | "-h") {
+        println!("{USAGE}");
+        return Ok(ExitCode::SUCCESS);
+    }
+    if !arguments.is_empty() && arguments != ["--github-env"] {
+        eprintln!("{USAGE}");
+        return Ok(ExitCode::from(2));
+    }
+    let environment = tooling::inherited_env();
+    // Local callers retain the original query working directory, including
+    // literal relative PATH entries. Browser suites supply their own checkout.
+    let directory = match std::env::current_dir() {
+        Ok(directory) => directory,
+        Err(_) => {
+            eprintln!("{}", failure(1).message);
+            return Ok(ExitCode::FAILURE);
+        }
+    };
+    let deadline = Instant::now() + INVOCATION;
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;
-    match runtime.block_on(detect()) {
-        Ok(address) => {
-            println!("{address}");
-            Ok(())
+    let result = runtime.block_on(async {
+        let mut signals = Signals::new()?;
+        execute(
+            &directory,
+            &environment,
+            &mut signals,
+            !arguments.is_empty(),
+            deadline,
+        )
+        .await
+    });
+    match result {
+        Ok(()) => Ok(ExitCode::SUCCESS),
+        Err(error) => {
+            eprintln!("{}", failure(error.code).message);
+            Ok(ExitCode::from(error.code))
         }
-        Err(error) => Err(anyhow!("Cannot select test media IP: {error:#}")),
     }
 }
 
-pub(crate) async fn detect() -> Result<Ipv4Addr> {
-    let platform = Platform::current()?;
+/// A browser-suite detector borrows its caller's existing signal owner. It
+/// awaits every admitted query's settlement, never select-drops that owner.
+pub(crate) trait Detector {
+    async fn detect(&mut self, signals: &mut Signals) -> tooling::Result<Ipv4Addr>;
+}
+pub(crate) struct NativeDetector<'a> {
+    pub root: &'a Path,
+    pub environment: &'a Environment,
+}
+impl Detector for NativeDetector<'_> {
+    async fn detect(&mut self, signals: &mut Signals) -> tooling::Result<Ipv4Addr> {
+        detect(self.root, self.environment, signals).await
+    }
+}
+pub(crate) async fn detect(
+    root: &Path,
+    environment: &Environment,
+    signals: &mut Signals,
+) -> tooling::Result<Ipv4Addr> {
+    detect_until(
+        root,
+        environment,
+        signals,
+        Instant::now() + DETECTION,
+        FINAL_FENCE,
+    )
+    .await
+}
+async fn detect_until(
+    root: &Path,
+    environment: &Environment,
+    signals: &mut Signals,
+    deadline: Instant,
+    reserve: Duration,
+) -> tooling::Result<Ipv4Addr> {
+    check(signals, deadline).await?;
+    let platform = Platform::current().map_err(mapped)?;
+    admission(deadline, QUERY_SLOT * 2 + reserve)?;
     let (command, arguments) = platform.route_command();
     let output = read_tool(
+        root,
+        environment,
+        signals,
         command,
         arguments.iter().map(|arg| (*arg).to_owned()).collect(),
     )
     .await?;
-    let interface = default_interface(platform, &output)?;
+    let interface = default_interface(platform, &output).map_err(mapped)?;
+    check(signals, deadline).await?;
+    admission(deadline, QUERY_SLOT + reserve)?;
     let (command, arguments) = platform.address_command(&interface);
-    let listing = read_tool(command, arguments).await?;
-    select_address(platform, &interface, &listing)
+    let listing = read_tool(root, environment, signals, command, arguments).await?;
+    let address = select_address(platform, &interface, &listing).map_err(mapped)?;
+    check(signals, deadline).await?;
+    Ok(address)
 }
 
-/// A tool's standard output with a clean locale, a deadline and a size bound;
-/// its own output never reaches an error message.
-async fn read_tool(command: &str, arguments: Vec<String>) -> Result<String> {
-    let child = Command::new(command)
-        .args(&arguments)
-        .env("LC_ALL", "C")
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .kill_on_drop(true)
-        .spawn();
-    let child = match child {
-        Ok(child) => child,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            bail!("Cannot read default route with {command}: command not installed")
-        }
-        Err(_) => bail!("Cannot read default route with {command}: command failed or timed out"),
-    };
-    let output = tokio::time::timeout(COMMAND_TIMEOUT, child.wait_with_output())
-        .await
-        .ok()
-        .and_then(|result| result.ok())
-        .filter(|output| output.status.success())
-        .ok_or_else(|| {
-            anyhow!("Cannot read default route with {command}: command failed or timed out")
-        })?;
-    if output.stdout.len() > OUTPUT_LIMIT {
-        bail!("Cannot read default route with {command}: command failed or timed out");
+/// The existing helper owns a fresh reserved group and an inline bounded pipe.
+/// The extra sentinel detects overflow before parsing; no received bytes leak.
+async fn read_tool(
+    root: &Path,
+    environment: &Environment,
+    signals: &mut Signals,
+    program: &str,
+    arguments: Vec<String>,
+) -> tooling::Result<String> {
+    let mut command = tooling::command(root, environment, program, arguments);
+    command.env("LC_ALL", "C").stderr(Stdio::null());
+    let (status, output) = crate::test_env::helper_with_signals(
+        command,
+        COMMAND_TIMEOUT,
+        Some(OUTPUT_LIMIT as u64),
+        Some(signals),
+    )
+    .await
+    .map_err(mapped)?;
+    if status != 0 {
+        return Err(failure(u8::try_from(status).unwrap_or(1)));
     }
-    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+    Ok(String::from_utf8_lossy(&output).into_owned())
+}
+
+async fn execute(
+    root: &Path,
+    environment: &Environment,
+    signals: &mut Signals,
+    github: bool,
+    deadline: Instant,
+) -> tooling::Result<()> {
+    execute_with(root, environment, signals, github, deadline, || {}).await
+}
+
+async fn execute_with(
+    root: &Path,
+    environment: &Environment,
+    signals: &mut Signals,
+    github: bool,
+    deadline: Instant,
+    after_publish: impl FnOnce(),
+) -> tooling::Result<()> {
+    check(signals, deadline).await?;
+    // Admit the captured existing runner file before launching any query.
+    let mut target = if github {
+        Some(files::Target::open(environment)?)
+    } else {
+        None
+    };
+    let operation = async {
+        let address = detect_until(
+            root,
+            environment,
+            signals,
+            deadline,
+            REPLAY_SLOT + FINAL_FENCE,
+        )
+        .await?;
+        check(signals, deadline).await?;
+        if let Some(target) = &mut target {
+            target.append(address)?;
+        } else {
+            admission(deadline, REPLAY_SLOT + FINAL_FENCE)?;
+            crate::ci::replay_media_ip(
+                root,
+                environment,
+                signals,
+                address,
+                Instant::now() + Duration::from_secs(25),
+            )
+            .await?;
+        }
+        Ok(())
+    }
+    .await;
+    if operation.is_ok() {
+        after_publish();
+    }
+    let pending = check(signals, deadline).await;
+    let checked = target.as_ref().map(files::Target::check).transpose();
+    let closed = target.map(files::Target::finish).transpose();
+    let final_fence = check(signals, deadline).await;
+    operation
+        .and(pending)
+        .and(checked.map(|_| ()))
+        .and(closed.map(|_| ()))
+        .and(final_fence)
 }
 
 /// The one interface the default route uses.

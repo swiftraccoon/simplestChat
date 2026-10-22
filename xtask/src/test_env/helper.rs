@@ -3,11 +3,12 @@
 use super::{Stop, service::Service};
 use crate::owned_process::{self, Signals};
 use anyhow::Result;
+use std::{fs::File, io::Read, os::fd::OwnedFd};
 use std::{
     process::{Command, Stdio},
     time::Duration,
 };
-use tokio::io::AsyncReadExt;
+use tokio::io::unix::AsyncFd;
 
 const GRACE: Duration = Duration::from_secs(2);
 
@@ -60,11 +61,30 @@ pub(super) async fn run(
 /// Record acquisition only after spawn succeeds. A pre-spawn interruption or
 /// failed executable admission cannot imply a detached daemon was dispatched.
 pub(super) async fn run_dispatched(
+    command: Command,
+    timeout: Duration,
+    capture: Option<u64>,
+    signals: Option<&mut Signals>,
+    dispatched: &mut bool,
+) -> Result<Output> {
+    run_owned(
+        command,
+        timeout,
+        capture,
+        signals,
+        dispatched,
+        Reader::close,
+    )
+    .await
+}
+
+async fn run_owned(
     mut command: Command,
     timeout: Duration,
     capture: Option<u64>,
     mut signals: Option<&mut Signals>,
     dispatched: &mut bool,
+    close_reader: impl FnOnce(Reader) -> Result<()>,
 ) -> Result<Output> {
     if let Some(signals) = &mut signals
         && let Some(code) = signals.pending().await
@@ -79,43 +99,36 @@ pub(super) async fn run_dispatched(
     *dispatched = true;
     let pid = rustix::process::Pid::from_raw(i32::try_from(service.pid())?)
         .expect("owned service has a positive process identity");
-    let mut reader = Reader(if let Some(maximum) = capture {
-        let stdout = service
-            .take_stdout()
-            .ok_or_else(|| stopped(1, "Owned test output unavailable."))?;
-        let stdout = tokio::process::ChildStdout::from_std(stdout)?;
-        Some(tokio::spawn(async move {
-            let mut bytes = Vec::new();
-            stdout
-                .take(
-                    maximum
-                        .checked_add(1)
-                        .ok_or_else(|| stopped(1, "Owned test output bound invalid."))?,
-                )
-                .read_to_end(&mut bytes)
-                .await?;
-            if bytes.len() as u64 > maximum {
-                return Err(stopped(1, "Owned test output exceeded its bound."));
+    let mut reader = match capture {
+        Some(maximum) => {
+            let Some(stdout) = service.take_stdout() else {
+                let _ = service.stop(GRACE).await;
+                return Err(stopped(1, "Owned test output unavailable."));
+            };
+            match Reader::new(File::from(OwnedFd::from(stdout)), maximum) {
+                Ok(reader) => Some(reader),
+                Err(error) => {
+                    let _ = service.stop(GRACE).await;
+                    return Err(error);
+                }
             }
-            Ok(bytes)
-        }))
-    } else {
-        None
-    });
+        }
+        None => None,
+    };
     let completed = async {
-        if let Some(reader) = &mut reader.0 {
-            tokio::select! {
-                biased;
-                bytes = reader => {
-                    let bytes = bytes.map_err(|_| stopped(1, "Owned test output failed."))??;
-                    owned_process::exited(pid).await?;
-                    Ok::<_, anyhow::Error>(Some(bytes))
-                },
-                result = owned_process::exited(pid) => { result?; Ok(None) },
+        loop {
+            if let Some(reader) = &mut reader {
+                tokio::select! {
+                    biased;
+                    result = owned_process::exited(pid) => { result?; return Ok(()); },
+                    result = reader.read_once() => {
+                        if result? { owned_process::exited(pid).await?; return Ok(()); }
+                    },
+                }
+            } else {
+                owned_process::exited(pid).await?;
+                return Ok::<_, anyhow::Error>(());
             }
-        } else {
-            owned_process::exited(pid).await?;
-            Ok(None)
         }
     };
     let interruption = async {
@@ -133,30 +146,40 @@ pub(super) async fn run_dispatched(
         },
     };
     let ended = service.stop(GRACE).await;
-    // Retiring the group releases pipes inherited by an otherwise exited
-    // leader's descendants. Never wait for their EOF before this cleanup.
-    let stdout = match primary? {
-        Some(bytes) => bytes,
-        None => match &mut reader.0 {
-            Some(reader) => tokio::time::timeout(GRACE, reader)
+    // Normal leader exit does not imply EOF: retire its group before draining
+    // inherited pipes. On a known primary failure, only close the bounded pipe.
+    let drained = if primary.is_ok() {
+        match &mut reader {
+            Some(reader) => tokio::time::timeout(GRACE, reader.finish())
                 .await
-                .map_err(|_| stopped(1, "Owned test output completion timed out."))?
-                .map_err(|_| stopped(1, "Owned test output failed."))??,
-            None => Vec::new(),
-        },
+                .map_err(|_| stopped(1, "Owned test output completion timed out."))
+                .and_then(|result| result),
+            None => Ok(()),
+        }
+    } else {
+        Ok(())
     };
+    let stdout = reader
+        .as_mut()
+        .map_or_else(Vec::new, |reader| std::mem::take(&mut reader.bytes));
+    let closed = reader.map(close_reader).transpose();
+    primary?;
     let status = ended
         .wait_status
         .ok_or_else(|| stopped(1, "Owned test setup exit unproven."))?;
-    if !ended.group_cleanup_passed {
-        return Err(stopped(
-            u8::try_from(status)
-                .ok()
-                .filter(|status| *status != 0)
-                .unwrap_or(1),
-            "Owned test setup group cleanup unproven.",
-        ));
+    if !ended.group_cleanup_passed || drained.is_err() || closed.is_err() {
+        if status != 0 {
+            return Err(stopped(
+                u8::try_from(status).unwrap_or(1),
+                "Owned test setup retirement failed.",
+            ));
+        }
+        if !ended.group_cleanup_passed {
+            return Err(stopped(1, "Owned test setup group cleanup unproven."));
+        }
     }
+    drained?;
+    closed?;
     if status == 0
         && let Some(signals) = &mut signals
         && let Some(code) = signals.pending().await
@@ -166,12 +189,83 @@ pub(super) async fn run_dispatched(
     Ok(Output { status, stdout })
 }
 
-struct Reader(Option<tokio::task::JoinHandle<Result<Vec<u8>>>>);
-impl Drop for Reader {
-    fn drop(&mut self) {
-        if let Some(reader) = &self.0 {
-            reader.abort();
+/// Inline readiness keeps no spawned task alive after an error return. Each
+/// nonblocking read is cancellation safe and its bounded buffer survives polls.
+struct Reader {
+    file: AsyncFd<File>,
+    bytes: Vec<u8>,
+    maximum: usize,
+    complete: bool,
+}
+impl Reader {
+    fn new(file: File, maximum: u64) -> Result<Self> {
+        let admitted: Result<usize> = (|| {
+            let maximum = usize::try_from(maximum)?;
+            maximum
+                .checked_add(1)
+                .ok_or_else(|| stopped(1, "Owned test output bound invalid."))?;
+            let flags = rustix::fs::fcntl_getfl(&file)?;
+            rustix::fs::fcntl_setfl(&file, flags | rustix::fs::OFlags::NONBLOCK)?;
+            Ok(maximum)
+        })();
+        let maximum = match admitted {
+            Ok(maximum) => maximum,
+            Err(error) => {
+                let _ = nix::unistd::close(file);
+                return Err(error);
+            }
+        };
+        let file = match AsyncFd::try_new(file) {
+            Ok(file) => file,
+            Err(error) => {
+                let (file, _) = error.into_parts();
+                let _ = nix::unistd::close(file);
+                return Err(stopped(1, "Owned test output admission failed."));
+            }
+        };
+        Ok(Self {
+            file,
+            bytes: Vec::with_capacity(maximum + 1),
+            maximum,
+            complete: false,
+        })
+    }
+    async fn read_once(&mut self) -> Result<bool> {
+        if self.complete {
+            return Ok(true);
         }
+        let mut buffer = [0; 8192];
+        let remaining = (self.maximum + 1 - self.bytes.len()).min(buffer.len());
+        loop {
+            let mut ready = self.file.readable().await?;
+            let result =
+                ready.try_io(|file| Read::read(&mut file.get_ref(), &mut buffer[..remaining]));
+            match result {
+                Ok(Ok(0)) => {
+                    self.complete = true;
+                    return Ok(true);
+                }
+                Ok(Ok(count)) => {
+                    self.bytes.extend_from_slice(&buffer[..count]);
+                    if self.bytes.len() > self.maximum {
+                        return Err(stopped(1, "Owned test output exceeded its bound."));
+                    }
+                    return Ok(false);
+                }
+                Ok(Err(_)) => return Err(stopped(1, "Owned test output failed.")),
+                Err(_) => {}
+            }
+        }
+    }
+    async fn finish(&mut self) -> Result<()> {
+        while !self.read_once().await? {}
+        Ok(())
+    }
+    fn close(self) -> Result<()> {
+        self.close_with(|file| nix::unistd::close(file).map_err(anyhow::Error::from))
+    }
+    fn close_with(self, close: impl FnOnce(File) -> Result<()>) -> Result<()> {
+        close(self.file.into_inner())
     }
 }
 

@@ -286,6 +286,27 @@ fn print_key(context: &Context, scope: Scope, github_output: bool) -> Result<()>
     }
 }
 
+/// Emit only one selected media address through the existing reserved replay
+/// child. The detector's same signal registration stays with its caller.
+pub(crate) async fn replay_media_ip(
+    root: &Path,
+    environment: &crate::tooling::Environment,
+    signals: &mut crate::owned_process::Signals,
+    address: std::net::Ipv4Addr,
+    deadline: std::time::Instant,
+) -> crate::tooling::Result<()> {
+    process::replay_output(
+        root,
+        environment,
+        signals,
+        format!("{address}\n").as_bytes(),
+        false,
+        deadline,
+    )
+    .await
+    .result
+}
+
 pub(crate) fn run_container_smoke(root: &Path, arguments: &[String]) -> Result<ExitCode> {
     container_smoke::run_local(root, arguments)
 }

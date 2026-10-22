@@ -187,3 +187,79 @@ sys.exit(0)
     assert_eq!(output.stdout, b"closed\n");
     assert!(fixture.0.join("worker").is_file());
 }
+
+#[tokio::test]
+async fn signal_overflow_and_timeout_close_the_inline_pipe_before_error_return() {
+    for expected in [1, 124, 130, 143] {
+        let fixture = Fixture::new();
+        let script = if expected == 1 {
+            "print('x'*1024)"
+        } else {
+            "import time;from pathlib import Path;Path(__import__('sys').argv[1],'ready').touch();time.sleep(30)"
+        };
+        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+        let mut signals = Signals::injected(receiver);
+        let closed = std::cell::Cell::new(false);
+        let cancel = async {
+            if matches!(expected, 130 | 143) {
+                ready(&fixture.0.join("ready")).await;
+                sender.send(expected).unwrap();
+            }
+        };
+        let timeout = if expected == 124 {
+            Duration::from_millis(50)
+        } else {
+            Duration::from_secs(5)
+        };
+        let mut dispatched = false;
+        let (result, ()) = tokio::join!(
+            run_owned(
+                fixture.command(script),
+                timeout,
+                Some(64),
+                Some(&mut signals),
+                &mut dispatched,
+                |reader| {
+                    reader.close_with(|file| {
+                        nix::unistd::close(file)?;
+                        closed.set(true);
+                        Ok(())
+                    })
+                }
+            ),
+            cancel
+        );
+        assert_eq!(
+            result.err().unwrap().downcast_ref::<Stop>().unwrap().code,
+            expected
+        );
+        assert!(closed.get(), "inline pipe explicitly closed for{expected}");
+    }
+}
+
+#[tokio::test]
+async fn capture_close_failure_refuses_zero_and_does_not_replace_known_command_failure() {
+    let fixture = Fixture::new();
+    for status in [0, 42] {
+        let result = run_owned(
+            fixture.command(&format!("import sys;print('fixed');sys.exit({status})")),
+            Duration::from_secs(5),
+            Some(64),
+            None,
+            &mut false,
+            |reader| {
+                reader.close_with(|file| {
+                    nix::unistd::close(file)?;
+                    Err(stopped(1, "injected pipe close failure"))
+                })
+            },
+        )
+        .await;
+        let error = result.err().unwrap();
+        if status == 0 {
+            assert!(error.to_string().contains("close"));
+        } else {
+            assert_eq!(error.downcast_ref::<Stop>().unwrap().code, 42);
+        }
+    }
+}

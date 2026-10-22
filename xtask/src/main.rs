@@ -69,7 +69,8 @@ Commands:
   http-policy   Write security/http-policy.json from the server's security headers
                 and content security policy; `--check` fails when it is stale.
   media-ip      Print the owned IPv4 address of the default route's interface for a
-                non-loopback media announcement (TEST_ANNOUNCE_IP).
+                non-loopback media announcement (TEST_ANNOUNCE_IP); --github-env appends
+                only that fixed variable to the captured runner environment file.
   performance-thresholds COMPARISON.json
                 Summarize a same-host benchmark comparison and enforce its
                 readiness/CPU/RSS regression budgets.
@@ -111,7 +112,7 @@ fn run(arguments: &[String]) -> Result<ExitCode> {
         "line-length" => line_length::run(&root, rest).map(|()| ExitCode::SUCCESS),
         "protocol-ts" => protocol_ts::run(&root, rest).map(|()| ExitCode::SUCCESS),
         "http-policy" => http_policy::run(&root, rest).map(|()| ExitCode::SUCCESS),
-        "media-ip" => media_ip::run(&root, rest).map(|()| ExitCode::SUCCESS),
+        "media-ip" => media_ip::run(&root, rest),
         "performance-thresholds" => performance_thresholds::run(&root, rest),
         "test-postgres" => test_env::run_postgres(&root, rest),
         "test-server" => test_env::run_server(&root, rest),

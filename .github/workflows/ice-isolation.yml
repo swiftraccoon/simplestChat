@@ -44,8 +44,7 @@ jobs:
         run: |
           npm --prefix web/e2e ci --ignore-scripts
           npm --prefix web/e2e exec -- playwright install webkit chromium
-          test_media_ip="$(cargo run --locked -q -p xtask -- media-ip)"
-          echo "TEST_ANNOUNCE_IP=${test_media_ip}" >> "${GITHUB_ENV}"
+          cargo run --locked -q -p xtask -- media-ip --github-env
 
       - name: Record macOS version
         run: sw_vers
