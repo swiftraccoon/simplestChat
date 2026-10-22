@@ -425,7 +425,6 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential clang python3-pip cmake curl perl pkg-config
-          echo "OPENSSL_DIR=${RUNNER_TEMP}/simplestchat-openssl-4.0.3" >> "${GITHUB_ENV}"
 
       - name: Restore checksum-pinned OpenSSL
         if: steps.verified.outputs.cache-hit != 'true'
@@ -437,11 +436,15 @@ jobs:
 
       - name: Build checksum-pinned OpenSSL
         if: steps.verified.outputs.cache-hit != 'true' && steps.openssl.outputs.cache-hit != 'true'
+        env:
+          OPENSSL_DIR: ${{ runner.temp }}/simplestchat-openssl-4.0.3
         run: build/install-openssl.sh "${OPENSSL_DIR}"
 
       - name: Verify native DTLS closure and media diagnostic context
         if: steps.verified.outputs.cache-hit != 'true'
         timeout-minutes: 12
+        env:
+          OPENSSL_DIR: ${{ runner.temp }}/simplestchat-openssl-4.0.3
         run: build/check-native-dtls.sh
 
       - name: Preserve native media failure diagnostics
@@ -1093,7 +1096,6 @@ jobs:
           # Reconcile the pinned revision and system dependencies even on cache hits.
           # The application comes from the already-tested production image.
           npm --prefix web/e2e exec -- playwright install --with-deps chromium
-          echo "PLAYWRIGHT_BROWSERS_PATH=$RUNNER_TEMP/rollover-playwright" >> "$GITHUB_ENV"
 
       - name: Save pinned rollover Chromium download bytes
         if: steps.rollover-chromium.outputs.cache-hit != 'true'
@@ -1112,6 +1114,8 @@ jobs:
 
       - name: App-only release and rollback on a disposable host
         timeout-minutes: 11
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/rollover-playwright
         run: cargo run --locked -q -p xtask -- ci release-checks
 
       - name: Preserve private local release-container diagnostics

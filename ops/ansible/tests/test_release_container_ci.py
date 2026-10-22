@@ -261,8 +261,10 @@ class ReleaseContainerCiTests(unittest.TestCase):
         self.assertEqual(integration["timeout-minutes"], "11")
         self.assertNotIn("continue-on-error", integration)
         self.assertNotIn("if", integration, "Do not silently skip a required release check")
-        self.assertNotIn(
-            "env", integration, "No deployment secrets or helper overrides enter the fixture"
+        self.assertEqual(
+            integration["env"],
+            {"PLAYWRIGHT_BROWSERS_PATH": "${{ runner.temp }}/rollover-playwright"},
+            "No deployment secrets or helper overrides enter the fixture",
         )
 
     def test_pinned_rollover_browser_runs_after_image_build_without_an_extra_app_build(
@@ -310,14 +312,11 @@ class ReleaseContainerCiTests(unittest.TestCase):
         self.assertEqual(
             tooling["env"], {"PLAYWRIGHT_BROWSERS_PATH": "${{ runner.temp }}/rollover-playwright"}
         )
+        self.assertEqual(self.step(INTEGRATION)["env"], tooling["env"])
         command = string(tooling, "run")
         self.assertIn("npm --prefix web/e2e ci --ignore-scripts\n", command)
         self.assertIn(
             "npm --prefix web/e2e exec -- playwright install --with-deps chromium\n", command
-        )
-        self.assertIn(
-            'echo "PLAYWRIGHT_BROWSERS_PATH=$RUNNER_TEMP/rollover-playwright" >> "$GITHUB_ENV"',
-            command,
         )
         self.assertEqual(save["if"], "steps.rollover-chromium.outputs.cache-hit != 'true'")
         self.assertEqual(
