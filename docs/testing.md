@@ -543,6 +543,30 @@ removed afterward. Set `PRODUCTION_IMAGE` to test another built image.
 
 ### App-only releases and rollback
 
+The workflow's unchanged 11-minute release step uses
+`cargo run --locked -q -p xtask -- ci release-checks`. In the explicit hosted or
+disposable Linux CI context, this resolves the first executable Node in its
+captured `PATH` and runs the literal pinned Playwright Chromium-path expression.
+Ordinary Node/Chromium symlinks resolve to canonical paths; both must be nonempty,
+regular executables. The proof reads metadata, never executable contents, so it
+imposes no executable-size ceiling. Chromium discovery is capped at 30 seconds
+and 4096 stdout bytes; malformed, relative or control-character paths are refused.
+Retained descriptors and file stamps are rechecked before the Python coordinator
+and after it finishes, then explicitly closed. These are identity snapshots,
+not descriptor execution or protection against a compromised same-UID writer.
+
+The existing `python3 -B build/ci_release_checks.py` coordinator retains its exact
+controller/image/output arguments, parallel scanner-download and release-fixture
+policy, private output and status. Rust inherits coordinator output, preserves
+failures, and owns only its CLI process groups. Cancellation gives the coordinator
+15 seconds for its existing parallel 5-second TERM/5-second reap paths before
+forced group cleanup; the 660-second command budget reserves that grace and
+reaping time. The coordinator and privileged fixture retain ownership of their
+separate-session children and containers. Successful Rust CLI-group cleanup
+does not establish their cleanup or replace the fixture's report. Owned inert
+Node/Python fixtures cover this wrapper; cold hosted runtime and an actual
+release/rollback run remain unmeasured for the port.
+
 CI also runs `build/test-release-container.py` against that existing production
 image, using the real release helper and public deployment templates. It checks
 a successful replacement, failed candidate startup and rollback while requiring

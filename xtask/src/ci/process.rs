@@ -55,17 +55,20 @@ impl<'a> Native<'a> {
         let mut command = tooling::command(
             self.root,
             self.environment,
-            match (&request.executable, request.program) {
-                (Some(executable), super::command::Program::CargoAudit) => {
+            match (&request.executable, &request.node, request.program) {
+                (Some(executable), None, super::command::Program::CargoAudit) => {
                     executable.validate()?.as_os_str()
                 }
-                (None, super::command::Program::CargoAudit) | (Some(_), _) => {
+                (None, Some(node), super::command::Program::Node) => node.validate()?.as_os_str(),
+                (_, _, super::command::Program::CargoAudit | super::command::Program::Node)
+                | (Some(_), _, _)
+                | (_, Some(_), _) => {
                     return Err(Failure::new(
                         1,
-                        "Audit execution requires a validated selected executable.",
+                        "CI execution requires its validated executable role.",
                     ));
                 }
-                (None, _) => std::ffi::OsStr::new(request.program.name()),
+                (None, None, _) => std::ffi::OsStr::new(request.program.name()),
             },
             &request.arguments,
         );

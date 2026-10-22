@@ -121,6 +121,9 @@ xtask/src/ci/install_compose/**
 !xtask/src/ci/audit_rust/
 xtask/src/ci/audit_rust/**
 !xtask/src/ci/audit_rust/*.rs
+!xtask/src/ci/release_checks/
+xtask/src/ci/release_checks/**
+!xtask/src/ci/release_checks/*.rs
 !xtask/src/ci/image_cache/
 xtask/src/ci/image_cache/**
 !xtask/src/ci/image_cache/*.rs

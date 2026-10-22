@@ -1112,14 +1112,7 @@ jobs:
 
       - name: App-only release and rollback on a disposable host
         timeout-minutes: 11
-        run: |
-          python3 -B build/ci_release_checks.py \
-            --controller "${RUNNER_TEMP}/release-container-controller/bin/python" \
-            --node "$(command -v node)" \
-            --chromium "$(node -e 'process.stdout.write(require("./web/e2e/node_modules/playwright").chromium.executablePath())')" \
-            --image "${PRODUCTION_IMAGE}" \
-            --fixture-output "${RUNNER_TEMP}/release-container" \
-            --output "${RUNNER_TEMP}/release-checks"
+        run: cargo run --locked -q -p xtask -- ci release-checks
 
       - name: Preserve private local release-container diagnostics
         if: ${{ always() && env.ACT == 'true' }}

@@ -11,6 +11,7 @@ pub(super) enum Program {
     Sudo,
     Python,
     CargoAudit,
+    Node,
 }
 impl Program {
     pub(super) fn name(self) -> &'static str {
@@ -21,6 +22,7 @@ impl Program {
             Self::Sudo => "sudo",
             Self::Python => "python3",
             Self::CargoAudit => "cargo-audit",
+            Self::Node => "node",
         }
     }
 }
@@ -35,6 +37,7 @@ pub(super) struct Command {
     pub cleanup: bool,
     pub stdout: Option<std::sync::Arc<std::fs::File>>,
     pub executable: Option<std::sync::Arc<super::selected_executable::Executable>>,
+    pub node: Option<std::sync::Arc<super::release_checks::files::Executable>>,
 }
 impl Command {
     pub(super) fn capture(program: Program, args: &[&str]) -> Self {
@@ -47,6 +50,7 @@ impl Command {
             cleanup: false,
             stdout: None,
             executable: None,
+            node: None,
         }
     }
 }

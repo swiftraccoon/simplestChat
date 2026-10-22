@@ -19,16 +19,7 @@ RETENTION = "Preserve sanitized release-container report"
 LOCAL_DIAGNOSTICS = "Preserve private local release-container diagnostics"
 EXPORT = "Export the tested immutable production image"
 RELEASE = "Retain the verified production release"
-RUN_COMMAND = (
-    "python3 -B build/ci_release_checks.py \\\n"
-    + '  --controller "${RUNNER_TEMP}/release-container-controller/bin/python" \\\n'
-    + '  --node "$(command -v node)" \\\n'
-    + "  --chromium \"$(node -e 'process.stdout.write(require("
-    + '"./web/e2e/node_modules/playwright").chromium.executablePath())\')" \\\n'
-    + '  --image "${PRODUCTION_IMAGE}" \\\n'
-    + '  --fixture-output "${RUNNER_TEMP}/release-container" \\\n'
-    + '  --output "${RUNNER_TEMP}/release-checks"\n'
-)
+RUN_COMMAND = "cargo run --locked -q -p xtask -- ci release-checks"
 
 
 class ReleaseContainerCiTests(unittest.TestCase):
@@ -111,7 +102,7 @@ class ReleaseContainerCiTests(unittest.TestCase):
             "${PRODUCTION_IMAGE:-simplestchat-ci:production}",
             (ROOT / "build/test-container.sh").read_text(),
         )
-        self.assertIn('--image "${PRODUCTION_IMAGE}"', string(self.step(INTEGRATION), "run"))
+        self.assertEqual(string(self.step(INTEGRATION), "run"), RUN_COMMAND)
 
     def test_image_policy_has_pinned_rust_on_hosted_and_disposable_ci(self) -> None:
         """The compiled policy runs in both contexts without changing action scope."""
