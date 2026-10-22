@@ -136,6 +136,9 @@ xtask/src/ci/codeql_cache/**
 !xtask/src/ci/native_dtls/
 xtask/src/ci/native_dtls/**
 !xtask/src/ci/native_dtls/*.rs
+!xtask/src/ci/ops_artifact/
+xtask/src/ci/ops_artifact/**
+!xtask/src/ci/ops_artifact/*.rs
 !xtask/src/ci_evidence/
 xtask/src/ci_evidence/**
 !xtask/src/ci_evidence/*.rs

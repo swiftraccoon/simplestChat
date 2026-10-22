@@ -288,6 +288,135 @@ binary digest, signature or runtime-readiness claim. Failure is exit 1 and only
 The existing Ops artifact and server release contracts are unchanged. This is
 a new plan contract tested directly, not a Python producer receipt or oracle.
 
+## Controlled local unsigned producer
+
+`xtask` can execute a fixed build recipe using explicitly selected local materials:
+
+```sh
+cargo run --locked -q -p xtask -- ops-artifact build \
+  --request /controlled/producer-request.json --request-sha256 ORIGINAL_REQUEST_SHA256
+```
+
+This command authorizes a build on the current Linux x86-64 host. Its dispatcher
+has no material-acquisition or installation stage. It never executes the candidate,
+signs or switches a production callsite. Ops remains
+process-free; xtask calls its existing inspector, retained-manifest pair validator
+and unsigned assembly library directly. The new first-party dependency adds Ops
+source to the native-DTLS cache inputs without changing the server ten-file release,
+required jobs, attestation policy or Python runtime.
+
+The original UTF-8 request is at most 64 KiB, pinned by its lowercase SHA-256, and
+has exactly these fields:
+
+```json
+{
+  "schemaVersion": 1,
+  "selection": {
+    "repository": "swiftraccoon/simplestChat",
+    "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "packageVersion": "0.1.0",
+    "protocolVersion": 1,
+    "target": "x86_64-unknown-linux-musl",
+    "buildRunId": 123,
+    "runAttempt": 1
+  },
+  "source": {"path": "/controlled/materials/source", "sha256": "FULL_TREE_SHA256"},
+  "builderKit": {"path": "/controlled/materials/kit", "sha256": "FULL_TREE_SHA256"},
+  "output": "/controlled/new-run"
+}
+```
+
+The example digest placeholders must be replaced with independently selected
+64-character digests. The seven selection fields use the existing Ops schema;
+revision/repository/run identities remain declarations. Paths are normalized
+absolute UTF-8 without control characters, at most 4096 bytes and 32
+components; output has no colon, at most 20 components and must be fresh. Source, kit and
+output cannot contain one another. Duplicate/unknown fields, numeric type changes
+and wrong original request bytes are refused before material or output access.
+
+The new full-tree pin profile is `ops-producer-tree-v1`, distinct from the partial
+`workspace-ops-v1` inventory. Its SHA input begins with the profile plus NUL, followed
+by entries sorted by relative UTF-8 path, including the empty root path. Each entry
+contains a big-endian u32 path byte length, path bytes, one directory-kind byte
+(1 for directory), one executable-file-bit byte, big-endian u64 file byte count
+(zero for directories), and 32 raw file SHA bytes (zero for directories). Directory
+permissions are not encoded; original regular-file executable-bit distinctions
+are encoded. No self-computed pin authenticates acquisition or the declared revision.
+
+Trees admit only regular files and directories on the selected filesystem:
+symlinks, hardlinked files, special files and set-ID modes are refused. The curated
+kit has only `toolchain/`, `host-tools/` and `registry/` at its root. Required roles
+are `toolchain/bin/cargo`, `toolchain/bin/rustc`,
+`toolchain/lib/rustlib/x86_64-unknown-linux-gnu/bin/rust-lld`, `host-tools/bin/cc`,
+and the musl target library subtree. Ordinary rustup installations with aliases
+need a separately prepared kit. Source is bounded to 1 GiB, kit to 8 GiB, each file
+to 512 MiB; together they have at most 131,072 entries, 16 MiB of relative names,
+32 descendant levels and 4096-byte relative paths. Private staged directories are
+0700, data 0600 and executable files 0700, with current-user ownership and no
+special permission bits at admission. Streaming copy checks actual stored
+bytes before admitting its exact metadata stamp, then independently re-enumerates
+and rehashes original and staged trees before the first tool and after the build.
+These are optimistic snapshots, not
+an atomic filesystem lock against the caller or root.
+
+The fresh output contains `source/`, `kit/`, empty Cargo/home/temp/target slots,
+private logs and observations, then `unsigned/` from the existing assembly API.
+Cargo runs from the new parent with `--manifest-path source/Cargo.toml`, so source
+`.cargo` files remain measured descendants rather than effective configuration.
+Its sole generated `.cargo/config.toml` replaces crates.io with the pinned
+`kit/registry` directory source and sets offline mode. Every outside ancestor,
+and any existing `.cargo` there, must have root/current-user ownership without
+group/other write authority; both legacy and modern ancestor config files are
+refused. Fresh CargoHome has neither configuration spelling. These rules follow
+Cargo's [discovery and relative-path rules](https://doc.rust-lang.org/cargo/reference/config.html).
+
+The clear-then-set environment supplies only fixed owned path slots, locale,
+compiler/linker roles and the plan's encoded target flags. Fixed version/sysroot
+probes precede bounded `cargo metadata --frozen` and the fixed package/bin/target
+build. Metadata admission covers returned **manifest locations** under source or
+registry, not every reported source path or compiler I/O. Its selected package
+version must match the explicit selection. Rust 1.99.0's
+[pinned target](https://github.com/rust-lang/rust/blob/1.99.0/compiler/rustc_target/src/spec/targets/x86_64_unknown_linux_musl.rs)
+supports static PIE; the recipe preserves that default and the unchanged ELF/pair
+policy. Fake recipe tests do not establish a successful actual link.
+
+`--frozen` is locked plus Cargo offline, not network isolation for build scripts.
+Directory-source [checksum metadata](https://doc.rust-lang.org/cargo/reference/source-replacement.html)
+detects accidental modification, not malicious input. Authentication of source,
+registry, compiler, host tools and their dynamic runtime is caller-owned. Cargo
+metadata may read an external manifest before refusing it; build scripts, proc
+macros and host tools can access host files, network and processes. Their complete
+I/O/resource closure and filesystem quotas are not proved by this command.
+
+A checked shared budget limits producer-owned descriptors to 128, including
+transient directory cursors. Native setup/settlement reserves sixteen slots;
+material/config/tool owners close before reserving one hundred for the existing
+Ops library calls. Deep combinations may be refused even within individual path
+limits. Inherited stdio and runtime signal/poll registrations are outside this
+file-owner budget. File owners explicitly attempt close; directory cursors use
+the mature reader's RAII close without a fallible-close claim.
+
+The watchdog allows 18 minutes for active work and two for final settlement,
+verification, closes and bounded output replay. Commands subtract their grace
+and a 20-second scheduling allowance from remaining active time. Signals remain
+owned through final output/close/deadline fences, and known nonzero statuses win
+over later cleanup errors. Combined build output is privately retained with an
+actual 64 MiB pipe-reader cap; probes and metadata have smaller fixed caps. This
+is not a hard filesystem/scheduler/reap wall-clock guarantee or measured hosted
+build timing; cold xtask compilation precedes its clock.
+
+The final bundle includes measured material, selected-tool, recipe, resolution
+and Cargo/log observations, each at most 1 MiB. Raw probe/metadata output and the
+combined build log stay private outside it. Observations do not authenticate a
+build, prove musl provenance/ABI or authorize signing. Successful CLI output is
+bounded counts/hashes and selected claims; require its final zero exit. Failure
+can retain private partial inputs and even a completed unsigned inventory after
+a later failure; no inventory is a producer-success or signing-readiness marker.
+Trusted-workflow attestation, a fresh independent controller verifier, a real
+controlled musl build and owned Debian runtime evidence remain outstanding, as
+do transport/bootstrap/install ownership. Validation uses inert fake Cargo/tools
+and metadata-only nonexecutable ELF fixtures, with no real build or candidate run.
+
 ## Local unsigned artifact preparation
 
 Prepare signing inputs from a local pair without building, signing, running or

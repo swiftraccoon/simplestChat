@@ -27,7 +27,15 @@ run the relevant crate without the server's native test graph:
 ```sh
 cargo test --locked -p xtask -- --test-threads=1
 cargo test --locked -p simplestchat-ops
+cargo test --locked -p xtask ci::ops_artifact -- --test-threads=1
 ```
+
+The [local Ops producer](../ops/README.md#controlled-local-unsigned-producer) has
+inert selected-tool and owned-filesystem regressions. Those tests do not run
+Cargo as a real builder, link or execute a candidate, acquire a toolchain,
+sign or install anything. Its production command is separately authorized by
+an original-request pin and complete caller-selected source/curated-kit pins;
+those hashes are not authentication or proof of complete compiler I/O closure.
 
 Rust tests include native media checks; database tests are opt-in. Serial
 execution reduces UDP port-allocation races. Web tests use mocked browser APIs;

@@ -155,6 +155,7 @@ class SecurityWorkflowTests(unittest.TestCase):
             "xtask/Cargo.toml": b"controller",
             "load_tests/Cargo.toml": b"generator",
             "ops/Cargo.toml": b"operations",
+            "ops/src/lib.rs": b"linked operations policy",
             "rust-toolchain.toml": b"compiler",
             ".cargo/config.toml": b"config",
             ".github/workflows/ci.yml": b"native plan",

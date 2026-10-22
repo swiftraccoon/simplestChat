@@ -402,7 +402,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/native-dtls-verified
-          key: native-dtls-v2-${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'main' || 'untrusted' }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('vendor/**', 'build/check-native-dtls.sh', 'build/install-openssl.sh', 'build/pip-constraints.txt', 'Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml', '.cargo/**', 'xtask/**', 'load_tests/Cargo.toml', 'ops/Cargo.toml', '.github/workflows/ci.yml') }}
+          key: native-dtls-v2-${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'main' || 'untrusted' }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('vendor/**', 'build/check-native-dtls.sh', 'build/install-openssl.sh', 'build/pip-constraints.txt', 'Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml', '.cargo/**', 'xtask/**', 'load_tests/Cargo.toml', 'ops/Cargo.toml', 'ops/src/**', '.github/workflows/ci.yml') }}
           lookup-only: true
 
       - name: Install the pinned Rust toolchain for native regression policy

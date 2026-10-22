@@ -145,6 +145,7 @@ RUN mkdir -p src load_tests/src xtask/src ops/src \
     && printf 'fn main() {}\n' > load_tests/src/main.rs \
     && printf 'fn main() {}\n' > xtask/src/main.rs \
     && printf 'fn main() {}\n' > ops/src/main.rs \
+    && printf '' > ops/src/lib.rs \
     && /opt/security-tools/bin/cargo-auditable auditable build --locked --release --bin simplestChat \
     && rm -rf src \
         target/release/simplestChat \

@@ -22,6 +22,7 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde-saphyr = { version = "=2.0.0", default-features = false, features = ["deserialize"] }
 serde_json = { version = "1.0.151", features = ["raw_value"] }
 sha2 = "0.11.0"
+simplestchat-ops = { path = "../ops" }
 syn = { version = "=3.0.6", features = ["full"] }
 tokio = { version = "1.53.2", features = ["full"] }
 url = "2.5.8"

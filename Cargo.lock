@@ -4803,6 +4803,7 @@ dependencies = [
  "serde-saphyr",
  "serde_json",
  "sha2 0.11.0",
+ "simplestchat-ops",
  "syn 3.0.6",
  "tokio",
  "url",

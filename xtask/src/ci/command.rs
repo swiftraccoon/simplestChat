@@ -15,6 +15,8 @@ pub(super) enum Program {
     PgConfig,
     DtlsPython,
     DtlsWorker,
+    OpsCargo,
+    OpsRustc,
 }
 impl Program {
     pub(super) fn name(self) -> &'static str {
@@ -29,6 +31,8 @@ impl Program {
             Self::PgConfig => "pg_config",
             Self::DtlsPython => "python3",
             Self::DtlsWorker => "mediasoup-worker-test",
+            Self::OpsCargo => "cargo",
+            Self::OpsRustc => "rustc",
         }
     }
 }
@@ -47,6 +51,7 @@ pub(super) struct Command {
     pub executable: Option<std::sync::Arc<super::selected_executable::Executable>>,
     pub node: Option<std::sync::Arc<super::release_checks::files::Executable>>,
     pub dtls: Option<std::sync::Arc<super::native_dtls::files::Executable>>,
+    pub ops: Option<std::sync::Arc<super::ops_artifact::recipe::Tool>>,
 }
 impl Command {
     pub(super) fn capture(program: Program, args: &[&str]) -> Self {
@@ -62,6 +67,7 @@ impl Command {
             executable: None,
             node: None,
             dtls: None,
+            ops: None,
         }
     }
 }

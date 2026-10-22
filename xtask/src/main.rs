@@ -30,6 +30,8 @@ Commands:
   ci-local      Run all required local workflow jobs, or one explicitly partial job,
                 against only an owned disposable engine; see `ci-local --help`.
   run           Build and run the local UI; --skip-web reuses web/dist.
+  ops-artifact  Produce an unsigned Ops candidate from explicitly pinned local materials;
+                fixed recipe only, with no signing, installation or candidate execution.
   check         Run installed-tool quality gates: [--web|--rust|--python|--helpers].
                 Default runs all groups, without installs or application services.
   container-smoke Check an already-built image on the selected local Unix engine;
@@ -102,6 +104,7 @@ fn run(arguments: &[String]) -> Result<ExitCode> {
         "check" => check::run(&root, rest),
         "ci" => ci::run(&root, rest),
         "container-smoke" => ci::run_container_smoke(&root, rest),
+        "ops-artifact" => ci::run_ops_artifact(rest),
         "ci-evidence" => ci_evidence::run(&root, rest),
         "ci-local" => ci_local::run(&root, rest),
         "ci-retention" => ci_retention::run(&root, rest),

@@ -115,43 +115,7 @@ impl<'a> Native<'a> {
         let mut command = tooling::command(
             self.root,
             self.environment,
-            match (
-                &request.executable,
-                &request.node,
-                &request.dtls,
-                request.program,
-            ) {
-                (Some(executable), None, None, super::command::Program::CargoAudit) => {
-                    executable.validate()?.as_os_str()
-                }
-                (None, Some(node), None, super::command::Program::Node) => {
-                    node.validate()?.as_os_str()
-                }
-                (None, None, Some(dtls), super::command::Program::DtlsPython) => {
-                    dtls.validate(false)?.as_os_str()
-                }
-                (None, None, Some(dtls), super::command::Program::DtlsWorker) => {
-                    dtls.validate(true)?.as_os_str()
-                }
-                (
-                    _,
-                    _,
-                    _,
-                    super::command::Program::CargoAudit
-                    | super::command::Program::Node
-                    | super::command::Program::DtlsPython
-                    | super::command::Program::DtlsWorker,
-                )
-                | (Some(_), _, _, _)
-                | (_, Some(_), _, _)
-                | (_, _, Some(_), _) => {
-                    return Err(Failure::new(
-                        1,
-                        "CI execution requires its validated executable role.",
-                    ));
-                }
-                (None, None, None, _) => std::ffi::OsStr::new(request.program.name()),
-            },
+            executable(&request)?,
             &request.arguments,
         );
         use std::os::unix::process::CommandExt;
@@ -291,6 +255,56 @@ impl<'a> Native<'a> {
         }
         Ok(output)
     }
+}
+
+/// Each selected role admits exactly one matching proof; no proof permits a
+/// fallback to PATH or substitution into another executable role.
+fn executable(request: &Command) -> Result<&std::ffi::OsStr> {
+    use super::command::Program;
+    let proofs = [
+        request.executable.is_some(),
+        request.node.is_some(),
+        request.dtls.is_some(),
+        request.ops.is_some(),
+    ]
+    .into_iter()
+    .filter(|present| *present)
+    .count();
+    let selected = matches!(
+        request.program,
+        Program::CargoAudit
+            | Program::Node
+            | Program::DtlsPython
+            | Program::DtlsWorker
+            | Program::OpsCargo
+            | Program::OpsRustc
+    );
+    if proofs == 0 && !selected {
+        return Ok(std::ffi::OsStr::new(request.program.name()));
+    }
+    if proofs != 1 {
+        return Err(Failure::new(
+            1,
+            "CI execution requires its validated executable role.",
+        ));
+    }
+    let path = match request.program {
+        Program::CargoAudit => request.executable.as_ref().map(|value| value.validate()),
+        Program::Node => request.node.as_ref().map(|value| value.validate()),
+        Program::DtlsPython => request.dtls.as_ref().map(|value| value.validate(false)),
+        Program::DtlsWorker => request.dtls.as_ref().map(|value| value.validate(true)),
+        Program::OpsCargo => request
+            .ops
+            .as_ref()
+            .map(|value| value.validate(super::ops_artifact::recipe::Role::Cargo)),
+        Program::OpsRustc => request
+            .ops
+            .as_ref()
+            .map(|value| value.validate(super::ops_artifact::recipe::Role::Rustc)),
+        _ => None,
+    }
+    .ok_or_else(|| Failure::new(1, "CI execution requires its validated executable role."))??;
+    Ok(path.as_os_str())
 }
 
 pub(super) trait Finalizer {

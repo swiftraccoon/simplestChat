@@ -269,6 +269,7 @@ test('context excludes local-only descendants while retaining production inputs'
     'xtask/src/ci/image_cache/private.env',
     'xtask/src/ci/container_smoke/private.env',
     'xtask/src/ci/native_dtls/private.env',
+    'xtask/src/ci/ops_artifact/private.env',
     'web/node_modules/example/index.js', 'web/e2e/results/report.json',
     'web/scripts/CLAUDE.md', 'web/scripts/local-only.mjs',
     'web/public/private.env', 'web/public/unlisted.html', 'web/src/CLAUDE.md',
@@ -307,6 +308,8 @@ test('ops workspace inputs remain narrow and no ops binary enters the production
   assert.match(dockerfile, /^COPY ops\/Cargo\.toml ops\/Cargo\.toml$/m);
   assert.match(dockerfile, /^COPY ops\/src \.\/ops\/src$/m);
   assert.match(dockerfile, /> ops\/src\/main\.rs/);
+  assert.match(dockerfile, /printf '' > ops\/src\/lib\.rs/,
+    'The xtask path dependency needs the Ops library target during dependency warming');
   const runtime = dockerfile.slice(dockerfile.indexOf(' AS runtime-base'));
   assert.doesNotMatch(runtime, /^COPY .*ops\/src|^COPY .*simplestchat-ops/m);
   assert.doesNotMatch(dockerfile, /cargo[^\n]*build[^\n]*(?:-p|--bin) simplestchat-ops/);

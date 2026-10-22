@@ -30,6 +30,7 @@ mod io;
 mod native_dtls;
 mod native_security;
 mod npm_path;
+mod ops_artifact;
 mod process;
 mod production_image;
 mod receipts;
@@ -287,6 +288,10 @@ fn print_key(context: &Context, scope: Scope, github_output: bool) -> Result<()>
 
 pub(crate) fn run_container_smoke(root: &Path, arguments: &[String]) -> Result<ExitCode> {
     container_smoke::run_local(root, arguments)
+}
+
+pub(crate) fn run_ops_artifact(arguments: &[String]) -> Result<ExitCode> {
+    ops_artifact::run(arguments)
 }
 
 pub(crate) fn run(root: &Path, arguments: &[String]) -> Result<ExitCode> {
