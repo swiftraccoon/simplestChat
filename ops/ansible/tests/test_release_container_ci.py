@@ -580,77 +580,50 @@ docker() {
         for step in (restore, save):
             self.assertNotIn("continue-on-error", step)
 
-    def test_local_failed_fixture_retains_only_private_command_diagnostics(self) -> None:
-        """Keep both original and cleanup failures even without a final report."""
+    def test_local_failed_fixture_uses_the_compiled_private_evidence_policy(self) -> None:
+        """Keep diagnostics after failures; Rust fixtures check copied bytes and permissions."""
         retention = self.step(LOCAL_DIAGNOSTICS)
         self.assertEqual(retention["if"], "${{ always() && env.ACT == 'true' }}")
         self.assertEqual(self.steps.index(retention), self.steps.index(self.step(INTEGRATION)) + 1)
+        self.assertEqual(
+            retention["run"], "cargo run --locked -q -p xtask -- ci copy-evidence release-container"
+        )
+        self.assertEqual(retention["shell"], "bash")
+        self.assertNotIn("env", retention)
         self.assertNotIn("continue-on-error", retention)
-        for completed_report in (False, True):
-            with (
-                self.subTest(completed_report=completed_report),
-                tempfile.TemporaryDirectory() as raw,
-            ):
-                root = Path(raw)
-                source = root / "runner/release-container"
-                private = source / "private"
-                private.mkdir(parents=True, mode=0o700)
-                evidence = root / "evidence"
-                evidence.mkdir(mode=0o700)
-                expected: dict[str, bytes] = {}
-                for number in (49, 54):
-                    for suffix in ("json", "stdout", "stderr"):
-                        name = f"command-{number:03d}.{suffix}"
-                        body = f"private {name}\n".encode()
-                        _ = (private / name).write_bytes(body)
-                        expected[f"private/{name}"] = body
-                if completed_report:
-                    body = b'{"passed":false,"failure":"Command 049 failed"}\n'
-                    _ = (source / "report.json").write_bytes(body)
-                    expected["report.json"] = body
-                for name in ("ca.key", "fixture-image.tar", "app.env"):
-                    _ = (private / name).write_text("not command evidence")
-                (private / "command-999.stderr").symlink_to(private / "ca.key")
-                result = subprocess.run(  # noqa: S603 - Execute the checked workflow in owned temp paths.
-                    ["/bin/bash", "-c", string(retention, "run")],
-                    env={
-                        "PATH": "/usr/bin:/bin",
-                        "RUNNER_TEMP": str(source.parent),
-                        "LOCAL_CI_EVIDENCE": str(evidence),
-                    },
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                    timeout=5,
-                )
-                self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(result.stdout, "", "Private logs must not enter the CI console")
-                destination = evidence / "release-container"
-                copied = {
-                    str(path.relative_to(destination)): path.read_bytes()
-                    for path in destination.rglob("*")
-                    if path.is_file()
-                }
-                self.assertEqual(copied, expected)
-                for path in (evidence, destination, destination / "private"):
-                    self.assertEqual(path.stat().st_mode & 0o777, 0o700)
-                for relative in expected:
-                    self.assertEqual((destination / relative).stat().st_mode & 0o777, 0o600)
 
-    def test_local_diagnostics_allow_failure_before_fixture_started(self) -> None:
-        """An earlier build failure has no fixture evidence and remains the original failure."""
-        with tempfile.TemporaryDirectory() as raw:
-            root = Path(raw)
-            result = subprocess.run(  # noqa: S603 - Execute the checked workflow in an owned temp path.
-                ["/bin/bash", "-c", string(self.step(LOCAL_DIAGNOSTICS), "run")],
-                env={"PATH": "/usr/bin:/bin", "RUNNER_TEMP": str(root)},
-                capture_output=True,
-                text=True,
-                check=False,
-                timeout=5,
+    def test_local_evidence_bootstraps_only_in_owned_runner_jobs(self) -> None:
+        """The same pinned compiler precedes all three copies without changing hosted steps."""
+        for job_name, copies in (
+            ("image-database", {"image-database"}),
+            ("deployment", {"release-container", "release-checks"}),
+        ):
+            steps = objects(obj(self.workflow, "jobs", job_name), "steps")
+            bootstrap = steps[1]
+            self.assertEqual(
+                bootstrap["uses"],
+                "dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d",
             )
-            self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(list(root.iterdir()), [])
+            self.assertEqual(bootstrap["if"], "${{ env.ACT }}")
+            self.assertEqual(bootstrap["with"], {"toolchain": "1.99.0"})
+            self.assertNotIn("env", bootstrap)
+            self.assertNotIn("permissions", bootstrap)
+            self.assertNotIn("environment", bootstrap)
+            self.assertNotIn("continue-on-error", bootstrap)
+            commands = {
+                string(step, "run").rsplit(" ", 1)[-1]: step
+                for step in steps
+                if "ci copy-evidence " in string(step.get("run", ""))
+            }
+            self.assertEqual(set(commands), copies)
+            for kind, step in commands.items():
+                self.assertEqual(step["if"], "${{ always() && env.ACT == 'true' }}")
+                self.assertEqual(
+                    step["run"], f"cargo run --locked -q -p xtask -- ci copy-evidence {kind}"
+                )
+                self.assertNotIn("env", step)
+                self.assertNotIn("continue-on-error", step)
+                self.assertGreater(steps.index(step), 1)
 
     def test_read_only_permissions_pinned_actions_and_no_remote_deployment(self) -> None:
         """Verify read only permissions pinned actions and no remote deployment."""
@@ -659,6 +632,11 @@ docker() {
         self.assertNotIn("environment", self.job)
         for step in self.steps:
             if "uses" in step:
+                if string(step, "uses").startswith("dtolnay/rust-toolchain@"):
+                    self.assertEqual(
+                        step, self.steps[1], "Only the fixed local-evidence bootstrap is allowed"
+                    )
+                    continue
                 # First-party GitHub actions only, pinned by commit: checkout,
                 # Node tooling, download/layer caches, and artifact retention.
                 self.assertRegex(

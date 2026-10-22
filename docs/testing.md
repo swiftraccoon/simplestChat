@@ -739,6 +739,21 @@ aggregate jobs install pinned Rust before this policy; hosted CodeQL health and
 local execution evidence still run afterward. The added hosted compilation cost
 has not been measured on GitHub.
 
+Local diagnostic preservation uses `ci copy-evidence image-database`,
+`ci copy-evidence release-container` and `ci copy-evidence release-checks` through
+the same xtask entry point. These commands read the owned `RUNNER_TEMP` and
+`LOCAL_CI_EVIDENCE` roots and copy only the workflow's fixed report/log allowlists.
+An absent, non-directory or symlink source succeeds without requiring an evidence
+root; a valid source creates a new directory even when optional files are absent.
+Destination directories use `0700`, files use `0600`, and existing destinations
+fail rather than overwrite earlier evidence. Symlink and special-file entries
+are skipped; descriptor-relative access prevents replacement paths from escaping
+the admitted directories. Each command bounds inventories to 4,096 entries per
+directory, 1,024 copied files, 16 MiB per file and 256 MiB total. Exceeded limits,
+changed sources and I/O failures fail quietly with a fixed message; private
+paths and file contents never enter the console. The affected jobs bootstrap
+the same pinned Rust toolchain only in the isolated local runner.
+
 The four local CodeQL scans enforce the same first-party source scope, security
 query suites, exact finding reviews and completed-query health. `vendor/` is
 excluded from automated source analysis. Native C/C++ source analysis and

@@ -898,6 +898,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Install the pinned Rust toolchain for local evidence copies
+        if: ${{ env.ACT }}
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable (2026-10-01)
+        with:
+          toolchain: 1.99.0
       - name: Start Docker inside the isolated local runner
         if: ${{ env.ACT }}
         run: build/ci-local-docker.sh
@@ -941,17 +946,7 @@ jobs:
       - name: Preserve local database preparation evidence
         if: ${{ always() && env.ACT == 'true' }}
         shell: bash
-        run: |
-          set -euo pipefail
-          source="${RUNNER_TEMP}/image-database-preparation"
-          [[ -d "${source}" && ! -L "${source}" ]] || exit 0
-          destination="${LOCAL_CI_EVIDENCE:?}/image-database"
-          umask 077
-          mkdir -m 700 "${destination}"
-          for file in "${source}/database-preparation.json" "${source}/database-status.json" "${source}"/scanner-result-*.json; do
-            [[ -f "${file}" && ! -L "${file}" ]] || continue
-            install -m 600 "${file}" "${destination}/${file##*/}"
-          done
+        run: cargo run --locked -q -p xtask -- ci copy-evidence image-database
       - name: Preserve bounded database preparation evidence
         if: ${{ always() && !env.ACT }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -977,6 +972,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      - name: Install the pinned Rust toolchain for local evidence copies
+        if: ${{ env.ACT }}
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable (2026-10-01)
+        with:
+          toolchain: 1.99.0
 
       - name: Start Docker inside the isolated local runner
         if: ${{ env.ACT }}
@@ -1272,37 +1273,12 @@ jobs:
       - name: Preserve private local release-container diagnostics
         if: ${{ always() && env.ACT == 'true' }}
         shell: bash
-        run: |
-          set -euo pipefail
-          source="${RUNNER_TEMP}/release-container"
-          [[ -d "${source}" && ! -L "${source}" ]] || exit 0
-          destination="${LOCAL_CI_EVIDENCE:?}/release-container"
-          umask 077
-          mkdir -m 700 "${destination}" "${destination}/private"
-          if [[ -f "${source}/report.json" && ! -L "${source}/report.json" ]]; then
-            install -m 600 "${source}/report.json" "${destination}/report.json"
-          fi
-          if [[ -d "${source}/private" && ! -L "${source}/private" ]]; then
-            for log in "${source}"/private/command-*.{json,stdout,stderr}; do
-              [[ -f "${log}" && ! -L "${log}" ]] || continue
-              install -m 600 "${log}" "${destination}/private/${log##*/}"
-            done
-          fi
+        run: cargo run --locked -q -p xtask -- ci copy-evidence release-container
 
       - name: Preserve private local release-check preparation diagnostics
         if: ${{ always() && env.ACT == 'true' }}
         shell: bash
-        run: |
-          set -euo pipefail
-          source="${RUNNER_TEMP}/release-checks"
-          [[ -d "${source}" && ! -L "${source}" ]] || exit 0
-          destination="${LOCAL_CI_EVIDENCE:?}/release-checks"
-          umask 077
-          mkdir -m 700 "${destination}"
-          for name in summary.json release-fixture.stdout release-fixture.stderr scanner-tools.stdout scanner-tools.stderr; do
-            [[ -f "${source}/${name}" && ! -L "${source}/${name}" ]] || continue
-            install -m 600 "${source}/${name}" "${destination}/${name}"
-          done
+        run: cargo run --locked -q -p xtask -- ci copy-evidence release-checks
 
       - name: Fingerprint the vulnerability database download cache
         id: image-database-inputs

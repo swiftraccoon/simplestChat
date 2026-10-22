@@ -100,6 +100,17 @@ CodeQL health and local execution evidence remain separate blocking checks.
 The official HTTPS bootstrap boundary, action fingerprint and 2026-11-29 expiry
 are unchanged. Added hosted compilation cost has not been measured on GitHub.
 
+The local evidence-copy commands add exact installer reviews at
+`ci.yml#jobs/image-database/steps/1/uses` and
+`ci.yml#jobs/deployment/steps/1/uses`. Both run only under the existing local
+`ACT` guard, after checkout disables persisted credentials, with the same
+immutable action and explicit Rust 1.99.0. They supply rustup missing from the
+maintained local image before compiled evidence preservation can run, including
+after an earlier job-step failure. No token or restored artifact selects the
+installer or its arguments. All original copy guards and required security,
+freshness and release checks remain blocking. The official HTTPS bootstrap
+boundary, action fingerprint and 2026-11-29 expiry are unchanged.
+
 The cache-retention port adds one exact installer-action review at
 `cache-retention.yml#jobs/retain/steps/1/uses`. It uses that same immutable action
 and explicit Rust 1.99.0 to build the maintenance binary before the scoped

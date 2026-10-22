@@ -4770,6 +4770,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "flate2",
+ "nix",
  "rawzip",
  "regex",
  "rustix",
