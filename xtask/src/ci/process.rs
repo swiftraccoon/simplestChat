@@ -266,6 +266,7 @@ fn executable(request: &Command) -> Result<&std::ffi::OsStr> {
         request.node.is_some(),
         request.dtls.is_some(),
         request.ops.is_some(),
+        request.source_git.is_some(),
     ]
     .into_iter()
     .filter(|present| *present)
@@ -278,6 +279,7 @@ fn executable(request: &Command) -> Result<&std::ffi::OsStr> {
             | Program::DtlsWorker
             | Program::OpsCargo
             | Program::OpsRustc
+            | Program::OpsGit
     );
     if proofs == 0 && !selected {
         return Ok(std::ffi::OsStr::new(request.program.name()));
@@ -301,6 +303,7 @@ fn executable(request: &Command) -> Result<&std::ffi::OsStr> {
             .ops
             .as_ref()
             .map(|value| value.validate(super::ops_artifact::recipe::Role::Rustc)),
+        Program::OpsGit => request.source_git.as_ref().map(|value| value.validate()),
         _ => None,
     }
     .ok_or_else(|| Failure::new(1, "CI execution requires its validated executable role."))??;

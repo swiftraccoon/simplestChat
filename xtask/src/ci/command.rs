@@ -17,6 +17,7 @@ pub(super) enum Program {
     DtlsWorker,
     OpsCargo,
     OpsRustc,
+    OpsGit,
 }
 impl Program {
     pub(super) fn name(self) -> &'static str {
@@ -33,6 +34,7 @@ impl Program {
             Self::DtlsWorker => "mediasoup-worker-test",
             Self::OpsCargo => "cargo",
             Self::OpsRustc => "rustc",
+            Self::OpsGit => "git",
         }
     }
 }
@@ -52,6 +54,7 @@ pub(super) struct Command {
     pub node: Option<std::sync::Arc<super::release_checks::files::Executable>>,
     pub dtls: Option<std::sync::Arc<super::native_dtls::files::Executable>>,
     pub ops: Option<std::sync::Arc<super::ops_artifact::recipe::Tool>>,
+    pub source_git: Option<std::sync::Arc<super::ops_artifact::source::Git>>,
 }
 impl Command {
     pub(super) fn capture(program: Program, args: &[&str]) -> Self {
@@ -68,6 +71,7 @@ impl Command {
             node: None,
             dtls: None,
             ops: None,
+            source_git: None,
         }
     }
 }

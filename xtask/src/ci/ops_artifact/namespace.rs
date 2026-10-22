@@ -357,9 +357,14 @@ impl OwnedRun {
     pub fn create(pathname: &Path, budget: &Budget) -> Result<Self> {
         Self::create_with(pathname, budget, true)
     }
+    /// A fresh private local output without Cargo's outside-config authority rule.
+    /// Namespace identity is still retained and rechecked through explicit close.
+    pub fn local(pathname: &Path, budget: &Budget) -> Result<Self> {
+        Self::create_with(pathname, budget, false)
+    }
     #[cfg(test)]
     pub fn fixture(pathname: &Path, budget: &Budget) -> Result<Self> {
-        Self::create_with(pathname, budget, false)
+        Self::local(pathname, budget)
     }
     fn create_with(pathname: &Path, budget: &Budget, controlled: bool) -> Result<Self> {
         let parent = Chain::open(pathname.parent().ok_or_else(|| failure(1))?, budget)?;
@@ -469,12 +474,21 @@ impl OwnedRun {
 /// Re-read actual stored bytes through the writer descriptor before admitting
 /// its stamp; then recheck the visible same-inode binding before explicit close.
 pub(super) fn write(parent: &File, name: &str, bytes: &[u8], budget: &Budget) -> Result<Metadata> {
-    let output = Held::create(parent, name, false, budget)?;
-    let admitted = private_file(&output, false)?;
+    write_mode(parent, name, bytes, false, budget)
+}
+pub(super) fn write_mode(
+    parent: &File,
+    name: &str,
+    bytes: &[u8],
+    executable: bool,
+    budget: &Budget,
+) -> Result<Metadata> {
+    let output = Held::create(parent, name, executable, budget)?;
+    let admitted = private_file(&output, executable)?;
     let written = (|| {
         let mut writer = output.file();
         io(writer.write_all(bytes).and_then(|()| writer.sync_all()))?;
-        let before = private_file(&output, false)?;
+        let before = private_file(&output, executable)?;
         if !binding(&admitted, &before) {
             return Err(failure(1));
         }

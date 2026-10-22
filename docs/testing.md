@@ -37,6 +37,14 @@ sign or install anything. Its production command is separately authorized by
 an original-request pin and complete caller-selected source/curated-kit pins;
 those hashes are not authentication or proof of complete compiler I/O closure.
 
+The same focused group includes the [selected local Git source exporter](../ops/README.md#selected-local-git-source-export).
+It uses bounded fake commands and tiny temporary Git repositories with isolated
+configuration/templates, including a corrupted nested-tree/OID fixture. An
+installed regular Git supporting the fixed no-lazy-fetch options is
+required for those local plumbing fixtures. No clone, fetch, build, candidate,
+engine or host operation runs. Export observations do not authenticate acquisition
+or replace eventual trusted CI and Debian runtime evidence.
+
 Rust tests include native media checks; database tests are opt-in. Serial
 execution reduces UDP port-allocation races. Web tests use mocked browser APIs;
 the web build runs TypeScript checking and produces the production UI.

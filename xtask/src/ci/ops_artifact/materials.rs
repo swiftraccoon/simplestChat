@@ -430,7 +430,6 @@ fn unchanged(original: &Snapshot, observed: &Snapshot) -> Result<()> {
     }
 }
 
-#[cfg(test)]
 pub(super) async fn measure<E: Executor, C: Clock>(
     path: &std::path::Path,
     budget: &Budget,

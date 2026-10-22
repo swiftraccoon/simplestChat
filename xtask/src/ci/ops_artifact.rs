@@ -14,6 +14,7 @@ mod native_tests;
 pub(super) mod recipe;
 mod request;
 mod resolution;
+pub(crate) mod source;
 #[cfg(test)]
 mod tests;
 
@@ -22,7 +23,7 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::time::{Duration, Instant};
 
-const USAGE: &str = "usage: cargo run --locked -q -p xtask -- ops-artifact build \
+const USAGE: &str = "usage: cargo run --locked -q -p xtask -- ops-artifact build|source \
 --request PATH --request-sha256 SHA256";
 
 pub(super) fn run(arguments: &[String]) -> anyhow::Result<std::process::ExitCode> {
@@ -34,7 +35,7 @@ pub(super) fn run(arguments: &[String]) -> anyhow::Result<std::process::ExitCode
         eprintln!("{USAGE}");
         return Ok(std::process::ExitCode::from(2));
     };
-    if operation != "build"
+    if !matches!(operation.as_str(), "build" | "source")
         || request_flag != "--request"
         || sha_flag != "--request-sha256"
         || !namespace::path(std::path::Path::new(path))
@@ -46,7 +47,16 @@ pub(super) fn run(arguments: &[String]) -> anyhow::Result<std::process::ExitCode
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;
-    match runtime.block_on(execute::native(std::path::Path::new(path), selected)) {
+    let result = runtime.block_on(async {
+        if operation == "source" {
+            source::native(std::path::Path::new(path), selected)
+                .await
+                .map_err(|error| Failure::new(error.code, "Ops source export is unproven."))
+        } else {
+            execute::native(std::path::Path::new(path), selected).await
+        }
+    });
+    match result {
         Ok(()) => Ok(std::process::ExitCode::SUCCESS),
         Err(error) => {
             eprintln!("{}", error.message);

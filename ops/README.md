@@ -288,6 +288,105 @@ binary digest, signature or runtime-readiness claim. Failure is exit 1 and only
 The existing Ops artifact and server release contracts are unchanged. This is
 a new plan contract tested directly, not a Python producer receipt or oracle.
 
+## Selected local Git source export
+
+Export one selected local commit without checking out, compiling or executing its
+source:
+
+```sh
+cargo run --locked -q -p xtask -- ops-artifact source \
+  --request /controlled/source-request.json --request-sha256 ORIGINAL_REQUEST_SHA256
+```
+
+The UTF-8 request is at most 64 KiB, bound to its original lowercase SHA-256, and
+has exactly these fields:
+
+```json
+{
+  "schemaVersion": 1,
+  "selection": {
+    "repository": "swiftraccoon/simplestChat",
+    "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "packageVersion": "0.1.0",
+    "protocolVersion": 1,
+    "target": "x86_64-unknown-linux-musl",
+    "buildRunId": 123,
+    "runAttempt": 1
+  },
+  "repository": "/controlled/local-repository",
+  "git": {"path": "/controlled/tools/git", "sha256": "GIT_SHA256", "bytes": 12345},
+  "output": "/controlled/fresh-source-export"
+}
+```
+
+Replace the example revision, run identities, Git digest and byte count with
+explicit selections. The seven identity fields remain declarations. Paths use
+the producer's normalized absolute, control-free profile; output has at most
+20 components, must be fresh, and cannot overlap the repository, selected Git
+file or request. Exported material is `output/source/`; its measured full-tree
+pin can feed the unchanged producer request. The fixed private
+`source-observation.json` is outside that tree.
+
+Only an ordinary local repository with descriptor-bound `.git/objects` is
+supported. Bare repositories, linked worktrees, `commondir`, `gitdir`, object
+alternates and symlinked ancestors are refused. A fresh bare `git-view` has a
+literal configuration, empty refs/objects and retained namespace/metadata checks.
+`GIT_OBJECT_DIRECTORY` selects the original local objects; original repository
+configuration is never loaded. Global/system configuration and inherited Git
+overrides are cleared. Fixed
+[Git options](https://git-scm.com/docs/git) disable replacement objects, lazy
+promisor fetches, optional locks and pagination. Unsupported options fail closed.
+There is no checkout, archive attribute expansion, filter, hook, fetch or received
+shell/argv stage. Selected Git, its dynamic runtime/helpers and the local object
+database are caller-owned trust inputs; this is not an execution sandbox or
+upstream repository authentication.
+
+The selected Git file is nonempty, regular, at most 64 MiB, executable,
+root/current-user owned, without group/other write or set-ID permissions. Its
+original SHA/count are checked through a retained descriptor and the exact
+hash-bound metadata is rechecked before and after every command. No PATH
+fallback is allowed. Installed hardlinked command aliases are admitted; their
+link count is retained in the full stamp checks. Those checks detect observed change; they do not authenticate
+Git acquisition or prevent a later same-user/root replacement. No exclusive
+inode ownership, descriptor-based exec or atomic runtime snapshot is claimed.
+
+A NUL-delimited raw tree catalogue admits at most 8,192 entries, 4 MiB output,
+2 MiB path bytes, 16 descendant levels, 4096-byte paths and 255-byte components.
+Directories, including explicit empty trees, are preserved. Links, submodules,
+unsafe or `.git` components, duplicate/conflicting names and missing parents
+are refused. Each blob is at most 16 MiB and the source total at most 256 MiB.
+Raw commit bytes are bounded to 1 MiB, each raw tree to 4 MiB and their combined
+retained bytes to 8 MiB. The catalogue is repeated, and the raw commit, root and
+every distinct nested tree are captured and explicitly rehashed with selected
+Git before and after copying. Recursive `ls-tree` alone does not validate every
+nested loose-tree payload against its object ID. Every stored blob is also
+rehashed with `hash-object --no-filters` and compared to its catalogue ID.
+[Raw object reads](https://git-scm.com/docs/git-cat-file) and
+[unfiltered hashing](https://git-scm.com/docs/git-hash-object) keep this boundary
+in Git rather than a new Git object parser.
+
+Fresh directories are 0700 and regular files 0600 or 0700 according to the Git
+executable bit. Writer-bound byte checks, retained stamps and namespace checks
+precede independent complete-tree hashing with `ops-producer-tree-v1`; the result
+must match exactly the admitted catalogue and captured blob bytes. The shared
+128-descriptor budget includes owners and a sixteen-slot command/replay reserve;
+deep path combinations may be refused. File owners attempt explicit closes;
+temporary mature directory cursors are RAII-closed. One signal/deadline owner
+survives closes and bounded result replay. The producer's 18-minute active plus
+two-minute settlement watchdog applies; filesystem/scheduler/reap stalls and
+cold xtask compilation have no hard wall-clock guarantee.
+
+Final zero exit and bounded JSON describe an **observed local commit/tree/source
+relationship** and selected Git/request identities. Paths, catalogue names,
+source bytes and commit author/message data stay private. The output does not
+prove GitHub origin/main status, authenticated acquisition, a successful build,
+signing readiness, musl provenance or runtime compatibility. This is an optimistic
+observation of a caller-owned mutable object database and output, not an atomic
+snapshot or lock. Failure can retain private partial material and even an
+observation after a later close/replay failure; file presence alone is not success.
+Tests use fake/fault processes and tiny owned local Git repositories with isolated
+configuration/templates and no hooks or network. No candidate is built or run.
+
 ## Controlled local unsigned producer
 
 `xtask` can execute a fixed build recipe using explicitly selected local materials:
