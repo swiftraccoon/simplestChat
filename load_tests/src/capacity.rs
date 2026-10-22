@@ -12,6 +12,7 @@ pub(crate) mod model;
 mod presentation;
 #[cfg(test)]
 mod tests;
+pub mod vps;
 
 const USAGE: &str = "Usage: load_test capacity suggest --vcpus N --memory-gib GIB \
 [--port-mbps MBPS] [--calibration PATH] [--included-egress-tb TB] \

@@ -6,6 +6,32 @@ It uses the existing Ansible playbook, image-build service and
 [`build/capacity.py`](../../build/capacity.py) measurement engine. Preparation and
 image building are explicit options; each measurement creates a new run.
 
+The Rust library `simplestchat_load_test::capacity::vps` now provides the pure
+request, workload-argument, calibration, terminal-unit and redacted residual
+policy, checked against these retained Python functions. It starts no process
+or remote operation and adds no VPS command. The controller, SSH preparation
+lease, systemd worker, collection/recovery and archive transport remain Python.
+The shared Rust capacity engine already implements the measured workload; its
+installation and executable provenance on the Debian host still need an explicit
+contract before the worker can use it. The load-test executable currently ships
+inside the Fedora runtime image, which is not evidence of Debian host ABI
+compatibility. Bootstrap/Ansible provisioning and the broader host operations
+binary remain a Tier 2 concern.
+
+The pure request parser keeps Python's integer/float distinction, finite quota
+checks and unknown fields. Requests are bounded at 512 KiB and report/inspection
+inputs at 8 MiB, using the existing JSON numeric-token adapter and Serde's bounded
+nesting and Unicode-scalar domain. Unpaired surrogates and deeper JSON are refused;
+parity does not extend to Python's broader decoder domain. Malformed nested NaN
+image values remain unconfirmed; normal engine image identities are strings.
+Unit output is bounded at 16 MiB, matching the two captured streams.
+The future operation owner must also bound aggregate snapshot count and bytes;
+per-record limits alone do not establish an aggregate collection budget.
+Argument generation returns only the `run` suffix, so an operation owner
+must select and verify the actual executable. A residual snapshot is evidence of
+ownership; destructive recovery must still re-inspect each immutable ID at the
+last operation boundary, as the Python controller does today.
+
 Use a dedicated private benchmark host prepared with the
 [bootstrap controller](BOOTSTRAP.md), the pinned Ansible Python environment,
 and a clean committed checkout. The full `--revision` must equal the controller
