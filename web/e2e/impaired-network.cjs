@@ -27,6 +27,7 @@ async function runSuite(runner = {}) {
   const step = runner.step ?? ((_name, work) => work());
   const assert = require('node:assert/strict');
   const { execFileSync } = require('node:child_process');
+  const executeImpairment = runner.executeImpairment ?? execFileSync;
   const fs = require('node:fs');
   const os = require('node:os');
   const path = require('node:path');
@@ -160,15 +161,15 @@ async function runSuite(runner = {}) {
       { mode: 0o600 },
     );
   }
-  function impair(action, env) {
+  function impair(action, profile = {}) {
     if (!impairmentEnabled) return;
-    const output = execFileSync('sh', [impairScript, action], {
+    const output = executeImpairment('sh', [impairScript, action], {
       env: {
         ...env,
         IMPAIR_UDP_PORT: env.IMPAIR_UDP_PORT || '41100',
         IMPAIR_WORKERS: env.IMPAIR_WORKERS || '1',
         IMPAIR_DIRECTION: 'downlink',
-        ...(env || {}),
+        ...profile,
       },
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'inherit'],
@@ -874,11 +875,13 @@ async function runSuite(runner = {}) {
       report.failure = { message: error.message, stack: error.stack };
       throw error;
     } finally {
-      try {
-        impair('clear');
-        if (blockUdp) impair('unblock-udp');
-      } catch (error) {
-        report.failure ??= { message: `impairment clear failed: ${error.message}` };
+      for (const action of blockUdp ? ['clear', 'unblock-udp'] : ['clear']) {
+        try {
+          impair(action);
+        } catch (error) {
+          report.passed = false;
+          report.failure ??= { message: `impairment ${action} failed: ${error.message}` };
+        }
       }
       report.finishedAt = new Date().toISOString();
       correlation?.finish();
