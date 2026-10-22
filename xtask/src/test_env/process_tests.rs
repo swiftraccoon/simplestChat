@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::owned_process::{self, Group, Signals};
+use std::process::Stdio;
 use std::{
     fs,
     os::unix::fs::DirBuilderExt,

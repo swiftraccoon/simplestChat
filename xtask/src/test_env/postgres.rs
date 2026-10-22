@@ -2,15 +2,15 @@
 //! directory, bound to loopback only, stopped afterwards and retained for
 //! diagnostics. Never a shared service, never a Unix socket.
 
-use super::Stop;
-use super::process::{self, shell_status};
+use super::process;
+use super::{Stop, helper};
+use crate::owned_process::Signals;
 use anyhow::{Context, Result};
 use std::fs::{self, OpenOptions};
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
-use std::process::Stdio;
+use std::process::{Command, Stdio};
 use std::time::Duration;
-use tokio::process::Command;
 
 const DEFAULT_PORT: &str = "15434";
 const DATABASE: &str = "simplestchat_test";
@@ -32,6 +32,7 @@ struct Cluster {
     data: PathBuf,
     identity: Option<RootRunner>,
     start_attempted: bool,
+    start_confirmed: bool,
 }
 
 pub(crate) async fn run(_root: &Path, command: &[String]) -> Result<i32> {
@@ -40,6 +41,7 @@ pub(crate) async fn run(_root: &Path, command: &[String]) -> Result<i32> {
             Stop::usage("Usage: cargo run -q -p xtask -- test-postgres COMMAND [ARG ...]").into(),
         );
     }
+    let mut signals = Signals::new()?;
     let port_text = std::env::var("TEST_POSTGRES_PORT").unwrap_or_else(|_| DEFAULT_PORT.to_owned());
     let port = parse_port(&port_text).ok_or_else(|| {
         Stop::usage("TEST_POSTGRES_PORT must be an integer from 1000 through 65535.")
@@ -52,7 +54,7 @@ pub(crate) async fn run(_root: &Path, command: &[String]) -> Result<i32> {
             );
         }
     }
-    let identity = root_runner(&path).await?;
+    let identity = root_runner(&path, &mut signals).await?;
     if let Err(error) = std::net::TcpListener::bind(("127.0.0.1", port)) {
         return Err(Stop::usage(format!(
             "Refusing unavailable PostgreSQL test port: {error}"
@@ -67,43 +69,49 @@ pub(crate) async fn run(_root: &Path, command: &[String]) -> Result<i32> {
         directory,
         identity,
         start_attempted: false,
+        start_confirmed: false,
     };
-    let status = match cluster.start_and_run(port, command).await {
+    let status = match cluster.start_and_run(port, command, &mut signals).await {
         Ok(status) => status,
         Err(error) => {
-            let status = cluster.cleanup(1).await;
-            if error.downcast_ref::<Stop>().is_some() {
-                return Err(error);
+            if let Some(stop) = error.downcast_ref::<Stop>() {
+                eprintln!("{}", stop.message);
+                i32::from(stop.code)
+            } else {
+                eprintln!("xtask: {error:#}");
+                1
             }
-            eprintln!("xtask: {error:#}");
-            return Ok(status);
         }
     };
-    Ok(cluster.cleanup(status).await)
+    Ok(cluster.finish(status, &mut signals).await)
 }
 
 impl Cluster {
-    async fn start_and_run(&mut self, port: u16, command: &[String]) -> Result<i32> {
+    async fn start_and_run(
+        &mut self,
+        port: u16,
+        command: &[String],
+        signals: &mut Signals,
+    ) -> Result<i32> {
         let initdb_log = self.directory.join("initdb.log");
         let postgres_log = self.directory.join("postgres.log");
         if let Some(identity) = &self.identity {
             // Transfer only this newly created private directory, never its shared parent.
             let owner = format!("{}:{}", identity.uid, identity.gid);
-            let chown = Command::new("chown")
-                .arg(&owner)
-                .arg(&self.directory)
-                .status()
-                .await
-                .context("running chown")?;
-            if !chown.success() {
-                return Ok(shell_status(chown));
+            let mut chown = Command::new("chown");
+            chown.arg(&owner).arg(&self.directory);
+            let chown = helper::run(chown, Duration::from_secs(10), None, Some(signals)).await?;
+            if chown.status != 0 {
+                return Ok(chown.status);
             }
-            let writable = self
-                .postgres_command("test", &["-w", &self.directory.to_string_lossy()])
-                .status()
-                .await
-                .context("checking the cluster directory")?;
-            if !writable.success() {
+            let writable = helper::run(
+                self.postgres_command("test", &["-w", &self.directory.to_string_lossy()]),
+                Duration::from_secs(10),
+                None,
+                Some(signals),
+            )
+            .await?;
+            if writable.status != 0 {
                 return Err(Stop::usage(
                     "The postgres account cannot access its cluster; use a traversable RUNNER_TEMP/TMPDIR parent.",
                 )
@@ -135,12 +143,12 @@ impl Cluster {
                 ],
                 &initdb_log,
                 true,
+                Some(signals),
             )
             .await?;
         if status != 0 {
             return Ok(status);
         }
-        self.start_attempted = true;
         let options = format!("-h 127.0.0.1 -p {port} -c unix_socket_directories=''");
         let status = self
             .step(
@@ -159,11 +167,13 @@ impl Cluster {
                 ],
                 &initdb_log,
                 false,
+                Some(signals),
             )
             .await?;
         if status != 0 {
             return Ok(status);
         }
+        self.start_confirmed = true;
         let port_text = port.to_string();
         let status = self
             .step(
@@ -180,21 +190,22 @@ impl Cluster {
                 ],
                 &initdb_log,
                 false,
+                Some(signals),
             )
             .await?;
         if status != 0 {
             return Ok(status);
         }
-        if !self.running().await {
+        if !matches!(self.state(Some(signals)).await?, State::Running) {
             return Ok(1);
         }
         let database_url =
             format!("postgres://{OWNER}@127.0.0.1:{port}/{DATABASE}?sslmode=disable");
-        let status = self.run_child(command, &database_url).await?;
+        let status = self.run_child(command, &database_url, signals).await?;
         if status != 0 {
             return Ok(status);
         }
-        if !self.running().await {
+        if !matches!(self.state(Some(signals)).await?, State::Running) {
             eprintln!("Owned PostgreSQL exited while the test command was running.");
             return Ok(1);
         }
@@ -204,7 +215,12 @@ impl Cluster {
     /// Run the test command in its own process group with libpq defaults
     /// removed, so an inherited service can never receive its writes; a
     /// signal to this process stops the whole group and reports 130 or 143.
-    async fn run_child(&self, command: &[String], database_url: &str) -> Result<i32> {
+    async fn run_child(
+        &self,
+        command: &[String],
+        database_url: &str,
+        signals: &mut Signals,
+    ) -> Result<i32> {
         let mut child = std::process::Command::new(&command[0]);
         child.args(&command[1..]);
         child.env_clear();
@@ -217,39 +233,88 @@ impl Cluster {
             .env("DATABASE_URL", database_url)
             .env("TEST_DATABASE_URL", database_url)
             .env("DISPOSABLE_TEST_DATABASE", "1");
-        process::run_test_child(child, CHILD_GRACE).await
+        process::run_test_child(child, CHILD_GRACE, signals).await
     }
 
-    async fn cleanup(&mut self, mut status: i32) -> i32 {
+    /// Cleanup cannot be cancelled midway. Observe a pending interruption only
+    /// after every acquired resource has received its retirement attempt.
+    async fn finish(&mut self, status: i32, signals: &mut Signals) -> i32 {
+        let mut status = self.cleanup(status).await;
+        if status == 0
+            && let Some(code) = signals.pending().await
+        {
+            status = i32::from(code);
+        }
+        status
+    }
+
+    async fn cleanup(&mut self, status: i32) -> i32 {
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+        self.cleanup_observing(status, || tokio::time::Instant::now() < deadline)
+            .await
+    }
+
+    async fn cleanup_observing(
+        &mut self,
+        mut status: i32,
+        mut continue_settlement: impl FnMut() -> bool,
+    ) -> i32 {
         let data = self.data.to_string_lossy().into_owned();
         let postgres_log = self.directory.join("postgres.log");
-        if self.start_attempted && self.running().await {
-            let fast = self
-                .step(
-                    "pg_ctl",
-                    &["-D", &data, "-w", "-t", "15", "stop", "-m", "fast"],
-                    &postgres_log,
-                    false,
-                )
-                .await;
-            if !matches!(fast, Ok(0)) {
+        if self.start_attempted {
+            // pg_ctl detaches postmaster before its pidfile exists. A failed
+            // start leaves that gap unproven, even if every status says 3.
+            if !self.start_confirmed {
                 eprintln!(
-                    "Fast shutdown failed; stopping only the owned test cluster immediately."
+                    "Owned PostgreSQL startup is unproven; detached daemon closure cannot be confirmed."
                 );
-                if status == 0 {
-                    status = 1;
+                worsen(&mut status);
+            }
+            loop {
+                let before = self.state(None).await;
+                if before.is_err() {
+                    eprintln!(
+                        "Owned PostgreSQL shutdown status is unproven; attempting its exact data-directory stop."
+                    );
+                    worsen(&mut status);
                 }
-                let immediate = self
-                    .step(
-                        "pg_ctl",
-                        &["-D", &data, "-w", "-t", "5", "stop", "-m", "immediate"],
-                        &postgres_log,
-                        false,
-                    )
-                    .await;
-                if !matches!(immediate, Ok(0)) {
-                    eprintln!("Could not stop owned test cluster: {data}");
+                if !matches!(before, Ok(State::Stopped)) {
+                    let fast = self
+                        .step(
+                            "pg_ctl",
+                            &["-D", &data, "-w", "-t", "15", "stop", "-m", "fast"],
+                            &postgres_log,
+                            false,
+                            None,
+                        )
+                        .await;
+                    if !matches!(fast, Ok(0)) {
+                        eprintln!(
+                            "Fast shutdown failed; stopping only the owned test cluster immediately."
+                        );
+                        worsen(&mut status);
+                        let immediate = self
+                            .step(
+                                "pg_ctl",
+                                &["-D", &data, "-w", "-t", "5", "stop", "-m", "immediate"],
+                                &postgres_log,
+                                false,
+                                None,
+                            )
+                            .await;
+                        if !matches!(immediate, Ok(0)) {
+                            eprintln!("Could not stop the owned test cluster.");
+                        }
+                    }
                 }
+                if self.start_confirmed || !continue_settlement() {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+            if !matches!(self.state(None).await, Ok(State::Stopped)) {
+                eprintln!("Owned PostgreSQL shutdown could not be confirmed.");
+                worsen(&mut status);
             }
         }
         println!(
@@ -265,18 +330,33 @@ impl Cluster {
         status
     }
 
-    async fn running(&self) -> bool {
-        self.postgres_command("pg_ctl", &["-D", &self.data.to_string_lossy(), "status"])
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .await
-            .is_ok_and(|status| status.success())
+    /// Status 3 is a current not-running observation. It cannot settle an
+    /// unsuccessful detached startup; that uncertainty is sticky in cleanup.
+    /// Other failures leave ownership uncertain and must not skip a stop.
+    async fn state(&self, signals: Option<&mut Signals>) -> Result<State> {
+        let mut command =
+            self.postgres_command("pg_ctl", &["-D", &self.data.to_string_lossy(), "status"]);
+        command.stdout(Stdio::null()).stderr(Stdio::null());
+        match helper::run(command, Duration::from_secs(5), None, signals)
+            .await?
+            .status
+        {
+            0 => Ok(State::Running),
+            3 => Ok(State::Stopped),
+            _ => anyhow::bail!("Owned PostgreSQL status could not be determined."),
+        }
     }
 
-    /// Run one PostgreSQL tool with its output on a log file; its status as
-    /// the shell would report it.
-    async fn step(&self, tool: &str, args: &[&str], log: &Path, truncate: bool) -> Result<i32> {
+    /// Logs stream to private files; setup commands have an outer deadline and
+    /// a reserved owned group independently of pg_ctl's daemon/data-dir owner.
+    async fn step(
+        &mut self,
+        tool: &str,
+        args: &[&str],
+        log: &Path,
+        truncate: bool,
+        signals: Option<&mut Signals>,
+    ) -> Result<i32> {
         let file = OpenOptions::new()
             .create(true)
             .write(true)
@@ -286,15 +366,23 @@ impl Cluster {
             .open(log)
             .with_context(|| format!("opening {}", log.display()))?;
         let errors = file.try_clone()?;
-        let status = self
-            .postgres_command(tool, args)
-            .stdin(Stdio::null())
+        let mut command = self.postgres_command(tool, args);
+        command
             .stdout(Stdio::from(file))
-            .stderr(Stdio::from(errors))
-            .status()
-            .await
-            .with_context(|| format!("running {tool}"))?;
-        Ok(shell_status(status))
+            .stderr(Stdio::from(errors));
+        // initdb may initialize catalogs; pg_ctl's own -t remains 15s/5s.
+        let timeout = if tool == "initdb" {
+            Duration::from_secs(60)
+        } else {
+            Duration::from_secs(30)
+        };
+        let output = if tool == "pg_ctl" && args.contains(&"start") {
+            helper::run_dispatched(command, timeout, None, signals, &mut self.start_attempted)
+                .await?
+        } else {
+            helper::run(command, timeout, None, signals).await?
+        };
+        Ok(output.status)
     }
 
     /// A PostgreSQL tool with every `PG*` variable, service file and inherited
@@ -351,13 +439,15 @@ fn disposable_root_runner(act: bool, disposable: bool, os: &str, container: bool
     act && disposable && os == "Linux" && container
 }
 
-async fn root_runner(path: &str) -> Result<Option<RootRunner>> {
-    if tool_output("id", &["-u"]).await.as_deref() != Some("0") {
+async fn root_runner(path: &str, signals: &mut Signals) -> Result<Option<RootRunner>> {
+    if tool_output("id", &["-u"], path, signals).await?.as_deref() != Some("0") {
         return Ok(None);
     }
     let act = std::env::var("ACT").is_ok_and(|value| value == "true");
     let disposable = std::env::var("LOCAL_CI_DISPOSABLE").is_ok_and(|value| value == "1");
-    let os = tool_output("uname", &["-s"]).await.unwrap_or_default();
+    let os = tool_output("uname", &["-s"], path, signals)
+        .await?
+        .unwrap_or_default();
     let container = CONTAINER_MARKERS
         .iter()
         .any(|marker| Path::new(marker).is_file());
@@ -367,8 +457,8 @@ async fn root_runner(path: &str) -> Result<Option<RootRunner>> {
         )
         .into());
     }
-    let uid = tool_output("id", &["-u", "postgres"]).await;
-    let gid = tool_output("id", &["-g", "postgres"]).await;
+    let uid = tool_output("id", &["-u", "postgres"], path, signals).await?;
+    let gid = tool_output("id", &["-g", "postgres"], path, signals).await?;
     match (find_on_path(path, "runuser"), uid, gid) {
         (Some(_), Some(uid), Some(gid)) if positive_integer(&uid) && positive_integer(&gid) => {
             Ok(Some(RootRunner { uid, gid }))
@@ -385,18 +475,32 @@ fn positive_integer(text: &str) -> bool {
 }
 
 /// A tool's trimmed standard output, when it exits successfully.
-async fn tool_output(tool: &str, args: &[&str]) -> Option<String> {
-    let output = Command::new(tool)
+async fn tool_output(
+    tool: &str,
+    args: &[&str],
+    path: &str,
+    signals: &mut Signals,
+) -> Result<Option<String>> {
+    let mut command = Command::new(tool);
+    command
         .args(args)
-        .stdin(Stdio::null())
-        .stderr(Stdio::null())
-        .output()
-        .await
-        .ok()?;
-    output
-        .status
-        .success()
-        .then(|| String::from_utf8_lossy(&output.stdout).trim().to_owned())
+        .env_clear()
+        .env("PATH", path)
+        .stderr(Stdio::null());
+    let output = helper::run(command, Duration::from_secs(5), Some(4096), Some(signals)).await?;
+    Ok((output.status == 0).then(|| String::from_utf8_lossy(&output.stdout).trim().to_owned()))
+}
+
+#[derive(Debug)]
+enum State {
+    Running,
+    Stopped,
+}
+
+fn worsen(status: &mut i32) {
+    if *status == 0 {
+        *status = 1;
+    }
 }
 
 /// `RUNNER_TEMP`, else `TMPDIR`, else `/tmp`: an existing absolute directory.
@@ -486,9 +590,10 @@ mod tests {
                 gid: "999".into(),
             }),
             start_attempted: false,
+            start_confirmed: false,
         };
         let command = cluster.postgres_command("pg_ctl", &["-D", "/tmp/cluster/data", "status"]);
-        let std_command = command.as_std();
+        let std_command = command;
         assert_eq!(std_command.get_program(), "runuser");
         let args: Vec<String> = std_command
             .get_args()
@@ -552,3 +657,7 @@ mod tests {
         fs::remove_dir_all(&root).unwrap();
     }
 }
+
+#[cfg(test)]
+#[path = "postgres_tests.rs"]
+mod lifecycle_tests;

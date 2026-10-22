@@ -3,18 +3,19 @@
 //! add an owned TURN relay (`TURN_E2E`), an owned HTTPS proxy
 //! (`TEST_BROWSER_HTTPS`) and the passkey origin (`PASSKEY_E2E`).
 
-use super::Stop;
 use super::postgres::{create_private_directory, find_on_path, parse_port, tail, temp_root};
-use super::process::{self, Termination};
+use super::process;
+use super::service::{Service, Termination};
+use super::{Stop, helper};
+use crate::owned_process::Signals;
 use anyhow::{Context, Result};
 use serde::Serialize;
 use std::fs::{self, OpenOptions};
 use std::net::{Ipv4Addr, SocketAddr, TcpListener, UdpSocket};
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
-use std::process::Stdio;
+use std::process::{Command, Stdio};
 use std::time::Duration;
-use tokio::process::{Child, Command};
 use tokio::time::sleep;
 
 const DEFAULT_SERVER_PORT: &str = "3119";
@@ -59,10 +60,10 @@ struct TurnPlan {
 /// The owned processes, stopped in reverse order of their start.
 struct Harness {
     plan: Plan,
-    server: Option<Child>,
-    turn: Option<Child>,
+    server: Option<Service>,
+    turn: Option<Service>,
     turn_config: Option<PathBuf>,
-    https: Option<Child>,
+    https: Option<Service>,
 }
 
 #[derive(Serialize)]
@@ -76,6 +77,7 @@ struct ServerShutdown {
     kill_attempted: bool,
     kill_sent: bool,
     wait_status: Option<i32>,
+    group_cleanup_passed: bool,
     wait_status_interpretation: &'static str,
     passed: bool,
     finished_at: String,
@@ -89,12 +91,15 @@ struct TurnShutdown {
     pid: u32,
     wait_status: i32,
     forced: bool,
+    group_cleanup_passed: bool,
     passed: bool,
     finished_at: String,
 }
 
 pub(crate) async fn run(root: &Path, command: &[String]) -> Result<i32> {
-    let plan = plan(root, command).await?;
+    let mut signals = Signals::new()?;
+    let plan = plan(root, command, &mut signals).await?;
+    helper::check(&mut signals).await?;
     preflight(&plan)?;
     fs::create_dir_all(&plan.artifacts)
         .with_context(|| format!("creating {}", plan.artifacts.display()))?;
@@ -105,7 +110,7 @@ pub(crate) async fn run(root: &Path, command: &[String]) -> Result<i32> {
         turn_config: None,
         https: None,
     };
-    let status = match harness.start_and_run(command).await {
+    let status = match harness.start_and_run(command, &mut signals).await {
         Ok(status) => status,
         Err(error) => {
             if let Some(stop) = error.downcast_ref::<Stop>() {
@@ -117,7 +122,7 @@ pub(crate) async fn run(root: &Path, command: &[String]) -> Result<i32> {
             }
         }
     };
-    Ok(harness.cleanup(status).await)
+    Ok(harness.finish(status, &mut signals).await)
 }
 
 fn env(name: &str) -> Option<String> {
@@ -128,7 +133,7 @@ fn flag(name: &str) -> bool {
     env(name).is_some_and(|value| value == "1")
 }
 
-async fn plan(root: &Path, command: &[String]) -> Result<Plan> {
+async fn plan(root: &Path, command: &[String], signals: &mut Signals) -> Result<Plan> {
     if !flag("DISPOSABLE_TEST_DATABASE") || command.is_empty() {
         return Err(Stop::usage(
             "Set DISPOSABLE_TEST_DATABASE=1 and pass the test command to run.",
@@ -210,16 +215,15 @@ async fn plan(root: &Path, command: &[String]) -> Result<Plan> {
         if find_on_path(&path, "turnserver").is_none() {
             return Err(Stop::usage("TURN_E2E requires coturn (turnserver) on PATH.").into());
         }
-        let version = Command::new("turnserver")
+        let mut version = Command::new("turnserver");
+        version
             .arg("--version")
             .env_clear()
             .env("PATH", &path)
-            .stdin(Stdio::null())
-            .stderr(Stdio::null())
-            .output()
-            .await
-            .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_owned())
-            .unwrap_or_default();
+            .stderr(Stdio::null());
+        let version =
+            helper::run(version, Duration::from_secs(5), Some(4096), Some(signals)).await?;
+        let version = String::from_utf8_lossy(&version.stdout).trim().to_owned();
         if version != TURN_VERSION {
             return Err(
                 Stop::usage("TURN_E2E requires the verified coturn 4.18.0 configuration.").into(),
@@ -306,7 +310,7 @@ fn preflight(plan: &Plan) -> Result<()> {
 }
 
 impl Harness {
-    async fn start_and_run(&mut self, command: &[String]) -> Result<i32> {
+    async fn start_and_run(&mut self, command: &[String], signals: &mut Signals) -> Result<i32> {
         let artifacts = self.plan.artifacts.clone();
         let mut server_env: Vec<(String, String)> = vec![("PATH".into(), self.plan.path.clone())];
         if self.plan.presentation {
@@ -321,31 +325,30 @@ impl Harness {
         if let Some(token) = &self.plan.metrics_token {
             server_env.push(("METRICS_TOKEN".into(), token.clone()));
         }
-        if let Some(turn) = &self.plan.turn {
+        if let Some(port) = self.plan.turn.as_ref().map(|turn| turn.port) {
             // This opt-in creates its own relay and credentials. Never accept
             // deployment TURN settings or listen for clients outside loopback.
             let secret = process::random_hex()?;
             server_env.push((
                 "TURN_URLS".into(),
-                format!("turn:127.0.0.1:{}?transport=udp", turn.port),
+                format!("turn:127.0.0.1:{port}?transport=udp"),
             ));
             server_env.push(("TURN_SECRET".into(), secret.clone()));
             server_env.push(("TURN_TTL".into(), "60".into()));
-            let config = self.write_turn_config(turn.port, &secret)?;
+            let config = self.write_turn_config(port, &secret)?;
             let log = log_file(&artifacts.join("turn.log"))?;
-            let child = Command::new("turnserver")
+            let mut child = Command::new("turnserver");
+            child
                 .arg("-c")
                 .arg(&config)
                 .env_clear()
                 .env("PATH", &self.plan.path)
                 .stdin(Stdio::null())
                 .stdout(Stdio::from(log.try_clone()?))
-                .stderr(Stdio::from(log))
-                .spawn()
-                .context("starting turnserver")?;
-            self.turn_config = Some(config);
-            self.turn = Some(child);
-            self.await_turn_ready(turn.port).await?;
+                .stderr(Stdio::from(log));
+            helper::check(signals).await?;
+            self.turn = Some(Service::spawn(child).context("starting turnserver")?);
+            self.await_turn_ready(port, signals).await?;
         }
         let log = log_file(&artifacts.join("server.log"))?;
         let mut server = Command::new(&self.plan.binary);
@@ -369,15 +372,16 @@ impl Harness {
             .stdin(Stdio::null())
             .stdout(Stdio::from(log.try_clone()?))
             .stderr(Stdio::from(log));
-        let server = server
-            .spawn()
+        helper::check(signals).await?;
+        let server = Service::spawn(server)
             .with_context(|| format!("starting {}", self.plan.binary.display()))?;
-        let server_pid = server.id().unwrap_or(0);
+        let server_pid = server.pid();
         self.server = Some(server);
-        self.await_server_ready().await?;
+        self.await_server_ready(signals).await?;
         if let Some(https) = &self.plan.https {
             let log = log_file(&artifacts.join("https-proxy.log"))?;
-            let child = Command::new("node")
+            let mut child = Command::new("node");
+            child
                 .arg("build/test-https-proxy.mjs")
                 .arg(self.plan.port.to_string())
                 .arg(https.port.to_string())
@@ -387,32 +391,31 @@ impl Harness {
                 .env("TMPDIR", env("TMPDIR").unwrap_or_else(|| "/tmp".into()))
                 .stdin(Stdio::null())
                 .stdout(Stdio::from(log.try_clone()?))
-                .stderr(Stdio::from(log))
-                .spawn()
-                .context("starting the HTTPS proxy")?;
-            self.https = Some(child);
-            self.await_https_ready().await?;
+                .stderr(Stdio::from(log));
+            helper::check(signals).await?;
+            self.https = Some(Service::spawn(child).context("starting the HTTPS proxy")?);
+            self.await_https_ready(signals).await?;
         }
-        let status = self.run_child(command, server_pid).await?;
+        let status = self.run_child(command, server_pid, signals).await?;
         if status != 0 {
             return Ok(status);
         }
-        if self.https.as_mut().is_some_and(exited) {
+        if exited(self.https.as_ref())? {
             eprintln!("Owned HTTPS proxy exited while the test command was running.");
             return Ok(1);
         }
-        if self.turn.as_mut().is_some_and(exited) {
+        if exited(self.turn.as_ref())? {
             eprintln!("Owned TURN relay exited while the test command was running.");
             return Ok(1);
         }
-        if self.server.as_mut().is_some_and(exited) {
+        if exited(self.server.as_ref())? {
             eprintln!("Test server exited while the test command was running.");
             return Ok(1);
         }
         Ok(0)
     }
 
-    fn write_turn_config(&self, port: u16, secret: &str) -> Result<PathBuf> {
+    fn write_turn_config(&mut self, port: u16, secret: &str) -> Result<PathBuf> {
         let artifacts = self.plan.artifacts.display();
         let announce = self.plan.announce;
         let mut text = String::new();
@@ -437,6 +440,7 @@ relay-threads=1\nuser-quota=8\ntotal-quota=64\nlog-file=stdout\nlog-min-level=wa
                 .open(&candidate)
             {
                 Ok(mut file) => {
+                    self.turn_config = Some(candidate.clone());
                     use std::io::Write;
                     file.write_all(text.as_bytes())?;
                     return Ok(candidate);
@@ -450,36 +454,36 @@ relay-threads=1\nuser-quota=8\ntotal-quota=64\nlog-file=stdout\nlog-min-level=wa
 
     /// Readiness uses the local TCP listener; the browser must additionally
     /// prove authenticated relay allocation and selected relay candidates.
-    async fn await_turn_ready(&mut self, port: u16) -> Result<()> {
+    async fn await_turn_ready(&mut self, port: u16, signals: &mut Signals) -> Result<()> {
         for attempt in 0..40 {
-            if self.turn.as_mut().is_some_and(exited) {
+            if exited(self.turn.as_ref())? {
                 anyhow::bail!("Owned TURN relay did not become ready");
             }
-            if tcp_connects(port).await {
+            if helper::wait(signals, tcp_connects(port)).await? {
                 return Ok(());
             }
             if attempt == 39 {
                 anyhow::bail!("Owned TURN relay did not become ready");
             }
-            sleep(Duration::from_millis(100)).await;
+            helper::wait(signals, sleep(Duration::from_millis(100))).await?;
         }
         Ok(())
     }
 
-    async fn await_server_ready(&mut self) -> Result<()> {
+    async fn await_server_ready(&mut self, signals: &mut Signals) -> Result<()> {
         let url = format!("{}/api/rooms", self.plan.readiness_url);
         for _ in 0..120 {
-            if self.server.as_mut().is_some_and(exited) {
+            if exited(self.server.as_ref())? {
                 return Err(Stop {
                     code: 1,
                     message: "Test server exited before readiness.".into(),
                 }
                 .into());
             }
-            if http_ok(&url, false, &self.plan.path).await {
+            if http_ok(&url, false, &self.plan.path, signals).await? {
                 return Ok(());
             }
-            sleep(Duration::from_millis(250)).await;
+            helper::wait(signals, sleep(Duration::from_millis(250))).await?;
         }
         Err(Stop {
             code: 1,
@@ -488,20 +492,20 @@ relay-threads=1\nuser-quota=8\ntotal-quota=64\nlog-file=stdout\nlog-min-level=wa
         .into())
     }
 
-    async fn await_https_ready(&mut self) -> Result<()> {
+    async fn await_https_ready(&mut self, signals: &mut Signals) -> Result<()> {
         let url = format!("{}/api/rooms", self.plan.base_url);
         for _ in 0..80 {
-            if self.https.as_mut().is_some_and(exited) {
+            if exited(self.https.as_ref())? {
                 return Err(Stop {
                     code: 1,
                     message: "Owned HTTPS proxy exited before readiness.".into(),
                 }
                 .into());
             }
-            if http_ok(&url, true, &self.plan.path).await {
+            if http_ok(&url, true, &self.plan.path, signals).await? {
                 return Ok(());
             }
-            sleep(Duration::from_millis(250)).await;
+            helper::wait(signals, sleep(Duration::from_millis(250))).await?;
         }
         Err(Stop {
             code: 1,
@@ -513,7 +517,12 @@ relay-threads=1\nuser-quota=8\ntotal-quota=64\nlog-file=stdout\nlog-min-level=wa
     /// Run the test command with the owned environment exported and nothing
     /// of an earlier run's credentials inherited; INT or TERM stops it and
     /// reports 130 or 143.
-    async fn run_child(&mut self, command: &[String], server_pid: u32) -> Result<i32> {
+    async fn run_child(
+        &mut self,
+        command: &[String],
+        server_pid: u32,
+        signals: &mut Signals,
+    ) -> Result<i32> {
         let mut child = std::process::Command::new(&command[0]);
         child.args(&command[1..]);
         child
@@ -531,27 +540,39 @@ relay-threads=1\nuser-quota=8\ntotal-quota=64\nlog-file=stdout\nlog-min-level=wa
         if let Some(token) = &self.plan.metrics_token {
             child.env("TEST_METRICS_TOKEN", token);
         }
-        process::run_test_child(child, CHILD_GRACE).await
+        process::run_test_child(child, CHILD_GRACE, signals).await
+    }
+
+    /// Cleanup cannot be cancelled midway. Observe a pending interruption only
+    /// after every acquired resource has received its retirement attempt.
+    async fn finish(&mut self, status: i32, signals: &mut Signals) -> i32 {
+        let mut status = self.cleanup(status).await;
+        if status == 0
+            && let Some(code) = signals.pending().await
+        {
+            status = i32::from(code);
+        }
+        status
     }
 
     async fn cleanup(&mut self, mut status: i32) -> i32 {
         let artifacts = self.plan.artifacts.clone();
-        if let Some(mut proxy) = self.https.take() {
-            let ended = process::terminate(&mut proxy, SHUTDOWN_GRACE).await;
+        if let Some(proxy) = self.https.take() {
+            let ended = proxy.stop(SHUTDOWN_GRACE).await;
             if ended.kill_attempted {
                 eprintln!("Owned HTTPS proxy needed forced shutdown.");
                 worsen(&mut status);
             }
-            if ended.wait_status != Some(0) {
+            if ended.wait_status != Some(0) || !ended.group_cleanup_passed {
                 eprintln!("Owned HTTPS proxy exited unsuccessfully.");
                 worsen(&mut status);
             }
         }
         let (server_pid, ended) = match self.server.take() {
-            Some(mut server) => {
-                let pid = server.id();
+            Some(server) => {
+                let pid = Some(server.pid());
                 // Bound shutdown; never kill by executable name or target another server.
-                (pid, process::terminate(&mut server, SHUTDOWN_GRACE).await)
+                (pid, server.stop(SHUTDOWN_GRACE).await)
             }
             None => (None, Termination::default()),
         };
@@ -564,8 +585,11 @@ relay-threads=1\nuser-quota=8\ntotal-quota=64\nlog-file=stdout\nlog-min-level=wa
             kill_attempted: ended.kill_attempted,
             kill_sent: ended.kill_sent,
             wait_status: ended.wait_status,
+            group_cleanup_passed: ended.group_cleanup_passed,
             wait_status_interpretation: interpretation(ended.wait_status),
-            passed: ended.wait_status == Some(0) && !ended.kill_attempted,
+            passed: ended.wait_status == Some(0)
+                && !ended.kill_attempted
+                && ended.group_cleanup_passed,
             finished_at: now(),
         };
         let retained = write_evidence(&artifacts.join("server-shutdown.json"), &report);
@@ -578,15 +602,15 @@ relay-threads=1\nuser-quota=8\ntotal-quota=64\nlog-file=stdout\nlog-min-level=wa
             );
             worsen(&mut status);
         }
-        if let Some(mut relay) = self.turn.take() {
-            let pid = relay.id().unwrap_or(0);
-            let ended = process::terminate(&mut relay, SHUTDOWN_GRACE).await;
+        if let Some(relay) = self.turn.take() {
+            let pid = relay.pid();
+            let ended = relay.stop(SHUTDOWN_GRACE).await;
             if ended.kill_attempted {
                 eprintln!("Owned TURN relay needed forced shutdown.");
                 worsen(&mut status);
             }
             let wait_status = ended.wait_status.unwrap_or(-1);
-            if wait_status != 0 && wait_status != 143 {
+            if (wait_status != 0 && wait_status != 143) || !ended.group_cleanup_passed {
                 eprintln!("Owned TURN relay exited unsuccessfully: {wait_status}");
                 worsen(&mut status);
             }
@@ -596,7 +620,10 @@ relay-threads=1\nuser-quota=8\ntotal-quota=64\nlog-file=stdout\nlog-min-level=wa
                 pid,
                 wait_status,
                 forced: ended.kill_attempted,
-                passed: !ended.kill_attempted && (wait_status == 0 || wait_status == 143),
+                group_cleanup_passed: ended.group_cleanup_passed,
+                passed: !ended.kill_attempted
+                    && (wait_status == 0 || wait_status == 143)
+                    && ended.group_cleanup_passed,
                 finished_at: now(),
             };
             if !write_evidence(&artifacts.join("turn-shutdown.json"), &report) {
@@ -605,8 +632,11 @@ relay-threads=1\nuser-quota=8\ntotal-quota=64\nlog-file=stdout\nlog-min-level=wa
             }
         }
         // The generated shared secret is needed only while the owned relay is alive.
-        if let Some(config) = self.turn_config.take() {
-            let _ = fs::remove_file(config);
+        if let Some(config) = self.turn_config.take()
+            && fs::remove_file(config).is_err()
+        {
+            eprintln!("Could not remove the owned TURN test configuration.");
+            worsen(&mut status);
         }
         println!(
             "Test server log and browser artifacts: {}",
@@ -625,8 +655,8 @@ fn worsen(status: &mut i32) {
     }
 }
 
-fn exited(child: &mut Child) -> bool {
-    child.try_wait().ok().flatten().is_some()
+fn exited(service: Option<&Service>) -> Result<bool> {
+    service.map_or(Ok(false), Service::exited)
 }
 
 fn executable(path: &Path) -> bool {
@@ -713,7 +743,7 @@ fn civil_from_days(days: i64) -> (i64, u32, u32) {
 
 /// `curl --fail --silent --max-time 2` with a clean environment, insecure for
 /// the owned proxy's self-signed certificate.
-async fn http_ok(url: &str, insecure: bool, path: &str) -> bool {
+async fn http_ok(url: &str, insecure: bool, path: &str, signals: &mut Signals) -> Result<bool> {
     let mut curl = Command::new("curl");
     curl.args([
         "--fail",
@@ -729,11 +759,14 @@ async fn http_ok(url: &str, insecure: bool, path: &str) -> bool {
     curl.arg(url)
         .env_clear()
         .env("PATH", path)
-        .stdin(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .await
-        .is_ok_and(|status| status.success())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    Ok(
+        helper::run(curl, Duration::from_secs(5), None, Some(signals))
+            .await?
+            .status
+            == 0,
+    )
 }
 
 async fn tcp_connects(port: u16) -> bool {
@@ -875,3 +908,7 @@ mod tests {
         assert!(stamp.ends_with('Z') && stamp.as_bytes()[10] == b'T');
     }
 }
+
+#[cfg(test)]
+#[path = "server_tests.rs"]
+mod lifecycle_tests;

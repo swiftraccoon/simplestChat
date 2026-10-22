@@ -66,15 +66,24 @@ fn io(_: std::io::Error) -> Failure {
 
 pub(crate) async fn exited(pid: Pid) -> Result<()> {
     loop {
+        if exited_now(pid)? {
+            return Ok(());
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+}
+
+/// Observe a retained child without releasing its PID or group reservation.
+pub(crate) fn exited_now(pid: Pid) -> Result<bool> {
+    loop {
         match rustix::process::waitid(
             WaitId::Pid(pid),
             WaitIdOptions::EXITED | WaitIdOptions::NOHANG | WaitIdOptions::NOWAIT,
         ) {
-            Ok(Some(_)) => return Ok(()),
-            Ok(None) | Err(rustix::io::Errno::INTR) => {}
+            Ok(value) => return Ok(value.is_some()),
+            Err(rustix::io::Errno::INTR) => {}
             Err(_) => return Err(Failure::new(1, "Owned child wait failed.")),
         }
-        tokio::time::sleep(Duration::from_millis(10)).await;
     }
 }
 

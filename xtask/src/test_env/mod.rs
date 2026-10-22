@@ -7,9 +7,11 @@
 //! command's own status is preserved; cleanup trouble turns success into 1 but
 //! never hides a failure; INT and TERM clean up and exit 130 or 143.
 
+mod helper;
 mod postgres;
 mod process;
 mod server;
+mod service;
 
 use anyhow::Result;
 use std::path::Path;

@@ -239,6 +239,30 @@ pass or hide an existing test failure. These signals use the shared numeric
 process owner, without a `kill` command lookup. Groups do not cover children
 that start a separate session or external resources owned by the selected test.
 
+Startup signal handling is active before any setup or readiness helper starts.
+The application, optional HTTPS proxy and TURN relay each retain a separate
+owned group through bounded shutdown and reaping; `groupCleanupPassed` is
+recorded separately from leader TERM/KILL attempts in server/relay receipts.
+A zero leader status alone cannot pass shutdown. Readiness/version CLIs also
+own groups and have outer deadlines; captured metadata is limited to 4096 bytes.
+A normally exited helper's group is retired before waiting for final pipe EOF.
+Cleanup continues through repeated interruptions; a pending INT/TERM still
+prevents an otherwise successful harness from returning zero.
+
+PostgreSQL daemon ownership uses `pg_ctl` and the newly created data directory,
+separately from these CLI groups. Status 3 is a not-running observation; status
+4 or a failed probe is uncertain, triggers an exact-data-directory stop attempt,
+and cannot pass. A successful startup requires a final not-running observation
+after shutdown. PostgreSQL detaches its startup child before writing its pidfile:
+an unsuccessful, timed-out or interrupted dispatched start therefore stays
+**unproven**, even if later probes all return 3. Cleanup makes bounded best-effort
+status/stop retries over a five-second observation window, checked between
+individually bounded helper calls; this is not a five-second total cleanup limit
+or proof that a delayed detached child cannot remain. The original failure or
+130/143 is preserved, the private diagnostics remain, and this path never claims
+successful daemon closure. No executable-name or discovered-PID kill is used.
+
+
 For browser tests, replace the Cargo test command with
 `npm --prefix web/e2e test` after the [browser installation steps](../web/e2e/README.md).
 Build the UI first; do not rebuild assets during a browser run.
