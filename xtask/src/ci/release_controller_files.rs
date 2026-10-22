@@ -45,12 +45,41 @@ pub(super) fn identity(file: &File) -> Result<Binding> {
         inode: value.ino(),
     })
 }
-pub(super) struct Directory {
+pub(in crate::ci) struct Directory {
     owners: Vec<File>,
     before: Vec<Metadata>,
     names: Vec<OsString>,
 }
+/// Opaque identity witness; reopening grants access only after every original
+/// ancestor name/device/inode/mode/owner binding has been re-admitted.
+pub(in crate::ci) struct NamespaceBinding {
+    before: Vec<Metadata>,
+    names: Vec<OsString>,
+}
+impl NamespaceBinding {
+    pub fn reopen(&self, path: &Path) -> Result<Directory> {
+        let directory = Directory::open(path)?;
+        if directory.names != self.names
+            || directory.before.len() != self.before.len()
+            || directory
+                .before
+                .iter()
+                .zip(&self.before)
+                .any(|(a, b)| !binding(a, b))
+        {
+            let _ = directory.finish();
+            return Err(plan::failure());
+        }
+        Ok(directory)
+    }
+}
 impl Directory {
+    pub fn binding(&self) -> NamespaceBinding {
+        NamespaceBinding {
+            before: self.before.clone(),
+            names: self.names.clone(),
+        }
+    }
     pub fn open(path: &Path) -> Result<Self> {
         if !path.is_absolute() {
             return Err(plan::failure());

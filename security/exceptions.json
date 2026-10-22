@@ -1814,6 +1814,16 @@
     {
       "scanner": "zizmor",
       "fingerprint": "superfluous-actions:0fb2d712953646c2c07edb9a959b25649b214c63cb1143b35266a007af663b35",
+      "scope": ".github/workflows/ci.yml#jobs/native-dtls/steps/2/uses",
+      "owner": "swiftraccoon",
+      "rationale": "The local act runner needs pinned Rust for this compiled native check.",
+      "reachability": "Exact cache-miss step and action; fixed Rust 1.99.0; no token input.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md"
+    },
+    {
+      "scanner": "zizmor",
+      "fingerprint": "superfluous-actions:0fb2d712953646c2c07edb9a959b25649b214c63cb1143b35266a007af663b35",
       "scope": ".github/workflows/ci.yml#jobs/browser/steps/1/uses",
       "owner": "swiftraccoon",
       "rationale": "Exact-input CI keys and local execution receipts now run through compiled xtask before native-library setup or cache reuse. The maintained local act image has no rustup, so this immutable installer action is required to bootstrap rustup and install the repository's exact Rust 1.99.0 toolchain.",

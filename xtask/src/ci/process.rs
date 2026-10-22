@@ -16,6 +16,10 @@ use tokio::io::AsyncReadExt;
 pub(super) trait Executor {
     async fn run(&mut self, command: Command) -> Result<Vec<u8>>;
     async fn ready(&mut self) -> Result<()>;
+    /// Forward a bounded byte projection through the existing owned replay CLI.
+    async fn replay(&mut self, _: &[u8], _: bool, _: std::time::Instant) -> Result<()> {
+        Err(Failure::new(1, "CI output replay is unavailable."))
+    }
     /// Cumulative proof for spawned CLI groups, not engine resources or root
     /// groups separated by sudo. No child is initially a vacuous clean proof.
     fn cleanup_passed(&self) -> bool {
@@ -111,20 +115,42 @@ impl<'a> Native<'a> {
         let mut command = tooling::command(
             self.root,
             self.environment,
-            match (&request.executable, &request.node, request.program) {
-                (Some(executable), None, super::command::Program::CargoAudit) => {
+            match (
+                &request.executable,
+                &request.node,
+                &request.dtls,
+                request.program,
+            ) {
+                (Some(executable), None, None, super::command::Program::CargoAudit) => {
                     executable.validate()?.as_os_str()
                 }
-                (None, Some(node), super::command::Program::Node) => node.validate()?.as_os_str(),
-                (_, _, super::command::Program::CargoAudit | super::command::Program::Node)
-                | (Some(_), _, _)
-                | (_, Some(_), _) => {
+                (None, Some(node), None, super::command::Program::Node) => {
+                    node.validate()?.as_os_str()
+                }
+                (None, None, Some(dtls), super::command::Program::DtlsPython) => {
+                    dtls.validate(false)?.as_os_str()
+                }
+                (None, None, Some(dtls), super::command::Program::DtlsWorker) => {
+                    dtls.validate(true)?.as_os_str()
+                }
+                (
+                    _,
+                    _,
+                    _,
+                    super::command::Program::CargoAudit
+                    | super::command::Program::Node
+                    | super::command::Program::DtlsPython
+                    | super::command::Program::DtlsWorker,
+                )
+                | (Some(_), _, _, _)
+                | (_, Some(_), _, _)
+                | (_, _, Some(_), _) => {
                     return Err(Failure::new(
                         1,
                         "CI execution requires its validated executable role.",
                     ));
                 }
-                (None, None, _) => std::ffi::OsStr::new(request.program.name()),
+                (None, None, None, _) => std::ffi::OsStr::new(request.program.name()),
             },
             &request.arguments,
         );
@@ -267,10 +293,10 @@ impl<'a> Native<'a> {
     }
 }
 
-trait Finalizer {
+pub(super) trait Finalizer {
     async fn finish(&self, group: &mut Group) -> (bool, Result<std::process::ExitStatus>);
 }
-struct Finalize;
+pub(super) struct Finalize;
 impl Finalizer for Finalize {
     async fn finish(&self, group: &mut Group) -> (bool, Result<std::process::ExitStatus>) {
         let pid = group.pid();
@@ -313,6 +339,53 @@ async fn read(reader: impl tokio::io::AsyncRead + Unpin, maximum: u64) -> Result
 }
 
 impl Executor for Native<'_> {
+    async fn replay(
+        &mut self,
+        bytes: &[u8],
+        stderr: bool,
+        deadline: std::time::Instant,
+    ) -> Result<()> {
+        self.ready().await?;
+        let executable = std::env::current_exe()
+            .map_err(|_| Failure::new(1, "CI output replay executable unavailable."))?;
+        let proof = super::release_checks::files::Executable::open(&executable)?;
+        let selected = match proof.validate() {
+            Ok(path) => path.to_owned(),
+            Err(error) => {
+                let _ = proof.close();
+                return Err(error);
+            }
+        };
+        let mut command = tooling::command(
+            self.root,
+            self.environment,
+            selected,
+            ["ci", "release-controller", "__replay"],
+        );
+        if stderr {
+            command.stdout(std::io::stderr());
+        } else {
+            command.stdout(Stdio::inherit());
+        }
+        command.stderr(Stdio::null());
+        let prior = self.cleanup_passed;
+        self.cleanup_passed = false;
+        let replay =
+            super::release_controller::replay::run(command, bytes, &mut self.signals, deadline)
+                .await;
+        if replay.is_ok() {
+            self.cleanup_passed = prior;
+        }
+        if let Err(error) = &replay
+            && matches!(error.code, 130 | 143)
+        {
+            self.interrupted = Some(error.code);
+        }
+        let validated = proof.validate().map(|_| ());
+        let closed = proof.close();
+        replay.and(validated).and(closed)?;
+        self.ready().await
+    }
     fn cleanup_passed(&self) -> bool {
         self.cleanup_passed
     }

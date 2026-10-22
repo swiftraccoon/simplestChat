@@ -114,6 +114,80 @@ class SecurityWorkflowTests(unittest.TestCase):
                     hashlib.sha256(feature.encode()).hexdigest(),
                 )
 
+    def test_native_dtls_cache_miss_bootstrap_controller_and_source_closure(self) -> None:
+        """Only exact native/tooling inputs reuse the unchanged bounded native job."""
+        job = obj(workflow("ci.yml"), "jobs", "native-dtls")
+        self.assertEqual(job["timeout-minutes"], "25")
+        steps = objects(job, "steps")
+        self.assertEqual(at(steps[0], "with", "persist-credentials"), "false")
+        lookup = steps[1]
+        self.assertEqual(at(lookup, "with", "lookup-only"), "true")
+        key = string(at(lookup, "with", "key"))
+        self.assertTrue(key.startswith("native-dtls-v2-"))
+        self.assertIn("'main' || 'untrusted'", key)
+        bootstrap = steps[2]
+        guard = "steps.verified.outputs.cache-hit != 'true'"
+        self.assertEqual(bootstrap["if"], guard)
+        self.assertEqual(
+            bootstrap["uses"], "dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d"
+        )
+        self.assertEqual(bootstrap["with"], {"toolchain": "1.99.0"})
+        checks = [step for step in steps if "ci native-dtls" in string(step.get("run", ""))]
+        self.assertEqual(len(checks), 1)
+        self.assertEqual(
+            checks[0]["run"], "cargo run --locked -q -p xtask -- ci native-dtls --record-success"
+        )
+        self.assertEqual(checks[0]["if"], guard)
+        self.assertEqual(checks[0]["timeout-minutes"], "12")
+        self.assertNotIn(
+            "native-dtls-verified", "\n".join(string(step.get("run", "")) for step in steps)
+        )
+        patterns = cast(
+            "list[str]",
+            re.findall(r"'([^']+)'", key.split("hashFiles(", 1)[1].split(")", 1)[0]),
+        )
+        fixture = {
+            "vendor/worker.cpp": b"native",
+            "xtask/src/ci/process.rs": b"owner",
+            "xtask/src/ci/bounded_log.rs": b"log",
+            "Cargo.toml": b"workspace",
+            "Cargo.lock": b"lock",
+            "xtask/Cargo.toml": b"controller",
+            "load_tests/Cargo.toml": b"generator",
+            "ops/Cargo.toml": b"operations",
+            "rust-toolchain.toml": b"compiler",
+            ".cargo/config.toml": b"config",
+            ".github/workflows/ci.yml": b"native plan",
+            "build/install-openssl.sh": b"installer",
+            "build/pip-constraints.txt": b"constraints",
+            "build/check-native-dtls.sh": b"reference",
+            "web/src/main.ts": b"ui",
+        }
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            for filename, content in fixture.items():
+                path = root / filename
+                path.parent.mkdir(parents=True, exist_ok=True)
+                _ = path.write_bytes(content)
+
+            def fingerprint() -> bytes:
+                selected = {
+                    path
+                    for pattern in patterns
+                    for path in root.glob(pattern + "/*" if pattern.endswith("/**") else pattern)
+                    if path.is_file()
+                }
+                digest = hashlib.sha256()
+                for path in sorted(selected):
+                    digest.update(hashlib.sha256(path.read_bytes()).digest())
+                return digest.digest()
+
+            original = fingerprint()
+            for filename, content in fixture.items():
+                _ = (root / filename).write_bytes(content + b"changed")
+                self.assertEqual(fingerprint() == original, filename == "web/src/main.ts", filename)
+                _ = (root / filename).write_bytes(content)
+
     def test_aggregate_rejects_missing_skipped_and_failed_jobs(self) -> None:
         """Every maintained correctness/security job must be in the always-run aggregate."""
         ci = workflow("ci.yml")

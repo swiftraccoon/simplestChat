@@ -133,6 +133,9 @@ xtask/src/ci/container_smoke/**
 !xtask/src/ci/codeql_cache/
 xtask/src/ci/codeql_cache/**
 !xtask/src/ci/codeql_cache/*.rs
+!xtask/src/ci/native_dtls/
+xtask/src/ci/native_dtls/**
+!xtask/src/ci/native_dtls/*.rs
 !xtask/src/ci_evidence/
 xtask/src/ci_evidence/**
 !xtask/src/ci_evidence/*.rs

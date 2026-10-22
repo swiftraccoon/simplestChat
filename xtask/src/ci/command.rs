@@ -13,6 +13,8 @@ pub(super) enum Program {
     CargoAudit,
     Node,
     PgConfig,
+    DtlsPython,
+    DtlsWorker,
 }
 impl Program {
     pub(super) fn name(self) -> &'static str {
@@ -25,6 +27,8 @@ impl Program {
             Self::CargoAudit => "cargo-audit",
             Self::Node => "node",
             Self::PgConfig => "pg_config",
+            Self::DtlsPython => "python3",
+            Self::DtlsWorker => "mediasoup-worker-test",
         }
     }
 }
@@ -42,6 +46,7 @@ pub(super) struct Command {
     pub combined_log: Option<std::sync::Arc<super::bounded_log::Log>>,
     pub executable: Option<std::sync::Arc<super::selected_executable::Executable>>,
     pub node: Option<std::sync::Arc<super::release_checks::files::Executable>>,
+    pub dtls: Option<std::sync::Arc<super::native_dtls::files::Executable>>,
 }
 impl Command {
     pub(super) fn capture(program: Program, args: &[&str]) -> Self {
@@ -56,6 +61,7 @@ impl Command {
             combined_log: None,
             executable: None,
             node: None,
+            dtls: None,
         }
     }
 }

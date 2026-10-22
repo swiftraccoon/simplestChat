@@ -348,3 +348,66 @@ async fn combined_mode_refuses_ambiguous_modes_and_borrowed_owners_before_spawn(
         Arc::try_unwrap(log).unwrap().finish().await.unwrap();
     }
 }
+
+#[tokio::test]
+async fn replay_known_interrupt_and_timeout_survive_unproven_finalization() {
+    use std::process::Stdio;
+    for code in [124, 130, 143] {
+        let fixture = Fixture::new(IDLE);
+        let mut command = std::process::Command::new(fixture.path.join("docker"));
+        command
+            .env_clear()
+            .envs(&fixture.environment)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+        let mut signals = Signals::injected(receiver);
+        let deadline =
+            std::time::Instant::now() + Duration::from_secs(if code == 124 { 21 } else { 30 });
+        let cancel = async {
+            ready(&fixture.path.join("ready")).await;
+            if code != 124 {
+                sender.send(code).unwrap();
+            }
+        };
+        let (result, ()) = tokio::join!(
+            crate::ci::release_controller::replay::run_with_finalizer(
+                command,
+                b"owned bytes",
+                &mut signals,
+                deadline,
+                &Unproven
+            ),
+            cancel
+        );
+        assert_eq!(result.unwrap_err().code, code);
+    }
+}
+
+#[tokio::test]
+async fn replay_unfit_deadline_cannot_dispatch_and_pending_interrupt_has_precedence() {
+    use std::process::Stdio;
+    for code in [124, 130, 143] {
+        let fixture = Fixture::new("(root/'dispatched').write_text('unexpected')");
+        let mut command = std::process::Command::new(fixture.path.join("docker"));
+        command
+            .env_clear()
+            .envs(&fixture.environment)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+        if code != 124 {
+            sender.send(code).unwrap();
+        }
+        let mut signals = Signals::injected(receiver);
+        let result = crate::ci::release_controller::replay::run(
+            command,
+            b"owned bytes",
+            &mut signals,
+            std::time::Instant::now(),
+        )
+        .await;
+        assert_eq!(result.unwrap_err().code, code);
+        assert!(!fixture.path.join("dispatched").exists());
+    }
+}

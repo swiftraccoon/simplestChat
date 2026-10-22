@@ -154,6 +154,19 @@ but now incurs the tool build; this review makes no hosted cold-time claim.
 Restored databases still require source/receipt validation, regenerated reports
 and current policy.
 
+The native-DTLS Rust port adds one exact informational installer review at
+`ci.yml#jobs/native-dtls/steps/2/uses`, only when its input cache misses. It uses
+the same immutable `89b12181fb390509a0842a86cc55eeb8eb928c1d` action and explicit
+Rust 1.99.0 after checkout with persisted credentials disabled. No token or
+restored executable selects the installer or its arguments. The official HTTPS
+rustup bootstrap is unchanged; its installer bytes are not independently pinned
+by this review. The fingerprint and 2026-11-29 expiry are unchanged. Native
+assertions, group/log/namespace cleanup and final marker publication remain
+blocking, with the same 12-minute step and 25-minute job ceilings. Lookup-only
+cache reuse binds the expanded Rust/Cargo/config/workflow inputs and restores
+no native executable. Cold hosted compilation and real native runtime remain
+unmeasured for this port.
+
 ## Account-room action reference
 
 On 2026-10-18, the new manual-only account-room experiment produced one

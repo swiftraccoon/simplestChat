@@ -393,17 +393,23 @@ jobs:
           persist-credentials: false
 
       # The check compiles the vendored worker and its test binary from scratch,
-      # about nine minutes, and reads nothing but the vendored sources, the
-      # pinned OpenSSL installer, the pinned Python build tools and the script.
-      # A passing run records that exact input set; later pushes that leave it
-      # unchanged skip the rebuild, and any change to it verifies again.
+      # historically about nine minutes. The source key also binds its Rust
+      # controller/toolchain and this workflow; cold Cargo compile time has not
+      # been measured inside the unchanged 12-minute verification budget.
+      # Lookup-only reuse never restores executable output or native artifacts.
       - name: Look up a passing verification of these native inputs
         id: verified
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/native-dtls-verified
-          key: native-dtls-v2-${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'main' || 'untrusted' }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('vendor/**', 'build/check-native-dtls.sh', 'build/install-openssl.sh', 'build/pip-constraints.txt') }}
+          key: native-dtls-v2-${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'main' || 'untrusted' }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('vendor/**', 'build/check-native-dtls.sh', 'build/install-openssl.sh', 'build/pip-constraints.txt', 'Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml', '.cargo/**', 'xtask/**', 'load_tests/Cargo.toml', 'ops/Cargo.toml', '.github/workflows/ci.yml') }}
           lookup-only: true
+
+      - name: Install the pinned Rust toolchain for native regression policy
+        if: steps.verified.outputs.cache-hit != 'true'
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable (2026-10-01)
+        with:
+          toolchain: 1.99.0
 
       - name: Install native build dependencies
         if: steps.verified.outputs.cache-hit != 'true'
@@ -430,7 +436,7 @@ jobs:
         timeout-minutes: 12
         env:
           OPENSSL_DIR: ${{ runner.temp }}/simplestchat-openssl-4.0.3
-        run: build/check-native-dtls.sh
+        run: cargo run --locked -q -p xtask -- ci native-dtls --record-success
 
       - name: Preserve native media failure diagnostics
         if: ${{ failure() && !env.ACT }}
@@ -440,10 +446,6 @@ jobs:
           path: ${{ runner.temp }}/simplestchat-native-dtls.*/*.log
           if-no-files-found: ignore
           retention-days: 7
-
-      - name: Record the passing verification
-        if: steps.verified.outputs.cache-hit != 'true'
-        run: printf '%s\n' "${GITHUB_SHA}" > "${RUNNER_TEMP}/native-dtls-verified"
 
       - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         if: steps.verified.outputs.cache-hit != 'true'

@@ -51,6 +51,7 @@ Commands:
                 container-smoke checks immutable production startup and database assertions.
                 database-check runs monitoring, restore or migration in owned PostgreSQL.
                 session-soak supervises the fixed workload and runner-owned database outage.
+                native-dtls checks tagged native regressions in a disposable source copy.
                 npm-path publishes the pinned npm bin directory through the runner file.
                 controller-path publishes the installed automation controller bin directory.
                 image-cache publishes validated database-byte cache selectors.

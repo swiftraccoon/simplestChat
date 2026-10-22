@@ -429,7 +429,7 @@ PASSKEY_E2E=1 cargo run -q -p xtask -- test-env \
   node web/e2e/passkey-management.cjs
 ```
 
-Run `build/check-native-dtls.sh` after configuring the pinned OpenSSL installation
+Run `cargo run --locked -q -p xtask -- ci native-dtls` after configuring the pinned OpenSSL installation
 to exercise the worker's DTLS closure reasons, media warning context and native
 bandwidth constraint handling. It builds
 a separate temporary worker test target, leaving Cargo's production archive untouched. Paired native
@@ -444,10 +444,56 @@ for unmet video demand. They cover offline/idle admission, repeated allocation
 changes, probe spacing, estimate preservation without feedback and bitrate caps.
 Real impaired
 presentation recovery remains a separate hosted browser check.
-CI runs the helper in its own job and records a passing verification under a cache key
-made from the vendored sources, the helper, the pinned OpenSSL installer and the pip
-constraints; a push that leaves those unchanged skips the nine-minute rebuild, and any
-change to them verifies again.
+The controller uses a fresh 0700 temporary directory and copies only bounded,
+regular, nofollow source entries: at most 4096 entries, 32 nested levels, 16 MiB per
+file and 64 MiB total. It refuses links, special files, invalid UTF-8 names/text
+and changing selected bytes or directory membership. Source files are stamped
+when read and revalidated after copying. These are optimistic identity/stamp
+checks, not an atomic source snapshot or an authenticated Cargo/runtime closure.
+Retained namespace walks permit at most 24 absolute path components. The original
+`build/check-native-dtls.sh` remains the unchanged reference for inert selection
+and command-policy tests; ordinary checks do not compile the worker.
+
+Python, CC, CXX and pkg-config selection uses captured PATH/caller-directory
+semantics, including literal paths with spaces. Python executes through its
+validated selected absolute path, preserving ordinary symlink/virtualenv lookup;
+the owned worker executes through its validated canonical path. Literal PYTHON,
+CC and CXX values still pass to Invoke. Executable metadata/path checks do not
+authenticate pyvenv.cfg, Python modules, compiler binaries or the complete build
+runtime, and Invoke's own working-directory changes can affect relative compiler
+lookup. The clean environment preserves the reference's pinned wheel, pip,
+Meson-output and test-tag settings without ambient Python/pip configuration.
+
+Every phase has a fresh reserved process group. Combined build, DTLS and orderly
+logs each stop at 64 MiB of actual file bytes; group retirement precedes bounded
+EOF/explicit close. Failure retains the private logs and removes disposable
+source/tool/build trees where their binding remains proven. Success removes
+the prefix. Removal is limited to 100000 entries and 64 levels; failure is not
+silently ignored. Existing 60-line failure and 3-line success tails, including long
+lines, share a 64 MiB forwarding ceiling and use an owned bounded replay child.
+Output, cleanup, late interruption and entry-relative deadline failures cannot
+return 0. No process owner claims detached/session/privileged descendants.
+
+CI keeps its lookup-only `native-dtls-v2` namespace and existing 12-minute check
+and 25-minute job budgets. The expanded key includes vendored/reference/install
+inputs plus xtask/shared providers, workspace manifests, Cargo.lock, compiler
+configuration and the workflow itself. Unchanged UI bytes do not invalidate it.
+A cache miss installs the existing pinned Rust 1.99.0 toolchain and runs the
+controller with `--record-success`; ordinary local invocation never publishes a
+marker. Cargo cold compilation inside that budget remains unmeasured. The old
+roughly nine-minute native build timing is not evidence for this port.
+
+The authorized CI option publishes the fixed unsigned `native-dtls-verified`
+revision marker after successful assertions, output and owned-prefix cleanup.
+The publisher explicitly closes, then checks pending cancellation/deadline.
+Failures attempt rollback only through the original complete namespace witness
+and exact staged inode/stamp, including uncertain rename/sync outcomes. If close
+or re-admission fails, a marker may remain; its presence alone is not final
+process/close proof or a release signature. Late failure logs are retained under
+a fresh private `.failed` prefix only if that original parent can be re-admitted.
+The existing artifact glob covers both prefixes. Inert fixtures and Python oracle
+comparisons do not establish native compilation, wheel installation or hosted
+runtime parity.
 
 Exercise call outcomes with real browser decoding on owned loopback services:
 

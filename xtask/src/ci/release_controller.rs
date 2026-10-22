@@ -2,7 +2,7 @@
 //! worker owns its CLI groups only; no broker/root/session/engine cleanup claim.
 
 #[path = "release_controller_files.rs"]
-mod files;
+pub(super) mod files;
 #[path = "release_controller_launcher.rs"]
 mod launcher;
 #[path = "release_controller_log.rs"]
@@ -14,7 +14,7 @@ mod process;
 #[path = "release_controller_protocol.rs"]
 mod protocol;
 #[path = "release_controller_replay.rs"]
-mod replay;
+pub(super) mod replay;
 #[path = "release_controller_source.rs"]
 mod source;
 #[cfg(test)]

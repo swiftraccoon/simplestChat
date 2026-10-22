@@ -1,7 +1,7 @@
 //! Unconditional CI advisory audit, using the unchanged authenticated installer.
 
 mod execute;
-mod files;
+pub(super) mod files;
 mod plan;
 #[cfg(test)]
 mod tests;

@@ -164,7 +164,18 @@ impl Owned {
 }
 
 fn remove_contents(root: &File, depth: usize, budget: &mut usize) -> bool {
-    if depth > 16 {
+    remove_contents_bounded(root, depth, budget, 4096, 16)
+}
+
+/// Remove only beneath a retained directory, with explicit caller policy caps.
+pub(in crate::ci) fn remove_contents_bounded(
+    root: &File,
+    depth: usize,
+    budget: &mut usize,
+    maximum: usize,
+    maximum_depth: usize,
+) -> bool {
+    if depth > maximum_depth {
         return false;
     }
     let entries = match Dir::read_from(root) {
@@ -182,7 +193,7 @@ fn remove_contents(root: &File, depth: usize, budget: &mut usize) -> bool {
             continue;
         }
         *budget += 1;
-        if *budget > 4096 {
+        if *budget > maximum {
             return false;
         }
         let metadata = match rustix::fs::statat(root, name, AtFlags::SYMLINK_NOFOLLOW) {
@@ -208,7 +219,8 @@ fn remove_contents(root: &File, depth: usize, budget: &mut usize) -> bool {
                     .is_ok_and(|parent| child.dev() == parent.dev() && child.uid() == parent.uid())
             });
             if admitted {
-                passed &= remove_contents(&child, depth + 1, budget);
+                passed &=
+                    remove_contents_bounded(&child, depth + 1, budget, maximum, maximum_depth);
             } else {
                 passed = false;
             }

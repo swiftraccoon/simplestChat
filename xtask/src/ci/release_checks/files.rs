@@ -113,10 +113,30 @@ impl Executable {
     pub(in crate::ci) fn close(self) -> Result<()> {
         close(self.file)
     }
+
+    /// Preserve invocation-path semantics (for example Python virtualenvs)
+    /// after validating the same retained canonical target and selected binding.
+    pub(in crate::ci) fn selected_path(&self) -> Result<&Path> {
+        self.validate()?;
+        Ok(&self.selected)
+    }
 }
 
 /// Match the shell's first executable PATH candidate; no ambient PATH fallback.
 pub(super) fn node(root: &Path, environment: &Environment) -> Result<Executable> {
+    select(root, environment, std::ffi::OsStr::new("node"))
+}
+
+/// Select the first executable exactly as PATH lookup does; an explicit path
+/// is resolved relative to the captured caller directory. No shell evaluation.
+pub(in crate::ci) fn select(
+    root: &Path,
+    environment: &Environment,
+    program: &std::ffi::OsStr,
+) -> Result<Executable> {
+    if program.as_encoded_bytes().contains(&b'/') {
+        return Executable::open(&root.join(program));
+    }
     let path = environment
         .get(std::ffi::OsStr::new("PATH"))
         .ok_or_else(|| Failure::new(127, "Release-check Node unavailable."))?;
@@ -124,7 +144,7 @@ pub(super) fn node(root: &Path, environment: &Environment) -> Result<Executable>
         return Err(invalid());
     }
     for directory in std::env::split_paths(path) {
-        let candidate = root.join(directory).join("node");
+        let candidate = root.join(directory).join(program);
         if candidate.is_file() && rustix::fs::access(&candidate, Access::EXEC_OK).is_ok() {
             return Executable::open(&candidate);
         }
@@ -141,4 +161,40 @@ pub(super) fn chromium(bytes: &[u8]) -> Result<Executable> {
         return Err(invalid());
     }
     Executable::open(Path::new(path))
+}
+
+#[cfg(test)]
+mod resolver_tests {
+    use super::*;
+    use std::{
+        fs,
+        os::unix::fs::{PermissionsExt, symlink},
+    };
+
+    #[test]
+    fn node_delegation_keeps_first_executable_path_and_ordinary_symlink_selection() {
+        let root = std::env::temp_dir()
+            .canonicalize()
+            .unwrap()
+            .join(format!("shared-node-resolution-{}", std::process::id()));
+        fs::create_dir(&root).unwrap();
+        let first = root.join("first");
+        let second = root.join("second");
+        fs::create_dir(&first).unwrap();
+        fs::create_dir(&second).unwrap();
+        let executable = second.join("actual node");
+        fs::write(&executable, b"owned-inert").unwrap();
+        fs::set_permissions(&executable, fs::Permissions::from_mode(0o700)).unwrap();
+        fs::write(first.join("node"), b"not executable").unwrap();
+        fs::set_permissions(first.join("node"), fs::Permissions::from_mode(0o600)).unwrap();
+        symlink(&executable, second.join("node")).unwrap();
+        let environment = Environment::from([(
+            "PATH".into(),
+            std::env::join_paths([first, second]).unwrap(),
+        )]);
+        let selected = node(&root, &environment).unwrap();
+        assert_eq!(selected.validate().unwrap(), executable);
+        selected.close().unwrap();
+        fs::remove_dir_all(root).unwrap();
+    }
 }

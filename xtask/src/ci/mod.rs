@@ -27,6 +27,7 @@ mod image_cache;
 mod inputs;
 mod install_compose;
 mod io;
+mod native_dtls;
 mod native_security;
 mod npm_path;
 mod process;
@@ -55,6 +56,7 @@ const USAGE: &str = "usage: cargo run --locked -q -p xtask -- ci key|save|verify
        cargo run --locked -q -p xtask -- ci container-smoke\n\
        cargo run --locked -q -p xtask -- ci database-check monitoring|restore|migration\n\
        cargo run --locked -q -p xtask -- ci session-soak\n\
+       cargo run --locked -q -p xtask -- ci native-dtls [--record-success]\n\
        cargo run --locked -q -p xtask -- ci npm-path\n\
        cargo run --locked -q -p xtask -- ci controller-path\n\
        cargo run --locked -q -p xtask -- ci image-cache hint|status preparation|status production";
@@ -288,6 +290,12 @@ pub(crate) fn run_container_smoke(root: &Path, arguments: &[String]) -> Result<E
 }
 
 pub(crate) fn run(root: &Path, arguments: &[String]) -> Result<ExitCode> {
+    if arguments
+        .first()
+        .is_some_and(|argument| argument == "native-dtls")
+    {
+        return native_dtls::run(root, &arguments[1..]);
+    }
     if arguments
         .first()
         .is_some_and(|argument| argument == "container-smoke")

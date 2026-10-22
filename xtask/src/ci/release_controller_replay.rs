@@ -12,7 +12,7 @@ use std::{
     io::{Read, Write},
     os::unix::process::CommandExt,
     process::{Command, Stdio},
-    time::{Duration, Instant},
+    time::Instant,
 };
 use tokio::io::AsyncWriteExt;
 
@@ -35,11 +35,27 @@ pub(super) async fn replay(
     let closed = proof.finish();
     result.and(closed)
 }
-pub(super) async fn run(
+pub(in crate::ci) async fn run(
+    command: Command,
+    bytes: &[u8],
+    signals: &mut Signals,
+    deadline: Instant,
+) -> Result<()> {
+    run_with_finalizer(
+        command,
+        bytes,
+        signals,
+        deadline,
+        &crate::ci::process::Finalize,
+    )
+    .await
+}
+pub(in crate::ci) async fn run_with_finalizer(
     mut command: Command,
     bytes: &[u8],
     signals: &mut Signals,
     deadline: Instant,
+    finalizer: &impl crate::ci::process::Finalizer,
 ) -> Result<()> {
     if bytes.len() as u64 > plan::MAX_LOG {
         return Err(plan::failure());
@@ -47,7 +63,9 @@ pub(super) async fn run(
     if let Some(code) = signals.pending().await {
         return Err(Failure::new(code, "Release controller replay interrupted."));
     }
+    replay_budget(deadline)?;
     command.process_group(0).stdin(Stdio::piped());
+    replay_budget(deadline)?;
     let child = command.spawn().map_err(|_| plan::failure())?;
     let mut group = Group::new(child);
     let pid = group.pid();
@@ -96,21 +114,25 @@ pub(super) async fn run(
         let _ = rustix::process::kill_process_group(pid, rustix::process::Signal::TERM);
         let _ = tokio::time::timeout(plan::GRACE, owned_process::exited(pid)).await;
     }
-    let settled = owned_process::finish(pid).await;
-    if !matches!(
-        tokio::time::timeout(Duration::from_secs(5), owned_process::exited(pid)).await,
-        Ok(Ok(()))
-    ) {
-        return Err(plan::failure());
-    }
-    let status = tooling::shell_status(group.reap().await?);
+    let (settled, reaped) = finalizer.finish(&mut group).await;
     result?;
     closed?;
+    let status = tooling::shell_status(reaped.map_err(|_| plan::failure())?);
     if settled && status == 0 {
         Ok(())
     } else {
         Err(plan::failure())
     }
+}
+fn replay_budget(deadline: Instant) -> Result<()> {
+    if deadline
+        .checked_duration_since(Instant::now())
+        .and_then(|value| value.checked_sub(plan::RESERVE))
+        .is_none_or(|value| value.is_zero())
+    {
+        return Err(Failure::new(124, "Release controller replay timed out."));
+    }
+    Ok(())
 }
 /// Only this reserved child may block on the inherited runner output pipe.
 /// Its parent remains cancellable and owns its final group retirement/reap.
