@@ -100,6 +100,17 @@ deletion limits remain enforced. The official HTTPS bootstrap boundary and
 2026-11-29 expiry are unchanged; this record does not authorize a wider action
 scope or weaken maintenance authorization.
 
+The analyzed-database cache key now uses compiled tooling on hosted Rust jobs.
+The existing exact `codeql.yml#jobs/source-analysis/steps/1/uses` installer review
+also covers that Rust matrix entry before cache lookup, while retaining local
+receipt bootstrap for the other matrix entries. The redundant installer on a
+database miss and its old step-6 review are removed. The immutable action,
+explicit Rust 1.99.0, credential-free checkout, official HTTPS bootstrap boundary
+and 2026-11-29 expiry are unchanged. A database hit still avoids fresh extraction
+but now incurs the tool build; this review makes no hosted cold-time claim.
+Restored databases still require source/receipt validation, regenerated reports
+and current policy.
+
 ## Account-room action reference
 
 On 2026-10-18, the new manual-only account-room experiment produced one

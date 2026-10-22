@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, override
 from unittest.mock import patch
 
-from test_support import ROOT
+from test_support import ROOT, at, objects, string, yaml_value
 
 # isort: split
 import ci_verified
@@ -68,6 +68,28 @@ class NativeCacheTests(unittest.TestCase):
     """Cache corruption, input drift and unavailable source must fail before analysis."""
 
     directory: Path = Path()
+
+    def test_hosted_rust_key_uses_compiled_tooling_after_exact_bootstrap(self) -> None:
+        """A database hit skips extraction while compiling the exact key still needs Rust."""
+        workflow = yaml_value(
+            (ROOT / ".github/workflows/codeql.yml").read_text(), scalars_as_strings=True
+        )
+        steps = objects(workflow, "jobs", "source-analysis", "steps")
+        installers = [
+            step
+            for step in steps
+            if string(step.get("uses", "")).startswith("dtolnay/rust-toolchain@")
+        ]
+        self.assertEqual(len(installers), 1)
+        installer = installers[0]
+        self.assertEqual(installer["if"], "${{ env.ACT || matrix.language == 'rust' }}")
+        self.assertEqual(at(installer, "with", "toolchain"), "1.99.0")
+        key = next(step for step in steps if step.get("id") == "rust-inputs")
+        restore = next(step for step in steps if step.get("id") == "rust-database")
+        self.assertLess(steps.index(installer), steps.index(key))
+        self.assertLess(steps.index(key), steps.index(restore))
+        self.assertIn("cargo run --locked -q -p xtask -- ci codeql-cache key", string(key, "run"))
+        self.assertIn('--source-root "$RUNNER_TEMP/codeql-local/source"', string(key, "run"))
 
     @override
     def setUp(self) -> None:

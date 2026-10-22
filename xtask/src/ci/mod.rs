@@ -12,6 +12,7 @@ use std::time::Duration;
 use tokio::io::AsyncReadExt;
 
 mod automation;
+mod codeql_cache;
 mod fingerprint;
 mod inputs;
 mod io;
@@ -22,7 +23,7 @@ mod tests;
 
 const USAGE: &str = "usage: cargo run --locked -q -p xtask -- ci key|save|verify \
 --scope SCOPE [--key KEY --directory PATH] [--root CHECKOUT]\n\
-       cargo run --locked -q -p xtask -- ci native-security|automation";
+       cargo run --locked -q -p xtask -- ci native-security|automation|codeql-cache";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Scope {
@@ -223,6 +224,12 @@ fn options(root: &Path, arguments: &[String]) -> Option<Options> {
 }
 
 pub(crate) fn run(root: &Path, arguments: &[String]) -> Result<ExitCode> {
+    if arguments
+        .first()
+        .is_some_and(|argument| argument == "codeql-cache")
+    {
+        return codeql_cache::run(root, &arguments[1..]);
+    }
     if arguments
         .first()
         .is_some_and(|argument| argument == "automation")

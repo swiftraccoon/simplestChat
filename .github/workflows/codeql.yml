@@ -40,8 +40,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Install the pinned Rust toolchain for local execution receipts
-        if: ${{ env.ACT }}
+      - name: Install the pinned Rust toolchain for compiled cache tooling
+        if: ${{ env.ACT || matrix.language == 'rust' }}
         uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable (2026-10-01)
         with:
           toolchain: 1.99.0
@@ -69,7 +69,7 @@ jobs:
         env:
           CODEQL_SUITE: ${{ inputs.security_gate && 'security' || 'all' }}
         run: |
-          key="$(python3 build/security_codeql_cache.py --language rust --suite "$CODEQL_SUITE" \
+          key="$(cargo run --locked -q -p xtask -- ci codeql-cache key --language rust --suite "$CODEQL_SUITE" \
             --source-root "$RUNNER_TEMP/codeql-local/source")"
           echo "key=$key" >> "$GITHUB_OUTPUT"
       - name: Restore the exact evaluated Rust database
@@ -79,11 +79,6 @@ jobs:
         with:
           path: ${{ runner.temp }}/codeql-rust-database
           key: ${{ steps.rust-inputs.outputs.key }}
-      - name: Install the pinned Rust extraction toolchain
-        if: ${{ matrix.language == 'rust' && steps.rust-database.outputs.cache-hit != 'true' }}
-        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable (2026-10-01)
-        with:
-          toolchain: 1.99.0
       - name: Fingerprint the Rust extraction build dependencies
         if: ${{ matrix.language == 'rust' && steps.rust-database.outputs.cache-hit != 'true' }}
         id: rust-cargo-inputs

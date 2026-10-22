@@ -87,6 +87,9 @@ xtask/src/check/**
 !xtask/src/ci/
 xtask/src/ci/**
 !xtask/src/ci/*.rs
+!xtask/src/ci/codeql_cache/
+xtask/src/ci/codeql_cache/**
+!xtask/src/ci/codeql_cache/*.rs
 !xtask/src/ci_evidence/
 xtask/src/ci_evidence/**
 !xtask/src/ci_evidence/*.rs

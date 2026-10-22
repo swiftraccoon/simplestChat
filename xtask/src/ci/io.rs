@@ -46,16 +46,25 @@ pub(super) fn bounded(path: &Path, limit: u64) -> Result<Vec<u8>> {
 }
 
 pub(super) fn digest(path: &Path) -> Result<String> {
-    let mut file = regular(path, 1024 * 1024 * 1024, false)?;
+    digest_file(regular(path, 1024 * 1024 * 1024, false)?)
+}
+
+/// Hash an already bounded regular descriptor, rejecting growth or truncation.
+pub(super) fn digest_file(file: File) -> Result<String> {
+    let length = file.metadata()?.len();
+    let mut file = file.take(length + 1);
     let mut hashed = Sha256::new();
     let mut buffer = [0_u8; 65536];
+    let mut total = 0_u64;
     loop {
         let count = file.read(&mut buffer)?;
         if count == 0 {
             break;
         }
+        total += count as u64;
         hashed.update(&buffer[..count]);
     }
+    require(total == length, "ci_cache_file_changed")?;
     Ok(hex(&hashed.finalize()))
 }
 

@@ -982,16 +982,6 @@
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md#cache-retention-trigger"
     },
     {
-      "scanner": "zizmor",
-      "fingerprint": "superfluous-actions:0fb2d712953646c2c07edb9a959b25649b214c63cb1143b35266a007af663b35",
-      "scope": ".github/workflows/codeql.yml#jobs/source-analysis/steps/6/uses",
-      "owner": "swiftraccoon",
-      "rationale": "Rust extraction needs the exact repository Rust 1.99.0 toolchain on a database-cache miss. The maintained local act image does not supply the hosted runner's Rust prerequisites, so the existing immutable installer action remains necessary.",
-      "reachability": "Only this exact Rust matrix step and immutable action reference are reviewed. Checkout disables persisted credentials, the toolchain version is explicit, and database validation, all requested queries and current finding policy remain blocking. The official HTTPS rustup bootstrap is not independently checksum-pinned by this review. Re-reviewed 2026-10-05 at 89b12181: fixed repository-controlled toolchain/component inputs, HTTPS rustup bootstrap when absent, and bounded retries for official-server checksum propagation failures. Scope and expiry are unchanged.",
-      "expires": "2026-11-29",
-      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md#github-actions-portability-findings"
-    },
-    {
       "scanner": "codeql",
       "fingerprint": "codeql:a39318b2695485564932ddadca6b5915364636eedb329f8919606e5b2aa1bdce",
       "scope": "vendor/mediasoup-sys-0.17.0/subprojects/abseil-cpp-20240722.2/absl/debugging/symbolize_elf.inc:657:657:27:73",
@@ -1846,8 +1836,8 @@
       "fingerprint": "superfluous-actions:0fb2d712953646c2c07edb9a959b25649b214c63cb1143b35266a007af663b35",
       "scope": ".github/workflows/codeql.yml#jobs/source-analysis/steps/1/uses",
       "owner": "swiftraccoon",
-      "rationale": "Exact-input CI keys and local execution receipts now run through compiled xtask before native-library setup or cache reuse. The maintained local act image has no rustup, so this immutable installer action is required to bootstrap rustup and install the repository's exact Rust 1.99.0 toolchain.",
-      "reachability": "Reviewed 2026-10-21 for only this exact step and immutable action reference. Checkout disables persisted credentials; the explicit repository-controlled toolchain and the reviewed official HTTPS rustup bootstrap are unchanged. CI key/receipt verification and every source/security gate remain blocking. No artifact, pull-request value or restored cache selects installer source or arguments.",
+      "rationale": "Compiled analyzed-database keys require the exact repository Rust 1.99.0 toolchain before hosted Rust cache lookup. The maintained local act image also needs this immutable installer for execution receipts in every matrix entry.",
+      "reachability": "Re-reviewed 2026-10-21 for this exact installer location and unchanged immutable action reference. The guard now includes hosted Rust and local execution; the redundant miss-only installer was removed. Checkout disables persisted credentials and all installer arguments are fixed repository values. The official HTTPS rustup bootstrap boundary and expiry are unchanged. Database identity, source validation, fresh reports and current policy remain blocking; no analyzed database substitutes for finding policy.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md#github-actions-portability-findings"
     },

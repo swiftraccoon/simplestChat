@@ -782,7 +782,38 @@ modification times are stabilized; changed Rust source still requires fresh
 extraction, full queries and current policy. Cache publication is capped at one
 GiB of distinct file data, counting hardlinks once. Direct local runs accept
 `--rust-cargo-cache`; the official
-workflow installs the pinned Rust toolchain only on an evaluated-database miss.
+workflow installs the pinned Rust toolchain before the compiled Rust database-key
+lookup. A database hit still skips fresh extraction and dependency-output reuse;
+it now requires the small tooling build as well as the compiler bootstrap.
+
+The key command is
+`cargo run --locked -q -p xtask -- ci codeql-cache key --language rust --source-root /absolute/source`.
+It requires the same declared hosted image or pinned local runner identity as
+`ci key`; run it inside that runner environment.
+The same entrypoint offers `validate-bundle`, `validate-source`, `save` and
+`restore`; use `ci codeql-cache --help` for their explicit paths and arguments.
+Keys reuse the CI source inventory and bind the analyzer/query pin, source path,
+suite, trust/platform namespace, and native package/compiler/OpenSSL identities
+where applicable. The Python module remains the scanner driver's import API and
+parity reference. Reusing a database still regenerates reports and applies
+current finding policy.
+
+Native source readback supports the Stored and Deflate methods used by genuine
+CodeQL archives. Other compression methods can be inspected as bounded bundle
+metadata but are rejected when source bytes must be hashed. The validator never
+extracts members: it rejects unsafe paths, decoded name aliases, links,
+encryption, cached SARIF and missing evaluated queries. Matching UnicodePath
+metadata is validated along with UTF-8/CP437 names; ambiguous NUL names are
+rejected even where an older Python ZIP reader truncated them. Archives are
+limited to 100,000 members and four GiB of expanded data, with sixteen MiB per
+keyed source file. Save uses private staging and the existing exact receipt
+format; restore verifies the bytes before the installed CodeQL CLI can unpack
+them. Tests use owned files and fake analyzer commands, including cross-language
+receipt interchange with the Python reference.
+On 2026-10-21, a fresh debug tooling target built in 11.33 seconds on the local
+macOS ARM64 workstation with Rust 1.99.0 and registry sources already downloaded.
+That measurement excludes toolchain installation and downloads; hosted cold
+timing has not been measured.
 
 After successful push CI on main, `cache-retention.yml` removes obsolete caches
 from known families. It verifies the triggering run and current main revision,

@@ -12,6 +12,8 @@ workspace = true
 [dependencies]
 anyhow = "1.0.104"
 chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
+flate2 = { version = "=1.1.10", default-features = false, features = ["rust_backend"] }
+rawzip = "=0.5.2"
 regex = "1.13.1"
 rustix = { version = "1.1.5", features = ["fs", "process", "system"] }
 ryu-js = "=1.0.3"
