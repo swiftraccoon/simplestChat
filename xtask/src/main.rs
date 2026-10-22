@@ -45,6 +45,7 @@ Commands:
                 audit-rust installs verified audit tooling and applies the advisory policy.
                 release-checks discovers pinned Chromium and runs the isolated release coordinator.
                 release-controller overlaps bounded controller preparation with the image build.
+                commit-subject checks the branch tip against the local hook's byte grammar.
                 database-check runs monitoring, restore or migration in owned PostgreSQL.
                 npm-path publishes the pinned npm bin directory through the runner file.
                 controller-path publishes the installed automation controller bin directory.

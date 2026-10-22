@@ -108,6 +108,23 @@ runs the ignored authentication case.
 
 ### Python automation
 
+The automation job checks the actual branch-tip subject, including a pull
+request's head commit, with `cargo run --locked -q -p xtask -- ci commit-subject`.
+It accepts only a complete 40-hex `COMMIT_REVISION` and captures the fixed
+`git log -1 --format=%B REVISION` command privately, with a 30-second deadline,
+1 MiB output limit and 64 KiB first-line limit. The first LF ends the subject;
+NUL removal and C-locale byte whitespace rules match the unchanged POSIX
+`.githooks/commit-msg` hook, including non-UTF-8 input. Diagnostics never echo
+the message. Known Git failures and interrupts retain their status; grammar or
+bound failures return 1, and invalid invocation/revision returns 2. Owned
+command cleanup covers descendants remaining in its group.
+
+The same pinned compiler step now precedes this check, before automation cache
+lookup. Rejected CI subjects therefore pay toolchain setup and any cold xtask
+compilation first; hosted Linux timing remains unmeasured. Local Git commits
+continue using the bootstrap-free POSIX hook. Byte-oracle and inert Git-process
+fixtures check these boundaries without installing tools or contacting a host.
+
 Use Python 3.12 or newer and the pinned controller/checking environment:
 
 ```sh

@@ -91,6 +91,15 @@ review locations and the existing CodeQL Rust installer location move by one
 step; their action bytes, fingerprints and scope are otherwise unchanged.
 Receipt verification and all source/security gates remain blocking.
 
+The compiled branch-tip subject check moves only the automation installer from
+`ci.yml#jobs/automation/steps/3/uses` to `steps/2/uses`, ahead of that check.
+Its immutable action, Rust 1.99.0, official HTTPS bootstrap boundary and
+2026-11-29 expiry are unchanged. The check receives only the complete selected
+Git revision, executes a fixed bounded Git command and prints no commit text.
+Checkout still disables persisted credentials; no token is supplied to
+compilation. Invalid subjects now incur toolchain setup and cold compilation
+before rejection; hosted Linux runtime has not been measured.
+
 The compiled required-job policy moves that job's installer to
 `ci.yml#jobs/required/steps/1/uses` and also uses it on hosted runners. Checkout
 still disables persisted credentials, followed by the same immutable action and

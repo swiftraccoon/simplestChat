@@ -20,6 +20,41 @@ from release_json import json_value
 class PythonPolicyTests(unittest.TestCase):
     """Keep shared strict settings, tool pins and CI gate wiring aligned."""
 
+    def test_branch_subject_checks_the_head_before_any_cached_gate(self) -> None:
+        """Keep the typed byte-policy check unconditional after the existing bootstrap."""
+        workflow = yaml_value(
+            (ROOT / ".github/workflows/ci.yml").read_text(), scalars_as_strings=True
+        )
+        job = obj(workflow, "jobs", "automation")
+        steps = objects(job, "steps")
+        self.assertEqual(string(job, "timeout-minutes"), "10")
+        self.assertEqual(string(steps[0], "with", "persist-credentials"), "false")
+        self.assertEqual(string(steps[0], "with", "fetch-depth"), "2")
+        self.assertEqual(string(steps[1], "if"), "${{ env.ACT }}")
+        self.assertEqual(string(steps[1], "run"), "build/ci-local-docker.sh")
+        rust, subject, fingerprint = steps[2:5]
+        self.assertEqual(string(rust, "name"), "Install the pinned Rust toolchain for CI receipts")
+        self.assertEqual(
+            string(rust, "uses"),
+            "dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d",
+        )
+        self.assertEqual(obj(rust, "with"), {"toolchain": "1.99.0"})
+        self.assertEqual(string(subject, "name"), "Check the branch tip commit subject")
+        self.assertEqual(
+            obj(subject, "env"),
+            {"COMMIT_REVISION": "${{ github.event.pull_request.head.sha || github.sha }}"},
+        )
+        self.assertEqual(
+            string(subject, "run"), "cargo run --locked -q -p xtask -- ci commit-subject"
+        )
+        self.assertEqual(string(fingerprint, "id"), "verified-inputs")
+        for scope in (job, rust, subject):
+            self.assertNotIn("if", scope)
+            self.assertNotIn("continue-on-error", scope)
+        self.assertEqual(
+            sum(step.get("name") == "Check the branch tip commit subject" for step in steps), 1
+        )
+
     def test_configuration_has_full_rules_and_no_machine_specific_environment(self) -> None:
         """Require strict rule sets without blanket type suppressions or local venv bindings."""
         config = json_value(cast("object", tomllib.loads((ROOT / "pyproject.toml").read_text())))

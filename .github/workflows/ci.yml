@@ -44,17 +44,15 @@ jobs:
       - name: Start Docker inside the isolated local runner
         if: ${{ env.ACT }}
         run: build/ci-local-docker.sh
-      - name: Check the branch tip commit subject
-        env:
-          COMMIT_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: |
-          git log -1 --format=%B "$COMMIT_REVISION" > "${RUNNER_TEMP}/commit-message"
-          .githooks/commit-msg "${RUNNER_TEMP}/commit-message"
       - name: Install the pinned Rust toolchain for CI receipts
-        # Key/receipt checks use xtask before native-library setup or cache reuse.
+        # Subject/key/receipt checks use xtask before native setup or cache reuse.
         uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable (2026-10-01)
         with:
           toolchain: 1.99.0
+      - name: Check the branch tip commit subject
+        env:
+          COMMIT_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: cargo run --locked -q -p xtask -- ci commit-subject
 
       - name: Fingerprint the exact automation inputs
         id: verified-inputs
