@@ -768,6 +768,16 @@ changes by the same filesystem owner. The web job installs its pinned Rust
 toolchain before this step. Filesystem fixtures cover the publication boundary;
 the Node installer's existing tests remain the reference for installation.
 
+The automation controller's apt, venv and pip commands also remain direct. After
+successful installation, `cargo run --locked -q -p xtask -- ci controller-path`
+publishes only `RUNNER_TEMP/ansible-controller/bin` through the same protected
+PATH-file writer. It accepts no alternate prefix, starts no installer and cannot
+substitute npm's directory. The existing compiler setup precedes controller
+installation; no new toolchain bootstrap or token-bearing step is introduced.
+Both roles attempt every retained descriptor close, and a write or close failure
+cannot report success. This verifies publication policy, not controller-package
+authenticity or immunity to later changes by the same filesystem owner.
+
 The unconditional Rust dependency audit uses
 `cargo run --locked -q -p xtask -- ci audit-rust` in the same explicit
 hosted/disposable Linux contexts. It retains the reference

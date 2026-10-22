@@ -46,6 +46,7 @@ Commands:
                 release-checks discovers pinned Chromium and runs the isolated release coordinator.
                 database-check runs monitoring, restore or migration in owned PostgreSQL.
                 npm-path publishes the pinned npm bin directory through the runner file.
+                controller-path publishes the installed automation controller bin directory.
                 image-cache publishes validated database-byte cache selectors.
                 CodeQL extraction keys never substitute for analyzed databases.
   ci-evidence   Record or require complete executed local-CI matrix evidence.

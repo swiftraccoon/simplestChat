@@ -85,6 +85,20 @@ class PythonPolicyTests(unittest.TestCase):
             if step.get("name") == "Install the pinned Rust toolchain for CI receipts"
         )
         self.assertLess(steps.index(rust), steps.index(gate))
+        self.assertLess(steps.index(rust), steps.index(install))
+        self.assertEqual(install["if"], "steps.verified.outputs.cache-hit != 'true'")
+        self.assertEqual(
+            string(install, "run").splitlines(),
+            [
+                "sudo apt-get update",
+                "sudo apt-get install -y python3-venv shellcheck jq postgresql",
+                'python3 -m venv "${RUNNER_TEMP}/ansible-controller"',
+                '"${RUNNER_TEMP}/ansible-controller/bin/pip" install -r '
+                + "build/python-requirements.txt",
+                "cargo run --locked -q -p xtask -- ci controller-path",
+            ],
+        )
+        self.assertNotIn("continue-on-error", install)
         self.assertEqual(
             rust["uses"],
             "dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d",

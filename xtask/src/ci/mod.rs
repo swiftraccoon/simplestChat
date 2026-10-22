@@ -47,6 +47,7 @@ const USAGE: &str = "usage: cargo run --locked -q -p xtask -- ci key|save|verify
        cargo run --locked -q -p xtask -- ci release-checks\n\
        cargo run --locked -q -p xtask -- ci database-check monitoring|restore|migration\n\
        cargo run --locked -q -p xtask -- ci npm-path\n\
+       cargo run --locked -q -p xtask -- ci controller-path\n\
        cargo run --locked -q -p xtask -- ci image-cache hint|status preparation|status production";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -292,6 +293,12 @@ pub(crate) fn run(root: &Path, arguments: &[String]) -> Result<ExitCode> {
         .is_some_and(|argument| argument == "image-cache")
     {
         return image_cache::run(root, &arguments[1..]);
+    }
+    if arguments
+        .first()
+        .is_some_and(|argument| argument == "controller-path")
+    {
+        return npm_path::run_controller(&arguments[1..]);
     }
     if arguments
         .first()
