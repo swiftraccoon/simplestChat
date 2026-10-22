@@ -246,7 +246,7 @@ to use for both.
 Run from the candidate checkout:
 
 ```sh
-node load_tests/benchmark-local.mjs \
+./target/release/load_test bench local \
   --baseline-root /absolute/path/to/baseline \
   --baseline-bin /absolute/path/to/baseline/target/release/simplestChat \
   --candidate-root "$PWD" \
@@ -261,6 +261,56 @@ The runner starts and stops its own local servers, alternates baseline/candidate
 order, and records delivery, latency, CPU, memory, and cleanup results. The output
 directory must be new. Default ports are HTTP 3129 and UDP 41100; override them
 with `--port` and `--udp-port` if occupied.
+
+The command uses the already built native binary; it does not install tools or
+build either server. `load_test bench local --help` starts no runtime or child.
+The retained [`benchmark-local.mjs`](../load_tests/benchmark-local.mjs) remains
+the JavaScript policy reference and supports its existing imports and command
+line. Ordinary helper checks keep using that reference without compiling a
+native generator. Rust fixtures compare its supported policy outputs and run
+owned fixture children; they do not establish benchmark results or production
+capacity.
+
+Every child receives a minimal environment and literal arguments. The private
+metrics capability goes only to the owned loopback server and its HTTP requests;
+proxies and redirects are disabled. Logs and artifacts are new private files.
+Signals stop the reserved owned process groups, including descendants, then
+retain the actual exits and return 130 or 143. A leader exit alone does not admit
+its results: the generator's group and output sinks must close first. Offline
+reports likewise require both owned workload processes to be stopped. Cleanup
+and evidence failures cannot publish a passing result or skip another finalizer.
+
+Source identities retain the scoped Git, nonignored untracked inputs, modes and
+symlink text independently of executable hashes. Native snapshots refuse
+non-UTF-8 paths, symlink ancestors and linked `Cargo.lock` inputs. Bounds are
+100,000 entries, depth 64, 64 MiB per generator source file, 256 MiB per server
+source file and 2 GiB per executable or source-tree total. These snapshots do not
+attest that a binary was built from those inputs. The manifest separately records
+the native orchestrator executable hash, selected generator hash and source
+identity; ignored Cargo configuration, toolchains, environment flags and external
+native libraries still need separate build evidence.
+
+The native manifest keeps host platform, kernel, architecture, CPU model, logical
+CPU count, memory and load observations. Unavailable observations are explicit
+nulls with fixed field names, and `implementation` identifies Rust. Linux load
+averages come from `/proc/loadavg` at its two-decimal precision; macOS uses
+`sysctl vm.loadavg`. `loadAverageSource` records that distinction. These are host
+observations, not process-affinity counts or container quota measurements.
+
+Diagnostic finalization invokes the frozen selected generator's offline reader,
+including exit 1's incomplete report. Its output must then match the linked
+reader's fixed protocol and values for the same stopped input. Object order and
+equivalent finite JSON number spellings are ignored; unknown fields or a changed
+value fail closed with a fixed error. A generator with different reader semantics
+is incompatible, even when its JSON has a familiar shape. Independent reads and
+hash checks occur outside the performance measurement window. Input, time and
+output bounds from the individual reader commands still apply.
+
+Additional native bounds are 64 MiB per child output stream, a 1 MiB initial
+capture-log prefix for readiness, and at most three 4 MiB media snapshots with a
+two-second whole-request deadline. Output overflow, unsafe files and stream-close
+failures cause a refusal. Capture retains its packet cap and header-only loopback
+filter.
 
 Keep the generator, worker count, subscription caps, and workload identical.
 Run without competing builds or other benchmarks. If the generator comes from

@@ -16,14 +16,14 @@ For commands, options, and report definitions, see the
 | `chat_load.rs` | Scheduled public chat, acknowledgments, complete room fanout and retained-message comparison inventory |
 | `datagram_counter.rs` | Actual UDP datagram counts for socket-drop measurements |
 | `main.rs` | The `load_test` binary: options, ramps, workloads, result files |
-| `evidence.rs`, `plan.rs` | Pure shared generator wire contracts and deterministic graph planning |
-| `owned_process/` | Reserved process groups, bounded pipes, long-lived child ownership and cancellation |
-| `bench/` | Shared comparison policy, scoped provenance, bounded observations and fixed-protocol report adapters |
 | `lib.rs`, `report/` | Offline bounded diagnostic readers and report command; no workload or runtime startup |
+| `evidence.rs`, `plan.rs` | Pure shared generator wire contracts and deterministic graph planning, without collectors or native resources |
+| `bench/`, `bench/local/` | Local A/B policy, scoped provenance, injectable health/resource/media observations, fixed-protocol reader commands and owned cleanup/evidence finalization |
 | `report/lifecycle*.rs` | Calendar/phase anchors, strict marker decoding, anonymous lifecycle state, private file/stream bounds |
 | `report/media*.rs`, `report/receiver_stall*.rs` | Strict snapshot/identity validation, independently clocked counter and stall correlation, bounded offline inputs |
 | `capacity.rs`, `capacity/` | Offline host suggestions and ranked cost comparisons, shared resource/workload policy, bounded calibration JSON and Python-reference parity |
 | `capacity_run/` | Explicit isolated host measurements: workload/search policy, CPU windows, owned process/container cleanup, bounded artifacts, typed reports and fake-engine/oracle regressions |
+| `owned_process/` | Reserved child process groups, bounded pipes, cancellation and exact cleanup shared by explicit measurement backends |
 | `metrics.rs` | Counters, signaling histograms, diagnostic collection |
 | `metrics/measurement.rs` | Shared interval, per-attempt readiness/coverage, consumer delivery checks |
 | `subscriptions.rs` | Bounded discovery deduplication, pending queues, and consumer-cap refill (tests in `subscriptions_tests.rs`) |

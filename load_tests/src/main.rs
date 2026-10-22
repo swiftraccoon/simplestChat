@@ -636,6 +636,9 @@ fn main() -> std::process::ExitCode {
     if args.get(1).is_some_and(|arg| arg == "capacity") {
         return simplestchat_load_test::capacity::run(&args[2..]);
     }
+    if args.get(1).is_some_and(|arg| arg == "bench") {
+        return simplestchat_load_test::bench::run(&args[2..]);
+    }
     match run_workload() {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(error) => {
@@ -4664,6 +4667,7 @@ fn print_usage() {
     println!("  load_test capacity suggest --vcpus N --memory-gib GIB [OPTIONS]");
     println!("  load_test capacity compare REPORT.json [REPORT.json ...]");
     println!("  load_test capacity run --server-image IMAGE --generator-image IMAGE [OPTIONS]");
+    println!("  load_test bench local --help");
     println!("\nOptions:");
     println!("  -c, --clients <N>          Number of concurrent clients (default: 5)");
     println!("  -d, --duration <SECS>      Shared measurement duration, 3–3600s (default: 30)");

@@ -51,6 +51,14 @@ and repeated baseline/candidate comparisons, use the
 cgroup throttling, per-thread attribution and netem impairment inside a Linux
 VM, use [`benchmark-podman.mjs`](../docs/performance.md#production-shape-and-impaired-networks).
 
+`./target/release/load_test bench local --help` describes the explicit native
+comparison entrypoint. It owns the selected loopback servers, generator and
+optional header capture, preserves private failure evidence, and admits reports
+only after the owned processes and their sinks close. The JavaScript benchmark
+modules remain callable policy references for parity tests and existing imports.
+Neither the ordinary helper gate nor an offline report command compiles a
+generator or starts a benchmark workload.
+
 The same binary can read stopped server diagnostics without creating a runtime,
 joining a room or sending media:
 

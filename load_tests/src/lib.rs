@@ -2,7 +2,8 @@
 
 //! Offline planning, bounded diagnostic readers and explicit capacity measurement.
 //! Importing these modules starts no runtime, connection, engine or workload;
-//! only an explicit `capacity run` command constructs the measurement runtime.
+//! only explicit `capacity run` or `bench local` commands construct a
+//! measurement runtime and create owned resources.
 
 pub mod bench;
 pub mod capacity;

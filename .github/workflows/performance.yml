@@ -125,7 +125,7 @@ jobs:
             scenario=conference; ramp=5
             extra=()
           fi
-          node load_tests/benchmark-local.mjs \
+          "${GITHUB_WORKSPACE}/target/release/load_test" bench local \
             --baseline-root "${RUNNER_TEMP}/baseline" \
             --baseline-bin "${RUNNER_TEMP}/baseline/target/release/simplestChat" \
             --candidate-root "${GITHUB_WORKSPACE}" \
