@@ -13,6 +13,9 @@ use anyhow::Result;
 use std::{ffi::OsString, sync::Arc};
 
 struct NativePorts;
+pub(in crate::bench) fn reserve_guest_ports() -> Result<Ports> {
+    NativePorts.reserve()
+}
 #[async_trait::async_trait]
 impl PortSource for NativePorts {
     fn reserve(&self) -> Result<Ports> {

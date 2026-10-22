@@ -16,6 +16,7 @@ pub mod process;
 pub mod provenance;
 pub mod reports;
 pub mod resources;
+mod restart_browser;
 pub mod sampling;
 mod smoke;
 pub mod subscription;
@@ -44,6 +45,7 @@ pub fn run(arguments: &[std::ffi::OsString]) -> std::process::ExitCode {
         Some("account-room") => account_room::run(&arguments[1..]),
         Some("shutdown-smoke") => smoke::run(false, &arguments[1..]),
         Some("diagnostics-smoke") => smoke::run(true, &arguments[1..]),
+        Some("restart-browser-smoke") => restart_browser::run(&arguments[1..]),
         Some("local") => local::run(&arguments[1..]),
         Some("podman") => podman::run(&arguments[1..]),
         Some("impaired") => impaired::run(&arguments[1..]),
@@ -54,7 +56,7 @@ pub fn run(arguments: &[std::ffi::OsString]) -> std::process::ExitCode {
             println!(concat!(
                 "Usage: load_test bench local|podman|impaired|",
                 "browser-mechanics|browser-adaptive|browser-tcp|account-room|",
-                "shutdown-smoke|diagnostics-smoke [OPTIONS]"
+                "shutdown-smoke|diagnostics-smoke|restart-browser-smoke [OPTIONS]"
             ));
             std::process::ExitCode::SUCCESS
         }
@@ -62,7 +64,7 @@ pub fn run(arguments: &[std::ffi::OsString]) -> std::process::ExitCode {
             eprintln!(concat!(
                 "Usage: load_test bench local|podman|impaired|",
                 "browser-mechanics|browser-adaptive|browser-tcp|account-room|",
-                "shutdown-smoke|diagnostics-smoke [OPTIONS]"
+                "shutdown-smoke|diagnostics-smoke|restart-browser-smoke [OPTIONS]"
             ));
             std::process::ExitCode::from(2)
         }

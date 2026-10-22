@@ -6,7 +6,7 @@ use std::{
     time::Duration,
 };
 
-pub(super) type Environment = BTreeMap<OsString, OsString>;
+pub(in crate::bench) type Environment = BTreeMap<OsString, OsString>;
 pub(super) const ACTIVE_MS: f64 = 150_000.0;
 pub(super) const FINAL_MS: f64 = 240_000.0;
 pub(super) const START: Duration = Duration::from_secs(20);
@@ -14,7 +14,7 @@ pub(super) const DRAIN: Duration = Duration::from_secs(20);
 pub(super) const LOG_BYTES: u64 = 32_768;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum Mode {
+pub(in crate::bench) enum Mode {
     Shutdown,
     Diagnostics,
 }
@@ -26,7 +26,7 @@ impl Mode {
         }
     }
 }
-pub(super) struct Config {
+pub(in crate::bench) struct Config {
     pub mode: Mode,
     pub binary: PathBuf,
     pub output: PathBuf,
@@ -128,7 +128,7 @@ impl Config {
     }
 }
 #[derive(Clone, Copy, Debug, serde::Serialize)]
-pub(super) struct Ports {
+pub(in crate::bench) struct Ports {
     pub http: u16,
     pub media: u16,
 }

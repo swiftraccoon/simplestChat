@@ -63,7 +63,12 @@ async fn early_exit_keeps_literal_arguments_stdin_and_exact_code_until_reap() {
         )
         .unwrap();
     assert!(child.retirement().is_none());
+    assert!(!child.owned_streams_closed());
     let exit = terminal(&mut child).await;
+    assert!(
+        !child.owned_streams_closed(),
+        "polling never proves final closure"
+    );
     assert_eq!(exit.code, Some(7));
     assert_eq!(exit.signal, None);
     assert!(child.pid() > 1);
@@ -76,6 +81,7 @@ async fn early_exit_keeps_literal_arguments_stdin_and_exact_code_until_reap() {
     assert_eq!(facts.wait_signal, None);
     assert!(facts.term_attempted && facts.kill_attempted);
     assert!(facts.group_cleanup_passed && facts.streams_closed);
+    assert!(child.owned_streams_closed());
     assert_eq!(child.output, format!("input{literal}").as_bytes());
     assert_eq!(child.errors, b"err");
     assert!(!directory.0.join("forbidden").exists());
@@ -200,6 +206,11 @@ async fn streaming_has_a_sticky_byte_limit_without_delivering_the_overflow_byte(
         Some(0)
     );
     assert_eq!(child.errors, b"private-error");
+    assert!(child.owned_streams_closed());
+    assert!(
+        !child.retirement().unwrap().streams_closed,
+        "the transferred stdout reader still belongs to this test"
+    );
 }
 
 #[tokio::test]
@@ -298,4 +309,10 @@ async fn a_previously_failed_pipe_never_becomes_a_positive_close_observation() {
     let facts = child.retirement().unwrap();
     assert!(facts.group_cleanup_passed);
     assert!(!facts.streams_closed);
+    assert!(!child.owned_streams_closed());
+    assert!(child.stop(Duration::ZERO).await.is_err());
+    assert!(
+        !child.owned_streams_closed(),
+        "retry cannot erase a failed pipe"
+    );
 }

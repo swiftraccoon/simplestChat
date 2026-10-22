@@ -4672,6 +4672,7 @@ fn print_usage() {
     println!("  load_test bench browser-tcp --help");
     println!("  load_test bench account-room --help");
     println!("  load_test bench shutdown-smoke|diagnostics-smoke --help");
+    println!("  load_test bench restart-browser-smoke --help");
     println!("\nOptions:");
     println!("  -c, --clients <N>          Number of concurrent clients (default: 5)");
     println!("  -d, --duration <SECS>      Shared measurement duration, 3–3600s (default: 30)");

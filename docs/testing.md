@@ -222,7 +222,7 @@ and stale or interrupted rejoins. With the UI built and
 [browser tooling installed](../web/e2e/README.md), run the real restart check:
 
 ```sh
-node build/restart-browser-smoke.mjs --binary "$PWD/target/debug/simplestChat" \
+./target/debug/load_test bench restart-browser-smoke --binary "$PWD/target/debug/simplestChat" \
   --browser chromium --output "$PWD/results/restart-browser"
 ```
 
@@ -232,6 +232,72 @@ and delivers messages before and after restart. Capture calls are intercepted
 and must remain zero. CI runs Chromium; `--browser firefox` and `--browser webkit`
 use those installed Playwright engines. Retained results include recovery timing
 and browser/server exit status. They do not prove physical-device media recovery.
+
+The Rust owner retains two sequential guest-server lifetimes and one Node browser
+owner. Its inherited anonymous control stream admits exactly `stop-first`,
+`start-second`, then `stop-second`, with one bounded canonical request and ACK at
+a time. First-server exit 0, reserved-group retirement and owned-pipe completion
+precede the start ACK. Node must independently observe both restart notices
+before requesting the second server. It reuses the same selected binary, random
+loopback ports and fixed guest-only environment; database/auth settings are not
+inherited. The same captured signal owner covers every phase and final close.
+
+Both installed Node and the repository-fixed Playwright module/runtime remain
+caller-trusted. `--node /absolute/executable` selects an installed Node explicitly;
+otherwise the captured PATH selects its first executable candidate, resolving
+that selection once. There is no installation stage. The controller retains
+stamps and SHA-256 measurements for five fixed first-party files: the restart
+phase/channel, browser owner, lifecycle cleanup and WebKit owner. Final rehashes
+are optimistic snapshots, without authenticated origin or protection from later
+same-UID writes. They do not describe all Playwright/tool/runtime I/O.
+
+`--output` is required, absolute, UTF-8 and fresh. The 0700 leaf retains its
+`.creator` witness and 0600 artifacts: `outcome.json`, admitted `server-1.log` and
+`server-2.log`, `browser.log`, and a validated `browser-receipt.json` when present.
+Each server stream and Node stderr are bounded to 1 MiB; server logs concatenate
+stdout then stderr after retirement, without an interleaving claim. The strict
+Node receipt is at most 32 KiB and contains counters and selected observations,
+not chat text, URLs, raw frames or dependency error messages. Native server
+records explicitly separate exit, reserved-group signals, leader reap and owned
+stream observations from the browser cleanup verdict. Duplex Control EOF and
+explicit close are separately required; escaped descendants are outside these
+observations. Unknown or failed cleanup cannot pass. Failed journeys can still
+report successful browser cleanup.
+
+The fixed scheduling budget is 75 active seconds plus 100 for finalization, with
+an internal 175-second fence inside the unchanged three-minute CI step. Success
+also retains the original strict elapsed time below 120 seconds. Readiness uses
+20-second phase windows with 750 ms bounded requests; fragmented control frames,
+ACKs and terminal EOF each have a two-second slot. An admitted transition keeps
+its returned server owner even after cancellation. Node retirement starts
+concurrently with that transition settling and any returned server retirement.
+The conservative Node tail is 35 seconds grace, up to three Darwin inspection
+paths of 2 seconds plus 5 seconds settlement, a 5-second terminal wait, two
+5-second owned stream tasks and a possible 5-second guard fallback: 76 seconds.
+The server tail is 20 + 21 + 5 + three 5-second tasks + 5: 66 seconds. At most one
+server remains unretired; the tails overlap rather than adding, leaving room for
+EOF and file/control final checks within the reserve. These are scheduling and
+refusal bounds, not guarantees against OS, filesystem, reap or cold-build stalls.
+
+Presentation is artifact-only. Exit codes are 0 for complete success, 1 for
+failed/incomplete observations or unproven cleanup, 2 for invalid arguments,
+124 for an observed deadline and 130/143 for observed INT/TERM. The first known
+failure survives later cancellation. The saved outcome describes observations
+before its own final publication/namespace closes and final clock/signal fences;
+only CLI exit 0 confirms those final checks. It may retain a positive observation
+when a later finalizer fails. This is not a durable cleanup receipt. The native
+signal fences deliberately correct the original JS's generic cancellation exit,
+and continued cleanup observation refuses late page errors or external requests
+that the original could report after its last success check. Node checks elapsed
+time before and after accepting a positive join/restart observation; the retained
+reference tested its condition first and could accept an observation after its
+phase window. Native Control EOF also has a post-read two-second fence, so an
+already-ready read cannot bypass the timer when scheduling resumes late.
+Byte-retained JS
+oracles, virtual-time fake hosts, and actual inherited-FD integration with inert
+guest scripts/fake Playwright cover source parity and ownership. They do not run
+the real server or browser. The existing guarded seven-day `restart-browser`
+upload keeps the artifacts; no hosted timing or runtime parity is claimed here.
 
 Manually check leaving during recovery and a prolonged outage: after two minutes,
 automatic retries stop and explicit retry remains available. Do not interrupt a

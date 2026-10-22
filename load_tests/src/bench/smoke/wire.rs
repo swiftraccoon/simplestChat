@@ -36,10 +36,13 @@ pub(super) trait Wire: Send + Sync {
     async fn ready(&self, ports: Ports) -> Result<bool>;
     async fn connect(&self, ports: Ports) -> Result<Box<dyn Socket>>;
 }
-pub(super) struct NativeWire {
+pub(in crate::bench) struct NativeWire {
     client: reqwest::Client,
 }
 impl NativeWire {
+    pub(in crate::bench) async fn request_ready(&self, ports: Ports) -> Result<bool> {
+        self.ready(ports).await
+    }
     pub fn new() -> Result<Self> {
         Ok(Self {
             client: reqwest::Client::builder()

@@ -57,6 +57,15 @@ impl std::fmt::Display for Interrupted {
 impl std::error::Error for Interrupted {}
 
 #[derive(Debug)]
+pub(crate) struct ControlWriteTimedOut;
+impl std::fmt::Display for ControlWriteTimedOut {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("Owned control write timed out")
+    }
+}
+impl std::error::Error for ControlWriteTimedOut {}
+
+#[derive(Debug)]
 struct ObservedFailure(Exit);
 impl std::fmt::Display for ObservedFailure {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -74,7 +83,7 @@ pub(crate) fn failure_status(error: &anyhow::Error) -> Option<u8> {
     if let Some(interrupted) = error.downcast_ref::<owned_process::Interrupted>() {
         return Some(interrupted.0);
     }
-    if error.is::<owned_process::child::CommandTimedOut>() {
+    if error.is::<owned_process::child::CommandTimedOut>() || error.is::<ControlWriteTimedOut>() {
         return Some(124);
     }
     error.downcast_ref::<ObservedFailure>().map(|failure| {
@@ -139,6 +148,12 @@ pub trait Child: Send {
     fn retirement(&self) -> Option<Retirement> {
         None
     }
+    /// Positive completion of this child's retained stream tasks only. A caller
+    /// must separately finish transferred stdout or duplex control ownership.
+    /// Hosts without an observation remain unknown and cannot supply proof.
+    fn owned_streams_closed(&self) -> bool {
+        false
+    }
     fn take_stdout(&mut self) -> Option<Box<dyn Stream>>;
     async fn poll(&mut self) -> Result<Option<Exit>>;
     async fn stop(&mut self, grace: Duration) -> Result<Exit>;
@@ -148,6 +163,9 @@ pub trait Child: Send {
 
 #[async_trait::async_trait]
 impl Child for owned_process::child::Child {
+    fn owned_streams_closed(&self) -> bool {
+        self.owned_streams_closed()
+    }
     fn retirement(&self) -> Option<Retirement> {
         self.retirement().map(|v| Retirement {
             term_attempted: v.term_attempted,
@@ -191,6 +209,12 @@ impl Child for owned_process::child::Child {
 pub trait Control: Send {
     async fn read(&mut self, buffer: &mut [u8]) -> Result<usize>;
     async fn write(&mut self, bytes: &[u8]) -> Result<()>;
+    /// Await a bounded nonblocking write, faulting the write half on failure.
+    /// Partial failed frames cannot be retried. The caller still closes this
+    /// endpoint explicitly. Unsupported hosts refuse before sending any bytes.
+    async fn write_bounded(&mut self, _bytes: &[u8], _limit: Duration) -> Result<()> {
+        anyhow::bail!("Bounded owned control writes unavailable")
+    }
     fn finish(self: Box<Self>) -> Result<()>;
 }
 

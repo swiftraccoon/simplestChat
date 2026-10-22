@@ -89,6 +89,7 @@ pub(crate) struct Child {
     failed: bool,
     retirement: Option<super::cleanup::Retirement>,
     external_streams: bool,
+    owned_streams_closed: bool,
     pub(crate) output: Vec<u8>,
     pub(crate) errors: Vec<u8>,
 }
@@ -99,6 +100,11 @@ impl Child {
     }
     pub(crate) fn retirement(&self) -> Option<super::cleanup::Retirement> {
         self.retirement.clone()
+    }
+    /// Only the tasks retained by this child have completed successfully.
+    /// Transferred stdout and the caller's duplex control endpoint are excluded.
+    pub(crate) fn owned_streams_closed(&self) -> bool {
+        self.owned_streams_closed && !self.failed
     }
     pub(crate) fn take_stdout(&mut self) -> Option<Stdout> {
         self.stream.take()
@@ -184,14 +190,12 @@ impl Child {
         {
             self.errors.clone_from(errors);
         }
+        self.owned_streams_closed =
+            !self.failed && input.is_ok() && output.is_ok() && errors.is_ok();
         self.retirement
             .as_mut()
             .expect("retirement observed")
-            .streams_closed = !self.external_streams
-            && !self.failed
-            && input.is_ok()
-            && output.is_ok()
-            && errors.is_ok();
+            .streams_closed = !self.external_streams && self.owned_streams_closed;
         self.failed |= input.is_err() || output.is_err() || errors.is_err();
         input?;
         output?;
@@ -369,6 +373,7 @@ impl Runner {
             failed: false,
             retirement: None,
             external_streams: stream || duplex,
+            owned_streams_closed: false,
             output: Vec::new(),
             errors: Vec::new(),
         })

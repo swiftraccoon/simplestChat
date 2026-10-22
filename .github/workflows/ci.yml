@@ -666,7 +666,7 @@ jobs:
         if: matrix.group == 'stress'
         timeout-minutes: 3
         run: |
-          node build/restart-browser-smoke.mjs --binary "$PWD/target/debug/simplestChat" \
+          ./target/debug/load_test bench restart-browser-smoke --binary "$PWD/target/debug/simplestChat" \
             --browser chromium --output "${RUNNER_TEMP}/restart-browser"
 
       - name: Preserve browser restart diagnostics

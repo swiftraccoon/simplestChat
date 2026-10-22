@@ -20,6 +20,51 @@ from release_json import json_value
 class PythonPolicyTests(unittest.TestCase):
     """Keep shared strict settings, tool pins and CI gate wiring aligned."""
 
+    def test_restart_browser_keeps_the_three_minute_owner_and_guarded_evidence(self) -> None:
+        """Move the full operation after the existing build without changing job authority."""
+        workflow = yaml_value(
+            (ROOT / ".github/workflows/ci.yml").read_text(), scalars_as_strings=True
+        )
+        jobs = obj(workflow, "jobs")
+        steps = next(
+            objects(obj(jobs, name), "steps")
+            for name in jobs
+            if isinstance(jobs[name], dict)
+            and "steps" in obj(jobs, name)
+            and any(
+                step.get("name") == "Automatic room recovery after an owned server restart"
+                for step in objects(obj(jobs, name), "steps")
+            )
+        )
+        step = next(
+            step
+            for step in steps
+            if step.get("name") == "Automatic room recovery after an owned server restart"
+        )
+        self.assertEqual(step["if"], "matrix.group == 'stress'")
+        self.assertEqual(step["timeout-minutes"], "3")
+        self.assertEqual(
+            string(step, "run"),
+            "./target/debug/load_test bench restart-browser-smoke "
+            + '--binary "$PWD/target/debug/simplestChat" \\\n'
+            + '  --browser chromium --output "${RUNNER_TEMP}/restart-browser"\n',
+        )
+        self.assertNotIn("env", step)
+        self.assertNotIn("continue-on-error", step)
+        build = next(
+            item for item in steps if item.get("name") == "Build server and load generator"
+        )
+        self.assertEqual(string(build, "run"), "cargo build --locked --workspace --bins")
+        self.assertLess(steps.index(build), steps.index(step))
+        upload = next(
+            item for item in steps if item.get("name") == "Preserve browser restart diagnostics"
+        )
+        self.assertEqual(
+            string(upload, "if"), "${{ !cancelled() && matrix.group == 'stress' && !env.ACT }}"
+        )
+        self.assertEqual(string(upload, "with", "path"), "${{ runner.temp }}/restart-browser")
+        self.assertEqual(string(upload, "with", "retention-days"), "7")
+
     def test_guest_smokes_use_the_prebuilt_owner_after_the_guarded_workspace_build(self) -> None:
         """Retain cache guards while moving both complete operations to the same binary."""
         workflow = yaml_value(

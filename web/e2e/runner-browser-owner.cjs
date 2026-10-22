@@ -2,7 +2,18 @@ const { closeOwnedBrowser } = require('./lifecycle-cleanup.cjs');
 const { launchOwnedWebKit } = require('./runner-webkit-owner.cjs');
 
 /** Owns only browser processes launched by this test, including failed connections. */
-function createBrowserOwner({ browserName, playwright, persist, webKitTestNetwork = false }) {
+function createBrowserOwner({
+  browserName,
+  playwright,
+  persist,
+  webKitTestNetwork = false,
+  connectTimeoutMs,
+}) {
+  if (
+    connectTimeoutMs !== undefined &&
+    (!Number.isSafeInteger(connectTimeoutMs) || connectTimeoutMs <= 0)
+  )
+    throw new Error('Owned browser connection timeout is invalid.');
   const owned = new Map();
   const lifecycle = [];
   const save = () => persist(lifecycle);
@@ -39,7 +50,10 @@ function createBrowserOwner({ browserName, playwright, persist, webKitTestNetwor
       owned.set(server, { server, record });
       try {
         save();
-        if (!browser) browser = await playwright[name].connect(server.wsEndpoint());
+        if (!browser)
+          browser = await (connectTimeoutMs === undefined
+            ? playwright[name].connect(server.wsEndpoint())
+            : playwright[name].connect(server.wsEndpoint(), { timeout: connectTimeoutMs }));
         owned.delete(server);
         owned.set(browser, { server, record });
         return browser;

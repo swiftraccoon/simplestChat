@@ -1,19 +1,19 @@
 //! Complete guest-only shutdown and stopped-recorder smokes. Importing is inert.
 
-mod config;
+pub(super) mod config;
 mod controller;
-mod files;
+pub(super) mod files;
 #[cfg(test)]
 mod files_tests;
 #[cfg(test)]
 mod fixtures;
-mod native;
+pub(super) mod native;
 #[cfg(test)]
 mod oracle_tests;
 mod report;
 #[cfg(test)]
 mod tests;
-mod wire;
+pub(super) mod wire;
 #[cfg(test)]
 mod wire_tests;
 

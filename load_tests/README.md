@@ -104,6 +104,21 @@ generator subprocess is required. See [the smoke contract](../docs/testing.md#re
 for exact report fields, status/timing corrections, bounds and runtime limits.
 Implementation lives in `src/bench/smoke/`; byte-retained JS oracles are test-only.
 
+`./target/debug/load_test bench restart-browser-smoke --binary /absolute/server
+--browser chromium --output /absolute/private/new-run` owns the paired guest
+servers and one controlled Node/Playwright lifetime. Three fixed phase requests
+require first-server retirement before the second starts on the same ports.
+The controller joins every admitted transition and starts Node/server cleanup
+concurrently on failure. It retains bounded private artifacts, strict browser
+observations and independent native retirement facts. Installed Node/Playwright
+are caller-trusted; `--node` can select an absolute installed executable. The
+75-second active schedule and 100-second cleanup reserve fit the unchanged
+three-minute CI step as refusal/fallback bounds, with success still below 120
+seconds. See [restart coverage and limits](../docs/testing.md#readiness-and-shutdown)
+for status corrections, source measurements and artifact finalization scope.
+Implementation lives in `src/bench/restart_browser/`; original JS remains a
+byte-retained test oracle. Inert tests do not claim real-browser runtime proof.
+
 The same binary can read stopped server diagnostics without creating a runtime,
 joining a room or sending media:
 

@@ -44,7 +44,7 @@ const READ: OFlag = OFlag::O_RDONLY
     .union(OFlag::O_NONBLOCK)
     .union(OFlag::O_CLOEXEC);
 
-pub(super) struct Selected {
+pub(in crate::bench) struct Selected {
     file: Option<File>,
     path: PathBuf,
     stamp: Metadata,

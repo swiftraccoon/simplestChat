@@ -106,6 +106,7 @@ async fn inherited_unix_stdin_is_duplex_and_capture_remains_separate_until_retir
         .into(),
     ];
     let (mut child, mut control) = host.spawn_controlled(request).unwrap();
+    assert!(!child.owned_streams_closed());
     // A cancelled waiting read has consumed no bytes; the same retained owner
     // can subsequently deliver every fragment without restarting a frame.
     let mut waiting = [0; 2];
@@ -114,7 +115,10 @@ async fn inherited_unix_stdin_is_duplex_and_capture_remains_separate_until_retir
             .await
             .is_err()
     );
-    control.write(b"req").await.unwrap();
+    control
+        .write_bounded(b"req", Duration::from_secs(1))
+        .await
+        .unwrap();
     control.write(b"uest\n").await.unwrap();
     let mut bytes = Vec::new();
     tokio::time::timeout(Duration::from_secs(3), async {
@@ -146,7 +150,14 @@ async fn inherited_unix_stdin_is_duplex_and_capture_remains_separate_until_retir
             .success()
     );
     assert_eq!(child.output(), b"{\"receipt\":true}");
+    assert!(child.owned_streams_closed());
+    assert!(
+        !child.retirement().unwrap().streams_closed,
+        "owned pipe completion cannot prove the caller's control endpoint closed"
+    );
     control.finish().unwrap();
+    assert!(child.owned_streams_closed());
+    assert!(!child.retirement().unwrap().streams_closed);
     std::fs::remove_dir_all(directory).unwrap();
 }
 
