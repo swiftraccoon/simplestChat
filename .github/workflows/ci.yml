@@ -212,7 +212,7 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: |
           node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"
-          echo "$RUNNER_TEMP/simplestchat-npm-12.2.0/bin" >> "$GITHUB_PATH"
+          cargo run --locked -q -p xtask -- ci npm-path
 
       - name: Check helper syntax, safety and cleanup
         run: cargo run --locked -q -p xtask -- check --helpers
@@ -334,7 +334,7 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: |
           node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"
-          echo "$RUNNER_TEMP/simplestchat-npm-12.2.0/bin" >> "$GITHUB_PATH"
+          cargo run --locked -q -p xtask -- ci npm-path
 
       # Include development dependencies from the first build so cargo test
       # reuses the same feature graph and native worker. Explicitly use its
@@ -568,7 +568,7 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: |
           node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"
-          echo "$RUNNER_TEMP/simplestchat-npm-12.2.0/bin" >> "$GITHUB_PATH"
+          cargo run --locked -q -p xtask -- ci npm-path
 
       # One feature set for every Rust target in CI. Distinct feature sets
       # (default for the server, load-test for the generator, all for the
@@ -870,14 +870,14 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
+      - name: Install the pinned Rust toolchain for the quality gate
+        run: rustup toolchain install --profile minimal
+
       - name: Install checksum-pinned npm
         working-directory: ${{ github.workspace }}
         run: |
           node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"
-          echo "$RUNNER_TEMP/simplestchat-npm-12.2.0/bin" >> "$GITHUB_PATH"
-
-      - name: Install the pinned Rust toolchain for the quality gate
-        run: rustup toolchain install --profile minimal
+          cargo run --locked -q -p xtask -- ci npm-path
 
       - run: npm ci --ignore-scripts
       - run: cargo run --locked -q -p xtask -- check --web
@@ -1095,7 +1095,7 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: |
           node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"
-          echo "$RUNNER_TEMP/simplestchat-npm-12.2.0/bin" >> "$GITHUB_PATH"
+          cargo run --locked -q -p xtask -- ci npm-path
 
       - name: Restore pinned rollover Chromium download bytes
         id: rollover-chromium

@@ -678,6 +678,18 @@ including its first cold xtask compile; hosted cold-start timing remains
 unmeasured. Owned fake commands verify policy and cleanup, without downloading,
 installing or contacting an engine.
 
+The npm setup steps keep `node build/install-npm.mjs` as the authenticated
+installer, followed by `cargo run --locked -q -p xtask -- ci npm-path` to
+publish its fixed 12.2.0 `bin` directory. Publication requires an existing
+absolute `GITHUB_PATH` regular file and owned runner/prefix/bin directories
+that are not writable by other users. It refuses final symlinks, special files,
+relative paths and control characters in the published path; it preserves the
+runner file and closes retained descriptors explicitly. The command starts no
+child or download and does not reauthenticate the installation or prevent later
+changes by the same filesystem owner. The web job installs its pinned Rust
+toolchain before this step. Filesystem fixtures cover the publication boundary;
+the Node installer's existing tests remain the reference for installation.
+
 ### Run CI locally
 
 Commit the candidate locally, then run the complete required workflow without a

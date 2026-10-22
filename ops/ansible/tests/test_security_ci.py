@@ -554,6 +554,37 @@ class SecurityWorkflowTests(unittest.TestCase):
                     "\n".join(string(step.get("run", "")) for step in steps),
                 )
 
+    def test_npm_path_publication_follows_installer_and_pinned_rust_bootstrap(self) -> None:
+        """Every typed publication is reachable with Rust and keeps installer failure fatal."""
+        jobs = obj(workflow("ci.yml"), "jobs")
+        for name in ("rust-lint", "rust-test", "browser", "web", "deployment"):
+            with self.subTest(job=name):
+                steps = objects(jobs, name, "steps")
+                install = next(
+                    step for step in steps if step.get("name") == "Install checksum-pinned npm"
+                )
+                lines = string(install["run"]).splitlines()
+                self.assertEqual(
+                    lines,
+                    [
+                        'node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"',
+                        "cargo run --locked -q -p xtask -- ci npm-path",
+                    ],
+                )
+                self.assertNotIn("continue-on-error", install)
+                self.assertEqual(install["working-directory"], "${{ github.workspace }}")
+                bootstrap = [
+                    index
+                    for index, step in enumerate(steps)
+                    if "if" not in step
+                    and (
+                        string(step.get("uses", "")).startswith("dtolnay/rust-toolchain@")
+                        or step.get("run") == "rustup toolchain install --profile minimal"
+                    )
+                ]
+                self.assertTrue(bootstrap)
+                self.assertLess(min(bootstrap), steps.index(install))
+
     def test_local_codeql_runs_full_pinned_analysis_before_recording_success(self) -> None:
         """Local success requires each real language policy; hosted uploads stay on GitHub."""
         codeql = workflow("codeql.yml")
