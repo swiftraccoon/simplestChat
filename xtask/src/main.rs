@@ -12,6 +12,7 @@ mod check;
 mod ci;
 mod ci_evidence;
 mod ci_local;
+mod ci_retention;
 mod http_policy;
 mod line_length;
 mod media_ip;
@@ -35,6 +36,8 @@ Commands:
                 automation runs installed controller quality, syntax and unit checks.
                 CodeQL extraction keys never substitute for analyzed databases.
   ci-evidence   Record or require complete executed local-CI matrix evidence.
+  ci-retention  Print an allowlisted main-cache retention plan; --apply requires
+                exact successful main CI and refreshed inventory before each deletion.
   line-length   Fail when Rust production code has more lines over 100 columns
                 than the ratchet in xtask/line-length-allowance.txt permits;
                 `--update` lowers the allowance to the current count.
@@ -79,6 +82,7 @@ fn run(arguments: &[String]) -> Result<ExitCode> {
         "ci" => ci::run(&root, rest),
         "ci-evidence" => ci_evidence::run(&root, rest),
         "ci-local" => ci_local::run(&root, rest),
+        "ci-retention" => ci_retention::run(&root, rest),
         "line-length" => line_length::run(&root, rest).map(|()| ExitCode::SUCCESS),
         "protocol-ts" => protocol_ts::run(&root, rest).map(|()| ExitCode::SUCCESS),
         "http-policy" => http_policy::run(&root, rest).map(|()| ExitCode::SUCCESS),

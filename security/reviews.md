@@ -91,6 +91,15 @@ review locations and the existing CodeQL Rust installer location move by one
 step; their action bytes, fingerprints and scope are otherwise unchanged.
 Receipt verification and all source/security gates remain blocking.
 
+The cache-retention port adds one exact installer-action review at
+`cache-retention.yml#jobs/retain/steps/1/uses`. It uses that same immutable action
+and explicit Rust 1.99.0 to build the maintenance binary before the scoped
+GitHub token is supplied. The successful same-repository main-push trigger,
+credential-free checkout, API allowlist, complete-inventory checks and exact-ID
+deletion limits remain enforced. The official HTTPS bootstrap boundary and
+2026-11-29 expiry are unchanged; this record does not authorize a wider action
+scope or weaken maintenance authorization.
+
 ## Account-room action reference
 
 On 2026-10-18, the new manual-only account-room experiment produced one

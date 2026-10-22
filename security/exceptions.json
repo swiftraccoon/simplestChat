@@ -1850,6 +1850,16 @@
       "reachability": "Reviewed 2026-10-21 for only this exact step and immutable action reference. Checkout disables persisted credentials; the explicit repository-controlled toolchain and the reviewed official HTTPS rustup bootstrap are unchanged. CI key/receipt verification and every source/security gate remain blocking. No artifact, pull-request value or restored cache selects installer source or arguments.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md#github-actions-portability-findings"
+    },
+    {
+      "scanner": "zizmor",
+      "fingerprint": "superfluous-actions:0fb2d712953646c2c07edb9a959b25649b214c63cb1143b35266a007af663b35",
+      "scope": ".github/workflows/cache-retention.yml#jobs/retain/steps/1/uses",
+      "owner": "swiftraccoon",
+      "rationale": "Compiled cache maintenance needs the repository's exact Rust 1.99.0 toolchain. The maintained local act image has no rustup, so the existing immutable installer action bootstraps the compiler before the scoped GitHub token is supplied.",
+      "reachability": "Reviewed 2026-10-21 for only this exact step and immutable action reference. Successful same-repository main-push guards and credential-free exact-SHA checkout precede the installer; only fixed repository-controlled arguments select the toolchain. The official HTTPS rustup bootstrap boundary is unchanged. API allowlists, complete inventory, current-main authorization and exact-ID deletion limits remain blocking.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md#github-actions-portability-findings"
     }
   ]
 }

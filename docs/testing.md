@@ -789,10 +789,17 @@ from known families. It verifies the triggering run and current main revision,
 protects the newest cache in each trust/platform namespace and every cache
 created or accessed within two hours, and targets eight GiB of total storage.
 Unknown cache families and other refs remain untouched. Run
-`python3 build/ci_cache_retention.py` for a read-only plan; applying it requires
+`cargo run --locked -q -p xtask -- ci-retention` for a read-only plan; applying it requires
 `--apply --run-id <successful-CI-run> --revision <current-main-SHA>`. Deletions
 are limited to cache IDs, with refreshed inventory before each deletion and
 limits of 100 deletions and 240 seconds.
+The hosted maintenance workflow builds the tool before exposing its scoped
+token. The Python implementation remains a reference for planner parity; unit
+tests exercise the Rust client with a fake `gh`, including incomplete inventory,
+changed cache identity, stale main revisions, output limits and cancellation.
+Canonical UTC GitHub timestamps are checked across supported Python versions;
+the separate oracle for noncanonical ISO extensions follows the maintained
+Python 3.14 reference and runs only on compatible interpreters.
 
 Scheduled mutation, performance/soak and macOS WebKit compatibility workflows
 are additional tiers, not part of the required push gate.

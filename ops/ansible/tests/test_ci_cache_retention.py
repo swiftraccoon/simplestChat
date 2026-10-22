@@ -243,7 +243,14 @@ class RetentionTests(unittest.TestCase):
         steps = objects(job, "steps")
         self.assertEqual(at(steps[0], "with", "persist-credentials"), "false")
         self.assertEqual(at(steps[0], "with", "ref"), "${{ github.event.workflow_run.head_sha }}")
-        self.assertIn("--apply", string(steps[1], "run"))
+        self.assertEqual(
+            steps[1]["uses"],
+            "dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d",
+        )
+        self.assertEqual(at(steps[1], "with", "toolchain"), "1.99.0")
+        self.assertEqual(steps[2]["run"], "cargo build --locked -q -p xtask")
+        self.assertNotIn("env", steps[2])
+        self.assertIn("target/debug/xtask ci-retention --apply", string(steps[3], "run"))
 
 
 if __name__ == "__main__":

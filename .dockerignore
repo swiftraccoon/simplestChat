@@ -87,6 +87,9 @@ xtask/src/ci_evidence/**
 !xtask/src/ci_local/
 xtask/src/ci_local/**
 !xtask/src/ci_local/*.rs
+!xtask/src/ci_retention/
+xtask/src/ci_retention/**
+!xtask/src/ci_retention/*.rs
 !xtask/src/run_local/
 xtask/src/run_local/**
 !xtask/src/run_local/*.rs

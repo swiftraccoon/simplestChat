@@ -32,11 +32,17 @@ jobs:
         with:
           persist-credentials: false
           ref: ${{ github.event.workflow_run.head_sha }}
+      - name: Install pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable (2026-10-01)
+        with:
+          toolchain: 1.99.0
+      - name: Build cache maintenance without credentials
+        run: cargo build --locked -q -p xtask
       - name: Retain current caches and prune obsolete allowed families
         env:
           GH_TOKEN: ${{ github.token }}
           MAINTENANCE_RUN: ${{ github.event.workflow_run.id }}
           MAINTENANCE_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
-          python3 build/ci_cache_retention.py --apply \
+          target/debug/xtask ci-retention --apply \
             --run-id "$MAINTENANCE_RUN" --revision "$MAINTENANCE_SHA"
