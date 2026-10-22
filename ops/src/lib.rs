@@ -3,6 +3,7 @@
 //! Validated metadata is not signature evidence or authorization to deploy. Python
 //! remains the release runtime until independent parity and distribution checks.
 
+pub mod distribution;
 mod files;
 mod json;
 pub mod release;

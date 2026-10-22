@@ -472,3 +472,62 @@ only fixed identity fields; config bytes can contain private environment values
 and remain outside serialization and Debug output. Tests use owned tiny archives,
 Python oracles and mutation fixtures, with no engine or real image. No new
 dependency version, advisory waiver or license exception is added.
+
+### Local operations ELF reader (2026-10-22)
+
+The operations executable inspector adds exact `object` 0.40.0 with default
+features disabled and only `read_core`, `elf` and `std`. The
+[registry record](https://crates.io/api/v1/crates/object/0.40.0) reports a
+non-yanked 2026-08-01 release, Rust 1.85 minimum and Apache-2.0 OR MIT license,
+already permitted by dependency policy. The
+[upstream repository](https://github.com/gimli-rs/object) had activity through
+2026-10-12 at review. The primary
+[RustSec package directory query](https://api.github.com/repos/RustSec/advisory-db/contents/crates/object)
+returned no published package entry at review; this is a point-in-time check,
+not an assurance against undisclosed defects. No advisory waiver is added.
+
+The selected [features](https://docs.rs/crate/object/0.40.0/features) add only
+the already locked `memchr` dependency. Other formats, write/build APIs and
+compression, including flate2/ruzstd, remain disabled. Callers use the mature
+[low-level ELF readers](https://docs.rs/object/0.40.0/object/read/elf/index.html),
+not a new general parser. Before any parser-controlled cached read, first-party
+code bounds program headers and dynamic entries to 8,192 each, interpreter data
+to 4 KiB and dynamic strings to 1 MiB. At most five read regions totaling under
+2 MiB enter the cache. No sections, symbols, notes, compressed data or machine
+instructions are interpreted or mapped for execution. Malformed/extended table
+counts, ambiguous singleton fields and nonzero hidden dynamic entries after
+termination are refused.
+
+PT_DYNAMIC's file offset must agree with its virtual address through exactly
+one complete file-backed LOAD mapping. Dynamic/string ranges intersecting any
+other LOAD memory range, including partial or zero-fill overlaps, are refused;
+inert decoy-table fixtures cover these aliases. PT_INTERP is read at its bounded
+file offset, matching Linux's
+[ELF loader](https://github.com/torvalds/linux/blob/master/fs/binfmt_elf.c).
+This is a conservative supported metadata domain, not a complete loader model.
+
+Mapping admission uses the explicit Linux x86-64 4 KiB base-page domain. The
+kernel's elf_map rounds LOAD addresses down and file extents up to pages;
+elf_load can zero-fill through page boundaries. Consequently all nonempty
+LOAD memory spans are rounded with checked arithmetic, sorted within the
+8,192-header budget, and refused if any pages overlap, even when the original
+table declares no dynamic segment. File/virtual offsets must be page-congruent.
+The complete original program-header table must have one file-backed mapping;
+any PT_PHDR must match its offset, address and size exactly. Linux derives
+AT_PHDR from LOAD/e_phoff, while musl's
+[dynamic linker](https://git.musl-libc.org/cgit/musl/plain/ldso/dynlink.c)
+can derive a base address from AT_PHDR and PT_PHDR. Inert fixtures cover page
+replacement of dynamic strings/tables and of the program-header table itself,
+zero-fill shadows, exact page boundaries and contradictory PT_PHDR declarations.
+
+Original SHA-256 covers every byte of a nonempty regular file up to 256 MiB.
+The retained Snapshot checks reads/seeks and final namespace/file stamps and
+closes descriptors before returning success. Output contains only hashes,
+counts, fixed architecture/type labels and linkage booleans; no candidate
+strings or paths. Tests use inert bytes, owned file mutation/alias fixtures,
+the actual Python metadata parser where domains overlap, and an empty-PATH CLI.
+No candidate executes. No interpreter/NEEDED entries does not prove musl
+provenance, signed source identity or ABI/runtime compatibility. An actual
+controlled musl build, authenticated separate artifact and owned Debian 13
+runtime evidence remain prerequisites before host installation or replacement
+of Python. Global production RPATH flags remain unchanged by this slice.

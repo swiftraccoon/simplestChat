@@ -1,8 +1,9 @@
 # Operations policy tools
 
 `simplestchat-ops` validates local release manifests, receiver receipts and
-Docker/OCI image archives. It has no network, engine, service, SSH or deployment
-command. Python remains the release runtime and the reference implementation.
+Docker/OCI image archives, and inspects local executable identities. It has no
+network, engine, service, SSH or deployment command. Python remains the release
+runtime and the reference implementation.
 
 ```sh
 cargo run --locked -q -p simplestchat-ops -- release manifest --path /path/to/release.json
@@ -41,6 +42,7 @@ timestamp text remains unchanged.
 | `src/main.rs` | Allowlisted CLI forms and fixed output failures |
 | `src/json.rs` | Serde grammar, duplicate keys, numeric tokens and bounded decoding |
 | `src/files.rs` | Descriptor-bound regular-file snapshot and change detection |
+| `src/distribution.rs`, `src/distribution_elf.rs` | Original executable identity and bounded ELF linkage facts |
 | `src/release/manifest.rs` | Existing release schema, migration checksums and real UTC dates |
 | `src/release/archive.rs`, `src/release/archive/` | Whole-transfer identity and bounded offline Docker/OCI metadata validation |
 
@@ -57,6 +59,72 @@ result as the [Rust linkage reference](https://doc.rust-lang.org/reference/linka
 recommends. The existing signed server artifact and its ten-file contract stay
 unchanged. Python's controller-supplied preflight remains the bootstrap trust
 boundary until binary provenance, ABI and installation ownership are established.
+
+## Local executable inspection
+
+Inspect a candidate file without executing it:
+
+```sh
+cargo run --locked -q -p simplestchat-ops -- distribution inspect-executable --path /path/to/simplestchat-ops
+```
+
+Success prints the original whole-file `sha256` and `bytes`, `architecture`,
+`elfClass`, `littleEndian`, `fileType`, `programHeaders`, and fixed linkage facts:
+`noInterpreter`, `neededCount`, `noNeeded`, `pieFlag`, `bindNow`,
+`nonExecutableStack`, `noWritableExecutableLoad`, `relroPresent`, `noRpath`,
+`noRunpath`, `noTextRelocations` and `noLoaderHooks`. The digest includes unused
+and trailing bytes. No loader path, dependency name, symbol, note, source path or
+candidate string is printed. Invalid input returns exit 1 and only
+`{"passed":false,"failure":"invalid_executable"}`; invalid arguments return 2.
+The command starts no child, even to query a candidate's version.
+
+The supported domain is nonempty regular files of at most 256 MiB containing
+ELF64 little-endian x86-64 ET_EXEC or ET_DYN, System V/Linux OSABI, with an entry
+point in a file-backed executable load segment. ET_DYN means `dynamic`; the
+separate `pieFlag` describes DF_1_PIE and does not infer it from the file type.
+Static executables and static PIE with a dynamic table but no interpreter or
+DT_NEEDED entries are supported. Each file read and seek checks the retained
+snapshot stamp; final file/directory binding checks and explicit successful
+closes precede the identity. The library's `verify` also compares an explicitly
+selected digest, byte count and architecture. The caller owns authentication of
+that selection, and later operations must rebind current bytes.
+
+The exact [object 0.40.0 low-level reader](https://docs.rs/object/0.40.0/object/read/elf/index.html)
+uses only `read_core`, `elf` and `std`. Before allocating parser reads, the tool
+bounds program headers and dynamic entries to 8,192 each, the dynamic string
+table to 1 MiB and the interpreter to 4 KiB. Only five bounded regions can enter
+the cache (under 2 MiB total); no section/symbol readers, archive parser,
+decompressor or executable mapping is used. Extended program counts, truncated
+or ambiguous relevant tables, missing dynamic termination, nonzero hidden
+entries after termination, duplicate singleton dynamic fields and ambiguous
+virtual metadata mappings are refused. Dynamic-table address/offset identities
+must agree within one complete file-backed LOAD mapping; partial overlaps and
+zero-fill shadow mappings are refused too. Sections, relocation correctness and
+machine instructions are not validated. Python's existing glibc server policy
+remains unchanged; inert overlap fixtures compare its parser facts, while new
+static forms have explicit local fixture assertions.
+
+The mapping domain explicitly uses Linux x86-64 4 KiB base pages. LOAD file and
+virtual offsets must be congruent modulo 4 KiB, and every nonempty LOAD's rounded
+memory-page span must be disjoint from all others. This conservative refusal
+also applies when no dynamic table is declared: a page replacement can shadow
+the program-header table itself. The complete original program-header table
+must have one unambiguous file-backed mapping. A present PT_PHDR must be unique
+and describe that exact offset, address and size.
+[Linux](https://github.com/torvalds/linux/blob/master/fs/binfmt_elf.c) derives
+AT_PHDR from LOAD plus e_phoff;
+[musl](https://git.musl-libc.org/cgit/musl/plain/ldso/dynlink.c) may use PT_PHDR
+to derive a base address. These admission
+rules prevent contradictory views without attempting to emulate either loader.
+
+These are linkage facts. `noInterpreter` and `noNeeded` do not establish musl
+provenance, kernel/CPU compatibility, source revision, a signed artifact or
+permission to install or run the file. Package version currently inherits the
+workspace version and is not a CLI compatibility protocol. A future musl build
+must also control the existing global `/usr/lib64` RPATH flags. Distribution
+readiness remains incomplete until an actual controlled musl artifact, its
+separate authenticated attestation, harmless checks on an owned Debian 13 host,
+and installation/bootstrap ownership evidence exist. Python remains the runtime.
 
 ## Pure release evidence policy
 

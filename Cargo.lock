@@ -2199,6 +2199,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "object"
+version = "0.40.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd229a0361b9d0d4396176e02d65897f487eebeab7caa6d443855ee152ca0b9c"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
 name = "oid-registry"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3481,6 +3490,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "nix",
+ "object",
  "regex-syntax",
  "serde",
  "serde_json",

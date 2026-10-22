@@ -110,6 +110,7 @@ fn usage_and_help_never_read_a_manifest_or_start_another_command() {
                 "Usage: simplestchat-ops release manifest --path PATH\n",
                 "       simplestchat-ops release archive --manifest PATH --path PATH\n",
                 "       simplestchat-ops release receipt --envelope PATH --receipt PATH\n",
+                "       simplestchat-ops distribution inspect-executable --path PATH\n",
             )
             .as_bytes()
         );
