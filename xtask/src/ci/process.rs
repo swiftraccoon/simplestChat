@@ -52,9 +52,55 @@ impl<'a> Native<'a> {
         Ok(self.signals)
     }
 
-    async fn execute(&mut self, mut request: Command) -> Result<Vec<u8>> {
+    async fn execute(&mut self, request: Command) -> Result<Vec<u8>> {
+        self.execute_with(request, &Finalize).await
+    }
+
+    async fn execute_with(
+        &mut self,
+        mut request: Command,
+        finalizer: &impl Finalizer,
+    ) -> Result<Vec<u8>> {
+        let combined = request
+            .combined_log
+            .take()
+            .map(std::sync::Arc::try_unwrap)
+            .transpose()
+            .map_err(|_| Failure::new(1, "CI combined log must have one owner."))?;
+        let combined_mode = combined.is_some();
+        let cleanup = request.cleanup;
+        let result = self.execute_body(request, &combined, finalizer).await;
+        // This runs on setup/spawn errors too. A body-local Group guard finishes
+        // its fallback before these bounded EOF and explicit-close attempts.
+        let logged = match combined {
+            Some(log) => log.finish().await.and_then(|value| {
+                if value.complete {
+                    Ok(())
+                } else {
+                    Err(Failure::new(1, "CI combined log completion is unproven."))
+                }
+            }),
+            None => Ok(()),
+        };
+        let output = result?;
+        logged?;
+        if combined_mode && !cleanup {
+            self.ready().await?;
+        }
+        Ok(output)
+    }
+
+    async fn execute_body(
+        &mut self,
+        mut request: Command,
+        combined: &Option<super::bounded_log::Log>,
+        finalizer: &impl Finalizer,
+    ) -> Result<Vec<u8>> {
         if !request.cleanup {
             self.ready().await?;
+        }
+        if combined.is_some() && (request.stdout.is_some() || request.capture.is_some()) {
+            return Err(Failure::new(1, "CI combined output requires its own mode."));
         }
         if request.stdout.is_some() && request.capture.is_none() {
             return Err(Failure::new(
@@ -90,7 +136,11 @@ impl<'a> Native<'a> {
             .map(std::sync::Arc::try_unwrap)
             .transpose()
             .map_err(|_| Failure::new(1, "CI output sink must have one owner."))?;
-        if let Some(file) = &sink {
+        if let Some(log) = combined {
+            command
+                .stdout(Stdio::from(log.writer()?))
+                .stderr(Stdio::from(log.writer()?));
+        } else if let Some(file) = &sink {
             command.stdout(Stdio::from(
                 file.try_clone()
                     .map_err(|_| Failure::new(1, "CI output sink unavailable."))?,
@@ -146,7 +196,20 @@ impl<'a> Native<'a> {
         };
         let mut reader = Reader(reader);
         let completed = async {
-            let bytes = if let Some(task) = &mut reader.0 {
+            let bytes = if let Some(log) = combined {
+                loop {
+                    if log.failed() {
+                        return Err(Failure::new(
+                            1,
+                            "CI combined log exceeded its bound or failed.",
+                        ));
+                    }
+                    tokio::select! {
+                        result = exited(pid) => { result?; break Vec::new(); },
+                        _ = tokio::time::sleep(Duration::from_millis(10)) => {},
+                    }
+                }
+            } else if let Some(task) = &mut reader.0 {
                 let (_, bytes) = tokio::try_join!(exited(pid), async {
                     task.await
                         .map_err(|_| Failure::new(1, "Production image output failed."))?
@@ -185,26 +248,42 @@ impl<'a> Native<'a> {
             let _ = rustix::process::kill_process_group(pid, signal);
             let _ = tokio::time::timeout(request.grace, exited(pid)).await;
         }
-        let cleaned = cleanup::finish(pid).await;
-        // NOWAIT keeps the identity reserved through the final group signal.
-        // A failed signal cannot make blocking wait/reap an unbounded operation.
-        let terminal = tokio::time::timeout(Duration::from_secs(5), exited(pid)).await;
-        if !matches!(terminal, Ok(Ok(()))) {
-            return Err(Failure::new(1, "Production image command reap failed."));
-        }
-        let status = group.reap().await?;
-        if cleaned {
+        let (cleaned, reaped) = finalizer.finish(&mut group).await;
+        if cleaned && reaped.is_ok() {
             self.cleanup_passed = prior_cleanup;
         }
+        // Preserve a known timeout/interruption even if terminal observation or
+        // reap subsequently fails. Unproven cleanup remains a sticky false flag.
         let output = outcome?;
-        if !cleaned {
-            return Err(Failure::new(1, "Production image command cleanup failed."));
-        }
+        let status = reaped?;
         let code = tooling::shell_status(status);
         if code != 0 {
             return Err(Failure::new(code, "Production image command failed."));
         }
+        if !cleaned {
+            return Err(Failure::new(1, "Production image command cleanup failed."));
+        }
         Ok(output)
+    }
+}
+
+trait Finalizer {
+    async fn finish(&self, group: &mut Group) -> (bool, Result<std::process::ExitStatus>);
+}
+struct Finalize;
+impl Finalizer for Finalize {
+    async fn finish(&self, group: &mut Group) -> (bool, Result<std::process::ExitStatus>) {
+        let pid = group.pid();
+        let cleaned = cleanup::finish(pid).await;
+        // NOWAIT keeps the identity reserved through the final group signal.
+        // Never block in reap unless terminal observation has succeeded.
+        let terminal = tokio::time::timeout(Duration::from_secs(5), exited(pid)).await;
+        let reaped = if matches!(terminal, Ok(Ok(()))) {
+            group.reap().await
+        } else {
+            Err(Failure::new(1, "Production image command reap failed."))
+        };
+        (cleaned, reaped)
     }
 }
 
@@ -250,3 +329,7 @@ impl Executor for Native<'_> {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "process_tests.rs"]
+mod tests;

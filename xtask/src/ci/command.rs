@@ -38,6 +38,8 @@ pub(super) struct Command {
     pub capture: Option<u64>,
     pub cleanup: bool,
     pub stdout: Option<std::sync::Arc<std::fs::File>>,
+    /// Unique owner; both streams are bounded and closed after group retirement.
+    pub combined_log: Option<std::sync::Arc<super::bounded_log::Log>>,
     pub executable: Option<std::sync::Arc<super::selected_executable::Executable>>,
     pub node: Option<std::sync::Arc<super::release_checks::files::Executable>>,
 }
@@ -51,6 +53,7 @@ impl Command {
             capture: Some(4 * 1024 * 1024),
             cleanup: false,
             stdout: None,
+            combined_log: None,
             executable: None,
             node: None,
         }

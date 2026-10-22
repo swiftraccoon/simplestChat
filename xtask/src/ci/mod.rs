@@ -13,6 +13,7 @@ use tokio::io::AsyncReadExt;
 
 mod audit_rust;
 mod automation;
+mod bounded_log;
 mod browser_suite;
 mod codeql_cache;
 mod command;
