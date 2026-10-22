@@ -4,7 +4,8 @@
 Docker/OCI image archives, and inspects local executable identities. It has no
 network, engine, service, SSH or deployment command. Local unsigned artifact
 preparation can write a new private directory, as described below. Python remains
-the release runtime and the reference implementation.
+the release runtime and the reference implementation. A separate read-only
+release preflight checks the fixed host paths without executing installed helpers.
 
 ```sh
 cargo run --locked -q -p simplestchat-ops -- release manifest --path /path/to/release.json
@@ -49,6 +50,7 @@ timestamp text remains unchanged.
 | `src/distribution_assembly.rs`, `src/distribution_assembly_files.rs` | Fresh local unsigned signing inputs and measured payload bytes |
 | `src/release/manifest.rs` | Existing release schema, migration checksums and real UTC dates |
 | `src/release/archive.rs`, `src/release/archive/` | Whole-transfer identity and bounded offline Docker/OCI metadata validation |
+| `src/release/preflight*.rs` | Fixed read-only host admission and exact installed-helper byte checks |
 
 The crate uses existing dependency versions and does not depend on the server,
 load generator, mediasoup or native TLS. The manual argument parser follows
@@ -63,6 +65,84 @@ result as the [Rust linkage reference](https://doc.rust-lang.org/reference/linka
 recommends. The existing signed server artifact and its ten-file contract stay
 unchanged. Python's controller-supplied preflight remains the bootstrap trust
 boundary until binary provenance, ABI and installation ownership are established.
+
+## Read-only release preflight
+
+The implemented command is available for eventual independently verified Ops
+distribution; Ansible still supplies and runs the unchanged Python reference.
+Do not install or substitute an unverified development binary on a release host.
+The native check requires effective UID 0, kernel Linux/x86_64 and Debian major
+13. It starts no process and does not import or execute an installed helper.
+
+```sh
+simplestchat-ops release preflight
+simplestchat-ops release preflight --helpers-json "$EXPECTED_HELPER_JSON"
+```
+
+The first form selects ordinary reconciliation. The second requires an exact
+complete mapping of the ten base helpers, the base plus three GitHub-fetch
+helpers, or the base plus `force_release.py`, to lowercase SHA-256 digests of
+their original bytes. The controller supplies `EXPECTED_HELPER_JSON` with all
+names and all 64-digit digests from its checkout, without trimming source. The
+14-helper combined fetch/force set is refused. The request cannot choose paths,
+identity, a fixture root, file modes or the helper directory.
+
+Both modes require `/etc/simplestchat-public` and `/srv/simplestchat-public` to be
+root:root directories with exact mode 0700, plus nonempty regular
+`/etc/simplestchat-public/images.json` with exact mode 0600 and at most 65,536
+bytes. Its contents are never read. Prepared mode additionally requires
+`/srv/simplestchat-public/releases` mode 0700, and every directory from `/`
+through `/usr/local/libexec/simplestchat-public` root:root with exact mode 0755.
+Selected helper files must be root:root regular files with exact mode 0644,
+nonempty and at most 1 MiB each. All permission checks include special bits.
+Hardlinks are accepted and their original link counts remain part of the
+mutation checks; no exclusive inode ownership is claimed. Helpers are visited
+in request order, and hashes cover whitespace and final newlines exactly.
+
+Success is only `{"schemaVersion":1,"runId":"32 lowercase hexadecimal digits","prepared":true}`
+(or `false` in ordinary mode). `runId` is fresh UUID-v4 entropy without hyphens.
+Failures return exit 1 and only
+`{"schemaVersion":1,"passed":false,"failure":"fixed_code"}`. The fixed codes
+match `release_preflight.py`; no private paths, configuration, helper bytes or
+operating-system error text are printed. Invalid command syntax returns 2.
+Successful output writes must complete before the command returns zero; this
+does not impose a wall-clock guarantee on a blocked output or filesystem.
+
+The optional argument is UTF-8 JSON at most 4096 bytes. Absent input means `{}`.
+Its explicit conservative domain rejects a BOM, decoded duplicate keys,
+nonfinite numbers, unpaired surrogates and more than 128 nested containers;
+these malformed-input refusals return `preflight_unavailable`. Python's raw
+string character count, duplicate-last and nonfinite behavior are broader.
+Valid helper names and digests remain the same fixed ASCII domain.
+
+The selected OS data is at most 64 KiB of UTF-8 from `/etc/os-release`, with
+`/usr/lib/os-release` used only when the preferred name is absent. The standard
+relative link `../usr/lib/os-release` and its absolute equivalent are supported
+through that fixed retained target; all other links are refused. Preferred-name
+absence, a selected link's inode/target and the final target are rechecked.
+The parser follows CPython's selected field behavior: optional whole quotes,
+five backslash escapes, universal newlines and last-value-wins keys. Only exact
+`ID=debian` and the first dot-separated `VERSION_ID` component `13` pass.
+See [CPython's parser](https://github.com/python/cpython/blob/3.14/Lib/platform.py)
+and the [os-release standard](https://www.freedesktop.org/software/systemd/man/latest/os-release.html).
+
+The native filesystem profile is deliberately stronger than Python's path-based
+snapshot: selected OS data is root:root regular mode 0644, every traversed
+directory is root:root without group/other write permission, and other links are
+refused. A single shared descriptor tree retains at most 48 owned Files,
+including transient probes. Before/after hashes and final namespace checks bind
+original file stamps, modes, owners, sizes and link counts. A 64 KiB streaming
+buffer reads at most 13 MiB of helper bytes plus 64 KiB of OS data; configuration
+contents are excluded. Every acquired File receives an explicit close attempt,
+including constructor, read, verification and close-failure paths.
+
+These are optimistic observations, not a filesystem lock, authentication,
+durable receipt, helper update serialization or runtime readiness. Operators
+must still serialize releases. The existing locked rustix 1.1.5 `process`,
+`system` and `rand` APIs supply effective UID, uname and Linux getrandom without
+unsafe first-party code or external commands; no new package or version is
+introduced. Tests use actual owned files with synthetic ownership/identity and
+the retained Python oracle, never the actual host's protected release paths.
 
 ## Local executable inspection
 

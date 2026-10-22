@@ -1,6 +1,7 @@
 //! Allowlisted local inspection and unsigned artifact preparation. Preparation
 //! writes only a new private output; no command, engine or network is started.
 
+mod preflight_cli;
 mod receipt_cli;
 
 use simplestchat_ops::{
@@ -18,6 +19,7 @@ const USAGE: &str = concat!(
     "Usage: simplestchat-ops release manifest --path PATH\n",
     "       simplestchat-ops release archive --manifest PATH --path PATH\n",
     "       simplestchat-ops release receipt --envelope PATH --receipt PATH\n",
+    "       simplestchat-ops release preflight [--helpers-json JSON]\n",
     "       simplestchat-ops distribution inspect-executable --path PATH\n",
     "       simplestchat-ops distribution verify-pair --manifest PATH ",
     "--path PATH --selection PATH\n",
@@ -31,6 +33,16 @@ fn main() -> ExitCode {
     if args.len() == 1 && matches!(args[0].to_str(), Some("--help" | "-h")) {
         println!("{USAGE}");
         return ExitCode::SUCCESS;
+    }
+    if args.len() >= 2 && args[0] == "release" && args[1] == "preflight" {
+        if args.len() == 2 {
+            return preflight_cli::run(None);
+        }
+        if args.len() == 4 && args[2] == "--helpers-json" {
+            return preflight_cli::run(Some(&args[3]));
+        }
+        eprintln!("{USAGE}");
+        return ExitCode::from(2);
     }
     let (result, failure) = if args.len() == 12
         && args[0] == "distribution"

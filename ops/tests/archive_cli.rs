@@ -191,6 +191,7 @@ fn arguments_are_fixed_and_do_not_select_another_operation() {
                 "Usage: simplestchat-ops release manifest --path PATH\n",
                 "       simplestchat-ops release archive --manifest PATH --path PATH\n",
                 "       simplestchat-ops release receipt --envelope PATH --receipt PATH\n",
+                "       simplestchat-ops release preflight [--helpers-json JSON]\n",
                 "       simplestchat-ops distribution inspect-executable --path PATH\n",
                 "       simplestchat-ops distribution verify-pair --manifest PATH ",
                 "--path PATH --selection PATH\n",
