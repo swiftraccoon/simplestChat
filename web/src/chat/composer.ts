@@ -74,10 +74,17 @@ export class ChatComposer {
     const emojiButton = button(
       '☺',
       () => {
+        if (this.events.signal.aborted) return;
         this.emojiPanel.hidden = !this.emojiPanel.hidden;
       },
       'emoji-toggle',
     );
+    this.events.onDispose(() => {
+      emojiButton.remove();
+      this.emojiPanel.remove();
+      this.typingLine.remove();
+      this.replyBar.remove();
+    });
     emojiButton.title = 'Choose emoji';
     emojiButton.setAttribute('aria-label', 'Choose emoji');
     for (const emoji of ['😀', '😂', '😊', '❤️', '👍', '👋', '🎉', '🔥', '🤔', '😢', '🙌', '💯']) {
@@ -85,6 +92,7 @@ export class ChatComposer {
         button(
           emoji,
           () => {
+            if (this.events.signal.aborted) return;
             this.insertText(
               emoji,
               input.selectionStart ?? input.value.length,
@@ -475,6 +483,7 @@ export class ChatComposer {
 
   /** Answer a message: the next send quotes it. */
   startReply(message: ChatEntry): void {
+    if (this.events.signal.aborted) return;
     this.replyingTo = message;
     const cancel = button('✕', () => this.cancelReply(), 'reply-bar-cancel');
     cancel.setAttribute('aria-label', 'Cancel reply');

@@ -39,6 +39,7 @@ export class SocialChat {
   private readonly accountPeers = new Set<string>();
   private readonly conversationStatus = el('span', '', 'conversation-status');
   private readonly closeButton = button('✕', () => {
+    if (this.disposed) return;
     this.closePrivate();
     this.renderer.conversationButtons.get('public')?.node.focus();
   });
@@ -65,6 +66,7 @@ export class SocialChat {
   private readonly olderButton = button(
     'Earlier messages',
     () => {
+      if (this.disposed) return;
       this.loadEarlier().catch(() => {});
     },
     'chat-earlier',
@@ -72,6 +74,7 @@ export class SocialChat {
   private readonly pinsButton = button(
     '',
     () => {
+      if (this.disposed) return;
       this.pinsExpanded = !this.pinsExpanded;
       this.renderPins();
     },
@@ -199,12 +202,19 @@ export class SocialChat {
     });
 
     const toolbar = el('div', undefined, 'conversation-toolbar');
+    this.events.onDispose(() => {
+      toolbar.remove();
+      this.conversationStatus.remove();
+      this.historyStart.remove();
+    });
     this.renderer.conversations.setAttribute('aria-label', 'Conversations');
     this.closeButton.setAttribute('aria-label', 'Close PM');
     this.closeButton.title = 'Close PM';
     const optionsButton = button(
       '⋯',
-      () => this.options.openSettings?.('chat-look', optionsButton),
+      () => {
+        if (!this.disposed) this.options.openSettings?.('chat-look', optionsButton);
+      },
       'chat-options-button',
     );
     optionsButton.setAttribute('aria-label', 'Chat options');
@@ -665,6 +675,7 @@ export class SocialChat {
   }
 
   private render(forceScroll = false): void {
+    if (this.disposed) return;
     const room = this.options.getRoom();
     const pendingIds = new Set(
       this.store.messages
@@ -975,6 +986,7 @@ export class SocialChat {
   }
 
   private switchConversation(id: string, name?: string): void {
+    if (this.disposed) return;
     if (id !== 'public' && this.openAccountConversation(id, name)) return;
     if (id !== this.store.active) this.composer.attachments.reset();
     this.composer.cancelReply();

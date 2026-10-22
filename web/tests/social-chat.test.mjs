@@ -372,7 +372,7 @@ async function fixture({
     getAccountId: () => (state.viewer === 'guest' ? null : state.viewer),
     notify: (text) => state.notifications.push(text),
   });
-  const chat = new SocialChat({
+  const options = {
     getRoom: () => state.room,
     getViewerKey: () => state.viewer,
     getToken: () => state.token,
@@ -386,7 +386,8 @@ async function fixture({
     },
     openSettings: (section) => state.openedSettings.push(section),
     mountAccountNotifications: () => state.mountedAccountNotifications++,
-  });
+  };
+  const chat = new SocialChat(options);
   const screenContext = {
     push() {},
     pop() {},
@@ -410,6 +411,7 @@ async function fixture({
     state,
     http,
     chat,
+    remount: () => new SocialChat(options),
     accountPreferences,
     tab,
     participants,
@@ -2898,3 +2900,73 @@ for (const result of ['success', 'failure']) {
     assert.equal(f.state.notifications.length, notifications);
   });
 }
+
+test('disposing and remounting chat removes only its controls and retires retained button callbacks', async () => {
+  const f = await fixture();
+  await f.chat.activate();
+  f.chat.receive(entry('retained-controls'));
+  const selectors = [
+    '.conversation-toolbar',
+    '.conversation-status',
+    '.chat-history-start',
+    '.typing-line',
+    '.emoji-panel',
+    '.emoji-toggle',
+    '.reply-bar',
+    '.mention-list',
+  ];
+  const count = (selector) => f.document.querySelectorAll(selector).length;
+  for (const selector of selectors) assert.equal(count(selector), 1, selector);
+  const staticNodes = [
+    'chat-panel',
+    'chat-input-row',
+    'chat-input',
+    'chat-send-btn',
+    'chat-messages',
+  ].map((id) => f.document.getElementById(id));
+  const retired = {
+    options: f.document.querySelector('.chat-options-button'),
+    emoji: f.document.querySelector('.emoji-toggle'),
+    choice: f.document.querySelector('.emoji-choice'),
+    public: f.chat.renderer.conversationButtons.get('public').node,
+    close: f.chat.closeButton,
+    older: f.chat.olderButton,
+    pins: f.chat.pinsButton,
+    reply: f.document
+      .querySelectorAll('button')
+      .find((node) => node.getAttribute('aria-label') === 'Reply'),
+  };
+  for (const node of Object.values(retired)) assert.ok(node);
+  f.chat.dispose();
+  f.chat.dispose();
+  for (const selector of selectors) assert.equal(count(selector), 0, `${selector} retired`);
+  for (const node of staticNodes) assert.equal(node.isConnected, true, node.id);
+
+  const next = f.remount();
+  try {
+    await next.activate();
+    f.chat.dispose();
+    for (const selector of selectors) assert.equal(count(selector), 1, `${selector} remounted`);
+    const active = new f.Node('button');
+    f.document.activeElement = active;
+    next.input.value = 'replacement draft';
+    const requests = f.state.requests.length;
+    for (const node of Object.values(retired)) node.click();
+    await flush();
+    assert.equal(next.input.value, 'replacement draft');
+    assert.equal(f.document.activeElement, active, 'retired buttons cannot move current focus');
+    assert.equal(f.chat.composer.replyingTo, null);
+    assert.equal(f.chat.composer.emojiPanel.hidden, true);
+    assert.equal(f.chat.pinsExpanded, false);
+    assert.equal(f.state.requests.length, requests, 'retired actions cannot start reads');
+    assert.deepEqual(f.state.openedSettings, []);
+    f.document.querySelector('.chat-options-button').click();
+    assert.deepEqual(f.state.openedSettings, ['chat-look']);
+    f.document.querySelector('.emoji-toggle').click();
+    assert.equal(next.composer.emojiPanel.hidden, false);
+  } finally {
+    next.dispose();
+  }
+  for (const selector of selectors) assert.equal(count(selector), 0, `${selector} final disposal`);
+  for (const node of staticNodes) assert.equal(node.isConnected, true, node.id);
+});
