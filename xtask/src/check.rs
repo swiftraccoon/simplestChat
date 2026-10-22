@@ -181,6 +181,17 @@ fn matching(root: &Path, directory: &str, suffix: &str) -> tooling::Result<Vec<O
     Ok(files)
 }
 
+// Cargo uplifts this shared executable even for fresh builds. On macOS that
+// removes then copies the destination, so a different file must not spawn it
+// concurrently. Keep standalone files self-building; serialize only this pool.
+const SHARED_XTASK_TESTS: &[&str] = &[
+    "build/tests/ci-evidence.test.mjs",
+    "build/tests/ci-verified.test.mjs",
+    "build/tests/performance-thresholds.test.mjs",
+    "build/tests/test-postgres.test.mjs",
+    "build/tests/test-server.test.mjs",
+];
+
 fn helpers(root: &Path, environment: &Environment) -> tooling::Result<()> {
     tooling::run(root, environment, "sh", ["-n", ".githooks/commit-msg"])?;
     let scripts = matching(root, "build", ".sh")?;
@@ -196,9 +207,29 @@ fn helpers(root: &Path, environment: &Environment) -> tooling::Result<()> {
             .map(OsString::as_os_str)
             .chain([OsStr::new(".githooks/commit-msg")]),
     )?;
-    let mut arguments = vec![OsString::from("--test")];
-    arguments.extend(matching(root, "build/tests", ".test.mjs")?);
-    arguments.push("load_tests/benchmark-local.test.mjs".into());
-    arguments.push("load_tests/report-command.test.mjs".into());
-    tooling::run(root, environment, "node", arguments)
+    let mut tests = matching(root, "build/tests", ".test.mjs")?;
+    tests.push("load_tests/benchmark-local.test.mjs".into());
+    tests.push("load_tests/report-command.test.mjs".into());
+    let (serial, parallel): (Vec<_>, Vec<_>) = tests.into_iter().partition(|path| {
+        SHARED_XTASK_TESTS
+            .iter()
+            .any(|name| path.as_os_str() == OsStr::new(name))
+    });
+    tooling::run(
+        root,
+        environment,
+        "node",
+        std::iter::once(OsString::from("--test")).chain(parallel),
+    )?;
+    if !serial.is_empty() {
+        tooling::run(
+            root,
+            environment,
+            "node",
+            ["--test".into(), "--test-concurrency=1".into()]
+                .into_iter()
+                .chain(serial),
+        )?;
+    }
+    Ok(())
 }

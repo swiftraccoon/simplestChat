@@ -48,7 +48,9 @@ case "$command" in
             phase="cargo-${10}"
         else phase="cargo-$4"; fi ;;
     sh|bash) phase="$command:$2" ;;
-    node) phase=helper-tests ;;
+    node)
+        if [ "${2-}" = --test-concurrency=1 ]; then phase=serial-helper-tests
+        else phase=helper-tests; fi ;;
     shellcheck) phase=shellcheck ;;
     ruff) if [ "$1" = check ]; then phase=python-lint; else phase=python-format; fi ;;
     basedpyright) phase=python-types ;;
@@ -595,6 +597,238 @@ fn helper_test_filenames_with_spaces_stay_one_argument() {
             "load_tests/report-command.test.mjs"
         ]
     );
+}
+
+#[test]
+fn shared_xtask_inventory_tracks_the_actual_cargo_consumers() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    // This is a conservative maintained-source policy, not a JavaScript parser.
+    // Inspect literal Cargo commands independently of their imported API name,
+    // quoting or line layout. Computed executable names require policy review.
+    let cargo = regex::Regex::new(r#"['"`]cargo(?:['"`]|\s)"#).unwrap();
+    let mut consumers = fs::read_dir(root.join("build/tests"))
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .filter(|path| path.to_string_lossy().ends_with(".test.mjs"))
+        .chain([
+            root.join("load_tests/benchmark-local.test.mjs"),
+            root.join("load_tests/report-command.test.mjs"),
+        ])
+        .filter(|path| {
+            let source = fs::read_to_string(path).unwrap();
+            cargo.is_match(&source) && source.contains("xtask")
+        })
+        .map(|path| {
+            path.strip_prefix(root)
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .to_owned()
+        })
+        .collect::<Vec<_>>();
+    consumers.sort();
+    assert_eq!(consumers, SHARED_XTASK_TESTS);
+}
+
+#[test]
+fn helper_pools_preserve_each_test_once_and_stop_at_the_first_failed_pool() {
+    let fixture = Fixture::new();
+    for path in SHARED_XTASK_TESTS {
+        fixture.write(path, "never execute this fixture\n");
+    }
+    fixture.run(&["--helpers"], &[]).unwrap();
+    let events = fixture.events();
+    let nodes = events
+        .iter()
+        .filter(|event| event.command == "node")
+        .collect::<Vec<_>>();
+    assert_eq!(nodes.len(), 2);
+    assert_eq!(
+        nodes[0].arguments,
+        [
+            "--test",
+            "build/tests/first.test.mjs",
+            "build/tests/second.test.mjs",
+            "load_tests/benchmark-local.test.mjs",
+            "load_tests/report-command.test.mjs",
+        ]
+    );
+    assert_eq!(
+        nodes[1].arguments,
+        ["--test", "--test-concurrency=1"]
+            .into_iter()
+            .chain(SHARED_XTASK_TESTS.iter().copied())
+            .collect::<Vec<_>>()
+    );
+    for (phase, count, code) in [("helper-tests", 1, 37), ("serial-helper-tests", 2, 41)] {
+        let error = fixture
+            .run(
+                &["--helpers"],
+                &[
+                    ("FIXTURE_FAIL", phase.into()),
+                    ("FIXTURE_FAILURE_CODE", code.to_string().into()),
+                ],
+            )
+            .unwrap_err();
+        assert_eq!(error.code, code);
+        assert_eq!(
+            fixture
+                .events()
+                .iter()
+                .filter(|event| event.command == "node")
+                .count(),
+            count
+        );
+    }
+}
+
+fn installed_node() -> PathBuf {
+    std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
+        .map(|component| component.join("node"))
+        .find(|path| {
+            path.metadata().is_ok_and(|metadata| {
+                metadata.is_file() && metadata.permissions().mode() & 0o111 != 0
+            })
+        })
+        .expect("Installed Node is required by the helper scheduling fixture")
+        .canonicalize()
+        .unwrap()
+}
+
+fn literal_shell(value: &Path) -> String {
+    format!("'{}'", value.to_str().unwrap().replace('\'', "'\\''"))
+}
+
+#[test]
+fn actual_node_keeps_the_shared_cli_lease_exclusive_and_other_files_parallel() {
+    let fixture = Fixture::new();
+    let node = installed_node();
+    let wrapper = fixture.root.join("node-wrapper.cjs");
+    let actual_node = serde_json::to_string(node.to_str().unwrap()).unwrap();
+    fixture.write(
+        "node-wrapper.cjs",
+        &format!(
+            r#"
+const assert = require('node:assert/strict');
+const {{spawnSync}} = require('node:child_process');
+const args = process.argv.slice(2);
+assert.equal(args[0], '--test');
+const serial = args[1] === '--test-concurrency=1';
+if (!serial) {{
+  assert(!args.some(value => value.startsWith('--test-concurrency')));
+  // Give this private barrier two workers even on a one-CPU test host. The
+  // runner must admit the parallel pool without a global serialization flag.
+  args.splice(1, 0, '--test-concurrency=2');
+}}
+const result = spawnSync({actual_node}, args, {{stdio:'inherit', env:process.env}});
+assert.ifError(result.error);
+assert.equal(result.signal, null);
+process.exitCode = result.status;
+"#
+        ),
+    );
+    fs::write(
+        fixture.bin.join("node"),
+        format!(
+            "#!/bin/sh\nexec {} {} \"$@\"\n",
+            literal_shell(&node),
+            literal_shell(&wrapper)
+        ),
+    )
+    .unwrap();
+    fs::set_permissions(fixture.bin.join("node"), fs::Permissions::from_mode(0o755)).unwrap();
+
+    let cargo = fixture.root.join("fake-cargo.cjs");
+    fixture.write(
+        "fake-cargo.cjs",
+        r#"
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+assert.deepEqual(process.argv.slice(2), ['build','--locked','-q','-p','xtask']);
+assert(fs.existsSync('.shared-cli-lease'));
+fs.mkdirSync('target/debug', {recursive:true});
+fs.rmSync('target/debug/xtask', {force:true});
+fs.writeFileSync('target/debug/xtask', '#!/bin/sh\nprintf "fixture-cli\\n"\n', {mode:0o700});
+"#,
+    );
+    fs::write(
+        fixture.bin.join("cargo"),
+        format!(
+            "#!/bin/sh\nexec {} {} \"$@\"\n",
+            literal_shell(&node),
+            literal_shell(&cargo)
+        ),
+    )
+    .unwrap();
+    fs::set_permissions(fixture.bin.join("cargo"), fs::Permissions::from_mode(0o755)).unwrap();
+    for path in SHARED_XTASK_TESTS {
+        fixture.write(
+            path,
+            r#"
+import assert from 'node:assert/strict';
+import {execFileSync, spawnSync} from 'node:child_process';
+import {mkdirSync, rmSync, writeFileSync} from 'node:fs';
+import {readFile, writeFile} from 'node:fs/promises';
+import {basename, join} from 'node:path';
+import test from 'node:test';
+test('one file owns fake Cargo plus every use of its executable', async () => {
+  // Failing admission cannot remove a different worker's lease.
+  mkdirSync('.shared-cli-lease');
+  try {
+    await writeFile('.shared-cli-lease/owner', basename(import.meta.url));
+    execFileSync('cargo', ['build','--locked','-q','-p','xtask']);
+    assert.equal((await readFile('.shared-cli-lease/owner','utf8')), basename(import.meta.url));
+    const child = spawnSync(join(process.cwd(),'target/debug/xtask'), [], {encoding:'utf8'});
+    assert.ifError(child.error); assert.equal(child.signal, null);
+    assert.equal(child.status, 0); assert.equal(child.stdout, 'fixture-cli\n');
+    writeFileSync(`ran-${basename(import.meta.url)}`, 'joined');
+  } finally { rmSync('.shared-cli-lease', {recursive:true}); }
+});
+"#,
+        );
+    }
+    for (name, peer) in [("first", "second"), ("second", "first")] {
+        fixture.write(
+            &format!("build/tests/{name}.test.mjs"),
+            &format!(
+                r#"
+import assert from 'node:assert/strict';
+import {{existsSync, writeFileSync}} from 'node:fs';
+import {{setTimeout as wait}} from 'node:timers/promises';
+import test from 'node:test';
+test('the independent helper pool admits both barrier workers', async () => {{
+  writeFileSync('pure-{name}', 'ready');
+  for (let count=0; !existsSync('pure-{peer}') && count<2000; count++) await wait(5);
+  assert(existsSync('pure-{peer}'), 'Other parallel file was not admitted');
+}});
+"#
+            ),
+        );
+    }
+    for path in [
+        "load_tests/benchmark-local.test.mjs",
+        "load_tests/report-command.test.mjs",
+    ] {
+        fixture.write(
+            path,
+            "import test from 'node:test'; test('inert', () => {});\n",
+        );
+    }
+    fixture.run(&["--helpers"], &[]).unwrap();
+    assert!(!fixture.root.join(".shared-cli-lease").exists());
+    for path in SHARED_XTASK_TESTS {
+        assert_eq!(
+            fs::read(fixture.root.join(format!(
+                "ran-{}",
+                Path::new(path).file_name().unwrap().to_str().unwrap()
+            )))
+            .unwrap(),
+            b"joined"
+        );
+    }
+    for name in ["first", "second"] {
+        assert!(fixture.root.join(format!("pure-{name}")).is_file());
+    }
 }
 
 #[test]
