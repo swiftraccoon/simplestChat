@@ -354,3 +354,187 @@ fn maximum_pax_logical_size_is_refused_before_reading_or_writing_bodies() {
     assert_eq!(fs::read_dir(destination).unwrap().count(), 0);
     assert!(!fixture.0.join("collection.json").exists());
 }
+
+#[test]
+fn benchmark_results_publish_fixed_root_outputs_and_retain_failed_archives() {
+    let fixture = Fixture::new();
+    let source = fixture.archive(&[(SUMMARY, b'0', b"{}"), (RESULTS, b'0', b"[]")]);
+    let manifest = finish_benchmark_results(&source, &fixture.0).unwrap();
+    assert_eq!(manifest["complete"], true);
+    assert_eq!(fs::read(fixture.0.join(SUMMARY)).unwrap(), b"{}");
+    assert_eq!(fs::read(fixture.0.join(RESULTS)).unwrap(), b"[]");
+    assert!(!fixture.0.join("generator").exists());
+    assert!(!source.exists());
+
+    let failed = Fixture::new();
+    let source = failed.archive(&[
+        (SUMMARY, b'0', b"{}"),
+        (RESULTS, b'0', b"[]"),
+        (TIMEOUT, b'0', b"{}"),
+    ]);
+    assert_eq!(
+        finish_benchmark_results(&source, &failed.0)
+            .unwrap_err()
+            .to_string(),
+        "generator_timeout_marker"
+    );
+    assert!(source.exists());
+    assert!(!failed.0.join(SUMMARY).exists());
+    assert!(!failed.0.join(RESULTS).exists());
+    assert!(!failed.0.join("collection.json").exists());
+}
+
+#[test]
+fn handshake_collection_accepts_only_one_bounded_regular_fixed_basename() {
+    let fixture = Fixture::new();
+    let source = fixture.archive(&[("./handshakes.pcap", b'0', b"pcap fixture")]);
+    let manifest = finish_handshake_capture(&source, &fixture.0).unwrap();
+    assert_eq!(
+        manifest["files"][CAPTURE]["sha256"],
+        hex(&Sha256::digest(b"pcap fixture"))
+    );
+    assert_eq!(fs::read(fixture.0.join(CAPTURE)).unwrap(), b"pcap fixture");
+    assert!(fixture.0.join("capture-collection.json").exists());
+    assert!(!source.exists());
+    assert_eq!(
+        fs::metadata(fixture.0.join(CAPTURE)).unwrap().mode() & 0o7777,
+        0o600
+    );
+
+    for (name, kind) in [
+        (SUMMARY, b'0'),
+        ("../handshakes.pcap", b'0'),
+        (CAPTURE, b'2'),
+        (CAPTURE, b'1'),
+        (CAPTURE, b'5'),
+    ] {
+        let failed = Fixture::new();
+        let source = failed.archive(&[(name, kind, b"fixture")]);
+        assert!(finish_handshake_capture(&source, &failed.0).is_err());
+        assert!(source.exists());
+        assert!(!failed.0.join(CAPTURE).exists());
+        assert!(!failed.0.join("capture-collection.json").exists());
+    }
+    let failed = Fixture::new();
+    let source = failed.archive(&[(CAPTURE, b'0', b"a"), (CAPTURE, b'0', b"b")]);
+    assert!(finish_handshake_capture(&source, &failed.0).is_err());
+    assert!(!failed.0.join(CAPTURE).exists());
+}
+
+#[test]
+fn handshake_size_limits_and_existing_or_linked_destinations_refuse_publication() {
+    let fixture = Fixture::new();
+    let source = fixture.archive(&[(CAPTURE, b'0', b"fixture")]);
+    File::options()
+        .write(true)
+        .open(&source)
+        .unwrap()
+        .set_len(65 * 1024 * 1024 + 1)
+        .unwrap();
+    assert_eq!(
+        finish_handshake_capture(&source, &fixture.0)
+            .unwrap_err()
+            .to_string(),
+        "result_archive_too_large"
+    );
+    assert!(!fixture.0.join(CAPTURE).exists());
+
+    // Reject the declared body ceiling before any allocation or body read.
+    let mut oversized = tar::Header::new_ustar();
+    oversized.set_path(CAPTURE).unwrap();
+    oversized.set_entry_type(tar::EntryType::Regular);
+    oversized.set_size(64 * 1024 * 1024 + 1);
+    oversized.set_mode(0o600);
+    oversized.set_cksum();
+    fs::write(&source, oversized.as_bytes()).unwrap();
+    assert_eq!(
+        finish_handshake_capture(&source, &fixture.0)
+            .unwrap_err()
+            .to_string(),
+        "oversized_tar_body"
+    );
+    assert!(!fixture.0.join(CAPTURE).exists());
+
+    let source = fixture.archive(&[(CAPTURE, b'0', b"fixture")]);
+    let original = fixture.0.join("original");
+    fs::write(&original, b"preserve").unwrap();
+    symlink(&original, fixture.0.join(CAPTURE)).unwrap();
+    assert!(finish_handshake_capture(&source, &fixture.0).is_err());
+    assert_eq!(fs::read(original).unwrap(), b"preserve");
+    assert!(source.exists());
+    assert!(!fixture.0.join("capture-collection.json").exists());
+}
+
+#[test]
+fn directory_replacement_cannot_publish_outside_the_validated_results() {
+    let fixture = Fixture::new();
+    let run = fixture.0.join("run");
+    let moved = fixture.0.join("moved");
+    let outside = fixture.0.join("outside");
+    fs::create_dir(&run).unwrap();
+    fs::create_dir(&outside).unwrap();
+    let original = fixture.archive(&[(CAPTURE, b'0', &vec![42; 64 * 1024 * 1024])]);
+    let archive = run.join("handshakes.tar");
+    fs::rename(original, &archive).unwrap();
+    // Create the alias before validation begins: creating it later would change
+    // the source inode ctime and correctly reject the archive as mutated.
+    fs::hard_link(&archive, outside.join("handshakes.tar")).unwrap();
+    let run_for_swap = run.clone();
+    let moved_for_swap = moved.clone();
+    let outside_for_swap = outside.clone();
+    let swapped = std::thread::spawn(move || {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        loop {
+            if fs::metadata(run_for_swap.join(CAPTURE))
+                .is_ok_and(|metadata| metadata.len() == 64 * 1024 * 1024)
+            {
+                fs::rename(&run_for_swap, &moved_for_swap).unwrap();
+                symlink(&outside_for_swap, &run_for_swap).unwrap();
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "output was not created"
+            );
+            std::thread::yield_now();
+        }
+    });
+    let result = finish_handshake_capture(&archive, &run);
+    swapped.join().unwrap();
+    assert!(
+        result.is_err(),
+        "a replaced output root was accepted: {result:?}"
+    );
+    assert!(!outside.join("capture-collection.json").exists());
+}
+
+#[test]
+fn result_mutation_cannot_publish_a_stale_successful_manifest() {
+    let fixture = Fixture::new();
+    let source = fixture.archive(&[(CAPTURE, b'0', &vec![42; 64 * 1024 * 1024])]);
+    let output = fixture.0.join(CAPTURE);
+    let output_for_mutation = output.clone();
+    let mutation = std::thread::spawn(move || {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        loop {
+            if fs::metadata(&output_for_mutation)
+                .is_ok_and(|metadata| metadata.len() == 64 * 1024 * 1024)
+            {
+                fs::write(&output_for_mutation, b"replaced result").unwrap();
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "output was not created"
+            );
+            std::thread::yield_now();
+        }
+    });
+    let result = finish_handshake_capture(&source, &fixture.0);
+    mutation.join().unwrap();
+    assert!(
+        result.is_err(),
+        "a changed extracted output was accepted: {result:?}"
+    );
+    assert!(!fixture.0.join("capture-collection.json").exists());
+}

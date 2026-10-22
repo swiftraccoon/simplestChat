@@ -5,14 +5,19 @@
 //! paths, modes, ownership or links. A collection manifest is published last.
 
 use anyhow::{Result, ensure};
-use nix::fcntl::{OFlag, open, openat};
-use nix::sys::stat::Mode;
+use nix::fcntl::{AtFlags, OFlag, open, openat};
+use nix::sys::stat::{Mode, SFlag, fstat, fstatat, mkdirat};
+use nix::unistd::{UnlinkatFlags, unlinkat};
 use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
-use std::fs::{self, DirBuilder, File};
+#[cfg(test)]
+use std::fs::DirBuilder;
+use std::fs::{self, File};
 use std::io::{Read, Seek, SeekFrom, Write};
-use std::os::unix::fs::{DirBuilderExt, MetadataExt};
+#[cfg(test)]
+use std::os::unix::fs::DirBuilderExt;
+use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 
 pub(crate) const MAX_RESULT: u64 = 128 * 1024 * 1024;
@@ -23,6 +28,41 @@ const TAR_BLOCK: u64 = 512;
 const SUMMARY: &str = "load_test_summary.json";
 const RESULTS: &str = "load_test_results.json";
 const TIMEOUT: &str = "load_test_timeout.json";
+const CAPTURE: &str = "handshakes.pcap";
+
+/// Fixed collectors share parsing policy, never archive-selected host paths.
+#[derive(Clone, Copy)]
+enum Collection {
+    Capacity,
+    Benchmark,
+    Capture,
+}
+
+impl Collection {
+    fn maximum_archive(self) -> u64 {
+        match self {
+            Self::Capacity | Self::Benchmark => MAX_ARCHIVE,
+            Self::Capture => 65 * 1024 * 1024,
+        }
+    }
+
+    fn maximum_file(self) -> u64 {
+        match self {
+            Self::Capacity | Self::Benchmark => MAX_RESULT,
+            Self::Capture => 64 * 1024 * 1024,
+        }
+    }
+
+    fn name(self, name: &str) -> Result<&'static str> {
+        match (self, name) {
+            (Self::Capacity | Self::Benchmark, SUMMARY) => Ok(SUMMARY),
+            (Self::Capacity | Self::Benchmark, RESULTS) => Ok(RESULTS),
+            (Self::Capacity | Self::Benchmark, TIMEOUT) => Ok(TIMEOUT),
+            (Self::Capture, CAPTURE) => Ok(CAPTURE),
+            _ => anyhow::bail!("unsafe_result_entry"),
+        }
+    }
+}
 
 pub(crate) fn regular(path: &Path, maximum: u64) -> Result<File> {
     let file = File::from(open(
@@ -142,7 +182,98 @@ struct Selected {
     size: u64,
 }
 
-fn selected(file: &mut File) -> Result<Vec<Selected>> {
+struct Output {
+    name: &'static str,
+    identity: Identity,
+}
+
+impl Output {
+    fn verify(&self, directory: &File) -> Result<()> {
+        let file = File::from(openat(
+            directory,
+            self.name,
+            OFlag::O_RDONLY | OFlag::O_NOFOLLOW | OFlag::O_NONBLOCK | OFlag::O_CLOEXEC,
+            Mode::empty(),
+        )?);
+        ensure!(
+            file.metadata()?.is_file() && identity(&file)? == self.identity,
+            "result_output_changed"
+        );
+        nix::unistd::close(file)?;
+        Ok(())
+    }
+}
+
+struct Extracted {
+    directory: File,
+    outputs: Vec<Output>,
+    manifest: Value,
+}
+
+impl Extracted {
+    /// Reopen only the fixed basenames under the retained directory. A link,
+    /// replacement or in-place write cannot inherit a prior successful hash.
+    fn verify(&self) -> Result<()> {
+        for output in &self.outputs {
+            output.verify(&self.directory)?;
+        }
+        Ok(())
+    }
+}
+
+fn directory(path: &Path) -> Result<File> {
+    Ok(File::from(open(
+        path,
+        OFlag::O_RDONLY | OFlag::O_DIRECTORY | OFlag::O_NOFOLLOW | OFlag::O_CLOEXEC,
+        Mode::empty(),
+    )?))
+}
+
+fn visible_directory(path: &Path, directory: &File) -> Result<()> {
+    let visible = fs::symlink_metadata(path)?;
+    let owned = directory.metadata()?;
+    ensure!(
+        visible.is_dir() && visible.dev() == owned.dev() && visible.ino() == owned.ino(),
+        "result_directory_changed"
+    );
+    Ok(())
+}
+
+/// Cleanup may remove only the inode created by this collection, even when a
+/// later identity/content check failed. A foreign replacement is retained.
+fn owned_name(directory: &File, name: &std::ffi::OsStr, expected: &Identity) -> Result<()> {
+    let file = File::from(openat(
+        directory,
+        name,
+        OFlag::O_RDONLY | OFlag::O_NOFOLLOW | OFlag::O_NONBLOCK | OFlag::O_CLOEXEC,
+        Mode::empty(),
+    )?);
+    let current = identity(&file)?;
+    ensure!(
+        file.metadata()?.is_file()
+            && current.device == expected.device
+            && current.inode == expected.inode,
+        "result_output_replaced"
+    );
+    nix::unistd::close(file)?;
+    Ok(())
+}
+
+fn visible_results(root: &File, extracted: &Extracted, collection: Collection) -> Result<()> {
+    if matches!(collection, Collection::Capacity) {
+        let visible = fstatat(root, "generator", AtFlags::AT_SYMLINK_NOFOLLOW)?;
+        let owned = fstat(&extracted.directory)?;
+        ensure!(
+            SFlag::from_bits_truncate(visible.st_mode) == SFlag::S_IFDIR
+                && visible.st_dev == owned.st_dev
+                && visible.st_ino == owned.st_ino,
+            "result_directory_changed"
+        );
+    }
+    extracted.verify()
+}
+
+fn selected(file: &mut File, collection: Collection) -> Result<Vec<Selected>> {
     let archive_bytes = file.metadata()?.len();
     let mut archive = tar::Archive::new(file);
     let mut seen = BTreeSet::new();
@@ -177,12 +308,7 @@ fn selected(file: &mut File) -> Result<Vec<Selected>> {
             continue;
         }
         let name = name.strip_prefix("./").unwrap_or(name);
-        let name = match name {
-            SUMMARY => SUMMARY,
-            RESULTS => RESULTS,
-            TIMEOUT => TIMEOUT,
-            _ => anyhow::bail!("unsafe_result_entry"),
-        };
+        let name = collection.name(name)?;
         ensure!(
             entry.header().entry_type().is_file() && entry.link_name_bytes().is_none(),
             "unsafe_result_entry"
@@ -190,17 +316,20 @@ fn selected(file: &mut File) -> Result<Vec<Selected>> {
         ensure!(seen.insert(name), "duplicate_result_entry");
         let size = entry.size();
         ensure!(
-            size <= if name == RESULTS {
-                MAX_RESULT
-            } else {
+            size <= if name == SUMMARY || name == TIMEOUT {
                 MAX_SUMMARY
+            } else {
+                collection.maximum_file()
             },
             "result_file_too_large"
         );
         total = total
             .checked_add(size)
             .ok_or_else(|| anyhow::anyhow!("result_archive_too_large"))?;
-        ensure!(total <= MAX_ARCHIVE, "result_archive_too_large");
+        ensure!(
+            total <= collection.maximum_archive(),
+            "result_archive_too_large"
+        );
         let offset = entry.raw_file_position();
         ensure!(
             offset
@@ -210,27 +339,28 @@ fn selected(file: &mut File) -> Result<Vec<Selected>> {
         );
         selected.push(Selected { name, offset, size });
     }
-    ensure!(
-        seen.contains(SUMMARY) && seen.contains(RESULTS),
-        "missing_required_results"
-    );
+    let required = match collection {
+        Collection::Capacity | Collection::Benchmark => {
+            seen.contains(SUMMARY) && seen.contains(RESULTS)
+        }
+        Collection::Capture => seen.contains(CAPTURE),
+    };
+    ensure!(required, "missing_required_results");
     ensure!(!seen.contains(TIMEOUT), "generator_timeout_marker");
     Ok(selected)
 }
 
-fn extract_file(file: &mut File, destination: &Path) -> Result<Value> {
+fn extract_into(file: &mut File, directory: File, collection: Collection) -> Result<Extracted> {
     let original = identity(file)?;
-    ensure!(original.bytes <= MAX_ARCHIVE, "result_archive_too_large");
-    DirBuilder::new().mode(0o700).create(destination)?;
-    let directory = open(
-        destination,
-        OFlag::O_RDONLY | OFlag::O_DIRECTORY | OFlag::O_NOFOLLOW | OFlag::O_CLOEXEC,
-        Mode::empty(),
-    )?;
-    check_headers(file, 8, MAX_RESULT)?;
-    let entries = selected(file)?;
+    ensure!(
+        original.bytes <= collection.maximum_archive(),
+        "result_archive_too_large"
+    );
+    check_headers(file, 8, collection.maximum_file())?;
+    let entries = selected(file, collection)?;
     ensure!(identity(file)? == original, "result_archive_changed");
     let mut files = Map::new();
+    let mut outputs = Vec::new();
     for entry in entries {
         file.seek(SeekFrom::Start(entry.offset))?;
         let mut output = File::from(openat(
@@ -249,22 +379,37 @@ fn extract_file(file: &mut File, destination: &Path) -> Result<Value> {
             digest.update(&buffer[..count]);
             remaining -= count as u64;
         }
+        let written = identity(&output)?;
+        ensure!(written.bytes == entry.size, "result_output_changed");
         nix::unistd::close(output)?;
+        outputs.push(Output {
+            name: entry.name,
+            identity: written,
+        });
         files.insert(
             entry.name.into(),
             json!({"bytes":entry.size,"sha256":hex(&digest.finalize())}),
         );
     }
     ensure!(identity(file)? == original, "result_archive_changed");
-    Ok(json!({"schemaVersion":1,"complete":true,"files":files}))
+    let result = Extracted {
+        directory,
+        outputs,
+        manifest: json!({"schemaVersion":1,"complete":true,"files":files}),
+    };
+    result.verify()?;
+    Ok(result)
 }
 
 #[cfg(test)]
 pub(crate) fn extract(archive: &Path, destination: &Path) -> Result<Value> {
     let mut file = regular(archive, u64::MAX)?;
-    let result = extract_file(&mut file, destination)?;
+    DirBuilder::new().mode(0o700).create(destination)?;
+    let result = extract_into(&mut file, directory(destination)?, Collection::Capacity)?;
     nix::unistd::close(file)?;
-    Ok(result)
+    visible_directory(destination, &result.directory)?;
+    nix::unistd::close(result.directory)?;
+    Ok(result.manifest)
 }
 
 fn hex(bytes: &[u8]) -> String {
@@ -273,9 +418,62 @@ fn hex(bytes: &[u8]) -> String {
 
 /// Call only after successful bounded engine transfer and closed output files.
 pub(crate) fn finish_collection(archive: &Path, directory: &Path) -> Result<Value> {
-    let mut file = regular(archive, u64::MAX)?;
+    finish(archive, directory, "collection.json", Collection::Capacity)
+}
+
+/// Publish only fixed JSON result basenames into an existing private run root.
+/// Failed transfers, invalid archives and timeout markers retain their archive;
+/// the collection manifest is created only after every output is closed.
+pub(crate) fn finish_benchmark_results(archive: &Path, directory: &Path) -> Result<Value> {
+    finish(archive, directory, "collection.json", Collection::Benchmark)
+}
+
+/// A stopped capture sidecar may contribute only its bounded regular pcap.
+pub(crate) fn finish_handshake_capture(archive: &Path, directory: &Path) -> Result<Value> {
+    finish(
+        archive,
+        directory,
+        "capture-collection.json",
+        Collection::Capture,
+    )
+}
+
+fn finish(
+    archive: &Path,
+    directory: &Path,
+    manifest_name: &'static str,
+    collection: Collection,
+) -> Result<Value> {
+    ensure!(
+        archive.parent() == Some(directory),
+        "invalid_result_archive_location"
+    );
+    let name = archive
+        .file_name()
+        .ok_or_else(|| anyhow::anyhow!("invalid_result_archive_location"))?;
+    let root = self::directory(directory)?;
+    visible_directory(directory, &root)?;
+    let mut file = File::from(openat(
+        &root,
+        name,
+        OFlag::O_RDONLY | OFlag::O_NOFOLLOW | OFlag::O_NONBLOCK | OFlag::O_CLOEXEC,
+        Mode::empty(),
+    )?);
+    ensure!(file.metadata()?.is_file(), "result_not_regular");
     let original = identity(&file)?;
-    let mut manifest = extract_file(&mut file, &directory.join("generator"))?;
+    let original_stat = fstat(&file)?;
+    let destination = if matches!(collection, Collection::Capacity) {
+        mkdirat(&root, "generator", Mode::from_bits_truncate(0o700))?;
+        File::from(openat(
+            &root,
+            "generator",
+            OFlag::O_RDONLY | OFlag::O_DIRECTORY | OFlag::O_NOFOLLOW | OFlag::O_CLOEXEC,
+            Mode::empty(),
+        )?)
+    } else {
+        root.try_clone()?
+    };
+    let mut extracted = extract_into(&mut file, destination, collection)?;
     file.rewind()?;
     let mut digest = Sha256::new();
     let mut count = 0_u64;
@@ -286,26 +484,76 @@ pub(crate) fn finish_collection(archive: &Path, directory: &Path) -> Result<Valu
             break;
         }
         count += read as u64;
-        ensure!(count <= MAX_ARCHIVE, "result_archive_too_large");
+        ensure!(
+            count <= collection.maximum_archive(),
+            "result_archive_too_large"
+        );
         digest.update(&buffer[..read]);
     }
     ensure!(
         identity(&file)? == original && count == original.bytes,
         "result_archive_changed"
     );
-    manifest["archiveSha256"] = hex(&digest.finalize()).into();
-    manifest["archiveBytes"] = count.into();
+    extracted.manifest["archiveSha256"] = hex(&digest.finalize()).into();
+    extracted.manifest["archiveBytes"] = count.into();
     nix::unistd::close(file)?;
-    let current = fs::symlink_metadata(archive)?;
+    let current = fstatat(&root, name, AtFlags::AT_SYMLINK_NOFOLLOW)?;
     ensure!(
-        current.is_file() && current.dev() == original.device && current.ino() == original.inode,
+        SFlag::from_bits_truncate(current.st_mode) == SFlag::S_IFREG
+            && current.st_dev == original_stat.st_dev
+            && current.st_ino == original_stat.st_ino,
         "result_archive_changed"
     );
-    let mut bytes = serde_json::to_vec_pretty(&manifest)?;
+    visible_directory(directory, &root)?;
+    visible_results(&root, &extracted, collection)?;
+    let mut bytes = serde_json::to_vec_pretty(&extracted.manifest)?;
     bytes.push(b'\n');
-    new_file(&directory.join("collection.json"), &bytes)?;
-    fs::remove_file(archive)?;
-    Ok(manifest)
+    let mut manifest = File::from(openat(
+        &root,
+        manifest_name,
+        OFlag::O_WRONLY | OFlag::O_CREAT | OFlag::O_EXCL | OFlag::O_NOFOLLOW | OFlag::O_CLOEXEC,
+        Mode::from_bits_truncate(0o600),
+    )?);
+    manifest.write_all(&bytes)?;
+    let published = Output {
+        name: manifest_name,
+        identity: identity(&manifest)?,
+    };
+    nix::unistd::close(manifest)?;
+    let publication = (|| -> Result<()> {
+        visible_directory(directory, &root)?;
+        visible_results(&root, &extracted, collection)?;
+        published.verify(&root)?;
+        let archive = File::from(openat(
+            &root,
+            name,
+            OFlag::O_RDONLY | OFlag::O_NOFOLLOW | OFlag::O_NONBLOCK | OFlag::O_CLOEXEC,
+            Mode::empty(),
+        )?);
+        ensure!(
+            archive.metadata()?.is_file() && identity(&archive)? == original,
+            "result_archive_changed"
+        );
+        nix::unistd::close(archive)?;
+        visible_directory(directory, &root)?;
+        // All validation precedes this cleanup. Like every filesystem snapshot,
+        // this does not lock out later writes by another process of the owner.
+        unlinkat(&root, name, UnlinkatFlags::NoRemoveDir)?;
+        Ok(())
+    })();
+    if let Err(error) = publication {
+        owned_name(
+            &root,
+            std::ffi::OsStr::new(manifest_name),
+            &published.identity,
+        )?;
+        unlinkat(&root, manifest_name, UnlinkatFlags::NoRemoveDir)
+            .map_err(|_| anyhow::anyhow!("result_manifest_cleanup_failed"))?;
+        return Err(error);
+    }
+    nix::unistd::close(extracted.directory)?;
+    nix::unistd::close(root)?;
+    Ok(extracted.manifest)
 }
 
 #[cfg(test)]

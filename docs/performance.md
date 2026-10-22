@@ -708,8 +708,7 @@ The historical production-shape benchmark uses two media workers under a
 2-CPU, 2 GiB container. Managed deployments derive their actual quotas and worker
 counts from host facts; this is a reproducible test shape, not a deployment default.
 The native Mac runner above has neither the quota nor Linux, so
-[`load_tests/benchmark-podman.mjs`](../load_tests/benchmark-podman.mjs) runs
-the same workloads inside the Podman Linux VM: the production image gets
+`load_test bench podman` runs the same workloads inside the Podman Linux VM: the production image gets
 `--cpus` and `--memory`, the load-test image shares its network namespace over
 loopback, and one streaming sampler per container reads the process, the
 cgroup's `cpu.stat` (usage and throttled periods) and every thread's CPU. The
@@ -721,13 +720,42 @@ images from the checkout, then for example:
 ```sh
 podman build --target production -t localhost/simplestchat-production:dev .
 podman build --target loadtest -t localhost/simplestchat-loadtest:dev .
-node load_tests/benchmark-podman.mjs \
+./target/release/load_test bench podman \
   --server-image localhost/simplestchat-production:dev \
   --generator-image localhost/simplestchat-loadtest:dev \
   --output results/capacity-200c.$(date -u +%Y%m%dT%H%M%SZ) \
   --clients 200 --scenarios multi-room --subscription-plan ring-v1 --subscription-seed 17 \
   --workers 2 --cpus 2 --memory 2g --ramp-up 405 --warmup 10 --duration 120
 ```
+
+The native backend requires an already-running Podman engine and locally built
+images; it starts no VM and uses `--pull never`. The retained
+[`benchmark-podman.mjs`](../load_tests/benchmark-podman.mjs) is the JavaScript
+reference. Parser, sampler, attribution and admission policy are checked against
+its pure exports; fake engines verify lifecycle and failure evidence without
+running containers. No new performance measurement follows from this migration.
+
+Every run writes creation intent before asking the engine to create a container.
+Cleanup verifies its immutable ID, exact name, image and unique run label, then
+stops and removes only that owned resource. A lost create response can be resolved
+through the journal; a mismatched identity is retained for inspection and never
+removed. Interrupted runs keep failed evidence and attempt every owned finalizer.
+Generator and capture files are copied only from stopped containers through
+bounded private tar streams. The reader validates all headers and fixed basenames
+before writing results; `collection.json` and `capture-collection.json` publish
+last. Links, sparse files and duplicate PAX keys are refused. Failed transfers
+retain their archive and stderr without publishing a successful manifest.
+The native manifest identifies the orchestrator executable bytes, image IDs and
+digests; this replaces the reference's JavaScript-source hash interpretation.
+User tags remain in the manifest, while every server and generator command uses
+the inspected immutable image ID. Requested netem and capture sidecars are frozen
+the same way; unused sidecar images are neither required nor inspected. Repointing
+a local tag during the comparison therefore cannot change its selected content.
+This deliberately strengthens the reference's tag-based launch provenance.
+Ownership compares the full inspected `Image` ID, accepting its optional `sha256:`
+prefix. Podman's `Config.Image` is a resolved display name even for ID-based
+launches, as shown in its [inspection implementation](https://github.com/containers/podman/blob/v5.7.1/libpod/container_inspect.go#L140);
+it does not authorize cleanup.
 
 The ramp must respect the server's join limits from one address (about two
 seconds per client above 30). The `webinar` scenario is the one-to-many shape:
@@ -743,7 +771,10 @@ worker/runtime split do inform limits.
 `--netem "loss 5% delay 50ms 10ms"` adds a NET_ADMIN sidecar built from
 [`load_tests/netem.Containerfile`](../load_tests/netem.Containerfile) that
 impairs UDP inside the server's namespace, when the VM kernel ships `sch_netem`
-(the historical Podman 5.5 VM lacked it; verify the kernel used for a new run).
+(the historical Podman 5.5 VM lacked it; verify the kernel used for a new run). The runner
+sets `/bin/sh` as the sidecar entrypoint and passes `-c` plus the validated script.
+This also corrects the retained reference's duplicate `sh` argument, which the
+image's shell entrypoint would interpret as a filename.
 
 `--server-env "KEY=VALUE;KEY=VALUE"` passes experiment settings to the server
 container (the wiring keys the script owns cannot be overridden), for example

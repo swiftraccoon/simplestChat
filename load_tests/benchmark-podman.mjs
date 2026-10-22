@@ -109,6 +109,12 @@ export function netemScript(params, scope, udpPort, workers) {
   ].join('\n');
 }
 
+/** Run the script through the image's shell, rather than a script named sh. */
+export function netemArguments(image, server, script) {
+  return ['run', '--rm', '--network', `container:${server}`, '--cap-add', 'NET_ADMIN',
+    '--entrypoint', '/bin/sh', image, '-c', script];
+}
+
 /**
  * The kernel's UDP counters of the server's network namespace: the namespace
  * totals from `/proc/net/snmp` and, from `/proc/net/udp`, the receive-queue
@@ -369,7 +375,7 @@ async function runOne(options, scenario, repetition, manifest) {
     if (!ready) throw new Error('Owned server container did not become ready');
     if (options.netem) {
       const script = netemScript(options.netem, options.netemScope, options.udpPort, options.workers);
-      const shown = await podman(['run', '--rm', '--network', `container:${sfu}`, '--cap-add', 'NET_ADMIN', options.netemImage, 'sh', '-c', script]);
+      const shown = await podman(netemArguments(options.netemImage, sfu, script));
       await writeFile(join(directory, 'netem.txt'), `${script}\n---\n${shown}`, { flag: 'wx' });
     }
     const before = await metrics(origin, token); await writeFile(join(directory, 'metrics-before.txt'), before.raw, { flag: 'wx' });

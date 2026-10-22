@@ -49,7 +49,7 @@ still apply: 10 attempts per room/IP and 30 per IP in 60 seconds. For larger run
 and repeated baseline/candidate comparisons, use the
 [local benchmark workflow](../docs/performance.md); for the production CPU quota,
 cgroup throttling, per-thread attribution and netem impairment inside a Linux
-VM, use [`benchmark-podman.mjs`](../docs/performance.md#production-shape-and-impaired-networks).
+VM, use [`load_test bench podman`](../docs/performance.md#production-shape-and-impaired-networks).
 
 `./target/release/load_test bench local --help` describes the explicit native
 comparison entrypoint. It owns the selected loopback servers, generator and

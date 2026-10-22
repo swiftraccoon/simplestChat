@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { threadTicks, cgroupCpuStat, threadGroup, serverAttribution, netemScript, parseOptions, parseNetnsUdp, parseMemoryBlock } from './benchmark-podman.mjs';
+import { netemArguments, threadTicks, cgroupCpuStat, threadGroup, serverAttribution, netemScript, parseOptions, parseNetnsUdp, parseMemoryBlock } from './benchmark-podman.mjs';
 
 const stat = (tid, name, utime, stime) => `${tid} (${name}) S 0 1 1 0 -1 4194560 100 0 0 0 ${utime} ${stime} 0 0 20 0 3 0 5 1000 200 18446744073709551615 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n`;
 
@@ -162,4 +162,13 @@ test('memory sampler blocks yield totals, large mappings and the cgroup split', 
   ]);
   assert.deepEqual(sample.cgroup, { anon: 460000000, file: 12000000, kernel: 30000000, sock: 26000000, slab: 3000000 });
   assert.throws(() => parseMemoryBlock('Rss: 1 kB\n@@M\n@@C\n'), /smaps_rollup|memory.stat/);
+});
+
+
+test('netem invokes the script once through the configured shell entrypoint', () => {
+  const script = netemScript('loss 2%', 'udp-both', 41100, 2);
+  assert.deepEqual(netemArguments('netem:test', 'a'.repeat(64), script), [
+    'run', '--rm', '--network', `container:${'a'.repeat(64)}`, '--cap-add', 'NET_ADMIN',
+    '--entrypoint', '/bin/sh', 'netem:test', '-c', script,
+  ]);
 });

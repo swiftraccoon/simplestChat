@@ -423,3 +423,22 @@ uses the last PAX value, while this tar reader uses the first. Ordinary tar/PAX
 fixtures retain reference parity. Tests use owned archives, including metadata
 and size attacks; they do not contact an engine. This dependency assessment
 adds no advisory or license exception.
+
+The Podman benchmark collector reuses that reader for stopped containers and
+publishes its fixed JSON names directly in the existing private run directory.
+The separate handshake profile admits only `handshakes.pcap`, at most 64 MiB
+inside a 65 MiB archive. Both profiles use the same bounded physical-header,
+PAX, link, sparse-entry, duplicate and path rules. Copies stream to new private
+archive/stderr files; validation starts only after the owned engine command has
+stopped and closed both sinks. Failed copies and timeout markers retain their
+archives without a successful collection manifest. Container references are
+verified immutable IDs, and no archive member selects a host path.
+
+The publication boundary retains the run and extraction directory descriptors
+through manifest creation and archive cleanup. It rechecks visible directory
+bindings and each output's device, inode, size, modification and change times
+before and after publication. Cleanup checks the archive binding again and
+removes a failed manifest only while its name still identifies the owned inode.
+Owned race fixtures cover directory replacement and extracted-file mutation
+during the final archive digest. These snapshots do not lock out subsequent
+writes by another process running as the same filesystem owner.

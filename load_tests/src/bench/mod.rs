@@ -19,6 +19,8 @@ pub mod subscription;
 pub mod summary;
 pub mod verdict;
 
+pub(super) mod podman;
+
 #[cfg(test)]
 mod media_sampler_tests;
 #[cfg(test)]
@@ -32,17 +34,18 @@ mod subscription_tests;
 #[cfg(test)]
 mod summary_tests;
 
-/// Explicit offline policy or owned local benchmark entrypoint.
+/// Explicit offline policy or owned local/container benchmark entrypoint.
 /// Importing the library never starts a runtime or process.
 pub fn run(arguments: &[std::ffi::OsString]) -> std::process::ExitCode {
     match arguments.first().and_then(|argument| argument.to_str()) {
         Some("local") => local::run(&arguments[1..]),
+        Some("podman") => podman::run(&arguments[1..]),
         Some("--help" | "-h") if arguments.len() == 1 => {
-            println!("Usage: load_test bench local [OPTIONS]");
+            println!("Usage: load_test bench local|podman [OPTIONS]");
             std::process::ExitCode::SUCCESS
         }
         _ => {
-            eprintln!("Usage: load_test bench local [OPTIONS]");
+            eprintln!("Usage: load_test bench local|podman [OPTIONS]");
             std::process::ExitCode::from(2)
         }
     }
