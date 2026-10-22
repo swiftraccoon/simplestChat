@@ -458,6 +458,51 @@ policy asks each participant for all 29 remote microphones and nine videos
 (1,140 consumers total), with one rotating speaker and silent microphones using
 DTX. The server's production media/admission defaults remain in force.
 
+The workflow invokes the already-built `load_test bench account-room` directly.
+One Rust invocation owns the selected server and generator groups, registration,
+protected metrics, fixed libpq queries, and private credentials. It accepts only
+explicit hosted-Linux and disposable-database opt-ins. It starts its own fresh
+loopback server with the original helper configuration; no outer Cargo server
+harness or separately supervised generator is involved. The retained JavaScript
+controller remains a policy oracle and does not run in this job.
+
+The active watchdog is 33 minutes with a two-minute final cleanup reserve inside
+the unchanged 35-minute step. The generator retains its 60-second ramp,
+30-second warmup and 1,200-second measurement, with a 180-second completion
+allowance. HTTP and PostgreSQL commands have separate clipped deadlines. These
+are watchdog and admission bounds, not a guarantee against scheduler, filesystem,
+engine-independent OS or reaping stalls; hosted timing for this new controller
+has not been measured. Known nonzero outcomes survive later cleanup failures. A full 1,470 seconds
+must remain before generator admission; setup exceeding that budget is refused
+rather than launching a known incomplete run. Per-command body and settlement
+costs also consume this budget, so worst-case setup does not promise completion.
+An optional local query timeout counts as a missing sample only after positive
+retirement of that same psql group and its streams. Unknown cleanup, observed
+interruption, an explicit exit 124 or the active deadline aborts the measurement;
+required version and retention queries retain their fatal outcomes.
+
+Fresh selected output and private credential directories refuse existing leaves.
+Each of four private stdout/stderr logs is bounded to 32 MiB; at most 5,000
+resource samples occupy 32 MiB. Each process-tree observation admits at most
+128 processes, 512 tasks per process, 4,096 tasks and 8,192 child names in total,
+and 4 MiB of process/task text; missing observations remain null. The three
+fixed generator outputs are created
+0600 before invocation and are read only after positive group/stream retirement.
+Only the six explicit workflow artifacts are uploaded. Failed retirement remains
+unproven, and a missing host retirement observation cannot supply a clean result.
+The shutdown path remains `server-shutdown.json`, with explicit schema 2:
+reserved-group TERM/KILL syscall observations and nullable leader-terminal/grace
+facts distinguish final group retirement from forced leader escalation. It does
+not claim closure of separately sessioned, privileged or engine-owned processes.
+Payload and namespace checks are optimistic observations rather than locks
+against later same-UID changes. Zero also requires the final publication/close
+and pending signal/time fences; an earlier report alone is incomplete if the
+command subsequently fails one of those checks.
+The core account-room report remains schema 1; `controllerIdentity` now hashes
+framed embedded Rust modules instead of silently reusing the former JavaScript
+harness/helper source hashes. Selected binary and lock hashes are local
+observations, not authenticated build or complete-input claims.
+
 The `account-room` artifact contains the safe generator summary and per-client
 evidence, retained-message ID/sender/content-digest inventory, sampled server
 process-tree and generator CPU/RSS, host/cgroup headroom, protected application

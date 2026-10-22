@@ -100,6 +100,9 @@ load_tests/src/bench/local/**
 !load_tests/src/bench/impaired/
 load_tests/src/bench/impaired/**
 !load_tests/src/bench/impaired/*.rs
+!load_tests/src/bench/account_room/
+load_tests/src/bench/account_room/**
+!load_tests/src/bench/account_room/*.rs
 !load_tests/src/bench/podman/
 load_tests/src/bench/podman/**
 !load_tests/src/bench/podman/*.rs

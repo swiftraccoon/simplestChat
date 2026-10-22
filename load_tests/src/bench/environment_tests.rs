@@ -2,6 +2,7 @@
 
 use super::super::process::{Child, Stream};
 use super::*;
+use anyhow::ensure;
 use std::fs;
 use std::os::unix::fs::{PermissionsExt, symlink};
 use std::path::PathBuf;
@@ -379,17 +380,13 @@ async fn cancellation_and_cleanup_failures_refuse_without_leaking_outputs_or_ski
     host.cancelled.store(true, Ordering::SeqCst);
     let error = fixture.observe(&host, "linux", "x86_64").await.unwrap_err();
     assert_eq!(error.to_string(), FAILURE);
+    assert_eq!(failure_status(&error), Some(143));
     assert!(host.calls.lock().unwrap().is_empty());
     let mut host = FakeHost::linux();
     host.responses.get_mut("uname -r").unwrap().cancel = true;
-    assert_eq!(
-        fixture
-            .observe(&host, "linux", "x86_64")
-            .await
-            .unwrap_err()
-            .to_string(),
-        FAILURE
-    );
+    let error = fixture.observe(&host, "linux", "x86_64").await.unwrap_err();
+    assert_eq!(error.to_string(), FAILURE);
+    assert_eq!(failure_status(&error), Some(143));
     assert_eq!(host.stopped.load(Ordering::SeqCst), 1);
     let mut host = FakeHost::darwin();
     host.responses

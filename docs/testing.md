@@ -1404,6 +1404,12 @@ for the Podman capacity runs and the local impairment helpers.
 
 For the separate fixed thirty-account, twenty-minute media/chat measurement,
 dispatch `gh workflow run performance.yml --ref main -f only=account-room`.
+Its measured command is `./target/release/load_test bench account-room`; the
+Rust owner starts and retires both selected CLI groups without nested Cargo.
+Unit tests use fake HTTP/database/process observations and actual JavaScript
+policy oracles; they do not establish hosted performance or a live database run.
+Run the focused, serialized fixtures with
+`cargo test --locked -p simplestchat-load-test --lib account_room -- --test-threads=1`.
 This job runs only on demand on an isolated GitHub-hosted Linux runner, with a
 fresh PostgreSQL service, and exercises real refresh on every media connection.
 It retains safe resource, delivery and database-inventory evidence, including

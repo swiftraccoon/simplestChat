@@ -257,6 +257,7 @@ test('context excludes local-only descendants while retaining production inputs'
     'load_tests/src/bench/private.env', 'load_tests/src/bench/podman/private.env',
     'load_tests/src/bench/local/private.env',
     'load_tests/src/bench/impaired/private.env',
+    'load_tests/src/bench/account_room/private.env',
     'xtask/notes.md', 'xtask/src/CLAUDE.md', 'web/CLAUDE.md', 'web/.env',
     'xtask/src/check/private.env', 'xtask/src/run_local/private.env',
     'xtask/src/ci/private.env', 'xtask/src/ci_local/private.env',

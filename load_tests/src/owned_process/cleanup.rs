@@ -16,26 +16,61 @@ pub(super) async fn stop(group: &mut Group) -> Result<()> {
         .map(|_| ())
 }
 
+/// Observed reserved-group signals and reap. Missing observations stay absent;
+/// an accepted ESRCH/zombie outcome never asserts a delivered signal.
+#[derive(Debug, Clone, Default, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct Retirement {
+    pub(crate) term_attempted: bool,
+    pub(crate) term_sent: bool,
+    pub(crate) kill_attempted: bool,
+    pub(crate) kill_sent: bool,
+    pub(crate) leader_terminal_before_cleanup: Option<bool>,
+    pub(crate) leader_grace_expired: Option<bool>,
+    pub(crate) wait_code: Option<i32>,
+    pub(crate) wait_signal: Option<i32>,
+    pub(crate) group_cleanup_passed: bool,
+    pub(crate) streams_closed: bool,
+}
+
 pub(super) async fn stop_with_grace(
     group: &mut Group,
     grace: Duration,
 ) -> Result<std::process::ExitStatus> {
+    stop_with_report(group, grace, &mut Retirement::default()).await
+}
+
+pub(super) async fn stop_with_report(
+    group: &mut Group,
+    grace: Duration,
+    report: &mut Retirement,
+) -> Result<std::process::ExitStatus> {
+    use std::os::unix::process::ExitStatusExt;
     let pid = group.pid;
-    let terminate = signal(pid, Signal::SIGTERM).await;
-    let _ = tokio::time::timeout(grace, exited(pid)).await;
-    let kill = signal(pid, Signal::SIGKILL).await;
+    report.leader_terminal_before_cleanup = super::peek(pid).ok().map(|v| v.is_some());
+    report.term_attempted = true;
+    let terminate = signal_observed(pid, Signal::SIGTERM).await;
+    report.term_sent = matches!(terminate, Ok(true));
+    let grace_result = tokio::time::timeout(grace, exited(pid)).await;
+    report.leader_grace_expired = match &grace_result {
+        Ok(Ok(_)) => Some(false),
+        Err(_) => Some(true),
+        _ => None,
+    };
+    report.kill_attempted = true;
+    let kill = signal_observed(pid, Signal::SIGKILL).await;
+    report.kill_sent = matches!(kill, Ok(true));
     let exited = tokio::time::timeout(Duration::from_secs(5), exited(pid)).await;
     // Darwin can reject TERM just before NOWAIT exposes the leader's exit.
-    // Reconcile that earlier EPERM only while the unreaped leader still
-    // reserves its ID and a fresh complete group inspection proves all-zombie.
+    // Reconcile only with a fresh all-zombie proof while the ID is reserved.
     #[cfg(target_os = "macos")]
     let (terminate, kill) = if (permission_error(&terminate) || permission_error(&kill))
         && matches!(&exited, Ok(Ok(_)))
         && zombie_group(pid).await
     {
-        let reconcile = |result: Result<()>| {
+        let reconcile = |result: Result<bool>| {
             if permission_error(&result) {
-                Ok(())
+                Ok(false)
             } else {
                 result
             }
@@ -44,32 +79,38 @@ pub(super) async fn stop_with_grace(
     } else {
         (terminate, kill)
     };
-    // The standard child has no background reaper. Reap only after NOWAIT
-    // proves exit; until then the leader continues to reserve this exact PGID.
+    // Retain a real reap even when an earlier signal error remains primary.
     let reaped = if matches!(exited, Ok(Ok(_))) {
         Some(group.reap())
     } else {
         None
     };
+    if let Some(Ok(status)) = &reaped {
+        report.wait_code = status.code();
+        report.wait_signal = status.signal();
+    }
     terminate?;
     kill?;
     exited.map_err(|_| anyhow::anyhow!("command_reap_timed_out"))??;
-    reaped.expect("exit was proved before reaping")
+    let status = reaped.expect("exit was proved before reaping")?;
+    report.group_cleanup_passed = true;
+    Ok(status)
 }
 
 #[cfg(target_os = "macos")]
-fn permission_error(result: &Result<()>) -> bool {
+fn permission_error(result: &Result<bool>) -> bool {
     result
         .as_ref()
         .err()
         .is_some_and(|error| error.downcast_ref::<Errno>() == Some(&Errno::EPERM))
 }
 
-async fn signal(pid: Pid, signal: Signal) -> Result<()> {
+async fn signal_observed(pid: Pid, signal: Signal) -> Result<bool> {
     match killpg(pid, signal) {
-        Ok(()) | Err(Errno::ESRCH) => Ok(()),
+        Ok(()) => Ok(true),
+        Err(Errno::ESRCH) => Ok(false),
         #[cfg(target_os = "macos")]
-        Err(Errno::EPERM) if zombie_group(pid).await => Ok(()),
+        Err(Errno::EPERM) if zombie_group(pid).await => Ok(false),
         Err(error) => Err(error.into()),
     }
 }

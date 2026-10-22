@@ -1,6 +1,7 @@
 //! Explicit owned local comparisons. Importing policy starts no runtime, child
 //! process, server, network request or workload.
 
+mod account_room;
 pub mod artifacts;
 pub mod clock;
 pub mod commands;
@@ -39,6 +40,7 @@ mod summary_tests;
 /// Importing the library never starts a runtime or process.
 pub fn run(arguments: &[std::ffi::OsString]) -> std::process::ExitCode {
     match arguments.first().and_then(|argument| argument.to_str()) {
+        Some("account-room") => account_room::run(&arguments[1..]),
         Some("local") => local::run(&arguments[1..]),
         Some("podman") => podman::run(&arguments[1..]),
         Some("impaired") => impaired::run(&arguments[1..]),
@@ -48,14 +50,14 @@ pub fn run(arguments: &[std::ffi::OsString]) -> std::process::ExitCode {
         Some("--help" | "-h") if arguments.len() == 1 => {
             println!(concat!(
                 "Usage: load_test bench local|podman|impaired|",
-                "browser-mechanics|browser-adaptive|browser-tcp [OPTIONS]"
+                "browser-mechanics|browser-adaptive|browser-tcp|account-room [OPTIONS]"
             ));
             std::process::ExitCode::SUCCESS
         }
         _ => {
             eprintln!(concat!(
                 "Usage: load_test bench local|podman|impaired|",
-                "browser-mechanics|browser-adaptive|browser-tcp [OPTIONS]"
+                "browser-mechanics|browser-adaptive|browser-tcp|account-room [OPTIONS]"
             ));
             std::process::ExitCode::from(2)
         }

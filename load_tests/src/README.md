@@ -25,6 +25,7 @@ For commands, options, and report definitions, see the
 | `capacity_run/` | Explicit isolated host measurements: workload/search policy, CPU windows, owned process/container cleanup, bounded artifacts, typed reports and fake-engine/oracle regressions |
 | `owned_process/` | Reserved child process groups, bounded pipes, closed byte/duplex stdin modes, cancellation and exact cleanup shared by explicit measurement backends |
 | `bench/podman/` | Production-shape comparison policy, namespace-local command arguments, cgroup/thread samplers, verified container ownership and bounded transfer finalizers |
+| `bench/account_room/` | Fixed hosted thirty-account owner: private setup, psql/HTTP observations, bounded samples, stopped-input verdicts and explicit retirement evidence |
 | `bench/impaired/` | One disposable Linux loopback profile, fixed guest generator evidence, observed kernel-state lease and stopped-input admission |
 | `bench/impaired/browser*`, `adaptive*` | Shared guest browser owner, mechanics/DTX, live Linux adaptive/UDP leases, bounded phase dialogue, strict stopped-Node BrowserServer receipt and private evidence |
 | `metrics.rs` | Counters, signaling histograms, diagnostic collection |

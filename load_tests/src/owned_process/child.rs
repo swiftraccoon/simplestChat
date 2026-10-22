@@ -87,6 +87,8 @@ pub(crate) struct Child {
     stream: Option<Stdout>,
     retired: Option<Exit>,
     failed: bool,
+    retirement: Option<super::cleanup::Retirement>,
+    external_streams: bool,
     pub(crate) output: Vec<u8>,
     pub(crate) errors: Vec<u8>,
 }
@@ -94,6 +96,9 @@ pub(crate) struct Child {
 impl Child {
     pub(crate) fn pid(&self) -> u32 {
         self.group.pid.as_raw() as u32
+    }
+    pub(crate) fn retirement(&self) -> Option<super::cleanup::Retirement> {
+        self.retirement.clone()
     }
     pub(crate) fn take_stdout(&mut self) -> Option<Stdout> {
         self.stream.take()
@@ -141,7 +146,8 @@ impl Child {
             return Ok(exit.clone());
         }
         ensure!(self.group.reserved(), "command_group_already_reaped");
-        let status = match super::cleanup::stop_with_grace(&mut self.group, grace).await {
+        let report = self.retirement.get_or_insert_with(Default::default);
+        let status = match super::cleanup::stop_with_report(&mut self.group, grace, report).await {
             Ok(status) => status,
             Err(error) => {
                 self.failed = true;
@@ -178,6 +184,14 @@ impl Child {
         {
             self.errors.clone_from(errors);
         }
+        self.retirement
+            .as_mut()
+            .expect("retirement observed")
+            .streams_closed = !self.external_streams
+            && !self.failed
+            && input.is_ok()
+            && output.is_ok()
+            && errors.is_ok();
         self.failed |= input.is_err() || output.is_err() || errors.is_err();
         input?;
         output?;
@@ -353,6 +367,8 @@ impl Runner {
             stream: reader,
             retired: None,
             failed: false,
+            retirement: None,
+            external_streams: stream || duplex,
             output: Vec::new(),
             errors: Vec::new(),
         })

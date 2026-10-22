@@ -6,7 +6,7 @@
 //! Darwin uses `sysctl vm.loadavg`. Neither reports a container resource quota.
 
 use super::process::{Command, Exit, Host, Sink};
-use anyhow::{Result, ensure};
+use anyhow::Result;
 use nix::fcntl::{OFlag, open, openat};
 use nix::sys::stat::Mode;
 use serde_json::{Value, json};
@@ -23,18 +23,32 @@ const CPU_LIMIT: u64 = 2 * 1024 * 1024;
 const PROC_LIMIT: u64 = 64 * 1024;
 const MAX_SAFE_INTEGER: u64 = (1_u64 << 53) - 1;
 
-async fn cancelled(host: &dyn Host) -> bool {
+#[derive(Debug)]
+struct Interrupted(u8);
+impl std::fmt::Display for Interrupted {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(FAILURE)
+    }
+}
+impl std::error::Error for Interrupted {}
+
+/// An observed pending signal remains typed without exposing command output.
+pub fn failure_status(error: &anyhow::Error) -> Option<u8> {
+    error.downcast_ref::<Interrupted>().map(|value| value.0)
+}
+
+async fn check(host: &dyn Host) -> Result<()> {
     tokio::select! {
         biased;
-        _ = host.cancelled() => true,
-        () = std::future::ready(()) => false,
+        code = host.cancelled() => Err(Interrupted(code).into()),
+        () = std::future::ready(()) => Ok(()),
     }
 }
 
 enum Observation {
     Exit(Exit),
     Unavailable,
-    Cancelled,
+    Cancelled(u8),
 }
 
 /// Every started observation is retired before its output is inspected. A
@@ -47,7 +61,7 @@ async fn command(
     program: &str,
     arguments: &[&str],
 ) -> Result<Option<String>> {
-    ensure!(!cancelled(host).await, "{FAILURE}");
+    check(host).await?;
     let mut environment = super::commands::clean(environment);
     environment.insert("LC_ALL".into(), "C".into());
     let Ok(mut child) = host.spawn(Command {
@@ -63,14 +77,14 @@ async fn command(
         stderr: Sink::Capture,
         cleanup: false,
     }) else {
-        ensure!(!cancelled(host).await, "{FAILURE}");
+        check(host).await?;
         return Ok(None);
     };
     let observation = tokio::time::timeout(Duration::from_secs(2), async {
         loop {
             let observed = tokio::select! {
                 biased;
-                _ = host.cancelled() => return Observation::Cancelled,
+                code = host.cancelled() => return Observation::Cancelled(code),
                 observed = child.poll() => observed,
             };
             match observed {
@@ -79,7 +93,7 @@ async fn command(
                 Ok(None) => {
                     tokio::select! {
                         biased;
-                        _ = host.cancelled() => return Observation::Cancelled,
+                        code = host.cancelled() => return Observation::Cancelled(code),
                         () = tokio::time::sleep(Duration::from_millis(10)) => {},
                     }
                 }
@@ -88,14 +102,12 @@ async fn command(
     })
     .await
     .unwrap_or(Observation::Unavailable);
-    let stopped = child
-        .stop(Duration::ZERO)
-        .await
-        .map_err(|_| anyhow::anyhow!(FAILURE))?;
-    ensure!(
-        !matches!(observation, Observation::Cancelled) && !cancelled(host).await,
-        "{FAILURE}"
-    );
+    let stopped = child.stop(Duration::ZERO).await;
+    if let Observation::Cancelled(code) = observation {
+        return Err(Interrupted(code).into());
+    }
+    let stopped = stopped.map_err(|_| anyhow::anyhow!(FAILURE))?;
+    check(host).await?;
     if !matches!(observation, Observation::Exit(exit) if exit.success()) || !stopped.success() {
         return Ok(None);
     }
@@ -235,7 +247,7 @@ async fn observe_for(
     architecture: &str,
     proc_root: &Path,
 ) -> Result<Value> {
-    ensure!(!cancelled(host).await, "{FAILURE}");
+    check(host).await?;
     let (release, details) = if platform == "macos" {
         let (release, cpu, count, memory, load) = tokio::join!(
             command(host, directory, environment, "uname", &["-r"]),
@@ -283,7 +295,7 @@ async fn observe_for(
         };
         (release, details)
     };
-    ensure!(!cancelled(host).await, "{FAILURE}");
+    check(host).await?;
     let mut unavailable = Vec::new();
     for (field, available) in [
         ("release", release.is_some()),

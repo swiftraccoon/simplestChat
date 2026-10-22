@@ -62,12 +62,20 @@ async fn early_exit_keeps_literal_arguments_stdin_and_exact_code_until_reap() {
             },
         )
         .unwrap();
+    assert!(child.retirement().is_none());
     let exit = terminal(&mut child).await;
     assert_eq!(exit.code, Some(7));
     assert_eq!(exit.signal, None);
     assert!(child.pid() > 1);
     let stopped = child.stop(Duration::from_millis(20)).await.unwrap();
     assert_eq!(stopped.code, Some(7));
+    let facts = child.retirement().unwrap();
+    assert_eq!(facts.leader_terminal_before_cleanup, Some(true));
+    assert_eq!(facts.leader_grace_expired, Some(false));
+    assert_eq!(facts.wait_code, Some(7));
+    assert_eq!(facts.wait_signal, None);
+    assert!(facts.term_attempted && facts.kill_attempted);
+    assert!(facts.group_cleanup_passed && facts.streams_closed);
     assert_eq!(child.output, format!("input{literal}").as_bytes());
     assert_eq!(child.errors, b"err");
     assert!(!directory.0.join("forbidden").exists());
@@ -133,6 +141,12 @@ async fn ignored_term_uses_bounded_grace_and_retains_the_actual_kill_signal() {
     let exit = child.stop(Duration::from_millis(25)).await.unwrap();
     assert_eq!(exit.code, None);
     assert_eq!(exit.signal.as_deref(), Some("SIGKILL"));
+    let facts = child.retirement().unwrap();
+    assert_eq!(facts.leader_terminal_before_cleanup, Some(false));
+    assert_eq!(facts.leader_grace_expired, Some(true));
+    assert_eq!(facts.wait_signal, Some(9));
+    assert!(facts.term_sent && facts.kill_sent && facts.group_cleanup_passed);
+    assert!(facts.streams_closed);
     assert!(begin.elapsed() < Duration::from_secs(3));
 }
 
@@ -251,4 +265,37 @@ async fn aborting_the_owner_future_kills_before_the_group_identity_can_be_reused
     assert!(task.await.unwrap_err().is_cancelled());
     tokio::time::sleep(Duration::from_millis(400)).await;
     assert!(!directory.0.join("leaked").exists());
+}
+
+#[tokio::test]
+async fn a_previously_failed_pipe_never_becomes_a_positive_close_observation() {
+    let directory = Directory::new();
+    let mut child = directory
+        .runner()
+        .spawn(
+            Path::new("/bin/sh"),
+            &["-c".into(), "printf 123456789".into()],
+            Request {
+                limits: Limits {
+                    stdout: 8,
+                    ..Limits::default()
+                },
+                ..Request::default()
+            },
+        )
+        .unwrap();
+    tokio::time::timeout(Duration::from_secs(3), async {
+        loop {
+            if child.poll().await.is_err() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    })
+    .await
+    .unwrap();
+    assert!(child.stop(Duration::from_millis(20)).await.is_err());
+    let facts = child.retirement().unwrap();
+    assert!(facts.group_cleanup_passed);
+    assert!(!facts.streams_closed);
 }

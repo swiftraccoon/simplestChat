@@ -25,6 +25,22 @@ impl Exit {
     }
 }
 
+/// Actual native reserved-group observations; unavailable hosts return None.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Retirement {
+    pub term_attempted: bool,
+    pub term_sent: bool,
+    pub kill_attempted: bool,
+    pub kill_sent: bool,
+    pub leader_terminal_before_cleanup: Option<bool>,
+    pub leader_grace_expired: Option<bool>,
+    pub wait_code: Option<i32>,
+    pub wait_signal: Option<i32>,
+    pub group_cleanup_passed: bool,
+    pub streams_closed: bool,
+}
+
 pub struct Output {
     pub exit: Exit,
     pub stdout: Vec<u8>,
@@ -120,6 +136,9 @@ impl Stream for owned_process::child::Stdout {
 #[async_trait::async_trait]
 pub trait Child: Send {
     fn pid(&self) -> u32;
+    fn retirement(&self) -> Option<Retirement> {
+        None
+    }
     fn take_stdout(&mut self) -> Option<Box<dyn Stream>>;
     async fn poll(&mut self) -> Result<Option<Exit>>;
     async fn stop(&mut self, grace: Duration) -> Result<Exit>;
@@ -129,6 +148,20 @@ pub trait Child: Send {
 
 #[async_trait::async_trait]
 impl Child for owned_process::child::Child {
+    fn retirement(&self) -> Option<Retirement> {
+        self.retirement().map(|v| Retirement {
+            term_attempted: v.term_attempted,
+            term_sent: v.term_sent,
+            kill_attempted: v.kill_attempted,
+            kill_sent: v.kill_sent,
+            leader_terminal_before_cleanup: v.leader_terminal_before_cleanup,
+            leader_grace_expired: v.leader_grace_expired,
+            wait_code: v.wait_code,
+            wait_signal: v.wait_signal,
+            group_cleanup_passed: v.group_cleanup_passed,
+            streams_closed: v.streams_closed,
+        })
+    }
     fn pid(&self) -> u32 {
         self.pid()
     }
@@ -191,15 +224,41 @@ impl NativeHost {
 /// until its pipes are closed and all owned descendants have been stopped.
 /// Every error path still attempts cleanup; only fixed caller errors escape.
 pub async fn run(host: &dyn Host, command: Command) -> Result<Output> {
+    run_observed(host, command).await.result
+}
+
+/// The same bounded owner retains its primary result separately from its
+/// actual stop outcome and optional native observations. Missing facts never
+/// imply positive closure. Existing run callers keep their previous behavior.
+pub(crate) struct Completion {
+    pub(crate) result: Result<Output>,
+    pub(crate) stop_succeeded: bool,
+    pub(crate) retirement: Option<Retirement>,
+}
+impl Completion {
+    fn failed(error: anyhow::Error) -> Self {
+        Self {
+            result: Err(error),
+            stop_succeeded: false,
+            retirement: None,
+        }
+    }
+}
+
+/// Return primary output and closure observations from the same reserved child.
+pub(crate) async fn run_observed(host: &dyn Host, command: Command) -> Completion {
     let cleanup = command.cleanup;
     if !cleanup {
         tokio::select! {
             biased;
-            code = host.cancelled() => return Err(Interrupted(code).into()),
+            code = host.cancelled() => return Completion::failed(Interrupted(code).into()),
             _ = std::future::ready(()) => {},
         }
     }
-    let mut child = host.spawn(command)?;
+    let mut child = match host.spawn(command) {
+        Ok(child) => child,
+        Err(error) => return Completion::failed(error),
+    };
     let observed = loop {
         let poll = if cleanup {
             child.poll().await
@@ -225,18 +284,27 @@ pub async fn run(host: &dyn Host, command: Command) -> Result<Output> {
         }
     };
     let stopped = child.stop(Duration::from_secs(5)).await;
-    let exit = observed?;
-    if let Err(error) = stopped {
-        if !exit.success() {
-            return Err(ObservedFailure(exit).into());
+    let stop_succeeded = stopped.is_ok();
+    let retirement = child.retirement();
+    let result = (|| {
+        let exit = observed?;
+        if let Err(error) = stopped {
+            if !exit.success() {
+                return Err(ObservedFailure(exit).into());
+            }
+            return Err(error);
         }
-        return Err(error);
+        Ok(Output {
+            exit,
+            stdout: child.output().to_owned(),
+            stderr: child.errors().to_owned(),
+        })
+    })();
+    Completion {
+        result,
+        stop_succeeded,
+        retirement,
     }
-    Ok(Output {
-        exit,
-        stdout: child.output().to_owned(),
-        stderr: child.errors().to_owned(),
-    })
 }
 
 fn destination(sink: Sink) -> Result<Destination> {
