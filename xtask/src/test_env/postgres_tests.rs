@@ -50,6 +50,8 @@ sys.exit(0)
     fn cluster(&self) -> Cluster {
         Cluster {
             path: self.directory.to_string_lossy().into_owned(),
+            environment: Environment::new(),
+            workdir: self.directory.clone(),
             data: self.directory.join("data"),
             directory: self.directory.clone(),
             identity: None,
@@ -231,4 +233,66 @@ async fn interruption_during_cleanup_waits_for_stop_and_cannot_publish_success()
             "status"
         );
     }
+}
+
+#[tokio::test]
+async fn captured_environments_stay_independent_and_child_pg_defaults_are_removed() {
+    let first = Fixture::new(&[3], 0, 0, "");
+    let second = Fixture::new(&[3], 0, 0, "");
+    let script = "import json,os;from pathlib import Path;Path('child.json').write_text(json.dumps(dict(os.environ)))";
+    let command = vec!["/usr/bin/python3".into(), "-c".into(), script.into()];
+    let (_sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+    let mut signals = Signals::injected(receiver);
+    for (fixture, tag) in [(&first, "first"), (&second, "second")] {
+        let mut cluster = fixture.cluster();
+        cluster.environment = Environment::from([
+            ("KEPT".into(), tag.into()),
+            ("PGHOST".into(), "remote.invalid".into()),
+            ("PGSERVICE".into(), "production".into()),
+            (
+                "DATABASE_URL".into(),
+                "postgres://remote.invalid/live".into(),
+            ),
+        ]);
+        assert_eq!(
+            cluster
+                .run_child(
+                    &command,
+                    "postgres://owned@127.0.0.1/owned_test",
+                    &mut signals
+                )
+                .await
+                .unwrap(),
+            0
+        );
+        let report: Value =
+            serde_json::from_slice(&fs::read(fixture.directory.join("child.json")).unwrap())
+                .unwrap();
+        assert_eq!(report["KEPT"], tag);
+        assert_eq!(
+            report["DATABASE_URL"],
+            "postgres://owned@127.0.0.1/owned_test"
+        );
+        assert_eq!(report["TEST_DATABASE_URL"], report["DATABASE_URL"]);
+        assert_eq!(report["DISPOSABLE_TEST_DATABASE"], "1");
+        assert!(
+            !report
+                .as_object()
+                .unwrap()
+                .keys()
+                .any(|name| name.starts_with("PG"))
+        );
+    }
+    let environment = Environment::from([(
+        "RUNNER_TEMP".into(),
+        first.directory.clone().into_os_string(),
+    )]);
+    assert_eq!(temp_root(&environment).unwrap(), first.directory);
+    assert!(
+        temp_root(&Environment::from([(
+            "RUNNER_TEMP".into(),
+            "relative".into()
+        )]))
+        .is_err()
+    );
 }

@@ -217,6 +217,28 @@ per-address budgets for the five browsers a suite drives from one address
 (`REGISTRATIONS_PER_IP_PER_HOUR=100`, `AUTH_REQUESTS_PER_MINUTE=300`); a
 deployment keeps the defaults in [configuration](configuration.md).
 
+CI's three controller database steps use a fixed typed selection:
+
+```sh
+cargo run --locked -q -p xtask -- ci database-check monitoring
+RESTORE_CONTAINER_E2E=1 cargo run --locked -q -p xtask -- ci database-check restore
+cargo run --locked -q -p xtask -- ci database-check migration
+```
+
+These retain the existing Python test patterns. The restore step first pulls the
+same digest-pinned PostgreSQL 18.6 image and retains `RESTORE_CONTAINER_E2E=1` in
+the workflow. Discovery runs literal `pg_config --bindir` with a 30-second outer
+bound and 4096-byte stdout ceiling, admits one existing absolute directory, and
+prepends it using `join_paths`. The optional pull has a 600-second outer bound;
+the existing ten-minute automation-job deadline still applies. The environment
+is captured once and threaded into preparation, cluster configuration and the
+test child; no process-global environment is changed. Preparation transfers its
+registered signals only after CLI group cleanup, then awaits the same cluster
+owner directly without another Cargo build or nested harness. These checks do
+not replace the Python suites' container ownership. Fake tools and inert children
+verify the command/environment/cleanup boundary; hosted Linux PostgreSQL and
+container runtime cost remain unmeasured until that integration runs.
+
 With PostgreSQL tools on `PATH`, use the owned bootstrap:
 
 ```sh

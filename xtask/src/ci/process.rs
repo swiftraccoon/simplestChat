@@ -42,6 +42,16 @@ impl<'a> Native<'a> {
         }
     }
 
+    /// Transfer the existing registration only after all preparation groups
+    /// are closed. The next harness owns observing it through its own cleanup.
+    pub(super) async fn into_signals(mut self) -> Result<Signals> {
+        self.ready().await?;
+        if !self.cleanup_passed {
+            return Err(Failure::new(1, "CI preparation group cleanup is unproven."));
+        }
+        Ok(self.signals)
+    }
+
     async fn execute(&mut self, mut request: Command) -> Result<Vec<u8>> {
         if !request.cleanup {
             self.ready().await?;

@@ -8,8 +8,10 @@ use super::process;
 use super::service::{Service, Termination};
 use super::{Stop, helper};
 use crate::owned_process::Signals;
+use crate::tooling::Environment;
 use anyhow::{Context, Result};
 use serde::Serialize;
+use std::ffi::OsStr;
 use std::fs::{self, OpenOptions};
 use std::net::{Ipv4Addr, SocketAddr, TcpListener, UdpSocket};
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
@@ -31,6 +33,7 @@ const TEST_JWT_SECRET: &str = "disposable-test-only-jwt-secret-at-least-32-bytes
 
 /// Everything the opt-ins decided before any process started.
 struct Plan {
+    environment: Environment,
     binary: PathBuf,
     workdir: PathBuf,
     database_url: String,
@@ -96,9 +99,9 @@ struct TurnShutdown {
     finished_at: String,
 }
 
-pub(crate) async fn run(root: &Path, command: &[String]) -> Result<i32> {
+pub(crate) async fn run(root: &Path, command: &[String], environment: &Environment) -> Result<i32> {
     let mut signals = Signals::new()?;
-    let plan = plan(root, command, &mut signals).await?;
+    let plan = plan(root, command, environment, &mut signals).await?;
     helper::check(&mut signals).await?;
     preflight(&plan)?;
     fs::create_dir_all(&plan.artifacts)
@@ -125,32 +128,40 @@ pub(crate) async fn run(root: &Path, command: &[String]) -> Result<i32> {
     Ok(harness.finish(status, &mut signals).await)
 }
 
-fn env(name: &str) -> Option<String> {
-    std::env::var(name).ok()
+fn env(environment: &Environment, name: &str) -> Option<String> {
+    environment
+        .get(OsStr::new(name))
+        .and_then(|value| value.to_str())
+        .map(str::to_owned)
 }
 
-fn flag(name: &str) -> bool {
-    env(name).is_some_and(|value| value == "1")
+fn flag(environment: &Environment, name: &str) -> bool {
+    env(environment, name).is_some_and(|value| value == "1")
 }
 
-async fn plan(root: &Path, command: &[String], signals: &mut Signals) -> Result<Plan> {
-    if !flag("DISPOSABLE_TEST_DATABASE") || command.is_empty() {
+async fn plan(
+    root: &Path,
+    command: &[String],
+    environment: &Environment,
+    signals: &mut Signals,
+) -> Result<Plan> {
+    if !flag(environment, "DISPOSABLE_TEST_DATABASE") || command.is_empty() {
         return Err(Stop::usage(
             "Set DISPOSABLE_TEST_DATABASE=1 and pass the test command to run.",
         )
         .into());
     }
-    let database_url = env("DATABASE_URL").unwrap_or_default();
+    let database_url = env(environment, "DATABASE_URL").unwrap_or_default();
     if !disposable_database_url(&database_url) {
         return Err(Stop::usage(
             "DATABASE_URL must use loopback and a name ending _test; only sslmode=disable is accepted as a query.",
         )
         .into());
     }
-    let binary = env("TEST_SERVER_BINARY")
+    let binary = env(environment, "TEST_SERVER_BINARY")
         .map(PathBuf::from)
         .unwrap_or_else(|| root.join("target/debug/simplestChat"));
-    let workdir = env("TEST_SERVER_WORKDIR")
+    let workdir = env(environment, "TEST_SERVER_WORKDIR")
         .map(PathBuf::from)
         .unwrap_or_else(|| root.to_path_buf());
     if !workdir.join("Cargo.toml").is_file() || !workdir.join("migrations").is_dir() {
@@ -163,16 +174,20 @@ async fn plan(root: &Path, command: &[String], signals: &mut Signals) -> Result<
         }
         .into());
     }
-    let port_text = env("TEST_SERVER_PORT").unwrap_or_else(|| DEFAULT_SERVER_PORT.to_owned());
-    let https_enabled = match env("TEST_BROWSER_HTTPS").as_deref() {
+    let port_text =
+        env(environment, "TEST_SERVER_PORT").unwrap_or_else(|| DEFAULT_SERVER_PORT.to_owned());
+    let https_enabled = match env(environment, "TEST_BROWSER_HTTPS").as_deref() {
         None | Some("0") => false,
         Some("1") => true,
         Some(_) => return Err(Stop::usage("TEST_BROWSER_HTTPS must be 0 or 1.").into()),
     };
-    let media_text = env("TEST_MEDIA_PORT").unwrap_or_else(|| DEFAULT_MEDIA_PORT.to_owned());
-    let turn_text = env("TEST_TURN_PORT").unwrap_or_else(|| DEFAULT_TURN_PORT.to_owned());
+    let media_text =
+        env(environment, "TEST_MEDIA_PORT").unwrap_or_else(|| DEFAULT_MEDIA_PORT.to_owned());
+    let turn_text =
+        env(environment, "TEST_TURN_PORT").unwrap_or_else(|| DEFAULT_TURN_PORT.to_owned());
     // An explicitly empty override is invalid, not a request for the default.
-    let announce_text = env("TEST_ANNOUNCE_IP").unwrap_or_else(|| "127.0.0.1".to_owned());
+    let announce_text =
+        env(environment, "TEST_ANNOUNCE_IP").unwrap_or_else(|| "127.0.0.1".to_owned());
     let (port, media_port, turn_port) = match (
         parse_port(&port_text),
         parse_port(&media_text),
@@ -184,8 +199,8 @@ async fn plan(root: &Path, command: &[String], signals: &mut Signals) -> Result<
         }
     };
     let https = if https_enabled {
-        let https_text =
-            env("TEST_HTTPS_PORT").unwrap_or_else(|| (u32::from(port) + 1).to_string());
+        let https_text = env(environment, "TEST_HTTPS_PORT")
+            .unwrap_or_else(|| (u32::from(port) + 1).to_string());
         let https_port = parse_port(&https_text).filter(|candidate| *candidate != port);
         let Some(https_port) = https_port else {
             return Err(Stop::usage(
@@ -193,7 +208,7 @@ async fn plan(root: &Path, command: &[String], signals: &mut Signals) -> Result<
             )
             .into());
         };
-        let openssl = env("OPENSSL_DIR")
+        let openssl = env(environment, "OPENSSL_DIR")
             .map(PathBuf::from)
             .unwrap_or_else(|| root.join("target/openssl-4.0.3"))
             .join("bin/openssl");
@@ -210,8 +225,8 @@ async fn plan(root: &Path, command: &[String], signals: &mut Signals) -> Result<
     } else {
         None
     };
-    let path = env("PATH").unwrap_or_default();
-    let turn = if flag("TURN_E2E") {
+    let path = env(environment, "PATH").unwrap_or_default();
+    let turn = if flag(environment, "TURN_E2E") {
         if find_on_path(&path, "turnserver").is_none() {
             return Err(Stop::usage("TURN_E2E requires coturn (turnserver) on PATH.").into());
         }
@@ -240,7 +255,7 @@ async fn plan(root: &Path, command: &[String], signals: &mut Signals) -> Result<
         }
         .into());
     }
-    let passkey = flag("PASSKEY_E2E");
+    let passkey = flag(environment, "PASSKEY_E2E");
     // WebAuthn relying party IDs are domains. Keep the owned HTTP bind on IPv4
     // loopback, but use localhost for both the browser origin and relying party.
     let browser_host = if passkey { "localhost" } else { "127.0.0.1" };
@@ -262,14 +277,15 @@ async fn plan(root: &Path, command: &[String], signals: &mut Signals) -> Result<
         "ACCOUNT_ROOM_E2E",
     ]
     .iter()
-    .any(|name| flag(name))
+    .any(|name| flag(environment, name))
     .then(process::random_hex)
     .transpose()?;
-    let artifacts = match env("E2E_ARTIFACTS") {
+    let artifacts = match env(environment, "E2E_ARTIFACTS") {
         Some(artifacts) if !artifacts.is_empty() => PathBuf::from(artifacts),
-        _ => create_private_directory(&temp_root()?, "simplestchat-tests.")?,
+        _ => create_private_directory(&temp_root(environment)?, "simplestchat-tests.")?,
     };
     Ok(Plan {
+        environment: environment.clone(),
         binary,
         workdir,
         database_url,
@@ -281,7 +297,7 @@ async fn plan(root: &Path, command: &[String], signals: &mut Signals) -> Result<
         https,
         turn,
         passkey,
-        presentation: flag("PRESENTATION_E2E"),
+        presentation: flag(environment, "PRESENTATION_E2E"),
         metrics_token,
         artifacts,
         path,
@@ -388,7 +404,10 @@ impl Harness {
                 .arg(&https.openssl)
                 .env_clear()
                 .env("PATH", &self.plan.path)
-                .env("TMPDIR", env("TMPDIR").unwrap_or_else(|| "/tmp".into()))
+                .env(
+                    "TMPDIR",
+                    env(&self.plan.environment, "TMPDIR").unwrap_or_else(|| "/tmp".into()),
+                )
                 .stdin(Stdio::null())
                 .stdout(Stdio::from(log.try_clone()?))
                 .stderr(Stdio::from(log));
@@ -526,6 +545,8 @@ relay-threads=1\nuser-quota=8\ntotal-quota=64\nlog-file=stdout\nlog-min-level=wa
         let mut child = std::process::Command::new(&command[0]);
         child.args(&command[1..]);
         child
+            .env_clear()
+            .envs(&self.plan.environment)
             .env_remove("TEST_METRICS_TOKEN")
             .env_remove("TEST_SERVER_PID");
         child

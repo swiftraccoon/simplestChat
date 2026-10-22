@@ -13,6 +13,10 @@ mod process;
 mod server;
 mod service;
 
+use crate::{
+    owned_process::Signals,
+    tooling::{self, Environment},
+};
 use anyhow::Result;
 use std::path::Path;
 use std::process::ExitCode;
@@ -63,17 +67,34 @@ where
     Ok(ExitCode::from(u8::try_from(status).unwrap_or(1)))
 }
 
-pub(crate) fn run_postgres(root: &Path, command: &[String]) -> Result<ExitCode> {
-    execute(postgres::run(root, command))
+pub(crate) fn run_postgres(_root: &Path, command: &[String]) -> Result<ExitCode> {
+    let environment = tooling::inherited_env();
+    let directory = std::env::current_dir()?;
+    execute(async {
+        let mut signals = Signals::new()?;
+        postgres::run(&directory, command, &environment, &mut signals).await
+    })
+}
+
+/// CI preparation transfers its captured environment and registered signals to
+/// this same cluster owner; no nested Cargo process or second harness is used.
+pub(crate) async fn postgres_with_environment(
+    root: &Path,
+    command: &[String],
+    environment: &Environment,
+    signals: &mut Signals,
+) -> Result<i32> {
+    postgres::run(root, command, environment, signals).await
 }
 
 pub(crate) fn run_server(root: &Path, command: &[String]) -> Result<ExitCode> {
-    execute(server::run(root, command))
+    let environment = tooling::inherited_env();
+    execute(server::run(root, command, &environment))
 }
 
 /// Both services for one command: the server harness runs as the cluster's
 /// test command, through this same binary.
-pub(crate) fn run_env(root: &Path, command: &[String]) -> Result<ExitCode> {
+pub(crate) fn run_env(_root: &Path, command: &[String]) -> Result<ExitCode> {
     if command.is_empty() {
         return execute(async {
             Err(Stop::usage("Usage: cargo run -q -p xtask -- test-env COMMAND [ARG ...]").into())
@@ -82,5 +103,10 @@ pub(crate) fn run_env(root: &Path, command: &[String]) -> Result<ExitCode> {
     let exe = std::env::current_exe()?;
     let mut nested = vec![exe.to_string_lossy().into_owned(), "test-server".to_owned()];
     nested.extend(command.iter().cloned());
-    execute(postgres::run(root, &nested))
+    let environment = tooling::inherited_env();
+    let directory = std::env::current_dir()?;
+    execute(async {
+        let mut signals = Signals::new()?;
+        postgres::run(&directory, &nested, &environment, &mut signals).await
+    })
 }

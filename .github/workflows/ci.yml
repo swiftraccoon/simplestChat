@@ -95,30 +95,17 @@ jobs:
 
       - name: Verify operational alert history in disposable PostgreSQL
         if: steps.verified.outputs.cache-hit != 'true'
-        run: |
-          postgres_bindir="$(pg_config --bindir)"
-          export PATH="${postgres_bindir}:$PATH"
-          cargo run --locked -q -p xtask -- test-postgres python -m unittest discover \
-            -s ops/ansible/tests -p test_monitoring_database.py -v
+        run: cargo run --locked -q -p xtask -- ci database-check monitoring
 
       - name: Verify isolated backup restoration with pinned PostgreSQL
         if: steps.verified.outputs.cache-hit != 'true'
         env:
           RESTORE_CONTAINER_E2E: "1"
-        run: |
-          docker pull docker.io/library/postgres:18.6-bookworm@sha256:3725f4e2499eef5134592b3b4ab79a543ed7f8e533b05b5b637af926630f6650
-          postgres_bindir="$(pg_config --bindir)"
-          export PATH="${postgres_bindir}:$PATH"
-          cargo run --locked -q -p xtask -- test-postgres python -m unittest discover \
-            -s ops/ansible/tests -p test_restore_database.py -v
+        run: cargo run --locked -q -p xtask -- ci database-check restore
 
       - name: Verify server migration data preservation in disposable PostgreSQL
         if: steps.verified.outputs.cache-hit != 'true'
-        run: |
-          postgres_bindir="$(pg_config --bindir)"
-          export PATH="${postgres_bindir}:$PATH"
-          cargo run --locked -q -p xtask -- test-postgres python -m unittest discover \
-            -s ops/ansible/tests -p test_migrate_public.py -v
+        run: cargo run --locked -q -p xtask -- ci database-check migration
 
       - name: Preserve isolated restore failure diagnostics
         if: ${{ failure() && !env.ACT }}

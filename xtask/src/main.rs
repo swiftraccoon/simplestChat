@@ -44,6 +44,7 @@ Commands:
                 install-compose installs the authenticated Compose release in explicit CI.
                 audit-rust installs verified audit tooling and applies the advisory policy.
                 release-checks discovers pinned Chromium and runs the isolated release coordinator.
+                database-check runs monitoring, restore or migration in owned PostgreSQL.
                 npm-path publishes the pinned npm bin directory through the runner file.
                 image-cache publishes validated database-byte cache selectors.
                 CodeQL extraction keys never substitute for analyzed databases.

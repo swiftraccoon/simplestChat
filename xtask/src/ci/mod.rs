@@ -16,6 +16,7 @@ mod automation;
 mod browser_suite;
 mod codeql_cache;
 mod command;
+mod database_check;
 mod evidence_copy;
 mod fingerprint;
 mod github_output;
@@ -44,6 +45,7 @@ const USAGE: &str = "usage: cargo run --locked -q -p xtask -- ci key|save|verify
        cargo run --locked -q -p xtask -- ci install-compose\n\
        cargo run --locked -q -p xtask -- ci audit-rust\n\
        cargo run --locked -q -p xtask -- ci release-checks\n\
+       cargo run --locked -q -p xtask -- ci database-check monitoring|restore|migration\n\
        cargo run --locked -q -p xtask -- ci npm-path\n\
        cargo run --locked -q -p xtask -- ci image-cache hint|status preparation|status production";
 
@@ -272,6 +274,13 @@ fn print_key(context: &Context, scope: Scope, github_output: bool) -> Result<()>
 }
 
 pub(crate) fn run(root: &Path, arguments: &[String]) -> Result<ExitCode> {
+    if arguments
+        .first()
+        .is_some_and(|argument| argument == "database-check")
+    {
+        return database_check::run(root, &arguments[1..]);
+    }
+
     if arguments
         .first()
         .is_some_and(|argument| argument == "release-checks")

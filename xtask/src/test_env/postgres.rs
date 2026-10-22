@@ -4,7 +4,7 @@
 
 use super::process;
 use super::{Stop, helper};
-use crate::owned_process::Signals;
+use crate::{owned_process::Signals, tooling::Environment};
 use anyhow::{Context, Result};
 use std::fs::{self, OpenOptions};
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
@@ -28,6 +28,8 @@ struct RootRunner {
 
 struct Cluster {
     path: String,
+    environment: Environment,
+    workdir: PathBuf,
     directory: PathBuf,
     data: PathBuf,
     identity: Option<RootRunner>,
@@ -35,18 +37,24 @@ struct Cluster {
     start_confirmed: bool,
 }
 
-pub(crate) async fn run(_root: &Path, command: &[String]) -> Result<i32> {
+pub(super) async fn run(
+    root: &Path,
+    command: &[String],
+    environment: &Environment,
+    signals: &mut Signals,
+) -> Result<i32> {
     if command.is_empty() {
         return Err(
             Stop::usage("Usage: cargo run -q -p xtask -- test-postgres COMMAND [ARG ...]").into(),
         );
     }
-    let mut signals = Signals::new()?;
-    let port_text = std::env::var("TEST_POSTGRES_PORT").unwrap_or_else(|_| DEFAULT_PORT.to_owned());
+    let port_text = value(environment, "TEST_POSTGRES_PORT")
+        .unwrap_or(DEFAULT_PORT)
+        .to_owned();
     let port = parse_port(&port_text).ok_or_else(|| {
         Stop::usage("TEST_POSTGRES_PORT must be an integer from 1000 through 65535.")
     })?;
-    let path = std::env::var("PATH").unwrap_or_default();
+    let path = value(environment, "PATH").unwrap_or_default().to_owned();
     for tool in TOOLS {
         if find_on_path(&path, tool).is_none() {
             return Err(
@@ -54,24 +62,26 @@ pub(crate) async fn run(_root: &Path, command: &[String]) -> Result<i32> {
             );
         }
     }
-    let identity = root_runner(&path, &mut signals).await?;
+    let identity = root_runner(&path, environment, signals).await?;
     if let Err(error) = std::net::TcpListener::bind(("127.0.0.1", port)) {
         return Err(Stop::usage(format!(
             "Refusing unavailable PostgreSQL test port: {error}"
         ))
         .into());
     }
-    let temp_root = temp_root()?;
+    let temp_root = temp_root(environment)?;
     let directory = create_private_directory(&temp_root, "simplestchat-postgres.")?;
     let mut cluster = Cluster {
         path,
+        environment: environment.clone(),
+        workdir: root.to_path_buf(),
         data: directory.join("data"),
         directory,
         identity,
         start_attempted: false,
         start_confirmed: false,
     };
-    let status = match cluster.start_and_run(port, command, &mut signals).await {
+    let status = match cluster.start_and_run(port, command, signals).await {
         Ok(status) => status,
         Err(error) => {
             if let Some(stop) = error.downcast_ref::<Stop>() {
@@ -83,7 +93,7 @@ pub(crate) async fn run(_root: &Path, command: &[String]) -> Result<i32> {
             }
         }
     };
-    Ok(cluster.finish(status, &mut signals).await)
+    Ok(cluster.finish(status, signals).await)
 }
 
 impl Cluster {
@@ -99,7 +109,12 @@ impl Cluster {
             // Transfer only this newly created private directory, never its shared parent.
             let owner = format!("{}:{}", identity.uid, identity.gid);
             let mut chown = Command::new("chown");
-            chown.arg(&owner).arg(&self.directory);
+            chown
+                .arg(&owner)
+                .arg(&self.directory)
+                .current_dir(&self.workdir)
+                .env_clear()
+                .envs(&self.environment);
             let chown = helper::run(chown, Duration::from_secs(10), None, Some(signals)).await?;
             if chown.status != 0 {
                 return Ok(chown.status);
@@ -223,8 +238,8 @@ impl Cluster {
     ) -> Result<i32> {
         let mut child = std::process::Command::new(&command[0]);
         child.args(&command[1..]);
-        child.env_clear();
-        for (name, value) in std::env::vars_os() {
+        child.current_dir(&self.workdir).env_clear();
+        for (name, value) in &self.environment {
             if !name.to_string_lossy().starts_with("PG") {
                 child.env(name, value);
             }
@@ -398,7 +413,9 @@ impl Cluster {
             command.arg(tool);
             command
         } else {
-            Command::new(tool)
+            let mut command = Command::new(tool);
+            command.current_dir(&self.workdir);
+            command
         };
         command.args(args);
         command
@@ -439,12 +456,16 @@ fn disposable_root_runner(act: bool, disposable: bool, os: &str, container: bool
     act && disposable && os == "Linux" && container
 }
 
-async fn root_runner(path: &str, signals: &mut Signals) -> Result<Option<RootRunner>> {
+async fn root_runner(
+    path: &str,
+    environment: &Environment,
+    signals: &mut Signals,
+) -> Result<Option<RootRunner>> {
     if tool_output("id", &["-u"], path, signals).await?.as_deref() != Some("0") {
         return Ok(None);
     }
-    let act = std::env::var("ACT").is_ok_and(|value| value == "true");
-    let disposable = std::env::var("LOCAL_CI_DISPOSABLE").is_ok_and(|value| value == "1");
+    let act = value(environment, "ACT") == Some("true");
+    let disposable = value(environment, "LOCAL_CI_DISPOSABLE") == Some("1");
     let os = tool_output("uname", &["-s"], path, signals)
         .await?
         .unwrap_or_default();
@@ -503,11 +524,21 @@ fn worsen(status: &mut i32) {
     }
 }
 
+fn value<'a>(environment: &'a Environment, name: &str) -> Option<&'a str> {
+    environment
+        .get(std::ffi::OsStr::new(name))
+        .and_then(|value| value.to_str())
+}
+
 /// `RUNNER_TEMP`, else `TMPDIR`, else `/tmp`: an existing absolute directory.
-pub(crate) fn temp_root() -> Result<PathBuf> {
+pub(crate) fn temp_root(environment: &Environment) -> Result<PathBuf> {
     let chosen = ["RUNNER_TEMP", "TMPDIR"]
         .iter()
-        .find_map(|name| std::env::var(name).ok().filter(|value| !value.is_empty()))
+        .find_map(|name| {
+            value(environment, name)
+                .filter(|value| !value.is_empty())
+                .map(str::to_owned)
+        })
         .unwrap_or_else(|| "/tmp".to_owned());
     let root = PathBuf::from(chosen.trim_end_matches('/'));
     if !root.is_absolute() || !root.is_dir() {
@@ -583,6 +614,8 @@ mod tests {
     fn the_postgres_account_runs_tools_through_a_cleared_environment_twice() {
         let cluster = Cluster {
             path: "/fixture/bin".into(),
+            environment: Environment::new(),
+            workdir: PathBuf::from("/tmp/workdir"),
             directory: PathBuf::from("/tmp/cluster"),
             data: PathBuf::from("/tmp/cluster/data"),
             identity: Some(RootRunner {

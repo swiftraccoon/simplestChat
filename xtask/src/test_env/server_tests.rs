@@ -21,6 +21,7 @@ impl Fixture {
     fn harness(&self) -> Harness {
         Harness {
             plan: Plan {
+                environment: Environment::new(),
                 binary: self.root.join("server"),
                 workdir: self.root.clone(),
                 database_url: "postgres://test_owner@127.0.0.1/simplestchat_test?sslmode=disable"
@@ -46,6 +47,34 @@ impl Fixture {
     }
     fn report(&self, name: &str) -> Value {
         serde_json::from_slice(&fs::read(self.root.join(name)).unwrap()).unwrap()
+    }
+
+    fn environment(&self) -> Environment {
+        fs::write(self.root.join("Cargo.toml"), b"fixture only").unwrap();
+        fs::create_dir(self.root.join("migrations")).unwrap();
+        let binary = self.tool("server", IDLE);
+        let mut environment = Environment::from([
+            ("DISPOSABLE_TEST_DATABASE".into(), "1".into()),
+            (
+                "DATABASE_URL".into(),
+                "postgres://test_owner@127.0.0.1/simplestchat_test?sslmode=disable".into(),
+            ),
+            ("TEST_SERVER_PORT".into(), "3211".into()),
+            ("TEST_MEDIA_PORT".into(), "42011".into()),
+            ("TEST_ANNOUNCE_IP".into(), "127.0.0.1".into()),
+            ("PASSKEY_E2E".into(), "1".into()),
+            ("PRESENTATION_E2E".into(), "1".into()),
+            ("LIFECYCLE_E2E".into(), "1".into()),
+        ]);
+        for (name, path) in [
+            ("TEST_SERVER_BINARY", &binary),
+            ("TEST_SERVER_WORKDIR", &self.root),
+            ("PATH", &self.root),
+            ("RUNNER_TEMP", &self.root),
+        ] {
+            environment.insert(name.into(), path.as_os_str().to_owned());
+        }
+        environment
     }
 }
 impl Drop for Fixture {
@@ -179,4 +208,102 @@ async fn queued_turn_readiness_cancellation_does_not_poll_a_socket() {
         fixture.report("turn-shutdown.json")["groupCleanupPassed"],
         true
     );
+}
+
+#[tokio::test]
+async fn independent_captured_environments_determine_plans_without_global_mutation() {
+    let fixture = Fixture::new();
+    let mut environment = fixture.environment();
+    let (_sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+    let mut signals = Signals::injected(receiver);
+    let command = vec!["/this-must-never-run".into()];
+    let first = plan(&fixture.root, &command, &environment, &mut signals)
+        .await
+        .unwrap();
+    assert_eq!(first.port, 3211);
+    assert_eq!(first.media_port, 42011);
+    assert_eq!(first.announce, Ipv4Addr::LOCALHOST);
+    assert_eq!(first.base_url, "http://localhost:3211");
+    assert!(first.presentation);
+    assert!(first.metrics_token.is_some());
+    assert_eq!(first.artifacts.parent(), Some(fixture.root.as_path()));
+    assert!(first.artifacts.is_dir());
+
+    environment.insert("TEST_SERVER_PORT".into(), "3212".into());
+    environment.insert("PASSKEY_E2E".into(), "0".into());
+    environment.insert("PRESENTATION_E2E".into(), "0".into());
+    environment.insert("LIFECYCLE_E2E".into(), "0".into());
+    let second = plan(&fixture.root, &command, &environment, &mut signals)
+        .await
+        .unwrap();
+    assert_eq!(second.port, 3212);
+    assert_eq!(second.base_url, "http://127.0.0.1:3212");
+    assert!(!second.presentation);
+    assert!(second.metrics_token.is_none());
+    assert_eq!(
+        first
+            .environment
+            .get(OsStr::new("TEST_SERVER_PORT"))
+            .and_then(|value| value.to_str()),
+        Some("3211")
+    );
+    assert_eq!(first.base_url, "http://localhost:3211");
+    assert_ne!(first.artifacts, second.artifacts);
+
+    environment.insert("TEST_SERVER_PORT".into(), "".into());
+    let refused = plan(&fixture.root, &command, &environment, &mut signals)
+        .await
+        .err()
+        .unwrap();
+    assert_eq!(refused.downcast_ref::<Stop>().unwrap().code, 2);
+}
+
+#[tokio::test]
+async fn test_command_uses_captured_values_and_owned_overrides_without_ambient_cargo() {
+    let fixture = Fixture::new();
+    let program = fixture.tool(
+        "test-command",
+        r#"import json,os
+from pathlib import Path
+value={'captured':os.environ.get('CAPTURED_ONLY'),
+ 'ambientCargo':any(name.startswith('CARGO_') for name in os.environ),
+ 'pid':os.environ.get('TEST_SERVER_PID'),
+ 'ownedToken':os.environ.get('TEST_METRICS_TOKEN')=='owned-test-token',
+ 'hasToken':'TEST_METRICS_TOKEN' in os.environ,'community':os.environ.get('COMMUNITY_E2E'),
+ 'url':os.environ.get('BASE_URL')}
+Path(__file__).with_name('captured.json').write_text(json.dumps(value))
+"#,
+    );
+    let mut harness = fixture.harness();
+    harness.plan.environment = Environment::from([
+        ("CAPTURED_ONLY".into(), "original-selection".into()),
+        ("TEST_SERVER_PID".into(), "unowned-pid-sentinel".into()),
+        (
+            "TEST_METRICS_TOKEN".into(),
+            "unowned-secret-sentinel".into(),
+        ),
+    ]);
+    let command = vec![program.to_string_lossy().into_owned()];
+    for metrics in [false, true] {
+        harness.plan.metrics_token = metrics.then(|| "owned-test-token".into());
+        let (_sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+        let mut signals = Signals::injected(receiver);
+        assert_eq!(
+            harness
+                .run_child(&command, 1234, &mut signals)
+                .await
+                .unwrap(),
+            0
+        );
+        let observed = fixture.report("captured.json");
+        // Interpreter launchers can add their own SDK variables on macOS;
+        // Cargo's ambient test-run context still must not cross this boundary.
+        assert_eq!(observed["ambientCargo"], false);
+        assert_eq!(observed["captured"], "original-selection");
+        assert_eq!(observed["pid"], "1234");
+        assert_eq!(observed["community"], "1");
+        assert_eq!(observed["url"], "http://127.0.0.1:3119");
+        assert_eq!(observed["hasToken"], metrics);
+        assert_eq!(observed["ownedToken"], metrics);
+    }
 }

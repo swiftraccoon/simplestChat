@@ -12,6 +12,7 @@ pub(super) enum Program {
     Python,
     CargoAudit,
     Node,
+    PgConfig,
 }
 impl Program {
     pub(super) fn name(self) -> &'static str {
@@ -23,6 +24,7 @@ impl Program {
             Self::Python => "python3",
             Self::CargoAudit => "cargo-audit",
             Self::Node => "node",
+            Self::PgConfig => "pg_config",
         }
     }
 }
