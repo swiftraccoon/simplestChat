@@ -1,7 +1,7 @@
 //! Fixed CI inputs; ordinary local invocations never select an ambient engine.
 
+use crate::ci::runner::{authorized, text};
 use crate::tooling::{Environment, Failure, Result};
-use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
 #[derive(Clone)]
@@ -13,13 +13,6 @@ pub(super) struct Context {
     pub image: String,
     pub local_arm: bool,
     pub cache_hit: bool,
-}
-
-fn text<'a>(environment: &'a Environment, key: &str) -> &'a str {
-    environment
-        .get(OsStr::new(key))
-        .and_then(|value| value.to_str())
-        .unwrap_or("")
 }
 
 pub(super) fn digest(value: &str) -> bool {
@@ -43,13 +36,7 @@ impl Context {
         verify: bool,
     ) -> Result<Self> {
         let local = text(&environment, "ACT") == "true";
-        let authorized = if local {
-            text(&environment, "LOCAL_CI_DISPOSABLE") == "1"
-        } else {
-            text(&environment, "GITHUB_ACTIONS") == "true"
-                && text(&environment, "RUNNER_ENVIRONMENT") == "github-hosted"
-        };
-        if system != "Linux" || !authorized {
+        if !authorized(&environment, system) {
             return Err(Failure::new(
                 2,
                 "Production images require hosted GitHub or disposable local CI.",

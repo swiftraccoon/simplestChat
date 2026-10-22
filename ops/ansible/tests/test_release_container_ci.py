@@ -1,6 +1,5 @@
 """Offline policy checks for disposable-host release integration in CI."""
 
-import subprocess
 import unittest
 from functools import cached_property
 from pathlib import Path
@@ -190,76 +189,18 @@ class ReleaseContainerCiTests(unittest.TestCase):
         self.assertEqual(step["shell"], "bash")
         self.assertNotIn("continue-on-error", step)
         self.assertNotIn("if", step)
-        command = string(step, "run")
-        self.assertTrue(command.startswith("set -euo pipefail\n"))
-        self.assertIn('mktemp -d "${RUNNER_TEMP}/simplestchat-compose.XXXXXXXX"', command)
-        self.assertIn(
-            "curl --disable --fail --silent --show-error --location --proto '=https' --tlsv1.2",
-            command,
+        self.assertEqual(
+            string(step, "run"),
+            "cargo run --locked -q -p xtask -- ci install-compose",
         )
-        self.assertIn("--connect-timeout 10 --max-time 60", command)
-        self.assertIn(
-            "https://github.com/docker/compose/releases/download/v5.6.0/docker-compose-linux-${compose_arch}",
-            command,
-        )
-        self.assertIn("40343e21ca777173e69cff5dbafeb37c6f81f3b0d57d9e597f036e95eb63e76a", command)
-        self.assertIn('"${compose_download}/docker-compose" | sha256sum --check --strict', command)
-        self.assertIn("sudo install -d -m 0755 /usr/local/lib/docker/cli-plugins", command)
-        installation = (
-            'sudo install -m 0755 "${compose_download}/docker-compose" '
-            + "/usr/local/lib/docker/cli-plugins/docker-compose"
-        )
-        self.assertIn(installation, command)
-        self.assertLess(command.index("sha256sum --check --strict"), command.index(installation))
         self.assertLess(
-            command.index(installation), command.index("docker compose version --short")
+            self.steps.index(step), self.steps.index(self.step("Validate Compose rendering"))
         )
-        self.assertIn(
-            'test "$(timeout --signal=TERM --kill-after=2s 10s '
-            + 'docker compose version --short)" = 5.6.0',
-            command,
+        self.assertLess(
+            self.steps.index(step), self.steps.index(self.step("Build production container"))
         )
-        self.assertIn("sudo env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin LC_ALL=C", command)
-        self.assertIn(
-            "timeout --signal=TERM --kill-after=2s 10s /usr/bin/docker --host unix:///var/run/docker.sock",
-            command,
-        )
-        self.assertEqual(command.count('compose version --short)" = 5.6.0'), 2)
-        self.assertNotRegex(command, r"\b(?:apt|apt-get|systemctl|service|dockerd)\b")
-        self.assertNotRegex(command, r"\b(?:latest|prune|remove|upgrade)\b")
-
-    def test_compose_selects_an_authenticated_native_binary_before_any_download(self) -> None:
-        """Exercise both native controllers and fail closed on unsupported machines."""
-        command = string(self.step(COMPOSE_TOOL), "run")
-        selection, separator, _ = command.partition("compose_download=")
-        self.assertEqual(separator, "compose_download=")
-        script = (
-            'uname() { printf "%s\\n" "$TEST_MACHINE"; }\n'
-            + selection
-            + 'printf "%s %s\\n" "$compose_arch" "$compose_sha256"\n'
-        )
-        digests = {
-            "x86_64": "40343e21ca777173e69cff5dbafeb37c6f81f3b0d57d9e597f036e95eb63e76a",
-            "aarch64": "733ec76717ceb59052a9609b9dadfb523b2df8eab57a54212872d10a58078ea2",
-        }
-        for machine in ("x86_64", "aarch64", "arm64", "riscv64"):
-            with self.subTest(machine=machine):
-                result = subprocess.run(  # noqa: S603 -- Execute only the checked local selection block.
-                    ["/bin/bash", "-c", script],
-                    env={"TEST_MACHINE": machine},
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                    timeout=5,
-                )
-                if machine == "riscv64":
-                    self.assertNotEqual(result.returncode, 0)
-                    self.assertIn("Unsupported Compose controller architecture", result.stderr)
-                    self.assertEqual(result.stdout, "")
-                else:
-                    architecture = "aarch64" if machine == "arm64" else machine
-                    self.assertEqual(result.returncode, 0, result.stderr)
-                    self.assertEqual(result.stdout, f"{architecture} {digests[architecture]}\n")
+        # Pin selection, verified bytes, literal privilege/TLS argv, both version
+        # checks and failure/cancellation ownership use actual Rust/fixture tests.
 
     def test_guest_compose_contract_runs_with_required_pinned_renderer(self) -> None:
         """The real JSON contract regression cannot silently skip in production-image CI."""

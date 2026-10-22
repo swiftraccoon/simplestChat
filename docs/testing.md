@@ -651,6 +651,33 @@ dependency guards and production-image non-root/loader checks.
 The [browser compatibility workflow](../web/e2e/README.md#ci) adds weekly and
 manual Firefox/Linux and WebKit/macOS runs.
 
+The preceding Compose installation uses
+`cargo run --locked -q -p xtask -- ci install-compose` in the same explicit
+hosted/disposable Linux contexts. It authenticates the existing Compose 5.6.0
+AMD64/ARM64 digests before either fixed `sudo install` command. Curl retains its
+HTTPS/TLS policy, 10-second connection and 60-second transfer bounds, plus a
+256 MiB artifact cap. Output goes directly to a retained descriptor in a fresh
+0700 directory. Both the download and the private install copy receive bounded
+SHA-256 checks with stable metadata/bindings; input files close before privilege.
+The caller's version check retains its 10-second limit and two-second kill grace.
+The root check retains its clean environment, fixed daemon socket and inner
+GNU timeout (10 seconds plus two-second kill grace), with an outer 15-second
+owned-command bound. Both must report exactly 5.6.0.
+
+All exits attempt owned staging cleanup. A fixed private
+`compose-install-<random>.json` records stage, status, verified/download state,
+installation attempts/completion, version checks and separate process/staging
+cleanup proofs. The process proof covers the owned CLI group; sudo can separate
+root process groups. The retained inner timeout bounds the root version check.
+Its parent
+namespace stays descriptor-bound through the final exclusive 0600 report write;
+received command text and paths never enter that evidence. An interrupted
+privileged install can already have changed the plugin; cleanup retires staging
+and does not undo that installation. The step keeps its three-minute budget,
+including its first cold xtask compile; hosted cold-start timing remains
+unmeasured. Owned fake commands verify policy and cleanup, without downloading,
+installing or contacting an engine.
+
 ### Run CI locally
 
 Commit the candidate locally, then run the complete required workflow without a

@@ -14,15 +14,19 @@ use tokio::io::AsyncReadExt;
 mod automation;
 mod browser_suite;
 mod codeql_cache;
+mod command;
 mod evidence_copy;
 mod fingerprint;
 mod github_output;
 mod inputs;
+mod install_compose;
 mod io;
 mod native_security;
+mod process;
 mod production_image;
 mod receipts;
 mod required;
+mod runner;
 #[cfg(test)]
 mod tests;
 
@@ -31,7 +35,8 @@ const USAGE: &str = "usage: cargo run --locked -q -p xtask -- ci key|save|verify
        cargo run --locked -q -p xtask -- ci native-security|automation|codeql-cache|required\n\
        cargo run --locked -q -p xtask -- ci browser-suite SUITE\n\
        cargo run --locked -q -p xtask -- ci copy-evidence KIND\n\
-       cargo run --locked -q -p xtask -- ci production-image build|verify";
+       cargo run --locked -q -p xtask -- ci production-image build|verify\n\
+       cargo run --locked -q -p xtask -- ci install-compose";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Scope {
@@ -258,6 +263,12 @@ fn print_key(context: &Context, scope: Scope, github_output: bool) -> Result<()>
 }
 
 pub(crate) fn run(root: &Path, arguments: &[String]) -> Result<ExitCode> {
+    if arguments
+        .first()
+        .is_some_and(|argument| argument == "install-compose")
+    {
+        return install_compose::run(root, &arguments[1..]);
+    }
     if arguments
         .first()
         .is_some_and(|argument| argument == "production-image")

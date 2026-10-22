@@ -263,6 +263,7 @@ test('context excludes local-only descendants while retaining production inputs'
     'xtask/src/ci_retention/private.env',
     'xtask/src/ci/codeql_cache/private.env',
     'xtask/src/ci/production_image/private.env',
+    'xtask/src/ci/install_compose/private.env',
     'web/node_modules/example/index.js', 'web/e2e/results/report.json',
     'web/scripts/CLAUDE.md', 'web/scripts/local-only.mjs',
     'web/public/private.env', 'web/public/unlisted.html', 'web/src/CLAUDE.md',

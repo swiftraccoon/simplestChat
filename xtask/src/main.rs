@@ -40,6 +40,7 @@ Commands:
                 browser-suite runs a maintained suite in Chromium then Firefox.
                 copy-evidence preserves a fixed private local-CI artifact projection.
                 production-image builds and verifies the immutable CI production image.
+                install-compose installs the authenticated Compose release in explicit CI.
                 CodeQL extraction keys never substitute for analyzed databases.
   ci-evidence   Record or require complete executed local-CI matrix evidence.
   ci-retention  Print an allowlisted main-cache retention plan; --apply requires

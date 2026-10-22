@@ -26,41 +26,7 @@ for migration do
 done
 "#;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum Program {
-    Git,
-    Docker,
-}
-impl Program {
-    pub(super) fn name(self) -> &'static str {
-        match self {
-            Self::Git => "git",
-            Self::Docker => "docker",
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub(super) struct Command {
-    pub program: Program,
-    pub arguments: Vec<OsString>,
-    pub timeout: Duration,
-    pub grace: Duration,
-    pub capture: Option<u64>,
-    pub cleanup: bool,
-}
-impl Command {
-    pub(super) fn capture(program: Program, args: &[&str]) -> Self {
-        Self {
-            program,
-            arguments: args.iter().map(OsString::from).collect(),
-            timeout: Duration::from_secs(30),
-            grace: Duration::from_secs(5),
-            capture: Some(4 * 1024 * 1024),
-            cleanup: false,
-        }
-    }
-}
+pub(super) use crate::ci::command::{Command, Program};
 
 pub(super) fn arm(directory: &Path) -> Command {
     let mut command = Command::capture(

@@ -78,7 +78,11 @@ elif args[:2]==['buildx','rm']:
 else: sys.exit(92)
 "#,
     );
-    let mut native = Native::new(&fixture.context, signals());
+    let mut native = Native::new(
+        &fixture.context.root,
+        &fixture.context.environment,
+        signals(),
+    );
     execute::build(&fixture.context, &mut native).await.unwrap();
     assert_eq!(
         fixture.output(),
@@ -101,7 +105,11 @@ async fn actual_command_exit_spawn_refusals_and_private_capture_fail_closed() {
         &mut fixture,
         "print('PRIVATE-SENTINEL',file=sys.stderr)\nsys.exit(42)",
     );
-    let mut native = Native::new(&fixture.context, signals());
+    let mut native = Native::new(
+        &fixture.context.root,
+        &fixture.context.environment,
+        signals(),
+    );
     let error = native
         .run(Command::capture(Program::Docker, &["fixture"]))
         .await
@@ -126,7 +134,11 @@ async fn actual_command_exit_spawn_refusals_and_private_capture_fail_closed() {
         "PATH".into(),
         fixture.root.join("fake commands").into_os_string(),
     );
-    let mut native = Native::new(&fixture.context, signals());
+    let mut native = Native::new(
+        &fixture.context.root,
+        &fixture.context.environment,
+        signals(),
+    );
     assert_eq!(
         native
             .run(Command::capture(Program::Docker, &["fixture"]))
@@ -153,7 +165,11 @@ while True: time.sleep(.01)
 "#,
         );
         let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
-        let mut native = Native::new(&fixture.context, Signals::injected(receiver));
+        let mut native = Native::new(
+            &fixture.context.root,
+            &fixture.context.environment,
+            Signals::injected(receiver),
+        );
         let mut request = Command::capture(Program::Docker, &["fixture"]);
         request.grace = Duration::from_millis(30);
         request.timeout = Duration::from_secs(3);
@@ -215,7 +231,11 @@ sys.stdout.write('PRIVATE-SENTINEL'*10000);sys.stdout.flush()
 while True: time.sleep(.01)
 "#,
     );
-    let mut native = Native::new(&fixture.context, signals());
+    let mut native = Native::new(
+        &fixture.context.root,
+        &fixture.context.environment,
+        signals(),
+    );
     let mut command = Command::capture(Program::Docker, &["fixture"]);
     command.capture = Some(16);
     command.grace = Duration::from_millis(30);
@@ -249,7 +269,11 @@ if pid==0:
 (root/'descendant').write_text(str(pid))
 "#,
     );
-    let mut native = Native::new(&fixture.context, signals());
+    let mut native = Native::new(
+        &fixture.context.root,
+        &fixture.context.environment,
+        signals(),
+    );
     let result = native
         .run(Command::capture(Program::Docker, &["fixture"]))
         .await;
@@ -317,7 +341,11 @@ else: sys.exit(93)
         .environment
         .insert("PRODUCTION_IMAGE".into(), IMAGE.into());
     let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
-    let mut native = Native::new(&fixture.context, Signals::injected(receiver));
+    let mut native = Native::new(
+        &fixture.context.root,
+        &fixture.context.environment,
+        Signals::injected(receiver),
+    );
     let cancel = async {
         wait(&fixture.root.join("ready")).await;
         sender.send(143).unwrap();

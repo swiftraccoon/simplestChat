@@ -40,7 +40,7 @@ pub(super) fn run(root: &Path, arguments: &[String]) -> anyhow::Result<ExitCode>
             .map_err(|_| files::failure("Production image runtime unavailable."))?;
         runtime.block_on(async {
             let signals = crate::ci::browser_suite::process::Signals::new()?;
-            let mut runner = process::Native::new(&context, signals);
+            let mut runner = process::Native::new(&context.root, &context.environment, signals);
             if arguments[0] == "build" {
                 execute::build(&context, &mut runner).await
             } else {
