@@ -68,6 +68,15 @@ The later change to optional local vendor analysis removes the `security-deep`
 hosted job and its obsolete review. Of those two historical records, only the
 `security-fast` installer review remains active.
 
+Using the existing compiled npm PATH publisher moves that fast-job installer
+from `security.yml#jobs/security-fast/steps/3/uses` to `steps/2/uses`, before
+npm setup. The immutable `89b12181fb390509a0842a86cc55eeb8eb928c1d` action and
+explicit Rust 1.99.0 are unchanged, as are the fingerprint, official HTTPS
+bootstrap boundary and 2026-11-29 expiry. Node's authenticated npm installer
+still runs first within its setup step; the helper only publishes the fixed
+owned npm directory. Checkout retains disabled credentials and the source
+security gate remains blocking. Hosted cold compilation time is unmeasured.
+
 On 2026-10-05, the same informational installer finding was reviewed for
 `codeql.yml#jobs/source-analysis/steps/5/uses`. The Rust matrix entry installs
 1.98.1 only when its exact evaluated database is absent. The maintained local

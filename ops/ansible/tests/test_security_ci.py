@@ -556,34 +556,58 @@ class SecurityWorkflowTests(unittest.TestCase):
 
     def test_npm_path_publication_follows_installer_and_pinned_rust_bootstrap(self) -> None:
         """Every typed publication is reachable with Rust and keeps installer failure fatal."""
-        jobs = obj(workflow("ci.yml"), "jobs")
-        for name in ("rust-lint", "rust-test", "browser", "web", "deployment"):
-            with self.subTest(job=name):
-                steps = objects(jobs, name, "steps")
-                install = next(
-                    step for step in steps if step.get("name") == "Install checksum-pinned npm"
-                )
-                lines = string(install["run"]).splitlines()
-                self.assertEqual(
-                    lines,
-                    [
-                        'node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"',
-                        "cargo run --locked -q -p xtask -- ci npm-path",
-                    ],
-                )
-                self.assertNotIn("continue-on-error", install)
-                self.assertEqual(install["working-directory"], "${{ github.workspace }}")
-                bootstrap = [
-                    index
-                    for index, step in enumerate(steps)
-                    if "if" not in step
-                    and (
-                        string(step.get("uses", "")).startswith("dtolnay/rust-toolchain@")
-                        or step.get("run") == "rustup toolchain install --profile minimal"
-                    )
-                ]
-                self.assertTrue(bootstrap)
-                self.assertLess(min(bootstrap), steps.index(install))
+        sites = {
+            "ci.yml": ("rust-lint", "rust-test", "browser", "web", "deployment"),
+            "performance.yml": ("compare", "impaired", "soak"),
+            "browser-compatibility.yml": ("browser",),
+            "security.yml": ("security-fast", "security-mutation"),
+            "ice-isolation.yml": ("same-host",),
+        }
+        for filename, names in sites.items():
+            jobs = obj(workflow(filename), "jobs")
+            for name in names:
+                with self.subTest(workflow=filename, job=name):
+                    self.assert_npm_publication(filename, name, objects(jobs, name, "steps"))
+
+    def assert_npm_publication(self, filename: str, name: str, steps: list[JsonObject]) -> None:
+        """Require exact installer/publication argv and a prior repository-pinned compiler."""
+        install = next(step for step in steps if step.get("name") == "Install checksum-pinned npm")
+        lines = [line for line in string(install["run"]).splitlines() if not line.startswith("#")]
+        expected = [
+            'node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"',
+            "cargo run --locked -q -p xtask -- ci npm-path",
+        ]
+        if filename == "ice-isolation.yml":
+            expected.insert(1, "rustup toolchain install --profile minimal")
+        self.assertEqual(lines, expected)
+        self.assertNotIn("continue-on-error", install)
+        if filename == "ci.yml" and name == "rust-test":
+            self.assertEqual(install["if"], "steps.verified.outputs.cache-hit != 'true'")
+        else:
+            self.assertNotIn("if", install)
+        self.assertEqual(install["working-directory"], "${{ github.workspace }}")
+        bootstrap = [
+            index
+            for index, step in enumerate(steps)
+            if "if" not in step
+            and (
+                string(step.get("uses", "")).startswith("dtolnay/rust-toolchain@")
+                or step.get("uses") == "./.github/actions/native-toolchain"
+                or "rustup toolchain install --profile minimal"
+                in string(step.get("run", "")).splitlines()
+            )
+        ]
+        self.assertTrue(bootstrap)
+        first = min(bootstrap)
+        self.assertLessEqual(first, steps.index(install))
+        if first == steps.index(install):
+            self.assertEqual(filename, "ice-isolation.yml")
+        elif string(steps[first].get("uses", "")).startswith("dtolnay/rust-toolchain@"):
+            self.assertEqual(
+                steps[first]["uses"],
+                "dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d",
+            )
+            self.assertEqual(string(steps[first], "with", "toolchain"), "1.99.0")
 
     def test_local_codeql_runs_full_pinned_analysis_before_recording_success(self) -> None:
         """Local success requires each real language policy; hosted uploads stay on GitHub."""

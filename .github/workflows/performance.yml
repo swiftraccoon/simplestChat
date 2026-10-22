@@ -77,7 +77,7 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: |
           node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"
-          echo "$RUNNER_TEMP/simplestchat-npm-12.2.0/bin" >> "$GITHUB_PATH"
+          cargo run --locked -q -p xtask -- ci npm-path
 
       # The baseline is a detached worktree sharing this checkout's dependency
       # artifacts; only its workspace crate and vendored path crates compile.
@@ -179,7 +179,7 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: |
           node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"
-          echo "$RUNNER_TEMP/simplestchat-npm-12.2.0/bin" >> "$GITHUB_PATH"
+          cargo run --locked -q -p xtask -- ci npm-path
 
       - name: Build the server and the generator
         run: |
@@ -280,7 +280,7 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: |
           node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"
-          echo "$RUNNER_TEMP/simplestchat-npm-12.2.0/bin" >> "$GITHUB_PATH"
+          cargo run --locked -q -p xtask -- ci npm-path
 
       - name: Build server and load generator
         run: cargo build --locked --workspace --bins

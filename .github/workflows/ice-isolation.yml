@@ -35,15 +35,15 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: |
           node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"
-          echo "$RUNNER_TEMP/simplestchat-npm-12.2.0/bin" >> "$GITHUB_PATH"
+          # The runner's rustup reads rust-toolchain.toml; only xtask tooling is built.
+          rustup toolchain install --profile minimal
+          cargo run --locked -q -p xtask -- ci npm-path
 
       - name: Install pinned browser tooling
         id: tooling
         run: |
           npm --prefix web/e2e ci --ignore-scripts
           npm --prefix web/e2e exec -- playwright install webkit chromium
-          # The runner's rustup reads rust-toolchain.toml; only the xtask tooling is built.
-          rustup toolchain install --profile minimal
           test_media_ip="$(cargo run --locked -q -p xtask -- media-ip)"
           echo "TEST_ANNOUNCE_IP=${test_media_ip}" >> "${GITHUB_ENV}"
 

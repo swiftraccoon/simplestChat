@@ -79,7 +79,7 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: |
           node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"
-          echo "$RUNNER_TEMP/simplestchat-npm-12.2.0/bin" >> "$GITHUB_PATH"
+          cargo run --locked -q -p xtask -- ci npm-path
 
       - name: Configure native dependencies and media address
         run: |

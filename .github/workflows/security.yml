@@ -27,16 +27,17 @@ jobs:
         with:
           node-version: 26.10.0
 
-      - name: Install checksum-pinned npm
-        working-directory: ${{ github.workspace }}
-        run: |
-          node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"
-          echo "$RUNNER_TEMP/simplestchat-npm-12.2.0/bin" >> "$GITHUB_PATH"
-
       - name: Install pinned Rust toolchain
         uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable (2026-10-01)
         with:
           toolchain: 1.99.0
+
+      - name: Install checksum-pinned npm
+        working-directory: ${{ github.workspace }}
+        run: |
+          node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"
+          cargo run --locked -q -p xtask -- ci npm-path
+
       - name: Install source-check prerequisites
         run: |
           sudo apt-get update
@@ -99,7 +100,7 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: |
           node build/install-npm.mjs "$RUNNER_TEMP/simplestchat-npm-12.2.0"
-          echo "$RUNNER_TEMP/simplestchat-npm-12.2.0/bin" >> "$GITHUB_PATH"
+          cargo run --locked -q -p xtask -- ci npm-path
 
       - name: Prepare the locked source dependency cache
         run: |
