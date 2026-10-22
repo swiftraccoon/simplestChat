@@ -222,16 +222,7 @@ jobs:
         run: cargo run --locked -q -p xtask -- check --rust
 
       - name: Audit Rust dependencies
-        run: |
-          audit_tools="$(mktemp -d "$RUNNER_TEMP/rust-audit-tools.XXXXXXXX")/tools"
-          python3 build/security_tools.py install --tools cargo-audit --directory "$audit_tools"
-          cargo_audit="$(python3 build/security_tools.py path cargo-audit --directory "$audit_tools")"
-          # SQLx 0.9 removes the old optional rsa lockfile entry. Keep its
-          # advisory unsuppressed so a future reintroduction is audited.
-          # The atty and rand advisories occur only in mediasoup-sys build tools.
-          "$cargo_audit" audit --deny unsound \
-            --ignore RUSTSEC-2021-0145 \
-            --ignore RUSTSEC-2026-0097
+        run: cargo run --locked -q -p xtask -- ci audit-rust
 
       - name: Record the successful rust-lint verification
         if: steps.verified.outputs.cache-hit != 'true'

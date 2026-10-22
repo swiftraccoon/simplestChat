@@ -11,6 +11,7 @@ use std::process::{ExitCode, Stdio};
 use std::time::Duration;
 use tokio::io::AsyncReadExt;
 
+mod audit_rust;
 mod automation;
 mod browser_suite;
 mod codeql_cache;
@@ -28,6 +29,7 @@ mod production_image;
 mod receipts;
 mod required;
 mod runner;
+mod selected_executable;
 #[cfg(test)]
 mod tests;
 
@@ -38,6 +40,7 @@ const USAGE: &str = "usage: cargo run --locked -q -p xtask -- ci key|save|verify
        cargo run --locked -q -p xtask -- ci copy-evidence KIND\n\
        cargo run --locked -q -p xtask -- ci production-image build|verify\n\
        cargo run --locked -q -p xtask -- ci install-compose\n\
+       cargo run --locked -q -p xtask -- ci audit-rust\n\
        cargo run --locked -q -p xtask -- ci npm-path";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -270,6 +273,12 @@ pub(crate) fn run(root: &Path, arguments: &[String]) -> Result<ExitCode> {
         .is_some_and(|argument| argument == "npm-path")
     {
         return npm_path::run(&arguments[1..]);
+    }
+    if arguments
+        .first()
+        .is_some_and(|argument| argument == "audit-rust")
+    {
+        return audit_rust::run(root, &arguments[1..]);
     }
     if arguments
         .first()

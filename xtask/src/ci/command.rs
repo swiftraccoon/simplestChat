@@ -9,6 +9,8 @@ pub(super) enum Program {
     Docker,
     Curl,
     Sudo,
+    Python,
+    CargoAudit,
 }
 impl Program {
     pub(super) fn name(self) -> &'static str {
@@ -17,6 +19,8 @@ impl Program {
             Self::Docker => "docker",
             Self::Curl => "curl",
             Self::Sudo => "sudo",
+            Self::Python => "python3",
+            Self::CargoAudit => "cargo-audit",
         }
     }
 }
@@ -30,6 +34,7 @@ pub(super) struct Command {
     pub capture: Option<u64>,
     pub cleanup: bool,
     pub stdout: Option<std::sync::Arc<std::fs::File>>,
+    pub executable: Option<std::sync::Arc<super::selected_executable::Executable>>,
 }
 impl Command {
     pub(super) fn capture(program: Program, args: &[&str]) -> Self {
@@ -41,6 +46,7 @@ impl Command {
             capture: Some(4 * 1024 * 1024),
             cleanup: false,
             stdout: None,
+            executable: None,
         }
     }
 }

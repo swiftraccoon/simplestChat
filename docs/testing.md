@@ -690,6 +690,34 @@ changes by the same filesystem owner. The web job installs its pinned Rust
 toolchain before this step. Filesystem fixtures cover the publication boundary;
 the Node installer's existing tests remain the reference for installation.
 
+The unconditional Rust dependency audit uses
+`cargo run --locked -q -p xtask -- ci audit-rust` in the same explicit
+hosted/disposable Linux contexts. It retains the reference
+`python3 build/security_tools.py install --tools cargo-audit --directory PATH`
+and `path cargo-audit --directory PATH` commands. That installer authenticates
+the scanner and its receipt. The native command accepts only the selected
+`tools/bin/cargo-audit` beneath its fresh 0700 prefix, retains its descriptors,
+and rechecks file and directory identities before execution and after audit.
+Files must be executable, regular, single-link and at most 256 MiB; directories
+and the scanner cannot permit group/world writes. This is a namespace/identity
+snapshot, not descriptor execution or a lock against a compromised same-UID
+runner.
+
+The scanner retains inherited audit output and exactly `audit --deny unsound`,
+with only `RUSTSEC-2021-0145` and `RUSTSEC-2026-0097` excluded for mediasoup-sys
+build tools. The removed optional SQLx/rsa advisory remains unsuppressed.
+Installer, path resolution and audit share one 30-minute command deadline; the
+job remains unconditional with its existing 30-minute budget, including any
+cold compilation. Every exit attempts descriptor closes and bounded,
+descriptor-relative prefix cleanup without following links. A fixed private
+`rust-audit-<random>.json` records stages, status and separate executable,
+CLI-process-group and namespace cleanup evidence through the retained parent
+descriptor. Received output and paths never enter that report. SIGINT/SIGTERM
+return 130/143, timeout returns 124, invalid context returns 2, and subprocess
+failures preserve their status. Owned fake installers/scanners verify these
+boundaries without an install, advisory database download or live audit;
+authenticated Linux installation and cold-start runtime remain unmeasured.
+
 ### Run CI locally
 
 Commit the candidate locally, then run the complete required workflow without a

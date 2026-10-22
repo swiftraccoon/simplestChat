@@ -786,6 +786,9 @@ class VerifiedWorkflowTests(unittest.TestCase):
             self.assertNotIn("if", step)
             if name == "Check helper syntax, safety and cleanup":
                 self.assertEqual(step["run"], "cargo run --locked -q -p xtask -- check --helpers")
+            else:
+                self.assertEqual(step["run"], "cargo run --locked -q -p xtask -- ci audit-rust")
+        self.assertEqual(obj(jobs, "rust-lint")["timeout-minutes"], "30")
         browser = objects(obj(jobs, "browser"), "steps")
         for step in browser:
             if "node web/e2e/" in string(step.get("run", "")):

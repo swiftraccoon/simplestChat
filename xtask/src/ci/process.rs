@@ -55,7 +55,18 @@ impl<'a> Native<'a> {
         let mut command = tooling::command(
             self.root,
             self.environment,
-            request.program.name(),
+            match (&request.executable, request.program) {
+                (Some(executable), super::command::Program::CargoAudit) => {
+                    executable.validate()?.as_os_str()
+                }
+                (None, super::command::Program::CargoAudit) | (Some(_), _) => {
+                    return Err(Failure::new(
+                        1,
+                        "Audit execution requires a validated selected executable.",
+                    ));
+                }
+                (None, _) => std::ffi::OsStr::new(request.program.name()),
+            },
             &request.arguments,
         );
         use std::os::unix::process::CommandExt;

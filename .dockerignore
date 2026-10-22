@@ -118,6 +118,9 @@ xtask/src/ci/production_image/**
 !xtask/src/ci/install_compose/
 xtask/src/ci/install_compose/**
 !xtask/src/ci/install_compose/*.rs
+!xtask/src/ci/audit_rust/
+xtask/src/ci/audit_rust/**
+!xtask/src/ci/audit_rust/*.rs
 !xtask/src/ci/codeql_cache/
 xtask/src/ci/codeql_cache/**
 !xtask/src/ci/codeql_cache/*.rs
