@@ -18,6 +18,7 @@ mod browser_suite;
 mod codeql_cache;
 mod command;
 mod commit_subject;
+mod container_smoke;
 mod database_check;
 mod evidence_copy;
 mod fingerprint;
@@ -51,6 +52,7 @@ const USAGE: &str = "usage: cargo run --locked -q -p xtask -- ci key|save|verify
        cargo run --locked -q -p xtask -- ci release-checks\n\
        cargo run --locked -q -p xtask -- ci release-controller start|wait\n\
        cargo run --locked -q -p xtask -- ci commit-subject\n\
+       cargo run --locked -q -p xtask -- ci container-smoke\n\
        cargo run --locked -q -p xtask -- ci database-check monitoring|restore|migration\n\
        cargo run --locked -q -p xtask -- ci session-soak\n\
        cargo run --locked -q -p xtask -- ci npm-path\n\
@@ -281,7 +283,17 @@ fn print_key(context: &Context, scope: Scope, github_output: bool) -> Result<()>
     }
 }
 
+pub(crate) fn run_container_smoke(root: &Path, arguments: &[String]) -> Result<ExitCode> {
+    container_smoke::run_local(root, arguments)
+}
+
 pub(crate) fn run(root: &Path, arguments: &[String]) -> Result<ExitCode> {
+    if arguments
+        .first()
+        .is_some_and(|argument| argument == "container-smoke")
+    {
+        return container_smoke::run_ci(root, &arguments[1..]);
+    }
     if arguments
         .first()
         .is_some_and(|argument| argument == "session-soak")

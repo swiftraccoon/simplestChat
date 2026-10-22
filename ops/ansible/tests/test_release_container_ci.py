@@ -97,7 +97,12 @@ class ReleaseContainerCiTests(unittest.TestCase):
         verify = string(self.step("Verify production image contents and user"), "run")
         self.assertEqual(verify, "cargo run --locked -q -p xtask -- ci production-image verify")
         smoke = self.step("Production startup, migration and database-backed API smoke")
-        self.assertEqual(smoke["run"], "build/test-container.sh")
+        self.assertEqual(smoke["run"], "cargo run --locked -q -p xtask -- ci container-smoke")
+        self.assertEqual(smoke["timeout-minutes"], "5")
+        self.assertEqual(
+            at(smoke, "env", "CONTAINER_TEST_ARTIFACTS"), "${{ runner.temp }}/container-smoke"
+        )
+        self.assertNotIn("if", smoke)
         self.assertIn(
             "${PRODUCTION_IMAGE:-simplestchat-ci:production}",
             (ROOT / "build/test-container.sh").read_text(),

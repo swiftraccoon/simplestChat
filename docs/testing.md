@@ -604,13 +604,60 @@ With Docker available:
 
 ```sh
 docker build --target production -t simplestchat-ci:production .
-build/test-container.sh
+cargo run --locked -q -p xtask -- container-smoke
 ```
 
-The smoke creates its own disposable containers, applies migrations and checks
-the UI, database-backed API, account registration and restart. HTTP is published
-only on a random loopback port. Its containers and temporary database data are
-removed afterward. Set `PRODUCTION_IMAGE` to test another built image.
+The smoke creates its own disposable containers, applies every source migration
+and checks health, HTML, all four public PWA files' MIME types and bytes, empty
+rooms, one account write and restart of the same app container/image. HTTP is
+published only on a random loopback port; PostgreSQL and the app share a fresh
+network namespace and temporary data. Set `PRODUCTION_IMAGE` to another built
+image. The local facade defaults to `simplestchat-ci:production`; CI uses
+`cargo run --locked -q -p xtask -- ci container-smoke`, requiring an immutable
+image ID and the explicit hosted/disposable Linux context.
+
+The captured Docker selection must resolve to a local Unix endpoint. An explicit
+`DOCKER_CONTEXT` retains Docker's precedence over `DOCKER_HOST`; unsupported
+remote/TLS transports are refused. Every later call uses that frozen endpoint and
+rechecks its bounded opaque engine ID. This is an equality observation, not
+daemon authentication. Both images resolve to immutable IDs before the journal
+and separate create/start phases. A settled inspection failure may trigger a
+pull of the one fixed PostgreSQL digest; it is not evidence that an image is
+absent. The pull shares the remaining active budget rather than a new 30-second
+cold-pull limit.
+
+Container ownership requires the generated name/nonce label, full ID and image
+to match before removal. Successful scoped listing must confirm absence afterward;
+an inspect failure alone cannot. Both retirements are attempted after failure or
+cancellation. A lost create response without a positive witness remains unproven.
+The five-minute watchdog reserves one minute for cleanup. Each readiness loop
+allows at most 120 probes with 500ms delays, subject to that shared deadline;
+their worst-case command times are not claimed to fit. Before every dispatch,
+the body budget also reserves that command's grace plus 20 seconds for scheduled
+terminal observation, group fallback and combined-log settlement, including
+Darwin's zombie-only inventory proof. This is scheduling allowance, not a bound
+on OS/filesystem stalls or reap scheduling. The outer CI step also includes
+compilation. Cold hosted execution and real-image behavior remain unmeasured
+for this port.
+
+Artifacts stay private in a fresh 0700 directory, with exclusive 0600 fixed-name
+files; `CONTAINER_TEST_ARTIFACTS` must select a new directory beneath an existing
+parent. Temporary-parent aliases are canonicalized before anchoring. Sources
+require no symlink ancestors/finals, four assets at most 16MiB each, and at most
+4096 migration-directory entries; SQL is counted without reading its contents.
+The bounded HTTP subset rejects folded/control-bearing headers and duplicate
+Content-Type. Curl ignores inherited configuration, uses literal loopback URLs,
+and never saves registration JWT/cookie output. Each container log retains both
+channels privately, capped at 1MiB; raw guest logs are not echoed on failure.
+
+The summary records individual assertion, engine, CLI-group and source-close
+observations, without an overall success claim before its own publication/close.
+CLI zero additionally requires final namespace/descriptor closes, pending-signal
+and deadline checks. CLI groups cover only descendants remaining in their groups;
+engine resource cleanup is a separate inspected-ID proof. Owned fake engine/HTTP/
+clock tests and the unchanged `build/test-container.sh` oracle cover the policy.
+The oracle records the env-shebang Bash choice/version. Bash3.2's `errexit` can
+ignore the old failed `[[ ]]` port check; Rust always refuses non-loopback ports.
 
 ### App-only releases and rollback
 

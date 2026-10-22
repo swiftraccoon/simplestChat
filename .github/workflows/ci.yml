@@ -1024,7 +1024,7 @@ jobs:
         timeout-minutes: 5
         env:
           CONTAINER_TEST_ARTIFACTS: ${{ runner.temp }}/container-smoke
-        run: build/test-container.sh
+        run: cargo run --locked -q -p xtask -- ci container-smoke
 
       - name: Export the tested immutable production image
         timeout-minutes: 6

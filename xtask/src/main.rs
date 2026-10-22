@@ -32,6 +32,8 @@ Commands:
   run           Build and run the local UI; --skip-web reuses web/dist.
   check         Run installed-tool quality gates: [--web|--rust|--python|--helpers].
                 Default runs all groups, without installs or application services.
+  container-smoke Check an already-built image on the selected local Unix engine;
+                creates and removes only its own disposable smoke containers.
   ci            Exact-input CI keys and success receipts: key|save|verify --scope SCOPE.
                 key --github-output appends the fixed key output to GITHUB_OUTPUT.
                 native-security verifies dependency pins, overlays and server linkage.
@@ -46,6 +48,7 @@ Commands:
                 release-checks discovers pinned Chromium and runs the isolated release coordinator.
                 release-controller overlaps bounded controller preparation with the image build.
                 commit-subject checks the branch tip against the local hook's byte grammar.
+                container-smoke checks immutable production startup and database assertions.
                 database-check runs monitoring, restore or migration in owned PostgreSQL.
                 session-soak supervises the fixed workload and runner-owned database outage.
                 npm-path publishes the pinned npm bin directory through the runner file.
@@ -97,6 +100,7 @@ fn run(arguments: &[String]) -> Result<ExitCode> {
         "run" => run_local::run(&root, rest),
         "check" => check::run(&root, rest),
         "ci" => ci::run(&root, rest),
+        "container-smoke" => ci::run_container_smoke(&root, rest),
         "ci-evidence" => ci_evidence::run(&root, rest),
         "ci-local" => ci_local::run(&root, rest),
         "ci-retention" => ci_retention::run(&root, rest),

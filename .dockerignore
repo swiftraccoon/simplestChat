@@ -127,6 +127,9 @@ xtask/src/ci/release_checks/**
 !xtask/src/ci/image_cache/
 xtask/src/ci/image_cache/**
 !xtask/src/ci/image_cache/*.rs
+!xtask/src/ci/container_smoke/
+xtask/src/ci/container_smoke/**
+!xtask/src/ci/container_smoke/*.rs
 !xtask/src/ci/codeql_cache/
 xtask/src/ci/codeql_cache/**
 !xtask/src/ci/codeql_cache/*.rs
