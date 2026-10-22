@@ -1,6 +1,7 @@
 //! Explicit generator evidence under a disposable Linux loopback impairment.
 //! Imports acquire no process, interface, runtime or network resource.
 
+mod browser;
 mod controller;
 mod netem;
 mod output;
@@ -17,6 +18,10 @@ use std::{ffi::OsString, process::ExitCode};
 
 const USAGE: &str =
     "Usage: load_test bench impaired --output DIR [--server-bin BIN] [--generator BIN]";
+
+pub(super) fn run_browser(arguments: &[OsString]) -> ExitCode {
+    browser::run(arguments)
+}
 
 pub(super) fn run(arguments: &[OsString]) -> ExitCode {
     if arguments == [OsString::from("--help")] || arguments == [OsString::from("-h")] {

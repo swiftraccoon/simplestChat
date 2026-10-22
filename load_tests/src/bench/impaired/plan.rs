@@ -60,7 +60,7 @@ pub(super) fn text<'a>(environment: &'a Environment, key: &str) -> Option<&'a st
     environment.get(OsStr::new(key)).and_then(|v| v.to_str())
 }
 
-fn absolute(root: &Path, value: &OsStr) -> PathBuf {
+pub(super) fn absolute(root: &Path, value: &OsStr) -> PathBuf {
     let value = Path::new(value);
     if value.is_absolute() {
         value.to_owned()
@@ -69,7 +69,7 @@ fn absolute(root: &Path, value: &OsStr) -> PathBuf {
     }
 }
 
-fn tool(root: &Path, environment: &Environment, name: &str) -> Result<Selected> {
+pub(super) fn tool(root: &Path, environment: &Environment, name: &str) -> Result<Selected> {
     let path = environment
         .get(OsStr::new("PATH"))
         .cloned()

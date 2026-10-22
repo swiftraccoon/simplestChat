@@ -112,14 +112,20 @@ impl Output {
     }
     pub fn file(&self, name: &str) -> Result<File> {
         ensure!(
-            matches!(name, "generator.log" | "server.log"),
+            matches!(name, "generator.log" | "server.log" | "browser.log"),
             "Invalid impaired log"
         );
         self.fresh(name, || {}).map(|(file, _)| file)
     }
     pub fn json(&self, name: &str, value: &impl serde::Serialize) -> Result<()> {
         ensure!(
-            matches!(name, "impaired-exit.json" | "impaired-summary.json"),
+            matches!(
+                name,
+                "impaired-exit.json"
+                    | "impaired-summary.json"
+                    | "browser-mechanics-exit.json"
+                    | "browser-mechanics-owner.json"
+            ),
             "Invalid impaired output"
         );
         let bytes = serde_json::to_vec_pretty(value)?;

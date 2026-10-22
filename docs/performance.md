@@ -593,6 +593,76 @@ iptables UDP blocking and macOS PF/dummynet remain on that separate track.
 Inert tool/process and reference-oracle tests do not establish actual kernel
 behavior, native media delivery or hosted runtime timing.
 
+### Guest browser mechanics and DTX
+
+The maintained silent-microphone step uses the already-built generator binary
+as a launcher for the existing Node browser scenario:
+
+```sh
+./target/release/load_test bench browser-mechanics \
+  --output /absolute/private/new-browser-run
+```
+
+`--server-bin BIN` selects an existing server (otherwise `SIMPLESTCHAT_BIN`, then
+`target/release/simplestChat`). `--node BIN` selects one literal executable;
+otherwise the first executable `node` on the captured `PATH` is selected.
+Executable and adapter-entry hashes are checked before execution and admission.
+These are observations of selected files, not authentication of Node modules,
+Playwright, browser installations, interpreter configuration or runtime closure.
+Both Linux and macOS invocations use fresh loopback ports and require an explicit
+fresh output directory; they do not require a database or privileged command.
+
+The launcher preserves the original guest server on HTTP `127.0.0.1:3109` and
+media port `41100`, with one worker, ad-hoc rooms and registration disabled.
+`LIBWEBRTC_FIELD_TRIALS`, `WEBRTC_MIN_OUTGOING_BITRATE` and `WEBRTC_SERVER_TCP`
+remain the supported optional server inputs. Other server settings start from
+the original clean environment. The Node adapter fixes Chromium, the
+`baseline,silentAudio` phases, silent capture and `IMPAIR_SCRIPT=none`; all
+existing decode, layer and Opus-DTX assertions remain in Node. UDP blocking,
+canary/foreign-room selection, custom impairment and conflicting browser/profile
+options are refused before acquisition.
+
+The Node command receives `PATH`, `HOME`, `TMPDIR`, the fixed scenario values,
+`PLAYWRIGHT_MODULE`, `PLAYWRIGHT_BROWSERS_PATH` and XDG cache/config/runtime
+locations from the captured environment. Runtime/module overrides remain caller
+authority. `NODE_OPTIONS` is refused and unrelated inherited settings, including
+`NODE_PATH` and database credentials, are not forwarded. This is a deliberately
+narrower environment than the shell's inherited Node command.
+
+Readiness has a 20-second window; the Node body has a 600-second watchdog.
+The entry scheduling policy is 720 seconds, reserving 90 seconds for retirement
+and finalization before dispatch. Node receives 20 seconds of cooperative
+termination grace (covering the existing browser owner's 10-second graceful plus
+5-second forced-close attempt); the server receives 5 seconds. Each uses the established
+reserved-group owner, terminal observation and bounded sink settlement. These
+are watchdog/admission limits, not a guaranteed wall time under OS stalls,
+Darwin group-inspection retries or final drop settlement. An unproven close,
+late signal or elapsed final deadline cannot return zero, and an earlier known
+failure retains precedence over a later timeout or cleanup failure.
+
+Node owns its admitted BrowserServers through the existing browser owner.
+Its one receipt is captured on bounded 16 KiB stdout after the exact invocation's
+final browser close; scenario progress goes to private `browser.log` stderr
+(64 MiB). Rust stops/reaps/drains that Node CLI before decoding the strict receipt,
+then publishes `browser-mechanics-owner.json` and fixed observations in
+`browser-mechanics-exit.json` through its retained output directory. The server's
+two log streams each have a 64 MiB cap (128 MiB combined). Measured Rust execution
+is silent. Final zero additionally requires a clean server exit and all final
+file/directory closes, signal and deadline checks. Artifact presence is not that
+final proof. Rust proves its server/Node CLI-group boundary; the Node receipt
+describes only the BrowserServers admitted by that invocation. Neither claims
+arbitrary detached SDK descendants, privileged resources or whole-host cleanup.
+Existing scenario artifact writes remain trusted runtime/path operations.
+
+The unchanged `build/impaired-check.sh` remains the reference for other profiles.
+Its trap calls kernel clear/unblock even with impairment disabled and ignores
+server wait failures. The mechanics launcher deliberately makes no such kernel
+calls and refuses a failed server shutdown. Adaptive netem transitions, ICE-TCP
+blocking and PF/dummynet still use their original references pending complete
+phase/block/platform parity and observed-state ownership. Inert fake-tool and
+actual-shell oracles establish command/policy behavior only; no actual browser,
+server, kernel or hosted runtime timing is claimed by these checks.
+
 ## Sizing a host
 
 The [load-test binary](../load_tests/README.md#build-and-run) provides offline

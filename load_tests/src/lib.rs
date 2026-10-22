@@ -2,7 +2,7 @@
 
 //! Offline planning, bounded diagnostic readers and explicit capacity measurement.
 //! Importing these modules starts no runtime, connection, engine or workload;
-//! only explicit `capacity run` or `bench local|podman|impaired` commands construct a
+//! only explicit `capacity run` or `bench` runtime commands construct a
 //! measurement runtime and create owned resources.
 
 pub mod bench;

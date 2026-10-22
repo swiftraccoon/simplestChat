@@ -210,7 +210,7 @@ jobs:
       - name: Silent microphone sends almost nothing with DTX
         env:
           IMPAIRED_SILENT_AUDIO: "1"
-        run: IMPAIRED_PROFILES=baseline,silentAudio IMPAIR_SCRIPT=none build/impaired-check.sh "${RUNNER_TEMP}/impaired/dtx"
+        run: ./target/release/load_test bench browser-mechanics --output "${RUNNER_TEMP}/impaired/dtx"
 
       # UDP to and from the media port is dropped before anyone joins, so the
       # publisher and the viewer can only connect over the server's ICE-TCP

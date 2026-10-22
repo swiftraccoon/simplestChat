@@ -26,6 +26,7 @@ For commands, options, and report definitions, see the
 | `owned_process/` | Reserved child process groups, bounded pipes, cancellation and exact cleanup shared by explicit measurement backends |
 | `bench/podman/` | Production-shape comparison policy, namespace-local command arguments, cgroup/thread samplers, verified container ownership and bounded transfer finalizers |
 | `bench/impaired/` | One disposable Linux loopback profile, fixed guest generator evidence, observed kernel-state lease and stopped-input admission |
+| `bench/impaired/browser*` | Guest-only mechanics/DTX launcher, strict stopped-Node BrowserServer receipt and private lifecycle evidence; no kernel lease |
 | `metrics.rs` | Counters, signaling histograms, diagnostic collection |
 | `metrics/measurement.rs` | Shared interval, per-attempt readiness/coverage, consumer delivery checks |
 | `subscriptions.rs` | Bounded discovery deduplication, pending queues, and consumer-cap refill (tests in `subscriptions_tests.rs`) |

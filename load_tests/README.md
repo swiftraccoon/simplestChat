@@ -69,6 +69,14 @@ counters) and `impaired-exit.json` in the fresh private output directory.
 See [the impairment contract](../docs/performance.md#native-generator-under-impairment)
 for defaults, bounds, ownership assumptions and retained shell references.
 
+`./target/release/load_test bench browser-mechanics --output /absolute/private/new-run`
+owns a guest-only server and the fixed Chromium baseline/silent-audio journey.
+It forces impairment off and never invokes kernel cleanup. Node keeps browser
+automation and its BrowserServer owner; Rust captures the strict bounded close
+receipt after the Node command retires. `--server-bin` and `--node` select existing
+executables. See [the mechanics contract](../docs/performance.md#guest-browser-mechanics-and-dtx)
+for supported environment inputs, watchdogs, private evidence and limits.
+
 The same binary can read stopped server diagnostics without creating a runtime,
 joining a room or sending media:
 

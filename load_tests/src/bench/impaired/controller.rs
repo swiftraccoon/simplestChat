@@ -47,15 +47,18 @@ impl NativeReadiness {
                 .build()?,
         ))
     }
+    pub(super) async fn request(&self, url: &'static str) -> bool {
+        self.0
+            .get(url)
+            .send()
+            .await
+            .is_ok_and(|response| response.status().is_success())
+    }
 }
 #[async_trait::async_trait]
 impl Readiness for NativeReadiness {
     async fn ready(&self) -> bool {
-        self.0
-            .get("http://127.0.0.1:3129/ready")
-            .send()
-            .await
-            .is_ok_and(|response| response.status().is_success())
+        self.request("http://127.0.0.1:3129/ready").await
     }
 }
 pub(super) struct Services<'a> {
