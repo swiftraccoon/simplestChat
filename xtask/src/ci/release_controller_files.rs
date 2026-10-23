@@ -74,6 +74,13 @@ impl NamespaceBinding {
     }
 }
 impl Directory {
+    /// Compare an original retained namespace identity without following a new
+    /// spelling. Directory timestamps may change when siblings are created.
+    pub fn contains_identity(&self, metadata: &Metadata) -> bool {
+        self.before
+            .iter()
+            .any(|m| m.dev() == metadata.dev() && m.ino() == metadata.ino())
+    }
     pub fn binding(&self) -> NamespaceBinding {
         NamespaceBinding {
             before: self.before.clone(),

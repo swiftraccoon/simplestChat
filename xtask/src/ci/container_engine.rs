@@ -22,6 +22,7 @@ pub(in crate::ci) enum Scope {
     Smoke,
     Validation,
     LoadImage,
+    Benchmark,
 }
 impl Scope {
     pub fn failure(self) -> Failure {
@@ -31,6 +32,7 @@ impl Scope {
                 Self::Smoke => "Container smoke evidence rejected.",
                 Self::Validation => "Configuration validation evidence rejected.",
                 Self::LoadImage => "Load image evidence rejected.",
+                Self::Benchmark => "Container benchmark evidence rejected.",
             },
         )
     }
@@ -41,6 +43,7 @@ impl Scope {
                 Self::Smoke => "Container smoke watchdog expired.",
                 Self::Validation => "Configuration validation watchdog expired.",
                 Self::LoadImage => "Load image watchdog expired.",
+                Self::Benchmark => "Container benchmark watchdog expired.",
             },
         )
     }
@@ -53,6 +56,7 @@ impl Scope {
                     "Configuration validation requires a local Unix Docker endpoint."
                 }
                 Self::LoadImage => "Load image requires a local Unix Docker endpoint.",
+                Self::Benchmark => "Container benchmark requires a local Unix Docker endpoint.",
             },
         )
     }
@@ -63,6 +67,7 @@ impl Scope {
                 Self::Smoke => "Container smoke context selection invalid.",
                 Self::Validation => "Configuration validation context selection invalid.",
                 Self::LoadImage => "Load image context selection invalid.",
+                Self::Benchmark => "Container benchmark context selection invalid.",
             },
         )
     }
@@ -71,6 +76,7 @@ impl Scope {
             Self::Smoke => "Container smoke command and log settlement failed.",
             Self::Validation => "Configuration command and log settlement failed.",
             Self::LoadImage => "Load image command and log settlement failed.",
+            Self::Benchmark => "Container benchmark command settlement failed.",
         }
     }
 }
@@ -118,12 +124,23 @@ impl Policy {
             metadata_grace: Duration::from_secs(1),
         }
     }
+    pub fn benchmark(recovery: bool) -> Self {
+        Self {
+            scope: Scope::Benchmark,
+            watchdog: Duration::from_secs(if recovery { 1260 } else { 2400 }),
+            reserve: Duration::from_secs(if recovery { 0 } else { 1260 }),
+            settlement: Duration::from_secs(20),
+            metadata_timeout: Duration::from_secs(5),
+            metadata_grace: Duration::from_secs(1),
+        }
+    }
     fn validate(self) -> Result<()> {
         if self.reserve >= self.watchdog
             || self.metadata_timeout.is_zero()
             || self.metadata_grace.is_zero()
             || self.settlement.is_zero()
-            || self.metadata_timeout + self.metadata_grace + self.settlement >= self.reserve
+            || (!matches!(self.scope, Scope::Benchmark)
+                && self.metadata_timeout + self.metadata_grace + self.settlement >= self.reserve)
         {
             return Err(self.scope.failure());
         }
@@ -302,6 +319,15 @@ impl<'a, E: Executor, C: Clock> Core<'a, E, C> {
         clock: &'a mut C,
         policy: Policy,
     ) -> Result<Self> {
+        Self::bind_with(endpoint, runner, clock, policy, false).await
+    }
+    pub async fn bind_with(
+        endpoint: &'a str,
+        runner: &'a mut E,
+        clock: &'a mut C,
+        policy: Policy,
+        cleanup: bool,
+    ) -> Result<Self> {
         policy.validate()?;
         self::endpoint(endpoint, policy.scope)?;
         let mut value = Self {
@@ -311,16 +337,47 @@ impl<'a, E: Executor, C: Clock> Core<'a, E, C> {
             identity: String::new(),
             policy,
         };
+        let format = if matches!(policy.scope, Scope::Benchmark) {
+            super::container_benchmark::plan::DAEMON
+        } else {
+            "{{.ID}}"
+        };
         let bytes = value
-            .raw(value.command(&["info", "--format", "{{.ID}}"], false))
+            .raw(value.command(&["info", "--format", format], cleanup))
             .await?;
-        let identity = line(&bytes, value.policy.scope)?;
+        let identity = if matches!(policy.scope, Scope::Benchmark) {
+            let v: serde_json::Value =
+                serde_json::from_slice(&bytes).map_err(|_| policy.scope.failure())?;
+            if v.get("os").and_then(|v| v.as_str()) != Some("linux")
+                || v.get("cgroup").and_then(|v| v.as_str()) != Some("2")
+                || v.get("system")
+                    .and_then(|v| v.as_str())
+                    .is_none_or(|s| s.to_ascii_lowercase().contains("desktop"))
+                || v.get("security")
+                    .and_then(|v| v.as_array())
+                    .is_none_or(|a| {
+                        a.iter().any(|v| {
+                            v.as_str()
+                                .is_none_or(|s| s.to_ascii_lowercase().contains("rootless"))
+                        })
+                    })
+            {
+                return Err(policy.scope.failure());
+            }
+            let id = v
+                .get("id")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| policy.scope.failure())?;
+            line(id.as_bytes(), policy.scope)?.to_owned()
+        } else {
+            line(&bytes, value.policy.scope)?.to_owned()
+        };
         // Docker's ID is opaque (UUID and colon-group forms both exist). This
         // equality observation is not authentication or a global uniqueness proof.
         if identity.len() > 256 {
             return Err(value.policy.scope.failure());
         }
-        value.identity = identity.into();
+        value.identity = identity;
         Ok(value)
     }
     pub fn policy(&self) -> Policy {

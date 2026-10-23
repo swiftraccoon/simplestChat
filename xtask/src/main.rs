@@ -36,6 +36,8 @@ Commands:
                 fixed recipe only, with no signing, installation or candidate execution.
   check         Run installed-tool quality gates: [--web|--rust|--python|--helpers].
                 Default runs all groups, without installs or application services.
+  container-benchmark Standalone root/Linux private benchmark run or locked recovery;
+                installed service callsites remain unchanged; see --help.
   container-smoke Check an already-built image on the selected local Unix engine;
                 creates and removes only its own disposable smoke containers.
   ci            Exact-input CI keys and success receipts: key|save|verify --scope SCOPE.
@@ -111,6 +113,7 @@ fn run(arguments: &[String]) -> Result<ExitCode> {
         "check" => check::run(&root, rest),
         "ci" => ci::run(&root, rest),
         "container-smoke" => ci::run_container_smoke(&root, rest),
+        "container-benchmark" => ci::run_container_benchmark(rest),
         "ops-artifact" => ci::run_ops_artifact(rest),
         "public-smoke" => ci::run_public_smoke(rest),
         "ci-evidence" => ci_evidence::run(&root, rest),

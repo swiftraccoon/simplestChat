@@ -71,19 +71,33 @@ impl<'a> Native<'a> {
         let mdns_admission = mdns.as_ref().map(|v| v.begin()).transpose();
         let retained_ops = request.retained_ops.clone();
         let retained_admission = retained_ops.as_ref().map(|v| v.begin()).transpose();
+        let benchmark = request.benchmark.clone();
+        let benchmark_admission = if request.benchmark_output.is_some() != benchmark.is_some() {
+            Err(Failure::new(
+                1,
+                "CI benchmark capture requires its closed invocation.",
+            ))
+        } else {
+            benchmark
+                .as_ref()
+                .map(|v| v.begin(&request))
+                .transpose()
+                .map(|_| ())
+        };
         let (io, admission) = OwnedIo::take(&mut request);
         let owned_io = io.combined.is_some() || io.separate.is_some() || io.input.is_some();
         let cleanup = request.cleanup;
         let result = match admission
             .and(mdns_admission.map(|_| ()))
             .and(retained_admission.map(|_| ()))
+            .and(benchmark_admission.map(|_| ()))
         {
             Ok(()) => self.execute_body(request, &io, finalizer).await,
             Err(error) => Err(error),
         };
         // This runs on setup/spawn errors too. A body-local Group guard finishes
         // its fallback before these bounded EOF and explicit-close attempts.
-        let closed = io.finish().await;
+        let closed = io.finish_benchmark(benchmark.as_deref()).await;
         if let Some(proof) = retained_ops {
             proof.observed_io(closed.as_ref().ok().cloned().flatten());
         }
@@ -121,7 +135,9 @@ impl<'a> Native<'a> {
                 "CI file output requires bounded stderr capture.",
             ));
         }
-        let (root, environment) = if let Some(proof) = &request.retained_ops {
+        let (root, environment) = if let Some(proof) = &request.benchmark {
+            proof.context(request.program, &request.arguments)?
+        } else if let Some(proof) = &request.retained_ops {
             proof.context(request.program, &request.arguments)?
         } else {
             match request.comparison.as_ref() {
@@ -165,6 +181,12 @@ impl<'a> Native<'a> {
             command.stdout(Stdio::inherit()).stderr(Stdio::inherit());
         }
         if let Some(proof) = &request.retained_ops {
+            if !request.cleanup {
+                self.ready().await?;
+            }
+            proof.validate(request.program, &request.arguments)?;
+        }
+        if let Some(proof) = &request.benchmark {
             if !request.cleanup {
                 self.ready().await?;
             }
@@ -306,6 +328,18 @@ impl<'a> Native<'a> {
         }
         // Preserve a known timeout/interruption even if terminal observation or
         // reap subsequently fails. Unproven cleanup remains a sticky false flag.
+        if let Some(benchmark) = &request.benchmark {
+            benchmark.outcome(
+                outcome.is_ok(),
+                reaped
+                    .as_ref()
+                    .ok()
+                    .map(|status| tooling::shell_status(*status)),
+                mdns_timeout,
+                mdns_interrupted,
+                cleaned && reaped.is_ok(),
+            );
+        }
         let output = outcome?;
         let status = reaped?;
         let code = tooling::shell_status(status);
@@ -349,6 +383,12 @@ impl OwnedIo {
     }
 
     async fn finish(self) -> Result<Option<super::ops_artifact::verify::tools::Captures>> {
+        self.finish_benchmark(None).await
+    }
+    async fn finish_benchmark(
+        self,
+        benchmark: Option<&super::container_benchmark::tools::Invocation>,
+    ) -> Result<Option<super::ops_artifact::verify::tools::Captures>> {
         let input_closed = self
             .input
             .map(|file| {
@@ -359,6 +399,17 @@ impl OwnedIo {
             finish_log(self.combined, "CI combined log completion is unproven."),
             finish_separate(self.separate)
         );
+        if let Some(proof) = benchmark {
+            let evidence = if input_closed.is_ok() && combined.is_ok() && separate.is_ok() {
+                Some(super::container_benchmark::tools::IoSeals {
+                    paired: separate.as_ref().ok().cloned().flatten(),
+                    combined: combined.as_ref().ok().cloned().flatten(),
+                })
+            } else {
+                None
+            };
+            proof.observed_io(evidence);
+        }
         input_closed?;
         combined?;
         separate
@@ -373,14 +424,22 @@ fn owner<T>(value: Option<std::sync::Arc<T>>, message: &str) -> (Option<T>, Resu
     }
 }
 
-async fn finish_log(log: Option<super::bounded_log::Log>, message: &str) -> Result<()> {
+async fn finish_log(
+    log: Option<super::bounded_log::Log>,
+    message: &str,
+) -> Result<Option<super::ops_artifact::verify::tools::Seal>> {
     if let Some(log) = log {
         let value = log.finish().await?;
         if !value.complete {
             return Err(Failure::new(1, message));
         }
+        return Ok(Some(super::ops_artifact::verify::tools::Seal {
+            sha256: value.sha256,
+            bytes: value.bytes,
+            metadata: value.metadata,
+        }));
     }
-    Ok(())
+    Ok(None)
 }
 
 async fn finish_separate(
@@ -458,6 +517,7 @@ fn executable(request: &Command) -> Result<&std::ffi::OsStr> {
         request.load_image.is_some(),
         request.mdns.is_some(),
         request.retained_ops.is_some(),
+        request.benchmark.is_some(),
     ]
     .into_iter()
     .filter(|present| *present)
@@ -482,6 +542,7 @@ fn executable(request: &Command) -> Result<&std::ffi::OsStr> {
             | Program::MdnsLogs
             | Program::MdnsCompiler
             | Program::MdnsProbe
+            | Program::BenchmarkCurl
     );
     if proofs == 0 && !selected {
         return Ok(std::ffi::OsStr::new(request.program.name()));
@@ -493,10 +554,20 @@ fn executable(request: &Command) -> Result<&std::ffi::OsStr> {
         ));
     }
     let path = match request.program {
-        Program::Git | Program::Docker => request
-            .load_image
+        Program::Git | Program::Docker => {
+            if let Some(proof) = &request.benchmark {
+                Some(proof.validate(request.program, &request.arguments))
+            } else {
+                request
+                    .load_image
+                    .as_ref()
+                    .map(|value| value.validate(request.program))
+            }
+        }
+        Program::BenchmarkCurl => request
+            .benchmark
             .as_ref()
-            .map(|value| value.validate(request.program)),
+            .map(|proof| proof.validate(request.program, &request.arguments)),
         Program::CargoAudit => request.executable.as_ref().map(|value| value.validate()),
         Program::Node => request.node.as_ref().map(|value| value.validate()),
         Program::Zstd => request.zstd.as_ref().map(|value| value.validate()),

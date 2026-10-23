@@ -29,6 +29,7 @@ pub(super) enum Program {
     MdnsLogs,
     MdnsCompiler,
     MdnsProbe,
+    BenchmarkCurl,
 }
 impl Program {
     pub(super) fn name(self) -> &'static str {
@@ -57,6 +58,7 @@ impl Program {
             Self::MdnsLogs => "/usr/bin/log",
             Self::MdnsCompiler => "/usr/bin/cc",
             Self::MdnsProbe => "owned-mdns-probe",
+            Self::BenchmarkCurl => "nsenter",
         }
     }
 }
@@ -99,6 +101,8 @@ pub(super) struct Command {
     /// that owner's capture boundary must attach its selected proof every time.
     pub load_image: Option<std::sync::Arc<super::load_generator_image::tools::Invocation>>,
     pub mdns: Option<std::sync::Arc<super::mdns::tools::Invocation>>,
+    pub benchmark_output: Option<std::sync::Arc<super::container_benchmark::tools::CaptureReceipt>>,
+    pub benchmark: Option<std::sync::Arc<super::container_benchmark::tools::Invocation>>,
     pub retained_ops: Option<std::sync::Arc<super::ops_artifact::verify::tools::Invocation>>,
 }
 impl Command {
@@ -124,6 +128,8 @@ impl Command {
             load_image: None,
             mdns: None,
             retained_ops: None,
+            benchmark: None,
+            benchmark_output: None,
         }
     }
 }

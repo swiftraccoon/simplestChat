@@ -19,6 +19,7 @@ mod codeql_cache;
 mod command;
 mod commit_subject;
 mod config_validation;
+mod container_benchmark;
 mod container_engine;
 mod container_smoke;
 mod database_check;
@@ -62,6 +63,7 @@ const USAGE: &str = "usage: cargo run --locked -q -p xtask -- ci key|save|verify
        cargo run --locked -q -p xtask -- ci release-controller start|wait\n\
        cargo run --locked -q -p xtask -- ci commit-subject\n\
        cargo run --locked -q -p xtask -- ci container-smoke\n\
+       cargo run --locked -q -p xtask -- ci container-benchmark run|cleanup\n\
        cargo run --locked -q -p xtask -- ci validate-config promtool|caddy\n\
        cargo run --locked -q -p xtask -- ci load-generator-image\n\
        cargo run --locked -q -p xtask -- ci mdns preflight|snapshot [--artifact-only]\n\
@@ -322,6 +324,10 @@ pub(crate) fn run_container_smoke(root: &Path, arguments: &[String]) -> Result<E
     container_smoke::run_local(root, arguments)
 }
 
+pub(crate) fn run_container_benchmark(arguments: &[String]) -> Result<ExitCode> {
+    container_benchmark::run(arguments)
+}
+
 #[cfg(feature = "public-smoke")]
 pub(crate) fn run_public_smoke(arguments: &[String]) -> Result<ExitCode> {
     public_smoke::run(arguments)
@@ -365,6 +371,12 @@ pub(crate) fn run(root: &Path, arguments: &[String]) -> Result<ExitCode> {
         .is_some_and(|argument| argument == "native-dtls")
     {
         return native_dtls::run(root, &arguments[1..]);
+    }
+    if arguments
+        .first()
+        .is_some_and(|a| a == "container-benchmark")
+    {
+        return container_benchmark::run(&arguments[1..]);
     }
     if arguments
         .first()

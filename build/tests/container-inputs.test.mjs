@@ -279,6 +279,10 @@ test('context excludes local-only descendants while retaining production inputs'
     'xtask/src/ci/audit_rust/private.env',
     'xtask/src/ci/release_checks/private.env',
     'xtask/src/ci/image_cache/private.env',
+    'xtask/src/ci/container_benchmark/private.env',
+    'xtask/src/ci/container_benchmark/reference/private.env',
+    'xtask/src/ci/container_benchmark/reference/build/private.env',
+    'xtask/src/ci/container_benchmark/reference/build/tests/private.env',
     'xtask/src/ci/container_smoke/private.env',
     'xtask/src/ci/config_validation/private.env',
     'xtask/src/ci/load_generator_image/private.env',
@@ -337,4 +341,17 @@ test('ops workspace inputs remain narrow and no ops binary enters the production
   const runtime = dockerfile.slice(dockerfile.indexOf(' AS runtime-base'));
   assert.doesNotMatch(runtime, /^COPY .*ops\/src|^COPY .*simplestchat-ops/m);
   assert.doesNotMatch(dockerfile, /cargo[^\n]*build[^\n]*(?:-p|--bin) simplestchat-ops/);
+});
+
+// These retained references are compile/runtime inputs for inert policy tests;
+// arbitrary adjacent files remain outside the image context.
+test('standalone container benchmark admits only its reviewed reference closure', () => {
+  for (const filename of [
+    'xtask/src/ci/container_benchmark/oracle.mjs',
+    'xtask/src/ci/container_benchmark/reference/build/benchmark-container.sh',
+    'xtask/src/ci/container_benchmark/reference/build/cleanup-container-benchmark.sh',
+    'xtask/src/ci/container_benchmark/reference/build/tests/container-benchmark.test.mjs',
+  ]) assert.equal(excluded(filename), false, filename);
+  assert.equal(excluded('xtask/src/ci/container_benchmark/reference/build/other.sh'), true);
+  assert.equal(excluded('xtask/src/ci/container_benchmark/reference/build/tests/other.mjs'), true);
 });

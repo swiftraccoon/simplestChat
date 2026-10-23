@@ -25,6 +25,7 @@ pub(super) struct Finished {
     pub metadata: Metadata,
 }
 pub(super) struct Log {
+    maximum: u64,
     #[cfg(test)]
     original_pipe_fds: [i32; 2],
     writer: Option<File>,
@@ -112,6 +113,7 @@ impl Log {
             result
         });
         Ok(Self {
+            maximum,
             #[cfg(test)]
             original_pipe_fds,
             writer: Some(write),
@@ -126,6 +128,9 @@ impl Log {
             .ok_or_else(failure)?
             .try_clone()
             .map_err(|_| failure())
+    }
+    pub fn maximum(&self) -> u64 {
+        self.maximum
     }
     pub fn failed(&self) -> bool {
         self.failed.load(Ordering::SeqCst)

@@ -2010,3 +2010,138 @@ The unchanged `build/public-smoke.mjs` and its seven tests remain pinned
 executable references. Inert VM oracles exercise their complete operation and CLI;
 owned fake HTTP/sockets and mature duplex WebSocket fixtures test the native
 controller. These source tests make no claim of a real deployment/TLS/browser run.
+
+## Standalone private container benchmark
+
+The source-level Rust owner provides `xtask container-benchmark run` and
+`xtask container-benchmark cleanup` (also through `xtask ci container-benchmark`).
+It requires an explicitly authorized root/Linux host, root-owned installed
+Docker/nsenter/curl tools, cgroup v2, and a trusted rootful Docker daemon on the
+**same Linux host** through a frozen local Unix endpoint. A Unix socket does not
+prove that the daemon shares the controller's kernel. Reported Desktop, rootless,
+non-Linux and non-v2 profiles are refused. This source port has not established
+real host, namespace, engine, media, capacity or installed-service interoperability.
+The existing two Bash scripts, Ansible installation, Python callers, service
+launcher and ExecStopPost are unchanged; no installed path selects this owner.
+
+`run` takes the same nine flag pairs: required `--server-image`,
+`--generator-image`, `--output`; optional `--workers` (1–4, default 1), `--clients`
+(2–30, default 10), `--rooms` (1–4, default 1), `--duration` (3–180, default 60),
+`--ramp-up` (1–120, default 5), and `--warmup` (10–60, default 10). Numeric inputs
+are canonical positive decimal integers of at most three digits; clients must
+fit rooms×10 and rooms cannot exceed clients. Both images are exact lowercase
+`sha256:` IDs. Their IDs are opaque Docker identities, not an assertion that an
+index digest equals a configuration digest. No pull or build occurs. `--output`
+is a fresh absolute UTF-8, control-free path without commas, with at most 20
+components; its existing parent is canonicalized once and retained. Existing
+output, symlink leaves and physical overlap with the control namespace refuse.
+
+One root 0700 `/run/simplestchat-bench` namespace and root 0600 workload lock cover
+the complete run; recovery always takes that same lock with a 30-second wait.
+There is no public `--normal`, root bypass or configurable host/proc/sys path.
+The normal path checks the optional protected public release record and refuses
+any running public Compose project before making its output or container intent.
+Nonempty captured `DOCKER_HOST` has the original script's precedence over context;
+otherwise only captured Docker context discovery selects the Unix endpoint.
+Later commands use the frozen endpoint, a fresh private empty Docker config, and
+closed selected-tool/environment profiles. Tools are caller-trusted, not signed
+or authenticated by these metadata checks. The original command recipe and
+immutable ID/name/run/role/network observations must match before mutation.
+
+A protected journal precedes create attempts. Each role has an exact nonce name,
+image, label set and full CID. Containers retain the original loopback/no-network
+server and generator-shared-network protections: UID 10001, read-only root,
+no capabilities/new privileges, bounded tmpfs/memory/CPU/PIDs/nofile/core and
+local log rotation. Guest environment is fixed; the fresh metrics token is
+supplied only to the server-create child and an unlinked 0600 read-only curl
+configuration. It never enters argv, the journal or public failure text.
+Namespace requests pin original process-start/cgroup/netns witnesses and keep
+`/proc/<controller PID>/fd/<retained FD>` alive until the selected CLI's reserved
+group and owned I/O settle. These are optimistic same-host observations, not
+atomic PID/namespace locking or proof about escaped processes.
+An initially absent journal stays an absence witness until this owner publishes
+its own record; a later entry is not adopted. Existing control readers and the
+workload lock admit ordinary type, owner, group, mode and link count before open,
+then compare the acquired descriptor with that admitted entry.
+
+Readiness has a 60-second phase, generator completion retains ramp+warmup+duration
++60 seconds (at most 420), room zero-count polling has 40 seconds, and server stop
+uses daemon grace 30 with a 33-second CLI body. The new controller serializes
+terminal inspection, cgroup observations and Docker stats under one Native and
+one Signals registration, then cross-checks the generator's terminal exit with
+`docker wait`. This replaces the shell background sampler and long concurrent
+wait. No separate sampler process or supervisor is introduced. Original retained
+cgroup/process witnesses close before container removal; disappearance is accepted
+only after that role's exact terminal observation. Both containers require clean
+zero exits for workload success. Cleanup may still succeed after workload failure.
+Before generator intent or create, the remaining active window must cover its
+selected ramp, warmup and duration plus the fixed 110-second create/start CLI and
+settlement allowance. Readiness and zero-count loops retry only an unavailable
+curl result backed by actual process settlement, original output seals/readback,
+and successful token/namespace finalization. Authority, I/O or finalization
+uncertainty is fatal; a later successful response cannot erase it.
+
+The standalone scheduling profile is **2400 seconds with a 1260-second retirement
+reserve**; external recovery has its own 1260-second entry including lock wait.
+This deliberately does not fit the unchanged 900-second RuntimeMax/90-second
+TimeoutStop service. The conservative retirement call graph reserves ten domain
+calls per role: name inventory, known-CID inventory, ownership inspection, stop,
+possible kill, logs, terminal inspection, plain removal, CID absence and name
+absence. Each domain call is preceded by the existing Core daemon-ID check.
+Metadata bodies 6s + grace 1 + settlement 20 cost 27s; the Core check costs 26s. Twenty
+pairs cost 1060s; generator/server stop bodies 8/33 add 29s, totaling 1089s. A fresh
+bind 26 gives 1115s. Internal in-flight 55 + 1115 + replay 25 + files/fences 20 =1215s;
+external lock 30 + 1115 +25 +20 =1190s. The 1260 reserve leaves 45/70s scheduling
+slack. Remaining-tail admission uses the original clock and releases each settled
+slot once; it does not reset after acquiring the lock. Slow setup can refuse.
+These are scheduling checks, not hard bounds on OS/reap/filesystem stalls.
+
+Metadata stdout and stderr use separate private unlinked bounded logs (64KiB,
+context discovery 4KiB stdout). Original Finished byte counts, SHA-256 and complete
+file stamps seal both channels after all native finalizers, before readback or
+parsing. Raw metadata stderr and arbitrary CLI errors are not artifacts. Combined
+role logs are bounded to 32MiB per role and redacted before publication; recovery
+also removes every lowercase-hex run of 64 or more bytes because the plaintext
+secret is deliberately not retained. This can hide ordinary hashes in log text.
+Encoded secrets are outside this literal-redaction claim. Namespace, cgroup and
+source files have finite anchored/read bounds; at most 512 samples/64MiB accepted
+sampling data are retained. A 128-slot reservation covers this owner's known file,
+probe and bounded-log allowances before acquisition; deep namespaces can refuse.
+This is not a whole-process or daemon descriptor limit. Standard-library child
+stdio transfers and directory iterator/drop boundaries are not independently
+observable close receipts.
+
+The guest workload directory is 0700 UID/GID 10001; its summary is admitted separately
+as a nofollow ordinary UID 10001 file of at most 8MiB, mode 0600 or 0644. Timeout-file
+absence, exact selected schema 2 settings/provenance/coverage/consumer counts and
+zero failures are required. Unknown private JSON stays omitted; duplicate selected
+keys use the last value. Exact decimal identity follows the retained jq 1.7.1
+profile, preserving numeric/boolean distinctions. Three active Prometheus counters
+require singleton digit-zero values; the snapshot singleton uses the observed
+AWK decimal strnum-equals-one profile (including decimal exponent/leading sign,
+near-one decimal rounding and CR), without claiming provider-specific hexadecimal
+coercion. Selected JSON strings and keys must be Unicode scalar strings.
+
+Cleanup cross-checks exact names and known CIDs and never uses `rm --force` or
+`--volumes`. A lost create response plus current absence remains unproved.
+Emergency recovery byte-retains the previous private result before writing a
+negative result; a failed retention copy leaves the prior result unchanged and
+cannot finalize the journal. Other proved roles still get retirement attempts.
+New intents include a daemon identity hash. New cleanup refuses an unfinished
+legacy shell journal without that witness; finalized legacy records remain
+admissible. The installed legacy cleanup remains available unchanged.
+`finalized=true` certifies verified retirement, independently of workload success;
+it never substitutes for `passed=true`. Saved result/cleanup reports are
+prepublication observations: later file/namespace close, signal or deadline failure
+can still return nonzero. Final CLI 0 is authoritative. Failure codes preserve the
+first known status, including 124/130/143 rather than the shell's final flattening 1.
+No raw token, private error or full container inspection is a receipt.
+
+The two unchanged scripts and their unchanged 47-test donor are byte-pinned.
+The executable oracle runs those actual tests and extracted JQ/AWK/Bash blocks
+with installed tools and inert inputs. It does not rewrite paths or claim to run
+the whole Bash launcher: its fixed root/proc/namespace operations remain held.
+Complete fake-controller run/recovery/fault tests, owned filesystem tests, and
+inert selected-tool Native fixtures cover the new owner. Real Linux/static
+shipping, engine/kernel behavior and service-budget approval remain prerequisites
+for any later installed-callsite switch.
