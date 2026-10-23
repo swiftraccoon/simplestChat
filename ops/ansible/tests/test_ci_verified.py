@@ -759,6 +759,42 @@ class VerifiedWorkflowTests(unittest.TestCase):
         for step in protected:
             self.assertLess(steps.index(python), steps.index(step))
 
+    def test_rust_native_consumers_override_the_python_pkg_config_export(self) -> None:
+        """The selected Python environment must not redirect native OpenSSL discovery."""
+        workflow = obj(
+            yaml_value((ROOT / ".github/workflows/ci.yml").read_text(), scalars_as_strings=True)
+        )
+        job = obj(workflow, "jobs", "rust-test")
+        steps = objects(job, "steps")
+        python = next(
+            step
+            for step in steps
+            if string(step.get("uses", "")).startswith("actions/setup-python@")
+        )
+        self.assertEqual(obj(python, "with").get("update-environment", "true"), "true")
+        canonical = "${{ github.workspace }}/target/openssl-4.0.3/lib/pkgconfig"
+        self.assertEqual(string(obj(workflow, "env"), "PKG_CONFIG_PATH"), canonical)
+
+        # setup-python writes GITHUB_ENV after workflow/job env has been applied.
+        exported = {**obj(workflow, "env"), **obj(job, "env")}
+        exported["PKG_CONFIG_PATH"] = "/opt/hostedtoolcache/Python/3.14.8/x64/lib/pkgconfig"
+        self.assertNotEqual(exported["PKG_CONFIG_PATH"], canonical)
+        consumers = [
+            step
+            for step in steps
+            if step.get("uses") == "./.github/actions/native-toolchain"
+            or "cargo " in string(step.get("run", ""))
+            or "./target/debug/load_test " in string(step.get("run", ""))
+        ]
+        self.assertEqual(len(consumers), 12)
+        for step in consumers:
+            with self.subTest(step=step.get("name", step.get("uses"))):
+                self.assertLess(steps.index(python), steps.index(step))
+                local = obj(step, "env")
+                self.assertEqual(string(local, "PKG_CONFIG_PATH"), canonical)
+                effective = {**exported, **local}
+                self.assertEqual(effective["PKG_CONFIG_PATH"], canonical)
+
     def test_native_success_receipts_do_not_enable_automated_vendor_scans(self) -> None:
         """Optional native cache helpers remain available without any required scan job."""
         jobs = obj(

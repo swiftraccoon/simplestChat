@@ -255,6 +255,8 @@ jobs:
         with:
           python-version: '3.14.8'
 
+      # setup-python exports its own PKG_CONFIG_PATH. Each Rust/native consumer
+      # below restores the pinned OpenSSL path at step scope.
       - name: Install the pinned Rust toolchain for CI receipts
         # Key/receipt checks use xtask before native-library setup or cache reuse.
         uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable (2026-10-01)
@@ -264,6 +266,7 @@ jobs:
       - name: Fingerprint the exact rust-test inputs
         id: verified-inputs
         env:
+          PKG_CONFIG_PATH: ${{ github.workspace }}/target/openssl-4.0.3/lib/pkgconfig
           CI_CACHE_SCOPE: rust-test
         run: |
           cargo run --locked -q -p xtask -- ci key --scope "$CI_CACHE_SCOPE" --github-output
@@ -276,6 +279,7 @@ jobs:
       - name: Validate the restored rust-test receipt
         if: steps.verified.outputs.cache-hit == 'true'
         env:
+          PKG_CONFIG_PATH: ${{ github.workspace }}/target/openssl-4.0.3/lib/pkgconfig
           CI_CACHE_SCOPE: rust-test
           CI_CACHE_KEY: ${{ steps.verified-inputs.outputs.key }}
           CI_CACHE_DIRECTORY: ${{ runner.temp }}/ci-verified-rust-test
@@ -284,6 +288,8 @@ jobs:
             --key "$CI_CACHE_KEY" --directory "$CI_CACHE_DIRECTORY"
 
       - uses: ./.github/actions/native-toolchain
+        env:
+          PKG_CONFIG_PATH: ${{ github.workspace }}/target/openssl-4.0.3/lib/pkgconfig
         if: steps.verified.outputs.cache-hit != 'true'
         with:
           # Test dependencies produce a different graph from browser binaries.
@@ -304,6 +310,8 @@ jobs:
             web/e2e/package-lock.json
 
       - name: Install checksum-pinned npm
+        env:
+          PKG_CONFIG_PATH: ${{ github.workspace }}/target/openssl-4.0.3/lib/pkgconfig
         if: steps.verified.outputs.cache-hit != 'true'
         working-directory: ${{ github.workspace }}
         run: |
@@ -314,28 +322,40 @@ jobs:
       # reuses the same feature graph and native worker. Explicitly use its
       # profile too; every test still executes in the test step below.
       - name: Build server, load generator and test harnesses
+        env:
+          PKG_CONFIG_PATH: ${{ github.workspace }}/target/openssl-4.0.3/lib/pkgconfig
         if: steps.verified.outputs.cache-hit != 'true'
         run: cargo build --locked --workspace --all-targets --all-features --profile test
 
       - name: Verify readiness and graceful shutdown
+        env:
+          PKG_CONFIG_PATH: ${{ github.workspace }}/target/openssl-4.0.3/lib/pkgconfig
         if: steps.verified.outputs.cache-hit != 'true'
         run: ./target/debug/load_test bench shutdown-smoke --binary "$PWD/target/debug/simplestChat" --output "$RUNNER_TEMP/shutdown-smoke"
 
       - name: Verify bounded local operation diagnostics
+        env:
+          PKG_CONFIG_PATH: ${{ github.workspace }}/target/openssl-4.0.3/lib/pkgconfig
         if: steps.verified.outputs.cache-hit != 'true'
         run: ./target/debug/load_test bench diagnostics-smoke --binary "$PWD/target/debug/simplestChat" --output "$RUNNER_TEMP/diagnostics-smoke"
 
       - name: Verify native security patches
+        env:
+          PKG_CONFIG_PATH: ${{ github.workspace }}/target/openssl-4.0.3/lib/pkgconfig
         if: steps.verified.outputs.cache-hit != 'true'
         run: cargo run --locked -q -p xtask -- ci native-security
 
       - name: Migrate disposable test database with the real server
+        env:
+          PKG_CONFIG_PATH: ${{ github.workspace }}/target/openssl-4.0.3/lib/pkgconfig
         if: steps.verified.outputs.cache-hit != 'true'
         run: cargo run --locked -q -p xtask -- test-server true
 
       # Include all PostgreSQL tests, not only the default unit suite.
       # Serialize native media-worker and room-session integration tests.
       - name: Test (including PostgreSQL recovery, refresh and moderation)
+        env:
+          PKG_CONFIG_PATH: ${{ github.workspace }}/target/openssl-4.0.3/lib/pkgconfig
         if: steps.verified.outputs.cache-hit != 'true'
         run: cargo test --locked --workspace --all-features -- --include-ignored --test-threads=1
 
@@ -343,6 +363,7 @@ jobs:
         if: steps.verified.outputs.cache-hit != 'true'
         timeout-minutes: 2
         env:
+          PKG_CONFIG_PATH: ${{ github.workspace }}/target/openssl-4.0.3/lib/pkgconfig
           RUST_LOG: warn
           E2E_ARTIFACTS: ${{ runner.temp }}/media-smoke
         run: |
@@ -369,6 +390,7 @@ jobs:
       - name: Record the successful rust-test verification
         if: steps.verified.outputs.cache-hit != 'true'
         env:
+          PKG_CONFIG_PATH: ${{ github.workspace }}/target/openssl-4.0.3/lib/pkgconfig
           CI_CACHE_SCOPE: rust-test
           CI_CACHE_KEY: ${{ steps.verified-inputs.outputs.key }}
           CI_CACHE_DIRECTORY: ${{ runner.temp }}/ci-verified-rust-test

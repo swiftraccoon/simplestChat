@@ -103,7 +103,10 @@ class PythonPolicyTests(unittest.TestCase):
             )
             self.assertLess(steps.index(build), steps.index(step))
             self.assertEqual(step["if"], build["if"])
-            self.assertNotIn("env", step)
+            self.assertEqual(
+                obj(step, "env"),
+                {"PKG_CONFIG_PATH": "${{ github.workspace }}/target/openssl-4.0.3/lib/pkgconfig"},
+            )
             self.assertNotIn("continue-on-error", step)
 
         upload = next(
