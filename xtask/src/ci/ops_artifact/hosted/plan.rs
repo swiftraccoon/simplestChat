@@ -16,7 +16,7 @@ pub(super) const PHASES: [Duration; 5] = [
     Duration::from_secs(300),
     Duration::from_secs(900),
     Duration::from_secs(300),
-    Duration::from_secs(300),
+    Duration::from_secs(540),
     Duration::from_secs(1200),
 ];
 

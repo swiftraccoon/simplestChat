@@ -1273,6 +1273,16 @@ settlement allowance retained. Individual per-command maxima are not additive
 completion guarantees: a slow cold download or build can time out. Filesystem,
 scheduling and reap stalls have no hard wall-clock bound.
 
+Kit preparation has a 540-second slot. All phase slots plus the 300-second final
+reserve total 3,540 seconds, leaving 60 seconds for initial setup and gaps within
+the unchanged 3,600-second entry. Embedded filesystem work retains its
+120-second reserve, so copying and subsequent measurements share the active
+cutoff 420 seconds after kit preparation begins. A local Darwin arm64 diagnostic
+copied a measured 505,134,204-byte tree with 26,814 files in 134.362 seconds,
+including all five payload-hash passes, per-file synchronization and checked
+closes. This was a local filesystem measurement with an inert process adapter;
+it does not establish completed hosted Linux or cold-build timing.
+
 After all required correctness and security jobs pass, the separate signer job
 downloads the same-run unsigned assembly and independently checks the selected
 identity, original payload graph, producer outcome and pinned material catalog:
