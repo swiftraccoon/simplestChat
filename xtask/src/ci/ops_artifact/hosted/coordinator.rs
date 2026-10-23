@@ -13,6 +13,7 @@ use super::{
     files::Tree,
     kit,
     plan::{self, Plan},
+    progress::{Checkpoint, Edge, Phase, Progress},
     provenance, signing,
     tools::{InvocationSpec, Role, Tools},
     worker,
@@ -213,14 +214,18 @@ async fn crate_alias<E: Executor>(
 
 async fn probes<E: Executor>(
     owners: &mut Owners,
-    plan: &Plan,
+    progress: &mut Progress<'_>,
     executor: &mut E,
     end: Instant,
     next: &mut usize,
 ) -> Result<()> {
+    let plan = progress.owner();
     let tools = owners.tools.as_ref().ok_or_else(|| failure(1))?;
     let tree = owners.kit.as_ref().ok_or_else(|| failure(1))?;
-    for (index, args) in kit::arguments().into_iter().enumerate() {
+    let arguments = kit::arguments();
+    let total = arguments.len();
+    for (index, args) in arguments.into_iter().enumerate() {
+        progress.kit(Checkpoint::Probe, Edge::Begin, index + 1, total);
         executor.ready().await?;
         tree.check()?;
         let (body, latest) = plan.body(end, Duration::from_secs(5))?;
@@ -271,6 +276,7 @@ async fn probes<E: Executor>(
         if plan.now()? >= end {
             return Err(failure(124));
         }
+        progress.kit(Checkpoint::Probe, Edge::Complete, index + 1, total);
     }
     Ok(())
 }
@@ -366,14 +372,14 @@ async fn produce<E: Executor>(
     context: &Context,
     run: &OwnedRun,
     captured: &Environment,
-    plan: &Plan,
+    progress: &mut Progress<'_>,
     executor: &mut E,
 ) -> Result<Vec<u8>> {
     Box::pin(produce_with(
         context,
         run,
         captured,
-        plan,
+        progress,
         executor,
         Catalog::load()?,
         &mut RealStages,
@@ -385,15 +391,17 @@ async fn produce_with<E: Executor, S: Stages>(
     context: &Context,
     run: &OwnedRun,
     captured: &Environment,
-    plan: &Plan,
+    progress: &mut Progress<'_>,
     executor: &mut E,
     catalog: Catalog,
     stages: &mut S,
 ) -> Result<Vec<u8>> {
+    let plan = progress.owner();
     let budget = run.budget();
     let clock = StageClock(plan.clock.clone());
     let mut owners = Owners::default();
     let result = async {
+        progress.enter(Phase::Source);
         let end = plan.begin(0)?;
         executor.ready().await?;
         plan.check()?;
@@ -442,7 +450,9 @@ async fn produce_with<E: Executor, S: Stages>(
             return Err(failure(1));
         }
         plan.complete(0, end)?;
+        progress.complete();
 
+        progress.enter(Phase::Download);
         let end = plan.begin(1)?;
         owners.downloads = Some(Tree::create(&run.path.join("downloads"), budget)?);
         let mut material_names = Vec::new();
@@ -514,7 +524,9 @@ async fn produce_with<E: Executor, S: Stages>(
             );
         }
         plan.complete(1, end)?;
+        progress.complete();
 
+        progress.enter(Phase::Registry);
         let end = plan.begin(2)?;
         let (request, selected) = record(
             run,
@@ -535,11 +547,17 @@ async fn produce_with<E: Executor, S: Stages>(
         let registry = decode(&original_registry)?;
         let registry_sha = selected_digest(&registry, "registry")?;
         plan.complete(2, end)?;
+        progress.complete();
 
+        progress.enter(Phase::Kit);
         let end = plan.begin(3)?;
         owners.kit = Some(Tree::create(&run.path.join("kit"), budget)?);
         let mut graph = Graph::default();
-        for (artifact, original_name) in catalog.artifacts.iter().zip(material_names) {
+        let total = catalog.artifacts.len();
+        for (index, (artifact, original_name)) in
+            catalog.artifacts.iter().zip(material_names).enumerate()
+        {
+            progress.kit(Checkpoint::Import, Edge::Begin, index + 1, total);
             let name = if artifact.format == Format::UbuntuDeb {
                 let downloads = owners.downloads.take().ok_or_else(|| failure(1))?;
                 let (downloads, name) = fetch::decoded_deb(
@@ -564,15 +582,19 @@ async fn produce_with<E: Executor, S: Stages>(
                 import(tree, graph, file, artifact.clone(), plan, executor, end).await?;
             graph = imported;
             owners.kit = Some(tree);
+            progress.kit(Checkpoint::Import, Edge::Complete, index + 1, total);
         }
+        progress.kit(Checkpoint::Resolve, Edge::Begin, 1, 1);
         let tree = owners.kit.take().ok_or_else(|| failure(1))?;
         owners.kit = Some(complete_kit(tree, graph, plan, executor, end).await?);
+        progress.kit(Checkpoint::Resolve, Edge::Complete, 1, 1);
         owners
             .tools
             .as_mut()
             .unwrap()
             .admit_cc(&run.path.join("kit"))?;
-        probes(&mut owners, plan, executor, end, &mut next).await?;
+        probes(&mut owners, progress, executor, end, &mut next).await?;
+        progress.kit(Checkpoint::RegistryCopy, Edge::Begin, 1, 1);
         materials::copy_bounded(
             &run.path.join("registry/registry"),
             &run.path.join("kit/registry"),
@@ -584,6 +606,8 @@ async fn produce_with<E: Executor, S: Stages>(
         )
         .await?;
         owners.kit.as_mut().unwrap().registry_created()?;
+        progress.kit(Checkpoint::RegistryCopy, Edge::Complete, 1, 1);
+        progress.kit(Checkpoint::Measure, Edge::Begin, 1, 1);
         let kit_identity = materials::measure(
             &run.path.join("kit"),
             budget,
@@ -604,11 +628,14 @@ async fn produce_with<E: Executor, S: Stages>(
         {
             return Err(failure(1));
         }
+        progress.kit(Checkpoint::Measure, Edge::Complete, 1, 1);
         // All private readers and bootstrap proofs close before the producer's
         // separately reserved descriptor profile admits compiler work.
         owners.finish()?;
         plan.complete(3, end)?;
+        progress.complete();
 
+        progress.enter(Phase::Producer);
         let end = plan.begin(4)?;
         let (request, selected) = record(
             run,
@@ -630,6 +657,8 @@ async fn produce_with<E: Executor, S: Stages>(
         .await?;
         decode(&producer)?;
         plan.complete(4, end)?;
+        progress.complete();
+        progress.enter(Phase::Assembly);
         plan.finalizing()?;
 
         let hosted_kit = provenance::encoded(&json!({
@@ -742,9 +771,12 @@ async fn produce_with<E: Executor, S: Stages>(
         .map(str::to_owned)
         .collect();
         final_inventory(run, &expected)?;
+        progress.complete();
         Ok(observation)
     }
     .await;
+    progress.refused(&result);
+    progress.enter(Phase::Finalization);
     let closed = owners.finish();
     result.and_then(|bytes| closed.map(|()| bytes))
 }
@@ -798,12 +830,22 @@ pub(super) async fn native(output: &Path) -> Result<()> {
     let plan = Plan::new(Arc::new(plan::NativeClock));
     let replay = replay_environment();
     let mut executor = Native::new(&context.workspace, &replay, signals);
-    executor.ready().await?;
-    plan.check()?;
-    let run = create(&context, output, &budget, &plan, &mut executor).await?;
-    let result = produce(&context, &run, &captured, &plan, &mut executor).await;
-    let closed = run.finish();
-    completion(result, closed, &plan, &mut executor, &budget).await
+    let mut stderr = std::io::stderr();
+    let mut progress = Progress::new(&plan, &mut stderr);
+    progress.enter(Phase::Source);
+    let result = async {
+        executor.ready().await?;
+        plan.check()?;
+        let run = create(&context, output, &budget, &plan, &mut executor).await?;
+        let result = produce(&context, &run, &captured, &mut progress, &mut executor).await;
+        progress.refused(&result);
+        progress.enter(Phase::Finalization);
+        let closed = run.finish();
+        completion(result, closed, &plan, &mut executor, &budget).await
+    }
+    .await;
+    progress.finish(&result);
+    result
 }
 pub(super) async fn signing_native(directory: &Path, output: &Path) -> Result<()> {
     let signals = Signals::new()?;

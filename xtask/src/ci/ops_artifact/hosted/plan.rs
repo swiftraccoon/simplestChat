@@ -65,6 +65,12 @@ impl Plan {
     pub fn end(&self) -> Instant {
         self.start + self.limit
     }
+    /// Diagnostic-only age of the last existing validated owner sample. Borrowed
+    /// stages can run between samples. Reading it observes no clock and changes
+    /// no admission, deadline, phase or monotonicity state.
+    pub fn observed_elapsed(&self) -> Duration {
+        self.latest.get().saturating_duration_since(self.start)
+    }
     pub fn check(&self) -> Result<()> {
         if self.now()? >= self.end() {
             Err(failure(124))

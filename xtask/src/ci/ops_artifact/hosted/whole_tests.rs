@@ -168,7 +168,7 @@ fn catalog() -> (Catalog, BTreeMap<String, Vec<u8>>) {
 }
 struct FakeStages {
     calls: Vec<&'static str>,
-    producer_failure: bool,
+    producer_failure: Option<u8>,
 }
 impl Stages for FakeStages {
     async fn source<E: Executor, C: super::super::super::Clock>(
@@ -259,8 +259,8 @@ impl Stages for FakeStages {
         .await?;
         assert_eq!(source.sha256, request["source"]["sha256"]);
         assert_eq!(kit.sha256, request["builderKit"]["sha256"]);
-        if self.producer_failure {
-            return Err(failure(42));
+        if let Some(code) = self.producer_failure {
+            return Err(failure(code));
         }
         let output = Path::new(request["output"].as_str().unwrap());
         mkdir(output);
@@ -467,9 +467,58 @@ impl Executor for FakeCli {
     }
 }
 
+struct DiagnosticSink {
+    bytes: Vec<u8>,
+    budget: Budget,
+    broken: bool,
+    terminals: usize,
+}
+impl Write for DiagnosticSink {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        if bytes
+            .windows(b"event=finished".len())
+            .any(|part| part == b"event=finished")
+        {
+            assert_eq!(
+                self.budget.count(),
+                0,
+                "no terminal result before owned closes"
+            );
+            self.terminals += 1;
+        }
+        self.bytes.extend_from_slice(bytes);
+        if self.broken {
+            Err(std::io::Error::other("PRIVATE diagnostic write refusal"))
+        } else {
+            Ok(bytes.len())
+        }
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
 async fn operation(
     fail: Option<&'static str>,
-) -> (fixture::Fixture, Vec<&'static str>, FakeCli, Result<()>) {
+) -> (
+    fixture::Fixture,
+    Vec<&'static str>,
+    FakeCli,
+    Result<()>,
+    Vec<u8>,
+) {
+    operation_with_sink(fail, false).await
+}
+async fn operation_with_sink(
+    fail: Option<&'static str>,
+    broken: bool,
+) -> (
+    fixture::Fixture,
+    Vec<&'static str>,
+    FakeCli,
+    Result<()>,
+    Vec<u8>,
+) {
     let fixture = fixture::Fixture::new();
     let workspace = fixture.root.join("checkout");
     mkdir(&workspace);
@@ -496,30 +545,46 @@ async fn operation(
     };
     let mut stages = FakeStages {
         calls: Vec::new(),
-        producer_failure: fail == Some("producer"),
+        producer_failure: match fail {
+            Some("producer") => Some(42),
+            Some("producer-deadline") => Some(124),
+            Some("producer-int") => Some(130),
+            Some("producer-term") => Some(143),
+            _ => None,
+        },
     };
     let run = OwnedRun::local(&fixture.root.join("result"), &budget).unwrap();
+    let mut diagnostic = DiagnosticSink {
+        bytes: Vec::new(),
+        budget: budget.clone(),
+        broken,
+        terminals: 0,
+    };
+    let mut progress = Progress::new(&plan, &mut diagnostic);
     let produced = Box::pin(produce_with(
         &context,
         &run,
         &captured,
-        &plan,
+        &mut progress,
         &mut cli,
         catalog,
         &mut stages,
     ))
     .await;
+    assert!(!progress.finished());
     let closed = run.finish();
     let result = completion(produced, closed, &plan, &mut cli, &budget).await;
     assert_eq!(budget.count(), 0);
     let (attempted, fallback) = budget.close_counts();
     assert!(attempted > 0);
     assert_eq!(fallback, 0);
-    (fixture, stages.calls, cli, result)
+    progress.finish(&result);
+    assert_eq!(diagnostic.terminals, 1);
+    (fixture, stages.calls, cli, result, diagnostic.bytes)
 }
 #[tokio::test]
 async fn whole_private_fixture_reaches_all_five_phases_and_nine_evidence_publication() {
-    let (fixture, stages, cli, result) = Box::pin(operation(None)).await;
+    let (fixture, stages, cli, result, _) = Box::pin(operation(None)).await;
     result.unwrap();
     assert_eq!(stages, ["source", "registry", "producer"]);
     assert_eq!(cli.calls.len(), 21);
@@ -559,7 +624,7 @@ async fn whole_private_fixture_retains_failure_and_blocks_later_stages_or_positi
         "late-clock",
         "late-signal",
     ] {
-        let (fixture, stages, cli, result) = Box::pin(operation(Some(fail))).await;
+        let (fixture, stages, cli, result, _) = Box::pin(operation(Some(fail))).await;
         super::super::fixture::expect_error(
             result,
             match fail {
@@ -584,5 +649,42 @@ async fn whole_private_fixture_retains_failure_and_blocks_later_stages_or_positi
             assert!(fixture.root.join("result/unsigned").exists());
             assert!(!cli.replayed.is_empty());
         }
+    }
+}
+
+#[tokio::test]
+async fn diagnostics_keep_stage_primary_and_late_completion_errors_after_all_owned_closes() {
+    for broken in [false, true] {
+        for (fail, code, phase) in [
+            ("producer", 42, "producer"),
+            ("producer-deadline", 124, "producer"),
+            ("producer-int", 130, "producer"),
+            ("producer-term", 143, "producer"),
+            ("cleanup", 1, "finalization"),
+            ("late-clock", 124, "finalization"),
+            ("late-signal", 143, "finalization"),
+        ] {
+            let (fixture, _, _, result, diagnostics) =
+                Box::pin(operation_with_sink(Some(fail), broken)).await;
+            super::super::fixture::expect_error(result, code);
+            let text = std::str::from_utf8(&diagnostics).unwrap();
+            assert!(text.lines().last().unwrap().contains(&format!(
+                "event=finished status={code} refusedPhase={phase} "
+            )));
+            assert!(!text.contains("PRIVATE"));
+            assert!(!text.contains(fixture.root.to_str().unwrap()));
+            assert!(!text.contains("https://"));
+            assert!(diagnostics.len() <= super::super::progress::MAX_BYTES);
+        }
+        let (_, stages, _, result, diagnostics) = Box::pin(operation_with_sink(None, broken)).await;
+        result.unwrap();
+        assert_eq!(stages, ["source", "registry", "producer"]);
+        let text = std::str::from_utf8(&diagnostics).unwrap();
+        assert!(
+            text.lines()
+                .last()
+                .unwrap()
+                .contains("event=finished status=0 refusedPhase=none ")
+        );
     }
 }

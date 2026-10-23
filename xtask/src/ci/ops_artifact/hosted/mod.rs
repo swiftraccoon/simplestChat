@@ -17,6 +17,7 @@ mod kit;
 #[cfg(test)]
 mod native_tests;
 mod plan;
+mod progress;
 mod provenance;
 mod shim;
 mod signing;

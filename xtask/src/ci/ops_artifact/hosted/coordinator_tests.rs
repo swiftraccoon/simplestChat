@@ -92,10 +92,13 @@ async fn whole_coordinator_source_failure_preserves_primary_closes_peers_and_nev
     let plan = Plan::new(Arc::new(super::super::fixture::Clock::new()));
     let run = OwnedRun::local(&fixture.root.join("result"), &budget).unwrap();
     let mut executor = FirstFailure { calls: 0 };
+    let mut diagnostics = Vec::new();
+    let mut progress = Progress::new(&plan, &mut diagnostics);
     super::super::fixture::expect_error(
-        produce(&context, &run, &env, &plan, &mut executor).await,
+        produce(&context, &run, &env, &mut progress, &mut executor).await,
         42,
     );
+    assert!(!progress.finished());
     assert_eq!(executor.calls, 1);
     for never in ["downloads", "registry", "kit", "build", "unsigned"] {
         assert!(!run.path.join(never).exists());
