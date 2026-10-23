@@ -9,6 +9,21 @@ Start with [development setup](docs/development.md), then the
 README a quick introduction; put detailed explanations alongside the system
 they describe. Local agent instructions such as `CLAUDE.md` stay untracked.
 
+## Standards for new work
+
+The [coding standard](docs/coding-standard.md) and
+[commit standard](docs/commit-standard.md) govern new work and subsequent changes
+from this adoption (2026-10-22) onward. Read them before implementation or committing. The coding
+standard adopts pinned Rust style and API guidance, with the
+[Rust API review inventory](docs/rust-api-checklist.md) used for affected changes.
+The existing language, privacy, ownership and verification rules below continue
+alongside that baseline.
+
+This is a prospective adoption. Existing code and published commit history have
+not been audited against it; that retroactive review is a separate task. A new
+change reviews the code and contracts it affects without requiring an unrelated
+repository-wide rewrite.
+
 ## Before publishing
 
 Use focused local commits on `main`; a pull request is not required.
@@ -196,26 +211,10 @@ Public-platform readiness also needs current capacity measurements, recovery
 drills and operational monitoring. Keep those limitations visible until the
 corresponding behavior is implemented and verified.
 
-Use focused commits with a Conventional Commit subject: `type(scope): description`
-or `type: description`, for example `fix(web): prevent overlapping controls`.
-Use an imperative description and explain non-obvious changes in the body.
-Enable the shared check in each checkout with
-`git config --local core.hooksPath .githooks`. The hook rejects malformed subjects
-before creating a commit; CI also checks the branch tip, including the actual
-PR head instead of GitHub's generated merge message. Supported types are `feat`,
-`fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`,
-and `ops`; breaking changes may add `!` before the colon.
-Size commits by coherent change, not by step. One commit carries one theme: a
-feature, the redesign of one area, a bug with its fix, or one maintenance
-concern, together with the tests, documentation, generated files, security
-review rebindings and allowlist updates that the change itself requires. Do not
-split a theme into a trail of small commits (a type here, a test move there, a
-review rebinding, an allowlist line): fold such follow-ups into the commit that
-needs them while the work is unpushed, and squash before pushing when the work
-accumulated as steps. Do not bundle unrelated themes either; a review's whole
-implementation is several commits, one per theme. As a yardstick, a day's work
-on one roadmap slice is a handful of commits, not dozens, and each must stand on
-its own: the subject names the theme, the body explains the non-obvious decisions
-and the validation that was run. Keep mechanical formatting separate from
-behavior changes where practical. Do not commit secrets, captured user data,
-generated build outputs or local agent instructions.
+Follow the [commit standard](docs/commit-standard.md) for Conventional Commits
+1.0.0, coherent change sizing, breaking-change explanations and completed
+checkpoints. Enable the existing subject check in each checkout with
+`git config --local core.hooksPath .githooks`. The hook and CI validate the
+subject; review must also check the body, footers, theme and validation evidence.
+Do not commit secrets, captured user data, generated build outputs or local agent
+instructions.

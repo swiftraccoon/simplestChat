@@ -11,6 +11,9 @@
 # Publish only shared guides; existing local plans stay private.
 /docs/*
 !/docs/development.md
+!/docs/coding-standard.md
+!/docs/commit-standard.md
+!/docs/rust-api-checklist.md
 !/docs/deployment.md
 !/docs/configuration.md
 !/docs/diagnostics.md

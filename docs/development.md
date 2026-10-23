@@ -1,6 +1,9 @@
 # Development
 
 Run commands from the repository root.
+Read the [coding standard](coding-standard.md) and
+[commit standard](commit-standard.md) before authoring new work; existing code
+will receive a separate retroactive review.
 
 ## Prerequisites
 
