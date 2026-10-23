@@ -155,6 +155,7 @@ class SecurityWorkflowTests(unittest.TestCase):
             "xtask/Cargo.toml": b"controller",
             "load_tests/Cargo.toml": b"generator",
             "ops/Cargo.toml": b"operations",
+            "ops/ops-build-inputs.lock.json": b"compiled material catalog",
             "ops/src/lib.rs": b"linked operations policy",
             "rust-toolchain.toml": b"compiler",
             ".cargo/config.toml": b"config",
@@ -195,7 +196,10 @@ class SecurityWorkflowTests(unittest.TestCase):
         gate = obj(ci, "jobs", "required")
         self.assertEqual(gate["if"], "${{ always() }}")
         self.assertEqual(set(strings(gate, "needs")), GATES)
-        self.assertEqual(set(obj(ci, "jobs")) - {"required", "release-security"}, GATES)
+        separate_ops = {"ops-build", "ops-release-security"}
+        self.assertEqual(
+            set(obj(ci, "jobs")) - {"required", "release-security"} - separate_ops, GATES
+        )
         steps = objects(gate, "steps")
         aggregate = next(
             step
@@ -330,8 +334,18 @@ class SecurityWorkflowTests(unittest.TestCase):
             signer["permissions"],
             {"contents": "read", "id-token": "write", "attestations": "write"},
         )
+        ops_signer = obj(ci, "jobs", "ops-release-security")
+        self.assertEqual(
+            ops_signer["if"],
+            "${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}",
+        )
+        self.assertEqual(ops_signer["needs"], ["required", "ops-build"])
+        self.assertEqual(
+            ops_signer["permissions"],
+            {"contents": "read", "id-token": "write", "attestations": "write"},
+        )
         for name, value in obj(ci, "jobs").items():
-            if name != "release-security":
+            if name not in {"release-security", "ops-release-security"}:
                 self.assertNotIn("id-token", obj(obj(value).get("permissions", {})))
                 self.assertNotIn("attestations", obj(obj(value).get("permissions", {})))
         steps = objects(signer, "steps")
@@ -964,6 +978,7 @@ class SecurityWorkflowTests(unittest.TestCase):
                 "security/exceptions.json",
                 "security/image-policy.json",
                 "ops/Cargo.toml",
+                "ops/ops-build-inputs.lock.json",
                 "ops/src/**",
             ):
                 self.assertIn(f"'{source}'", key)

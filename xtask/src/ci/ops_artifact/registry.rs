@@ -22,6 +22,27 @@ const COMPRESSED: u64 = 128 * 1024 * 1024;
 const EXPANDED: u64 = 1024 * 1024 * 1024;
 const MEMBERS: usize = 65536;
 
+pub(super) struct SelectedArchive {
+    pub name: String,
+    pub version: String,
+    pub checksum: String,
+}
+
+/// Reuse the bounded lock parser for fixed-origin archive acquisition. These
+/// selections authenticate nothing until the enclosing source is authenticated.
+pub(super) fn selected_archives(original_lock: &[u8]) -> Result<Vec<SelectedArchive>> {
+    lock::parse(original_lock).map(|packages| {
+        packages
+            .into_iter()
+            .map(|package| SelectedArchive {
+                name: package.name,
+                version: package.version,
+                checksum: package.checksum,
+            })
+            .collect()
+    })
+}
+
 struct Cache {
     root: Chain,
     budget: Budget,
@@ -270,4 +291,40 @@ pub(super) async fn native(path: &Path, selected: &str) -> Result<()> {
         return Err(failure(1));
     }
     deadline.check(true)
+}
+
+/// Hydrate under the enclosing executor's existing cancellation registration.
+pub(super) async fn observe<E: Executor, C: Clock>(
+    path: &Path,
+    selected: &str,
+    budget: &Budget,
+    executor: &mut E,
+    deadline: &Deadline<'_, C>,
+) -> Result<Vec<u8>> {
+    executor.ready().await?;
+    deadline.check(false)?;
+    let request = Request::read(path, selected, budget)?;
+    let cache = Cache::open(&request.archives_root, budget)?;
+    if let Err(error) = executor.ready().await.and_then(|()| deadline.check(false)) {
+        let _ = cache.finish();
+        return Err(error);
+    }
+    let run = match OwnedRun::local(&request.output, budget) {
+        Ok(run) => run,
+        Err(error) => {
+            let _ = cache.finish();
+            return Err(error);
+        }
+    };
+    let result = hydrate(&request, &cache, &run, executor, deadline).await;
+    let cache_closed = cache.finish();
+    let run_closed = run.finish();
+    let bytes = result?;
+    cache_closed.and(run_closed)?;
+    executor.ready().await?;
+    if !executor.cleanup_passed() {
+        return Err(failure(1));
+    }
+    deadline.check(true)?;
+    Ok(bytes)
 }

@@ -49,7 +49,9 @@ async fn command<E: Executor, C: Clock>(
     executor.ready().await?;
     recipe.check(run, tools)?;
     let _reservation = run.budget().reserve(16)?;
-    command.timeout = deadline.body(maximum)?;
+    let body = deadline.body(maximum)?;
+    command.timeout = body;
+    command.ops_stage_dispatch = Some(deadline.dispatch_by(body)?);
     command.grace = GRACE;
     let output = executor.run(command).await?;
     deadline.check(false)?;
@@ -161,6 +163,7 @@ async fn build<E: Executor, C: Clock>(
     executor.ready().await?;
     recipe.check(run, tools)?;
     let body = deadline.body(Duration::from_secs(18 * 60))?;
+    let dispatch = deadline.dispatch_by(body)?;
     let file = rustix::fs::openat(
         run.file(),
         "build.log",
@@ -183,6 +186,7 @@ async fn build<E: Executor, C: Clock>(
     value.combined_log = Some(Arc::new(log));
     value.timeout = body;
     value.grace = GRACE;
+    value.ops_stage_dispatch = Some(dispatch);
     // Native owns the admitted sink even when setup/spawn fails. Group cleanup
     // precedes bounded EOF and explicit log closes; it never executes candidate.
     executor.run(value).await?;
@@ -373,4 +377,36 @@ pub(super) async fn native(path: &std::path::Path, selected: &str) -> Result<()>
     let mut executor = Native::new(&cwd, &environment, signals);
     let result = produce(&request, &run, &mut executor, &deadline).await;
     complete(result, run, &mut executor, &deadline).await
+}
+
+/// Build without replacing the enclosing executor or publishing its observation.
+pub(super) async fn observe<E: Executor, C: Clock>(
+    path: &std::path::Path,
+    selected: &str,
+    budget: &Budget,
+    executor: &mut E,
+    deadline: &Deadline<'_, C>,
+) -> Result<Vec<u8>> {
+    executor.ready().await?;
+    deadline.check(false)?;
+    let request = Request::read(path, selected, budget)?;
+    executor.ready().await?;
+    deadline.check(false)?;
+    let host = rustix::system::uname();
+    if host.sysname() != c"Linux" || host.machine() != c"x86_64" {
+        return Err(failure(1));
+    }
+    executor.ready().await?;
+    deadline.check(false)?;
+    let run = OwnedRun::create(&request.output, budget)?;
+    let result = produce(&request, &run, executor, deadline).await;
+    let closed = run.finish();
+    let value = result?;
+    closed?;
+    executor.ready().await?;
+    if !executor.cleanup_passed() {
+        return Err(failure(1));
+    }
+    deadline.check(true)?;
+    encoded(&value)
 }

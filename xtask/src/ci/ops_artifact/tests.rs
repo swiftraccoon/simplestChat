@@ -82,7 +82,7 @@ fn watchdog_reserves_cleanup_and_never_admits_zero_body() {
     let deadline = Deadline::new(&clock);
     assert_eq!(
         deadline.body(Duration::from_secs(2000)).unwrap(),
-        Duration::from_secs(1055)
+        Duration::from_secs(1054)
     );
     clock.0.set(clock.now() + Duration::from_secs(1055));
     assert_eq!(deadline.body(Duration::from_secs(1)).unwrap_err().code, 124);
@@ -91,6 +91,144 @@ fn watchdog_reserves_cleanup_and_never_admits_zero_body() {
     assert!(deadline.check(true).is_ok());
     clock.0.set(clock.now() + RESERVE);
     assert!(deadline.check(true).is_err());
+}
+#[test]
+fn embedded_stages_preserve_the_outer_end_and_original_settlement_reserve() {
+    let clock = FakeClock::new();
+    let end = clock.now() + Duration::from_secs(300);
+    let first = Deadline::bounded(&clock, end);
+    assert_eq!(
+        first.body(Duration::from_secs(2000)).unwrap(),
+        Duration::from_secs(154)
+    );
+    clock.0.set(clock.now() + Duration::from_secs(50));
+    let next = Deadline::bounded(&clock, end);
+    assert_eq!(next.end(), end);
+    assert_eq!(
+        next.body(Duration::from_secs(2000)).unwrap(),
+        Duration::from_secs(104)
+    );
+    clock.0.set(end - RESERVE);
+    assert_eq!(next.check(false).unwrap_err().code, 124);
+    assert!(next.check(true).is_ok());
+    clock.0.set(end);
+    assert_eq!(next.check(true).unwrap_err().code, 124);
+
+    let capped = Deadline::bounded(&clock, clock.now() + Duration::from_secs(3600));
+    assert_eq!(capped.end(), clock.now() + TOTAL);
+    let short = Deadline::bounded(&clock, clock.now() + Duration::from_secs(119));
+    assert_eq!(short.check(false).unwrap_err().code, 124);
+}
+#[test]
+fn dispatch_cutoff_keeps_the_chosen_body_and_original_end_after_setup() {
+    let clock = FakeClock::new();
+    let start = clock.now();
+    let end = start + Duration::from_secs(300);
+    let deadline = Deadline::bounded(&clock, end);
+    let body = deadline.body(Duration::from_secs(30)).unwrap();
+    let latest = deadline.dispatch_by(body).unwrap();
+    assert_eq!(latest, start + Duration::from_secs(125));
+    clock.0.set(start + Duration::from_secs(50));
+    let next_stage = Deadline::bounded(&clock, end);
+    assert_eq!(next_stage.dispatch_by(body).unwrap(), latest);
+    clock.0.set(latest);
+    assert_eq!(deadline.dispatch_by(body).unwrap(), latest);
+    clock.0.set(latest + Duration::from_nanos(1));
+    assert_eq!(deadline.dispatch_by(body).unwrap_err().code, 124);
+    assert_eq!(next_stage.dispatch_by(body).unwrap_err().code, 124);
+    assert!(deadline.check(false).is_ok());
+    assert_eq!(deadline.dispatch_by(Duration::ZERO).unwrap_err().code, 124);
+    assert_eq!(deadline.dispatch_by(Duration::MAX).unwrap_err().code, 124);
+}
+
+#[test]
+fn remaining_limited_body_keeps_setup_headroom_without_extending_the_original_end() {
+    let clock = FakeClock::new();
+    let start = clock.now();
+    let end = start + Duration::from_secs(300);
+    let deadline = Deadline::bounded(&clock, end);
+    let body = deadline.body(Duration::from_secs(2000)).unwrap();
+    assert_eq!(body, Duration::from_secs(154));
+    let latest = deadline.dispatch_by(body).unwrap();
+    assert_eq!(latest, start + DISPATCH_SETUP);
+    assert_eq!(latest + body + GRACE + SETTLEMENT + RESERVE, end);
+    clock.0.set(latest);
+    assert_eq!(deadline.dispatch_by(body).unwrap(), latest);
+    clock.0.set(latest + Duration::from_nanos(1));
+    assert_eq!(deadline.dispatch_by(body).unwrap_err().code, 124);
+    assert_eq!(deadline.body(Duration::ZERO).unwrap_err().code, 124);
+}
+
+#[test]
+fn real_clock_remaining_limited_body_still_admits_a_later_setup_sample() {
+    let clock = NativeClock;
+    let deadline = Deadline::bounded(&clock, clock.now() + Duration::from_secs(300));
+    let body = deadline.body(Duration::from_secs(2000)).unwrap();
+    assert!(body < Duration::from_secs(2000));
+    // Advance the real clock past the body() sample. Previously its calculated
+    // cutoff equalled that sample, making every remaining-limited body fail.
+    std::thread::sleep(Duration::from_millis(1));
+    let latest = deadline.dispatch_by(body).unwrap();
+    assert!(clock.now() <= latest);
+    assert_eq!(latest + body + GRACE + SETTLEMENT + RESERVE, deadline.end());
+}
+
+#[tokio::test]
+async fn actual_build_construction_passes_original_cutoff_to_delayed_fake_setup() {
+    struct Delayed<'a> {
+        clock: &'a FakeClock,
+        end: Instant,
+        attempted: usize,
+        spawned: usize,
+    }
+    impl crate::ci::process::Executor for Delayed<'_> {
+        async fn run(&mut self, command: crate::ci::command::Command) -> Result<Vec<u8>> {
+            self.attempted += 1;
+            let latest = command
+                .ops_stage_dispatch
+                .expect("original stage dispatch bound");
+            assert_eq!(command.timeout, Duration::from_secs(30));
+            assert_eq!(
+                latest,
+                self.end - RESERVE - command.timeout - GRACE - SETTLEMENT
+            );
+            self.clock.0.set(latest + Duration::from_nanos(1));
+            if self.clock.now() > latest {
+                return Err(failure(124));
+            }
+            self.spawned += 1;
+            panic!("late setup cannot admit a process")
+        }
+        async fn ready(&mut self) -> Result<()> {
+            Ok(())
+        }
+    }
+    let fixture = Fixture::new();
+    let budget = namespace::Budget::default();
+    let request = fixture.request(&budget).await;
+    let run = namespace::OwnedRun::fixture(&fixture.output, &budget).unwrap();
+    let clock = FakeClock::new();
+    let end = clock.now() + Duration::from_secs(300);
+    let deadline = Deadline::bounded(&clock, end);
+    let mut executor = Delayed {
+        clock: &clock,
+        end,
+        attempted: 0,
+        spawned: 0,
+    };
+    let result = execute::produce(&request, &run, &mut executor, &deadline).await;
+    assert_eq!(result.unwrap_err().code, 124);
+    assert_eq!(executor.attempted, 1);
+    assert_eq!(executor.spawned, 0);
+    assert!(
+        std::fs::read_dir(run.path.join("target"))
+            .unwrap()
+            .next()
+            .is_none()
+    );
+    assert!(!run.path.join("build.log").exists());
+    run.finish().unwrap();
+    assert_eq!(budget.count(), 0);
 }
 #[test]
 fn descriptor_cap_is_checked_and_partial_reservations_unwind() {

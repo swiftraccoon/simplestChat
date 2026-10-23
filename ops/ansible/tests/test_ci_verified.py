@@ -560,6 +560,35 @@ class VerifiedCacheTests(unittest.TestCase):
         with self.assertRaises(OSError):
             _ = cache.verify(self.root, "backend", key, directory)
 
+    def test_embedded_ops_catalog_changes_every_compiled_tool_key_and_original_receipt(
+        self,
+    ) -> None:
+        """Key the catalog without admitting adjacent Ops JSON into narrow scopes."""
+        path = self.root / "ops/ops-build-inputs.lock.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        _ = path.write_bytes(b"original reviewed catalog\n")
+        adjacent = path.with_name("unrelated-local-selection.json")
+        _ = adjacent.write_bytes(b"original unrelated JSON\n")
+        self.git("add", ".")
+        original = {scope: cache.cache_key(self.root, scope) for scope in cache.SCOPES}
+        directory = self.root / "catalog-receipt"
+        cache.save(self.root, "rust-test", original["rust-test"], directory)
+        self.assertEqual(
+            cache.verify(self.root, "rust-test", original["rust-test"], directory), "1" * 40
+        )
+        _ = path.write_bytes(b"changed reviewed catalog\n")
+        for scope in cache.SCOPES:
+            self.assertNotEqual(cache.cache_key(self.root, scope), original[scope], scope)
+        with self.assertRaisesRegex(ToolError, "ci_cache_inputs_changed"):
+            _ = cache.verify(self.root, "rust-test", original["rust-test"], directory)
+        _ = path.write_bytes(b"original reviewed catalog\n")
+        _ = adjacent.write_bytes(b"changed unrelated JSON\n")
+        for scope in cache.SCOPES:
+            conservative = scope in {"automation", "rust-lint", "rust-test"}
+            self.assertEqual(
+                cache.cache_key(self.root, scope) != original[scope], conservative, scope
+            )
+
     def test_backend_closure_preserves_build_inputs_without_operational_invalidations(self) -> None:
         """Documentation and Python tests cannot change compiler inputs or embedded Rust data."""
         inputs = (

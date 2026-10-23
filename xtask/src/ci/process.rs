@@ -1,6 +1,6 @@
 //! Bounded native commands reuse the browser supervisor's reserved group guard.
 
-use super::command::{Command, SeparateLogs};
+use super::command::{Command, Program, SeparateLogs};
 use crate::ci::browser_suite::{
     cleanup,
     process::{Group, Signals, exited},
@@ -70,6 +70,16 @@ impl<'a> Native<'a> {
         let mdns = request.mdns.clone();
         let mdns_admission = mdns.as_ref().map(|v| v.begin()).transpose();
         let retained_ops = request.retained_ops.clone();
+        let ops_acquire = request.ops_acquire.clone();
+        let hosted_ops = request.hosted_ops.clone();
+        let hosted_admission = hosted_ops
+            .as_ref()
+            .map(|proof| proof.begin(&request))
+            .transpose();
+        let acquire_admission = ops_acquire
+            .as_ref()
+            .map(|proof| proof.begin(&request))
+            .transpose();
         let release_checks = request.release_checks.clone();
         let checks_admission = release_checks
             .as_ref()
@@ -99,6 +109,8 @@ impl<'a> Native<'a> {
         let result = match admission
             .and(mdns_admission.map(|_| ()))
             .and(retained_admission.map(|_| ()))
+            .and(acquire_admission.map(|_| ()))
+            .and(hosted_admission.map(|_| ()))
             .and(checks_admission.map(|_| ()))
             .and(benchmark_admission.map(|_| ()))
             .and({
@@ -122,6 +134,12 @@ impl<'a> Native<'a> {
             proof.observed_io(closed.as_ref().ok().cloned().flatten());
         }
         if let Some(proof) = retained_ops {
+            proof.observed_io(closed.as_ref().ok().cloned().flatten());
+        }
+        if let Some(proof) = ops_acquire {
+            proof.observed_io(closed.as_ref().ok().cloned().flatten());
+        }
+        if let Some(proof) = hosted_ops {
             proof.observed_io(closed.as_ref().ok().cloned().flatten());
         }
         if let Some(mdns) = mdns {
@@ -158,10 +176,35 @@ impl<'a> Native<'a> {
                 "CI file output requires bounded stderr capture.",
             ));
         }
+        if request.ops_stage_dispatch.is_some()
+            && !match request.program {
+                Program::OpsGit => request.source_git.is_some(),
+                Program::OpsCargo | Program::OpsRustc => request.ops.is_some(),
+                _ => false,
+            }
+        {
+            return Err(Failure::new(
+                1,
+                "CI Ops dispatch bound requires its selected role.",
+            ));
+        }
         let (root, environment) = if let Some(proof) = &request.benchmark {
             proof.context(request.program, &request.arguments)?
         } else if let Some(proof) = &request.retained_ops {
             proof.context(request.program, &request.arguments)?
+        } else if let Some(proof) = &request.ops_acquire {
+            proof.context(request.program, &request.arguments)?
+        } else if let Some(proof) = &request.hosted_ops {
+            proof.context(request.program, &request.arguments)?
+        } else if let Some(proof) = &request.source_git {
+            proof.context()?.unwrap_or((self.root, self.environment))
+        } else if let Some(proof) = &request.ops {
+            let role = match request.program {
+                Program::OpsCargo => super::ops_artifact::recipe::Role::Cargo,
+                Program::OpsRustc => super::ops_artifact::recipe::Role::Rustc,
+                _ => return Err(Failure::new(1, "CI Ops producer role invalid.")),
+            };
+            proof.context(role)?
         } else {
             match request.comparison.as_ref() {
                 Some(invocation) => invocation.context(
@@ -220,6 +263,14 @@ impl<'a> Native<'a> {
             }
             proof.validate(request.program, &request.arguments)?;
         }
+        if let Some(proof) = &request.ops_acquire {
+            self.ready().await?;
+            proof.validate(request.program, &request.arguments)?;
+        }
+        if let Some(proof) = &request.hosted_ops {
+            self.ready().await?;
+            proof.validate(request.program, &request.arguments)?;
+        }
         if let Some(proof) = &request.benchmark {
             if !request.cleanup {
                 self.ready().await?;
@@ -234,6 +285,12 @@ impl<'a> Native<'a> {
         if let Some(proof) = &request.release_http {
             self.ready().await?;
             proof.validate(request.program, &request.arguments)?;
+        }
+        if request
+            .ops_stage_dispatch
+            .is_some_and(|end| std::time::Instant::now() > end)
+        {
+            return Err(Failure::new(124, "CI Ops stage dispatch window expired."));
         }
         let child = command.spawn().map_err(|error| {
             Failure::new(
@@ -560,6 +617,8 @@ fn executable(request: &Command) -> Result<&std::ffi::OsStr> {
         request.load_image.is_some(),
         request.mdns.is_some(),
         request.retained_ops.is_some(),
+        request.ops_acquire.is_some(),
+        request.hosted_ops.is_some(),
         request.benchmark.is_some(),
         request.release_checks.is_some(),
         #[cfg(feature = "release-http-policy")]
@@ -578,6 +637,9 @@ fn executable(request: &Command) -> Result<&std::ffi::OsStr> {
             | Program::OpsRustc
             | Program::OpsGit
             | Program::OpsGh
+            | Program::OpsMaterialCurl
+            | Program::OpsDpkgDeb
+            | Program::OpsHostCc
             | Program::ComparisonGit
             | Program::ComparisonCargo
             | Program::ComparisonBenchmark
@@ -603,6 +665,11 @@ fn executable(request: &Command) -> Result<&std::ffi::OsStr> {
         return proof
             .validate(request.program, &request.arguments)
             .map(|p| p.as_os_str());
+    }
+    if let Some(proof) = &request.hosted_ops {
+        return proof
+            .validate(request.program, &request.arguments)
+            .map(|path| path.as_os_str());
     }
     #[cfg(feature = "release-http-policy")]
     if let Some(proof) = &request.release_http {
@@ -648,10 +715,16 @@ fn executable(request: &Command) -> Result<&std::ffi::OsStr> {
             .as_ref()
             .map(|value| value.validate(super::ops_artifact::recipe::Role::Rustc)),
         Program::OpsGit => request.source_git.as_ref().map(|value| value.validate()),
-        Program::OpsGh => request
-            .retained_ops
-            .as_ref()
-            .map(|value| value.validate(request.program, &request.arguments)),
+        Program::OpsGh => {
+            if let Some(proof) = &request.retained_ops {
+                Some(proof.validate(request.program, &request.arguments))
+            } else {
+                request
+                    .ops_acquire
+                    .as_ref()
+                    .map(|proof| proof.validate(request.program, &request.arguments))
+            }
+        }
         Program::ComparisonGit | Program::ComparisonCargo | Program::ComparisonBenchmark => {
             request.comparison.as_ref().map(|value| {
                 value.validate(comparison_role(request.program).expect("comparison role"))

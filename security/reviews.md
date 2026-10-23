@@ -189,6 +189,24 @@ ceiling remains 45 minutes; cold bootstrap and compilation time are unmeasured.
 This review adds no native-toolchain or candidate installer and does not apply
 to another workflow location or action reference.
 
+On 2026-10-23, the separate hosted Ops producer and signer-input admission add
+two exact informational installer reviews at
+`ci.yml#jobs/ops-build/steps/1/uses` and
+`ci.yml#jobs/ops-release-security/steps/1/uses`. Both select Rust 1.99.0 through
+the same immutable action after checkout with persisted credentials disabled.
+Hosted rustup availability does not establish that this exact version is
+installed or selected. The pinned action source was re-read; its official HTTPS
+bootstrap when rustup is absent remains a runtime trust boundary, without an
+independent checksum claim for installer bytes. No candidate artifact, token or
+cache selects the installer arguments. The producer has read-only repository
+permission. Only the separate signer, after the canonical required jobs and
+producer succeed, receives OIDC/attestation permission and signs the three
+independently admitted Ops subjects. These records retain the existing feature
+fingerprint and 2026-11-29 expiry. They waive only the informational redundant
+installer finding at these two locations; source, provenance, artifact and
+runtime checks remain blocking. Hosted cold timing is not established by this
+review.
+
 ## Account-room action reference
 
 On 2026-10-18, the new manual-only account-room experiment produced one

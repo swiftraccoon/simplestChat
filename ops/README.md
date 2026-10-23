@@ -1214,11 +1214,138 @@ deadline can still make the command fail. Only final CLI zero includes those
 fences. Fixed failures reveal no private paths, logical evidence names, JSON or
 token values; observed process/control statuses remain primary.
 
-This unit downloads no artifact and establishes no artifact-ID/ZIP transport
-relationship. Current CI emits no Ops signing attestation, so no present Ops
-release acceptance is claimed. The server ten-file signer contract, Python
-runtime paths and workflows remain unchanged. Build provenance assertions,
-opaque evidence truth, actual tool/network interoperability, static Linux
-build, Debian 13 ABI/runtime behavior and install authority require separate
-evidence. All included transaction and Native fixtures are inert and owned;
-they run no real gh verification, GitHub request, root acquisition or candidate.
+The `verify-retained` command downloads no artifact and establishes no
+artifact-ID/ZIP transport relationship by itself. The hosted producer and
+acquisition commands below supply those separate operations. Debian 13 runtime
+behavior and installation ownership still require their own evidence. The
+transaction and Native verifier fixtures are inert and owned; they run no real
+gh verification, GitHub request, trust-root acquisition or candidate.
+
+## Hosted Ops production and signing
+
+Trusted `CI` pushes to `main` build a separate
+`simplestchat-ops-REVISION-x86_64-unknown-linux-musl` artifact. The server's
+ten-file release artifact and installed Python runtime retain their existing
+contracts. A pull request cannot request an Ops signature.
+
+The hosted entry point is:
+
+```sh
+cargo run --locked -q -p xtask -- ops-artifact hosted --output /absolute/fresh-run
+```
+
+It requires the fixed repository, numeric repository/owner IDs, `CI` workflow,
+`push` event, `refs/heads/main`, matching source/workflow revision, and a GitHub
+hosted Linux x86-64 environment. The local source exporter, registry hydrator
+and fixed producer borrow the same process supervisor and cancellation owner.
+The environment check is an admission policy; the eventual GitHub certificate
+provides signer identity authority.
+
+[ops-build-inputs.lock.json](ops-build-inputs.lock.json) pins the exact HTTPS
+origins, SHA-256 values and sizes of four Rust 1.99.0 archives and 38 Ubuntu
+24.04 packages. The registry archives are selected from the original exported
+Cargo lockfile. Downloads, extraction, registry copying and complete-tree
+readback precede the existing offline producer. The measured host compiler kit
+contains its package sysroot, fixed GCC/binutils roles and an execution adapter
+that replaces itself with that GCC. Resolver probes check the compiler's owned
+program, startup-object and search-directory selections before the build.
+The hosted operating system, `/bin/sh` and dynamic loader remain trusted runtime
+inputs. Offline Cargo configuration is not a compiler filesystem sandbox or
+complete network isolation.
+
+The internal hosted owner has a 3,600-second scheduling profile, beginning after
+`cargo run` bootstrap and compilation. The job's external 65-minute watchdog
+also includes that setup. Source export, downloads,
+registry hydration, kit preparation and production have bounded aggregate
+phases. Each subprocess body is clipped to the remaining phase budget with its
+settlement allowance retained. Individual per-command maxima are not additive
+completion guarantees: a slow cold download or build can time out. Filesystem,
+scheduling and reap stalls have no hard wall-clock bound.
+
+After all required correctness and security jobs pass, the separate signer job
+downloads the same-run unsigned assembly and independently checks the selected
+identity, original payload graph, producer outcome and pinned material catalog:
+
+```sh
+cargo run --locked -q -p xtask -- ops-artifact signing-inputs \
+  --directory /absolute/unsigned-artifact --output /absolute/fresh-signer-inputs
+```
+
+The existing GitHub attestation action signs exactly three subjects:
+`ops-preparation.json`, `ops-release.json` and `simplestchat-ops`, using the
+`ops-artifact/v1` predicate URI documented above. The published flat artifact
+also contains its metadata, indexed evidence and `ops-attestation.jsonl` bundle.
+Preparing signer inputs performs no cryptographic verification. The controller
+must still verify the completed successful run and retained signed statement;
+the workflow cannot establish its own terminal result while it is running.
+
+## Acquire one signed Ops artifact
+
+Build the default `xtask` before supplying credentials, then invoke its binary
+with an explicit `GH_TOKEN` and one pinned request:
+
+```sh
+target/debug/xtask ops-artifact acquire \
+  --request /absolute/acquire-request.json --request-sha256 ORIGINAL_REQUEST_SHA256
+```
+
+The closed request contains exactly `schemaVersion: 1`, `selection` with the
+existing seven identity fields, `artifactId`, a fresh absolute `output`, and
+`authentication: "gh-token"`. Artifact ID is a positive integer at most
+9007199254740991. The original UTF-8 request is at most 16 KiB. Received request
+paths admit at most sixteen ordinary components; output admits fifteen so that
+derived verifier paths remain inside the existing sixteen-component limit.
+No URL or credential belongs in this JSON. Missing `GH_TOKEN` refuses before
+output/tool admission; alternative tokens and keyring fallback are unsupported.
+
+The selected caller-trusted gh 2.102.0 executes five fixed calls: version,
+repository API, exact run-attempt API, exact artifact API, then the artifact ZIP
+endpoint. Repository/run/attempt/revision checks match retained verification.
+Artifact metadata must additionally match its numeric ID, repository, run,
+revision, exact target-suffixed name, nonexpired status, SHA-256 and byte count.
+The API digest and size bind the downloaded ZIP before extraction.
+
+The ZIP is at most 300 MiB, with at most 22 flat members and 281 MiB expanded.
+Only the fixed metadata, binary, bundle and contiguous indexed evidence names
+are admitted. Stored and deflate entries are supported, including canonical
+ZIP64 framing. Duplicate or conflicting names, links, encryption, directories,
+overlaps, preambles, trailing data and local/central disagreements refuse.
+Admission checks the complete structure before creating payload sinks; decoding
+checks final stream termination, exact sizes and CRCs. The extracted graph must
+match the existing Ops metadata before the retained verifier is invoked.
+
+Acquisition has a 1,440-second entry profile retaining five command settlement
+slots, an aggregate archive/hash budget, the existing 600-second verifier,
+bounded replay and final file checks. Filesystem workers are always joined.
+Original request, outer output and verified file witnesses remain bound through
+final replay; reopening cannot adopt identical bytes at a replacement inode.
+An observation file records progress. Only final CLI zero includes owner
+settlement, replay and the final signal/deadline/file fences.
+
+Private paired captures and work directories remain under the new output leaf.
+Fixed errors reveal no tokens, private paths or payload JSON. The gh runtime
+handles GitHub's archive redirect; its normal redirect and trust-provider policy
+remains part of the selected client trust boundary. This operation authenticates
+retained bytes. It does not execute a candidate or install or replace a host tool.
+
+## API review for Ops delivery
+
+This affected-component review follows the pinned
+[Rust API inventory](../docs/rust-api-checklist.md); unrelated rows remain pending.
+`C-VALIDATE`, `C-SERDE`, `C-NEWTYPE` and `C-CUSTOM-TYPE` apply to closed request,
+material, artifact and verified-witness boundaries. Decoded requests and opaque
+invocation/witness types carry their distinct roles; external IDs, digests,
+sizes, paths and JSON shapes are checked before use. Serialization is deliberate
+for requests and observations; process owners and credential-bearing contexts
+are not deserializable authority.
+
+`C-DTOR-FAIL` and `C-DTOR-BLOCK` apply to owned files, subprocess I/O and workers.
+Checked finalizers attempt acquired peers and retain the primary failure;
+fallback destructors do not panic. Blocking filesystem workers have abort
+checkpoints and are joined before the operation returns. OS close/reap calls
+remain outside a hard time bound. `C-DEBUG` and `C-DEBUG-NONEMPTY` apply to the
+cross-module invocation, request and retained-observation types, whose fixed
+nonempty debug output omits credentials and private paths. Filesystem witnesses
+stay internal and have no debug representation. `C-FAILURE`, `C-EXAMPLE` and `C-LINK` are
+covered by the command contracts and examples above. These are internal CLI
+adapters, with no new public library compatibility promise or package metadata.

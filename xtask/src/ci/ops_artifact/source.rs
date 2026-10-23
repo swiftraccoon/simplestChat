@@ -83,7 +83,9 @@ impl<C: Clock> Context<'_, C> {
         git.validate()?;
         view.check(run)?;
         let mut command = git::command(git, args, maximum);
-        command.timeout = deadline.body(Duration::from_secs(30))?;
+        let body = deadline.body(Duration::from_secs(30))?;
+        command.timeout = body;
+        command.ops_stage_dispatch = Some(deadline.dispatch_by(body)?);
         let result = executor.run(command).await;
         let checked = git
             .validate()
@@ -346,4 +348,73 @@ async fn complete<E: Executor, C: Clock>(
         return Err(failure(1));
     }
     deadline.check(true)
+}
+
+/// Borrow the enclosing executor so cancellation and cleanup authority survives
+/// every stage failure. Git carries this stage's fixed cwd and environment.
+pub(super) async fn observe<E: Executor, C: Clock>(
+    path: &Path,
+    selected: &str,
+    budget: &Budget,
+    executor: &mut E,
+    deadline: &Deadline<'_, C>,
+) -> Result<Vec<u8>> {
+    executor.ready().await?;
+    deadline.check(false)?;
+    let request = Request::read(path, selected, budget)?;
+    let repository = Repository::open(&request.repository, budget)?;
+    if let Err(error) = executor.ready().await.and_then(|()| deadline.check(false)) {
+        let _ = repository.finish();
+        return Err(error);
+    }
+    let run = match OwnedRun::local(&request.output, budget) {
+        Ok(run) => run,
+        Err(error) => {
+            let _ = repository.finish();
+            return Err(error);
+        }
+    };
+    let view = match view::View::create(&run) {
+        Ok(view) => view,
+        Err(error) => {
+            let _ = repository.finish();
+            let _ = run.finish();
+            return Err(error);
+        }
+    };
+    let result = async {
+        executor.ready().await?;
+        deadline.check(false)?;
+        let environment = environment(&run, &repository)?;
+        let git = Git::open(&request.git, budget, executor, deadline).await?;
+        let git = Arc::new(git.in_context(run.path.clone(), environment));
+        let result = async {
+            let _native = budget.reserve(16)?;
+            let context = Context {
+                git: &git,
+                repository: &repository,
+                run: &run,
+                view: &view,
+                deadline,
+            };
+            export(&request, &context, executor).await
+        }
+        .await;
+        let closed = Arc::try_unwrap(git)
+            .map_err(|_| failure(1))
+            .and_then(Git::finish);
+        result.and_then(|bytes| closed.map(|()| bytes))
+    }
+    .await;
+    let view_closed = view.finish(&run);
+    let repository_closed = repository.finish();
+    let run_closed = run.finish();
+    let bytes = result?;
+    view_closed.and(repository_closed).and(run_closed)?;
+    executor.ready().await?;
+    if !executor.cleanup_passed() {
+        return Err(failure(1));
+    }
+    deadline.check(true)?;
+    Ok(bytes)
 }

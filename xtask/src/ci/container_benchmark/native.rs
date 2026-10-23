@@ -143,6 +143,9 @@ fn conflicting(command: &Command) -> bool {
         || command.load_image.is_some()
         || command.mdns.is_some()
         || command.retained_ops.is_some()
+        || command.ops_acquire.is_some()
+        || command.hosted_ops.is_some()
+        || command.ops_stage_dispatch.is_some()
 }
 impl<E: Executor> Executor for Adapter<'_, E> {
     async fn run(&mut self, mut request: Command) -> Result<Vec<u8>> {

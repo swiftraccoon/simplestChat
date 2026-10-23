@@ -21,7 +21,7 @@ pub(super) const CAPS: [Duration; 4] = [
     Duration::from_secs(120),
 ];
 
-pub(super) trait Clock: Send + Sync {
+pub(in crate::ci::ops_artifact) trait Clock: Send + Sync {
     fn now(&self) -> Instant;
 }
 pub(super) struct NativeClock;

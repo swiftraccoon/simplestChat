@@ -120,7 +120,17 @@ fn canonical_names_match_the_actual_workflow_dependency_graph() {
     let observed: std::collections::BTreeSet<_> = jobs
         .keys()
         .map(String::as_str)
-        .filter(|name| !["required", "release-security"].contains(name))
+        // Main-push Ops production/signing has its own chain, checked by the
+        // workflow policy tests; these ten correctness/security gates stay shared.
+        .filter(|name| {
+            ![
+                "required",
+                "release-security",
+                "ops-build",
+                "ops-release-security",
+            ]
+            .contains(name)
+        })
         .collect();
     assert_eq!(observed, names);
 }

@@ -117,6 +117,7 @@ pub(super) const BACKEND_FILES: &[&str] = &[
     "build/security_tools.py",
     "ops/ansible/files/bounded_process.py",
     "ops/ansible/files/release_json.py",
+    "ops/ops-build-inputs.lock.json",
 ];
 
 pub(super) const BACKEND_ENVIRONMENT: &[&str] = &[
@@ -174,6 +175,7 @@ fn ci_tool_input(name: &str) -> bool {
             "Cargo.lock",
             "rust-toolchain",
             "rust-toolchain.toml",
+            "ops/ops-build-inputs.lock.json",
         ]
         .contains(&name)
 }

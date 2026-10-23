@@ -1900,6 +1900,26 @@
       "reachability": "Re-reviewed 2026-10-21 for this exact installer location and unchanged immutable action. The installer now also runs on hosted deployment jobs. Checkout disables persisted credentials; compiler arguments are fixed repository values, with no token or restored artifact selecting the installer. The official HTTPS rustup bootstrap boundary and expiry are unchanged. Production-image ownership and immutable identity checks, diagnostic admission and every required security, freshness and release gate remain blocking.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md#github-actions-portability-findings"
+    },
+    {
+      "scanner": "zizmor",
+      "fingerprint": "superfluous-actions:0fb2d712953646c2c07edb9a959b25649b214c63cb1143b35266a007af663b35",
+      "scope": ".github/workflows/ci.yml#jobs/ops-build/steps/1/uses",
+      "owner": "swiftraccoon",
+      "rationale": "The separate hosted Ops build and signer-input admission require the repository exact Rust 1.99.0 toolchain. This immutable installer selects that version rather than relying on the runner image toolchain; hosted runners already supplying rustup does not establish that version is installed or selected.",
+      "reachability": "Reviewed 2026-10-23 for this exact main-push-only job step and immutable 89b12181fb390509a0842a86cc55eeb8eb928c1d action. Checkout disables persisted credentials. All installer arguments are fixed repository values; candidate artifacts, tokens and restored caches cannot select them. The existing official HTTPS rustup bootstrap trust boundary remains; its installer bytes are not independently checksum-pinned. The Ops producer has no signing permission. Only the separate signer, after all canonical required gates and the complete producer succeed, attests the three independently admitted fixed subjects. This informational finding review does not waive artifact, provenance, source or runtime checks.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md#github-actions-portability-findings"
+    },
+    {
+      "scanner": "zizmor",
+      "fingerprint": "superfluous-actions:0fb2d712953646c2c07edb9a959b25649b214c63cb1143b35266a007af663b35",
+      "scope": ".github/workflows/ci.yml#jobs/ops-release-security/steps/1/uses",
+      "owner": "swiftraccoon",
+      "rationale": "The separate hosted Ops build and signer-input admission require the repository exact Rust 1.99.0 toolchain. This immutable installer selects that version rather than relying on the runner image toolchain; hosted runners already supplying rustup does not establish that version is installed or selected.",
+      "reachability": "Reviewed 2026-10-23 for this exact main-push-only job step and immutable 89b12181fb390509a0842a86cc55eeb8eb928c1d action. Checkout disables persisted credentials. All installer arguments are fixed repository values; candidate artifacts, tokens and restored caches cannot select them. The existing official HTTPS rustup bootstrap trust boundary remains; its installer bytes are not independently checksum-pinned. The Ops producer has no signing permission. Only the separate signer, after all canonical required gates and the complete producer succeed, attests the three independently admitted fixed subjects. This informational finding review does not waive artifact, provenance, source or runtime checks.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md#github-actions-portability-findings"
     }
   ]
 }

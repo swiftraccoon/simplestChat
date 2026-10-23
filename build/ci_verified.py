@@ -106,7 +106,15 @@ CODEQL_RUST_MANIFESTS = frozenset(
 # The compiled fingerprint implementation and its compiler inputs are part of
 # every closure. Retain the Python module too while security callers use its API.
 CI_TOOL_PREFIXES = ("xtask/", ".cargo/")
-CI_TOOL_FILES = frozenset({"Cargo.toml", "Cargo.lock", "rust-toolchain", "rust-toolchain.toml"})
+CI_TOOL_FILES = frozenset(
+    {
+        "Cargo.toml",
+        "Cargo.lock",
+        "rust-toolchain",
+        "rust-toolchain.toml",
+        "ops/ops-build-inputs.lock.json",
+    }
+)
 
 
 def ci_tool_input(name: str) -> bool:
@@ -130,6 +138,7 @@ BACKEND_FILES = frozenset(
         "build/ci-local-postgres.sh",
         "ops/ansible/files/bounded_process.py",
         "ops/ansible/files/release_json.py",
+        "ops/ops-build-inputs.lock.json",
     }
 )
 BACKEND_ENVIRONMENT = frozenset(

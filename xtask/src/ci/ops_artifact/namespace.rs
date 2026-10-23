@@ -22,7 +22,11 @@ pub(super) const FLAGS: OFlags = OFlags::RDONLY
 const DESCRIPTORS: usize = 128;
 
 #[derive(Clone, Default)]
-pub(super) struct Budget(Arc<AtomicUsize>);
+pub(super) struct Budget(
+    Arc<AtomicUsize>,
+    #[cfg(test)] Arc<AtomicUsize>,
+    #[cfg(test)] Arc<AtomicUsize>,
+);
 pub(super) struct Permit(Budget);
 impl Budget {
     /// Reserve a whole helper allowance before acquisition. The retained limit
@@ -52,6 +56,10 @@ impl Budget {
     #[cfg(test)]
     pub fn count(&self) -> usize {
         self.0.load(Ordering::SeqCst)
+    }
+    #[cfg(test)]
+    pub fn close_counts(&self) -> (usize, usize) {
+        (self.1.load(Ordering::SeqCst), self.2.load(Ordering::SeqCst))
     }
 }
 impl Drop for Permit {
@@ -128,9 +136,16 @@ impl Held {
                 Mode::from_bits_truncate(if executable { 0o700 } else { 0o600 }),
             )
         })?;
-        let metadata = private_file(&value, executable)?;
-        if metadata.len() != 0 {
-            return Err(failure(1));
+        let admitted = private_file(&value, executable).and_then(|metadata| {
+            if metadata.len() == 0 {
+                Ok(())
+            } else {
+                Err(failure(1))
+            }
+        });
+        if let Err(error) = admitted {
+            let _ = value.finish();
+            return Err(error);
         }
         Ok(value)
     }
@@ -138,12 +153,16 @@ impl Held {
         self.file.as_ref().unwrap()
     }
     pub fn finish(mut self) -> Result<()> {
+        #[cfg(test)]
+        self._permit.0.1.fetch_add(1, Ordering::SeqCst);
         nix::unistd::close(self.file.take().unwrap()).map_err(|_| failure(1))
     }
 }
 impl Drop for Held {
     fn drop(&mut self) {
         if let Some(file) = self.file.take() {
+            #[cfg(test)]
+            self._permit.0.2.fetch_add(1, Ordering::SeqCst);
             let _ = nix::unistd::close(file);
         }
     }
@@ -229,7 +248,13 @@ impl Chain {
             return Err(failure(1));
         }
         let root = Held::root(budget)?;
-        let stamp = io(root.file().metadata())?;
+        let stamp = match io(root.file().metadata()) {
+            Ok(stamp) => stamp,
+            Err(error) => {
+                let _ = root.finish();
+                return Err(error);
+            }
+        };
         let mut value = Self {
             files: vec![root],
             stamps: vec![stamp],
@@ -237,17 +262,29 @@ impl Chain {
             path: PathBuf::from("/"),
             budget: budget.clone(),
         };
-        for component in pathname.components() {
-            if let Component::Normal(name) = component {
-                value.push(name)?;
+        let admitted = (|| {
+            for component in pathname.components() {
+                if let Component::Normal(name) = component {
+                    value.push(name)?;
+                }
             }
+            value.verify()
+        })();
+        if let Err(error) = admitted {
+            let _ = value.finish();
+            return Err(error);
         }
-        value.verify()?;
         Ok(value)
     }
     fn push(&mut self, name: &std::ffi::OsStr) -> Result<()> {
         let file = Held::open(self.file(), name, FLAGS | OFlags::DIRECTORY, &self.budget)?;
-        let stamp = io(file.file().metadata())?;
+        let stamp = match io(file.file().metadata()) {
+            Ok(stamp) => stamp,
+            Err(error) => {
+                let _ = file.finish();
+                return Err(error);
+            }
+        };
         self.files.push(file);
         self.stamps.push(stamp);
         self.names.push(name.into());
@@ -270,9 +307,10 @@ impl Chain {
                 FLAGS | OFlags::DIRECTORY,
                 &self.budget,
             )?;
-            let observed = io(file.file().metadata())?;
-            let matched = binding(&observed, &self.stamps[i + 1]);
-            file.finish()?;
+            let matched =
+                io(file.file().metadata()).map(|observed| binding(&observed, &self.stamps[i + 1]));
+            let closed = file.finish();
+            let matched = matched.and_then(|matched| closed.map(|()| matched))?;
             if !matched {
                 return Err(failure(1));
             }
@@ -310,33 +348,40 @@ impl Chain {
                     }
                 }
             };
-            let before = io(cargo.file().metadata())?;
-            if before.mode() & 0o022 != 0
-                || ![0, rustix::process::getuid().as_raw()].contains(&before.uid())
-            {
-                return Err(failure(1));
-            }
-            for name in ["config", "config.toml"] {
-                if !matches!(
-                    rustix::fs::statat(cargo.file(), name, AtFlags::SYMLINK_NOFOLLOW),
-                    Err(rustix::io::Errno::NOENT)
-                ) {
+            let admitted = (|| {
+                let before = io(cargo.file().metadata())?;
+                if before.mode() & 0o022 != 0
+                    || ![0, rustix::process::getuid().as_raw()].contains(&before.uid())
+                {
                     return Err(failure(1));
                 }
-            }
-            let visible = Held::open(
-                file.file(),
-                std::ffi::OsStr::new(".cargo"),
-                FLAGS | OFlags::DIRECTORY,
-                &self.budget,
-            )?;
-            let matched = binding(&before, &io(cargo.file().metadata())?)
-                && binding(&before, &io(visible.file().metadata())?);
-            visible.finish()?;
-            cargo.finish()?;
-            if !matched {
-                return Err(failure(1));
-            }
+                for name in ["config", "config.toml"] {
+                    if !matches!(
+                        rustix::fs::statat(cargo.file(), name, AtFlags::SYMLINK_NOFOLLOW),
+                        Err(rustix::io::Errno::NOENT)
+                    ) {
+                        return Err(failure(1));
+                    }
+                }
+                let visible = Held::open(
+                    file.file(),
+                    std::ffi::OsStr::new(".cargo"),
+                    FLAGS | OFlags::DIRECTORY,
+                    &self.budget,
+                )?;
+                let matched = (|| {
+                    Ok(binding(&before, &io(cargo.file().metadata())?)
+                        && binding(&before, &io(visible.file().metadata())?))
+                })();
+                let closed = visible.finish();
+                if matched.and_then(|matched| closed.map(|()| matched))? {
+                    Ok(())
+                } else {
+                    Err(failure(1))
+                }
+            })();
+            let closed = cargo.finish();
+            admitted.and(closed)?;
         }
         Ok(())
     }
@@ -385,8 +430,9 @@ pub(super) fn read_bound(
                 return Err(failure(1));
             }
             let visible = Held::open(parent.file(), pathname.file_name().unwrap(), FLAGS, budget)?;
-            let matched = same(&before, &io(visible.file().metadata())?);
-            visible.finish()?;
+            let matched = io(visible.file().metadata()).map(|stamp| same(&before, &stamp));
+            let closed = visible.finish();
+            let matched = matched.and_then(|matched| closed.map(|()| matched))?;
             if !matched {
                 return Err(failure(1));
             }
@@ -437,19 +483,40 @@ impl OwnedRun {
         controlled: bool,
         parent: Chain,
     ) -> Result<Self> {
-        if controlled {
-            parent.controlled()?;
-        } else {
-            parent.verify()?;
-        }
-        let name = pathname.file_name().ok_or_else(|| failure(1))?;
-        rustix::fs::mkdirat(parent.file(), name, Mode::from_bits_truncate(0o700))
-            .map_err(|_| failure(1))?;
-        let leaf = Held::open(parent.file(), name, FLAGS | OFlags::DIRECTORY, budget)?;
-        let stamp = io(leaf.file().metadata())?;
-        if stamp.mode() & 0o7777 != 0o700 || stamp.uid() != rustix::process::getuid().as_raw() {
-            return Err(failure(1));
-        }
+        let admitted = (|| {
+            if controlled {
+                parent.controlled()?;
+            } else {
+                parent.verify()?;
+            }
+            let name = pathname.file_name().ok_or_else(|| failure(1))?;
+            rustix::fs::mkdirat(parent.file(), name, Mode::from_bits_truncate(0o700))
+                .map_err(|_| failure(1))?;
+            let leaf = Held::open(parent.file(), name, FLAGS | OFlags::DIRECTORY, budget)?;
+            let admitted = io(leaf.file().metadata()).and_then(|stamp| {
+                if stamp.mode() & 0o7777 == 0o700
+                    && stamp.uid() == rustix::process::getuid().as_raw()
+                {
+                    Ok(stamp)
+                } else {
+                    Err(failure(1))
+                }
+            });
+            match admitted {
+                Ok(stamp) => Ok((leaf, stamp)),
+                Err(error) => {
+                    let _ = leaf.finish();
+                    Err(error)
+                }
+            }
+        })();
+        let (leaf, stamp) = match admitted {
+            Ok(value) => value,
+            Err(error) => {
+                let _ = parent.finish();
+                return Err(error);
+            }
+        };
         Ok(Self {
             parent,
             leaf,
@@ -477,9 +544,12 @@ impl OwnedRun {
             FLAGS | OFlags::DIRECTORY,
             &self.budget,
         )?;
-        let matched = binding(&self.stamp, &io(visible.file().metadata())?)
-            && binding(&self.stamp, &io(self.file().metadata())?);
-        visible.finish()?;
+        let matched = (|| {
+            Ok(binding(&self.stamp, &io(visible.file().metadata())?)
+                && binding(&self.stamp, &io(self.file().metadata())?))
+        })();
+        let closed = visible.finish();
+        let matched = matched.and_then(|matched| closed.map(|()| matched))?;
         if matched { Ok(()) } else { Err(failure(1)) }
     }
     pub fn directory(&self, name: &str) -> Result<Held> {
@@ -495,8 +565,11 @@ impl OwnedRun {
             FLAGS | OFlags::DIRECTORY,
             &self.budget,
         )?;
-        private_directory(&value)?;
-        self.check()?;
+        let admitted = private_directory(&value).and_then(|_| self.check());
+        if let Err(error) = admitted {
+            let _ = value.finish();
+            return Err(error);
+        }
         Ok(value)
     }
     pub fn record(&self, name: &str, bytes: &[u8]) -> Result<()> {
@@ -553,8 +626,8 @@ pub(super) fn write_mode(
     budget: &Budget,
 ) -> Result<Metadata> {
     let output = Held::create(parent, name, executable, budget)?;
-    let admitted = private_file(&output, executable)?;
     let written = (|| {
+        let admitted = private_file(&output, executable)?;
         let mut writer = output.file();
         io(writer.write_all(bytes).and_then(|()| writer.sync_all()))?;
         let before = private_file(&output, executable)?;
@@ -568,8 +641,9 @@ pub(super) fn write_mode(
             return Err(failure(1));
         }
         let visible = Held::open(parent, std::ffi::OsStr::new(name), FLAGS, budget)?;
-        let matched = same(&before, &io(visible.file().metadata())?);
-        visible.finish()?;
+        let matched = io(visible.file().metadata()).map(|stamp| same(&before, &stamp));
+        let closed = visible.finish();
+        let matched = matched.and_then(|matched| closed.map(|()| matched))?;
         if !matched {
             return Err(failure(1));
         }

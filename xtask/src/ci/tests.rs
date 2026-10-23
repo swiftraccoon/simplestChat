@@ -858,3 +858,29 @@ fn operations_workspace_inputs_change_rust_keys_with_exact_python_parity() {
         assert_eq!(assert_key_parity(&fixture, scope), original);
     }
 }
+
+#[test]
+fn embedded_ops_catalog_changes_every_compiled_tool_key_with_exact_python_parity() {
+    let fixture = Fixture::new();
+    let catalog = "ops/ops-build-inputs.lock.json";
+    let adjacent = "ops/unrelated-local-selection.json";
+    fixture.write(catalog, b"original reviewed catalog\n");
+    fixture.write(adjacent, b"original unrelated JSON\n");
+    fixture.git(&["add", "."]);
+    for name in inputs::SCOPES {
+        let scope = Scope::parse(name).unwrap();
+        let original = assert_key_parity(&fixture, scope);
+        fixture.write(catalog, b"changed reviewed catalog\n");
+        assert_ne!(assert_key_parity(&fixture, scope), original, "{name}");
+        fixture.write(catalog, b"original reviewed catalog\n");
+        fixture.write(adjacent, b"changed unrelated JSON\n");
+        let conservative = matches!(scope, Scope::Automation | Scope::RustLint | Scope::RustTest);
+        assert_eq!(
+            assert_key_parity(&fixture, scope) != original,
+            conservative,
+            "{name}"
+        );
+        fixture.write(adjacent, b"original unrelated JSON\n");
+        assert_eq!(assert_key_parity(&fixture, scope), original, "{name}");
+    }
+}

@@ -464,6 +464,139 @@ pub(super) async fn measure_bounded<E: Executor, C: Clock>(
     Ok(identity)
 }
 
+/// Copy one measured tree into a fresh private leaf, preserving the scanner's
+/// original source and stored-byte snapshots through independent readback.
+/// The supplied frame selects bytes; it grants no acquisition authority.
+pub(super) async fn copy_bounded<E: Executor, C: Clock>(
+    source: &std::path::Path,
+    destination: &std::path::Path,
+    expected_sha: &str,
+    maximum: u64,
+    budget: &Budget,
+    executor: &mut E,
+    deadline: &Deadline<'_, C>,
+) -> Result<Identity> {
+    executor.ready().await?;
+    deadline.check(false)?;
+    if !super::digest(expected_sha)
+        || maximum == 0
+        || maximum > KIT_BYTES
+        || source.starts_with(destination)
+        || destination.starts_with(source)
+    {
+        return Err(failure(1));
+    }
+    let root = Chain::open(source, budget)?;
+    let measured = scan(
+        root.file(),
+        None,
+        maximum,
+        budget,
+        &mut Limits::default(),
+        executor,
+        deadline,
+    )
+    .await;
+    let original = match measured {
+        Ok((original, _)) if original.identity.sha256 == expected_sha => original,
+        Ok(_) => {
+            let _ = root.finish();
+            return Err(failure(1));
+        }
+        Err(error) => {
+            let _ = root.finish();
+            return Err(error);
+        }
+    };
+    let parent = (|| {
+        let witness = root.witness()?;
+        let parent = Chain::open(destination.parent().ok_or_else(|| failure(1))?, budget)?;
+        let result = parent.witness().and_then(|parent| {
+            if witness.leaf_in(&parent) {
+                Err(failure(1))
+            } else {
+                Ok(parent)
+            }
+        });
+        let closed = parent.finish();
+        result.and_then(|parent| closed.map(|()| parent))
+    })();
+    let parent = match parent {
+        Ok(parent) => parent,
+        Err(error) => {
+            let _ = root.finish();
+            return Err(error);
+        }
+    };
+    if let Err(error) = executor.ready().await.and_then(|()| deadline.check(false)) {
+        let _ = root.finish();
+        return Err(error);
+    }
+    let run = match OwnedRun::local_witness(destination, budget, &parent) {
+        Ok(run) => run,
+        Err(error) => {
+            let _ = root.finish();
+            return Err(error);
+        }
+    };
+    let result = async {
+        let target = Held::open(
+            run.file(),
+            std::ffi::OsStr::new("."),
+            namespace::FLAGS | OFlags::DIRECTORY,
+            budget,
+        )?;
+        let (copied, staged) = scan(
+            root.file(),
+            Some(target),
+            maximum,
+            budget,
+            &mut Limits::default(),
+            executor,
+            deadline,
+        )
+        .await?;
+        unchanged(&original, &copied)?;
+        let staged = staged.ok_or_else(|| failure(1))?;
+        let rechecked = scan(
+            root.file(),
+            None,
+            maximum,
+            budget,
+            &mut Limits::default(),
+            executor,
+            deadline,
+        )
+        .await?;
+        unchanged(&original, &rechecked.0)?;
+        let stored = scan(
+            run.file(),
+            None,
+            maximum,
+            budget,
+            &mut Limits::default(),
+            executor,
+            deadline,
+        )
+        .await?;
+        unchanged(&staged, &stored.0)?;
+        if stored.0.identity.sha256 != expected_sha {
+            return Err(failure(1));
+        }
+        root.verify()?;
+        run.check()?;
+        Ok(stored.0.identity)
+    }
+    .await;
+    let output_closed = run.finish();
+    let source_closed = root.finish();
+    let identity = result?;
+    output_closed.and(source_closed)?;
+    executor.ready().await?;
+    deadline.check(true)?;
+    Ok(identity)
+}
+
 #[cfg(test)]
 pub(super) async fn copy_after<E: Executor, C: Clock>(
     path: &std::path::Path,

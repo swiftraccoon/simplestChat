@@ -126,3 +126,77 @@ fn catalogue_caps_actual_records_total_bytes_names_and_exact_ids() {
         assert!(catalog::oid(value.as_bytes()).is_err());
     }
 }
+
+#[tokio::test]
+async fn selected_git_hash_or_pending_refusal_checked_closes_original_file_and_parents() {
+    struct Pending(Option<u8>);
+    impl Executor for Pending {
+        async fn run(&mut self, _: crate::ci::command::Command) -> Result<Vec<u8>> {
+            panic!("selected Git admission cannot execute a command")
+        }
+        async fn ready(&mut self) -> Result<()> {
+            match self.0 {
+                Some(code) => Err(failure(code)),
+                None => Ok(()),
+            }
+        }
+    }
+    for pending in [None, Some(124), Some(130), Some(143)] {
+        let fixture = super::super::fixture::Fixture::new();
+        let path = fixture.kit.join("host-tools/bin/cc");
+        let original = std::fs::read(&path).unwrap();
+        let selected = request::GitSelection {
+            path: path.clone(),
+            sha256: if pending.is_some() {
+                sha(&original)
+            } else {
+                "0".repeat(64)
+            },
+            bytes: original.len() as u64,
+        };
+        let budget = Budget::default();
+        let clock = NativeClock;
+        let deadline = Deadline::new(&clock);
+        let result = Git::open(&selected, &budget, &mut Pending(pending), &deadline).await;
+        assert_eq!(result.err().unwrap().code, pending.unwrap_or(1));
+        assert_eq!(budget.count(), 0);
+        let (checked, fallback) = budget.close_counts();
+        assert!(checked > 0);
+        assert_eq!(fallback, 0);
+        assert_eq!(std::fs::read(path).unwrap(), original);
+    }
+}
+
+#[test]
+fn incomplete_or_redirected_repository_checked_closes_both_original_chains() {
+    for redirected in [false, true] {
+        let fixture = super::super::fixture::Fixture::new();
+        if redirected {
+            std::fs::create_dir_all(fixture.source.join(".git/objects")).unwrap();
+            std::fs::write(
+                fixture.source.join(".git/commondir"),
+                b"retain this redirect",
+            )
+            .unwrap();
+        }
+        let budget = Budget::default();
+        assert_eq!(
+            Repository::open(&fixture.source, &budget)
+                .err()
+                .unwrap()
+                .code,
+            1
+        );
+        assert_eq!(budget.count(), 0);
+        let (checked, fallback) = budget.close_counts();
+        assert!(checked > 0);
+        assert_eq!(fallback, 0);
+        assert!(fixture.source.join("Cargo.toml").is_file());
+        if redirected {
+            assert_eq!(
+                std::fs::read(fixture.source.join(".git/commondir")).unwrap(),
+                b"retain this redirect"
+            );
+        }
+    }
+}

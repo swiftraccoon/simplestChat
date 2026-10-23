@@ -1,0 +1,654 @@
+{
+  "schemaVersion": 1,
+  "profile": "ops-hosted-kit-v1",
+  "rustVersion": "1.99.0",
+  "host": "x86_64-unknown-linux-gnu",
+  "target": "x86_64-unknown-linux-musl",
+  "rustManifest": {
+    "url": "https://static.rust-lang.org/dist/channel-rust-1.99.0.toml",
+    "sha256": "ce6dddc886364f8d786514771212cebe9b731ba82d6b859951c6b0ccc516b6a2",
+    "bytes": 943486
+  },
+  "ubuntuIndices": [
+    {
+      "suite": "noble",
+      "url": "https://archive.ubuntu.com/ubuntu/dists/noble/main/binary-amd64/Packages.xz",
+      "sha256": "2a6a199e1031a5c279cb346646d594993f35b1c03dd4a82aaa0323980dd92451",
+      "bytes": 1401160,
+      "xzMembers": 2
+    },
+    {
+      "suite": "noble-security",
+      "url": "https://security.ubuntu.com/ubuntu/dists/noble-security/main/binary-amd64/Packages.xz",
+      "sha256": "826284ec617fee8f6fa770de1a18822d6f810b27eefdc85ad7dc92b5ff503f6e",
+      "bytes": 1145924,
+      "xzMembers": 1
+    },
+    {
+      "suite": "noble-updates",
+      "url": "https://archive.ubuntu.com/ubuntu/dists/noble-updates/main/binary-amd64/Packages.xz",
+      "sha256": "289c26b58515bd34c22f22f8c7a2fa7a28ad523ec3441fe61c09041d127842b7",
+      "bytes": 1400456,
+      "xzMembers": 1
+    }
+  ],
+  "ubuntuRoots": [
+    "gcc-13-x86-64-linux-gnu",
+    "binutils-x86-64-linux-gnu",
+    "libc6-dev"
+  ],
+  "artifacts": [
+    {
+      "name": "rustc-x86_64-unknown-linux-gnu",
+      "format": "rust-gzip",
+      "url": "https://static.rust-lang.org/dist/2026-10-01/rustc-1.99.0-x86_64-unknown-linux-gnu.tar.gz",
+      "sha256": "238e72b8617f79bc96f27a5bfeb1a208b5755fe1a48f8bc190fe403ef6d54ab8",
+      "bytes": 141398713,
+      "version": "1.99.0",
+      "archiveRoot": "rustc-1.99.0-x86_64-unknown-linux-gnu",
+      "component": "rustc",
+      "dependencies": []
+    },
+    {
+      "name": "cargo-x86_64-unknown-linux-gnu",
+      "format": "rust-gzip",
+      "url": "https://static.rust-lang.org/dist/2026-10-01/cargo-1.99.0-x86_64-unknown-linux-gnu.tar.gz",
+      "sha256": "c2b8ba1f59e7a230aa5522684f3f7aa620b98e5ad37683a5e5cf9b41f534fa1e",
+      "bytes": 14521653,
+      "version": "1.99.0",
+      "archiveRoot": "cargo-1.99.0-x86_64-unknown-linux-gnu",
+      "component": "cargo",
+      "dependencies": []
+    },
+    {
+      "name": "rust-std-x86_64-unknown-linux-gnu",
+      "format": "rust-gzip",
+      "url": "https://static.rust-lang.org/dist/2026-10-01/rust-std-1.99.0-x86_64-unknown-linux-gnu.tar.gz",
+      "sha256": "1dcaa01beb6bc78fdb13815b4f15214719167c58e3d79fbdf214591f8c195ee1",
+      "bytes": 50364291,
+      "version": "1.99.0",
+      "archiveRoot": "rust-std-1.99.0-x86_64-unknown-linux-gnu",
+      "component": "rust-std-x86_64-unknown-linux-gnu",
+      "dependencies": []
+    },
+    {
+      "name": "rust-std-x86_64-unknown-linux-musl",
+      "format": "rust-gzip",
+      "url": "https://static.rust-lang.org/dist/2026-10-01/rust-std-1.99.0-x86_64-unknown-linux-musl.tar.gz",
+      "sha256": "6b78195819101aaac812a093b4bf4a09bade699adb99473ce909778d581a88eb",
+      "bytes": 69911151,
+      "version": "1.99.0",
+      "archiveRoot": "rust-std-1.99.0-x86_64-unknown-linux-musl",
+      "component": "rust-std-x86_64-unknown-linux-musl",
+      "dependencies": []
+    },
+    {
+      "name": "binutils-common",
+      "format": "ubuntu-deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/b/binutils/binutils-common_2.42-4ubuntu2.10_amd64.deb",
+      "sha256": "d136073f5e2153f3df11c1d08d66727b9466b28ff483f50085f14bbe3464b5ee",
+      "bytes": 240286,
+      "version": "2.42-4ubuntu2.10",
+      "archiveRoot": "",
+      "component": "",
+      "dependencies": []
+    },
+    {
+      "name": "binutils-x86-64-linux-gnu",
+      "format": "ubuntu-deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/b/binutils/binutils-x86-64-linux-gnu_2.42-4ubuntu2.10_amd64.deb",
+      "sha256": "1e510a15f30208d39edcd840e48f26a77bbca7c417805eeccb1e3f7de198ef29",
+      "bytes": 2462744,
+      "version": "2.42-4ubuntu2.10",
+      "archiveRoot": "",
+      "component": "",
+      "dependencies": [
+        "binutils-common",
+        "libbinutils",
+        "libc6",
+        "libctf-nobfd0",
+        "libctf0",
+        "libgcc-s1",
+        "libgprofng0",
+        "libjansson4",
+        "libsframe1",
+        "libstdc++6",
+        "libzstd1",
+        "zlib1g"
+      ]
+    },
+    {
+      "name": "cpp-13-x86-64-linux-gnu",
+      "format": "ubuntu-deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-13/cpp-13-x86-64-linux-gnu_13.3.0-6ubuntu2~24.04.1_amd64.deb",
+      "sha256": "2ca48bf0c2d6465bc39322899715a85d934b4d7442dd5586a7bebbe3ce0f806b",
+      "bytes": 10714542,
+      "version": "13.3.0-6ubuntu2~24.04.1",
+      "archiveRoot": "",
+      "component": "",
+      "dependencies": [
+        "gcc-13-base",
+        "libc6",
+        "libgmp10",
+        "libisl23",
+        "libmpc3",
+        "libmpfr6",
+        "libzstd1",
+        "zlib1g"
+      ]
+    },
+    {
+      "name": "gcc-13-base",
+      "format": "ubuntu-deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-13/gcc-13-base_13.3.0-6ubuntu2~24.04.1_amd64.deb",
+      "sha256": "e859aca26585bb91113a451f1e66bc0e5283cb08797d679aacc1d936ae6dff8e",
+      "bytes": 51616,
+      "version": "13.3.0-6ubuntu2~24.04.1",
+      "archiveRoot": "",
+      "component": "",
+      "dependencies": []
+    },
+    {
+      "name": "gcc-13-x86-64-linux-gnu",
+      "format": "ubuntu-deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-13/gcc-13-x86-64-linux-gnu_13.3.0-6ubuntu2~24.04.1_amd64.deb",
+      "sha256": "a134b0319a82d14581b3a14820d2832af4ec9778ed8b9b4ddaeecfb0555ec325",
+      "bytes": 21084546,
+      "version": "13.3.0-6ubuntu2~24.04.1",
+      "archiveRoot": "",
+      "component": "",
+      "dependencies": [
+        "cpp-13-x86-64-linux-gnu",
+        "gcc-13-base",
+        "libcc1-0",
+        "binutils-x86-64-linux-gnu",
+        "libgcc-13-dev",
+        "libc6",
+        "libgcc-s1",
+        "libgmp10",
+        "libisl23",
+        "libmpc3",
+        "libmpfr6",
+        "libstdc++6",
+        "libzstd1",
+        "zlib1g"
+      ]
+    },
+    {
+      "name": "gcc-14-base",
+      "format": "ubuntu-deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-14/gcc-14-base_14.2.0-4ubuntu2~24.04.1_amd64.deb",
+      "sha256": "b95c172411a7fdae70307cf33a9f5320ba5e056b556454543dd5b679d5ce1c4f",
+      "bytes": 51014,
+      "version": "14.2.0-4ubuntu2~24.04.1",
+      "archiveRoot": "",
+      "component": "",
+      "dependencies": []
+    },
+    {
+      "name": "libasan8",
+      "format": "ubuntu-deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-14/libasan8_14.2.0-4ubuntu2~24.04.1_amd64.deb",
+      "sha256": "8321aac6230fa1da320e76eb6288b7436164624aec449ed3933ea6c4cc86daac",
+      "bytes": 3026656,
+      "version": "14.2.0-4ubuntu2~24.04.1",
+      "archiveRoot": "",
+      "component": "",
+      "dependencies": [
+        "gcc-14-base",
+        "libc6",
+        "libgcc-s1"
+      ]
+    },
+    {
+      "name": "libatomic1",
+      "format": "ubuntu-deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-14/libatomic1_14.2.0-4ubuntu2~24.04.1_amd64.deb",
+      "sha256": "fe49cbbc7be753528380c724a8eef5f1e31dffa9221f692c5069048d81c7449d",
+      "bytes": 10466,
+      "version": "14.2.0-4ubuntu2~24.04.1",
+      "archiveRoot": "",
+      "component": "",
+      "dependencies": [
+        "gcc-14-base",
+        "libc6"
+      ]
+    },
+    {
+      "name": "libbinutils",
+      "format": "ubuntu-deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/b/binutils/libbinutils_2.42-4ubuntu2.10_amd64.deb",
+      "sha256": "064dce00ce94e1fc2d33779cb0071088f4c8aac79e85345f2e78a020f7d14699",
+      "bytes": 576834,
+      "version": "2.42-4ubuntu2.10",
+      "archiveRoot": "",
+      "component": "",
+      "dependencies": [
+        "libc6",
+        "libsframe1",
+        "libzstd1",
+        "zlib1g",
+        "binutils-common"
+      ]
+    },
+    {
+      "name": "libc-dev-bin",
+      "format": "ubuntu-deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/glibc/libc-dev-bin_2.39-0ubuntu8.9_amd64.deb",
+      "sha256": "77db23aba4582d034d9a95e4818a16e7e51a2d4fb17a9204439688e288d67f4c",
+      "bytes": 20402,
+      "version": "2.39-0ubuntu8.9",
+      "archiveRoot": "",
+      "component": "",
+      "dependencies": [
+        "libc6",
+        "libc6"
+      ]
+    },
+    {
+      "name": "libc6",
+      "format": "ubuntu-deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/glibc/libc6_2.39-0ubuntu8.9_amd64.deb",
+      "sha256": "ff5557d99b51f761c4b7c92368b9cc45565eda17df9bf9eb4b134d09825008be",
+      "bytes": 3264314,
+      "version": "2.39-0ubuntu8.9",
+      "archiveRoot": "",
+      "component": "",
+      "dependencies": [
+        "libgcc-s1"
+      ]
+    },
+    {
+      "name": "libc6-dev",
+      "format": "ubuntu-deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/glibc/libc6-dev_2.39-0ubuntu8.9_amd64.deb",
+      "sha256": "e13d5fcc1b2a86f75bca8e0026a8e39f24fe97ca86e92be79991f8697eb1306f",
+      "bytes": 2125612,
+      "version": "2.39-0ubuntu8.9",
+      "archiveRoot": "",
+      "component": "",
+      "dependencies": [
+        "libc6",
+        "libc-dev-bin",
+        "linux-libc-dev",
+        "libcrypt-dev",
+        "rpcsvc-proto"
+      ]
+    },
+    {
+      "name": "libcc1-0",
+      "format": "ubuntu-deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-14/libcc1-0_14.2.0-4ubuntu2~24.04.1_amd64.deb",
+      "sha256": "454456436ca767817a860557263d7cc2489f0a410f03efff4c0bb236d579ec09",
+      "bytes": 48002,
+      "version": "14.2.0-4ubuntu2~24.04.1",
+      "archiveRoot": "",
+      "component": "",
+      "dependencies": [
+        "gcc-14-base",
+        "libc6",
+        "libgcc-s1",
+        "libstdc++6"
+      ]
+    },
+    {
+      "name": "libcrypt-dev",
+      "format": "ubuntu-deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/libx/libxcrypt/libcrypt-dev_4.4.36-4build1_amd64.deb",
+      "sha256": "2edff420ef80b4a3f3751e65c33423ef30e563122a58b759e4854ea8d84ba1b1",
+      "bytes": 111780,
+      "version": "1:4.4.36-4build1",
+      "archiveRoot": "",
+      "component": "",
+      "dependencies": [
+        "libcrypt1"
+      ]
+    },
+    {
+      "name": "libcrypt1",
+      "format": "ubuntu-deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/libx/libxcrypt/libcrypt1_4.4.36-4build1_amd64.deb",
+      "sha256": "9474785cd6f398512bf8c305c3901dbb111569dccb6f5832002373c0a8ac5832",
+      "bytes": 82302,
+      "version": "1:4.4.36-4build1",
+      "archiveRoot": "",
+      "component": "",
+      "dependencies": [
+        "libc6"
+      ]
+    },
+    {
+      "name": "libctf-nobfd0",
+      "format": "ubuntu-deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/b/binutils/libctf-nobfd0_2.42-4ubuntu2.10_amd64.deb",
+      "sha256": "da352eb7fa6c4369d2a6c1e5e680f574eda2e38576563326b18d9e47e61c4078",
+      "bytes": 98012,
+      "version": "2.42-4ubuntu2.10",
+      "archiveRoot": "",
+      "component": "",
+      "dependencies": [
+        "libc6",
+        "zlib1g"
+      ]
+    },
+    {
+      "name": "libctf0",
+      "format": "ubuntu-deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/b/binutils/libctf0_2.42-4ubuntu2.10_amd64.deb",
+      "sha256": "7ec86d697c3668503c85f308a6832f092075b5880ad002f22185264da0bd4645",
+      "bytes": 94474,
+      "version": "2.42-4ubuntu2.10",
+      "archiveRoot": "",
+      "component": "",
+      "dependencies": [
+        "libbinutils",
+        "libc6",
+        "zlib1g"
+      ]
+    },
+    {
+      "name": "libgcc-13-dev",
+      "format": "ubuntu-deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-13/libgcc-13-dev_13.3.0-6ubuntu2~24.04.1_amd64.deb",
+      "sha256": "cd689db2691edaa10f37329307292796bb599e722e0505c79e14caaa1fe9a93a",
+      "bytes": 2680642,
+      "version": "13.3.0-6ubuntu2~24.04.1",
+      "archiveRoot": "",
+      "component": "",
+      "dependencies": [
+        "gcc-13-base",
+        "libgcc-s1",
+        "libgomp1",
+        "libitm1",
+        "libatomic1",
+        "libasan8",
+        "liblsan0",
+        "libtsan2",
+        "libubsan1",
+        "libhwasan0",
+        "libquadmath0"
+      ]
+    },
+    {
+      "name": "libgcc-s1",
+      "format": "ubuntu-deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-14/libgcc-s1_14.2.0-4ubuntu2~24.04.1_amd64.deb",
+      "sha256": "aa7fadbe33b78bcf99885318040601c550c208929565b179891d9a3cc2aa68cd",
+      "bytes": 78392,
+      "version": "14.2.0-4ubuntu2~24.04.1",
+      "archiveRoot": "",
+      "component": "",
+      "dependencies": [
+        "gcc-14-base",
+        "libc6"
+      ]
+    },
+    {
+      "name": "libgmp10",
+      "format": "ubuntu-deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gmp/libgmp10_6.3.0+dfsg-2ubuntu6.1_amd64.deb",
+      "sha256": "285f8a505dfa8e1b33f357a9d8d3477ad35bf18c0b34771a6df4c25923f3ae0d",
+      "bytes": 253460,
+      "version": "2:6.3.0+dfsg-2ubuntu6.1",
+      "archiveRoot": "",
+      "component": "",
+      "dependencies": [
+        "libc6"
+      ]
+    },
+    {
+      "name": "libgomp1",
+      "format": "ubuntu-deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-14/libgomp1_14.2.0-4ubuntu2~24.04.1_amd64.deb",
+      "sha256": "e8a95ec58125b4933597f30ff56c2ae10edf90f287262e366d4b6edea3019144",
+      "bytes": 148062,
+      "version": "14.2.0-4ubuntu2~24.04.1",
+      "archiveRoot": "",
+      "component": "",
+      "dependencies": [
+        "gcc-14-base",
+        "libc6"
+      ]
+    },
+    {
+      "name": "libgprofng0",
+      "format": "ubuntu-deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/b/binutils/libgprofng0_2.42-4ubuntu2.10_amd64.deb",
+      "sha256": "1b7e3c2fc162e8358ca6e5a3fffdb4d0d632f790630323215841bb36a63c0ab8",
+      "bytes": 848684,
+      "version": "2.42-4ubuntu2.10",
+      "archiveRoot": "",
+      "component": "",
+      "dependencies": [
+        "libbinutils",
+        "libc6",
+        "libgcc-s1",
+        "libstdc++6",
+        "zlib1g"
+      ]
+    },
+    {
+      "name": "libhwasan0",
+      "format": "ubuntu-deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-14/libhwasan0_14.2.0-4ubuntu2~24.04.1_amd64.deb",
+      "sha256": "2195318cfe68fe16b601913ef7b33c9a900372f57861643fdc9ae6fef84534cd",
+      "bytes": 1640706,
+      "version": "14.2.0-4ubuntu2~24.04.1",
+      "archiveRoot": "",
+      "component": "",
+      "dependencies": [
+        "gcc-14-base",
+        "libc6",
+        "libgcc-s1"
+      ]
+    },
+    {
+      "name": "libisl23",
+      "format": "ubuntu-deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/i/isl/libisl23_0.26-3build1.1_amd64.deb",
+      "sha256": "4e040926e50fb961fae9bf95660189d468336a4a17bc321872c434fc8f777e7f",
+      "bytes": 679812,
+      "version": "0.26-3build1.1",
+      "archiveRoot": "",
+      "component": "",
+      "dependencies": [
+        "libc6",
+        "libgmp10"
+      ]
+    },
+    {
+      "name": "libitm1",
+      "format": "ubuntu-deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-14/libitm1_14.2.0-4ubuntu2~24.04.1_amd64.deb",
+      "sha256": "1fca498129dd3510294809d77ee754f72a9de281111200e9b7b9a5adf37faa9f",
+      "bytes": 29702,
+      "version": "14.2.0-4ubuntu2~24.04.1",
+      "archiveRoot": "",
+      "component": "",
+      "dependencies": [
+        "gcc-14-base",
+        "libc6"
+      ]
+    },
+    {
+      "name": "libjansson4",
+      "format": "ubuntu-deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/j/jansson/libjansson4_2.14-2build2_amd64.deb",
+      "sha256": "0cf79113f5d193ce9af2be2ff4b2c3b30dd4e55a0b6c47f7d28f6c849ff3aa60",
+      "bytes": 32830,
+      "version": "2.14-2build2",
+      "archiveRoot": "",
+      "component": "",
+      "dependencies": [
+        "libc6"
+      ]
+    },
+    {
+      "name": "liblsan0",
+      "format": "ubuntu-deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-14/liblsan0_14.2.0-4ubuntu2~24.04.1_amd64.deb",
+      "sha256": "dc0c2a1a053e833ba4d71e1ec2ba4244fe301761ad4a91d6725f927a52d86a14",
+      "bytes": 1321652,
+      "version": "14.2.0-4ubuntu2~24.04.1",
+      "archiveRoot": "",
+      "component": "",
+      "dependencies": [
+        "gcc-14-base",
+        "libc6",
+        "libgcc-s1"
+      ]
+    },
+    {
+      "name": "libmpc3",
+      "format": "ubuntu-deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/m/mpclib3/libmpc3_1.3.1-1build1.1_amd64.deb",
+      "sha256": "cebe6098bb3d66fdacac9dc6fe406a651216d9c00f27c3f9c159d15d96cdf864",
+      "bytes": 54636,
+      "version": "1.3.1-1build1.1",
+      "archiveRoot": "",
+      "component": "",
+      "dependencies": [
+        "libc6",
+        "libgmp10",
+        "libmpfr6"
+      ]
+    },
+    {
+      "name": "libmpfr6",
+      "format": "ubuntu-deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/m/mpfr4/libmpfr6_4.2.1-1build1.1_amd64.deb",
+      "sha256": "aebc1c8b69a1f98bb43dfc268daecd181116dbf40b13ee4e822eb4bdd52b493a",
+      "bytes": 353020,
+      "version": "4.2.1-1build1.1",
+      "archiveRoot": "",
+      "component": "",
+      "dependencies": [
+        "libc6",
+        "libgmp10"
+      ]
+    },
+    {
+      "name": "libquadmath0",
+      "format": "ubuntu-deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-14/libquadmath0_14.2.0-4ubuntu2~24.04.1_amd64.deb",
+      "sha256": "dc8f0ca542e09d662f29370c8393c016440dd4bc5c996c5fcc19f632b63ce3b0",
+      "bytes": 153316,
+      "version": "14.2.0-4ubuntu2~24.04.1",
+      "archiveRoot": "",
+      "component": "",
+      "dependencies": [
+        "gcc-14-base",
+        "libc6"
+      ]
+    },
+    {
+      "name": "libsframe1",
+      "format": "ubuntu-deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/b/binutils/libsframe1_2.42-4ubuntu2.10_amd64.deb",
+      "sha256": "72093fb456864db55f1352bfa5e952a94f7abaff64e71dff1fbf001db1984564",
+      "bytes": 15724,
+      "version": "2.42-4ubuntu2.10",
+      "archiveRoot": "",
+      "component": "",
+      "dependencies": [
+        "libc6"
+      ]
+    },
+    {
+      "name": "libstdc++6",
+      "format": "ubuntu-deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-14/libstdc++6_14.2.0-4ubuntu2~24.04.1_amd64.deb",
+      "sha256": "a51f8de7829211db961a31f02158058ad1a95f92ac6d0a5dff6350e2821c54c0",
+      "bytes": 792064,
+      "version": "14.2.0-4ubuntu2~24.04.1",
+      "archiveRoot": "",
+      "component": "",
+      "dependencies": [
+        "gcc-14-base",
+        "libc6",
+        "libgcc-s1"
+      ]
+    },
+    {
+      "name": "libtsan2",
+      "format": "ubuntu-deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-14/libtsan2_14.2.0-4ubuntu2~24.04.1_amd64.deb",
+      "sha256": "8cbcc9b3ae5ef23b449383d47a9035b27596e307d7dce7df9b83d47a7acd1d91",
+      "bytes": 2771910,
+      "version": "14.2.0-4ubuntu2~24.04.1",
+      "archiveRoot": "",
+      "component": "",
+      "dependencies": [
+        "gcc-14-base",
+        "libc6",
+        "libgcc-s1"
+      ]
+    },
+    {
+      "name": "libubsan1",
+      "format": "ubuntu-deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-14/libubsan1_14.2.0-4ubuntu2~24.04.1_amd64.deb",
+      "sha256": "a16dea3abe2dcac99bcfae27e7e5672fde64573c3c170dcb0cd55631238f9814",
+      "bytes": 1183812,
+      "version": "14.2.0-4ubuntu2~24.04.1",
+      "archiveRoot": "",
+      "component": "",
+      "dependencies": [
+        "gcc-14-base",
+        "libc6",
+        "libgcc-s1",
+        "libstdc++6"
+      ]
+    },
+    {
+      "name": "libzstd1",
+      "format": "ubuntu-deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/libz/libzstd/libzstd1_1.5.5+dfsg2-2build1.1_amd64.deb",
+      "sha256": "dfcf25061e07aad7efd3f4f880ba5ad4d4d09ebe7fc8cc77ab6b8a161d6d4727",
+      "bytes": 299472,
+      "version": "1.5.5+dfsg2-2build1.1",
+      "archiveRoot": "",
+      "component": "",
+      "dependencies": [
+        "libc6"
+      ]
+    },
+    {
+      "name": "linux-libc-dev",
+      "format": "ubuntu-deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/l/linux/linux-libc-dev_6.8.0-147.147_amd64.deb",
+      "sha256": "fec8e4a308c03cd98dace67370a8d5a8031c36741796065c9f6e3f9548ab0cd2",
+      "bytes": 1595188,
+      "version": "6.8.0-147.147",
+      "archiveRoot": "",
+      "component": "",
+      "dependencies": []
+    },
+    {
+      "name": "rpcsvc-proto",
+      "format": "ubuntu-deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/r/rpcsvc-proto/rpcsvc-proto_1.4.2-0ubuntu7_amd64.deb",
+      "sha256": "7eb710fe148d224c159ddec1ceb0ba53ead52a80a6793dcdae1474acf20d8f71",
+      "bytes": 67446,
+      "version": "1.4.2-0ubuntu7",
+      "archiveRoot": "",
+      "component": "",
+      "dependencies": [
+        "libc6"
+      ]
+    },
+    {
+      "name": "zlib1g",
+      "format": "ubuntu-deb",
+      "url": "https://archive.ubuntu.com/ubuntu/pool/main/z/zlib/zlib1g_1.3.dfsg-3.1ubuntu2.3_amd64.deb",
+      "sha256": "376249c8de139568221dbb242318cc8cb8f02299e3a62b7432948e1754fbddf9",
+      "bytes": 63158,
+      "version": "1:1.3.dfsg-3.1ubuntu2.3",
+      "archiveRoot": "",
+      "component": "",
+      "dependencies": [
+        "libc6"
+      ]
+    }
+  ]
+}

@@ -248,6 +248,7 @@ test('context excludes local-only descendants while retaining production inputs'
     '.env', 'CLAUDE.md', 'results/local/report.json',
     'ops/private.env', 'ops/src/private.env', 'ops/src/release/private.env',
     'ops/tests/private.env', 'ops/src/release/archive/private.env', 'ops/README.md',
+    'ops/unrelated-local-selection.json', 'ops/ops-build-inputs.private.json',
     'build/CLAUDE.md', 'build/private.env', 'src/CLAUDE.md', 'src/auth/private.env',
     'security/private.env', 'security/notes.json', 'security/runtime/private.env',
     'src/media/CLAUDE.md', 'src/room/notes.md', 'src/room/manager/notes.md', 'src/room/social/notes.md',
@@ -299,6 +300,12 @@ test('context excludes local-only descendants while retaining production inputs'
     'xtask/src/ci/ops_artifact/registry/private.env',
     'xtask/src/ci/ops_artifact/verify/private.env',
     'xtask/src/ci/ops_artifact/verify/retained/ops-attestation.jsonl',
+    'xtask/src/ci/ops_artifact/acquire/private.env',
+    'xtask/src/ci/ops_artifact/acquire/artifact.zip',
+    'xtask/src/ci/ops_artifact/acquire/retained/ops-attestation.jsonl',
+    'xtask/src/ci/ops_artifact/hosted/private.env',
+    'xtask/src/ci/ops_artifact/hosted/unreviewed.lock.json',
+    'xtask/src/ci/ops_artifact/hosted/provisioned/kit/toolchain/bin/rustc',
     'web/node_modules/example/index.js', 'web/e2e/results/report.json',
     'web/scripts/CLAUDE.md', 'web/scripts/local-only.mjs',
     'web/public/private.env', 'web/public/unlisted.html', 'web/src/CLAUDE.md',
@@ -311,7 +318,7 @@ test('context excludes local-only descendants while retaining production inputs'
     'src/main.rs', 'src/auth/mod.rs', 'src/media/mod.rs', 'src/room/mod.rs', 'src/room/manager/membership.rs',
     'src/room/social/members.rs',
     'src/signaling/mod.rs', 'migrations/001_initial.sql',
-    'ops/Cargo.toml', 'ops/src/main.rs', 'ops/src/release/manifest.rs',
+    'ops/Cargo.toml', 'ops/ops-build-inputs.lock.json', 'ops/src/main.rs', 'ops/src/release/manifest.rs',
     'load_tests/Cargo.toml', 'load_tests/src/main.rs', 'load_tests/src/metrics/measurement.rs',
     'xtask/Cargo.toml', 'xtask/src/main.rs',
     'web/package.json', 'web/package-lock.json', 'web/tsconfig.json',
@@ -328,7 +335,8 @@ test('context excludes local-only descendants while retaining production inputs'
 test('ops workspace inputs remain narrow and no ops binary enters the production image', () => {
   const opsRules = ignoreRules.filter(rule => rule.replace(/^!/, '').startsWith('ops'));
   assert.deepEqual(opsRules.toSorted(), [
-    '!ops/', 'ops/**', '!ops/Cargo.toml', '!ops/src/', 'ops/src/**', '!ops/src/*.rs',
+    '!ops/', 'ops/**', '!ops/Cargo.toml', '!ops/ops-build-inputs.lock.json',
+    '!ops/src/', 'ops/src/**', '!ops/src/*.rs',
     '!ops/src/release/', 'ops/src/release/**', '!ops/src/release/*.rs',
     '!ops/src/release/archive/', 'ops/src/release/archive/**', '!ops/src/release/archive/*.rs',
     '!ops/ansible/', 'ops/ansible/**', '!ops/ansible/files/', 'ops/ansible/files/**',
@@ -336,11 +344,14 @@ test('ops workspace inputs remain narrow and no ops binary enters the production
   ].toSorted());
   assert.match(dockerfile, /^COPY ops\/Cargo\.toml ops\/Cargo\.toml$/m);
   assert.match(dockerfile, /^COPY ops\/src \.\/ops\/src$/m);
+  assert.match(dockerfile,
+    /^COPY ops\/ops-build-inputs\.lock\.json \.\/ops\/ops-build-inputs\.lock\.json$/m);
   assert.match(dockerfile, /> ops\/src\/main\.rs/);
   assert.match(dockerfile, /printf '' > ops\/src\/lib\.rs/,
     'The xtask path dependency needs the Ops library target during dependency warming');
   const runtime = dockerfile.slice(dockerfile.indexOf(' AS runtime-base'));
-  assert.doesNotMatch(runtime, /^COPY .*ops\/src|^COPY .*simplestchat-ops/m);
+  assert.doesNotMatch(runtime,
+    /^COPY .*ops\/(?:src|ops-build-inputs\.lock\.json)|^COPY .*simplestchat-ops/m);
   assert.doesNotMatch(dockerfile, /cargo[^\n]*build[^\n]*(?:-p|--bin) simplestchat-ops/);
 });
 

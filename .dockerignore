@@ -30,6 +30,7 @@ security/runtime/**
 !ops/
 ops/**
 !ops/Cargo.toml
+!ops/ops-build-inputs.lock.json
 !ops/src/
 ops/src/**
 !ops/src/*.rs
@@ -262,6 +263,12 @@ xtask/src/ci/ops_artifact/registry/**
 !xtask/src/ci/ops_artifact/verify/
 xtask/src/ci/ops_artifact/verify/**
 !xtask/src/ci/ops_artifact/verify/*.rs
+!xtask/src/ci/ops_artifact/acquire/
+xtask/src/ci/ops_artifact/acquire/**
+!xtask/src/ci/ops_artifact/acquire/*.rs
+!xtask/src/ci/ops_artifact/hosted/
+xtask/src/ci/ops_artifact/hosted/**
+!xtask/src/ci/ops_artifact/hosted/*.rs
 !xtask/src/ci_evidence/
 xtask/src/ci_evidence/**
 !xtask/src/ci_evidence/*.rs

@@ -155,6 +155,7 @@ COPY src ./src
 # Keep the workspace member real in build-only layers; no ops binary is built
 # or copied into the production runtime image.
 COPY ops/src ./ops/src
+COPY ops/ops-build-inputs.lock.json ./ops/ops-build-inputs.lock.json
 COPY migrations/*.sql ./migrations/
 RUN python3 build/security_tools.py path cargo-auditable --directory /opt/security-tools \
     && /opt/security-tools/bin/cargo-auditable auditable build --locked --release --bin simplestChat \

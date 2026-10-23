@@ -17,6 +17,7 @@ pub(crate) struct Git {
     stamp: Metadata,
     path: PathBuf,
     budget: Budget,
+    context: Option<(PathBuf, crate::tooling::Environment)>,
 }
 impl std::fmt::Debug for Git {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -31,51 +32,88 @@ impl Git {
         deadline: &Deadline<'_, C>,
     ) -> Result<Self> {
         let parent = Chain::open(selected.path.parent().ok_or_else(|| failure(1))?, budget)?;
-        let leaf = Held::open(
+        let leaf = match Held::open(
             parent.file(),
             selected.path.file_name().unwrap(),
             namespace::FLAGS,
             budget,
-        )?;
-        let stamp = io(leaf.file().metadata())?;
-        if !stamp.is_file()
-            || stamp.mode() & 0o6000 != 0
-            || stamp.mode() & 0o022 != 0
-            || ![0, rustix::process::getuid().as_raw()].contains(&stamp.uid())
-            || stamp.mode() & 0o111 == 0
-            || stamp.len() != selected.bytes
-        {
-            return Err(failure(1));
-        }
-        let mut digest = Sha256::new();
-        let mut count = 0;
-        let mut buffer = [0u8; 64 * 1024];
-        let mut reader = leaf.file();
-        loop {
-            executor.ready().await?;
-            deadline.check(false)?;
-            let n = io(reader.read(&mut buffer))?;
-            if n == 0 {
-                break;
+        ) {
+            Ok(leaf) => leaf,
+            Err(error) => {
+                let _ = parent.finish();
+                return Err(error);
             }
-            count += n as u64;
-            if count > selected.bytes {
+        };
+        let admitted = async {
+            let stamp = io(leaf.file().metadata())?;
+            if !stamp.is_file()
+                || stamp.mode() & 0o6000 != 0
+                || stamp.mode() & 0o022 != 0
+                || ![0, rustix::process::getuid().as_raw()].contains(&stamp.uid())
+                || stamp.mode() & 0o111 == 0
+                || stamp.len() != selected.bytes
+            {
                 return Err(failure(1));
             }
-            digest.update(&buffer[..n]);
+            let mut digest = Sha256::new();
+            let mut count = 0;
+            let mut buffer = [0u8; 64 * 1024];
+            let mut reader = leaf.file();
+            loop {
+                executor.ready().await?;
+                deadline.check(false)?;
+                let n = io(reader.read(&mut buffer))?;
+                if n == 0 {
+                    break;
+                }
+                count += n as u64;
+                if count > selected.bytes {
+                    return Err(failure(1));
+                }
+                digest.update(&buffer[..n]);
+            }
+            if count != selected.bytes || hex(&digest.finalize()) != selected.sha256 {
+                return Err(failure(1));
+            }
+            Ok(stamp)
         }
-        if count != selected.bytes || hex(&digest.finalize()) != selected.sha256 {
-            return Err(failure(1));
-        }
+        .await;
+        let stamp = match admitted {
+            Ok(stamp) => stamp,
+            Err(error) => {
+                let _ = leaf.finish();
+                let _ = parent.finish();
+                return Err(error);
+            }
+        };
         let value = Self {
             parent,
             leaf,
             stamp,
             path: selected.path.clone(),
             budget: budget.clone(),
+            context: None,
         };
-        value.validate()?;
+        if let Err(error) = value.validate() {
+            let _ = value.finish();
+            return Err(error);
+        }
         Ok(value)
+    }
+    pub(super) fn in_context(
+        mut self,
+        directory: PathBuf,
+        environment: crate::tooling::Environment,
+    ) -> Self {
+        self.context = Some((directory, environment));
+        self
+    }
+    pub(in crate::ci) fn context(&self) -> Result<Option<(&Path, &crate::tooling::Environment)>> {
+        self.validate()?;
+        Ok(self
+            .context
+            .as_ref()
+            .map(|(path, environment)| (path.as_path(), environment)))
     }
     pub(crate) fn validate(&self) -> Result<&Path> {
         self.parent.verify()?;
@@ -88,8 +126,10 @@ impl Git {
             namespace::FLAGS,
             &self.budget,
         )?;
-        let matched = namespace::same(&self.stamp, &io(visible.file().metadata())?);
-        visible.finish()?;
+        let matched =
+            io(visible.file().metadata()).map(|stamp| namespace::same(&self.stamp, &stamp));
+        let closed = visible.finish();
+        let matched = matched.and_then(|matched| closed.map(|()| matched))?;
         if matched {
             Ok(&self.path)
         } else {
@@ -124,13 +164,22 @@ fn absent(parent: &File, name: &str, budget: &Budget) -> Result<()> {
 impl Repository {
     pub fn open(path: &Path, budget: &Budget) -> Result<Self> {
         let root = Chain::open(path, budget)?;
-        let objects = Chain::open(&path.join(".git/objects"), budget)?;
+        let objects = match Chain::open(&path.join(".git/objects"), budget) {
+            Ok(objects) => objects,
+            Err(error) => {
+                let _ = root.finish();
+                return Err(error);
+            }
+        };
         let value = Self {
             root,
             objects,
             budget: budget.clone(),
         };
-        value.check()?;
+        if let Err(error) = value.check() {
+            let _ = value.finish();
+            return Err(error);
+        }
         Ok(value)
     }
     pub fn check(&self) -> Result<()> {

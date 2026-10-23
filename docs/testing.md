@@ -63,6 +63,24 @@ API, trust-root acquisition, candidate or installer. Successful synthetic JSON i
 explicitly a supplied observation, never cryptographic evidence. Actual online
 interoperability, trusted Ops signing and Debian runtime evidence remain separate.
 
+The same focused Ops group covers the
+[hosted producer and signed-artifact acquisition](../ops/README.md#hosted-ops-production-and-signing).
+Owned inert ZIP fixtures exercise full framing, CRC/stream termination, member
+limits and rejected aliases. Fake and actual inert Native gh processes exercise
+exact API identity, paired capture seals, cancellation, deadlines, cleanup and
+original file witnesses through replay. They perform no live GitHub request,
+signature verification, compiler build, candidate execution or installation.
+Complete coordinator fixtures substitute inert source, registry and producer
+stages and a tiny private catalog; the real coordinator still owns download
+capture admission, archive/kit processing, copying, evidence assembly and final
+replay. Production fixes those stages and the compiled catalog, with no runtime
+override. These fixtures establish orchestration behavior rather than a cold
+hosted build or the truth of synthetic producer observations.
+The workflow policy tests separately check main-only signing, its required-job
+dependencies and its exact three subjects. A successful hosted build and an
+actual post-CI acquisition are separate interoperability evidence; Debian host
+runtime and installation evidence are separate again.
+
 Rust tests include native media checks; database tests are opt-in. Serial
 execution reduces UDP port-allocation races. Web tests use mocked browser APIs;
 the web build runs TypeScript checking and produces the production UI.

@@ -1,6 +1,8 @@
 //! Fresh online verification of one caller-retained, flat Ops artifact.
 //! No artifact transport, signing, candidate execution or installation occurs.
 
+#[cfg(test)]
+mod embedding_tests;
 mod execute;
 #[cfg(test)]
 mod fault_tests;
@@ -19,6 +21,57 @@ pub(in crate::ci) mod tools;
 mod worker_tests;
 
 use crate::tooling::{Failure, Result};
+pub(super) use files::OutputWitness as RetainedWitness;
+pub(super) use hash::Checkpoint as RetainedCheckpoint;
+pub(super) use plan::Clock as RetainedClock;
+use std::{sync::Arc, time::Instant};
+
+/// The acquisition owner supplies its existing monotonic clock and absolute
+/// operation end. Verification reserves its complete entry budget plus the
+/// caller's finalization tail before touching the retained artifact.
+pub(super) struct Window {
+    pub clock: Arc<dyn RetainedClock>,
+    pub end: Instant,
+}
+
+pub(super) struct RetainedObservation {
+    pub bytes: Vec<u8>,
+    pub witness: RetainedWitness,
+}
+impl std::fmt::Debug for RetainedObservation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("RetainedOpsVerificationObservation")
+    }
+}
+
+pub(super) async fn observe_retained<E: crate::ci::process::Executor>(
+    path: std::path::PathBuf,
+    selected: String,
+    caller: std::path::PathBuf,
+    environment: crate::tooling::Environment,
+    budget: super::namespace::Budget,
+    window: Window,
+    executor: &mut E,
+) -> Result<RetainedObservation> {
+    let context = plan::Context::new(window.clock);
+    if context
+        .end()
+        .checked_add(std::time::Duration::from_secs(45))
+        .is_none_or(|end| end > window.end)
+    {
+        return Err(failure(124));
+    }
+    execute::observation(
+        path,
+        selected,
+        caller,
+        environment,
+        budget,
+        &context,
+        executor,
+    )
+    .await
+}
 
 pub(super) fn failure(code: u8) -> Failure {
     Failure::new(code, "Ops retained verification is unproven.")

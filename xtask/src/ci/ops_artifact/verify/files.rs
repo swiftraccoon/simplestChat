@@ -380,7 +380,93 @@ pub(super) struct Output {
     work: Vec<(String, Held, Metadata)>,
     pub records: BTreeMap<String, Record>,
 }
+
+/// Original namespace and byte observations retained after explicit descriptor
+/// closure. Reopening compares against these observations, never a new baseline.
+#[derive(Clone)]
+pub(in crate::ci::ops_artifact) struct OutputWitness {
+    root: ChainWitness,
+    records: BTreeMap<String, Record>,
+    work: Vec<(String, Metadata)>,
+}
+impl OutputWitness {
+    pub(in crate::ci::ops_artifact) fn check(
+        &self,
+        budget: &Budget,
+        checkpoint: &Checkpoint,
+    ) -> Result<()> {
+        checkpoint.check()?;
+        let root = self.root.reopen(budget)?;
+        let result = (|| {
+            let mut expected = self.records.keys().cloned().collect::<BTreeSet<_>>();
+            expected.insert("work".into());
+            if inventory(root.file(), budget, 32)? != expected {
+                return Err(failure(1));
+            }
+            let work = Held::open(
+                root.file(),
+                OsStr::new("work"),
+                FLAGS | OFlags::DIRECTORY,
+                budget,
+            )?;
+            let checked = (|| {
+                let (_, original) = self.work.first().ok_or_else(|| failure(1))?;
+                if !namespace::binding(original, &namespace::private_directory(&work)?) {
+                    return Err(failure(1));
+                }
+                for (name, original) in self.work.iter().skip(1) {
+                    checkpoint.check()?;
+                    let child = Held::open(
+                        work.file(),
+                        OsStr::new(name),
+                        FLAGS | OFlags::DIRECTORY,
+                        budget,
+                    )?;
+                    let matched = namespace::private_directory(&child).and_then(|observed| {
+                        if namespace::binding(original, &observed) {
+                            Ok(())
+                        } else {
+                            Err(failure(1))
+                        }
+                    });
+                    matched.and(child.finish())?;
+                }
+                Ok(())
+            })();
+            checked.and(work.finish())?;
+            frame(root.file(), &self.records, budget, checkpoint)?;
+            root.verify()?;
+            checkpoint.check()
+        })();
+        result.and(root.finish())
+    }
+}
 impl Output {
+    pub fn witness(&self) -> Result<OutputWitness> {
+        self.check()?;
+        let chain = Chain::open(&self.run.path, self.run.budget())?;
+        let result = (|| {
+            if !namespace::binding(
+                &io(self.run.file().metadata())?,
+                &io(chain.file().metadata())?,
+            ) {
+                return Err(failure(1));
+            }
+            let witness = OutputWitness {
+                root: chain.witness()?,
+                records: self.records.clone(),
+                work: self
+                    .work
+                    .iter()
+                    .map(|(name, _, stamp)| (name.clone(), stamp.clone()))
+                    .collect(),
+            };
+            self.check()?;
+            Ok(witness)
+        })();
+        let closed = chain.finish();
+        result.and_then(|witness| closed.map(|()| witness))
+    }
     #[cfg(test)]
     pub fn new(path: &Path, budget: &Budget) -> Result<Self> {
         let run = OwnedRun::local(path, budget)?;

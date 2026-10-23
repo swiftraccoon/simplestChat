@@ -1,13 +1,18 @@
-//! A caller-authorized, fixed-recipe producer of unsigned local Ops candidates.
-//! Material pins select bytes, not authenticated source/toolchain/runtime facts.
-//! Cargo and compiler subprocesses are not a sandbox or a network isolation layer.
+//! Fixed Ops production, signer-input admission and authenticated retention.
+//! Local material pins select bytes; the trusted workflow and fresh verifier
+//! supply their separate identity boundaries. Compiler processes are not a
+//! sandbox. Retaining an artifact grants no execution or installation authority.
 
+pub(super) mod acquire;
 mod execute;
 #[cfg(test)]
 mod files_tests;
 #[cfg(test)]
 mod fixture;
+pub(super) mod hosted;
 mod materials;
+#[cfg(test)]
+mod materials_tests;
 mod namespace;
 #[cfg(test)]
 mod native_tests;
@@ -26,13 +31,36 @@ use sha2::{Digest, Sha256};
 use std::time::{Duration, Instant};
 
 const USAGE: &str = "usage: cargo run --locked -q -p xtask -- ops-artifact \
-build|source|registry|verify-retained \
---request PATH --request-sha256 SHA256";
+build|source|registry|verify-retained|acquire \
+--request PATH --request-sha256 SHA256\n\
+cargo run --locked -q -p xtask -- ops-artifact hosted --output PATH\n\
+cargo run --locked -q -p xtask -- ops-artifact signing-inputs --directory PATH --output PATH";
 
 pub(super) fn run(arguments: &[String]) -> anyhow::Result<std::process::ExitCode> {
     if arguments == ["--help"] {
         println!("{USAGE}");
         return Ok(std::process::ExitCode::SUCCESS);
+    }
+    if let [operation, flag, output] = arguments
+        && operation == "hosted"
+        && flag == "--output"
+        && namespace::path(std::path::Path::new(output))
+    {
+        return Ok(completed(
+            runtime()?.block_on(hosted::native(std::path::Path::new(output))),
+        ));
+    }
+    if let [operation, directory_flag, directory, output_flag, output] = arguments
+        && operation == "signing-inputs"
+        && directory_flag == "--directory"
+        && output_flag == "--output"
+        && namespace::path(std::path::Path::new(directory))
+        && namespace::path(std::path::Path::new(output))
+    {
+        return Ok(completed(runtime()?.block_on(hosted::signing_native(
+            std::path::Path::new(directory),
+            std::path::Path::new(output),
+        ))));
     }
     let [operation, request_flag, path, sha_flag, selected] = arguments else {
         eprintln!("{USAGE}");
@@ -40,22 +68,22 @@ pub(super) fn run(arguments: &[String]) -> anyhow::Result<std::process::ExitCode
     };
     if !matches!(
         operation.as_str(),
-        "build" | "source" | "registry" | "verify-retained"
+        "build" | "source" | "registry" | "verify-retained" | "acquire"
     ) || request_flag != "--request"
         || sha_flag != "--request-sha256"
         || !namespace::path(std::path::Path::new(path))
         || !digest(selected)
         || (operation == "verify-retained" && !verify::request_path(std::path::Path::new(path)))
+        || (operation == "acquire" && !acquire::request_path(std::path::Path::new(path)))
     {
         eprintln!("{USAGE}");
         return Ok(std::process::ExitCode::from(2));
     }
-    let runtime = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()?;
-    let result = runtime.block_on(async {
+    let result = runtime()?.block_on(async {
         if operation == "verify-retained" {
             verify::native(std::path::Path::new(path), selected).await
+        } else if operation == "acquire" {
+            acquire::native(std::path::Path::new(path), selected).await
         } else if operation == "source" {
             source::native(std::path::Path::new(path), selected)
                 .await
@@ -70,11 +98,21 @@ pub(super) fn run(arguments: &[String]) -> anyhow::Result<std::process::ExitCode
             execute::native(std::path::Path::new(path), selected).await
         }
     });
+    Ok(completed(result))
+}
+
+fn runtime() -> std::io::Result<tokio::runtime::Runtime> {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+}
+
+fn completed(result: Result<()>) -> std::process::ExitCode {
     match result {
-        Ok(()) => Ok(std::process::ExitCode::SUCCESS),
+        Ok(()) => std::process::ExitCode::SUCCESS,
         Err(error) => {
             eprintln!("{}", error.message);
-            Ok(std::process::ExitCode::from(error.code))
+            std::process::ExitCode::from(error.code)
         }
     }
 }
@@ -86,6 +124,7 @@ const TOTAL: Duration = Duration::from_secs(20 * 60);
 const RESERVE: Duration = Duration::from_secs(2 * 60);
 const SETTLEMENT: Duration = Duration::from_secs(20);
 const GRACE: Duration = Duration::from_secs(5);
+const DISPATCH_SETUP: Duration = Duration::from_secs(1);
 const LOG_LIMIT: u64 = 64 * 1024 * 1024;
 
 pub(super) fn failure(code: u8) -> Failure {
@@ -122,19 +161,35 @@ impl Clock for NativeClock {
 pub(super) struct Deadline<'a, C> {
     pub clock: &'a C,
     start: Instant,
+    limit: Instant,
 }
 impl<'a, C: Clock> Deadline<'a, C> {
     pub fn end(&self) -> Instant {
-        self.start + TOTAL
+        self.limit
     }
     pub fn new(clock: &'a C) -> Self {
+        let start = clock.now();
         Self {
             clock,
-            start: clock.now(),
+            start,
+            limit: start + TOTAL,
         }
     }
+    /// Embed a stage without extending the enclosing operation's deadline.
+    /// The existing two-minute settlement reserve still applies to shorter
+    /// stages, so an insufficient outer window refuses before active work.
+    pub fn bounded(clock: &'a C, end: Instant) -> Self {
+        let mut deadline = Self::new(clock);
+        deadline.limit = deadline.limit.min(end);
+        deadline
+    }
     pub fn check(&self, finalizing: bool) -> Result<()> {
-        let limit = if finalizing { TOTAL } else { TOTAL - RESERVE };
+        let entry = self.limit.saturating_duration_since(self.start);
+        let limit = if finalizing {
+            entry
+        } else {
+            entry.checked_sub(RESERVE).ok_or_else(|| failure(124))?
+        };
         if self.clock.now().saturating_duration_since(self.start) >= limit {
             Err(failure(124))
         } else {
@@ -143,16 +198,42 @@ impl<'a, C: Clock> Deadline<'a, C> {
     }
     pub fn body(&self, maximum: Duration) -> Result<Duration> {
         self.check(false)?;
-        let remaining = (TOTAL - RESERVE)
-            .saturating_sub(self.clock.now().saturating_duration_since(self.start));
-        let body = remaining
-            .checked_sub(GRACE + SETTLEMENT)
+        let remaining = self
+            .limit
+            .checked_sub(RESERVE)
+            .and_then(|end| end.checked_duration_since(self.clock.now()))
             .ok_or_else(|| failure(124))?;
+        let body = remaining
+            .checked_sub(GRACE + SETTLEMENT + DISPATCH_SETUP)
+            .ok_or_else(|| failure(124))?
+            .min(maximum);
         if body.is_zero() {
             Err(failure(124))
         } else {
-            Ok(body.min(maximum))
+            Ok(body)
         }
+    }
+    /// Latest spawn for an already chosen body. Setup may consume this window
+    /// but cannot move it or borrow the original settlement/finalization tail.
+    pub fn dispatch_by(&self, body: Duration) -> Result<Instant> {
+        self.check(false)?;
+        if body.is_zero() {
+            return Err(failure(124));
+        }
+        let latest = self
+            .limit
+            .checked_sub(RESERVE)
+            .and_then(|end| end.checked_sub(body))
+            .and_then(|end| end.checked_sub(GRACE + SETTLEMENT))
+            .ok_or_else(|| failure(124))?;
+        let now = self.clock.now();
+        if now < self.start {
+            return Err(failure(1));
+        }
+        if now > latest {
+            return Err(failure(124));
+        }
+        Ok(latest)
     }
 }
 

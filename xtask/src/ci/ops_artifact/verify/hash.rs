@@ -11,13 +11,26 @@ use std::{
 };
 
 #[derive(Clone)]
-pub(super) struct Checkpoint {
+pub(in crate::ci::ops_artifact) struct Checkpoint {
     abort: Arc<AtomicBool>,
     clock: Arc<dyn super::plan::Clock>,
     start: Instant,
     end: Instant,
 }
 impl Checkpoint {
+    pub(in crate::ci::ops_artifact) fn from_owner(
+        clock: Arc<dyn super::RetainedClock>,
+        start: Instant,
+        end: Instant,
+        abort: Arc<AtomicBool>,
+    ) -> Self {
+        Self {
+            abort,
+            clock,
+            start,
+            end,
+        }
+    }
     pub fn check(&self) -> Result<()> {
         let now = self.clock.now();
         if now < self.start {

@@ -273,7 +273,7 @@ async fn cleanup(state: &Shared) -> Result<()> {
     .await
     .map_err(|_| failure(1))?
 }
-pub(super) async fn transaction<E: Executor>(
+pub(super) async fn observation<E: Executor>(
     path: PathBuf,
     selected: String,
     caller: PathBuf,
@@ -281,7 +281,7 @@ pub(super) async fn transaction<E: Executor>(
     budget: Budget,
     context: &Context,
     executor: &mut E,
-) -> Result<()> {
+) -> Result<super::RetainedObservation> {
     let state = Arc::new(Mutex::new(State::default()));
     let result = async {
         let captured = environment;
@@ -354,7 +354,16 @@ pub(super) async fn transaction<E: Executor>(
             )
         })
         .await?;
-        Ok(observation)
+        let witness = stage(&state, context, executor, move |state, checkpoint| {
+            let output = state.output.as_ref().ok_or_else(|| failure(1))?;
+            output.verify_all(checkpoint)?;
+            output.witness()
+        })
+        .await?;
+        Ok(super::RetainedObservation {
+            bytes: observation,
+            witness,
+        })
     }
     .await;
     let closed = cleanup(&state).await;
@@ -365,8 +374,30 @@ pub(super) async fn transaction<E: Executor>(
         return Err(failure(1));
     }
     context.remaining()?;
+    Ok(observation)
+}
+
+pub(super) async fn transaction<E: Executor>(
+    path: PathBuf,
+    selected: String,
+    caller: PathBuf,
+    environment: Environment,
+    budget: Budget,
+    context: &Context,
+    executor: &mut E,
+) -> Result<()> {
+    let observation = observation(
+        path,
+        selected,
+        caller,
+        environment,
+        budget,
+        context,
+        executor,
+    )
+    .await?;
     executor
-        .replay(&observation, false, context.replay_deadline()?)
+        .replay(&observation.bytes, false, context.replay_deadline()?)
         .await?;
     executor.ready().await?;
     context.remaining()?;
