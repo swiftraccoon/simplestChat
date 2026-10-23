@@ -250,6 +250,11 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Select the pinned Python Unicode oracle
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.14.8'
+
       - name: Install the pinned Rust toolchain for CI receipts
         # Key/receipt checks use xtask before native-library setup or cache reuse.
         uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable (2026-10-01)

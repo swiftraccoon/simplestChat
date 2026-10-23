@@ -726,6 +726,39 @@ class VerifiedCacheTests(unittest.TestCase):
 class VerifiedWorkflowTests(unittest.TestCase):
     """Keep volatile audits/browser behavior fresh and publish only completed successes."""
 
+    def test_rust_unicode_oracle_is_pinned_before_fingerprints_cache_and_builds(self) -> None:
+        """The release calendar oracle cannot inherit a runner's older Unicode database."""
+        jobs = obj(
+            yaml_value((ROOT / ".github/workflows/ci.yml").read_text(), scalars_as_strings=True),
+            "jobs",
+        )
+        steps = objects(obj(jobs, "rust-test"), "steps")
+        selected = [
+            step
+            for step in steps
+            if string(step.get("uses", "")).startswith("actions/setup-python@")
+        ]
+        self.assertEqual(len(selected), 1)
+        python = selected[0]
+        self.assertEqual(
+            string(python, "uses"),
+            "actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1",
+        )
+        self.assertEqual(string(obj(python, "with"), "python-version"), "3.14.8")
+        self.assertNotIn("if", python)
+        self.assertNotIn("continue-on-error", python)
+        protected = [
+            next(step for step in steps if step.get("id") == "verified-inputs"),
+            next(step for step in steps if step.get("id") == "verified"),
+            next(
+                step for step in steps if step.get("uses") == "./.github/actions/native-toolchain"
+            ),
+            next(step for step in steps if string(step.get("run", "")).startswith("cargo build ")),
+            next(step for step in steps if string(step.get("run", "")).startswith("cargo test ")),
+        ]
+        for step in protected:
+            self.assertLess(steps.index(python), steps.index(step))
+
     def test_native_success_receipts_do_not_enable_automated_vendor_scans(self) -> None:
         """Optional native cache helpers remain available without any required scan job."""
         jobs = obj(

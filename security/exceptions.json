@@ -144,7 +144,7 @@
     {
       "scanner": "zizmor",
       "fingerprint": "self-repository:7d65041123978cf420877842e3f127995a022f851b87c4b322a0a4ea398c9df6",
-      "scope": ".github/workflows/ci.yml#jobs/rust-test/steps/5/uses",
+      "scope": ".github/workflows/ci.yml#jobs/rust-test/steps/6/uses",
       "owner": "swiftraccoon",
       "rationale": "act 0.2.89 only recognizes ./ local actions; immutable $/ syntax is unsupported by the maintained local runner.",
       "reachability": "Exact step and pinned action feature. Checkout disables persisted credentials; trusted workflow source remains subject to required review and security checks.",
@@ -1814,7 +1814,7 @@
     {
       "scanner": "zizmor",
       "fingerprint": "superfluous-actions:0fb2d712953646c2c07edb9a959b25649b214c63cb1143b35266a007af663b35",
-      "scope": ".github/workflows/ci.yml#jobs/rust-test/steps/1/uses",
+      "scope": ".github/workflows/ci.yml#jobs/rust-test/steps/2/uses",
       "owner": "swiftraccoon",
       "rationale": "Exact-input CI keys and local execution receipts now run through compiled xtask before native-library setup or cache reuse. The maintained local act image has no rustup, so this immutable installer action is required to bootstrap rustup and install the repository's exact Rust 1.99.0 toolchain.",
       "reachability": "Reviewed 2026-10-21 for only this exact step and immutable action reference. Checkout disables persisted credentials; the explicit repository-controlled toolchain and the reviewed official HTTPS rustup bootstrap are unchanged. CI key/receipt verification and every source/security gate remain blocking. No artifact, pull-request value or restored cache selects installer source or arguments.",

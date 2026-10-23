@@ -41,6 +41,11 @@ not a claim to accept every value Python can represent. Calendar checks use the
 locked Unicode 16 decimal-digit data, matching the pinned Python oracle; original
 timestamp text remains unchanged.
 
+Rust manifest parity tests require CPython 3.14.8 and its Unicode 16 database.
+The CI Rust test job selects that interpreter before input fingerprints, cache
+reuse and builds. This pins the test oracle's Unicode behavior; the operational
+Python helpers retain their Python 3.12 support.
+
 | Module | Responsibility |
 | --- | --- |
 | `src/main.rs` | Allowlisted CLI forms and fixed output failures |

@@ -100,6 +100,13 @@ review locations and the existing CodeQL Rust installer location move by one
 step; their action bytes, fingerprints and scope are otherwise unchanged.
 Receipt verification and all source/security gates remain blocking.
 
+Selecting CPython 3.14.8 for the Unicode 16 manifest oracle moves only the
+Rust test job's existing installer review from `steps/1/uses` to `steps/2/uses`
+and its native-toolchain composite review from `steps/5/uses` to `steps/6/uses`.
+Both action references, fingerprints, rationales and the 2026-11-29 expiry are
+unchanged. This location update adds no exception for the Python setup action;
+the source and action security checks remain blocking.
+
 The compiled branch-tip subject check moves only the automation installer from
 `ci.yml#jobs/automation/steps/3/uses` to `steps/2/uses`, ahead of that check.
 Its immutable action, Rust 1.99.0, official HTTPS bootstrap boundary and
