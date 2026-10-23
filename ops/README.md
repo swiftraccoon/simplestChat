@@ -1245,8 +1245,19 @@ provides signer identity authority.
 origins, SHA-256 values and sizes of four Rust 1.99.0 archives and 38 Ubuntu
 24.04 packages. The registry archives are selected from the original exported
 Cargo lockfile. Downloads, extraction, registry copying and complete-tree
-readback precede the existing offline producer. The measured host compiler kit
-contains its package sysroot, fixed GCC/binutils roles and an execution adapter
+readback precede the existing offline producer. Rust installer-v3 declarations
+are checked against the selected entry kinds. File-only
+manifests allow archive directories that are proper ancestors of declared
+entries; this does not admit undeclared files, links or unrelated empty
+directories. Explicit directory declarations authorize their bounded subtrees.
+Missing declarations and file/directory mismatches are refused.
+One exact packaging exception retains the empty
+`lib/rustlib/x86_64-unknown-linux-gnu/lib/self-contained` directory from the pinned
+GNU `rust-std` 1.99.0 component, whose file-only manifest omits it. The exception
+requires that component/root and a zero-byte directory header; it admits no
+children, sibling directories, files or links without their own declarations.
+The measured host compiler kit contains its package sysroot, fixed GCC/binutils
+roles and an execution adapter
 that replaces itself with that GCC. Resolver probes check the compiler's owned
 program, startup-object and search-directory selections before the build.
 The hosted operating system, `/bin/sh` and dynamic loader remain trusted runtime

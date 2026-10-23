@@ -219,6 +219,14 @@ fn selected(artifact: &Artifact, raw: &str) -> Result<Option<String>> {
         }
     }
 }
+fn empty_runtime_directory(artifact: &Artifact, path: &str, kind: tar::EntryType) -> bool {
+    // The pinned GNU std component includes this empty packaging directory,
+    // while its manifest lists only files. No sibling or payload is exempt.
+    kind.is_dir()
+        && artifact.archive_root == "rust-std-1.99.0-x86_64-unknown-linux-gnu"
+        && artifact.component == "rust-std-x86_64-unknown-linux-gnu"
+        && path == "toolchain/lib/rustlib/x86_64-unknown-linux-gnu/lib/self-contained"
+}
 fn target(artifact: &Artifact, destination: &str, raw: &str, hard: bool) -> Result<String> {
     if raw.is_empty() || raw.len() > 4096 || raw.contains(['\\', '\0', '\n', '\r']) {
         return Err(failure(1));
@@ -271,13 +279,16 @@ impl Graph {
         decoded(file, artifact.format, checkpoint, preflight)?;
         let mut seen = BTreeSet::new();
         let mut metadata = BTreeMap::new();
-        let mut installed = BTreeSet::new();
+        let mut installed = BTreeMap::new();
         decoded(file, artifact.format, checkpoint, |reader, checkpoint| {
             let mut archive = tar::Archive::new(reader);
             for entry in archive.entries().map_err(|_| failure(1))? {
                 checkpoint()?;
                 let mut entry = entry.map_err(|_| failure(1))?;
                 let kind = entry.header().entry_type();
+                if kind.is_dir() && entry.size() != 0 {
+                    return Err(failure(1));
+                }
                 let raw = name(&entry.path_bytes(), kind.is_dir())?;
                 if !seen.insert(raw.clone()) {
                     return Err(failure(1));
@@ -318,7 +329,7 @@ impl Graph {
                 if !files::safe(&destination) {
                     return Err(failure(1));
                 }
-                installed.insert(destination.clone());
+                installed.insert(destination.clone(), kind);
                 if kind.is_dir() {
                     tree.directory(&destination)?;
                     continue;
@@ -411,19 +422,30 @@ impl Graph {
             if declarations.is_empty() || declarations.len() > 8192 {
                 return Err(failure(1));
             }
-            for path in &installed {
-                if !declarations
-                    .iter()
-                    .any(|(p, k)| path == p || *k == "dir" && path.starts_with(&format!("{p}/")))
-                {
+            for (path, kind) in &installed {
+                if empty_runtime_directory(artifact, path, *kind) {
+                    continue;
+                }
+                if !declarations.iter().any(|(p, k)| {
+                    path == p
+                            || *k == "dir" && path.starts_with(&format!("{p}/"))
+                            // Installer manifests may list only files. Their
+                            // structural parent directories are still present
+                            // in the archive, but authorize no extra payload.
+                            || kind.is_dir() && p.starts_with(&format!("{path}/"))
+                }) {
                     return Err(failure(1));
                 }
             }
             for (path, kind) in declarations {
-                if !installed.contains(&path)
-                    && !(kind == "dir"
-                        && installed.iter().any(|p| p.starts_with(&format!("{path}/"))))
-                {
+                let present = match installed.get(&path) {
+                    Some(entry) => entry.is_dir() == (kind == "dir"),
+                    None => {
+                        kind == "dir"
+                            && installed.keys().any(|p| p.starts_with(&format!("{path}/")))
+                    }
+                };
+                if !present {
                     return Err(failure(1));
                 }
             }

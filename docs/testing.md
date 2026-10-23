@@ -76,6 +76,11 @@ capture admission, archive/kit processing, copying, evidence assembly and final
 replay. Production fixes those stages and the compiled catalog, with no runtime
 override. These fixtures establish orchestration behavior rather than a cold
 hosted build or the truth of synthetic producer observations.
+Rust installer fixtures include file-only manifests with explicit structural
+parent directories. Those directories admit no undeclared files, links or empty
+siblings; declaration-kind mismatches and missing declared entries still fail.
+The pinned GNU `rust-std` empty packaging-directory exception is tested against
+other components, siblings, payloads, child files and nonempty directory bodies.
 The workflow policy tests separately check main-only signing, its required-job
 dependencies and its exact three subjects. A successful hosted build and an
 actual post-CI acquisition are separate interoperability evidence; Debian host

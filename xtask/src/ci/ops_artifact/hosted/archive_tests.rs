@@ -24,6 +24,14 @@ fn file<'a>(name: &'a str, data: &'a [u8]) -> Entry<'a> {
         target: None,
     }
 }
+fn directory(name: &str) -> Entry<'_> {
+    Entry {
+        name,
+        data: b"",
+        kind: b'5',
+        target: None,
+    }
+}
 fn tar(entries: &[Entry<'_>]) -> Vec<u8> {
     let mut builder = tar::Builder::new(Vec::new());
     for entry in entries {
@@ -55,19 +63,28 @@ pub(super) fn gzip(bytes: &[u8]) -> Vec<u8> {
     writer.finish().unwrap()
 }
 fn rust(manifest: &[u8], version: &[u8], extra: &[Entry<'_>]) -> (Artifact, Vec<u8>) {
+    rust_component("rustc", manifest, version, extra)
+}
+fn rust_component(
+    component: &str,
+    manifest: &[u8],
+    version: &[u8],
+    extra: &[Entry<'_>],
+) -> (Artifact, Vec<u8>) {
     let artifact = Catalog::load()
         .unwrap()
         .artifacts
         .into_iter()
-        .find(|p| p.component == "rustc")
+        .find(|p| p.component == component)
         .unwrap();
     let root = artifact.archive_root.clone();
     let components = format!("{root}/components");
     let installer = format!("{root}/rust-installer-version");
-    let declarations = format!("{root}/rustc/manifest.in");
-    let compiler = format!("{root}/rustc/bin/rustc");
+    let declarations = format!("{root}/{component}/manifest.in");
+    let compiler = format!("{root}/{component}/bin/rustc");
+    let components_body = format!("{component}\n");
     let mut entries = vec![
-        file(&components, b"rustc\n"),
+        file(&components, components_body.as_bytes()),
         file(&installer, version),
         file(&declarations, manifest),
         file(&compiler, b"inert compiler bytes"),
@@ -147,6 +164,116 @@ fn complete_rust_installer_component_requires_exact_declarations_and_integrity()
     appended.extend_from_slice(&gzip(&[]));
     admitted(&artifact, &appended, false, false);
     admitted(&artifact, &bytes[..bytes.len() - 1], false, false);
+}
+
+#[test]
+fn file_only_rust_manifest_admits_exact_structural_parent_directories() {
+    let artifact = Catalog::load()
+        .unwrap()
+        .artifacts
+        .into_iter()
+        .find(|p| p.component == "rustc")
+        .unwrap();
+    let bin = format!("{}/rustc/bin", artifact.archive_root);
+    let lib = format!("{}/rustc/lib", artifact.archive_root);
+    let nested = format!("{lib}/nested");
+    let payload = format!("{nested}/library");
+    for manifest in [
+        b"file:bin/rustc\nfile:lib/nested/library\n".as_slice(),
+        b"file:bin/rustc\ndir:lib/nested\n",
+    ] {
+        let (artifact, bytes) = rust(
+            manifest,
+            b"3\n",
+            &[
+                directory(&bin),
+                directory(&lib),
+                directory(&nested),
+                file(&payload, b"inert library bytes"),
+            ],
+        );
+        admitted(&artifact, &bytes, true, true);
+    }
+}
+
+#[test]
+fn structural_parents_authorize_no_undeclared_payload_or_empty_directory() {
+    let artifact = Catalog::load()
+        .unwrap()
+        .artifacts
+        .into_iter()
+        .find(|p| p.component == "rustc")
+        .unwrap();
+    let bin = format!("{}/rustc/bin", artifact.archive_root);
+    let extra = format!("{bin}/extra");
+    for entry in [
+        directory(&extra),
+        file(&extra, b"undeclared payload"),
+        Entry {
+            name: &extra,
+            data: b"",
+            kind: b'2',
+            target: Some("rustc"),
+        },
+    ] {
+        let (artifact, bytes) = rust(b"file:bin/rustc\n", b"3\n", &[directory(&bin), entry]);
+        admitted(&artifact, &bytes, false, true);
+    }
+    for manifest in [
+        b"file:bin\nfile:bin/rustc\n".as_slice(),
+        b"dir:bin/rustc\n",
+        b"file:bin/rustc\nfile:bin/missing\n",
+        b"file:bin/rustc\ndir:bin/missing\n",
+    ] {
+        let (artifact, bytes) = rust(manifest, b"3\n", &[directory(&bin)]);
+        admitted(&artifact, &bytes, false, false);
+    }
+}
+
+#[test]
+fn only_the_pinned_gnu_std_empty_packaging_directory_is_admitted() {
+    let catalog = Catalog::load().unwrap();
+    for component in [
+        "rust-std-x86_64-unknown-linux-gnu",
+        "rust-std-x86_64-unknown-linux-musl",
+        "rustc",
+    ] {
+        let artifact = catalog
+            .artifacts
+            .iter()
+            .find(|p| p.component == component)
+            .unwrap();
+        let parent = format!("{}/{component}", artifact.archive_root);
+        let name = format!("{parent}/lib/rustlib/x86_64-unknown-linux-gnu/lib/self-contained");
+        let (artifact, bytes) =
+            rust_component(component, b"file:bin/rustc\n", b"3\n", &[directory(&name)]);
+        admitted(
+            &artifact,
+            &bytes,
+            component == "rust-std-x86_64-unknown-linux-gnu",
+            true,
+        );
+        for entry in [
+            file(&name, b"undeclared payload"),
+            Entry {
+                name: &name,
+                data: b"nonempty directory body",
+                kind: b'5',
+                target: None,
+            },
+        ] {
+            let (artifact, bytes) =
+                rust_component(component, b"file:bin/rustc\n", b"3\n", &[entry]);
+            admitted(&artifact, &bytes, false, false);
+        }
+        let sibling = format!("{name}-other");
+        let child = format!("{name}/extra");
+        for entry in [directory(&sibling), file(&child, b"undeclared child")] {
+            let (artifact, bytes) =
+                rust_component(component, b"file:bin/rustc\n", b"3\n", &[entry]);
+            admitted(&artifact, &bytes, false, false);
+        }
+    }
 }
 
 #[test]
