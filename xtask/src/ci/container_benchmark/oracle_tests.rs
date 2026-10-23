@@ -318,12 +318,6 @@ fn cases() -> Vec<Value> {
         "+1",
         ".1e1",
         "1.00000000000000000001",
-        "1\r",
-        "\r1",
-        "\u{000b}1",
-        "\u{000c}1",
-        "1\u{000b}",
-        "1\u{000c}",
         "1\u{0085}",
         "\u{00a0}1",
         "true",
@@ -398,11 +392,13 @@ fn native_policy(case: &Value) -> bool {
 #[tokio::test]
 async fn actual_original_47_tests_and_selected_jq_awk_predicates_match_the_native_policy() {
     let cases = cases();
+    assert_eq!(cases.len(), 183);
     let evidence = reference(&cases).await.unwrap();
     assert_eq!(evidence["originalTests"], 47);
     for tool in ["jq", "awk", "bash"] {
         assert!(!evidence["provider"][tool].as_str().unwrap().is_empty());
     }
+    let provider = evidence["provider"]["awk"].as_str().unwrap();
     assert_eq!(evidence["results"].as_array().unwrap().len(), cases.len());
     for (index, (case, result)) in cases
         .iter()
@@ -412,11 +408,46 @@ async fn actual_original_47_tests_and_selected_jq_awk_predicates_match_the_nativ
         assert_eq!(
             result["passed"],
             native_policy(case),
-            "case {index}: {}",
+            "case {index}: {}; AWK {provider}",
             case["kind"]
         );
     }
     assert!(!evidence.to_string().contains("PRIVATE"));
+}
+#[tokio::test]
+async fn actual_awk_control_whitespace_profiles_preserve_the_fixed_native_metric_policy() {
+    let cases = [
+        "1\r",
+        "\r1",
+        "\u{000b}1",
+        "\u{000c}1",
+        "1\u{000b}",
+        "1\u{000c}",
+    ]
+    .map(|value| {
+        let input = baseline_metrics()
+            .replace("snapshot_complete 1", &format!("snapshot_complete {value}"));
+        json!({"kind":"counts","input":input})
+    });
+    assert_eq!(cases.len(), 6);
+    let evidence = reference(&cases).await.unwrap();
+    assert_eq!(evidence["originalTests"], 47);
+    let provider = evidence["provider"]["awk"].as_str().unwrap();
+    let native = [true, true, true, true, false, false];
+    let rows = evidence["results"].as_array().unwrap();
+    assert_eq!(rows.len(), cases.len(), "AWK {provider}");
+    let profiles = [[false; 6], native, [true; 6]].map(|profile| {
+        profile
+            .map(|passed| json!({"status":u8::from(!passed),"passed":passed}))
+            .to_vec()
+    });
+    assert!(
+        profiles.iter().any(|profile| profile == rows),
+        "Unreviewed complete AWK control-whitespace profile: {provider}; {rows:?}"
+    );
+    for (case, native) in cases.iter().zip(native) {
+        assert_eq!(native_policy(case), native, "{case}; AWK {provider}");
+    }
 }
 #[tokio::test]
 async fn actual_bounded_public_guard_and_emergency_blocks_keep_their_failure_evidence() {

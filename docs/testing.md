@@ -2205,7 +2205,15 @@ profile, preserving numeric/boolean distinctions. Three active Prometheus counte
 require singleton digit-zero values; the snapshot singleton uses the observed
 AWK decimal strnum-equals-one profile (including decimal exponent/leading sign,
 near-one decimal rounding and CR), without claiming provider-specific hexadecimal
-coercion. Selected JSON strings and keys must be Unicode scalar strings.
+coercion. The native profile accepts leading CR/VT/FF and trailing CR, while
+refusing trailing VT/FF. The actual-reference oracle separately checks all six
+values against three complete observed result patterns: One True AWK 20200816
+matches this native pattern, Mawk 1.3.4 20200120 rejects all six, and GNU Awk 5.3.0
+accepts all six. Each actual invocation must match one whole six-row status and
+pass/fail pattern; mixed or unknown patterns fail. Provider/version metadata is
+retained for diagnostics, rather than treated as authority for coercion behavior.
+The other 183 shared-domain vectors retain exact parity and cardinality checks.
+Selected JSON strings and keys must be Unicode scalar strings.
 
 Cleanup cross-checks exact names and known CIDs and never uses `rm --force` or
 `--volumes`. A lost create response plus current absence remains unproved.
