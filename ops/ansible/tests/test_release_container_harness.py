@@ -13,6 +13,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from contextlib import ExitStack, redirect_stderr, redirect_stdout
 from copy import deepcopy
@@ -25,6 +26,7 @@ from unittest.mock import patch
 from test_support import ROOT
 
 # isort: split
+import bounded_process
 import release_container_harness as harness_module
 import release_public as release
 from release_artifact import sha256_file
@@ -33,6 +35,7 @@ from release_json import JsonObject, JsonValue, decode_json, object_value, strin
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
+    from typing import IO, Literal
 
     from release_container_harness import CommandOptions
 
@@ -132,6 +135,7 @@ class FakeCommands:
     compose: FakeDocker = dataclass_field(default_factory=FakeDocker)
     settlement_unconfirmed: bool = False
     last_failure: JsonObject | None = None
+    cleanup_deadline: float | None = None
 
 
 @dataclass
@@ -309,6 +313,7 @@ class CleanupCommands:
         self.calls: list[tuple[tuple[str, ...], CommandOptions]] = []
         self.settlement_unconfirmed: bool = False
         self.last_failure: JsonObject | None = None
+        self.cleanup_deadline: float | None = None
 
     def docker(self, *args: str, **kwargs: Unpack[CommandOptions]) -> TextResult:
         """Refuse every command outside the exact cleanup inventory operations."""
@@ -465,6 +470,8 @@ class HarnessInputTests(HarnessTestCase):
             sys.executable,
             "--chromium",
             sys.executable,
+            "--http-policy-binary",
+            str(Path(sys.executable).resolve()),
         ]
         for arguments in (valid[1:], valid[:1] + valid[3:], valid[:3]):
             with (
@@ -504,6 +511,8 @@ class HarnessInputTests(HarnessTestCase):
                         sys.executable,
                         "--chromium",
                         sys.executable,
+                        "--http-policy-binary",
+                        str(Path(sys.executable).resolve()),
                     ]
                 )
         self.assertEqual(list(self.directory.iterdir()), [])
@@ -1025,6 +1034,8 @@ class HarnessEvidenceTests(HarnessTestCase):
                             sys.executable,
                             "--chromium",
                             sys.executable,
+                            "--http-policy-binary",
+                            str(Path(sys.executable).resolve()),
                         ]
                     )
                 self.assertEqual(status, 0 if execution_passes and cleanup_passes else 1)
@@ -1034,7 +1045,7 @@ class HarnessEvidenceTests(HarnessTestCase):
                 if not execution_passes:
                     self.assertEqual(report["failure"], "Original execution failure")
                 self.assertEqual(harness.cleanup_calls, 1)
-                self.assertEqual(alarms, [480, 100, 0])
+                self.assertEqual(alarms, [660, 100, 0])
                 self.assertEqual(stat.S_IMODE((output / "report.json").stat().st_mode), 0o644)
                 self.assertEqual(stat.S_IMODE(output.stat().st_mode), 0o755)
                 self.assertEqual(stat.S_IMODE((output / "private").stat().st_mode), 0o700)
@@ -1484,6 +1495,134 @@ class HarnessCommandTests(HarnessTestCase):
             ],
             42,
         )
+
+
+class HarnessHttpPolicyOwnerTests(HarnessTestCase):
+    """The new explicit binary and cooperative grace never adopt replacement authority."""
+
+    def test_cleanup_admission_reserves_cooperative_tail_and_refuses_expired_spawns(self) -> None:
+        """A caught alarm cannot admit another child beyond the original cleanup deadline."""
+        commands = harness_module.Commands(self.directory)
+        commands.cleanup_deadline = 100
+        with patch.object(time, "monotonic", return_value=20):
+            self.assertEqual(commands.admitted_timeout(210, 60), 15)
+        for observed in (90, 100, float("nan")):
+            with (
+                self.subTest(observed=observed),
+                patch.object(time, "monotonic", return_value=observed),
+                patch.object(subprocess, "Popen") as spawn,
+                self.assertRaisesRegex(harness_module.CheckError, "cleanup deadline exhausted"),
+            ):
+                _ = commands.run(["owned-command"])
+            spawn.assert_not_called()
+        self.assertEqual(list(self.directory.iterdir()), [])
+
+    def test_cleanup_late_success_refuses_without_replacing_known_nonzero(self) -> None:
+        """The post-settlement clock fence affects success while a settled42 remains known."""
+        for code in (0, 42):
+            with self.subTest(code=code):
+                directory = self.directory / f"late-{code}"
+                directory.mkdir()
+                commands = harness_module.Commands(directory)
+                commands.cleanup_deadline = 100
+                with (
+                    patch.object(time, "monotonic", side_effect=[0, 0, 0, 112, 112]),
+                    patch.object(subprocess, "Popen", FakeLaunch(FakeChild(returncode=code))),
+                ):
+                    if code == 0:
+                        with self.assertRaisesRegex(
+                            harness_module.CheckError, "deadline exhausted"
+                        ):
+                            _ = commands.run(["owned-command"])
+                    else:
+                        self.assertEqual(commands.run(["owned-command"], success=False).code, code)
+
+    def test_cleanup_stream_setup_cannot_cross_the_original_spawn_deadline(self) -> None:
+        """Opening peer streams cannot spend the remaining TERM/reap reservation."""
+        source = self.directory / "input"
+        _ = source.write_bytes(b"owned inert input")
+        commands = harness_module.Commands(self.directory)
+        commands.cleanup_deadline = 100
+        acquired: list[IO[bytes]] = []
+        actual_open = Path.open
+
+        def opened(path: Path, mode: Literal["rb", "xb"]) -> IO[bytes]:
+            stream = actual_open(path, mode)
+            acquired.append(stream)
+            return stream
+
+        with (
+            patch.object(time, "monotonic", side_effect=[0, 0, 95, 95]),
+            patch.object(Path, "open", opened),
+            patch.object(subprocess, "Popen") as spawn,
+            self.assertRaisesRegex(harness_module.CheckError, "cleanup deadline exhausted"),
+        ):
+            _ = commands.run(["owned-command"], input_path=source)
+        spawn.assert_not_called()
+        self.assertEqual(len(acquired), 3)
+        self.assertTrue(all(stream.closed for stream in acquired))
+        report = read_object((self.directory / "command-001.json").read_text(encoding="utf-8"))
+        self.assertIsNone(report["exitStatus"])
+        self.assertIs(commands.settlement_unconfirmed, expr2=False)
+
+    def test_retained_checker_rejects_replacement_and_closes_original_descriptor(self) -> None:
+        """Both success and failure paths retain the original executable authority."""
+        for failed_body in (False, True):
+            with self.subTest(failed_body=failed_body):
+                self.replacement(failed_body=failed_body)
+
+    def replacement(self, *, failed_body: bool) -> None:
+        """Refuse a caller-selected pathname change during checker settlement."""
+        selected = self.directory / f"checker-{failed_body}"
+        _ = selected.write_text("#!/inert\n")
+        selected.chmod(0o700)
+        original = harness_module.CheckError("Original checker failure")
+        descriptors: list[int] = []
+        actual_open = os.open
+
+        def retained(path: Path, flags: int) -> int:
+            descriptor = actual_open(path, flags)
+            descriptors.append(descriptor)
+            return descriptor
+
+        with (
+            patch.object(os, "open", side_effect=retained),
+            self.assertRaises(harness_module.CheckError) as raised,
+            harness_module.http_policy_owner(selected),
+        ):
+            _ = selected.rename(selected.with_suffix(".owned"))
+            _ = selected.write_text("foreign replacement\n")
+            selected.chmod(0o700)
+            if failed_body:
+                raise original
+        if failed_body:
+            self.assertIs(raised.exception, original)
+            self.assertIsInstance(raised.exception.__cause__, harness_module.CheckError)
+        else:
+            self.assertIn("binary changed", str(raised.exception))
+        with self.assertRaises(OSError):
+            _ = os.fstat(descriptors[0])
+        self.assertEqual(selected.read_text(), "foreign replacement\n")
+
+    def test_checker_grace_keeps_original_failure_and_attempts_private_record(self) -> None:
+        """A failed cooperative stop cannot replace a known original cause or skip its record."""
+        commands = harness_module.Commands(self.directory)
+        original = harness_module.CheckError("Original checker interruption")
+        child = FakeChild(returncode=None, interruption=original)
+        cleanup = harness_module.CheckError("Cleanup unconfirmed")
+        with (
+            patch.object(subprocess, "Popen", FakeLaunch(child)),
+            patch.object(bounded_process, "stop", side_effect=cleanup) as stop,
+            self.assertRaises(harness_module.CheckError) as raised,
+        ):
+            _ = commands.run(["owned-checker"], timeout=210, grace=60)
+        self.assertIs(raised.exception, original)
+        self.assertIs(raised.exception.__cause__, cleanup)
+        stop.assert_called_once_with(child, grace=60)
+        self.assertIs(commands.settlement_unconfirmed, expr2=True)
+        report = read_object((self.directory / "command-001.json").read_text())
+        self.assertEqual(report["timeoutSeconds"], 210)
+        self.assertIsNone(report["exitStatus"])
 
 
 class HarnessDerivativeTests(HarnessTestCase):

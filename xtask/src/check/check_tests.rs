@@ -44,8 +44,10 @@ fn bootstrap_linux_graph_excludes_native_tls_until_the_client_feature_is_selecte
             "bootstrap unexpectedly requires {dependency}"
         );
     }
-    let client = graph(&["--features", "public-smoke"]);
-    assert!(client.lines().any(|line| line.starts_with("openssl-sys v")));
+    for feature in ["public-smoke", "release-http-policy"] {
+        let client = graph(&["--features", feature]);
+        assert!(client.lines().any(|line| line.starts_with("openssl-sys v")));
+    }
 }
 
 const ENVIRONMENT_KEYS: &[&str] = &[
@@ -71,6 +73,8 @@ const SOURCES: &[&str] = &[
     "ops/ansible/filter_plugins/filter.py",
     "ops/ansible/tests/test_new\ncase.py",
     "typings/fixture/nested.pyi",
+    "xtask/src/ci/release_http_policy/oracle.py",
+    "xtask/src/ci/release_http_policy/__init__.py",
 ];
 const DISPATCH: &str = r#"
 {
@@ -199,6 +203,7 @@ impl Fixture {
             "results/generated.py",
             "vendor/upstream.py",
             "reference/example.py",
+            "xtask/src/ci/release_http_policy/reference/build/release_http_policy.py",
         ]) {
             fixture.write(name, "# inert source\n");
         }
@@ -1132,6 +1137,8 @@ fn python_rejects_new_source_roots_before_any_checker() {
         "new-owned-root/module.py",
         "build/unapproved.pyi",
         "typings/unapproved.py",
+        "xtask/src/ci/other/module.py",
+        "xtask/src/ci/release_http_policy_unapproved/module.py",
     ] {
         let fixture = Fixture::new();
         fixture.write(source, "# policy must be explicit\n");

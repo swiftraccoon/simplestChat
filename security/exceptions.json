@@ -543,6 +543,16 @@
     },
     {
       "scanner": "codeql",
+      "fingerprint": "codeql:3fad85717ecdd86d5b8475b348bdb96215d5584abadcc9044fef03685698d844",
+      "scope": "xtask/src/ci/release_http_policy/reference/build/release_container_fixture.py:171:175:19:6",
+      "owner": "swiftraccoon",
+      "rationale": "This historical fixture copy is byte-identical to the configuration-only renderer reviewed as alert 27. Its unchanged StrictUndefined Jinja Environment renders tracked local dotenv, SQL, Compose and PostgreSQL configuration, never HTML; HTML escaping would corrupt those formats. The offline release-HTTP oracle imports this retained dependency but replaces jinja2.Environment with a fail-on-use sentinel, so rendering is denied in that oracle.",
+      "reachability": "Fresh local CodeQL 2.27.1 Python analysis of 507526025fa4797708bcce0739ceeb18d1ebf2e0 supplies this exact query, copied path, primary range/message and complete source SHA256 072ef7e7851dc2d2232694d3f7f7224876391a4a8052977adce04309b0de24e8. Compiled/current-file source pins are checked before every reference execution; the oracle audit hook denies subprocess and socket creation. Only this exact local finding is reviewed; no GitHub alert number, remote dismissal, query/path exclusion, automatic renewal or expiry extension is authorized.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#local-release-http-retained-fixture"
+    },
+    {
+      "scanner": "codeql",
       "fingerprint": "codeql:04848074b8775fea973a3bd713ceb3b9972e8f5fbab63b098641d4d387c991aa",
       "scope": "ops/ansible/tests/test_automation.py:39:39:9:65",
       "owner": "swiftraccoon",

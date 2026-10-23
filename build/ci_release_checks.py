@@ -38,6 +38,16 @@ class Task:
     name: str
     command: tuple[str, ...]
     timeout: float
+    grace: float = 5
+
+
+@dataclass(frozen=True)
+class FixtureTools:
+    """Explicit prebuilt tools forwarded unchanged into the root fixture."""
+
+    node: Path
+    chromium: Path
+    http_policy: Path
 
 
 @dataclass(frozen=True)
@@ -66,7 +76,7 @@ def run_task(task: Task, output: Path, cancelled: threading.Event) -> Result:
                 output=stdout,
                 error=stderr,
                 limits=bounded_process.Limits(
-                    timeout=task.timeout, healthy=lambda: not cancelled.is_set()
+                    timeout=task.timeout, healthy=lambda: not cancelled.is_set(), grace=task.grace
                 ),
             )
     except (OSError, RuntimeError) as error:
@@ -89,7 +99,11 @@ def run_tasks(tasks: tuple[Task, Task], output: Path, cancelled: threading.Event
 
 
 def tasks(
-    controller: Path, image: str, fixture_output: Path, output: Path, browser: tuple[Path, Path]
+    controller: Path,
+    image: str,
+    fixture_output: Path,
+    output: Path,
+    tools: FixtureTools,
 ) -> tuple[Task, Task]:
     """Build the existing fixture command and a download-only pinned installer."""
     return (
@@ -106,12 +120,15 @@ def tasks(
                 "--output",
                 str(fixture_output),
                 "--node",
-                str(browser[0]),
+                str(tools.node),
                 "--chromium",
-                str(browser[1]),
+                str(tools.chromium),
+                "--http-policy-binary",
+                str(tools.http_policy),
             ),
-            # The fixture bounds execution to 480s and its cleanup to 100s.
-            590,
+            # 660s work + 60s checker TERM + 5s reap + 100s cleanup + 10s publication = 835s.
+            850,
+            180,
         ),
         Task(
             "scanner-tools",
@@ -144,6 +161,7 @@ class Options(argparse.Namespace):
     output: Path = Path()
     node: Path = Path()
     chromium: Path = Path()
+    http_policy_binary: Path = Path()
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -155,6 +173,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     _ = parser.add_argument("--output", type=Path, required=True)
     _ = parser.add_argument("--node", type=Path, required=True)
     _ = parser.add_argument("--chromium", type=Path, required=True)
+    _ = parser.add_argument("--http-policy-binary", type=Path, required=True)
     args = parser.parse_args(argv, namespace=Options())
     _ = os.umask(0o077)
     cancelled = threading.Event()
@@ -170,6 +189,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             all(path.is_absolute() and path.is_file() for path in (args.node, args.chromium)),
             "invalid_browser_tools",
         )
+        require(
+            args.http_policy_binary.is_absolute() and args.http_policy_binary.is_file(),
+            "invalid_http_policy_binary",
+        )
         require(args.fixture_output.is_absolute() and args.output.is_absolute(), "relative_output")
         args.output.mkdir(mode=0o700)
         results = run_tasks(
@@ -178,7 +201,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 args.image,
                 args.fixture_output,
                 args.output,
-                (args.node, args.chromium),
+                FixtureTools(args.node, args.chromium, args.http_policy_binary),
             ),
             args.output,
             cancelled,

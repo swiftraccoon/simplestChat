@@ -14,11 +14,12 @@ use std::{
     time::{Duration, Instant},
 };
 
-pub(super) const BUDGET: Duration = Duration::from_secs(11 * 60);
-// The coordinator cancels both separately-sessioned tasks and gives their
-// bounded_process owners up to 5s TERM + 5s reap, in parallel. Keep that grace.
-const GRACE: Duration = Duration::from_secs(15);
-const RESERVE: Duration = Duration::from_secs(20);
+pub(super) const BUDGET: Duration = Duration::from_secs(1140);
+// 850 body + 200 cooperative TERM + 20 Native settlement + 10 final fences.
+const COORDINATOR_BODY: Duration = Duration::from_secs(850);
+const GRACE: Duration = Duration::from_secs(200);
+const FINAL: Duration = Duration::from_secs(30);
+const COORDINATOR_TAIL: Duration = Duration::from_secs(1080);
 pub(super) const EXPRESSION: &str = concat!(
     "process.stdout.write(require(",
     "\"./web/e2e/node_modules/playwright\"",
@@ -30,9 +31,15 @@ pub(super) struct Context {
     pub environment: Environment,
     pub temporary: PathBuf,
     pub image: String,
+    pub http_policy: PathBuf,
 }
 impl Context {
-    pub(super) fn new(root: &Path, environment: Environment, system: &str) -> Result<Self> {
+    pub(super) fn new(
+        root: &Path,
+        environment: Environment,
+        system: &str,
+        http_policy: &Path,
+    ) -> Result<Self> {
         if !runner::authorized(&environment, system) {
             return Err(Failure::new(
                 2,
@@ -41,7 +48,9 @@ impl Context {
         }
         let temporary = PathBuf::from(runner::text(&environment, "RUNNER_TEMP"));
         let image = runner::text(&environment, "PRODUCTION_IMAGE");
-        if !temporary.is_absolute()
+        if !http_policy.is_absolute()
+            || http_policy.as_os_str().as_encoded_bytes().len() > 4096
+            || !temporary.is_absolute()
             || temporary.is_symlink()
             || !temporary.is_dir()
             || temporary.as_os_str().as_encoded_bytes().len() > 4096
@@ -59,20 +68,28 @@ impl Context {
             temporary,
             image: image.into(),
             environment,
+            http_policy: http_policy.into(),
         })
     }
 }
-fn remaining(deadline: Instant) -> Result<Duration> {
+fn remaining(deadline: Instant, reserve: Duration) -> Result<Duration> {
     deadline
         .checked_duration_since(Instant::now())
-        .and_then(|left| left.checked_sub(RESERVE))
+        .and_then(|left| left.checked_sub(reserve))
         .filter(|left| !left.is_zero())
         .ok_or_else(|| Failure::new(124, "Release-check budget exhausted."))
+}
+pub(super) fn fence(deadline: Instant) -> Result<()> {
+    remaining(deadline, Duration::ZERO).map(|_| ())
 }
 pub(super) fn discover(node: Arc<Executable>, deadline: Instant) -> Result<Command> {
     let mut command = Command::capture(Program::Node, &["-e", EXPRESSION]);
     command.node = Some(node);
-    command.timeout = remaining(deadline)?.min(Duration::from_secs(30));
+    let left = remaining(deadline, COORDINATOR_TAIL + Duration::from_secs(25))?;
+    if left < Duration::from_secs(30) {
+        return Err(Failure::new(124, "Release-check budget exhausted."));
+    }
+    command.timeout = Duration::from_secs(30);
     command.capture = Some(4096);
     Ok(command)
 }
@@ -80,6 +97,8 @@ pub(super) fn coordinator(
     context: &Context,
     node: &Path,
     chromium: &Path,
+    http_policy: &Path,
+    python: Arc<Executable>,
     deadline: Instant,
 ) -> Result<Command> {
     let mut command = Command::capture(
@@ -95,6 +114,8 @@ pub(super) fn coordinator(
         node.as_os_str().to_owned(),
         "--chromium".into(),
         chromium.as_os_str().to_owned(),
+        "--http-policy-binary".into(),
+        http_policy.as_os_str().to_owned(),
         "--image".into(),
         context.image.clone().into(),
         "--fixture-output".into(),
@@ -103,7 +124,17 @@ pub(super) fn coordinator(
         context.temporary.join("release-checks").into_os_string(),
     ]);
     command.capture = None;
-    command.timeout = remaining(deadline)?;
+    if remaining(deadline, GRACE + FINAL)? < COORDINATOR_BODY {
+        return Err(Failure::new(124, "Release-check budget exhausted."));
+    }
+    command.timeout = COORDINATOR_BODY;
     command.grace = GRACE;
+    command.release_checks = Some(super::invocation::Invocation::new(
+        context,
+        python,
+        &command,
+        deadline,
+        COORDINATOR_TAIL,
+    )?);
     Ok(command)
 }

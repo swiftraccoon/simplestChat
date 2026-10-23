@@ -19,7 +19,10 @@ RETENTION = "Preserve sanitized release-container report"
 LOCAL_DIAGNOSTICS = "Preserve private local release-container diagnostics"
 EXPORT = "Export the tested immutable production image"
 RELEASE = "Retain the verified production release"
-RUN_COMMAND = "cargo run --locked -q -p xtask -- ci release-checks"
+RUN_COMMAND = (
+    '"$RUNNER_TEMP/release-http-policy-build/debug/xtask" ci release-checks \\\n'
+    + '  --http-policy-binary "$RUNNER_TEMP/release-http-policy-build/debug/xtask"\n'
+)
 
 
 class ReleaseContainerCiTests(unittest.TestCase):
@@ -204,7 +207,7 @@ class ReleaseContainerCiTests(unittest.TestCase):
         step = self.step("Verify the guest checker against pinned Compose JSON")
         self.assertNotIn("if", step)
         self.assertNotIn("continue-on-error", step)
-        self.assertEqual(step["timeout-minutes"], "2")
+        self.assertNotIn("timeout-minutes", step, "The existing job bounds cold feature builds")
         self.assertEqual(string(step, "env", "VM_COMPOSE_REQUIRED"), "1")
         self.assertIn(
             '"${RUNNER_TEMP}/release-container-controller/bin/python" -B -m unittest discover',
@@ -220,6 +223,30 @@ class ReleaseContainerCiTests(unittest.TestCase):
             self.steps.index(self.step("Install isolated release-container checks")), position
         )
         self.assertLess(position, self.steps.index(self.step(INTEGRATION)))
+
+    def test_optional_http_owner_is_built_once_with_explicit_system_tls_and_separate_target(
+        self,
+    ) -> None:
+        """A later default xtask build cannot replace the selected feature-enabled executable."""
+        prepare = self.step("Verify the guest checker against pinned Compose JSON")
+        script = string(prepare, "run")
+        self.assertIn("sudo apt-get install -y libssl-dev pkg-config", script)
+        self.assertIn("cargo build --locked -p xtask --features release-http-policy", script)
+        self.assertIn('--target-dir "$RUNNER_TEMP/release-http-policy-build"', script)
+        for variable in (
+            "OPENSSL_DIR",
+            "OPENSSL_STATIC",
+            "PKG_CONFIG_PATH",
+            "AWS_LC_SYS_SYSTEM_DIR",
+            "AWS_LC_SYS_STATIC",
+            "AWS_LC_SYS_SYSTEM_SKIP_VERSION_CHECK",
+        ):
+            self.assertIn("-u " + variable, script)
+        self.assertLess(
+            script.index("-k ComposeSerializationTests -v"), script.index("cargo build")
+        )
+        self.assertNotIn("cargo run", RUN_COMMAND)
+        self.assertEqual(string(self.step(INTEGRATION), "run"), RUN_COMMAND)
 
     def test_dependencies_use_existing_pinned_controller_requirements_in_an_isolated_venv(
         self,
@@ -250,7 +277,7 @@ class ReleaseContainerCiTests(unittest.TestCase):
         """Verify root disposable opt in is explicit bounded and preserves failure."""
         integration = self.step(INTEGRATION)
         self.assertEqual(integration["run"], RUN_COMMAND)
-        self.assertEqual(integration["timeout-minutes"], "11")
+        self.assertEqual(integration["timeout-minutes"], "20")
         self.assertNotIn("continue-on-error", integration)
         self.assertNotIn("if", integration, "Do not silently skip a required release check")
         self.assertEqual(

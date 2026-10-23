@@ -21,6 +21,47 @@ import bounded_process as process
 class BoundedProcessTests(unittest.TestCase):
     """A child must not spend disk or memory beyond its declared output budget."""
 
+    def test_cooperative_grace_is_finite_positive_and_default_cleanup_is_unchanged(self) -> None:
+        """Only an explicit profile extends TERM; the existing five-second reap is retained."""
+        for grace in (0, -1, float("inf"), float("nan")):
+            with (
+                self.subTest(grace=grace),
+                self.assertRaisesRegex(process.ProcessError, "invalid_process_grace"),
+            ):
+                _ = process.Limits(grace=grace)
+        for grace in (5, 60, 180):
+            reaped = Mock(return_value=0)
+            child = Mock(pid=123, wait=reaped)
+            with (
+                patch.object(process, "signal_group") as send,
+                patch.object(process, "wait_exited", return_value=True) as wait,
+            ):
+                if grace == process.DEFAULT_LIMITS.grace:
+                    process.stop(child)
+                else:
+                    process.stop(child, grace=grace)
+            wait.assert_called_once_with(123, grace)
+            self.assertEqual(
+                [call.args for call in send.call_args_list],
+                [(123, signal.SIGTERM), (123, signal.SIGKILL)],
+            )
+            reaped.assert_called_once_with(timeout=5)
+        self.assertEqual(process.DEFAULT_LIMITS.grace, 5)
+
+    def test_original_failure_survives_later_cleanup_failure(self) -> None:
+        """A cooperative profile cannot replace its already observed primary failure."""
+        original = process.ProcessError("command_timed_out")
+        cleanup = process.ProcessError("cleanup_unconfirmed")
+        with (
+            patch.object(process, "pump", side_effect=original),
+            patch.object(process, "stop", side_effect=cleanup) as stop,
+            self.assertRaises(process.ProcessError) as raised,
+        ):
+            _ = process.run([sys.executable, "-c", "pass"], limits=process.Limits(grace=60))
+        self.assertIs(raised.exception, original)
+        self.assertIs(raised.exception.__cause__, cleanup)
+        self.assertEqual(stop.call_args.kwargs, {"grace": 60})
+
     def test_input_and_both_output_streams_are_serviced_without_deadlock(self) -> None:
         """Large stdin and noisy stderr are concurrent, independently bounded streams."""
         script = (

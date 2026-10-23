@@ -784,7 +784,7 @@ class VerifiedWorkflowTests(unittest.TestCase):
             if step.get("name") == "App-only release and rollback on a disposable host"
         )
         self.assertEqual(install["timeout-minutes"], "10")
-        self.assertEqual(release["timeout-minutes"], "11")
+        self.assertEqual(release["timeout-minutes"], "20")
         self.assertEqual(job["timeout-minutes"], "95")
         self.assertNotIn("if", install)
         self.assertNotIn("continue-on-error", install)

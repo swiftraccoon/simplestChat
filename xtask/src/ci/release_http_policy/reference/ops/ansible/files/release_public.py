@@ -1,0 +1,1950 @@
+"""Stage a release, replace only the public app, or replace it through the launcher.
+
+The maintenance action serves a candidate that carries schema or grant changes.
+No builds, pulls, account seeding, database restoration, or host maintenance
+occur here; `maintain` delegates migrations to the launcher, which checks the
+packaged SQL against the revision's source checkout and applies the runtime
+grants. Persistent evidence and a workload lock make partial updates visible.
+A failed app-only candidate gets one bounded image/config rollback; a failed
+maintenance keeps its new selection for inspection, since the schema may have
+moved. Successful recovery never converts a failed release into a passed one.
+"""
+
+import argparse
+import fcntl
+import hashlib
+import ipaddress
+import json
+import os
+import re
+import shutil
+import signal
+import stat
+import subprocess
+import sys
+import tempfile
+import time
+import uuid
+from collections.abc import Generator, Sequence
+from contextlib import contextmanager
+from copy import deepcopy
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from pathlib import Path
+from types import FrameType
+from typing import NoReturn, Protocol, TypedDict, Unpack
+
+import bounded_process
+import release_assets
+import runtime_profile
+from release_artifact import ArtifactError, Manifest, sha256_file, validate_manifest, verify_archive
+from release_json import JsonObject, JsonValue, array_value, decode_json, object_value, string_value
+
+ROOT = Path("/srv/simplestchat-public")
+ROOT_UID = 0
+MAX_BACKUP_RECEIPT_BYTES = 16384
+BACKUP_PRIVATE_MODE = 0o600
+BACKUP_HASH_CACHE_SECONDS = 86400
+BACKUP_HASH_CACHE_SCHEMA = 2
+BACKUP_HASH_TIMESTAMP_MARGIN_SECONDS = 2
+CONFIG = Path("/etc/simplestchat-public")
+WORK = Path("/run/simplestchat-bench")
+SOURCES = Path("/srv/simplestchat-bench/sources")
+LAUNCHER = "/usr/local/bin/simplestchat-public-deploy"
+MAX_LAUNCHER_SECONDS = 900
+ENV = {"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "LC_ALL": "C"}
+DOCKER = ["/usr/bin/docker", "--host", "unix:///var/run/docker.sock"]
+SELECTION = ("compose.public.yml", "app.env", "images.json")
+# app.env lines a maintenance candidate may never change: secrets, the public
+# identity and the launcher's own switches. Everything else (sizing, limits,
+# logging, new settings) may follow the template.
+IDENTITY_KEYS = frozenset(
+    {
+        "SIMPLESTCHAT_IMAGE",
+        "DATABASE_URL",
+        "JWT_SECRET",
+        "METRICS_TOKEN",
+        "TRUSTED_PROXY_SECRET",
+        "ALLOWED_ORIGINS",
+        "WEBAUTHN_RP_ID",
+        "WEBAUTHN_ORIGIN",
+        "ANNOUNCE_IP",
+        "ANNOUNCE_IPV6",
+        "BIND_ADDR",
+        "PORT",
+        "RUN_MIGRATIONS",
+        "TURN_URLS",
+        "TURN_SECRET",
+        "TURN_TTL",
+    }
+)
+ID = re.compile(r"sha256:[a-f0-9]{64}")
+MAX_INSPECTION_BYTES = 2 * 1024 * 1024
+MAX_ARCHIVE_OUTPUT_BYTES = 4 * 1024**3
+ARCHIVE_FREE_RESERVE_BYTES = 1024**3
+LEDGER_COLUMNS = 3
+IMAGE_SELECTIONS = 2
+CONTAINER_FORMAT = (
+    '{"id":{{json .Id}},"image":{{json .Image}},"state":{{json .State}},'
+    '"restarts":{{.RestartCount}},'
+    '"configHash":{{json (index .Config.Labels "com.docker.compose.config-hash")}}}'
+)
+IMAGE_FORMAT = (
+    '{"id":{{json .Id}},"os":{{json .Os}},"architecture":{{json .Architecture}},'
+    '"user":{{json .Config.User}},"labels":{{json .Config.Labels}},'
+    '"cmd":{{json .Config.Cmd}},"entrypoint":{{json (index .Config "Entrypoint")}},'
+    '"workingDir":{{json .Config.WorkingDir}},'
+    '"hasHealthcheck":{{if index .Config "Healthcheck"}}true{{else}}false{{end}},'
+    '"envNames":[{{range $i, $v := .Config.Env}}{{if $i}},{{end}}'
+    '{{json (index (split $v "=") 0)}}{{end}}]}'
+)
+LEDGER_QUERY = (
+    "SELECT version, success, encode(checksum, 'hex') FROM public._sqlx_migrations ORDER BY version"
+)
+
+
+class CommandOptions(TypedDict, total=False):
+    """Optional command controls shared by real runners and typed test doubles."""
+
+    timeout: float
+    input_data: bytes | None
+    input_path: Path | None
+    output_path: Path | None
+    output_limit: int | None
+
+
+class AttemptContext(Protocol):
+    """Evidence ownership needed to update a persistent operation journal."""
+
+    @property
+    def attempt(self) -> Path:
+        """Return the existing private evidence directory."""
+        ...
+
+
+class RunnerProtocol(AttemptContext, Protocol):
+    """Permit only bounded byte-producing commands and scoped container lookup."""
+
+    def run(self, args: Sequence[str], **options: Unpack[CommandOptions]) -> bytes:
+        """Run a bounded command and retain its private evidence."""
+        ...
+
+    def docker(self, *args: str, **kwargs: Unpack[CommandOptions]) -> bytes:
+        """Run a command against the fixed local Docker endpoint."""
+        ...
+
+    def compose(
+        self,
+        *args: str,
+        filename: Path | None = None,
+        envfile: Path | None = None,
+        **kwargs: Unpack[CommandOptions],
+    ) -> bytes:
+        """Run a command against the selected public Compose project."""
+        ...
+
+    def container(self, service: str) -> JsonObject:
+        """Inspect exactly one running project container."""
+        ...
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class JournalContext:
+    """Bind recovery journal writes to the original preparation directory."""
+
+    attempt: Path
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ReleaseOptions:
+    """Validated immutable command selection for a single release operation."""
+
+    action: str
+    revision: str
+    quiet_seconds: int = 0
+    candidate_env: Path | None = None
+    browser_assets_upgrade: bool = False
+
+
+class _ArgumentValues(argparse.Namespace):
+    action: str = ""
+    revision: str = ""
+    quiet_seconds: int = 0
+    candidate_env: str | None = None
+    browser_assets_upgrade: bool = False
+
+
+class ReleaseError(RuntimeError):
+    """A bounded release operation failed; inspect its private evidence."""
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class TurnConfiguration:
+    """The only supported runtime change: enable the separately verified local relay."""
+
+    domain: str
+    secret: str = field(repr=False)
+
+    def environment(self) -> dict[str, str]:
+        """Return fixed TURN settings after rejecting dotenv or URL injection."""
+        require(
+            re.fullmatch(r"(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}", self.domain)
+            and re.fullmatch(r"[a-f0-9]{64}", self.secret),
+            "Invalid managed TURN configuration",
+        )
+        return {
+            "TURN_URLS": (
+                f"turn:{self.domain}:3478?transport=udp,"
+                f"turn:{self.domain}:3478?transport=tcp,"
+                f"turns:{self.domain}:5349?transport=tcp"
+            ),
+            "TURN_SECRET": self.secret,
+            "TURN_TTL": "86400",
+        }
+
+
+def timestamp() -> str:
+    """Return a UTC timestamp suitable for durable JSON evidence."""
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def require(condition: object, message: str) -> None:
+    """Reject an unmet invariant without substituting another deployment action."""
+    if not condition:
+        raise ReleaseError(message)
+
+
+def protected(
+    path: Path,
+    *,
+    directory: bool = False,
+    modes: tuple[int, ...] = (0o600,),
+    limit: int | None = None,
+) -> None:
+    """Require an ordinary root-owned path with approved permissions and size."""
+    metadata = path.lstat()
+    require(
+        metadata.st_uid == ROOT_UID and stat.S_IMODE(metadata.st_mode) in modes,
+        f"Unexpected ownership or permissions: {path}",
+    )
+    require(
+        stat.S_ISDIR(metadata.st_mode) if directory else stat.S_ISREG(metadata.st_mode),
+        f"Unexpected file type: {path}",
+    )
+    if limit is not None:
+        require(metadata.st_size <= limit, f"Oversized configuration: {path}")
+
+
+def atomic(path: Path, data: JsonValue | bytes) -> None:
+    """Replace one private regular file durably; the journal covers the set."""
+    if not isinstance(data, (str, bytes)):
+        data = json.dumps(data, indent=2) + "\n"
+    if isinstance(data, str):
+        data = data.encode()
+    descriptor, temporary = tempfile.mkstemp(prefix=".release-", dir=path.parent)
+    with os.fdopen(descriptor, "wb") as output:
+        _ = output.write(data)
+        output.flush()
+        os.fsync(output.fileno())
+    _ = Path(temporary).replace(path)
+    directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
+
+
+def archive_output_budget(path: Path, selected: int | None) -> int:
+    """Limit explicit archive writes by operator policy and current filesystem headroom."""
+    requested = MAX_ARCHIVE_OUTPUT_BYTES if selected is None else selected
+    require(
+        type(requested) is int and 0 < requested <= MAX_ARCHIVE_OUTPUT_BYTES,
+        "Invalid archive output limit",
+    )
+    maximum = min(requested, shutil.disk_usage(path.parent).free - ARCHIVE_FREE_RESERVE_BYTES)
+    require(maximum > 0, "Insufficient archive output reserve")
+    return maximum
+
+
+class Runner:
+    """Bound commands and retain output privately without printing secrets."""
+
+    def __init__(self, attempt: Path) -> None:
+        """Retain each command's output beneath the caller-owned attempt."""
+        self.attempt: Path = attempt
+        self.number: int = 0
+
+    def run(self, args: Sequence[str], **options: Unpack[CommandOptions]) -> bytes:
+        """Execute explicit argv with bounded cleanup and private immutable output."""
+        timeout = options.get("timeout", 30)
+        input_data, input_path = options.get("input_data"), options.get("input_path")
+        output_path, output_limit = options.get("output_path"), options.get("output_limit")
+        self.number += 1
+        prefix = self.attempt / f"{self.number:03d}"
+        target = output_path or prefix.with_suffix(".stdout")
+        require(
+            output_path is not None or output_limit is None, "Output limits require an archive path"
+        )
+        maximum = (
+            archive_output_budget(output_path, output_limit)
+            if output_path
+            else MAX_INSPECTION_BYTES
+        )
+        source = input_path.open("rb") if input_path else None
+        process: subprocess.Popen[bytes] | None = None
+        try:
+            with target.open("xb") as output, prefix.with_suffix(".stderr").open("xb") as error:
+                process = subprocess.Popen(  # noqa: S603 - fixed local argv; no shell or inherited environment.
+                    args,
+                    stdin=source
+                    or (subprocess.PIPE if input_data is not None else subprocess.DEVNULL),
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    env=ENV,
+                    start_new_session=True,
+                )
+                _ = bounded_process.pump(
+                    process,
+                    output,
+                    error,
+                    bounded_process.Limits(
+                        timeout=timeout, stdout=maximum, stderr=MAX_INSPECTION_BYTES
+                    ),
+                    input_data=input_data or b"",
+                )
+        except bounded_process.ProcessError as error:
+            if str(error) == "command_timed_out":
+                raise subprocess.TimeoutExpired(args, timeout) from error
+            raise ReleaseError(str(error)) from error
+        finally:
+            if source:
+                source.close()
+            if process is not None:
+                try:
+                    if process.returncode is None:
+                        self.stop(process)
+                finally:
+                    for stream in (process.stdin, process.stdout, process.stderr):
+                        if stream is not None:
+                            stream.close()
+        if process is None:
+            message = "Command failed before creating an owned process"
+            raise ReleaseError(message)
+        require(
+            process.returncode == 0, f"Command {self.number:03d} failed; inspect private output"
+        )
+        if output_path:
+            return b""
+        require(
+            target.stat().st_size <= MAX_INSPECTION_BYTES,
+            "Command inspection output exceeded its bound",
+        )
+        return target.read_bytes()
+
+    @staticmethod
+    def stop(process: subprocess.Popen[bytes]) -> None:
+        """Use the shared bounded process-group cleanup, retaining ownership until reaping."""
+        bounded_process.stop(process)
+
+    def docker(self, *args: str, **kwargs: Unpack[CommandOptions]) -> bytes:
+        """Use the fixed local Unix socket without inherited Docker configuration."""
+        return self.run([*DOCKER, *args], **kwargs)
+
+    def compose(
+        self,
+        *args: str,
+        filename: Path | None = None,
+        envfile: Path | None = None,
+        **kwargs: Unpack[CommandOptions],
+    ) -> bytes:
+        """Keep every Compose command bound to the prepared public project."""
+        return self.docker(
+            "compose",
+            "--project-name",
+            "simplestchat-public",
+            "--project-directory",
+            str(CONFIG),
+            "--env-file",
+            str(envfile or CONFIG / "app.env"),
+            "-f",
+            str(filename or CONFIG / "compose.public.yml"),
+            *args,
+            **kwargs,
+        )
+
+    def container(self, service: str) -> JsonObject:
+        """Inspect the single running container belonging to a named service."""
+        value = self.compose("ps", "--status", "running", "--quiet", service).decode().strip()
+        require(
+            re.fullmatch(r"[a-f0-9]{64}", value),
+            f"Exactly one running {service} container is required",
+        )
+        result = object_value(
+            decode_json(
+                self.docker(
+                    "inspect",
+                    "--format",
+                    CONTAINER_FORMAT,
+                    value,
+                )
+            )
+        )
+        state = object_value(result["state"])
+        require(state["Running"] and not state["OOMKilled"], f"{service} is not running normally")
+        return result
+
+
+def stable_container(value: JsonObject) -> tuple[JsonValue, JsonValue, JsonValue, JsonValue]:
+    """Select fields that prove a retained dependency was not restarted."""
+    return value["id"], value["image"], object_value(value["state"])["StartedAt"], value["restarts"]
+
+
+def boot_id() -> str:
+    """Read and validate the current Linux boot identity."""
+    value = Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+    require(
+        re.fullmatch(r"[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}", value),
+        "Invalid host boot identity",
+    )
+    return value
+
+
+def expired_backup(record: JsonObject) -> bool:
+    """Allow only the nightly owner's bounded daemon work to age out or cross a reboot."""
+    deadline = record.get("untilMonotonic")
+    recorded_boot = record.get("bootId")
+    return (
+        record.get("operation") == "nightly_backup"
+        and type(deadline) in (int, float)
+        and isinstance(deadline, (int, float))
+        and deadline > 0
+        and isinstance(recorded_boot, str)
+        and bool(
+            re.fullmatch(
+                r"[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}", recorded_boot
+            )
+        )
+        and (recorded_boot != boot_id() or time.monotonic() >= deadline)
+    )
+
+
+@contextmanager
+def workload_lock(
+    *,
+    after_reboot: bool = False,
+    cancel_reboot: bool = False,
+    recover_expired_backup: bool = False,
+    recover_offsite_backup: bool = False,
+) -> Generator[None]:
+    """Serialize work and reject any unfinished persistent ownership journal."""
+    require(not (after_reboot and cancel_reboot), "Choose one reboot recovery action")
+    protected(ROOT, directory=True, modes=(0o700,))
+    protected(CONFIG, directory=True, modes=(0o700,))
+    WORK.mkdir(mode=0o700, exist_ok=True)
+    protected(WORK, directory=True, modes=(0o700,))
+    try:
+        descriptor = os.open(WORK / "workload.lock", os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        os.close(descriptor)
+    except FileExistsError:
+        pass
+    protected(WORK / "workload.lock")
+    with (WORK / "workload.lock").open("r+") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        current = WORK / "current.json"
+        if current.exists() or current.is_symlink():
+            protected(current, limit=16384)
+            record = object_value(decode_json(current.read_text()))
+            require(
+                type(record.get("schemaVersion")) is int
+                and record["schemaVersion"] == 1
+                and (
+                    record.get("finalized") is True
+                    or (recover_expired_backup and expired_backup(record))
+                    or (recover_offsite_backup and record.get("operation") == "offsite_backup")
+                ),
+                "Resolve unfinished benchmark cleanup before releasing",
+            )
+        state = ROOT / "release-state.json"
+        if state.exists() or state.is_symlink():
+            protected(state, limit=16384)
+            record = object_value(decode_json(state.read_text()))
+            selected_boot = record.get("bootId")
+            prepared = (
+                record.get("phase") == "await_reboot"
+                and isinstance(selected_boot, str)
+                and re.fullmatch(
+                    r"[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}", selected_boot
+                )
+            )
+            resumed_boot = after_reboot and prepared and record["bootId"] != boot_id()
+            cancelled_boot = cancel_reboot and prepared and record["bootId"] == boot_id()
+            require(
+                type(record.get("schemaVersion")) is int
+                and record["schemaVersion"] == 1
+                and (record.get("finalized") is True or resumed_boot or cancelled_boot),
+                "Inspect and recover the unfinished release before starting another",
+            )
+        yield
+
+
+def image_identity(runner: RunnerProtocol, selector: str, revision: str) -> str:
+    """Require the selected production runtime to match its reviewed revision."""
+    # Docker may omit an unset optional Entrypoint from the image Config map.
+    # Keep required fields strict; index only this optional value to obtain null.
+    value = object_value(
+        decode_json(
+            runner.docker(
+                "image",
+                "inspect",
+                "--format",
+                IMAGE_FORMAT,
+                selector,
+            )
+        )
+    )
+    identifier = string_value(value["id"])
+    require(ID.fullmatch(identifier), "Missing local content-addressed image ID")
+    require(
+        value["os"] == "linux"
+        and value["architecture"] == "amd64"
+        and value["user"] == "10001:10001",
+        "Unexpected image platform or runtime user",
+    )
+    require(
+        object_value(value["labels"]).get("org.opencontainers.image.revision") == revision,
+        "Image revision mismatch",
+    )
+    require(
+        value["cmd"] == ["/app/simplestChat"] and value["entrypoint"] in (None, []),
+        "Unexpected image entrypoint",
+    )
+    require(
+        value["workingDir"] == "/app" and value["hasHealthcheck"] is False,
+        "Unexpected image execution defaults",
+    )
+    runtime_profile.validate_environment_names(
+        [string_value(item) for item in array_value(value["envNames"])]
+    )
+    return identifier
+
+
+def packaged_migrations(runner: RunnerProtocol, image: str) -> dict[str, str]:
+    """Execute only the fixed checksum command in a bounded, isolated container."""
+    name = "scpub-release-validate-" + uuid.uuid4().hex
+    journal(runner, finalized=False, phase="validate_image")
+    atomic(runner.attempt / "validation-name.txt", name)
+    # Keep timeout below PID 1: some packaged versions reject an init-parented
+    # child as orphaned. Docker's init also forwards signals and reaps children.
+    container = (
+        runner.docker(
+            "create",
+            "--name",
+            name,
+            "--init",
+            "--network",
+            "none",
+            "--pull",
+            "never",
+            "--read-only",
+            "--user",
+            "10001:10001",
+            "--cap-drop",
+            "ALL",
+            "--security-opt",
+            "no-new-privileges",
+            "--memory",
+            "128m",
+            "--cpus",
+            "0.5",
+            "--pids-limit",
+            "32",
+            "--log-driver",
+            "local",
+            # The local driver's default compression requires more than one file.
+            "--log-opt",
+            "max-size=1m",
+            "--log-opt",
+            "max-file=1",
+            "--log-opt",
+            "compress=false",
+            "--entrypoint",
+            "/usr/bin/timeout",
+            image,
+            "--signal=TERM",
+            "--kill-after=2s",
+            "10s",
+            "/bin/sh",
+            "-c",
+            'for file in /app/migrations/*.sql; do sha384sum "$file" || exit; done',
+        )
+        .decode()
+        .strip()
+    )
+    require(re.fullmatch(r"[a-f0-9]{64}", container), "Uncertain validation container creation")
+    _ = runner.docker("start", container)
+    require(
+        runner.docker("wait", container, timeout=20).strip() == b"0",
+        "Packaged migration validation failed",
+    )
+    lines = runner.docker("logs", container).decode().splitlines()
+    result: dict[str, str] = {}
+    for line in lines:
+        match = re.fullmatch(r"([a-f0-9]{96})  /app/migrations/([0-9]+)_[A-Za-z0-9_]+\.sql", line)
+        if match is None:
+            message = "Unexpected packaged migration output"
+            raise ReleaseError(message)
+        version = str(int(match[2]))
+        require(version not in result, "Duplicate packaged migration version")
+        result[version] = match[1]
+    require(result, "No packaged migrations")
+    _ = runner.docker("rm", container)
+    journal(runner, finalized=True, phase="image_validated")
+    return result
+
+
+def retain_browser_assets(runner: RunnerProtocol, images: dict[str, str]) -> JsonObject:
+    """Capture exact public bytes before interruption, including a legacy selected image."""
+    captures: dict[str, dict[str, bytes]] = {}
+    for revision, image in images.items():
+        _ = image_identity(runner, image, revision)
+        name = "scpub-release-assets-" + uuid.uuid4().hex
+        journal(runner, finalized=False, phase="capture_browser_assets")
+        atomic(runner.attempt / "asset-container-name.txt", name)
+        container = ""
+        failure: BaseException | None = None
+        try:
+            container = (
+                runner.docker(
+                    "create",
+                    "--name",
+                    name,
+                    "--init",
+                    "--network",
+                    "none",
+                    "--pull",
+                    "never",
+                    "--read-only",
+                    "--user",
+                    "10001:10001",
+                    "--cap-drop",
+                    "ALL",
+                    "--security-opt",
+                    "no-new-privileges",
+                    "--memory",
+                    "128m",
+                    "--cpus",
+                    "0.5",
+                    "--pids-limit",
+                    "32",
+                    "--log-driver",
+                    "local",
+                    "--log-opt",
+                    "max-size=1m",
+                    "--log-opt",
+                    "max-file=1",
+                    "--log-opt",
+                    "compress=false",
+                    "--entrypoint",
+                    "/usr/bin/timeout",
+                    image,
+                    "--signal=TERM",
+                    "--kill-after=2s",
+                    "10s",
+                    "/bin/sh",
+                    "-c",
+                    "exit 0",
+                )
+                .decode()
+                .strip()
+            )
+            require(re.fullmatch(r"[a-f0-9]{64}", container), "Uncertain asset container creation")
+            archive = runner.attempt / ("assets-" + revision + ".tar")
+            _ = runner.docker(
+                "cp",
+                f"{container}:/app/web/dist/assets",
+                "-",
+                output_path=archive,
+                output_limit=release_assets.MAX_TAR,
+                timeout=30,
+            )
+            captures[revision] = release_assets.read_capture(archive)
+        except BaseException as error:
+            failure = error
+            raise
+        finally:
+            # Never start the container, even to inspect its contents. Remove by
+            # recorded owned name after uncertain creation, not an untrusted ID.
+            try:
+                _ = runner.docker(
+                    "rm", container if re.fullmatch(r"[a-f0-9]{64}", container) else name
+                )
+            except BaseException:
+                if failure is None:
+                    raise
+                # Leave the unfinished journal and owned name for recovery.
+    receipt = release_assets.publish(
+        ROOT / "browser-assets", captures, int(time.time()), owner=ROOT_UID
+    )
+    public_receipt: JsonObject = dict(receipt)
+    atomic(runner.attempt / "browser-assets.json", public_receipt)
+    journal(runner, finalized=True, phase="browser_assets_retained")
+    return dict(receipt)
+
+
+def journal(runner: AttemptContext, finalized: bool, phase: str) -> None:  # noqa: FBT001 - preserve the established positional helper API.
+    """Durably record the operation's current ownership and settlement state."""
+    atomic(
+        ROOT / "release-state.json",
+        {
+            "schemaVersion": 1,
+            "attempt": str(runner.attempt),
+            "finalized": finalized,
+            "phase": phase,
+        },
+    )
+
+
+def stage(runner: RunnerProtocol, directory: Path, manifest: Manifest) -> JsonObject:
+    """Validate and import one immutable artifact without stopping public services."""
+    _ = verify_archive(directory / "image.tar", manifest)
+    selected = directory / "staged.json"
+    if selected.exists() or selected.is_symlink():
+        protected(selected, limit=16384)
+        prior = object_value(decode_json(selected.read_text()))
+        require(
+            prior["manifestSha256"] == sha256_file(directory / "release.json"),
+            "Staged release changed",
+        )
+        require(
+            image_identity(runner, string_value(prior["serverImage"]), manifest["revision"])
+            == prior["serverImage"],
+            "Staged image missing",
+        )
+        return prior
+    require(
+        shutil.disk_usage(ROOT).free > (directory / "image.tar").stat().st_size * 2 + 1024**3,
+        "Insufficient free space to import image with safe headroom",
+    )
+    journal(runner, finalized=False, phase="import_image")
+    _ = runner.docker("image", "load", "--input", str(directory / "image.tar"), timeout=300)
+    image = image_identity(runner, manifest["imageTag"], manifest["revision"])
+    require(
+        packaged_migrations(runner, image) == manifest["migrations"],
+        "Archive migration manifest differs from image",
+    )
+    record: JsonObject = {
+        "schemaVersion": 1,
+        "revision": manifest["revision"],
+        "serverImage": image,
+        "manifestSha256": sha256_file(directory / "release.json"),
+        "stagedAt": timestamp(),
+    }
+    atomic(selected, record)
+    journal(runner, finalized=True, phase="staged")
+    return record
+
+
+def ledger(runner: RunnerProtocol, database: str) -> dict[str, str]:
+    """Read successful migration versions and exact checksums from the live database."""
+    lines = (
+        runner.docker(
+            "exec",
+            "--user",
+            "999:999",
+            database,
+            "psql",
+            "--no-psqlrc",
+            "--set",
+            "ON_ERROR_STOP=on",
+            "--host",
+            "/run/simplestchat-postgres",
+            "--username",
+            "postgres",
+            "--dbname",
+            "simplestchat",
+            "--tuples-only",
+            "--no-align",
+            "--field-separator",
+            " ",
+            "--command",
+            LEDGER_QUERY,
+        )
+        .decode()
+        .splitlines()
+    )
+    result: dict[str, str] = {}
+    for line in lines:
+        fields = line.split()
+        require(
+            len(fields) == LEDGER_COLUMNS
+            and re.fullmatch(r"[1-9][0-9]*", fields[0])
+            and fields[1] == "t"
+            and re.fullmatch(r"[a-f0-9]{96}", fields[2])
+            and fields[0] not in result,
+            "Invalid migration ledger",
+        )
+        result[fields[0]] = fields[2]
+    require(result, "Empty migration ledger")
+    return result
+
+
+QUIET_POLL_SECONDS = 5.0
+MAX_QUIET_SECONDS = 600
+
+
+def metrics_token() -> str | None:
+    """Return the app's metrics bearer token from its private environment file, if set."""
+    for line in (CONFIG / "app.env").read_text().splitlines():
+        if line.startswith("METRICS_TOKEN="):
+            token = line.partition("=")[2].strip()
+            return token if token and re.fullmatch(r"[A-Za-z0-9._~-]{32,512}", token) else None
+    return None
+
+
+def active_rooms(runner: RunnerProtocol, curl_config: Path) -> int | None:
+    """`simplestchat_rooms_active` from the local metrics endpoint; None when unavailable."""
+    try:
+        body = runner.run(
+            [
+                "/usr/bin/curl",
+                "--disable",
+                "--noproxy",
+                "*",
+                "--proto",
+                "=http",
+                "--fail",
+                "--silent",
+                "--show-error",
+                "--max-time",
+                "2",
+                "--config",
+                str(curl_config),
+                "http://127.0.0.1:3000/metrics",
+            ],
+            timeout=5,
+        ).decode()
+    except (ReleaseError, UnicodeDecodeError):
+        return None
+    for line in body.splitlines():
+        if line.startswith("simplestchat_rooms_active "):
+            try:
+                return int(line.split()[1])
+            except (IndexError, ValueError):
+                return None
+    return None
+
+
+def quiet(runner: RunnerProtocol, report: JsonObject, seconds: int) -> None:
+    """Observe a bounded quiet window; new calls may still arrive before replacement.
+
+    The wait needs the metrics token from app.env; without it, or when the
+    endpoint is unreadable, the release proceeds and records that it could
+    not tell. A deadline reached with rooms still active also proceeds: the
+    operator chose the bound, and the report shows what was interrupted.
+    """
+    report["quietWaitRequestedSeconds"] = seconds
+    token = metrics_token() if seconds > 0 else None
+    if token is None:
+        report["quietWaitSeconds"] = 0
+        report["roomsActiveAtQuietCheck"] = None
+        return
+    curl_config = runner.attempt / "metrics-curl.config"
+    _ = curl_config.write_text(f'header = "Authorization: Bearer {token}"\n')
+    curl_config.chmod(0o600)
+    started = time.monotonic()
+    deadline = started + seconds
+    rooms = active_rooms(runner, curl_config)
+    while rooms is not None and rooms > 0 and time.monotonic() < deadline:
+        time.sleep(min(QUIET_POLL_SECONDS, max(0.0, deadline - time.monotonic())))
+        rooms = active_rooms(runner, curl_config)
+    report["quietWaitSeconds"] = round(time.monotonic() - started, 3)
+    report["roomsActiveAtQuietCheck"] = rooms
+
+
+def observe_replacement_rooms(runner: RunnerProtocol, report: JsonObject) -> None:
+    """Sample immediately before stopping; this is an observation, not an admission lock."""
+    token = metrics_token()
+    rooms: int | None = None
+    if token is not None:
+        config = runner.attempt / "replacement-metrics-curl.config"
+        atomic(config, f'header = "Authorization: Bearer {token}"\n')
+        rooms = active_rooms(runner, config)
+    report["roomsActiveBeforeStop"] = rooms
+    report["roomsObservedBeforeStopAt"] = timestamp()
+
+
+def ready(
+    runner: RunnerProtocol,
+    *,
+    origin: str | None = None,
+    seconds: float = 30,
+    address: str | None = None,
+) -> None:
+    """Require bounded readiness on loopback or trusted public HTTPS."""
+    resolve: list[str] = []
+    if address is not None:
+        require(
+            origin is not None and re.fullmatch(r"https://[a-z0-9.-]+", origin),
+            "An address override requires a canonical HTTPS origin",
+        )
+        destination = ipaddress.ip_address(address)
+        selected = (
+            f"[{destination}]"
+            if isinstance(destination, ipaddress.IPv6Address)
+            else str(destination)
+        )
+        resolve = ["--resolve", f"{str(origin).removeprefix('https://')}:443:{selected}"]
+    deadline = time.monotonic() + seconds
+    url = (origin or "http://127.0.0.1:3000") + "/ready"
+    while True:
+        try:
+            value = object_value(
+                decode_json(
+                    runner.run(
+                        [
+                            "/usr/bin/curl",
+                            "--disable",
+                            "--noproxy",
+                            "*",
+                            "--proto",
+                            "=https" if origin else "=http",
+                            "--fail",
+                            "--silent",
+                            "--show-error",
+                            "--max-time",
+                            "2",
+                            *resolve,
+                            url,
+                        ],
+                        timeout=5,
+                    )
+                )
+            )
+            require(value.get("status") == "ready", "Application is not ready")
+        except (ReleaseError, ValueError):
+            if time.monotonic() >= deadline:
+                message = "Application readiness deadline exceeded"
+                raise ReleaseError(message) from None
+            time.sleep(0.5)
+        else:
+            return
+
+
+JOURNAL_SELECTION = Path("/etc/simplestchat-monitoring/application-journal.enabled")
+JOURNAL_LOGGING: JsonObject = {
+    "driver": "journald",
+    "options": {"tag": "simplestchat.app", "mode": "non-blocking", "max-buffer-size": "4m"},
+}
+LOCAL_LOGGING: JsonObject = {"driver": "local", "options": {"max-size": "10m", "max-file": "3"}}
+JOURNAL_COMPOSE = """    logging:
+      driver: journald
+      options:
+        tag: simplestchat.app
+        mode: non-blocking
+        max-buffer-size: 4m"""
+
+
+def dotenv_lines(text: str) -> dict[str, str]:
+    """Return the assignments of a dotenv text, keeping values verbatim."""
+    values: dict[str, str] = {}
+    for line in text.splitlines():
+        if line and not line.startswith("#"):
+            key, separator, value = line.partition("=")
+            require(
+                separator == "=" and re.fullmatch(r"[A-Z][A-Z0-9_]*", key) is not None,
+                "Malformed app.env line",
+            )
+            require(key not in values, f"Duplicate app.env line: {key}")
+            values[key] = value
+    return values
+
+
+def reviewed_candidate_environment(candidate: Path, report: JsonObject) -> str:
+    """Accept a re-rendered app.env whose identity lines equal the installed one's.
+
+    The playbook renders the template with the host's facts and the selected
+    image, so sizing and new settings may change; secrets and identity may not.
+    The changed keys go into the report so the outcome says what moved.
+    """
+    protected(candidate, limit=1024 * 1024)
+    installed = dotenv_lines((CONFIG / "app.env").read_text())
+    proposed = dotenv_lines(candidate.read_text())
+    for key in sorted(IDENTITY_KEYS):
+        # The server reads an absent line and an empty one the same way.
+        require(
+            installed.get(key, "") == proposed.get(key, ""),
+            f"The candidate app.env changes {key}; that needs full maintenance",
+        )
+    changed: list[JsonValue] = [
+        key
+        for key in sorted(installed.keys() | proposed.keys())
+        if installed.get(key) != proposed.get(key)
+    ]
+    report["environmentChanges"] = changed
+    return candidate.read_text()
+
+
+def journal_selection(compose: str, before: JsonObject) -> tuple[str, bool]:
+    """Enable only the explicitly prepared persistent journal in the same replacement."""
+    if not JOURNAL_SELECTION.exists():
+        return compose, False
+    protected(JOURNAL_SELECTION, limit=2)
+    require(JOURNAL_SELECTION.read_bytes() == b"1\n", "Invalid journal selection")
+    application = object_value(object_value(before["services"])["simplestchat"])
+    current = application.get("logging")
+    if current == JOURNAL_LOGGING:
+        return compose, False
+    require(current == LOCAL_LOGGING, "Unexpected application logging configuration")
+    app, separator, dependencies = compose.partition("\n  postgres:")
+    require(
+        separator and app.count("    logging: *bounded-logging") == 1, "Unexpected logging layout"
+    )
+    return app.replace(
+        "    logging: *bounded-logging", JOURNAL_COMPOSE
+    ) + separator + dependencies, True
+
+
+def browser_asset_mount() -> JsonObject:
+    """Return the sole additional managed proxy capability."""
+    return {
+        "type": "bind",
+        "source": str(ROOT / "browser-assets"),
+        "target": release_assets.CONTAINER_PATH,
+        "read_only": True,
+        "bind": {"create_host_path": True},
+    }
+
+
+def reviewed_browser_asset_mount(proxy: JsonObject) -> JsonObject | None:
+    """Return the store mount as this host's Compose renders it, or None when absent.
+
+    Compose renders the bind sub-options (host path creation, propagation,
+    SELinux labels) by its own version; the reviewed capability is the
+    read-only bind of the store at the fixed target and nothing else.
+    """
+    mounts = array_value(proxy.get("volumes", []))
+    selected = [
+        object_value(item)
+        for item in mounts
+        if object_value(item).get("target") == release_assets.CONTAINER_PATH
+    ]
+    if not selected:
+        return None
+    require(len(selected) == 1, "Ambiguous browser asset proxy mount")
+    mount = selected[0]
+    expected = browser_asset_mount()
+    comparable = {key: value for key, value in mount.items() if key != "bind"}
+    reviewed = {key: value for key, value in expected.items() if key != "bind"}
+    differing = sorted(
+        key for key in set(comparable) | set(reviewed) if comparable.get(key) != reviewed.get(key)
+    )
+    if not isinstance(mount.get("bind", {}), dict):
+        differing.append("bind")
+    require(
+        not differing,
+        "Browser asset proxy mount differs from reviewed readonly store: " + ", ".join(differing),
+    )
+    return mount
+
+
+def validate_browser_proxy(config: JsonObject, *, legacy_allowed: bool = False) -> bool:
+    """Reject app-only replacement until stable proxy retention was explicitly installed."""
+    proxy = object_value(object_value(config["services"])["caddy"])
+    if reviewed_browser_asset_mount(proxy) is None:
+        require(
+            legacy_allowed,
+            "Browser assets need --maintenance --browser-assets-upgrade before app-only releases",
+        )
+        return False
+    receipt = CONFIG / "browser-assets-installed.json"
+    protected(receipt, limit=512)
+    value = object_value(decode_json(receipt.read_bytes()))
+    require(
+        set(value) == {"schemaVersion", "caddyfileSha256"}
+        and value["schemaVersion"] == 1
+        and value["caddyfileSha256"] == sha256_file(CONFIG / "Caddyfile"),
+        "Browser asset proxy configuration changed; use explicit maintenance",
+    )
+    return True
+
+
+def candidate_selection(  # noqa: PLR0913, PLR0915 - compare the entire resolved selection within one replacement boundary.
+    runner: RunnerProtocol,
+    new_image: str,
+    old: JsonObject,
+    turn: TurnConfiguration | None = None,
+    reviewed_environment: str | None = None,
+    *,
+    browser_assets_upgrade: bool = False,
+) -> tuple[bytes, bytes]:
+    """Allow image selection and, explicitly, TURN or a reviewed app.env re-rendering."""
+    original = (CONFIG / "compose.public.yml").read_text()
+    before = object_value(
+        decode_json(runner.compose("--profile", "maintenance", "config", "--format", "json"))
+    )
+    runtime_profile.validate_compose(
+        before, ROOT / "postgres-socket", string_value(old["serverImage"])
+    )
+    installed_assets = validate_browser_proxy(before, legacy_allowed=browser_assets_upgrade)
+    require(
+        not browser_assets_upgrade or not installed_assets,
+        "Browser asset proxy is already installed",
+    )
+    compose, journal_changed = journal_selection(original, before)
+    if browser_assets_upgrade:
+        protected(CONFIG / "compose.public.yml.candidate", limit=1024 * 1024)
+        compose = (CONFIG / "compose.public.yml.candidate").read_text()
+    needle = f'image: "{old["serverImage"]}"'
+    require(
+        compose.count(needle) == IMAGE_SELECTIONS,
+        "Expected only app and migration image selections; reapply reviewed configuration",
+    )
+    environment = (
+        (CONFIG / "app.env").read_text() if reviewed_environment is None else reviewed_environment
+    )
+    needle_env = f"SIMPLESTCHAT_IMAGE={old['serverImage']}"
+    require(
+        environment.splitlines().count(needle_env) == 1,
+        "Current image environment differs from selection",
+    )
+    preview = runner.attempt / "candidate-compose.yml"
+    preview_env = runner.attempt / "candidate.env"
+    atomic(preview, compose.replace(needle, f'image: "{new_image}"'))
+    atomic(
+        preview_env,
+        "\n".join(
+            f"SIMPLESTCHAT_IMAGE={new_image}" if line == needle_env else line
+            for line in environment.splitlines()
+        )
+        + "\n",
+    )
+    selected_compose = preview.read_bytes()
+    if turn is not None:
+        values = turn.environment()
+        require(
+            not any(line.partition("=")[0] in values for line in environment.splitlines()),
+            "TURN is already configured; rotation requires separate maintenance",
+        )
+        atomic(
+            preview_env,
+            preview_env.read_bytes()
+            + "".join(f"{key}={value}\n" for key, value in values.items()).encode(),
+        )
+        # Override this service's env_file only for validation; the installed
+        # Compose file continues to reference its ordinary protected app.env.
+        require(compose.count("- ./app.env") == 1, "Unexpected application env_file selection")
+        atomic(preview, selected_compose.replace(b"- ./app.env", f'- "{preview_env}"'.encode()))
+    base = before
+    if reviewed_environment is not None:
+        require(turn is None, "Enable TURN through full maintenance, not with a candidate app.env")
+        # The candidate, rendered through the installed files with the old image,
+        # is the baseline: the preview may differ from it only by the image.
+        require(original.count("- ./app.env") == 1, "Unexpected application env_file selection")
+        reviewed = runner.attempt / "reviewed.env"
+        reviewed_compose = runner.attempt / "reviewed-compose.yml"
+        atomic(reviewed, environment)
+        atomic(reviewed_compose, original.replace("- ./app.env", f'- "{reviewed}"'))
+        base = object_value(
+            decode_json(
+                runner.compose(
+                    "--profile",
+                    "maintenance",
+                    "config",
+                    "--format",
+                    "json",
+                    filename=reviewed_compose,
+                    envfile=reviewed,
+                )
+            )
+        )
+        atomic(preview, selected_compose.replace(b"- ./app.env", f'- "{preview_env}"'.encode()))
+    after = object_value(
+        decode_json(
+            runner.compose(
+                "--profile",
+                "maintenance",
+                "config",
+                "--format",
+                "json",
+                filename=preview,
+                envfile=preview_env,
+            )
+        )
+    )
+    runtime_profile.validate_compose(after, ROOT / "postgres-socket", new_image)
+    expected = deepcopy(base)
+    if browser_assets_upgrade:
+        # The mount's reviewed fields are checked here; its bind sub-options are
+        # whatever this host's Compose renders, so the remaining configuration is
+        # compared around the mount exactly as rendered.
+        rendered = reviewed_browser_asset_mount(
+            object_value(object_value(after["services"])["caddy"])
+        )
+        require(rendered is not None, "Candidate proxy lacks the browser asset store mount")
+        proxy = object_value(object_value(expected["services"])["caddy"])
+        array_value(proxy.setdefault("volumes", [])).append(rendered)
+    if journal_changed:
+        object_value(object_value(expected["services"])["simplestchat"])["logging"] = (
+            JOURNAL_LOGGING
+        )
+    for service in ("simplestchat", "migrate"):
+        object_value(object_value(expected["services"])[service])["image"] = new_image
+    if turn is not None or reviewed_environment is not None:
+        expected_environment = object_value(
+            object_value(object_value(expected["services"])["simplestchat"])["environment"]
+        )
+        if turn is not None:
+            expected_environment.update(turn.environment())
+        expected_environment["SIMPLESTCHAT_IMAGE"] = new_image
+    # app.env is also a service env_file; preview overrides only interpolation,
+    # so its image metadata is changed when the real file is installed below.
+    require(after == expected, "Candidate changes configuration beyond the reviewed selection")
+    for rendered in (before, after):
+        application = object_value(object_value(rendered["services"])["simplestchat"])
+        require(
+            object_value(application["environment"])["RUN_MIGRATIONS"] == "false",
+            "Runtime migrations must remain disabled",
+        )
+    return selected_compose, preview_env.read_bytes()
+
+
+def write_backup_receipt(attempt: Path, backup: Path, sha256: str, revision: str) -> None:
+    """Record a dump that completed and listed; monitoring counts receipts, never bare dumps."""
+    receipt = {
+        "schemaVersion": 1,
+        "dump": backup.name,
+        "bytes": backup.stat().st_size,
+        "sha256": sha256,
+        "revision": revision,
+        "completedAt": datetime.now(UTC).isoformat(timespec="seconds"),
+    }
+    atomic(attempt / "database-before.receipt.json", json.dumps(receipt, indent=2) + "\n")
+
+
+def publish_backup(partial: Path, destination: Path) -> None:
+    """Flush complete archive bytes before publishing its name or any success receipt."""
+    require(partial.parent == destination.parent, "Backup publication must stay on one filesystem")
+    require(not destination.exists() and not destination.is_symlink(), "Backup already exists")
+    descriptor = os.open(partial, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    try:
+        metadata = os.fstat(descriptor)
+        require(stat.S_ISREG(metadata.st_mode) and metadata.st_size > 0, "Empty or unsafe backup")
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+    _ = partial.replace(destination)
+    descriptor = os.open(destination.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def backup_headroom(runner: RunnerProtocol, database: str) -> None:
+    """Reserve twice the current database size plus 1 GiB before creating a dump."""
+    size = (
+        runner.docker(
+            "exec",
+            "--user",
+            "999:999",
+            database,
+            "psql",
+            "-X",
+            "-q",
+            "-t",
+            "-A",
+            "-h",
+            "/run/simplestchat-postgres",
+            "-U",
+            "postgres",
+            "-d",
+            "simplestchat",
+            "-c",
+            "SELECT pg_database_size(current_database())",
+            timeout=15,
+        )
+        .decode()
+        .strip()
+    )
+    require(re.fullmatch(r"[1-9][0-9]{0,15}", size), "Invalid database size for backup reserve")
+    require(
+        shutil.disk_usage(runner.attempt).free > 1024**3 + 2 * int(size),
+        "Insufficient backup headroom",
+    )
+
+
+def validated_backup(
+    receipt: Path,
+    *,
+    digest_cache: JsonObject | None = None,
+) -> tuple[Path, JsonObject, float]:
+    """Verify private receipt metadata and the current archive bytes without following links."""
+    protected(receipt.parent, directory=True, modes=(0o700,))
+    protected(receipt, limit=MAX_BACKUP_RECEIPT_BYTES)
+    descriptor = os.open(receipt, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    with os.fdopen(descriptor, "rb") as source:
+        metadata = os.fstat(source.fileno())
+        require(
+            stat.S_ISREG(metadata.st_mode)
+            and metadata.st_uid == ROOT_UID
+            and stat.S_IMODE(metadata.st_mode) == BACKUP_PRIVATE_MODE
+            and metadata.st_nlink == 1
+            and metadata.st_size <= MAX_BACKUP_RECEIPT_BYTES,
+            "Unsafe backup receipt",
+        )
+        record = object_value(decode_json(source.read(MAX_BACKUP_RECEIPT_BYTES + 1)))
+    name, size, digest = record.get("dump"), record.get("bytes"), record.get("sha256")
+    require(
+        type(record.get("schemaVersion")) is int and record["schemaVersion"] == 1,
+        "Invalid backup receipt schema",
+    )
+    require(
+        isinstance(name, str)
+        and re.fullmatch(r"(?:database-before|[0-9]{8}T[0-9]{6}Z)\.dump", name),
+        "Invalid backup filename",
+    )
+    require(type(size) is int and size > 0, "Invalid backup size")
+    require(
+        isinstance(digest, str) and re.fullmatch(r"[a-f0-9]{64}", digest), "Invalid backup digest"
+    )
+    completed = datetime.fromisoformat(string_value(record.get("completedAt")))
+    require(
+        completed.tzinfo is not None and 0 < completed.timestamp() <= time.time() + 300,
+        "Invalid backup completion time",
+    )
+    backup = receipt.with_name(string_value(name))
+    protected(backup)
+    descriptor = os.open(backup, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    with os.fdopen(descriptor, "rb") as source:
+        before = os.fstat(source.fileno())
+        require(
+            stat.S_ISREG(before.st_mode)
+            and before.st_uid == ROOT_UID
+            and stat.S_IMODE(before.st_mode) == BACKUP_PRIVATE_MODE
+            and before.st_nlink == 1
+            and before.st_size == size,
+            "Backup size or permissions differ",
+        )
+        signature: list[JsonValue] = [
+            str(backup),
+            digest,
+            before.st_dev,
+            before.st_ino,
+            before.st_size,
+            before.st_mtime_ns,
+            before.st_ctime_ns,
+        ]
+        checked_at = time.time()
+        # A same-size rewrite can share a fresh filesystem timestamp. Admit
+        # only timestamps already older than a coarse clock tick before hashing;
+        # time spent hashing must not make an initially racy signature cacheable.
+        stable_after = (
+            max(before.st_mtime_ns, before.st_ctime_ns) / 1_000_000_000
+            + BACKUP_HASH_TIMESTAMP_MARGIN_SECONDS
+        )
+        cached_at = digest_cache.get("checkedAt") if digest_cache is not None else None
+        cached = (
+            digest_cache is not None
+            and digest_cache.get("schemaVersion") == BACKUP_HASH_CACHE_SCHEMA
+            and digest_cache.get("signature") == signature
+            and type(cached_at) in (int, float)
+            and isinstance(cached_at, (int, float))
+            and stable_after < cached_at
+            and 0 <= checked_at - cached_at < BACKUP_HASH_CACHE_SECONDS
+        )
+        if digest_cache is not None and not cached:
+            digest_cache.clear()
+        actual = digest if cached else hashlib.file_digest(source, "sha256").hexdigest()
+        after = os.fstat(source.fileno())
+        require(
+            (before.st_size, before.st_mtime_ns, before.st_ctime_ns)
+            == (after.st_size, after.st_mtime_ns, after.st_ctime_ns),
+            "Backup changed during validation",
+        )
+    require(actual == digest, "Backup digest differs")
+    if digest_cache is not None and not cached and stable_after < checked_at:
+        digest_cache.update(
+            {
+                "schemaVersion": BACKUP_HASH_CACHE_SCHEMA,
+                "signature": signature,
+                "checkedAt": checked_at,
+            }
+        )
+    return backup, record, completed.timestamp()
+
+
+def deploy(  # noqa: PLR0913, PLR0915 - explicit opt-in settings; keep replacement and bounded rollback together.
+    runner: RunnerProtocol,
+    manifest: Manifest,
+    staged: JsonObject,
+    report: JsonObject,
+    quiet_seconds: int = 0,
+    *,
+    turn: TurnConfiguration | None = None,
+    verify_address: str | None = None,
+) -> None:
+    """Replace only the app, preserving backup evidence and one bounded rollback."""
+    for filename in SELECTION:
+        protected(CONFIG / filename, limit=1024 * 1024)
+    old = object_value(decode_json((CONFIG / "images.json").read_text()))
+    old_image = string_value(old["serverImage"])
+    old_revision = string_value(old["revision"])
+    require(
+        ID.fullmatch(old_image) and re.fullmatch(r"[a-f0-9]{40}", old_revision),
+        "Invalid deployed identity",
+    )
+    _ = image_identity(runner, old_image, old_revision)
+    new_image = image_identity(runner, string_value(staged["serverImage"]), manifest["revision"])
+    require(old["serverImage"] != new_image or turn is not None, "This image is already selected")
+    app, database, proxy = (
+        runner.container(service) for service in ("simplestchat", "postgres", "caddy")
+    )
+    for service, container in (("simplestchat", app), ("postgres", database), ("caddy", proxy)):
+        fields = runner.compose("config", "--hash", service).decode().split()
+        require(
+            fields == [service, container["configHash"]],
+            "Running configuration differs from disk; use reviewed maintenance",
+        )
+    require(app["image"] == old["serverImage"], "Running app differs from selected image")
+    database_state = object_value(database["state"])
+    require(
+        object_value(database_state.get("Health", {})).get("Status") == "healthy",
+        "Database must be healthy",
+    )
+    require(
+        not runner.compose("--profile", "maintenance", "ps", "--all", "--quiet", "migrate").strip(),
+        "Inspect retained migration container first",
+    )
+    ready(runner, seconds=3)
+    database_id = string_value(database["id"])
+    applied = ledger(runner, database_id)
+    report["backupMigrations"] = dict(applied)
+    require(
+        applied == manifest["migrations"],
+        "Schema changes require the explicit maintenance deployment",
+    )
+    require(
+        packaged_migrations(runner, new_image) == manifest["migrations"],
+        "Candidate migration mismatch",
+    )
+    preview, preview_env = candidate_selection(runner, new_image, old, turn)
+    report["browserAssets"] = retain_browser_assets(
+        runner, {old_revision: old_image, manifest["revision"]: new_image}
+    )
+    config = object_value(decode_json(runner.compose("config", "--format", "json")))
+    environment = object_value(
+        object_value(object_value(config["services"])["simplestchat"])["environment"]
+    )
+    origin = string_value(environment["WEBAUTHN_ORIGIN"])
+    require(re.fullmatch(r"https://[a-z0-9.-]+", origin), "Unexpected public origin")
+    ready(runner, origin=origin, seconds=3, address=verify_address)
+    quiet(runner, report, quiet_seconds)
+    backup = runner.attempt / "database-before.dump"
+    partial = runner.attempt / "database-before.dump.partial"
+    backup_headroom(runner, database_id)
+    journal(runner, finalized=False, phase="live_backup")
+    _ = runner.docker(
+        "exec",
+        "--user",
+        "999:999",
+        database_id,
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=2s",
+        "45s",
+        "pg_dump",
+        "--host",
+        "/run/simplestchat-postgres",
+        "--username",
+        "postgres",
+        "--dbname",
+        "simplestchat",
+        "--format",
+        "custom",
+        timeout=60,
+        output_path=partial,
+    )
+    require(partial.stat().st_size > 0, "Empty live database backup")
+    _ = runner.docker(
+        "exec",
+        "--interactive",
+        "--user",
+        "999:999",
+        database_id,
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=2s",
+        "15s",
+        "pg_restore",
+        "--list",
+        input_path=partial,
+    )
+    publish_backup(partial, backup)
+    report["backupSha256"] = sha256_file(backup)
+    write_backup_receipt(
+        runner.attempt, backup, string_value(report["backupSha256"]), manifest["revision"]
+    )
+    journal(runner, finalized=True, phase="backed_up")
+    for filename in SELECTION:
+        _ = shutil.copyfile(CONFIG / filename, runner.attempt / ("before-" + filename))
+    journal(runner, finalized=False, phase="replace_application")
+    replaced = False
+    try:
+        report["phase"] = "replace_application"
+        observe_replacement_rooms(runner, report)
+        report["interruptionStartedAt"] = timestamp()
+        replaced = True
+        _ = runner.compose("stop", "--timeout", "30", "simplestchat", timeout=45)
+        atomic(CONFIG / "compose.public.yml", preview)
+        atomic(CONFIG / "app.env", preview_env)
+        atomic(
+            CONFIG / "images.json", dict(old, revision=manifest["revision"], serverImage=new_image)
+        )
+        _ = release_assets.select_version(
+            ROOT / "browser-assets", manifest["revision"], owner=ROOT_UID
+        )
+        _ = runner.compose(
+            "up",
+            "--detach",
+            "--no-build",
+            "--pull",
+            "never",
+            "--no-deps",
+            "simplestchat",
+            timeout=60,
+        )
+        require(
+            runner.container("simplestchat")["image"] == new_image,
+            "Replacement is not the staged image",
+        )
+        ready(runner)
+        ready(runner, origin=origin, address=verify_address)
+        require(
+            stable_container(runner.container("postgres")) == stable_container(database)
+            and stable_container(runner.container("caddy")) == stable_container(proxy),
+            "A retained dependency restarted during release",
+        )
+        report["interruptionFinishedAt"] = timestamp()
+        report["phase"] = "complete"
+        journal(runner, finalized=True, phase="complete")
+    except BaseException:
+        report["rollbackAttempted"] = replaced
+        if replaced:
+            try:
+                failed = runner.compose("ps", "--all", "--quiet", "simplestchat").decode().strip()
+                if re.fullmatch(r"[a-f0-9]{64}", failed):
+                    _ = runner.docker(
+                        "inspect",
+                        "--format",
+                        '{"image":{{json .Image}},"state":{{json .State}}}',
+                        failed,
+                    )
+                _ = runner.compose("logs", "--no-color", "--tail", "100", "simplestchat")
+            except (ReleaseError, subprocess.TimeoutExpired):
+                pass
+            try:
+                _ = runner.compose("stop", "--timeout", "30", "simplestchat", timeout=45)
+                for filename in SELECTION:
+                    atomic(
+                        CONFIG / filename, (runner.attempt / ("before-" + filename)).read_bytes()
+                    )
+                _ = release_assets.select_version(
+                    ROOT / "browser-assets", old_revision, owner=ROOT_UID
+                )
+                _ = runner.compose(
+                    "up",
+                    "--detach",
+                    "--no-build",
+                    "--pull",
+                    "never",
+                    "--no-deps",
+                    "simplestchat",
+                    timeout=60,
+                )
+                require(
+                    runner.container("simplestchat")["image"] == old["serverImage"],
+                    "Rollback image mismatch",
+                )
+                ready(runner)
+                ready(runner, origin=origin, address=verify_address)
+                require(
+                    stable_container(runner.container("postgres")) == stable_container(database)
+                    and stable_container(runner.container("caddy")) == stable_container(proxy),
+                    "Dependency continuity changed",
+                )
+                report["rollbackPassed"] = True
+                journal(runner, finalized=True, phase="rolled_back")
+            except BaseException:  # noqa: BLE001 - rollback failure must not mask the original failure.
+                report["rollbackPassed"] = False
+        raise
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class MaintenancePlan:
+    """What a prepared maintenance replacement must show once the launcher returns."""
+
+    new_image: str
+    origin: str
+    database_id: str
+    migrations: dict[str, str]
+
+
+def prepare_maintenance(  # noqa: PLR0913, PLR0915 - explicit upgrade admission, backup and stop stay one reviewed sequence.
+    runner: RunnerProtocol,
+    manifest: Manifest,
+    staged: JsonObject,
+    report: JsonObject,
+    candidate_env: Path | None = None,
+    *,
+    browser_assets_upgrade: bool = False,
+) -> MaintenancePlan:
+    """Back up, stop the app then the proxy, and select the candidate for the launcher.
+
+    Unlike `deploy`, the candidate may carry migrations the database has not
+    applied; the applied ledger must still be a prefix of the packaged one. A
+    candidate app.env (the template re-rendered by the playbook) may change
+    sizing and settings, never secrets or identity.
+    """
+    for filename in SELECTION:
+        protected(CONFIG / filename, limit=1024 * 1024)
+    old = object_value(decode_json((CONFIG / "images.json").read_text()))
+    old_image = string_value(old["serverImage"])
+    old_revision = string_value(old["revision"])
+    require(
+        ID.fullmatch(old_image) and re.fullmatch(r"[a-f0-9]{40}", old_revision),
+        "Invalid deployed identity",
+    )
+    _ = image_identity(runner, old_image, old_revision)
+    new_image = image_identity(runner, string_value(staged["serverImage"]), manifest["revision"])
+    source = SOURCES / manifest["revision"]
+    require(
+        (source / ".git").is_dir(),
+        "The launcher needs the revision's clean source checkout; run maintenance.yml",
+    )
+    if browser_assets_upgrade:
+        candidate_proxy = CONFIG / "Caddyfile.candidate"
+        protected(candidate_proxy, limit=1024 * 1024)
+        committed_proxy = runner.run(
+            ["/usr/bin/git", "-C", str(source), "show", f"{manifest['revision']}:Caddyfile"]
+        )
+        require(
+            candidate_proxy.read_bytes() == committed_proxy,
+            "Candidate Caddyfile differs from exact release source",
+        )
+    app, database, proxy = (
+        runner.container(service) for service in ("simplestchat", "postgres", "caddy")
+    )
+    for service, container in (("simplestchat", app), ("postgres", database), ("caddy", proxy)):
+        fields = runner.compose("config", "--hash", service).decode().split()
+        require(
+            fields == [service, container["configHash"]],
+            "Running configuration differs from disk; use reviewed maintenance",
+        )
+    require(app["image"] == old["serverImage"], "Running app differs from selected image")
+    database_state = object_value(database["state"])
+    require(
+        object_value(database_state.get("Health", {})).get("Status") == "healthy",
+        "Database must be healthy",
+    )
+    require(
+        not runner.compose("--profile", "maintenance", "ps", "--all", "--quiet", "migrate").strip(),
+        "Inspect retained migration container first",
+    )
+    ready(runner, seconds=3)
+    database_id = string_value(database["id"])
+    applied = ledger(runner, database_id)
+    report["backupMigrations"] = dict(applied)
+    packaged = manifest["migrations"]
+    require(
+        all(packaged.get(version) == checksum for version, checksum in applied.items()),
+        "Applied migrations differ from the candidate's packaged ones; recover the ledger first",
+    )
+    require(packaged_migrations(runner, new_image) == packaged, "Candidate migration mismatch")
+    reviewed_environment = (
+        None if candidate_env is None else reviewed_candidate_environment(candidate_env, report)
+    )
+    require(
+        old["serverImage"] != new_image
+        or bool(report.get("environmentChanges"))
+        or browser_assets_upgrade,
+        "This image is already selected and no reviewed configuration changes were supplied",
+    )
+    preview, preview_env = candidate_selection(
+        runner,
+        new_image,
+        old,
+        reviewed_environment=reviewed_environment,
+        browser_assets_upgrade=browser_assets_upgrade,
+    )
+    if browser_assets_upgrade:
+        _ = runner.docker(
+            "exec",
+            "--interactive",
+            "--user",
+            "10001:10001",
+            string_value(proxy["id"]),
+            "caddy",
+            "validate",
+            "--config",
+            "/dev/stdin",
+            "--adapter",
+            "caddyfile",
+            input_path=CONFIG / "Caddyfile.candidate",
+            timeout=20,
+        )
+    report["browserAssets"] = retain_browser_assets(
+        runner, {old_revision: old_image, manifest["revision"]: new_image}
+    )
+    config = object_value(decode_json(runner.compose("config", "--format", "json")))
+    environment = object_value(
+        object_value(object_value(config["services"])["simplestchat"])["environment"]
+    )
+    origin = string_value(environment["WEBAUTHN_ORIGIN"])
+    require(re.fullmatch(r"https://[a-z0-9.-]+", origin), "Unexpected public origin")
+    ready(runner, origin=origin, seconds=3)
+    backup = runner.attempt / "database-before.dump"
+    partial = runner.attempt / "database-before.dump.partial"
+    backup_headroom(runner, database_id)
+    journal(runner, finalized=False, phase="live_backup")
+    _ = runner.docker(
+        "exec",
+        "--user",
+        "999:999",
+        database_id,
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=2s",
+        "45s",
+        "pg_dump",
+        "--host",
+        "/run/simplestchat-postgres",
+        "--username",
+        "postgres",
+        "--dbname",
+        "simplestchat",
+        "--format",
+        "custom",
+        timeout=60,
+        output_path=partial,
+    )
+    require(partial.stat().st_size > 0, "Empty live database backup")
+    _ = runner.docker(
+        "exec",
+        "--interactive",
+        "--user",
+        "999:999",
+        database_id,
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=2s",
+        "15s",
+        "pg_restore",
+        "--list",
+        input_path=partial,
+    )
+    publish_backup(partial, backup)
+    report["backupSha256"] = sha256_file(backup)
+    write_backup_receipt(
+        runner.attempt, backup, string_value(report["backupSha256"]), manifest["revision"]
+    )
+    journal(runner, finalized=True, phase="backed_up")
+    for filename in SELECTION:
+        _ = shutil.copyfile(CONFIG / filename, runner.attempt / ("before-" + filename))
+    if browser_assets_upgrade:
+        _ = shutil.copyfile(CONFIG / "Caddyfile", runner.attempt / "before-Caddyfile")
+    journal(runner, finalized=False, phase="maintenance_stop")
+    report["phase"] = "maintenance_stop"
+    observe_replacement_rooms(runner, report)
+    report["interruptionStartedAt"] = timestamp()
+    # The app first: Compose would stop the proxy first, and Caddy's grace period
+    # then waits for the WebSockets the still-running app holds open.
+    _ = runner.compose("stop", "--timeout", "30", "simplestchat", timeout=45)
+    _ = runner.compose("stop", "--timeout", "3", "caddy", timeout=30)
+    atomic(CONFIG / "compose.public.yml", preview)
+    atomic(CONFIG / "app.env", preview_env)
+    atomic(CONFIG / "images.json", dict(old, revision=manifest["revision"], serverImage=new_image))
+    _ = release_assets.select_version(ROOT / "browser-assets", manifest["revision"], owner=ROOT_UID)
+    if browser_assets_upgrade:
+        atomic(CONFIG / "Caddyfile", (CONFIG / "Caddyfile.candidate").read_bytes())
+        (CONFIG / "Caddyfile").chmod(0o644)
+        atomic(
+            CONFIG / "browser-assets-installed.json",
+            {"schemaVersion": 1, "caddyfileSha256": sha256_file(CONFIG / "Caddyfile")},
+        )
+        report["browserAssetProxyUpgraded"] = True
+    if candidate_env is not None:
+        # Consumed: the next maintenance renders its own.
+        candidate_env.unlink()
+    # The launcher refuses an unfinished journal and holds the workload lock
+    # itself; from here its own evidence directory records the deployment.
+    journal(runner, finalized=True, phase="maintenance_selected")
+    return MaintenancePlan(
+        new_image=new_image, origin=origin, database_id=database_id, migrations=dict(packaged)
+    )
+
+
+def launch_maintenance(runner: RunnerProtocol, report: JsonObject) -> None:
+    """Run the maintenance launcher, which migrates, grants and restarts everything."""
+    report["phase"] = "launcher"
+    started = time.monotonic()
+    try:
+        _ = runner.run([LAUNCHER], timeout=MAX_LAUNCHER_SECONDS)
+    except (ReleaseError, subprocess.TimeoutExpired):
+        report["launcherPassed"] = False
+        raise
+    report["launcherPassed"] = True
+    report["launcherSeconds"] = round(time.monotonic() - started, 1)
+
+
+def finish_maintenance(runner: RunnerProtocol, plan: MaintenancePlan, report: JsonObject) -> None:
+    """Require the launcher to have produced the selected image on a migrated database."""
+    report["phase"] = "verify"
+    ready(runner)
+    ready(runner, origin=plan.origin)
+    app = runner.container("simplestchat")
+    require(app["image"] == plan.new_image, "Replacement is not the staged image")
+    require(
+        runner.compose("config", "--hash", "simplestchat").decode().split()
+        == ["simplestchat", app["configHash"]],
+        "The launcher did not start the app from the installed configuration",
+    )
+    database = runner.container("postgres")
+    require(
+        string_value(database["id"]) == plan.database_id,
+        "The database container was replaced during maintenance",
+    )
+    require(
+        ledger(runner, plan.database_id) == plan.migrations,
+        "Ledger differs from the candidate after migration",
+    )
+    report["interruptionFinishedAt"] = timestamp()
+    report["phase"] = "complete"
+    journal(runner, finalized=True, phase="complete")
+
+
+def main() -> None:  # noqa: PLR0915 - one transaction per action, with the maintenance launcher run between two lock holds.
+    """Run one explicit staging, deployment or maintenance transaction and retain its outcome."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    _ = parser.add_argument("action", choices=("stage", "deploy", "maintain"))
+    _ = parser.add_argument("revision")
+    _ = parser.add_argument(
+        "--quiet-seconds",
+        type=int,
+        default=0,
+        help="wait up to this long for zero active rooms before replacing the app",
+    )
+    _ = parser.add_argument(
+        "--candidate-env",
+        help="maintain: install this re-rendered app.env (identity lines unchanged) with the image",
+    )
+    _ = parser.add_argument(
+        "--browser-assets-upgrade",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="maintain: install the reviewed stable public asset proxy and readonly mount once",
+    )
+    raw = parser.parse_args(namespace=_ArgumentValues())
+    arguments = ReleaseOptions(
+        action=raw.action,
+        revision=raw.revision,
+        quiet_seconds=raw.quiet_seconds,
+        candidate_env=None if raw.candidate_env is None else Path(raw.candidate_env),
+        browser_assets_upgrade=raw.browser_assets_upgrade,
+    )
+    require(
+        arguments.candidate_env is None or arguments.action == "maintain",
+        "--candidate-env applies to maintain",
+    )
+    require(
+        not arguments.browser_assets_upgrade or arguments.action == "maintain",
+        "--browser-assets-upgrade applies to maintain",
+    )
+    require(os.geteuid() == 0, "Run as root on the prepared public host")
+    require(re.fullmatch(r"[a-f0-9]{40}", arguments.revision), "Use the exact release commit")
+    require(
+        0 <= arguments.quiet_seconds <= MAX_QUIET_SECONDS,
+        f"--quiet-seconds must be between 0 and {MAX_QUIET_SECONDS}",
+    )
+    _ = os.umask(0o077)
+
+    def interrupted(_signum: int, _frame: FrameType | None) -> NoReturn:
+        message = "Release interrupted"
+        raise ReleaseError(message)
+
+    for signum in (signal.SIGTERM, signal.SIGINT):
+        _ = signal.signal(signum, interrupted)
+    attempt: Path | None = None
+    report: JsonObject = {
+        "action": arguments.action,
+        "revision": arguments.revision,
+        "startedAt": timestamp(),
+        "passed": False,
+        "phase": "stage",
+    }
+    try:
+        plan: MaintenancePlan | None = None
+        with workload_lock():
+            protected(ROOT / "releases", directory=True, modes=(0o700,))
+            directory = ROOT / "releases" / arguments.revision
+            protected(directory, directory=True, modes=(0o700,))
+            for filename in ("release.json", "image.tar"):
+                protected(directory / filename)
+            manifest = validate_manifest(directory / "release.json")
+            require(
+                manifest["revision"] == arguments.revision, "Release directory identity differs"
+            )
+            protected(ROOT / "results", directory=True, modes=(0o700,))
+            attempt = Path(tempfile.mkdtemp(prefix="release.", dir=ROOT / "results"))
+            runner = Runner(attempt)
+            staged = stage(runner, directory, manifest)
+            if arguments.action == "deploy":
+                report["phase"] = "preflight"
+                deploy(runner, manifest, staged, report, quiet_seconds=arguments.quiet_seconds)
+            elif arguments.action == "maintain":
+                report["phase"] = "preflight"
+                plan = prepare_maintenance(
+                    runner,
+                    manifest,
+                    staged,
+                    report,
+                    candidate_env=arguments.candidate_env,
+                    browser_assets_upgrade=arguments.browser_assets_upgrade,
+                )
+            else:
+                report["phase"] = "complete"
+        if plan is not None:
+            # The launcher takes the workload lock itself, so it runs between holds.
+            launch_maintenance(runner, report)
+            with workload_lock():
+                finish_maintenance(runner, plan, report)
+        report["passed"] = True
+    except BaseException as error:
+        report["failure"] = (
+            str(error) if isinstance(error, (ReleaseError, ArtifactError)) else type(error).__name__
+        )
+        raise
+    finally:
+        if attempt is not None:
+            report["finishedAt"] = timestamp()
+            atomic(attempt / "outcome.json", report)
+            _ = sys.stdout.write(json.dumps({"evidence": str(attempt), **report}) + "\n")
+
+
+def cli() -> int:
+    """Preserve the standalone command's sanitized error and exit behavior."""
+    try:
+        main()
+    except (
+        ReleaseError,
+        ArtifactError,
+        OSError,
+        ValueError,
+        KeyError,
+        subprocess.TimeoutExpired,
+    ) as error:
+        failure = type(error).__name__
+        _ = sys.stderr.write(
+            f"Release failed ({failure}); inspect private evidence before another attempt.\n"
+        )
+        return 1
+    return 0

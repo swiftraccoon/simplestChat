@@ -31,8 +31,8 @@ ignore = [
 docstring-code-format = true
 
 [tool.basedpyright]
-include = ["build", "ops/ansible/files", "ops/ansible/callback_plugins", "ops/ansible/filter_plugins", "ops/ansible/tests", "typings"]
-exclude = ["**/__pycache__", "ops/ansible/.venv", "vendor", "reference", "results", "target"]
+include = ["build", "ops/ansible/files", "ops/ansible/callback_plugins", "ops/ansible/filter_plugins", "ops/ansible/tests", "typings", "xtask/src/ci/release_http_policy"]
+exclude = ["**/__pycache__", "ops/ansible/.venv", "vendor", "reference", "results", "target", "xtask/src/ci/release_http_policy/reference"]
 typeCheckingMode = "all"
 pythonVersion = "3.12"
 pythonPlatform = "All"

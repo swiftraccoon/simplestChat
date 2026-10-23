@@ -44,6 +44,8 @@ mod public_smoke;
 mod receipts;
 mod release_checks;
 mod release_controller;
+#[cfg(feature = "release-http-policy")]
+mod release_http_policy;
 mod required;
 mod runner;
 mod selected_executable;
@@ -59,7 +61,9 @@ const USAGE: &str = "usage: cargo run --locked -q -p xtask -- ci key|save|verify
        cargo run --locked -q -p xtask -- ci production-image build|verify\n\
        cargo run --locked -q -p xtask -- ci install-compose\n\
        cargo run --locked -q -p xtask -- ci audit-rust\n\
-       cargo run --locked -q -p xtask -- ci release-checks\n\
+       cargo run --locked -q -p xtask -- ci release-checks \
+       --http-policy-binary ABSOLUTE_FEATURE_BINARY\n\
+       xtask ci release-http-policy --help (feature release-http-policy)\n\
        cargo run --locked -q -p xtask -- ci release-controller start|wait\n\
        cargo run --locked -q -p xtask -- ci commit-subject\n\
        cargo run --locked -q -p xtask -- ci container-smoke\n\
@@ -345,6 +349,20 @@ pub(crate) fn run_ops_artifact(arguments: &[String]) -> Result<ExitCode> {
 }
 
 pub(crate) fn run(root: &Path, arguments: &[String]) -> Result<ExitCode> {
+    if arguments
+        .first()
+        .is_some_and(|a| a == "release-http-policy")
+    {
+        #[cfg(feature = "release-http-policy")]
+        return release_http_policy::run(&arguments[1..]);
+        #[cfg(not(feature = "release-http-policy"))]
+        {
+            eprintln!(
+                "release-http-policy requires a prebuilt xtask with --features release-http-policy"
+            );
+            return Ok(ExitCode::from(2));
+        }
+    }
     if arguments.first().is_some_and(|arg| arg == "mdns") {
         return mdns::run(root, &arguments[1..]);
     }

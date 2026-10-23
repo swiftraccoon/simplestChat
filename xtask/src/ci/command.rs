@@ -104,6 +104,9 @@ pub(super) struct Command {
     pub benchmark_output: Option<std::sync::Arc<super::container_benchmark::tools::CaptureReceipt>>,
     pub benchmark: Option<std::sync::Arc<super::container_benchmark::tools::Invocation>>,
     pub retained_ops: Option<std::sync::Arc<super::ops_artifact::verify::tools::Invocation>>,
+    pub release_checks: Option<std::sync::Arc<super::release_checks::invocation::Invocation>>,
+    #[cfg(feature = "release-http-policy")]
+    pub release_http: Option<std::sync::Arc<super::release_http_policy::tools::Invocation>>,
 }
 impl Command {
     pub(super) fn capture(program: Program, args: &[&str]) -> Self {
@@ -130,6 +133,9 @@ impl Command {
             retained_ops: None,
             benchmark: None,
             benchmark_output: None,
+            release_checks: None,
+            #[cfg(feature = "release-http-policy")]
+            release_http: None,
         }
     }
 }

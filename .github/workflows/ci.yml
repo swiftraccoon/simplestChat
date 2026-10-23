@@ -1083,18 +1083,27 @@ jobs:
           key: ${{ steps.rollover-chromium.outputs.cache-primary-key }}
 
       - name: Verify the guest checker against pinned Compose JSON
-        timeout-minutes: 2
         env:
           VM_COMPOSE_REQUIRED: "1"
         run: |
           "${RUNNER_TEMP}/release-container-controller/bin/python" -B -m unittest discover \
             -s ops/ansible/tests -p test_security_vm_guest.py -k ComposeSerializationTests -v
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev pkg-config
+          # The job's pinned prefixes belong to other native builds. This optional
+          # host TLS owner uses the installed headers in a separate target tree.
+          env -u OPENSSL_DIR -u OPENSSL_STATIC -u PKG_CONFIG_PATH \
+            -u AWS_LC_SYS_SYSTEM_DIR -u AWS_LC_SYS_STATIC -u AWS_LC_SYS_SYSTEM_SKIP_VERSION_CHECK \
+            cargo build --locked -p xtask --features release-http-policy \
+              --target-dir "$RUNNER_TEMP/release-http-policy-build"
 
       - name: App-only release and rollback on a disposable host
-        timeout-minutes: 11
+        timeout-minutes: 20
         env:
           PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/rollover-playwright
-        run: cargo run --locked -q -p xtask -- ci release-checks
+        run: |
+          "$RUNNER_TEMP/release-http-policy-build/debug/xtask" ci release-checks \
+            --http-policy-binary "$RUNNER_TEMP/release-http-policy-build/debug/xtask"
 
       - name: Preserve private local release-container diagnostics
         if: ${{ always() && env.ACT == 'true' }}

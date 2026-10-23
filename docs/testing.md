@@ -172,6 +172,9 @@ PATH="$PWD/ops/ansible/.venv/bin:$PATH" \
 The source gate runs Ruff's complete stable rule set, its formatter, and
 basedpyright's `all` mode over every maintained Python file and type stub,
 including tests. It rejects a new source directory until explicitly included.
+The offline release-HTTP oracle package under `xtask/src/ci/release_http_policy`
+is a maintained checked root; its exact historical `reference/` copies retain
+the existing reference exclusion and are checked by byte pins and oracle tests.
 Third-party `vendor/` sources and ignored private operator scripts are outside
 this policy. ShellCheck, `jq`, and the Ansible dependencies are required for the
 offline tests; the optional Compose renderer needs the Docker CLI, not a daemon.
@@ -1073,29 +1076,111 @@ provide inert coverage; no real engine or validator workload was run for this po
 
 ### App-only releases and rollback
 
-The workflow's unchanged 11-minute release step uses
-`cargo run --locked -q -p xtask -- ci release-checks`. In the explicit hosted or
-disposable Linux CI context, this resolves the first executable Node in its
-captured `PATH` and runs the literal pinned Playwright Chromium-path expression.
-Ordinary Node/Chromium symlinks resolve to canonical paths; both must be nonempty,
-regular executables. The proof reads metadata, never executable contents, so it
-imposes no executable-size ceiling. Chromium discovery is capped at 30 seconds
-and 4096 stdout bytes; malformed, relative or control-character paths are refused.
-Retained descriptors and file stamps are rechecked before the Python coordinator
-and after it finishes, then explicitly closed. These are identity snapshots,
-not descriptor execution or protection against a compromised same-UID writer.
+The workflow's 20-minute release step runs an explicitly prebuilt feature binary:
 
-The existing `python3 -B build/ci_release_checks.py` coordinator retains its exact
-controller/image/output arguments, parallel scanner-download and release-fixture
-policy, private output and status. Rust inherits coordinator output, preserves
-failures, and owns only its CLI process groups. Cancellation gives the coordinator
-15 seconds for its existing parallel 5-second TERM/5-second reap paths before
-forced group cleanup; the 660-second command budget reserves that grace and
-reaping time. The coordinator and privileged fixture retain ownership of their
-separate-session children and containers. Successful Rust CLI-group cleanup
-does not establish their cleanup or replace the fixture's report. Owned inert
-Node/Python fixtures cover this wrapper; cold hosted runtime and an actual
-release/rollback run remain unmeasured for the port.
+```sh
+"$RUNNER_TEMP/release-http-policy-build/debug/xtask" ci release-checks \
+  --http-policy-binary "$RUNNER_TEMP/release-http-policy-build/debug/xtask"
+```
+
+The existing Compose validation step first installs `libssl-dev` and `pkg-config`,
+then builds with `--features release-http-policy` into that separate target directory.
+It unsets the workflow's pinned OpenSSL/AWS-LC build-prefix variables for this host
+client build. Later default-feature Cargo commands cannot overwrite the selected
+binary. Compilation and package provisioning are outside the runtime step; the
+95-minute job allowance covers them. Default xtask commands remain TLS-free.
+
+In an explicit hosted or disposable Linux CI context, the wrapper resolves the
+first executable Node in its captured `PATH` and runs the literal pinned
+Playwright Chromium-path expression. Ordinary Node/Chromium symlinks resolve
+once to canonical nonempty regular executables. Metadata snapshots impose no
+executable-size ceiling and do not claim descriptor execution or exclusion of a
+same-UID writer. Discovery has a 30-second body, 5-second TERM grace, 20-second
+settlement allowance and 4096-byte stdout cap. Node, Chromium, selected Python
+and the feature checker are retained and checked through coordinator settlement,
+then explicitly closed. A coordinator-only capability checks the original
+remaining-tail deadline again at Native's final pre-spawn boundary.
+
+The Python coordinator retains its parallel scanner-download and release-fixture
+policy, original image/output inputs, private output and status. Both caller forms
+require `--http-policy-binary ABSOLUTE_FEATURE_BINARY`; there is no Python checker
+fallback, implicit unfeatured binary or runtime Cargo build. For manual use, build
+`cargo build --locked -p xtask --features release-http-policy --bin xtask`, then
+pass the resulting absolute path to `build/test-release-container.py` alongside
+its existing required flags. A caller retains and rechecks the original checker
+file/path before and after its child settles, with explicit all-attempt close.
+
+The wrapper admits one 1140-second entry: discovery 55 + coordinator body 850 +
+TERM 200 + Native settlement 20 + final fences 10 =1135, leaving five seconds of
+scheduling slack. The coordinator gives only its fixture task an 850-second body
+and 180-second TERM grace; scanner defaults remain unchanged. The fixture has a
+660-second work alarm, checker TERM 60 plus its existing five-second reap,
+100-second cleanup window and ten-second publication allowance: nominal 835,
+within the fixture's 850-second body. Repeated external signals latch during
+awaited child finalizers. Cleanup commands reserve their own body/TERM/reap inside
+one original 100-second monotonic deadline; known failures survive late clocks.
+These are scheduling allowances, not OS/reaping or cold-build guarantees.
+
+The opt-in `xtask ci release-http-policy` owns the complete original passive
+response check. It requires Linux/root and only the original five flags:
+`--fixture-token`, `--caddy-id`, `--app-id`, `--ca` and `--ca-sha256`. There is no
+origin or arbitrary path option. Four fixed `/usr/bin/docker --host
+unix:///var/run/docker.sock inspect --format ... FULL_ID` calls prove the exact
+running Caddy/app identities, fixture/project/service labels and sole loopback 443
+publication before and after five requests. No daemon-info discovery, inherited
+Docker context, credentials, full inspection or raw response enters the receipt.
+
+The five GETs are `/`, `/api/capabilities`, `/api/auth/profile`, `/metrics` and
+`/diagnostics/media`. A mature reqwest HTTP/1 client connects only to 127.0.0.1:443,
+verifies `localhost` with TLS 1.2 minimum, and trusts only the retained CA bundle.
+The CA is a nofollow regular file of 1 to 65536 bytes, bound to the original SHA256,
+namespace and full descriptor stamp, rehashed before/after HTTP and explicitly
+closed. Requests set Host localhost, exact Accept, Accept-Encoding identity and
+Connection close, with proxies, redirects, retries, decompression, cookies and
+authentication disabled. The original exact status/type/security-header/CSP,
+no-cookie/server, no-store, capabilities/auth omission and private 404 predicates
+remain the policy. Bodies retain at most 128KiB for HTML or 4096 bytes for each
+other endpoint, plus one refusal byte. Parsed headers admit at most 64 fields and
+16KiB of projected Latin1 names/values; this is a post-parser accepted limit,
+not a bound on the HTTP library's earlier parser allocations.
+
+One shared absolute 25-second HTTP window covers all five requests. Three seconds
+is connect/read inactivity, not a per-GET total. The checker uses one 180-second
+entry: four calls at5 body +1 TERM +20 settlement =104, HTTP 25, CA/tool/files 10
+and receipt 25 total 164, with 16 seconds slack. Each phase reserves unfinished
+phases and the final 35-second tail against that same clock; cancellation replaces
+unfinished phases and cannot reset or extend it. The checker parent allows a
+210-second body then60 TERM and its existing five-second reap. Known native
+statuses124/130/143 and other child failures remain failures through all closes.
+The optional owner and its Native dispatch arm compile only with
+`release-http-policy`; the disabled command prints the fixed build instruction.
+
+Docker stdout/stderr use distinct private0600 unlinked bounded captures (64KiB
+and 4KiB). Original Finished metadata/count/SHA seals gate readback, so a later
+same-inode rewrite cannot become a new observation. Retained CA/capture ancestor
+chains admit at most16 normal components each; acquisition is serial with only
+two capture peers and a single selected tool live. These bounds cover this
+owner's named files/pipe owners, not all descriptors internal to TLS, runtime or
+standard-library child setup. No raw CLI/header/body/CA payload is published.
+The fixed ten-key success receipt describes prepublication observations; final
+CLI 0 additionally requires receipt replay, pending-signal, deadline and all
+explicit-close gates. Client/runtime Drop is not an observed internal socket,
+TLS-task or descriptor close receipt. No remote, browser-Origin, application,
+live TLS or privileged Docker interoperability is proved by this source port.
+
+The original Python checker, fifteen tests, harness and complete local import
+closure are retained byte-for-byte, with compiled and current-file byte/stamp
+pins checked before every reference subprocess. An offline oracle executes the actual fifteen
+tests and original selected predicates with an audit hook denying process and
+socket creation; unused YAML/template import APIs are fail-on-use sentinels.
+Rust comparisons preserve recursive duplicate/nonfinite refusal, integer/float
+identity and raw-byte bounds with Python's BOM and UTF16/32 JSON detection.
+The bounded JSON domain requires Unicode scalar strings/keys and depth below 128;
+Python's lone-surrogate and deeper irrelevant-label inputs are named refusals.
+Unicode decimal/header-whitespace fixtures use the pinned Python 3.14/Unicode 16
+profile. Owned fake HTTP/clock/file/controller cases and actual inert selected
+processes cover cancellation, timeout, overflow, original-seal mutation and
+all-attempt retirement. They never contact a Docker daemon or TLS endpoint.
 
 CI also runs `build/test-release-container.py` against that existing production
 image, using the real release helper and public deployment templates. It checks

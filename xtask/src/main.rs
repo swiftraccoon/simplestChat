@@ -51,7 +51,9 @@ Commands:
                 production-image builds and verifies the immutable CI production image.
                 install-compose installs the authenticated Compose release in explicit CI.
                 audit-rust installs verified audit tooling and applies the advisory policy.
-                release-checks discovers pinned Chromium and runs the isolated release coordinator.
+                release-checks discovers Chromium and requires \
+                --http-policy-binary ABSOLUTE_FEATURE_BINARY.
+                release-http-policy checks only the owned loopback fixture (optional feature).
                 release-controller overlaps bounded controller preparation with the image build.
                 commit-subject checks the branch tip against the local hook's byte grammar.
                 container-smoke checks immutable production startup and database assertions.

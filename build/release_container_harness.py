@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 import platform
 import re
@@ -25,12 +26,13 @@ import sys
 import tempfile
 import time
 import uuid
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol, TypedDict, Unpack
 
+import bounded_process
 import release_assets
-import release_http_policy
 import release_public as release
 from release_artifact import sha256_file, validate_manifest, verify_archive
 from release_container_fixture import LABEL, FixtureIdentity, render_fixture
@@ -45,8 +47,9 @@ from release_json import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Generator, Mapping, Sequence
     from types import FrameType
+    from typing import BinaryIO
 
 PROJECT = Path(__file__).resolve().parents[1]
 FILES = PROJECT / "ops/ansible/files"
@@ -117,7 +120,8 @@ type Snapshot = dict[str, tuple[JsonValue, JsonValue, JsonValue, JsonValue]]
 class CommandOptions(TypedDict, total=False):
     """The complete bounded command invocation surface used by real and fake runners."""
 
-    timeout: int
+    timeout: float
+    grace: float
     success: bool
     input_path: Path | None
     pass_fds: tuple[int, ...]
@@ -146,6 +150,7 @@ class CommandRunner(Protocol):
 
     settlement_unconfirmed: bool
     last_failure: JsonObject | None
+    cleanup_deadline: float | None
 
     def run(self, args: list[str], **options: Unpack[CommandOptions]) -> CommandResult:
         """Execute one explicit host command with bounded cleanup."""
@@ -278,6 +283,19 @@ class Command:
         return self.output.read_text(encoding="utf-8").strip()
 
 
+@dataclass(frozen=True)
+class CommandFinalization:
+    """Original local owners and bounds needed by every command finalizer."""
+
+    process: subprocess.Popen[bytes] | None
+    source: BinaryIO | None
+    prefix: Path
+    timeout: float
+    started: float
+    grace: float
+    arguments: tuple[str, ...]
+
+
 class Commands:
     """Each command has bounded owned-process cleanup and private immutable logs."""
 
@@ -287,10 +305,22 @@ class Commands:
         self.sequence: int = 0
         self.settlement_unconfirmed: bool = False
         self.last_failure: JsonObject | None = None
+        self.cleanup_deadline: float | None = None
+
+    def admitted_timeout(self, timeout: float, grace: float) -> float:
+        """Reserve this command's full TERM/reap tail inside the one cleanup window."""
+        if self.cleanup_deadline is None:
+            return timeout
+        remaining = self.cleanup_deadline - time.monotonic() - grace - bounded_process.REAP_SECONDS
+        require(math.isfinite(remaining) and remaining > 0, "Fixture cleanup deadline exhausted")
+        return min(timeout, remaining)
 
     def run(self, args: list[str], **options: Unpack[CommandOptions]) -> Command:
         """Run explicit argv and retain uncertainty before stopping an interrupted child."""
-        timeout = options.get("timeout", 30)
+        grace = options.get("grace", 5)
+        bounded_process.valid_grace(grace)
+        requested_timeout = options.get("timeout", 30)
+        timeout = self.admitted_timeout(requested_timeout, grace)
         success = options.get("success", True)
         input_path = options.get("input_path")
         pass_fds = options.get("pass_fds", ())
@@ -298,10 +328,12 @@ class Commands:
         prefix = self.directory / f"command-{self.sequence:03d}"
         output, error = prefix.with_suffix(".stdout"), prefix.with_suffix(".stderr")
         process: subprocess.Popen[bytes] | None = None
+        original: BaseException | None = None
         started = time.monotonic()
         source = input_path.open("rb") if input_path else None
         try:
             with output.open("xb") as stdout, error.open("xb") as stderr:
+                timeout = self.admitted_timeout(requested_timeout, grace)
                 # Explicit argv targets the disposable host; no shell is involved.
                 process = subprocess.Popen(  # noqa: S603
                     args,
@@ -313,26 +345,20 @@ class Commands:
                     pass_fds=pass_fds,
                 )
                 _ = process.wait(timeout=timeout)
+        except BaseException as error:
+            original = error
+            raise
         finally:
-            if source:
-                source.close()
-            if process is not None and process.poll() is None:
-                # Killing a Docker client or release supervisor cannot prove
-                # daemon-side work (or a separately sessioned child) has ended.
-                # No fixture cleanup may race that uncertain operation.
-                self.settlement_unconfirmed = True
-                release.Runner.stop(process)
-            record: JsonObject = {
-                "command": list(args),
-                "timeoutSeconds": timeout,
-                "exitStatus": process.returncode if process else None,
-                "seconds": round(time.monotonic() - started, 3),
-            }
-            write_new(prefix.with_suffix(".json"), record)
+            self.finish(
+                CommandFinalization(process, source, prefix, timeout, started, grace, tuple(args)),
+                original,
+            )
         if process is None or process.returncode is None:
             message = "Owned command exited without an original status"
             raise CheckError(message)
         result = Command(process.returncode, output, error)
+        if result.code == 0 and self.cleanup_deadline is not None:
+            require(time.monotonic() < self.cleanup_deadline, "Fixture cleanup deadline exhausted")
         if result.code != 0:
             # Fixed operation names only: never copy resolved config, command
             # arguments, environment values or database content into CI output.
@@ -354,6 +380,40 @@ class Commands:
             f"Command {self.sequence:03d} failed; inspect private logs",
         )
         return result
+
+    def finish(self, owned: CommandFinalization, original: BaseException | None) -> None:
+        """Attempt all input/group/record finalizers while preserving an earlier failure."""
+        failures: list[BaseException] = []
+        try:
+            if owned.source:
+                owned.source.close()
+        except OSError as error:
+            failures.append(error)
+        try:
+            if owned.process is not None and owned.process.poll() is None:
+                # A stopped client cannot prove daemon-side or separately
+                # sessioned work ended; retain that uncertainty permanently.
+                self.settlement_unconfirmed = True
+                if owned.grace == bounded_process.DEFAULT_LIMITS.grace:
+                    release.Runner.stop(owned.process)
+                else:
+                    bounded_process.stop(owned.process, grace=owned.grace)
+        except (OSError, RuntimeError, subprocess.SubprocessError) as error:
+            failures.append(error)
+        record: JsonObject = {
+            "command": list(owned.arguments),
+            "timeoutSeconds": owned.timeout,
+            "exitStatus": owned.process.returncode if owned.process else None,
+            "seconds": round(time.monotonic() - owned.started, 3),
+        }
+        try:
+            write_new(owned.prefix.with_suffix(".json"), record)
+        except (OSError, RuntimeError) as error:
+            failures.append(error)
+        if failures:
+            if original is not None:
+                raise original from failures[0]
+            raise failures[0]
 
     def docker(self, *args: str, **kwargs: Unpack[CommandOptions]) -> Command:
         """Route one explicit command to the fixed local Docker endpoint."""
@@ -414,14 +474,104 @@ def assert_healthy_exit(value: JsonObject, *, deliberate_failure: bool = False) 
     )
 
 
+def executable_stamp(value: os.stat_result) -> tuple[int, ...]:
+    """Bind the selected caller-trusted executable without asserting byte authentication."""
+    return (
+        value.st_dev,
+        value.st_ino,
+        value.st_mode,
+        value.st_uid,
+        value.st_gid,
+        value.st_nlink,
+        value.st_size,
+        value.st_mtime_ns,
+        value.st_ctime_ns,
+    )
+
+
+def http_policy_success() -> JsonObject:
+    """Require the Rust owner's exact closed success receipt without a Python checker fallback."""
+    return {
+        "passed": True,
+        "requests": 5,
+        "scope": "owned-loopback-release-fixture",
+        "securityHeaders": True,
+        "contentSecurityPolicy": True,
+        "jsonNoStore": True,
+        "anonymousCookiesAbsent": True,
+        "missingAuthorizationRejected": True,
+        "privateEndpointsOmitted": True,
+        "responseLimits": True,
+    }
+
+
+def complete_http_policy(value: JsonObject) -> bool:
+    """Reject JSON numeric/boolean coercions and any missing or additional receipt field."""
+    expected = http_policy_success()
+    return value == expected and all(
+        type(value[key]) is type(item) for key, item in expected.items()
+    )
+
+
+@contextmanager
+def http_policy_owner(path: Path) -> Generator[None]:
+    """Retain the explicit executable across its child settlement and close on every path."""
+    require(path.is_absolute(), "HTTP policy binary must be an explicit absolute file")
+    before = path.lstat()
+    require(
+        stat.S_ISREG(before.st_mode) and bool(before.st_mode & 0o111),
+        "HTTP policy binary is not an ordinary executable",
+    )
+    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK)
+    original: BaseException | None = None
+
+    def check() -> None:
+        require(
+            executable_stamp(os.fstat(descriptor))
+            == executable_stamp(before)
+            == executable_stamp(path.lstat()),
+            "HTTP policy binary changed",
+        )
+
+    try:
+        check()
+        yield
+    except BaseException as error:
+        original = error
+        raise
+    finally:
+        failed: BaseException | None = None
+        try:
+            check()
+        except (OSError, CheckError) as error:
+            failed = error
+        try:
+            os.close(descriptor)
+        except (OSError, CheckError) as error:
+            if failed is None:
+                failed = error
+        if failed is not None:
+            if original is not None:
+                raise original from failed
+            raise failed
+
+
 class Harness:
     """Own the complete disposable-host fixture lifecycle and its original outcome."""
 
-    def __init__(self, output: Path, image: str, browser: tuple[Path, Path] | None = None) -> None:
+    def __init__(
+        self,
+        output: Path,
+        image: str,
+        browser: tuple[Path, Path] | None = None,
+        *,
+        http_policy_binary: Path | None = None,
+    ) -> None:
         """Initialize evidence without touching Docker, services, or fixture paths."""
         self.output: Path = output
         self.image: str = image
         self.browser: tuple[Path, Path] | None = browser
+        self.http_policy_binary: Path | None = http_policy_binary
         self.private: Path = output / "private"
         self.commands: CommandRunner = Commands(self.private)
         self.token: str = uuid.uuid4().hex
@@ -547,31 +697,35 @@ class Harness:
         """Check passive HTTP policy only after the fixture owns its TLS proxy and application."""
         caddy, app = self.service("caddy"), self.service("simplestchat")
         require(self.ca_digest is not None, "Fixture TLS authority is not recorded")
-        result = self.commands.run(
-            [
-                sys.executable,
-                "-B",
-                str(PROJECT / "build/release_http_policy.py"),
-                "--fixture-token",
-                self.token,
-                "--caddy-id",
-                string_value(caddy["id"]),
-                "--app-id",
-                string_value(app["id"]),
-                "--ca",
-                str(self.private / "ca.crt"),
-                "--ca-sha256",
-                str(self.ca_digest),
-            ],
-            timeout=35,
-        )
+        selected = self.http_policy_binary
+        if selected is None:
+            message = "HTTP policy binary is required"
+            raise CheckError(message)
+        with http_policy_owner(selected):
+            result = self.commands.run(
+                [
+                    str(selected),
+                    "ci",
+                    "release-http-policy",
+                    "--fixture-token",
+                    self.token,
+                    "--caddy-id",
+                    string_value(caddy["id"]),
+                    "--app-id",
+                    string_value(app["id"]),
+                    "--ca",
+                    str(self.private / "ca.crt"),
+                    "--ca-sha256",
+                    str(self.ca_digest),
+                ],
+                timeout=210,
+                grace=60,
+            )
         require(
-            object_value(decode_json(result.text())) == release_http_policy.success_report(),
+            result.code == 0 and complete_http_policy(object_value(decode_json(result.text()))),
             "Fixture HTTP response policy did not pass completely",
         )
-        object_value(self.report["cases"])["httpResponsePolicy"] = (
-            release_http_policy.success_report()
-        )
+        object_value(self.report["cases"])["httpResponsePolicy"] = http_policy_success()
 
     def derivative(self, kind: str) -> dict[str, str]:
         """Derive an isolated fixture image from the same checked local production image."""
@@ -1416,6 +1570,7 @@ class Options(argparse.Namespace):
     output: str = ""
     node: str = ""
     chromium: str = ""
+    http_policy_binary: str = ""
 
 
 def options(arguments: Sequence[str] | None) -> Options:
@@ -1426,6 +1581,7 @@ def options(arguments: Sequence[str] | None) -> Options:
     _ = parser.add_argument("--output", required=True)
     _ = parser.add_argument("--node", required=True)
     _ = parser.add_argument("--chromium", required=True)
+    _ = parser.add_argument("--http-policy-binary", required=True)
     result = Options()
     _ = parser.parse_args(arguments, namespace=result)
     if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9._/:@-]{0,255}", result.image):
@@ -1433,26 +1589,66 @@ def options(arguments: Sequence[str] | None) -> Options:
     return result
 
 
-def main(arguments: Sequence[str] | None = None) -> int:
-    """Run once, retain failure and cleanup uncertainty, and print only sanitized evidence."""
-    parsed = options(arguments)
-    _ = os.umask(0o077)
-    output = fresh_output(parsed.output)
+def selected_tools(parsed: Options) -> tuple[tuple[Path, Path], Path]:
+    """Require explicit existing tools before the fixture begins any host operation."""
     browser = (Path(parsed.node), Path(parsed.chromium))
     require(
         all(path.is_absolute() and path.is_file() for path in browser),
         "Browser tools must be explicit existing absolute files",
     )
-    harness = Harness(output, parsed.image, browser)
+    http_policy_binary = Path(parsed.http_policy_binary)
+    with http_policy_owner(http_policy_binary):
+        pass
+    return browser, http_policy_binary
+
+
+def publish_fixture_report(harness: Harness, output: Path, started: float) -> None:
+    """Publish sanitized observations; the final CLI status remains authoritative."""
+    harness.report["seconds"] = round(time.monotonic() - started, 3)
+    harness.report["lastNonzeroCommand"] = harness.commands.last_failure
+    write_new(output / "report.json", harness.report)
+    # Only this sanitized fixed-name report is exported for the unprivileged
+    # artifact uploader. Generic evidence and fixture CA sources stay 0600.
+    (output / "report.json").chmod(0o644)
+    output.chmod(0o755)
+    print(json.dumps(harness.report))  # noqa: T201 - Public sanitized CI report.
+    print(  # noqa: T201 - Explicit CLI cleanup summary without private diagnostics.
+        "Private fixture data and images retained; verified owned containers "
+        + f"and fixture trust entry cleaned: {harness.report['cleanupPassed']}"
+    )
+
+
+def main(arguments: Sequence[str] | None = None) -> int:
+    """Run once, retain failure and cleanup uncertainty, and print only sanitized evidence."""
+    parsed = options(arguments)
+    _ = os.umask(0o077)
+    output = fresh_output(parsed.output)
+    browser, http_policy_binary = selected_tools(parsed)
+    harness = Harness(output, parsed.image, browser, http_policy_binary=http_policy_binary)
     started = time.monotonic()
 
-    def interrupted(_number: int, _frame: FrameType | None) -> None:
+    interrupted_phases: set[str] = set()
+    phase = "work"
+
+    def interrupted(number: int, _frame: FrameType | None) -> None:
+        # Once an interruption starts child retirement, repeated external signals
+        # must not abandon that separately-sessioned owner's cooperative cleanup.
+        if phase == "publication":
+            interrupted_phases.add(phase)
+            return
+        if phase == "cleanup" and number != signal.SIGALRM:
+            interrupted_phases.add("cleanup-external")
+            return
+        if phase in interrupted_phases or (interrupted_phases and number != signal.SIGALRM):
+            return
+        interrupted_phases.add(phase)
+        _ = signal.alarm(0)
         message = "Container release attempt interrupted or exceeded its work deadline"
         raise CheckError(message)
 
     for number in (signal.SIGTERM, signal.SIGINT, signal.SIGALRM):
         _ = signal.signal(number, interrupted)
-    _ = signal.alarm(480)
+    _ = signal.alarm(660)
     try:
         harness.setup()
         harness.exercise_browser_rollover()
@@ -1464,6 +1660,8 @@ def main(arguments: Sequence[str] | None = None) -> int:
             str(error) if isinstance(error, CheckError) else type(error).__name__
         )
     finally:
+        phase = "cleanup"
+        harness.commands.cleanup_deadline = time.monotonic() + 100
         _ = signal.alarm(100)
         try:
             harness.cleanup()
@@ -1471,20 +1669,12 @@ def main(arguments: Sequence[str] | None = None) -> int:
             harness.report["cleanupPassed"] = False
             harness.report["cleanupFailures"] = [type(error).__name__]
         _ = signal.alarm(0)
+        phase = "publication"
+        if interrupted_phases:
+            harness.report["passed"] = False
         harness.report["passed"] = harness.report["passed"] and harness.report["cleanupPassed"]
-        harness.report["seconds"] = round(time.monotonic() - started, 3)
-        harness.report["lastNonzeroCommand"] = harness.commands.last_failure
-        write_new(output / "report.json", harness.report)
-        # Only this sanitized fixed-name report is exported for the unprivileged
-        # artifact uploader. Generic evidence and fixture CA sources stay 0600.
-        (output / "report.json").chmod(0o644)
-        output.chmod(0o755)
-        print(json.dumps(harness.report))  # noqa: T201 - Public sanitized CI report.
-        print(  # noqa: T201 - Explicit CLI cleanup summary without private diagnostics.
-            "Private fixture data and images retained; verified owned containers "
-            + f"and fixture trust entry cleaned: {harness.report['cleanupPassed']}"
-        )
-    return 0 if harness.report["passed"] else 1
+        publish_fixture_report(harness, output, started)
+    return 0 if harness.report["passed"] and not interrupted_phases else 1
 
 
 if __name__ == "__main__":

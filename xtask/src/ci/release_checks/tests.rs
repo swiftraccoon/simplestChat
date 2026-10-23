@@ -47,6 +47,7 @@ impl Fixture {
         fs::create_dir(&bin).unwrap();
         let node = bin.join("node");
         executable(&node, b"fixture Node");
+        executable(&bin.join("python3"), b"inert Python");
         let chromium = root.join("browser with spaces");
         executable(&chromium, b"fixture Chromium");
         let environment = [
@@ -61,7 +62,9 @@ impl Fixture {
         ]
         .into_iter()
         .collect::<Environment>();
-        let context = Context::new(&root, environment, "Linux").unwrap();
+        let http_policy = root.join("feature xtask");
+        executable(&http_policy, b"feature checker fixture");
+        let context = Context::new(&root, environment, "Linux", &http_policy).unwrap();
         Self {
             root,
             context,
@@ -116,6 +119,10 @@ impl Executor for Fake<'_> {
             assert_eq!(request.capture, Some(4096));
         } else {
             assert_eq!(request.program, Program::Python);
+            let proof = request.release_checks.take().unwrap();
+            proof.begin(&request).unwrap();
+            proof.validate(request.program, &request.arguments).unwrap();
+            drop(proof);
             assert!(request.capture.is_none());
         }
         self.commands.push(request);
@@ -145,6 +152,13 @@ impl Executor for Fake<'_> {
             }
             Ok(bytes)
         } else {
+            if self.mode == "checker_changed" {
+                fs::write(
+                    &self.fixture.context.http_policy,
+                    b"replacement feature binary",
+                )
+                .unwrap();
+            }
             if self.mode == "browser_changed" {
                 fs::write(&self.fixture.chromium, b"replaced Chromium").unwrap();
             }
@@ -181,6 +195,8 @@ async fn exact_discovery_and_coordinator_arguments_keep_one_budget_and_inherited
             f.node.canonicalize().unwrap().into_os_string(),
             "--chromium".into(),
             f.chromium.canonicalize().unwrap().into_os_string(),
+            "--http-policy-binary".into(),
+            f.context.http_policy.clone().into_os_string(),
             "--image".into(),
             f.context.image.clone().into(),
             "--fixture-output".into(),
@@ -192,11 +208,10 @@ async fn exact_discovery_and_coordinator_arguments_keep_one_budget_and_inherited
             f.context.temporary.join("release-checks").into_os_string()
         ]
     );
-    assert_eq!(plan::BUDGET, Duration::from_secs(660));
+    assert_eq!(plan::BUDGET, Duration::from_secs(1140));
     assert!(fake.commands[0].timeout <= Duration::from_secs(30));
-    assert!(fake.commands[1].timeout <= Duration::from_secs(640));
-    assert!(fake.commands[1].timeout > Duration::from_secs(639));
-    assert_eq!(fake.commands[1].grace, Duration::from_secs(15));
+    assert_eq!(fake.commands[1].timeout, Duration::from_secs(850));
+    assert_eq!(fake.commands[1].grace, Duration::from_secs(200));
     assert!(
         !f.context.temporary.join("release-checks").exists(),
         "only coordinator creates its output"
@@ -236,6 +251,7 @@ async fn invalid_returned_paths_and_tool_mutation_refuse_success_without_echoing
         "empty",
         "node_changed",
         "browser_changed",
+        "checker_changed",
     ] {
         let f = Fixture::new();
         let mut fake = Fake::new(&f, mode);
@@ -243,7 +259,11 @@ async fn invalid_returned_paths_and_tool_mutation_refuse_success_without_echoing
         assert!(!error.message.contains(f.root.to_str().unwrap()));
         assert_eq!(
             fake.commands.len(),
-            if mode == "browser_changed" { 2 } else { 1 },
+            if matches!(mode, "browser_changed" | "checker_changed") {
+                2
+            } else {
+                1
+            },
             "{mode}"
         );
     }
@@ -317,14 +337,22 @@ fn retained_tool_identity_rejects_mutation_replacement_and_retargeted_symlinks()
 fn contexts_arguments_and_exhausted_budget_fail_before_any_workload() {
     let f = Fixture::new();
     for system in ["Darwin", "Windows"] {
-        assert!(Context::new(&f.root, f.context.environment.clone(), system).is_err());
+        assert!(
+            Context::new(
+                &f.root,
+                f.context.environment.clone(),
+                system,
+                &f.context.http_policy
+            )
+            .is_err()
+        );
     }
     let mut env = f.context.environment.clone();
     env.insert(
         "PRODUCTION_IMAGE".into(),
         "simplestchat-ci:production".into(),
     );
-    assert!(Context::new(&f.root, env, "Linux").is_err());
+    assert!(Context::new(&f.root, env, "Linux", &f.context.http_policy).is_err());
     let proof = Arc::new(files::node(&f.root, &f.context.environment).unwrap());
     assert_eq!(
         plan::discover(Arc::clone(&proof), Instant::now() + Duration::from_secs(19))
@@ -343,9 +371,9 @@ fn contexts_arguments_and_exhausted_budget_fail_before_any_workload() {
     );
     let mut env = f.context.environment.clone();
     env.insert("ACT".into(), "true".into());
-    assert!(Context::new(&f.root, env.clone(), "Linux").is_err());
+    assert!(Context::new(&f.root, env.clone(), "Linux", &f.context.http_policy).is_err());
     env.insert("LOCAL_CI_DISPOSABLE".into(), "1".into());
-    Context::new(&f.root, env, "Linux").unwrap();
+    Context::new(&f.root, env, "Linux", &f.context.http_policy).unwrap();
 }
 
 #[test]

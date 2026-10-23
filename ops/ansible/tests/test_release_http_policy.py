@@ -420,8 +420,11 @@ class TransportAndHarnessTests(unittest.TestCase):
 
     def test_harness_invokes_fixed_child_and_accepts_only_complete_sanitized_report(self) -> None:
         """The canonical fixture binds its owned identities and keeps raw output private."""
+        self.assertEqual(harness.http_policy_success(), policy.success_report())
         with tempfile.TemporaryDirectory() as temporary:
-            current = harness.Harness(Path(temporary), "fixture-image")
+            current = harness.Harness(
+                Path(temporary), "fixture-image", http_policy_binary=Path(sys.executable).resolve()
+            )
             current.token = TOKEN
             current.ca_digest = "d" * 64
 
@@ -440,12 +443,33 @@ class TransportAndHarnessTests(unittest.TestCase):
             )
             self.assertEqual(len(calls), 1)
             args, options = calls[0]
-            self.assertIn(str(ROOT / "build/release_http_policy.py"), args)
-            self.assertEqual(options.get("timeout"), 35)
+            self.assertEqual(
+                args,
+                [
+                    str(Path(sys.executable).resolve()),
+                    "ci",
+                    "release-http-policy",
+                    "--fixture-token",
+                    TOKEN,
+                    "--caddy-id",
+                    CADDY,
+                    "--app-id",
+                    APP,
+                    "--ca",
+                    str(current.private / "ca.crt"),
+                    "--ca-sha256",
+                    "d" * 64,
+                ],
+            )
+            self.assertNotIn(str(ROOT / "build/release_http_policy.py"), args)
+            self.assertEqual(options.get("timeout"), 210)
+            self.assertEqual(options.get("grace"), 60)
 
             for response in (
                 {**policy.success_report(), "private": "PRIVATE-FIXTURE"},
                 {"passed": True},
+                {**policy.success_report(), "passed": 1},
+                {**policy.success_report(), "requests": 5.0},
             ):
                 with (
                     patch.object(commands, "run", return_value=TextResult(json.dumps(response))),
@@ -453,3 +477,14 @@ class TransportAndHarnessTests(unittest.TestCase):
                     self.assertRaisesRegex(harness.CheckError, "did not pass completely"),
                 ):
                     current.response_policy()
+
+            with (
+                patch.object(
+                    commands,
+                    "run",
+                    return_value=TextResult(json.dumps(policy.success_report()), code=42),
+                ),
+                patch.object(current, "service", side_effect=[{"id": CADDY}, {"id": APP}]),
+                self.assertRaisesRegex(harness.CheckError, "did not pass completely"),
+            ):
+                current.response_policy()

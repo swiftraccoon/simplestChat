@@ -2,6 +2,7 @@
 
 mod execute;
 pub(super) mod files;
+pub(super) mod invocation;
 mod plan;
 #[cfg(test)]
 mod tests;
@@ -12,14 +13,17 @@ use crate::{
 };
 use std::{path::Path, process::ExitCode};
 
-const USAGE: &str = "usage: cargo run --locked -q -p xtask -- ci release-checks";
+const USAGE: &str = concat!(
+    "usage: cargo run --locked -q -p xtask -- ci release-checks ",
+    "--http-policy-binary ABSOLUTE_FEATURE_BINARY",
+);
 
 pub(super) fn run(root: &Path, arguments: &[String]) -> anyhow::Result<ExitCode> {
     if arguments.len() == 1 && matches!(arguments[0].as_str(), "--help" | "-h") {
         println!("{USAGE}");
         return Ok(ExitCode::SUCCESS);
     }
-    if !arguments.is_empty() {
+    if arguments.len() != 2 || arguments[0] != "--http-policy-binary" {
         eprintln!("{USAGE}");
         return Ok(ExitCode::from(2));
     }
@@ -29,6 +33,7 @@ pub(super) fn run(root: &Path, arguments: &[String]) -> anyhow::Result<ExitCode>
             root,
             tooling::inherited_env(),
             system.sysname().to_str().unwrap_or(""),
+            Path::new(&arguments[1]),
         )?;
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()

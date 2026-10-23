@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import os
+import signal
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -15,6 +17,7 @@ from test_support import ROOT
 # isort: split
 import ci_release_checks as checks
 import security_check
+from release_json import decode_json, integer_value, object_value
 from security_context import Context
 from security_tools import ToolError
 
@@ -26,6 +29,120 @@ def task(name: str, program: str, *arguments: str, timeout: float = 3) -> checks
 
 class ReleaseOverlapTests(unittest.TestCase):
     """Each result stays binding while work actually overlaps and children are reaped."""
+
+    def test_nested_checker_settles_before_repeated_parent_signals_return(self) -> None:
+        """Real inert groups exercise coordinator, fixture and checker retirement together."""
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary).resolve()
+            selected = output / "checker"
+            _ = selected.write_text(self.checker_program(output))
+            selected.chmod(0o700)
+            event = threading.Event()
+            failures: list[Exception] = []
+
+            def cancel() -> None:
+                try:
+                    self.wait_for(output / "checker-ready.json")
+                    event.set()
+                    self.wait_for(output / "checker-retiring")
+                    identity = int((output / "fixture.pid").read_text())
+                    os.kill(identity, signal.SIGTERM)
+                    os.kill(identity, signal.SIGTERM)
+                except (OSError, AssertionError) as error:
+                    failures.append(error)
+                finally:
+                    event.set()
+                    (output / "release-checker").touch()
+
+            watcher = threading.Thread(target=cancel)
+            watcher.start()
+            try:
+                result = checks.run_task(
+                    checks.Task(
+                        "nested",
+                        (sys.executable, "-c", self.fixture_program(output, selected)),
+                        10,
+                        8,
+                    ),
+                    output,
+                    event,
+                )
+            finally:
+                (output / "release-checker").touch()
+                watcher.join(timeout=5)
+            self.assertFalse(watcher.is_alive())
+            self.assertEqual(failures, [])
+            self.assertEqual(result.failure, "command_lease_lost")
+            self.assertIsNone(result.status)
+            self.assertTrue((output / "checker-closed").is_file())
+            self.assertTrue((output / "fixture-cleaned").is_file())
+            report = object_value(decode_json((output / "fixture/report.json").read_text()))
+            self.assertIs(report["passed"], expr2=False)
+            self.assertIs(report["cleanupPassed"], expr2=True)
+            identities = object_value(decode_json((output / "checker-ready.json").read_text()))
+            for identity in [
+                int((output / "fixture.pid").read_text()),
+                *(integer_value(value) for value in identities.values()),
+            ]:
+                with self.assertRaises(ProcessLookupError):
+                    os.kill(identity, 0)
+
+    def wait_for(self, path: Path) -> None:
+        """Use a bounded file barrier, with no port, service or external runtime dependency."""
+        deadline = time.monotonic() + 3
+        while not path.exists() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        self.assertTrue(path.is_file(), path.name)
+
+    @staticmethod
+    def checker_program(output: Path) -> str:
+        """Build an inert checker that always retires and reaps its separately owned child."""
+        return f"""#!{Path(sys.executable).resolve()}
+import json,os,pathlib,signal,subprocess,sys,time
+sys.path.insert(0,{str(ROOT / "ops/ansible/files")!r})
+import bounded_process
+directory=pathlib.Path({str(output)!r})
+stopping=False
+def cancel(*_):
+    global stopping
+    stopping=True
+signal.signal(signal.SIGTERM,cancel)
+child=subprocess.Popen([sys.executable,"-c","import time; time.sleep(30)"],start_new_session=True)
+try:
+    (directory/"checker-ready.json").write_text(json.dumps({{"checker":os.getpid(),"child":child.pid}}))
+    deadline=time.monotonic()+2
+    while not stopping and time.monotonic()<deadline: time.sleep(.01)
+    if not stopping: raise SystemExit(23)
+    (directory/"checker-retiring").touch()
+    deadline=time.monotonic()+2
+    while not (directory/"release-checker").exists() and time.monotonic()<deadline: time.sleep(.01)
+finally:
+    bounded_process.stop(child,grace=.2)
+    (directory/"checker-closed").touch()
+"""
+
+    @staticmethod
+    def fixture_program(output: Path, selected: Path) -> str:
+        """Replace only host-specific methods; retain real main, Commands and checker calls."""
+        return f"""
+import os,pathlib,sys
+sys.path[:0]=[{str(ROOT / "build")!r},{str(ROOT / "ops/ansible/files")!r}]
+import release_container_harness as harness
+directory=pathlib.Path({str(output)!r})
+class Inert(harness.Harness):
+    def setup(self): self.ca_digest="d"*64
+    def service(self,name): return {{"id":("a" if name=="caddy" else "b")*64}}
+    def exercise_browser_rollover(self): pass
+    def exercise(self): self.response_policy()
+    def cleanup(self):
+        self.report["cleanupPassed"]=True
+        (directory/"fixture-cleaned").touch()
+harness.Harness=Inert
+(directory/"fixture.pid").write_text(str(os.getpid()))
+raise SystemExit(harness.main(["--disposable-host","--image","fixture-image","--output",
+str(directory/"fixture"),"--node",sys.executable,"--chromium",sys.executable,
+"--http-policy-binary",{str(selected)!r}]))
+"""
 
     def test_both_children_start_before_either_finishes(self) -> None:
         """A cross-process barrier fails if the two independent commands become serial."""
@@ -110,7 +227,9 @@ class ReleaseOverlapTests(unittest.TestCase):
                 "sha256:" + "a" * 64,
                 output,
                 output,
-                (Path("/fixture/node"), Path("/fixture/chromium")),
+                checks.FixtureTools(
+                    Path("/fixture/node"), Path("/fixture/chromium"), Path("/fixture/http-policy")
+                ),
             )
         self.assertEqual(
             fixture.command[:4],
@@ -123,9 +242,18 @@ class ReleaseOverlapTests(unittest.TestCase):
         )
         self.assertIn("--disposable-host", fixture.command)
         self.assertEqual(
-            fixture.command[-4:], ("--node", "/fixture/node", "--chromium", "/fixture/chromium")
+            fixture.command[-6:],
+            (
+                "--node",
+                "/fixture/node",
+                "--chromium",
+                "/fixture/chromium",
+                "--http-policy-binary",
+                "/fixture/http-policy",
+            ),
         )
-        self.assertEqual(fixture.timeout, 590)
+        self.assertEqual(fixture.timeout, 850)
+        self.assertEqual(fixture.grace, 180)
         self.assertEqual(
             tools.command,
             (
@@ -144,6 +272,7 @@ class ReleaseOverlapTests(unittest.TestCase):
             ),
         )
         self.assertEqual(tools.timeout, 300)
+        self.assertEqual(tools.grace, 5)
 
 
 class PreparedImageToolTests(unittest.TestCase):

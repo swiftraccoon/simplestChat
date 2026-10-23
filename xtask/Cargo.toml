@@ -12,6 +12,7 @@ workspace = true
 [features]
 # CI keys and setup commands must compile before the pinned native libraries exist.
 public-smoke = ["dep:futures-util", "dep:reqwest", "dep:tokio-tungstenite"]
+release-http-policy = ["dep:reqwest"]
 
 [dependencies]
 anyhow = "1.0.104"

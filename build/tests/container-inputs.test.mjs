@@ -164,6 +164,7 @@ test('both Fedora stages mount only admitted read-only public policy files', () 
   const securityRules = ignoreRules.filter(rule => rule.replace(/^!/, '').startsWith('security'));
   assert.deepEqual(securityRules.toSorted(), [
     '!security/', 'security/**', '!security/exceptions.json', '!security/image-policy.json',
+    '!security/http-policy.json',
     '!security/runtime/', 'security/runtime/**', '!security/runtime/nsswitch.conf',
   ].toSorted());
 });
@@ -354,4 +355,32 @@ test('standalone container benchmark admits only its reviewed reference closure'
   ]) assert.equal(excluded(filename), false, filename);
   assert.equal(excluded('xtask/src/ci/container_benchmark/reference/build/other.sh'), true);
   assert.equal(excluded('xtask/src/ci/container_benchmark/reference/build/tests/other.mjs'), true);
+});
+
+
+test('release HTTP checker admits only its reviewed offline reference closure', () => {
+  for (const filename of [
+    'xtask/src/ci/release_http_policy/oracle.py',
+    'xtask/src/ci/release_http_policy/__init__.py',
+    'xtask/src/ci/release_http_policy/reference/build/release_container_fixture.py',
+    'xtask/src/ci/release_http_policy/reference/build/release_container_harness.py',
+    'xtask/src/ci/release_http_policy/reference/build/release_http_policy.py',
+    'xtask/src/ci/release_http_policy/reference/ops/ansible/files/bounded_process.py',
+    'xtask/src/ci/release_http_policy/reference/ops/ansible/files/release_artifact.py',
+    'xtask/src/ci/release_http_policy/reference/ops/ansible/files/release_assets.py',
+    'xtask/src/ci/release_http_policy/reference/ops/ansible/files/release_json.py',
+    'xtask/src/ci/release_http_policy/reference/ops/ansible/files/release_public.py',
+    'xtask/src/ci/release_http_policy/reference/ops/ansible/files/runtime_profile.py',
+    'xtask/src/ci/release_http_policy/reference/ops/ansible/tests/test_release_container_harness.py',
+    'xtask/src/ci/release_http_policy/reference/ops/ansible/tests/test_release_http_policy.py',
+    'xtask/src/ci/release_http_policy/reference/ops/ansible/tests/test_support.py',
+    'xtask/src/ci/release_http_policy/reference/security/http-policy.json',
+  ]) assert.equal(excluded(filename), false, filename);
+  for (const filename of [
+    'xtask/src/ci/release_http_policy/private.env',
+    'xtask/src/ci/release_http_policy/reference/build/other.py',
+    'xtask/src/ci/release_http_policy/reference/ops/ansible/files/other.py',
+    'xtask/src/ci/release_http_policy/reference/ops/ansible/tests/other.py',
+    'xtask/src/ci/release_http_policy/reference/security/other.json',
+  ]) assert.equal(excluded(filename), true, filename);
 });

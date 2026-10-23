@@ -1057,3 +1057,37 @@ Complete-source SHA256 per rebound file:
 | 35 | `src/signaling/security_tests.rs:174:174:149:161` | `codeql:b96f08b24fe4ff252e9b8d806692aaed103bfcf2e8bb368e18a6c538f54bcce6` |
 | 63 | `src/signaling/security_tests.rs:607:607:27:52` | `codeql:812fd21cf1ff627beca2f93af8a8f1a518cdb4e8d815bfae87c61103105fba29` |
 | 69 | `src/signaling/security_tests.rs:165:165:75:87` | `codeql:ca53d4797be56dda81bb54bf21392febfea9bd265d1e5213b3754603aeab5f6a` |
+
+<a id="local-release-http-retained-fixture"></a>
+
+## Local finding: retained release-HTTP configuration fixture (2026-10-22)
+
+Fresh local CodeQL `2.27.1` Python analysis of
+`507526025fa4797708bcce0739ceeb18d1ebf2e0` reports one new blocked
+`py/jinja2/autoescape-false` finding at
+`xtask/src/ci/release_http_policy/reference/build/release_container_fixture.py`,
+range `171:175:19:6`. Its complete-source SHA256 is
+`072ef7e7851dc2d2232694d3f7f7224876391a4a8052977adce04309b0de24e8`,
+rendered-message SHA256 is
+`67d39a5d4ef9fe9e92c004f6e11032202a7db050c6da7640e07df5b9eda66694`,
+and exact fingerprint is
+`codeql:3fad85717ecdd86d5b8475b348bdb96215d5584abadcc9044fef03685698d844`.
+This is a local SARIF observation; no GitHub alert number or dismissal is claimed.
+
+The entire retained file is byte-identical to
+[`build/release_container_fixture.py`](../build/release_container_fixture.py),
+whose configuration-only renderer is reviewed under [alert 27](#alert-27).
+The unchanged `StrictUndefined` Jinja environment renders local dotenv, SQL,
+Compose/YAML and PostgreSQL configuration, never HTML. HTML escaping would
+corrupt those formats. Browser fixture HTML and JSON receipts are generated
+separately from this renderer.
+
+The retained copy belongs to the offline release-HTTP reference import closure.
+Its oracle replaces `jinja2.Environment` with a fail-on-use sentinel, so invoking
+this renderer is denied. The audit hook also refuses subprocess and socket
+creation; compiled and current-file byte/stamp pins are checked before every
+reference execution. The new exception binds only the observed copied path,
+query, analyzer version, range, message and complete-source digest. Existing
+records are unchanged. Owner `swiftraccoon` and expiry `2026-11-29` match the
+original review; no query/path exclusion, automatic renewal, expiry extension
+or remote dismissal is added. Hosted ingestion remains a separate required check.

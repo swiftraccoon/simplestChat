@@ -70,8 +70,17 @@ impl<'a> Native<'a> {
         let mdns = request.mdns.clone();
         let mdns_admission = mdns.as_ref().map(|v| v.begin()).transpose();
         let retained_ops = request.retained_ops.clone();
+        let release_checks = request.release_checks.clone();
+        let checks_admission = release_checks
+            .as_ref()
+            .map(|p| p.begin(&request))
+            .transpose();
         let retained_admission = retained_ops.as_ref().map(|v| v.begin()).transpose();
         let benchmark = request.benchmark.clone();
+        #[cfg(feature = "release-http-policy")]
+        let release_http = request.release_http.clone();
+        #[cfg(feature = "release-http-policy")]
+        let http_admission = release_http.as_ref().map(|p| p.begin(&request)).transpose();
         let benchmark_admission = if request.benchmark_output.is_some() != benchmark.is_some() {
             Err(Failure::new(
                 1,
@@ -90,14 +99,28 @@ impl<'a> Native<'a> {
         let result = match admission
             .and(mdns_admission.map(|_| ()))
             .and(retained_admission.map(|_| ()))
+            .and(checks_admission.map(|_| ()))
             .and(benchmark_admission.map(|_| ()))
-        {
+            .and({
+                #[cfg(feature = "release-http-policy")]
+                {
+                    http_admission.map(|_| ())
+                }
+                #[cfg(not(feature = "release-http-policy"))]
+                {
+                    Ok(())
+                }
+            }) {
             Ok(()) => self.execute_body(request, &io, finalizer).await,
             Err(error) => Err(error),
         };
         // This runs on setup/spawn errors too. A body-local Group guard finishes
         // its fallback before these bounded EOF and explicit-close attempts.
         let closed = io.finish_benchmark(benchmark.as_deref()).await;
+        #[cfg(feature = "release-http-policy")]
+        if let Some(proof) = release_http {
+            proof.observed_io(closed.as_ref().ok().cloned().flatten());
+        }
         if let Some(proof) = retained_ops {
             proof.observed_io(closed.as_ref().ok().cloned().flatten());
         }
@@ -148,6 +171,17 @@ impl<'a> Native<'a> {
                 None => (self.root, self.environment),
             }
         };
+        let (root, environment) = if let Some(proof) = &request.release_checks {
+            proof.context(request.program, &request.arguments)?
+        } else {
+            (root, environment)
+        };
+        #[cfg(feature = "release-http-policy")]
+        let (root, environment) = if let Some(proof) = &request.release_http {
+            proof.context(request.program, &request.arguments)?
+        } else {
+            (root, environment)
+        };
         let mut command =
             tooling::command(root, environment, executable(&request)?, &request.arguments);
         use std::os::unix::process::CommandExt;
@@ -190,6 +224,15 @@ impl<'a> Native<'a> {
             if !request.cleanup {
                 self.ready().await?;
             }
+            proof.validate(request.program, &request.arguments)?;
+        }
+        if let Some(proof) = &request.release_checks {
+            self.ready().await?;
+            proof.validate(request.program, &request.arguments)?;
+        }
+        #[cfg(feature = "release-http-policy")]
+        if let Some(proof) = &request.release_http {
+            self.ready().await?;
             proof.validate(request.program, &request.arguments)?;
         }
         let child = command.spawn().map_err(|error| {
@@ -518,6 +561,9 @@ fn executable(request: &Command) -> Result<&std::ffi::OsStr> {
         request.mdns.is_some(),
         request.retained_ops.is_some(),
         request.benchmark.is_some(),
+        request.release_checks.is_some(),
+        #[cfg(feature = "release-http-policy")]
+        request.release_http.is_some(),
     ]
     .into_iter()
     .filter(|present| *present)
@@ -552,6 +598,17 @@ fn executable(request: &Command) -> Result<&std::ffi::OsStr> {
             1,
             "CI execution requires its validated executable role.",
         ));
+    }
+    if let Some(proof) = &request.release_checks {
+        return proof
+            .validate(request.program, &request.arguments)
+            .map(|p| p.as_os_str());
+    }
+    #[cfg(feature = "release-http-policy")]
+    if let Some(proof) = &request.release_http {
+        return proof
+            .validate(request.program, &request.arguments)
+            .map(|p| p.as_os_str());
     }
     let path = match request.program {
         Program::Git | Program::Docker => {

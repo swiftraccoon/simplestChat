@@ -21,7 +21,7 @@ sys.stdout.write('x'*4097 if mode=='overflow' else str(root/'browser with spaces
 import json,os,signal,sys,time
 from pathlib import Path
 root=Path(os.environ['FIXTURE_ROOT']);mode=os.environ['FIXTURE_MODE'];tmp=root/'runner temp'
-expected=['-B','build/ci_release_checks.py','--controller',str(tmp/'release-container-controller/bin/python'),'--node',str(root/'commands/node'),'--chromium',str(root/'browser with spaces'),'--image','sha256:'+'a'*64,'--fixture-output',str(tmp/'release-container'),'--output',str(tmp/'release-checks')]
+expected=['-B','build/ci_release_checks.py','--controller',str(tmp/'release-container-controller/bin/python'),'--node',str(root/'commands/node'),'--chromium',str(root/'browser with spaces'),'--http-policy-binary',str(root/'feature xtask'),'--image','sha256:'+'a'*64,'--fixture-output',str(tmp/'release-container'),'--output',str(tmp/'release-checks')]
 assert sys.argv[1:]==expected
 cancelled=False
 def cancel(*_):
