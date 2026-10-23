@@ -106,6 +106,16 @@ export class AccountUpdates {
 
     const sync = () => this.synchronize();
     window.addEventListener('focus', sync, { signal: this.events.signal });
+    window.addEventListener(
+      'online',
+      () => {
+        // A ready stream can retain a stalled read after connectivity returns.
+        // Pending headers and server-directed retries keep their existing owner.
+        if (this.account && connected.get(this.account) === this) this.stop();
+        this.synchronize();
+      },
+      { signal: this.events.signal },
+    );
     document.addEventListener('visibilitychange', sync, { signal: this.events.signal });
     this.timer = setInterval(sync, 5000);
     this.synchronize();
