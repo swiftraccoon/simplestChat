@@ -524,6 +524,20 @@ class VerifiedCacheTests(unittest.TestCase):
             cache.save(self.root, "rust-test", key, self.root / "changed-cache")
         self.assertFalse((self.root / "changed-cache").exists())
 
+    def test_rust_reference_requirements_invalidate_original_success(self) -> None:
+        """The selected Python's reviewed lock is part of the Rust-test receipt closure."""
+        path = self.root / "ops/ansible/requirements.txt"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        _ = path.write_bytes((ROOT / "ops/ansible/requirements.txt").read_bytes())
+        self.git("add", ".")
+        original = cache.cache_key(self.root, "rust-test")
+        directory = self.root / "cache"
+        cache.save(self.root, "rust-test", original, directory)
+        _ = path.write_bytes(path.read_bytes() + b"\n# changed reviewed input\n")
+        self.assertNotEqual(cache.cache_key(self.root, "rust-test"), original)
+        with self.assertRaisesRegex(ToolError, "ci_cache_inputs_changed"):
+            _ = cache.verify(self.root, "rust-test", original, directory)
+
     def test_backend_cache_checks_every_binary_before_installing_any(self) -> None:
         """Corrupt or symlinked restored executables must never reach the browser server."""
         output = self.backend_fixture()
@@ -725,6 +739,74 @@ class VerifiedCacheTests(unittest.TestCase):
 
 class VerifiedWorkflowTests(unittest.TestCase):
     """Keep volatile audits/browser behavior fresh and publish only completed successes."""
+
+    def test_selected_python_installs_the_reviewed_wheel_lock_before_fingerprinting(self) -> None:
+        """Reference subprocesses use pinned PyYAML under the selected Unicode interpreter."""
+        workflow = yaml_value(
+            (ROOT / ".github/workflows/ci.yml").read_text(), scalars_as_strings=True
+        )
+        steps = objects(obj(workflow, "jobs", "rust-test"), "steps")
+        python = next(
+            step
+            for step in steps
+            if string(step.get("uses", "")).startswith("actions/setup-python@")
+        )
+        fingerprint = next(step for step in steps if step.get("id") == "verified-inputs")
+        self.assertLess(steps.index(python), steps.index(fingerprint))
+        self.assertNotIn("if", fingerprint)
+        self.assertNotIn("continue-on-error", fingerprint)
+        self.assertEqual(
+            string(fingerprint, "run").splitlines(),
+            [
+                "python -m pip install --require-hashes --only-binary=:all: "
+                + "-r ops/ansible/requirements.txt",
+                'cargo run --locked -q -p xtask -- ci key --scope "$CI_CACHE_SCOPE" '
+                + "--github-output",
+            ],
+        )
+        requirements = (ROOT / "ops/ansible/requirements.txt").read_text().splitlines()
+        self.assertIn("--require-hashes", requirements)
+        self.assertIn("--only-binary=:all:", requirements)
+
+    def test_rollover_browser_acquisition_has_ten_minutes_without_weakening_runtime(self) -> None:
+        """Slow APT font downloads keep the same pinned install and required release check."""
+        workflow = yaml_value(
+            (ROOT / ".github/workflows/ci.yml").read_text(), scalars_as_strings=True
+        )
+        job = obj(workflow, "jobs", "deployment")
+        steps = objects(job, "steps")
+        install = next(
+            step for step in steps if step.get("name") == "Install pinned rollover browser tooling"
+        )
+        release = next(
+            step
+            for step in steps
+            if step.get("name") == "App-only release and rollback on a disposable host"
+        )
+        self.assertEqual(install["timeout-minutes"], "10")
+        self.assertEqual(release["timeout-minutes"], "11")
+        self.assertEqual(job["timeout-minutes"], "95")
+        self.assertNotIn("if", install)
+        self.assertNotIn("continue-on-error", install)
+        self.assertNotIn("if", release)
+        self.assertNotIn("continue-on-error", release)
+        self.assertEqual(
+            obj(install, "env"),
+            {"PLAYWRIGHT_BROWSERS_PATH": "${{ runner.temp }}/rollover-playwright"},
+        )
+        commands = [
+            line
+            for line in string(install, "run").splitlines()
+            if line and not line.lstrip().startswith("#")
+        ]
+        self.assertEqual(
+            commands,
+            [
+                "npm --prefix web/e2e ci --ignore-scripts",
+                "npm --prefix web/e2e exec -- playwright install --with-deps chromium",
+            ],
+        )
+        self.assertLess(steps.index(install), steps.index(release))
 
     def test_rust_unicode_oracle_is_pinned_before_fingerprints_cache_and_builds(self) -> None:
         """The release calendar oracle cannot inherit a runner's older Unicode database."""

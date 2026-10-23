@@ -315,7 +315,7 @@ fn workflow_fingerprint_steps_keep_their_scopes_order_guards_and_receipt_consume
     for (job, scope, count) in [
         ("automation", "automation", 16),
         ("rust-lint", "rust-lint", 13),
-        ("rust-test", "rust-test", 19),
+        ("rust-test", "rust-test", 20),
         ("browser", "backend", 43),
     ] {
         let steps = workflow.jobs[job]["steps"].as_array().unwrap();
@@ -331,15 +331,30 @@ fn workflow_fingerprint_steps_keep_their_scopes_order_guards_and_receipt_consume
             .collect();
         assert_eq!(matching.len(), 1);
         let (index, key) = matching[0];
-        assert_eq!(key["env"], serde_json::json!({"CI_CACHE_SCOPE":scope}));
+        let expected_env = if job == "rust-test" {
+            serde_json::json!({
+                "CI_CACHE_SCOPE":scope,
+                "PKG_CONFIG_PATH":"${{ github.workspace }}/target/openssl-4.0.3/lib/pkgconfig"
+            })
+        } else {
+            serde_json::json!({"CI_CACHE_SCOPE":scope})
+        };
+        assert_eq!(key["env"], expected_env);
         assert!(key.get("if").is_none());
-        assert_eq!(
-            key["run"].as_str().unwrap().trim(),
+        let expected_run = if job == "rust-test" {
+            concat!(
+                "python -m pip install --require-hashes --only-binary=:all: ",
+                "-r ops/ansible/requirements.txt\n",
+                "cargo run --locked -q -p xtask -- ci key --scope ",
+                "\"$CI_CACHE_SCOPE\" --github-output"
+            )
+        } else {
             concat!(
                 "cargo run --locked -q -p xtask -- ci key --scope ",
                 "\"$CI_CACHE_SCOPE\" --github-output"
             )
-        );
+        };
+        assert_eq!(key["run"].as_str().unwrap().trim(), expected_run);
         let restore = &steps[index + 1];
         assert_eq!(restore["id"], "verified");
         assert_eq!(

@@ -269,6 +269,7 @@ jobs:
           PKG_CONFIG_PATH: ${{ github.workspace }}/target/openssl-4.0.3/lib/pkgconfig
           CI_CACHE_SCOPE: rust-test
         run: |
+          python -m pip install --require-hashes --only-binary=:all: -r ops/ansible/requirements.txt
           cargo run --locked -q -p xtask -- ci key --scope "$CI_CACHE_SCOPE" --github-output
       - name: Restore a verified rust-test result
         id: verified
@@ -1065,7 +1066,7 @@ jobs:
           key: rollover-chromium-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('web/e2e/package-lock.json') }}
 
       - name: Install pinned rollover browser tooling
-        timeout-minutes: 5
+        timeout-minutes: 10
         env:
           PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/rollover-playwright
         run: |

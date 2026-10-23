@@ -300,7 +300,7 @@ class ReleaseContainerCiTests(unittest.TestCase):
                 + "${{ hashFiles('web/e2e/package-lock.json') }}",
             },
         )
-        self.assertEqual(tooling["timeout-minutes"], "5")
+        self.assertEqual(tooling["timeout-minutes"], "10")
         self.assertEqual(
             tooling["env"], {"PLAYWRIGHT_BROWSERS_PATH": "${{ runner.temp }}/rollover-playwright"}
         )
