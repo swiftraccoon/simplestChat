@@ -20,6 +20,9 @@ pub(super) fn io<T>(value: std::io::Result<T>) -> Result<T> {
 pub(super) fn sys<T>(value: rustix::io::Result<T>) -> Result<T> {
     value.map_err(|_| fail("asset_operation_failed"))
 }
+fn convert<T: TryInto<U>, U>(value: T) -> Result<U> {
+    value.try_into().map_err(|_| fail("asset_operation_failed"))
+}
 #[cfg(test)]
 pub(super) type Hook = std::rc::Rc<dyn Fn(&'static str, &str) -> Result<()>>;
 #[derive(Clone, Default)]
@@ -324,9 +327,7 @@ impl Fs {
         ))?;
         // The fresh entry is not deleted if its identity could not be admitted.
         let directory = self.directory(parent, name, None)?;
-        let bits = mode
-            .try_into()
-            .map_err(|_| fail("asset_operation_failed"))?;
+        let bits = convert(mode)?;
         let changed = sys(rustix::fs::fchmod(
             self.fd(directory),
             Mode::from_bits_truncate(bits),
@@ -502,9 +503,7 @@ impl Fs {
             self.access.event("write", &self.path(parent, name))?;
             io(file.write_all(bytes))?;
             io(file.sync_all())?;
-            let bits = mode
-                .try_into()
-                .map_err(|_| fail("asset_operation_failed"))?;
+            let bits = convert(mode)?;
             sys(rustix::fs::fchmod(&file, Mode::from_bits_truncate(bits)))?;
             let stamp = io(file.metadata())?;
             require(
@@ -791,9 +790,6 @@ impl Fs {
         Ok(())
     }
     fn link_stamp(&self, parent: Dir, name: &str) -> Result<LinkStamp> {
-        fn convert<T: TryInto<U>, U>(value: T) -> Result<U> {
-            value.try_into().map_err(|_| fail("asset_operation_failed"))
-        }
         let value = sys(rustix::fs::statat(
             self.fd(parent),
             name,
