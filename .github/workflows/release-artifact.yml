@@ -38,12 +38,25 @@ jobs:
           "$RUNNER_TEMP/release-builder-build/release/simplestchat-ops" release build \
             --output "${RUNNER_TEMP}/simplestchat-release"
 
+      # Temporary diagnostic branch: repeat export without rebuilding or publishing.
+      - name: Probe exact local image export after the initial build
+        if: ${{ !cancelled() }}
+        timeout-minutes: 6
+        run: |
+          image_id="$(docker image inspect --format '{{.Id}}' "simplestchat-release/production:$GITHUB_SHA")"
+          "$RUNNER_TEMP/release-builder-build/release/simplestchat-ops" release build \
+            --image-id "$image_id" \
+            --timeout-seconds 300 \
+            --output "$RUNNER_TEMP/simplestchat-export-probe"
+
       - name: Retain the artifact and original build outcome
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: simplestchat-development-${{ github.sha }}
-          path: ${{ runner.temp }}/simplestchat-release
+          path: |
+            ${{ runner.temp }}/simplestchat-release
+            ${{ runner.temp }}/simplestchat-export-probe
           if-no-files-found: error
           compression-level: 0
-          retention-days: 14
+          retention-days: 1

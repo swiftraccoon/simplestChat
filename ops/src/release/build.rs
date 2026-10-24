@@ -869,17 +869,28 @@ impl<E: Executor> Controller<'_, E> {
             self.owner,
             self.phase,
         )?;
-        let manifest =
-            crate::release::manifest::Manifest::decode(&bytes).map_err(|_| Failure::Archive)?;
+        let manifest = crate::release::manifest::Manifest::decode(&bytes).map_err(|error| {
+            let _ = writeln!(
+                std::io::stderr().lock(),
+                "Release archive diagnostic: manifest_decode {}",
+                error.code()
+            );
+            Failure::Archive
+        })?;
         let file = output.get_mut("image.tar")?;
         let mut original = file.writer()?;
         let verified =
             crate::release::archive::verify_retained_archive(&mut original, &manifest, || {
                 self.owner.before(self.phase).is_ok()
             });
-        if verified.is_err() {
+        if let Err(error) = &verified {
             self.owner
                 .record(self.owner.primary().unwrap_or(Failure::Archive));
+            let _ = writeln!(
+                std::io::stderr().lock(),
+                "Release archive diagnostic: verify_retained {}",
+                error.code()
+            );
         }
         let closed = files::close(original);
         if let Err(error) = closed.as_ref() {
@@ -911,6 +922,10 @@ impl<E: Executor> Controller<'_, E> {
                                 .any(|(value, expected)| value.string() != Some(expected.as_str()))
                     })
             {
+                let _ = writeln!(
+                    std::io::stderr().lock(),
+                    "Release archive diagnostic: rootfs_mismatch"
+                );
                 return Err(Failure::Archive);
             }
         }
