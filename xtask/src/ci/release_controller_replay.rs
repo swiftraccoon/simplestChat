@@ -23,7 +23,7 @@ pub(super) async fn replay(
     deadline: Instant,
 ) -> Result<()> {
     let executable = std::env::current_exe().map_err(|_| plan::failure())?;
-    let proof = super::source::Source::open(&executable, 256 * 1024 * 1024)?;
+    let proof = super::source::Source::open(&executable, plan::MAX_EXECUTABLE_BYTES)?;
     let mut command = tooling::command(
         &context.root,
         &context.environment,

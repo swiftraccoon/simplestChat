@@ -17,6 +17,9 @@ pub(super) const LOG: &str = "release-container-controller.log";
 pub(super) const STATUS: &str = "release-container-controller.status";
 pub(super) const SPOOL: &str = "release-controller-control";
 pub(super) const MAX_LOG: u64 = 64 * 1024 * 1024;
+// The ordinary Linux debug controller measured 275,234,152 bytes after the
+// capacity dependency was added. Both self-verification paths share this cap.
+pub(super) const MAX_EXECUTABLE_BYTES: u64 = 320 * 1024 * 1024;
 pub(super) const STARTUP: Duration = Duration::from_secs(10);
 pub(super) const WORKER: Duration = Duration::from_secs(90 * 60);
 pub(super) const WAIT: Duration = Duration::from_secs(300);

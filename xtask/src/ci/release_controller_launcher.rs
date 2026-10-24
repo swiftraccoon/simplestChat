@@ -33,12 +33,13 @@ impl Drop for Launch {
 }
 pub(super) async fn start(context: &Context, signals: &mut Signals) -> Result<()> {
     let executable = std::env::current_exe().map_err(|_| plan::failure())?;
-    let proof = super::source::Source::open(&executable, 256 * 1024 * 1024).map_err(|error| {
-        Failure::new(
-            error.code,
-            "Release controller executable admission failed.",
-        )
-    })?;
+    let proof =
+        super::source::Source::open(&executable, plan::MAX_EXECUTABLE_BYTES).map_err(|error| {
+            Failure::new(
+                error.code,
+                "Release controller executable admission failed.",
+            )
+        })?;
     let result = start_with(
         context,
         signals,

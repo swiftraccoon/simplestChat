@@ -3,7 +3,7 @@ use super::*;
 use crate::{owned_process::Signals, tooling::Environment};
 use std::{
     fs,
-    os::unix::fs::{DirBuilderExt, PermissionsExt, symlink},
+    os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt, symlink},
     path::PathBuf,
     sync::atomic::{AtomicUsize, Ordering},
     time::{Duration, Instant},
@@ -122,6 +122,32 @@ fn startup_diagnostics_admit_only_closed_phases_and_never_private_failure_text()
             "Release controller preparation failed."
         );
     }
+}
+#[test]
+fn measured_linux_controller_and_exact_cap_fit_but_one_extra_byte_is_refused() {
+    let fixture = Fixture::new();
+    let path = fixture.directory.join("controller-source");
+    let measured_linux_bytes = 275_234_152;
+    assert!(measured_linux_bytes > 256 * 1024 * 1024);
+    for bytes in [measured_linux_bytes, plan::MAX_EXECUTABLE_BYTES] {
+        let file = fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(&path)
+            .unwrap();
+        file.set_len(bytes).unwrap();
+        nix::unistd::close(file).unwrap();
+        let source = source::Source::open(&path, plan::MAX_EXECUTABLE_BYTES).unwrap();
+        assert_eq!(serde_json::to_value(&source.stamp).unwrap()["bytes"], bytes);
+        source.validate().unwrap();
+        source.finish().unwrap();
+    }
+    let file = fs::OpenOptions::new().write(true).open(&path).unwrap();
+    file.set_len(plan::MAX_EXECUTABLE_BYTES + 1).unwrap();
+    nix::unistd::close(file).unwrap();
+    assert!(source::Source::open(&path, plan::MAX_EXECUTABLE_BYTES).is_err());
 }
 #[test]
 fn final_signal_and_deadline_fences_preserve_existing_nonzero_primary() {

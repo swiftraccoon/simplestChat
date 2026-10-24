@@ -1386,7 +1386,7 @@ Python invocation keep their existing paths.
 Startup diagnostics distinguish executable admission and revalidation, namespace
 preparation, worker launch, and worker exit before readiness. Other errors retain
 the coarse preparation failure. Requirements are limited to 1 MiB and the running
-controller executable to 256 MiB. An oversized source reports its original
+controller executable to 320 MiB. An oversized source reports its original
 descriptor byte count and bound after the file and directory close attempts.
 Public diagnostics contain only fixed phase labels and these numeric sizes.
 
