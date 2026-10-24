@@ -45,7 +45,8 @@ updates:
       default-days: 7
     open-pull-requests-limit: 3
   - package-ecosystem: pip
-    directory: /build
+    # Keep root tooling and aggregate requirement snapshots current too.
+    directories: [/, /build]
     schedule:
       interval: weekly
     cooldown:
