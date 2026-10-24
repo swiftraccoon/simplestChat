@@ -30,7 +30,7 @@ serde-saphyr = { version = "=2.0.0", default-features = false, features = ["dese
 serde_json = { version = "1.0.151", features = ["raw_value"] }
 sha2 = "0.11.0"
 simplestchat-ops = { path = "../ops" }
-syn = { version = "=3.0.6", features = ["full"] }
+syn = { version = "=3.0.9", features = ["full"] }
 tar = { version = "=0.4.46", default-features = false }
 tokio-tungstenite = { version = "0.30.0", features = ["native-tls"], optional = true }
 tokio = { version = "1.53.2", features = ["full"] }
