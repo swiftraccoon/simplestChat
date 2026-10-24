@@ -605,11 +605,12 @@ class Input:
 
 @final
 class Output:
-    """Project an owned test root into the original fixed wire namespace."""
+    """Deliver Ready immediately and final wire only after the real worker epilogue."""
 
     def __init__(self, root: Path, scenario: str) -> None:
         """Retain the original owned fixture state before any observation."""
         self.root, self.scenario = root, scenario
+        self.pending: str | None = None
 
     def write(self, text: str) -> int:
         """Retain original receipt privately and apply closed final-wire faults."""
@@ -647,11 +648,26 @@ class Output:
                 text += " \t\r\n\v\f"
             elif self.scenario == "final-non-ascii-whitespace":
                 text += "\u00a0"
+            # A rejected receipt can make either controller stop this worker
+            # immediately. Retain its final wire until the ACTUAL receiver has
+            # returned and the independent lock observation has been recorded.
+            self.pending = text
+            return len(text)
         _ = sys.stdout.write(text)
         return len(text)
 
     def flush(self) -> None:
-        """Flush the actual worker pipe without delaying or manufacturing EOF."""
+        """Flush Ready while the owned final receipt waits for worker completion."""
+        if self.pending is None:
+            _ = sys.stdout.flush()
+
+    def finish(self) -> None:
+        """Deliver the held wire after the genuine epilogue, without creating EOF."""
+        if self.pending is None:
+            message = "missing final fixture receipt"
+            raise ValueError(message)
+        text, self.pending = self.pending, None
+        _ = sys.stdout.write(text)
         _ = sys.stdout.flush()
 
 
@@ -855,8 +871,8 @@ def worker(root: Path, arguments: list[str]) -> int:  # noqa: C901, PLR0915 -- O
         with ExitStack() as stack:
             for module, name, replacement in replacements:
                 _ = stack.enter_context(patch.object(module, name, replacement))
-            output = cast("TextIO", cast("object", Output(root, scenario)))
-            code = receiver.main(Input(root, scenario), output)
+            output = Output(root, scenario)
+            code = receiver.main(Input(root, scenario), cast("TextIO", cast("object", output)))
     finally:
         if held_lock is not None:
             held_lock.close()
@@ -874,6 +890,7 @@ def worker(root: Path, arguments: list[str]) -> int:  # noqa: C901, PLR0915 -- O
         lockHeldAtReceipt=lock_checks,
         lockAvailableAfter=available,
     )
+    output.finish()
     return 7 if scenario == "final-nonzero" else code
 
 
