@@ -206,6 +206,13 @@ async function checkRoomAdministration(
     await row.getByRole('button', { name: 'Admit', exact: true }).click();
     await connected(waiting);
     assert.equal(await home.locator('#room-screen').isVisible(), false);
+    // The peer joins before the operator finishes refreshing the selected room.
+    await region.locator('.sheet-screen[aria-busy="false"]').waitFor({ state: 'visible' });
+    assert.equal(
+      await region.getByRole('alert').isVisible(),
+      false,
+      'the selected room refresh completed without an administration error',
+    );
     await closeSheet(home);
     await connected(owner);
     for (const page of members)
