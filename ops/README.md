@@ -2248,3 +2248,64 @@ remote operations. Notices reuse the exact scoped local-verifier texts; no
 new dependency or complete workspace license inventory is introduced. The
 synchronous entry point must run outside an entered Tokio runtime. Review the
 [validation evidence](../docs/testing.md) before considering any caller switch.
+
+
+## Explicit native host receiver
+
+The complete source route is:
+
+```sh
+simplestchat-ops release receive --timeout-seconds 300 --finalization-seconds 30
+```
+
+The numbers are an explicit caller choice, not defaults or a measured operational
+recommendation. Both selectors are required positive ASCII seconds,
+`0 < M < N <= 300`. One original N includes setup, the two physical stdin frames,
+transfer, extraction, verification, publication, receipt, standard descriptor
+restoration, runtime, signal completion and umask restoration. The body ends at
+N−M; curl's five-second TERM plus five-second reap allowance remains inside that
+body. M is reserved for local finalization. Kernel filesystem/random/close/reap
+stalls remain outside a hard wall guarantee.
+
+The root-only dedicated CLI takes one at-most-16-KiB LF envelope object, checks
+the fixed private layout and workload lock, persists a unique `download.*`
+attempt, then emits `{"schemaVersion":1,"status":"ready"}`. Only then does it read
+one at-most-16-KiB LF URL object. It does not require stdin EOF and ignores later
+frames. Positive signed 64-bit host identities are distinct from the local API's
+narrower selector profile. The passive envelope does not establish fresh API,
+signature, SSH actor, installation or deployment authority.
+
+The fixed roots remain `/srv/simplestchat-public`, `/etc/simplestchat-public` and
+`/run/simplestchat-bench`. This operation retains partial ZIP/member/evidence files
+and manifest-first partial publication after failure. It checks both existing
+pair targets before either link, accepts exact repeat and verified racing
+same-inode aliases, and never replaces or deletes a foreign target. It does not
+run Docker, touch a service, select a deployment or recover an unknown outcome.
+A final `fetch-outcome.json` and attempt sync are attempted while the lock is
+held. Lock close precedes the final sixteen-field report. Report claims and
+public committed-byte progress remain separate from a lower partial-write prefix.
+
+Curl 8.4+ with Linux/OpenSSL is an explicit platform prerequisite. The process
+uses the retained fixed `/etc/ssl/certs/ca-certificates.crt`, an owned empty capath
+and disabled native CA discovery. It runs HTTP/1.1 with TLS 1.2 minimum, fixed
+`simplestchat-release-receive` User-Agent, no ambient config/proxy/netrc/redirect/retry or
+decompression role, and carries the opaque URL only in bounded stdin config.
+Version/backend/CA exclusivity still require actual free-VM evidence. Curl's
+fifteen-second connect limit and the original native whole/body clock do not
+recreate urllib's fifteen-second per-socket idle timer. No low-speed floor is
+used. Raw first CE/CL values are checked, but malformed/conflicting HTTP framing
+may be rejected differently by curl; full wire/temporal parity is unclaimed.
+
+The shared byte-JSON profile bounds depth, value/string growth, nonfinite and
+surrogate handling.
+`--help` and the limited-scope `--licenses` route run before host/runtime effects.
+Syntax errors return2; operational refusals return1. Exit0 includes all known
+peer finalization and the original end fence. A nonzero exit invalidates earlier
+Ready, partial output or a complete earlier report, including a late failure.
+
+The existing Python receiver, prepared-helper preflight, controller command and
+operational callers remain unchanged. Source compilation and inert comparison do
+not authenticate a Linux musl executable on the target. The current authenticated
+Ops installer supports first install and exact repeat, not an upgrade. Installing
+or switching this receiver requires separately complete bootstrap and runtime
+proof; this source route makes no such switch.

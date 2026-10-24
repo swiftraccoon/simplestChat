@@ -2739,3 +2739,51 @@ VM, process, pipe and file owners before reporting success. Source-built Linux
 GNU execution is separate evidence from authenticated musl distribution or an
 installed caller migration. An already acquired archive alone does not exercise
 SSH or the receiver's download. Existing operational callers remain available.
+
+## Native host receiver checks
+
+The explicit native `release receive` operation has its own host contract and
+CLI, separate from the controller's default prepared Python receiver route. Run
+its ordinary regressions and actual CLI checks before the complete comparison:
+
+```sh
+cargo test --locked -p simplestchat-ops --lib release::attestation::receive::
+cargo test --locked -p simplestchat-ops --test release_receive_cli
+PYTHON_CHECK_ENV=/absolute/pinned-controller-env \
+  cargo test --locked -p simplestchat-ops --lib \
+  release::attestation::receive::oracle_tests::whole_host_receiver_matches_unchanged_python \
+  -- --ignored --exact
+```
+
+The comparison runs 104 cases through the unchanged Python host receiver with
+real private files, ZIP extraction, locks, syncs and publication. It supplies
+inert HTTP/process observations and compares retained effects, report classes
+and progress. Before/after censuses include the original reference sources and
+the maintained Python set. They establish source stability during each run,
+not that every unrelated policy test is unchanged since an older commit.
+Operations automation owns this exact ignored comparison; the broad database
+route skips its unique basename.
+
+Native cases cover original publication aliases, empty CA-directory custody,
+close and sync failures, final report ordering, descriptor flags and the retained
+whole-operation deadline. The actual subprocess signal cases cover INT/TERM
+while waiting on standard input and after the complete report. Thread-directed
+late injections complete their kernel signal handler before teardown continues;
+a process-directed signal still pending at handler removal is outside that
+observation. The parent separately requires natural pipe EOF, terminal leader
+observation, group retirement and one consuming reap under the original deadline.
+
+The command keeps fixed host paths and root admission, requires explicit
+`0 < finalization-seconds < timeout-seconds <= 300`, and does not change prepared
+callers or bootstrap installation. Its curl/OpenSSL/CA prerequisites, fixed
+User-Agent, parser bounds and socket-idle behavior are native-profile
+differences. A finite comparison does
+not establish unrestricted Python compatibility or actual TLS behavior.
+
+The separate manual signed musl runtime proof
+(`.github/workflows/release-receive-runtime.yml`) authenticates both artifacts, installs the retained Ops executable in a free
+Debian KVM guest, and exercises actual SSH fetch with the native host receiver.
+It requires positive repeat-publication identity plus lock, journal, conflicting
+target and wrong-checksum negatives. Its one 1800-second keeper includes both
+acquisitions and reserves 120 seconds for settlement. Source/inert checks alone
+do not establish a successful workflow run, signed musl execution or deployment.

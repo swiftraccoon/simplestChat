@@ -180,6 +180,7 @@ fn payload(
     member: &Member,
     owner: &RefCell<&mut Owner>,
     mut output: Option<&mut Retained>,
+    refusal: &mut Option<&mut &'static str>,
 ) -> Result<String> {
     // ZipExtFile stops at its declared uncompressed length. It does not require
     // consumption of trailing compressed bytes or a further inflater EOF.
@@ -233,30 +234,35 @@ fn payload(
             break;
         }
     }
-    require(
-        &mut owner.borrow_mut(),
-        count == member.bytes && crc.checksum() == member.crc,
-    )?;
+    if count != member.bytes {
+        if let Some(class) = refusal.as_deref_mut() {
+            *class = "zip_member_size_mismatch";
+        }
+        return reject(&mut owner.borrow_mut());
+    }
+    require(&mut owner.borrow_mut(), crc.checksum() == member.crc)?;
     let digest = super::super::files::hex(&digest.finalize());
     if let Some(output) = output {
         output.seal(&digest, &mut owner.borrow_mut())?;
     }
     Ok(digest)
 }
+pub(in crate::release::attestation) struct Pin<'a> {
+    pub bytes: u64,
+    pub sha256: &'a str,
+}
 fn members(
     file: &Retained,
     directory: &Dir,
     retained: &mut [Option<Retained>; 10],
-    metadata: &Metadata,
+    pin: Pin<'_>,
     owner: &mut Owner,
     extract: bool,
+    mut refusal: Option<&mut &'static str>,
 ) -> Result<()> {
-    require(
-        owner,
-        file.len() == metadata.zip_bytes() && file.len() <= MAX_ZIP,
-    )?;
+    require(owner, file.len() == pin.bytes && file.len() <= MAX_ZIP)?;
     let checksum = file.hash(owner)?;
-    require(owner, checksum == metadata.zip_sha256())?;
+    require(owner, checksum == pin.sha256)?;
     let end = preflight(file, owner)?;
     let mut buffer = vec![0; 256 * 1024];
     let archive = ZipArchive::from_seekable(file.file(), &mut buffer).map_err(|_| Cause::Zip)?;
@@ -357,6 +363,9 @@ fn members(
             }),
         )?;
     }
+    if let Some(class) = refusal.as_deref_mut() {
+        *class = "zip_error";
+    }
     for (at, name) in SELECTED.iter().enumerate() {
         let member = members
             .iter()
@@ -422,6 +431,7 @@ fn members(
                 member,
                 &checks,
                 extract.then(|| retained[at].as_mut().unwrap()),
+                &mut refusal,
             )?
         } else {
             payload(
@@ -429,6 +439,7 @@ fn members(
                 member,
                 &checks,
                 extract.then(|| retained[at].as_mut().unwrap()),
+                &mut refusal,
             )?
         };
         let actual = retained[at]
@@ -447,7 +458,18 @@ pub(in crate::release::attestation) fn verify(
     metadata: &Metadata,
     owner: &mut Owner,
 ) -> Result<()> {
-    members(file, directory, retained, metadata, owner, false)
+    members(
+        file,
+        directory,
+        retained,
+        Pin {
+            bytes: metadata.zip_bytes(),
+            sha256: metadata.zip_sha256(),
+        },
+        owner,
+        false,
+        None,
+    )
 }
 pub(in crate::release::attestation) fn extract(
     file: &Retained,
@@ -456,5 +478,28 @@ pub(in crate::release::attestation) fn extract(
     metadata: &Metadata,
     owner: &mut Owner,
 ) -> Result<()> {
-    members(file, directory, retained, metadata, owner, true)
+    members(
+        file,
+        directory,
+        retained,
+        Pin {
+            bytes: metadata.zip_bytes(),
+            sha256: metadata.zip_sha256(),
+        },
+        owner,
+        true,
+        None,
+    )
+}
+
+/// Full signed64 receiver identities do not pass through local API Metadata.
+pub(in crate::release::attestation) fn receive(
+    file: &Retained,
+    directory: &Dir,
+    retained: &mut [Option<Retained>; 10],
+    pin: Pin<'_>,
+    owner: &mut Owner,
+    refusal: &mut &'static str,
+) -> Result<()> {
+    members(file, directory, retained, pin, owner, true, Some(refusal))
 }

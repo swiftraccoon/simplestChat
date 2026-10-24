@@ -1,0 +1,50 @@
+---
+- name: Stage only the signed receiver assertions in the owned disposable guest
+  hosts: benchmark_hosts
+  become: true
+  gather_facts: false
+  pre_tasks:
+    - name: Require the generated loopback fixture and immutable selection
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'vmfixture'
+          - ansible_host == '127.0.0.1'
+          - ansible_user == 'fixture'
+          - vm_fixture_run_id is match('^[a-f0-9]{32}$')
+          - vm_fixture_revision is match('^[a-f0-9]{40}$')
+    - name: Read the original cloud-init run marker
+      ansible.builtin.slurp:
+        src: /etc/simplestchat-vm-fixture
+      register: receive_fixture_marker
+      no_log: true
+    - name: Bind this preparation to the exact owned guest
+      ansible.builtin.assert:
+        that:
+          - receive_fixture_marker.content | b64decode == vm_fixture_run_id + '\n'
+      no_log: true
+  tasks:
+    - name: Install only the native receiver's fixed Debian transport prerequisites
+      ansible.builtin.apt:
+        name:
+          - curl
+          - ca-certificates
+        state: present
+        update_cache: true
+    - name: Create only the missing private receiver result directory
+      ansible.builtin.file:
+        path: /srv/simplestchat-public/results
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+    - name: Stage the closed receiver assertions and fixed route source
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../build/{{ item }}"
+        dest: "/root/simplestchat-vm-fixture/{{ item }}"
+        owner: root
+        group: root
+        mode: '0600'
+      loop:
+        - security_vm_receive_guest.py
+        - security_vm_receive_route.py
+        - security_vm_fetch_guest.py

@@ -49,6 +49,9 @@ ops/src/release/attestation/acquire/**
 !ops/src/release/attestation/fetch/
 ops/src/release/attestation/fetch/**
 !ops/src/release/attestation/fetch/*.rs
+!ops/src/release/attestation/receive/
+ops/src/release/attestation/receive/**
+!ops/src/release/attestation/receive/*.rs
 !ops/src/release/attestation/verify/
 ops/src/release/attestation/verify/**
 !ops/src/release/attestation/verify/*.rs

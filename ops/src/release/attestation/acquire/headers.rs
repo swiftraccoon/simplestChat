@@ -111,6 +111,20 @@ impl Header {
             .map(str::to_owned)
             .map_err(|_| Cause::Policy)
     }
+    pub fn receiver(&self, expected: u64, owner: &mut Owner) -> Result<()> {
+        let first = |key: &str| self.fields.iter().find(|(name, _, _)| name == key);
+        let encoding = first("content-encoding");
+        let length = first("content-length");
+        if self.status != 200
+            || encoding.is_some_and(|(_, bytes, folded)| *folded || bytes != b"identity")
+            || length.is_some_and(|(_, bytes, folded)| {
+                *folded || bytes != expected.to_string().as_bytes()
+            })
+        {
+            return control::failed(owner, Cause::Policy);
+        }
+        Ok(())
+    }
     fn joined(&self, key: &str, owner: &mut Owner) -> Result<Option<Vec<u8>>> {
         let mut value = None;
         for (name, bytes, folded) in &self.fields {

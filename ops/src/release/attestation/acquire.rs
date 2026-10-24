@@ -6,7 +6,7 @@ pub(super) mod grant;
 #[path = "acquire/headers.rs"]
 mod headers;
 #[path = "acquire/licenses.rs"]
-mod licenses;
+pub(super) mod licenses;
 #[path = "acquire/options.rs"]
 pub(super) mod options;
 #[cfg(test)]
@@ -18,7 +18,7 @@ mod policy;
 #[path = "acquire/tests.rs"]
 pub(super) mod tests;
 #[path = "acquire/transport.rs"]
-mod transport;
+pub(super) mod transport;
 
 use super::{
     control::{self, Cause, Owner, Result, Window},
