@@ -260,31 +260,55 @@ pub(super) struct Observation {
     pub cases: Vec<Row>,
     pub lifecycle: Lifecycle,
 }
+fn matching_identity(wire: &Wire, pins: &Pins) -> Result<bool> {
+    let selected = simplestchat_ops::distribution::manifest::Selection::decode(
+        wire.selection.get().as_bytes(),
+    )
+    .map_err(|_| failure(1))?;
+    let selected = serde_json::to_value(selected.identity()).map_err(|_| failure(1))?;
+    Ok(wire.schema_version == 1
+        && wire.scope == "OpsDebianKeeperReceipt"
+        && wire.run_id == pins.run_id
+        && selected == pins.selection
+        && wire.artifact_id == pins.artifact_id
+        && wire.transfer_sha256 == pins.transfer_sha256
+        && wire.transfer_bytes == pins.transfer_bytes
+        && wire.manifest_sha256 == pins.pair.manifest().sha256()
+        && wire.manifest_bytes == pins.pair.manifest().bytes()
+        && wire.selection_sha256 == pins.pair.selection().sha256()
+        && wire.selection_bytes == pins.pair.selection().bytes()
+        && wire.binary_sha256 == pins.pair.binary().sha256()
+        && wire.binary_bytes == pins.pair.binary().bytes()
+        && wire.install_request_sha256 == pins.install_request_sha256
+        && wire.cloud_image_sha512 == pins.cloud_sha512)
+}
+
+/// Negative diagnostics are fixed labels, never a successful receipt or raw text.
+pub(super) fn failure_message(bytes: &[u8], pins: &Pins) -> Option<&'static str> {
+    if bytes.is_empty() || bytes.len() as u64 > super::SMALL {
+        return None;
+    }
+    let wire: Wire = serde_json::from_slice(bytes).ok()?;
+    if wire.passed || !matching_identity(&wire, pins).ok()? {
+        return None;
+    }
+    match wire.failure.as_ref()?.as_str() {
+        "guard" => Some("Ops Debian runtime keeper guard failed."),
+        "boot" => Some("Ops Debian runtime keeper boot failed."),
+        "stage" => Some("Ops Debian runtime keeper staging failed."),
+        "cases" => Some("Ops Debian runtime keeper cases failed."),
+        "cleanup" => Some("Ops Debian runtime keeper cleanup failed."),
+        "deadline" => Some("Ops Debian runtime keeper reported its deadline."),
+        "cancelled" => Some("Ops Debian runtime keeper reported cancellation."),
+        _ => None,
+    }
+}
 pub(super) fn admit(bytes: &[u8], pins: &Pins) -> Result<Observation> {
     if bytes.is_empty() || bytes.len() as u64 > super::SMALL {
         return Err(failure(1));
     }
     let wire: Wire = serde_json::from_slice(bytes).map_err(|_| failure(1))?;
-    let selected = simplestchat_ops::distribution::manifest::Selection::decode(
-        wire.selection.get().as_bytes(),
-    )
-    .map_err(|_| failure(1))?;
-    let same = serde_json::to_value(selected.identity()).map_err(|_| failure(1))? == pins.selection;
-    if wire.schema_version != 1
-        || wire.scope != "OpsDebianKeeperReceipt"
-        || wire.run_id != pins.run_id
-        || !same
-        || wire.artifact_id != pins.artifact_id
-        || wire.transfer_sha256 != pins.transfer_sha256
-        || wire.transfer_bytes != pins.transfer_bytes
-        || wire.manifest_sha256 != pins.pair.manifest().sha256()
-        || wire.manifest_bytes != pins.pair.manifest().bytes()
-        || wire.selection_sha256 != pins.pair.selection().sha256()
-        || wire.selection_bytes != pins.pair.selection().bytes()
-        || wire.binary_sha256 != pins.pair.binary().sha256()
-        || wire.binary_bytes != pins.pair.binary().bytes()
-        || wire.install_request_sha256 != pins.install_request_sha256
-        || wire.cloud_image_sha512 != pins.cloud_sha512
+    if !matching_identity(&wire, pins)?
         || wire.cases.len() != CASES.len()
         || wire.cases.iter().zip(CASES).any(|(row, (name, status))| {
             row.name != name || row.exit_status != status || !row.passed

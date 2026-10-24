@@ -289,7 +289,18 @@ async fn same_length_postfinish_zip_edits_and_original_request_replacement_refus
 
 #[tokio::test]
 async fn every_known_cli_failure_wins_over_later_signal_and_no_future_dispatch_occurs() {
-    for index in 0..9 {
+    let messages = [
+        "Ops artifact acquisition gh version command failed.",
+        "Ops artifact acquisition gh repository command failed.",
+        "Ops artifact acquisition gh run command failed.",
+        "Ops artifact acquisition gh artifact metadata command failed.",
+        "Ops artifact acquisition gh artifact download command failed.",
+        "Ops artifact verification gh version command failed.",
+        "Ops artifact verification gh repository command failed.",
+        "Ops artifact verification gh run command failed.",
+        "Ops artifact verification gh attestation command failed.",
+    ];
+    for (index, message) in messages.into_iter().enumerate() {
         for code in [42, 124, 130, 143] {
             let fixture = Fixture::new(0);
             let mut fake = Fake::new(&fixture);
@@ -300,11 +311,10 @@ async fn every_known_cli_failure_wins_over_later_signal_and_no_future_dispatch_o
                     cancelled.store(143, std::sync::atomic::Ordering::SeqCst);
                 }
             }));
-            assert_eq!(
-                run(&fixture, &mut fake).await.unwrap_err().code,
-                code,
-                "{index}"
-            );
+            let error = run(&fixture, &mut fake).await.unwrap_err();
+            assert_eq!(error.code, code, "{index}");
+            assert_eq!(error.message, message);
+            assert!(error.is_child_exit());
             assert_eq!(fake.calls, index + 1);
             assert!(fake.replays.is_empty());
         }

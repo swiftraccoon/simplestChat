@@ -18,7 +18,7 @@ use crate::{
         process::{self, Executor, Native},
     },
     owned_process::Signals,
-    tooling::{Environment, Result},
+    tooling::{Environment, Failure, Result},
 };
 use std::{
     ffi::{OsStr, OsString},
@@ -41,6 +41,19 @@ struct State {
     io_settled: bool,
 }
 type Shared = Arc<Mutex<State>>;
+fn command_failure(mut error: Failure, index: usize, keeper: Option<&'static str>) -> Failure {
+    if error.is_child_exit() {
+        error.message = match index {
+            0 => "Ops Debian runtime Git identity command failed.",
+            1 => "Ops Debian runtime Git clean-check command failed.",
+            2 => "Ops Debian runtime Git source-archive command failed.",
+            3 => keeper.unwrap_or("Ops Debian runtime keeper command failed."),
+            _ => "Ops Debian runtime command failed.",
+        }
+        .into();
+    }
+    error
+}
 fn lock(state: &Shared) -> Result<std::sync::MutexGuard<'_, State>> {
     state.lock().map_err(|_| failure(1))
 }
@@ -249,7 +262,21 @@ async fn call<E: Executor>(
     } else {
         Ok(())
     };
-    result?;
+    if let Err(error) = result {
+        let keeper = if error.is_child_exit() && index == 3 && settled.is_ok() && checked.is_ok() {
+            read.as_ref().ok().and_then(|bytes| {
+                state.lock().ok().and_then(|state| {
+                    state
+                        .pins
+                        .as_ref()
+                        .and_then(|pins| receipt::failure_message(bytes, pins))
+                })
+            })
+        } else {
+            None
+        };
+        return Err(command_failure(error, index, keeper));
+    }
     settled?;
     let bytes = read?;
     checked?;

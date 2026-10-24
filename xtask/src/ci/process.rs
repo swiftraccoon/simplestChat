@@ -459,7 +459,7 @@ impl<'a> Native<'a> {
         let status = reaped?;
         let code = tooling::shell_status(status);
         if code != 0 {
-            return Err(Failure::new(code, "Production image command failed."));
+            return Err(Failure::child_exit(code));
         }
         if !cleaned {
             return Err(Failure::new(1, "Production image command cleanup failed."));

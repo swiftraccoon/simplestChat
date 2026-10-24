@@ -16,7 +16,7 @@ use crate::{
         process::{Executor, Native},
     },
     owned_process::Signals,
-    tooling::{Environment, Result},
+    tooling::{Environment, Failure, Result},
 };
 use simplestchat_ops::distribution::manifest::verification::RetainedMetadata;
 use std::{
@@ -39,6 +39,22 @@ struct State {
     expanded: u64,
 }
 type Shared = Arc<Mutex<State>>;
+fn command_failure(mut error: Failure, index: usize) -> Failure {
+    if error.is_child_exit() {
+        error.message = [
+            "Ops artifact acquisition gh version command failed.",
+            "Ops artifact acquisition gh repository command failed.",
+            "Ops artifact acquisition gh run command failed.",
+            "Ops artifact acquisition gh artifact metadata command failed.",
+            "Ops artifact acquisition gh artifact download command failed.",
+        ]
+        .get(index)
+        .copied()
+        .unwrap_or("Ops artifact acquisition command failed.")
+        .into();
+    }
+    error
+}
 fn lock(state: &Shared) -> Result<std::sync::MutexGuard<'_, State>> {
     state.lock().map_err(|_| failure(1))
 }
@@ -169,7 +185,7 @@ async fn call<E: Executor>(
         }
         Err(error) => Err(error),
     };
-    result?;
+    result.map_err(|error| command_failure(error, index))?;
     let bytes = read?;
     advanced?;
     executor.ready().await?;

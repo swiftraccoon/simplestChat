@@ -18,6 +18,13 @@ pub(crate) type Result<T> = std::result::Result<T, Failure>;
 pub(crate) struct Failure {
     pub code: u8,
     pub message: String,
+    kind: FailureKind,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum FailureKind {
+    Other,
+    ChildExit,
 }
 
 impl Failure {
@@ -25,7 +32,22 @@ impl Failure {
         Self {
             code,
             message: message.into(),
+            kind: FailureKind::Other,
         }
+    }
+
+    /// A reaped child returned a nonzero shell status. This does not classify
+    /// timeouts, interruption, launch errors or failed cleanup as child exits.
+    pub(crate) fn child_exit(code: u8) -> Self {
+        Self {
+            code,
+            message: "Production image command failed.".into(),
+            kind: FailureKind::ChildExit,
+        }
+    }
+
+    pub(crate) fn is_child_exit(&self) -> bool {
+        self.kind == FailureKind::ChildExit
     }
 }
 

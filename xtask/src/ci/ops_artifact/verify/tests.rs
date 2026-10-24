@@ -158,18 +158,31 @@ async fn fake_successful_exit_does_not_replace_certificate_subject_or_api_policy
 
 #[tokio::test]
 async fn nonzero_cli_remains_primary_over_valid_json_late_cancel_and_final_close_refusal() {
-    let fixture = Fixture::new(0);
-    let mut fake = Fake::new(&fixture, Arc::new(Clock::new()));
-    fake.fail = Some((1, 42));
-    let cancelled = fake.cancelled.clone();
-    fake.mutate = Some(Box::new(move |index| {
-        if index == 1 {
-            cancelled.store(143, std::sync::atomic::Ordering::SeqCst);
+    let messages = [
+        "Ops artifact verification gh version command failed.",
+        "Ops artifact verification gh repository command failed.",
+        "Ops artifact verification gh run command failed.",
+        "Ops artifact verification gh attestation command failed.",
+    ];
+    for (index, message) in messages.into_iter().enumerate() {
+        for code in [42, 124, 130, 143] {
+            let fixture = Fixture::new(0);
+            let mut fake = Fake::new(&fixture, Arc::new(Clock::new()));
+            fake.fail = Some((index, code));
+            let cancelled = fake.cancelled.clone();
+            fake.mutate = Some(Box::new(move |at| {
+                if at == index {
+                    cancelled.store(143, std::sync::atomic::Ordering::SeqCst);
+                }
+            }));
+            let error = run(&fixture, &mut fake).await.unwrap_err();
+            assert_eq!(error.code, code);
+            assert_eq!(error.message, message);
+            assert!(error.is_child_exit());
+            assert_eq!(fake.calls, index + 1);
+            assert!(fake.replay.is_empty());
         }
-    }));
-    assert_eq!(run(&fixture, &mut fake).await.unwrap_err().code, 42);
-    assert_eq!(fake.calls, 2);
-    assert!(fake.replay.is_empty());
+    }
 }
 
 #[tokio::test]

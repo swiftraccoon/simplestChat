@@ -290,9 +290,15 @@ impl Executor for Fake {
         };
         let logs = Arc::try_unwrap(command.separate_logs.take().unwrap()).unwrap();
         let mut writer = logs.stdout.writer()?;
-        let written = writer.write_all(&output).map_err(|_| super::failure(1));
-        let closed = nix::unistd::close(writer).map_err(|_| super::failure(1));
-        let (stdout, stderr) = tokio::join!(logs.stdout.finish(), logs.stderr.finish());
+        // Oversized negative receipts must drain concurrently even on the
+        // current-thread runtime; a full blocking pipe cannot drive that task.
+        let writer = tokio::task::spawn_blocking(move || {
+            let written = writer.write_all(&output).map_err(|_| super::failure(1));
+            let closed = nix::unistd::close(writer).map_err(|_| super::failure(1));
+            written.and(closed)
+        });
+        let (written, stdout, stderr) =
+            tokio::join!(writer, logs.stdout.finish(), logs.stderr.finish());
         let seal = |value: crate::ci::bounded_log::Finished| super::super::verify::tools::Seal {
             sha256: value.sha256,
             bytes: value.bytes,
@@ -320,10 +326,9 @@ impl Executor for Fake {
         if let Some((at, code)) = self.runtime_fail
             && at == index
         {
-            return Err(super::failure(code));
+            return Err(Failure::child_exit(code));
         }
-        written?;
-        closed?;
+        written.map_err(|_| super::failure(1))??;
         if !complete {
             return Err(super::failure(1));
         }
@@ -352,6 +357,7 @@ pub(super) fn expect_error<T>(result: Result<T>, code: u8) {
         Err(Failure {
             code: actual,
             message,
+            ..
         }) => {
             assert_eq!(actual, code);
             assert!(!message.contains("PRIVATE"));

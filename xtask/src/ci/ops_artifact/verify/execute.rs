@@ -15,7 +15,7 @@ use crate::{
         process::{Executor, Native},
     },
     owned_process::Signals,
-    tooling::{Environment, Result},
+    tooling::{Environment, Failure, Result},
 };
 use simplestchat_ops::distribution::manifest::{
     verification::{MatchedVerifierPolicy, RetainedMetadata},
@@ -39,6 +39,21 @@ struct State {
     expected: BTreeSet<String>,
 }
 type Shared = Arc<Mutex<State>>;
+fn command_failure(mut error: Failure, index: usize) -> Failure {
+    if error.is_child_exit() {
+        error.message = [
+            "Ops artifact verification gh version command failed.",
+            "Ops artifact verification gh repository command failed.",
+            "Ops artifact verification gh run command failed.",
+            "Ops artifact verification gh attestation command failed.",
+        ]
+        .get(index)
+        .copied()
+        .unwrap_or("Ops artifact verification command failed.")
+        .into();
+    }
+    error
+}
 fn lock(state: &Shared) -> Result<std::sync::MutexGuard<'_, State>> {
     state.lock().map_err(|_| failure(1))
 }
@@ -190,7 +205,7 @@ async fn call<E: Executor>(
     drop(allowance);
     drop(log_permits);
     // A known process status is primary even if subsequent seal/clock checks fail.
-    executed?;
+    executed.map_err(|error| command_failure(error, index))?;
     if !executor.cleanup_passed() {
         return Err(failure(1));
     }

@@ -266,7 +266,7 @@ impl Executor for Fake {
         if let Some((at, code)) = self.fail
             && at == index
         {
-            return Err(failure(code));
+            return Err(crate::tooling::Failure::child_exit(code));
         }
         Ok(Vec::new())
     }

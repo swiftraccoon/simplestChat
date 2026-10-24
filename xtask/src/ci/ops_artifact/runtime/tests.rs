@@ -114,7 +114,22 @@ async fn failed_selected_ci_attempt_refuses_before_artifact_access_or_keeper() {
 
 #[tokio::test]
 async fn every_remote_or_runtime_failure_keeps_its_original_status_and_settles_owners() {
-    for index in 0..13 {
+    let messages = [
+        "Ops artifact acquisition gh version command failed.",
+        "Ops artifact acquisition gh repository command failed.",
+        "Ops artifact acquisition gh run command failed.",
+        "Ops artifact acquisition gh artifact metadata command failed.",
+        "Ops artifact acquisition gh artifact download command failed.",
+        "Ops artifact verification gh version command failed.",
+        "Ops artifact verification gh repository command failed.",
+        "Ops artifact verification gh run command failed.",
+        "Ops artifact verification gh attestation command failed.",
+        "Ops Debian runtime Git identity command failed.",
+        "Ops Debian runtime Git clean-check command failed.",
+        "Ops Debian runtime Git source-archive command failed.",
+        "Ops Debian runtime keeper command failed.",
+    ];
+    for (index, message) in messages.into_iter().enumerate() {
         let fixture = Fixture::new();
         let mut fake = Fake::new(&fixture);
         let budget = Budget::default();
@@ -123,13 +138,101 @@ async fn every_remote_or_runtime_failure_keeps_its_original_status_and_settles_o
         } else {
             fake.runtime_fail = Some((index - 9, 7));
         }
-        expect_error(run(&fixture, &mut fake, &budget).await, 7);
+        let error = run(&fixture, &mut fake, &budget).await.unwrap_err();
+        assert_eq!(error.code, 7);
+        assert_eq!(error.message, message);
+        assert!(error.is_child_exit());
         assert!(!fixture.output.join("summary.json").exists());
         assert!(fake.acquire.replays.is_empty());
         assert_eq!(budget.count(), 0);
         let (attempted, fallback) = budget.close_counts();
         assert!(attempted > 0);
         assert_eq!(fallback, 0);
+    }
+}
+
+#[tokio::test]
+async fn negative_keeper_receipts_supply_only_bound_allowlisted_failure_labels() {
+    let labels = [
+        ("guard", "Ops Debian runtime keeper guard failed."),
+        ("boot", "Ops Debian runtime keeper boot failed."),
+        ("stage", "Ops Debian runtime keeper staging failed."),
+        ("cases", "Ops Debian runtime keeper cases failed."),
+        ("cleanup", "Ops Debian runtime keeper cleanup failed."),
+        (
+            "deadline",
+            "Ops Debian runtime keeper reported its deadline.",
+        ),
+        (
+            "cancelled",
+            "Ops Debian runtime keeper reported cancellation.",
+        ),
+    ];
+    for (label, message) in labels {
+        let fixture = Fixture::new();
+        let mut fake = Fake::new(&fixture);
+        let budget = Budget::default();
+        fake.runtime_fail = Some((3, 42));
+        fake.receipt_mutate = Some(Box::new(move |wire| {
+            wire["passed"] = json!(false);
+            wire["failure"] = json!(label);
+        }));
+        let error = run(&fixture, &mut fake, &budget).await.unwrap_err();
+        assert_eq!(error.code, 42);
+        assert_eq!(error.message, message);
+        assert_eq!(fake.keeper_calls, 1);
+        assert!(!fixture.output.join("summary.json").exists());
+        assert!(fake.acquire.replays.is_empty());
+        assert_eq!(budget.count(), 0);
+        assert_eq!(budget.close_counts().1, 0);
+    }
+}
+
+#[tokio::test]
+async fn keeper_diagnostics_refuse_unbound_arbitrary_or_success_receipts() {
+    for index in 0..24 {
+        let fixture = Fixture::new();
+        let mut fake = Fake::new(&fixture);
+        let budget = Budget::default();
+        fake.runtime_fail = Some((3, 7));
+        fake.receipt_mutate = Some(Box::new(move |wire| {
+            wire["passed"] = json!(false);
+            wire["failure"] = json!("boot");
+            match index {
+                0 => wire["schemaVersion"] = json!(2),
+                1 => wire["scope"] = json!("other"),
+                2 => wire["runId"] = json!("f".repeat(32)),
+                3 => wire["selection"]["revision"] = json!("f".repeat(40)),
+                4 => wire["selection"]["runAttempt"] = json!(99),
+                5 => wire["artifactId"] = json!(99),
+                6 => wire["transferSha256"] = json!("f".repeat(64)),
+                7 => wire["transferBytes"] = json!(1),
+                8 => wire["manifestSha256"] = json!("f".repeat(64)),
+                9 => wire["manifestBytes"] = json!(1),
+                10 => wire["selectionSha256"] = json!("f".repeat(64)),
+                11 => wire["selectionBytes"] = json!(1),
+                12 => wire["binarySha256"] = json!("f".repeat(64)),
+                13 => wire["binaryBytes"] = json!(1),
+                14 => wire["installRequestSha256"] = json!("f".repeat(64)),
+                15 => wire["cloudImageSha512"] = json!("f".repeat(128)),
+                16 => wire["failure"] = json!("PRIVATE arbitrary command/error"),
+                17 => wire["failure"] = Value::Null,
+                18 => wire["passed"] = json!(true),
+                19 => wire["PRIVATE unexpected"] = json!(true),
+                20 => wire["install"]["PRIVATE unexpected"] = json!(true),
+                21 => wire["cases"][0]["PRIVATE unexpected"] = json!(true),
+                22 => wire["vmLifecycle"]["PRIVATE unexpected"] = json!(true),
+                _ => wire["cases"][0]["name"] = json!("PRIVATE".repeat(10000)),
+            }
+        }));
+        let error = run(&fixture, &mut fake, &budget).await.unwrap_err();
+        assert_eq!(error.code, 7);
+        assert_eq!(error.message, "Ops Debian runtime keeper command failed.");
+        assert!(!error.message.contains("PRIVATE"));
+        assert!(!fixture.output.join("summary.json").exists());
+        assert!(fake.acquire.replays.is_empty());
+        assert_eq!(budget.count(), 0);
+        assert_eq!(budget.close_counts().1, 0);
     }
 }
 
