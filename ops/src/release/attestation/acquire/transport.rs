@@ -26,15 +26,35 @@ use tokio::{
 const ERR_LIMIT: u64 = 65536;
 const TERM: Duration = Duration::from_secs(5);
 const REAP: Duration = Duration::from_secs(5);
-pub(super) enum Role {
+pub(in crate::release::attestation) enum Role {
     Api,
     Blob {
         directory: Dir,
         expected: u64,
         digest: String,
     },
+    Receiver {
+        directory: Dir,
+        expected: u64,
+        digest: String,
+    },
 }
-pub(super) struct Invocation {
+impl Role {
+    fn expected(&self) -> Option<u64> {
+        match self {
+            Self::Api => None,
+            Self::Blob { expected, .. } | Self::Receiver { expected, .. } => Some(*expected),
+        }
+    }
+    fn logical(&self) -> u64 {
+        if matches!(self, Self::Receiver { .. }) {
+            1024 * 1024
+        } else {
+            65536
+        }
+    }
+}
+pub(in crate::release::attestation) struct Invocation {
     pub program: PathBuf,
     pub arguments: Vec<OsString>,
     pub environment: BTreeMap<OsString, OsString>,
@@ -46,7 +66,7 @@ pub(super) struct Invocation {
     pub expire_after: Option<u64>,
 }
 #[derive(Default, Debug)]
-pub(super) struct Observation {
+pub(in crate::release::attestation) struct Observation {
     pub exit_status: Option<i32>,
     pub input_complete: bool,
     pub input_closed: bool,
@@ -61,6 +81,7 @@ pub(super) struct Observation {
     pub body_bytes: u64,
     pub stderr_bytes: u64,
     pub stderr_sha256: String,
+    pub receiver_failure: Option<&'static str>,
     #[cfg(test)]
     pub first_io_stage: Option<&'static str>,
     #[cfg(test)]
@@ -80,7 +101,7 @@ impl Observation {
         owner.record(Cause::Io);
     }
 }
-pub(super) struct Completion {
+pub(in crate::release::attestation) struct Completion {
     pub result: Result<Option<String>>,
     pub file: Option<Retained>,
     pub observation: Observation,
@@ -139,6 +160,25 @@ impl Faults {
         }
     }
 }
+#[cfg(test)]
+#[derive(Clone, Copy)]
+pub(in crate::release::attestation) enum ReceiverFault {
+    Read,
+    Interrupt,
+    Deadline,
+    Flush,
+    Fsync,
+}
+#[cfg(test)]
+thread_local! {
+    static RECEIVER_FAULT: std::cell::Cell<Option<ReceiverFault>> = const {
+        std::cell::Cell::new(None)
+    };
+}
+#[cfg(test)]
+pub(in crate::release::attestation) fn receiver_fault(fault: Option<ReceiverFault>) {
+    RECEIVER_FAULT.set(fault);
+}
 enum Event {
     Input(std::io::Result<usize>),
     Output(std::io::Result<usize>),
@@ -161,6 +201,8 @@ struct Streams {
     location: Option<String>,
     body_hash: Sha256,
     body_buffer: Vec<u8>,
+    #[cfg(test)]
+    receiver_fault: Option<ReceiverFault>,
     #[cfg(test)]
     expire_after: Option<u64>,
     error_hash: Sha256,
@@ -186,6 +228,8 @@ impl Streams {
             location: None,
             body_hash: Sha256::new(),
             body_buffer: Vec::new(),
+            #[cfg(test)]
+            receiver_fault: RECEIVER_FAULT.take(),
             #[cfg(test)]
             expire_after: None,
             error_hash: Sha256::new(),
@@ -255,22 +299,41 @@ impl Streams {
                     header.blob(*expected, owner)?;
                     self.file = Some(Retained::create(directory.clone(), "artifact.zip", owner)?);
                 }
+                Role::Receiver {
+                    directory,
+                    expected,
+                    ..
+                } => {
+                    if !(200..300).contains(&header.status) {
+                        observed.receiver_failure = Some("http_error");
+                        return control::failed(owner, Cause::Policy);
+                    }
+                    self.file = Some(
+                        Retained::create(directory.clone(), "artifact.zip", owner).inspect_err(
+                            |_| observed.receiver_failure = Some("filesystem_error"),
+                        )?,
+                    );
+                    if let Err(cause) = header.receiver(*expected, owner) {
+                        observed.receiver_failure = Some("http_response_rejected");
+                        return Err(cause);
+                    }
+                }
             }
             self.header_complete = true;
             &bytes[consumed..]
         };
-        if let Role::Blob { expected, .. } = role {
+        if let Some(expected) = role.expected() {
             let mut remaining = body;
             while !remaining.is_empty() {
                 let wanted = expected
                     .saturating_sub(observed.body_bytes)
                     .saturating_add(1)
-                    .min(65536) as usize;
+                    .min(role.logical()) as usize;
                 let count = (wanted - self.body_buffer.len()).min(remaining.len());
                 self.body_buffer.extend_from_slice(&remaining[..count]);
                 remaining = &remaining[count..];
                 if self.body_buffer.len() == wanted {
-                    self.commit_body(*expected, owner, observed)?;
+                    self.commit_body(expected, owner, observed)?;
                 }
             }
         }
@@ -298,12 +361,14 @@ impl Streams {
             .checked_add(self.body_buffer.len() as u64)
             .ok_or(Cause::Bounds)?;
         if next > expected {
+            observed.receiver_failure = Some("download_size_mismatch");
             return control::failed(owner, Cause::Bounds);
         }
         self.file
             .as_mut()
             .unwrap()
-            .write_chunk(&self.body_buffer, observed.body_bytes, owner)?;
+            .write_chunk(&self.body_buffer, observed.body_bytes, owner)
+            .inspect_err(|_| observed.receiver_failure = Some("filesystem_error"))?;
         self.body_hash.update(&self.body_buffer);
         observed.body_bytes = next;
         self.body_buffer.clear();
@@ -316,6 +381,25 @@ impl Streams {
         observed: &mut Observation,
         cleanup: bool,
     ) -> Result<()> {
+        #[cfg(test)]
+        if !cleanup
+            && observed.body_bytes >= 1024 * 1024
+            && let Some(
+                fault @ (ReceiverFault::Read | ReceiverFault::Interrupt | ReceiverFault::Deadline),
+            ) = self.receiver_fault
+        {
+            self.receiver_fault = None;
+            self.output_stopped = true;
+            return match fault {
+                ReceiverFault::Read => control::failed(owner, Cause::Io),
+                ReceiverFault::Interrupt => control::failed(owner, Cause::Interrupt),
+                ReceiverFault::Deadline => {
+                    owner.expire_body();
+                    owner.check(Window::Body)
+                }
+                _ => unreachable!(),
+            };
+        }
         #[cfg(test)]
         if self.interruptions > 0 {
             self.interruptions -= 1;
@@ -409,9 +493,14 @@ impl Streams {
                 if !cleanup {
                     observed.natural_output_eof = true;
                     if self.header_complete
-                        && let Role::Blob { expected, .. } = &request.role
+                        && let Some(expected) = request.role.expected()
                     {
-                        self.commit_body(*expected, owner, observed)?;
+                        self.commit_body(expected, owner, observed)?;
+                        if matches!(request.role, Role::Receiver { .. })
+                            && observed.body_bytes != expected
+                        {
+                            observed.receiver_failure = Some("download_size_mismatch");
+                        }
                     }
                 }
                 Ok(())
@@ -466,7 +555,10 @@ fn before(owner: &mut Owner, end: Instant) {
         owner.record(Cause::Deadline);
     }
 }
-pub(super) async fn run(owner: &mut Owner, request: Invocation) -> Completion {
+pub(in crate::release::attestation) async fn run(
+    owner: &mut Owner,
+    request: Invocation,
+) -> Completion {
     run_with(owner, request, Faults::default()).await
 }
 async fn run_with(owner: &mut Owner, request: Invocation, faults: Faults) -> Completion {
@@ -683,13 +775,33 @@ async fn run_with(owner: &mut Owner, request: Invocation, faults: Faults) -> Com
     if owner.error().is_none() {
         if let Role::Blob {
             expected, digest, ..
+        }
+        | Role::Receiver {
+            expected, digest, ..
         } = &request.role
         {
             let actual = super::super::files::hex(&streams.body_hash.clone().finalize());
             if !streams.header_complete || observed.body_bytes != *expected || actual != *digest {
+                if matches!(request.role, Role::Receiver { .. }) {
+                    observed.receiver_failure = Some(if observed.body_bytes != *expected {
+                        "download_size_mismatch"
+                    } else {
+                        "zip_checksum_mismatch"
+                    });
+                }
                 owner.record(Cause::Policy);
             } else if let Some(file) = &mut streams.file {
+                #[cfg(test)]
+                if matches!(
+                    streams.receiver_fault,
+                    Some(ReceiverFault::Flush | ReceiverFault::Fsync)
+                ) {
+                    owner.record(Cause::Io);
+                }
                 let sealed = file.seal(digest, owner);
+                if sealed.is_err() && matches!(request.role, Role::Receiver { .. }) {
+                    observed.receiver_failure = Some("filesystem_error");
+                }
                 error(owner, sealed);
             } else {
                 owner.record(Cause::Close);

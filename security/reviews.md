@@ -716,3 +716,17 @@ inventoried before explicit closes and bounded fixed public replay. The
 [Cargo directory-source contract](https://doc.rust-lang.org/cargo/reference/source-replacement.html)
 does not authenticate registry origin or establish a resolved build graph,
 toolchain readiness, compiler sandbox or complete filesystem/network isolation.
+
+The manual signed receiver proof additionally uses the same immutable Rust
+installer at
+`.github/workflows/release-receive-runtime.yml#jobs/release-receive-runtime/steps/2/uses`.
+The reviewed action source remains
+`89b12181fb390509a0842a86cc55eeb8eb928c1d`, SHA-256
+`88e5ba8078257c53aadfc8097bff99a3a7e1a5fb210343faa19528e2e21f2e91`.
+It selects fixed Rust 1.99.0 and the GNU target before controller compilation and
+the sole read-only token step. Public run and artifact selectors cannot choose
+installer source or options. Checkout credentials are disabled; the workflow
+has no signing or OIDC permission. The official HTTPS rustup bootstrap remains
+a trust boundary, without an independent checksum claim for downloaded installer
+bytes. The exact informational review expires on 2026-11-29. This source review
+provides no evidence that the new receiver VM proof has actually executed.

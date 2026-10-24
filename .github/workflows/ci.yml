@@ -375,6 +375,7 @@ jobs:
           --skip whole_verify_scenarios_match_unchanged_python
           --skip whole_fresh_release_matches_unchanged_python
           --skip whole_fetch_controller_matches_unchanged_python
+          --skip whole_host_receiver_matches_unchanged_python
 
       - name: Synthetic media delivery correctness smoke
         if: steps.verified.outputs.cache-hit != 'true'

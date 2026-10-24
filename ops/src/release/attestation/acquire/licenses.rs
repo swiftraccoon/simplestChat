@@ -76,7 +76,7 @@ impl Write for Descriptor<'_> {
         Ok(())
     }
 }
-pub(super) fn stdout() -> io::Result<()> {
+pub(in crate::release::attestation) fn stdout() -> io::Result<()> {
     let output = io::stdout();
     let mut lock = output.lock();
     lock.flush()?;

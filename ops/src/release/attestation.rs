@@ -9,6 +9,8 @@ pub mod verify;
 pub(super) mod acquire;
 pub(super) mod fetch;
 
+pub(super) mod receive;
+
 #[cfg(test)]
 #[path = "attestation/verify/fixture.rs"]
 mod verification_fixture;

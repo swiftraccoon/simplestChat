@@ -103,6 +103,10 @@ pub(super) fn seal_mode_fault(name: String) {
     PROBE.with(|p| p.borrow_mut().seal_mode = Some(name));
 }
 #[cfg(test)]
+pub(super) fn clear_copy_fault() {
+    PROBE.with(|p| p.borrow_mut().copy = None);
+}
+#[cfg(test)]
 pub(super) fn take_probe() -> (usize, usize) {
     PROBE.with(|p| {
         let mut p = p.borrow_mut();
@@ -256,6 +260,79 @@ impl Dir {
     fn file(&self) -> &File {
         self.0.edges.last().unwrap().handle.file()
     }
+    pub fn protected(&self, uid: u32, owner: &mut Owner) -> Result<()> {
+        self.check(owner, Window::Body)?;
+        let stamp = control::io(owner, self.file().metadata())?;
+        if stamp.uid() != uid || stamp.mode() & 0o7777 != 0o700 {
+            return control::failed(owner, Cause::Policy);
+        }
+        Ok(())
+    }
+    pub fn exists(&self, name: &OsStr, owner: &mut Owner) -> Result<bool> {
+        leaf(name, owner)?;
+        self.check(owner, Window::Body)?;
+        match nix::sys::stat::fstatat(self.file(), name, nix::fcntl::AtFlags::AT_SYMLINK_NOFOLLOW) {
+            Ok(_) => Ok(true),
+            Err(nix::errno::Errno::ENOENT) => Ok(false),
+            Err(_) => control::failed(owner, Cause::Io),
+        }
+    }
+    pub fn protected_file(&self, name: &OsStr, uid: u32, owner: &mut Owner) -> Result<()> {
+        leaf(name, owner)?;
+        self.check(owner, Window::Body)?;
+        let stamp = mapped(
+            owner,
+            nix::sys::stat::fstatat(self.file(), name, nix::fcntl::AtFlags::AT_SYMLINK_NOFOLLOW),
+        )?;
+        if stamp.st_uid != uid
+            || stamp.st_mode & 0o7777 != 0o600
+            || stamp.st_mode & nix::sys::stat::SFlag::S_IFMT.bits()
+                != nix::sys::stat::SFlag::S_IFREG.bits()
+        {
+            return control::failed(owner, Cause::Policy);
+        }
+        self.check(owner, Window::Body)
+    }
+    pub fn child(&self, name: &OsStr, owner: &mut Owner) -> Result<Self> {
+        if self.exists(name, owner)? {
+            Self::open(&self.path().join(name), owner)
+        } else {
+            self.create_child(name, owner)
+        }
+    }
+    pub fn sync(&self, owner: &mut Owner) -> Result<()> {
+        self.check(owner, Window::Body)?;
+        control::io(owner, self.file().sync_all())?;
+        self.check(owner, Window::Body)
+    }
+    /// Retire this owned empty CA child; receiver evidence never uses this.
+    /// All original descriptors are closed even if unlink or a witness refuses.
+    pub fn retire_empty(self, parent: &Self, owner: &mut Owner) -> Result<()> {
+        let result = (|| {
+            parent.final_namespace(owner)?;
+            self.final_namespace(owner)?;
+            if self.path().parent() != Some(parent.path().as_path()) {
+                return control::failed(owner, Cause::Changed);
+            }
+            mapped(
+                owner,
+                nix::unistd::unlinkat(
+                    parent.file(),
+                    self.path().file_name().ok_or(Cause::Input)?,
+                    nix::unistd::UnlinkatFlags::RemoveDir,
+                ),
+            )
+        })();
+        match Rc::try_unwrap(self.0) {
+            Ok(chain) => {
+                for edge in chain.edges.into_iter().rev() {
+                    edge.handle.close(owner);
+                }
+            }
+            Err(_) => owner.record(Cause::Close),
+        }
+        result
+    }
     pub fn path(&self) -> std::path::PathBuf {
         let mut path = std::path::PathBuf::from("/");
         for edge in &self.0.edges {
@@ -296,6 +373,55 @@ impl Dir {
             return Err(cause);
         }
         Ok(result)
+    }
+    /// The curl capath role admits only an empty directory at dispatch.
+    pub fn empty(&self, owner: &mut Owner) -> Result<()> {
+        self.check(owner, Window::Body)?;
+        let mut visits = 0_u8;
+        let mut accept = |name: &[u8], owner: &mut Owner| {
+            owner.check(Window::Body)?;
+            visits = visits.checked_add(1).ok_or(Cause::Bounds)?;
+            if visits > 2 || (name != b"." && name != b"..") {
+                return control::failed(owner, Cause::Changed);
+            }
+            Ok(())
+        };
+        #[cfg(target_os = "linux")]
+        {
+            use std::io::{Seek, SeekFrom};
+            let mut original = self.file();
+            control::io(owner, original.seek(SeekFrom::Start(0)))?;
+            let mut buffer = vec![std::mem::MaybeUninit::<u8>::uninit(); 8192];
+            let mut cursor = rustix::fs::RawDir::new(original, &mut buffer);
+            loop {
+                owner.check(Window::Body)?;
+                let Some(entry) = cursor.next() else {
+                    break;
+                };
+                let entry = entry.map_err(|_| {
+                    owner.record(Cause::Io);
+                    Cause::Io
+                })?;
+                accept(entry.file_name().to_bytes(), owner)?;
+            }
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            // The portable rustix cursor owns an opaque RAII-close descriptor;
+            // only the original retained File has a checked-close claim.
+            let cursor = rustix::fs::Dir::read_from(self.file()).map_err(|_| {
+                owner.record(Cause::Io);
+                Cause::Io
+            })?;
+            for entry in cursor {
+                let entry = entry.map_err(|_| {
+                    owner.record(Cause::Io);
+                    Cause::Io
+                })?;
+                accept(entry.file_name().to_bytes(), owner)?;
+            }
+        }
+        self.check(owner, Window::Body)
     }
     pub fn free_bytes(&self, owner: &mut Owner) -> Result<u64> {
         self.check(owner, Window::Body)?;
@@ -384,6 +510,12 @@ impl Dir {
     /// Write one bounded exclusive final outcome, even after a primary refusal.
     /// Every new original descriptor is explicitly closed before returning.
     pub fn final_journal(&self, bytes: &[u8], owner: &mut Owner) -> Result<()> {
+        self.journal("outcome.json", bytes, owner)
+    }
+    pub fn receiver_journal(&self, bytes: &[u8], owner: &mut Owner) -> Result<()> {
+        self.journal("fetch-outcome.json", bytes, owner)
+    }
+    fn journal(&self, name: &str, bytes: &[u8], owner: &mut Owner) -> Result<()> {
         if bytes.is_empty() || bytes.len() > 131072 {
             return control::failed(owner, Cause::Bounds);
         }
@@ -392,7 +524,7 @@ impl Dir {
             owner,
             openat(
                 self.file(),
-                "outcome.json",
+                name,
                 OFlag::O_RDWR
                     | OFlag::O_CREAT
                     | OFlag::O_EXCL
@@ -464,10 +596,7 @@ impl Dir {
                 return control::failed(owner, Cause::Changed);
             }
             self.final_namespace(owner)?;
-            let fd = mapped(
-                owner,
-                openat(self.file(), "outcome.json", READ, Mode::empty()),
-            )?;
+            let fd = mapped(owner, openat(self.file(), name, READ, Mode::empty()))?;
             let probe = Handle::new(File::from(fd));
             let readback = control::io(owner, probe.file().metadata());
             let matched = readback.as_ref().is_ok_and(|value| same(&stamp, value));
@@ -661,6 +790,77 @@ impl Retained {
     }
     pub fn file(&self) -> &File {
         self.handle.file()
+    }
+    pub fn protected(&self, uid: u32, owner: &mut Owner) -> Result<()> {
+        self.check(owner, Window::Body)?;
+        let stamp = control::io(owner, self.file().metadata())?;
+        if stamp.uid() != uid || stamp.mode() & 0o7777 != 0o600 {
+            return control::failed(owner, Cause::Policy);
+        }
+        Ok(())
+    }
+    pub fn lock(&self, owner: &mut Owner) -> Result<()> {
+        self.check(owner, Window::Body)?;
+        rustix::fs::flock(
+            self.file(),
+            rustix::fs::FlockOperation::NonBlockingLockExclusive,
+        )
+        .map_err(|_| {
+            owner.record(Cause::Io);
+            Cause::Io
+        })?;
+        self.check(owner, Window::Body)
+    }
+    /// Accept only the exact verified target alias of this original source.
+    /// A foreign equal-byte inode never changes the source's metadata witness.
+    pub fn publication_alias(&mut self, target: &Self, owner: &mut Owner) -> Result<()> {
+        target.check(owner, Window::Body)?;
+        let current = control::io(owner, self.file().metadata())?;
+        let alias = control::io(owner, target.file().metadata())?;
+        if current.dev() != alias.dev() || current.ino() != alias.ino() {
+            return self.check(owner, Window::Body);
+        }
+        let before = &self.witness.stamp;
+        if !binding(before, &current)
+            || current.len() != before.len()
+            || (current.mtime(), current.mtime_nsec()) != (before.mtime(), before.mtime_nsec())
+            || !(same(before, &current)
+                || current.nlink() == before.nlink().checked_add(1).ok_or(Cause::Bounds)?)
+        {
+            return mismatch(owner);
+        }
+        self.witness.stamp = current;
+        self.check(owner, Window::Body)
+    }
+    /// Retain publication after a successful own hardlink and its exact nlink
+    /// transition. Existing equal-byte files never enter this ownership path.
+    pub fn publish(&mut self, destination: &Dir, owner: &mut Owner) -> Result<bool> {
+        self.check(owner, Window::Body)?;
+        destination.check(owner, Window::Body)?;
+        match nix::unistd::linkat(
+            self.witness.directory.file(),
+            self.name(),
+            destination.file(),
+            self.name(),
+            nix::fcntl::AtFlags::empty(),
+        ) {
+            Ok(()) => {
+                let stamp = control::io(owner, self.file().metadata())?;
+                let before = &self.witness.stamp;
+                if !binding(before, &stamp)
+                    || stamp.len() != before.len()
+                    || stamp.nlink() != before.nlink().checked_add(1).ok_or(Cause::Bounds)?
+                    || (stamp.mtime(), stamp.mtime_nsec()) != (before.mtime(), before.mtime_nsec())
+                {
+                    return mismatch(owner).map(|()| false);
+                }
+                self.witness.stamp = stamp;
+                self.check(owner, Window::Body)?;
+                Ok(true)
+            }
+            Err(nix::errno::Errno::EEXIST) => Ok(false),
+            Err(_) => control::failed(owner, Cause::Io),
+        }
     }
     pub fn name(&self) -> &OsStr {
         &self.witness.name

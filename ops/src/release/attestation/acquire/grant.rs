@@ -12,9 +12,18 @@ pub(in crate::release::attestation) struct Grant {
 }
 impl Grant {
     pub fn decode(value: &str, owner: &mut Owner) -> Result<Self> {
+        Self::bounded(value, MAX_URL, owner)
+    }
+    pub(in crate::release::attestation) fn receiver(
+        value: &str,
+        owner: &mut Owner,
+    ) -> Result<Self> {
+        Self::bounded(value, 16384, owner)
+    }
+    fn bounded(value: &str, maximum: usize, owner: &mut Owner) -> Result<Self> {
         owner.check(Window::Body)?;
         let accepted = !value.is_empty()
-            && value.len() <= MAX_URL
+            && value.len() <= maximum
             && value.bytes().all(|byte| (33..127).contains(&byte));
         if !accepted {
             return control::failed(owner, Cause::Policy);
