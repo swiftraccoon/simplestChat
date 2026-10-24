@@ -1383,6 +1383,13 @@ inherited tracking/PIP environment and pinned requirements, whose descriptor
 and namespace binding remain checked through installation. The venv and later
 Python invocation keep their existing paths.
 
+Startup diagnostics distinguish executable admission and revalidation, namespace
+preparation, worker launch, and worker exit before readiness. Other errors retain
+the coarse preparation failure. Requirements are limited to 1 MiB and the running
+controller executable to 256 MiB. An oversized source reports its original
+descriptor byte count and bound after the file and directory close attempts.
+Public diagnostics contain only fixed phase labels and these numeric sizes.
+
 Private records are capped at 16 KiB, commit/cancel requests at 4 KiB, and actual
 combined log bytes at 64 MiB. Descriptor walks admit at most 24 path components.
 The worker has a 90-minute fallback watchdog, including a 20-second cleanup

@@ -26,8 +26,23 @@ mod wait;
 mod worker;
 
 use crate::tooling;
-use std::{path::Path, process::ExitCode};
+use std::{io::Write, path::Path, process::ExitCode};
 const USAGE: &str = "usage: cargo run --locked -q -p xtask -- ci release-controller start|wait";
+
+/// Only source-selected phases may enter public startup diagnostics.
+fn diagnostic(message: &str) -> &'static str {
+    const PHASES: [&str; 5] = [
+        "Release controller executable admission failed.",
+        "Release controller executable changed during startup.",
+        "Release controller namespace preparation failed.",
+        "Release controller worker launch failed.",
+        "Release controller worker exited before readiness.",
+    ];
+    PHASES
+        .into_iter()
+        .find(|phase| *phase == message)
+        .unwrap_or("Release controller preparation failed.")
+}
 
 pub(super) fn run(root: &Path, arguments: &[String]) -> anyhow::Result<ExitCode> {
     if arguments.len() == 1 && matches!(arguments[0].as_str(), "--help" | "-h") {
@@ -57,7 +72,7 @@ pub(super) fn run(root: &Path, arguments: &[String]) -> anyhow::Result<ExitCode>
     match result {
         Ok(()) => Ok(ExitCode::SUCCESS),
         Err(error) => {
-            eprintln!("Release controller preparation failed.");
+            let _ = writeln!(std::io::stderr(), "{}", diagnostic(&error.message));
             Ok(ExitCode::from(error.code))
         }
     }

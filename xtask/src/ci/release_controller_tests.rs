@@ -101,6 +101,29 @@ fn runtime() -> tokio::runtime::Runtime {
         .unwrap()
 }
 #[test]
+fn startup_diagnostics_admit_only_closed_phases_and_never_private_failure_text() {
+    for message in [
+        "Release controller executable admission failed.",
+        "Release controller executable changed during startup.",
+        "Release controller namespace preparation failed.",
+        "Release controller worker launch failed.",
+        "Release controller worker exited before readiness.",
+    ] {
+        assert_eq!(diagnostic(message), message);
+    }
+    for private in [
+        "private tool output and credential-shaped input",
+        "Release controller executable admission failed.\nprivate suffix",
+        "Release controller executable admission failed. private suffix",
+        "",
+    ] {
+        assert_eq!(
+            diagnostic(private),
+            "Release controller preparation failed."
+        );
+    }
+}
+#[test]
 fn final_signal_and_deadline_fences_preserve_existing_nonzero_primary() {
     for primary in [1, 100, 124, 127, 130, 143] {
         for signal in [None, Some(130), Some(143)] {

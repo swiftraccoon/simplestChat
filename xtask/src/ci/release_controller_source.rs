@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
     fs::{File, Metadata},
-    io::Read,
+    io::{Read, Write},
     os::unix::fs::MetadataExt,
     path::Path,
 };
@@ -76,9 +76,14 @@ impl Source {
                 return Err(plan::failure());
             }
         };
+        let mut excessive_bytes = None;
         let result = (|| {
             let before = file.metadata().map_err(|_| plan::failure())?;
-            if !before.is_file() || before.len() == 0 || before.len() > maximum {
+            if !before.is_file() || before.len() == 0 {
+                return Err(plan::failure());
+            }
+            if before.len() > maximum {
+                excessive_bytes = Some(before.len());
                 return Err(plan::failure());
             }
             let mut digest = Sha256::new();
@@ -124,6 +129,15 @@ impl Source {
             Err(error) => {
                 let _ = files::close(file);
                 let _ = parent.finish();
+                if let Some(bytes) = excessive_bytes {
+                    // Original descriptor metadata only, after peer closes.
+                    // A broken diagnostic stream preserves the source refusal.
+                    let _ = writeln!(
+                        std::io::stderr(),
+                        "Release controller source exceeds its byte bound: \
+                         bytes={bytes} limit={maximum}.",
+                    );
+                }
                 Err(error)
             }
         }

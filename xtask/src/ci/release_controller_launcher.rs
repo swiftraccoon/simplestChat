@@ -33,7 +33,12 @@ impl Drop for Launch {
 }
 pub(super) async fn start(context: &Context, signals: &mut Signals) -> Result<()> {
     let executable = std::env::current_exe().map_err(|_| plan::failure())?;
-    let proof = super::source::Source::open(&executable, 256 * 1024 * 1024)?;
+    let proof = super::source::Source::open(&executable, 256 * 1024 * 1024).map_err(|error| {
+        Failure::new(
+            error.code,
+            "Release controller executable admission failed.",
+        )
+    })?;
     let result = start_with(
         context,
         signals,
@@ -49,11 +54,20 @@ pub(super) async fn start(context: &Context, signals: &mut Signals) -> Result<()
                 .stdin(Stdio::null())
                 .stdout(Stdio::null())
                 .stderr(Stdio::null());
-            command.spawn().map_err(|_| plan::failure())
+            command
+                .spawn()
+                .map_err(|_| Failure::new(1, "Release controller worker launch failed."))
         },
         drop,
         |owned, intent, digest| worker::request(owned, intent, digest, Action::Commit),
-        || proof.validate(),
+        || {
+            proof.validate().map_err(|error| {
+                Failure::new(
+                    error.code,
+                    "Release controller executable changed during startup.",
+                )
+            })
+        },
         plan::STARTUP,
     )
     .await;
@@ -72,7 +86,12 @@ pub(super) async fn start_with(
     if let Some(code) = signals.pending().await {
         return Err(Failure::new(code, "Release controller start interrupted."));
     }
-    let (owned, intent, digest) = Owned::create(context)?;
+    let (owned, intent, digest) = Owned::create(context).map_err(|error| {
+        Failure::new(
+            error.code,
+            "Release controller namespace preparation failed.",
+        )
+    })?;
     let result: Result<()> = async {
         validate()?;
         let child = spawn(context, &owned, &intent, &digest)?;
@@ -96,7 +115,10 @@ pub(super) async fn start_with(
                 break;
             }
             if owned_process::exited_now(pid)? {
-                return Err(plan::failure());
+                return Err(Failure::new(
+                    1,
+                    "Release controller worker exited before readiness.",
+                ));
             }
             tokio::time::sleep(Duration::from_millis(20)).await;
         }
