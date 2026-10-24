@@ -76,6 +76,20 @@ fn steps(root: &Path, executable: &Path) -> std::io::Result<Vec<Step>> {
             .map(|name| Path::new("ops/ansible/files").join(name).into_os_string())
             .collect(),
     });
+    // Exercise the distributed Ops dependency profile before the server build.
+    // Its ignored helpers and Python comparisons have separate owning callers.
+    steps.push(Step::new(
+        "cargo",
+        &[
+            "test",
+            "--locked",
+            "-p",
+            "simplestchat-ops",
+            "--lib",
+            "--",
+            "--test-threads=1",
+        ],
+    ));
     // The unchanged Python reference needs the installed controller environment.
     // Keep this explicit gate in both hosted automation and its local-CI route.
     steps.push(Step::new(

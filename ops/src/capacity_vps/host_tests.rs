@@ -132,6 +132,182 @@ fn unit(load: &str, active: &str, sub: &str, pid: &str) -> String {
 }
 
 #[test]
+fn loaned_writer_keeps_its_original_parent_through_trim_and_accepts_expected_growth() {
+    use std::io::Write;
+
+    let temporary = Temporary::new();
+    temporary.directory("/state/kept/leaf", 0o700);
+    temporary.directory("/unrelated/leaf", 0o700);
+    let mut fs = Fs::new(access(&temporary)).unwrap();
+    let mut owner = Owner::fixture(clock());
+    let parent = fs.directory("/state/kept/leaf", true).unwrap();
+    let before = fs.dir_stamp(parent).unwrap();
+    let id = fs.writer("/state/kept/leaf/archive").unwrap();
+    let mut original = fs.take(id).unwrap();
+    assert!(matches!(fs.take(id), Err(Failure::Unproven)));
+    assert_eq!(fs.check(id), Err(Failure::Unproven));
+    fs.directory("/unrelated/leaf", true).unwrap();
+    fs.trim_directories().unwrap();
+    let retained = fs.dir_stamp(parent).unwrap();
+    assert_eq!(
+        (before.dev(), before.ino()),
+        (retained.dev(), retained.ino())
+    );
+    assert_eq!(fs.verify(), Err(Failure::Unproven));
+    original.write_all(b"original bytes after trim").unwrap();
+    original.sync_all().unwrap();
+    let completed = original.metadata().unwrap();
+    fs.put(id, original).unwrap();
+    fs.written(id).unwrap();
+    assert!(files::same(&completed, fs.stamp(id)));
+    fs.close(id).unwrap();
+    let reader = fs
+        .open("/state/kept/leaf/archive", 64, Some(0o600))
+        .unwrap();
+    assert_eq!(
+        fs.read(reader, 64, &mut owner).unwrap(),
+        b"original bytes after trim"
+    );
+    fs.verify().unwrap();
+    fs.finish().unwrap();
+    owner.finish().unwrap();
+}
+
+#[test]
+fn loaned_descriptors_consume_the_same_capacity_as_retained_descriptors() {
+    fn fill(loan: bool) -> usize {
+        let temporary = Temporary::new();
+        temporary.directory("/state", 0o700);
+        let mut fs = Fs::new(access(&temporary)).unwrap();
+        let first = fs.writer("/state/first").unwrap();
+        let original = if loan {
+            Some(fs.take(first).unwrap())
+        } else {
+            None
+        };
+        let mut admitted = 0;
+        loop {
+            match fs.writer(&format!("/state/peer-{admitted}")) {
+                Ok(_) => admitted += 1,
+                Err(error) => {
+                    assert_eq!(error, Failure::Bounds);
+                    break;
+                }
+            }
+        }
+        if let Some(original) = original {
+            fs.put(first, original).unwrap();
+            fs.written(first).unwrap();
+        }
+        fs.finish().unwrap();
+        admitted
+    }
+    let retained = fill(false);
+    let loaned = fill(true);
+    assert!(retained > 1);
+    assert_eq!(loaned, retained);
+}
+
+#[test]
+fn outstanding_loan_refuses_finish_but_every_retained_peer_close_is_attempted() {
+    for fail_close in [false, true] {
+        let temporary = Temporary::new();
+        temporary.directory("/state", 0o700);
+        let closes = Rc::new(Cell::new(0));
+        let observed = closes.clone();
+        let mut fs = Fs::new(Access {
+            root: Some(temporary.0.clone()),
+            hook: Some(Rc::new(move |event| {
+                if event == "close" {
+                    observed.set(observed.get() + 1);
+                    if fail_close {
+                        return Err(Failure::Close);
+                    }
+                }
+                Ok(())
+            })),
+        })
+        .unwrap();
+        let loan = fs.writer("/state/loan").unwrap();
+        fs.writer("/state/retained").unwrap();
+        let original = fs.take(loan).unwrap();
+        assert_eq!(fs.verify(), Err(Failure::Unproven));
+        let expected = fs.owned_descriptors().len();
+        let before = closes.get();
+        assert_eq!(fs.finish(), Err(Failure::Unproven));
+        assert_eq!(closes.get() - before, expected);
+        assert!(original.metadata().unwrap().is_file());
+        nix::unistd::close(original).unwrap();
+    }
+}
+
+#[test]
+fn rejected_returns_close_incoming_files_without_adopting_or_erasing_the_original_loan() {
+    for kind in ["foreign", "closed", "mode", "invalid"] {
+        let temporary = Temporary::new();
+        temporary.directory("/state", 0o700);
+        let closes = Rc::new(Cell::new(0));
+        let fail_close = Rc::new(Cell::new(false));
+        let observed = closes.clone();
+        let fail = fail_close.clone();
+        let mut fs = Fs::new(Access {
+            root: Some(temporary.0.clone()),
+            hook: Some(Rc::new(move |event| {
+                if event == "close" {
+                    observed.set(observed.get() + 1);
+                    if fail.replace(false) {
+                        return Err(Failure::Close);
+                    }
+                }
+                Ok(())
+            })),
+        })
+        .unwrap();
+        let id = fs.writer("/state/loan").unwrap();
+        let peer = fs.writer("/state/peer").unwrap();
+        let mut original = Some(fs.take(id).unwrap());
+        let (target, incoming, expected) = match kind {
+            "foreign" => (
+                id,
+                std::fs::File::open(temporary.path("/state/peer")).unwrap(),
+                Failure::Changed,
+            ),
+            "closed" => {
+                let incoming = fs.file(peer).try_clone().unwrap();
+                fs.close(peer).unwrap();
+                (peer, incoming, Failure::Unproven)
+            }
+            "mode" => {
+                let incoming = original.take().unwrap();
+                incoming
+                    .set_permissions(fs::Permissions::from_mode(0o640))
+                    .unwrap();
+                (id, incoming, Failure::Changed)
+            }
+            "invalid" => (
+                usize::MAX,
+                original.as_ref().unwrap().try_clone().unwrap(),
+                Failure::Unproven,
+            ),
+            _ => unreachable!(),
+        };
+        let before = closes.get();
+        fail_close.set(true);
+        assert_eq!(fs.put(target, incoming), Err(expected), "{kind}");
+        assert_eq!(closes.get() - before, 1, "rejected incoming file closes");
+        assert_eq!(fs.verify(), Err(Failure::Unproven));
+        if let Some(original) = original {
+            fs.put(id, original).unwrap();
+            fs.written(id).unwrap();
+            fs.verify().unwrap();
+            fs.finish().unwrap();
+        } else {
+            assert_eq!(fs.finish(), Err(Failure::Unproven));
+        }
+    }
+}
+
+#[test]
 fn atomic_replacement_updates_every_retained_alias_without_losing_original_bytes() {
     let temporary = Temporary::new();
     temporary.directory("/state", 0o700);

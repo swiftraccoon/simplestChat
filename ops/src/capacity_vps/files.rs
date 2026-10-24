@@ -79,6 +79,9 @@ struct Directory {
 }
 struct Entry {
     file: Option<File>,
+    // A taken original File remains owned by this arena's external borrower.
+    // It still consumes the descriptor budget and keeps its namespace owners.
+    loaned: bool,
     before: Metadata,
     parent: usize,
     name: String,
@@ -111,6 +114,7 @@ impl Fs {
         let file = io(self.file(id).try_clone())?;
         self.entries.push(Entry {
             file: Some(file),
+            loaned: false,
             before: entry.before.clone(),
             parent: entry.parent,
             name: entry.name.clone(),
@@ -176,7 +180,11 @@ impl Fs {
     }
     fn capacity(&self) -> Result<()> {
         let live = self.directories.iter().filter(|v| v.file.is_some()).count()
-            + self.entries.iter().filter(|v| v.file.is_some()).count();
+            + self
+                .entries
+                .iter()
+                .filter(|v| v.file.is_some() || v.loaned)
+                .count();
         // Reserve eight slots for signalfd, the bounded spawn pipe set and
         // procfs cleanup observations outside this file arena.
         if live.checked_add(9).is_none_or(|v| v > MAX_OWNED) {
@@ -402,6 +410,7 @@ impl Fs {
         };
         self.entries.push(Entry {
             file: Some(file),
+            loaned: false,
             before,
             parent,
             name,
@@ -440,6 +449,7 @@ impl Fs {
         };
         self.entries.push(Entry {
             file: Some(file),
+            loaned: false,
             before,
             parent: 0,
             name: String::new(),
@@ -458,8 +468,8 @@ impl Fs {
         Ok(id)
     }
     pub fn check(&self, id: FileId) -> Result<()> {
-        let value = &self.entries[id];
-        let current = io(self.file(id).metadata())?;
+        let value = self.entries.get(id).ok_or(Failure::Unproven)?;
+        let current = io(value.file.as_ref().ok_or(Failure::Unproven)?.metadata())?;
         if !same(&value.before, &current) {
             return Err(Failure::Changed);
         }
@@ -740,7 +750,7 @@ impl Fs {
                 || self
                     .entries
                     .iter()
-                    .any(|v| v.file.is_some() && !v.retired && v.parent == id)
+                    .any(|v| (v.loaned || (v.file.is_some() && !v.retired)) && v.parent == id)
                 || self
                     .directories
                     .iter()
@@ -778,6 +788,7 @@ impl Fs {
         };
         self.entries.push(Entry {
             file: Some(file),
+            loaned: false,
             before,
             parent,
             name,
@@ -794,19 +805,55 @@ impl Fs {
         }
         Ok(id)
     }
+    /// Transfer the original File to the archive writer while retaining its
+    /// descriptor budget and parent lease. Return it through put before any
+    /// successful arena verification or finalization.
     pub fn take(&mut self, id: FileId) -> Result<File> {
-        self.entries[id].file.take().ok_or(Failure::Unproven)
-    }
-    pub fn put(&mut self, id: FileId, file: File) -> Result<()> {
-        if self.entries[id].file.is_some() {
-            let _ = nix::unistd::close(file);
+        let entry = self.entries.get(id).ok_or(Failure::Unproven)?;
+        if entry.loaned || entry.file.is_none() {
             return Err(Failure::Unproven);
         }
+        self.check(id)?;
+        let entry = &mut self.entries[id];
+        let file = entry.file.take().ok_or(Failure::Unproven)?;
+        entry.loaned = true;
+        Ok(file)
+    }
+    /// Consume a returned loan, accepting only its original inode/owner/mode.
+    /// Rejected incoming files still receive a close attempt; the refusal stays
+    /// primary. written separately checks the intended size/time transition.
+    pub fn put(&mut self, id: FileId, file: File) -> Result<()> {
+        let admitted = (|| {
+            let entry = self.entries.get(id).ok_or(Failure::Unproven)?;
+            if !entry.loaned || entry.file.is_some() {
+                return Err(Failure::Unproven);
+            }
+            let current = io(file.metadata())?;
+            // Archive writes may grow length and change timestamps. The loan
+            // can return only the original inode, type, mode and owner binding;
+            // written() separately admits the intended completed data change.
+            if !binding(&entry.before, &current) {
+                return Err(Failure::Changed);
+            }
+            Ok(())
+        })();
+        if let Err(error) = admitted {
+            let _ = nix::unistd::close(file)
+                .map_err(|_| Failure::Close)
+                .and(self.access.event("close"));
+            return Err(error);
+        }
         self.entries[id].file = Some(file);
+        self.entries[id].loaned = false;
         Ok(())
     }
     pub fn written(&mut self, id: FileId) -> Result<()> {
-        let current = io(self.file(id).metadata())?;
+        let current = io(self
+            .entries
+            .get(id)
+            .and_then(|entry| entry.file.as_ref())
+            .ok_or(Failure::Unproven)?
+            .metadata())?;
         if !binding(&self.entries[id].before, &current) || current.nlink() != 1 {
             return Err(Failure::Changed);
         }
@@ -890,6 +937,9 @@ impl Fs {
             if self.entries[id].file.is_some() {
                 self.check(id)?;
             }
+        }
+        if self.entries.iter().any(|entry| entry.loaned) {
+            return Err(Failure::Unproven);
         }
         Ok(())
     }

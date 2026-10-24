@@ -26,7 +26,11 @@ fn gzip_contains_exact_files_and_local_pax_for_a_long_path_without_extracting() 
     let snapshot = Snapshot::walk(&mut fs, &mut owner, "/evidence").unwrap();
     assert_eq!(snapshot.count, 3);
     let id = fs.writer("/output/archive.gz").unwrap();
+    let parent = fs.directory("/output", true).unwrap();
     let mut file = fs.take(id).unwrap();
+    assert_eq!(fs.verify(), Err(Failure::Unproven));
+    fs.trim_directories().unwrap();
+    assert!(fs.dir_stamp(parent).unwrap().is_dir());
     let produced = produce(&snapshot, &mut fs, &mut owner, &mut file);
     file.sync_all().unwrap();
     fs.put(id, file).unwrap();

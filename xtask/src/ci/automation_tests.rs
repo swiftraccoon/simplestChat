@@ -35,7 +35,7 @@ fn text(values: &[OsString]) -> Vec<&str> {
 fn controller_checks_preserve_the_python_gate_offline_flags_and_all_syntax_only_playbooks() {
     let fixture = Fixture::new(&["a.sh"]);
     let steps = steps(&fixture.0, Path::new("/owned tool/xtask")).unwrap();
-    assert_eq!(steps.len(), if cfg!(target_os = "linux") { 17 } else { 16 });
+    assert_eq!(steps.len(), if cfg!(target_os = "linux") { 18 } else { 17 });
     assert_eq!(steps[0].program, "/owned tool/xtask");
     assert_eq!(text(&steps[0].arguments), ["check", "--python"]);
     assert_eq!(
@@ -76,9 +76,9 @@ fn controller_checks_preserve_the_python_gate_offline_flags_and_all_syntax_only_
     assert_eq!(steps.last().unwrap().program, "python");
     #[cfg(target_os = "linux")]
     {
-        assert_eq!(steps[15].program, "cargo");
+        assert_eq!(steps[16].program, "cargo");
         assert_eq!(
-            text(&steps[15].arguments),
+            text(&steps[16].arguments),
             [
                 "test",
                 "--locked",
@@ -95,6 +95,19 @@ fn controller_checks_preserve_the_python_gate_offline_flags_and_all_syntax_only_
     assert_eq!(steps[14].program, "cargo");
     assert_eq!(
         text(&steps[14].arguments),
+        [
+            "test",
+            "--locked",
+            "-p",
+            "simplestchat-ops",
+            "--lib",
+            "--",
+            "--test-threads=1"
+        ]
+    );
+    assert_eq!(steps[15].program, "cargo");
+    assert_eq!(
+        text(&steps[15].arguments),
         [
             "test",
             "--locked",

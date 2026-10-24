@@ -102,6 +102,13 @@ actual Debian executable/first-install behavior require their respective Linux
 tests and successful manual `ops-runtime.yml` run. The existing full application
 VM workflow remains a separate suite.
 
+Operations automation runs the standalone Ops library suite with its default
+dependency profile before the reference comparisons. On Linux this includes the
+host, process and archive cases. This exercises the distributed capacity runtime
+profile early; the workspace suite also checks the combined feature profile.
+Ignored subprocess workers run only through their owning tests, and Python
+comparisons have explicit invocations in the pinned controller environment.
+
 The private VPS operation adds owned local transaction fixtures, actual inert
 paired preparation processes, and bounded gzip/tar extraction. The paired tests
 exercise lease-stream EOF, quiet-child cancellation, release ordering and the
