@@ -240,8 +240,412 @@ class ObservedFile:
         self.closed = True
 
 
+def failure_facts() -> dict[str, object]:
+    """Make a closed passive failure row without executing or authenticating anything."""
+    control = guest.Control(100.0)
+    commands = guest.Commands(control, cast("guest.Wire", cast("object", SimpleNamespace())), [])
+    commands.sequence, commands.last_status, commands.last_role = 7, 1, "native-deploy"
+    commands.native_observation = guest.native_facts(
+        json.dumps(
+            {
+                "action": "deploy",
+                "passed": False,
+                "phase": "preflight",
+                "failure": "RuntimeProfileError",
+            }
+        ).encode(),
+        1,
+    )
+    owner = cast(
+        "guest.Fixture",
+        cast(
+            "object",
+            SimpleNamespace(
+                commands=commands,
+                value={"runId": TOKEN},
+                checkpoint="positive-native",
+                trials=[],
+            ),
+        ),
+    )
+    return guest.failure_snapshot("exercise", owner, ValueError("private-not-exported"), control)
+
+
 class DeployProofTests(unittest.TestCase):
     """Closed scalar profiles and real owner finalizers refuse concrete counterexamples."""
+
+    def test_native_failure_projection_is_closed_and_never_echoes_unknown_text(self) -> None:
+        """Reported semantic fields remain passive and distinct from the real signed exit."""
+        private_marker = "INERT_PRIVATE_URL_OR_CONFIG_MUST_NOT_ESCAPE"
+        positive = guest.native_facts(
+            json.dumps(
+                {
+                    "action": "deploy",
+                    "passed": True,
+                    "phase": "complete",
+                    "private": private_marker,
+                }
+            ).encode(),
+            1,
+        )
+        self.assertEqual(positive["nativeRawExit"], 1)
+        self.assertIs(positive["nativePassed"], expr2=True)
+        self.assertEqual(positive["nativePhase"], "complete")
+        for failure, expected in (
+            ("RuntimeProfileError", "runtime-profile"),
+            ("OSError", "filesystem"),
+            ("Command 031 failed; inspect private output", "native-command"),
+            (private_marker, "other-refusal"),
+        ):
+            observed = guest.native_facts(
+                json.dumps(
+                    {
+                        "action": "deploy",
+                        "passed": False,
+                        "phase": "stage",
+                        "failure": failure,
+                        "private": {private_marker: private_marker},
+                    }
+                ).encode(),
+                1,
+            )
+            self.assertEqual(observed["nativeFailureLabel"], expected)
+            self.assertEqual(observed["nativePhase"], "stage")
+            self.assertNotIn(private_marker, json.dumps(observed))
+        malformed = guest.native_facts(b'{"action":"deploy","action":"secret"}', 7)
+        self.assertEqual(malformed["nativeReportState"], "invalid")
+        self.assertEqual(malformed["nativeRawExit"], 7)
+
+    def test_failure_decoder_rejects_hostile_shapes_and_unknown_fields(self) -> None:
+        """Neither malformed keys, statuses nor nested secret objects reach the summary."""
+        original = failure_facts()
+        self.assertEqual(guest.failure_projection(original, TOKEN), original)
+        for key, value in (
+            ("phase", {"INERT_SECRET": "x"}),
+            ("checkpoint", ["INERT_SECRET"]),
+            ("firstFailureKind", {"INERT_SECRET": 1}),
+            ("lastObservedRole", ["INERT_SECRET"]),
+            ("nativeFailureLabel", {"INERT_SECRET": 1}),
+            ("nativeRawExit", True),
+            ("nativePassed", "true"),
+            ("lastObservedOrdinal", True),
+            ("completedTrials", 3),
+            ("guestSignalStatus", True),
+            ("nativeCommandOrdinal", 999),
+            ("runId", "b" * 32),
+        ):
+            with self.subTest(key=key):
+                candidate = dict(original)
+                candidate[key] = value
+                with self.assertRaises(ValueError):
+                    _ = guest.failure_projection(candidate, TOKEN)
+        extra = dict(original)
+        extra["INERT_SECRET"] = {"value": "INERT_SECRET"}
+        with self.assertRaises(ValueError):
+            _ = guest.failure_projection(extra, TOKEN)
+
+    def test_actual_owned_native_shape_child_exit_is_captured_before_status_rejection(self) -> None:
+        """The real adapter snapshots raw7/complete JSON before raising, then closes all pipes."""
+        children: list[subprocess.Popen[bytes]] = []
+        original_spawn = subprocess.Popen
+        native_json = json.dumps(
+            {
+                "action": "deploy",
+                "passed": False,
+                "phase": "preflight",
+                "failure": "RuntimeProfileError",
+            }
+        )
+
+        def spawn(  # noqa: PLR0913 -- Match the existing Popen boundary for this inert child only.
+            _args: list[str],
+            *,
+            executable: str | None,
+            pass_fds: tuple[int, ...],
+            stdin: BinaryIO | int,
+            stdout: int,
+            stderr: int,
+            env: Mapping[str, str],
+            cwd: Path,
+            start_new_session: bool,
+        ) -> subprocess.Popen[bytes]:
+            del executable
+            child = original_spawn(
+                [
+                    sys.executable,
+                    "-I",
+                    "-B",
+                    "-c",
+                    "import sys;sys.stdout.write(" + repr(native_json) + ");sys.exit(7)",
+                ],
+                stdin=stdin,
+                stdout=stdout,
+                stderr=stderr,
+                env=dict(env),
+                cwd=cwd,
+                pass_fds=pass_fds,
+                start_new_session=start_new_session,
+            )
+            children.append(child)
+            return child
+
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            patch.object(guest, "ROOT", Path(temporary)),
+        ):
+            source_path = Path(temporary) / "inert-source"
+            _ = source_path.write_bytes(b"not-a-native-binary")
+            with source_path.open("rb") as source:
+                pinned = cast(
+                    "stage.Original",
+                    cast(
+                        "object",
+                        SimpleNamespace(
+                            file=source,
+                            check=lambda: None,
+                        ),
+                    ),
+                )
+                control = guest.Control(time.monotonic())
+                control.phase = "exercise"
+                wire = cast("guest.Wire", cast("object", SimpleNamespace(no_extra=lambda: None)))
+                commands = guest.Commands(control, wire, [])
+                commands.native = pinned
+                with (
+                    patch.object(subprocess, "Popen", side_effect=spawn),
+                    patch.object(bounded_process, "stop", wraps=bounded_process.stop) as stop,
+                    self.assertRaises(ValueError),
+                ):
+                    _ = commands.run(
+                        ["simplestchat-ops", "release", "deploy", "--revision", CURRENT]
+                    )
+                observed = dict(commands.native_observation)
+                facts = [
+                    (
+                        child.returncode,
+                        child.stdout.closed if child.stdout else False,
+                        child.stderr.closed if child.stderr else False,
+                    )
+                    for child in children
+                ]
+                stop_calls = stop.call_count
+            source_closed = source.closed
+        self.assertEqual(facts, [(7, True, True)])
+        self.assertTrue(source_closed)
+        self.assertEqual(stop_calls, 0)
+        self.assertEqual(observed["nativeRawExit"], 7)
+        self.assertIs(observed["nativePassed"], expr2=False)
+        self.assertEqual(observed["nativePhase"], "preflight")
+        self.assertEqual(observed["nativeFailureLabel"], "runtime-profile")
+
+    def test_new_native_attempt_cannot_inherit_the_previous_trial_observation(self) -> None:
+        """An early refused second attempt keeps unknown facts, not old raw0/pass/complete."""
+        control = guest.Control(time.monotonic())
+        wire = cast("guest.Wire", cast("object", SimpleNamespace(no_extra=lambda: None)))
+        commands = guest.Commands(control, wire, [])
+        commands.native_observation = guest.native_facts(
+            json.dumps(
+                {
+                    "action": "deploy",
+                    "passed": True,
+                    "phase": "complete",
+                }
+            ).encode(),
+            0,
+        )
+        primary = ValueError("inert-pre-spawn")
+        with (
+            patch.object(commands, "check", side_effect=primary),
+            self.assertRaises(ValueError) as got,
+        ):
+            _ = commands.run(["simplestchat-ops", "release", "deploy", "--revision", PREVIOUS])
+        self.assertIs(got.exception, primary)
+        self.assertEqual(commands.native_observation, guest.native_facts(None, None))
+
+    def test_fixed_failure_reader_checks_marker_and_never_selects_a_stream(self) -> None:
+        """Emit only the exact marker-bound record, never raw command evidence."""
+        requested: list[tuple[Path, int, int]] = []
+        row = failure_facts()
+
+        def read(path: Path, maximum: int, mode: int) -> tuple[bytes, os.stat_result]:
+            requested.append((path, maximum, mode))
+            data = (
+                (TOKEN + "\n").encode()
+                if path.name == "simplestchat-vm-fixture"
+                else json.dumps(row).encode()
+            )
+            return data, os.stat_result((0,) * 10)
+
+        with (
+            patch.object(os, "geteuid", return_value=0),
+            patch.object(ops_guest, "read_fixed", side_effect=read),
+        ):
+            observed = guest.failure_diagnostic(TOKEN)
+        self.assertEqual(guest.record(observed), row)
+        self.assertEqual(
+            requested,
+            [
+                (Path("/etc/simplestchat-vm-fixture"), 128, 0o600),
+                (guest.ROOT / "deploy-observer-diagnostic.json", guest.MAX_FRAME, 0o600),
+            ],
+        )
+        with (
+            patch.object(os, "geteuid", return_value=0),
+            patch.object(ops_guest, "read_fixed") as reading,
+            self.assertRaises(ValueError),
+        ):
+            _ = guest.failure_diagnostic("../private-path")
+        reading.assert_not_called()
+
+    def test_failure_snapshot_precedes_cleanup_counter_and_status_overwrites(self) -> None:
+        """Actual execute preserves the body's semantic anchor while every owned peer closes."""
+        self._exercise_failure_boundary(late=False)
+
+    def test_guest_exact_body_end_cannot_become_cleanup_window_success(self) -> None:
+        """Actual execute refuses a previously complete body at exact B and still closes peers."""
+        self._exercise_failure_boundary(late=True)
+
+    def _exercise_failure_boundary(self, *, late: bool) -> None:
+        clock = [100.0]
+        control = guest.Control(clock[0])
+        primary = ValueError("private-body-error")
+        native_data = json.dumps(
+            {
+                "action": "deploy",
+                "passed": False,
+                "phase": "preflight",
+                "failure": "RuntimeProfileError",
+            }
+        ).encode()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            wire_file = tempfile.TemporaryFile()  # noqa: SIM115 -- Observe actual operation close.
+            fixture_file = tempfile.TemporaryFile(  # noqa: SIM115 -- Observe operation close.
+            )
+            incoming = iter((frame(), {"schemaVersion": 1, "kind": "continue", "runId": TOKEN}))
+            wire = cast(
+                "guest.Wire",
+                cast(
+                    "object",
+                    SimpleNamespace(
+                        read=lambda: next(incoming),
+                        no_extra=lambda: None,
+                        close=wire_file.close,
+                    ),
+                ),
+            )
+            commands = guest.Commands(control, wire, [])
+            commands.sequence, commands.last_status, commands.last_role = 7, 1, "native-deploy"
+            commands.native_observation = guest.native_facts(native_data, 1)
+            owner = object.__new__(guest.Fixture)
+            owner.value, owner.control, owner.wire = frame(), control, wire
+            owner.commands, owner.checkpoint, owner.trials = commands, "positive-native", []
+
+            def exercise() -> dict[str, object]:
+                control.advance()
+                if late:
+                    clock[0] = control.body_end
+                    return result()
+                raise primary
+
+            def finish(first: BaseException | None) -> BaseException | None:
+                commands.sequence, commands.last_status, commands.last_role = 99, 0, "trust-update"
+                fixture_file.close()
+                return first
+
+            caught: BaseException | None = None
+            with (
+                patch.object(guest, "ROOT", root),
+                patch.object(time, "monotonic", side_effect=lambda: clock[0]),
+                patch.object(guest, "Fixture", return_value=owner),
+                patch.object(owner, "prepare", return_value=prepared()),
+                patch.object(owner, "exercise", side_effect=exercise),
+                patch.object(owner, "finish", side_effect=finish),
+                patch.object(sys, "stdout", SimpleNamespace(buffer=io.BytesIO())),
+            ):
+                try:
+                    _ = guest.execute(control, wire)
+                except ValueError as error:
+                    caught = error
+                finally:
+                    # Gather real close facts before test fallback, then settle every known peer.
+                    closed = (fixture_file.closed, wire_file.closed)
+                    _ = ops_guest.settle((fixture_file.close, wire_file.close))
+            diagnostic = guest.record((root / "deploy-observer-diagnostic.json").read_bytes())
+        self.assertEqual(closed, (True, True))
+        self.assertEqual(guest.failure_projection(diagnostic, TOKEN), diagnostic)
+        self.assertTrue(control.settling)
+        self.assertIsNotNone(caught)
+        if not late:
+            self.assertIs(caught, primary)
+        self.assertEqual(diagnostic["checkpoint"], "body-completion" if late else "positive-native")
+        self.assertEqual(diagnostic["lastObservedOrdinal"], 7)
+        self.assertEqual(diagnostic["lastObservedExit"], 1)
+        self.assertEqual(diagnostic["nativeRawExit"], 1)
+        self.assertEqual(diagnostic["nativeFailureLabel"], "runtime-profile")
+        self.assertNotIn("private-body-error", json.dumps(diagnostic))
+
+    def test_guest_setup_final_fence_precedes_widening_after_real_debt_observation(self) -> None:
+        """An elapsed original setup boundary cannot be hidden by changing the active phase."""
+        control = guest.Control(100.0)
+        clock = [100.0]
+        with patch.object(time, "monotonic", side_effect=lambda: clock[0]):
+            control.configure(frame())
+            original = control.end
+            admit = control.exercise_budget
+
+            def observed() -> None:
+                admit()
+                clock[0] = control.setup_end
+
+            with (
+                patch.object(control, "exercise_budget", side_effect=observed),
+                self.assertRaises(ValueError),
+            ):
+                control.advance()
+        self.assertEqual(control.phase, "setup")
+        self.assertEqual(control.end, original)
+
+    def test_controller_body_fence_precedes_cleanup_and_preserves_known_input_close(self) -> None:
+        """Even a prior body refusal cannot skip the original B check or known finalizers."""
+        control = keeper.Control(started=100.0)
+        control.setup = False
+        modes: list[bool] = []
+        original = control.check
+
+        def checking() -> None:
+            modes.append(control.settling)
+            original()
+
+        def check_input(_control: fetch_vm.Control) -> None:
+            pass
+
+        with tempfile.TemporaryFile() as stream:
+            held = cast(
+                "fetch_vm.Held",
+                cast(
+                    "object",
+                    SimpleNamespace(
+                        stream=stream,
+                        check=check_input,
+                        close=stream.close,
+                    ),
+                ),
+            )
+            owners = fetch_vm.Owners(inputs=[held])
+            with (
+                patch.object(keeper, "admit", side_effect=ToolError("inert-primary")),
+                patch.object(fetch_vm, "Owners", return_value=owners),
+                patch.object(control, "check", side_effect=checking),
+                patch.object(time, "monotonic", return_value=control.body_end),
+            ):
+                observed = keeper.run(keeper.Options(), control)
+                closed = stream.closed
+        self.assertIs(modes[0], expr2=False)
+        self.assertIn(member=True, container=modes)
+        self.assertTrue(closed)
+        self.assertIs(observed["passed"], expr2=False)
+        self.assertEqual(observed["failure"], "guard")
 
     def test_original_fixture_setup_does_not_reset_clock(self) -> None:
         """The release boundary keeps the exact original end and both full calls."""

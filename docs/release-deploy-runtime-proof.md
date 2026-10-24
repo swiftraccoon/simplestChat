@@ -86,3 +86,54 @@ all SSH/QMP/VM/stream/known-host/source owners, actual QEMU zero, restoration an
 the original final clock fence. Earlier frames remain passive through final
 status. Before/after original witnesses do not eliminate every same-UID
 swap-and-restore race.
+
+
+## Bounded failure diagnostics
+
+A failed runtime trial stays failed. The controller retains only a closed
+metadata projection in `summary.json`; the workflow uploads that fixed file
+after success or failure when it exists. No raw guest/native stream, environment,
+configuration, credential, certificate key or database dump is uploaded. Missing
+evidence never authorizes a positive result. The workflow conclusion and final
+controller exit status remain authoritative: a late output/restore/fence failure
+can invalidate earlier JSON bytes.
+
+The guest snapshots its semantic checkpoint and last admitted fixed observer
+role/ordinal/status before fixture cleanup can overwrite them. These identify
+what was observed at the failure boundary; they do not assert that the last
+command caused the failure or that a daemon-side operation was undone. The
+checkpoint distinguishes positive/negative native execution, report parsing,
+saved outcome/journal/staged/backup validation, actor history and continuity.
+The completed-trial count is separate from a native child exit.
+
+A native raw signed leader exit is retained separately from selected passive
+`passed`/`phase` JSON fields. The report may claim success while the child exits
+nonzero; neither field alone authorizes the runtime proof. Fixed reviewed
+native/policy/asset failure literals map to closed labels. A numbered native
+command refusal can expose its bounded ordinal. Unknown text is only
+`other-refusal`; arbitrary unknown keys, URLs, paths, values and exception
+messages are never copied into the public projection. Malformed diagnostics
+are unavailable, not a replacement for the original failure.
+
+The marker-bound `--failure-diagnostic` guest route reads only its fixed private
+diagnostic record through existing bounded nofollow owners. It selects no
+command, stream or arbitrary path. The controller collects it only after a
+failed body, under the same original final end, and still attempts all known
+peer finalizers. These facts are passive diagnostics, not authentication or a
+saved-success capability. The snapshot precedes guest finalizers; it does not
+claim to observe every later guest teardown error.
+
+Original live body/setup fences run before widening to cleanup/exercise, even
+when an earlier failure is already latched. Cleanup never resets the entry
+clock or clears the primary failure. The fixture budgets4500/600/180 and native
+1800/60 remain unchanged. Local synthetic checks exercise hostile diagnostic
+JSON, first-anchor preservation across cleanup, actual owned child raw-exit
+capture, prior-trial reset, exact body/setup boundaries and all known closes.
+They do not establish a successful authenticated VM deployment.
+
+The first real signed host-deploy trial failed after authentication and initial
+fixture readiness; its VM and original-input cleanup completed. Its prior
+success-only artifact rule lost the private failure context. Source audit found
+no causal native/prerequisite mismatch, so no native/core behavior or DB policy
+is changed on that basis. The next actual runtime trial must use these bounded
+facts to identify the cause; a successful deploy/rollback proof remains pending.
