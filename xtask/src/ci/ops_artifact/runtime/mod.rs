@@ -10,6 +10,7 @@
 //! all-attempt finalization. C-GOOD-ERR/C-FAILURE/C-DEBUG keep private inputs out
 //! of diagnostics. These decisions cover this change, not a retrospective audit.
 
+mod diagnostics;
 mod execute;
 mod files;
 #[cfg(test)]
@@ -53,4 +54,9 @@ pub(super) fn request_path(path: &std::path::Path) -> bool {
 }
 pub(super) async fn native(path: &std::path::Path, selected: &str) -> Result<()> {
     execute::native(path, selected).await
+}
+
+/// Retain only passive bounded case diagnostics from this CI invocation.
+pub(super) fn diagnostics() -> std::process::ExitCode {
+    diagnostics::native()
 }

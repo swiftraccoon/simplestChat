@@ -155,6 +155,91 @@ class FileCloseFaults:
             raise
 
 
+class GuestHelpTests(unittest.TestCase):
+    """Bind the guest check to real maintained CLI vocabulary without executing a candidate."""
+
+    @staticmethod
+    def current_help() -> bytes:
+        """Read only the fixed string literals in the maintained Rust concat constant."""
+        source = (ROOT / "ops/src/main.rs").read_text()
+        body = source.split("const USAGE: &str = concat!(", 1)[1].split("\n);", 1)[0]
+        parts: list[str] = []
+        for line in body.splitlines():
+            if not line.strip():
+                continue
+            part = cast("object", json.loads(line.strip().removesuffix(",")))
+            if not isinstance(part, str):
+                message = "maintained help must remain fixed string data"
+                raise TypeError(message)
+            parts.append(part)
+        return ("".join(parts) + "\n").encode()
+
+    def test_current_legacy_and_additional_future_routes_preserve_required_commands(self) -> None:
+        """Help ordering may grow while exact program and manifest contracts remain required."""
+        current = self.current_help()
+        legacy = b"\n".join(
+            (
+                b"Usage: simplestchat-ops release manifest --path PATH",
+                b"       simplestchat-ops release preflight [--helpers-json JSON]",
+                b"       simplestchat-ops distribution inspect-executable --path PATH",
+                b"       simplestchat-ops distribution install --request ABS --request-sha256 SHA",
+                (
+                    b"       simplestchat-ops distribution verify-pair --manifest PATH "
+                    b"--path PATH --selection PATH"
+                ),
+                b"",
+            )
+        )
+        future = current + b"       simplestchat-ops release attestation verify [OPTIONS]\n"
+        for output in (current, legacy, future):
+            with self.subTest(output=output.splitlines()[0]):
+                guest.help_receipt(output, b"")
+        guest.help_receipt(current + b" " * (guest.MAX_HELP - len(current)), b"")
+
+    def test_wrong_program_manifest_error_output_duplicate_usage_and_bound_refuse(self) -> None:
+        """Related or prefixed manifest text cannot replace the complete fixed route line."""
+        current = self.current_help()
+        manifest = b"simplestchat-ops release manifest --path PATH\n"
+        invalid = (
+            current.replace(b"Usage: simplestchat-ops ", b"Usage: another-program ", 1),
+            current.replace(manifest, b""),
+            current.replace(manifest, b"simplestchat-ops release manifest --path WRONG\n"),
+            current.replace(manifest, b"simplestchat-ops release manifest --path PATH --extra\n"),
+            current + b"Usage: simplestchat-ops PRIVATE\n",
+            current + b" " * (guest.MAX_HELP + 1 - len(current)),
+        )
+        for output in invalid:
+            with self.subTest(output=output[:80]), self.assertRaises(guest.OpsError):
+                guest.help_receipt(output, b"")
+        with self.assertRaises(guest.OpsError):
+            guest.help_receipt(current, b"PRIVATE stderr")
+
+    def test_a_nonzero_help_child_remains_negative_before_receipt_validation(self) -> None:
+        """The real case dispatcher refuses nonzero status even for complete valid help bytes."""
+        current = self.current_help()
+        for status in (1, 2):
+            runner = object.__new__(guest.Runner)
+            runner.records = [
+                {"name": name, "exitStatus": expected, "passed": True}
+                for name, expected in guest.VPS_CASES
+            ]
+            refused: BaseException | None = None
+            with (
+                io.BytesIO(b"inert original, never executed") as source,
+                patch.object(guest.Runner, "check"),
+                patch.object(guest.Runner, "execute", return_value=(status, current, b"")),
+            ):
+                try:
+                    _ = runner.case("source-help", ["--help"], file=cast("BinaryIO", source))
+                except guest.OpsError as error:
+                    refused = error
+            self.assertIsInstance(refused, guest.OpsError)
+            self.assertEqual(
+                runner.records[-1],
+                {"name": "source-help", "exitStatus": status, "passed": False},
+            )
+
+
 class GuestInputTests(unittest.TestCase):
     """Mature tar framing and retained original metadata cannot adopt replacements."""
 

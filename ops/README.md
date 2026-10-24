@@ -1632,8 +1632,48 @@ allowance. The workflow's 90-minute job also covers cold setup/compilation.
 These are admission/deadline policies, not measured cold-start promises or hard
 bounds on OS I/O, scheduling or reap. Only final CLI zero includes original
 readback, all explicit closes, replay and cancellation/deadline fences. The
-workflow uploads only the sanitized summary after success; a partial local
+workflow uploads the runtime summary only after success; a partial local
 `summary.json` is not independent success or installation authority.
+
+A separate prebuilt Rust diagnostic operation runs under `always()` after the
+runtime step. It starts no process or runtime; the workflow does not forward
+`GH_TOKEN` to this operation. It reads only the bounded, no-follow
+`ops-runtime/keeper/summary.json`,
+checks the selected revision/run/attempt/artifact and fixed package/protocol/target,
+and writes a fresh private `ops-runtime-diagnostics/diagnostic.json`. Only a
+successful readback, namespace replay and explicit owner closes publish its
+`retained` marker. The workflow uploads that exact JSON for one day, including
+when the original runtime fails; it never uploads raw reports, logs, caches,
+images, sockets or keys. Without a compiled controller it does not compile a
+replacement during finalization. Missing, malformed or foreign reports remain
+explicitly unavailable. The diagnostic records the last observed fixed case and
+reported exit-match facts; it does not identify an unobserved first failure or
+authorize installation. The original runtime status and all 33 cases stay intact.
+
+The keeper's global-help check accepts the exact manifest route in the older
+manifest-first layout and the current indented layout. It keeps the fixed program
+prefix, one Usage line, other required commands, empty stderr, 8 KiB limit and
+successful command status. Extra supported routes do not invalidate that receipt.
+
+The affected API decisions are prospective. **C-SERDE/C-VALIDATE apply:** fixed
+projected data and typed source identities never deserialize runtime authority.
+**C-CALLER-CONTROL/C-RW-VALUE apply:** original file owners remain with the
+operation; stdout is borrowed and checked at the kernel writer boundary, including
+read-only descriptor failures. **C-DTOR-FAIL/C-GOOD-ERR apply:** independent closes
+are attempted, first failures remain primary, and public diagnostics contain only
+fixed classes and allowed case/status fields. This reuses the existing namespace
+adapter and JSON parser, adds no dependency or permission, and makes no wider API
+inventory or runtime-readiness claim.
+
+The corrected source passed 24 guest fixtures, nine focused diagnostic tests,
+30 runtime/controller tests, the eight workflow/request tests, native/GNU lint,
+formatting, Python quality, 575 helper tests and fast security. The full runtime
+set preceded only an import move into its test module; the nine diagnostics and
+all production lint checks were repeated afterward. Independent review added
+regressions for the guest's clamped negative statuses and real stdout write errors.
+The original signed `6a3acc8` runtime trial failed without a retained per-case
+report. Its stale help expectation is independently proven; its earliest failing
+case remains unproven until a new signed runtime run supplies the required evidence.
 
 The binary's separate host entry is:
 

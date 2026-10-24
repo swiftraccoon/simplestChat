@@ -107,6 +107,7 @@ jobs:
               output.write('sha256=' + hashlib.sha256(original).hexdigest() + '\n')
           PY
       - name: Authenticate, exercise and retire the exact Ops guest
+        id: runtime
         timeout-minutes: 75
         env:
           GH_TOKEN: ${{ github.token }}
@@ -123,3 +124,24 @@ jobs:
           path: ${{ runner.temp }}/ops-runtime/summary.json
           if-no-files-found: error
           retention-days: 14
+      - name: Write only bounded Ops runtime diagnostic context
+        id: diagnostics
+        if: ${{ always() }}
+        timeout-minutes: 1
+        env:
+          OPS_RUN_ID: ${{ inputs.run_id }}
+          OPS_RUN_ATTEMPT: ${{ inputs.run_attempt }}
+          OPS_ARTIFACT_ID: ${{ inputs.artifact_id }}
+          OPS_RUNTIME_OUTCOME: ${{ steps.runtime.outcome }}
+        run: |
+          if test -x target/debug/xtask; then
+            target/debug/xtask ops-artifact runtime-diagnostics
+          fi
+      - name: Preserve only the newly written sanitized diagnostic report
+        if: ${{ always() && steps.diagnostics.outputs.retained == 'true' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ops-runtime-diagnostics
+          path: ${{ runner.temp }}/ops-runtime-diagnostics/diagnostic.json
+          if-no-files-found: error
+          retention-days: 1

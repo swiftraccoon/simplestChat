@@ -102,6 +102,22 @@ actual Debian executable/first-install behavior require their respective Linux
 tests and successful manual `ops-runtime.yml` run. The existing full application
 VM workflow remains a separate suite.
 
+Keeper help fixtures cover legacy/current/future global-help layouts while
+retaining strict route, status, stderr and output-size checks. The compiled
+`xtask ops-artifact runtime-diagnostics` leaf has separate pure/bounded-file tests:
+
+```sh
+cargo test --locked -p xtask --bin xtask \
+  ci::ops_artifact::runtime::diagnostics::tests:: -- --test-threads=1
+```
+
+The reporter checks source identity, malformed/oversized/nonregular reports,
+fresh output/readback, clamped signal-status compatibility and actual read-only
+stdout refusal. It retains only one sanitized JSON after checked finalization;
+`lastObservedCase` is not a claim about the first failed case. Original runtime
+failure stays negative. The manual signed Debian run remains the actual guest
+execution and first-install gate.
+
 Operations automation runs the standalone Ops library suite with its default
 dependency profile before the reference comparisons. On Linux this includes the
 host, process and archive cases. This exercises the distributed capacity runtime
