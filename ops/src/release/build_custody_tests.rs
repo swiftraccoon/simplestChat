@@ -27,6 +27,8 @@ use std::{
     time::{Duration, Instant},
 };
 
+const SOURCE_REVISION: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
 fn owner() -> Owner {
     let mut owner = Owner::new(
         Instant::now(),
@@ -82,7 +84,7 @@ fn archive(fixture: &Fixture, bytes: &[u8], owner: &mut Owner) -> (Dir, Held) {
 
 fn failed_extract(archive: &mut Held, parent: &Path, owner: &mut Owner) -> Failure {
     let end = owner.end();
-    match Tree::extract(archive, parent, owner, end) {
+    match Tree::extract(archive, parent, SOURCE_REVISION, owner, end) {
         Err(error) => error,
         Ok(tree) => {
             tree.remove(owner, end).unwrap();
@@ -446,7 +448,7 @@ async fn admitted_migration_pair_closes_after_original_deadline_and_tree_cleanup
         false,
     );
     let (parent, mut archive) = archive(&fixture, &builder.into_inner().unwrap(), &mut owner);
-    let tree = Tree::extract(&mut archive, &fixture.0, &mut owner, end).unwrap();
+    let tree = Tree::extract(&mut archive, &fixture.0, SOURCE_REVISION, &mut owner, end).unwrap();
     let tree_path = tree.path().to_owned();
     let tree_originals = tree.fixture_descriptors();
     let migration = tree_path.join("migrations/001_fixture.sql");
@@ -527,7 +529,8 @@ async fn exact_source_membership_refuses_extra_file_even_when_all_directory_seal
     let end = owner.end();
     let bytes = source_bytes(b"known source member\n");
     let (parent, mut archive) = archive(&fixture, &bytes, &mut owner);
-    let mut tree = Tree::extract(&mut archive, &fixture.0, &mut owner, end).unwrap();
+    let mut tree =
+        Tree::extract(&mut archive, &fixture.0, SOURCE_REVISION, &mut owner, end).unwrap();
     let path = tree.path().to_owned();
     let originals = tree.fixture_descriptors();
     let known = path.join("partial.bin");

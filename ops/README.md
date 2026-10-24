@@ -172,6 +172,15 @@ observations are rechecked across command boundaries. Temporary cleanup operates
 only on its original created entries. A changed or foreign entry makes completion
 fail and is retained; cleanup never adopts an unknown path to delete it.
 
+The source extractor accepts Git's optional first global PAX header only in its
+ordinary commit-comment form: `pax_global_header`, exactly 52 bytes containing
+one `comment` equal to the already selected lowercase 40-hex revision. It parses
+that metadata with the existing tar PAX parser without creating a filesystem
+entry or adding it to the logical source ledger. Repeated, late, differently
+named or malformed global headers, other keys and path/size overrides are
+refused. The comment does not authenticate the revision or replace the original
+Git/source witnesses. Archives without that header remain supported.
+
 The native source ledger admits at most 100,000 logical archive entries and
 16 MiB of summed normalized relative-name bytes. These are explicit source
 acceptance limits using the existing archive resource profile's entry/name

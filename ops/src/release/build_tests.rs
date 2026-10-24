@@ -190,6 +190,7 @@ struct Inert {
     tag_reads: usize,
     temporary: Option<PathBuf>,
     context: Option<PathBuf>,
+    global_metadata_absent: Option<bool>,
     fault: Fault,
 }
 impl Inert {
@@ -204,6 +205,7 @@ impl Inert {
             tag_reads: 0,
             temporary: None,
             context: None,
+            global_metadata_absent: None,
             fault,
         }
     }
@@ -280,6 +282,14 @@ impl Inert {
                 }
                 _ => panic!("unexpected Git role"),
             }
+        }
+        if let Some(temporary) = &self.temporary
+            && temporary.join("context").is_dir()
+        {
+            self.global_metadata_absent = Some(matches!(
+                fs::symlink_metadata(temporary.join("context/pax_global_header")),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound
+            ));
         }
         if arguments[..2] == ["context", "inspect"] {
             return (0, b"unix:///var/run/docker.sock".to_vec());
@@ -726,8 +736,41 @@ fn entry(
         .append_data(&mut header, name, Cursor::new(bytes))
         .unwrap();
 }
-fn source_archive() -> Vec<u8> {
+fn pax_records(fields: &[(&str, &str)]) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    for (key, value) in fields {
+        let body = format!(" {key}={value}\n");
+        let mut length = body.len() + 1;
+        loop {
+            let record = format!("{length}{body}");
+            if record.len() == length {
+                bytes.extend_from_slice(record.as_bytes());
+                break;
+            }
+            length = record.len();
+        }
+    }
+    bytes
+}
+fn global_pax(builder: &mut tar::Builder<Vec<u8>>, name: &str, bytes: &[u8]) {
+    // Git's real source archive begins with this USTAR global record. It is
+    // metadata, not an extracted file, and its comment identifies the commit.
+    let mut header = tar::Header::new_ustar();
+    header.set_entry_type(tar::EntryType::new(b'g'));
+    header.set_mode(0o666);
+    header.set_size(bytes.len().try_into().unwrap());
+    header.set_cksum();
+    builder
+        .append_data(&mut header, name, Cursor::new(bytes))
+        .unwrap();
+}
+fn source_archive_with_pax(headers: &[(&str, Vec<u8>)], late: bool) -> Vec<u8> {
     let mut builder = tar::Builder::new(Vec::new());
+    if !late {
+        for (name, bytes) in headers {
+            global_pax(&mut builder, name, bytes);
+        }
+    }
     for name in ["build", "web", "migrations"] {
         entry(&mut builder, name, &[], 0o775, true);
     }
@@ -754,7 +797,18 @@ fn source_archive() -> Vec<u8> {
         0o644,
         false,
     );
+    if late {
+        for (name, bytes) in headers {
+            global_pax(&mut builder, name, bytes);
+        }
+    }
     builder.into_inner().unwrap()
+}
+fn source_archive() -> Vec<u8> {
+    source_archive_with_pax(
+        &[("pax_global_header", pax_records(&[("comment", REVISION)]))],
+        false,
+    )
 }
 fn image_archive() -> Vec<u8> {
     let mut builder = tar::Builder::new(Vec::new());
@@ -797,9 +851,16 @@ fn record(path: &Path) -> Option<Value> {
 fn whole_build_and_exact_export_publish_verified_closed_records_and_same_candidate_inode() {
     runtime().block_on(async {
         for export in [false, true] {
+            let source = source_archive();
+            assert_eq!(source[156], b'g');
+            assert_eq!(&source[..17], b"pax_global_header");
+            assert_eq!(
+                &source[512..564],
+                format!("52 comment={REVISION}\n").as_bytes()
+            );
             let result = run(
                 Case::simple("", export),
-                source_archive(),
+                source,
                 image_archive(),
                 Fault::None,
             )
@@ -813,6 +874,8 @@ fn whole_build_and_exact_export_publish_verified_closed_records_and_same_candida
             let source = record(&result.output.join("source.json")).unwrap();
             assert_eq!(source.as_object().unwrap().len(), 2);
             assert!(source.get("exportedImageId").is_none());
+            assert_eq!(source["inputsSha256"].as_object().unwrap().len(), 5);
+            assert_eq!(result.executor.global_metadata_absent, Some(true));
             assert_eq!(
                 record(&result.output.join("outcome.json")).unwrap()["passed"],
                 true
@@ -830,6 +893,126 @@ fn whole_build_and_exact_export_publish_verified_closed_records_and_same_candida
                     .temporary
                     .as_ref()
                     .is_some_and(|path| !path.exists())
+            );
+        }
+    });
+}
+
+#[test]
+fn headerless_source_archive_compatibility_keeps_build_and_export_valid() {
+    runtime().block_on(async {
+        for export in [false, true] {
+            let result = run(
+                Case::simple("", export),
+                source_archive_with_pax(&[], false),
+                image_archive(),
+                Fault::None,
+            )
+            .await;
+            assert!(result.attempt.result.is_ok(), "{:?}", result.attempt.result);
+            assert_eq!(result.primary, None);
+            assert_eq!(result.executor.global_metadata_absent, Some(true));
+            assert!(result.output.join("release.json").is_file());
+        }
+    });
+}
+
+#[test]
+fn source_global_pax_refusals_settle_the_source_ledger_before_any_build_or_export() {
+    runtime().block_on(async {
+        let comment = pax_records(&[("comment", REVISION)]);
+        let mismatch = "f".repeat(40);
+        let path = format!("../{REVISION}");
+        let size = "0".repeat(43);
+        let cases = [
+            (
+                "unknown-key",
+                vec![("pax_global_header", pax_records(&[("unknown", REVISION)]))],
+                false,
+            ),
+            (
+                "path-override",
+                vec![("pax_global_header", pax_records(&[("path", &path)]))],
+                false,
+            ),
+            (
+                "size-override",
+                vec![("pax_global_header", pax_records(&[("size", &size)]))],
+                false,
+            ),
+            (
+                "duplicate-comment",
+                vec![(
+                    "pax_global_header",
+                    pax_records(&[("comment", REVISION), ("comment", REVISION)]),
+                )],
+                false,
+            ),
+            (
+                "mismatched-commit",
+                vec![("pax_global_header", pax_records(&[("comment", &mismatch)]))],
+                false,
+            ),
+            (
+                "late-global",
+                vec![("pax_global_header", comment.clone())],
+                true,
+            ),
+            (
+                "repeated-global",
+                vec![
+                    ("pax_global_header", comment.clone()),
+                    ("pax_global_header", comment.clone()),
+                ],
+                false,
+            ),
+            (
+                "wrong-global-name",
+                vec![("nested/pax_global_header", comment)],
+                false,
+            ),
+        ];
+        for (name, headers, late) in cases {
+            let source = source_archive_with_pax(&headers, late);
+            let source_sha = sha(&source);
+            let result = run(
+                Case::simple("", false),
+                source,
+                image_archive(),
+                Fault::None,
+            )
+            .await;
+            // The controller has already settled every native peer and its
+            // extraction journal before the refusal or context facts are read.
+            assert_eq!(result.attempt.result, Err(Failure::Archive), "{name}");
+            assert_eq!(result.primary, Some(Failure::Archive), "{name}");
+            assert_eq!(sha(&result.executor.source), source_sha, "{name}");
+            assert_eq!(result.executor.global_metadata_absent, None, "{name}");
+            assert!(
+                result.executor.records.iter().all(
+                    |record| !["docker-build", "docker-save"].contains(&record.action.as_str())
+                ),
+                "{name}"
+            );
+            for file in [
+                "source.json",
+                "image.tar",
+                "release.candidate.json",
+                "release.json",
+            ] {
+                assert!(!result.output.join(file).exists(), "{name}: {file}");
+            }
+            assert_eq!(
+                record(&result.output.join("outcome.json")).unwrap()["passed"],
+                false
+            );
+            assert!(
+                result
+                    .executor
+                    .temporary
+                    .as_ref()
+                    .is_some_and(|path| !path.exists()),
+                "{name}"
             );
         }
     });
