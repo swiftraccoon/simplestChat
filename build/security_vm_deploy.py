@@ -110,8 +110,8 @@ class Control(fetch_vm.Control):
             self.whole_body_end - time.monotonic() >= CONTINUE_MINIMUM,
             "deploy_vm_two_full_envelopes",
         )
-        self.setup = False
         self.check()
+        self.setup = False
 
 
 @final

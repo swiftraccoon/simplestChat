@@ -2444,7 +2444,7 @@ upgrade/bootstrap remain unchanged. Source/oracle checks do not prove actual
 Docker/DB/Caddy/TLS or signed-musl host execution. The complete 97-case comparison
 against unchanged Python passed locally in 365.12 test seconds, using real private
 files, locks and owned inert children with inert service replies. The corrected
-ordinary Ops suite passed 484 tests. The new VM fixture has 22 passing inert tests;
+ordinary Ops suite passed 484 tests. The new VM fixture has 23 passing inert tests;
 its actual signed-musl host runtime remains unrun. See the
 affected API review for ownership,
 accepted profiles, the inherited-stdio SDK close exception and validation scope.
