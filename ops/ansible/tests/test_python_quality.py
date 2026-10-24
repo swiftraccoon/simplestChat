@@ -185,7 +185,7 @@ class PythonPolicyTests(unittest.TestCase):
         self.assertEqual(string(steps[0], "with", "fetch-depth"), "2")
         self.assertEqual(string(steps[1], "if"), "${{ env.ACT }}")
         self.assertEqual(string(steps[1], "run"), "build/ci-local-docker.sh")
-        rust, subject, fingerprint = steps[2:5]
+        rust, subject, fingerprint = steps[3:6]
         self.assertEqual(string(rust, "name"), "Install the pinned Rust toolchain for CI receipts")
         self.assertEqual(
             string(rust, "uses"),
