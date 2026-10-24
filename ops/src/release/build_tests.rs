@@ -18,9 +18,10 @@ use std::{
     collections::BTreeMap,
     ffi::OsString,
     fs::{self, File, OpenOptions},
-    io::{Cursor, Write},
+    io::{Cursor, Read, Write},
     os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt, symlink},
     path::{Component, Path, PathBuf},
+    process::ExitCode,
     time::{Duration, Instant},
 };
 
@@ -614,6 +615,16 @@ impl Drop for Run {
 }
 
 async fn run(case: Case, source: Vec<u8>, image: Vec<u8>, fault: Fault) -> Run {
+    run_started(case, source, image, fault, None).await
+}
+
+async fn run_started(
+    case: Case,
+    source: Vec<u8>,
+    image: Vec<u8>,
+    fault: Fault,
+    started: Option<Instant>,
+) -> Run {
     let fixture = Fixture::new();
     let root = fixture.0.join("checkout");
     directory(&root, 0o700);
@@ -702,7 +713,7 @@ async fn run(case: Case, source: Vec<u8>, image: Vec<u8>, fault: Fault) -> Run {
     }
     let mut executor = Inert::new(case.clone(), source, image, fault, output.clone());
     let mut owner = Owner::new(
-        Instant::now(),
+        started.unwrap_or_else(Instant::now),
         if case.export {
             super::control::Mode::Export
         } else {
@@ -874,6 +885,256 @@ fn image_archive() -> Vec<u8> {
 fn record(path: &Path) -> Option<Value> {
     path.is_file()
         .then(|| serde_json::from_slice(&fs::read(path).unwrap()).unwrap())
+}
+
+fn read_closed(path: &Path) -> std::result::Result<Vec<u8>, Failure> {
+    let mut file = File::open(path).map_err(|_| Failure::Io)?;
+    let mut bytes = Vec::new();
+    let read = file.read_to_end(&mut bytes).map_err(|_| Failure::Io);
+    let closed = close(file);
+    read.and(closed)?;
+    Ok(bytes)
+}
+
+struct LifecycleBody {
+    result: std::result::Result<PathBuf, Failure>,
+    primary: Option<Failure>,
+    manifest: std::result::Result<Vec<u8>, Failure>,
+    outcome: std::result::Result<Vec<u8>, Failure>,
+    image: std::result::Result<Vec<u8>, Failure>,
+    critical_closed: bool,
+    closes_succeeded: bool,
+    temporary_removed: bool,
+    global_metadata_absent: Option<bool>,
+}
+
+fn lifecycle_worker() {
+    use nix::sys::stat::{Mode, umask};
+
+    let caller_mask = Mode::from_bits_truncate(0o022);
+    let previous = umask(caller_mask);
+    let mut observations = Vec::new();
+    for export in [false, true] {
+        for offset in [None, Some(Duration::ZERO), Some(Duration::from_secs(1))] {
+            super::COMPLETION_PROBE.set(true);
+            super::COMPLETION_OFFSET.set(offset);
+            super::COMPLETION_MASK.set(None);
+            super::BODY_CLOSED.set(false);
+            super::COMPLETION_AFTER_BODY.set(false);
+            let started = Instant::now();
+            let mode = if export {
+                super::control::Mode::Export
+            } else {
+                super::control::Mode::Build
+            };
+            let mut body = None;
+            let mut body_mask = None;
+            let status = super::lifecycle(started, mode, 120, || {
+                let current = umask(Mode::empty());
+                let _ = umask(current);
+                body_mask = Some(current);
+                let runtime = match tokio::runtime::Builder::new_multi_thread()
+                    .worker_threads(2)
+                    .enable_all()
+                    .build()
+                {
+                    Ok(runtime) => runtime,
+                    Err(_) => return ExitCode::FAILURE,
+                };
+                super::files::fixture_observe_closes(None);
+                let result = runtime.block_on(run_started(
+                    Case::simple("", export),
+                    source_archive(),
+                    image_archive(),
+                    Fault::None,
+                    Some(started),
+                ));
+                // Observe the operation's completed closes before reopening any
+                // output for this test's independent readback.
+                let closes = super::files::fixture_take_closes();
+                let critical_closed = ["image.tar", "source.json", "outcome.json", "release.json"]
+                    .iter()
+                    .all(|name| {
+                        fs::metadata(result.output.join(name)).is_ok_and(|metadata| {
+                            closes.iter().any(|closed| {
+                                closed.regular
+                                    && closed.succeeded
+                                    && closed.identity == Some((metadata.dev(), metadata.ino()))
+                            })
+                        })
+                    });
+                let passed = result.attempt.result.is_ok();
+                body = Some(LifecycleBody {
+                    result: result.attempt.result.clone(),
+                    primary: result.primary,
+                    manifest: read_closed(&result.output.join("release.json")),
+                    outcome: read_closed(&result.output.join("outcome.json")),
+                    image: read_closed(&result.output.join("image.tar")),
+                    critical_closed,
+                    closes_succeeded: !closes.is_empty()
+                        && closes.iter().all(|closed| closed.succeeded),
+                    temporary_removed: result
+                        .executor
+                        .temporary
+                        .as_ref()
+                        .is_some_and(|path| !path.exists()),
+                    global_metadata_absent: result.executor.global_metadata_absent,
+                });
+                drop(result);
+                drop(runtime);
+                // This flag is set only after the actual runtime destructor and
+                // all operation/test readback handles have completed.
+                super::BODY_CLOSED.set(true);
+                if passed {
+                    ExitCode::SUCCESS
+                } else {
+                    ExitCode::FAILURE
+                }
+            });
+            observations.push((
+                export,
+                offset,
+                status,
+                body,
+                body_mask,
+                super::COMPLETION_MASK.get(),
+                super::COMPLETION_AFTER_BODY.get(),
+            ));
+            super::COMPLETION_PROBE.set(false);
+            super::COMPLETION_OFFSET.set(None);
+        }
+    }
+    let observed_mask = umask(previous);
+    // Only this exact test runs in the child. Restore its original process mask
+    // before making any verdict assertion, including failures at/after the end.
+    assert_eq!(observed_mask, caller_mask);
+    for (export, offset, status, body, body_mask, final_mask, after_body) in observations {
+        assert_eq!(body_mask, Some(Mode::from_bits_truncate(0o077)));
+        assert_eq!(final_mask, Some(caller_mask));
+        assert!(after_body, "final fence preceded runtime/body close");
+        let body = body.expect("whole inert operation was invoked");
+        assert!(body.result.is_ok(), "{:?}", body.result);
+        assert_eq!(body.primary, None);
+        assert!(body.critical_closed && body.closes_succeeded);
+        assert!(body.temporary_removed);
+        assert_eq!(body.global_metadata_absent, Some(true));
+        let manifest: Value = serde_json::from_slice(&body.manifest.unwrap()).unwrap();
+        let outcome: Value = serde_json::from_slice(&body.outcome.unwrap()).unwrap();
+        assert_eq!(manifest["revision"], REVISION);
+        assert_eq!(manifest["platform"], "linux/amd64");
+        assert_eq!(manifest["archiveSha256"], sha(&body.image.unwrap()));
+        assert_eq!(outcome["passed"], true);
+        assert_eq!(outcome.get("exportedImageId").is_some(), export);
+        assert_eq!(
+            status,
+            if offset.is_some() {
+                ExitCode::FAILURE
+            } else {
+                ExitCode::SUCCESS
+            },
+        );
+    }
+}
+
+#[test]
+fn standalone_lifecycle_finishes_runtime_and_restores_umask_before_original_end_fence() {
+    const ROLE: &str = "RELEASE_BUILD_LIFECYCLE_WORKER";
+    match std::env::var_os(ROLE) {
+        Some(value) if value == "whole-build-export" => return lifecycle_worker(),
+        Some(_) => panic!("unknown lifecycle test role"),
+        None => {}
+    }
+    let started = Instant::now();
+    let program = std::env::current_exe().unwrap();
+    let module = module_path!().split_once("::").unwrap().1;
+    let test = format!(
+        "{module}::{}",
+        concat!(
+            "standalone_lifecycle_finishes_runtime_and_restores_umask_",
+            "before_original_end_fence",
+        ),
+    );
+    let runtime = runtime();
+    let mut owner = runtime
+        .block_on(async { Owner::new(started, super::control::Mode::Export, 60) })
+        .unwrap();
+    let fixture = Fixture::new();
+    let log_path = fixture.0.join("lifecycle.log");
+    let log = OpenOptions::new()
+        .create_new(true)
+        .read(true)
+        .write(true)
+        .mode(0o600)
+        .open(&log_path)
+        .unwrap();
+    let completion = runtime.block_on(super::process::run(
+        &mut owner,
+        Invocation {
+            role: Role::Git,
+            program,
+            arguments: vec![
+                "--exact".into(),
+                test.into(),
+                "--nocapture".into(),
+                "--test-threads=1".into(),
+            ],
+            cwd: fixture.0.clone(),
+            environment: BTreeMap::from([
+                ("PATH".into(), "/usr/bin:/bin".into()),
+                (ROLE.into(), "whole-build-export".into()),
+            ]),
+            body_end: started + Duration::from_secs(30),
+            log,
+            archive: None,
+            capture: true,
+            allow_failure: false,
+        },
+    ));
+    let retained = read_closed(&log_path);
+    let primary = owner.primary();
+    drop(owner);
+    drop(runtime);
+    drop(fixture);
+    let observed = &completion.observation;
+    assert!(observed.group_retired && observed.reaped);
+    assert!(observed.stdout_eof && observed.stderr_eof);
+    assert!(observed.stdout_closed && observed.stderr_closed && observed.log_closed);
+    assert_eq!(observed.exit_status, Some(0));
+    assert_eq!(primary, None);
+    assert!(
+        completion.result.is_ok(),
+        "{}",
+        String::from_utf8_lossy(&retained.unwrap()),
+    );
+}
+
+#[test]
+fn lifecycle_deadline_uses_the_original_start_and_checked_mode_overheads() {
+    use super::control::Mode;
+
+    let started = Instant::now();
+    for seconds in [60, 120, 7200] {
+        for (mode, overhead) in [(Mode::Build, 300), (Mode::Export, 60)] {
+            assert_eq!(
+                Owner::deadline(started, mode, seconds),
+                started
+                    .checked_add(Duration::from_secs(seconds + overhead))
+                    .ok_or(Failure::Input),
+            );
+        }
+    }
+    for (mode, overhead) in [(Mode::Build, 300), (Mode::Export, 60)] {
+        assert_eq!(
+            Owner::deadline(started, mode, u64::MAX),
+            Err(Failure::Input)
+        );
+        assert_eq!(
+            Owner::deadline(started, mode, u64::MAX - overhead),
+            started
+                .checked_add(Duration::from_secs(u64::MAX))
+                .ok_or(Failure::Input),
+        );
+    }
 }
 
 #[test]

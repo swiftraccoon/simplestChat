@@ -1139,6 +1139,63 @@ fn bounded_line(output: impl AsFd, owner: &Owner, value: &[u8]) -> Result<()> {
     written.and(restored)
 }
 
+#[cfg(test)]
+thread_local! {
+    static COMPLETION_PROBE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    static COMPLETION_OFFSET: std::cell::Cell<Option<Duration>> = const {
+        std::cell::Cell::new(None)
+    };
+    static COMPLETION_MASK: std::cell::Cell<Option<nix::sys::stat::Mode>> = const {
+        std::cell::Cell::new(None)
+    };
+    static BODY_CLOSED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    static COMPLETION_AFTER_BODY: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+fn operation_mode(options: &Options) -> control::Mode {
+    if options.image.is_some() {
+        control::Mode::Export
+    } else {
+        control::Mode::Build
+    }
+}
+/// Own the dedicated CLI's umask around its complete synchronous runtime body.
+/// The callback supplies no new command, clock or selection authority.
+fn lifecycle(
+    started: Instant,
+    mode: control::Mode,
+    seconds: u64,
+    operation: impl FnOnce() -> ExitCode,
+) -> ExitCode {
+    let end = match Owner::deadline(started, mode, seconds) {
+        Ok(end) => end,
+        Err(_) => return ExitCode::FAILURE,
+    };
+    let previous = nix::sys::stat::umask(nix::sys::stat::Mode::from_bits_truncate(0o077));
+    let result = operation();
+    let _ = nix::sys::stat::umask(previous);
+    // The original owner/signals/runtime are gone, and the process umask has
+    // been restored. Their completion may not extend the original deadline.
+    let completed = Instant::now();
+    #[cfg(test)]
+    let completed = if COMPLETION_PROBE.get() {
+        let observed = nix::sys::stat::umask(nix::sys::stat::Mode::empty());
+        let _ = nix::sys::stat::umask(observed);
+        COMPLETION_MASK.set(Some(observed));
+        COMPLETION_AFTER_BODY.set(BODY_CLOSED.get());
+        COMPLETION_OFFSET
+            .get()
+            .and_then(|offset| end.checked_add(offset))
+            .unwrap_or(completed)
+    } else {
+        completed
+    };
+    if result == ExitCode::SUCCESS && completed >= end {
+        ExitCode::FAILURE
+    } else {
+        result
+    }
+}
+
 /// Execute the complete unsigned build/export operation. Usage errors are2;
 /// every operational failure, original deadline or INT/TERM is1; success is0.
 /// Run from a clean checkout root. Existing output paths are never overwritten.
@@ -1146,6 +1203,13 @@ fn bounded_line(output: impl AsFd, owner: &Owner, value: &[u8]) -> Result<()> {
 /// "Production release build and export", for this standalone CLI contract.
 /// It temporarily owns the process umask and output descriptor flags and restores
 /// them before returning; call it as one operation in its dedicated CLI process.
+///
+/// # Panics
+///
+/// Call a valid operation from a synchronous CLI outside an entered Tokio
+/// runtime. Starting or dropping this operation's runtime from an existing
+/// asynchronous runtime context can panic. Help, notices and invalid arguments
+/// return before creating a runtime or changing the process umask.
 ///
 /// Help and `--licenses` need no runtime, Git, Docker, configuration or writable
 /// current directory. The notices cover the builder's explicit Tokio/runtime use:
@@ -1182,10 +1246,9 @@ pub fn run(arguments: &[OsString]) -> ExitCode {
             return ExitCode::from(2);
         }
     };
-    let previous = nix::sys::stat::umask(nix::sys::stat::Mode::from_bits_truncate(0o077));
-    let result = run_options(started, options);
-    let _ = nix::sys::stat::umask(previous);
-    result
+    lifecycle(started, operation_mode(&options), options.seconds, || {
+        run_options(started, options)
+    })
 }
 fn run_options(started: Instant, options: Options) -> ExitCode {
     let runtime = match tokio::runtime::Builder::new_multi_thread()
@@ -1196,16 +1259,8 @@ fn run_options(started: Instant, options: Options) -> ExitCode {
         Ok(runtime) => runtime,
         Err(_) => return ExitCode::FAILURE,
     };
-    runtime.block_on(async {
-        let mut owner = match Owner::new(
-            started,
-            if options.image.is_some() {
-                control::Mode::Export
-            } else {
-                control::Mode::Build
-            },
-            options.seconds,
-        ) {
+    let result = runtime.block_on(async {
+        let mut owner = match Owner::new(started, operation_mode(&options), options.seconds) {
             Ok(owner) => owner,
             Err(_) => return ExitCode::FAILURE,
         };
@@ -1238,7 +1293,9 @@ fn run_options(started: Instant, options: Options) -> ExitCode {
             let _ = bounded_line(std::io::stderr(), &owner, line.as_bytes());
             ExitCode::FAILURE
         }
-    })
+    });
+    drop(runtime);
+    result
 }
 
 #[cfg(test)]
