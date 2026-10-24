@@ -133,8 +133,9 @@ fn archive(config: &[u8]) -> Vec<u8> {
 impl Fixture {
     pub(super) fn new() -> Self {
         let root = std::env::temp_dir().canonicalize().unwrap().join(format!(
-            "PRIVATE-release-verification-{}-{}",
+            "PRIVATE-release-verification-{}-{}-{}",
             std::process::id(),
+            module_path!().replace("::", "-"),
             NEXT.fetch_add(1, Ordering::Relaxed),
         ));
         directory(&root);

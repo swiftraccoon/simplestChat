@@ -1997,3 +1997,154 @@ and no normal dependency, build script or native/TLS graph; root must record the
 actual target/default dependency inventory. Embedding the notice adds no signed
 payload file, server subject or Ops subject. The server ten-file/four-subject and
 Ops three-subject contracts remain unchanged.
+
+
+## Fresh local release verification
+
+`simplestchat-ops release verify` implements the complete local operation from
+`build/verify-release.py`: select an explicitly pinned release through fresh
+GitHub API observations, download and extract it or reverify a supplied cache,
+then run the four maintained cryptographic verifiers. It returns the local
+directory and two verified file digests before contacting a deployment host. The Python
+reference and existing deployment/Ansible callers retain their operational
+roles; this command introduces no installer, signing or host callsite switch.
+
+```sh
+target/release/simplestchat-ops release verify \
+  --repository swiftraccoon/simplestChat \
+  --revision "$REVISION" \
+  --artifact-id "$ARTIFACT_ID" \
+  --ci-run "$CI_RUN_ID" \
+  --output-parent /controlled/release-evidence \
+  --timeout-seconds "$VERIFY_SECONDS" \
+  --finalization-seconds "$VERIFY_FINALIZATION_SECONDS"
+```
+
+Add `--artifact-dir /controlled/cached-release` to reverify retained bytes.
+`--output-parent` remains a required argument but is unused in that branch.
+Cached mode still fetches current artifact/workflow metadata and runs all four
+verifiers; it requests no token or download grant and does not resolve curl.
+Neither mode accepts a stored success receipt or caller-supplied API envelope
+as evidence of a fresh selection.
+
+The public selectors are the repository, lowercase 40-character revision and
+positive artifact/CI identifiers below `2^53`. Every full flag occurs once;
+split and equals forms and ASCII decimal numbers are supported. Fresh API checks
+bind the unexpired production artifact's exact name, identifier, ZIP size/digest
+and associated main-push CI run. That run must have completed successfully in
+the selected repository at the selected revision and workflow. Its actual
+attempt, certificate identity and all signed subjects remain bound by the
+cached verifier's checks. Provider JSON is bounded and rejects duplicate keys;
+extra provider fields do not become authority.
+The returned directory must be representable as UTF-8. A non-UTF-8 active Unix
+path is an ordinary failure with the same finalizers; Python's surrogate-path
+encoding is outside this native output profile. An unused cached output parent
+is still ignored.
+
+Both budgets are explicit, with `0 < M < N`. The original entry clock covers
+parsing, API/tool admission, download, extraction, signature verification,
+revalidation, output and all finalization. Body work ends at `entry + N - M`.
+Metadata, token and API roles have 20-second body caps; blob transfer has a
+240-second cap. Each is clipped to the original remaining body window while
+reserving its process settlement. The four verifier roles retain their
+180-second caps and settlement rules. No nested CLI, retry or fresh deadline
+extends the original budget. The existing callers' 660/1080-second guards also
+cover other phases; this source-level operation does not increase them.
+
+Fresh acquisition creates private, exclusive evidence beneath a canonical
+absolute output parent. It checks available disk against the selected ZIP,
+maximum extracted bytes and the reference's 256 MiB margin. Partial ZIPs and
+extracted prefixes remain private evidence after failure. The original ZIP and
+ten selected files are retained, streamed, hashed and checked through the same
+directory/file custody used by cached verification. Fresh acquisition preserves
+the reference's extraction pass followed by the cached comparison pass; cached
+mode keeps its single comparison pass. These checks detect observed changes;
+they do not lock a filesystem against another process with the same UID.
+Download commits follow the reference's 64 KiB logical reads. Extraction uses
+one bounded 1 MiB logical buffer over decoder reads of at most 64 KiB, matching
+the reference's failed-write/CRC prefixes. All ten required members are admitted
+before the first extraction output, and the final logical chunk is checked
+before it is written.
+
+Download transport requires a trusted curl 8.4 or newer with HTTPS support, in
+addition to the maintained authenticated `gh` used for metadata, token retrieval
+and the four verifiers. Curl is an external platform TLS/runtime prerequisite.
+It adds no Rust TLS dependency and does not imply identical Python and curl CA
+stores, authenticated executable distribution or macOS Ops bootstrap.
+
+Curl's fixed profile disables user configuration, proxies, netrc, redirects,
+retries and decompression. It uses HTTP/1.1 and preserves the validated request
+target, including signed query bytes and dot segments. Tokens and signed
+download targets enter only a bounded escaped stdin configuration; they never
+enter argv, the curl environment, public errors or retained evidence. Only the
+authenticated fixed GitHub endpoint receives the token. The approved Azure blob
+request is credentialless, sends the reference's Accept/identity headers and
+suppresses curl's default User-Agent. No candidate selects a program, flag,
+arbitrary destination or output pathname.
+
+The API grant operation completes after a bounded final 302 header with exactly
+one validated Location, matching the reference that closes without consuming
+the response body. Planned retirement of that owned curl role is distinct from
+owner cancellation or transfer success. Blob transfer instead requires final
+200, exact identity encoding and optional Content-Length, natural stream EOF,
+normal child exit, exact size/SHA and checked output finalization. Bytes stream
+into the parent's original exclusive descriptor. Cleanup-induced EOF, a parsed
+header or a leader exit alone cannot establish complete download success.
+
+The locked httparse parser handles response framing and header names. Selected
+values are projected from the bounded original header bytes: only leading
+whitespace is removed, while trailing whitespace and folded selected fields
+retain the reference's refusal. Duplicate Location is refused; duplicate length
+or encoding fields retain the reference's comma-join semantics. Only interim
+100 responses are skipped. Curl's HTTP framing and platform TLS acceptance form
+an explicit native transport profile, rather than a claim of equivalence over
+every malformed HTTP response or Python platform trust store.
+
+The reference uses per-socket read timeouts; curl exposes a different transport
+interface. The native profile uses fixed connection caps of 20 seconds for the
+API and 15 seconds for the blob, plus the original 20/240-second role windows.
+It imposes no minimum throughput or pipe-progress watchdog. A quiet blob gap
+longer than 15 seconds can therefore remain valid here if the complete transfer
+fits its whole window, while the reference would refuse it. This is a scoped
+timing difference that must be reviewed before a caller switch. A pipe timer
+would measure curl buffering rather than socket activity; a different HTTP
+adapter would require its own TLS, cancellation and resource-lifetime evidence.
+
+Exit 0 returns one bounded newline-terminated JSON object with exactly
+`revision`, `directory`, `image.tar` and `release.json`; the latter two values
+are verified SHA-256 digests. Wait for the final exit and complete stdout.
+Operational failures return 1 and invalid usage returns 2. Any nonzero exit
+invalidates earlier output, including a complete object emitted before a late
+signal, close or deadline refusal. Known peer finalizers are attempted while
+the first failure remains primary. Blocked kernel I/O or reaping remains outside
+a hard wall-time guarantee. The synchronous entry point must run outside an
+entered Tokio runtime.
+
+`release verify --licenses` includes the scoped httparse 1.10.1 MIT notice,
+preserving its copyright and exact 1063 bytes, including the final newline.
+The checksum-pinned crate's notice SHA-256 is
+`391a5396cec6230bfabd4ef4eb2350eb895bc5efce377a2218f5702ed020d3e3`.
+The existing rawzip notice remains available through
+`release attestation verify --licenses`, with runtime notices through
+`release build --licenses`. These are affected-dependency notices, not a full
+workspace license inventory. Httparse is an already locked, dependency-free
+crate; its new direct edge changes neither the signed payload filenames nor
+the server/Ops subject sets.
+
+The measured default musl normal/build dependency graph grows from 58 to 59
+packages, adding only httparse. The direct getrandom edge below reuses the
+already reachable version; no package version or checksum changes.
+
+The command also retains the exact getrandom 0.4.3 MIT notice: 1130 bytes with a
+final newline and SHA-256
+`523a42c25d245dde9c015f882cec7f4555aad883382a6cf19b4b7d9b2cd5419b`.
+Its direct dependency reuses a crate already reachable through the existing
+default graph. The safe OS-random call borrows a fixed 16-byte buffer until it
+returns; the original owner is checked before directory creation. The native
+call can block, with the same kernel-stall qualification as file operations.
+
+Private sharing
+stays limited to the two actual verification operations. Tests and actual
+authenticated transport measurements are separate evidence in the
+[testing guide](../docs/testing.md); source checks and inert oracles do not
+establish installed-binary or host readiness.

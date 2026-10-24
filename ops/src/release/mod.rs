@@ -8,3 +8,5 @@ pub mod trust;
 pub mod build;
 
 pub mod attestation;
+
+pub mod verify;

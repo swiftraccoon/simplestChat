@@ -28,7 +28,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE."#
 );
-fn write(mut writer: impl Write) -> io::Result<()> {
+pub(in crate::release::attestation) fn write(mut writer: impl Write) -> io::Result<()> {
     writer.write_all(HEADER.as_bytes())?;
     writer.write_all(LICENSE.as_bytes())?;
     writer.write_all(

@@ -109,7 +109,8 @@ fn usage_and_help_never_read_a_manifest_or_start_another_command() {
             concat!(
                 "Usage: simplestchat-ops release build --output PATH ",
                 "[--timeout-seconds N] [--image-id ID]\n",
-                "       simplestchat-ops release attestation prepare [OPTIONS]\n",
+                "       simplestchat-ops release verify [OPTIONS]\n",
+    "       simplestchat-ops release attestation prepare [OPTIONS]\n",
                 "       simplestchat-ops release attestation verify [OPTIONS]\n",
                 "       simplestchat-ops release manifest --path PATH\n",
                 "       simplestchat-ops release archive --manifest PATH --path PATH\n",

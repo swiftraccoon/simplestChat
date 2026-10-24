@@ -11,10 +11,10 @@ use rawzip::{CompressionMethod, Crc32, ZipArchive, extra_fields::ExtraFieldId};
 use sha2::{Digest, Sha256};
 use std::{cell::RefCell, collections::BTreeSet, io::Read, os::unix::fs::FileExt};
 
-pub(super) const MAX_ZIP: u64 = 2 * 1024 * 1024 * 1024;
+pub(in crate::release::attestation) const MAX_ZIP: u64 = 2 * 1024 * 1024 * 1024;
 const MAX_METADATA: u64 = 64 * 1024 * 1024;
 const MAX_TOTAL: u64 = MAX_ZIP + 128 * 1024 * 1024;
-pub(super) const SELECTED: [&str; 10] = [
+pub(in crate::release::attestation) const SELECTED: [&str; 10] = [
     "image.tar",
     "release.json",
     "outcome.json",
@@ -175,43 +175,81 @@ impl<R: Read> Read for Checked<'_, '_, R> {
         observed
     }
 }
-fn payload(reader: impl Read, member: &Member, owner: &RefCell<&mut Owner>) -> Result<String> {
+fn payload(
+    reader: impl Read,
+    member: &Member,
+    owner: &RefCell<&mut Owner>,
+    mut output: Option<&mut Retained>,
+) -> Result<String> {
     // ZipExtFile stops at its declared uncompressed length. It does not require
     // consumption of trailing compressed bytes or a further inflater EOF.
     let mut reader = reader.take(member.bytes);
-    let mut buffer = vec![0; 65536];
+    // Fresh extraction preserves the reference's 1MiB logical return/write
+    // boundary; cached comparison retains its 64KiB logical boundary. Actual
+    // decoder reads stay at most64KiB, and both allocations live on the heap.
+    let logical = if output.is_some() { 1024 * 1024 } else { 65536 };
+    let mut buffer = vec![0; logical];
     let mut count = 0_u64;
     let mut crc = Crc32::new();
     let mut digest = Sha256::new();
     loop {
         owner.borrow_mut().check(Window::Body)?;
-        let read = reader.read(&mut buffer);
-        if read.is_err() && owner.borrow().error().is_none() {
-            owner.borrow_mut().record(Cause::Zip);
-        }
-        let size = read.map_err(|_| owner.borrow().error().unwrap_or(Cause::Zip))?;
-        owner.borrow_mut().check(Window::Body)?;
-        if size == 0 {
+        let wanted = member.bytes.saturating_sub(count).min(buffer.len() as u64) as usize;
+        if wanted == 0 {
             break;
         }
-        count = count
-            .checked_add(size.try_into().map_err(|_| Cause::Bounds)?)
-            .ok_or(Cause::Bounds)?;
+        let mut size = 0;
+        let mut eof = false;
+        while size < wanted {
+            let end = wanted.min(size + 65536);
+            let read = reader.read(&mut buffer[size..end]);
+            if read.is_err() && owner.borrow().error().is_none() {
+                owner.borrow_mut().record(Cause::Zip);
+            }
+            let amount = read.map_err(|_| owner.borrow().error().unwrap_or(Cause::Zip))?;
+            owner.borrow_mut().check(Window::Body)?;
+            if amount == 0 {
+                eof = true;
+                break;
+            }
+            size += amount;
+        }
+        count = count.checked_add(size as u64).ok_or(Cause::Bounds)?;
         crc.update(&buffer[..size]);
         digest.update(&buffer[..size]);
+        // ZipExtFile checks CRC before returning its final logical read. A bad
+        // final chunk must therefore never enter a fresh output's prefix.
+        if eof || count == member.bytes {
+            require(&mut owner.borrow_mut(), crc.checksum() == member.crc)?;
+        }
+        if let Some(output) = &mut output {
+            output.write_chunk(
+                &buffer[..size],
+                count - size as u64,
+                &mut owner.borrow_mut(),
+            )?;
+        }
+        if eof {
+            break;
+        }
     }
     require(
         &mut owner.borrow_mut(),
         count == member.bytes && crc.checksum() == member.crc,
     )?;
-    Ok(super::super::files::hex(&digest.finalize()))
+    let digest = super::super::files::hex(&digest.finalize());
+    if let Some(output) = output {
+        output.seal(&digest, &mut owner.borrow_mut())?;
+    }
+    Ok(digest)
 }
-pub(super) fn verify(
+fn members(
     file: &Retained,
     directory: &Dir,
     retained: &mut [Option<Retained>; 10],
     metadata: &Metadata,
     owner: &mut Owner,
+    extract: bool,
 ) -> Result<()> {
     require(
         owner,
@@ -309,18 +347,30 @@ pub(super) fn verify(
         members[at].end = next;
         next = offset;
     }
+    if extract {
+        require(
+            owner,
+            SELECTED.iter().all(|name| {
+                members
+                    .iter()
+                    .any(|member| member.name == *name && member.bytes > 0)
+            }),
+        )?;
+    }
     for (at, name) in SELECTED.iter().enumerate() {
         let member = members
             .iter()
             .find(|member| member.name == *name)
             .ok_or(Cause::Zip)?;
         require(owner, member.bytes > 0)?;
-        if retained[at].is_none() {
-            retained[at] = Some(Retained::open(directory.clone(), name, owner)?);
+        if !extract {
+            if retained[at].is_none() {
+                retained[at] = Some(Retained::open(directory.clone(), name, owner)?);
+            }
+            let original = retained[at].as_ref().unwrap();
+            original.check(owner, Window::Body)?;
+            require(owner, original.len() == member.bytes)?;
         }
-        let original = retained[at].as_ref().unwrap();
-        original.check(owner, Window::Body)?;
-        require(owner, original.len() == member.bytes)?;
         // ZipFile.open applies these unsupported-mode guards to the selected
         // central ZipInfo, while the corresponding local flags are ignored.
         require(owner, member.flags & 0x60 == 0)?;
@@ -356,6 +406,9 @@ pub(super) fn verify(
         let physical_end =
             u64::try_from(finish.min(u128::from(file.len()))).map_err(|_| Cause::Bounds)?;
         require(owner, start <= physical_end)?;
+        if extract {
+            retained[at] = Some(Retained::create(directory.clone(), name, owner)?);
+        }
         let checks = RefCell::new(&mut *owner);
         let raw = rawzip::RangeReader::new(archive.get_ref(), start..physical_end);
         let checked = Checked {
@@ -364,12 +417,44 @@ pub(super) fn verify(
             owner: &checks,
         };
         let digest = if member.method == CompressionMethod::STORE {
-            payload(checked, member, &checks)?
+            payload(
+                checked,
+                member,
+                &checks,
+                extract.then(|| retained[at].as_mut().unwrap()),
+            )?
         } else {
-            payload(flate2::read::DeflateDecoder::new(checked), member, &checks)?
+            payload(
+                flate2::read::DeflateDecoder::new(checked),
+                member,
+                &checks,
+                extract.then(|| retained[at].as_mut().unwrap()),
+            )?
         };
-        let actual = original.hash(&mut checks.borrow_mut())?;
+        let actual = retained[at]
+            .as_ref()
+            .unwrap()
+            .hash(&mut checks.borrow_mut())?;
         require(&mut checks.borrow_mut(), actual == digest)?;
     }
     file.check(owner, Window::Body)
+}
+
+pub(in crate::release::attestation) fn verify(
+    file: &Retained,
+    directory: &Dir,
+    retained: &mut [Option<Retained>; 10],
+    metadata: &Metadata,
+    owner: &mut Owner,
+) -> Result<()> {
+    members(file, directory, retained, metadata, owner, false)
+}
+pub(in crate::release::attestation) fn extract(
+    file: &Retained,
+    directory: &Dir,
+    retained: &mut [Option<Retained>; 10],
+    metadata: &Metadata,
+    owner: &mut Owner,
+) -> Result<()> {
+    members(file, directory, retained, metadata, owner, true)
 }
