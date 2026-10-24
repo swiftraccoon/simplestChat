@@ -118,7 +118,7 @@ jobs:
             --request-sha256 "$OPS_REQUEST_SHA256"
       - name: Preserve the completed sanitized Ops summary
         if: ${{ success() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ops-runtime-summary
           path: ${{ runner.temp }}/ops-runtime/summary.json
@@ -139,7 +139,7 @@ jobs:
           fi
       - name: Preserve only the newly written sanitized diagnostic report
         if: ${{ always() && steps.diagnostics.outputs.retained == 'true' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ops-runtime-diagnostics
           path: ${{ runner.temp }}/ops-runtime-diagnostics/diagnostic.json
