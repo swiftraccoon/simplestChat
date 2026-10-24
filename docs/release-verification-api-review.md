@@ -107,3 +107,20 @@ compilation and these native checks do not establish authenticated Linux musl
 distribution or installed-caller readiness. No caller, installer or host route is
 switched by this implementation; its distribution/runtime and before-SSH caller
 proof remain separate gates.
+
+The shared retained-file writer now checks its original device, inode, regular
+file type, mode, UID, GID and link count again after sync, before accepting the
+length and timestamp changes from its own writes. Previously it could adopt an
+unexpected permission change as the new sealed metadata. Hash and namespace
+checks remain required; this correction adds no file replacement, deletion or
+host installation authority. This affects C-VALIDATE and C-DTOR-FAIL in the
+existing private-handle applicability record.
+
+A native regression changes the same open inode from 0600 to 0644 at the
+post-sync boundary and requires the original Changed cause. A paired close
+failure still attempts every original close once without replacing that cause
+or relying on fallback. A separate positive checks intended bounded growth.
+The two focused tests, all 391 ordinary Ops checks and all 359 preserved
+attestation/fetch reference scenarios passed with this repair and the separate
+original-owner signal correction. These are local native and inert-reference
+checks, not evidence of authenticated host execution or deployment.
