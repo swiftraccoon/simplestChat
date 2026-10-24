@@ -865,15 +865,23 @@ media API parameters can contain credentials. The step timeline retains fixed
 scenario names, timing and outcomes. Existing diagnostic, canary, soak and
 performance measurement commands retain their standalone execution paths.
 
-The WebKit follow-speaker reload issue remains open as of 2026-10-21 with
-Playwright 1.64.0 / WebKit 27.2 (r2370). One full owned community run passed
-44 checks with one documented measurement skip, but a bounded reload probe
-reproduced two fetch access-control `pageerror` events, including with the push
-fixture removed. A credential-free control loaded no application code: three
-native fetches returned 200 before navigation; during a held document
-replacement, three explicitly caught rejections produced three access-control
-`pageerror` events and zero DOM error/unhandled-rejection events. Browser and
-server exits were clean. This supports the engine mechanism described in
+The WebKit follow-speaker reload issue remains open as of 2026-10-24 with
+Playwright 1.64.0 / WebKit 27.2 (r2370). A fresh run of the complete original
+community journey passed 44 checks with the existing Chromium-only measurement
+skip, including the follow-speaker reload assertions. The single attempt took
+188.335 seconds including harness setup and cleanup. Browser and server exits
+were clean, and the disposable database was stopped. Application sources matched
+release `1e88240`; the retained assets identified `6a3acc8`, and copied binaries
+were bound by their source/build record and hashes. No assertions, error filters,
+retries or scenario steps were changed.
+This observation did not reproduce the intermittent failure or establish a fix.
+
+Earlier bounded reload probes reproduced two fetch access-control `pageerror`
+events, including with the push fixture removed. A fresh credential-free control
+loaded no application code: three native fetches returned 200 before navigation;
+during a held document replacement, three explicitly caught rejections produced
+three access-control `pageerror` events and zero DOM error/unhandled-rejection
+events. Browser and server exits were clean. This supports the mechanism described in
 [Playwright issue 43120](https://github.com/microsoft/playwright/issues/43120);
 the relationship to the application's intermittent reload failure remains an
 inference. Zero-page-error assertions remain enforced, with no ignored category
