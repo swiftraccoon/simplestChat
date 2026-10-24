@@ -184,6 +184,75 @@ test('in-flight changes block duplicate submissions and screen dismissal until s
   assert.equal(screen.canLeave(), true);
 });
 
+test('admission keeps settings open until the operator finishes both follow-up reads', async (t) => {
+  const f = await fixture('moderator');
+  f.Node.prototype.focus = function focus() {
+    f.document.activeElement = this;
+  };
+  const { SettingsSheet } = await loadTypeScript('src/settings-sheet.ts', {
+    modules: { './ui': f.ui, './settings-sheet.css': {} },
+    globals: { document: f.document },
+  });
+  const sheet = new SettingsSheet({ sections: () => [], host: () => f.document.body });
+  const admission = deferred();
+  const overview = deferred();
+  const lobby = deferred();
+  const refreshed = { role: 'moderator', settings: { ...f.state.settings } };
+  t.after(async () => {
+    admission.resolve({ status: 200 });
+    overview.resolve(refreshed);
+    lobby.resolve({ lobby: [], hasMore: false });
+    await flush();
+    sheet.close({ force: true });
+  });
+  const screen = f.sections.find((section) => section.id === 'room-lobby').screen();
+  sheet.open();
+  sheet.push(screen);
+  await flush();
+  const body = sheet.element.querySelector('.sheet-screen');
+  assert.ok(body);
+  let peerConnected = false;
+  let admissionStatus;
+  f.state.handle = async (method) => {
+    if (method === 'lobbyAction') {
+      peerConnected = true;
+      admissionStatus = (await admission.promise).status;
+    }
+    if (method === 'overview') return overview.promise;
+    if (method === 'lobby') return lobby.promise;
+  };
+  action(body, 'Admit').click();
+  assert.equal(peerConnected, true, 'the peer can connect before the admission response');
+  sheet.close();
+  assert.equal(sheet.isOpen, true, 'peer connection does not settle the operator screen');
+  admission.resolve({ status: 200 });
+  await flush();
+  assert.equal(admissionStatus, 200);
+  assert.equal(f.state.calls.at(-1).method, 'overview');
+  assert.equal(body.getAttribute('aria-busy'), 'true');
+  sheet.close();
+  assert.equal(sheet.isOpen, true, 'HTTP success does not finish the overview refresh');
+  overview.resolve(refreshed);
+  await flush();
+  assert.equal(f.state.calls.at(-1).method, 'lobby');
+  assert.equal(body.getAttribute('aria-busy'), 'true');
+  sheet.close();
+  assert.equal(sheet.isOpen, true, 'the refreshed lobby must also finish');
+  lobby.resolve({ lobby: [], hasMore: false });
+  await flush();
+  assert.match(body.textContent, /No lobby on this page\./);
+  assert.equal(body.getAttribute('aria-busy'), 'false');
+  assert.equal(body.querySelector('.auth-error').hidden, true);
+  assert.equal(screen.canLeave(), true);
+  sheet.close();
+  assert.equal(sheet.isOpen, false);
+  assert.equal(sheet.element.hidden, true);
+  assert.deepEqual(
+    f.state.calls.slice(2).map((call) => call.method),
+    ['lobbyAction', 'overview', 'lobby'],
+  );
+});
+
 test('late account or screen results cannot render retired account controls', async () => {
   const f = await fixture();
   const response = deferred();
