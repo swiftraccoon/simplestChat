@@ -18,6 +18,7 @@ from security_tools import ToolError, bounded_file, require, string
 
 ROOT = Path(__file__).resolve().parents[1]
 MAX_DOCUMENT = 1024 * 1024
+REFERENCE_GROUPS = ("foundation", "fetch", "host")
 
 
 def document(path: Path) -> dict[str, object]:
@@ -72,6 +73,14 @@ def expected_checks() -> tuple[set[str], set[str]]:
     """Require the same first-party coverage locally and in hosted automation."""
     ci, security, codeql = yaml_jobs("ci.yml"), yaml_jobs("security.yml"), yaml_jobs("codeql.yml")
     required = {string(value) for value in list_value(object_value(ci["required"])["needs"])}
+    references = matrix(ci["automation-references"])
+    require(set(references) == {"group"}, "local_ci_reference_matrix_shape")
+    reference_groups = [string(value) for value in list_value(references["group"])]
+    require(
+        set(reference_groups) == set(REFERENCE_GROUPS)
+        and len(reference_groups) == len(REFERENCE_GROUPS),
+        "local_ci_reference_coverage",
+    )
     browser = matrix(ci["browser"])
     require(set(browser) == {"group", "include"}, "local_ci_browser_matrix_shape")
     groups = [string(value) for value in list_value(browser["group"])]
@@ -92,6 +101,7 @@ def expected_checks() -> tuple[set[str], set[str]]:
     require(bool(groups) and len(groups) == len(set(groups)), "local_ci_browser_coverage")
     checks = {f"browser-{group}" for group in groups}
     checks |= {f"codeql-{language}" for language in languages} | {"security-fast"}
+    checks |= {f"reference-{group}" for group in reference_groups}
     return required, checks
 
 

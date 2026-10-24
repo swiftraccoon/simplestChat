@@ -27,6 +27,7 @@ if TYPE_CHECKING:
 ROOT = Path(__file__).resolve().parents[3]
 GATES = {
     "automation",
+    "automation-references",
     "rust-lint",
     "rust-test",
     "native-dtls",

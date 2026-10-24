@@ -296,7 +296,7 @@ class PythonPolicyTests(unittest.TestCase):
         fingerprint = next(step for step in steps if step.get("id") == "verified-inputs")
         self.assertLess(steps.index(rust), steps.index(fingerprint))
         command = string(gate, "run")
-        self.assertEqual(command, "cargo run --locked -q -p xtask -- ci automation")
+        self.assertEqual(command, "cargo run --locked -q -p xtask -- ci automation --checks")
         self.assertEqual(
             string(gate, "env", "PYTHON_CHECK_ENV"), "${{ runner.temp }}/ansible-controller"
         )

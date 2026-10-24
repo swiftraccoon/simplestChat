@@ -160,7 +160,7 @@ fn real_workflows_complete_with_byte_identical_receipts_and_exclusive_publicatio
         fs::read(fixture.path.join("oracle/required.json")).unwrap()
     );
     let report = files::document(&fixture.path.join("native/required.json")).unwrap();
-    assert_eq!(report["checks"].as_array().unwrap().len(), 8);
+    assert_eq!(report["checks"].as_array().unwrap().len(), 11);
     assert_eq!(report["workflows"].as_object().unwrap().len(), 3);
     assert!(fixture.context.complete().is_err());
     assert!(!fixture.oracle("complete", "").status.success());
@@ -219,7 +219,15 @@ fn missing_extra_failed_skipped_and_cancelled_jobs_never_complete() {
 
 #[test]
 fn every_matrix_family_is_required_and_unknown_receipts_are_rejected() {
-    for missing in ["browser-media", "codeql-rust", "security-fast", "unknown"] {
+    for missing in [
+        "browser-media",
+        "codeql-rust",
+        "security-fast",
+        "unknown",
+        "reference-foundation",
+        "reference-fetch",
+        "reference-host",
+    ] {
         let mut fixture = Fixture::new();
         fixture.populate();
         for name in ["native", "oracle"] {
@@ -351,6 +359,7 @@ fn actual_workflow_matrices_keep_numeric_parallelism_and_all_declared_entries() 
     let fixture = Fixture::new();
     for (name, job, dimension, limit) in [
         ("ci.yml", "browser", "group", 3),
+        ("ci.yml", "automation-references", "group", 3),
         ("codeql.yml", "source-analysis", "language", 4),
     ] {
         let bytes = files::bounded(&fixture.path.join(".github/workflows").join(name)).unwrap();
@@ -367,6 +376,30 @@ fn actual_workflow_matrices_keep_numeric_parallelism_and_all_declared_entries() 
 #[test]
 fn filtered_duplicate_or_expanded_matrices_and_vendor_scans_fail_before_evidence() {
     for (file, before, after, code) in [
+        (
+            "ci.yml",
+            "group: [foundation, fetch, host]",
+            "group: [foundation, fetch]",
+            "local_ci_reference_coverage",
+        ),
+        (
+            "ci.yml",
+            "group: [foundation, fetch, host]",
+            "group: [foundation, fetch, host, host]",
+            "local_ci_reference_coverage",
+        ),
+        (
+            "ci.yml",
+            "group: [foundation, fetch, host]",
+            "group: [foundation, fetch, unknown]",
+            "local_ci_reference_coverage",
+        ),
+        (
+            "ci.yml",
+            "group: [foundation, fetch, host]",
+            "group: [foundation, fetch, host]\n        include: []",
+            "local_ci_reference_matrix_shape",
+        ),
         (
             "ci.yml",
             "group: [accounts, media, stress]",

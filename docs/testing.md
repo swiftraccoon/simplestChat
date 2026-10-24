@@ -1982,9 +1982,17 @@ and `ci automation --references`. The first retains quality, syntax, ordinary
 Ops/CLI tests and full Python test discovery. The second owns every exact ignored
 whole-operation comparison: VPS controller/host, image builder and the six
 release operations. With no selector the local command retains their original
-complete order. The two jobs run in parallel under their existing ten-minute
-ceilings; both must succeed before signing. Reference comparisons always run
-and use no result cache. The existing automation receipt proves only the checks
+complete order. The checks job and reference matrix run in parallel under the
+same ten-minute ceiling per job; every entry must succeed before signing. Fixed
+reference groups are `foundation` (VPS controller/host, builder, prepare and cached
+verify), `fetch` (fresh acquisition and fetch), and `host` (receive and stage).
+Run one locally with `ci automation --references foundation|fetch|host`; bare
+`--references` still runs every comparison. Matrix failure does not cancel the
+other groups. Reference comparisons always run and use no result cache.
+Local CI also requires a successful execution receipt for each of the three
+reference matrix groups. Missing, duplicate, unknown or filtered groups fail
+completion even if an aggregate job result says success.
+The existing automation receipt proves only the checks
 job, with workflow/xtask changes invalidating prior keys.
 
 The preceding receiver head's hosted automation took 537 seconds of its 600-second

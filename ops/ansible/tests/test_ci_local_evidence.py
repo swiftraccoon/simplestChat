@@ -15,6 +15,9 @@ from test_support import obj, string, strings, yaml_value
 
 ROOT = Path(__file__).resolve().parents[3]
 CHECKS = {
+    "reference-foundation",
+    "reference-fetch",
+    "reference-host",
     "browser-accounts",
     "browser-media",
     "browser-stress",
@@ -106,6 +109,7 @@ class LocalCiEvidenceTests(unittest.TestCase):
         """Act parses literal limits with Atoi and otherwise silently serializes matrices."""
         for name, job, dimension, limit in (
             ("ci.yml", "browser", "group", 3),
+            ("ci.yml", "automation-references", "group", 3),
             ("codeql.yml", "source-analysis", "language", 4),
         ):
             workflow = obj(
@@ -118,7 +122,14 @@ class LocalCiEvidenceTests(unittest.TestCase):
     def test_missing_or_extra_matrix_receipts_fail(self) -> None:
         """Filtering any supported matrix family cannot satisfy the final aggregate."""
         self.populate()
-        for identifier in ("browser-media", "codeql-rust", "security-fast"):
+        for identifier in (
+            "browser-media",
+            "codeql-rust",
+            "security-fast",
+            "reference-foundation",
+            "reference-fetch",
+            "reference-host",
+        ):
             path = self.output / "receipts" / f"{identifier}.json"
             original = path.read_bytes()
             path.unlink()

@@ -144,40 +144,57 @@ the graph binding are compared through named finite cases; they are not blanket
 aliases for arbitrary reference failures. Private inspection/log output is
 bounded and never becomes a public exception message.
 
-Local validation of the complete feature passed Rust formatting, all-target/
-feature Clippy and warning-free public/private Rustdoc (61.406 seconds), GNU
-all-target Ops Clippy (20.488 seconds), and 430 ordinary Ops checks: 356 library,
-65 CLI and nine doctests (63.235 seconds). The independently frozen Python
-composition passed full maintained-source Ruff/format and strict basedpyright
-(268 sources/stubs), 16 staging-oracle tests covering all 81 reference scenarios,
-20 VM-harness tests, and offline playbook lint/syntax. All six exact Rust/reference
-comparisons passed together (260.531 seconds):
-81 staging scenarios and 463 preserved prepare, cached/fresh verification, fetch
-and receiver scenarios. Docker-input checks (ten), CI policy checks (33) and xtask
-operations-command checks (three) also passed.
+Local validation passed full Rust formatting, all-target/feature Clippy and
+warning-free public/private Rustdoc (51.143 seconds on the final Rust sources),
+GNU Ops all-target Clippy (20.488 seconds), and 430 ordinary Ops checks: 356
+library, 65 CLI and nine doctests (63.235 seconds). All six whole Rust/reference
+comparisons passed together in 273.321 seconds: 81 staging scenarios and
+463 preserved prepare, cached/fresh verification, fetch and receiver scenarios.
+These are finite source/inert checks, not an engine or deployment verdict.
 
-Failed iterations remain in private evidence: insufficient test-fixture body
-headroom, duplicate-key and atomic-temp observation mismatches, Python whitespace
-and wide-integer regressions, three Clippy findings, and a CI expectation missing
-the existing --skip flag. They were corrected and rechecked; no production budget,
-lint allowance, reference skip or successful-runtime claim was substituted.
-The final source also distinguishes natural body EOF from EOF caused by cleanup,
-so descendant-held pipes cannot grant a Docker cleanup identity.
+The final Python helper suite passed 1,811 tests in 148.064 seconds wall time
+(147.437 test seconds), with 17 existing platform/optional skips. The changed
+Python sources passed pinned Ruff, formatting and strict basedpyright. Earlier
+full maintained-source quality covered 268 sources/stubs. Thirteen Rust/Python
+receipt checks, five command-policy checks, four actual local-evidence CLI checks,
+ten Docker-input checks, 34 CI policy checks, two Ops signing-workflow checks,
+and offline VM playbook lint/syntax also passed. The VM harness has twenty inert
+checks; their success does not establish actual KVM or authenticated musl execution.
 
-Inert daemon observations prove policy/effect wiring only. Actual Docker execution,
+The complete automation plan is partitioned into checks and three fixed reference
+groups. `foundation` owns VPS controller/host, builder, prepare and cached verify;
+`fetch` owns fresh acquisition and fetch; `host` owns receive and stage. The full
+local route and bare references route preserve their original complete order.
+Every group retains its whole comparisons. The matrix uses numeric parallelism
+three, disables fail-fast, keeps the ten-minute limit and has no result cache.
+The eleven required job results, including its aggregate, remain mandatory before
+signing. The existing automation receipt proves only checks; workflow/xtask
+changes invalidate prior keys. Local completion additionally requires eleven
+execution receipts, including each reference group; missing, duplicate, unknown
+or filtered groups cannot inherit aggregate success.
+
+The first published integration, `326184a`, was refused before remote deployment.
+Its automation ran 1,810 Python tests and found two stale expectations for the
+checks selector and ten-job roster. Its reference job passed eight comparisons
+before exceeding ten minutes during staging. Those completed comparisons took
+24.49, 3.88, 16.28, 27.47, 44.00, 83.92, 120.65 and 105.66 seconds, after setup
+and compilation. These hosted observations motivated the fixed parallel groups;
+new hosted timings remain to be measured. No failed or interrupted case is
+counted as passed, and no budget, job, assertion or reference case was removed.
+
+Other failed iterations remain in private evidence: insufficient test-fixture
+body headroom, duplicate-key and atomic-temp observation mismatches, Python
+whitespace/wide-integer regressions, three Clippy findings, stale receipt counts,
+and a local Cargo-target environment correctly refused by cache guards. Their
+causes were corrected without broad aliases, lint allowances or skipped cases.
+A companion fixture fix removes wall-clock ZIP timestamps after a full-suite
+wire-byte comparison exposed a two-second tick race. Its new three-scenario
+regression failed before the fix; fixed metadata matches the pinned writer's
+raw bytes across all 36 ZIP profiles while preserving compression, modes,
+malformed cases and byte-equality assertions. Production Python is unchanged.
+
+Inert daemon observations establish policy/effect wiring only. Actual Docker,
 authenticated installed musl staging, caller budgets, upgrade/reconciliation and
 production route selection require separate evidence. The manual workflow has
-its own explicitly qualified first/repeat staging proof; no local source gate
-claims that runtime result.
-
-The final integration also partitions the complete automation plan into parallel
-checks and reference jobs after observing 537 seconds of the prior hosted
-600-second job limit. The full local route retains its original order; both
-partial routes together retain every command exactly once. Reference comparisons
-have no result cache. The typed required-job policy includes the new job before
-signing. The final integration passed four partition/failure-order checks,
-four required-job checks, three actual local-evidence CLI checks, 34 CI policy
-checks and two Ops signing-workflow checks. Changed Python quality also passed;
-full Rust quality passed again in 60.000 seconds. Independent review confirmed
-the disjoint command owners, required signing dependencies and cache boundary.
-Hosted timings remain to be measured on the new head.
+its explicitly qualified first/repeat staging proof. The new source and local
+gates do not claim that actual runtime result or the aspirational CI time target.

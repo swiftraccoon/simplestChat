@@ -20,9 +20,35 @@ const PLAYBOOKS: [&str; 10] = [
 ];
 
 #[derive(Clone, Copy, PartialEq, Eq)]
+enum ReferenceGroup {
+    Foundation,
+    Fetch,
+    Host,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum Group {
     Checks,
+    References(ReferenceGroup),
+}
+
+#[derive(Clone, Copy)]
+enum Selection {
+    All,
+    Checks,
     References,
+    Reference(ReferenceGroup),
+}
+
+impl Selection {
+    fn includes(self, group: Group) -> bool {
+        match self {
+            Self::All => true,
+            Self::Checks => group == Group::Checks,
+            Self::References => matches!(group, Group::References(_)),
+            Self::Reference(selected) => group == Group::References(selected),
+        }
+    }
 }
 
 struct Step {
@@ -40,9 +66,9 @@ impl Step {
         }
     }
 
-    fn reference(program: impl Into<OsString>, arguments: &[&str]) -> Self {
+    fn reference(group: ReferenceGroup, program: impl Into<OsString>, arguments: &[&str]) -> Self {
         Self {
-            group: Group::References,
+            group: Group::References(group),
             ..Self::new(program, arguments)
         }
     }
@@ -127,6 +153,7 @@ fn steps(root: &Path, executable: &Path) -> std::io::Result<Vec<Step>> {
     // The unchanged Python reference needs the installed controller environment.
     // Keep this explicit gate in both hosted automation and its local-CI route.
     steps.push(Step::reference(
+        ReferenceGroup::Foundation,
         "cargo",
         &[
             "test",
@@ -147,6 +174,7 @@ fn steps(root: &Path, executable: &Path) -> std::io::Result<Vec<Step>> {
     ));
     #[cfg(target_os = "linux")]
     steps.push(Step::reference(
+        ReferenceGroup::Foundation,
         "cargo",
         &[
             "test",
@@ -161,6 +189,7 @@ fn steps(root: &Path, executable: &Path) -> std::io::Result<Vec<Step>> {
         ],
     ));
     steps.push(Step::reference(
+        ReferenceGroup::Foundation,
         "cargo",
         &[
             "test",
@@ -175,6 +204,7 @@ fn steps(root: &Path, executable: &Path) -> std::io::Result<Vec<Step>> {
         ],
     ));
     steps.push(Step::reference(
+        ReferenceGroup::Foundation,
         "cargo",
         &[
             "test",
@@ -192,6 +222,7 @@ fn steps(root: &Path, executable: &Path) -> std::io::Result<Vec<Step>> {
         ],
     ));
     steps.push(Step::reference(
+        ReferenceGroup::Foundation,
         "cargo",
         &[
             "test",
@@ -209,6 +240,7 @@ fn steps(root: &Path, executable: &Path) -> std::io::Result<Vec<Step>> {
         ],
     ));
     steps.push(Step::reference(
+        ReferenceGroup::Fetch,
         "cargo",
         &[
             "test",
@@ -226,6 +258,7 @@ fn steps(root: &Path, executable: &Path) -> std::io::Result<Vec<Step>> {
         ],
     ));
     steps.push(Step::reference(
+        ReferenceGroup::Fetch,
         "cargo",
         &[
             "test",
@@ -243,6 +276,7 @@ fn steps(root: &Path, executable: &Path) -> std::io::Result<Vec<Step>> {
         ],
     ));
     steps.push(Step::reference(
+        ReferenceGroup::Host,
         "cargo",
         &[
             "test",
@@ -260,6 +294,7 @@ fn steps(root: &Path, executable: &Path) -> std::io::Result<Vec<Step>> {
         ],
     ));
     steps.push(Step::reference(
+        ReferenceGroup::Host,
         "cargo",
         &[
             "test",
@@ -300,20 +335,20 @@ fn execute(
     Ok(())
 }
 
-fn selected(steps: Vec<Step>, group: Option<Group>) -> Vec<Step> {
+fn selected(steps: Vec<Step>, selection: Selection) -> Vec<Step> {
     steps
         .into_iter()
-        .filter(|step| group.is_none_or(|group| step.group == group))
+        .filter(|step| selection.includes(step.group))
         .collect()
 }
 
-fn checks(root: &Path, environment: &Environment, group: Option<Group>) -> tooling::Result<()> {
+fn checks(root: &Path, environment: &Environment, selection: Selection) -> tooling::Result<()> {
     #[cfg(not(target_os = "linux"))]
     eprintln!("The VPS host oracle runs in Linux automation; use ci-local for that gate.");
     let executable = std::env::current_exe().map_err(|error| Failure::new(1, error.to_string()))?;
     let steps = selected(
         steps(root, &executable).map_err(|error| Failure::new(1, error.to_string()))?,
-        group,
+        selection,
     );
     execute(&steps, |step| {
         tooling::run(root, environment, &step.program, &step.arguments)
@@ -321,18 +356,28 @@ fn checks(root: &Path, environment: &Environment, group: Option<Group>) -> tooli
 }
 
 pub(super) fn run(root: &Path, arguments: &[String]) -> Result<ExitCode> {
-    let group = match arguments {
-        [] => None,
-        [flag] if flag == "--checks" => Some(Group::Checks),
-        [flag] if flag == "--references" => Some(Group::References),
+    let selection = match arguments {
+        [] => Selection::All,
+        [flag] if flag == "--checks" => Selection::Checks,
+        [flag] if flag == "--references" => Selection::References,
+        [flag, group] if flag == "--references" && group == "foundation" => {
+            Selection::Reference(ReferenceGroup::Foundation)
+        }
+        [flag, group] if flag == "--references" && group == "fetch" => {
+            Selection::Reference(ReferenceGroup::Fetch)
+        }
+        [flag, group] if flag == "--references" && group == "host" => {
+            Selection::Reference(ReferenceGroup::Host)
+        }
         _ => {
-            eprintln!(
-                "usage: cargo run --locked -q -p xtask -- ci automation [--checks|--references]"
-            );
+            eprintln!(concat!(
+                "usage: cargo run --locked -q -p xtask -- ci automation ",
+                "[--checks|--references [foundation|fetch|host]]",
+            ));
             return Ok(ExitCode::from(2));
         }
     };
-    match checks(root, &tooling::inherited_env(), group) {
+    match checks(root, &tooling::inherited_env(), selection) {
         Ok(()) => Ok(ExitCode::SUCCESS),
         Err(failure) => {
             eprintln!("{}", failure.message);

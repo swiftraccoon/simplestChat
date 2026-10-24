@@ -334,8 +334,8 @@ fn parallel_groups_partition_every_original_command_and_keep_full_python_discove
     let plan = || steps(&fixture.0, Path::new("/owned/xtask")).unwrap();
     let identity = |step: &Step| (step.program.clone(), step.arguments.clone());
     let all = plan();
-    let checks = selected(plan(), Some(Group::Checks));
-    let references = selected(plan(), Some(Group::References));
+    let checks = selected(plan(), Selection::Checks);
+    let references = selected(plan(), Selection::References);
     assert_eq!(checks.len(), 16);
     assert_eq!(
         references.len(),
@@ -368,12 +368,50 @@ fn parallel_groups_partition_every_original_command_and_keep_full_python_discove
         let args = text(&step.arguments);
         args.contains(&"--ignored") && args.contains(&"--exact")
     }));
-    let original: Vec<_> = selected(plan(), None).iter().map(identity).collect();
+    let original: Vec<_> = selected(plan(), Selection::All)
+        .iter()
+        .map(identity)
+        .collect();
     assert_eq!(original, all.iter().map(identity).collect::<Vec<_>>());
     for flags in [
         vec!["--checks".into(), "--references".into()],
         vec!["--unknown".into()],
     ] {
         assert_eq!(run(&fixture.0, &flags).unwrap(), ExitCode::from(2));
+    }
+}
+
+#[test]
+fn reference_matrix_groups_are_disjoint_complete_and_keep_each_comparison_whole() {
+    let fixture = Fixture::new(&["a.sh"]);
+    let plan = || steps(&fixture.0, Path::new("/owned/xtask")).unwrap();
+    let identity = |step: &Step| (step.program.clone(), step.arguments.clone());
+    let all = selected(plan(), Selection::References);
+    let mut observed = std::collections::BTreeSet::new();
+    for (group, expected) in [
+        (
+            ReferenceGroup::Foundation,
+            if cfg!(target_os = "linux") { 5 } else { 4 },
+        ),
+        (ReferenceGroup::Fetch, 2),
+        (ReferenceGroup::Host, 2),
+    ] {
+        let subset = selected(plan(), Selection::Reference(group));
+        assert_eq!(subset.len(), expected);
+        for step in subset {
+            assert!(
+                observed.insert(identity(&step)),
+                "one comparison cannot belong to two groups"
+            );
+            let args = text(&step.arguments);
+            assert!(args.contains(&"--ignored") && args.contains(&"--exact"));
+        }
+    }
+    assert_eq!(observed, all.iter().map(identity).collect());
+    for arguments in [
+        vec!["--references".into(), "unknown".into()],
+        vec!["--references".into(), "host".into(), "fetch".into()],
+    ] {
+        assert_eq!(run(&fixture.0, &arguments).unwrap(), ExitCode::from(2));
     }
 }

@@ -139,9 +139,14 @@ jobs:
           key: ${{ steps.verified.outputs.cache-primary-key }}
 
   automation-references:
-    name: Operations whole-reference comparisons
+    name: Operations whole-reference comparisons (${{ matrix.group }})
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        group: [foundation, fetch, host]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -162,7 +167,13 @@ jobs:
       - name: Compare every complete operation with its unchanged reference
         env:
           PYTHON_CHECK_ENV: ${{ runner.temp }}/ansible-controller
-        run: cargo run --locked -q -p xtask -- ci automation --references
+          REFERENCE_GROUP: ${{ matrix.group }}
+        run: cargo run --locked -q -p xtask -- ci automation --references "$REFERENCE_GROUP"
+      - name: Record successful local reference coverage
+        if: ${{ env.ACT }}
+        env:
+          LOCAL_REFERENCE_GROUP: ${{ matrix.group }}
+        run: cargo run --locked -q -p xtask -- ci-evidence record --id "reference-$LOCAL_REFERENCE_GROUP"
 
   rust-lint:
     name: Rust format, lints and documentation
