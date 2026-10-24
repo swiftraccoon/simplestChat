@@ -68,3 +68,6 @@ __pycache__/
 !/docs/release-stage-runtime-proof.md
 
 !/docs/release-deploy-runtime-proof.md
+
+!/docs/maintenance-prerequisites.md
+!/docs/maintain-namespace-prototype.md

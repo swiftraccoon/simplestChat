@@ -1,0 +1,122 @@
+name: Maintenance prerequisites KVM experiment
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read # Exact checkout only; no release or deployment authority.
+
+concurrency:
+  group: maintenance-prerequisites-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  caddy-prerequisites:
+    name: Exact-source Caddy and confined natural TLS in disposable Debian
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' &&
+      github.repository == 'swiftraccoon/simplestChat' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.14.8'
+      - name: Prepare the free owned guest and existing pinned controller dependencies
+        run: |
+          sudo rm -rf -- /usr/local/lib/android /usr/share/dotnet
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-x86 qemu-utils cloud-image-utils \
+            openssh-client curl acl
+          test -c /dev/kvm
+          sudo setfacl -m "u:$(id -un):rw" /dev/kvm
+          python3 -m venv "$RUNNER_TEMP/caddy-controller"
+          "$RUNNER_TEMP/caddy-controller/bin/python" -m pip --isolated install \
+            --require-hashes --only-binary=:all: -r ops/ansible/requirements.txt
+      - name: Check the closed inert prototype fixtures
+        run: |
+          "$RUNNER_TEMP/caddy-controller/bin/python" -B -m unittest discover \
+            -s ops/ansible/tests -p 'test_caddy*.py' -q
+      - name: Measure the finite confined Caddy experiment
+        timeout-minutes: 35
+        run: |
+          "$RUNNER_TEMP/caddy-controller/bin/python" -B build/caddy_probe_vm.py \
+            --project-root "$GITHUB_WORKSPACE" \
+            --output "$RUNNER_TEMP/maintenance-prerequisites" \
+            --timeout-seconds 1800 --finalization-seconds 120 \
+            --guest-finalization-seconds 60
+      - name: Preserve only the completed sanitized prerequisite summary
+        if: ${{ success() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: maintenance-prerequisites-summary
+          path: ${{ runner.temp }}/maintenance-prerequisites/summary.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: Preserve only closed prerequisite failure metadata when available
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: maintenance-prerequisites-failure-summary
+          path: ${{ runner.temp }}/maintenance-prerequisites/failure-summary.json
+          if-no-files-found: ignore
+          retention-days: 14
+
+  namespace-prerequisites:
+    name: Fixed PID namespace topology in disposable Debian
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' &&
+      github.repository == 'swiftraccoon/simplestChat' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.14.8'
+      - name: Prepare the free owned guest and existing pinned controller dependencies
+        run: |
+          sudo rm -rf -- /usr/local/lib/android /usr/share/dotnet
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-x86 qemu-utils cloud-image-utils \
+            openssh-client curl acl
+          test -c /dev/kvm
+          sudo setfacl -m "u:$(id -un):rw" /dev/kvm
+          python3 -m venv "$RUNNER_TEMP/namespace-controller"
+          "$RUNNER_TEMP/namespace-controller/bin/python" -m pip --isolated install \
+            --require-hashes --only-binary=:all: -r ops/ansible/requirements.txt
+      - name: Check only the inert namespace protocol boundaries
+        run: |
+          "$RUNNER_TEMP/namespace-controller/bin/python" -B -m unittest discover \
+            -s ops/ansible/tests -p 'test_maintain_namespace_probe.py' -q
+      - name: Observe the fixed eleven-case namespace catalog
+        timeout-minutes: 35
+        run: |
+          "$RUNNER_TEMP/namespace-controller/bin/python" -I -B \
+            build/maintain_namespace_probe.py \
+            --output "$RUNNER_TEMP/maintain-namespace-probe"
+      - name: Preserve only the completed namespace prerequisite summary
+        if: ${{ success() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: maintenance-namespace-summary
+          path: ${{ runner.temp }}/maintain-namespace-probe/summary.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: Preserve only closed prerequisite failure metadata when available
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: maintenance-namespace-failure-summary
+          path: ${{ runner.temp }}/maintain-namespace-probe/failure-summary.json
+          if-no-files-found: ignore
+          retention-days: 14
