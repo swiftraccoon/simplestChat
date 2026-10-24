@@ -28,11 +28,22 @@ const READ: OFlag = OFlag::O_RDONLY
 
 pub(super) fn close(file: File) -> Result<()> {
     #[cfg(test)]
+    {
+        observed_close(file, None)
+    }
+    #[cfg(not(test))]
+    {
+        nix::unistd::close(file).map_err(|_| Failure::Close)
+    }
+}
+#[cfg(test)]
+fn observed_close(file: File, generation: Option<u64>) -> Result<()> {
     let observation = {
         use std::os::fd::AsRawFd;
         let metadata = file.metadata().ok();
         CloseObservation {
             descriptor: file.as_raw_fd(),
+            generation,
             identity: metadata.as_ref().map(|value| (value.dev(), value.ino())),
             bytes: metadata.as_ref().map(Metadata::len),
             regular: metadata.as_ref().is_some_and(Metadata::is_file),
@@ -60,16 +71,39 @@ pub(super) fn close(file: File) -> Result<()> {
             }
         })
     }
-    #[cfg(not(test))]
-    result
 }
 #[cfg(test)]
 pub(super) struct CloseObservation {
     pub descriptor: i32,
+    pub generation: Option<u64>,
     pub identity: Option<(u64, u64)>,
     pub bytes: Option<u64>,
     pub regular: bool,
     pub succeeded: bool,
+}
+#[cfg(test)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub(super) struct OriginalDescriptor {
+    pub generation: u64,
+    pub descriptor: i32,
+    pub device: u64,
+    pub inode: u64,
+}
+#[cfg(test)]
+fn fixture_generation() -> u64 {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT: AtomicU64 = AtomicU64::new(1);
+    NEXT.fetch_add(1, Ordering::Relaxed)
+}
+#[cfg(test)]
+fn original_descriptor(file: &File, stamp: &Metadata, generation: u64) -> OriginalDescriptor {
+    use std::os::fd::AsRawFd;
+    OriginalDescriptor {
+        generation,
+        descriptor: file.as_raw_fd(),
+        device: stamp.dev(),
+        inode: stamp.ino(),
+    }
 }
 #[cfg(test)]
 #[derive(Default)]
@@ -168,9 +202,23 @@ fn leaf(name: &OsStr) -> Result<()> {
     }
 }
 struct Edge {
+    #[cfg(test)]
+    generation: u64,
     file: File,
     stamp: Metadata,
     name: Option<OsString>,
+}
+impl Edge {
+    fn close(self) -> Result<()> {
+        #[cfg(test)]
+        {
+            observed_close(self.file, Some(self.generation))
+        }
+        #[cfg(not(test))]
+        {
+            close(self.file)
+        }
+    }
 }
 struct Directory {
     path: PathBuf,
@@ -195,6 +243,8 @@ impl Dir {
             }
         };
         let mut edges = vec![Edge {
+            #[cfg(test)]
+            generation: fixture_generation(),
             stamp: root_stamp,
             file: root,
             name: None,
@@ -221,6 +271,8 @@ impl Dir {
                             }
                         };
                         edges.push(Edge {
+                            #[cfg(test)]
+                            generation: fixture_generation(),
                             file,
                             stamp,
                             name: Some(name.to_owned()),
@@ -233,7 +285,7 @@ impl Dir {
         })();
         if let Err(error) = admitted {
             for edge in edges.into_iter().rev() {
-                let _ = close(edge.file);
+                let _ = edge.close();
             }
             return Err(error);
         }
@@ -281,13 +333,15 @@ impl Dir {
         for edge in &parent.0.edges {
             match edge.file.try_clone() {
                 Ok(file) => edges.push(Edge {
+                    #[cfg(test)]
+                    generation: fixture_generation(),
                     file,
                     stamp: edge.stamp.clone(),
                     name: edge.name.clone(),
                 }),
                 Err(_) => {
                     for edge in edges.into_iter().rev() {
-                        let _ = close(edge.file);
+                        let _ = edge.close();
                     }
                     let _ = close(child);
                     return Err(Failure::Io);
@@ -295,6 +349,8 @@ impl Dir {
             }
         }
         edges.push(Edge {
+            #[cfg(test)]
+            generation: fixture_generation(),
             file: child,
             stamp,
             name: Some(name.to_owned()),
@@ -414,15 +470,11 @@ impl Dir {
         listed.and(closed)
     }
     #[cfg(test)]
-    pub fn fixture_descriptors(&self) -> Vec<(i32, u64, u64)> {
-        use std::os::fd::AsRawFd;
+    pub fn fixture_descriptors(&self) -> Vec<OriginalDescriptor> {
         self.0
             .edges
             .iter()
-            .map(|edge| {
-                let stamp = edge.file.metadata().unwrap();
-                (edge.file.as_raw_fd(), stamp.dev(), stamp.ino())
-            })
+            .map(|edge| original_descriptor(&edge.file, &edge.stamp, edge.generation))
             .collect()
     }
     pub fn check(&self) -> Result<()> {
@@ -482,6 +534,8 @@ impl Dir {
         })();
         match admitted {
             Ok(stamp) => Ok(Held {
+                #[cfg(test)]
+                generation: fixture_generation(),
                 directory: self.clone(),
                 name: name.to_owned(),
                 aliases: Vec::new(),
@@ -513,6 +567,8 @@ impl Dir {
             return Err(Failure::Input);
         }
         Ok(Held {
+            #[cfg(test)]
+            generation: fixture_generation(),
             directory: self.clone(),
             name: name.to_owned(),
             aliases: Vec::new(),
@@ -531,7 +587,7 @@ impl Dir {
         let directory = Rc::try_unwrap(self.0).map_err(|_| Failure::Close)?;
         let mut failed = false;
         for edge in directory.edges.into_iter().rev() {
-            failed |= close(edge.file).is_err();
+            failed |= edge.close().is_err();
         }
         if failed { Err(Failure::Close) } else { Ok(()) }
     }
@@ -552,6 +608,8 @@ impl Dir {
 }
 
 pub(super) struct Held {
+    #[cfg(test)]
+    generation: u64,
     directory: Dir,
     name: OsString,
     aliases: Vec<OsString>,
@@ -560,6 +618,10 @@ pub(super) struct Held {
     digest: Option<String>,
 }
 impl Held {
+    #[cfg(test)]
+    pub fn fixture_descriptor(&self) -> OriginalDescriptor {
+        original_descriptor(self.file(), &self.stamp, self.generation)
+    }
     pub fn original_metadata(&self) -> Metadata {
         self.stamp.clone()
     }
@@ -751,6 +813,9 @@ impl Held {
     }
     pub fn finish(mut self) -> Result<()> {
         let checked = self.check(self.digest.is_none());
+        #[cfg(test)]
+        let closed = observed_close(self.file.take().unwrap(), Some(self.generation));
+        #[cfg(not(test))]
         let closed = close(self.file.take().unwrap());
         checked?;
         closed
@@ -771,6 +836,9 @@ impl Held {
             )
             .map_err(|_| Failure::Changed)
         });
+        #[cfg(test)]
+        let closed = observed_close(self.file.take().unwrap(), Some(self.generation));
+        #[cfg(not(test))]
         let closed = close(self.file.take().unwrap());
         removed?;
         closed
@@ -835,13 +903,9 @@ impl Output {
         self.directory.path()
     }
     #[cfg(test)]
-    pub fn fixture_descriptors(&self) -> Vec<(i32, u64, u64)> {
-        use std::os::fd::AsRawFd;
+    pub fn fixture_descriptors(&self) -> Vec<OriginalDescriptor> {
         let mut descriptors = self.directory.fixture_descriptors();
-        descriptors.extend(self.records.values().map(|file| {
-            let stamp = file.file().metadata().unwrap();
-            (file.file().as_raw_fd(), stamp.dev(), stamp.ino())
-        }));
+        descriptors.extend(self.records.values().map(Held::fixture_descriptor));
         descriptors
     }
     pub fn create_file(&mut self, name: &str) -> Result<()> {

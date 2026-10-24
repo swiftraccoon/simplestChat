@@ -241,6 +241,12 @@ directory handle. The source ledger's explicit limits are 100,000 logical entrie
 and 16 MiB of summed normalized relative-name bytes. It adds no source depth limit
 or 8 GiB source-byte cap; the image archive keeps its separate existing profile.
 
+Close observations include a test-only admission generation as well as the live
+descriptor, device and inode. A later open can reuse all three numeric values;
+it cannot satisfy an earlier handle's checked-close requirement. An owned
+single-test subprocess exercises actual descriptor reuse and confirms that a
+dropped original receives no credit from a later explicit close.
+
 Directory enumeration borrows a newly opened original cursor `File` on Linux.
 The portable macOS iterator has an additional opaque libc cursor whose automatic
 `closedir` return status is unavailable. Tests of explicit successful closes cover
