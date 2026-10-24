@@ -106,6 +106,8 @@ Operations automation runs the standalone Ops library suite with its default
 dependency profile before the reference comparisons. On Linux this includes the
 host, process and archive cases. This exercises the distributed capacity runtime
 profile early; the workspace suite also checks the combined feature profile.
+Both jobs select CPython 3.14.8 before fingerprinting or creating the controller
+environment, keeping the manifest oracle's Unicode database consistent.
 Ignored subprocess workers run only through their owning tests, and Python
 comparisons have explicit invocations in the pinned controller environment.
 
