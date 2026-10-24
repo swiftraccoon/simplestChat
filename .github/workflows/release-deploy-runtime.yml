@@ -111,11 +111,11 @@ jobs:
             --previous-run-attempt "$DEPLOY_PREVIOUS_RUN_ATTEMPT" \
             --previous-artifact-id "$DEPLOY_PREVIOUS_ARTIFACT_ID" \
             --output "$RUNNER_TEMP/release-deploy-runtime"
-      - name: Preserve only the completed sanitized deploy summary
-        if: ${{ success() }}
+      - name: Preserve only the sanitized deploy summary, including failed trials
+        if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: signed-musl-release-deploy-runtime-summary
           path: ${{ runner.temp }}/release-deploy-runtime/summary.json
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 14

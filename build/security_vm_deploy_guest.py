@@ -139,6 +139,331 @@ require, exact, digest, integer, record = (
 )
 
 
+MAX_SIGNED_EXIT = 255
+DIAGNOSTIC_SCOPE = "HostDeployVmFailureFacts"
+DIAGNOSTIC_PHASES = frozenset({"request", "prepare", "continue", "exercise"})
+DIAGNOSTIC_CHECKPOINTS = frozenset(
+    {
+        "request",
+        "prepare",
+        "exercise",
+        "final-continuity",
+        "separate-probe",
+        "final-state",
+        "cleanup",
+        "body-completion",
+        *(
+            prefix + "-" + suffix
+            for prefix in ("positive", "negative")
+            for suffix in (
+                "native",
+                "report",
+                "outcome",
+                "journal",
+                "staged",
+                "backup",
+                "selection",
+                "events",
+                "actors",
+                "continuity",
+                "retired",
+            )
+        ),
+    }
+)
+DIAGNOSTIC_ROLES = frozenset(
+    {
+        "native-deploy",
+        "docker-compose",
+        "docker-image",
+        "docker-inspect",
+        "docker-exec",
+        "docker-events",
+        "docker-ps",
+        "docker-stop",
+        "docker-rm",
+        "docker-pull",
+        "docker-network",
+        "docker-other",
+        "curl",
+        "openssl",
+        "namespace-probe",
+        "trust-update",
+        "other-fixed-role",
+    }
+)
+FAILURE_LABELS = {
+    "native_input_refused": "native-input",
+    "native_policy_refused": "native-policy",
+    "native_archive_refused": "native-archive",
+    "native_input_changed": "native-input-changed",
+    "OSError": "filesystem",
+    "native_close_refused": "native-close",
+    "TimeoutExpired": "deadline",
+    "Release interrupted": "interrupted",
+    "command_output_limit": "output-limit",
+    "ReleaseError": "release-error",
+    "RuntimeProfileError": "runtime-profile",
+    "asset_tar_path": "asset-tar-path",
+    "AssetError": "asset-error",
+    "Application readiness deadline exceeded": "readiness",
+    "Insufficient backup headroom": "backup-headroom",
+    "Empty live database backup": "empty-backup",
+    "Running configuration differs from disk; use reviewed maintenance": "running-config",
+    "Browser asset proxy configuration changed; use explicit maintenance": "browser-proxy-config",
+    "Invalid deployed identity": "deployed-identity",
+    "This image is already selected": "same-image",
+    "Unexpected public origin": "public-origin",
+    "Database must be healthy": "database-health",
+    "Schema changes require the explicit maintenance deployment": "schema-change",
+    "Candidate migration mismatch": "candidate-migrations",
+    "Inspect retained migration container first": "migration-container",
+    "Running app differs from selected image": "selected-image",
+}
+# Exact first-party asset failure literals; never project an arbitrary prefix-matching value.
+STATIC_ASSET_FAILURES = frozenset(
+    {
+        "asset_capture_count",
+        "asset_capture_file",
+        "asset_capture_revision",
+        "asset_command_owner",
+        "asset_generation_count",
+        "asset_generation_fields",
+        "asset_generation_files",
+        "asset_immutable_collision",
+        "asset_index_duplicate",
+        "asset_index_generations",
+        "asset_index_schema",
+        "asset_index_size",
+        "asset_index_total",
+        "asset_lifetime",
+        "asset_name",
+        "asset_operation_failed",
+        "asset_public_files",
+        "asset_public_pointer",
+        "asset_public_target",
+        "asset_record",
+        "asset_record_fields",
+        "asset_required_capacity",
+        "asset_revision",
+        "asset_revision_changed",
+        "asset_selected_revision",
+        "asset_store_digest",
+        "asset_store_file_size",
+        "asset_store_foreign",
+        "asset_store_ownership",
+        "asset_store_unindexed",
+        "asset_tar_changed",
+        "asset_tar_content",
+        "asset_tar_content_size",
+        "asset_tar_count",
+        "asset_tar_duplicate",
+        "asset_tar_empty",
+        "asset_tar_extension",
+        "asset_tar_file_size",
+        "asset_tar_header_count",
+        "asset_tar_names",
+        "asset_tar_path",
+        "asset_tar_root",
+        "asset_tar_size",
+        "asset_tar_total",
+        "asset_tar_type",
+        "asset_tar_unsupported",
+        "asset_union_digest",
+        "asset_union_files",
+        "asset_union_size",
+        "asset_version_schema",
+        "asset_version_size",
+        "asset_workload_busy",
+    }
+)
+for _asset_code in STATIC_ASSET_FAILURES:
+    _ = FAILURE_LABELS.setdefault(_asset_code, _asset_code)
+
+NATIVE_FACT_KEYS = frozenset(
+    {
+        "nativeRawExit",
+        "nativeReportState",
+        "nativePassed",
+        "nativePhase",
+        "nativeFailureLabel",
+        "nativeCommandOrdinal",
+    }
+)
+DIAGNOSTIC_KEYS = NATIVE_FACT_KEYS | {
+    "schemaVersion",
+    "scope",
+    "runId",
+    "phase",
+    "checkpoint",
+    "firstFailureKind",
+    "lastObservedRole",
+    "lastObservedOrdinal",
+    "lastObservedExit",
+    "guestSignalStatus",
+    "snapshotBoundary",
+    "completedTrials",
+}
+FAILURE_KINDS = frozenset(
+    {
+        "OSError",
+        "ValueError",
+        "RuntimeError",
+        "ProcessError",
+        "TimeoutExpired",
+        "CheckError",
+        "ToolError",
+        "JSONDecodeError",
+        "UnicodeDecodeError",
+        "KeyError",
+        "TypeError",
+        "AssertionError",
+        "OtherError",
+    }
+)
+
+
+def native_facts(data: bytes | None, status: int | None) -> dict[str, object]:
+    """Project only closed passive native facts, never raw failure text or live authority."""
+    result: dict[str, object] = {
+        "nativeRawExit": status,
+        "nativeReportState": "not-observed" if data is None else "invalid",
+        "nativePassed": None,
+        "nativePhase": None,
+        "nativeFailureLabel": None,
+        "nativeCommandOrdinal": None,
+    }
+    if data is None or len(data) > MAX_STREAM:
+        return result
+    try:
+        value = record(data)
+    except (ValueError, RuntimeError, RecursionError):
+        return result
+    if value.get("action") != "deploy":
+        return result
+    result["nativeReportState"] = "decoded"
+    passed = value.get("passed")
+    result["nativePassed"] = passed if type(passed) is bool else None
+    phase = value.get("phase")
+    result["nativePhase"] = (
+        phase if phase in ("stage", "preflight", "replace_application", "complete") else None
+    )
+    failure = value.get("failure")
+    if type(failure) is str:
+        result["nativeFailureLabel"] = FAILURE_LABELS.get(failure, "other-refusal")
+        command = re.fullmatch(r"Command ([0-9]{3}) failed; inspect private output", failure)
+        if command is not None and 0 < int(command[1]) <= MAX_NATIVE_COMMANDS:
+            result["nativeFailureLabel"] = "native-command"
+            result["nativeCommandOrdinal"] = int(command[1])
+    return result
+
+
+def command_role(args: Sequence[str]) -> str:
+    """Classify only fixed source roles; never expose an argv element or path."""
+    if args[:3] == ["simplestchat-ops", "release", "deploy"]:
+        return "native-deploy"
+    if args[: len(reference.DOCKER)] == list(reference.DOCKER):
+        tail = args[len(reference.DOCKER) :]
+        name = "docker-" + tail[0] if tail else "docker-other"
+        return name if name in DIAGNOSTIC_ROLES else "docker-other"
+    return {
+        "/usr/bin/curl": "curl",
+        "/usr/bin/openssl": "openssl",
+        "/usr/bin/nsenter": "namespace-probe",
+        "/usr/sbin/update-ca-certificates": "trust-update",
+    }.get(args[0] if args else "", "other-fixed-role")
+
+
+def diagnostic_enum(value: object, choices: frozenset[str] | set[str]) -> bool:
+    """Reject wrong types before membership, including unhashable hostile JSON fields."""
+    return type(value) is str and value in choices
+
+
+def failure_projection(value: object, run_id: str) -> dict[str, object]:
+    """Accept one exact bounded diagnostic schema without copying unknown nested data."""
+    data = exact(value, set(DIAGNOSTIC_KEYS))
+    require(
+        type(data["schemaVersion"]) is int
+        and data["schemaVersion"] == 1
+        and data["scope"] == DIAGNOSTIC_SCOPE
+        and data["runId"] == run_id
+        and re.fullmatch(r"[a-f0-9]{32}", run_id)
+        and data["snapshotBoundary"] == "before-guest-finalizers"
+    )
+    require(
+        diagnostic_enum(data["phase"], DIAGNOSTIC_PHASES)
+        and diagnostic_enum(data["checkpoint"], DIAGNOSTIC_CHECKPOINTS)
+    )
+    require(
+        data["firstFailureKind"] is None or diagnostic_enum(data["firstFailureKind"], FAILURE_KINDS)
+    )
+    require(
+        data["lastObservedRole"] is None
+        or diagnostic_enum(data["lastObservedRole"], DIAGNOSTIC_ROLES)
+    )
+    _ = integer(data["lastObservedOrdinal"], 0, MAX_COMMANDS)
+    _ = integer(data["completedTrials"], 0, TRIAL_COUNT)
+    for key in ("lastObservedExit", "nativeRawExit"):
+        require(
+            data[key] is None
+            or (
+                type(data[key]) is int
+                and -MAX_SIGNED_EXIT <= cast("int", data[key]) <= MAX_SIGNED_EXIT
+            )
+        )
+    require(
+        data["nativeReportState"] in ("not-observed", "invalid", "decoded")
+        and (data["nativePassed"] is None or type(data["nativePassed"]) is bool)
+        and data["nativePhase"] in (None, "stage", "preflight", "replace_application", "complete")
+        and data["guestSignalStatus"] in (0, 130, 143)
+        and type(data["guestSignalStatus"]) is int
+    )
+    labels = {*FAILURE_LABELS.values(), "other-refusal", "native-command"}
+    require(
+        data["nativeFailureLabel"] is None or diagnostic_enum(data["nativeFailureLabel"], labels)
+    )
+    ordinal = data["nativeCommandOrdinal"]
+    require(ordinal is None or (type(ordinal) is int and 0 < ordinal <= MAX_NATIVE_COMMANDS))
+    return dict(data)
+
+
+def failure_snapshot(
+    phase: str,
+    owner: Fixture | None,
+    first: BaseException | None,
+    control: Control,
+) -> dict[str, object]:
+    """Capture the body failure anchor before cleanup commands can overwrite observed status."""
+    commands = None if owner is None else owner.commands
+    kind = None if first is None else type(first).__name__
+    return {
+        "schemaVersion": 1,
+        "scope": DIAGNOSTIC_SCOPE,
+        "runId": None if owner is None else owner.value["runId"],
+        "phase": phase,
+        "checkpoint": phase if owner is None else owner.checkpoint,
+        "firstFailureKind": kind if kind is None or kind in FAILURE_KINDS else "OtherError",
+        "lastObservedOrdinal": 0 if commands is None else commands.sequence,
+        "lastObservedRole": None if commands is None else commands.last_role,
+        "lastObservedExit": None if commands is None else commands.last_status,
+        "guestSignalStatus": control.status,
+        "completedTrials": 0 if owner is None else len(owner.trials),
+        "snapshotBoundary": "before-guest-finalizers",
+        **(native_facts(None, None) if commands is None else commands.native_observation),
+    }
+
+
+def failure_diagnostic(run_id: str) -> bytes:
+    """Read only the fixed marker-bound diagnostic record; no private stream export."""
+    require(os.geteuid() == 0 and re.fullmatch(r"[a-f0-9]{32}", run_id))
+    marker, _ = ops_guest.read_fixed(Path("/etc/simplestchat-vm-fixture"), 128, PRIVATE_MODE)
+    require(marker == (run_id + "\n").encode())
+    data, _ = ops_guest.read_fixed(
+        ROOT / "deploy-observer-diagnostic.json", MAX_FRAME, PRIVATE_MODE
+    )
+    return encoded(failure_projection(record(data), run_id))
+
+
 def required[T](value: T | None) -> T:
     """Refuse a missing already-owned role without adding authority."""
     if value is None:
@@ -201,9 +526,13 @@ class Control:
     def advance(self) -> None:
         """Admit exactly one exercise phase without refreshing time."""
         self.check()
-        require(self.phase == "setup" and self.body - time.monotonic() >= CONTINUE_MINIMUM)
-        self.phase = "exercise"
+        self.exercise_budget()
         self.check()
+        self.phase = "exercise"
+
+    def exercise_budget(self) -> None:
+        """Observe the unchanged two-call debt while the original setup phase still owns it."""
+        require(self.phase == "setup" and self.body - time.monotonic() >= CONTINUE_MINIMUM)
 
 
 @final
@@ -337,6 +666,8 @@ class Commands:
         self.last_failure: JsonObject | None = None
         self.cleanup_deadline: float | None = None
         self.last_status: int | None = None
+        self.last_role: str | None = None
+        self.native_observation = native_facts(None, None)
         self.socket: tuple[Path, os.stat_result] | None = None
 
     def check(self) -> None:
@@ -384,8 +715,16 @@ class Commands:
         self, args: list[str], **options: object
     ) -> Command:
         """Retain the fixed run role contract."""
+        # A new attempted native role cannot inherit a previous trial's passive success facts.
+        self.native_observation = (
+            native_facts(None, None)
+            if args[:3] == ["simplestchat-ops", "release", "deploy"]
+            else self.native_observation
+        )
         self.check()
         self.sequence += 1
+        self.last_role = command_role(args)
+        self.last_status = None
         sequence = self.sequence
         require(self.sequence <= MAX_COMMANDS)
         timeout = options.get("timeout", 30)
@@ -452,11 +791,16 @@ class Commands:
             )
             consumed = True
             self.last_status = status
+            self.native_observation = (
+                native_facts(None, status) if candidate is not None else self.native_observation
+            )
             for stream in streams:
                 stream.flush()
             _ = streams[0].seek(0)
             data = streams[0].read(MAX_STREAM + 1)
             require(len(data) <= MAX_STREAM)
+            if candidate is not None:
+                self.native_observation = native_facts(data, status)
             self.check()
             if candidate is not None:
                 candidate.check()
@@ -766,6 +1110,7 @@ class Fixture:
     def __init__(self, value: Mapping[str, object], control: Control, wire: Wire) -> None:
         """Retain this fixed role and its original owners before checking effects."""
         self.value, self.control, self.wire = value, control, wire
+        self.checkpoint = "prepare"
         self.originals: list[stage.Original] = []
         self.commands = Commands(control, wire, self.originals)
         self.harness: fixture.Harness | None = None
@@ -1193,6 +1538,8 @@ class Fixture:
             self.commands.injector = injector
         first: BaseException | None = None
         result: Command | None = None
+        prefix = "negative" if negative else "positive"
+        self.checkpoint = prefix + "-native"
         try:
             result = self.commands.run(
                 [
@@ -1220,15 +1567,18 @@ class Fixture:
         require(result is not None)
         result = cast("Command", result)
         until = stage.utc()
+        self.checkpoint = prefix + "-report"
         report, attempt = native_report(result.data, revision, negative=negative)
         require((result.code != 0) if negative else result.code == 0)
         require({path.name for path in (PUBLIC / "results").iterdir()} - before == {attempt.name})
+        self.checkpoint = prefix + "-outcome"
         outcome_original = retain(
             attempt / "outcome.json", MAX_RECORD, 0o600, self.control, self.originals
         )
         expected = dict(report)
         del expected["evidence"]
         require(record(outcome_original.data()) == expected)
+        self.checkpoint = prefix + "-journal"
         journal = read_record(PUBLIC / "release-state.json", self.control)
         require(
             journal
@@ -1241,6 +1591,7 @@ class Fixture:
         )
         role = "previous" if negative else "current"
         manifest = required(self.previous if negative else self.current)
+        self.checkpoint = prefix + "-staged"
         staged = retain(
             PUBLIC / "releases" / revision / "staged.json",
             MAX_RECORD,
@@ -1268,12 +1619,15 @@ class Fixture:
         )
         require(image == value["serverImage"])
         self.images[role] = image
+        self.checkpoint = prefix + "-backup"
         retained_backup = self.backup(attempt, report, revision)
+        self.checkpoint = prefix + "-selection"
         for name in reference.SELECTION:
             original = retain(
                 attempt / ("before-" + name), 2**20, 0o600, self.control, self.originals
             )
             require(original.data(2**20) == selected[name])
+        self.checkpoint = prefix + "-events"
         events = self.commands.docker(
             "events", "--since", since, "--until", until, "--format", "{{json .}}", timeout=15
         ).data
@@ -1281,8 +1635,10 @@ class Fixture:
         binding = ActorBinding(
             self.graphs, digest(postgres[0]), image_id(postgres[1]), required(self.harness).token
         )
+        self.checkpoint = prefix + "-actors"
         history = actor_history(events, attempt, binding, self.control, self.originals)
         self.actors.update(cast("list[str]", history["actorIds"]))
+        self.checkpoint = prefix + "-continuity"
         if negative:
             require(injector is not None and injector.stopped and injector.identifier is not None)
             injected_sequence(
@@ -1295,6 +1651,7 @@ class Fixture:
             observed = self.continuity(str(self.value["revision"]))
         else:
             observed = self.continuity(revision)
+        self.checkpoint = prefix + "-retired"
         known = self.commands.docker("ps", "--all", "--quiet", "--no-trunc").text().splitlines()
         require(self.actors.isdisjoint(known))
         for original in self.originals:
@@ -1327,6 +1684,7 @@ class Fixture:
         self.trials.append(negative)
         self.phase_seconds["negative"] = float(cast("float", negative["seconds"]))
         observed = self.continuity(str(self.value["revision"]))
+        self.checkpoint = "separate-probe"
         probe = MigrationProbe(self.commands)
         separate = stage.separate_probe(
             cast("stage.Runner", cast("object", probe)),
@@ -1334,6 +1692,7 @@ class Fixture:
             required(self.current)["migrations"],
             str(self.value["runId"]),
         )
+        self.checkpoint = "final-state"
         _ = self.continuity(str(self.value["revision"]))
         require(self.protected is not None and self.installed is not None)
         required(self.protected).check()
@@ -1374,6 +1733,8 @@ class Fixture:
 
     def finish(self, first: BaseException | None) -> BaseException | None:
         """Settle exact fixture resources, then every admitted original, preserving first."""
+        if not self.control.settling:
+            first = ops_guest.settle((self.control.check,), first)
         self.control.settling = True
         self.commands.injector = None
         actions: list[Callable[[], None]] = []
@@ -1951,24 +2312,28 @@ def execute(control: Control, wire: Wire) -> dict[str, object]:
         result = fixture_owner.exercise()
     except BaseException as error:  # noqa: BLE001 -- Preserve first; settle all peers.
         first = error
+    diagnostic = failure_snapshot(phase, fixture_owner, first, control)
+    first = ops_guest.settle((control.check,), first)
     control.settling = True
+    if diagnostic["firstFailureKind"] is None and first is not None:
+        kind = type(first).__name__
+        diagnostic["firstFailureKind"] = kind if kind in FAILURE_KINDS else "OtherError"
+        diagnostic["checkpoint"] = "body-completion"
     if fixture_owner is not None:
         first = fixture_owner.finish(first)
     first = ops_guest.settle((wire.close, control.check), first)
-    diagnostic = {
-        "schemaVersion": 1,
-        "phase": phase,
-        "passed": first is None,
-        "firstFailureKind": None if first is None else type(first).__name__,
-        "lastCommand": 0 if fixture_owner is None else fixture_owner.commands.sequence,
-        "lastSignedStatus": None if fixture_owner is None else fixture_owner.commands.last_status,
-    }
+    if diagnostic["firstFailureKind"] is None and first is not None:
+        kind = type(first).__name__
+        diagnostic["firstFailureKind"] = kind if kind in FAILURE_KINDS else "OtherError"
+        diagnostic["checkpoint"] = "cleanup"
 
     def save_diagnostic() -> None:
         """Retain the fixed save diagnostic role contract."""
+        control.check()
         _ = ops_guest.write_new(
             ROOT / "deploy-observer-diagnostic.json", (json.dumps(diagnostic) + "\n").encode()
         )
+        control.check()
 
     first = ops_guest.settle((save_diagnostic,), first)
     if first is not None:
@@ -1977,16 +2342,28 @@ def execute(control: Control, wire: Wire) -> dict[str, object]:
     return result
 
 
+def emit_readonly_record() -> int:
+    """Serve one of the two fixed passive records; never select an arbitrary file or action."""
+    try:
+        data = (
+            failure_diagnostic(sys.argv[2])
+            if sys.argv[1] == "--failure-diagnostic"
+            else private_evidence(sys.argv[2])
+        )
+        require(sys.stdout.buffer.write(data) == len(data))
+        _ = sys.stdout.buffer.flush()
+    except (OSError, ValueError, RuntimeError):
+        return 1
+    return 0
+
+
 def main() -> int:
     """Earlier frames remain passive through final restores, cancellation and stdout checks."""
-    if len(sys.argv) == EVIDENCE_ARGC and sys.argv[1] == "--private-evidence":
-        try:
-            data = private_evidence(sys.argv[2])
-            require(sys.stdout.buffer.write(data) == len(data))
-            _ = sys.stdout.buffer.flush()
-        except (OSError, ValueError, RuntimeError):
-            return 1
-        return 0
+    if len(sys.argv) == EVIDENCE_ARGC and sys.argv[1] in {
+        "--failure-diagnostic",
+        "--private-evidence",
+    }:
+        return emit_readonly_record()
     require(len(sys.argv) == 1)
     control = Control(time.monotonic())
     handlers: dict[signal.Signals, object] = {}

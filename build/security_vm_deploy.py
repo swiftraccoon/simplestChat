@@ -319,6 +319,8 @@ def run(  # noqa: C901, PLR0912, PLR0915 -- Ordered owners.
         "currentServerMetadataApiCalls": 0,
         "verifierCountsAreCompletedSuccessfulRolesOnly": True,
         "guestPrivateEvidenceRetained": False,
+        "guestFailureDiagnostic": None,
+        "guestFailureDiagnosticStatus": "not-requested",
     }
     owners = fetch_vm.Owners()
     tools: fetch_vm.NativeTools | None = None
@@ -631,7 +633,11 @@ def run(  # noqa: C901, PLR0912, PLR0915 -- Ordered owners.
     except BaseException as error:  # noqa: BLE001 -- Keep first; settle all.
         first = error
     finally:
+        body_was_positive = first is None
+        first = fetch_vm.settle((control.check,), first)
         control.settling = True
+        if body_was_positive and first is not None and report["failure"] is None:
+            report["failure"] = "body-completion"
         session_error = fetch_vm.settle((session.close,)) if session is not None else None
         first = first or session_error
         if host is not None:
@@ -652,6 +658,27 @@ def run(  # noqa: C901, PLR0912, PLR0915 -- Ordered owners.
                 report["guestPrivateEvidenceRetained"] = True
             except BaseException as error:  # noqa: BLE001 -- Keep evidence failure; settle all.
                 evidence_error = error
+        if (
+            first is not None
+            and host is not None
+            and owners.guest is not None
+            and work is not None
+            and run_id is not None
+        ):
+            report["guestFailureDiagnosticStatus"] = "unavailable"
+            try:
+                _, diagnostic = host.run(
+                    "deploy-failure-diagnostic",
+                    ssh(host, work, port, ("--failure-diagnostic", run_id)),
+                    timeout=min(20, control.end - time.monotonic()),
+                )
+                report["guestFailureDiagnostic"] = probe.failure_projection(
+                    probe.record(diagnostic), run_id
+                )
+                report["guestFailureDiagnosticStatus"] = "available"
+            except BaseException:  # noqa: BLE001 -- Still attempt every original finalizer.
+                # Diagnostics never replace the already-latched body failure or skip finalizers.
+                report["guestFailureDiagnosticStatus"] = "unavailable"
         actions: list[Callable[[], None]] = []
         if tools is not None:
             actions.append(lambda: tools.check(control))
