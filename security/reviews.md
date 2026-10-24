@@ -26,6 +26,22 @@ the original paths and includes redaction as well.
 
 ## GitHub Actions portability findings
 
+On 2026-10-24, the manual development-artifact workflow adds one exact
+`superfluous-actions` review for
+`release-artifact.yml#jobs/artifact/steps/1/uses`. The immutable
+[`89b12181fb390509a0842a86cc55eeb8eb928c1d` action source](https://github.com/dtolnay/rust-toolchain/blob/89b12181fb390509a0842a86cc55eeb8eb928c1d/action.yml)
+was re-read: explicit `toolchain: 1.99.0` reaches the rustup install unchanged.
+It retains the official HTTPS rustup bootstrap and bounded checksum-propagation
+retries; bootstrap bytes are not independently checksum-pinned. Checkout disables
+persisted credentials, compilation receives no token, and the workflow has only
+contents/read permission. The source-built native controller runs before Docker
+authority and retains blocking source, custody, process and payload checks. This
+workflow retains a development artifact without release authorization, signing,
+image publication or deployment. No artifact or restored cache selects installer
+source or arguments. The record binds only this action feature and YAML location,
+expires on 2026-11-29 and exempts no security check. Cold hosted compilation and
+actual Docker build/export timing remain unmeasured.
+
 Ten initial Zizmor findings have narrow records:
 
 - Two informational `superfluous-actions` findings refer to the pinned Rust

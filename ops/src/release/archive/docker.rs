@@ -4,9 +4,13 @@ use super::index::{Index, member_name};
 use super::{ArchiveError as E, Result, oci};
 use crate::json::{self, Json};
 use crate::release::manifest::Manifest;
-use std::fs::File;
+use std::io::{Read, Seek};
 
-pub(super) fn verify(file: &mut File, index: &Index, manifest: &Manifest) -> Result<Vec<u8>> {
+pub(super) fn verify(
+    file: &mut (impl Read + Seek),
+    index: &Index,
+    manifest: &Manifest,
+) -> Result<Vec<u8>> {
     let images = index.read_json(file, "manifest.json")?;
     let images = images
         .array()

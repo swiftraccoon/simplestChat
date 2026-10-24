@@ -139,8 +139,9 @@ class ReleaseContainerCiTests(unittest.TestCase):
         self.assertEqual(
             string(export, "run"),
             (
-                'python3 build/build-release.py --image-id "${PRODUCTION_IMAGE}" \\\n'
-                '  --timeout-seconds 300 --output "${RUNNER_TEMP}/simplestchat-release"\n'
+                '"$RUNNER_TEMP/release-builder-build/release/simplestchat-ops" release build \\\n'
+                + '  --image-id "${PRODUCTION_IMAGE}" \\\n'
+                + '  --timeout-seconds 300 --output "${RUNNER_TEMP}/simplestchat-release"\n'
             ),
         )
         self.assertNotIn("continue-on-error", export)

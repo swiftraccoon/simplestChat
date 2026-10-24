@@ -188,7 +188,9 @@ fn arguments_are_fixed_and_do_not_select_another_operation() {
         assert_eq!(
             output.stderr,
             concat!(
-                "Usage: simplestchat-ops release manifest --path PATH\n",
+                "Usage: simplestchat-ops release build --output PATH ",
+                "[--timeout-seconds N] [--image-id ID]\n",
+                "       simplestchat-ops release manifest --path PATH\n",
                 "       simplestchat-ops release archive --manifest PATH --path PATH\n",
                 "       simplestchat-ops release receipt --envelope PATH --receipt PATH\n",
                 "       simplestchat-ops release preflight [--helpers-json JSON]\n",

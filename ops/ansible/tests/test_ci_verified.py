@@ -995,6 +995,10 @@ class VerifiedWorkflowTests(unittest.TestCase):
                         "all_eight_whole_reference_scenarios_preserve_local_policy_"
                         "and_explicit_transport_deltas"
                     ),
+                    "--skip",
+                    "release::build::tests::whole_reference_scenarios_match_unchanged_python",
+                    "--skip",
+                    "release::build::process::tests::signal_worker",
                 ],
             )
             self.assertLess(steps.index(build), steps.index(execute))

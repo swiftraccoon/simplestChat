@@ -4,3 +4,5 @@ pub mod assets;
 pub mod manifest;
 pub mod preflight;
 pub mod trust;
+
+pub mod build;

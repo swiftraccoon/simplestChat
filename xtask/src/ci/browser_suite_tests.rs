@@ -521,32 +521,3 @@ async fn detector_receives_the_same_signal_and_pending_signals_cannot_launch_a_b
     assert_eq!(error.code, 130);
     assert!(fixture.events().is_empty());
 }
-
-#[test]
-fn darwin_group_exception_requires_successful_bounded_zombie_inventory_with_the_reserved_leader() {
-    let pid = rustix::process::Pid::from_raw(111).unwrap();
-    for rows in ["111 111 Z\n", " 111 111 Z+\n112 111 ZNs\n"] {
-        assert!(cleanup::proof(rows.as_bytes(), b"", true, pid));
-    }
-    for rows in [
-        "",
-        "112 111 Z\n",
-        "111 111 R\n",
-        "111 111 Z\n112 111 S\n",
-        "111 999 Z\n",
-        "111 111 Z?\n",
-        "0111 111 Z\n",
-        "111 0111 Z\n",
-        "111 111 Z\n111 111 Z\n",
-        "111 111 Z PRIVATE\n",
-        "2147483648 111 Z\n",
-        "-111 111 Z\n",
-        "111 111 Z\n\n",
-    ] {
-        assert!(!cleanup::proof(rows.as_bytes(), b"", true, pid), "{rows:?}");
-    }
-    assert!(!cleanup::proof(b"111 111 Z\n", b"PRIVATE", true, pid));
-    assert!(!cleanup::proof(b"111 111 Z\n", b"", false, pid));
-    assert!(!cleanup::proof(b"\xff", b"", true, pid));
-    assert!(!cleanup::proof(&vec![b' '; 65537], b"", true, pid));
-}

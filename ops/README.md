@@ -1,10 +1,11 @@
 # Operations policy tools
 
 `simplestchat-ops` validates local release manifests, receiver receipts and
-Docker/OCI image archives, and inspects local executable identities. It has no
-network, engine, service, SSH or deployment command. Local unsigned artifact
-preparation can write a new private directory, as described below. Python remains
-the release runtime and the reference implementation. A separate read-only
+Docker/OCI image archives, and inspects local executable identities. Its production
+release builder can invoke the selected local Git and Docker tools to build or
+export an unsigned image. Local unsigned artifact preparation can write a new
+private directory, as described below. Python remains the reference implementation
+and the installed release runtime. A separate read-only
 release preflight checks the fixed host paths without executing installed helpers.
 The browser-asset transaction commands described below can mutate only the fixed
 managed asset store while holding the existing workload lock.
@@ -77,6 +78,189 @@ result as the [Rust linkage reference](https://doc.rust-lang.org/reference/linka
 recommends. The existing signed server artifact and its ten-file contract stay
 unchanged. Python's controller-supplied preflight remains the bootstrap trust
 boundary until binary provenance, ABI and installation ownership are established.
+
+## Production release build and export
+
+Build the selected checkout's native controller before starting the operation:
+
+```sh
+cargo build --locked --release -p simplestchat-ops --bin simplestchat-ops
+mkdir -p results
+target/release/simplestchat-ops release build --output "$(pwd -P)/results/release-build-attempt"
+target/release/simplestchat-ops release build --image-id sha256:EXACT_LOWERCASE_IMAGE_DIGEST \
+  --timeout-seconds 300 --output "$(pwd -P)/results/release-export-attempt"
+```
+
+The image selector must be `sha256:` followed by exactly 64 lowercase hexadecimal
+digits; the placeholder above must be replaced. Output must be a fresh directory
+with an existing parent and no symlink components. An output inside the checkout
+must be Git-ignored. Commit or remove checkout changes before invocation; both
+tracked and untracked changes block admission. A retry uses a new output path and
+repeats every source, workload and image check.
+
+This source-built command supports Linux and macOS controllers, including Docker
+Desktop. The produced image remains `linux/amd64`. Windows is refused before
+effects. This controller build does not widen the distributed Ops binary's fixed
+Linux musl target, authenticate installation or update an installed host helper.
+The operation requires the selected local Git executable and a configured local
+Unix-socket Docker endpoint. It honors the active Docker context, then fixes the
+explicit local endpoint and strips Docker/Buildx endpoint and API overrides from
+subsequent commands. Socket alias checks detect observed replacement; they do not
+authenticate a daemon or make pathname connection atomic.
+
+`simplestchat-ops release build --licenses` prints the exact MIT notices for
+Tokio 1.53.3, Mio 1.2.4 and signal-hook-registry 1.4.8 (MIT option selected).
+They are embedded in the executable, so a binary-only installation carries these
+notices. This informational route needs no runtime, environment, checkout or
+writable directory; output/flush failure returns 1 with a fixed diagnostic.
+Mixed or duplicate selectors remain usage errors. This limited notice set covers
+the builder's explicit Tokio/runtime use; it is not a complete Ops or workspace
+license inventory. The default musl normal/build dependency graph remains the
+same 57 package versions as the public baseline; no package was added by this
+feature.
+
+The CLI accepts `--output PATH`, optional `--timeout-seconds N` and optional
+`--image-id ID`, in split or equals form. `N` uses ASCII decimal digits and may
+have leading zeroes; signs, whitespace, separators and Unicode numerals are usage
+errors. Selectors may occur once; full option
+names and ordinary ASCII decimal integers are required. `N` is 60 through 7200,
+default 3600. Python's incidental argparse abbreviations and Unicode integer forms
+remain available through the unchanged reference command; the new command does
+not accept them. Help and usage errors require no environment, tool or source
+lookup. Exit 0 means complete success, 1 means an operational failure, deadline or
+interrupt, and 2 means invalid arguments. Private command evidence retains actual
+signed child status separately from the operation's cause; a child exit 130 does
+not mean the controller received an interrupt.
+
+The builder refuses active public-chat or benchmark containers and unfinished
+protected benchmark/release cleanup records. It holds the existing workload lock
+when present. Build mode requires the default local Docker Buildx driver, archives
+the exact clean Git revision, restores Git source modes, hashes the five source
+inputs and migration files, and builds only the production target with its exact
+revision label. It may pull build inputs. Export mode inspects the exact immutable
+image and its production runtime identity and layer DiffIDs. It reuses an already
+matching release tag or creates a missing one, refuses a conflicting tag, and
+checks selection before and after save. Export mode never builds, pulls or runs
+an image, including after a failed export. Retained images and tags are not
+pruned or rolled back.
+
+Docker inspection and protected state records use the existing strict Ops JSON
+profile through a UTF-8 string adapter. Inspection keeps its 2 MiB encoded bound;
+benchmark `current.json` keeps 64 KiB and persistent `release-state.json` keeps
+16 KiB. All fields, including ignored metadata, are limited to 128 nested
+containers and 100,000 values. Decoded duplicate keys and lone surrogate escapes
+are refused; Unicode scalar strings and valid surrogate pairs are accepted.
+Integers retain their raw spelling through 4300 digits, including ignored values
+beyond `u64` or finite `f64` range. Float spelling is retained when conversion is
+finite; underflow to zero is allowed, while overflow, NaN and Infinity are refused.
+Booleans and null retain their own types.
+
+This adapter rejects raw NUL bytes and a leading UTF-8 BOM. The Python reference
+receives already decoded strings from strict subprocess UTF-8 or `read_text`;
+`json.loads(str)` does not perform the generic byte decoder's UTF-16/32 or BOM
+autodetection. Escaped `\u0000` inside a JSON string remains valid. The Rust metadata
+profile is an explicit accepted-domain boundary: deeper ignored objects accepted
+by Python can be refused here. The unchanged Python builder remains the reference;
+these limits are not a claim of full Python metadata parity.
+
+Both modes save an unsigned image, check the final clean revision, verify the
+whole archive and existing server metadata contract, then publish `release.json`
+by linking its verified candidate. Export additionally requires the archive's
+DiffIDs to equal the selected image's; a local Docker image ID is not assumed to
+equal the archive's configuration digest. Original file, source, tool and socket
+observations are rechecked across command boundaries. Temporary cleanup operates
+only on its original created entries. A changed or foreign entry makes completion
+fail and is retained; cleanup never adopts an unknown path to delete it.
+
+The native source ledger admits at most 100,000 logical archive entries and
+16 MiB of summed normalized relative-name bytes. These are explicit source
+acceptance limits using the existing archive resource profile's entry/name
+budgets; they do not impose its 8 GiB image-archive cap on source or add a source
+depth limit. Original deadlines and filesystem constraints still apply.
+Every created directory is checked for its exact journaled members, alongside
+full directory seals and original file bytes. An extra file is negative even if
+it appears before the first directory seal or directory growth metadata happens
+to match. Cleanup retains that unknown member.
+
+Membership enumeration opens a fresh cursor `File` relative to its retained
+original directory. Linux's iterator borrows that cursor. The portable iterator
+used on macOS owns an additional opaque libc directory cursor; its automatic
+`closedir` result is not exposed. Explicit checked-close claims cover the admitted
+original `File` handles, including the fresh cursor, and do not claim a reported
+close status for that opaque library cursor. Membership and seal checks detect
+observed changes. They leave a check-to-read race against the same UID while
+Docker reads pathname inputs; they do not make the context immutable or prove a
+complete compiler input closure.
+
+The selected timeout remains the upper bound on the active build/export window,
+beginning after source setup. The native operation also has an earlier whole
+owner, measured from entry:
+
+| Mode | Whole operation upper bound | Live workflow selection |
+| --- | --- | --- |
+| Build | `N + 300` seconds | Default 3600 gives 65 minutes |
+| Exact-image export | `N + 60` seconds | 300 gives 6 minutes |
+
+Setup shares at most 120 seconds. Build verification reserves and shares at most
+140 seconds. Exact-image export uses `v = min(140, N)` seconds for both its future
+verification reserve and verification phase cap. The whole export remains `N + 60`;
+the correction for small `N` preserves the full 40-second settlement/finalization
+tail rather than reducing it to admit work.
+Commands are admitted only with their remaining original body and settlement
+allowances. A live command retains 20 seconds for group retirement/reap,
+6 seconds for pipe/close settlement and 14 seconds for remaining file/state/outcome
+finalization. Save is capped at 300 seconds and the active time remaining, then
+clipped again to preserve those verification and settlement tails. Consequently,
+`--timeout-seconds 300` does not guarantee a full 300-second save body inside a
+six-minute export.
+
+For an export entering at virtual time zero, the original global body ceiling is
+20 seconds at `N = 60`, `139` and `140`, and 180 seconds at `N = 300`. Setup and
+active commands share that absolute ceiling; setup does not grant a new body
+allowance before export. The first setup query is additionally capped at 30 seconds.
+A 60-second selection therefore admits a positive bounded body while retaining
+60 seconds of verification and all 40 seconds of tail. Elapsed setup work reduces
+that remaining body. The [virtual-clock matrix](../docs/testing.md#production-release-builder)
+records exact phase and query endpoints for all four selections.
+
+Owner checks run between chunks and transitions; they cannot
+bound a kernel read or filesystem operation that itself blocks indefinitely.
+Workflow termination remains a separate outer bound.
+
+Failures after output admission retain the attempt, including available original
+command argv, bounded logs, signed exit observations and cleanup diagnostics.
+Stdout and stderr each have a 2 MiB live budget. Captured inspection also limits
+their combined log to 2 MiB; long uncaptured build/save commands retain both live
+stream limits. Cancellation and failure settle owned process groups and all
+admitted pipe/file peers, preserving the first operation failure. No automatic
+retry, fallback build, image deletion, registry push, service restart or deploy
+occurs. Positive record bytes alone do not override a late close or owner failure;
+downstream consumers must require exit 0.
+
+The unsigned directory keeps `image.tar`, `source.json`, `release.candidate.json`,
+`release.json` and `outcome.json`, plus private command evidence. `source.json`
+contains only `revision` and hashes of Dockerfile, .dockerignore, Cargo.lock,
+web/package-lock.json and build/pip-constraints.txt. Exported image ID appears
+only in `outcome.json`. The manifest and outcome remain schema 1.
+Unsigned build success supplies no signature, receiver authorization or deployment
+permission. The separate signer and server's ten-file published contract remain
+unchanged; the Ops distribution artifact has its own distinct contract.
+
+CI prepares the native controller in a separate bounded step before the existing
+six-minute export. It exports the production image already verified and smoke
+tested by that job. The manual artifact workflow keeps its 75-minute job and
+read-only permissions: pinned compiler bootstrap plus native preparation share
+8 minutes, the default operation gets 65 minutes, leaving 2 minutes for checkout
+and artifact retention. Cold setup and actual Docker export need workflow runtime
+evidence; an offline oracle or successful compilation cannot establish that fit.
+Neither caller obtains a same-run signed Ops artifact: that would depend on the
+very CI completion that production export helps establish.
+
+The unchanged `build/build-release.py` and `build/release_build.py` remain runnable
+references. Installed Python operations and other users of `release_build.Runner`
+keep their existing roles. The [testing guide](../docs/testing.md#production-release-builder)
+distinguishes whole-reference comparison, actual inert process tests and hosted
+Docker/signing evidence.
 
 ## Read-only release preflight
 

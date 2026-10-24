@@ -107,7 +107,9 @@ fn usage_and_help_never_read_a_manifest_or_start_another_command() {
         assert_eq!(
             output.stderr,
             concat!(
-                "Usage: simplestchat-ops release manifest --path PATH\n",
+                "Usage: simplestchat-ops release build --output PATH ",
+                "[--timeout-seconds N] [--image-id ID]\n",
+                "       simplestchat-ops release manifest --path PATH\n",
                 "       simplestchat-ops release archive --manifest PATH --path PATH\n",
                 "       simplestchat-ops release receipt --envelope PATH --receipt PATH\n",
                 "       simplestchat-ops release preflight [--helpers-json JSON]\n",
