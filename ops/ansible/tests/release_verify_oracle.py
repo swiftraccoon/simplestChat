@@ -339,6 +339,18 @@ def central_records(raw: bytearray) -> list[int]:
     return offsets
 
 
+def zip_info(name: str, archive: zipfile.ZipFile) -> zipfile.ZipInfo:
+    """Retain mature string-writer defaults with a fixed inert fixture date."""
+    info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
+    info.compress_type = archive.compression
+    info.compress_level = archive.compresslevel
+    if info.filename.endswith("/"):
+        info.external_attr = (0o40775 << 16) | 0x10
+    else:
+        info.external_attr = 0o600 << 16
+    return info
+
+
 def zip_original(files: dict[str, bytes], scenario: str) -> bytearray:
     """Use mature ZIP creation, then change only the named closed header fixture."""
     output = io.BytesIO()
@@ -363,7 +375,7 @@ def zip_original(files: dict[str, bytes], scenario: str) -> bytearray:
                 with archive.open(name, "w", force_zip64=True) as member:
                     _ = member.write(data)
             else:
-                archive.writestr(name, data)
+                archive.writestr(zip_info(name, archive), data)
         zip_extras(archive, scenario)
     return bytearray(output.getvalue())
 
@@ -381,7 +393,7 @@ def zip_extras(archive: zipfile.ZipFile, scenario: str) -> None:
         "zip-backslash": (("foo\\bar", b"x"),),
     }
     for name, data in extras.get(scenario, ()):
-        archive.writestr(name, data)
+        archive.writestr(zip_info(name, archive), data)
     if scenario == "zip-comment":
         archive.comment = b"ordinary bounded archive comment"
     if scenario == "zip-large-central-record":
