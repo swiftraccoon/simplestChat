@@ -6,7 +6,7 @@
 use crate::release::build::{
     Socket,
     control::{Failure, Owner},
-    files::{self, CloseObservation, Dir, Held, Output},
+    files::{self, CloseObservation, Dir, Held, OriginalDescriptor, Output},
     source::{Environment, Tool, Tree},
 };
 use crate::test_support::Fixture;
@@ -97,21 +97,26 @@ fn output(fixture: &Fixture, name: &str) -> Output {
     Output::create(Dir::open(&fixture.0).unwrap(), OsStr::new(name)).unwrap()
 }
 
-fn every_original_closed_once(expected: &[(i32, u64, u64)], observations: &[CloseObservation]) {
-    // Numeric descriptors are observed only while their original File is live.
-    // The close owner supplies completed observations; nothing borrows or probes
-    // a descriptor after close, when the number could already have been reused.
+fn every_original_closed_once(expected: &[OriginalDescriptor], observations: &[CloseObservation]) {
+    // Test-only admission generations distinguish the exact original resource
+    // from a later open of the same inode at the same numeric descriptor. Raw
+    // descriptors and identities are captured only while the original is live.
     let expected: BTreeSet<_> = expected.iter().copied().collect();
     assert!(!expected.is_empty());
-    for (descriptor, device, inode) in expected {
+    for original in expected {
         let attempts: Vec<_> = observations
             .iter()
             .filter(|observation| {
-                observation.descriptor == descriptor
-                    && observation.identity == Some((device, inode))
+                observation.generation == Some(original.generation)
+                    && observation.descriptor == original.descriptor
+                    && observation.identity == Some((original.device, original.inode))
             })
             .collect();
-        assert_eq!(attempts.len(), 1, "original descriptor close count");
+        assert_eq!(
+            attempts.len(),
+            1,
+            "original descriptor close count: {original:?}"
+        );
         assert!(
             attempts[0].succeeded,
             "the real close must precede any injected error"
@@ -668,4 +673,165 @@ async fn synthetic_post_admission_io_refusal_retires_journaled_directory_and_emp
             "file refusal must explicitly close its admitted writer before any member bytes copy"
         );
     }
+}
+
+fn descriptor_generation_worker() {
+    let fixture = Fixture::new();
+    let directory = Dir::open(&fixture.0).unwrap();
+    let mut first = None;
+    let mut second = None;
+    let mut dropped = None;
+    let mut replacement = None;
+    let observed: crate::release::build::control::Result<_> = (|| {
+        first = Some(directory.create(OsStr::new("same-inode"), 0o600)?);
+        let original = first.as_ref().unwrap().fixture_descriptor();
+        files::fixture_observe_closes(None);
+        let first_closed = first.take().unwrap().finish();
+        second = Some(directory.read(OsStr::new("same-inode"))?);
+        let reopened = second.as_ref().unwrap().fixture_descriptor();
+        let second_closed = second.take().unwrap().finish();
+        let explicit = files::fixture_take_closes();
+
+        dropped = Some(directory.read(OsStr::new("same-inode"))?);
+        let fallback = dropped.as_ref().unwrap().fixture_descriptor();
+        files::fixture_observe_closes(None);
+        // Deliberately exercise the negative: automatic File retirement is not
+        // the explicit checked close required by every_original_closed_once.
+        drop(dropped.take());
+        replacement = Some(directory.read(OsStr::new("same-inode"))?);
+        let later = replacement.as_ref().unwrap().fixture_descriptor();
+        let replacement_closed = replacement.take().unwrap().finish();
+        let fallback_observations = files::fixture_take_closes();
+        Ok((
+            original,
+            reopened,
+            first_closed,
+            second_closed,
+            explicit,
+            fallback,
+            later,
+            replacement_closed,
+            fallback_observations,
+        ))
+    })();
+    // Admission errors still settle every independently retained peer before
+    // inspecting any generation, close result or expected negative assertion.
+    let mut finalizers = Vec::new();
+    for file in [first, second, dropped, replacement].into_iter().flatten() {
+        finalizers.push(file.finish());
+    }
+    finalizers.push(directory.finish());
+    let _ = files::fixture_take_closes();
+    drop(fixture);
+    for result in finalizers {
+        result.unwrap();
+    }
+    let (
+        original,
+        reopened,
+        first_closed,
+        second_closed,
+        explicit,
+        fallback,
+        later,
+        replacement_closed,
+        fallback_observations,
+    ) = observed.unwrap();
+    first_closed.unwrap();
+    second_closed.unwrap();
+    replacement_closed.unwrap();
+    assert_eq!(
+        (original.descriptor, original.device, original.inode),
+        (reopened.descriptor, reopened.device, reopened.inode)
+    );
+    assert_ne!(original.generation, reopened.generation);
+    every_original_closed_once(&[original, reopened], &explicit);
+    assert_eq!(
+        (fallback.descriptor, fallback.device, fallback.inode),
+        (later.descriptor, later.device, later.inode)
+    );
+    assert_ne!(fallback.generation, later.generation);
+    every_original_closed_once(&[later], &fallback_observations);
+    assert!(
+        !fallback_observations
+            .iter()
+            .any(|observation| observation.generation == Some(fallback.generation))
+    );
+    let refused = std::panic::catch_unwind(|| {
+        every_original_closed_once(&[fallback], &fallback_observations)
+    });
+    assert!(
+        refused.is_err(),
+        "a later explicit close cannot credit the dropped original"
+    );
+}
+
+#[test]
+fn exact_close_observer_distinguishes_reused_descriptors_and_fallback_generations() {
+    const ROLE: &str = "SC_CLOSE_GENERATION_WORKER";
+    if std::env::var_os(ROLE).is_some() {
+        return descriptor_generation_worker();
+    }
+    // A single owned self-test child has no concurrent tests, runtime or signal
+    // scheduler allocating descriptors between close and reopen. Reuse is real,
+    // deterministic and checked without constructing a File from a raw number.
+    let program = std::env::current_exe().unwrap();
+    let test = format!(
+        "{}::exact_close_observer_distinguishes_reused_descriptors_and_fallback_generations",
+        module_path!().split_once("::").unwrap().1
+    );
+    let fixture = Fixture::new();
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    let completion = runtime.block_on(async {
+        let mut owner = Owner::new(
+            Instant::now(),
+            crate::release::build::control::Mode::Build,
+            60,
+        )
+        .unwrap();
+        let log = OpenOptions::new()
+            .create_new(true)
+            .read(true)
+            .write(true)
+            .mode(0o600)
+            .open(fixture.0.join("observer.log"))
+            .unwrap();
+        crate::release::build::process::run(
+            &mut owner,
+            crate::release::build::process::Invocation {
+                role: crate::release::build::process::Role::Git,
+                program,
+                arguments: vec![
+                    "--exact".into(),
+                    test.into(),
+                    "--nocapture".into(),
+                    "--test-threads=1".into(),
+                ],
+                cwd: fixture.0.clone(),
+                environment: [
+                    ("PATH".into(), "/usr/bin:/bin".into()),
+                    (ROLE.into(), "owned".into()),
+                ]
+                .into_iter()
+                .collect(),
+                body_end: Instant::now() + Duration::from_secs(10),
+                log,
+                archive: None,
+                capture: true,
+                allow_failure: false,
+            },
+        )
+        .await
+    });
+    drop(runtime);
+    drop(fixture);
+    let observed = completion.observation;
+    assert!(observed.group_retired && observed.reaped);
+    assert!(observed.stdout_closed && observed.stderr_closed && observed.log_closed);
+    assert!(observed.stdout_eof && observed.stderr_eof);
+    assert_eq!(observed.exit_status, Some(0));
+    assert!(completion.result.is_ok());
 }

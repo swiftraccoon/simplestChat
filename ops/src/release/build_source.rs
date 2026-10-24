@@ -570,7 +570,7 @@ impl Tree {
         self.directory.path()
     }
     #[cfg(test)]
-    pub fn fixture_descriptors(&self) -> Vec<(i32, u64, u64)> {
+    pub fn fixture_descriptors(&self) -> Vec<files::OriginalDescriptor> {
         self.directory.fixture_descriptors()
     }
     #[cfg(test)]
