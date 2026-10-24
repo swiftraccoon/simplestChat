@@ -345,9 +345,13 @@ impl Tree {
     pub fn extract(
         archive: &mut Held,
         parent: &Path,
+        revision: &str,
         owner: &mut Owner,
         end: Instant,
     ) -> Result<Self> {
+        if !hex(revision, 40) {
+            return Err(Failure::Input);
+        }
         let parent_dir = Dir::open(parent)?;
         let directory = match Dir::create_directory(&parent_dir, OsStr::new("context"), 0o755) {
             Ok(directory) => directory,
@@ -382,10 +386,44 @@ impl Tree {
             let mut contents = tar::Archive::new(&mut input);
             let mut names = BTreeSet::new();
             let mut budget = SourceBudget::default();
+            let mut global_comment = false;
             for member in contents.entries().map_err(|_| Failure::Archive)? {
                 owner.before(end)?;
                 archive.check(false)?;
                 let mut member = member.map_err(|_| Failure::Archive)?;
+                if member.header().entry_type().is_pax_global_extensions() {
+                    // Git emits one commit comment before all filesystem members.
+                    // Admit that bounded metadata only; it cannot alter paths,
+                    // sizes, modes or the exact creation/membership journal.
+                    if global_comment
+                        || member.raw_header_position() != 0
+                        || member.path_bytes().as_ref() != b"pax_global_header"
+                        || member.header().size().map_err(|_| Failure::Archive)? != 52
+                        || member.size() != 52
+                    {
+                        return Err(Failure::Archive);
+                    }
+                    let mut bytes = [0_u8; 52];
+                    member
+                        .read_exact(&mut bytes)
+                        .map_err(|_| Failure::Archive)?;
+                    owner.before(end)?;
+                    archive.check(false)?;
+                    let mut fields = tar::PaxExtensions::new(&bytes);
+                    let field = fields
+                        .next()
+                        .ok_or(Failure::Archive)?
+                        .map_err(|_| Failure::Archive)?;
+                    if field.key_bytes() != b"comment"
+                        || field.value_bytes() != revision.as_bytes()
+                        || fields.next().is_some()
+                        || bytes.last() != Some(&b'\n')
+                    {
+                        return Err(Failure::Archive);
+                    }
+                    global_comment = true;
+                    continue;
+                }
                 let raw = member.path().map_err(|_| Failure::Archive)?.into_owned();
                 if raw
                     .components()

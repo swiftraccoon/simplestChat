@@ -144,6 +144,10 @@ Existing xtask callers retain their adapter paths.
   refresh does not admit unrecorded members. See [custody tests][custody] and
   [whole transactions][transactions]. These are observed mutation fences, not an
   immutable filesystem or complete compiler-input-closure proof.
+  Source extraction also admits one leading 52-byte Git global PAX commit comment
+  bound to the selected revision. It creates no filesystem or journal entry for
+  that record and refuses repeated, late or overriding global metadata. The
+  existing headerless fixture profile remains accepted.
   Shared PID helpers additionally require the documented original-child/private-
   group and exclusive-wait preconditions. A numeric PID or successful record alone
   cannot establish them; callers retain the actual `Group` reservation.
@@ -253,51 +257,38 @@ The unchanged Python reference remains available. See [profile tests][json-tests
 
 ## Validation state and completion evidence
 
-On 2026-10-24, the candidate was validated against public base
-`70ec4ab495db30e0838bcb4cf17b7271e39f2907` with Rust 1.99.0. The source-bound
-local record retains exact file hashes and failed trials separately. Later
-changes to this review and the exact toolchain-action review affect documentation
-and scanner metadata only; they do not change the tested Rust/Python bodies.
+The initial builder implementation was checked against public base
+`70ec4ab495db30e0838bcb4cf17b7271e39f2907`: 229 native Ops library tests,
+39 CLI tests, 839 xtask tests, three doc tests and the 112-case whole-reference
+comparison passed. Those results predate the source-metadata correction below.
 
-- Native `aarch64-apple-darwin`, all features:
-  `cargo test --locked --offline -p xtask -p simplestchat-ops --all-features -- --test-threads=1`
-  passed 229 Ops library tests, 39 CLI tests, 839 xtask tests and three doc tests.
-  Two explicit Ops reference-oracle tests and one xtask reference test remained
-  ignored in this command. This gate took 486.614 seconds. Native process, budget,
-  custody, JSON, owner traits and strict license-output cases are included.
-- `cargo check --locked --offline -p xtask -p simplestchat-ops --all-targets --target x86_64-unknown-linux-gnu`
-  passed in 18.427 seconds. This is cross-compilation, not Linux execution.
-- `cargo run --locked --offline -q -p xtask -- check --rust` passed in
-  149.981 seconds, including formatting, workspace Clippy, generated contracts and
-  the private Rust documentation build. `check --helpers` passed in 55.839 seconds.
-- The full Python regression suite passed 1,649 tests with 17 explicit opt-in skips;
-  Ruff, formatting and basedpyright passed. Those Python files remained unchanged
-  through the final Rust notice/output and shared-buffer corrections. The unchanged
-  Python builder reference was also compared through the exact ignored
-  `release::build::tests::whole_reference_scenarios_match_unchanged_python` test:
-  all 112 finite cases passed. Real source/archive bytes and inert tool
-  observations do not establish physical Git/Docker build effects.
-- Default musl normal/build dependency trees were measured separately for the
-  public base and candidate: the same 57 package versions, no additions/removals.
-  The direct minimal Tokio request is `io-util`, `macros`, `process`,
-  `rt-multi-thread`, `signal`, `sync`, `time`, with default features disabled.
-  No new net/fs/full/TLS feature is requested in [the manifest][cargo].
+At `98d6dd8`, the hosted native controller compiled in forty seconds, then
+rejected Git's global PAX commit comment during source extraction. The separately
+tested image had passed startup and database checks; the native export did not
+reach image save. A read-only development workflow reproduced the source phase.
 
-The first final fast-security trial stopped at one unreviewed informational
-Zizmor finding for the added manual-workflow toolchain installer. Its immutable
-action source and exact new YAML location were reviewed in
-[the portability record](../security/reviews.md#github-actions-portability-findings);
-no broad scanner waiver was added. The corrected fast gate passed in 33.380 seconds, with all 11 focused
-security-policy/finding regressions passing. Its original failed trial is retained.
+The correction admits one bounded commit-comment record, bound to the selected
+revision, without creating a filesystem or journal entry. On Rust 1.99.0 native
+`aarch64-apple-darwin`, all 58 builder tests passed with two explicit ignored
+helpers. The exact ignored 112-case unchanged-Python comparison passed separately,
+and GNU Linux all-target Clippy passed in 14.835 seconds. GNU compilation does
+not establish Linux execution.
 
-Actual Ubuntu Docker build and exact-image export, cold compilation elapsed time,
-output custody under real Docker, default musl ELF/material checks and signed Ops
-runtime/install evidence remain **pending**. Local Docker was unavailable; no
-physical build is claimed. Measure the existing workflow budgets, preserve the
-separate signer and unchanged ten-file server contract, and record those results
-before closing the port. The source caller switches are candidates until that
-hosted evidence succeeds. Unsigned records and native compilation do not establish
-authenticated distribution or host installation.
+A real 31,805,440-byte archive produced by Git 2.56.0 also passed both whole
+build/export controller paths with CI's existing 300-second export setting and
+unchanged 120-second setup allowance. The two-loop native debug diagnostic took
+102.864 seconds. Tool and image observations were inert: this proves actual
+source extraction/custody/publication, not a physical Docker build. An older
+fixture replay used a 120-second export setting and exhausted its clipped
+46-second setup phase; that failed trial remains separate.
+
+Default musl normal/build package versions and scoped MIT notice delivery remain
+unchanged. Actual Ubuntu Docker build/export after this source fix, musl material
+and signed Ops runtime/install checks, and normal deployment remain separate
+gates. A follow-up for the builder's final runtime and umask teardown clock
+boundary is tracked separately. Preserve the independent signer and unchanged
+ten-file server contract; local unsigned records are not authenticated release
+authority. Exact source hashes, commands and failed trials remain private.
 
 [a]: https://github.com/rust-lang/api-guidelines/tree/19f0f62ecd0f56a0b7adaa332c352bc2476506ea/src
 [build]: ../ops/src/release/build.rs
