@@ -31,6 +31,8 @@ SOFTWARE."#
 pub(in crate::release::attestation) fn write(mut writer: impl Write) -> io::Result<()> {
     writer.write_all(HEADER.as_bytes())?;
     writer.write_all(LICENSE.as_bytes())?;
+    writer.write_all(b"\n\n")?;
+    super::super::control::signals::notice(&mut writer)?;
     writer.write_all(
         concat!(
             "\n\nRuntime notices: release build --licenses. ",

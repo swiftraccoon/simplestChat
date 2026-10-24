@@ -56,3 +56,5 @@ CLAUDE.local.md
 .ruff_cache/
 __pycache__/
 *.pyc
+
+!/docs/release-signal-lifecycle-review.md

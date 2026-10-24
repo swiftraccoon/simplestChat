@@ -227,10 +227,12 @@ fn lifecycle_worker() {
     fs::remove_file(fixture.bin.join("curl")).unwrap();
     let options = options(&fixture, true);
     let mut emitted = None;
-    let code = lifecycle(Instant::now(), Duration::from_secs(60), || {
+    let started = Instant::now();
+    let code = lifecycle(started, Duration::from_secs(60), || {
+        let mut owner =
+            Owner::new(started, Duration::from_secs(60), Duration::from_secs(10)).unwrap();
         let runtime = runtime();
         let result = runtime.block_on(async {
-            let mut owner = owner();
             let result = execute(&options, &mut owner).await;
             let passed = result.is_ok();
             emitted = result.ok();
@@ -238,7 +240,7 @@ fn lifecycle_worker() {
         });
         drop(runtime);
         FRAME_CLOSED.set(true);
-        result
+        (result, Some(owner))
     });
     drop(fixture);
     let restored = nix::sys::stat::umask(original);
@@ -468,4 +470,54 @@ fn non_utf8_active_directory_returns_an_error_after_all_peers_close_without_pani
             .count(),
         6
     );
+}
+
+#[test]
+fn late_real_signals_after_runtime_restore_refuse_fresh_success() {
+    use super::super::control::signal_tests::{self, Entry};
+    let Some(expected) = signal_tests::worker(Entry::Fresh) else {
+        return signal_tests::supervise(Entry::Fresh);
+    };
+    let previous = nix::sys::stat::umask(nix::sys::stat::Mode::from_bits_truncate(0o027));
+    let fixture = fixture::Fixture::new();
+    fs::remove_file(fixture.bin.join("curl")).unwrap();
+    let options = options(&fixture, true);
+    let started = Instant::now();
+    let mut facts = None;
+    let code = lifecycle(started, options.whole, || {
+        let mut owner = Owner::new(started, options.whole, options.reserve).unwrap();
+        let runtime = runtime();
+        let result = runtime.block_on(async {
+            files::start_probe(None);
+            let result = execute(&options, &mut owner).await;
+            let passed = result.is_ok();
+            let bytes = result.unwrap_or_default();
+            let emitted = verify::stdout(&mut owner, &bytes);
+            if let Err(cause) = emitted {
+                owner.record(cause);
+            }
+            (
+                passed && owner.check(Window::Final).is_ok(),
+                bytes,
+                files::take_probe(),
+            )
+        });
+        drop(runtime);
+        let passed = result.0;
+        facts = Some(result);
+        (passed, Some(owner))
+    });
+    drop(fixture);
+    let restored = nix::sys::stat::umask(previous);
+    signal_tests::assert_finished(
+        code,
+        expected,
+        nix::sys::stat::Mode::from_bits_truncate(0o027),
+    );
+    let (passed, emitted, probes) = facts.unwrap();
+    assert!(passed);
+    let result: Value = serde_json::from_slice(&emitted).unwrap();
+    assert_eq!(result.as_object().unwrap().len(), 4);
+    assert!(probes.0 > 0 && probes.1 == 0);
+    assert_eq!(restored, nix::sys::stat::Mode::from_bits_truncate(0o027));
 }

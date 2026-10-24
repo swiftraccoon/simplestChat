@@ -65,9 +65,11 @@ Python helpers retain their Python 3.12 support.
 | `src/release/preflight*.rs` | Fixed read-only host admission and exact installed-helper byte checks |
 | `src/release/assets*.rs` | Ordered browser-asset capture, retention, publication and workload lock |
 
-The crate uses existing dependency versions and does not depend on the server,
-load generator, mediasoup or native TLS. The manual argument parser follows
-`xtask` for this small command surface and avoids adding a CLI framework dependency.
+The crate reuses workspace dependency versions and adds one exact safe signal
+adapter, documented in the [signal lifecycle review](../docs/release-signal-lifecycle-review.md).
+Its default graph excludes the server, mediasoup and native TLS; capacity logic
+is shared with the load-test crate. The manual argument parser follows `xtask`
+for this small command surface and avoids adding a CLI framework dependency.
 
 No binary is installed by Ansible or added to the production image. Host
 execution requires a separate attested operations artifact, an inspected static
@@ -115,9 +117,10 @@ notices. This informational route needs no runtime, environment, checkout or
 writable directory; output/flush failure returns 1 with a fixed diagnostic.
 Mixed or duplicate selectors remain usage errors. This limited notice set covers
 the builder's explicit Tokio/runtime use; it is not a complete Ops or workspace
-license inventory. The default musl normal/build dependency graph remains the
-same 57 package versions as the public baseline; no package was added by this
-feature.
+license inventory. The original builder change kept its 57-package musl
+normal/build baseline without adding a package. Later verification and signal
+adapters have their own dependency reviews; the current default graph contains
+60 packages.
 
 The CLI accepts `--output PATH`, optional `--timeout-seconds N` and optional
 `--image-id ID`, in split or equals form. `N` uses ASCII decimal digits and may
