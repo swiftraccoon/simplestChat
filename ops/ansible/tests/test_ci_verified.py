@@ -857,16 +857,32 @@ class VerifiedWorkflowTests(unittest.TestCase):
             self.assertEqual(len(selected), 1)
             self.assertEqual(
                 string(selected[0], "run"),
-                "cargo run --locked -q -p xtask -- ci automation " + flag,
+                "cargo run --locked -q -p xtask -- ci automation "
+                + flag
+                + (' "$REFERENCE_GROUP"' if name == "automation-references" else ""),
             )
         reference = obj(jobs, "automation-references")
         self.assertNotIn("if", reference)
         self.assertNotIn("continue-on-error", reference)
+        strategy = obj(reference, "strategy")
+        self.assertEqual(string(strategy, "fail-fast"), "false")
+        self.assertEqual(obj(strategy, "matrix"), {"group": ["foundation", "fetch", "host"]})
         steps = objects(reference, "steps")
-        for step in steps:
+        receipt = steps[-1]
+        self.assertEqual(string(receipt, "if"), "${{ env.ACT }}")
+        self.assertNotIn("continue-on-error", receipt)
+        self.assertEqual(
+            string(receipt, "run"),
+            "cargo run --locked -q -p xtask -- ci-evidence record "
+            + '--id "reference-$LOCAL_REFERENCE_GROUP"',
+        )
+        self.assertEqual(string(receipt, "env", "LOCAL_REFERENCE_GROUP"), "${{ matrix.group }}")
+        for step in steps[:-1]:
             self.assertNotIn("if", step)
             self.assertNotIn("continue-on-error", step)
             self.assertNotIn("actions/cache/", string(step.get("uses", "")))
+        selected = next(step for step in steps if "--references" in string(step.get("run", "")))
+        self.assertEqual(string(selected, "env", "REFERENCE_GROUP"), "${{ matrix.group }}")
         python = next(
             step
             for step in steps

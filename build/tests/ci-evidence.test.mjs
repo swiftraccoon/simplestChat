@@ -35,6 +35,9 @@ const gates = [
   "codeql",
 ];
 const checks = [
+  "reference-foundation",
+  "reference-fetch",
+  "reference-host",
   "browser-accounts",
   "browser-media",
   "browser-stress",
@@ -123,6 +126,23 @@ test("local evidence CLI records all real matrices and completes exactly once", 
   assert.equal(report.base, "b".repeat(40));
   assert.equal(statSync(filename).mode & 0o777, 0o600);
   assert.equal(f.run(["complete"]).status, 1);
+});
+
+test("local evidence rejects each missing whole-reference group despite successful jobs", (t) => {
+  for (const missing of [
+    "reference-foundation",
+    "reference-fetch",
+    "reference-host",
+  ]) {
+    const f = fixture(t);
+    for (const check of checks.filter((check) => check !== missing)) {
+      const result = f.run(["record", "--id", check]);
+      assert.equal(result.status, 0, result.stderr);
+    }
+    const result = f.run(["complete"]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /local_ci_incomplete_matrix_receipts/);
+  }
 });
 
 test("local evidence workflow calls the compiled producer with no Python YAML bootstrap", () => {
