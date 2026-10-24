@@ -203,16 +203,48 @@ async fn material_symlinks_and_special_aliases_are_refused_without_spawn_or_leak
 }
 #[tokio::test]
 async fn measured_source_and_staged_changes_are_rejected_before_receipt() {
+    use crate::{
+        ci::{command::Command, process::Executor},
+        tooling::Result,
+    };
+
+    struct Yielding(usize);
+    impl Executor for Yielding {
+        async fn run(&mut self, _: Command) -> Result<Vec<u8>> {
+            panic!("material inspection must not execute a command");
+        }
+        async fn ready(&mut self) -> Result<()> {
+            self.0 += 1;
+            tokio::task::yield_now().await;
+            Ok(())
+        }
+    }
+
+    // Keep this whole transaction unboxed on the ordinary Tokio/libtest stack.
+    // A fixed inline reader buffer used to inflate each nested future here.
+    const MAX_FUTURE_BYTES: usize = 32 * 1024;
     let fixture = Fixture::new();
+    let original = vec![b'/'; 2 * 64 * 1024 + 37];
+    fs::write(fixture.source.join("ops/src/main.rs"), &original).unwrap();
     let budget = Budget::default();
-    let request = fixture.request(&budget).await;
+    let measured = fixture.request(&budget);
+    assert!(std::mem::size_of_val(&measured) < MAX_FUTURE_BYTES);
+    let request = measured.await;
     let run = OwnedRun::fixture(&fixture.output, &budget).unwrap();
     let clock = NativeClock;
     let deadline = Deadline::new(&clock);
-    let mut executor = Noop;
-    let materials = materials::Materials::stage(&request, &run, &mut executor, &deadline)
-        .await
-        .unwrap();
+    let mut executor = Yielding(0);
+    let staging = materials::Materials::stage(&request, &run, &mut executor, &deadline);
+    assert!(std::mem::size_of_val(&staging) < MAX_FUTURE_BYTES);
+    let materials = staging.await.unwrap();
+    assert_eq!(
+        fs::read(run.path.join("source/ops/src/main.rs")).unwrap(),
+        original
+    );
+    let verification = materials.verify(&run, &mut executor, &deadline);
+    assert!(std::mem::size_of_val(&verification) < MAX_FUTURE_BYTES);
+    verification.await.unwrap();
+    assert!(executor.0 > 6);
     fs::write(
         run.path.join("source/ops/src/main.rs"),
         b"// different bytes\n",
@@ -227,6 +259,7 @@ async fn measured_source_and_staged_changes_are_rejected_before_receipt() {
     materials.finish().unwrap();
     run.finish().unwrap();
     assert_eq!(budget.count(), 0);
+    assert_eq!(budget.close_counts().1, 0);
 }
 #[tokio::test]
 async fn executable_admission_uses_measured_stamps_not_new_baseline() {

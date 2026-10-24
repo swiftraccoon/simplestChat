@@ -134,7 +134,7 @@ async fn file<E: Executor, C: Clock>(
     }
     let mut digest = Sha256::new();
     let mut count = 0u64;
-    let mut buffer = [0u8; 64 * 1024];
+    let mut buffer = vec![0u8; 64 * 1024];
     let mut reader = source.file();
     let mut writer = target.map(Held::file);
     let normalized = target
