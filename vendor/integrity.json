@@ -191,7 +191,7 @@
         {
           "path": "python-tools-requirements.txt",
           "upstream_sha256": null,
-          "vendored_sha256": "f33d78b0eaac49bb958d9332e189d2d1c2ae21afbc97ad1b136f3c83e9ee7aec"
+          "vendored_sha256": "ddd2f1011c99d860db494993def796ac4b2151ca5bf6d7b1e42ab54ce32de26b"
         },
         {
           "path": "scripts/get-dep.sh",

@@ -263,3 +263,23 @@ async fn capture_close_failure_refuses_zero_and_does_not_replace_known_command_f
         }
     }
 }
+
+#[tokio::test]
+async fn pipe_admission_rejects_nonpipes_and_write_only_ends_without_retaining_their_fds() {
+    use std::os::fd::AsRawFd;
+
+    let fixture = Fixture::new();
+    let file = File::create(fixture.0.join("not-a-pipe")).unwrap();
+    let descriptor = file.as_raw_fd();
+    assert!(Reader::new(file, 64).is_err());
+    assert!(!Path::new(&format!("/dev/fd/{descriptor}")).exists());
+
+    let (read, write) = nix::unistd::pipe().unwrap();
+    let descriptor = write.as_raw_fd();
+    assert!(Reader::new(File::from(write), 64).is_err());
+    // Rejection consumes the admitted end through Tokio's Drop path. This
+    // proves observed closure, not a checked close result from that library.
+    assert!(!Path::new(&format!("/dev/fd/{descriptor}")).exists());
+    assert!(rustix::fs::fcntl_getfl(&read).is_ok());
+    nix::unistd::close(read).unwrap();
+}

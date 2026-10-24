@@ -2,15 +2,13 @@
 
 use super::{Control, ControlWriteTimedOut};
 use anyhow::{Result, ensure};
-use std::io::{Read, Write};
-use std::net::Shutdown;
 use std::os::unix::net::UnixStream;
 use std::time::Duration;
-use tokio::io::unix::AsyncFd;
+use tokio::net::UnixStream as TokioUnixStream;
 use tokio::time::Instant;
 
 pub(super) struct NativeControl {
-    socket: AsyncFd<UnixStream>,
+    socket: TokioUnixStream,
     write_failed: bool,
 }
 impl NativeControl {
@@ -19,16 +17,14 @@ impl NativeControl {
             let _ = nix::unistd::close(stream);
             return Err(error.into());
         }
-        match AsyncFd::try_new(stream) {
+        // The safe conversion owns the same socket FD. On error Tokio drops
+        // that owner; the negative result is not a checked-close proof.
+        match TokioUnixStream::from_std(stream) {
             Ok(socket) => Ok(Self {
                 socket,
                 write_failed: false,
             }),
-            Err(error) => {
-                let (stream, error) = error.into_parts();
-                let _ = nix::unistd::close(stream);
-                Err(error.into())
-            }
+            Err(error) => Err(error.into()),
         }
     }
     async fn bounded(&mut self, mut bytes: &[u8], limit: Duration) -> Result<()> {
@@ -39,21 +35,21 @@ impl NativeControl {
             if Instant::now() >= deadline {
                 return Err(ControlWriteTimedOut.into());
             }
-            // Only readiness waits are timed out. try_io performs a synchronous
+            // Only readiness waits are timed out. try_write is a synchronous
             // NONBLOCK syscall, so no write future or worker can be abandoned.
-            let mut ready = tokio::time::timeout_at(deadline, self.socket.writable_mut())
+            tokio::time::timeout_at(deadline, self.socket.writable())
                 .await
                 .map_err(|_| ControlWriteTimedOut)??;
             if Instant::now() >= deadline {
                 return Err(ControlWriteTimedOut.into());
             }
-            match ready.try_io(|stream| stream.get_mut().write(bytes)) {
-                Ok(result) => {
-                    let count = result?;
+            match self.socket.try_write(bytes) {
+                Ok(count) => {
                     ensure!(count != 0, "Control peer closed");
                     bytes = &bytes[count..];
                 }
-                Err(_) => continue,
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => continue,
+                Err(error) => return Err(error.into()),
             }
         }
         if Instant::now() >= deadline {
@@ -67,24 +63,25 @@ impl NativeControl {
 impl Control for NativeControl {
     async fn read(&mut self, buffer: &mut [u8]) -> Result<usize> {
         loop {
-            let mut ready = self.socket.readable_mut().await?;
-            match ready.try_io(|stream| stream.get_mut().read(buffer)) {
-                Ok(result) => return Ok(result?),
-                Err(_) => continue,
+            self.socket.readable().await?;
+            match self.socket.try_read(buffer) {
+                Ok(count) => return Ok(count),
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => continue,
+                Err(error) => return Err(error.into()),
             }
         }
     }
     async fn write(&mut self, mut bytes: &[u8]) -> Result<()> {
         ensure!(!self.write_failed, "Owned control write already failed");
         while !bytes.is_empty() {
-            let mut ready = self.socket.writable_mut().await?;
-            match ready.try_io(|stream| stream.get_mut().write(bytes)) {
-                Ok(result) => {
-                    let count = result?;
+            self.socket.writable().await?;
+            match self.socket.try_write(bytes) {
+                Ok(count) => {
                     ensure!(count != 0, "Control peer closed");
                     bytes = &bytes[count..];
                 }
-                Err(_) => continue,
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => continue,
+                Err(error) => return Err(error.into()),
             }
         }
         Ok(())
@@ -96,12 +93,14 @@ impl Control for NativeControl {
             self.write_failed = true;
             // Preserve the first failure while attempting the half-close. No
             // operation remains in flight; final descriptor close is separate.
-            let _ = self.socket.get_ref().shutdown(Shutdown::Write);
+            let _ = rustix::net::shutdown(&self.socket, rustix::net::Shutdown::Write);
         }
         result
     }
     fn finish(self: Box<Self>) -> Result<()> {
-        nix::unistd::close(self.socket.into_inner())?;
+        // A failed deregistration consumes/drops Tokio's owner and stays
+        // negative. Only a returned std owner reaches the explicit close.
+        nix::unistd::close(self.socket.into_std()?)?;
         Ok(())
     }
 }
@@ -109,6 +108,7 @@ impl Control for NativeControl {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::{Read, Write};
 
     #[tokio::test]
     async fn a_full_peer_buffer_times_out_half_closes_and_never_retries_a_failed_frame() {

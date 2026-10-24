@@ -3,12 +3,12 @@
 use super::{Stop, service::Service};
 use crate::owned_process::{self, Signals};
 use anyhow::Result;
-use std::{fs::File, io::Read, os::fd::OwnedFd};
+use std::{fs::File, os::fd::OwnedFd};
 use std::{
     process::{Command, Stdio},
     time::Duration,
 };
-use tokio::io::unix::AsyncFd;
+use tokio::net::unix::pipe::Receiver;
 
 const GRACE: Duration = Duration::from_secs(2);
 
@@ -192,7 +192,7 @@ async fn run_owned(
 /// Inline readiness keeps no spawned task alive after an error return. Each
 /// nonblocking read is cancellation safe and its bounded buffer survives polls.
 struct Reader {
-    file: AsyncFd<File>,
+    file: Receiver,
     bytes: Vec<u8>,
     maximum: usize,
     complete: bool,
@@ -215,11 +215,11 @@ impl Reader {
                 return Err(error);
             }
         };
-        let file = match AsyncFd::try_new(file) {
+        // Tokio owns the same pipe FD after this safe conversion. Its error
+        // path drops that FD; the failure stays negative without a close claim.
+        let file = match Receiver::from_file(file) {
             Ok(file) => file,
-            Err(error) => {
-                let (file, _) = error.into_parts();
-                let _ = nix::unistd::close(file);
+            Err(_) => {
                 return Err(stopped(1, "Owned test output admission failed."));
             }
         };
@@ -237,23 +237,21 @@ impl Reader {
         let mut buffer = [0; 8192];
         let remaining = (self.maximum + 1 - self.bytes.len()).min(buffer.len());
         loop {
-            let mut ready = self.file.readable().await?;
-            let result =
-                ready.try_io(|file| Read::read(&mut file.get_ref(), &mut buffer[..remaining]));
-            match result {
-                Ok(Ok(0)) => {
+            self.file.readable().await?;
+            match self.file.try_read(&mut buffer[..remaining]) {
+                Ok(0) => {
                     self.complete = true;
                     return Ok(true);
                 }
-                Ok(Ok(count)) => {
+                Ok(count) => {
                     self.bytes.extend_from_slice(&buffer[..count]);
                     if self.bytes.len() > self.maximum {
                         return Err(stopped(1, "Owned test output exceeded its bound."));
                     }
                     return Ok(false);
                 }
-                Ok(Err(_)) => return Err(stopped(1, "Owned test output failed.")),
-                Err(_) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {}
+                Err(_) => return Err(stopped(1, "Owned test output failed.")),
             }
         }
     }
@@ -265,7 +263,9 @@ impl Reader {
         self.close_with(|file| nix::unistd::close(file).map_err(anyhow::Error::from))
     }
     fn close_with(self, close: impl FnOnce(File) -> Result<()>) -> Result<()> {
-        close(self.file.into_inner())
+        // On failed deregistration Tokio consumes/drops its FD. Propagate that
+        // uncertainty; only a returned owner reaches the explicit close below.
+        close(File::from(self.file.into_nonblocking_fd()?))
     }
 }
 

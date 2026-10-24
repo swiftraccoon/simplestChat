@@ -2,7 +2,7 @@
 # that script installs so a later PyPI release cannot silently enter the build.
 invoke==3.0.3
 pip==26.2.1
-setuptools==84.0.0
+setuptools==84.1.0
 # Keep these exact versions aligned with the maintained worker tasks.py pins.
 meson==1.12.1
 ninja==1.13.2

@@ -175,7 +175,7 @@ async fn controlled_mode_refuses_byte_input_and_cancelled_dispatch_before_spawni
     let error = host.spawn_controlled(command(&directory)).err().unwrap();
     assert_eq!(super::process::failure_status(&error), Some(143));
     assert!(!directory.join("owned.pid").exists());
-    // Spawn failure still settles the parent's admitted AsyncFd endpoint.
+    // Spawn failure still settles the parent's admitted Unix socket endpoint.
     let host = NativeHost::default();
     let mut missing = command(&directory);
     missing.executable = directory.join("missing");

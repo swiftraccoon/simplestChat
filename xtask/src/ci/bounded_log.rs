@@ -8,7 +8,7 @@ use crate::tooling::{Failure, Result};
 use sha2::{Digest, Sha256};
 use std::{
     fs::{File, Metadata},
-    io::{Read, Write},
+    io::Write,
     os::unix::fs::MetadataExt,
     sync::{
         Arc,
@@ -16,7 +16,7 @@ use std::{
     },
     time::Duration,
 };
-use tokio::{io::unix::AsyncFd, sync::oneshot, task::JoinHandle};
+use tokio::{net::unix::pipe::Receiver, sync::oneshot, task::JoinHandle};
 
 pub(super) struct Finished {
     pub sha256: String,
@@ -92,11 +92,11 @@ impl Log {
             let _ = close(output);
             return Err(error);
         }
-        let reader = match AsyncFd::try_new(read) {
+        // This safe pipe conversion retains the same owned descriptor. On a
+        // conversion error Tokio drops it; that is not a checked-close proof.
+        let reader = match Receiver::from_file(read) {
             Ok(reader) => reader,
-            Err(error) => {
-                let (read, _) = error.into_parts();
-                let _ = close(read);
+            Err(_) => {
                 let _ = close(write);
                 let _ = close(output);
                 return Err(failure());
@@ -174,7 +174,7 @@ impl Drop for Log {
     }
 }
 async fn read_log(
-    reader: AsyncFd<File>,
+    reader: Receiver,
     mut output: File,
     maximum: u64,
     mut stop: oneshot::Receiver<()>,
@@ -185,17 +185,15 @@ async fn read_log(
     let result: Result<()> = async {
         let mut buffer = [0; 65536];
         loop {
-            let mut ready = tokio::select! {
+            tokio::select! {
                 biased;
                 _ = &mut stop => return Ok(()),
                 ready = reader.readable() => ready.map_err(|_| failure())?,
             };
-            let size = match ready.try_io(|fd| {
-                let mut file = fd.get_ref();
-                file.read(&mut buffer)
-            }) {
-                Ok(size) => size.map_err(|_| failure())?,
-                Err(_) => continue,
+            let size = match reader.try_read(&mut buffer) {
+                Ok(size) => size,
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => continue,
+                Err(_) => return Err(failure()),
             };
             if size == 0 {
                 complete = true;
@@ -218,7 +216,12 @@ async fn read_log(
         .and_then(|()| output.sync_all())
         .map_err(|_| failure());
     let metadata = output.metadata().map_err(|_| failure());
-    let pipe_closed = close(reader.into_inner());
+    // A deregistration failure consumes the receiver and uses Tokio's Drop
+    // path. Keep that result negative while still closing the output peer.
+    let pipe_closed = reader
+        .into_nonblocking_fd()
+        .map_err(|_| failure())
+        .and_then(|file| nix::unistd::close(file).map_err(|_| failure()));
     let log_closed = close(output);
     result?;
     flushed?;
