@@ -4,8 +4,9 @@ use super::*;
 use serde_json::{Value, json};
 use std::path::Path;
 
-const NAMES: [&str; 10] = [
+const NAMES: [&str; 11] = [
     "automation",
+    "automation-references",
     "rust-lint",
     "rust-test",
     "native-dtls",
@@ -121,7 +122,7 @@ fn canonical_names_match_the_actual_workflow_dependency_graph() {
         .keys()
         .map(String::as_str)
         // Main-push Ops production/signing has its own chain, checked by the
-        // workflow policy tests; these ten correctness/security gates stay shared.
+        // workflow policy tests; these eleven correctness/security gates stay shared.
         .filter(|name| {
             ![
                 "required",

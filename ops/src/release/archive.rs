@@ -146,6 +146,7 @@ pub struct Identity {
 pub struct VerifiedArchive {
     identity: Identity,
     config: Vec<u8>,
+    runtime_manifest: Option<String>,
 }
 impl std::fmt::Debug for VerifiedArchive {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -156,6 +157,12 @@ impl std::fmt::Debug for VerifiedArchive {
     }
 }
 impl VerifiedArchive {
+    /// Private daemon binding: classic engines select the verified config ID;
+    /// containerd may select the verified image-manifest ID of the same graph.
+    pub(crate) fn accepts_runtime_id(&self, identifier: &str) -> bool {
+        identifier == format!("sha256:{}", self.identity.config_sha256)
+            || self.runtime_manifest.as_deref() == Some(identifier)
+    }
     pub fn identity(&self) -> &Identity {
         &self.identity
     }
@@ -264,7 +271,7 @@ fn verify_after(
     after("index");
     snapshot.verify()?;
     let index = indexed?;
-    let config = docker::verify(snapshot.file_mut(), &index, manifest)?;
+    let (config, runtime_manifest) = docker::verify(snapshot.file_mut(), &index, manifest)?;
     after("validation");
     snapshot.verify()?;
     snapshot.finish()?;
@@ -276,7 +283,11 @@ fn verify_after(
         image_tag: manifest.fields().image_tag.clone(),
         platform: manifest.fields().platform.clone(),
     };
-    Ok(VerifiedArchive { identity, config })
+    Ok(VerifiedArchive {
+        identity,
+        config,
+        runtime_manifest,
+    })
 }
 
 /// Verify the existing signed-server archive profile through a caller-retained
@@ -417,7 +428,7 @@ pub fn verify_retained_archive(
         Limits::default(),
         &mut || true,
     )?;
-    let config = docker::verify(&mut reader, &index, manifest)?;
+    let (config, runtime_manifest) = docker::verify(&mut reader, &index, manifest)?;
     reader.check().map_err(|_| ArchiveError::Changed)?;
     checkpoint(&mut check)?;
     let identity = Identity {
@@ -428,7 +439,11 @@ pub fn verify_retained_archive(
         image_tag: manifest.fields().image_tag.clone(),
         platform: manifest.fields().platform.clone(),
     };
-    Ok(VerifiedArchive { identity, config })
+    Ok(VerifiedArchive {
+        identity,
+        config,
+        runtime_manifest,
+    })
 }
 
 #[cfg(test)]

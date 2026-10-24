@@ -10,7 +10,7 @@ pub(super) fn verify(
     file: &mut (impl Read + Seek),
     index: &Index,
     manifest: &Manifest,
-) -> Result<Vec<u8>> {
+) -> Result<(Vec<u8>, Option<String>)> {
     let images = index.read_json(file, "manifest.json")?;
     let images = images
         .array()
@@ -39,7 +39,7 @@ pub(super) fn verify(
     let config_name = image.get("Config").and_then(Json::string).ok_or(E::Path)?;
     let bytes = index.read_bytes(file, config_name)?;
     let config = json::decode(&bytes)?;
-    oci::verify(file, index, image, &config, manifest)?;
+    let runtime_manifest = oci::verify(file, index, image, &config, manifest)?;
     if index.has("repositories") {
         let repositories = index.read_json(file, "repositories")?;
         let (repository, tag) = tag.rsplit_once(':').unwrap();
@@ -54,7 +54,7 @@ pub(super) fn verify(
         }
     }
     validate_config(&config, manifest)?;
-    Ok(bytes)
+    Ok((bytes, runtime_manifest))
 }
 
 fn validate_config(config: &Json, manifest: &Manifest) -> Result<()> {

@@ -36,6 +36,8 @@ pub(super) struct Owner {
     end: Instant,
     body: Instant,
     receiver_protocol: Option<Instant>,
+    stage_validator: Option<Instant>,
+    stage_cleanup: Option<Instant>,
     signals: Signals,
     primary: Option<Cause>,
     #[cfg(test)]
@@ -59,6 +61,8 @@ impl Owner {
             end,
             body,
             receiver_protocol: None,
+            stage_validator: None,
+            stage_cleanup: None,
             signals: Signals::new().map_err(|_| Cause::Io)?,
             primary: None,
             #[cfg(test)]
@@ -109,11 +113,49 @@ impl Owner {
     /// still owes its original transport tail. This does not change B or N.
     pub fn begin_receiver_protocol(&mut self, end: Instant) -> Result<()> {
         self.check(Window::Body)?;
-        if self.receiver_protocol.is_some() || end > self.body {
+        if self.receiver_protocol.is_some() || self.stage_validator.is_some() || end > self.body {
             return failed(self, Cause::Input);
         }
         self.receiver_protocol = Some(end);
         self.check(Window::Body)
+    }
+    /// Stage's distinct checkpoint ceiling reserves exact validator retirement
+    /// inside B. It cannot replace or clear an admitted receiver protocol window.
+    pub fn begin_stage_validator(&mut self, end: Instant) -> Result<()> {
+        self.check(Window::Body)?;
+        if self.stage_validator.is_some() || self.receiver_protocol.is_some() || end > self.body {
+            return failed(self, Cause::Input);
+        }
+        if self.now() >= end {
+            return failed(self, Cause::Deadline);
+        }
+        self.stage_validator = Some(end);
+        self.check(Window::Body)
+    }
+    pub fn end_stage_validator(&mut self) {
+        if self.stage_validator.is_some() {
+            let _ = self.check(Window::Body);
+            self.stage_validator = None;
+        }
+    }
+    /// Only the fixed known-validator finalizer can use this stage ceiling.
+    /// Final-work filesystem loops stop at B while daemon retirement is owed.
+    pub fn begin_stage_cleanup(&mut self) -> Result<()> {
+        self.final_work()?;
+        if self.stage_cleanup.is_some() || self.stage_validator.is_some() {
+            return failed(self, Cause::Input);
+        }
+        if self.now() >= self.body {
+            return failed(self, Cause::Deadline);
+        }
+        self.stage_cleanup = Some(self.body);
+        Ok(())
+    }
+    pub fn end_stage_cleanup(&mut self) {
+        if self.stage_cleanup.is_some() {
+            let _ = self.final_work();
+            self.stage_cleanup = None;
+        }
     }
     /// Fence the last protocol observation before allowing its reserved tail.
     /// A previous failure remains primary; this grants only cleanup time.
@@ -145,7 +187,9 @@ impl Owner {
             self.record(cause);
             return Err(cause);
         }
-        if self.now() < self.start || self.now() >= self.end {
+        if self.now() < self.start
+            || self.now() >= self.stage_cleanup.unwrap_or(self.end).min(self.end)
+        {
             self.record(Cause::Deadline);
             return Err(Cause::Deadline);
         }
@@ -166,7 +210,11 @@ impl Owner {
             if self.now() < self.start
                 || self.now()
                     >= match window {
-                        Window::Body => self.receiver_protocol.unwrap_or(self.body).min(self.body),
+                        Window::Body => self
+                            .receiver_protocol
+                            .unwrap_or(self.body)
+                            .min(self.stage_validator.unwrap_or(self.body))
+                            .min(self.body),
                         Window::Final => self.end,
                     }
             {

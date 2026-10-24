@@ -138,6 +138,7 @@ class HostedOpsWorkflowTests(unittest.TestCase):
             obj(jobs, "required")["needs"],
             [
                 "automation",
+                "automation-references",
                 "rust-lint",
                 "rust-test",
                 "native-dtls",

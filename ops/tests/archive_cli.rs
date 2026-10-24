@@ -193,6 +193,7 @@ fn arguments_are_fixed_and_do_not_select_another_operation() {
                 "       simplestchat-ops release verify [OPTIONS]\n",
                 "       simplestchat-ops release fetch [OPTIONS]\n",
                 "       simplestchat-ops release receive [OPTIONS]\n",
+                "       simplestchat-ops release stage [OPTIONS]\n",
     "       simplestchat-ops release attestation prepare [OPTIONS]\n",
                 "       simplestchat-ops release attestation verify [OPTIONS]\n",
                 "       simplestchat-ops release manifest --path PATH\n",

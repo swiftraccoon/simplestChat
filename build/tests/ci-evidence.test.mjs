@@ -23,6 +23,7 @@ execFileSync("cargo", ["build", "--locked", "-q", "-p", "xtask"], {
 const binary = path.join(repository, "target/debug/xtask");
 const gates = [
   "automation",
+  "automation-references",
   "rust-lint",
   "rust-test",
   "native-dtls",

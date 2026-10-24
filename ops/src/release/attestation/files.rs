@@ -257,7 +257,7 @@ impl Dir {
         }
         Ok(dir)
     }
-    fn file(&self) -> &File {
+    pub(super) fn file(&self) -> &File {
         self.0.edges.last().unwrap().handle.file()
     }
     pub fn protected(&self, uid: u32, owner: &mut Owner) -> Result<()> {
@@ -468,7 +468,7 @@ impl Dir {
     }
     /// Final-outcome-only namespace checks remain available after a primary
     /// refusal. They retain the same end/signals and never authorize body work.
-    fn final_namespace(&self, owner: &mut Owner) -> Result<()> {
+    pub(super) fn final_namespace(&self, owner: &mut Owner) -> Result<()> {
         owner.final_work()?;
         for (at, edge) in self.0.edges.iter().enumerate() {
             owner.final_work()?;
