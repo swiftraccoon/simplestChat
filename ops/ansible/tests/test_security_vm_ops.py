@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib
+import io
 import json
 import os
 import py_compile
@@ -38,6 +39,7 @@ import bounded_process
 import security_vm as vm
 import security_vm_ops as keeper
 import security_vm_ops_guest as guest
+from security_vm_qmp import Observer
 from test_security_vm_ops_guest import fixture
 
 SOURCE_COUNT = 26
@@ -288,6 +290,85 @@ class CaseGuest:
             },
             "cloudInit": {"passed": True},
         }
+
+
+class EntryMaskTests(unittest.TestCase):
+    """Use actual Unix socket admission while the VM execution boundary stays inert."""
+
+    def test_main_keeps_qmp_socket_private_and_restores_caller_mask_on_success_and_error(
+        self,
+    ) -> None:
+        """The existing observer accepts the socket without relaxing its permission rule."""
+        options, data = fixture()
+        for fail in (False, True):
+            with (
+                self.subTest(fail=fail),
+                tempfile.TemporaryDirectory(prefix="ops-qmp-", dir="/tmp") as directory,
+            ):
+                self.entry_mask_case(Path(directory).resolve(), options, data, fail=fail)
+
+    def entry_mask_case(
+        self, root: Path, options: guest.Options, data: bytes, *, fail: bool
+    ) -> None:
+        """Enter the actual CLI under022, including handled I/O and parser-error exits."""
+        input_path = root / "input"
+        _ = input_path.write_bytes(data)
+        output = root / "output"
+        observed: list[int] = []
+
+        def run(
+            selected: guest.Options, destination: Path, descriptor: int, control: guest.Control
+        ) -> dict[str, object]:
+            self.assertEqual(selected.run_id, options.run_id)
+            self.assertEqual(destination, output)
+            self.assertEqual(os.fstat(descriptor).st_size, len(data))
+            control.check()
+            destination.mkdir(mode=0o700)
+            path = destination / "qmp.sock"
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as listener:
+                listener.bind(str(path))
+                listener.listen(1)
+                listener.settimeout(1)
+                observed.append(path.stat().st_mode & 0o777)
+                observer = Observer(path, control.end)
+                # Only admission is exercised. The peer closes before sending
+                # any QMP greeting; no emulator or guest success is inferred.
+                observer.start()
+                try:
+                    channel = listener.accept()[0]
+                    channel.close()
+                finally:
+                    observer.close()
+                facts = observer.diagnostics()
+                self.assertTrue(facts["connected"] is True)
+                self.assertTrue(facts["greetingReceived"] is False)
+                self.assertEqual(facts["failure"], "vm_qmp_eof_incomplete")
+            if fail:
+                message = "inert failure after private socket admission"
+                raise OSError(message)
+            return {"passed": True}
+
+        previous_mask = os.umask(0o022)
+        try:
+            with (
+                input_path.open("rb") as source,
+                io.TextIOWrapper(io.BytesIO(), encoding="utf-8") as stdout,
+                patch.object(sys, "stdin", source),
+                patch.object(sys, "stdout", stdout),
+                patch.object(sys, "stderr", io.StringIO()),
+                patch.object(keeper, "run", side_effect=run),
+            ):
+                status = keeper.main(["--output", str(output), *options.argv()])
+                self.assertEqual(status, 1 if fail else 0)
+                restored = os.umask(0o022)
+                self.assertEqual(restored, 0o022)
+                self.assertEqual(observed, [0o700])
+                with self.assertRaises(SystemExit):
+                    _ = keeper.main(["--unknown"])
+                self.assertEqual(os.umask(0o022), 0o022)
+                self.assertFalse(source.closed)
+        finally:
+            _ = os.umask(previous_mask)
 
 
 class KeeperTests(unittest.TestCase):

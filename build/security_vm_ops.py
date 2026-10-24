@@ -509,9 +509,8 @@ def run(
     return report
 
 
-def main(arguments: Sequence[str] | None = None) -> int:
+def _main(arguments: Sequence[str] | None, control: protocol.Control) -> int:
     """Include receipt writing and the original deadline fence in the final status."""
-    control = protocol.Control(SECONDS)
     old = {
         number: signal.signal(number, control.signal) for number in (signal.SIGINT, signal.SIGTERM)
     }
@@ -539,6 +538,16 @@ def main(arguments: Sequence[str] | None = None) -> int:
     finally:
         for number, handler in old.items():
             _ = signal.signal(number, handler)
+
+
+def main(arguments: Sequence[str] | None = None) -> int:
+    """Keep private VM outputs and QMP sockets independent of the caller's mask."""
+    control = protocol.Control(SECONDS)
+    previous_mask = os.umask(0o077)
+    try:
+        return _main(arguments, control)
+    finally:
+        _ = os.umask(previous_mask)
 
 
 if __name__ == "__main__":
