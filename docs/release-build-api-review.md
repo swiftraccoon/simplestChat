@@ -100,6 +100,10 @@ Existing xtask callers retain their adapter paths.
   `verify_retained_archive(&mut File, ...)` deliberately requires file metadata and
   caller custody. The private `Read`/`Seek` implementation must use those traits'
   signatures. This does not justify rewriting other generic I/O APIs by reference.
+  The private child invocation also consumes an optional original archive-writer
+  loan. It is an admitted file, not a path chosen by the child. Completion retains
+  a passive byte/digest/metadata seal and explicit close observation; neither
+  reconstructs ownership. The controller compares them against its retained file.
 
 - **C-GENERIC, C-INTERMEDIATE — applies.** Archive verification accepts only the
   checkpoint closure it needs and returns identity/configuration already measured.
@@ -148,6 +152,12 @@ Existing xtask callers retain their adapter paths.
   bound to the selected revision. It creates no filesystem or journal entry for
   that record and refuses repeated, late or overriding global metadata. The
   existing headerless fixture profile remains accepted.
+  The fixed Docker-save command now omits `--output` and streams binary stdout
+  into the admitted original writer in 64 KiB chunks, bounded at 8 GiB. It never
+  enters textual command logs or inspection capture. Stderr retains its 2 MiB
+  limit. Flush, synchronization, metadata observation and explicit writer close
+  precede the controller's independent original-file readback and seal comparison,
+  including on failed commands. The ten-file server release contract is unchanged.
   Shared PID helpers additionally require the documented original-child/private-
   group and exclusive-wait preconditions. A numeric PID or successful record alone
   cannot establish them; callers retain the actual `Group` reservation.
@@ -292,9 +302,49 @@ unchanged: the same 57 default musl normal/build package versions as the baselin
 The scoped notice/hash/CLI tests include actual read-only stdout refusal. These
 facts do not certify the whole workspace's license inventory.
 
-Actual Ubuntu Docker build/export after this source fix, the new hosted
-preparation job, musl ELF/material checks, signed Ops runtime/install and normal
-deployment remain separate gates. A follow-up for the builder's final runtime
+Hosted CI at `09c9193` passed the real production Docker build in 176 seconds
+and all migration/static/PWA/health/DB/registration/restart smokes. Native export
+then refused `release_build_original_changed` after thirteen seconds. This is a
+separate failed trial from the earlier source-header refusal. The Ops producer
+also completed, but preparation and both signers were skipped; its unsigned Ops
+artifact does not establish signed runtime or installation.
+
+The output-transport cause was reproduced before this correction: both whole
+build/export paths refused an untouched empty original after a pure sibling-file
+write and rename, with no candidate or release manifest published. One exact test
+covering both modes passed in 11.45 seconds. An actual Docker 29.9.2 CLI paired
+with a private inert Unix API independently produced the same 4,097-byte payload
+through both transports: `--output` replaced the original inode, while stdout
+written through the original handle preserved it. Both commands exited zero,
+stderr was empty, and the inert server shut down and joined. There was no engine
+or actual image export in that experiment. The versioned
+[Docker save implementation](https://github.com/docker/cli/blob/v29.9.2/cli/command/image/save.go)
+selects an atomic writer for `--output` and ordinary stdout otherwise.
+
+The corrected source passed all 256 Ops library tests, 43 CLI tests and four
+Rustdoc tests, plus the separate 112-case Python comparison. Six new native
+process tests cover a 3 MiB original-inode stream, the archive limit before write,
+partial failed output, actual write failure, failed close and metadata failure
+preceding a later close failure. Two new whole-controller tests require the
+closed original seal before publication and refuse missing-close or mismatched
+seal observations in both modes. The initial focused run passed 65 cases and
+failed one new fixture created outside Tokio; entering its owned runtime corrected
+that fixture before the successful complete run. The failed trial is retained.
+
+GNU Linux all-target Clippy passed in 31.719 seconds. Workspace Rust quality,
+helper quality and fast security passed in 184.551, 61.418 and 30.430 seconds,
+respectively. The complete Ops run took 42.936 seconds; the separate 112-case
+comparison took 26.016 seconds. Independent source reviews covered the process
+adapter and whole-controller wiring. These are source, inert-child and local
+filesystem checks; they do not establish actual engine export or deployment.
+
+The unchanged Python reference retains its original transport. Its 112-case
+comparison admits only the exact removal of
+`--output` and the known archive path from the Docker-save argv, requires the
+original writer loan there, and keeps other argv, environment and selectors exact.
+Actual Ubuntu Docker export with this correction, hosted preparation, musl
+ELF/material checks, signed Ops runtime/install and normal deployment remain
+separate gates. A follow-up for the builder's final runtime
 and umask teardown clock boundary is tracked separately. Preserve the independent
 signer and unchanged ten-file server contract; unsigned records and native
 compilation do not establish authenticated distribution or host installation.

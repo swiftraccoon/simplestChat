@@ -193,11 +193,23 @@ to exercise the child; a broad ignored run supplies no owning selector.
 Offline comparison establishes
 policy across build/export, preflight refusal, original selectors and tags, malformed
 source/image archives, migrations, deadline exhaustion and retained failure records.
+The comparison admits one explicit Docker-save transport difference: Rust omits
+the reference's exact `--output` and known archive-path pair and requires the
+original writer loan. Other argv, environment, capture and selector checks remain
+exact; the Python reference is unchanged.
 It does not prove process ownership, physical Docker effects or signing provenance.
 Separate actual inert child tests cover concurrent pipe pressure, per-stream and
 inspection budgets, signed status, descendants, cancellation, escalation, original
 first failure and all-peer closes on Linux and macOS. Custody tests separately
 exercise original descriptors, alias/inode changes and post-publication failures.
+Archive-stream tests retain more than the diagnostic output limit through the
+original inode, keep binary stdout out of logs, refuse overflow before writing
+beyond the 8 GiB archive bound, and retain partial bytes after a failed child.
+The bound-edge fixture starts its observation near the limit rather than writing
+8 GiB. Write, metadata and close failures remain negative while peer finalizers
+run; whole-operation tests independently compare the archive's seal and close
+observation before publication. Non-archive command journals use null archive
+fields rather than reporting a file close that did not occur.
 Phase/deadline tests use the original virtual clock; chunk checkpoints cannot bound
 a kernel read or filesystem operation that itself blocks indefinitely.
 

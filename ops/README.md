@@ -163,8 +163,17 @@ profile is an explicit accepted-domain boundary: deeper ignored objects accepted
 by Python can be refused here. The unchanged Python builder remains the reference;
 these limits are not a claim of full Python metadata parity.
 
-Both modes save an unsigned image, check the final clean revision, verify the
-whole archive and existing server metadata contract, then publish `release.json`
+Both modes stream `docker image save --platform linux/amd64 TAG` stdout into
+an original writer for the admitted `image.tar`. Docker receives no output path:
+its `--output` implementation atomically replaces that path rather than writing
+the admitted inode. Binary stdout is capped at 8 GiB and kept out of command
+logs; stderr retains its 2 MiB bound. The writer is flushed, synchronized, sealed
+and explicitly closed, and its byte count, digest and identity are compared with
+the retained original before the command can succeed. Partial bytes and negative
+command evidence remain on failure; an exchanged visible path is never adopted.
+
+Both modes then check the final clean revision, verify the whole archive and
+existing server metadata contract, then publish `release.json`
 by linking its verified candidate. Export additionally requires the archive's
 DiffIDs to equal the selected image's; a local Docker image ID is not assumed to
 equal the archive's configuration digest. Original file, source, tool and socket

@@ -318,6 +318,36 @@ impl<E: Executor> Controller<'_, E> {
         } else {
             self.inputs.root.clone()
         };
+        let archive_output = role == Role::Docker
+            && !capture
+            && !allow_failure
+            && arguments.len() == 7
+            && arguments[2..6].iter().map(|value| value.to_str()).eq([
+                Some("image"),
+                Some("save"),
+                Some("--platform"),
+                Some("linux/amd64"),
+            ]);
+        let archive = if archive_output {
+            let writer = self
+                .output
+                .as_ref()
+                .ok_or(Failure::Io)
+                .and_then(|output| output.get("image.tar"))
+                .and_then(|file| file.writer());
+            match writer {
+                Ok(writer) => Some(writer),
+                Err(error) => {
+                    self.owner.record(error);
+                    if let Err(error) = files::close(log) {
+                        self.owner.record(error);
+                    }
+                    return Err(error);
+                }
+            }
+        } else {
+            None
+        };
         let completion = self
             .executor
             .run(
@@ -330,6 +360,7 @@ impl<E: Executor> Controller<'_, E> {
                     environment,
                     body_end,
                     log,
+                    archive,
                     capture,
                     allow_failure,
                 },
@@ -353,6 +384,8 @@ impl<E: Executor> Controller<'_, E> {
                 || !completion.observation.stdout_closed
                 || !completion.observation.stderr_closed
                 || !completion.observation.log_closed
+                || !completion.observation.archive_closed
+                || archive_output != completion.observation.archive.is_some()
                 || completion.observation.log.as_ref().is_none_or(|seal| {
                     seal.bytes != report.log.bytes
                         || seal.sha256 != report.log.sha256
@@ -384,6 +417,33 @@ impl<E: Executor> Controller<'_, E> {
         } else if completion.result.is_ok() {
             self.owner.record(Failure::Changed);
         }
+        if archive_output {
+            let sealed = output
+                .get_mut("image.tar")?
+                .seal_cleanup(self.owner, self.owner.end());
+            if let Err(error) = sealed.as_ref() {
+                self.owner.record(*error);
+            }
+            if let (Ok(digest), Some(observed)) = (&sealed, &completion.observation.archive) {
+                let file = output.get("image.tar")?;
+                let metadata = file.file().metadata().map_err(|_| Failure::Io);
+                if let Err(error) = metadata.as_ref() {
+                    self.owner.record(*error);
+                }
+                if digest != &observed.sha256
+                    || file.length() != observed.bytes
+                    || observed.bytes != completion.observation.stdout_bytes
+                    || observed.sha256 != completion.observation.stdout_sha256
+                    || !metadata
+                        .as_ref()
+                        .is_ok_and(|metadata| files::same(&observed.metadata, metadata))
+                {
+                    self.owner.record(Failure::Changed);
+                }
+            } else if completion.result.is_ok() {
+                self.owner.record(Failure::Changed);
+            }
+        }
         if retained {
             let observation = &completion.observation;
             let cleanup_errors: Vec<_> = observation
@@ -407,6 +467,14 @@ impl<E: Executor> Controller<'_, E> {
                         "stdoutClosed":observation.stdout_closed,
                         "stderrClosed":observation.stderr_closed,
                         "logClosed":observation.log_closed,
+                        "archiveClosed":archive_output.then_some(observation.archive_closed),
+                        "archiveBytes":observation.archive.as_ref().map(|seal| seal.bytes),
+                        "archiveSha256":observation.archive.as_ref().map(|seal| &seal.sha256),
+                        "archiveIdentity":observation.archive.as_ref().map(|seal| {
+                            serde_json::json!({
+                                "device":seal.metadata.dev(), "inode":seal.metadata.ino(),
+                            })
+                        }),
                         "stdoutBytes":observation.stdout_bytes,
                         "stderrBytes":observation.stderr_bytes,
                         "stdoutSha256":observation.stdout_sha256,
@@ -830,15 +898,12 @@ impl<E: Executor> Controller<'_, E> {
         };
         self.owner.before(self.phase)?;
         self.output.as_mut().unwrap().create_file("image.tar")?;
-        let archive_path = self.output.as_ref().unwrap().get("image.tar")?.path();
         self.docker(
             vec![
                 "image".into(),
                 "save".into(),
                 "--platform".into(),
                 "linux/amd64".into(),
-                "--output".into(),
-                archive_path.as_os_str().into(),
                 tag.clone().into(),
             ],
             Duration::from_secs(300),
