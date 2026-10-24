@@ -126,6 +126,7 @@ fn canonical_names_match_the_actual_workflow_dependency_graph() {
             ![
                 "required",
                 "release-security",
+                "release-prepare",
                 "ops-build",
                 "ops-release-security",
             ]

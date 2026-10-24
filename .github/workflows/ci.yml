@@ -370,6 +370,8 @@ jobs:
           --skip ci::ops_artifact::capacity_vps::controller_tests::all_eight_whole_reference_scenarios_preserve_local_policy_and_explicit_transport_deltas
           --skip release::build::tests::whole_reference_scenarios_match_unchanged_python
           --skip release::build::process::tests::signal_worker
+          --skip release::attestation::prepare::oracle_tests::whole_prepare_scenarios_match_unchanged_python
+          --skip release::attestation::prepare::signal_tests::retained_hash_signal_child
 
       - name: Synthetic media delivery correctness smoke
         if: steps.verified.outputs.cache-hit != 'true'
@@ -1263,10 +1265,62 @@ jobs:
           GATE_RESULTS: ${{ toJSON(needs) }}
         run: cargo run --locked -q -p xtask -- ci-evidence complete
 
+  release-prepare:
+    name: Prepare the verified production signing inputs
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    needs: [required]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the pinned Rust toolchain for signing-input preparation
+        timeout-minutes: 2
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable (2026-10-01)
+        with:
+          toolchain: 1.99.0
+      - name: Compile the signing-input controller without signing credentials
+        timeout-minutes: 6
+        run: |
+          cargo build --locked --release -p simplestchat-ops --bin simplestchat-ops \
+            --target-dir "$RUNNER_TEMP/release-prepare-build"
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: simplestchat-unsigned-${{ github.sha }}
+          path: ${{ runner.temp }}/prepared-release
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: production-security-${{ github.sha }}
+          path: ${{ runner.temp }}/image-security
+      - name: Bind the successful image policy and exact archive bytes
+        timeout-minutes: 6
+        run: |
+          "$RUNNER_TEMP/release-prepare-build/release/simplestchat-ops" release attestation prepare \
+            --artifact-dir "$RUNNER_TEMP/prepared-release" \
+            --security-dir "$RUNNER_TEMP/image-security" \
+            --repository "$GITHUB_REPOSITORY" --revision "$GITHUB_SHA" \
+            --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --timeout-seconds 300 --finalization-seconds 30
+      - name: Retain only the prepared signing metadata
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: production-signing-metadata-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/prepared-release/sbom.spdx.json
+            ${{ runner.temp }}/prepared-release/image-security.json
+            ${{ runner.temp }}/prepared-release/runtime-proof.json
+            ${{ runner.temp }}/prepared-release/vex.openvex.json
+            ${{ runner.temp }}/prepared-release/release-predicate.json
+          if-no-files-found: error
+          retention-days: 14
+
   release-security:
     name: Attest the verified production release
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-    needs: [required]
+    needs: [required, release-prepare]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -1283,15 +1337,8 @@ jobs:
           path: ${{ runner.temp }}/signed-release
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: production-security-${{ github.sha }}
-          path: ${{ runner.temp }}/image-security
-      - name: Bind the successful image policy and exact archive bytes
-        run: |
-          python3 build/release_attestation.py prepare \
-            --artifact-dir "$RUNNER_TEMP/signed-release" \
-            --security-dir "$RUNNER_TEMP/image-security" \
-            --repository "$GITHUB_REPOSITORY" --revision "$GITHUB_SHA" \
-            --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT"
+          name: production-signing-metadata-${{ github.sha }}
+          path: ${{ runner.temp }}/signed-release
       - name: Sign the archive, SPDX and runtime disposition evidence
         id: attest
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2

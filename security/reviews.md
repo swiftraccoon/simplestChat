@@ -26,6 +26,19 @@ the original paths and includes redaction as well.
 
 ## GitHub Actions portability findings
 
+The later server signing-input port adds one exact installer review at
+`ci.yml#jobs/release-prepare/steps/1/uses`. It uses that same immutable action and
+Rust 1.99.0 after credential-free checkout. Its job has only contents/read and
+runs after the unchanged ten required gates, keeping the late UTC expiry check
+in that phase. Compilation has no explicitly supplied token and no signing
+permissions. The separate signer receives the original four files and five
+metadata files as disjoint data artifacts; it neither compiles nor executes this
+helper. Installer source, official HTTPS bootstrap boundary and the 2026-11-29
+expiry are unchanged. A prior hosted source-controller compilation took forty
+seconds. This job's cold time and actual Rust preparation still require hosted
+measurement; its fifteen-minute preparation allowance retains the old caller's
+budget. This record exempts no source, artifact, signature or runtime check.
+
 On 2026-10-24, the manual development-artifact workflow adds one exact
 `superfluous-actions` review for
 `release-artifact.yml#jobs/artifact/steps/1/uses`. The immutable

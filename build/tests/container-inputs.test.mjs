@@ -345,6 +345,9 @@ test('ops workspace inputs remain narrow and no ops binary enters the production
     '!ops/src/capacity_vps/', 'ops/src/capacity_vps/**', '!ops/src/capacity_vps/*.rs',
     '!ops/src/release/', 'ops/src/release/**', '!ops/src/release/*.rs',
     '!ops/src/release/archive/', 'ops/src/release/archive/**', '!ops/src/release/archive/*.rs',
+    '!ops/src/release/attestation/',
+    'ops/src/release/attestation/**',
+    '!ops/src/release/attestation/*.rs',
     '!ops/ansible/', 'ops/ansible/**', '!ops/ansible/files/', 'ops/ansible/files/**',
     '!ops/ansible/files/bounded_process.py', '!ops/ansible/files/release_json.py',
   ].toSorted());

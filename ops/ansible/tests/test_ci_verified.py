@@ -999,6 +999,13 @@ class VerifiedWorkflowTests(unittest.TestCase):
                     "release::build::tests::whole_reference_scenarios_match_unchanged_python",
                     "--skip",
                     "release::build::process::tests::signal_worker",
+                    "--skip",
+                    (
+                        "release::attestation::prepare::oracle_tests::"
+                        "whole_prepare_scenarios_match_unchanged_python"
+                    ),
+                    "--skip",
+                    "release::attestation::prepare::signal_tests::retained_hash_signal_child",
                 ],
             )
             self.assertLess(steps.index(build), steps.index(execute))

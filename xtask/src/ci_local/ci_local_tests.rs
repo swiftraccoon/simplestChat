@@ -479,6 +479,7 @@ fn help_and_full_gate_guards_refuse_before_any_engine_action() {
         (vec!["all", "--codeql", "/single-isa-bundle"], vec![]),
         (vec!["all", "--job", "web"], vec![]),
         (vec!["release-security"], vec![]),
+        (vec!["release-prepare"], vec![]),
         (vec!["required"], vec![]),
         (vec!["Bad_job"], vec![]),
         (vec!["--base"], vec![]),

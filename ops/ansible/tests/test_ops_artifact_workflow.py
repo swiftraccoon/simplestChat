@@ -150,7 +150,7 @@ class HostedOpsWorkflowTests(unittest.TestCase):
             ],
         )
         server = obj(jobs, "release-security")
-        self.assertEqual(server["needs"], ["required"])
+        self.assertEqual(server["needs"], ["required", "release-prepare"])
         server_steps = objects(server, "steps")
         predicates = [obj(step, "with") for step in server_steps if step.get("uses") == ATTEST]
         self.assertEqual(len(predicates), 1)
