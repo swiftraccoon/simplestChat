@@ -782,12 +782,12 @@ def receive(source: BinaryIO, options: Options, control: Control) -> tuple[Binar
 def write_new(path: Path, data: bytes, mode: int = PRIVATE_MODE) -> os.stat_result:
     """Create only a new private fixture leaf, never replace an existing entry."""
     descriptor = os.open(
-        path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, mode
+        path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, PRIVATE_MODE
     )
     with os.fdopen(descriptor, "wb") as output:
-        os.fchmod(output.fileno(), mode)
         require(output.write(data) == len(data))
         output.flush()
+        os.fchmod(output.fileno(), mode)
         os.fsync(output.fileno())
         value = os.fstat(output.fileno())
         require(
@@ -1177,14 +1177,14 @@ def foreign_install(runner: Runner, options: Options, name: str, *, wrong_mode: 
         source = runner.binary.file
         _ = source.seek(0)
         descriptor = os.open(
-            INSTALLED, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, HELPER_MODE
+            INSTALLED, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, PRIVATE_MODE
         )
         with os.fdopen(descriptor, "wb") as output:
-            os.fchmod(output.fileno(), HELPER_MODE)
             while chunk := source.read(CHUNK):
                 runner.control.check()
                 require(output.write(chunk) == len(chunk))
             output.flush()
+            os.fchmod(output.fileno(), HELPER_MODE)
             os.fsync(output.fileno())
     else:
         _ = write_new(INSTALLED, b"owned foreign fixture\n", EXECUTABLE_MODE)
