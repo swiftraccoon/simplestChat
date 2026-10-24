@@ -769,7 +769,7 @@ def worker(root: Path, arguments: list[str]) -> int:  # noqa: C901, PLR0915 -- O
         return cast("BinaryIO | TextIO", output)
 
     def descriptor_open(
-        path: object, flags: int, mode: int = 0o777, *, dir_fd: int | None = None
+        path: object, flags: int, mode: int = 0o600, *, dir_fd: int | None = None
     ) -> int:
         nonlocal receipt_fd
         if Path(cast("str", path)).name == "fetch-outcome.json":
