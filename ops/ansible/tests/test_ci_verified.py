@@ -1010,6 +1010,8 @@ class VerifiedWorkflowTests(unittest.TestCase):
                     "whole_verify_scenarios_match_unchanged_python",
                     "--skip",
                     "whole_fresh_release_matches_unchanged_python",
+                    "--skip",
+                    "whole_fetch_controller_matches_unchanged_python",
                 ],
             )
             self.assertLess(steps.index(build), steps.index(execute))

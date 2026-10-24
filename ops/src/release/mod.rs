@@ -10,3 +10,5 @@ pub mod build;
 pub mod attestation;
 
 pub mod verify;
+
+pub mod fetch;

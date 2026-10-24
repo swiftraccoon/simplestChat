@@ -142,12 +142,14 @@ impl Alias {
 pub(in crate::release::attestation) enum Program {
     Gh,
     Curl,
+    Ssh,
 }
 impl Program {
     fn name(self) -> &'static str {
         match self {
             Self::Gh => "gh",
             Self::Curl => "curl",
+            Self::Ssh => "ssh",
         }
     }
 }

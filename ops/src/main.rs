@@ -21,6 +21,7 @@ use std::process::ExitCode;
 const USAGE: &str = concat!(
     "Usage: simplestchat-ops release build --output PATH [--timeout-seconds N] [--image-id ID]\n",
     "       simplestchat-ops release verify [OPTIONS]\n",
+    "       simplestchat-ops release fetch [OPTIONS]\n",
     "       simplestchat-ops release attestation prepare [OPTIONS]\n",
     "       simplestchat-ops release attestation verify [OPTIONS]\n",
     "       simplestchat-ops release manifest --path PATH\n",
@@ -46,6 +47,9 @@ const USAGE: &str = concat!(
 
 fn main() -> ExitCode {
     let args: Vec<OsString> = std::env::args_os().skip(1).collect();
+    if args.len() >= 2 && args[0] == "release" && args[1] == "fetch" {
+        return simplestchat_ops::release::fetch::run(&args[2..]);
+    }
     if args.len() >= 2 && args[0] == "release" && args[1] == "verify" {
         return simplestchat_ops::release::verify::run(&args[2..]);
     }

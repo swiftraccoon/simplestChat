@@ -9,7 +9,7 @@ use std::{
     os::unix::fs::OpenOptionsExt,
     path::{Path, PathBuf},
 };
-pub(super) struct Fixture {
+pub(crate) struct Fixture {
     inner: cached::Fixture,
     pub root: PathBuf,
     pub candidate: PathBuf,
@@ -18,7 +18,7 @@ pub(super) struct Fixture {
     pub home: PathBuf,
     pub selection: Value,
 }
-pub(super) fn write(path: &Path, bytes: &[u8], mode: u32) -> io::Result<()> {
+pub(crate) fn write(path: &Path, bytes: &[u8], mode: u32) -> io::Result<()> {
     let mut file = OpenOptions::new()
         .create(true)
         .truncate(true)

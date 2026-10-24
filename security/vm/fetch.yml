@@ -1,0 +1,72 @@
+---
+- name: Prepare only the unchanged receiver inside the marked disposable guest
+  hosts: benchmark_hosts
+  become: true
+  gather_facts: false
+  pre_tasks:
+    - name: Require the generated loopback fixture and immutable selection
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'vmfixture'
+          - ansible_host == '127.0.0.1'
+          - ansible_user == 'fixture'
+          - vm_fixture_run_id is match('^[a-f0-9]{32}$')
+          - vm_fixture_revision is match('^[a-f0-9]{40}$')
+
+    - name: Read the original cloud-init run marker
+      ansible.builtin.slurp:
+        src: /etc/simplestchat-vm-fixture
+      register: fetch_fixture_marker
+      no_log: true
+
+    - name: Bind this preparation to the exact owned guest
+      ansible.builtin.assert:
+        that:
+          - fetch_fixture_marker.content | b64decode == vm_fixture_run_id + '\n'
+      no_log: true
+
+  tasks:
+    - name: Create only private receiver and fixture directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+      loop:
+        - /srv/simplestchat-public
+        - /srv/simplestchat-public/releases
+        - /srv/simplestchat-public/results
+        - /etc/simplestchat-public
+        - /run/simplestchat-bench
+        - /root/simplestchat-vm-fixture
+
+    - name: Create the fixed helper directory
+      ansible.builtin.file:
+        path: /usr/local/libexec/simplestchat-public
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Install only unchanged compatible receiver helpers
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../ops/ansible/files/{{ item }}"
+        dest: "/usr/local/libexec/simplestchat-public/{{ item }}"
+        owner: root
+        group: root
+        mode: '0644'
+      loop:
+        - fetch-release.py
+        - release_fetch_receiver.py
+        - release_trust.py
+        - release_artifact.py
+        - release_json.py
+
+    - name: Install only the trusted read-only publication probe
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../build/security_vm_fetch_guest.py"
+        dest: /root/simplestchat-vm-fixture/security_vm_fetch_guest.py
+        owner: root
+        group: root
+        mode: '0600'

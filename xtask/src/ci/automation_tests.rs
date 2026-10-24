@@ -35,7 +35,7 @@ fn text(values: &[OsString]) -> Vec<&str> {
 fn controller_checks_preserve_the_python_gate_offline_flags_and_all_syntax_only_playbooks() {
     let fixture = Fixture::new(&["a.sh"]);
     let steps = steps(&fixture.0, Path::new("/owned tool/xtask")).unwrap();
-    assert_eq!(steps.len(), if cfg!(target_os = "linux") { 22 } else { 21 });
+    assert_eq!(steps.len(), if cfg!(target_os = "linux") { 23 } else { 22 });
     assert_eq!(steps[0].program, "/owned tool/xtask");
     assert_eq!(text(&steps[0].arguments), ["check", "--python"]);
     assert_eq!(
@@ -110,6 +110,8 @@ fn controller_checks_preserve_the_python_gate_offline_flags_and_all_syntax_only_
             "--test",
             "release_fresh_verify_cli",
             "--test",
+            "release_fetch_cli",
+            "--test",
             "archive_cli",
             "--test",
             "manifest_cli",
@@ -137,7 +139,7 @@ fn controller_checks_preserve_the_python_gate_offline_flags_and_all_syntax_only_
             "--exact"
         ]
     );
-    let builder = &steps[steps.len() - 5];
+    let builder = &steps[steps.len() - 6];
     assert_eq!(builder.program, "cargo");
     assert_eq!(
         text(&builder.arguments),
@@ -153,7 +155,7 @@ fn controller_checks_preserve_the_python_gate_offline_flags_and_all_syntax_only_
             "--exact",
         ]
     );
-    let prepare = &steps[steps.len() - 4];
+    let prepare = &steps[steps.len() - 5];
     assert_eq!(prepare.program, "cargo");
     assert_eq!(
         text(&prepare.arguments),
@@ -172,7 +174,7 @@ fn controller_checks_preserve_the_python_gate_offline_flags_and_all_syntax_only_
             "--exact",
         ]
     );
-    let verify = &steps[steps.len() - 3];
+    let verify = &steps[steps.len() - 4];
     assert_eq!(verify.program, "cargo");
     assert_eq!(
         text(&verify.arguments),
@@ -191,7 +193,7 @@ fn controller_checks_preserve_the_python_gate_offline_flags_and_all_syntax_only_
             "--exact",
         ]
     );
-    let fresh = &steps[steps.len() - 2];
+    let fresh = &steps[steps.len() - 3];
     assert_eq!(fresh.program, "cargo");
     assert_eq!(
         text(&fresh.arguments),
@@ -204,6 +206,25 @@ fn controller_checks_preserve_the_python_gate_offline_flags_and_all_syntax_only_
             concat!(
                 "release::attestation::acquire::oracle_tests::",
                 "whole_fresh_release_matches_unchanged_python",
+            ),
+            "--",
+            "--ignored",
+            "--exact",
+        ]
+    );
+    let fetch = &steps[steps.len() - 2];
+    assert_eq!(fetch.program, "cargo");
+    assert_eq!(
+        text(&fetch.arguments),
+        [
+            "test",
+            "--locked",
+            "-p",
+            "simplestchat-ops",
+            "--lib",
+            concat!(
+                "release::attestation::fetch::oracle_tests::",
+                "whole_fetch_controller_matches_unchanged_python",
             ),
             "--",
             "--ignored",

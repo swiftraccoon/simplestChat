@@ -3,9 +3,10 @@
 
 use super::super::control::{self, Cause, Owner, Result, Window};
 
-pub(super) const MAX_URL: usize = 12288;
-pub(super) const MAX_TOKEN: usize = 4096;
-pub(super) struct Grant {
+pub(in crate::release::attestation) const MAX_URL: usize = 12288;
+pub(in crate::release::attestation) const MAX_TOKEN: usize = 4096;
+pub(in crate::release::attestation) struct Grant {
+    original: String,
     host: String,
     target: String,
 }
@@ -41,9 +42,13 @@ impl Grant {
             return control::failed(owner, Cause::Policy);
         }
         Ok(Self {
+            original: value.into(),
             host: host.into(),
             target: format!("/{path}?{query}"),
         })
+    }
+    pub fn into_url(self) -> String {
+        self.original
     }
     pub fn host(&self) -> &str {
         &self.host
@@ -52,7 +57,7 @@ impl Grant {
         &self.target
     }
 }
-pub(super) fn token(bytes: &[u8], owner: &mut Owner) -> Result<String> {
+pub(in crate::release::attestation) fn token(bytes: &[u8], owner: &mut Owner) -> Result<String> {
     owner.check(Window::Body)?;
     let value = std::str::from_utf8(bytes)
         .map_err(|_| Cause::Policy)?
