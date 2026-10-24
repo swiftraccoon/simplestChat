@@ -190,6 +190,7 @@ fn arguments_are_fixed_and_do_not_select_another_operation() {
             concat!(
                 "Usage: simplestchat-ops release build --output PATH ",
                 "[--timeout-seconds N] [--image-id ID]\n",
+                "       simplestchat-ops release attestation prepare [OPTIONS]\n",
                 "       simplestchat-ops release manifest --path PATH\n",
                 "       simplestchat-ops release archive --manifest PATH --path PATH\n",
                 "       simplestchat-ops release receipt --envelope PATH --receipt PATH\n",

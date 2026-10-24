@@ -15,6 +15,7 @@
 !/docs/commit-standard.md
 !/docs/rust-api-checklist.md
 !/docs/release-build-api-review.md
+!/docs/release-attestation-api-review.md
 !/docs/deployment.md
 !/docs/configuration.md
 !/docs/diagnostics.md

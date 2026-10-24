@@ -262,33 +262,42 @@ The initial builder implementation was checked against public base
 39 CLI tests, 839 xtask tests, three doc tests and the 112-case whole-reference
 comparison passed. Those results predate the source-metadata correction below.
 
-At `98d6dd8`, the hosted native controller compiled in forty seconds, then
-rejected Git's global PAX commit comment during source extraction. The separately
-tested image had passed startup and database checks; the native export did not
-reach image save. A read-only development workflow reproduced the source phase.
+At `98d6dd8`, the hosted native controller compiled in forty seconds, but source
+extraction rejected Git's global PAX commit comment before Docker build/save or
+final-image verification. A separate read-only development workflow reproduced
+that phase. The focused correction admits one bounded commit-comment record,
+bound to the selected revision, without creating a filesystem or journal entry.
 
-The correction admits one bounded commit-comment record, bound to the selected
-revision, without creating a filesystem or journal entry. On Rust 1.99.0 native
-`aarch64-apple-darwin`, all 58 builder tests passed with two explicit ignored
-helpers. The exact ignored 112-case unchanged-Python comparison passed separately,
-and GNU Linux all-target Clippy passed in 14.835 seconds. GNU compilation does
-not establish Linux execution.
-
-A real 31,805,440-byte archive produced by Git 2.56.0 also passed both whole
+A real 31,805,440-byte archive produced by Git 2.56.0 then passed both whole
 build/export controller paths with CI's existing 300-second export setting and
 unchanged 120-second setup allowance. The two-loop native debug diagnostic took
-102.864 seconds. Tool and image observations were inert: this proves actual
-source extraction/custody/publication, not a physical Docker build. An older
-fixture replay used a 120-second export setting and exhausted its clipped
-46-second setup phase; that failed trial remains separate.
+102.864 seconds. Tool and image observations in that replay were inert: it proves
+actual source extraction/custody/publication, not a physical Docker build. An
+older replay using the fixture's 120-second export setting exhausted its clipped
+46-second setup phase; that failed trial is retained separately.
 
-Default musl normal/build package versions and scoped MIT notice delivery remain
-unchanged. Actual Ubuntu Docker build/export after this source fix, musl material
-and signed Ops runtime/install checks, and normal deployment remain separate
-gates. A follow-up for the builder's final runtime and umask teardown clock
-boundary is tracked separately. Preserve the independent signer and unchanged
-ten-file server contract; local unsigned records are not authenticated release
-authority. Exact source hashes, commands and failed trials remain private.
+The final combined candidate passed the native Rust 1.99.0
+`aarch64-apple-darwin` all-features Ops gate: 248 library, 43 CLI and four doc
+tests, with four explicit ignored helpers. Both exact reference comparisons
+passed separately (112 builder and 72 preparation scenarios). GNU Linux
+all-target Clippy passed; this is cross-compilation, not Linux execution. The
+full workspace Rust quality gate passed in 165.843 seconds, including generated
+contracts and private Rustdoc. All 575 helper tests and final fast security
+passed. The Python suite ran 1,659 cases with seventeen opt-in skips and one
+stale workflow fixture; its corrected 33-test suite passed. Current source
+hashes, commands, failed trials and scoped review evidence are retained privately.
+
+The builder's minimal Tokio feature request and locked dependency graph remain
+unchanged: the same 57 default musl normal/build package versions as the baseline.
+The scoped notice/hash/CLI tests include actual read-only stdout refusal. These
+facts do not certify the whole workspace's license inventory.
+
+Actual Ubuntu Docker build/export after this source fix, the new hosted
+preparation job, musl ELF/material checks, signed Ops runtime/install and normal
+deployment remain separate gates. A follow-up for the builder's final runtime
+and umask teardown clock boundary is tracked separately. Preserve the independent
+signer and unchanged ten-file server contract; unsigned records and native
+compilation do not establish authenticated distribution or host installation.
 
 [a]: https://github.com/rust-lang/api-guidelines/tree/19f0f62ecd0f56a0b7adaa332c352bc2476506ea/src
 [build]: ../ops/src/release/build.rs

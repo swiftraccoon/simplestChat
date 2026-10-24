@@ -198,7 +198,10 @@ class SecurityWorkflowTests(unittest.TestCase):
         self.assertEqual(set(strings(gate, "needs")), GATES)
         separate_ops = {"ops-build", "ops-release-security"}
         self.assertEqual(
-            set(obj(ci, "jobs")) - {"required", "release-security"} - separate_ops, GATES
+            set(obj(ci, "jobs"))
+            - {"required", "release-security", "release-prepare"}
+            - separate_ops,
+            GATES,
         )
         steps = objects(gate, "steps")
         aggregate = next(
@@ -321,6 +324,90 @@ class SecurityWorkflowTests(unittest.TestCase):
                 self.assertEqual(step["timeout-minutes"], timeout)
                 self.assertNotIn("continue-on-error", step)
 
+    def test_preparation_has_only_read_authority_after_all_required_checks(self) -> None:
+        """Compile before signing authority and preserve the original late-expiry phase."""
+        jobs = obj(workflow("ci.yml"), "jobs")
+        prepare = obj(jobs, "release-prepare")
+        signer = obj(jobs, "release-security")
+        guard = "${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}"
+        self.assertEqual(prepare["if"], guard)
+        self.assertEqual(prepare["needs"], ["required"])
+        self.assertEqual(prepare["permissions"], {"contents": "read"})
+        self.assertEqual(prepare["timeout-minutes"], "15")
+        self.assertNotIn("continue-on-error", prepare)
+        steps = objects(prepare, "steps")
+        self.assertTrue(all("continue-on-error" not in step for step in steps))
+        checkout = obj(steps[0], "with")
+        self.assertEqual(checkout["persist-credentials"], "false")
+        compilation, operation = [step for step in steps if "run" in step]
+        compile_command = string(compilation, "run")
+        self.assertIn("cargo build --locked --release -p simplestchat-ops", compile_command)
+        self.assertIn('--target-dir "$RUNNER_TEMP/release-prepare-build"', compile_command)
+        self.assertNotIn("env", compilation)
+        command = string(operation, "run")
+        self.assertIn('"$RUNNER_TEMP/release-prepare-build/release/simplestchat-ops"', command)
+        self.assertIn("release attestation prepare", command)
+        self.assertIn("--timeout-seconds 300 --finalization-seconds 30", command)
+        self.assertGreaterEqual(int(string(operation, "timeout-minutes")) * 60, 330)
+        self.assertIn('--run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT"', command)
+        self.assertNotIn("env", operation)
+        downloads = [
+            step for step in steps if "actions/download-artifact@" in string(step.get("uses", ""))
+        ]
+        self.assertEqual(
+            [string(step, "with", "name") for step in downloads],
+            ["simplestchat-unsigned-${{ github.sha }}", "production-security-${{ github.sha }}"],
+        )
+        for step in downloads:
+            self.assertNotIn("run-id", obj(step, "with"))
+            self.assertNotIn("repository", obj(step, "with"))
+            self.assertNotIn("github-token", obj(step, "with"))
+        upload = next(
+            step for step in steps if "actions/upload-artifact@" in string(step.get("uses", ""))
+        )
+        self.assertEqual(
+            string(upload, "with", "name"), "production-signing-metadata-${{ github.sha }}"
+        )
+        metadata = {
+            "sbom.spdx.json",
+            "image-security.json",
+            "runtime-proof.json",
+            "vex.openvex.json",
+            "release-predicate.json",
+        }
+        original = {"image.tar", "release.json", "outcome.json", "source.json"}
+        self.assertFalse(original & metadata)
+        self.assertEqual(
+            set(string(upload, "with", "path").splitlines()),
+            {"${{ runner.temp }}/prepared-release/" + name for name in metadata},
+        )
+        self.assertEqual(string(upload, "with", "if-no-files-found"), "error")
+        signer_steps = objects(signer, "steps")
+        signer_downloads = [
+            step
+            for step in signer_steps
+            if "actions/download-artifact@" in string(step.get("uses", ""))
+        ]
+        self.assertEqual(
+            [string(step, "with", "name") for step in signer_downloads],
+            [
+                "simplestchat-unsigned-${{ github.sha }}",
+                "production-signing-metadata-${{ github.sha }}",
+            ],
+        )
+        self.assertEqual(
+            {string(step, "with", "path") for step in signer_downloads},
+            {"${{ runner.temp }}/signed-release"},
+        )
+        self.assertFalse(
+            any(
+                "cargo" in string(step.get("run", ""))
+                or "release_attestation.py prepare" in string(step.get("run", ""))
+                or "simplestchat-ops" in string(step.get("run", ""))
+                for step in signer_steps
+            )
+        )
+
     def test_signing_only_follows_all_main_push_gates(self) -> None:
         """PRs and partial CI runs cannot request a signing identity."""
         ci = workflow("ci.yml")
@@ -328,7 +415,7 @@ class SecurityWorkflowTests(unittest.TestCase):
         self.assertEqual(
             signer["if"], "${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}"
         )
-        self.assertEqual(signer["needs"], ["required"])
+        self.assertEqual(signer["needs"], ["required", "release-prepare"])
         self.assertEqual(signer["runs-on"], "ubuntu-24.04")
         self.assertEqual(
             signer["permissions"],

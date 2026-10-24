@@ -81,7 +81,10 @@ pub(super) fn parse(arguments: &[String]) -> Result<Option<Options>> {
             "A full CI run cannot filter out matrix entries.",
         ));
     }
-    if matches!(options.job.as_str(), "required" | "release-security") {
+    if matches!(
+        options.job.as_str(),
+        "required" | "release-security" | "release-prepare"
+    ) {
         return Err(Failure::new(
             2,
             "Use all for the aggregate gate; release signing runs only on GitHub.",

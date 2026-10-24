@@ -2472,3 +2472,47 @@ Complete fake-controller run/recovery/fault tests, owned filesystem tests, and
 inert selected-tool Native fixtures cover the new owner. Real Linux/static
 shipping, engine/kernel behavior and service-budget approval remain prerequisites
 for any later installed-callsite switch.
+
+
+### Offline server attestation preparation
+
+The closed `ops/ansible/tests/release_prepare_oracle.py` executes unchanged
+Python preparation with real inert archives, raw hashes, ordered file copies,
+late runtime/UTC checks and exact retained outputs. Its 72 named scenarios cover
+success, all eight evidence hashes, booleans/check sets, destination conflicts,
+partial copy I/O, runtime identity/VEX/expiry, opaque source/SBOM, empty/raw
+hash-only evidence and byte-JSON encodings. Only the fixed UTC date and named
+real-file copy faults are adapted. The exported pre-prepare inputs have a
+2 MiB/32-file test-fixture bound; production hash-only inputs gain no such cap.
+The four explicit nofollow/Unicode-scalar/depth/value profile differences remain
+separate from matching observations.
+
+```sh
+ops/ansible/.venv/bin/python -B -m unittest discover \
+  -s ops/ansible/tests -p test_release_prepare_oracle.py -v
+PYTHON_CHECK_ENV="$(pwd -P)/ops/ansible/.venv" \
+  cargo test --locked -p simplestchat-ops --lib \
+  release::attestation::prepare::oracle_tests::whole_prepare_scenarios_match_unchanged_python \
+  -- --ignored --exact --test-threads=1
+cargo test --locked -p simplestchat-ops --test release_attestation_cli
+```
+
+The ignored comparison runs the actual pinned Python driver and complete Rust
+operation on independently exported original files. It compares file sets,
+bytes/SHA-256/modes, original-four retention and exact predicate serialization;
+it does not turn decoded metadata into signing authority. Native tests also
+exercise explicit closes, source exchanges, first-error ordering, original
+budget/reserve exhaustion, copy/readback effects and real registered INT/TERM
+while retaining a hash input. The real CLI suite uses empty environment and
+private inert files, including a complete successful offline preparation.
+No test starts Git, Docker, network or a host workload.
+
+`release::attestation::prepare::signal_tests::retained_hash_signal_child` is an
+ignored owned worker. Its ordinary parent alone supplies its private fixture
+paths and observes registered-signal readiness, then settles the exact child
+group, reaps it and closes both capture readers before checking results. The
+broad database `--include-ignored` route must skip that worker and the pinned
+whole-oracle test by their exact names. Automation invokes the oracle explicitly
+in its maintained Python environment; neither test silently skips missing
+prerequisites. These are separate test contracts from attested installation or
+production signing/deployment proof.

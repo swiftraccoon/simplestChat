@@ -1716,3 +1716,107 @@ The prospective review covers these changed contracts. Inert fixtures, actual
 local processes, Linux type checks, signed artifact interoperability and measured
 workloads provide different evidence; none substitutes for an unrun category.
 Unrelated guideline rows and the planned retrospective review remain pending.
+
+
+## Offline server attestation preparation
+
+`simplestchat-ops release attestation prepare` consumes the existing unsigned
+server release and successful scanner evidence, creates four metadata copies,
+and writes the unsigned `release-predicate.json`. It performs no signature
+verification, signing, Git, Docker, network, installation or deployment action.
+The unchanged `build/release_attestation.py prepare` remains the reference.
+
+```sh
+target/release/simplestchat-ops release attestation prepare \
+  --artifact-dir /controlled/unsigned-release \
+  --security-dir /controlled/production-security/image \
+  --repository owner/repository --revision EXACT_LOWERCASE_40_HEX_COMMIT \
+  --run-id EXACT_CI_RUN --run-attempt EXACT_ATTEMPT \
+  --timeout-seconds 300 --finalization-seconds 30
+```
+
+Replace the selector placeholders with exact identities. Run IDs satisfy
+`0 < run < 2^53`; attempts satisfy `0 < attempt < 2^31`. Every full flag occurs
+once and accepts split or equals form. Numeric arguments use ASCII decimal
+syntax; Python's incidental plus signs, underscores, Unicode digits and option
+abbreviations remain available through the reference command. Artifact/security
+paths are canonical absolute paths. This Rust profile refuses symlinks in every
+component and admits regular files only, including the five hash-only inputs.
+Python's broader symlink/special-file behavior is not claimed as supported here.
+The two directories may overlap; fixed create-new destination names still refuse
+conflicts. Unrelated directory entries are permitted.
+
+Both budget flags are required and caller-selected: `0 < M < N`, with no default
+or arbitrary maximum. The original entry instant defines the whole `N` seconds,
+including parsing, runtime/signal setup, input admission and finalization. Body
+work stops at `entry + N - M`; the remaining interval is reserved for every
+admitted file/directory close. There is no restart or extension. Failure,
+INT/TERM, deadline and late finalization all return 1. Even after the first
+failure, every admitted peer receives its close attempt. Blocked kernel I/O
+cannot be bounded by cooperative checkpoints. The example's 300/30 allocation is
+a caller choice, not a default or cold-completion guarantee; measure actual
+selected evidence inside the existing CI job budget before switching a caller.
+
+Preparation preserves the reference order: validate the manifest/archive,
+validate scanner success and raw config identity, freshly hash all eight
+security evidence inputs, make four ordered copies, build the claim, freshly
+bind all eight release files and their runtime relationships, then create the
+predicate. Initial archive inspection retains its existing 8 GiB profile; the
+late release binding admits at most 2 GiB. The release manifest keeps 1 MiB;
+other bound metadata keeps 64 MiB. These checks retain their reference phases,
+including failures after copies. The five hash-only inputs (`native.json`,
+`elf.json`, `secret-paths.json`, `database-status.json`, and
+`runtime-license-evidence.json`) may be empty or arbitrary bytes and receive no
+new size or JSON limit; they stream through a fixed heap buffer under the same
+deadline. Source evidence and SBOM receive byte bindings without new schema
+validation. VEX checks here enforce the existing statement count, leaving scanner
+reachability policy with its existing owner.
+
+Parsed metadata uses the existing byte-aware JSON decoder: UTF BOM and UTF-16/32
+detection remain supported. Original encodings, whitespace and ignored integer
+lexemes remain in hashes and copies. The existing Rust profile admits at most
+128 nested containers and 100,000 values, refuses decoded duplicate keys and
+unpaired surrogates, limits integer conversion to 4300 digits and requires finite
+float conversion (including accepted underflow). Booleans, integers, floats and
+null stay distinct. These bounds also apply to ignored parsed fields; they are
+an explicit difference from unrestricted Python inputs. The existing signed
+archive metadata profile remains in force. No complete Python-domain parity is
+claimed.
+
+Required runtime reviews must have a real ASCII `YYYY-MM-DD` expiry strictly
+after the current UTC date. This check occurs late, after the earlier runtime
+identity and VEX checks, in the same order as the reference. Optional runtime
+proofs do not require a review. Run this complete preparation only after all
+required gates in a contents-read-only CI job. The privileged signer consumes
+prepared data; no newly compiled or unsigned helper executes with OIDC signing
+permissions. Current verification and receiver boundaries still validate
+relationships and expiry afresh before use.
+
+| Source | Destination |
+| --- | --- |
+| `spdx/sbom.spdx.json` | `sbom.spdx.json` |
+| scanner `outcome.json` | `image-security.json` |
+| `runtime-proof.json` | `runtime-proof.json` |
+| `vex.openvex.json` | `vex.openvex.json` |
+
+The original `image.tar`, `release.json`, build `outcome.json` and `source.json`
+remain unchanged. The four copies plus predicate are the five preparation
+outputs; a later signer adds exactly one `release-attestation.jsonl`, preserving
+the final ten-file server contract. Its four subjects remain image, SBOM,
+runtime proof and VEX. The separate Ops three-subject graph is unchanged.
+
+All five outputs use exclusive creation and private mode 0600. A conflict or
+copy/write error retains earlier copies and any partial current destination;
+retries require a fresh artifact directory with the original four files.
+Preparation never overwrites or rolls back an existing entry. Exit 0 has no
+stdout and includes checked finalization. Operational failure returns 1 with
+fixed JSON `{"passed":false,"failureClass":"release_attestation_failed"}`;
+invalid arguments return 2 with fixed usage. Neither path prints input values.
+Help needs no runtime, environment, input files or writable directory.
+
+Directory chains and original file descriptors remain owned through preparation.
+Visible names and inode/mode/owner/size/timestamp witnesses are checked around
+streamed I/O, copied bytes are read back, and the first observed failure remains
+primary through all-peer settlement. This detects observed replacement and
+mutation; it is not a filesystem lock, signature or authentication mechanism.
+Same-UID writable-filesystem/check-read races remain outside that claim.

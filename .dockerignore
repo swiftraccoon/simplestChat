@@ -40,6 +40,9 @@ ops/src/release/**
 !ops/src/release/archive/
 ops/src/release/archive/**
 !ops/src/release/archive/*.rs
+!ops/src/release/attestation/
+ops/src/release/attestation/**
+!ops/src/release/attestation/*.rs
 !ops/src/capacity_vps/
 ops/src/capacity_vps/**
 !ops/src/capacity_vps/*.rs

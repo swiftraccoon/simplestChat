@@ -1940,6 +1940,16 @@
       "reachability": "Reviewed 2026-10-24 for only this added location and immutable action reference. Checkout disables persisted credentials; toolchain arguments are fixed repository values and compilation receives no token. The action source retains the existing official HTTPS rustup bootstrap and bounded checksum-propagation retries; bootstrap bytes are not independently checksum-pinned. The contents/read workflow builds and retains a development artifact without signing, publishing an image or deploying. Source, custody, process, payload and security checks remain blocking. No artifact or cache selects installer source or arguments; cold hosted compilation and actual Docker build/export timing are unmeasured.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md#github-actions-portability-findings"
+    },
+    {
+      "scanner": "zizmor",
+      "fingerprint": "superfluous-actions:0fb2d712953646c2c07edb9a959b25649b214c63cb1143b35266a007af663b35",
+      "scope": ".github/workflows/ci.yml#jobs/release-prepare/steps/1/uses",
+      "owner": "swiftraccoon",
+      "rationale": "The read-only main-push preparation job compiles the complete native signing-input controller from the checked-out source before consuming release artifacts. This immutable installer selects the repository's explicit Rust 1.99.0 rather than relying on the runner's preinstalled compiler.",
+      "reachability": "Reviewed 2026-10-24 for only this new location and immutable action reference. Checkout disables persisted credentials; compiler inputs are fixed repository values. The job has only contents/read, no id-token/attestations permission, and runs after the unchanged ten required gates. The existing official HTTPS rustup bootstrap and bounded checksum-propagation retries remain unchanged; bootstrap bytes are not independently checksum-pinned. Only five exact metadata files are promoted as data; the separate privileged signer downloads them alongside the disjoint original four files and supplies signing authority. No token is explicitly forwarded to compilation; no artifact or cache chooses installer source or arguments. The existing fifteen-minute preparation budget remains; actual native compilation was measured at forty seconds in the preceding CI, while this job and the Rust preparation operation still need hosted measurement.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md#github-actions-portability-findings"
     }
   ]
 }

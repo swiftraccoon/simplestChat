@@ -19,6 +19,7 @@ use std::process::ExitCode;
 
 const USAGE: &str = concat!(
     "Usage: simplestchat-ops release build --output PATH [--timeout-seconds N] [--image-id ID]\n",
+    "       simplestchat-ops release attestation prepare [OPTIONS]\n",
     "       simplestchat-ops release manifest --path PATH\n",
     "       simplestchat-ops release archive --manifest PATH --path PATH\n",
     "       simplestchat-ops release receipt --envelope PATH --receipt PATH\n",
@@ -42,6 +43,9 @@ const USAGE: &str = concat!(
 
 fn main() -> ExitCode {
     let args: Vec<OsString> = std::env::args_os().skip(1).collect();
+    if args.len() >= 3 && args[0] == "release" && args[1] == "attestation" && args[2] == "prepare" {
+        return simplestchat_ops::release::attestation::prepare::run(&args[3..]);
+    }
     if args.len() == 1 && matches!(args[0].to_str(), Some("--help" | "-h")) {
         println!("{USAGE}");
         return ExitCode::SUCCESS;
