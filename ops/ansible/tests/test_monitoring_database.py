@@ -238,8 +238,13 @@ class IncidentDatabaseTests(unittest.TestCase):
         _ = self.sql((ROOT / "ops/ansible/files/monitoring-schema.sql").read_text())
         record = (ROOT / "ops/ansible/files/monitoring-alerts.sql").read_text()
         alert = incident("DatabaseUnavailable", "critical", {})
+        # Keep lifecycle events inside the real SQL retention window. Only the
+        # explicit aging step below should expire an incident as the calendar moves.
+        observed = datetime.fromisoformat(self.sql("SELECT clock_timestamp()::text;")) - timedelta(
+            hours=1
+        )
         value: JsonObject = {
-            "observedAt": "2026-09-23T10:00:00Z",
+            "observedAt": observed.isoformat(),
             "revision": "a" * 40,
             "complete": True,
             "alerts": [alert],
@@ -249,20 +254,20 @@ class IncidentDatabaseTests(unittest.TestCase):
         self.assertEqual(
             self.sql("SELECT count(*),sum(observations) FROM operations.alerts;"), "1|1"
         )
-        value["observedAt"] = "2026-09-23T10:01:00Z"
+        value["observedAt"] = (observed + timedelta(minutes=1)).isoformat()
         value["alerts"] = []
         value["complete"] = False
         _ = self.sql(record, value)
         self.assertEqual(
             self.sql("SELECT count(*) FROM operations.alerts WHERE resolved_at IS NULL;"), "1"
         )
-        value["observedAt"] = "2026-09-23T10:02:00Z"
+        value["observedAt"] = (observed + timedelta(minutes=2)).isoformat()
         value["complete"] = True
         _ = self.sql(record, value)
         self.assertEqual(
             self.sql("SELECT count(*) FROM operations.alerts WHERE resolved_at IS NULL;"), "0"
         )
-        value["observedAt"] = "2026-09-23T10:03:00Z"
+        value["observedAt"] = (observed + timedelta(minutes=3)).isoformat()
         value["alerts"] = [alert]
         _ = self.sql(record, value)
         self.assertEqual(
@@ -278,6 +283,6 @@ class IncidentDatabaseTests(unittest.TestCase):
             last_seen=now()-interval '40 days', resolved_at=now()-interval '40 days'
             WHERE resolved_at IS NOT NULL;"""
         )
-        value["observedAt"] = "2026-09-23T10:04:00Z"
+        value["observedAt"] = (observed + timedelta(minutes=4)).isoformat()
         _ = self.sql(record, value)
         self.assertEqual(self.sql("SELECT count(*) FROM operations.alerts;"), "1")
