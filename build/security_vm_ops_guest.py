@@ -1111,8 +1111,8 @@ def error_receipt(output: bytes, error: bytes, code: str, *, schema: bool = Fals
 
 def help_receipt(output: bytes, error: bytes) -> None:
     """Keep the maintained command surface visible without invoking a mutation route."""
+    manifest = b"simplestchat-ops release manifest --path PATH\n"
     required = (
-        b"Usage: simplestchat-ops release manifest --path PATH\n",
         b"simplestchat-ops release preflight [--helpers-json JSON]\n",
         b"simplestchat-ops distribution inspect-executable --path PATH\n",
         b"simplestchat-ops distribution install --request ABS --request-sha256 SHA\n",
@@ -1120,7 +1120,11 @@ def help_receipt(output: bytes, error: bytes) -> None:
     )
     require(
         not error
-        and output.startswith(required[0])
+        and output.startswith(b"Usage: simplestchat-ops ")
+        and any(
+            line in (b"Usage: " + manifest, b"       " + manifest)
+            for line in output.splitlines(keepends=True)
+        )
         and all(item in output for item in required)
         and output.count(b"Usage:") == 1
         and len(output) <= MAX_HELP

@@ -60,8 +60,10 @@ The entries below apply to the authored surface; the remaining inventory is pend
 
 The unchanged production Python files remain the reference. The final closed
 111-case driver passed ten Python tests, strict Ruff/format/basedpyright and its
-standalone shared-offset/ZIP64 cases. The original 238 Python reference hashes
-remain unchanged. An earlier 105/108-case set passed before independent review
+standalone shared-offset/ZIP64 cases. The held verification snapshot retained
+all 238 baseline Python hashes. The separate runtime-keeper help correction
+changes that guest and its fixtures; production attestation, trust and receiver
+references remain unchanged. An earlier 105/108-case set passed before review
 found central-versus-local flag handling and equal-offset overlap differences.
 Those trials remain separate; the final correction preserves Python's tie order,
 warning-only shared-offset exception and arbitrary-precision logical extent while

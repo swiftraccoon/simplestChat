@@ -83,7 +83,18 @@ class OpsRuntimeWorkflowTests(unittest.TestCase):
             self.assertNotIn("continue-on-error", step)
             self.assertNotIn("secrets", step)
             self.assertNotIn("${{", string(step.get("run", "")))
-            if step.get("uses") != UPLOAD:
+            if step.get("id") == "diagnostics":
+                self.assertEqual(step["if"], "${{ always() }}")
+                self.assertEqual(
+                    string(step, "run").splitlines(),
+                    [
+                        "if test -x target/debug/xtask; then",
+                        "  target/debug/xtask ops-artifact runtime-diagnostics",
+                        "fi",
+                    ],
+                )
+                self.assertEqual(step["timeout-minutes"], "1")
+            elif step.get("uses") != UPLOAD:
                 self.assertNotIn("if", step)
         canonical = yaml_value(
             (ROOT / ".github/workflows/ci.yml").read_text(), scalars_as_strings=True
@@ -172,7 +183,8 @@ class OpsRuntimeWorkflowTests(unittest.TestCase):
             int(string(runtime, "timeout-minutes")), int(string(job, "timeout-minutes"))
         )
         uploads = [step for step in steps if step.get("uses") == UPLOAD]
-        self.assertEqual(uploads, [steps[-1]])
+        self.assertEqual(len(uploads), 2)
+        self.assertEqual(uploads[1], steps[-1])
         self.assertEqual(uploads[0]["if"], "${{ success() }}")
         self.assertEqual(
             uploads[0]["with"],
@@ -181,6 +193,30 @@ class OpsRuntimeWorkflowTests(unittest.TestCase):
                 "path": "${{ runner.temp }}/ops-runtime/summary.json",
                 "if-no-files-found": "error",
                 "retention-days": "14",
+            },
+        )
+        self.assertEqual(
+            uploads[1]["if"],
+            "${{ always() && steps.diagnostics.outputs.retained == 'true' }}",
+        )
+        self.assertEqual(
+            uploads[1]["with"],
+            {
+                "name": "ops-runtime-diagnostics",
+                "path": "${{ runner.temp }}/ops-runtime-diagnostics/diagnostic.json",
+                "if-no-files-found": "error",
+                "retention-days": "1",
+            },
+        )
+        diagnostic = [step for step in steps if step.get("id") == "diagnostics"]
+        self.assertEqual(len(diagnostic), 1)
+        self.assertEqual(
+            diagnostic[0]["env"],
+            {
+                "OPS_RUN_ID": "${{ inputs.run_id }}",
+                "OPS_RUN_ATTEMPT": "${{ inputs.run_attempt }}",
+                "OPS_ARTIFACT_ID": "${{ inputs.artifact_id }}",
+                "OPS_RUNTIME_OUTCOME": "${{ steps.runtime.outcome }}",
             },
         )
 

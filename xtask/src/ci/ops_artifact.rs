@@ -36,12 +36,16 @@ const USAGE: &str = "usage: cargo run --locked -q -p xtask -- ops-artifact \
 build|source|registry|verify-retained|acquire|runtime \
 --request PATH --request-sha256 SHA256\n\
 cargo run --locked -q -p xtask -- ops-artifact hosted --output PATH\n\
-cargo run --locked -q -p xtask -- ops-artifact signing-inputs --directory PATH --output PATH";
+cargo run --locked -q -p xtask -- ops-artifact signing-inputs --directory PATH --output PATH\n\
+cargo run --locked -q -p xtask -- ops-artifact runtime-diagnostics";
 
 pub(super) fn run(arguments: &[String]) -> anyhow::Result<std::process::ExitCode> {
     if arguments == ["--help"] {
         println!("{USAGE}");
         return Ok(std::process::ExitCode::SUCCESS);
+    }
+    if arguments == ["runtime-diagnostics"] {
+        return Ok(runtime::diagnostics());
     }
     if let [operation, flag, output] = arguments
         && operation == "hosted"
