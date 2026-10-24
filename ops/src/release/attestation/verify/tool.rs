@@ -12,8 +12,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
-pub(super) type Environment = BTreeMap<OsString, OsString>;
-pub(super) fn restricted(source: impl IntoIterator<Item = (OsString, OsString)>) -> Environment {
+pub(in crate::release::attestation) type Environment = BTreeMap<OsString, OsString>;
+pub(in crate::release::attestation) fn restricted(
+    source: impl IntoIterator<Item = (OsString, OsString)>,
+) -> Environment {
     let mut environment: Environment = source
         .into_iter()
         .filter(|(key, _)| {
@@ -136,7 +138,20 @@ impl Alias {
         Ok(())
     }
 }
-pub(super) struct Tool {
+#[derive(Clone, Copy)]
+pub(in crate::release::attestation) enum Program {
+    Gh,
+    Curl,
+}
+impl Program {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Gh => "gh",
+            Self::Curl => "curl",
+        }
+    }
+}
+pub(in crate::release::attestation) struct Tool {
     alias: Alias,
     directory: Dir,
     file: Retained,
@@ -144,15 +159,22 @@ pub(super) struct Tool {
 }
 impl Tool {
     pub fn resolve(environment: &Environment, owner: &mut Owner) -> Result<Self> {
+        Self::resolve_program(environment, Program::Gh, owner)
+    }
+    pub fn resolve_program(
+        environment: &Environment,
+        program: Program,
+        owner: &mut Owner,
+    ) -> Result<Self> {
         let path = environment.get(OsStr::new("PATH")).ok_or(Cause::Command)?;
         let root = control::io(owner, std::env::current_dir())?;
         let mut selected = None;
         for path in std::env::split_paths(path) {
             owner.check(Window::Body)?;
             let path = if path.is_absolute() {
-                path.join("gh")
+                path.join(program.name())
             } else {
-                root.join(path).join("gh")
+                root.join(path).join(program.name())
             };
             if path.is_file()
                 && rustix::fs::accessat(

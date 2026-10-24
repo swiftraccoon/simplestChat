@@ -2613,3 +2613,80 @@ mismatches, measure the existing caller budget, and prove verification still
 finishes before Receiver/SSH construction. Copied prior API metadata proves no
 new API selection. No current source-only or inert fixture result satisfies that
 runtime/authentication gate.
+
+
+## Fresh release verification checks
+
+The complete native `release verify` operation has separate native fault,
+actual CLI and whole-reference checks. Run its ordinary tests with the normal
+parallel test runner:
+
+```sh
+cargo test --locked -p simplestchat-ops --lib release::attestation::acquire::
+cargo test --locked -p simplestchat-ops --test release_fresh_verify_cli
+```
+
+These checks own inert local GH/curl fixtures, actual pipes and process groups,
+signals, retained files, output faults and cleanup. Lifecycle/umask assertions
+run in an owned exact subprocess rather than changing the unit-test process's
+global mask. Their fixtures establish neither real GitHub selection nor TLS or
+cryptographic verification.
+
+The finite Python oracle executes the unchanged `build/verify-release.py` entry
+point and its real selection/download/extraction/cached-verification policy on
+103 named scenarios, adapting HTTP and cryptographic observations locally:
+
+```sh
+ops/ansible/.venv/bin/python3 -B \
+  ops/ansible/tests/release_fresh_verify_oracle.py --scenario fresh-success
+```
+
+Its genuine Rust comparison owns the reference process and then exercises the
+complete native operation with inert tools and real fixture bytes. Invoke the
+ignored test explicitly under the pinned controller Python environment:
+
+```sh
+PYTHON_CHECK_ENV=/absolute/pinned-controller-env \
+  cargo test --locked -p simplestchat-ops --lib \
+  release::attestation::acquire::oracle_tests::whole_fresh_release_matches_unchanged_python \
+  -- --ignored --exact
+```
+
+Operations automation owns this exact comparison in hosted and local CI. The
+broad database `--include-ignored` route skips only its unique basename
+`whole_fresh_release_matches_unchanged_python`; the oracle remains an explicit
+required automation step. The ordinary CLI target runs in the same Ops gate.
+No separately ignored native signal worker is introduced.
+
+The comparison covers both branches, repeat calls, current API relationships,
+token/grant roles, raw headers/targets, body limits and retained failure prefixes,
+late file/run/certificate refusals and the final public result. Native boundary
+differences are explicit in the
+[affected API review](release-fresh-verification-api-review.md), including curl
+framing/platform trust, read-idle timing and UTF-8 output paths. Cached operation
+must still acquire fresh API metadata and perform four verifications while curl
+and token retrieval are unavailable.
+
+Keep this fixture evidence separate from actual authenticated acquisition.
+Before switching an operational caller, use current explicit signed artifact
+selectors with a source-bound native binary: fetch and extract real bytes, run
+all four maintained verifiers, repeat through the cached branch, check original
+bytes and resource finalization, and measure the full caller's remaining budget.
+Prove completion before constructing Receiver/SSH or contacting the deployment
+host. An API-shaped fixture, copied metadata, source-built binary or successful
+compiler check alone does not establish authenticated distribution or bootstrap
+on a different target. Existing Python callers remain available until that
+separate migration is complete.
+
+On 2026-10-24, a source-built Darwin executable freshly acquired and verified
+signed artifact `12559686976` from successful CI run `40091336563` at
+`1e88240f388384fecce80ec620d970b781bc3d03`, then repeated cached verification.
+Both invocations returned exit 0, empty stderr and identical four-key results;
+all 11 files retained their original bytes. Fresh mode took 139.731 seconds and
+cached mode 20.304 seconds, including fixed role-observer logging. Each performed
+two current API calls and four distinct signature verifications; cached mode
+succeeded with curl unavailable and requested no token or grant. This is real
+platform transport and authentication evidence, separate from authenticated
+binary distribution, Linux musl execution and deployment-host integration.
+See the [affected API review](release-fresh-verification-api-review.md) for the
+artifact digest, tested tool versions and earlier failed trials.

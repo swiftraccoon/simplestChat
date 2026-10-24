@@ -8,7 +8,7 @@ use crate::{json::Json, release::trust};
 use serde::Serialize;
 use std::{collections::BTreeMap, ffi::OsString, path::PathBuf, time::Duration};
 
-pub(super) const USAGE: &str = concat!(
+pub(in crate::release::attestation) const USAGE: &str = concat!(
     "Usage: simplestchat-ops release attestation verify --directory ABS ",
     "--selection-json JSON --timeout-seconds N --finalization-seconds M\n",
     "Verify cached server bytes; 0 < M < N. Selection data does not prove fresh API identity."
@@ -26,7 +26,7 @@ struct RunId(i64);
 struct Attempt(i64);
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(super) struct Metadata {
+pub(in crate::release::attestation) struct Metadata {
     schema_version: u8,
     repository: String,
     artifact_id: ArtifactId,
@@ -51,14 +51,14 @@ fn text(value: &Json, key: &str) -> Result<String> {
         .map(str::to_owned)
         .ok_or(Cause::Input)
 }
-pub(super) fn hex(value: &str, length: usize) -> bool {
+pub(in crate::release::attestation) fn hex(value: &str, length: usize) -> bool {
     value.len() == length
         && value
             .bytes()
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 impl Metadata {
-    fn decode(bytes: &[u8]) -> Result<Self> {
+    pub fn decode(bytes: &[u8]) -> Result<Self> {
         let value =
             crate::json::decode_limited(bytes, trust::MAX_LINE).map_err(|_| Cause::Input)?;
         let object = value.object().ok_or(Cause::Input)?;
@@ -130,12 +130,11 @@ impl Metadata {
         .map_err(|_| Cause::Input)
     }
 }
-pub(super) struct Options {
+pub(in crate::release::attestation) struct Options {
     pub directory: PathBuf,
     pub metadata: Metadata,
     pub whole: Duration,
     pub reserve: Duration,
-    #[cfg(test)]
     pub environment: Option<BTreeMap<OsString, OsString>>,
 }
 fn number(value: &str) -> Result<u64> {
@@ -199,7 +198,6 @@ impl Options {
             metadata,
             whole: Duration::from_secs(whole),
             reserve: Duration::from_secs(reserve),
-            #[cfg(test)]
             environment: None,
         }))
     }

@@ -2,26 +2,25 @@
 //! The nine-field caller selection and returned envelope are passive data.
 
 #[cfg(test)]
-#[path = "verify/fixture.rs"]
-mod fixture;
+use super::verification_fixture as fixture;
 #[path = "verify/licenses.rs"]
-mod licenses;
+pub(super) mod licenses;
 #[path = "verify/options.rs"]
-mod options;
+pub(super) mod options;
 #[cfg(test)]
 #[path = "verify/oracle_tests.rs"]
 mod oracle_tests;
 #[path = "verify/policy.rs"]
 mod policy;
 #[path = "verify/process.rs"]
-mod process;
+pub(super) mod process;
 #[cfg(test)]
 #[path = "verify/tests.rs"]
 mod tests;
 #[path = "verify/tool.rs"]
-mod tool;
+pub(super) mod tool;
 #[path = "verify/zip.rs"]
-mod zip;
+pub(super) mod zip;
 
 use super::{
     bindings,
@@ -184,16 +183,10 @@ impl State {
         self.bind_files(options, &claim, owner)?;
         let bundle = self.file("release-attestation.jsonl");
         bundle.bound(process::OUT_LIMIT, owner)?;
-        let environment = {
-            #[cfg(test)]
-            if let Some(environment) = &options.environment {
-                tool::restricted(environment.clone())
-            } else {
-                tool::restricted(std::env::vars_os())
-            }
-            #[cfg(not(test))]
-            tool::restricted(std::env::vars_os())
-        };
+        let environment = options.environment.as_ref().map_or_else(
+            || tool::restricted(std::env::vars_os()),
+            |environment| tool::restricted(environment.clone()),
+        );
         let bundle_digest = bundle.hash(owner)?;
         self.tool = Some(tool::Tool::resolve(&environment, owner)?);
         let mut verification = BTreeMap::new();
@@ -232,6 +225,8 @@ impl State {
             policy::statement(&output, &options.metadata, &claim, owner)?;
             verification.insert(name.to_owned(), files::hex(&Sha256::digest(&output)));
         }
+        #[cfg(test)]
+        owner.after_verifiers();
         let actual = self.file("release-attestation.jsonl").hash(owner)?;
         policy::require(owner, actual == bundle_digest)?;
         let envelope = policy::envelope(
@@ -298,6 +293,21 @@ async fn execute(
         result
     }
 }
+pub(super) async fn acquired(
+    directory: std::path::PathBuf,
+    metadata: options::Metadata,
+    environment: tool::Environment,
+    owner: &mut Owner,
+) -> Result<Vec<u8>> {
+    let options = Options {
+        directory,
+        metadata,
+        whole: Duration::ZERO,
+        reserve: Duration::ZERO,
+        environment: Some(environment),
+    };
+    execute(&options, owner, &mut Native::default()).await
+}
 fn arguments(
     directory: &std::path::Path,
     name: &str,
@@ -336,7 +346,7 @@ fn arguments(
         "json".into(),
     ]
 }
-fn stdout(owner: &mut Owner, bytes: &[u8]) -> Result<()> {
+pub(super) fn stdout(owner: &mut Owner, bytes: &[u8]) -> Result<()> {
     let output = io::stdout();
     let mut lock = output.lock();
     lock.flush().map_err(|_| Cause::Io)?;

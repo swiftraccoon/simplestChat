@@ -1008,6 +1008,8 @@ class VerifiedWorkflowTests(unittest.TestCase):
                     "release::attestation::prepare::signal_tests::retained_hash_signal_child",
                     "--skip",
                     "whole_verify_scenarios_match_unchanged_python",
+                    "--skip",
+                    "whole_fresh_release_matches_unchanged_python",
                 ],
             )
             self.assertLess(steps.index(build), steps.index(execute))

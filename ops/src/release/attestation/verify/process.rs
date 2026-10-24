@@ -22,26 +22,26 @@ use tokio::{
     process::{ChildStderr, ChildStdout},
 };
 
-pub(super) const OUT_LIMIT: u64 = 8 * 1024 * 1024;
-pub(super) const ERR_LIMIT: u64 = 65536;
+pub(in crate::release::attestation) const OUT_LIMIT: u64 = 8 * 1024 * 1024;
+pub(in crate::release::attestation) const ERR_LIMIT: u64 = 65536;
 const BODY: Duration = Duration::from_secs(180);
 const TERM: Duration = Duration::from_secs(5);
 const REAP: Duration = Duration::from_secs(5);
 
-pub(super) struct Invocation {
+pub(in crate::release::attestation) struct Invocation {
     pub program: PathBuf,
     pub arguments: Vec<OsString>,
     pub environment: BTreeMap<OsString, OsString>,
     pub body_end: Instant,
     pub settlement_end: Instant,
 }
-pub(super) struct Completion {
+pub(in crate::release::attestation) struct Completion {
     pub result: Result<Vec<u8>>,
     pub observation: Observation,
 }
 /// Counts and hashes cover the actual observed prefix. A refused stream stops
 /// after its one overflow sentinel; only natural EOF proves the complete stream.
-pub(super) struct Observation {
+pub(in crate::release::attestation) struct Observation {
     pub pid: Option<u32>,
     pub exit_status: Option<i32>,
     pub stdin_closed: bool,
@@ -166,10 +166,12 @@ struct Streams {
     out_hash: Sha256,
     err_hash: Sha256,
     captured: Vec<u8>,
+    out_limit: u64,
 }
 impl Streams {
-    fn new() -> Self {
+    fn new(out_limit: u64) -> Self {
         Self {
+            out_limit,
             stdout: None,
             stderr: None,
             out_stopped: false,
@@ -190,7 +192,11 @@ impl Streams {
     }
     fn accept(&mut self, stdout: bool, bytes: &[u8], observed: &mut Observation) -> Result<()> {
         let (count, limit, hash) = if stdout {
-            (&mut observed.stdout_bytes, OUT_LIMIT, &mut self.out_hash)
+            (
+                &mut observed.stdout_bytes,
+                self.out_limit,
+                &mut self.out_hash,
+            )
         } else {
             (&mut observed.stderr_bytes, ERR_LIMIT, &mut self.err_hash)
         };
@@ -224,7 +230,7 @@ impl Streams {
             self.err_stopped = true;
             return Err(Cause::Io);
         }
-        let out_max = (OUT_LIMIT.saturating_sub(observed.stdout_bytes) + 1)
+        let out_max = (self.out_limit.saturating_sub(observed.stdout_bytes) + 1)
             .min(self.out_buffer.len() as u64) as usize;
         let err_max = (ERR_LIMIT.saturating_sub(observed.stderr_bytes) + 1)
             .min(self.err_buffer.len() as u64) as usize;
@@ -314,13 +320,30 @@ fn check_end(owner: &mut Owner, observed: &mut Observation, end: Instant) {
     }
 }
 
-pub(super) async fn run(owner: &mut Owner, request: Invocation) -> Completion {
+pub(in crate::release::attestation) async fn run(
+    owner: &mut Owner,
+    request: Invocation,
+) -> Completion {
     run_with(owner, request, Faults::default()).await
 }
+pub(in crate::release::attestation) async fn run_small(
+    owner: &mut Owner,
+    request: Invocation,
+) -> Completion {
+    run_with_limit(owner, request, Faults::default(), 65536).await
+}
 async fn run_with(owner: &mut Owner, request: Invocation, faults: Faults) -> Completion {
+    run_with_limit(owner, request, faults, OUT_LIMIT).await
+}
+async fn run_with_limit(
+    owner: &mut Owner,
+    request: Invocation,
+    faults: Faults,
+    out_limit: u64,
+) -> Completion {
     let started = owner.now();
     let mut observed = Observation::new();
-    let mut streams = Streams::new();
+    let mut streams = Streams::new(out_limit);
     let mut group = None;
     let admission = (|| {
         owner.check(Window::Body)?;
@@ -445,7 +468,7 @@ async fn run_with(owner: &mut Owner, request: Invocation, faults: Faults) -> Com
             || observed.stderr_limited
             || observed.timed_out
             || !observed.cleanup_errors.is_empty()
-            || observed.stdout_bytes > OUT_LIMIT
+            || observed.stdout_bytes > out_limit
             || observed.stderr_bytes > ERR_LIMIT
             || !observed.stdin_closed
             || !observed.stdout_closed

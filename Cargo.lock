@@ -3499,6 +3499,8 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "flate2",
+ "getrandom 0.4.3",
+ "httparse",
  "nix",
  "object",
  "rawzip",

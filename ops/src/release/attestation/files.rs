@@ -242,6 +242,58 @@ impl Dir {
     fn file(&self) -> &File {
         self.0.edges.last().unwrap().handle.file()
     }
+    pub fn path(&self) -> std::path::PathBuf {
+        let mut path = std::path::PathBuf::from("/");
+        for edge in &self.0.edges {
+            if let Some(name) = &edge.name {
+                path.push(name);
+            }
+        }
+        path
+    }
+    pub fn create_child(&self, name: &OsStr, owner: &mut Owner) -> Result<Self> {
+        leaf(name, owner)?;
+        self.check(owner, Window::Body)?;
+        mapped(
+            owner,
+            nix::sys::stat::mkdirat(self.file(), name, Mode::from_bits_truncate(0o700)),
+        )?;
+        let result = Self::open(&self.path().join(name), owner)?;
+        let accepted = (|| {
+            self.check(owner, Window::Body)?;
+            if self.0.edges.len() + 1 != result.0.edges.len()
+                || !self
+                    .0
+                    .edges
+                    .iter()
+                    .zip(&result.0.edges)
+                    .all(|(a, b)| binding(&a.stamp, &b.stamp))
+            {
+                return mismatch(owner);
+            }
+            let stamp = control::io(owner, result.file().metadata())?;
+            if stamp.uid() != rustix::process::getuid().as_raw() || stamp.mode() & 0o7777 != 0o700 {
+                return mismatch(owner);
+            }
+            Ok(())
+        })();
+        if let Err(cause) = accepted {
+            result.finish(owner);
+            return Err(cause);
+        }
+        Ok(result)
+    }
+    pub fn free_bytes(&self, owner: &mut Owner) -> Result<u64> {
+        self.check(owner, Window::Body)?;
+        let stat = mapped(owner, nix::sys::statvfs::fstatvfs(self.file()))?;
+        u64::try_from(
+            u128::from(stat.blocks_available())
+                .checked_mul(u128::from(stat.fragment_size()))
+                .ok_or(Cause::Bounds)?,
+        )
+        .map_err(|_| Cause::Bounds)
+    }
+
     pub fn check(&self, owner: &mut Owner, window: Window) -> Result<()> {
         owner.check(window)?;
         for (at, edge) in self.0.edges.iter().enumerate() {
@@ -501,7 +553,7 @@ impl Retained {
         }
         Ok((hex(&digest.finalize()), bytes))
     }
-    fn write_chunk(&mut self, bytes: &[u8], offset: u64, owner: &mut Owner) -> Result<()> {
+    pub fn write_chunk(&mut self, bytes: &[u8], offset: u64, owner: &mut Owner) -> Result<()> {
         if !self.created || self.sealed {
             return control::failed(owner, Cause::Changed);
         }
@@ -529,7 +581,7 @@ impl Retained {
         }
         Ok(())
     }
-    fn seal(&mut self, expected: &str, owner: &mut Owner) -> Result<()> {
+    pub fn seal(&mut self, expected: &str, owner: &mut Owner) -> Result<()> {
         self.check(owner, Window::Body)?;
         control::io(owner, self.handle.file().sync_all())?;
         let stamp = control::io(owner, self.handle.file().metadata())?;

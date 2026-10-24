@@ -403,7 +403,7 @@ fn dropping_a_pending_read_keeps_original_buffers_and_resumes_actual_pipe_bytes(
         let mut input = group.child().stdin.take().expect("piped input");
         let stdout = group.child().stdout.take().expect("piped output");
         let stderr = group.child().stderr.take().expect("piped errors");
-        let mut streams = Streams::new();
+        let mut streams = Streams::new(OUT_LIMIT);
         let mut observed = Observation::new();
         match ChildStdout::from_std(stdout) {
             Ok(pipe) => streams.stdout = Some(pipe),
