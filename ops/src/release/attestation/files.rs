@@ -175,7 +175,7 @@ pub(super) struct Dir(Rc<Chain>);
 impl Dir {
     pub fn open(path: &Path, owner: &mut Owner) -> Result<Self> {
         owner.check(Window::Body)?;
-        if !super::options::canonical(path) {
+        if !canonical(path) {
             return control::failed(owner, Cause::Input);
         }
         let root = mapped(
@@ -333,6 +333,17 @@ impl Witness {
         self.namespace(owner, window, growing)
     }
 }
+pub(super) fn canonical(path: &Path) -> bool {
+    path.is_absolute()
+        && path
+            .components()
+            .all(|part| matches!(part, Component::RootDir | Component::Normal(_)))
+        && path
+            .components()
+            .collect::<std::path::PathBuf>()
+            .as_os_str()
+            == path.as_os_str()
+}
 pub(super) struct Retained {
     handle: Handle,
     witness: Witness,
@@ -340,8 +351,9 @@ pub(super) struct Retained {
     sealed: bool,
 }
 impl Retained {
-    pub fn open(directory: Dir, name: &str, owner: &mut Owner) -> Result<Self> {
-        leaf(OsStr::new(name), owner)?;
+    pub fn open(directory: Dir, name: impl AsRef<OsStr>, owner: &mut Owner) -> Result<Self> {
+        let name = name.as_ref();
+        leaf(name, owner)?;
         directory.check(owner, Window::Body)?;
         let descriptor = mapped(owner, openat(directory.file(), name, READ, Mode::empty()))?;
         let handle = Handle::new(File::from(descriptor));
@@ -361,7 +373,7 @@ impl Retained {
             handle,
             witness: Witness {
                 directory,
-                name: name.into(),
+                name: name.to_owned(),
                 stamp,
             },
             created: false,
@@ -422,6 +434,9 @@ impl Retained {
             }
         }
     }
+    pub fn file(&self) -> &File {
+        self.handle.file()
+    }
     pub fn name(&self) -> &OsStr {
         &self.witness.name
     }
@@ -471,7 +486,7 @@ impl Retained {
             digest.update(&buffer[..size]);
             #[cfg(test)]
             if PROBE.with(|p| std::mem::take(&mut p.borrow_mut().hash_ready)) {
-                control::io(owner, super::stdout(b"PREPARE-HASH-READY\n"))?;
+                control::io(owner, super::prepare::stdout(b"PREPARE-HASH-READY\n"))?;
             }
             if collect {
                 bytes.try_reserve(size).map_err(|_| {

@@ -1,2 +1,7 @@
-//! Offline preparation of unsigned server signing inputs, without signature authority.
+//! Offline server attestation preparation and cached verification operations.
+
+mod bindings;
+mod control;
+mod files;
 pub mod prepare;
+pub mod verify;

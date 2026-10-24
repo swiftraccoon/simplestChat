@@ -1829,3 +1829,131 @@ streamed I/O, copied bytes are read back, and the first observed failure remains
 primary through all-peer settlement. This detects observed replacement and
 mutation; it is not a filesystem lock, signature or authentication mechanism.
 Same-UID writable-filesystem/check-read races remain outside that claim.
+
+
+## Cached server attestation verification
+
+`simplestchat-ops release attestation verify` verifies an already downloaded
+candidate with four fresh maintained `gh attestation verify` invocations. It
+performs no API selection, download, extraction, signing, SSH, engine or host
+operation. The original Python `verify_directory` and installed callers remain
+available; caller migration requires the separate recorded authentication and
+before-SSH gates.
+
+```sh
+target/release/simplestchat-ops release attestation verify \
+  --directory /controlled/cached-release \
+  --selection-json "$FRESH_SELECTED_METADATA_JSON" \
+  --timeout-seconds "$VERIFY_SECONDS" \
+  --finalization-seconds "$VERIFY_FINALIZATION_SECONDS"
+```
+
+The authenticated caller supplies the exact nine fields `schemaVersion`,
+`repository`, `artifactId`, `buildRunId`, `ciRunId`, `runAttempt`, `revision`,
+`artifactZipBytes` and `zipSha256`. `--selection-json` is UTF-8 JSON at most
+16 KiB, with no `attestation` field or previous proof. The JSON itself does not
+prove a fresh API observation. Keep API selection and the trusted controller
+channel as their separate authorities. IDs and attempts satisfy
+`0 < value < 2^53`; build/CI run IDs agree. Attempts at or above `2^31` are
+supported here; preparation's narrower producer selector does not apply.
+The ZIP identity is a positive size at most 2 GiB and a lowercase SHA-256.
+Repository spelling remains exact in certificate URLs.
+
+Every full flag occurs once; split and equals forms are supported. Numeric
+arguments use ASCII decimal syntax. Both budgets are required, with `0 < M < N`
+and no default, extension or guessed maximum. The original entry instant covers
+parsing, admission, ZIP work, all verifier processes, revalidation, file/runtime
+settlement and stdout. Body work ends at `entry + N - M`. Each verifier retains
+its reference 180-second body cap, clipped to the remaining original body budget
+while preserving five seconds of TERM grace and five seconds of reap time.
+No new peer is admitted without that room. The caller's reserve remains for
+final file/runtime/output settlement. Four maximum command times need not fit
+within a chosen whole budget; measure real inputs and authentication before
+selecting caller values. Existing 660-second Ansible and 1080-second controller
+guards also cover their other phases and are not increased by this command.
+
+The directory is a canonical absolute path, with no symlink components. Its
+`artifact.zip` and the ten fixed selected files are original nofollow regular
+files retained throughout verification. Unrelated directory entries are allowed;
+there is no directory membership seal or new arbitrary depth/FD limit. This is
+an explicit native path profile rather than Python's wrapper path resolution.
+Candidate files are never replaced, republished or rolled back.
+
+Verification preserves the reference order: compare the ZIP to its selected
+size/digest and the ten retained members once; validate the original claim and
+its eight file/runtime relationships; admit the original bundle and verifier;
+run each of the four subjects in order; form a new passive proof; then check the
+full build/source/manifest/archive and received-file relationships. Outcome
+schema/error, the exact five source inputs and the full manifest are late checks.
+Required runtime expiry samples current UTC separately in the initial and final
+binding phases. Lexical expiry checks precede each UTC sample. There is no added
+second decompression pass, cached-proof shortcut or source/SBOM schema expansion.
+Original namespace/content witnesses remain checked at handoffs and completion.
+
+The ZIP adapter uses the locked rawzip 0.5.2 parser, existing flate2 and streamed
+CRC/SHA checks. It preflights at most 65557 terminal bytes before library metadata
+allocation: one-disk EOCD, bounded counts, at most 1 MiB of central metadata and
+an exact central-directory endpoint. Fixed heap buffers hold 256 KiB of metadata
+and 64 KiB per streamed payload. Each declared and actual entry count is bounded
+by 256; they need not equal each other. Declared uncompressed totals stay within
+2 GiB + 128 MiB, with image at most 2 GiB and each other entry at most 64 MiB.
+All ten selected regular members must be nonempty; safe extra entries remain
+allowed and their payloads are not extracted or unnecessarily decompressed.
+
+Central metadata remains authoritative as in Python. Small member ZIP64 extras,
+local metadata differences, data descriptors, safe extra directory payloads and
+file/prefix-child names are not replaced with the acquisition adapter's stricter
+layout policy. Changed Unicode Path names are refused; the reference's ignored
+or equivalent extra fields retain their behavior. Selected local signature,
+filename and overlap checks remain. Unsupported patch/strong-encryption bits
+are checked on selected central entries, while differing local flags retain
+Python's behavior. Equal local offsets retain Python's reversed central order
+and accepted warning-only overlap case. Logical ZIP64 extents use checked u128
+arithmetic; streamed reads end at the original physical ZIP boundary and stay
+within the unchanged ZIP/output bounds. These guards remain alongside decoded
+count/CRC and exact retained-file hashes. Reads stop at the declared uncompressed length as the
+reference does, without a new trailing-compressed-byte policy. Offsets and sizes
+use checked native arithmetic. Parsed JSON uses the existing byte-aware
+128-container/100,000-value, Unicode-scalar, 4300-digit integer and finite-float
+profile; original encodings and successful verifier stdout hashes are preserved.
+These native resource/encoding boundaries are not a full Python-domain claim.
+
+Only the inherited `PATH`, `HOME`, `USER`, `LOGNAME`, `GH_TOKEN`, `GITHUB_TOKEN`
+and `XDG_CONFIG_HOME` reach the verifier, with `LC_ALL=C`. Use the controller's
+trusted maintained `gh` installation and configuration. Proxy/tracing/SSH
+variables are omitted, credentials never enter arguments or public output, and
+no candidate value selects a command or flag. The tool and original file
+witnesses are checked around every call. GH consumes paths; these checks do not
+prove which inode it opened or lock a filesystem against the same UID.
+
+Each process has empty, explicitly closed stdin and independent 8 MiB stdout /
+64 KiB stderr bounds. Both streams drain simultaneously. Bounded nonempty stderr
+is permitted. Natural EOF, exact group retirement, consuming reap and checked
+pipe closes are required; a leader exit alone is insufficient. Child exits
+124/130/143 remain subordinate failures, distinct from the original owner's
+signal/deadline. Every admitted peer receives settlement after a refusal, while
+the first observed cause remains primary. Blocked kernel I/O/reap is outside a
+hard cooperative wall bound; late completion remains negative.
+
+Exit 0 returns one bounded newline-terminated final ten-field passive envelope
+only after all four cryptographic results, exact certificate/claim/subject checks
+and local finalization. Its four verification hashes cover complete original
+stdout bytes. A previous receipt, zero child status or parsed claim alone cannot
+establish this result. Callers must wait for exit 0 and complete bounded stdout;
+any nonzero result invalidates all output, including a complete passive envelope.
+For a failure known before output, the command attempts to write fixed negative
+JSON. Errors during output or final signal/deadline checks can leave a partial
+line or an already emitted complete envelope. The final exit status remains
+authoritative. Operational failures return 1, and invalid usage returns 2 with
+fixed usage. Failure text never includes private values. The dedicated synchronous
+CLI must run outside an entered Tokio runtime; help and notices need no runtime,
+environment or files.
+
+`release attestation verify --licenses` prints the exact authenticated 1022-byte
+rawzip MIT text through a checked writer; `release build --licenses` retains the
+existing runtime notices. This is an affected-dependency notice set, not a full
+workspace audit. The new direct edge uses rawzip's default `std`/`alloc` features
+and no normal dependency, build script or native/TLS graph; root must record the
+actual target/default dependency inventory. Embedding the notice adds no signed
+payload file, server subject or Ops subject. The server ten-file/four-subject and
+Ops three-subject contracts remain unchanged.

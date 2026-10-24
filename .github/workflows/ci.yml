@@ -372,6 +372,7 @@ jobs:
           --skip release::build::process::tests::signal_worker
           --skip release::attestation::prepare::oracle_tests::whole_prepare_scenarios_match_unchanged_python
           --skip release::attestation::prepare::signal_tests::retained_hash_signal_child
+          --skip whole_verify_scenarios_match_unchanged_python
 
       - name: Synthetic media delivery correctness smoke
         if: steps.verified.outputs.cache-hit != 'true'

@@ -1,6 +1,7 @@
 //! Allowlisted inspection, explicit local release builds and host capacity.
 //! Inspection starts no child, engine or network. Release builds own their local
-//! Git/Docker effects; capacity retains its separate authenticated host contract.
+//! Git/Docker effects; cached verification owns fresh maintained verifier calls.
+//! Capacity retains its separate authenticated host contract.
 
 mod assets_cli;
 mod preflight_cli;
@@ -20,6 +21,7 @@ use std::process::ExitCode;
 const USAGE: &str = concat!(
     "Usage: simplestchat-ops release build --output PATH [--timeout-seconds N] [--image-id ID]\n",
     "       simplestchat-ops release attestation prepare [OPTIONS]\n",
+    "       simplestchat-ops release attestation verify [OPTIONS]\n",
     "       simplestchat-ops release manifest --path PATH\n",
     "       simplestchat-ops release archive --manifest PATH --path PATH\n",
     "       simplestchat-ops release receipt --envelope PATH --receipt PATH\n",
@@ -45,6 +47,9 @@ fn main() -> ExitCode {
     let args: Vec<OsString> = std::env::args_os().skip(1).collect();
     if args.len() >= 3 && args[0] == "release" && args[1] == "attestation" && args[2] == "prepare" {
         return simplestchat_ops::release::attestation::prepare::run(&args[3..]);
+    }
+    if args.len() >= 3 && args[0] == "release" && args[1] == "attestation" && args[2] == "verify" {
+        return simplestchat_ops::release::attestation::verify::run(&args[3..]);
     }
     if args.len() == 1 && matches!(args[0].to_str(), Some("--help" | "-h")) {
         println!("{USAGE}");

@@ -14,6 +14,9 @@ pub(super) enum Cause {
     Deadline,
     Interrupt,
     Terminate,
+    Zip,
+    Bounds,
+    Command,
 }
 pub(super) type Result<T> = std::result::Result<T, Cause>;
 #[derive(Clone, Copy)]
@@ -61,6 +64,19 @@ impl Owner {
             return self.start + elapsed;
         }
         Instant::now()
+    }
+    pub fn end(&self) -> Instant {
+        self.end
+    }
+    pub fn body_end(&self) -> Instant {
+        self.body
+    }
+    pub fn cleanup_before(&self, end: Instant) -> Result<()> {
+        if self.now() >= end.min(self.end) {
+            Err(Cause::Deadline)
+        } else {
+            Ok(())
+        }
     }
     pub fn record(&mut self, error: Cause) {
         self.primary.get_or_insert(error);

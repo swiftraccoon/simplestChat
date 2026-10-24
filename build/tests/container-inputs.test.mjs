@@ -249,6 +249,8 @@ test('context excludes local-only descendants while retaining production inputs'
     'ops/private.env', 'ops/src/private.env', 'ops/src/release/private.env',
     'ops/src/capacity_vps/private.env', 'ops/src/capacity_vps/retained/artifact.zip',
     'ops/tests/private.env', 'ops/src/release/archive/private.env', 'ops/README.md',
+    'ops/src/release/attestation/verify/private.env',
+    'ops/src/release/attestation/verify/retained.json',
     'ops/unrelated-local-selection.json', 'ops/ops-build-inputs.private.json',
     'build/CLAUDE.md', 'build/private.env', 'src/CLAUDE.md', 'src/auth/private.env',
     'security/private.env', 'security/notes.json', 'security/runtime/private.env',
@@ -348,6 +350,9 @@ test('ops workspace inputs remain narrow and no ops binary enters the production
     '!ops/src/release/attestation/',
     'ops/src/release/attestation/**',
     '!ops/src/release/attestation/*.rs',
+    '!ops/src/release/attestation/verify/',
+    'ops/src/release/attestation/verify/**',
+    '!ops/src/release/attestation/verify/*.rs',
     '!ops/ansible/', 'ops/ansible/**', '!ops/ansible/files/', 'ops/ansible/files/**',
     '!ops/ansible/files/bounded_process.py', '!ops/ansible/files/release_json.py',
   ].toSorted());
