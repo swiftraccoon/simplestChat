@@ -7,29 +7,44 @@ use super::super::{
 use serde::Serialize;
 use std::{collections::BTreeMap, ffi::OsString, path::PathBuf, time::Duration};
 
-pub(super) const USAGE: &str = concat!(
+pub(in crate::release::attestation) const USAGE: &str = concat!(
     "Usage: simplestchat-ops release verify --repository REPO --revision SHA ",
     "--artifact-id N --ci-run N --output-parent ABS [--artifact-dir ABS] ",
     "--timeout-seconds N --finalization-seconds M\n",
     "Fresh API identity and signed local bytes; 0 < M < N. No SSH or deployment-host operation."
 );
-pub(super) const SAFE: u64 = (1_u64 << 53) - 1;
+pub(in crate::release::attestation) const SAFE: u64 = (1_u64 << 53) - 1;
 
 #[derive(Clone, Copy, Debug, Serialize)]
 #[serde(transparent)]
-pub(super) struct ArtifactId(u64);
+pub(in crate::release::attestation) struct ArtifactId(u64);
 #[derive(Clone, Copy, Debug, Serialize)]
 #[serde(transparent)]
-pub(super) struct RunId(u64);
+pub(in crate::release::attestation) struct RunId(u64);
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(super) struct Selected {
+pub(in crate::release::attestation) struct Selected {
     pub repository: String,
     pub revision: String,
     pub artifact_id: ArtifactId,
     pub ci_run: RunId,
 }
 impl Selected {
+    pub fn new(repository: String, revision: String, artifact: u64, run: u64) -> Result<Self> {
+        if !self::repository(&repository)
+            || !digest(&revision, 40)
+            || !(1..=SAFE).contains(&artifact)
+            || !(1..=SAFE).contains(&run)
+        {
+            return Err(Cause::Input);
+        }
+        Ok(Self {
+            repository,
+            revision,
+            artifact_id: ArtifactId(artifact),
+            ci_run: RunId(run),
+        })
+    }
     pub fn artifact(&self) -> u64 {
         self.artifact_id.0
     }
@@ -37,7 +52,7 @@ impl Selected {
         self.ci_run.0
     }
 }
-pub(super) struct Options {
+pub(in crate::release::attestation) struct Options {
     pub selected: Selected,
     pub output_parent: PathBuf,
     pub artifact: Option<PathBuf>,
@@ -52,7 +67,7 @@ pub(super) struct Options {
     #[cfg(test)]
     pub output_spelling: Option<PathBuf>,
 }
-pub(super) fn number(value: &str) -> Result<u64> {
+pub(in crate::release::attestation) fn number(value: &str) -> Result<u64> {
     if value.is_empty() || !value.bytes().all(|byte| byte.is_ascii_digit()) {
         return Err(Cause::Input);
     }
@@ -66,7 +81,7 @@ fn identity(value: &str) -> Result<u64> {
             .ok_or(Cause::Input)
     })
 }
-pub(super) fn repository(value: &str) -> bool {
+pub(in crate::release::attestation) fn repository(value: &str) -> bool {
     let Some((owner, name)) = value.split_once('/') else {
         return false;
     };
@@ -82,13 +97,36 @@ pub(super) fn repository(value: &str) -> bool {
     };
     part(owner, 39, false) && part(name, 100, true)
 }
-pub(super) fn digest(value: &str, length: usize) -> bool {
+pub(in crate::release::attestation) fn digest(value: &str, length: usize) -> bool {
     value.len() == length
         && value
             .bytes()
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 impl Options {
+    pub fn internal(
+        selected: Selected,
+        output_parent: PathBuf,
+        artifact: Option<PathBuf>,
+        whole: Duration,
+        reserve: Duration,
+    ) -> Self {
+        Self {
+            selected,
+            output_parent,
+            artifact,
+            whole,
+            reserve,
+            #[cfg(test)]
+            environment: None,
+            #[cfg(test)]
+            free_bytes: None,
+            #[cfg(test)]
+            expire_after: None,
+            #[cfg(test)]
+            output_spelling: None,
+        }
+    }
     pub fn parse(arguments: &[OsString]) -> Result<Option<Self>> {
         if arguments.len() == 1 && matches!(arguments[0].to_str(), Some("--help" | "-h")) {
             return Ok(None);

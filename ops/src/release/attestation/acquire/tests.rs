@@ -2,7 +2,7 @@
 use super::super::verification_fixture as cached;
 use super::*;
 #[path = "fixture.rs"]
-mod fixture;
+pub(in crate::release::attestation) mod fixture;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::{fs, os::unix::fs::symlink};

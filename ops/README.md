@@ -2145,8 +2145,106 @@ call can block, with the same kernel-stall qualification as file operations.
 
 The [affected API review](../docs/release-fresh-verification-api-review.md)
 records validation, typed/passive data, serialization, privacy, I/O, runtime and
-explicit finalization decisions under the prospective standard. Private sharing
-stays limited to the two actual verification operations. Tests and actual
+explicit finalization decisions under the prospective standard. Private sharing covers the two local verification operations and the
+prepared-receiver fetch controller under the same operation owner. Tests and actual
 authenticated transport measurements are separate evidence in the
 [testing guide](../docs/testing.md); source checks and inert oracles do not
 establish installed-binary or host readiness.
+
+## Prepared-receiver release fetch controller
+
+`simplestchat-ops release fetch` implements the complete local transaction in
+`build/release_fetch_controller.py`: fresh explicit API selection, local signed
+bundle verification, then the prepared Python receiver's SSH protocol. The
+Python reference, receiver and deployment/Ansible callers remain operational.
+This standalone route does not install a target executable, change bootstrap,
+retry an uncertain fetch or stage/deploy an image.
+
+```sh
+target/release/simplestchat-ops release fetch \
+  --repository swiftraccoon/simplestChat \
+  --revision "$REVISION" --artifact-id "$ARTIFACT_ID" --ci-run "$CI_RUN_ID" \
+  --host "$HOST" --user "$SSH_USER" --identity /controlled/ssh-identity \
+  --output-parent /controlled/release-evidence \
+  --timeout-seconds "$FETCH_SECONDS" \
+  --finalization-seconds "$FETCH_FINALIZATION_SECONDS"
+```
+
+Optional `--port` defaults to 22. `--verified-directory /controlled/candidate`
+selects the cached local branch; it still performs fresh metadata and all four
+maintained cryptographic verifiers. Omitting that flag downloads and extracts
+local evidence first. An explicitly empty directory remains a supplied cached
+selector and is refused by this native canonical-path profile; it never selects
+fresh acquisition. Both branches create an exclusive private `release-fetch.*`
+attempt before metadata. Downloaded evidence uses its fixed `verified/` child.
+
+The original private verification result supplies the full ten-field envelope
+directly under the same owner. A saved report, public four-key result or
+caller-supplied success JSON cannot substitute for it. `artifact.json` is saved
+exclusively before SSH begins. After sending the envelope, only the receiver's
+exact two-field Ready message permits a new API token/download grant. The URL
+used for a local download is never reused for the remote fetch. GitHub tokens
+stay in their maintained local roles; the SSH environment contains only the
+reference PATH/HOME/USER/LOGNAME/SSH_AUTH_SOCK subset and LC_ALL=C. Grants enter
+SSH stdin only, and never public output, arguments or retained journals.
+
+The fixed OpenSSH argv preserves BatchMode, strict host keys, disabled multiplex,
+forwarding/proxy/local-command controls and the original receiver command.
+OpenSSH still uses the operator's trusted user/system configuration and known
+hosts; no `-F` override or new host-key bootstrap is introduced. A non-root user
+uses the existing `sudo -n --` receiver command. The identity must be a real-UID
+owned regular file with exact mode 0400 or 0600. Native active paths are canonical
+absolute nofollow paths with UTF-8 spelling; this is narrower than Python's
+relative cache and surrogate-path domain. Retained descriptors/hashes detect
+observed identity/tool changes, but OpenSSH opens its own identity pathname.
+These checks are neither an atomic descriptor handoff nor a lock against a
+same-UID writer. Existing SSH configuration and agent semantics remain trusted.
+
+N and M are required positive budgets with `0 < M < N`. One original entry clock
+covers parsing, tool/filesystem admission, two metadata calls, local acquisition
+or cache verification, four cryptographic verifiers, SSH, the post-Ready grant,
+reporting, output and runtime/umask restoration. Body ends at `entry + N - M`.
+The SSH protocol retains 30 seconds inside that body for its existing 15-second
+exit, five-second natural EOF, five-second TERM and five-second reap windows.
+Ready/receipt waits retain their 45/315-second caps, clipped to the original
+protocol end. Every post-admission witness/hash/read body checkpoint inherits
+that same protocol ceiling, including tool checks before a new grant's child
+window is calculated. The ceiling is fenced before transport settlement; the
+original body and whole ends remain unchanged. Local GitHub/curl/verifier phase
+caps and the documented native idle/CA profile above remain in force. No subprocess CLI or fresh owner restarts
+a clock. The existing callers' 660/1080-second guards are unchanged; a source
+port does not choose or increase their limits.
+
+Stdin remains open after the URL until the final receipt arrives. The cumulative
+Ready/final receive counter and the final trailing buffer retain the reference's
+separate 64 KiB bounds; physical output may therefore exceed one 64 KiB total.
+Only natural EOF followed by permitted ASCII whitespace and the current child
+status can complete transport. Forced EOF or local group retirement cannot
+establish receipt delivery or a remote durable outcome. The original leader is
+reserved until all exact-group retirement signals finish, then reaped once.
+Known pipe/file/tool/directory finalizers are attempted after failure, while the
+first cause stays primary. Blocked kernel I/O, close and reap remain outside a
+hard wall-time guarantee.
+
+The validated sixteen-field remote projection is saved before transport
+completion. `remoteSettled` is adopted only after successful transport finish;
+it is still a receiver claim, distinct from a current zero SSH exit and complete
+positive receipt. Missing/malformed receipts, timeouts or a locally killed SSH
+process leave the remote outcome unknown. Inspect retained evidence; the
+controller performs no automatic retry or remote rollback. `outcome.json` is an
+exclusive bounded private journal written/fsynced under the original finalization
+window, including negative outcomes when time/signals permit. Its observation
+precedes later close/output/runtime fences. Exit 0 and complete final stdout
+are both required; any nonzero status invalidates earlier complete or partial
+reports. Syntax/unknown-flag failures return 2. Parsed selector/key/path
+validation returns 1 with the original fixed three-field `invalid_options`
+report; invalid native N/M budgets remain usage 2. Other operational failure
+returns 1 with fixed redacted classes. Native private typed causes preserve the first failure, while
+later cleanup/journal uncertainty may update the legacy report projection.
+
+`release fetch --help` and `--licenses` require no runtime/environment/files or
+remote operations. Notices reuse the exact scoped local-verifier texts; no
+new dependency or complete workspace license inventory is introduced. The
+synchronous entry point must run outside an entered Tokio runtime. Review the
+[affected API decisions](../docs/release-fetch-api-review.md) and
+[validation evidence](../docs/testing.md) before considering any caller switch.

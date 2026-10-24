@@ -1950,6 +1950,16 @@
       "reachability": "Reviewed 2026-10-24 for only this new location and immutable action reference. Checkout disables persisted credentials; compiler inputs are fixed repository values. The job has only contents/read, no id-token/attestations permission, and runs after the unchanged ten required gates. The existing official HTTPS rustup bootstrap and bounded checksum-propagation retries remain unchanged; bootstrap bytes are not independently checksum-pinned. Only five exact metadata files are promoted as data; the separate privileged signer downloads them alongside the disjoint original four files and supplies signing authority. No token is explicitly forwarded to compilation; no artifact or cache chooses installer source or arguments. The existing fifteen-minute preparation budget remains; actual native compilation was measured at forty seconds in the preceding CI, while this job and the Rust preparation operation still need hosted measurement.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md#github-actions-portability-findings"
+    },
+    {
+      "scanner": "zizmor",
+      "fingerprint": "superfluous-actions:0fb2d712953646c2c07edb9a959b25649b214c63cb1143b35266a007af663b35",
+      "scope": ".github/workflows/release-fetch-runtime.yml#jobs/release-fetch-runtime/steps/2/uses",
+      "owner": "swiftraccoon",
+      "rationale": "The manual native fetch proof compiles with the repository exact Rust 1.99.0 toolchain and explicit Linux GNU target before its sole read-only API credential leaf. The immutable action selects those fixed inputs instead of the hosted runner default.",
+      "reachability": "Reviewed 2026-10-24 for only this exact same-repository, main-only workflow-dispatch step and immutable 89b12181fb390509a0842a86cc55eeb8eb928c1d action. Checkout disables persisted credentials. Fixed repository inputs select toolchain 1.99.0 and x86_64-unknown-linux-gnu before source compilation and before GH_TOKEN is exposed. No artifact, workflow input or cache selects installer source or arguments. The existing official HTTPS rustup bootstrap remains a trust boundary without an independent installer-checksum claim. The workflow has only contents/actions read permissions and no signing or OIDC authority. This review covers only the informational redundant-installer finding; source, runtime, host-key, resource and artifact checks remain blocking.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md#github-actions-portability-findings"
     }
   ]
 }

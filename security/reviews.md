@@ -253,6 +253,22 @@ checks remain blocking. The `actions: read` permission is documented inline for
 acquiring the exact selected CI run and its artifact; it receives no exception.
 This review makes no claim about cold hosted compilation or guest runtime.
 
+The manual native-fetch proof adds one exact informational installer review at
+`release-fetch-runtime.yml#jobs/release-fetch-runtime/steps/2/uses`, reviewed
+on 2026-10-24. The same immutable action source was re-read. Its explicit
+`toolchain: 1.99.0` reaches `rustup toolchain install` unchanged, and its fixed
+`targets: x86_64-unknown-linux-gnu` becomes the target argument. Installation
+and compilation precede the sole read-only credential leaf. Credential-free
+checkout and the fixed repository/main dispatch guard retain the earlier trust
+boundary; no workflow input, artifact or cache chooses installer arguments.
+The official HTTPS rustup bootstrap remains without an independent installer
+checksum claim. No signing or OIDC permission is granted. This location retains
+the existing feature fingerprint and 2026-11-29 expiry, and covers only the
+informational redundant-installer finding. Source, signed-artifact, host-key,
+process/resource, actual runtime and finalization checks remain blocking.
+Source-built GNU execution does not establish authenticated musl distribution
+or authorize an operational caller switch.
+
 ## Account-room action reference
 
 On 2026-10-18, the new manual-only account-room experiment produced one

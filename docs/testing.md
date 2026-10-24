@@ -2690,3 +2690,56 @@ platform transport and authentication evidence, separate from authenticated
 binary distribution, Linux musl execution and deployment-host integration.
 See the [affected API review](release-fresh-verification-api-review.md) for the
 artifact digest, tested tool versions and earlier failed trials.
+
+## SSH release fetch checks
+
+The native `release fetch` command verifies locally before starting its single
+OpenSSH session with the existing Python receiver. Run ordinary native and CLI
+checks separately from the whole-reference comparison:
+
+```sh
+cargo test --locked -p simplestchat-ops --lib release::attestation::fetch::
+cargo test --locked -p simplestchat-ops --test release_fetch_cli
+PYTHON_CHECK_ENV=/absolute/pinned-controller-env \
+  cargo test --locked -p simplestchat-ops --lib \
+  release::attestation::fetch::oracle_tests::whole_fetch_controller_matches_unchanged_python \
+  -- --ignored --exact
+```
+
+The finite comparison executes the unchanged Python controller and receiver on
+73 scenarios. Its inert SSH bridge runs the original receiver as an owned
+child; it supplies external GitHub, signature and HTTP observations locally.
+It checks both local acquisition branches, exact preflight/Ready/grant ordering,
+private evidence and failure prefixes, current exit and natural EOF, projected
+receipts and resource settlement. Its real subprocesses and filesystem checks
+establish neither real SSH authentication nor production remote effects.
+Operations automation runs the exact ignored comparison explicitly; the broad
+database ignored-test route skips its unique basename instead.
+
+Native regressions exercise both frames, stdin ownership through the final
+receipt, cancellation, subordinate status, missing EOF and descendants. Receive
+and trailing-output budgets remain separate: a valid whitespace fixture exceeds
+120 KiB overall while each original counter stays within 64 KiB. Raw read-ahead
+also counts toward the receive budget. A consuming-wait failure cannot cause a
+second reap or a later signal through a released process identifier; independent
+pipe finalizers still run and the unavailable reap observation remains negative.
+Other faults cover first failure with final report write/close, original deadlines,
+key admission and explicit-empty cached paths. Actual CLI signal tests and the
+runtime/umask fence run in owned subprocesses.
+
+Syntax errors and unknown flags return usage status 2. Parsed selector or key
+refusals return the reference's fixed three-field `invalid_options` result and
+status 1. Invalid native-only whole/finalization budgets are usage errors.
+The native path profile rejects an explicit-empty cached directory; it never
+turns that supplied value into a fresh download. See the
+[affected API review](release-fetch-api-review.md) for the complete native profile.
+
+Keep these fixtures separate from the actual disposable-VM SSH proof. That
+proof must bind the selected source-built executable, signed server artifact,
+generated guest/client identities and pinned known-host entry; execute both
+local-cache and local-download branches through real OpenSSH and the unchanged
+receiver; compare original published hashes and inodes; and finish all known
+VM, process, pipe and file owners before reporting success. Source-built Linux
+GNU execution is separate evidence from authenticated musl distribution or an
+installed caller migration. An already acquired archive alone does not exercise
+SSH or the receiver's download. Existing operational callers remain available.

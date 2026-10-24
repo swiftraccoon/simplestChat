@@ -95,6 +95,8 @@ fn steps(root: &Path, executable: &Path) -> std::io::Result<Vec<Step>> {
             "--test",
             "release_fresh_verify_cli",
             "--test",
+            "release_fetch_cli",
+            "--test",
             "archive_cli",
             "--test",
             "manifest_cli",
@@ -197,6 +199,23 @@ fn steps(root: &Path, executable: &Path) -> std::io::Result<Vec<Step>> {
             concat!(
                 "release::attestation::acquire::oracle_tests::",
                 "whole_fresh_release_matches_unchanged_python",
+            ),
+            "--",
+            "--ignored",
+            "--exact",
+        ],
+    ));
+    steps.push(Step::new(
+        "cargo",
+        &[
+            "test",
+            "--locked",
+            "-p",
+            "simplestchat-ops",
+            "--lib",
+            concat!(
+                "release::attestation::fetch::oracle_tests::",
+                "whole_fetch_controller_matches_unchanged_python",
             ),
             "--",
             "--ignored",

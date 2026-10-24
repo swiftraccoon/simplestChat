@@ -2,13 +2,13 @@
 //! Explicit selectors and emitted public digests remain passive data.
 
 #[path = "acquire/grant.rs"]
-mod grant;
+pub(super) mod grant;
 #[path = "acquire/headers.rs"]
 mod headers;
 #[path = "acquire/licenses.rs"]
 mod licenses;
 #[path = "acquire/options.rs"]
-mod options;
+pub(super) mod options;
 #[cfg(test)]
 #[path = "acquire/oracle_tests.rs"]
 mod oracle_tests;
@@ -16,7 +16,7 @@ mod oracle_tests;
 mod policy;
 #[cfg(test)]
 #[path = "acquire/tests.rs"]
-mod tests;
+pub(super) mod tests;
 #[path = "acquire/transport.rs"]
 mod transport;
 
@@ -37,7 +37,16 @@ use verify::tool::{self, Environment, Program, Tool};
 
 const GH_LIMIT: usize = 65536;
 const SETTLE: Duration = Duration::from_secs(10);
-struct State {
+pub(super) struct VerifiedRelease {
+    directory: PathBuf,
+    envelope: Vec<u8>,
+}
+impl VerifiedRelease {
+    pub(super) fn envelope(&self) -> &[u8] {
+        &self.envelope
+    }
+}
+pub(super) struct State {
     gh: Option<Tool>,
     curl: Option<Tool>,
     parent: Option<Dir>,
@@ -52,7 +61,7 @@ struct State {
     expire_after: Option<u64>,
 }
 impl State {
-    fn new(options: &Options) -> Self {
+    pub(super) fn new(options: &Options) -> Self {
         let source: Environment = {
             #[cfg(test)]
             if let Some(environment) = &options.environment {
@@ -66,6 +75,11 @@ impl State {
                 std::env::vars_os().collect()
             }
         };
+        Self::with_source(options, source)
+    }
+    pub(super) fn with_source(options: &Options, source: Environment) -> Self {
+        #[cfg(not(test))]
+        let _ = options;
         Self {
             gh: None,
             curl: None,
@@ -90,7 +104,7 @@ impl State {
         }
         Ok(())
     }
-    fn original_outputs(&self, owner: &mut Owner) -> Result<()> {
+    pub(super) fn original_outputs(&self, owner: &mut Owner) -> Result<()> {
         for directory in [&self.parent, &self.attempt, &self.artifact]
             .into_iter()
             .flatten()
@@ -105,10 +119,15 @@ impl State {
         }
         self.tools(owner)
     }
-    fn windows(owner: &mut Owner, cap: Duration) -> Result<(Instant, Instant)> {
+    fn windows_before(
+        owner: &mut Owner,
+        cap: Duration,
+        ceiling: Instant,
+    ) -> Result<(Instant, Instant)> {
         owner.check(Window::Body)?;
         let body = owner
             .body_end()
+            .min(ceiling)
             .checked_sub(SETTLE)
             .ok_or(Cause::Deadline)?
             .min(owner.now().checked_add(cap).ok_or(Cause::Deadline)?);
@@ -118,8 +137,17 @@ impl State {
         Ok((body, body.checked_add(SETTLE).ok_or(Cause::Deadline)?))
     }
     async fn gh(&self, arguments: Vec<OsString>, owner: &mut Owner) -> Result<Vec<u8>> {
+        self.gh_before(arguments, owner, owner.body_end()).await
+    }
+    async fn gh_before(
+        &self,
+        arguments: Vec<OsString>,
+        owner: &mut Owner,
+        ceiling: Instant,
+    ) -> Result<Vec<u8>> {
         self.tools(owner)?;
-        let (body_end, settlement_end) = Self::windows(owner, Duration::from_secs(20))?;
+        let (body_end, settlement_end) =
+            Self::windows_before(owner, Duration::from_secs(20), ceiling)?;
         #[cfg(test)]
         LAST_PHASE.set("command");
         let completed = verify::process::run_small(
@@ -159,7 +187,7 @@ impl State {
             .await?;
         crate::json::decode_limited(&bytes, GH_LIMIT).map_err(|_| Cause::Policy)
     }
-    async fn metadata(
+    pub(super) async fn metadata(
         &mut self,
         options: &Options,
         owner: &mut Owner,
@@ -198,7 +226,10 @@ impl State {
         LAST_PHASE.set("run-policy");
         policy::run(&run, &artifact, selected, owner)
     }
-    async fn curl_version(&mut self, owner: &mut Owner) -> Result<()> {
+    async fn curl_version_before(&mut self, owner: &mut Owner, ceiling: Instant) -> Result<()> {
+        if let Some(curl) = &self.curl {
+            return curl.bytes(owner);
+        }
         #[cfg(test)]
         LAST_PHASE.set("curl-tool");
         self.curl = Some(Tool::resolve_program(
@@ -207,7 +238,8 @@ impl State {
             owner,
         )?);
         self.tools(owner)?;
-        let (body_end, settlement_end) = Self::windows(owner, Duration::from_secs(20))?;
+        let (body_end, settlement_end) =
+            Self::windows_before(owner, Duration::from_secs(20), ceiling)?;
         let completed = verify::process::run_small(
             owner,
             verify::process::Invocation {
@@ -247,8 +279,19 @@ impl State {
         cap: Duration,
         owner: &mut Owner,
     ) -> Result<Option<String>> {
+        self.curl_before(input, role, cap, owner, owner.body_end())
+            .await
+    }
+    async fn curl_before(
+        &mut self,
+        input: Vec<u8>,
+        role: transport::Role,
+        cap: Duration,
+        owner: &mut Owner,
+        ceiling: Instant,
+    ) -> Result<Option<String>> {
         self.original_outputs(owner)?;
-        let (body_end, settlement_end) = Self::windows(owner, cap)?;
+        let (body_end, settlement_end) = Self::windows_before(owner, cap, ceiling)?;
         let api = matches!(role, transport::Role::Api);
         let completion = transport::run(
             owner,
@@ -331,56 +374,47 @@ impl State {
     }
     async fn perform(&mut self, options: &Options, owner: &mut Owner) -> Result<Vec<u8>> {
         let metadata = self.metadata(options, owner).await?;
+        let verified = self.verify_selected(options, metadata, owner, None).await?;
+        self.summary(options, verified, owner)
+    }
+    pub(super) async fn verify_selected(
+        &mut self,
+        options: &Options,
+        metadata: verify::options::Metadata,
+        owner: &mut Owner,
+        destination: Option<&Dir>,
+    ) -> Result<VerifiedRelease> {
         let directory = if let Some(directory) = &options.artifact {
             // This branch deliberately never resolves curl, requests a token or
             // asks GitHub for a download URL, including on cached success.
             directory.clone()
         } else {
-            #[cfg(test)]
-            LAST_PHASE.set("parent");
-            self.parent(&options.output_parent, owner)?;
-            #[cfg(test)]
-            LAST_PHASE.set("attempt");
-            let directory = self.attempt(owner)?;
+            let directory = if let Some(destination) = destination {
+                destination.check(owner, Window::Body)?;
+                destination.path().join("verified")
+            } else {
+                #[cfg(test)]
+                LAST_PHASE.set("parent");
+                self.parent(&options.output_parent, owner)?;
+                #[cfg(test)]
+                LAST_PHASE.set("attempt");
+                self.attempt(owner)?
+            };
             // Keep token and header acquisition before the artifact-directory
             // creation, preserving the reference's failed-evidence prefix.
-            #[cfg(test)]
-            LAST_PHASE.set("curl-version");
-            self.curl_version(owner).await?;
-            #[cfg(test)]
-            LAST_PHASE.set("token");
-            let bytes = self
-                .gh(
-                    vec![
-                        "auth".into(),
-                        "token".into(),
-                        "--hostname".into(),
-                        "github.com".into(),
-                    ],
-                    owner,
-                )
+            let grant = self
+                .new_grant(&options.selected, owner, owner.body_end())
                 .await?;
             #[cfg(test)]
-            LAST_PHASE.set("token-policy");
-            let token = grant::token(&bytes, owner)?;
-            let input = api_config(&options.selected, &token)?;
-            #[cfg(test)]
-            LAST_PHASE.set("grant");
-            let location = self
-                .curl(input, transport::Role::Api, Duration::from_secs(20), owner)
-                .await?
-                .ok_or(Cause::Policy)?;
-            #[cfg(test)]
-            LAST_PHASE.set("grant-policy");
-            let grant = grant::Grant::decode(&location, owner)?;
-            #[cfg(test)]
             LAST_PHASE.set("artifact-dir");
-            self.artifact = Some(
+            self.artifact = Some(if let Some(destination) = destination {
+                destination.create_child(OsStr::new("verified"), owner)?
+            } else {
                 self.attempt
                     .as_ref()
                     .unwrap()
-                    .create_child(OsStr::new("artifact"), owner)?,
-            );
+                    .create_child(OsStr::new("artifact"), owner)?
+            });
             #[cfg(test)]
             LAST_PHASE.set("disk");
             let free = self.artifact.as_ref().unwrap().free_bytes(owner)?;
@@ -421,6 +455,25 @@ impl State {
         let envelope =
             verify::acquired(directory.clone(), metadata, self.environment.clone(), owner).await?;
         self.original_outputs(owner)?;
+        self.gh.as_ref().unwrap().bytes(owner)?;
+        if let Some(curl) = &self.curl {
+            curl.bytes(owner)?;
+        }
+        Ok(VerifiedRelease {
+            directory,
+            envelope,
+        })
+    }
+    fn summary(
+        &self,
+        options: &Options,
+        verified: VerifiedRelease,
+        owner: &mut Owner,
+    ) -> Result<Vec<u8>> {
+        let VerifiedRelease {
+            directory,
+            envelope,
+        } = verified;
         #[cfg(test)]
         LAST_PHASE.set("result");
         let value = crate::json::decode_limited(&envelope, GH_LIMIT).map_err(|_| Cause::Policy)?;
@@ -452,7 +505,50 @@ impl State {
         bytes.push(b'\n');
         Ok(bytes)
     }
-    fn finish(mut self, owner: &mut Owner) {
+    pub(super) async fn new_grant(
+        &mut self,
+        selected: &options::Selected,
+        owner: &mut Owner,
+        ceiling: Instant,
+    ) -> Result<grant::Grant> {
+        #[cfg(test)]
+        LAST_PHASE.set("curl-version");
+        self.curl_version_before(owner, ceiling).await?;
+        #[cfg(test)]
+        LAST_PHASE.set("token");
+        let bytes = self
+            .gh_before(
+                vec![
+                    "auth".into(),
+                    "token".into(),
+                    "--hostname".into(),
+                    "github.com".into(),
+                ],
+                owner,
+                ceiling,
+            )
+            .await?;
+        #[cfg(test)]
+        LAST_PHASE.set("token-policy");
+        let token = grant::token(&bytes, owner)?;
+        let input = api_config(selected, &token)?;
+        #[cfg(test)]
+        LAST_PHASE.set("grant");
+        let location = self
+            .curl_before(
+                input,
+                transport::Role::Api,
+                Duration::from_secs(20),
+                owner,
+                ceiling,
+            )
+            .await?
+            .ok_or(Cause::Policy)?;
+        #[cfg(test)]
+        LAST_PHASE.set("grant-policy");
+        grant::Grant::decode(&location, owner)
+    }
+    pub(super) fn finish(mut self, owner: &mut Owner) {
         for file in self.members.iter_mut().filter_map(Option::take) {
             file.finish(owner);
         }
@@ -684,4 +780,9 @@ pub fn run(arguments: &[OsString]) -> ExitCode {
         drop(runtime);
         passed
     })
+}
+
+/// Existing exact scoped dependency notices, shared by the SSH controller.
+pub(super) fn dependency_notices() -> io::Result<()> {
+    licenses::stdout()
 }

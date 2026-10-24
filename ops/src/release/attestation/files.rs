@@ -33,6 +33,7 @@ struct Probe {
     fail: Option<usize>,
     copy: Option<(String, bool, u64)>,
     hash_ready: bool,
+    hash_clock: Option<std::time::Instant>,
 }
 #[cfg(test)]
 thread_local! {
@@ -44,6 +45,7 @@ thread_local! {
             fail: None,
             copy: None,
             hash_ready: false,
+            hash_clock: None,
         })
     };
 }
@@ -60,6 +62,10 @@ pub(super) fn start_probe(fail: Option<usize>) {
 #[cfg(test)]
 pub(super) fn announce_next_hash() {
     PROBE.with(|p| p.borrow_mut().hash_ready = true);
+}
+#[cfg(test)]
+pub(super) fn expire_hash_at(instant: std::time::Instant) {
+    PROBE.with(|p| p.borrow_mut().hash_clock = Some(instant));
 }
 #[cfg(test)]
 pub(super) fn copy_fault(name: String, read: bool, after: u64) {
@@ -106,7 +112,7 @@ impl Handle {
     fn file(&self) -> &File {
         self.0.as_ref().expect("retained descriptor before finish")
     }
-    fn close(mut self, owner: &mut Owner) {
+    fn close(mut self, owner: &mut Owner) -> bool {
         let result = nix::unistd::close(self.0.take().unwrap());
         #[cfg(test)]
         let synthetic = PROBE.with(|p| {
@@ -119,9 +125,11 @@ impl Handle {
         });
         #[cfg(not(test))]
         let synthetic = false;
-        if result.is_err() || synthetic {
+        let closed = result.is_ok() && !synthetic;
+        if !closed {
             owner.record(Cause::Close);
         }
+        closed
     }
 }
 impl Drop for Handle {
@@ -326,6 +334,165 @@ impl Dir {
         }
         Ok(())
     }
+    /// Final-outcome-only namespace checks remain available after a primary
+    /// refusal. They retain the same end/signals and never authorize body work.
+    fn final_namespace(&self, owner: &mut Owner) -> Result<()> {
+        owner.final_work()?;
+        for (at, edge) in self.0.edges.iter().enumerate() {
+            owner.final_work()?;
+            let stamp = control::io(owner, edge.handle.file().metadata())?;
+            if !stamp.is_dir() || !binding(&edge.stamp, &stamp) {
+                return mismatch(owner);
+            }
+            if let Some(name) = &edge.name {
+                let fd = mapped(
+                    owner,
+                    openat(
+                        self.0.edges[at - 1].handle.file(),
+                        name.as_os_str(),
+                        READ | OFlag::O_DIRECTORY,
+                        Mode::empty(),
+                    ),
+                )?;
+                let probe = Handle::new(File::from(fd));
+                let observed = control::io(owner, probe.file().metadata());
+                let matches = observed
+                    .as_ref()
+                    .is_ok_and(|stamp| stamp.is_dir() && binding(&edge.stamp, stamp));
+                if observed.is_ok() && !matches {
+                    owner.record(Cause::Changed);
+                }
+                let closed = probe.close(owner);
+                observed?;
+                if !closed {
+                    return Err(Cause::Close);
+                }
+                if !matches {
+                    return Err(Cause::Changed);
+                }
+                owner.final_work()?;
+            }
+        }
+        Ok(())
+    }
+    /// Write one bounded exclusive final outcome, even after a primary refusal.
+    /// Every new original descriptor is explicitly closed before returning.
+    pub fn final_journal(&self, bytes: &[u8], owner: &mut Owner) -> Result<()> {
+        if bytes.is_empty() || bytes.len() > 131072 {
+            return control::failed(owner, Cause::Bounds);
+        }
+        self.final_namespace(owner)?;
+        let fd = mapped(
+            owner,
+            openat(
+                self.file(),
+                "outcome.json",
+                OFlag::O_RDWR
+                    | OFlag::O_CREAT
+                    | OFlag::O_EXCL
+                    | OFlag::O_NOFOLLOW
+                    | OFlag::O_CLOEXEC,
+                Mode::from_bits_truncate(0o600),
+            ),
+        )?;
+        let handle = Handle::new(File::from(fd));
+        let result = (|| {
+            mapped(
+                owner,
+                fchmod(handle.file(), Mode::from_bits_truncate(0o600)),
+            )?;
+            let first = control::io(owner, handle.file().metadata())?;
+            if !first.is_file()
+                || first.len() != 0
+                || first.nlink() != 1
+                || first.mode() & 0o7777 != 0o600
+                || first.uid() != rustix::process::getuid().as_raw()
+            {
+                return control::failed(owner, Cause::Changed);
+            }
+            let mut at = 0;
+            while at < bytes.len() {
+                owner.final_work()?;
+                self.final_namespace(owner)?;
+                let count = control::io(
+                    owner,
+                    handle
+                        .file()
+                        .write_at(&bytes[at..], u64::try_from(at).map_err(|_| Cause::Bounds)?),
+                )?;
+                if count == 0 {
+                    return control::failed(owner, Cause::Io);
+                }
+                at += count;
+                owner.final_work()?;
+            }
+            control::io(owner, handle.file().sync_all())?;
+            owner.final_work()?;
+            let stamp = control::io(owner, handle.file().metadata())?;
+            if !binding(&first, &stamp)
+                || stamp.nlink() != 1
+                || stamp.len() != u64::try_from(bytes.len()).map_err(|_| Cause::Bounds)?
+            {
+                return control::failed(owner, Cause::Changed);
+            }
+            let mut observed = vec![0; bytes.len() + 1];
+            let mut read = 0;
+            loop {
+                owner.final_work()?;
+                let count = control::io(
+                    owner,
+                    handle.file().read_at(
+                        &mut observed[read..],
+                        u64::try_from(read).map_err(|_| Cause::Bounds)?,
+                    ),
+                )?;
+                if count == 0 {
+                    break;
+                }
+                read += count;
+                if read == observed.len() {
+                    break;
+                }
+            }
+            if observed.get(..read) != Some(bytes) {
+                return control::failed(owner, Cause::Changed);
+            }
+            self.final_namespace(owner)?;
+            let fd = mapped(
+                owner,
+                openat(self.file(), "outcome.json", READ, Mode::empty()),
+            )?;
+            let probe = Handle::new(File::from(fd));
+            let readback = control::io(owner, probe.file().metadata());
+            let matched = readback.as_ref().is_ok_and(|value| same(&stamp, value));
+            if readback.is_ok() && !matched {
+                owner.record(Cause::Changed);
+            }
+            let closed = probe.close(owner);
+            readback?;
+            if !closed {
+                return Err(Cause::Close);
+            }
+            if !matched {
+                return Err(Cause::Changed);
+            }
+            owner.final_work()
+        })();
+        if let Err(cause) = &result {
+            owner.record(*cause);
+        }
+        let closed = handle.close(owner);
+        if !closed && result.is_ok() {
+            Err(Cause::Close)
+        } else {
+            result
+        }
+    }
+    pub fn final_sync(&self, owner: &mut Owner) -> Result<()> {
+        self.final_namespace(owner)?;
+        control::io(owner, self.file().sync_all())?;
+        owner.final_work()
+    }
     pub fn finish(self, owner: &mut Owner) {
         let _ = self.check(owner, Window::Final);
         match Rc::try_unwrap(self.0) {
@@ -525,6 +692,10 @@ impl Retained {
         loop {
             self.check(owner, Window::Body)?;
             let size = control::io(owner, self.handle.file().read_at(&mut buffer, count))?;
+            #[cfg(test)]
+            if let Some(instant) = PROBE.with(|p| p.borrow_mut().hash_clock.take()) {
+                owner.observe_at(instant);
+            }
             self.check(owner, Window::Body)?;
             if size == 0 {
                 break;

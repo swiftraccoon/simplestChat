@@ -33,6 +33,7 @@ pub(super) struct Owner {
     start: Instant,
     end: Instant,
     body: Instant,
+    receiver_protocol: Option<Instant>,
     signals: Signals,
     primary: Option<Cause>,
     #[cfg(test)]
@@ -55,6 +56,7 @@ impl Owner {
             start,
             end,
             body,
+            receiver_protocol: None,
             signals: Signals::new().map_err(|_| Cause::Io)?,
             primary: None,
             #[cfg(test)]
@@ -80,6 +82,24 @@ impl Owner {
     pub fn body_end(&self) -> Instant {
         self.body
     }
+    /// Narrow the existing body checkpoints while the admitted SSH protocol
+    /// still owes its original transport tail. This does not change B or N.
+    pub fn begin_receiver_protocol(&mut self, end: Instant) -> Result<()> {
+        self.check(Window::Body)?;
+        if self.receiver_protocol.is_some() || end > self.body {
+            return failed(self, Cause::Input);
+        }
+        self.receiver_protocol = Some(end);
+        self.check(Window::Body)
+    }
+    /// Fence the last protocol observation before allowing its reserved tail.
+    /// A previous failure remains primary; this grants only cleanup time.
+    pub fn end_receiver_protocol(&mut self) {
+        if self.receiver_protocol.is_some() {
+            let _ = self.check(Window::Body);
+            self.receiver_protocol = None;
+        }
+    }
     pub fn cleanup_before(&self, end: Instant) -> Result<()> {
         if self.now() >= end.min(self.end) {
             Err(Cause::Deadline)
@@ -89,6 +109,24 @@ impl Owner {
     }
     pub fn record(&mut self, error: Cause) {
         self.primary.get_or_insert(error);
+    }
+    /// Final report work may proceed after a primary failure. This never clears
+    /// that cause, grants body authority, or replaces the original deadline.
+    pub fn final_work(&mut self) -> Result<()> {
+        if let Some(signal) = self.signals.pending_now() {
+            let cause = if signal == 130 {
+                Cause::Interrupt
+            } else {
+                Cause::Terminate
+            };
+            self.record(cause);
+            return Err(cause);
+        }
+        if self.now() < self.start || self.now() >= self.end {
+            self.record(Cause::Deadline);
+            return Err(Cause::Deadline);
+        }
+        Ok(())
     }
     pub fn error(&self) -> Option<Cause> {
         self.primary
@@ -105,7 +143,7 @@ impl Owner {
             if self.now() < self.start
                 || self.now()
                     >= match window {
-                        Window::Body => self.body,
+                        Window::Body => self.receiver_protocol.unwrap_or(self.body).min(self.body),
                         Window::Final => self.end,
                     }
             {
