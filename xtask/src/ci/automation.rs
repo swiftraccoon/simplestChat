@@ -76,6 +76,42 @@ fn steps(root: &Path, executable: &Path) -> std::io::Result<Vec<Step>> {
             .map(|name| Path::new("ops/ansible/files").join(name).into_os_string())
             .collect(),
     });
+    // The unchanged Python reference needs the installed controller environment.
+    // Keep this explicit gate in both hosted automation and its local-CI route.
+    steps.push(Step::new(
+        "cargo",
+        &[
+            "test",
+            "--locked",
+            "-p",
+            "xtask",
+            "--bin",
+            "xtask",
+            concat!(
+                "ci::ops_artifact::capacity_vps::controller_tests::",
+                "all_eight_whole_reference_scenarios_preserve_local_policy_",
+                "and_explicit_transport_deltas",
+            ),
+            "--",
+            "--ignored",
+            "--exact",
+        ],
+    ));
+    #[cfg(target_os = "linux")]
+    steps.push(Step::new(
+        "cargo",
+        &[
+            "test",
+            "--locked",
+            "-p",
+            "simplestchat-ops",
+            "--lib",
+            "capacity_vps::host_tests::whole_host_policy_matches_original_python_oracle",
+            "--",
+            "--ignored",
+            "--exact",
+        ],
+    ));
     steps.push(Step::new(
         "python",
         &[
@@ -101,6 +137,8 @@ fn execute(
 }
 
 fn checks(root: &Path, environment: &Environment) -> tooling::Result<()> {
+    #[cfg(not(target_os = "linux"))]
+    eprintln!("The VPS host oracle runs in Linux automation; use ci-local for that gate.");
     let executable = std::env::current_exe().map_err(|error| Failure::new(1, error.to_string()))?;
     let steps = steps(root, &executable).map_err(|error| Failure::new(1, error.to_string()))?;
     execute(&steps, |step| {

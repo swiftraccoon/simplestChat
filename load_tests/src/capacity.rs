@@ -1,25 +1,31 @@
 //! Capacity command dispatch; suggest/compare remain offline and run is explicit.
 
+#[cfg(feature = "full")]
 use anyhow::{Result, ensure};
 use std::ffi::OsString;
+#[cfg(feature = "full")]
 use std::io::Write;
+#[cfg(feature = "full")]
 use std::path::PathBuf;
 use std::process::ExitCode;
 
 pub(crate) mod format;
 pub(crate) mod json;
 pub(crate) mod model;
+#[cfg(feature = "full")]
 mod presentation;
-#[cfg(test)]
+#[cfg(all(test, feature = "full"))]
 mod tests;
 pub mod vps;
 
+#[cfg(feature = "full")]
 const USAGE: &str = "Usage: load_test capacity suggest --vcpus N --memory-gib GIB \
 [--port-mbps MBPS] [--calibration PATH] [--included-egress-tb TB] \
 [--app-cpus CPUS] [--app-memory-mib MIB] [--env]\n\
        load_test capacity compare REPORT.json [REPORT.json ...]\n\
        load_test capacity run --server-image IMAGE --generator-image IMAGE [OPTIONS]";
 
+#[cfg(feature = "full")]
 #[derive(Default)]
 struct Options {
     vcpus: Option<i64>,
@@ -32,11 +38,13 @@ struct Options {
     env: bool,
 }
 
+#[cfg(feature = "full")]
 enum Command {
     Suggest(Options),
     Compare(Vec<PathBuf>),
 }
 
+#[cfg(feature = "full")]
 fn arguments(arguments: &[OsString]) -> Option<Command> {
     let (command, arguments) = arguments.split_first()?;
     if command == "compare" {
@@ -78,6 +86,7 @@ fn arguments(arguments: &[OsString]) -> Option<Command> {
     Some(Command::Suggest(result))
 }
 
+#[cfg(feature = "full")]
 fn suggest(options: Options) -> Result<String> {
     let vcpus = options.vcpus.unwrap();
     let memory_gib = options.memory_gib.unwrap();
@@ -144,6 +153,7 @@ fn suggest(options: Options) -> Result<String> {
     Ok(format!("{}\n", lines.join("\n")))
 }
 
+#[cfg(feature = "full")]
 fn execute(command: Command) -> Result<String> {
     match command {
         Command::Suggest(options) => suggest(options),
@@ -156,29 +166,93 @@ fn execute(command: Command) -> Result<String> {
     }
 }
 
-/// Dispatch capacity commands; only an explicit `run` starts the measurement runtime.
-pub fn run(arguments_: &[OsString]) -> ExitCode {
-    if arguments_.first().is_some_and(|value| value == "run") {
-        return crate::capacity_run::run(&arguments_[1..]);
+/// Dispatch capacity commands; only an explicit `run` starts measurement.
+pub fn run(arguments: &[OsString]) -> ExitCode {
+    run_with_program(arguments, "load_test")
+}
+
+fn usage(program: &str) -> String {
+    #[cfg(feature = "full")]
+    {
+        USAGE.replace("load_test", program)
     }
+    #[cfg(not(feature = "full"))]
+    {
+        crate::capacity_run::usage(program)
+    }
+}
+
+/// Dispatch the same capacity command with a bounded caller presentation name.
+/// The name selects help text only; it never selects a program or workload root.
+pub fn run_with_program(arguments_: &[OsString], program: &str) -> ExitCode {
+    if program.is_empty()
+        || program.len() > 64
+        || !program
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"_.-".contains(&b))
+    {
+        return ExitCode::from(2);
+    }
+    if arguments_.first().is_some_and(|value| value == "run") {
+        return crate::capacity_run::run(&arguments_[1..], program);
+    }
+    let usage = usage(program);
     if arguments_
         .iter()
         .any(|argument| argument == "--help" || argument == "-h")
     {
-        println!("{USAGE}");
+        println!("{usage}");
         return ExitCode::SUCCESS;
     }
-    let Some(command) = arguments(arguments_) else {
-        eprintln!("{USAGE}");
-        return ExitCode::from(2);
-    };
-    match execute(command)
-        .and_then(|output| Ok(std::io::stdout().lock().write_all(output.as_bytes())?))
+    #[cfg(feature = "full")]
     {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(error) => {
-            eprintln!("capacity: {error}");
-            ExitCode::FAILURE
+        let Some(command) = arguments(arguments_) else {
+            eprintln!("{usage}");
+            return ExitCode::from(2);
+        };
+        match execute(command)
+            .and_then(|output| Ok(std::io::stdout().lock().write_all(output.as_bytes())?))
+        {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => {
+                eprintln!("capacity: {error}");
+                ExitCode::FAILURE
+            }
         }
+    }
+    #[cfg(not(feature = "full"))]
+    {
+        eprintln!("{usage}");
+        ExitCode::from(2)
+    }
+}
+
+#[cfg(all(test, not(feature = "full")))]
+mod lite_tests {
+    use super::*;
+
+    #[test]
+    fn lightweight_help_and_dispatch_offer_only_the_available_measurement() {
+        let help = usage("simplestchat-ops");
+        assert!(help.starts_with("Usage: simplestchat-ops capacity run "));
+        assert!(!help.contains("capacity suggest"));
+        assert!(!help.contains("capacity compare"));
+        assert_eq!(
+            run_with_program(&["--help".into()], "simplestchat-ops"),
+            ExitCode::SUCCESS
+        );
+        assert_eq!(
+            run_with_program(
+                &[
+                    "suggest".into(),
+                    "--vcpus".into(),
+                    "2".into(),
+                    "--memory-gib".into(),
+                    "2".into()
+                ],
+                "simplestchat-ops"
+            ),
+            ExitCode::from(2),
+        );
     }
 }

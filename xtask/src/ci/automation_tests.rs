@@ -35,7 +35,7 @@ fn text(values: &[OsString]) -> Vec<&str> {
 fn controller_checks_preserve_the_python_gate_offline_flags_and_all_syntax_only_playbooks() {
     let fixture = Fixture::new(&["a.sh"]);
     let steps = steps(&fixture.0, Path::new("/owned tool/xtask")).unwrap();
-    assert_eq!(steps.len(), 15);
+    assert_eq!(steps.len(), if cfg!(target_os = "linux") { 17 } else { 16 });
     assert_eq!(steps[0].program, "/owned tool/xtask");
     assert_eq!(text(&steps[0].arguments), ["check", "--python"]);
     assert_eq!(
@@ -74,6 +74,44 @@ fn controller_checks_preserve_the_python_gate_offline_flags_and_all_syntax_only_
         ]
     );
     assert_eq!(steps.last().unwrap().program, "python");
+    #[cfg(target_os = "linux")]
+    {
+        assert_eq!(steps[15].program, "cargo");
+        assert_eq!(
+            text(&steps[15].arguments),
+            [
+                "test",
+                "--locked",
+                "-p",
+                "simplestchat-ops",
+                "--lib",
+                "capacity_vps::host_tests::whole_host_policy_matches_original_python_oracle",
+                "--",
+                "--ignored",
+                "--exact"
+            ]
+        );
+    }
+    assert_eq!(steps[14].program, "cargo");
+    assert_eq!(
+        text(&steps[14].arguments),
+        [
+            "test",
+            "--locked",
+            "-p",
+            "xtask",
+            "--bin",
+            "xtask",
+            concat!(
+                "ci::ops_artifact::capacity_vps::controller_tests::",
+                "all_eight_whole_reference_scenarios_preserve_local_policy_",
+                "and_explicit_transport_deltas",
+            ),
+            "--",
+            "--ignored",
+            "--exact"
+        ]
+    );
     assert_eq!(
         text(&steps.last().unwrap().arguments),
         [

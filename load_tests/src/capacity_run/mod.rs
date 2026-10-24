@@ -68,18 +68,24 @@ async fn measured(options: &options::Options, cancellation: &process::Cancellati
     result
 }
 
-pub(crate) fn run(arguments: &[OsString]) -> ExitCode {
+#[cfg(not(feature = "full"))]
+pub(crate) fn usage(program: &str) -> String {
+    options::usage(program)
+}
+
+pub(crate) fn run(arguments: &[OsString], program: &str) -> ExitCode {
+    let usage = options::usage(program);
     if arguments
         .iter()
         .any(|value| value == "--help" || value == "-h")
     {
-        println!("{}", options::USAGE);
+        println!("{usage}");
         return ExitCode::SUCCESS;
     }
     let options = match options::parse(arguments) {
         Ok(options) => options,
         Err(error) => {
-            eprintln!("capacity: {error}\n{}", options::USAGE);
+            eprintln!("capacity: {error}\n{usage}");
             return ExitCode::from(2);
         }
     };

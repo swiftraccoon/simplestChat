@@ -565,6 +565,66 @@ fn unsupported_unicode_and_nesting_are_explicit_decoder_refusals() {
 }
 
 #[test]
+fn strict_wire_strings_preserve_private_request_and_outcome_numeric_domains() {
+    let mut value = request();
+    value["future"] = json!("PRIVATE_NUMBERS");
+    let source = serde_json::to_string_pretty(&value).unwrap().replace(
+        "\"PRIVATE_NUMBERS\"",
+        "[NaN,Infinity,-Infinity,9007199254740993,-0,1.00,1e03]",
+    );
+    let request = Request::decode(source.as_bytes()).unwrap();
+    assert_eq!(request.runtime_seconds(), 1200);
+    assert_eq!(request.as_json(), source.as_bytes());
+    let original = br#"{ "passed":false,"finalized":true,"projection":{"cost":Infinity} }
+"#;
+    let outcome = Outcome::decode(original).unwrap();
+    assert_eq!(outcome.as_json(), original);
+    assert!(!outcome.passed());
+    assert!(outcome.finalized());
+    let control = json!({"schemaVersion":1,"passed":false,"result":{
+        "passed":false,"requestJson":source,"outcomeJson":String::from_utf8_lossy(original)}});
+    let projected = project_controller_report(
+        &serde_json::to_vec(&control).unwrap(),
+        &request,
+        Some(&outcome),
+    )
+    .unwrap();
+    let projected = json::parse(&projected).unwrap();
+    assert!(matches!(&projected["request"]["future"], Json::Array(v)
+        if matches!(&v[3], Json::Number(n) if n=="9007199254740993")
+        && matches!(&v[4], Json::Number(n) if n=="-0")
+        && matches!(&v[5], Json::Number(n) if n=="1.00")
+        && matches!(&v[6], Json::Number(n) if n=="1e03")));
+    assert!(
+        matches!(&projected["result"]["outcome"]["projection"]["cost"],
+        Json::Number(n) if n=="Infinity")
+    );
+    assert!(!projected["result"]["passed"].is_true());
+}
+
+#[test]
+fn private_assessment_projection_cannot_upgrade_the_owners_failed_verdict() {
+    let request = decode_request(&request()).unwrap();
+    let mut report = report();
+    report["projection"]["cost"] = json!("INFINITE_COST");
+    let original = serde_json::to_string(&report)
+        .unwrap()
+        .replace("\"INFINITE_COST\"", "Infinity");
+    let assessment = assess(original.as_bytes(), &request).unwrap();
+    assert!(assessment.passed);
+    let projected = project_worker_outcome(
+        br#"{"schemaVersion":1,"passed":false,"finalized":false,"exitStatus":1}"#,
+        Some(&assessment),
+        None,
+    )
+    .unwrap();
+    let value = json::parse(&projected).unwrap();
+    assert!(!value["passed"].is_true());
+    assert!(matches!(&value["projection"]["cost"], Json::Number(v) if v=="Infinity"));
+    assert!(Outcome::decode(br#"{"passed":1,"finalized":true}"#).is_err());
+}
+
+#[test]
 fn malformed_nested_nan_image_values_do_not_confirm_ownership() {
     let id = "f".repeat(64);
     let mut journal = snapshot()["journal"].clone();

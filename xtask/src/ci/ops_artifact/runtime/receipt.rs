@@ -9,7 +9,12 @@ use serde_json::{Value, value::RawValue};
 use simplestchat_ops::distribution::ExecutableIdentity;
 use std::{ffi::OsString, path::Path};
 
-pub(super) const CASES: [(&str, u8); 28] = [
+pub(super) const CASES: [(&str, u8); 33] = [
+    ("vps-fd-cloexec", 1),
+    ("vps-stage-exchange", 1),
+    ("vps-stage-unlinked", 1),
+    ("vps-wrong-image", 1),
+    ("vps-origin-expired", 124),
     ("source-help", 0),
     ("source-invalid-cli", 2),
     ("source-forbidden-root", 2),

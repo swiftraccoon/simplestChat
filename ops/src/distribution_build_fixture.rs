@@ -15,6 +15,11 @@ pub fn populate(root: &Path) -> Vec<(String, Vec<u8>)> {
         "vendor/mediasoup-sys-0.19.0/Cargo.toml",
         "ops/src/main.rs",
         "ops/src/release/mod.rs",
+        "load_tests/src/lib.rs",
+        "load_tests/src/capacity.rs",
+        "load_tests/src/capacity/json.rs",
+        "load_tests/src/capacity_run/mod.rs",
+        "load_tests/src/owned_process/mod.rs",
     ];
     paths
         .into_iter()

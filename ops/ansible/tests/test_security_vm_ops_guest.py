@@ -17,7 +17,8 @@ from contextlib import suppress
 from dataclasses import dataclass, field, replace
 from functools import partial
 from pathlib import Path
-from typing import TYPE_CHECKING, final, override
+from types import SimpleNamespace
+from typing import TYPE_CHECKING, cast, final, override
 from unittest.mock import Mock, patch
 
 from test_support import ROOT
@@ -438,6 +439,73 @@ class GuestProtocolTests(unittest.TestCase):
                 with self.assertRaises(guest.OpsError):
                     guest.empty_cache()
 
+    def test_vps_source_namespace_rejects_siblings_links_and_late_directory_changes(self) -> None:
+        """Only three original source leaves become importable, with full directory checks."""
+        for fault in ("extra", "link", "replace"):
+            with self.subTest(fault=fault), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                os.chown(root, -1, os.getgid())
+                for name in guest.VPS_SOURCE_NAMES:
+                    path = root / name
+                    _ = path.write_bytes(b"inert fixture source\n")
+                    path.chmod(0o600)
+                control = guest.Control(20)
+                original_directory = guest.directory
+                with (
+                    patch.object(guest, "VPS_SOURCE", root),
+                    patch.object(
+                        guest,
+                        "directory",
+                        side_effect=partial(original_directory, owner=os.getuid()),
+                    ),
+                ):
+                    before = guest.vps_namespace(control)
+                    if fault == "extra":
+                        _ = (root / "argparse.pyc").write_bytes(b"ignored sibling")
+                    elif fault == "link":
+                        target = root / "vps_ops_bootstrap.py"
+                        target.unlink()
+                        target.symlink_to(root / "security_vm_ops_guest.py")
+                    else:
+                        target = root / "vps_ops_bootstrap.py"
+                        data = target.read_bytes()
+                        target.unlink()
+                        _ = target.write_bytes(data)
+                        target.chmod(0o600)
+                    with self.assertRaises(guest.OpsError):
+                        _ = guest.vps_namespace(control, before if fault == "replace" else None)
+
+    def test_vps_namespace_primary_precedes_after_effect_close_and_signal(self) -> None:
+        """A known rejected sibling remains primary while the actual FD still closes."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            os.chown(root, -1, os.getgid())
+            control = guest.Control(20)
+            _ = (root / "argparse.pyc").write_bytes(b"rejected before import")
+            original_directory, original_close = guest.directory, os.close
+            closed: list[int] = []
+
+            def close(fd: int) -> None:
+                original_close(fd)
+                closed.append(fd)
+                control.signal(15, None)
+                message = "late-owned-close"
+                raise OSError(message)
+
+            with (
+                patch.object(guest, "VPS_SOURCE", root),
+                patch.object(
+                    guest, "directory", side_effect=partial(original_directory, owner=os.getuid())
+                ),
+                patch.object(os, "close", side_effect=close),
+                self.assertRaises(guest.OpsError),
+            ):
+                _ = guest.vps_namespace(control)
+            self.assertEqual(control.status, 1)
+            self.assertEqual(len(closed), 1)
+            with self.assertRaises(OSError):
+                _ = os.fstat(closed[0])
+
     def test_cancel_and_original_deadline_latch_without_resetting_cleanup(self) -> None:
         """Repeated signals do not throw into owners, and cleanup uses the original extra tail."""
         with patch.object(time, "monotonic", return_value=10):
@@ -523,6 +591,8 @@ class FinalRunner:
     def __init__(self, selected: guest.Control, receiver: FinalReceiver) -> None:
         """Use only the scenario's original control owner."""
         self.state = receiver.state
+        self.control = selected
+        self.receiver = receiver
         if selected is not self.state.control:
             raise AssertionError
         self.records: list[dict[str, object]] = []
@@ -547,6 +617,113 @@ class FinalRunner:
 class GuestFinalizationTests(unittest.TestCase):
     """Use supplied inert runtime observations to test original owner completion only."""
 
+    def test_five_custody_probes_precede_all_original_install_cases_under_one_owner(self) -> None:
+        """Keep actual guest run ordering/finalization while substituting both runtimes."""
+        options, _ = fixture()
+        control = guest.Control(200)
+        state = GuestScenario(options, None, control, clock=control.started)
+        transfer = FinalTransfer(state)
+
+        def probes(runner: FinalRunner, selected: guest.Options) -> None:
+            self.assertIs(selected, options)
+            self.assertIs(runner.control, control)
+            self.assertIs(runner.receiver.state, state)
+            self.assertEqual(runner.records, [])
+            state.trace.append("probes")
+            runner.records.extend(
+                {"name": name, "exitStatus": status, "passed": True}
+                for name, status in guest.VPS_CASES
+            )
+
+        def install(runner: FinalRunner, selected: guest.Options) -> None:
+            self.assertIs(selected, options)
+            self.assertIs(runner.control, control)
+            self.assertEqual(len(runner.records), len(guest.VPS_CASES))
+            state.trace.append("install")
+            runner.records.extend(
+                {"name": name, "exitStatus": status, "passed": True}
+                for name, status in guest.INSTALL_CASES
+            )
+
+        with (
+            patch.object(guest, "guard"),
+            patch.object(guest, "receive", return_value=(transfer, FinalReceiver(state))),
+            patch.object(guest, "Runner", FinalRunner),
+            patch.object(guest, "vps_cases", side_effect=probes),
+            patch.object(guest, "exercise", side_effect=install),
+            patch.object(time, "monotonic", side_effect=state.now),
+        ):
+            report = guest.run(options, io.BytesIO(), control)
+        self.assertTrue(report["passed"])
+        self.assertEqual(len(cast("list[object]", report["cases"])), 33)
+        self.assertEqual(len(guest.INSTALL_CASES), 28)
+        self.assertEqual(state.trace, ["probes", "install", "runner", "receiver", "transfer"])
+
+    def test_probe_adapter_refuses_partial_wrong_or_unproven_custody_rows(self) -> None:
+        """A typed source module still cannot supply malformed positive observations."""
+        for fault in (None, "missing", "order", "status", "cloexec", "readonly", "image", "extra"):
+            with self.subTest(fault=fault):
+                self.probe_adapter(fault)
+
+    def probe_adapter(self, fault: str | None) -> None:
+        """Exercise the real closed adapter with one inert fixed-module boundary."""
+        options, _ = fixture()
+        control = guest.Control(200)
+        state = GuestScenario(options, None, control)
+        runner = FinalRunner(control, FinalReceiver(state))
+        rows: list[dict[str, object]] = [
+            {
+                "name": name,
+                "exitStatus": status,
+                "passed": True,
+                "kernelImageObserved": name != guest.VPS_CASES[-1][0],
+                "originalCloexec": True,
+                "originalReadonly": True,
+            }
+            for name, status in guest.VPS_CASES
+        ]
+        if fault == "missing":
+            _ = rows.pop()
+        if fault == "order":
+            rows.reverse()
+        for condition, key, value in [
+            ("status", "exitStatus", True),
+            ("cloexec", "originalCloexec", False),
+            ("readonly", "originalReadonly", False),
+            ("image", "kernelImageObserved", False),
+            ("extra", "PRIVATE-extra", True),
+        ]:
+            if fault == condition:
+                rows[0][key] = value
+
+        def exercise(
+            selected: guest.Options, receiver: FinalReceiver, owner: guest.Control
+        ) -> list[dict[str, object]]:
+            self.assertIs(selected, options)
+            self.assertIs(receiver, runner.receiver)
+            self.assertIs(owner, control)
+            return rows
+
+        module = SimpleNamespace(
+            CASES=tuple((name, status, b"unused") for name, status in guest.VPS_CASES),
+            exercise=exercise,
+        )
+        with (
+            patch.object(guest, "import_module", return_value=module),
+            patch.object(sys, "path", list(sys.path)),
+        ):
+            if fault is None:
+                guest.vps_cases(cast("guest.Runner", cast("object", runner)), options)
+                self.assertEqual(
+                    [row["name"] for row in runner.records], [name for name, _ in guest.VPS_CASES]
+                )
+                self.assertTrue(
+                    all(set(row) == {"name", "exitStatus", "passed"} for row in runner.records)
+                )
+            else:
+                with self.assertRaises(ValueError):
+                    guest.vps_cases(cast("guest.Runner", cast("object", runner)), options)
+
     def test_late_cancellation_deadline_and_peer_close_failures_remain_negative(self) -> None:
         """All acquired peers settle even after an earlier finalizer or the body fails."""
         for fault in (
@@ -570,6 +747,7 @@ class GuestFinalizationTests(unittest.TestCase):
             patch.object(guest, "guard"),
             patch.object(guest, "receive", return_value=(transfer, FinalReceiver(state))),
             patch.object(guest, "Runner", FinalRunner),
+            patch.object(guest, "vps_cases"),
             patch.object(guest, "exercise", side_effect=state.exercise),
             patch.object(time, "monotonic", side_effect=state.now),
         ):
@@ -658,6 +836,7 @@ class GuestFinalizationTests(unittest.TestCase):
                     patch.object(guest, "guard"),
                     patch.object(guest, "receive", return_value=(transfer, FinalReceiver(state))),
                     patch.object(guest, "Runner", return_value=runner),
+                    patch.object(guest, "vps_cases"),
                     patch.object(guest, "exercise", side_effect=exercise),
                     patch.object(runner, "process", bounded_process, create=True),
                     patch.object(runner, "finish", side_effect=finish),

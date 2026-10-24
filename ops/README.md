@@ -414,27 +414,36 @@ observation. The library separates `collect_inputs(source_root)` from the pure
 `plan(&selection, &inventory)`. `inspect` composes them. No command is started,
 toolchain resolved, registry accessed, artifact generated or candidate run.
 
-The `workspace-ops-v1` inventory selects original bytes of `Cargo.toml`,
+The `workspace-ops-capacity-v2` inventory selects original bytes of `Cargo.toml`,
 `Cargo.lock`, `rust-toolchain.toml`, `.cargo/config.toml`, the Ops/load-test/xtask
 manifests, the two current mediasoup path-patch manifests, and every regular
-`*.rs` under `ops/src`. This covers the current named workspace discovery
-manifests, not complete Cargo/compiler I/O closure. The tool does not interpret
+`*.rs` under `ops/src`, the load-test library entry and capacity dispatcher, and
+Rust files under its `capacity`, `capacity_run` and `owned_process` directories.
+This covers the current named workspace discovery manifests, not complete
+Cargo/compiler I/O closure. The tool does not interpret
 TOML, resolve changed workspace members/path patches, or read other workspace,
 vendor or registry source. A later builder must audit the complete input closure
 instead of treating this fixed selection as one. Implicit `ops/build.rs`, an
-`ops/.cargo` directory and legacy `.cargo/config` are refused rather than silently
-omitted from this profile. Other unselected paths are not source inputs here.
+`ops/.cargo`, `load_tests/build.rs`, `load_tests/.cargo` and legacy `.cargo/config`
+are refused rather than silently omitted from this profile. Other unselected
+paths are not source inputs here.
 
-At most 64 files are selected, each at most 1 MiB except `Cargo.lock` at 4 MiB,
-with a 16 MiB original-byte total. Empty selected files are recorded accurately;
+At most 256 file records are selected, each at most 1 MiB except `Cargo.lock`
+at 4 MiB, with a 16 MiB original-byte total. Empty selected files are recorded accurately;
 the inventory does not establish that a manifest parses or source compiles.
-Source traversal has at most eight descendant directory levels and 16 selected
+Source traversal has at most eight descendant directory levels and 32 selected
 directory owners, including the source root. Selected source names are bounded
 ASCII components; links and special files are refused. Enumerations have a
 combined 8,192-entry/1 MiB name budget and 255-byte entry-name limit. Source-path
 ancestors have at most 32 retained owners, shared across every file. The bound
-is 112 retained File handles plus transient enumeration/binding handles, rather
-than one ancestor chain per file.
+is 80 retained File handles plus one transient enumeration/binding handle:
+32 ancestors, 32 selected directories and 16 regular-file owners. Fixed discovery
+files retain their original descriptors. Each Rust leaf is hashed and explicitly
+closed before admitting the next; its anchored parent, original full stamp and
+digest remain. Final verification opens that same visible inode without following
+links, completely rehashes it and checks its unchanged stamp before closing it.
+This is a checked new open, not continuous original-file custody. The larger
+record inventory therefore does not raise the previous live-descriptor ceiling.
 
 Retained descriptor-relative directories are enumerated with rustix's mature
 `Dir` reader. Files, selected directory stamps/membership and visible bindings
@@ -445,8 +454,8 @@ cursor is RAII-closed internally, with no fallible close API. This detects
 observed mutation/replacement; it is neither an atomic snapshot nor a lock.
 
 The canonical SHA-256 frame is the ASCII bytes
-`simplestchat-ops-source-inventory-v1` plus NUL, a big-endian u32 file count, then
-entries sorted by relative ASCII path. Each entry is big-endian u16 path length,
+`simplestchat-ops-capacity-source-inventory-v2` plus NUL, a big-endian u32 file
+count, then entries sorted by relative ASCII path. Each entry is big-endian u16 path length,
 path bytes, big-endian u64 original byte count and the 32 raw bytes of that
 file's SHA-256. Names are part of the digest but stay private. Public inventory
 output and Debug contain only the profile, SHA, count and byte total. This
@@ -741,7 +750,7 @@ output cannot contain one another. Duplicate/unknown fields, numeric type change
 and wrong original request bytes are refused before material or output access.
 
 The new full-tree pin profile is `ops-producer-tree-v1`, distinct from the partial
-`workspace-ops-v1` inventory. Its SHA input begins with the profile plus NUL, followed
+`workspace-ops-capacity-v2` inventory. Its SHA input begins with the profile plus NUL, followed
 by entries sorted by relative UTF-8 path, including the empty root path. Each entry
 contains a big-endian u32 path byte length, path bytes, one directory-kind byte
 (1 for directory), one executable-file-bit byte, big-endian u64 file byte count
@@ -1389,7 +1398,7 @@ and authenticated `simplestchat-ops`. Whole-transfer and individual SHA/count
 pins, the original installer-request bytes and the controller's typed executable
 identity cross the keeper boundary. The selected first-party keeper dependency
 closure is measured against Git HEAD and retained original files. The controller
-copies exactly those 26 files into a fresh private source tree and runs the
+copies exactly those 28 files into a fresh private source tree and runs the
 keeper from that tree. Exact directory inventories, immutable metadata and file
 hashes are checked through dispatch, settlement and final replay. Unselected
 checkout siblings cannot supply Python imports; additions or substitutions in
@@ -1399,8 +1408,16 @@ No candidate runs on the controller.
 
 The guest checks the complete 19-field executable identity, local pair policy,
 ordinary/base/fetch/force preflight against the unchanged Python oracle, typed
-negative cases, first installation and exact repeat. Its 28 ordered cases use
-fixed commands. Writers close before the original executable inode receives its
+negative cases, first installation and exact repeat. Its 33 ordered cases use
+fixed commands: five VPS execution-boundary probes precede the existing 28
+installation and CLI cases. The new probes use a separate closed guest source
+directory containing the measured probe, original guest and bootstrap scripts.
+They check actual same-descriptor ELF execution, kernel CLOEXEC retirement by
+candidate inode, exchanged/unlinked/wrong running-image refusals and the original
+remote monotonic deadline. Their expected negative statuses are not success
+receipts; each probe separately asserts its kernel/custody observations before
+the parent admits that row. They run no measured capacity workload.
+Writers close before the original executable inode receives its
 checked executable mode; commands execute through the retained read-only file
 descriptor. Per-command completion observes the leader and pipes. Final owned
 VM destruction supplies guest process closure, with authenticated SSH, QMP,
@@ -1470,3 +1487,39 @@ nonempty debug output omits credentials and private paths. Filesystem witnesses
 stay internal and have no debug representation. `C-FAILURE`, `C-EXAMPLE` and `C-LINK` are
 covered by the command contracts and examples above. These are internal CLI
 adapters, with no new public library compatibility promise or package metadata.
+
+## Private VPS capacity operation
+
+The [capacity guide](ansible/CAPACITY.md#rust-controller-and-authenticated-host-operation)
+documents `xtask vps-capacity`, its mandatory CI artifact selectors, the fixed
+Debian host and the retained Python reference. The public Ops entry points serve
+one framed request or one canonical systemd worker; decoded protocol records
+alone grant no execution authority. No module import starts a workload.
+
+The load-test library keeps its default `full` feature for the existing
+executable. Ops selects only `capacity-runtime` with default features disabled,
+sharing workload and cleanup policy without adding the server, media or native
+TLS graph. Linux implements the host body; other targets retain protocol and
+inspection support and return the fixed unsupported-platform failure for host
+entry points. A cross-target type check does not establish kernel behavior.
+
+This affected-component review applies `C-FEATURE` to that explicit feature
+boundary; `C-NEWTYPE`, `C-CUSTOM-TYPE` and `C-STRUCT-PRIVATE` to opaque authenticated
+acquisition, invocation and filesystem owners; and `C-VALIDATE`/`C-SERDE` to closed
+control messages and original private numeric evidence. Mutable wire DTOs remain
+data. Invocation admission retains the actual authenticated acquisition and
+original transfer witnesses rather than reconstructing authority from JSON.
+
+`C-RW-VALUE`, `C-DTOR-FAIL` and `C-DTOR-BLOCK` apply to borrowed original input,
+bounded captures, joined preparation groups and all-peer file finalization.
+Readiness is bound to both independently observed progress and the final stdout
+seal. Linux signal ownership stays on its calling thread, and safe POSIX spawn
+restores the child's original signal mask. Observed deadlines and first control
+status survive later cleanup failures; blocking OS calls still have the
+limitations described above. `C-GOOD-ERR`, `C-DEBUG` and `C-FAILURE` keep fixed
+codes and redacted owners separate from private child evidence.
+
+The prospective review covers these changed contracts. Inert fixtures, actual
+local processes, Linux type checks, signed artifact interoperability and measured
+workloads provide different evidence; none substitutes for an unrun category.
+Unrelated guideline rows and the planned retrospective review remain pending.

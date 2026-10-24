@@ -949,9 +949,27 @@ class VerifiedWorkflowTests(unittest.TestCase):
                 step for step in steps if string(step.get("run", "")).startswith("cargo test ")
             )
             self.assertEqual(
-                string(execute, "run"),
-                "cargo test --locked --workspace --all-features "
-                + "-- --include-ignored --test-threads=1",
+                shlex.split(string(execute, "run")),
+                [
+                    "cargo",
+                    "test",
+                    "--locked",
+                    "--workspace",
+                    "--all-features",
+                    "--",
+                    "--include-ignored",
+                    "--test-threads=1",
+                    "--skip",
+                    "capacity_vps::process::tests::inert_child_signal_mask",
+                    "--skip",
+                    "capacity_vps::host_tests::whole_host_policy_matches_original_python_oracle",
+                    "--skip",
+                    (
+                        "ci::ops_artifact::capacity_vps::controller_tests::"
+                        "all_eight_whole_reference_scenarios_preserve_local_policy_"
+                        "and_explicit_transport_deltas"
+                    ),
+                ],
             )
             self.assertLess(steps.index(build), steps.index(execute))
             self.assertEqual(build["if"], execute["if"])

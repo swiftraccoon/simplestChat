@@ -69,7 +69,7 @@ fn nonexecuting_plan_projects_only_bounded_claims_inventory_and_unresolved_slots
     assert!(output.stderr.is_empty());
     let value: Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(value["kind"], "ops-build-plan");
-    assert_eq!(value["inventory"]["files"], 11);
+    assert_eq!(value["inventory"]["files"], 16);
     assert_eq!(value["recipe"]["program"], "cargoExecutable");
     assert_eq!(value["recipe"]["arguments"][1]["value"], "--frozen");
     let public = String::from_utf8(output.stdout).unwrap();
@@ -89,6 +89,41 @@ fn nonexecuting_plan_projects_only_bounded_claims_inventory_and_unresolved_slots
         fs::read(root.0.join("selection.json")).unwrap(),
         selection_before
     );
+    assert!(!root.0.join("source/target").exists());
+}
+
+#[test]
+fn streamed_inventory_exceeds_the_child_descriptor_limit_without_exhausting_it() {
+    let root = Fixture::new();
+    for index in 0..180 {
+        fs::write(
+            root.0.join(format!("source/ops/src/extra{index}.rs")),
+            b"// owned metadata-only fixture\n",
+        )
+        .unwrap();
+    }
+    // The kernel carries this child-only limit across exec. The actual Ops
+    // command still runs with an empty PATH and never invokes a compiler.
+    let output = Command::new("python3")
+        .args([
+            "-I",
+            "-c",
+            "import os, resource, sys; resource.setrlimit(resource.RLIMIT_NOFILE, (96, 96)); assert resource.getrlimit(resource.RLIMIT_NOFILE) == (96, 96); os.execve(sys.argv[1], sys.argv[1:], {'PATH': '', 'LANG': 'C', 'LC_ALL': 'C'})",
+            env!("CARGO_BIN_EXE_simplestchat-ops"),
+            "distribution",
+            "build-plan",
+            "--selection",
+        ])
+        .arg(root.0.join("selection.json"))
+        .arg("--source-root")
+        .arg(root.0.join("source"))
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{:?}", output.stderr);
+    assert!(output.stderr.is_empty());
+    let value: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(value["inventory"]["files"], 196);
+    assert_eq!(value["inventory"]["profile"], "workspace-ops-capacity-v2");
     assert!(!root.0.join("source/target").exists());
 }
 

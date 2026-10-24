@@ -102,6 +102,43 @@ actual Debian executable/first-install behavior require their respective Linux
 tests and successful manual `ops-runtime.yml` run. The existing full application
 VM workflow remains a separate suite.
 
+The private VPS operation adds owned local transaction fixtures, actual inert
+paired preparation processes, and bounded gzip/tar extraction. The paired tests
+exercise lease-stream EOF, quiet-child cancellation, release ordering and the
+first interrupt surviving a later signal during joined cleanup. The source
+inventory CLI also runs with 196 selected files and a child-only 96-descriptor
+limit. These checks do not execute a remote capacity workload.
+
+Whole-controller parity requires the pinned Python environment. Operations
+automation and its local-CI route explicitly run the otherwise ignored test;
+missing dependencies fail instead of skipping it:
+
+```sh
+PYTHON_CHECK_ENV="$PWD/ops/ansible/.venv" \
+  cargo test --locked -p xtask --bin xtask \
+  ci::ops_artifact::capacity_vps::controller_tests::all_eight_whole_reference_scenarios_preserve_local_policy_and_explicit_transport_deltas \
+  -- --ignored --exact
+```
+
+The unchanged Python controller runs with inert external adapters in all eight
+scenarios. This checks local policy and documented transport differences; a
+signed musl binary, Debian kernel/process behavior and a measured host run need
+their own evidence. The Python controller remains available as the reference.
+
+Linux operations automation also explicitly runs the host policy comparison:
+
+```sh
+PYTHON_CHECK_ENV="$PWD/ops/ansible/.venv" \
+  cargo test --locked -p simplestchat-ops --lib \
+  capacity_vps::host_tests::whole_host_policy_matches_original_python_oracle \
+  -- --ignored --exact
+```
+
+That host test is compiled only on Linux. Direct automation on other platforms
+reports its absence; `ci-local` runs the Linux workflow. The ignored inert child
+used by the real process regression is launched only by its exact parent test.
+Do not replace either oracle command with a broad `--ignored` invocation.
+
 Rust tests include native media checks; database tests are opt-in. Serial
 execution reduces UDP port-allocation races. Web tests use mocked browser APIs;
 the web build runs TypeScript checking and produces the production UI.
@@ -522,13 +559,20 @@ With PostgreSQL tools on `PATH`, use the owned bootstrap:
 ```sh
 cargo build --locked --bin simplestChat
 cargo run -q -p xtask -- test-env \
-  cargo test --locked --workspace -- --include-ignored --test-threads=1
+  cargo test --locked -p simplestChat -- --include-ignored --test-threads=1
 ```
 
 It creates a fresh loopback-only PostgreSQL cluster on port 15434, starts and
 migrates an owned application server, then stops both after the command. It
 refuses an occupied port and retains its private temporary directory for
 diagnostics. Set `TEST_POSTGRES_PORT` when another local service owns that port.
+
+The database commands select the server package. Run ordinary workspace tests
+separately using the command at the start of this guide. The workspace also has
+ignored tooling fixtures that require an owning parent or the pinned Python
+automation environment; a blanket `--include-ignored` would launch them outside
+that owner. CI includes database tests while skipping those three named fixtures;
+operations automation explicitly runs both complete Python reference comparisons.
 The trust-authenticated database is disposable, never a shared development DB.
 
 Each harness test command owns a fresh process group. It retains the leader's
@@ -906,7 +950,8 @@ export DATABASE_URL='postgres://test_owner@127.0.0.1:15434/simplestchat_test?ssl
 export DISPOSABLE_TEST_DATABASE=1
 
 cargo build --locked --bin simplestChat
-cargo run -q -p xtask -- test-server cargo test --locked --workspace -- --include-ignored --test-threads=1
+cargo run -q -p xtask -- test-server \
+  cargo test --locked -p simplestChat -- --include-ignored --test-threads=1
 ```
 
 Trust authentication is only for this disposable loopback cluster. The helper

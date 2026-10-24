@@ -247,6 +247,7 @@ test('context excludes local-only descendants while retaining production inputs'
   for (const filename of [
     '.env', 'CLAUDE.md', 'results/local/report.json',
     'ops/private.env', 'ops/src/private.env', 'ops/src/release/private.env',
+    'ops/src/capacity_vps/private.env', 'ops/src/capacity_vps/retained/artifact.zip',
     'ops/tests/private.env', 'ops/src/release/archive/private.env', 'ops/README.md',
     'ops/unrelated-local-selection.json', 'ops/ops-build-inputs.private.json',
     'build/CLAUDE.md', 'build/private.env', 'src/CLAUDE.md', 'src/auth/private.env',
@@ -296,6 +297,8 @@ test('context excludes local-only descendants while retaining production inputs'
     'xtask/src/ci/performance_compare/private.env',
     'xtask/src/ci/performance_compare/unlisted.sh',
     'xtask/src/ci/ops_artifact/private.env',
+    'xtask/src/ci/ops_artifact/capacity_vps/private.env',
+    'xtask/src/ci/ops_artifact/capacity_vps/retained/ops-attestation.jsonl',
     'xtask/src/ci/ops_artifact/source/private.env',
     'xtask/src/ci/ops_artifact/registry/private.env',
     'xtask/src/ci/ops_artifact/verify/private.env',
@@ -319,8 +322,10 @@ test('context excludes local-only descendants while retaining production inputs'
     'src/room/social/members.rs',
     'src/signaling/mod.rs', 'migrations/001_initial.sql',
     'ops/Cargo.toml', 'ops/ops-build-inputs.lock.json', 'ops/src/main.rs', 'ops/src/release/manifest.rs',
+    'ops/src/capacity_vps/protocol.rs',
     'load_tests/Cargo.toml', 'load_tests/src/main.rs', 'load_tests/src/metrics/measurement.rs',
     'xtask/Cargo.toml', 'xtask/src/main.rs',
+    'xtask/src/ci/ops_artifact/capacity_vps/prepare.rs',
     'web/package.json', 'web/package-lock.json', 'web/tsconfig.json',
     'web/tsconfig.app.json', 'web/tsconfig.tools.json', 'web/vite.config.ts',
     'web/index.html', 'web/bundle-budget.json', 'web/scripts/check-bundle.mjs',
@@ -337,6 +342,7 @@ test('ops workspace inputs remain narrow and no ops binary enters the production
   assert.deepEqual(opsRules.toSorted(), [
     '!ops/', 'ops/**', '!ops/Cargo.toml', '!ops/ops-build-inputs.lock.json',
     '!ops/src/', 'ops/src/**', '!ops/src/*.rs',
+    '!ops/src/capacity_vps/', 'ops/src/capacity_vps/**', '!ops/src/capacity_vps/*.rs',
     '!ops/src/release/', 'ops/src/release/**', '!ops/src/release/*.rs',
     '!ops/src/release/archive/', 'ops/src/release/archive/**', '!ops/src/release/archive/*.rs',
     '!ops/ansible/', 'ops/ansible/**', '!ops/ansible/files/', 'ops/ansible/files/**',
@@ -349,6 +355,8 @@ test('ops workspace inputs remain narrow and no ops binary enters the production
   assert.match(dockerfile, /> ops\/src\/main\.rs/);
   assert.match(dockerfile, /printf '' > ops\/src\/lib\.rs/,
     'The xtask path dependency needs the Ops library target during dependency warming');
+  assert.match(dockerfile, /printf '' > load_tests\/src\/lib\.rs/,
+    'The Ops capacity dependency needs the load-test library target during dependency warming');
   const runtime = dockerfile.slice(dockerfile.indexOf(' AS runtime-base'));
   assert.doesNotMatch(runtime,
     /^COPY .*ops\/(?:src|ops-build-inputs\.lock\.json)|^COPY .*simplestchat-ops/m);

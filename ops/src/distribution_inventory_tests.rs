@@ -18,7 +18,7 @@ fn framed_inventory_binds_sorted_names_sizes_and_original_bytes() {
     let path = root.0.join("source");
     let mut expected = fixture::populate(&path);
     expected.sort_by(|a, b| a.0.cmp(&b.0));
-    let mut frame = b"simplestchat-ops-source-inventory-v1\0".to_vec();
+    let mut frame = b"simplestchat-ops-capacity-source-inventory-v2\0".to_vec();
     frame.extend((expected.len() as u32).to_be_bytes());
     for (name, bytes) in &expected {
         frame.extend((name.len() as u16).to_be_bytes());
@@ -32,7 +32,7 @@ fn framed_inventory_binds_sorted_names_sizes_and_original_bytes() {
         .map(|v| format!("{v:02x}"))
         .collect();
     assert_eq!(inventory.sha256(), digest);
-    assert_eq!(inventory.files(), 11);
+    assert_eq!(inventory.files(), expected.len());
     assert_eq!(
         inventory.bytes(),
         expected.iter().map(|(_, v)| v.len() as u64).sum::<u64>()
@@ -133,7 +133,8 @@ fn nofollow_regular_admission_and_unsupported_implicit_inputs_are_explicit() {
 #[test]
 fn file_count_size_depth_and_directory_budgets_are_enforced_before_growth() {
     let (_root, path) = source();
-    for index in 0..53 {
+    let existing = collect_inputs(&path).unwrap().files();
+    for index in 0..MAX_FILES - existing {
         fs::write(path.join(format!("ops/src/extra{index}.rs")), b"").unwrap();
     }
     assert_eq!(collect_inputs(&path).unwrap().files(), MAX_FILES);

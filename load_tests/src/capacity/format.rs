@@ -45,6 +45,7 @@ pub(crate) fn repr(value: f64) -> String {
     }
 }
 
+#[cfg(feature = "full")]
 pub(crate) fn grouped(value: f64) -> String {
     let text = format!("{value:.0}");
     let mut result = String::new();

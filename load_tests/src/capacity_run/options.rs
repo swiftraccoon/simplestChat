@@ -14,6 +14,10 @@ pub(super) const USAGE: &str = "Usage: load_test capacity run --server-image IMA
 [--chat-interval-ms N] [--viewport-width N] [--pixel-ratio N] [--layout classic|modern] \
 [--monthly-price N] [--egress-price-per-gb N] [--included-egress-tb N] [--port-mbps N]";
 
+pub(super) fn usage(program: &str) -> String {
+    USAGE.replace("load_test", program)
+}
+
 #[derive(Clone, Debug)]
 pub(super) struct Options {
     pub(super) server_image: String,

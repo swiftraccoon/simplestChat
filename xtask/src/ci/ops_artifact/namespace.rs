@@ -128,6 +128,16 @@ impl Held {
         })
     }
     pub fn create(parent: &File, name: &str, executable: bool, budget: &Budget) -> Result<Self> {
+        Self::create_name(parent, std::ffi::OsStr::new(name), executable, budget)
+    }
+    /// Create one exclusive private leaf beneath the retained directory. Unix
+    /// archive names need not be UTF-8; callers still validate a single leaf.
+    pub fn create_name(
+        parent: &File,
+        name: &std::ffi::OsStr,
+        executable: bool,
+        budget: &Budget,
+    ) -> Result<Self> {
         let value = Self::acquire(budget, || {
             rustix::fs::openat(
                 parent,

@@ -6,6 +6,8 @@ selector, and never treats candidate JSON as authentication. Only its closed
 metadata receipt may be published; command streams and keys remain private.
 The Rust owner launches this keeper from its fresh, closed source projection.
 Derived ROOT paths and Ansible inputs refer to that projection, not the caller checkout.
+Its explicit source closure now includes the VPS exec fixture and bootstrap;
+the separate guest namespace runs five custody probes before all28 installer cases.
 """
 
 from __future__ import annotations
@@ -286,7 +288,7 @@ def stage(host: Host, guest: vm.Guest, work: Path, port: int, options: protocol.
 
 
 def guest_observation(data: bytes, options: protocol.Options, status: int) -> dict[str, object]:
-    """Validate a strict ordered prefix without publishing arbitrary guest output."""
+    """Validate the strict five-plus-twenty-eight prefix without arbitrary guest output."""
     value = protocol.exact(
         protocol.object_json(data),
         {"schemaVersion", "scope", "runId", "cases", "install", "passed", "failure"},

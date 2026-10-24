@@ -19,6 +19,8 @@ use std::{
 pub(super) const NAMES: &[&str] = &[
     "build/security_vm_ops.py",
     "build/security_vm_ops_guest.py",
+    "build/security_vm_vps_guest.py",
+    "build/vps_ops_bootstrap.py",
     "build/security_vm.py",
     "build/security_vm_qmp.py",
     "build/security_context.py",

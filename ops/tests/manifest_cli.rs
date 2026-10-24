@@ -124,6 +124,9 @@ fn usage_and_help_never_read_a_manifest_or_start_another_command() {
                 "--selection PATH --source-root PATH\n",
                 "       simplestchat-ops distribution prepare-artifact --manifest PATH ",
                 "--path PATH --selection PATH --evidence PATH --output PATH\n",
+                "       simplestchat-ops capacity run --server-image IMAGE --generator-image IMAGE [OPTIONS]\n",
+                "       simplestchat-ops capacity-vps serve --transport-json JSON --origin-monotonic-ns N\n",
+                "       simplestchat-ops capacity-vps worker --run RUN --request-sha256 SHA\n",
             )
             .as_bytes()
         );

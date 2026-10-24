@@ -6,17 +6,13 @@ It uses the existing Ansible playbook, image-build service and
 [`build/capacity.py`](../../build/capacity.py) measurement engine. Preparation and
 image building are explicit options; each measurement creates a new run.
 
-The Rust library `simplestchat_load_test::capacity::vps` now provides the pure
-request, workload-argument, calibration, terminal-unit and redacted residual
-policy, checked against these retained Python functions. It starts no process
-or remote operation and adds no VPS command. The controller, SSH preparation
-lease, systemd worker, collection/recovery and archive transport remain Python.
-The shared Rust capacity engine already implements the measured workload; its
-installation and executable provenance on the Debian host still need an explicit
-contract before the worker can use it. The load-test executable currently ships
-inside the Fedora runtime image, which is not evidence of Debian host ABI
-compatibility. Bootstrap/Ansible provisioning and the broader host operations
-binary remain a Tier 2 concern.
+The Rust `xtask vps-capacity` operation uses the same workload policy and the
+capacity engine through an explicitly selected signed Ops artifact. It owns
+preparation, SSH transport, systemd execution, collection, recovery and local
+evidence extraction. The Python controller remains available as the reference;
+Ansible still provisions the host. The standalone host binary targets Debian
+13/x86_64 with systemd. Fedora runtime images remain separate measured workload
+inputs and do not establish the host executable's ABI compatibility.
 
 The pure request parser keeps Python's integer/float distinction, finite quota
 checks and unknown fields. Requests are bounded at 512 KiB and report/inspection
@@ -52,6 +48,71 @@ direct SSH with strict host-key checking and noninteractive sudo; password-based
 first access belongs to bootstrap. Private keys, inventory and generated
 evidence remain outside tracked source. The controller refuses a public host,
 running containers, active builds or tests, and unfinished cleanup records.
+
+## Rust controller and authenticated host operation
+
+Build the controller before supplying its GitHub credential. Select the signed
+Ops artifact from the successful CI attempt for this exact committed revision;
+the run, attempt and artifact IDs are mandatory. The artifact's authenticated
+selection is retained through transport, collection and final replay. No Ops
+candidate executes on the controller.
+
+```sh
+cargo build --locked -p xtask --bin xtask
+target/debug/xtask vps-capacity \
+  --inventory ops/ansible/inventory.local.test.yml --limit test_vps \
+  --revision "$(git rev-parse HEAD)" \
+  --ops-ci-run "$OPS_CI_RUN_ID" --ops-run-attempt "$OPS_RUN_ATTEMPT" \
+  --ops-artifact "$OPS_ARTIFACT_ID" \
+  --label audio30-one-worker --audio-only --runtime-seconds 900 \
+  --server-cpus 1 --generator-cpus 4.8 --app-cpus 5
+```
+
+The controller requires `GH_TOKEN` for authenticated acquisition. It removes
+that credential from SSH, Ansible and workload child environments. The example
+presumes an already prepared host and images; add `--prepare` and
+`--build-images` explicitly when needed. Workload flags retain the Python
+controller's defaults and policy. Running an experiment still requires selecting
+the target, quotas and duration; source tests are not a capacity measurement.
+
+Each run stages exactly the authenticated manifest, selection and musl binary
+under `/srv/simplestchat-bench/artifacts/ops-runtime.RUN`. The stdlib Python
+bootstrap handles bounded framing, hashing, sealing and execution of its original
+read-only descriptor. Successful ELF execution retires that descriptor through
+kernel `CLOEXEC`; this is not a checked Python close or a descriptor inherited by
+Rust. Rust opens `/proc/self/exe` and the fixed staged path separately and binds
+their inode, full stamp and byte identity. This requires trusted Linux procfs.
+It does not install a permanent binary or change installed release helpers.
+
+Preparation retains one SSH lease while Ansible runs. EOF on either lease stream,
+extra stdout after the ready record, interruption or a failed custody check
+cancels preparation. Ansible and its streams finish before the controller sends
+the exact release line and closes stdin. All phase budgets derive from the
+original invocation; imports after the remote monotonic sample consume its
+budget, while interpreter startup is covered by the controller's parent budget.
+
+Use `--collect RUN` or `--recover RUN` with the original revision and artifact
+selectors to adopt a saved run's original workload. Neither mode starts another
+workload. A lost start acknowledgement remains uncertain and is never retried
+automatically. Recovery rechecks immutable container ownership immediately before
+stopping or removing it; cleanup cannot convert a failed measurement into a pass.
+
+Control responses are closed finite JSON. Saved private workload/outcome bytes
+retain the existing numeric policy through string envelopes, with an 8 MiB
+whole-response ceiling. Archives are bounded at 512 MiB compressed, 1 GiB
+expanded, 144 MiB per member and 10,000 logical files. Extraction retains the
+shared nofollow namespace limits: each derived absolute directory path is at most
+4,096 bytes and 32 components, with no ASCII controls. Those limits include the
+controller evidence ancestry; arbitrary-depth Python archive acceptance is not
+claimed. Sparse PAX metadata is refused because the selected Rust tar reader
+cannot reproduce that extension's extraction semantics. Canonical host evidence
+contains shallow regular files.
+
+The generated execution inventory explicitly replaces `scbench_revision` with
+the selected revision. Original operator bytes remain retained and checked. YAML
+scalar behavior, omitted/null distinctions and private numeric evidence keep the
+documented reference domain; ignored revision scalars are the deliberate inventory
+difference. The pinned Ansible runtime remains trusted.
 
 ## Measure thirty active microphones per room
 

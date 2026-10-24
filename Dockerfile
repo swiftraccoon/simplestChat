@@ -143,6 +143,7 @@ RUN mkdir -p src load_tests/src xtask/src ops/src \
     && printf '#![allow(non_snake_case)]\nfn main() {}\n' > src/main.rs \
     && printf '#![allow(non_snake_case)]\n' > src/lib.rs \
     && printf 'fn main() {}\n' > load_tests/src/main.rs \
+    && printf '' > load_tests/src/lib.rs \
     && printf 'fn main() {}\n' > xtask/src/main.rs \
     && printf 'fn main() {}\n' > ops/src/main.rs \
     && printf '' > ops/src/lib.rs \

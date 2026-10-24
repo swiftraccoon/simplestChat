@@ -28,36 +28,52 @@ const TAR_BLOCK: u64 = 512;
 const SUMMARY: &str = "load_test_summary.json";
 const RESULTS: &str = "load_test_results.json";
 const TIMEOUT: &str = "load_test_timeout.json";
+#[cfg(any(feature = "full", test))]
 const CAPTURE: &str = "handshakes.pcap";
 
 /// Fixed collectors share parsing policy, never archive-selected host paths.
 #[derive(Clone, Copy)]
 enum Collection {
     Capacity,
+    #[cfg(any(feature = "full", test))]
     Benchmark,
+    #[cfg(any(feature = "full", test))]
     Capture,
 }
 
 impl Collection {
     fn maximum_archive(self) -> u64 {
         match self {
-            Self::Capacity | Self::Benchmark => MAX_ARCHIVE,
+            Self::Capacity => MAX_ARCHIVE,
+            #[cfg(any(feature = "full", test))]
+            Self::Benchmark => MAX_ARCHIVE,
+            #[cfg(any(feature = "full", test))]
             Self::Capture => 65 * 1024 * 1024,
         }
     }
 
     fn maximum_file(self) -> u64 {
         match self {
-            Self::Capacity | Self::Benchmark => MAX_RESULT,
+            Self::Capacity => MAX_RESULT,
+            #[cfg(any(feature = "full", test))]
+            Self::Benchmark => MAX_RESULT,
+            #[cfg(any(feature = "full", test))]
             Self::Capture => 64 * 1024 * 1024,
         }
     }
 
     fn name(self, name: &str) -> Result<&'static str> {
         match (self, name) {
-            (Self::Capacity | Self::Benchmark, SUMMARY) => Ok(SUMMARY),
-            (Self::Capacity | Self::Benchmark, RESULTS) => Ok(RESULTS),
-            (Self::Capacity | Self::Benchmark, TIMEOUT) => Ok(TIMEOUT),
+            (Self::Capacity, SUMMARY) => Ok(SUMMARY),
+            #[cfg(any(feature = "full", test))]
+            (Self::Benchmark, SUMMARY) => Ok(SUMMARY),
+            (Self::Capacity, RESULTS) => Ok(RESULTS),
+            #[cfg(any(feature = "full", test))]
+            (Self::Benchmark, RESULTS) => Ok(RESULTS),
+            (Self::Capacity, TIMEOUT) => Ok(TIMEOUT),
+            #[cfg(any(feature = "full", test))]
+            (Self::Benchmark, TIMEOUT) => Ok(TIMEOUT),
+            #[cfg(any(feature = "full", test))]
             (Self::Capture, CAPTURE) => Ok(CAPTURE),
             _ => anyhow::bail!("unsafe_result_entry"),
         }
@@ -340,9 +356,10 @@ fn selected(file: &mut File, collection: Collection) -> Result<Vec<Selected>> {
         selected.push(Selected { name, offset, size });
     }
     let required = match collection {
-        Collection::Capacity | Collection::Benchmark => {
-            seen.contains(SUMMARY) && seen.contains(RESULTS)
-        }
+        Collection::Capacity => seen.contains(SUMMARY) && seen.contains(RESULTS),
+        #[cfg(any(feature = "full", test))]
+        Collection::Benchmark => seen.contains(SUMMARY) && seen.contains(RESULTS),
+        #[cfg(any(feature = "full", test))]
         Collection::Capture => seen.contains(CAPTURE),
     };
     ensure!(required, "missing_required_results");
@@ -424,11 +441,13 @@ pub(crate) fn finish_collection(archive: &Path, directory: &Path) -> Result<Valu
 /// Publish only fixed JSON result basenames into an existing private run root.
 /// Failed transfers, invalid archives and timeout markers retain their archive;
 /// the collection manifest is created only after every output is closed.
+#[cfg(any(feature = "full", test))]
 pub(crate) fn finish_benchmark_results(archive: &Path, directory: &Path) -> Result<Value> {
     finish(archive, directory, "collection.json", Collection::Benchmark)
 }
 
 /// A stopped capture sidecar may contribute only its bounded regular pcap.
+#[cfg(any(feature = "full", test))]
 pub(crate) fn finish_handshake_capture(archive: &Path, directory: &Path) -> Result<Value> {
     finish(
         archive,

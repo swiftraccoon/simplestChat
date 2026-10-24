@@ -1,9 +1,12 @@
-//! Local release policy and unsigned artifact preparation, without server,
-//! engine, network, service or candidate-execution dependencies.
+//! Release/artifact policy and explicitly requested private capacity operations.
+//! Importing a module starts no process, engine, connection or workload. The
+//! capacity routes retain their separate host, provenance and ownership gates;
+//! the default graph requires no server, media or native TLS implementation.
 //!
 //! Validated metadata is not signature evidence or authorization to deploy. Python
 //! remains the release runtime until independent parity and distribution checks.
 
+pub mod capacity_vps;
 pub mod distribution;
 mod files;
 mod json;

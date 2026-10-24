@@ -229,9 +229,9 @@ impl Fake {
                 "installRequestSha256":value("--install-request-sha256"),
                 "cloudImageSha512":"c".repeat(128),
                 "install":{"firstChanged":true,"secondChanged":false},
-                "cases":receipt::CASES.map(|(name,status)|json!({
+                "cases":receipt::CASES.iter().map(|(name,status)|json!({
                     "name":name,"exitStatus":status,"passed":true
-                })),
+                })).collect::<Vec<_>>(),
                 "guestExecuted":true,"runtimeValidated":true,
                 "installValidated":true,"cleanupPassed":true,
                 "passed":true,"failure":null,"vmLifecycle":{

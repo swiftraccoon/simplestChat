@@ -150,10 +150,230 @@ impl Request {
     pub fn workload(&self) -> &str {
         self.value["workload"].string().unwrap()
     }
+    /// The original validated systemd runtime ceiling, in whole seconds.
+    pub fn runtime_seconds(&self) -> u64 {
+        // decode already requires an integer token in 120..=21600.
+        integer(&self.value["runtimeSeconds"], 120, 21600).unwrap()
+    }
     /// Return the validated request unchanged for the existing transport envelope.
     pub fn as_json(&self) -> &[u8] {
         &self.original
     }
+}
+
+/// Bounded private worker evidence, retaining the original extended JSON bytes.
+/// This data is neither executable provenance nor container cleanup authority.
+#[derive(Clone)]
+pub struct Outcome {
+    value: Json,
+    original: Vec<u8>,
+}
+impl Outcome {
+    /// Decode the existing private outcome domain, including its numeric tokens.
+    ///
+    /// # Errors
+    /// Refuses oversized, malformed, nonobject or incorrectly typed verdict data.
+    pub fn decode(bytes: &[u8]) -> Result<Self> {
+        let value = decode(bytes, MAX_JSON)?;
+        object(&value)?;
+        ensure!(
+            matches!(value["passed"], Json::Bool(_)) && matches!(value["finalized"], Json::Bool(_)),
+            "invalid_worker_outcome"
+        );
+        Ok(Self {
+            value,
+            original: bytes.to_vec(),
+        })
+    }
+
+    pub fn passed(&self) -> bool {
+        self.value["passed"].is_true()
+    }
+
+    pub fn finalized(&self) -> bool {
+        self.value["finalized"].is_true()
+    }
+    pub fn revision(&self) -> Option<&str> {
+        self.value["revision"].string()
+    }
+
+    /// Validate saved verdict facts without normalizing private evidence values.
+    /// The one exact missing-outcome document remains negative evidence.
+    ///
+    /// # Errors
+    /// Refuses malformed selected fields, another revision, or a positive verdict
+    /// lacking zero exit, finalized cleanup and valid passing-step evidence.
+    pub fn validate_saved(&self, revision: &str) -> Result<()> {
+        ensure!(hex(revision, 40), "invalid_worker_revision");
+        const MISSING: &[u8] =
+            br#"{"passed":false,"finalized":false,"failureClass":"worker_outcome_missing"}"#;
+        if self.original == MISSING {
+            return Ok(());
+        }
+        ensure!(
+            matches!(&self.value["schemaVersion"], Json::Number(v) if v=="1")
+                && self.revision() == Some(revision),
+            "invalid_worker_outcome"
+        );
+        if let Some(status) = self.value.get("exitStatus") {
+            ensure!(
+                matches!(status, Json::Number(v)
+                if integer_token(v) && v.parse::<i32>().is_ok()),
+                "invalid_worker_exit"
+            );
+        }
+        if let Some(failure) = self.value.get("failureClass") {
+            ensure!(matches!(failure, Json::String(_)), "invalid_worker_failure");
+        }
+        if let Some(failed) = self.value.get("cleanupFailure") {
+            ensure!(matches!(failed, Json::Bool(true)), "invalid_worker_cleanup");
+        }
+        if let Some(cleanup) = self.value.get("cleanup") {
+            object(cleanup)?;
+        }
+        for field in ["passingSteps", "failedSteps"] {
+            if let Some(steps) = self.value.get(field) {
+                for step in array(steps)? {
+                    object(step)?;
+                }
+            }
+        }
+        if self.passed() {
+            ensure!(
+                self.finalized()
+                    && matches!(&self.value["exitStatus"], Json::Number(v) if v=="0"||v=="-0")
+                    && self.value["cleanup"]["clean"].is_true()
+                    && self.value.get("cleanupFailure").is_none(),
+                "invalid_positive_outcome"
+            );
+            let passing = array(&self.value["passingSteps"])?;
+            ensure!(
+                !passing.is_empty()
+                    && passing
+                        .iter()
+                        .all(|step| step["valid"].is_true() && step["passed"].is_true())
+                    && array(&self.value["failedSteps"])?.is_empty(),
+                "invalid_positive_outcome"
+            );
+        }
+        Ok(())
+    }
+
+    /// Project private cleanup data through the same numeric codec.
+    /// The closed transport receiver validates its residual snapshot shape; this
+    /// projection alone supplies no live container or destructive authority.
+    pub fn cleanup_json(&self) -> Option<Vec<u8>> {
+        self.value
+            .get("cleanup")
+            .map(|value| encode(value).into_bytes())
+    }
+
+    /// Bind visible positive step evidence to the original requested workload.
+    /// Failed or missing observations remain negative, collectable evidence.
+    ///
+    /// # Errors
+    /// Refuses saved verdict violations or a positive step for another workload.
+    pub fn validate_workload(&self, request: &Request) -> Result<()> {
+        self.validate_saved(request.revision())?;
+        if self.passed() {
+            ensure!(
+                array(&self.value["passingSteps"])?
+                    .iter()
+                    .all(|step| step["workload"].string() == Some(request.workload())),
+                "worker_workload_mismatch"
+            );
+        }
+        Ok(())
+    }
+
+    pub fn as_json(&self) -> &[u8] {
+        &self.original
+    }
+}
+
+/// Project the established private collection object from strict wire strings.
+///
+/// # Errors
+/// Refuses invalid object fields or the existing whole private report bound.
+pub fn project_collection(control: &[u8], request: &Request, outcome: &Outcome) -> Result<Vec<u8>> {
+    let mut value = decode(control, MAX_JSON)?;
+    let Json::Object(fields) = &mut value else {
+        anyhow::bail!("invalid_collection");
+    };
+    fields.remove("requestJson");
+    fields.remove("outcomeJson");
+    fields.insert("request".into(), request.value.clone());
+    fields.insert("outcome".into(), outcome.value.clone());
+    let bytes = encode(&value).into_bytes();
+    ensure!(bytes.len() <= MAX_JSON, "collection_too_large");
+    Ok(bytes)
+}
+
+/// Preserve the established local report objects behind the strict wire strings.
+/// The caller supplies ordinary control/report fields; this function substitutes
+/// only the original request and decoded collected outcome in their fixed slots.
+///
+/// # Errors
+/// Refuses the existing private decoder domain or whole 8 MiB report bound.
+pub fn project_controller_report(
+    control: &[u8],
+    request: &Request,
+    outcome: Option<&Outcome>,
+) -> Result<Vec<u8>> {
+    let mut value = decode(control, MAX_JSON)?;
+    let Json::Object(fields) = &mut value else {
+        anyhow::bail!("invalid_controller_report");
+    };
+    fields.insert("request".into(), request.value.clone());
+    if let Some(Json::Object(result)) = fields.get_mut("result") {
+        result.remove("requestJson");
+        result.insert("request".into(), request.value.clone());
+        if let Some(outcome) = outcome {
+            result.remove("outcomeJson");
+            result.insert("outcome".into(), outcome.value.clone());
+        } else {
+            ensure!(
+                !result.contains_key("outcomeJson"),
+                "worker_outcome_missing"
+            );
+        }
+    }
+    let bytes = encode(&value).into_bytes();
+    ensure!(bytes.len() <= MAX_JSON, "controller_report_too_large");
+    Ok(bytes)
+}
+
+/// Assemble the existing worker outcome without normalizing private infinities.
+/// This is a representation adapter; the owner computes every verdict separately.
+///
+/// # Errors
+/// Refuses invalid object projections and the existing 8 MiB private report bound.
+pub fn project_worker_outcome(
+    control: &[u8],
+    assessment: Option<&Assessment>,
+    cleanup: Option<&[u8]>,
+) -> Result<Vec<u8>> {
+    let mut value = decode(control, MAX_JSON)?;
+    let Json::Object(fields) = &mut value else {
+        anyhow::bail!("invalid_worker_outcome");
+    };
+    if let Some(assessment) = assessment {
+        let projected = decode(&assessment.to_json(), MAX_JSON)?;
+        fields.extend(
+            object(&projected)?
+                .iter()
+                .filter(|(key, _)| key.as_str() != "passed")
+                .map(|(key, value)| (key.clone(), value.clone())),
+        );
+    }
+    if let Some(cleanup) = cleanup {
+        let cleanup = decode(cleanup, MAX_JSON)?;
+        object(&cleanup)?;
+        fields.insert("cleanup".into(), cleanup);
+    }
+    let bytes = encode(&value).into_bytes();
+    ensure!(bytes.len() <= MAX_JSON, "worker_outcome_too_large");
+    Ok(bytes)
 }
 
 /// Produce arguments only. The operation owner chooses a verified host-compatible

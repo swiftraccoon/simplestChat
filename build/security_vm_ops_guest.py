@@ -23,8 +23,9 @@ import tarfile
 import time
 import uuid
 from dataclasses import dataclass
+from importlib import import_module
 from pathlib import Path
-from typing import TYPE_CHECKING, cast, final, override
+from typing import TYPE_CHECKING, Protocol, cast, final, override
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -35,6 +36,10 @@ ROOT = Path("/root/simplestchat-vm-fixture")
 INPUT = ROOT / "ops-input"
 LIBRARY = Path("/usr/local/libexec/simplestchat-public")
 INSTALLED = LIBRARY / "simplestchat-ops"
+VPS_SOURCE = ROOT / "vps-source"
+VPS_SOURCE_NAMES = frozenset(
+    {"security_vm_ops_guest.py", "security_vm_vps_guest.py", "vps_ops_bootstrap.py"}
+)
 MARKER = Path("/etc/simplestchat-vm-fixture")
 NAMES = ("ops-release.json", "ops-selection.json", "simplestchat-ops")
 MAX_BINARY = 256 * 1024**2
@@ -59,7 +64,14 @@ MAX_HELP = 8192
 UUID_VERSION = 4
 DEADLINE_STATUS = 124
 SIGNAL_STATUSES = (130, 143)
-CASES = (
+VPS_CASES = (
+    ("vps-fd-cloexec", 1),
+    ("vps-stage-exchange", 1),
+    ("vps-stage-unlinked", 1),
+    ("vps-wrong-image", 1),
+    ("vps-origin-expired", 124),
+)
+INSTALL_CASES = (
     ("source-help", 0),
     ("source-invalid-cli", 2),
     ("source-forbidden-root", 2),
@@ -89,6 +101,7 @@ CASES = (
     ("installed-final-inspect", 0),
     ("installed-final-pair", 0),
 )
+CASES = VPS_CASES + INSTALL_CASES
 BASE = frozenset(
     {
         "bounded_process.py",
@@ -720,6 +733,45 @@ def guard(options: Options) -> None:
     )
 
 
+def vps_namespace(control: Control, expected: os.stat_result | None = None) -> os.stat_result:
+    """Admit exactly three protected fixture sources before making them importable."""
+    control.check()
+    descriptor = directory(VPS_SOURCE)
+    primary: BaseException | None = None
+    before: os.stat_result | None = None
+    try:
+        before = os.fstat(descriptor)
+        require(expected is None or stamp(before) == stamp(expected))
+        names: set[str] = set()
+        with os.scandir(descriptor) as entries:
+            for entry in entries:
+                control.check()
+                require(len(names) < len(VPS_SOURCE_NAMES) and entry.name in VPS_SOURCE_NAMES)
+                value = entry.stat(follow_symlinks=False)
+                require(
+                    stat.S_ISREG(value.st_mode)
+                    and value.st_uid == before.st_uid
+                    and value.st_gid == before.st_gid
+                    and value.st_nlink == 1
+                    and stat.S_IMODE(value.st_mode) == PRIVATE_MODE
+                )
+                names.add(entry.name)
+        require(names == set(VPS_SOURCE_NAMES))
+        require(stamp(os.fstat(descriptor)) == stamp(before) == stamp(VPS_SOURCE.lstat()))
+        control.check()
+    except BaseException as error:  # noqa: BLE001 -- Preserve namespace failure through its close.
+        primary = error
+        control.status = control.status or 1
+    finally:
+        primary = settle((lambda: os.close(descriptor),), primary)
+    if primary is not None:
+        raise primary
+    if before is None:
+        message = "ops_guest_unproven"
+        raise OpsError(message)
+    return before
+
+
 def receive(source: BinaryIO, options: Options, control: Control) -> tuple[BinaryIO, Receiver]:
     """Authenticate the whole transfer before its mature parser can see member metadata."""
     path = ROOT / "ops-transfer.tar"
@@ -857,6 +909,11 @@ class Runner:
                 Path("/etc/simplestchat-public/images.json"),
             )
         )
+        self.vps_stamp = vps_namespace(control)
+        self.protected.extend(
+            Snapshot.capture(VPS_SOURCE / name, MAX_METADATA, PRIVATE_MODE)
+            for name in sorted(VPS_SOURCE_NAMES)
+        )
         self.directories: dict[Path, os.stat_result] = {}
         private = {
             Path("/root"),
@@ -864,6 +921,9 @@ class Runner:
             INPUT,
             ROOT / "python-cache",
             ROOT / "tmp",
+            VPS_SOURCE,
+            Path("/srv/simplestchat-bench"),
+            Path("/srv/simplestchat-bench/artifacts"),
             Path("/etc/simplestchat-public"),
             Path("/srv/simplestchat-public"),
             Path("/srv/simplestchat-public/releases"),
@@ -903,6 +963,7 @@ class Runner:
         self.control.check()
         self.receiver.check()
         empty_cache()
+        _ = vps_namespace(self.control, self.vps_stamp)
         for path, before in self.directories.items():
             require(stamp(path.lstat())[:5] == stamp(before)[:5])
         for held in self.receiver.files.values():
@@ -1384,6 +1445,55 @@ def manifest_cases(runner: Runner, options: Options) -> None:
     )
 
 
+class VpsProbeModule(Protocol):
+    """Type the one fixed fixture module; it supplies no artifact authentication."""
+
+    CASES: tuple[tuple[str, int, bytes], ...]
+
+    def exercise(
+        self, options: Options, receiver: Receiver, control: Control
+    ) -> list[dict[str, object]]:
+        """Execute only the fixed five-probe suite under the original guest owner."""
+        ...
+
+
+def vps_cases(runner: Runner, options: Options) -> None:
+    """Run the five custody probes under the same original guest owner, before install."""
+    runner.check()
+    sys.path.insert(0, str(VPS_SOURCE))
+    # Ordinary import from the checked closed tree; no custom loader or preload.
+    # A narrow interface avoids a static cycle with the copied guest reference.
+    probes = cast("VpsProbeModule", cast("object", import_module("security_vm_vps_guest")))
+
+    require(tuple((name, status) for name, status, _ in probes.CASES) == VPS_CASES)
+    rows = probes.exercise(options, runner.receiver, runner.control)
+    require(len(rows) == len(VPS_CASES) and not runner.records)
+    for value, (name, status) in zip(rows, VPS_CASES, strict=True):
+        row = exact(
+            value,
+            {
+                "name",
+                "exitStatus",
+                "passed",
+                "kernelImageObserved",
+                "originalCloexec",
+                "originalReadonly",
+            },
+        )
+        require(
+            row["name"] == name
+            and type(row["exitStatus"]) is int
+            and row["exitStatus"] == status
+            and row["passed"] is True
+            and row["originalCloexec"] is True
+            and row["originalReadonly"] is True
+            and type(row["kernelImageObserved"]) is bool
+            and (row["kernelImageObserved"] is True or name == VPS_CASES[-1][0])
+        )
+        runner.records.append({"name": name, "exitStatus": status, "passed": True})
+    runner.check()
+
+
 def exercise(runner: Runner, options: Options) -> None:
     """Complete all twenty-eight cases under the original guest owner."""
     manifest_file = runner.receiver.files[NAMES[0]].file
@@ -1435,6 +1545,7 @@ def run(options: Options, source: BinaryIO, control: Control) -> dict[str, objec
         runner = Runner(control, receiver)
         report["cases"] = runner.records
         report["failure"] = "cases"
+        vps_cases(runner, options)
         exercise(runner, options)
         runner.check()
         report["passed"], report["failure"] = True, None

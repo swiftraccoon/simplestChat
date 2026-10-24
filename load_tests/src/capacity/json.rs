@@ -9,13 +9,18 @@
 //! marker length depends on the bounded item count, never on user string length.
 
 use anyhow::{Result, ensure};
+#[cfg(any(feature = "full", test))]
 use nix::fcntl::{OFlag, open};
+#[cfg(any(feature = "full", test))]
 use nix::sys::stat::Mode;
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
+#[cfg(any(feature = "full", test))]
 use std::fs::File;
+#[cfg(any(feature = "full", test))]
 use std::io::Read;
 use std::ops::Index;
+#[cfg(any(feature = "full", test))]
 use std::path::Path;
 
 const MAX_RESULT: u64 = 128 * 1024 * 1024;
@@ -136,6 +141,7 @@ impl Index<&str> for Json {
     }
 }
 
+#[cfg(any(feature = "full", test))]
 pub(crate) fn read(path: &Path) -> Result<Json> {
     let file = File::from(open(
         path,

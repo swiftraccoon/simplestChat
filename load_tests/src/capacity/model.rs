@@ -1,13 +1,16 @@
 //! Typed workload provenance and the unchanged host sizing/resource policy.
 
+#[cfg(feature = "full")]
 use super::{format::general, json::Json};
 use anyhow::{Result, ensure};
 use std::collections::BTreeMap;
 
 pub(crate) const MIB: f64 = 1_048_576.0;
+#[cfg(feature = "full")]
 pub(crate) const WORKLOADS: [&str; 3] = ["meetings", "large-meeting", "webinar"];
 const MEMORY_HEADROOM: f64 = 2.0;
 
+#[cfg(feature = "full")]
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct Profile {
     pub(crate) meeting_size: i64,
@@ -20,6 +23,7 @@ pub(crate) struct Profile {
     chat_interval_ms: i64,
 }
 
+#[cfg(feature = "full")]
 impl Default for Profile {
     fn default() -> Self {
         Self {
@@ -35,6 +39,7 @@ impl Default for Profile {
     }
 }
 
+#[cfg(feature = "full")]
 impl Profile {
     pub(crate) fn read(report: &Json) -> Result<Self> {
         let measurement = &report["measurement"];
@@ -95,6 +100,7 @@ pub(crate) struct Ceiling {
 
 pub(crate) type Ceilings = BTreeMap<String, Ceiling>;
 
+#[cfg(feature = "full")]
 pub(crate) fn reference() -> Ceilings {
     [
         ("meetings", 85, 85.0 * 2.39, 170, 1),
@@ -116,6 +122,7 @@ pub(crate) fn reference() -> Ceilings {
     .collect()
 }
 
+#[cfg(feature = "full")]
 pub(crate) fn ceilings(report: &Json) -> Result<Ceilings> {
     let entries = report["ceilings"].object("ceilings")?;
     let mut result = BTreeMap::new();
@@ -149,6 +156,7 @@ pub(crate) fn ceilings(report: &Json) -> Result<Ceilings> {
     Ok(result)
 }
 
+#[cfg(feature = "full")]
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Host {
     pub(crate) vcpus: i64,
@@ -243,6 +251,7 @@ pub(crate) fn project(ceilings: &Ceilings, deployment: Deployment) -> Result<Pro
     })
 }
 
+#[cfg(feature = "full")]
 #[derive(Debug)]
 pub(crate) struct Suggestion {
     pub(crate) deployment: Deployment,
@@ -254,6 +263,7 @@ pub(crate) struct Suggestion {
     pub(crate) connections: i64,
 }
 
+#[cfg(feature = "full")]
 impl Suggestion {
     pub(crate) fn settings(&self) -> Vec<String> {
         let deployment = self.deployment;
@@ -298,6 +308,7 @@ pub(crate) fn deployment(
     Ok(result)
 }
 
+#[cfg(feature = "full")]
 pub(crate) fn suggest(
     host: Host,
     ceilings: &Ceilings,

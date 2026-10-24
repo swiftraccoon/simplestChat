@@ -146,6 +146,7 @@ fn conflicting(command: &Command) -> bool {
         || command.ops_acquire.is_some()
         || command.hosted_ops.is_some()
         || command.ops_runtime.is_some()
+        || command.ops_vps.is_some()
         || command.ops_stage_dispatch.is_some()
 }
 impl<E: Executor> Executor for Adapter<'_, E> {

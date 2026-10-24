@@ -4,6 +4,7 @@
 //! sandbox. Retaining an artifact grants no execution or installation authority.
 
 pub(super) mod acquire;
+pub(in crate::ci) mod capacity_vps;
 mod execute;
 #[cfg(test)]
 mod files_tests;

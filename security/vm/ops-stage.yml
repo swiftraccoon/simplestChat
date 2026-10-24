@@ -37,6 +37,9 @@
         - /root/simplestchat-vm-fixture/ops-input
         - /root/simplestchat-vm-fixture/python-cache
         - /root/simplestchat-vm-fixture/tmp
+        - /root/simplestchat-vm-fixture/vps-source
+        - /srv/simplestchat-bench
+        - /srv/simplestchat-bench/artifacts
         - /etc/simplestchat-public
         - /srv/simplestchat-public
         - /srv/simplestchat-public/releases
@@ -84,6 +87,21 @@
           name: security_vm_ops_guest.py
         - source: ops/ansible/files/release_preflight.py
           name: release_preflight.py
+
+    - name: Stage the separate closed VPS assertion source namespace
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../{{ item.source }}"
+        dest: "/root/simplestchat-vm-fixture/vps-source/{{ item.name }}"
+        owner: root
+        group: root
+        mode: '0600'
+      loop:
+        - source: build/security_vm_ops_guest.py
+          name: security_vm_ops_guest.py
+        - source: build/security_vm_vps_guest.py
+          name: security_vm_vps_guest.py
+        - source: build/vps_ops_bootstrap.py
+          name: vps_ops_bootstrap.py
 
     - name: Bind assertion inputs to this run and revision
       ansible.builtin.copy:

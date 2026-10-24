@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Self, cast, final, override
 from unittest.mock import patch
 
-from test_support import ROOT
+from test_support import ROOT, objects, string, strings, yaml_value
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -42,7 +42,7 @@ import security_vm_ops_guest as guest
 from security_vm_qmp import Observer
 from test_security_vm_ops_guest import fixture
 
-SOURCE_COUNT = 26
+SOURCE_COUNT = 28
 PROBE = r"""
 import json
 import runpy
@@ -469,7 +469,7 @@ class KeeperTests(unittest.TestCase):
             if failure is None:
                 self.assertTrue(report["cleanupPassed"])
                 self.assertEqual(report["cases"], observation(options)["cases"])
-                self.assertEqual(len(cast("list[object]", report["cases"])), 28)
+                self.assertEqual(len(cast("list[object]", report["cases"])), 33)
                 self.assertEqual(report["install"], {"firstChanged": True, "secondChanged": False})
             if failure == "input-after":
                 self.assertFalse(report["cleanupPassed"])
@@ -571,7 +571,41 @@ class KeeperTests(unittest.TestCase):
 
 
 class SourceProjectionTests(unittest.TestCase):
-    """Execute the real keeper imports from a closed fixture, without a VM or candidate."""
+    """Execute real keeper imports from a closed fixture, without a VM or candidate."""
+
+    def test_stage_and_projection_share_the_exact_separate_vps_source_closure(self) -> None:
+        """The child receives three controlled sources and no old-root import siblings."""
+        names = source_inputs()
+        self.assertIn("build/security_vm_vps_guest.py", names)
+        self.assertIn("build/vps_ops_bootstrap.py", names)
+        tasks = objects(yaml_value((ROOT / "security/vm/ops-stage.yml").read_text()), 0, "tasks")
+        copied = next(
+            task
+            for task in tasks
+            if task["name"] == "Stage the separate closed VPS assertion source namespace"
+        )
+        self.assertEqual(
+            string(copied, "ansible.builtin.copy", "dest"),
+            "/root/simplestchat-vm-fixture/vps-source/{{ item.name }}",
+        )
+        self.assertEqual(string(copied, "ansible.builtin.copy", "mode"), "0600")
+        entries = objects(copied, "loop")
+        self.assertEqual({string(item, "name") for item in entries}, guest.VPS_SOURCE_NAMES)
+        self.assertTrue(all(string(item, "source") in names for item in entries))
+        directories = next(
+            task
+            for task in tasks
+            if task["name"] == "Create the private assertion and read-only preflight directories"
+        )
+        self.assertTrue(
+            {
+                "/root/simplestchat-vm-fixture/vps-source",
+                "/srv/simplestchat-bench",
+                "/srv/simplestchat-bench/artifacts",
+            }.issubset(strings(directories, "loop"))
+        )
+        self.assertEqual(guest.CASES[: len(guest.VPS_CASES)], guest.VPS_CASES)
+        self.assertEqual(len(guest.INSTALL_CASES), 28)
 
     def test_projected_keeper_excludes_caller_source_bytecode_and_native_extension_siblings(
         self,

@@ -49,7 +49,7 @@ async fn whole_operation_keeps_one_authenticated_transfer_through_final_replay()
     assert_eq!(summary["passed"], true);
     assert_eq!(summary["selection"], fixture.wire["selection"]);
     assert_eq!(summary["artifactId"], 456);
-    assert_eq!(summary["cases"].as_array().unwrap().len(), 28);
+    assert_eq!(summary["cases"].as_array().unwrap().len(), 33);
     assert!(
         !summary
             .as_object()

@@ -1,5 +1,6 @@
-//! Allowlisted local inspection, unsigned preparation and fixed browser-asset
-//! filesystem transactions. No child command, engine or network is started.
+//! Allowlisted release inspection and explicit private-host capacity commands.
+//! Inspection starts no child, engine or network. Capacity dispatch owns those
+//! effects through its separate fixed-host and authenticated-input contracts.
 
 mod assets_cli;
 mod preflight_cli;
@@ -32,7 +33,10 @@ const USAGE: &str = concat!(
     "--path PATH --selection PATH\n",
     "       simplestchat-ops distribution build-plan --selection PATH --source-root PATH\n",
     "       simplestchat-ops distribution prepare-artifact --manifest PATH --path PATH ",
-    "--selection PATH --evidence PATH --output PATH",
+    "--selection PATH --evidence PATH --output PATH\n",
+    "       simplestchat-ops capacity run --server-image IMAGE --generator-image IMAGE [OPTIONS]\n",
+    "       simplestchat-ops capacity-vps serve --transport-json JSON --origin-monotonic-ns N\n",
+    "       simplestchat-ops capacity-vps worker --run RUN --request-sha256 SHA",
 );
 
 fn main() -> ExitCode {
@@ -40,6 +44,37 @@ fn main() -> ExitCode {
     if args.len() == 1 && matches!(args[0].to_str(), Some("--help" | "-h")) {
         println!("{USAGE}");
         return ExitCode::SUCCESS;
+    }
+    if args.first().is_some_and(|arg| arg == "capacity") {
+        if args.get(1).is_some_and(|arg| arg == "run") {
+            return simplestchat_load_test::capacity::run_with_program(
+                &args[1..],
+                "simplestchat-ops",
+            );
+        }
+        if args.len() == 2 && matches!(args[1].to_str(), Some("--help" | "-h")) {
+            return simplestchat_load_test::capacity::run_with_program(
+                &[OsString::from("run"), OsString::from("--help")],
+                "simplestchat-ops",
+            );
+        }
+        eprintln!("{USAGE}");
+        return ExitCode::from(2);
+    }
+    if args.first().is_some_and(|arg| arg == "capacity-vps") {
+        if args.len() == 6 {
+            if args[1] == "serve"
+                && args[2] == "--transport-json"
+                && args[4] == "--origin-monotonic-ns"
+            {
+                return simplestchat_ops::capacity_vps::serve(&args[3], &args[5]);
+            }
+            if args[1] == "worker" && args[2] == "--run" && args[4] == "--request-sha256" {
+                return simplestchat_ops::capacity_vps::worker(&args[3], &args[5]);
+            }
+        }
+        eprintln!("{USAGE}");
+        return ExitCode::from(2);
     }
     if args.len() >= 2 && args[0] == "distribution" && args[1] == "install" {
         if args.len() != 6 || args[2] != "--request" || args[4] != "--request-sha256" {

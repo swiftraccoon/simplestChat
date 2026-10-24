@@ -20,6 +20,7 @@ impl Group {
     pub(super) fn child(&mut self) -> &mut Child {
         self.child.as_mut().expect("owned child")
     }
+    #[cfg(feature = "full")]
     pub(super) fn reserved(&self) -> bool {
         self.child.is_some()
     }

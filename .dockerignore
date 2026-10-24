@@ -40,6 +40,9 @@ ops/src/release/**
 !ops/src/release/archive/
 ops/src/release/archive/**
 !ops/src/release/archive/*.rs
+!ops/src/capacity_vps/
+ops/src/capacity_vps/**
+!ops/src/capacity_vps/*.rs
 !ops/ansible/
 ops/ansible/**
 !ops/ansible/files/
@@ -272,6 +275,9 @@ xtask/src/ci/ops_artifact/hosted/**
 !xtask/src/ci/ops_artifact/runtime/
 xtask/src/ci/ops_artifact/runtime/**
 !xtask/src/ci/ops_artifact/runtime/*.rs
+!xtask/src/ci/ops_artifact/capacity_vps/
+xtask/src/ci/ops_artifact/capacity_vps/**
+!xtask/src/ci/ops_artifact/capacity_vps/*.rs
 !xtask/src/ci_evidence/
 xtask/src/ci_evidence/**
 !xtask/src/ci_evidence/*.rs

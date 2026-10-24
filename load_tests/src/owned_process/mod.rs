@@ -3,8 +3,9 @@
 use self::group::Group;
 pub(crate) use self::io::Destination;
 use self::io::read_limited;
+#[cfg(feature = "full")]
 pub(crate) mod child;
-#[cfg(test)]
+#[cfg(all(test, feature = "full"))]
 mod child_tests;
 mod cleanup;
 mod group;

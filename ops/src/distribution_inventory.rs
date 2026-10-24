@@ -1,6 +1,7 @@
 //! A fixed selected-input profile, not complete Cargo compiler I/O closure.
-//! Shared directory owners avoid one ancestor chain per regular file. Every
-//! retained File has an explicit attempted close; rustix's transient directory
+//! Shared directory owners and streamed Rust-file checks bound live descriptors
+//! independently of the selected file count. Every owned File has an explicit
+//! attempted close; rustix's transient directory
 //! cursor is internally RAII-closed (its API does not report close errors).
 
 use super::Failure;
@@ -25,15 +26,16 @@ const FLAGS: OFlag = OFlag::O_RDONLY
     .union(OFlag::O_NONBLOCK)
     .union(OFlag::O_CLOEXEC);
 const MAX_ANCESTORS: usize = 32;
-const MAX_DIRECTORIES: usize = 16;
-const MAX_FILES: usize = 64;
+const MAX_DIRECTORIES: usize = 32;
+const MAX_FILES: usize = 256;
+const MAX_LIVE_FILES: usize = 16;
 const MAX_FILE: u64 = 1024 * 1024;
 const MAX_LOCK: u64 = 4 * MAX_FILE;
 const MAX_TOTAL: u64 = 16 * MAX_FILE;
 const MAX_ENTRIES: usize = 8192;
 const MAX_NAMES: usize = 1024 * 1024;
 const MAX_DEPTH: usize = 8;
-const FIXED: [&str; 9] = [
+const FIXED: [&str; 11] = [
     "Cargo.toml",
     "Cargo.lock",
     "rust-toolchain.toml",
@@ -43,6 +45,8 @@ const FIXED: [&str; 9] = [
     "xtask/Cargo.toml",
     "vendor/mediasoup-0.29.0/Cargo.toml",
     "vendor/mediasoup-sys-0.19.0/Cargo.toml",
+    "load_tests/src/lib.rs",
+    "load_tests/src/capacity.rs",
 ];
 
 fn same(a: &Metadata, b: &Metadata) -> bool {
@@ -94,7 +98,7 @@ struct Directory {
     entries: Option<Vec<Vec<u8>>>,
 }
 struct Input {
-    file: File,
+    file: Option<File>,
     before: Metadata,
     parent: usize,
     name: String,
@@ -281,7 +285,14 @@ impl Tree {
     }
 
     fn read(&mut self, path: &str) -> Result<(), Failure> {
-        if self.files.len() >= MAX_FILES {
+        if self.files.len() >= MAX_FILES
+            || self
+                .files
+                .iter()
+                .filter(|input| input.file.is_some())
+                .count()
+                >= MAX_LIVE_FILES
+        {
             return Err(Failure::Bounds);
         }
         let (parent_path, name) = path.rsplit_once('/').unwrap_or(("", path));
@@ -317,7 +328,7 @@ impl Tree {
             }
         };
         self.files.push(Input {
-            file,
+            file: Some(file),
             before,
             parent,
             name: name.into(),
@@ -331,7 +342,12 @@ impl Tree {
         let mut buffer = [0; 65536];
         loop {
             input.verify_stamp()?;
-            let size = input.file.read(&mut buffer).map_err(|_| Failure::Input)?;
+            let size = input
+                .file
+                .as_mut()
+                .unwrap()
+                .read(&mut buffer)
+                .map_err(|_| Failure::Input)?;
             input.verify_stamp()?;
             if size == 0 {
                 break;
@@ -347,6 +363,15 @@ impl Tree {
         }
         input.digest = digest.finalize().into();
         Ok(())
+    }
+
+    fn streamed(&mut self, path: &str) -> Result<(), Failure> {
+        self.read(path)?;
+        // Retain the exact original stamp/digest and anchored parent, then
+        // explicitly close this read before admitting the next source leaf.
+        // Final verification performs a new nofollow open and complete rehash;
+        // it does not claim continuous original-FD custody for streamed inputs.
+        close(self.files.last_mut().unwrap().file.take().unwrap())
     }
 
     fn source(&mut self, path: &str, depth: usize) -> Result<(), Failure> {
@@ -376,7 +401,7 @@ impl Tree {
             match rustix::fs::FileType::from_raw_mode(metadata.st_mode) {
                 rustix::fs::FileType::Directory => self.source(&child, depth + 1)?,
                 rustix::fs::FileType::RegularFile if name.ends_with(".rs") => {
-                    self.read(&child)?;
+                    self.streamed(&child)?;
                 }
                 _ => return Err(Failure::Namespace),
             }
@@ -384,7 +409,7 @@ impl Tree {
         Ok(())
     }
 
-    fn verify(&self) -> Result<(), Failure> {
+    fn verify_directories(&self) -> Result<(), Failure> {
         for node in &self.directories {
             let unchanged = |value: &Metadata| {
                 if node.entries.is_some() {
@@ -423,9 +448,14 @@ impl Tree {
                 return Err(Failure::Changed);
             }
         }
+        Ok(())
+    }
+
+    fn verify(&self) -> Result<(), Failure> {
+        self.verify_directories()?;
         for input in &self.files {
             input.verify_stamp()?;
-            let visible = File::from(
+            let mut visible = File::from(
                 openat(
                     &self.directories[input.parent].file,
                     input.name.as_str(),
@@ -434,23 +464,51 @@ impl Tree {
                 )
                 .map_err(|_| Failure::Changed)?,
             );
-            let unchanged = visible
-                .metadata()
-                .is_ok_and(|value| same(&input.before, &value));
+            let verified = (|| {
+                let initial = visible.metadata().map_err(|_| Failure::Changed)?;
+                if !same(&input.before, &initial) {
+                    return Err(Failure::Changed);
+                }
+                if input.file.is_none() {
+                    let mut digest = Sha256::new();
+                    let mut bytes = 0u64;
+                    let mut buffer = [0; 65536];
+                    loop {
+                        if !same(&initial, &visible.metadata().map_err(|_| Failure::Changed)?) {
+                            return Err(Failure::Changed);
+                        }
+                        let size = visible.read(&mut buffer).map_err(|_| Failure::Input)?;
+                        if !same(&initial, &visible.metadata().map_err(|_| Failure::Changed)?) {
+                            return Err(Failure::Changed);
+                        }
+                        if size == 0 {
+                            break;
+                        }
+                        bytes = bytes.checked_add(size as u64).ok_or(Failure::Bounds)?;
+                        if bytes > input.before.len() {
+                            return Err(Failure::Changed);
+                        }
+                        digest.update(&buffer[..size]);
+                    }
+                    let observed: [u8; 32] = digest.finalize().into();
+                    if bytes != input.before.len() || observed != input.digest {
+                        return Err(Failure::Changed);
+                    }
+                }
+                Ok(())
+            })();
             let closed = close(visible);
-            if !unchanged {
-                return Err(Failure::Changed);
-            }
+            verified?;
             closed?;
         }
-        Ok(())
+        self.verify_directories()
     }
 
     fn inventory(&self) -> SourceInventory {
         let mut inputs: Vec<_> = self.files.iter().collect();
         inputs.sort_by(|a, b| a.path.cmp(&b.path));
         let mut digest = Sha256::new();
-        digest.update(b"simplestchat-ops-source-inventory-v1\0");
+        digest.update(b"simplestchat-ops-capacity-source-inventory-v2\0");
         digest.update((inputs.len() as u32).to_be_bytes());
         for input in inputs {
             digest.update((input.path.len() as u16).to_be_bytes());
@@ -459,7 +517,7 @@ impl Tree {
             digest.update(input.digest);
         }
         SourceInventory {
-            profile: "workspace-ops-v1",
+            profile: "workspace-ops-capacity-v2",
             sha256: digest
                 .finalize()
                 .iter()
@@ -473,7 +531,9 @@ impl Tree {
     fn close_with(self, mut close: impl FnMut(File) -> Result<(), Failure>) -> Result<(), Failure> {
         let mut failed = false;
         for file in self.files {
-            failed |= close(file.file).is_err();
+            if let Some(file) = file.file {
+                failed |= close(file).is_err();
+            }
         }
         for directory in self.directories.into_iter().rev() {
             failed |= close(directory.file).is_err();
@@ -483,10 +543,10 @@ impl Tree {
 }
 impl Input {
     fn verify_stamp(&self) -> Result<(), Failure> {
-        if same(
-            &self.before,
-            &self.file.metadata().map_err(|_| Failure::Input)?,
-        ) {
+        let Some(file) = &self.file else {
+            return Ok(());
+        };
+        if same(&self.before, &file.metadata().map_err(|_| Failure::Input)?) {
             Ok(())
         } else {
             Err(Failure::Changed)
@@ -494,10 +554,13 @@ impl Input {
     }
 }
 
-/// Hash the fixed discovery manifests/config and every Rust file under ops/src.
+/// Hash the fixed discovery manifests/config, Ops Rust and capacity-library roots.
 /// Unselected workspace/vendor source is not a compiler-input closure. The tree
-/// retains at most 32 ancestor, 16 selected-directory and 64 regular-file owners
-/// (112), plus one enumeration cursor or visible-binding descriptor at a time.
+/// retains at most 32 ancestor, 32 selected-directory and 16 regular-file owners
+/// (80), plus one enumeration cursor or visible-binding descriptor at a time.
+/// Up to 256 file records retain stamps/digests. Rust leaves are closed after
+/// initial hashing and completely rehashed through anchored parents at the final
+/// fence; this is a checked new open, not continuous original-file custody.
 /// Membership/stamp/binding checks detect observed changes, not atomic snapshots.
 pub fn collect_inputs(source_root: &Path) -> Result<SourceInventory, Failure> {
     collect_after(source_root, |_| {})
@@ -511,10 +574,18 @@ fn collect_after(
     let result = (|| {
         tree.refuse(".cargo", &["config"])?;
         tree.refuse("ops", &["build.rs", ".cargo"])?;
+        tree.refuse("load_tests", &["build.rs", ".cargo"])?;
         for path in FIXED {
             tree.read(path)?;
         }
         tree.source("ops/src", 0)?;
+        for path in [
+            "load_tests/src/capacity",
+            "load_tests/src/capacity_run",
+            "load_tests/src/owned_process",
+        ] {
+            tree.source(path, 0)?;
+        }
         if tree.files.len() == FIXED.len() {
             return Err(Failure::Namespace);
         }

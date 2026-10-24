@@ -3498,6 +3498,7 @@ name = "simplestchat-ops"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "flate2",
  "nix",
  "object",
  "regex-syntax",
@@ -3505,6 +3506,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.11.0",
+ "simplestchat-load-test",
  "tar",
 ]
 

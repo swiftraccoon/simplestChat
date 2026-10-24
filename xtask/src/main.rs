@@ -37,6 +37,7 @@ Commands:
   check         Run installed-tool quality gates: [--web|--rust|--python|--helpers].
                 Default runs all groups, without installs or application services.
   container-benchmark Standalone root/Linux private benchmark run or locked recovery;
+  vps-capacity Authenticated private VPS measurement, collection or explicit recovery;
                 installed service callsites remain unchanged; see --help.
   container-smoke Check an already-built image on the selected local Unix engine;
                 creates and removes only its own disposable smoke containers.
@@ -117,6 +118,7 @@ fn run(arguments: &[String]) -> Result<ExitCode> {
         "container-smoke" => ci::run_container_smoke(&root, rest),
         "container-benchmark" => ci::run_container_benchmark(rest),
         "ops-artifact" => ci::run_ops_artifact(rest),
+        "vps-capacity" => ci::run_vps_capacity(rest),
         "public-smoke" => ci::run_public_smoke(rest),
         "ci-evidence" => ci_evidence::run(&root, rest),
         "ci-local" => ci_local::run(&root, rest),

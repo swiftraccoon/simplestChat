@@ -11,7 +11,7 @@ use std::{
     io::Write,
     os::unix::fs::MetadataExt,
     sync::{
-        Arc,
+        Arc, Mutex,
         atomic::{AtomicBool, Ordering},
     },
     time::Duration,
@@ -32,6 +32,11 @@ pub(super) struct Log {
     task: Option<JoinHandle<Result<Finished>>>,
     stop: Option<oneshot::Sender<()>>,
     failed: Arc<AtomicBool>,
+    progress: Arc<Mutex<Progress>>,
+}
+struct Progress {
+    bytes: u64,
+    digest: Sha256,
 }
 impl std::fmt::Debug for Log {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -105,8 +110,13 @@ impl Log {
         let (stop, stopped) = oneshot::channel();
         let failed = Arc::new(AtomicBool::new(false));
         let flag = failed.clone();
+        let progress = Arc::new(Mutex::new(Progress {
+            bytes: 0,
+            digest: Sha256::new(),
+        }));
+        let observed = progress.clone();
         let task = tokio::spawn(async move {
-            let result = read_log(reader, output, maximum, stopped).await;
+            let result = read_log(reader, output, maximum, stopped, observed).await;
             if !result.as_ref().is_ok_and(|value| value.complete) {
                 flag.store(true, Ordering::SeqCst);
             }
@@ -120,6 +130,7 @@ impl Log {
             task: Some(task),
             stop: Some(stop),
             failed,
+            progress,
         })
     }
     pub fn writer(&self) -> Result<File> {
@@ -134,6 +145,35 @@ impl Log {
     }
     pub fn failed(&self) -> bool {
         self.failed.load(Ordering::SeqCst)
+    }
+    /// After the owned child has inherited its writer, close this parent's
+    /// original writer so a later child EOF can be observed during supervision.
+    /// Failure remains negative; finish still settles the independent reader.
+    pub fn release_writer(&mut self) -> Result<()> {
+        self.writer.take().map(close).transpose().map(|_| ())
+    }
+    /// Observe reader-task termination only to refuse a lost interactive lease.
+    /// This is not proof of successful EOF, checked closes or completed output;
+    /// the caller must still consume finish after owned group retirement.
+    pub fn drainer_finished(&self) -> bool {
+        self.task.as_ref().is_some_and(JoinHandle::is_finished)
+    }
+    /// Snapshot the exact prefix accepted from this original pipe after its
+    /// file writes. This can bind a live lease response to observed producer
+    /// bytes; it is not durable-output, EOF or final-close evidence.
+    pub fn progress(&self) -> Result<(u64, String)> {
+        if self.failed() {
+            return Err(failure());
+        }
+        let progress = self.progress.lock().map_err(|_| failure())?;
+        let sha256 = progress
+            .digest
+            .clone()
+            .finalize()
+            .iter()
+            .map(|value| format!("{value:02x}"))
+            .collect();
+        Ok((progress.bytes, sha256))
     }
     #[cfg(test)]
     pub fn pipe_fds(&self) -> [i32; 2] {
@@ -178,6 +218,7 @@ async fn read_log(
     mut output: File,
     maximum: u64,
     mut stop: oneshot::Receiver<()>,
+    progress: Arc<Mutex<Progress>>,
 ) -> Result<Finished> {
     let mut digest = Sha256::new();
     let mut bytes = 0_u64;
@@ -205,6 +246,11 @@ async fn read_log(
                 .map_err(|_| failure())?;
             digest.update(&buffer[..allowed]);
             bytes += allowed as u64;
+            {
+                let mut observed = progress.lock().map_err(|_| failure())?;
+                observed.bytes = bytes;
+                observed.digest = digest.clone();
+            }
             if allowed != size {
                 return Ok(());
             }

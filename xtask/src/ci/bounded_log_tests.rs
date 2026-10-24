@@ -85,6 +85,69 @@ async fn exact_cap_completes_but_one_excess_byte_cannot_reach_disk_or_pass() {
 }
 
 #[tokio::test]
+async fn live_progress_binds_pipe_bytes_even_when_the_output_file_is_modified() {
+    use std::os::unix::fs::FileExt;
+
+    let fixture = Fixture::new();
+    let mut log = Log::start(fixture.file(), 64).unwrap();
+    let mut producer = log.writer().unwrap();
+    let outside = OpenOptions::new()
+        .write(true)
+        .open(fixture.0.join("output.log"))
+        .unwrap();
+    outside.write_all_at(b"fake\n", 0).unwrap();
+    assert_eq!(log.progress().unwrap().0, 0);
+    producer.write_all(b"real\n").unwrap();
+    log.release_writer().unwrap();
+    tokio::time::timeout(Duration::from_secs(2), async {
+        while log.progress().unwrap().0 != 5 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    let observed = log.progress().unwrap();
+    outside.write_all_at(b"fake\n", 0).unwrap();
+    assert_eq!(log.progress().unwrap(), observed);
+    let expected: String = Sha256::digest(b"real\n")
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
+    assert_eq!(observed.1, expected);
+    close(outside).unwrap();
+    close(producer).unwrap();
+    let completed = log.finish().await.unwrap();
+    assert!(completed.complete);
+    assert_eq!(completed.sha256, observed.1);
+    // File readback must be matched to the observed pipe digest by the owner;
+    // producer progress never adopts an outside file edit as received data.
+    assert_eq!(fixture.bytes(), b"fake\n");
+}
+
+#[tokio::test]
+async fn releasing_the_parent_writer_makes_producer_eof_observable_before_finish() {
+    let fixture = Fixture::new();
+    let mut log = Log::start(fixture.file(), 64).unwrap();
+    let mut producer = log.writer().unwrap();
+    log.release_writer().unwrap();
+    assert!(log.writer().is_err());
+    producer.write_all(b"ready\n").unwrap();
+    tokio::task::yield_now().await;
+    assert!(!log.drainer_finished());
+    close(producer).unwrap();
+    tokio::time::timeout(Duration::from_secs(2), async {
+        while !log.drainer_finished() {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    let completed = log.finish().await.unwrap();
+    assert!(completed.complete);
+    assert_eq!(completed.bytes, 6);
+}
+
+#[tokio::test]
 async fn a_retained_foreign_writer_has_bounded_incomplete_eof_without_a_reader_thread() {
     let fixture = Fixture::new();
     let log = Log::start(fixture.file(), 8).unwrap();

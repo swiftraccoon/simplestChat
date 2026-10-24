@@ -15,9 +15,21 @@ use std::process::Stdio;
 use std::time::Duration;
 use tokio::io::AsyncReadExt;
 
+#[path = "vps_prepare.rs"]
+mod vps_prepare;
+
 pub(super) trait Executor {
     async fn run(&mut self, command: Command) -> Result<Vec<u8>>;
     async fn ready(&mut self) -> Result<()>;
+    /// Hold the exact preparation lease until the owned Ansible group and both
+    /// of its streams settle. The native owner borrows its existing signals.
+    async fn vps_prepare(
+        &mut self,
+        invocation: super::ops_artifact::capacity_vps::prepare::PrepareInvocation,
+        _: std::time::Instant,
+    ) -> Result<()> {
+        vps_prepare::refuse(invocation).await
+    }
     /// Forward a bounded byte projection through the existing owned replay CLI.
     async fn replay(&mut self, _: &[u8], _: bool, _: std::time::Instant) -> Result<()> {
         Err(Failure::new(1, "CI output replay is unavailable."))
@@ -73,6 +85,11 @@ impl<'a> Native<'a> {
         let ops_acquire = request.ops_acquire.clone();
         let hosted_ops = request.hosted_ops.clone();
         let ops_runtime = request.ops_runtime.clone();
+        let ops_vps = request.ops_vps.clone();
+        let vps_admission = ops_vps
+            .as_ref()
+            .map(|proof| proof.begin(&request))
+            .transpose();
         let runtime_admission = ops_runtime
             .as_ref()
             .map(|proof| proof.begin(&request))
@@ -117,6 +134,7 @@ impl<'a> Native<'a> {
             .and(acquire_admission.map(|_| ()))
             .and(hosted_admission.map(|_| ()))
             .and(runtime_admission.map(|_| ()))
+            .and(vps_admission.map(|_| ()))
             .and(checks_admission.map(|_| ()))
             .and(benchmark_admission.map(|_| ()))
             .and({
@@ -149,6 +167,9 @@ impl<'a> Native<'a> {
             proof.observed_io(closed.as_ref().ok().cloned().flatten());
         }
         if let Some(proof) = ops_runtime {
+            proof.observed_io(closed.as_ref().ok().cloned().flatten());
+        }
+        if let Some(proof) = ops_vps {
             proof.observed_io(closed.as_ref().ok().cloned().flatten());
         }
         if let Some(mdns) = mdns {
@@ -206,6 +227,8 @@ impl<'a> Native<'a> {
         } else if let Some(proof) = &request.hosted_ops {
             proof.context(request.program, &request.arguments)?
         } else if let Some(proof) = &request.ops_runtime {
+            proof.context(request.program, &request.arguments)?
+        } else if let Some(proof) = &request.ops_vps {
             proof.context(request.program, &request.arguments)?
         } else if let Some(proof) = &request.source_git {
             proof.context()?.unwrap_or((self.root, self.environment))
@@ -283,6 +306,10 @@ impl<'a> Native<'a> {
             proof.validate(request.program, &request.arguments)?;
         }
         if let Some(proof) = &request.ops_runtime {
+            self.ready().await?;
+            proof.validate(request.program, &request.arguments)?;
+        }
+        if let Some(proof) = &request.ops_vps {
             self.ready().await?;
             proof.validate(request.program, &request.arguments)?;
         }
@@ -427,6 +454,17 @@ impl<'a> Native<'a> {
             let _ = tokio::time::timeout(request.grace, exited(pid)).await;
         }
         let (cleaned, reaped) = finalizer.finish(&mut group).await;
+        if let Some(proof) = &request.ops_vps {
+            use std::os::unix::process::ExitStatusExt;
+            proof.observed_exit(
+                reaped.as_ref().ok().and_then(|status| {
+                    status
+                        .code()
+                        .or_else(|| status.signal().map(|signal| -signal))
+                }),
+                cleaned && reaped.is_ok(),
+            );
+        }
         if cleaned && reaped.is_ok() {
             self.cleanup_passed = prior_cleanup;
         }
@@ -635,6 +673,7 @@ fn executable(request: &Command) -> Result<&std::ffi::OsStr> {
         request.ops_acquire.is_some(),
         request.hosted_ops.is_some(),
         request.ops_runtime.is_some(),
+        request.ops_vps.is_some(),
         request.benchmark.is_some(),
         request.release_checks.is_some(),
         #[cfg(feature = "release-http-policy")]
@@ -658,6 +697,9 @@ fn executable(request: &Command) -> Result<&std::ffi::OsStr> {
             | Program::OpsHostCc
             | Program::OpsRuntimeGit
             | Program::OpsRuntimePython
+            | Program::OpsVpsGit
+            | Program::OpsVpsSsh
+            | Program::OpsVpsAnsible
             | Program::ComparisonGit
             | Program::ComparisonCargo
             | Program::ComparisonBenchmark
@@ -690,6 +732,11 @@ fn executable(request: &Command) -> Result<&std::ffi::OsStr> {
             .map(|path| path.as_os_str());
     }
     if let Some(proof) = &request.ops_runtime {
+        return proof
+            .validate(request.program, &request.arguments)
+            .map(|path| path.as_os_str());
+    }
+    if let Some(proof) = &request.ops_vps {
         return proof
             .validate(request.program, &request.arguments)
             .map(|path| path.as_os_str());
@@ -903,6 +950,13 @@ async fn replay_selected(
 }
 
 impl Executor for Native<'_> {
+    async fn vps_prepare(
+        &mut self,
+        invocation: super::ops_artifact::capacity_vps::prepare::PrepareInvocation,
+        end: std::time::Instant,
+    ) -> Result<()> {
+        vps_prepare::run(self, invocation, end).await
+    }
     async fn replay(
         &mut self,
         bytes: &[u8],
