@@ -2848,3 +2848,37 @@ in one free Debian KVM guest. Native actor history and the separately inspected
 checksum probe have distinct claims; the probe establishes its own isolation.
 Source/inert checks alone do not establish signed Stage execution, production
 application deployment, a database migration, rollback or caller cutover.
+
+
+## Optional maintenance prerequisite experiments
+
+The manual maintenance prerequisites KVM experiment
+(`.github/workflows/maintenance-prerequisites.yml`) has two independent free-runner jobs. One observes the exact pinned Caddy image,
+naturally generated local TLS material, guest-only public-root trust, fresh-process
+reuse and the existing network-none 8 MiB validator. Its guest OUTPUT/FORWARD and
+physical egress guards remain until the exact owned VM exits. The other runs the
+fixed PID-namespace topology catalog, with 11
+named cases and 14 fresh namespaces, original kernel handles and actual adopted
+reaps. Neither job proves the other's behavior or complete maintenance success.
+The optional workflow has no artifact selector, API token, production host,
+required-CI role or installed caller change.
+
+The Caddy 60-case suite and namespace 14-case boundary suite use the maintained strict
+Python configuration. These are source/local fixtures, without actual helper-role,
+namespace, KVM, Caddy, TLS or network-containment execution. Both actual experiments
+and the operational 900-second launcher remain unrun until separately recorded.
+No application deployment, caller cutover or authenticated Ops distribution is
+established. Run the two local fixture suites independently:
+
+```sh
+ops/ansible/.venv/bin/python -B -m unittest discover \
+  -s ops/ansible/tests -p 'test_caddy*.py' -q
+ops/ansible/.venv/bin/python -B -m unittest discover \
+  -s ops/ansible/tests -p 'test_maintain_namespace_probe.py' -q
+```
+
+The optional jobs keep positive summaries success-only and separately attempt an
+exact closed failure-summary artifact under `always()`. Its fixed negative
+checkpoint/case/status/error metadata contains no raw streams, keys, work or
+configuration. Missing or partial metadata is unavailable evidence; final nonzero
+exit invalidates passive bytes and never becomes success through retention.
