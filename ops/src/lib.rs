@@ -1,15 +1,18 @@
-//! Release/artifact policy and explicitly requested private capacity operations.
+//! Release/artifact policy, explicit local builds and private capacity operations.
 //! Importing a module starts no process, engine, connection or workload. The
 //! capacity routes retain their separate host, provenance and ownership gates;
 //! the default graph requires no server, media or native TLS implementation.
 //!
-//! Validated metadata is not signature evidence or authorization to deploy. Python
-//! remains the release runtime until independent parity and distribution checks.
+//! Validated metadata is not signature evidence or authorization to deploy. The
+//! explicit production builder owns its local Git/Docker operation; Python stays
+//! available as its reference. Signing, delivery and installed host operations
+//! retain their existing independent runtime and distribution requirements.
 
 pub mod capacity_vps;
 pub mod distribution;
 mod files;
 mod json;
+pub mod owned_process;
 pub mod release;
 
 /// Fixed, non-sensitive validation failures. Paths, keys and file contents never

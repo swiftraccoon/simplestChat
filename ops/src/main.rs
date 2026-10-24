@@ -1,6 +1,6 @@
-//! Allowlisted release inspection and explicit private-host capacity commands.
-//! Inspection starts no child, engine or network. Capacity dispatch owns those
-//! effects through its separate fixed-host and authenticated-input contracts.
+//! Allowlisted inspection, explicit local release builds and host capacity.
+//! Inspection starts no child, engine or network. Release builds own their local
+//! Git/Docker effects; capacity retains its separate authenticated host contract.
 
 mod assets_cli;
 mod preflight_cli;
@@ -18,7 +18,8 @@ use std::path::Path;
 use std::process::ExitCode;
 
 const USAGE: &str = concat!(
-    "Usage: simplestchat-ops release manifest --path PATH\n",
+    "Usage: simplestchat-ops release build --output PATH [--timeout-seconds N] [--image-id ID]\n",
+    "       simplestchat-ops release manifest --path PATH\n",
     "       simplestchat-ops release archive --manifest PATH --path PATH\n",
     "       simplestchat-ops release receipt --envelope PATH --receipt PATH\n",
     "       simplestchat-ops release preflight [--helpers-json JSON]\n",
@@ -103,6 +104,9 @@ fn main() -> ExitCode {
         } else {
             ExitCode::FAILURE
         };
+    }
+    if args.len() >= 2 && args[0] == "release" && args[1] == "build" {
+        return simplestchat_ops::release::build::run(&args[2..]);
     }
     if args.len() >= 2 && args[0] == "release" && args[1] == "assets" {
         let code = assets_cli::run(&args[2..]);

@@ -368,6 +368,8 @@ jobs:
           --skip capacity_vps::process::tests::inert_child_signal_mask
           --skip capacity_vps::host_tests::whole_host_policy_matches_original_python_oracle
           --skip ci::ops_artifact::capacity_vps::controller_tests::all_eight_whole_reference_scenarios_preserve_local_policy_and_explicit_transport_deltas
+          --skip release::build::tests::whole_reference_scenarios_match_unchanged_python
+          --skip release::build::process::tests::signal_worker
 
       - name: Synthetic media delivery correctness smoke
         if: steps.verified.outputs.cache-hit != 'true'
@@ -977,6 +979,12 @@ jobs:
         with:
           toolchain: 1.99.0
 
+      - name: Prepare the source-built native release controller
+        timeout-minutes: 6
+        run: |
+          cargo build --locked --release -p simplestchat-ops --bin simplestchat-ops \
+            --target-dir "$RUNNER_TEMP/release-builder-build"
+
       - name: Start Docker inside the isolated local runner
         if: ${{ env.ACT }}
         run: build/ci-local-docker.sh
@@ -1048,7 +1056,8 @@ jobs:
       - name: Export the tested immutable production image
         timeout-minutes: 6
         run: |
-          python3 build/build-release.py --image-id "${PRODUCTION_IMAGE}" \
+          "$RUNNER_TEMP/release-builder-build/release/simplestchat-ops" release build \
+            --image-id "${PRODUCTION_IMAGE}" \
             --timeout-seconds 300 --output "${RUNNER_TEMP}/simplestchat-release"
 
       - name: Install isolated release-container checks

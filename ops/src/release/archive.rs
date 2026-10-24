@@ -279,5 +279,157 @@ fn verify_after(
     Ok(VerifiedArchive { identity, config })
 }
 
+/// Verify the existing signed-server archive profile through a caller-retained
+/// descriptor. The caller keeps and checks original namespace ownership and must
+/// explicitly close the descriptor after this borrowed operation. `check` is the
+/// same original owner: it is polled before/after every bounded read and seek.
+/// A deadline does not bound a kernel read that itself blocks. No pathname is
+/// reopened and no signature or deployment authority is created.
+///
+/// The caller retains the descriptor on success and error and must perform its
+/// own checked close. The file cursor is moved and is not restored. See
+/// [`super::build::run`] for the complete local controller using this interface;
+/// [`verify_archive`] supplies the separate anchored pathname-inspection API.
+///
+/// # Errors
+///
+/// Returns an [`ArchiveError`] for invalid or changed input, digest/runtime
+/// disagreement, I/O or a negative owner checkpoint. A caller whose checkpoint
+/// records a more specific deadline/signal cause must retain that original cause.
+///
+/// # Panics
+///
+/// A panic from the caller's checkpoint propagates. It does not close the file.
+///
+/// # Example
+///
+/// This helper assumes the caller has already admitted the original file and
+/// retains its namespace witnesses. It starts no process or service.
+///
+/// ```no_run
+/// use simplestchat_ops::release::{
+///     archive::{ArchiveError, VerifiedArchive, verify_retained_archive},
+///     manifest::Manifest,
+/// };
+/// use std::{fs::File, time::Instant};
+///
+/// fn inspect_original(
+///     archive: &mut File,
+///     manifest: &Manifest,
+///     original_end: Instant,
+///     mut original_namespace: impl FnMut() -> bool,
+/// ) -> Result<VerifiedArchive, ArchiveError> {
+///     let verified = verify_retained_archive(archive, manifest, || {
+///         Instant::now() < original_end && original_namespace()
+///     })?;
+///     Ok(verified)
+/// }
+/// ```
+pub fn verify_retained_archive(
+    file: &mut std::fs::File,
+    manifest: &Manifest,
+    mut check: impl FnMut() -> bool,
+) -> Result<VerifiedArchive> {
+    use std::os::unix::fs::MetadataExt;
+    let before = file.metadata().map_err(|_| ArchiveError::Read)?;
+    if !before.is_file() || before.len() == 0 || before.len() > MAX_ARCHIVE_BYTES {
+        return Err(ArchiveError::Input);
+    }
+    fn same(a: &std::fs::Metadata, b: &std::fs::Metadata) -> bool {
+        a.dev() == b.dev()
+            && a.ino() == b.ino()
+            && a.mode() == b.mode()
+            && a.uid() == b.uid()
+            && a.gid() == b.gid()
+            && a.nlink() == b.nlink()
+            && a.len() == b.len()
+            && a.mtime() == b.mtime()
+            && a.mtime_nsec() == b.mtime_nsec()
+            && a.ctime() == b.ctime()
+            && a.ctime_nsec() == b.ctime_nsec()
+    }
+    struct Reader<'a, F> {
+        file: &'a mut std::fs::File,
+        before: &'a std::fs::Metadata,
+        check: &'a mut F,
+    }
+    impl<F: FnMut() -> bool> Reader<'_, F> {
+        fn check(&mut self) -> std::io::Result<()> {
+            if !(self.check)() || !same(self.before, &self.file.metadata()?) {
+                Err(std::io::Error::other("retained_archive_changed_or_expired"))
+            } else {
+                Ok(())
+            }
+        }
+    }
+    impl<F: FnMut() -> bool> Read for Reader<'_, F> {
+        fn read(&mut self, bytes: &mut [u8]) -> std::io::Result<usize> {
+            self.check()?;
+            let maximum = bytes.len().min(65536);
+            let count = self.file.read(&mut bytes[..maximum])?;
+            self.check()?;
+            Ok(count)
+        }
+    }
+    impl<F: FnMut() -> bool> Seek for Reader<'_, F> {
+        fn seek(&mut self, position: std::io::SeekFrom) -> std::io::Result<u64> {
+            self.check()?;
+            let offset = self.file.seek(position)?;
+            self.check()?;
+            Ok(offset)
+        }
+    }
+    let mut reader = Reader {
+        file,
+        before: &before,
+        check: &mut check,
+    };
+    reader.rewind().map_err(|_| ArchiveError::Read)?;
+    let mut hash = Sha256::new();
+    let mut total = 0;
+    let mut buffer = [0; 65536];
+    loop {
+        let count = reader.read(&mut buffer).map_err(|_| ArchiveError::Read)?;
+        if count == 0 {
+            break;
+        }
+        total += count as u64;
+        if total > before.len() {
+            return Err(ArchiveError::Changed);
+        }
+        hash.update(&buffer[..count]);
+    }
+    let archive_sha256: String = hash
+        .finalize()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
+    if total != before.len() {
+        return Err(ArchiveError::Changed);
+    }
+    if archive_sha256 != manifest.fields().archive_sha256 {
+        return Err(ArchiveError::Digest);
+    }
+    reader.rewind().map_err(|_| ArchiveError::Read)?;
+    let index = index::Index::read_with_checkpoint(
+        &mut reader,
+        before.len(),
+        Limits::default(),
+        &mut || true,
+    )?;
+    let config = docker::verify(&mut reader, &index, manifest)?;
+    reader.check().map_err(|_| ArchiveError::Changed)?;
+    checkpoint(&mut check)?;
+    let identity = Identity {
+        archive_sha256,
+        archive_bytes: before.len(),
+        config_sha256: sha256(&config),
+        revision: manifest.fields().revision.clone(),
+        image_tag: manifest.fields().image_tag.clone(),
+        platform: manifest.fields().platform.clone(),
+    };
+    Ok(VerifiedArchive { identity, config })
+}
+
 #[cfg(test)]
 mod tests;

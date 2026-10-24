@@ -148,6 +148,140 @@ reports its absence; `ci-local` runs the Linux workflow. The ignored inert child
 used by the real process regression is launched only by its exact parent test.
 Do not replace either oracle command with a broad `--ignored` invocation.
 
+### Production release builder
+
+The native [production build/export command](../ops/README.md#production-release-build-and-export)
+has a closed whole-reference driver at
+`ops/ansible/tests/release_build_oracle.py`. Its 26 scenario families contain
+112 finite cases, using unchanged actual `build_release`, real source/image tar
+bytes, extraction, hashes, lock/state policy, archive validation, publication and
+failure finalizers. Only tool, clock and privileged-state observations are inert.
+The driver starts no Docker, Git, network or host workload. Its bounded JSON keeps
+fixture inputs separate from observed verdicts, commands and retained records.
+
+Run the driver tests with the pinned operations Python environment:
+
+```sh
+ops/ansible/.venv/bin/python -B -m unittest discover \
+  -s ops/ansible/tests -p test_release_build_oracle.py -v
+ops/ansible/.venv/bin/python -B ops/ansible/tests/release_build_oracle.py \
+  --scenario export-missing-tag
+```
+
+Its optional `--fixture-directory PATH` creates a fresh private directory of exact
+source/image input archives, with relative names, SHA-256 and byte counts in the
+result. These inputs are generated independently of the candidate's output.
+Fixed test fixtures are limited to 2 MiB each and 64 MiB per export; these test-only
+limits do not narrow the production builder's source/archive acceptance domain.
+
+Operations automation and its local-CI route explicitly run the otherwise ignored
+Rust comparison with that same environment. Missing dependencies fail; the test
+does not silently skip:
+
+```sh
+PYTHON_CHECK_ENV="$PWD/ops/ansible/.venv" \
+  cargo test --locked -p simplestchat-ops --lib \
+  release::build::tests::whole_reference_scenarios_match_unchanged_python \
+  -- --ignored --exact
+```
+
+Broad database `--include-ignored` runs must skip this exact test and run it through
+the explicit pinned-Python automation route instead. They must also skip
+`release::build::process::tests::signal_worker`, the ignored child fixture launched
+only by its two owning native signal regressions. Run those ordinary parent tests
+to exercise the child; a broad ignored run supplies no owning selector.
+Offline comparison establishes
+policy across build/export, preflight refusal, original selectors and tags, malformed
+source/image archives, migrations, deadline exhaustion and retained failure records.
+It does not prove process ownership, physical Docker effects or signing provenance.
+Separate actual inert child tests cover concurrent pipe pressure, per-stream and
+inspection budgets, signed status, descendants, cancellation, escalation, original
+first failure and all-peer closes on Linux and macOS. Custody tests separately
+exercise original descriptors, alias/inode changes and post-publication failures.
+Phase/deadline tests use the original virtual clock; chunk checkpoints cannot bound
+a kernel read or filesystem operation that itself blocks indefinitely.
+
+Source custody fixtures also inject a real extra context file. The direct test
+refreshes all directory metadata observations first, then requires exact membership
+to refuse it independently of those seals. A separate extraction fixture inserts
+an unrecorded file before initial sealing; fresh directory metadata cannot admit
+it either. The whole-operation case before sealing requires no build or save;
+the case injected during the inert build requires no save. Neither may publish
+the release manifest.
+Cleanup retains the unknown inode while closing every admitted original tree
+directory handle. The source ledger's explicit limits are 100,000 logical entries
+and 16 MiB of summed normalized relative-name bytes. It adds no source depth limit
+or 8 GiB source-byte cap; the image archive keeps its separate existing profile.
+
+Directory enumeration borrows a newly opened original cursor `File` on Linux.
+The portable macOS iterator has an additional opaque libc cursor whose automatic
+`closedir` return status is unavailable. Tests of explicit successful closes cover
+the admitted original `File` handles, including their cursor, rather than asserting
+an unobservable library-cursor close result. Neither membership enumeration nor
+directory metadata seals remove the same-UID check-to-read race during Docker's
+pathname reads. These mutation fences are not an immutable-context or complete
+compiler-input-closure proof.
+
+Metadata fixtures exercise the existing strict Ops JSON profile through the
+builder's actual decoder and private guard policy. Valid image/state shapes remain
+accepted with ignored integers beyond `u64` and finite `f64`, preserving raw
+4300-digit integer and finite float spelling. Cases include 4301-digit refusal,
+underflow exponents, nonfinite/overflow values, Unicode scalar and paired-surrogate
+strings, lone-surrogate refusal, decoded duplicate keys and distinct bool/null.
+Depth 128 and 100,000 total values include ignored containers and fields; the next
+container or value is refused. The image fixture includes an ignored string just
+over 1 MiB, which must pass the caller's 2 MiB inspection cap, plus exact-cap and
+cap-plus-one checks. Actual protected-file cases retain the separate 64 KiB
+benchmark and 16 KiB persistent-state encoded bounds.
+
+The metadata adapter accepts UTF-8 strings and rejects raw NUL or a leading BOM,
+matching the reference's already decoded string boundary rather than generic
+JSON byte encoding detection. Escaped `\u0000` remains valid. These tests document
+the explicit Rust profile; they do not establish full Python acceptance parity
+for deeper or otherwise out-of-profile ignored metadata. The Python reference
+remains unchanged.
+
+The focused budget fixtures cover export selections 60, 139, 140 and 300 seconds.
+The whole export end remains `N + 60`, verification reserve and cap are both
+`v = min(140, N)`, and the complete 40-second tail remains unchanged. At virtual
+entry zero, endpoints are absolute seconds since that original entry:
+
+| N | Whole end | v | Setup end | Setup body end | Active end | Active body end |
+| --- | --- | --- | --- | --- | --- | --- |
+| 60 | 120 | 60 | 46 | 20 | 46 | 20 |
+| 139 | 199 | 139 | 46 | 20 | 46 | 20 |
+| 140 | 200 | 140 | 46 | 20 | 46 | 20 |
+| 300 | 360 | 140 | 120 | 30 | 206 | 180 |
+
+Setup and active columns are independent admission probes at entry, not budgets
+to add together. The setup body includes its 30-second query cap. Repeated queries
+reuse the saved setup end; elapsed setup consumes the same absolute active body
+ceiling. After the initial active body ceiling plus its 26-second child/pipe tail,
+the verification matrix is:
+
+| N | Verification start | Verification end | First query end |
+| --- | --- | --- | --- |
+| 60 | 46 | 106 | 76 |
+| 139 | 46 | 185 | 76 |
+| 140 | 46 | 186 | 76 |
+| 300 | 206 | 346 | 236 |
+
+Each verification query has a 30-second cap and reuses its original phase end,
+retaining 26 seconds for child/pipe settlement and 14 for file finalization.
+The fixtures also refuse late setup and exhausted-body admissions, clamp cleanup
+to the original whole end, and preserve an already observed failure through later
+cleanup exhaustion. Interrupt/terminate cases record typed observations in the
+virtual owner; they do not deliver OS signals. Actual SIGINT/SIGTERM behavior is
+covered by the separate native subprocess regressions.
+
+Actual Ubuntu build and exact-image export must also fit the documented workflow
+budgets, preserve admitted output inodes and pass the existing server archive
+profile. Unsigned output is insufficient receiver authorization. The separate
+signer must still publish exactly the existing ten server files. The manual
+workflow remains dispatch-only/read-only and retains failed evidence without
+turning failure into success; its policy tests also pin separate native preparation,
+the compiler bootstrap and the unchanged 75-minute job limit.
+
 Rust tests include native media checks; database tests are opt-in. Serial
 execution reduces UDP port-allocation races. Web tests use mocked browser APIs;
 the web build runs TypeScript checking and produces the production UI.
@@ -568,7 +702,7 @@ With PostgreSQL tools on `PATH`, use the owned bootstrap:
 ```sh
 cargo build --locked --bin simplestChat
 cargo run -q -p xtask -- test-env \
-  cargo test --locked -p simplestChat -- --include-ignored --test-threads=1
+  cargo test --locked -p simplestchat -- --include-ignored --test-threads=1
 ```
 
 It creates a fresh loopback-only PostgreSQL cluster on port 15434, starts and
@@ -960,7 +1094,7 @@ export DISPOSABLE_TEST_DATABASE=1
 
 cargo build --locked --bin simplestChat
 cargo run -q -p xtask -- test-server \
-  cargo test --locked -p simplestChat -- --include-ignored --test-threads=1
+  cargo test --locked -p simplestchat -- --include-ignored --test-threads=1
 ```
 
 Trust authentication is only for this disposable loopback cluster. The helper

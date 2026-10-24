@@ -20,8 +20,23 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Install the pinned Rust toolchain for the release controller
+        timeout-minutes: 2
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable (2026-10-01)
+        with:
+          toolchain: 1.99.0
+
+      - name: Prepare the source-built native release controller
+        timeout-minutes: 6
+        run: |
+          cargo build --locked --release -p simplestchat-ops --bin simplestchat-ops \
+            --target-dir "$RUNNER_TEMP/release-builder-build"
+
       - name: Build the exact selected commit without publishing or deploying
-        run: python3 build/build-release.py --output "${RUNNER_TEMP}/simplestchat-release"
+        timeout-minutes: 65
+        run: |
+          "$RUNNER_TEMP/release-builder-build/release/simplestchat-ops" release build \
+            --output "${RUNNER_TEMP}/simplestchat-release"
 
       - name: Retain the artifact and original build outcome
         if: ${{ !cancelled() }}

@@ -1930,6 +1930,16 @@
       "reachability": "Reviewed 2026-10-23 for only this exact same-repository main-only workflow-dispatch step and immutable 89b12181fb390509a0842a86cc55eeb8eb928c1d action. Checkout disables persisted credentials. The fixed repository input selects Rust 1.99.0 before compilation and before the sole runtime step receives GH_TOKEN; caller artifact identifiers cannot select installer source or arguments. The reviewed official HTTPS rustup bootstrap remains a runtime trust boundary, without an independent checksum claim for installer bytes. The workflow has only contents/actions read permissions and no signing or OIDC authority. This informational finding review does not waive source, artifact, provenance, runtime or finalization checks.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md#github-actions-portability-findings"
+    },
+    {
+      "scanner": "zizmor",
+      "fingerprint": "superfluous-actions:0fb2d712953646c2c07edb9a959b25649b214c63cb1143b35266a007af663b35",
+      "scope": ".github/workflows/release-artifact.yml#jobs/artifact/steps/1/uses",
+      "owner": "swiftraccoon",
+      "rationale": "The manual development-artifact workflow compiles its native release controller from the checked-out source before Docker authority. This immutable installer selects the repository's explicit Rust 1.99.0 rather than relying on the hosted runner's preinstalled compiler.",
+      "reachability": "Reviewed 2026-10-24 for only this added location and immutable action reference. Checkout disables persisted credentials; toolchain arguments are fixed repository values and compilation receives no token. The action source retains the existing official HTTPS rustup bootstrap and bounded checksum-propagation retries; bootstrap bytes are not independently checksum-pinned. The contents/read workflow builds and retains a development artifact without signing, publishing an image or deploying. Source, custody, process, payload and security checks remain blocking. No artifact or cache selects installer source or arguments; cold hosted compilation and actual Docker build/export timing are unmeasured.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md#github-actions-portability-findings"
     }
   ]
 }

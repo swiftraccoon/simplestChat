@@ -35,7 +35,7 @@ fn text(values: &[OsString]) -> Vec<&str> {
 fn controller_checks_preserve_the_python_gate_offline_flags_and_all_syntax_only_playbooks() {
     let fixture = Fixture::new(&["a.sh"]);
     let steps = steps(&fixture.0, Path::new("/owned tool/xtask")).unwrap();
-    assert_eq!(steps.len(), if cfg!(target_os = "linux") { 18 } else { 17 });
+    assert_eq!(steps.len(), if cfg!(target_os = "linux") { 19 } else { 18 });
     assert_eq!(steps[0].program, "/owned tool/xtask");
     assert_eq!(text(&steps[0].arguments), ["check", "--python"]);
     assert_eq!(
@@ -101,6 +101,12 @@ fn controller_checks_preserve_the_python_gate_offline_flags_and_all_syntax_only_
             "-p",
             "simplestchat-ops",
             "--lib",
+            "--test",
+            "release_build_cli",
+            "--test",
+            "archive_cli",
+            "--test",
+            "manifest_cli",
             "--",
             "--test-threads=1"
         ]
@@ -123,6 +129,22 @@ fn controller_checks_preserve_the_python_gate_offline_flags_and_all_syntax_only_
             "--",
             "--ignored",
             "--exact"
+        ]
+    );
+    let builder = &steps[steps.len() - 2];
+    assert_eq!(builder.program, "cargo");
+    assert_eq!(
+        text(&builder.arguments),
+        [
+            "test",
+            "--locked",
+            "-p",
+            "simplestchat-ops",
+            "--lib",
+            "release::build::tests::whole_reference_scenarios_match_unchanged_python",
+            "--",
+            "--ignored",
+            "--exact",
         ]
     );
     assert_eq!(

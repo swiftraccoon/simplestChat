@@ -6,7 +6,7 @@ use super::{ArchiveError as E, Result, sha256};
 use crate::json::{self, Json};
 use crate::release::manifest::Manifest;
 use std::collections::BTreeMap;
-use std::fs::File;
+use std::io::{Read, Seek};
 
 fn schema_two(value: &Json) -> bool {
     value
@@ -45,7 +45,11 @@ fn descriptor_path(index: &Index, descriptor: &Json) -> Result<String> {
     }
     Ok(name)
 }
-fn read_descriptor(file: &mut File, index: &Index, descriptor: &Json) -> Result<Json> {
+fn read_descriptor(
+    file: &mut (impl Read + Seek),
+    index: &Index,
+    descriptor: &Json,
+) -> Result<Json> {
     let bytes = index.read_bytes(file, &descriptor_path(index, descriptor)?)?;
     let value = json::decode(&bytes)?;
     if descriptor.get("digest").and_then(Json::string)
@@ -98,7 +102,7 @@ fn annotations(value: Option<&Json>, manifest: &Manifest, outermost: bool) -> Re
 }
 
 pub(super) fn verify(
-    file: &mut File,
+    file: &mut (impl Read + Seek),
     members: &Index,
     image: &BTreeMap<String, Json>,
     config: &Json,
