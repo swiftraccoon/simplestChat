@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import io
+import os
+import signal
 import subprocess
 import tempfile
 import unittest
@@ -14,7 +16,70 @@ import release_fetch_controller_oracle as oracle
 from test_support import array, obj
 
 # isort: split
+import release_trust as trust
 from release_json import JsonObject, decode_json
+
+
+class FinalWireDeliveryTests(unittest.TestCase):
+    """Make immediate receipt rejection independent of the worker's scheduling."""
+
+    def test_actual_worker_records_lock_release_before_delivering_invalid_receipt(self) -> None:
+        """A synchronous rejecting consumer cannot stop the final lock observation."""
+        with tempfile.TemporaryDirectory(prefix="fetch-final-wire.") as name:
+            root = Path(name).resolve()
+            source = oracle.fixture("final-identity-mismatch")
+            control = oracle.populate(root, source)
+            _ = oracle.prepare_host(root, source)
+            envelope = dict(source.selection)
+            envelope["attestation"] = {
+                "predicate": decode_json(source.files[trust.PREDICATE]),
+                "bundleSha256": oracle.digest(source.files[trust.BUNDLE]),
+                "verificationSha256": dict.fromkeys(trust.SUBJECTS, "c" * 64),
+            }
+
+            class Consumer(io.StringIO):
+                """Observe the real final-pipe write immediately, before it can return."""
+
+                @override
+                def write(self, text: str) -> int:
+                    """Require the independent completed lock observation before final bytes."""
+                    value = obj(decode_json(text))
+                    if value.get("status") != "ready":
+                        events = [
+                            obj(decode_json(line))
+                            for line in (root / "events.jsonl").read_bytes().splitlines()
+                        ]
+                        finished = [row for row in events if row["role"] == "ssh-finished"]
+                        if len(finished) != 1 or finished[0]["lockAvailableAfter"] is not True:
+                            message = "final wire preceded the real worker lock observation"
+                            raise AssertionError(message)
+                    return super().write(text)
+
+            wire = oracle.encoded(envelope) + oracle.encoded({"url": oracle.REMOTE_GRANT})
+            handlers = {
+                number: signal.getsignal(number)
+                for number in (signal.SIGINT, signal.SIGTERM, signal.SIGALRM)
+            }
+            previous_mask = os.umask(0o077)
+            try:
+                with (
+                    io.TextIOWrapper(io.BytesIO(wire)) as input_stream,
+                    Consumer() as output,
+                    patch("sys.stdin", input_stream),
+                    patch("sys.stdout", output),
+                    patch.dict(os.environ, {}, clear=True),
+                ):
+                    status = oracle.worker(root, [str(v) for v in array(control, "sshArguments")])
+                    values = [obj(decode_json(line)) for line in output.getvalue().splitlines()]
+            finally:
+                for number, handler in handlers.items():
+                    _ = signal.signal(number, handler)
+                _ = os.umask(previous_mask)
+            self.assertEqual(status, 0)
+            self.assertEqual([row["status"] for row in values], ["ready", "complete"])
+            self.assertEqual(values[-1]["artifactId"], 124)
+            original = obj(decode_json((root / "remote-final-000.json").read_bytes()))
+            self.assertEqual(original["artifactId"], 123)
 
 
 class WholeFetchOracleTests(unittest.TestCase):

@@ -121,3 +121,12 @@ The companion manual KVM proof is separately reviewed and tested. Its source-bui
 Linux GNU, actual SSH and receiver results must be recorded after execution;
 local fixtures and successful compilation do not establish those results or
 authenticated Ops distribution. Existing deployment callers remain unchanged.
+
+A later hosted comparison exposed a test-observer race after an invalid final
+receipt: either controller could stop the worker before its independent lock
+observation reached the event log. The adapter now delivers Ready immediately
+and holds only the final wire until the actual reference returns and the lock
+observation is recorded. Strict event, journal and publication comparisons remain
+unchanged. A synchronous rejecting-consumer regression fails against the previous
+fixture and passes with this ordering. This fixture boundary adds no production
+authority or claim about real SSH scheduling.
