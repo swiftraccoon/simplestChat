@@ -286,7 +286,8 @@ actual source extraction/custody/publication, not a physical Docker build. An
 older replay using the fixture's 120-second export setting exhausted its clipped
 46-second setup phase; that failed trial is retained separately.
 
-The final combined candidate passed the native Rust 1.99.0
+Before the streaming and lifecycle corrections, the PAX/preparation candidate
+passed the native Rust 1.99.0
 `aarch64-apple-darwin` all-features Ops gate: 248 library, 43 CLI and four doc
 tests, with four explicit ignored helpers. Both exact reference comparisons
 passed separately (112 builder and 72 preparation scenarios). GNU Linux
@@ -338,14 +339,32 @@ comparison took 26.016 seconds. Independent source reviews covered the process
 adapter and whole-controller wiring. These are source, inert-child and local
 filesystem checks; they do not establish actual engine export or deployment.
 
+The CLI teardown correction also fences the final runtime boundary. One checked
+calculation preserves the original start and existing build/export mode overheads.
+The outer positive fence runs after Owner/Signals and the actual runtime are gone
+and the original process umask is restored. A body failure stays negative; help,
+notices and invalid arguments return before runtime or umask effects. The public
+entrypoint documents valid operations as synchronous dedicated-CLI calls outside
+an entered Tokio runtime; it makes no panic-unwind restoration guarantee.
+
+The combined streaming/lifecycle source passed all 258 Ops library tests, 43 CLI
+tests and four Rustdoc tests in 39.927 seconds. The focused builder group passed
+68 cases with two explicitly ignored helpers in 19.751 seconds. The separate
+112-case Python comparison passed in 22.133 seconds. GNU Linux all-target Clippy,
+workspace Rust quality and fast security passed in 26.032, 166.150 and 34.882
+seconds, respectively. These are native inert-process/filesystem checks and a
+Linux compilation check; actual Linux execution and release gates remain separate.
+
 The unchanged Python reference retains its original transport. Its 112-case
 comparison admits only the exact removal of
 `--output` and the known archive path from the Docker-save argv, requires the
 original writer loan there, and keeps other argv, environment and selectors exact.
-Actual Ubuntu Docker export with this correction, hosted preparation, musl
-ELF/material checks, signed Ops runtime/install and normal deployment remain
-separate gates. A follow-up for the builder's final runtime
-and umask teardown clock boundary is tracked separately. Preserve the independent
+Published streaming commit `6a3acc8` subsequently passed actual Docker export
+in 22 seconds, native preparation and both signers. Normal signed deployment
+and independent HTTP/container revision checks passed. Its separate signed Ops
+Debian runtime trial failed a keeper gate; the stale global-help expectation and
+failed-case evidence retention are being corrected. The new CLI teardown
+correction still needs its own hosted release/runtime gates. Preserve the independent
 signer and unchanged ten-file server contract; unsigned records and native
 compilation do not establish authenticated distribution or host installation.
 

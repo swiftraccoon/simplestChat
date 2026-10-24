@@ -70,16 +70,19 @@ pub(super) struct Owner {
     elapsed: Option<Duration>,
 }
 impl Owner {
-    pub fn new(started: Instant, mode: Mode, seconds: u64) -> Result<Self> {
+    pub(super) fn deadline(started: Instant, mode: Mode, seconds: u64) -> Result<Instant> {
         let overhead = match mode {
             Mode::Build => 300,
             Mode::Export => 60,
         };
-        let duration = Duration::from_secs(seconds + overhead);
+        let duration = Duration::from_secs(seconds.checked_add(overhead).ok_or(Failure::Input)?);
+        started.checked_add(duration).ok_or(Failure::Input)
+    }
+    pub fn new(started: Instant, mode: Mode, seconds: u64) -> Result<Self> {
         Ok(Self {
             #[cfg(test)]
             started,
-            end: started.checked_add(duration).ok_or(Failure::Input)?,
+            end: Self::deadline(started, mode, seconds)?,
             signals: Signals::new().map_err(|_| Failure::Io)?,
             primary: None,
             #[cfg(test)]
