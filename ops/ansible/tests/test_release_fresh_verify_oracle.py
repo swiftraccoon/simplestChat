@@ -55,6 +55,18 @@ PASSING = {
 class FreshVerifyOracleTests(unittest.TestCase):
     """External observations never replace actual CLI, trust or filesystem policy."""
 
+    def test_inert_zip_bytes_do_not_follow_the_wall_clock(self) -> None:
+        """Parent and child regenerations must keep identical payload, digest and wire bytes."""
+        for scenario in ("fresh-success", "zip-crc", "zip-unsafe-name"):
+            with self.subTest(scenario=scenario):
+                with patch("zipfile.time.localtime", return_value=(2020, 1, 1, 0, 0, 0, 2, 1, -1)):
+                    first = oracle.fixture(scenario)
+                with patch("zipfile.time.localtime", return_value=(2021, 1, 1, 0, 0, 2, 4, 1, -1)):
+                    second = oracle.fixture(scenario)
+                self.assertEqual(first.files["artifact.zip"], second.files["artifact.zip"])
+                self.assertEqual(first.blob_wire.data, second.blob_wire.data)
+                self.assertEqual(first.selection, second.selection)
+
     def test_all_closed_cases_keep_explicit_verdicts_and_bounded_ordinary_output(self) -> None:
         """Every case runs the real CLI and retains the exact observable failure shape."""
         self.assertEqual(len(oracle.SCENARIOS), len(set(oracle.SCENARIOS)))
