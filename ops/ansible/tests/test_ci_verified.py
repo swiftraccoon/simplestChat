@@ -866,7 +866,9 @@ class VerifiedWorkflowTests(unittest.TestCase):
         self.assertNotIn("continue-on-error", reference)
         strategy = obj(reference, "strategy")
         self.assertEqual(string(strategy, "fail-fast"), "false")
-        self.assertEqual(obj(strategy, "matrix"), {"group": ["foundation", "fetch", "host"]})
+        self.assertEqual(
+            obj(strategy, "matrix"), {"group": ["foundation", "fetch", "host", "deploy"]}
+        )
         steps = objects(reference, "steps")
         receipt = steps[-1]
         self.assertEqual(string(receipt, "if"), "${{ env.ACT }}")
@@ -1070,6 +1072,8 @@ class VerifiedWorkflowTests(unittest.TestCase):
                     "whole_host_receiver_matches_unchanged_python",
                     "--skip",
                     "whole_stage_matches_unchanged_python",
+                    "--skip",
+                    "whole_deploy_matches_unchanged_python",
                 ],
             )
             self.assertLess(steps.index(build), steps.index(execute))

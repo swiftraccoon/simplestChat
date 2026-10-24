@@ -6,7 +6,7 @@ use signals::Signals;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum Cause {
+pub(in crate::release) enum Cause {
     Input,
     Policy,
     Archive,
@@ -20,9 +20,9 @@ pub(super) enum Cause {
     Bounds,
     Command,
 }
-pub(super) type Result<T> = std::result::Result<T, Cause>;
+pub(in crate::release) type Result<T> = std::result::Result<T, Cause>;
 #[derive(Clone, Copy)]
-pub(super) enum Window {
+pub(in crate::release) enum Window {
     Body,
     Final,
 }
@@ -31,13 +31,15 @@ pub(super) enum LateClock {
     Failure,
     Date(chrono::NaiveDate),
 }
-pub(super) struct Owner {
+pub(in crate::release) struct Owner {
     start: Instant,
     end: Instant,
     body: Instant,
     receiver_protocol: Option<Instant>,
     stage_validator: Option<Instant>,
     stage_cleanup: Option<Instant>,
+    deploy_candidate: Option<Instant>,
+    deploy_recovery: Option<Instant>,
     signals: Signals,
     primary: Option<Cause>,
     #[cfg(test)]
@@ -47,7 +49,7 @@ pub(super) struct Owner {
     #[cfg(test)]
     pub utc_error: bool,
     #[cfg(test)]
-    pub late_clock: Option<LateClock>,
+    pub(super) late_clock: Option<LateClock>,
 }
 impl Owner {
     pub fn new(start: Instant, whole: Duration, reserve: Duration) -> Result<Self> {
@@ -63,6 +65,8 @@ impl Owner {
             receiver_protocol: None,
             stage_validator: None,
             stage_cleanup: None,
+            deploy_candidate: None,
+            deploy_recovery: None,
             signals: Signals::new().map_err(|_| Cause::Io)?,
             primary: None,
             #[cfg(test)]
@@ -108,6 +112,47 @@ impl Owner {
     }
     pub fn body_end(&self) -> Instant {
         self.body
+    }
+    /// Reserve the fixed known replacement recovery debt inside original B.
+    pub fn begin_deploy_candidate(&mut self, end: Instant) -> Result<()> {
+        self.check(Window::Body)?;
+        if self.deploy_candidate.is_some()
+            || self.deploy_recovery.is_some()
+            || self.receiver_protocol.is_some()
+            || self.stage_validator.is_some()
+            || self.stage_cleanup.is_some()
+            || end > self.body
+            || self.now() >= end
+        {
+            return failed(self, Cause::Deadline);
+        }
+        self.deploy_candidate = Some(end);
+        self.check(Window::Body)
+    }
+    /// Fence the last candidate observation before allowing known recovery.
+    pub fn end_deploy_candidate(&mut self) {
+        if self.deploy_candidate.is_some() {
+            let _ = self.check(Window::Body);
+            self.deploy_candidate = None;
+        }
+    }
+    /// Recovery retains primary failure and uses B, never the local M reserve.
+    pub fn begin_deploy_recovery(&mut self) -> Result<()> {
+        self.final_work()?;
+        if self.deploy_candidate.is_some()
+            || self.deploy_recovery.is_some()
+            || self.now() >= self.body
+        {
+            return failed(self, Cause::Deadline);
+        }
+        self.deploy_recovery = Some(self.body);
+        self.final_work()
+    }
+    pub fn end_deploy_recovery(&mut self) {
+        if self.deploy_recovery.is_some() {
+            let _ = self.final_work();
+            self.deploy_recovery = None;
+        }
     }
     /// Narrow the existing body checkpoints while the admitted SSH protocol
     /// still owes its original transport tail. This does not change B or N.
@@ -188,7 +233,12 @@ impl Owner {
             return Err(cause);
         }
         if self.now() < self.start
-            || self.now() >= self.stage_cleanup.unwrap_or(self.end).min(self.end)
+            || self.now()
+                >= self
+                    .stage_cleanup
+                    .unwrap_or(self.end)
+                    .min(self.deploy_recovery.unwrap_or(self.end))
+                    .min(self.end)
         {
             self.record(Cause::Deadline);
             return Err(Cause::Deadline);
@@ -214,6 +264,7 @@ impl Owner {
                             .receiver_protocol
                             .unwrap_or(self.body)
                             .min(self.stage_validator.unwrap_or(self.body))
+                            .min(self.deploy_candidate.unwrap_or(self.body))
                             .min(self.body),
                         Window::Final => self.end,
                     }

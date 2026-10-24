@@ -2,10 +2,14 @@
 //! unfinished-journal gates. No path, owner or recovery bypass is public.
 use super::{
     Result, fail,
-    files::{self, Dir, Entry, Fs},
+    files::{self, Dir, Entry, Fs, ScopedFs},
     require,
+    scope::Scope,
 };
-use crate::json::{self, Json};
+use crate::{
+    json::{self, Json},
+    release::workload::Lease,
+};
 use std::fs::File;
 
 /// Own the fixed root/config/work directories and one acquired workload lock.
@@ -18,6 +22,7 @@ pub struct Workload {
     lock: Option<File>,
     lock_entry: Option<Entry>,
     held: bool,
+    borrowed: Option<Lease>,
 }
 impl Workload {
     pub fn acquire() -> Result<Self> {
@@ -39,6 +44,7 @@ impl Workload {
             lock: None,
             lock_entry: None,
             held: false,
+            borrowed: None,
         };
         let result = value.setup();
         if let Err(error) = result {
@@ -51,6 +57,70 @@ impl Workload {
             return Err(error);
         }
         Ok(value)
+    }
+    pub(super) fn borrow(file: File, lease: Lease, uid: u32, scope: &Scope<'_>) -> Result<Self> {
+        #[cfg(not(test))]
+        if uid != 0 {
+            let result = Err(fail("asset_command_owner"));
+            scope.observed(&result);
+            let _ = scope.closed(files::Access::default().close(file));
+            return result;
+        }
+        let access = files::Access {
+            #[cfg(test)]
+            owner: Some(uid),
+            #[cfg(test)]
+            hook: None,
+        };
+        let fs = Fs::open_scoped(file, access, scope)?;
+        let value = Self {
+            fs,
+            root: 0,
+            store_root: None,
+            lock: None,
+            lock_entry: None,
+            held: false,
+            borrowed: Some(lease),
+        };
+        let checked = value.check_scoped(scope);
+        scope.observed(&checked);
+        if let Err(first) = checked {
+            let _ = value.finish_scoped(scope);
+            return Err(first);
+        }
+        Ok(value)
+    }
+    pub(super) fn check_scoped(&self, scope: &Scope<'_>) -> Result<()> {
+        scope.check()?;
+        let fs = ScopedFs::new(&self.fs, scope);
+        if let Some(lease) = &self.borrowed {
+            scope.lease(lease.check())?;
+            fs.protected_dir(self.root, Some(0o700))?;
+            fs.verify()?;
+            return scope.result(Ok(()));
+        }
+        require(self.held && self.lock.is_some(), "asset_operation_failed")?;
+        fs.verify()?;
+        fs.check_entry(
+            self.lock_entry
+                .ok_or_else(|| fail("asset_operation_failed"))?,
+        )
+    }
+    pub(super) fn finish_scoped(mut self, scope: &Scope<'_>) -> Result<()> {
+        let store = self
+            .store_root
+            .map(|root| {
+                super::store::read_scoped(&mut ScopedFs::new(&mut self.fs, scope), root).map(|_| ())
+            })
+            .unwrap_or(Ok(()));
+        scope.observed(&store);
+        let proof = self.check_scoped(scope);
+        scope.observed(&proof);
+        let finished = self.fs.finish_scoped(scope);
+        // The borrower never unlocks. Its retained filesystem owners close
+        // before the actual Lease clone is dropped and the sole owner can unlock.
+        drop(self.borrowed.take());
+        scope.result(store.and(proof).and(finished))
     }
     fn setup(&mut self) -> Result<()> {
         let srv = self.fs.directory(0, "srv", None)?;

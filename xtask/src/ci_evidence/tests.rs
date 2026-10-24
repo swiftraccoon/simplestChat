@@ -160,7 +160,7 @@ fn real_workflows_complete_with_byte_identical_receipts_and_exclusive_publicatio
         fs::read(fixture.path.join("oracle/required.json")).unwrap()
     );
     let report = files::document(&fixture.path.join("native/required.json")).unwrap();
-    assert_eq!(report["checks"].as_array().unwrap().len(), 11);
+    assert_eq!(report["checks"].as_array().unwrap().len(), 12);
     assert_eq!(report["workflows"].as_object().unwrap().len(), 3);
     assert!(fixture.context.complete().is_err());
     assert!(!fixture.oracle("complete", "").status.success());
@@ -227,6 +227,7 @@ fn every_matrix_family_is_required_and_unknown_receipts_are_rejected() {
         "reference-foundation",
         "reference-fetch",
         "reference-host",
+        "reference-deploy",
     ] {
         let mut fixture = Fixture::new();
         fixture.populate();
@@ -359,7 +360,7 @@ fn actual_workflow_matrices_keep_numeric_parallelism_and_all_declared_entries() 
     let fixture = Fixture::new();
     for (name, job, dimension, limit) in [
         ("ci.yml", "browser", "group", 3),
-        ("ci.yml", "automation-references", "group", 3),
+        ("ci.yml", "automation-references", "group", 4),
         ("codeql.yml", "source-analysis", "language", 4),
     ] {
         let bytes = files::bounded(&fixture.path.join(".github/workflows").join(name)).unwrap();
@@ -378,26 +379,26 @@ fn filtered_duplicate_or_expanded_matrices_and_vendor_scans_fail_before_evidence
     for (file, before, after, code) in [
         (
             "ci.yml",
+            "group: [foundation, fetch, host, deploy]",
             "group: [foundation, fetch, host]",
-            "group: [foundation, fetch]",
             "local_ci_reference_coverage",
         ),
         (
             "ci.yml",
-            "group: [foundation, fetch, host]",
-            "group: [foundation, fetch, host, host]",
+            "group: [foundation, fetch, host, deploy]",
+            "group: [foundation, fetch, host, deploy, deploy]",
             "local_ci_reference_coverage",
         ),
         (
             "ci.yml",
-            "group: [foundation, fetch, host]",
-            "group: [foundation, fetch, unknown]",
+            "group: [foundation, fetch, host, deploy]",
+            "group: [foundation, fetch, host, unknown]",
             "local_ci_reference_coverage",
         ),
         (
             "ci.yml",
-            "group: [foundation, fetch, host]",
-            "group: [foundation, fetch, host]\n        include: []",
+            "group: [foundation, fetch, host, deploy]",
+            "group: [foundation, fetch, host, deploy]\n        include: []",
             "local_ci_reference_matrix_shape",
         ),
         (

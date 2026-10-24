@@ -46,6 +46,9 @@ ops/src/release/attestation/**
 !ops/src/release/attestation/acquire/
 ops/src/release/attestation/acquire/**
 !ops/src/release/attestation/acquire/*.rs
+!ops/src/release/attestation/deploy/
+ops/src/release/attestation/deploy/**
+!ops/src/release/attestation/deploy/*.rs
 !ops/src/release/attestation/fetch/
 ops/src/release/attestation/fetch/**
 !ops/src/release/attestation/fetch/*.rs

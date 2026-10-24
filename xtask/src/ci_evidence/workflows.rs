@@ -120,8 +120,8 @@ impl Inventory {
         let reference_groups = strings(member(references, "group")?)?;
         ensure!(
             reference_groups.iter().copied().collect::<BTreeSet<_>>()
-                == BTreeSet::from(["foundation", "fetch", "host"])
-                && reference_groups.len() == 3,
+                == BTreeSet::from(["foundation", "fetch", "host", "deploy"])
+                && reference_groups.len() == 4,
             "local_ci_reference_coverage"
         );
         let browser = matrix(job(ci, "browser")?)?;

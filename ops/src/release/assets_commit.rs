@@ -2,35 +2,73 @@
 //! every removal requires a witness retained by this same guarded operation.
 use super::{
     Result, fail,
-    files::{self, Dir, Entry, Fs},
+    files::{Dir, Entry, Fs, ScopedFs},
     model::{self, Capture, Generation},
+    scope::Scope,
     store::{self, State},
 };
+use std::borrow::BorrowMut;
 
+#[cfg(test)]
 pub(super) fn nonce() -> Result<String> {
-    use std::io::Read;
+    nonce_scoped(&Scope::standalone())
+}
+pub(super) fn nonce_bytes(input: &mut impl std::io::Read, scope: &Scope<'_>) -> Result<[u8; 16]> {
     let mut bytes = [0u8; 16];
-    let mut random = files::io(std::fs::File::open("/dev/urandom"))?;
-    let read = files::io(random.read_exact(&mut bytes));
-    let closed = super::files::Access::default().close(random);
-    read.and(closed)?;
+    let mut offset = 0;
+    while offset < bytes.len() {
+        scope.check()?;
+        let read = match input.read(&mut bytes[offset..]) {
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+            value => scope.observed_io(value)?,
+        };
+        if read == 0 {
+            return scope.observed_io(Err(std::io::Error::from(std::io::ErrorKind::UnexpectedEof)));
+        }
+        offset += read;
+    }
+    scope.result(Ok(bytes))
+}
+pub(super) fn nonce_scoped(scope: &Scope<'_>) -> Result<String> {
+    let mut random = scope.admit_io(|| std::fs::File::open("/dev/urandom"))?;
+    let read = nonce_bytes(&mut random, scope);
+    scope.observed(&read);
+    let closed = scope.closed(super::files::Access::default().close(random));
+    let mut bytes = read?;
+    closed?;
     bytes[6] = (bytes[6] & 15) | 64;
     bytes[8] = (bytes[8] & 63) | 128;
-    Ok(bytes.iter().map(|byte| format!("{byte:02x}")).collect())
+    scope.result(Ok(bytes.iter().map(|byte| format!("{byte:02x}")).collect()))
 }
+
 pub(super) fn run(
     fs: &mut Fs,
     prior: State,
     selected: &[Generation],
     captures: &[(String, Capture)],
 ) -> Result<()> {
+    run_scoped(
+        &mut ScopedFs::new(fs, &Scope::standalone()),
+        prior,
+        selected,
+        captures,
+    )
+}
+pub(super) fn run_scoped<T: BorrowMut<Fs>>(
+    fs: &mut ScopedFs<'_, '_, T>,
+    prior: State,
+    selected: &[Generation],
+    captures: &[(String, Capture)],
+) -> Result<()> {
+    let scope = fs.scope();
+    scope.check()?;
     let identities = model::identities(selected)?;
     let bytes = model::index(selected)?;
     if prior.original.as_deref() == Some(bytes.as_slice()) {
         return fs.verify();
     }
     let root = prior.root;
-    let pending = fs.mkdir(root, &format!(".pending-{}", nonce()?), 0o755)?;
+    let pending = fs.mkdir(root, &format!(".pending-{}", nonce_scoped(scope)?), 0o755)?;
     let mut added = Vec::<Dir>::new();
     let mut public_created = None;
     let mut index = None;
@@ -56,7 +94,7 @@ pub(super) fn run(
             fs.rename_dir(directory, root, revision)?;
             sources.push((revision.clone(), directory));
         }
-        let union_name = format!("union-{}", model::sha(&bytes));
+        let union_name = format!("union-{}", model::sha_scoped(&bytes, scope)?);
         let union = fs.mkdir(pending, &union_name, 0o755)?;
         for (name, revision, _) in &identities {
             let source = sources
@@ -88,12 +126,18 @@ pub(super) fn run(
     })();
     // A rename that became visible is irreversible here even when its final
     // probe or fsync failed. Leave that evidence for a subsequent refusal.
-    let rollback = if result.is_err() && !switched {
-        rollback(fs, &prior, pending, index, &added, public_created)
-    } else {
-        Ok(())
+    scope.observed(&result);
+    let (rollback, pending_cleanup) = {
+        let _recovery = scope.recovery_if(result.is_err());
+        let rollback = if result.is_err() && !switched {
+            rollback(fs, &prior, pending, index, &added, public_created)
+        } else {
+            Ok(())
+        };
+        scope.observed(&rollback);
+        let pending_cleanup = fs.remove_dir(pending, 0);
+        (rollback, pending_cleanup)
     };
-    let pending_cleanup = fs.remove_dir(pending, 0);
     result.and(rollback).and(pending_cleanup)?;
     for (revision, directory) in &prior.directories {
         if !selected.iter().any(|entry| entry.revision == *revision) {
@@ -106,11 +150,11 @@ pub(super) fn run(
     fs.sync(root)?;
     // This also fences unexpected additions and validates every newly selected
     // generation, the exact original index bytes and the visible union pointer.
-    store::read(fs, root)?;
+    store::read_scoped(fs, root)?;
     fs.verify()
 }
-fn rollback(
-    fs: &mut Fs,
+fn rollback<T: BorrowMut<Fs>>(
+    fs: &mut ScopedFs<'_, '_, T>,
     prior: &State,
     pending: Dir,
     index: Option<Entry>,

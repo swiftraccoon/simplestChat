@@ -1,7 +1,7 @@
 //! Offline server attestation preparation and cached verification operations.
 
 mod bindings;
-mod control;
+pub(super) mod control;
 mod files;
 pub mod prepare;
 pub mod verify;
@@ -16,3 +16,5 @@ pub(super) mod receive;
 mod verification_fixture;
 
 pub(super) mod stage;
+
+pub(super) mod deploy;

@@ -18,7 +18,7 @@ from security_tools import ToolError, bounded_file, require, string
 
 ROOT = Path(__file__).resolve().parents[1]
 MAX_DOCUMENT = 1024 * 1024
-REFERENCE_GROUPS = ("foundation", "fetch", "host")
+REFERENCE_GROUPS = ("foundation", "fetch", "host", "deploy")
 
 
 def document(path: Path) -> dict[str, object]:

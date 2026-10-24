@@ -8,6 +8,8 @@ mod capture;
 mod commit;
 #[path = "assets_files.rs"]
 mod files;
+#[path = "assets_host.rs"]
+pub(in crate::release) mod host;
 #[path = "assets_lock.rs"]
 mod lock;
 #[path = "assets_model.rs"]
@@ -15,6 +17,8 @@ mod model;
 #[cfg(test)]
 #[path = "assets_oracle_tests.rs"]
 mod oracle_tests;
+#[path = "assets_scope.rs"]
+mod scope;
 #[path = "assets_store.rs"]
 mod store;
 #[cfg(test)]
