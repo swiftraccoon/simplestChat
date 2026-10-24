@@ -1789,7 +1789,7 @@ and cleans recursively. Existing authenticated bundles can be moved from
 the same receipts and analyzer/query checks apply at the new location.
 
 The shared `cargo run --locked -q -p xtask -- ci required` policy reads
-`GATE_RESULTS` once and requires successful results from exactly the ten canonical
+`GATE_RESULTS` once and requires successful results from exactly the eleven canonical
 workflow jobs. It rejects missing, skipped, cancelled or failed jobs, duplicate
 job/result fields, malformed JSON and input above 64 KiB. Other job metadata and
 outputs cannot establish success and are never printed. Both hosted and local
@@ -1976,6 +1976,22 @@ quality gate first, then offline Ansible lint, every maintained controller
 playbook's syntax check, ShellCheck and operations unit tests. Each command's
 arguments are explicit and the first failure stops the gate. It installs no
 tools and applies no playbook to a host.
+
+Hosted and local CI split that complete plan between `ci automation --checks`
+and `ci automation --references`. The first retains quality, syntax, ordinary
+Ops/CLI tests and full Python test discovery. The second owns every exact ignored
+whole-operation comparison: VPS controller/host, image builder and the six
+release operations. With no selector the local command retains their original
+complete order. The two jobs run in parallel under their existing ten-minute
+ceilings; both must succeed before signing. Reference comparisons always run
+and use no result cache. The existing automation receipt proves only the checks
+job, with workflow/xtask changes invalidating prior keys.
+
+The preceding receiver head's hosted automation took 537 seconds of its 600-second
+job limit, including 435 seconds in the complete automation command. Local staging
+adds about 52 seconds of native/reference comparison and 74 seconds of Python
+reference tests. Those measured costs motivated this split; they do not establish
+new hosted runtimes or the aspirational five-minute CI target.
 
 `cargo run --locked -q -p xtask -- ci native-security` verifies the native
 dependency versions, source pins and overlay hashes used by the Rust test job,
@@ -2791,3 +2807,39 @@ It requires positive repeat-publication identity plus lock, journal, conflicting
 target and wrong-checksum negatives. Its one 1800-second keeper includes both
 acquisitions and reserves 120 seconds for settlement. Source/inert checks alone
 do not establish a successful workflow run, signed musl execution or deployment.
+
+## Native host staging checks
+
+The explicit `release stage` command keeps the prepared Python callers available.
+Run ordinary, actual CLI and whole-reference checks with the pinned environment:
+
+```sh
+cargo test --locked -p simplestchat-ops --lib release::attestation::stage::
+cargo test --locked -p simplestchat-ops --test release_stage_cli
+PYTHON_CHECK_ENV=/absolute/pinned-controller-env \
+  cargo test --locked -p simplestchat-ops --lib \
+  release::attestation::stage::oracle_tests::whole_stage_matches_unchanged_python \
+  -- --ignored --exact
+```
+
+The 81-case comparison executes the complete unchanged Python staging main
+with real private files, TARs, flock, atomic records and actual inert Docker
+children. The native operation uses independent lower observations; its process
+adapter has separate actual owned-child tests. The comparison checks both
+config and selected image-manifest IDs, received hardlinks, repeat identity,
+command/effect order, journals and retained failures. It contacts no Docker daemon.
+
+Native cases distinguish natural response completion from EOF caused by cleanup,
+retain known validator IDs after other stream-close failures, refuse unknown
+creation authority, and check the post-lock outcome and runtime/umask/signal
+fences. The 40-second validator tail stays inside the original body, leaving
+finalization for local records and runtime retirement. Small accepted budgets
+can refuse before container creation. See the [API review](release-stage-api-review.md)
+for the native limits and Python whitespace, line and 4300-digit version rules.
+
+The separate manual [signed musl staging proof](release-stage-runtime-proof.md)
+authenticates both artifacts and exercises actual Docker first stage and repeat
+in one free Debian KVM guest. Native actor history and the separately inspected
+checksum probe have distinct claims; the probe establishes its own isolation.
+Source/inert checks alone do not establish signed Stage execution, production
+application deployment, a database migration, rollback or caller cutover.

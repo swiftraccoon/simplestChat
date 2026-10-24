@@ -112,6 +112,7 @@ fn usage_and_help_never_read_a_manifest_or_start_another_command() {
                 "       simplestchat-ops release verify [OPTIONS]\n",
                 "       simplestchat-ops release fetch [OPTIONS]\n",
                 "       simplestchat-ops release receive [OPTIONS]\n",
+                "       simplestchat-ops release stage [OPTIONS]\n",
     "       simplestchat-ops release attestation prepare [OPTIONS]\n",
                 "       simplestchat-ops release attestation verify [OPTIONS]\n",
                 "       simplestchat-ops release manifest --path PATH\n",

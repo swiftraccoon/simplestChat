@@ -61,3 +61,7 @@ __pycache__/
 !/docs/release-signal-lifecycle-review.md
 
 !/docs/release-receive-runtime-proof.md
+
+!/docs/release-stage-api-review.md
+
+!/docs/release-stage-runtime-proof.md

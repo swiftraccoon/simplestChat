@@ -19,7 +19,14 @@ const PLAYBOOKS: [&str; 10] = [
     "migration-data.yml",
 ];
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Group {
+    Checks,
+    References,
+}
+
 struct Step {
+    group: Group,
     program: OsString,
     arguments: Vec<OsString>,
 }
@@ -27,8 +34,16 @@ struct Step {
 impl Step {
     fn new(program: impl Into<OsString>, arguments: &[&str]) -> Self {
         Self {
+            group: Group::Checks,
             program: program.into(),
             arguments: arguments.iter().map(OsString::from).collect(),
+        }
+    }
+
+    fn reference(program: impl Into<OsString>, arguments: &[&str]) -> Self {
+        Self {
+            group: Group::References,
+            ..Self::new(program, arguments)
         }
     }
 }
@@ -70,6 +85,7 @@ fn steps(root: &Path, executable: &Path) -> std::io::Result<Vec<Step>> {
         ));
     }
     steps.push(Step {
+        group: Group::Checks,
         program: "shellcheck".into(),
         arguments: scripts
             .into_iter()
@@ -99,6 +115,8 @@ fn steps(root: &Path, executable: &Path) -> std::io::Result<Vec<Step>> {
             "--test",
             "release_receive_cli",
             "--test",
+            "release_stage_cli",
+            "--test",
             "archive_cli",
             "--test",
             "manifest_cli",
@@ -108,7 +126,7 @@ fn steps(root: &Path, executable: &Path) -> std::io::Result<Vec<Step>> {
     ));
     // The unchanged Python reference needs the installed controller environment.
     // Keep this explicit gate in both hosted automation and its local-CI route.
-    steps.push(Step::new(
+    steps.push(Step::reference(
         "cargo",
         &[
             "test",
@@ -128,7 +146,7 @@ fn steps(root: &Path, executable: &Path) -> std::io::Result<Vec<Step>> {
         ],
     ));
     #[cfg(target_os = "linux")]
-    steps.push(Step::new(
+    steps.push(Step::reference(
         "cargo",
         &[
             "test",
@@ -142,7 +160,7 @@ fn steps(root: &Path, executable: &Path) -> std::io::Result<Vec<Step>> {
             "--exact",
         ],
     ));
-    steps.push(Step::new(
+    steps.push(Step::reference(
         "cargo",
         &[
             "test",
@@ -156,7 +174,7 @@ fn steps(root: &Path, executable: &Path) -> std::io::Result<Vec<Step>> {
             "--exact",
         ],
     ));
-    steps.push(Step::new(
+    steps.push(Step::reference(
         "cargo",
         &[
             "test",
@@ -173,7 +191,7 @@ fn steps(root: &Path, executable: &Path) -> std::io::Result<Vec<Step>> {
             "--exact",
         ],
     ));
-    steps.push(Step::new(
+    steps.push(Step::reference(
         "cargo",
         &[
             "test",
@@ -190,7 +208,7 @@ fn steps(root: &Path, executable: &Path) -> std::io::Result<Vec<Step>> {
             "--exact",
         ],
     ));
-    steps.push(Step::new(
+    steps.push(Step::reference(
         "cargo",
         &[
             "test",
@@ -207,7 +225,7 @@ fn steps(root: &Path, executable: &Path) -> std::io::Result<Vec<Step>> {
             "--exact",
         ],
     ));
-    steps.push(Step::new(
+    steps.push(Step::reference(
         "cargo",
         &[
             "test",
@@ -224,7 +242,7 @@ fn steps(root: &Path, executable: &Path) -> std::io::Result<Vec<Step>> {
             "--exact",
         ],
     ));
-    steps.push(Step::new(
+    steps.push(Step::reference(
         "cargo",
         &[
             "test",
@@ -235,6 +253,23 @@ fn steps(root: &Path, executable: &Path) -> std::io::Result<Vec<Step>> {
             concat!(
                 "release::attestation::receive::oracle_tests::",
                 "whole_host_receiver_matches_unchanged_python",
+            ),
+            "--",
+            "--ignored",
+            "--exact",
+        ],
+    ));
+    steps.push(Step::reference(
+        "cargo",
+        &[
+            "test",
+            "--locked",
+            "-p",
+            "simplestchat-ops",
+            "--lib",
+            concat!(
+                "release::attestation::stage::oracle_tests::",
+                "whole_stage_matches_unchanged_python",
             ),
             "--",
             "--ignored",
@@ -265,22 +300,39 @@ fn execute(
     Ok(())
 }
 
-fn checks(root: &Path, environment: &Environment) -> tooling::Result<()> {
+fn selected(steps: Vec<Step>, group: Option<Group>) -> Vec<Step> {
+    steps
+        .into_iter()
+        .filter(|step| group.is_none_or(|group| step.group == group))
+        .collect()
+}
+
+fn checks(root: &Path, environment: &Environment, group: Option<Group>) -> tooling::Result<()> {
     #[cfg(not(target_os = "linux"))]
     eprintln!("The VPS host oracle runs in Linux automation; use ci-local for that gate.");
     let executable = std::env::current_exe().map_err(|error| Failure::new(1, error.to_string()))?;
-    let steps = steps(root, &executable).map_err(|error| Failure::new(1, error.to_string()))?;
+    let steps = selected(
+        steps(root, &executable).map_err(|error| Failure::new(1, error.to_string()))?,
+        group,
+    );
     execute(&steps, |step| {
         tooling::run(root, environment, &step.program, &step.arguments)
     })
 }
 
 pub(super) fn run(root: &Path, arguments: &[String]) -> Result<ExitCode> {
-    if !arguments.is_empty() {
-        eprintln!("usage: cargo run --locked -q -p xtask -- ci automation");
-        return Ok(ExitCode::from(2));
-    }
-    match checks(root, &tooling::inherited_env()) {
+    let group = match arguments {
+        [] => None,
+        [flag] if flag == "--checks" => Some(Group::Checks),
+        [flag] if flag == "--references" => Some(Group::References),
+        _ => {
+            eprintln!(
+                "usage: cargo run --locked -q -p xtask -- ci automation [--checks|--references]"
+            );
+            return Ok(ExitCode::from(2));
+        }
+    };
+    match checks(root, &tooling::inherited_env(), group) {
         Ok(()) => Ok(ExitCode::SUCCESS),
         Err(failure) => {
             eprintln!("{}", failure.message);

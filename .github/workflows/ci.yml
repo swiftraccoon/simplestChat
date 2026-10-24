@@ -93,7 +93,7 @@ jobs:
         env:
           ANSIBLE_CONFIG: ${{ github.workspace }}/ops/ansible/ansible.cfg
           PYTHON_CHECK_ENV: ${{ runner.temp }}/ansible-controller
-        run: cargo run --locked -q -p xtask -- ci automation
+        run: cargo run --locked -q -p xtask -- ci automation --checks
 
       - name: Verify operational alert history in disposable PostgreSQL
         if: steps.verified.outputs.cache-hit != 'true'
@@ -137,6 +137,32 @@ jobs:
         with:
           path: ${{ runner.temp }}/ci-verified-automation
           key: ${{ steps.verified.outputs.cache-primary-key }}
+
+  automation-references:
+    name: Operations whole-reference comparisons
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Select the pinned Python Unicode oracle
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.14.8'
+      - name: Install the pinned Rust toolchain for reference comparisons
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable (2026-10-01)
+        with:
+          toolchain: 1.99.0
+      - name: Install the isolated pinned reference environment
+        run: |
+          python3 -m venv "${RUNNER_TEMP}/ansible-controller"
+          "${RUNNER_TEMP}/ansible-controller/bin/pip" install -r build/python-requirements.txt
+          cargo run --locked -q -p xtask -- ci controller-path
+      - name: Compare every complete operation with its unchanged reference
+        env:
+          PYTHON_CHECK_ENV: ${{ runner.temp }}/ansible-controller
+        run: cargo run --locked -q -p xtask -- ci automation --references
 
   rust-lint:
     name: Rust format, lints and documentation
@@ -376,6 +402,7 @@ jobs:
           --skip whole_fresh_release_matches_unchanged_python
           --skip whole_fetch_controller_matches_unchanged_python
           --skip whole_host_receiver_matches_unchanged_python
+          --skip whole_stage_matches_unchanged_python
 
       - name: Synthetic media delivery correctness smoke
         if: steps.verified.outputs.cache-hit != 'true'
@@ -1226,7 +1253,18 @@ jobs:
   required:
     name: Required security and correctness checks
     if: ${{ always() }}
-    needs: [automation, rust-lint, rust-test, native-dtls, browser, web, image-database, deployment, security, codeql]
+    needs:
+      - automation
+      - automation-references
+      - rust-lint
+      - rust-test
+      - native-dtls
+      - browser
+      - web
+      - image-database
+      - deployment
+      - security
+      - codeql
     runs-on: ubuntu-24.04
     timeout-minutes: 7
     permissions:

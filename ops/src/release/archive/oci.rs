@@ -107,9 +107,9 @@ pub(super) fn verify(
     image: &BTreeMap<String, Json>,
     config: &Json,
     manifest: &Manifest,
-) -> Result<()> {
+) -> Result<Option<String>> {
     if !members.has("index.json") && !members.has("oci-layout") {
-        return Ok(());
+        return Ok(None);
     }
     let layout = members.read_json(file, "oci-layout")?;
     if !layout.object().is_some_and(|v| {
@@ -173,7 +173,16 @@ pub(super) fn verify(
         {
             return Err(E::LayersMismatch);
         }
-        return Ok(());
+        // The selected manifest descriptor has just passed its exact byte
+        // digest/size, config and layer relationship checks. Unselected index
+        // or arbitrary archive blob digests are never runtime identities.
+        return Ok(Some(
+            descriptor
+                .get("digest")
+                .and_then(Json::string)
+                .ok_or(E::DescriptorDigest)?
+                .to_owned(),
+        ));
     }
     Err(E::IndexDepth)
 }

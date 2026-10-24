@@ -35,7 +35,7 @@ fn text(values: &[OsString]) -> Vec<&str> {
 fn controller_checks_preserve_the_python_gate_offline_flags_and_all_syntax_only_playbooks() {
     let fixture = Fixture::new(&["a.sh"]);
     let steps = steps(&fixture.0, Path::new("/owned tool/xtask")).unwrap();
-    assert_eq!(steps.len(), if cfg!(target_os = "linux") { 24 } else { 23 });
+    assert_eq!(steps.len(), if cfg!(target_os = "linux") { 25 } else { 24 });
     assert_eq!(steps[0].program, "/owned tool/xtask");
     assert_eq!(text(&steps[0].arguments), ["check", "--python"]);
     assert_eq!(
@@ -114,6 +114,8 @@ fn controller_checks_preserve_the_python_gate_offline_flags_and_all_syntax_only_
             "--test",
             "release_receive_cli",
             "--test",
+            "release_stage_cli",
+            "--test",
             "archive_cli",
             "--test",
             "manifest_cli",
@@ -141,7 +143,7 @@ fn controller_checks_preserve_the_python_gate_offline_flags_and_all_syntax_only_
             "--exact"
         ]
     );
-    let builder = &steps[steps.len() - 7];
+    let builder = &steps[steps.len() - 8];
     assert_eq!(builder.program, "cargo");
     assert_eq!(
         text(&builder.arguments),
@@ -157,7 +159,7 @@ fn controller_checks_preserve_the_python_gate_offline_flags_and_all_syntax_only_
             "--exact",
         ]
     );
-    let prepare = &steps[steps.len() - 6];
+    let prepare = &steps[steps.len() - 7];
     assert_eq!(prepare.program, "cargo");
     assert_eq!(
         text(&prepare.arguments),
@@ -176,7 +178,7 @@ fn controller_checks_preserve_the_python_gate_offline_flags_and_all_syntax_only_
             "--exact",
         ]
     );
-    let verify = &steps[steps.len() - 5];
+    let verify = &steps[steps.len() - 6];
     assert_eq!(verify.program, "cargo");
     assert_eq!(
         text(&verify.arguments),
@@ -195,7 +197,7 @@ fn controller_checks_preserve_the_python_gate_offline_flags_and_all_syntax_only_
             "--exact",
         ]
     );
-    let fresh = &steps[steps.len() - 4];
+    let fresh = &steps[steps.len() - 5];
     assert_eq!(fresh.program, "cargo");
     assert_eq!(
         text(&fresh.arguments),
@@ -214,7 +216,7 @@ fn controller_checks_preserve_the_python_gate_offline_flags_and_all_syntax_only_
             "--exact",
         ]
     );
-    let fetch = &steps[steps.len() - 3];
+    let fetch = &steps[steps.len() - 4];
     assert_eq!(fetch.program, "cargo");
     assert_eq!(
         text(&fetch.arguments),
@@ -233,7 +235,7 @@ fn controller_checks_preserve_the_python_gate_offline_flags_and_all_syntax_only_
             "--exact",
         ]
     );
-    let receive = &steps[steps.len() - 2];
+    let receive = &steps[steps.len() - 3];
     assert_eq!(receive.program, "cargo");
     assert_eq!(
         text(&receive.arguments),
@@ -246,6 +248,25 @@ fn controller_checks_preserve_the_python_gate_offline_flags_and_all_syntax_only_
             concat!(
                 "release::attestation::receive::oracle_tests::",
                 "whole_host_receiver_matches_unchanged_python",
+            ),
+            "--",
+            "--ignored",
+            "--exact",
+        ]
+    );
+    let stage = &steps[steps.len() - 2];
+    assert_eq!(stage.program, "cargo");
+    assert_eq!(
+        text(&stage.arguments),
+        [
+            "test",
+            "--locked",
+            "-p",
+            "simplestchat-ops",
+            "--lib",
+            concat!(
+                "release::attestation::stage::oracle_tests::",
+                "whole_stage_matches_unchanged_python",
             ),
             "--",
             "--ignored",
@@ -305,4 +326,54 @@ fn a_failed_quality_or_syntax_check_preserves_status_and_cannot_run_later_steps(
         run(&fixture.0, &["unexpected".into()]).unwrap(),
         ExitCode::from(2)
     );
+}
+
+#[test]
+fn parallel_groups_partition_every_original_command_and_keep_full_python_discovery() {
+    let fixture = Fixture::new(&["a.sh"]);
+    let plan = || steps(&fixture.0, Path::new("/owned/xtask")).unwrap();
+    let identity = |step: &Step| (step.program.clone(), step.arguments.clone());
+    let all = plan();
+    let checks = selected(plan(), Some(Group::Checks));
+    let references = selected(plan(), Some(Group::References));
+    assert_eq!(checks.len(), 16);
+    assert_eq!(
+        references.len(),
+        if cfg!(target_os = "linux") { 9 } else { 8 }
+    );
+    let expected: std::collections::BTreeSet<_> = all.iter().map(identity).collect();
+    let actual: std::collections::BTreeSet<_> =
+        checks.iter().chain(&references).map(identity).collect();
+    assert_eq!(expected.len(), all.len());
+    assert_eq!(actual, expected);
+    assert_eq!(checks.len() + references.len(), all.len());
+    assert_eq!(checks.last().unwrap().program, "python");
+    assert_eq!(
+        text(&checks.last().unwrap().arguments),
+        [
+            "-m",
+            "unittest",
+            "discover",
+            "-s",
+            "ops/ansible/tests",
+            "-v"
+        ]
+    );
+    assert!(
+        checks
+            .iter()
+            .all(|step| !text(&step.arguments).contains(&"--ignored"))
+    );
+    assert!(references.iter().all(|step| {
+        let args = text(&step.arguments);
+        args.contains(&"--ignored") && args.contains(&"--exact")
+    }));
+    let original: Vec<_> = selected(plan(), None).iter().map(identity).collect();
+    assert_eq!(original, all.iter().map(identity).collect::<Vec<_>>());
+    for flags in [
+        vec!["--checks".into(), "--references".into()],
+        vec!["--unknown".into()],
+    ] {
+        assert_eq!(run(&fixture.0, &flags).unwrap(), ExitCode::from(2));
+    }
 }

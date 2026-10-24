@@ -1970,6 +1970,26 @@
       "reachability": "Reviewed 2026-10-24 for only this exact same-repository, main-only workflow-dispatch step and immutable 89b12181fb390509a0842a86cc55eeb8eb928c1d action. Checkout disables persisted credentials. Fixed repository values select Rust 1.99.0 and x86_64-unknown-linux-gnu before compilation and before GH_TOKEN is supplied. Public CI and artifact identifiers cannot select installer source or arguments. The workflow has only contents/actions read permission, without signing or OIDC authority. Official HTTPS rustup bootstrap remains a trust boundary without an independent installer-checksum claim. This informational finding review does not waive artifact authentication, installed-byte custody, host-key, runtime, resource or finalization checks.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md#github-actions-portability-findings"
+    },
+    {
+      "scanner": "zizmor",
+      "fingerprint": "superfluous-actions:0fb2d712953646c2c07edb9a959b25649b214c63cb1143b35266a007af663b35",
+      "scope": ".github/workflows/release-stage-runtime.yml#jobs/release-stage-runtime/steps/2/uses",
+      "owner": "swiftraccoon",
+      "rationale": "The manual signed Stage proof builds its trusted controller and GNU client with exact Rust 1.99.0 before the sole read-only credential leaf. The immutable installer selects fixed repository inputs rather than the runner default.",
+      "reachability": "Reviewed 2026-10-24 for only this exact same-repository, main-only workflow-dispatch step and immutable 89b12181fb390509a0842a86cc55eeb8eb928c1d action. Checkout disables persisted credentials. Fixed repository values select Rust 1.99.0 and x86_64-unknown-linux-gnu before compilation and before GH_TOKEN is supplied. Public CI and artifact identifiers cannot select installer source or arguments. The workflow has only contents/actions read permission, without signing or OIDC authority. Official HTTPS rustup bootstrap remains a trust boundary without an independent installer-checksum claim. This informational finding review does not waive artifact authentication, installed-byte custody, host-key, runtime, resource or finalization checks.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md#github-actions-portability-findings"
+    },
+    {
+      "scanner": "zizmor",
+      "fingerprint": "superfluous-actions:0fb2d712953646c2c07edb9a959b25649b214c63cb1143b35266a007af663b35",
+      "scope": ".github/workflows/ci.yml#jobs/automation-references/steps/2/uses",
+      "owner": "swiftraccoon",
+      "rationale": "The complete unchanged-Python reference comparisons run in their own required free-runner job to preserve the existing ten-minute ceiling. The immutable action installs the exact Rust 1.99.0 compiler before running source-built xtask and Ops.",
+      "reachability": "Reviewed 2026-10-24 for this exact new step only. Checkout disables persisted credentials; Python and Rust are explicitly pinned. The reviewed official HTTPS rustup bootstrap is unchanged. No API token or restored result selects installer arguments, and this job uses no result cache. Every reference comparison and all eleven required correctness/security results remain blocking.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md#github-actions-portability-findings"
     }
   ]
 }

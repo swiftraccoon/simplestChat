@@ -1,0 +1,90 @@
+name: Signed musl release stage KVM runtime
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'Successful same-head main CI run for both signed artifacts'
+        type: string
+        required: true
+      run_attempt:
+        description: 'Exact successful CI run attempt'
+        type: string
+        required: true
+        default: '1'
+      artifact_id:
+        description: 'Signed Ops artifact ID from that exact CI attempt'
+        type: string
+        required: true
+
+permissions:
+  contents: read # Exact checkout only; no source or release writes.
+  actions: read # Acquire and authenticate the selected CI artifacts.
+
+concurrency:
+  group: release-stage-runtime-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release-stage-runtime:
+    name: Signed musl staging and real Docker in disposable Debian 13
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' &&
+      github.repository == 'swiftraccoon/simplestChat' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.14.8'
+      - name: Install pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable (2026-10-01)
+        with:
+          toolchain: 1.99.0
+          targets: x86_64-unknown-linux-gnu
+      - name: Prepare the free owned guest and pinned controller tools
+        run: |
+          sudo rm -rf -- /usr/local/lib/android /usr/share/dotnet
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-x86 qemu-utils cloud-image-utils \
+            openssh-client curl acl
+          test -c /dev/kvm
+          sudo setfacl -m "u:$(id -un):rw" /dev/kvm
+          python3 -m venv "$RUNNER_TEMP/stage-controller"
+          "$RUNNER_TEMP/stage-controller/bin/python" -m pip --isolated install \
+            --require-hashes --only-binary=:all: -r ops/ansible/requirements.txt
+          python3 build/security_tools.py install --tools gh --directory "$RUNNER_TEMP/stage-gh"
+          stage_gh="$(python3 build/security_tools.py path gh --directory "$RUNNER_TEMP/stage-gh")"
+          test "$stage_gh" = "$RUNNER_TEMP/stage-gh/bin/gh"
+          printf '%s\n' "$RUNNER_TEMP/stage-controller/bin" "${stage_gh%/gh}" >> "$GITHUB_PATH"
+      - name: Compile trusted controllers before exposing the API credential
+        run: |
+          cargo build --locked -p xtask --bin xtask
+          cargo build --locked --release --target x86_64-unknown-linux-gnu \
+            -p simplestchat-ops --bin simplestchat-ops
+      - name: Authenticate both contracts and exercise installed musl staging
+        timeout-minutes: 35
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STAGE_RUN_ID: ${{ inputs.run_id }}
+          STAGE_RUN_ATTEMPT: ${{ inputs.run_attempt }}
+          STAGE_ARTIFACT_ID: ${{ inputs.artifact_id }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          python3 -B build/security_vm_stage.py \
+            --run-id "$STAGE_RUN_ID" --run-attempt "$STAGE_RUN_ATTEMPT" \
+            --artifact-id "$STAGE_ARTIFACT_ID" \
+            --output "$RUNNER_TEMP/release-stage-runtime"
+      - name: Preserve only the completed sanitized stage summary
+        if: ${{ success() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: signed-musl-release-stage-runtime-summary
+          path: ${{ runner.temp }}/release-stage-runtime/summary.json
+          if-no-files-found: error
+          retention-days: 14

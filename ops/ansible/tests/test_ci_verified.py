@@ -837,6 +837,44 @@ class VerifiedWorkflowTests(unittest.TestCase):
         )
         self.assertLess(steps.index(install), steps.index(release))
 
+    def test_parallel_automation_keeps_every_reference_required_without_shared_receipts(
+        self,
+    ) -> None:
+        """Separate owners retain the ten-minute ceiling and cannot cache each other's work."""
+        jobs = obj(
+            yaml_value((ROOT / ".github/workflows/ci.yml").read_text(), scalars_as_strings=True),
+            "jobs",
+        )
+        for name, flag in (("automation", "--checks"), ("automation-references", "--references")):
+            job = obj(jobs, name)
+            self.assertEqual(string(job, "timeout-minutes"), "10")
+            self.assertEqual(string(job, "runs-on"), "ubuntu-24.04")
+            selected = [
+                step
+                for step in objects(job, "steps")
+                if "-- ci automation" in string(step.get("run", ""))
+            ]
+            self.assertEqual(len(selected), 1)
+            self.assertEqual(
+                string(selected[0], "run"),
+                "cargo run --locked -q -p xtask -- ci automation " + flag,
+            )
+        reference = obj(jobs, "automation-references")
+        self.assertNotIn("if", reference)
+        self.assertNotIn("continue-on-error", reference)
+        steps = objects(reference, "steps")
+        for step in steps:
+            self.assertNotIn("if", step)
+            self.assertNotIn("continue-on-error", step)
+            self.assertNotIn("actions/cache/", string(step.get("uses", "")))
+        python = next(
+            step
+            for step in steps
+            if string(step.get("uses", "")).startswith("actions/setup-python@")
+        )
+        self.assertEqual(string(obj(python, "with"), "python-version"), "3.14.8")
+        self.assertLess(steps.index(python), len(steps) - 2)
+
     def test_rust_unicode_oracle_is_pinned_before_fingerprints_cache_and_builds(self) -> None:
         """The release calendar oracle cannot inherit a runner's older Unicode database."""
         jobs = obj(
@@ -1014,6 +1052,8 @@ class VerifiedWorkflowTests(unittest.TestCase):
                     "whole_fetch_controller_matches_unchanged_python",
                     "--skip",
                     "whole_host_receiver_matches_unchanged_python",
+                    "--skip",
+                    "whole_stage_matches_unchanged_python",
                 ],
             )
             self.assertLess(steps.index(build), steps.index(execute))

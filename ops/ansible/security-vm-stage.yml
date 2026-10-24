@@ -1,0 +1,74 @@
+---
+- name: Prepare only the marked disposable native staging fixture
+  hosts: benchmark_hosts
+  become: true
+  gather_facts: true
+  vars_files:
+    - group_vars/benchmark_hosts.yml
+  pre_tasks:
+    - name: Require the exact disposable Debian guest and selected revision
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'vmfixture'
+          - ansible_host == '127.0.0.1'
+          - ansible_user == 'fixture'
+          - ansible_facts.distribution == 'Debian'
+          - ansible_facts.distribution_major_version == '13'
+          - ansible_facts.architecture == 'x86_64'
+          - ansible_facts.service_mgr == 'systemd'
+          - vm_fixture_run_id is match('^[a-f0-9]{32}$')
+          - vm_fixture_revision is match('^[a-f0-9]{40}$')
+    - name: Read only the cloud-init ownership marker
+      ansible.builtin.slurp:
+        src: /etc/simplestchat-vm-fixture
+      register: stage_fixture_marker
+      no_log: true
+    - name: Require the original exact marker
+      ansible.builtin.assert:
+        that:
+          - stage_fixture_marker.content | b64decode == vm_fixture_run_id + '\n'
+      no_log: true
+  tasks:
+    - name: Install only signed-repository transport prerequisites
+      ansible.builtin.apt:
+        name: [ca-certificates, curl]
+        state: present
+        update_cache: true
+        install_recommends: false
+        fail_on_autoremove: true
+    - name: Reuse the unchanged pinned Docker provisioning closure
+      ansible.builtin.import_tasks: tasks/docker.yml
+    - name: Create only the fixed stage result and selected release directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+      loop:
+        - /srv/simplestchat-public/results
+        - "/srv/simplestchat-public/releases/{{ vm_fixture_revision }}"
+    - name: Stage the source-bound fixed assertion helper
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../build/security_vm_stage_guest.py"
+        dest: /root/simplestchat-vm-fixture/security_vm_stage_guest.py
+        owner: root
+        group: root
+        mode: '0600'
+    - name: Copy only the currently authenticated original manifest and archive
+      ansible.builtin.copy:
+        src: "{{ vm_stage_artifact_dir }}/{{ item }}"
+        dest: "/srv/simplestchat-public/releases/{{ vm_fixture_revision }}/{{ item }}"
+        owner: root
+        group: root
+        mode: '0600'
+      loop: [release.json, image.tar]
+    - name: Supply nonsecret protected absence-of-deployment canaries
+      ansible.builtin.copy:
+        content: "STAGE_FIXTURE_INERT\n"
+        dest: "/etc/simplestchat-public/{{ item }}"
+        owner: root
+        group: root
+        mode: '0600'
+        force: false
+      loop: [app.env, migration.env, compose.public.yml]

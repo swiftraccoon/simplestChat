@@ -14,3 +14,5 @@ pub(super) mod receive;
 #[cfg(test)]
 #[path = "attestation/verify/fixture.rs"]
 mod verification_fixture;
+
+pub(super) mod stage;

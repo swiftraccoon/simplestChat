@@ -730,3 +730,29 @@ has no signing or OIDC permission. The official HTTPS rustup bootstrap remains
 a trust boundary, without an independent checksum claim for downloaded installer
 bytes. The exact informational review expires on 2026-11-29. This source review
 provides no evidence that the new receiver VM proof has actually executed.
+
+The manual signed staging proof uses the same immutable Rust installer at
+`.github/workflows/release-stage-runtime.yml#jobs/release-stage-runtime/steps/2/uses`.
+The action remains `89b12181fb390509a0842a86cc55eeb8eb928c1d`, with reviewed
+source SHA-256 `88e5ba8078257c53aadfc8097bff99a3a7e1a5fb210343faa19528e2e21f2e91`.
+Fixed Rust 1.99.0 and its GNU target are selected before compiling either
+controller and before the sole read-only token leaf. Checkout credentials are
+disabled, public IDs cannot choose installer options, and there is no signing
+or OIDC permission. Official HTTPS rustup bootstrap remains a trust boundary;
+no independent downloaded-installer checksum is claimed. This exact
+informational location review expires on 2026-11-29 and establishes no actual
+Stage VM execution.
+
+The staging feature partitions automation into checks and complete reference
+comparisons, each on a free runner with the existing ten-minute ceiling.
+`ci.yml#jobs/automation-references/steps/2/uses` reuses only the reviewed immutable
+`dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d` action
+(source SHA-256 `88e5ba8078257c53aadfc8097bff99a3a7e1a5fb210343faa19528e2e21f2e91`)
+and explicit Rust 1.99.0. This exact informational portability review expires
+2026-11-29. Checkout disables persisted credentials; no API token is supplied.
+The official HTTPS bootstrap boundary is unchanged, without an independent
+installer checksum claim. Reference comparisons use no result cache, and the
+required-job policy now demands all eleven correctness/security jobs before
+signing. Existing automation receipts prove the separate checks job only;
+changed workflow and xtask inputs invalidate old cache keys. This review waives
+no source, reference, dependency or runtime check.

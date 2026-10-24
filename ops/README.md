@@ -2314,3 +2314,96 @@ not authenticate a Linux musl executable on the target. The current authenticate
 Ops installer supports first install and exact repeat, not an upgrade. Installing
 or switching this receiver requires separately complete bootstrap and runtime
 proof; this source route makes no such switch.
+
+
+## Explicit native host staging
+
+The source route for the complete host stage action is:
+
+```sh
+simplestchat-ops release stage --revision "$REVISION" \
+  --timeout-seconds 600 --finalization-seconds 60
+```
+
+These budgets are an explicit example, not defaults or an operational timing
+recommendation. Both are required positive ASCII seconds, `0 < M < N <= 600`.
+One original N includes setup, hashes, child effects, records, output, runtime,
+signal completion and umask restoration. Body ends at N−M. A potentially live
+validator reserves its known 40-second removal/process-settlement tail inside
+that body; small valid budgets can refuse before creating it. M remains for
+local finalization. No phase restarts or increases either original end.
+Kernel filesystem/random/close/reap stalls remain outside a hard wall guarantee.
+
+The dedicated root-only Linux command uses the fixed prepared root/config/work
+layout and nonblocking workload lock. It refuses unfinished ownership journals,
+checks the revision's original manifest/archive and creates one private
+`results/release.*` attempt. It verifies the entire archive before reading an
+existing `staged.json`. An exact repeat still checks the actual Docker image,
+keeps the original staging record and does no load or validation-container work.
+
+A new stage checks import headroom, journals the import, and invokes only
+`/usr/bin/docker --host unix:///var/run/docker.sock` with its fixed environment.
+Load retains the reference's 300-second child body cap; wait uses 20 seconds and
+other fixed roles 30, with their settlement retained inside the original body.
+Both child streams are independently bounded to 2 MiB and drained concurrently.
+Positive completion requires checked closes. A consuming pipe-conversion
+refusal stays negative; the SDK's private close is not a checked-close receipt,
+and every other retained peer still receives its explicit finalizer.
+The fixed original Docker executable is bounded to 256 MiB before hashing.
+The original tool, socket namespace and input files are rechecked. Docker still
+opens its own socket/archive path; these are observations, not an atomic FD
+handoff or exclusion of a same-UID writer.
+
+The daemon's production platform/user/revision/entrypoint/command/workdir/
+healthcheck/environment profile is checked separately from offline archive
+validation. Its actual ID must be either the verified config digest or selected
+verified image-manifest digest of that same graph. This supports classic and
+containerd-backed engines. It refuses unrelated IDs even if their reported
+runtime profile is similar; that stronger native binding is documented rather
+than claimed as full Python-domain parity.
+
+Migration checksums execute only in a uniquely named, immutable-ID validator:
+network none, pull never, read-only, runtime user, init, no capabilities,
+no-new-privileges, 128 MiB, 0.5 CPU, 32 PIDs and bounded local logs. The fixed
+checksum command has its own ten-second TERM/two-second KILL limit. Success
+requires actual wait zero, exact nonempty migration output, validator removal,
+manifest equality, an atomic `staged.json` and finalized `release-state.json`.
+No app/proxy/database container or installed selection is changed.
+
+Fixed stdout parsing keeps Python's string/byte whitespace and Unicode line
+boundaries, including one CRLF boundary. Decimal migration versions do not
+acquire a u64 limit; they retain the pinned default 4300-digit conversion limit
+including leading zeros. A valid but different map refuses after normal
+validator removal. A conversion failure occurs before removal and its known-ID
+finalizer remains a separate negative-path effect.
+
+A successful create's complete ID requires raw zero and natural stdout EOF
+fenced in the live body, before any local group retirement. Cleanup-generated
+EOF cannot authorize that identity. A known ID is retained before fallible logs
+or later peer closes. Exact known-ID cleanup is attempted after failure; uncertain create
+output never authorizes name-based cleanup. First failure remains primary even
+if cleanup fails. Failed captures are bounded and persisted after that known
+validator finalizer, under the existing lock. Imported images, incomplete
+journals and failed evidence remain for inspection; no retry, image deletion,
+automatic recovery or rollback is performed.
+
+Outcome persistence occurs after the lock closes, matching the original stage
+CLI. A failure before attempt creation emits no report; an outcome persistence
+failure also suppresses final stdout. A complete earlier report or saved outcome
+is passive: nonzero final exit invalidates positive interpretation, including
+late signal, descriptor, runtime, mask or original-deadline failures.
+
+`--help`, `-h` and the scoped `--licenses` route require no runtime or host layout.
+Syntax errors return 2; operational refusals return 1. The public facade is
+intended for dedicated synchronous use outside an entered Tokio runtime. The
+[affected API review](../docs/release-stage-api-review.md) records private
+ownership, parser boundaries and the named reference differences.
+
+The unchanged Python stage action, deployment/force/maintenance controllers,
+Ansible jobs, prepared-helper preflight and authenticated Ops bootstrap remain
+operational. First installation and identical repeat are distinct from an Ops
+upgrade. Source implementation and inert fixtures do not establish Docker
+execution, signed musl readiness, measured caller budgets or a production switch.
+The separate free Debian KVM proof must authenticate both artifact contracts,
+execute the installed native stage first/repeat and check original publication,
+image identity, validator retirement and all final owners before any migration.

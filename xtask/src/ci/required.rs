@@ -1,7 +1,7 @@
 //! Canonical whole-workflow aggregation, before stored-analysis or receipt checks.
 //!
 //! GitHub supplies the dependency results once through `GATE_RESULTS`. This
-//! boundary accepts bounded JSON with exactly the maintained ten job names and
+//! boundary accepts bounded JSON with exactly the maintained eleven job names and
 //! typed terminal conclusions. Job metadata and outputs cannot establish success;
 //! neither their content nor parser errors are printed. No subprocesses run here.
 
@@ -20,6 +20,7 @@ const MAX_RESULTS: usize = 64 * 1024;
 #[serde(rename_all = "kebab-case")]
 enum Gate {
     Automation,
+    AutomationReferences,
     RustLint,
     RustTest,
     NativeDtls,
@@ -31,8 +32,9 @@ enum Gate {
     Codeql,
 }
 
-const GATES: [Gate; 10] = [
+const GATES: [Gate; 11] = [
     Gate::Automation,
+    Gate::AutomationReferences,
     Gate::RustLint,
     Gate::RustTest,
     Gate::NativeDtls,
