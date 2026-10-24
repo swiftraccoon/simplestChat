@@ -5,10 +5,6 @@
 //! Run it in a dedicated CLI process with explicit caller-selected whole and
 //! finalization budgets. The existing Python command remains the reference.
 
-#[path = "control.rs"]
-mod control;
-#[path = "files.rs"]
-mod files;
 #[path = "options.rs"]
 mod options;
 #[cfg(test)]
@@ -23,6 +19,7 @@ mod signal_tests;
 #[path = "tests.rs"]
 mod tests;
 
+use super::{control, files};
 use control::{Cause, Owner, Result, Window};
 use files::{Dir, Retained};
 use options::Options;
@@ -157,12 +154,13 @@ impl State {
             policy::require(owner, actual == digests[name])?;
         }
         let security = self.read("image-security.json", options, owner)?;
-        policy::bind_security(&security, &options.selection, &config, &digests, owner)?;
+        let selected = options.selection.claim_selection()?;
+        policy::bind_security(&security, &selected, &config, &digests, owner)?;
         self.bind_runtime(&security, options, &config, &digests, owner)?;
         let outcome = self.read("outcome.json", options, owner)?;
-        policy::bind_outcome(&outcome, &options.selection, &config, owner)?;
+        policy::bind_outcome(&outcome, &selected, &config, owner)?;
         let manifest = self.read("release.json", options, owner)?;
-        policy::bind_manifest(&manifest, &options.selection, &digests, owner)?;
+        policy::bind_manifest(&manifest, &selected, &digests, owner)?;
         let directory = self.directory(0, options, owner)?;
         self.outputs.push(Retained::create(
             directory,
@@ -182,14 +180,8 @@ impl State {
     ) -> Result<()> {
         let required = policy::runtime_security(security, digests, owner)?;
         let runtime = self.read("runtime-proof.json", options, owner)?;
-        policy::runtime_proof(
-            &runtime,
-            required,
-            &options.selection,
-            image,
-            digests,
-            owner,
-        )?;
+        let selected = options.selection.claim_selection()?;
+        policy::runtime_proof(&runtime, required, &selected, image, digests, owner)?;
         let vex = self.read("vex.openvex.json", options, owner)?;
         policy::runtime_vex(&vex, required, owner)?;
         policy::runtime_review(security, &runtime, required, owner)
@@ -224,7 +216,7 @@ impl Write for Descriptor<'_> {
         Ok(())
     }
 }
-fn stdout(bytes: &[u8]) -> io::Result<()> {
+pub(super) fn stdout(bytes: &[u8]) -> io::Result<()> {
     let output = io::stdout();
     let mut lock = output.lock();
     lock.flush()?;

@@ -2,11 +2,7 @@
 
 use super::control::{Cause, Result};
 use serde::Serialize;
-use std::{
-    ffi::OsString,
-    path::{Component, Path, PathBuf},
-    time::Duration,
-};
+use std::{ffi::OsString, path::PathBuf, time::Duration};
 
 pub(super) const USAGE: &str = concat!(
     "Usage: simplestchat-ops release attestation prepare --artifact-dir ABS ",
@@ -85,13 +81,6 @@ fn number(value: &str) -> Result<u64> {
     }
     value.parse().map_err(|_| Cause::Input)
 }
-pub(super) fn canonical(path: &Path) -> bool {
-    path.is_absolute()
-        && path
-            .components()
-            .all(|p| matches!(p, Component::RootDir | Component::Normal(_)))
-        && path.components().collect::<PathBuf>().as_os_str() == path.as_os_str()
-}
 impl Options {
     pub fn parse(args: &[OsString]) -> Result<Option<Self>> {
         if args.len() == 1 && matches!(args[0].to_str(), Some("--help" | "-h")) {
@@ -131,7 +120,7 @@ impl Options {
         let take_text = |name: &str| fields[name].to_str().map(str::to_owned).ok_or(Cause::Input);
         let artifact = PathBuf::from(&fields["--artifact-dir"]);
         let security = PathBuf::from(&fields["--security-dir"]);
-        if !canonical(&artifact) || !canonical(&security) {
+        if !super::files::canonical(&artifact) || !super::files::canonical(&security) {
             return Err(Cause::Input);
         }
         let selection = Selection::new(

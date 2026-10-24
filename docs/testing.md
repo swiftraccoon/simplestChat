@@ -2528,3 +2528,58 @@ whole-oracle test by their exact names. Automation invokes the oracle explicitly
 in its maintained Python environment; neither test silently skips missing
 prerequisites. These are separate test contracts from attested installation or
 production signing/deployment proof.
+
+
+## Cached verification checks
+
+The native cached `release attestation verify` operation has separate policy,
+actual local process, empty-environment CLI and whole-reference coverage. Its
+closed Python oracle executes the unchanged `verify_directory` against real inert
+ZIP/tar/files with only verifier observations and UTC adapted. It never contacts
+GitHub or a host. All 111 named scenarios are available through:
+
+```sh
+ops/ansible/.venv/bin/python3 -B ops/ansible/tests/release_verify_oracle.py \
+  --scenario success
+```
+
+The exact ignored Rust comparison is
+`release::attestation::verify::oracle_tests::whole_verify_scenarios_match_unchanged_python`.
+Run it explicitly under the pinned controller Python environment in automation:
+
+```sh
+PYTHON_CHECK_ENV=/absolute/pinned-controller-env \
+  cargo test --locked -p simplestchat-ops --lib \
+  release::attestation::verify::oracle_tests::whole_verify_scenarios_match_unchanged_python \
+  -- --ignored --exact
+```
+
+The broad workspace `--include-ignored` command skips the unique basename
+`whole_verify_scenarios_match_unchanged_python`; the owning automation still
+invokes its qualified name with `--ignored --exact`. The whole test owns the
+bounded Python child, both captures, group retirement/reap,
+original caller deadline and subsequent Rust verification. Repeated use requires
+eight fresh verifier observations, while each ordinary call requires four.
+The oracle compares passive envelopes, exact argv/environment/caps, refusal
+prefixes, raw stdout hashes and retained bytes. Three explicit native profile
+cases distinguish witnessed ZIP/inode changes and Unicode-scalar refusal from
+reference-positive behavior. Actual helper tests use owned inert subprocesses,
+including cap sentinels, backpressure, descendant pipes, signal/deadline and
+close/read/conversion faults; the same exact ordinary test owns its child role,
+so no independently invoked ignored child route is added.
+
+The actual `release_verification_cli` target checks route/help/notices/usage,
+selector limits and fixed errors in an empty environment/private cwd. Its
+successful case uses a controlled local `gh` fixture, proving native dispatch and
+policy together without claiming cryptography. The shared preparation owner,
+file custody and late bindings keep their existing 17-native/4-CLI/72-oracle
+regression contract and must be rerun on the final combined source.
+
+Local Python oracle/quality results, default-stack process/CLI results, target
+checks and actual maintained-GH verification are separate evidence. Before any
+caller switch, record four fresh authenticated verifier results on exact original
+signed production inputs, repeat the operation, reject modified/certificate/run
+mismatches, measure the existing caller budget, and prove verification still
+finishes before Receiver/SSH construction. Copied prior API metadata proves no
+new API selection. No current source-only or inert fixture result satisfies that
+runtime/authentication gate.
