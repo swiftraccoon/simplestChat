@@ -7,6 +7,7 @@ use std::{cell::Cell, io::Cursor, os::unix::fs::symlink, rc::Rc};
 fn setup() -> (Temporary, Fs, Owner) {
     let temporary = Temporary::new();
     temporary.directory("/evidence", 0o700);
+    temporary.directory("/output", 0o700);
     let fs = Fs::new(Access {
         root: Some(temporary.path("/")),
         hook: None,
@@ -24,7 +25,7 @@ fn gzip_contains_exact_files_and_local_pax_for_a_long_path_without_extracting() 
     temporary.file(&format!("/evidence/{name}"), b"private long path\n", 0o600);
     let snapshot = Snapshot::walk(&mut fs, &mut owner, "/evidence").unwrap();
     assert_eq!(snapshot.count, 3);
-    let id = fs.writer("/archive.gz").unwrap();
+    let id = fs.writer("/output/archive.gz").unwrap();
     let mut file = fs.take(id).unwrap();
     let produced = produce(&snapshot, &mut fs, &mut owner, &mut file);
     file.sync_all().unwrap();
@@ -33,7 +34,7 @@ fn gzip_contains_exact_files_and_local_pax_for_a_long_path_without_extracting() 
     fs.close(id).unwrap();
     produced.unwrap();
     snapshot.verify(&mut fs, &mut owner).unwrap();
-    let bytes = std::fs::read(temporary.path("/archive.gz")).unwrap();
+    let bytes = std::fs::read(temporary.path("/output/archive.gz")).unwrap();
     let decoder = flate2::read::GzDecoder::new(Cursor::new(bytes));
     let mut tar = tar::Archive::new(decoder);
     let mut members = std::collections::BTreeMap::new();
@@ -63,7 +64,7 @@ fn archive_refuses_special_entries_and_same_bytes_replaced_after_snapshot() {
     )
     .unwrap();
     temporary.file("/evidence/record", b"same", 0o600);
-    let id = fs.writer("/archive.gz").unwrap();
+    let id = fs.writer("/output/archive.gz").unwrap();
     let mut file = fs.take(id).unwrap();
     assert_eq!(
         produce(&snapshot, &mut fs, &mut owner, &mut file),
