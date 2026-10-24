@@ -146,7 +146,7 @@ fn hex(value: &str, length: usize) -> bool {
             .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
 
-fn decimal(character: char) -> Option<u32> {
+pub(super) fn decimal(character: char) -> Option<u32> {
     // The maintained regex-syntax Unicode 16 Nd ranges match pinned CPython's
     // Unicode 16 database. Adjacent decimal sets contain complete groups of ten.
     static DIGITS: OnceLock<Vec<(char, char)>> = OnceLock::new();

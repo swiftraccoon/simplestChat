@@ -24,6 +24,7 @@ enum ReferenceGroup {
     Foundation,
     Fetch,
     Host,
+    Deploy,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -142,6 +143,8 @@ fn steps(root: &Path, executable: &Path) -> std::io::Result<Vec<Step>> {
             "release_receive_cli",
             "--test",
             "release_stage_cli",
+            "--test",
+            "release_deploy_cli",
             "--test",
             "archive_cli",
             "--test",
@@ -311,6 +314,24 @@ fn steps(root: &Path, executable: &Path) -> std::io::Result<Vec<Step>> {
             "--exact",
         ],
     ));
+    steps.push(Step::reference(
+        ReferenceGroup::Deploy,
+        "cargo",
+        &[
+            "test",
+            "--locked",
+            "-p",
+            "simplestchat-ops",
+            "--lib",
+            concat!(
+                "release::attestation::deploy::oracle_tests::",
+                "whole_deploy_matches_unchanged_python",
+            ),
+            "--",
+            "--ignored",
+            "--exact",
+        ],
+    ));
     steps.push(Step::new(
         "python",
         &[
@@ -369,10 +390,13 @@ pub(super) fn run(root: &Path, arguments: &[String]) -> Result<ExitCode> {
         [flag, group] if flag == "--references" && group == "host" => {
             Selection::Reference(ReferenceGroup::Host)
         }
+        [flag, group] if flag == "--references" && group == "deploy" => {
+            Selection::Reference(ReferenceGroup::Deploy)
+        }
         _ => {
             eprintln!(concat!(
                 "usage: cargo run --locked -q -p xtask -- ci automation ",
-                "[--checks|--references [foundation|fetch|host]]",
+                "[--checks|--references [foundation|fetch|host|deploy]]",
             ));
             return Ok(ExitCode::from(2));
         }

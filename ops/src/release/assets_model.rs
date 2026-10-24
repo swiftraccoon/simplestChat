@@ -1,18 +1,33 @@
 //! Ordered public identities and exact Python-compatible index serialization.
 use super::{
     MAX_AGE, MAX_CAPTURES, MAX_FILE, MAX_FILES, MAX_GENERATIONS, MAX_INDEX, MAX_TOTAL, Result,
-    fail, require,
+    fail, require, scope::Scope,
 };
 use crate::json::{self, Json};
 use serde::{Serialize, Serializer, ser::SerializeMap};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 
+#[cfg(test)]
 pub(super) fn sha(bytes: &[u8]) -> String {
     Sha256::digest(bytes)
         .iter()
         .map(|byte| format!("{byte:02x}"))
         .collect()
+}
+pub(super) fn sha_scoped(bytes: &[u8], scope: &Scope<'_>) -> Result<String> {
+    scope.check()?;
+    let mut hash = Sha256::new();
+    for chunk in bytes.chunks(65536) {
+        scope.check()?;
+        hash.update(chunk);
+        scope.check()?;
+    }
+    Ok(hash
+        .finalize()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect())
 }
 pub(super) fn revision(value: &str) -> bool {
     value.len() == 40
@@ -70,13 +85,20 @@ impl Capture {
     pub fn read(path: &std::path::Path) -> Result<Self> {
         super::capture::read(path)
     }
+    pub(in crate::release) fn read_owned(
+        path: &std::path::Path,
+        owner: &mut crate::release::attestation::control::Owner,
+    ) -> Result<Self> {
+        super::capture::read_owned(path, owner)
+    }
     pub fn files(&self) -> usize {
         self.0.len()
     }
     pub fn bytes(&self) -> u64 {
         self.0.iter().map(|(_, bytes)| bytes.len() as u64).sum()
     }
-    pub(super) fn records(&self) -> Result<Vec<(String, Record)>> {
+    fn records_scoped(&self, scope: &Scope<'_>) -> Result<Vec<(String, Record)>> {
+        scope.check()?;
         require(
             !self.0.is_empty() && self.0.len() <= MAX_FILES,
             "asset_capture_revision",
@@ -95,7 +117,7 @@ impl Capture {
                 Ok((
                     name.clone(),
                     Record {
-                        sha256: sha(bytes),
+                        sha256: sha_scoped(bytes, scope)?,
                         size: bytes.len() as u64,
                     },
                 ))
@@ -317,11 +339,21 @@ pub(super) fn identities(generations: &[Generation]) -> Result<Vec<(String, Stri
     }
     Ok(result)
 }
+#[cfg(test)]
 pub(super) fn select(
     prior: &[Generation],
     captures: &[(String, Capture)],
     timestamp: u64,
 ) -> Result<Vec<Generation>> {
+    select_scoped(prior, captures, timestamp, &Scope::standalone())
+}
+pub(super) fn select_scoped(
+    prior: &[Generation],
+    captures: &[(String, Capture)],
+    timestamp: u64,
+    scope: &Scope<'_>,
+) -> Result<Vec<Generation>> {
+    scope.check()?;
     require(
         !captures.is_empty() && captures.len() <= MAX_CAPTURES,
         "asset_capture_count",
@@ -336,7 +368,7 @@ pub(super) fn select(
             self::revision(revision) && revisions.insert(revision),
             "asset_capture_revision",
         )?;
-        let records = capture.records()?;
+        let records = capture.records_scoped(scope)?;
         if let Some(old) = prior.iter().find(|item| item.revision == *revision) {
             require(
                 old.assets.len() == records.len()

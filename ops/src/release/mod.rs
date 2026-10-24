@@ -15,4 +15,8 @@ pub mod fetch;
 
 pub mod receive;
 
+mod workload;
+
+pub mod deploy;
+
 pub mod stage;

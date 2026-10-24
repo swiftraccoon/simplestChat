@@ -2,8 +2,9 @@
 //! extension allocations before tar-rs interprets names. Every input descriptor
 //! is checked and explicitly closed, including after a malformed capture.
 
+use super::scope::{Mode, Scope};
 use super::{MAX_FILE, MAX_FILES, MAX_TAR, MAX_TOTAL, Result, fail, model, require};
-use crate::files::Snapshot;
+use crate::{files::Snapshot, release::attestation::control::Owner};
 use std::{
     collections::BTreeSet,
     io::{Read, Seek},
@@ -23,7 +24,8 @@ fn extent(offset: u64, size: u64, length: u64) -> Result<()> {
     require(padded.is_some_and(|end| end <= length), "asset_tar_content")
 }
 
-fn preflight(input: &mut (impl Read + Seek), length: u64) -> Result<()> {
+fn preflight(input: &mut (impl Read + Seek), length: u64, scope: &Scope<'_>) -> Result<()> {
+    scope.check()?;
     let mut archive = tar::Archive::new(input);
     let entries = archive
         .entries_with_seek()
@@ -33,6 +35,7 @@ fn preflight(input: &mut (impl Read + Seek), length: u64) -> Result<()> {
     let mut members = 0_usize;
     let mut payload = 0_u64;
     for (number, entry) in entries.enumerate() {
+        scope.check()?;
         require(number < MAX_HEADERS, "asset_tar_header_count")?;
         let mut entry = entry.map_err(|_| fail("asset_tar_content"))?;
         extent(entry.raw_file_position(), entry.size(), length)?;
@@ -112,8 +115,12 @@ fn preflight(input: &mut (impl Read + Seek), length: u64) -> Result<()> {
     require(pending.is_none(), "asset_tar_unsupported")
 }
 
-fn parse(input: &mut (impl Read + Seek), length: u64) -> Result<model::Capture> {
-    preflight(input, length)?;
+fn parse_scoped(
+    input: &mut (impl Read + Seek),
+    length: u64,
+    scope: &Scope<'_>,
+) -> Result<model::Capture> {
+    preflight(input, length, scope)?;
     input.rewind().map_err(|_| fail("asset_tar_content"))?;
     let mut archive = tar::Archive::new(input);
     let entries = archive
@@ -124,6 +131,7 @@ fn parse(input: &mut (impl Read + Seek), length: u64) -> Result<model::Capture> 
     let mut total = 0_u64;
     let mut assets = Vec::new();
     for entry in entries {
+        scope.check()?;
         require(seen.len() <= MAX_FILES, "asset_tar_count")?;
         let mut entry = entry.map_err(|_| fail("asset_tar_content"))?;
         let bytes = entry.path_bytes();
@@ -185,14 +193,53 @@ fn parse(input: &mut (impl Read + Seek), length: u64) -> Result<model::Capture> 
     Ok(model::Capture(assets))
 }
 
+struct OwnedStream<'a, 'flow, 'owner> {
+    input: &'a mut Snapshot,
+    scope: &'flow Scope<'owner>,
+}
+impl Read for OwnedStream<'_, '_, '_> {
+    fn read(&mut self, bytes: &mut [u8]) -> std::io::Result<usize> {
+        let end = bytes.len().min(65536);
+        self.input.read_checked(&mut bytes[..end], |event, value| {
+            self.scope.snapshot(event, value)
+        })
+    }
+}
+impl Seek for OwnedStream<'_, '_, '_> {
+    fn seek(&mut self, position: std::io::SeekFrom) -> std::io::Result<u64> {
+        self.input
+            .seek_checked(position, |event, value| self.scope.snapshot(event, value))
+    }
+}
+
 pub(super) fn read(path: &Path) -> Result<model::Capture> {
-    let mut snapshot = Snapshot::open(path, MAX_TAR).map_err(|_| fail("asset_tar_size"))?;
+    read_scoped(path, &Scope::standalone())
+}
+pub(super) fn read_owned(path: &Path, owner: &mut Owner) -> Result<model::Capture> {
+    read_scoped(path, &Scope::owned(owner, Mode::Body))
+}
+fn read_scoped(path: &Path, scope: &Scope<'_>) -> Result<model::Capture> {
+    scope.check()?;
+    let mut snapshot =
+        Snapshot::open_checked(path, MAX_TAR, |event, value| scope.snapshot(event, value))
+            .map_err(|_| fail("asset_tar_size"))?;
     let length = snapshot.length();
-    let captured = parse(&mut snapshot.checked_stream(), length);
-    let closed = snapshot.finish().map_err(|_| fail("asset_tar_changed"));
+    let captured = parse_scoped(
+        &mut OwnedStream {
+            input: &mut snapshot,
+            scope,
+        },
+        length,
+        scope,
+    );
+    scope.observed(&captured);
+    let closed = snapshot
+        .finish_checked(|event, value| scope.snapshot(event, value))
+        .map_err(|_| fail("asset_tar_changed"));
+    scope.observed(&closed);
     let captured = captured?;
     closed?;
-    Ok(captured)
+    scope.result(Ok(captured))
 }
 
 #[cfg(test)]

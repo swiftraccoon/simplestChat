@@ -38,6 +38,7 @@ const checks = [
   "reference-foundation",
   "reference-fetch",
   "reference-host",
+  "reference-deploy",
   "browser-accounts",
   "browser-media",
   "browser-stress",
@@ -133,6 +134,7 @@ test("local evidence rejects each missing whole-reference group despite successf
     "reference-foundation",
     "reference-fetch",
     "reference-host",
+    "reference-deploy",
   ]) {
     const f = fixture(t);
     for (const check of checks.filter((check) => check !== missing)) {

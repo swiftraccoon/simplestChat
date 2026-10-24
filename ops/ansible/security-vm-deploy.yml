@@ -1,0 +1,99 @@
+---
+- name: Prepare only the marked disposable host deploy fixture
+  hosts: benchmark_hosts
+  become: true
+  gather_facts: true
+  vars_files:
+    - group_vars/benchmark_hosts.yml
+  pre_tasks:
+    - name: Require the owned Debian guest and both exact signed revisions
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'vmfixture'
+          - ansible_host == '127.0.0.1'
+          - ansible_user == 'fixture'
+          - ansible_facts.distribution == 'Debian'
+          - ansible_facts.distribution_major_version == '13'
+          - ansible_facts.architecture == 'x86_64'
+          - ansible_facts.service_mgr == 'systemd'
+          - vm_fixture_run_id is match('^[a-f0-9]{32}$')
+          - vm_fixture_revision is match('^[a-f0-9]{40}$')
+          - vm_previous_revision is match('^[a-f0-9]{40}$')
+          - vm_previous_revision != vm_fixture_revision
+    - name: Read only the cloud-init ownership marker
+      ansible.builtin.slurp:
+        src: /etc/simplestchat-vm-fixture
+      register: deploy_fixture_marker
+      no_log: true
+    - name: Require the original exact marker
+      ansible.builtin.assert:
+        that:
+          - deploy_fixture_marker.content | b64decode == vm_fixture_run_id + '\n'
+      no_log: true
+  tasks:
+    - name: Install only disposable render and signed repository transport prerequisites
+      ansible.builtin.apt:
+        name: [ca-certificates, curl, openssl, python3-jinja2, python3-yaml]
+        state: present
+        update_cache: true
+        install_recommends: false
+        fail_on_autoremove: true
+    - name: Reuse the unchanged pinned Docker provisioning closure
+      ansible.builtin.import_tasks: tasks/docker.yml
+    - name: Create only the fixed private source and canonical payload directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+      loop:
+        - /srv/simplestchat-public/results
+        - "/srv/simplestchat-public/releases/{{ vm_fixture_revision }}"
+        - "/srv/simplestchat-public/releases/{{ vm_previous_revision }}"
+        - /root/simplestchat-vm-fixture/deploy-source/build
+        - /root/simplestchat-vm-fixture/deploy-source/ops/ansible/templates
+    - name: Copy only source-bound fixed guest assertions
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../build/{{ item }}"
+        dest: "/root/simplestchat-vm-fixture/{{ item }}"
+        owner: root
+        group: root
+        mode: '0600'
+      loop: [security_vm_deploy_guest.py, security_vm_stage_guest.py]
+    - name: Project only the mature renderer and its complete fixed source inputs
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../{{ item }}"
+        dest: "/root/simplestchat-vm-fixture/deploy-source/{{ item }}"
+        owner: root
+        group: root
+        mode: '0600'
+      loop:
+        - build/release_container_fixture.py
+        - build/release_container_harness.py
+        - docker-compose.yml
+        - Caddyfile
+        - ops/ansible/templates/public-app.env.j2
+        - ops/ansible/templates/public-migration.env.j2
+        - ops/ansible/templates/public-proxy.env.j2
+        - ops/ansible/templates/public-compose.yml.j2
+        - ops/ansible/templates/public-pg_hba.conf.j2
+        - ops/ansible/templates/public-init-database.sql.j2
+        - ops/ansible/templates/public-runtime-grants.sql.j2
+        - ops/ansible/templates/public-postgres-admin-password.j2
+    - name: Copy only authenticated original current manifest and archive
+      ansible.builtin.copy:
+        src: "{{ vm_current_artifact_dir }}/{{ item }}"
+        dest: "/srv/simplestchat-public/releases/{{ vm_fixture_revision }}/{{ item }}"
+        owner: root
+        group: root
+        mode: '0600'
+      loop: [release.json, image.tar]
+    - name: Copy only authenticated original previous manifest and archive
+      ansible.builtin.copy:
+        src: "{{ vm_previous_artifact_dir }}/{{ item }}"
+        dest: "/srv/simplestchat-public/releases/{{ vm_previous_revision }}/{{ item }}"
+        owner: root
+        group: root
+        mode: '0600'
+      loop: [release.json, image.tar]

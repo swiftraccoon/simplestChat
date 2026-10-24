@@ -2407,3 +2407,51 @@ execution, signed musl readiness, measured caller budgets or a production switch
 The separate free Debian KVM proof must authenticate both artifact contracts,
 execute the installed native stage first/repeat and check original publication,
 image identity, validator retirement and all final owners before any migration.
+
+
+### Native application-only host deployment
+
+The standalone source operation is:
+
+```sh
+simplestchat-ops release deploy --revision "$REVISION" \
+  --quiet-seconds 600 --timeout-seconds 1800 --finalization-seconds 60
+```
+
+This is a root operation on the fixed prepared Linux/amd64 Docker host. All
+release inputs and local host authority must already be trusted. N/M are required
+positive ASCII decimal seconds with `0 < M < N <= 1800`; quiet observation defaults
+to zero and accepts `0..600`. The example is not a measured timing guarantee or a
+change to installed caller limits. Harmless `--help` and the existing scoped
+`--licenses` route run before host, file, runtime or daemon effects.
+
+The whole operation stages the actual archive under its same workload lock,
+attempt and original deadline. It checks exact schema equality, runtime identity,
+configuration, retained dependencies and both readiness paths, captures old/new
+browser assets without starting their containers, and creates, lists, syncs and
+hashes a live backup before stopping the application. Listing a dump is not an
+actual restore test. Missing/unreadable metrics or an active quiet deadline
+proceeds with the reported observation; it is not a quiescence lock.
+
+Replacement changes only the app selection. An error inside its flagged body
+allows one bounded rollback of those known config/image/assets under the same
+owner. Database restore, migrations, maintenance, dependency replacement and
+name-based cleanup after uncertain creation are absent. Failed recovery stays
+failed; late finalization cannot invent another rollback. The original body
+reserves 576 seconds for source-derived diagnostic/recovery command debt before
+the final room/time samples and first-stop admission. Local M is separate.
+
+Final exit status is authoritative. A late file, output, runtime, signal or mask
+failure can invalidate an earlier complete report or leave partial stdout.
+Private evidence remains protected and may contain command output/configuration;
+reports must be shared only under the existing operator privacy policy.
+
+The installed Python runtime, operational callers, maintenance and authenticated
+upgrade/bootstrap remain unchanged. Source/oracle checks do not prove actual
+Docker/DB/Caddy/TLS or signed-musl host execution. The complete 97-case comparison
+against unchanged Python passed locally in 365.12 test seconds, using real private
+files, locks and owned inert children with inert service replies. The corrected
+ordinary Ops suite passed 484 tests. The new VM fixture has 22 passing inert tests;
+its actual signed-musl host runtime remains unrun. See the
+[affected API review](../docs/release-deploy-api-review.md) for ownership,
+accepted profiles, the inherited-stdio SDK close exception and validation scope.

@@ -4,9 +4,18 @@ mod files;
 mod options;
 #[cfg(test)]
 mod oracle_tests;
-mod process;
+pub(super) mod process;
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+pub(super) fn start_records_probe() {
+    files::start_probe();
+}
+#[cfg(test)]
+pub(super) fn take_records_probe() -> (usize, usize) {
+    files::take_probe()
+}
 
 use super::{
     control::{self, Cause, Owner, Result, Window},
@@ -36,7 +45,7 @@ const IMAGE_FORMAT: &str = concat!(
     "{{json (index (split $v \"=\") 0)}}{{end}}]}",
 );
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Role {
+pub(super) enum Role {
     Load,
     Inspect,
     Create,
@@ -45,23 +54,23 @@ enum Role {
     Logs,
     Remove,
 }
-struct Invocation {
-    role: Role,
-    program: PathBuf,
-    arguments: Vec<OsString>,
-    body_end: Instant,
-    settlement_end: Instant,
-    cleanup: bool,
+pub(super) struct Invocation {
+    pub role: Role,
+    pub program: PathBuf,
+    pub arguments: Vec<OsString>,
+    pub body_end: Instant,
+    pub settlement_end: Instant,
+    pub cleanup: bool,
 }
-struct CommandOutput {
-    stdout: Vec<u8>,
-    stderr: Vec<u8>,
-    status: Option<i32>,
-    error: Option<Cause>,
-    settled: bool,
-    stdout_complete: bool,
+pub(super) struct CommandOutput {
+    pub stdout: Vec<u8>,
+    pub stderr: Vec<u8>,
+    pub status: Option<i32>,
+    pub error: Option<Cause>,
+    pub settled: bool,
+    pub stdout_complete: bool,
 }
-trait Executor {
+pub(super) trait Executor {
     async fn run(&mut self, owner: &mut Owner, request: Invocation) -> CommandOutput;
 }
 struct Native;
@@ -132,19 +141,40 @@ impl Native {
 
 use sha2::Digest;
 
-struct Access {
-    root: PathBuf,
-    config: PathBuf,
-    work: PathBuf,
-    docker: PathBuf,
-    socket: Option<PathBuf>,
-    uid: u32,
+pub(super) struct Access {
+    pub root: PathBuf,
+    pub config: PathBuf,
+    pub work: PathBuf,
+    pub docker: PathBuf,
+    pub socket: Option<PathBuf>,
+    pub uid: u32,
     #[cfg(test)]
-    free_bytes: Option<u64>,
+    pub free_bytes: Option<u64>,
     #[cfg(test)]
     fault: Option<files::Fault>,
 }
 impl Access {
+    pub fn for_host(
+        root: PathBuf,
+        config: PathBuf,
+        work: PathBuf,
+        docker: PathBuf,
+        socket: Option<PathBuf>,
+        uid: u32,
+    ) -> Self {
+        Self {
+            root,
+            config,
+            work,
+            docker,
+            socket,
+            uid,
+            #[cfg(test)]
+            free_bytes: None,
+            #[cfg(test)]
+            fault: None,
+        }
+    }
     fn fixed() -> Self {
         Self {
             root: "/srv/simplestchat-public".into(),
@@ -200,7 +230,7 @@ struct Outcome {
     passed: bool,
 }
 #[derive(Default)]
-struct State {
+pub(super) struct State {
     directories: Vec<Dir>,
     originals: Vec<Retained>,
     records: files::Records,
@@ -220,6 +250,9 @@ struct State {
     commands: usize,
     pending_logs: Vec<(String, Vec<u8>)>,
     failure: Option<String>,
+    host: bool,
+    lease: Option<crate::release::workload::Lease>,
+    selected_image: Option<String>,
 }
 fn cause_name(cause: Cause) -> &'static str {
     match cause {
@@ -254,13 +287,13 @@ fn text<'a>(value: &'a Json, name: &str) -> Option<&'a str> {
 }
 // Fixed stdout compatibility for the unchanged Python3.14 operation. These
 // borrow the bounded capture; they are not a general file or protocol parser.
-fn python_space(value: char) -> bool {
+pub(super) fn python_space(value: char) -> bool {
     value.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&value)
 }
-fn python_strip(value: &str) -> &str {
+pub(super) fn python_strip(value: &str) -> &str {
     value.trim_matches(python_space)
 }
-fn python_byte_strip(value: &[u8]) -> &[u8] {
+pub(super) fn python_byte_strip(value: &[u8]) -> &[u8] {
     let white = |b: &u8| matches!(*b, b' ' | b'\t' | b'\n' | b'\r' | 0x0b | 0x0c);
     let start = value.iter().position(|b| !white(b)).unwrap_or(value.len());
     let end = value
@@ -283,7 +316,7 @@ fn python_line_break(value: char) -> bool {
             | '\u{2029}'
     )
 }
-fn python_lines(value: &str) -> impl Iterator<Item = &str> {
+pub(super) fn python_lines(value: &str) -> impl Iterator<Item = &str> {
     let mut after_cr = false;
     value
         .split_inclusive(python_line_break)
@@ -308,6 +341,50 @@ fn exact_hex(value: &str, length: usize) -> bool {
             .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
 impl State {
+    pub fn for_host() -> Self {
+        Self {
+            host: true,
+            ..Self::default()
+        }
+    }
+    pub fn attempt(&self) -> Option<Dir> {
+        self.attempt.clone()
+    }
+    pub fn root(&self) -> Option<Dir> {
+        self.root.clone()
+    }
+    pub fn selected_image(&self) -> Option<&str> {
+        self.selected_image.as_deref()
+    }
+    pub fn command_count(&self) -> usize {
+        self.commands
+    }
+    pub fn continue_commands(&mut self, count: usize) {
+        self.commands = count;
+    }
+    pub fn failure(&self) -> Option<&str> {
+        self.failure.as_deref()
+    }
+    pub fn borrowed_lease(&self) -> Result<crate::release::workload::Lease> {
+        self.lease.clone().ok_or(Cause::Input)
+    }
+    /// The borrowed store must settle before the sole owner releases this lock.
+    pub fn unlock(&mut self, owner: &mut Owner) {
+        if let Some(lease) = self.lease.take() {
+            let (released, file) = lease.release();
+            if released.is_err() {
+                owner.record(Cause::Close);
+            }
+            if let Some(file) = file
+                && nix::unistd::close(file).is_err()
+            {
+                owner.record(Cause::Close);
+            }
+        }
+        if let Some(lock) = self.lock.take() {
+            lock.finish(owner);
+        }
+    }
     fn policy<T>(&mut self, owner: &mut Owner, message: &'static str) -> Result<T> {
         self.failure = Some(message.into());
         control::failed(owner, Cause::Policy)
@@ -318,7 +395,12 @@ impl State {
         dir.protected(uid, owner)?;
         Ok(dir)
     }
-    fn setup(&mut self, access: &Access, revision: &str, owner: &mut Owner) -> Result<Manifest> {
+    pub fn setup(
+        &mut self,
+        access: &Access,
+        revision: &str,
+        owner: &mut Owner,
+    ) -> Result<Manifest> {
         let root = self.directory(&access.root, access.uid, owner)?;
         self.root = Some(root.clone());
         let _ = self.directory(&access.config, access.uid, owner)?;
@@ -337,7 +419,29 @@ impl State {
             Retained::create(work.clone(), "workload.lock", owner)?
         });
         self.lock.as_ref().unwrap().protected(access.uid, owner)?;
-        self.lock.as_ref().unwrap().lock(owner)?;
+        if self.host {
+            let file = control::io(owner, self.lock.as_ref().unwrap().file().try_clone())?;
+            self.lease = Some(crate::release::workload::Lease::acquire(file).map_err(
+                |failed| {
+                    let cause = match failed.first {
+                        crate::release::workload::Failure::Busy => {
+                            self.failure = Some("BlockingIOError".into());
+                            Cause::Io
+                        }
+                        crate::release::workload::Failure::Io => Cause::Io,
+                        crate::release::workload::Failure::Changed => Cause::Changed,
+                        crate::release::workload::Failure::Close => Cause::Close,
+                    };
+                    owner.record(cause);
+                    if failed.close_failed {
+                        owner.record(Cause::Close);
+                    }
+                    cause
+                },
+            )?);
+        } else {
+            self.lock.as_ref().unwrap().lock(owner)?;
+        }
         for (dir, name, message) in [
             (
                 &work,
@@ -433,7 +537,29 @@ impl State {
         }
         Ok(manifest)
     }
-    fn originals(&self, owner: &mut Owner) -> Result<()> {
+    pub fn originals(&self, owner: &mut Owner) -> Result<()> {
+        if self.host
+            && let Some(lock) = &self.lock
+        {
+            lock.check(owner, Window::Body)?;
+        }
+        if let Some(lease) = &self.lease {
+            let matching = lease
+                .matches(self.lock.as_ref().ok_or(Cause::Changed)?.file())
+                .map_err(|error| {
+                    let cause = match error {
+                        crate::release::workload::Failure::Io => Cause::Io,
+                        crate::release::workload::Failure::Close => Cause::Close,
+                        crate::release::workload::Failure::Busy => Cause::Policy,
+                        crate::release::workload::Failure::Changed => Cause::Changed,
+                    };
+                    owner.record(cause);
+                    cause
+                })?;
+            if !matching {
+                return control::failed(owner, Cause::Changed);
+            }
+        }
         self.records.check_guard(owner)?;
         for file in self
             .originals
@@ -452,7 +578,7 @@ impl State {
         }
         Ok(())
     }
-    fn cleanup_witness(&self, access: &Access, owner: &mut Owner) -> Result<()> {
+    pub fn cleanup_witness(&self, access: &Access, owner: &mut Owner) -> Result<()> {
         use std::os::unix::fs::FileExt;
         owner.final_work()?;
         self.tool_directory
@@ -519,6 +645,15 @@ impl State {
         owner.final_work()
     }
     fn journal(&mut self, phase: &str, finalized: bool, owner: &mut Owner) -> Result<()> {
+        self.journal_in(phase, finalized, owner, false)
+    }
+    pub fn journal_in(
+        &mut self,
+        phase: &str,
+        finalized: bool,
+        owner: &mut Owner,
+        recovery: bool,
+    ) -> Result<()> {
         let value = json!({"schemaVersion":1,"attempt":self.attempt.as_ref().unwrap().path(),
             "finalized":finalized,"phase":phase});
         self.records.write(
@@ -526,7 +661,7 @@ impl State {
             "release-state.json",
             &bytes(&value)?,
             owner,
-            false,
+            recovery,
         )
     }
     async fn command(
@@ -570,7 +705,7 @@ impl State {
             .ok_or(Cause::Deadline)?
             .min(phase_end);
         self.commands += 1;
-        if self.commands > 20 {
+        if !self.host && self.commands > 20 {
             return control::failed(owner, Cause::Bounds);
         }
         let mut argv: Vec<OsString> = vec!["--host".into(), "unix:///var/run/docker.sock".into()];
@@ -668,7 +803,7 @@ impl State {
         access: &Access,
         selector: &str,
         revision: &str,
-        archive: &crate::release::archive::VerifiedArchive,
+        archive: Option<&crate::release::archive::VerifiedArchive>,
         owner: &mut Owner,
         executor: &mut impl Executor,
     ) -> Result<String> {
@@ -747,12 +882,23 @@ impl State {
                 return self.policy(owner, "runtime_environment_override");
             }
         }
-        if !archive.accepts_runtime_id(identifier) {
+        if archive.is_some_and(|archive| !archive.accepts_runtime_id(identifier)) {
             return self.policy(owner, "Imported image differs from verified archive graph");
         }
         Ok(identifier.into())
     }
-    async fn stage(
+    pub async fn installed_identity(
+        &mut self,
+        access: &Access,
+        selector: &str,
+        revision: &str,
+        owner: &mut Owner,
+        executor: &mut impl Executor,
+    ) -> Result<String> {
+        self.identity(access, selector, revision, None, owner, executor)
+            .await
+    }
+    pub async fn stage(
         &mut self,
         access: &Access,
         manifest: &Manifest,
@@ -777,7 +923,7 @@ impl State {
                     access,
                     selected,
                     &manifest.fields().revision,
-                    &verified,
+                    Some(&verified),
                     owner,
                     executor,
                 )
@@ -785,6 +931,7 @@ impl State {
             if image != selected {
                 return self.policy(owner, "Staged image missing");
             }
+            self.selected_image = Some(image);
             return Ok(());
         }
         #[cfg(test)]
@@ -842,7 +989,7 @@ impl State {
                 access,
                 &manifest.fields().image_tag,
                 &manifest.fields().revision,
-                &verified,
+                Some(&verified),
                 owner,
                 executor,
             )
@@ -861,9 +1008,10 @@ impl State {
             false,
         )?;
         self.journal("staged", true, owner)?;
+        self.selected_image = Some(image);
         Ok(())
     }
-    async fn migrations(
+    pub async fn migrations(
         &mut self,
         access: &Access,
         image: &str,
@@ -1037,11 +1185,43 @@ impl State {
             file.finish(owner);
         }
     }
-    fn finish(mut self, owner: &mut Owner) {
-        self.close_inputs(owner);
-        if let Some(lock) = self.lock.take() {
-            lock.finish(owner);
+    pub async fn settle_known(
+        &mut self,
+        access: &Access,
+        owner: &mut Owner,
+        executor: &mut impl Executor,
+    ) {
+        if self.validator_window.take().is_some() {
+            owner.end_stage_validator();
         }
+        if self.failure.is_none() {
+            self.failure = owner.error().map(|cause| cause_name(cause).into());
+        }
+        if let Some(id) = self.validator.take() {
+            let admitted = owner.begin_stage_cleanup();
+            if admitted.is_ok() {
+                let _ = self
+                    .command(
+                        access,
+                        Role::Remove,
+                        vec!["rm".into(), "--force".into(), id.into()],
+                        true,
+                        owner,
+                        executor,
+                    )
+                    .await;
+            }
+            owner.end_stage_cleanup();
+        }
+        if let Some(attempt) = &self.attempt {
+            for (name, data) in self.pending_logs.drain(..) {
+                let _ = self.records.write(attempt, &name, &data, owner, true);
+            }
+        }
+    }
+    pub fn finish(mut self, owner: &mut Owner) {
+        self.close_inputs(owner);
+        self.unlock(owner);
         self.records.finish(owner);
         self.root.take();
         self.tool_directory.take();
@@ -1084,40 +1264,12 @@ async fn execute(
     if let Err(cause) = result {
         owner.record(cause);
     }
-    if state.validator_window.take().is_some() {
-        owner.end_stage_validator();
-    }
-    if state.failure.is_none() {
-        state.failure = owner.error().map(|cause| cause_name(cause).into());
-    }
-    if let Some(id) = state.validator.take() {
-        let admitted = owner.begin_stage_cleanup();
-        if admitted.is_ok() {
-            let _ = state
-                .command(
-                    access,
-                    Role::Remove,
-                    vec!["rm".into(), "--force".into(), id.into()],
-                    true,
-                    owner,
-                    executor,
-                )
-                .await;
-        }
-        owner.end_stage_cleanup();
-    }
-    if let Some(attempt) = &state.attempt {
-        for (name, data) in state.pending_logs.drain(..) {
-            let _ = state.records.write(attempt, &name, &data, owner, true);
-        }
-    }
+    state.settle_known(access, owner, executor).await;
     if owner.error().is_none() {
         report.phase = "complete";
     }
     // Like the reference's main(), outcome persistence is outside the flock.
-    if let Some(lock) = state.lock.take() {
-        lock.finish(owner);
-    }
+    state.unlock(owner);
     report.passed = owner.error().is_none();
     report.failure = state
         .failure
@@ -1165,7 +1317,7 @@ thread_local! {
     static FRAME_CLOSED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     static COMPLETION_AFTER_FRAME: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
-fn lifecycle(
+pub(super) fn lifecycle(
     started: Instant,
     whole: Duration,
     operation: impl FnOnce() -> (bool, Option<Owner>),

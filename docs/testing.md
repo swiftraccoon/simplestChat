@@ -1980,16 +1980,18 @@ tools and applies no playbook to a host.
 Hosted and local CI split that complete plan between `ci automation --checks`
 and `ci automation --references`. The first retains quality, syntax, ordinary
 Ops/CLI tests and full Python test discovery. The second owns every exact ignored
-whole-operation comparison: VPS controller/host, image builder and the six
+whole-operation comparison: VPS controller/host, image builder and the seven
 release operations. With no selector the local command retains their original
 complete order. The checks job and reference matrix run in parallel under the
 same ten-minute ceiling per job; every entry must succeed before signing. Fixed
 reference groups are `foundation` (VPS controller/host, builder, prepare and cached
-verify), `fetch` (fresh acquisition and fetch), and `host` (receive and stage).
-Run one locally with `ci automation --references foundation|fetch|host`; bare
-`--references` still runs every comparison. Matrix failure does not cancel the
+verify), `fetch` (fresh acquisition and fetch), `host` (receive and stage),
+and `deploy` (the complete host deployment comparison). For example,
+`cargo run --locked -q -p xtask -- ci automation --references deploy` selects
+the deployment comparison; replace `deploy` with another fixed group as needed.
+Bare `--references` still runs every comparison. Matrix failure does not cancel the
 other groups. Reference comparisons always run and use no result cache.
-Local CI also requires a successful execution receipt for each of the three
+Local CI also requires a successful execution receipt for each of the four
 reference matrix groups. Missing, duplicate, unknown or filtered groups fail
 completion even if an aggregate job result says success.
 The existing automation receipt proves only the checks

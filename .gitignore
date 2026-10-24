@@ -63,5 +63,8 @@ __pycache__/
 !/docs/release-receive-runtime-proof.md
 
 !/docs/release-stage-api-review.md
+!/docs/release-deploy-api-review.md
 
 !/docs/release-stage-runtime-proof.md
+
+!/docs/release-deploy-runtime-proof.md

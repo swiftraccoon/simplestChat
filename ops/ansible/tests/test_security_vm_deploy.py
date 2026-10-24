@@ -1,0 +1,879 @@
+"""Inert whole-boundary host-deploy fixture tests; no Docker, VM or network."""
+
+from __future__ import annotations
+
+import copy
+import hashlib
+import io
+import json
+import os
+import selectors
+import signal
+import subprocess
+import sys
+import tempfile
+import time
+import unittest
+from pathlib import Path
+from types import SimpleNamespace
+from typing import TYPE_CHECKING, cast, final
+from unittest.mock import patch
+
+from test_support import ROOT
+
+# isort: split
+import bounded_process
+import release_container_fixture as render
+import release_container_harness as fixture
+import security_vm_deploy as keeper
+import security_vm_deploy_guest as guest
+import security_vm_fetch as fetch_vm
+import security_vm_ops_guest as ops_guest
+import security_vm_stage_guest as stage
+from security_tools import ToolError
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
+    from typing import BinaryIO
+
+    import security_vm_receive as receive
+
+TOKEN = "1" * 32
+CURRENT = "a" * 40
+PREVIOUS = "b" * 40
+BINARY = "c" * 64
+IMAGE_A = "sha256:" + "d" * 64
+IMAGE_B = "sha256:" + "e" * 64
+POSTGRES_ID = "9" * 64
+POSTGRES_IMAGE = "sha256:" + "a" * 64
+ACTORS = [character * 64 for character in ("2", "3", "4", "5")]
+VALIDATORS = 2
+HANDLER_COUNT = 2
+STAMP = "2026-10-24T00:00:00Z"
+
+
+def frame() -> dict[str, object]:
+    """Supply the exact same-owner authenticated input shape, without real artifacts."""
+    return {
+        "schemaVersion": 1,
+        "runId": TOKEN,
+        "revision": CURRENT,
+        "previousRevision": PREVIOUS,
+        "setupSeconds": 200,
+        "bodySeconds": 4000,
+        "guestSha256": BINARY,
+        "sourcePins": dict.fromkeys(guest.GUEST_SOURCES, BINARY),
+        "helperPins": dict.fromkeys(
+            set(ops_guest.BASE | ops_guest.FETCH | ops_guest.FORCE) | {"security_vm_ops_guest.py"},
+            BINARY,
+        ),
+        "binary": {"sha256": BINARY, "bytes": 100},
+        "current": {
+            name: {"sha256": BINARY, "bytes": 100} for name in ("image.tar", "release.json")
+        },
+        "previous": {
+            name: {"sha256": BINARY, "bytes": 100} for name in ("image.tar", "release.json")
+        },
+    }
+
+
+def prepared() -> dict[str, object]:
+    """Provide passive prepared facts only, not authentication capability."""
+    return {
+        "schemaVersion": 1,
+        "kind": "prepared",
+        "runId": TOKEN,
+        "revision": CURRENT,
+        "previousRevision": PREVIOUS,
+        "passed": True,
+        "binarySha256": BINARY,
+        "firstImage": IMAGE_A,
+        "dependencySha256": BINARY,
+        "migrationSha256": BINARY,
+    }
+
+
+def trial(*, negative: bool) -> dict[str, object]:
+    """Describe distinct positive and negative observations, including real-exit authority."""
+    return {
+        "case": "owned-candidate-stop-rollback" if negative else "first-A-to-B",
+        "passed": True,
+        "exitStatus": 1 if negative else 0,
+        "rollbackAttempted": negative,
+        "rollbackPassed": negative,
+        "retainedBackup": {
+            "bytes": 1024,
+            "sha256": BINARY,
+            "listed": True,
+            "restoreRehearsed": False,
+        },
+        "actorHistory": {
+            "actorIds": ACTORS,
+            "validatorCount": 2,
+            "assetCaptureCount": 2,
+            "allCreatedStartedAsRequiredExitedZeroAndRemoved": True,
+            "historyRows": 30,
+            "nativeIsolationInspected": False,
+        },
+        "selected": {"revision": CURRENT, "image": IMAGE_B, "appId": "6" * 64},
+        "injectedCandidateId": "7" * 64 if negative else None,
+        "manualStopObserved": negative,
+        "seconds": 10.0,
+    }
+
+
+def result() -> dict[str, object]:
+    """Return a complete closed public observation for projection-fault tests."""
+    return {
+        "schemaVersion": 1,
+        "kind": "result",
+        "runId": TOKEN,
+        "revision": CURRENT,
+        "previousRevision": PREVIOUS,
+        "passed": True,
+        "cleanupPassed": True,
+        "binarySha256": BINARY,
+        "firstImage": IMAGE_A,
+        "currentImage": IMAGE_B,
+        "trials": [trial(negative=False), trial(negative=True)],
+        "dependenciesUnchanged": True,
+        "markerUnchanged": True,
+        "seedAggregateUnchanged": True,
+        "schemaUnchanged": True,
+        "currentSelected": True,
+        "actorHistoryComplete": True,
+        "ownedInjectorStoppedCandidate": True,
+        "nativeValidatorIsolationIndependentlyInspected": False,
+        "phaseSeconds": {"prepare": 20.0, "positive": 30.0, "negative": 40.0},
+        "separateProbe": {
+            "passed": True,
+            "isolationIndependentlyInspected": True,
+            "migrationMapMatched": True,
+            "exitStatus": 0,
+            "containerId": "8" * 64,
+        },
+    }
+
+
+def actor_binding() -> guest.ActorBinding:
+    """Keep a preheld dependency distinct from signed server-image graphs."""
+    return guest.ActorBinding(
+        {"current": ({IMAGE_A}, {}), "previous": ({IMAGE_A}, {})},
+        POSTGRES_ID,
+        POSTGRES_IMAGE,
+        TOKEN,
+    )
+
+
+def events(*, missing: str | None = None, wrong_image: bool = False) -> bytes:
+    """Use actual event-shaped full actor IDs and image attributes, never an engine."""
+    rows: list[str] = [
+        json.dumps(
+            {
+                "Type": "container",
+                "Action": action,
+                "Actor": {
+                    "ID": POSTGRES_ID,
+                    "Attributes": {
+                        "name": "simplestchat-public-postgres-1",
+                        "image": fixture.POSTGRES,
+                        "com.docker.compose.project": "simplestchat-public",
+                        "com.docker.compose.service": "postgres",
+                        render.LABEL: TOKEN,
+                    },
+                },
+            }
+        )
+        for action in ("exec_create: psql -X", "exec_start: psql -X", "exec_die")
+    ]
+    for index, identifier in enumerate(ACTORS):
+        kind = "validate" if index < VALIDATORS else "assets"
+        name = "scpub-release-" + kind + "-" + str(index + 2) * 32
+        actions = (
+            ("create", "start", "die", "destroy") if index < VALIDATORS else ("create", "destroy")
+        )
+        for action in actions:
+            if action == missing:
+                continue
+            attributes = {"name": name, "image": IMAGE_B if wrong_image else IMAGE_A}
+            if action == "die":
+                attributes["exitCode"] = "0"
+            rows.append(
+                json.dumps(
+                    {
+                        "Type": "container",
+                        "Action": action,
+                        "Actor": {"ID": identifier, "Attributes": attributes},
+                    }
+                )
+            )
+    return ("\n".join(rows) + "\n").encode()
+
+
+@final
+class ObservedFile:
+    """Retain actual own-temp output streams under a test UID mapping only."""
+
+    def __init__(self, path: Path) -> None:
+        """Own the original stream before gathering any assertion facts."""
+        self.path = path
+        self.file = path.open("rb")
+        self.closed = False
+        try:
+            self.before = os.fstat(self.file.fileno())
+            self.sha256 = hashlib.sha256(self.file.read()).hexdigest()
+            _ = self.file.seek(0)
+        except BaseException as error:
+            first = ops_guest.settle((self.close,), error)
+            if first is not None:
+                raise first from None
+            raise
+
+    def data(self, _maximum: int = guest.MAX_RECORD) -> bytes:
+        """Read the same original output descriptor."""
+        _ = self.file.seek(0)
+        return self.file.read()
+
+    def close(self) -> None:
+        """Explicitly close once before any test assertion."""
+        self.file.close()
+        self.closed = True
+
+
+class DeployProofTests(unittest.TestCase):
+    """Closed scalar profiles and real owner finalizers refuse concrete counterexamples."""
+
+    def test_original_fixture_setup_does_not_reset_clock(self) -> None:
+        """The release boundary keeps the exact original end and both full calls."""
+        with patch.object(time, "monotonic", return_value=100.0):
+            control = keeper.Control(started=100.0)
+        original = control.end
+        with patch.object(time, "monotonic", return_value=200.0):
+            control.release_setup()
+            observed = (control.end, control.body_end)
+        self.assertEqual(observed, (original, original - keeper.FINALIZATION_SECONDS))
+        with (
+            patch.object(time, "monotonic", return_value=701.0),
+            self.assertRaises(ToolError),
+        ):
+            control.release_setup()
+
+    def test_late_setup_cannot_admit_second_full_native_call(self) -> None:
+        """Missing setup admission refuses even when the final fixture clock is open."""
+        with patch.object(time, "monotonic", return_value=0.0):
+            control = keeper.Control()
+        with (
+            patch.object(time, "monotonic", return_value=600.0),
+            self.assertRaises(ToolError),
+        ):
+            control.release_setup()
+        self.assertTrue(control.setup)
+
+    def test_guest_continue_has_no_second_clock_or_replay(self) -> None:
+        """Guest durations are subordinate to one entry epoch, never host instants."""
+        with patch.object(time, "monotonic", return_value=10.0):
+            control = guest.Control(10.0)
+            control.configure(frame())
+            before = (control.started, control.body, control.end)
+            control.advance()
+            with self.assertRaises(ValueError):
+                control.advance()
+        self.assertEqual(before, (control.started, control.body, control.end))
+
+    def test_guest_expired_or_cancelled_before_selector_admission(self) -> None:
+        """Neither cancellation nor an expired owner may acquire a new selector."""
+        for cancelled in (False, True):
+            control = guest.Control(0.0)
+            control.status = 130 if cancelled else 0
+            with (
+                patch.object(time, "monotonic", return_value=0.0 if cancelled else 31.0),
+                patch.object(selectors, "DefaultSelector") as opening,
+                self.assertRaises(ValueError),
+            ):
+                _ = guest.Wire(control)
+            opening.assert_not_called()
+
+    def test_request_rejects_unknown_role_or_mismatched_revisions(self) -> None:
+        """No arbitrary remote command, source role or same-image trial is admitted."""
+        self.assertEqual(guest.request(frame()), frame())
+        for change in (
+            {"command": "PRIVATE"},
+            {"previousRevision": CURRENT},
+            {"bodySeconds": True},
+        ):
+            with self.assertRaises(ValueError):
+                _ = guest.request(dict(frame(), **change))
+
+    def test_prepared_projection_is_closed_and_not_final_authority(self) -> None:
+        """Wrong binary and unknown strings refuse before continuation."""
+        self.assertEqual(keeper.prepared_projection(prepared(), frame()), prepared())
+        for change in ({"binarySha256": "0" * 64}, {"token": "PRIVATE"}, {"passed": False}):
+            with self.assertRaises((ValueError, ToolError)):
+                _ = keeper.prepared_projection(dict(prepared(), **change), frame())
+
+    def test_public_projection_rejects_top_and_nested_secret_fields(self) -> None:
+        """A trusted script's arbitrary dictionary cannot reach uploaded evidence."""
+        self.assertEqual(
+            guest.public_result(
+                guest.record(json.dumps(result(), indent=2).encode()), frame(), prepared()
+            ),
+            result(),
+        )
+        variants = [dict(result(), opaque="PRIVATE")]
+        nested = copy.deepcopy(result())
+        cast("dict[str, object]", cast("list[object]", nested["trials"])[0])["opaque"] = "PRIVATE"
+        variants.append(nested)
+        for candidate in variants:
+            with self.assertRaises(ValueError):
+                _ = guest.public_result(candidate, frame(), prepared())
+
+    def test_missing_injection_cannot_be_relabelled_as_rollback(self) -> None:
+        """Native nonzero alone does not prove a deliberately stopped candidate."""
+        for key, value in (
+            ("manualStopObserved", False),
+            ("exitStatus", 0),
+            ("rollbackPassed", False),
+            ("injectedCandidateId", None),
+        ):
+            changed = dict(trial(negative=True), **{key: value})
+            with self.assertRaises(ValueError):
+                _ = guest.public_trial(changed, CURRENT, negative=True)
+
+    def test_no_native_isolation_or_restore_claim_from_other_observations(self) -> None:
+        """Actual actor lifetime and dump list retain their explicit proof limits."""
+        changed = dict(result(), nativeValidatorIsolationIndependentlyInspected=True)
+        with self.assertRaises(ValueError):
+            _ = guest.public_result(changed, frame(), prepared())
+        changed_trial = trial(negative=False)
+        cast("dict[str, object]", changed_trial["retainedBackup"])["restoreRehearsed"] = True
+        with self.assertRaises(ValueError):
+            _ = guest.public_trial(changed_trial, CURRENT, negative=False)
+
+    def test_actor_history_uses_real_outputs_without_static_ordinals(self) -> None:
+        """Real bulk roles omit stdout while stderr inventories every shifted command."""
+        owners: list[ObservedFile] = []
+        observed: dict[str, object] = {}
+        missing_refused = False
+        with tempfile.TemporaryDirectory() as temporary:
+            attempt = Path(temporary)
+            for ordinal in range(1, 13):
+                identifier = {2: ACTORS[0], 5: ACTORS[1], 9: ACTORS[2], 12: ACTORS[3]}.get(
+                    ordinal, "0"
+                )
+                _ = (attempt / f"{ordinal:03d}.stderr").write_bytes(b"")
+                if ordinal not in {3, 6}:
+                    _ = (attempt / f"{ordinal:03d}.stdout").write_text(identifier + "\n")
+            _ = (attempt / "validation-name.txt").write_text("scpub-release-validate-" + "3" * 32)
+            _ = (attempt / "asset-container-name.txt").write_text(
+                "scpub-release-assets-" + "5" * 32
+            )
+
+            def retain_output(
+                path: Path,
+                _cap: int,
+                _mode: int,
+                _control: guest.Control,
+                _originals: list[stage.Original],
+            ) -> stage.Original:
+                item = ObservedFile(path)
+                owners.append(item)
+                return cast("stage.Original", cast("object", item))
+
+            try:
+                with patch.object(guest, "retain", side_effect=retain_output):
+                    observed = guest.actor_history(
+                        events(),
+                        attempt,
+                        actor_binding(),
+                        guest.Control(time.monotonic()),
+                        [],
+                    )
+                    (attempt / "005.stderr").unlink()
+                    try:
+                        _ = guest.native_ids(attempt, guest.Control(time.monotonic()), [])
+                    except ValueError:
+                        missing_refused = True
+            finally:
+                for owner in owners:
+                    owner.close()
+            facts = [owner.closed and owner.file.closed for owner in owners]
+        self.assertTrue(all(facts))
+        self.assertEqual(observed["actorIds"], ACTORS)
+        self.assertFalse(observed["nativeIsolationInspected"])
+        self.assertTrue(missing_refused)
+
+    def test_actor_history_refuses_missing_anchor_and_unbound_image(self) -> None:
+        """Neither incomplete ring history nor a profile-only image is sufficient."""
+        control = guest.Control(time.monotonic())
+        for data in (
+            events(missing="create"),
+            events(wrong_image=True),
+            events().replace(b"exec_die", b"die"),
+            events().replace(POSTGRES_ID.encode(), ("8" * 64).encode()),
+            events().replace(TOKEN.encode(), ("f" * 32).encode()),
+            b"\n" * guest.HISTORY_LIMIT,
+        ):
+            with (
+                patch.object(guest, "native_ids", return_value=set(ACTORS)),
+                self.assertRaises(ValueError),
+            ):
+                _ = guest.actor_history(
+                    data,
+                    Path("/inert"),
+                    actor_binding(),
+                    control,
+                    [],
+                )
+
+    def test_injected_event_proof_requires_exact_signed_actor(self) -> None:
+        """A missing manual stop or wrong signed image cannot establish effect."""
+        rows: list[str] = [
+            json.dumps(
+                {
+                    "Type": "container",
+                    "Action": action,
+                    "Actor": {
+                        "ID": ACTORS[0],
+                        "Attributes": {"image": IMAGE_A, render.LABEL: TOKEN},
+                    },
+                }
+            )
+            for action in ("create", "start", "die", "stop", "destroy")
+        ]
+        data = ("\n".join(rows) + "\n").encode()
+        guest.injected_sequence(data, ACTORS[0], IMAGE_A, TOKEN)
+        for changed in (
+            data.replace(b'"stop"', b'"inspect"'),
+            data.replace(IMAGE_A.encode(), IMAGE_B.encode()),
+        ):
+            with self.assertRaises(ValueError):
+                guest.injected_sequence(changed, ACTORS[0], IMAGE_A, TOKEN)
+
+    def test_actual_inert_command_drains_closes_and_preserves_signed_status(self) -> None:
+        """A real owned no-network child settles both pipes before assertions."""
+        children: list[subprocess.Popen[bytes]] = []
+        popen = subprocess.Popen[bytes]
+
+        def admitted(  # noqa: PLR0913 -- Exact real Popen role boundary.
+            args: Sequence[str],
+            *,
+            executable: str | None,
+            pass_fds: tuple[int, ...],
+            stdin: BinaryIO | int,
+            stdout: int,
+            stderr: int,
+            env: Mapping[str, str],
+            cwd: Path,
+            start_new_session: bool,
+        ) -> subprocess.Popen[bytes]:
+            child = popen(
+                args,
+                executable=executable,
+                pass_fds=pass_fds,
+                stdin=stdin,
+                stdout=stdout,
+                stderr=stderr,
+                env=env,
+                cwd=cwd,
+                start_new_session=start_new_session,
+            )
+            children.append(child)
+            return child
+
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            patch.object(guest, "ROOT", Path(temporary)),
+        ):
+            control = guest.Control(time.monotonic())
+            control.phase = "exercise"
+            wire = cast("guest.Wire", cast("object", SimpleNamespace(no_extra=lambda: None)))
+            runner = guest.Commands(control, wire, [])
+            with patch.object(subprocess, "Popen", side_effect=admitted):
+                observed = runner.run(
+                    [
+                        sys.executable,
+                        "-I",
+                        "-B",
+                        "-c",
+                        "import sys;sys.stdout.buffer.write(b'bounded');sys.stderr.write('quiet')",
+                    ]
+                )
+            facts = [
+                (
+                    child.returncode,
+                    child.stdout.closed if child.stdout else False,
+                    child.stderr.closed if child.stderr else False,
+                )
+                for child in children
+            ]
+        self.assertEqual(observed.code, 0)
+        self.assertEqual(observed.data, b"bounded")
+        self.assertEqual(facts, [(0, True, True)])
+
+    def test_real_body_refusal_survives_both_log_close_faults(  # noqa: C901 -- Owned peer faults.
+        self,
+    ) -> None:
+        """An observed failure wins while both actual logs and all child pipes close."""
+        logs: list[BinaryIO] = []
+        children: list[subprocess.Popen[bytes]] = []
+        primary = ValueError("fixed_inert_body")
+        original_pump = bounded_process.pump
+
+        @final
+        class CloseFault:
+            """Keep a real stream and raise only after its descriptor has closed."""
+
+            def __init__(self, stream: BinaryIO) -> None:
+                self.stream = stream
+
+            @property
+            def closed(self) -> bool:
+                return self.stream.closed
+
+            def write(self, data: bytes) -> int:
+                return self.stream.write(data)
+
+            def flush(self) -> None:
+                self.stream.flush()
+
+            def read(self, size: int = -1) -> bytes:
+                return self.stream.read(size)
+
+            def seek(self, offset: int, whence: int = 0) -> int:
+                return self.stream.seek(offset, whence)
+
+            def close(self) -> None:
+                was_open = not self.closed
+                self.stream.close()
+                if was_open:
+                    message = "fixed_inert_close"
+                    raise OSError(message)
+
+        def admit(fd: int, _mode: str) -> BinaryIO:
+            raw = cast("BinaryIO", os.fdopen(fd, mode="w+b"))
+            stream = cast("BinaryIO", cast("object", CloseFault(raw)))
+            logs.append(stream)
+            return stream
+
+        def observe(
+            child: subprocess.Popen[bytes],
+            output: BinaryIO,
+            error: BinaryIO,
+            limits: bounded_process.Limits,
+        ) -> int:
+            children.append(child)
+            _ = original_pump(child, output, error, limits)
+            raise primary
+
+        caught: BaseException | None = None
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            patch.object(guest, "ROOT", Path(temporary)),
+        ):
+            control = guest.Control(time.monotonic())
+            control.phase = "exercise"
+            wire = cast("guest.Wire", cast("object", SimpleNamespace(no_extra=lambda: None)))
+            runner = guest.Commands(control, wire, [])
+            try:
+                with (
+                    patch.object(stage, "adopt", side_effect=admit),
+                    patch.object(bounded_process, "pump", side_effect=observe),
+                ):
+                    _ = runner.run([sys.executable, "-I", "-B", "-c", "pass"])
+            except ValueError as error:
+                caught = error
+            facts = [
+                (
+                    child.returncode,
+                    child.stdout.closed if child.stdout else False,
+                    child.stderr.closed if child.stderr else False,
+                )
+                for child in children
+            ]
+            closed = [stream.closed for stream in logs]
+        self.assertIs(caught, primary)
+        self.assertEqual(closed, [True, True])
+        self.assertEqual(facts, [(0, True, True)])
+
+    def test_old_a_acquisition_does_not_borrow_current_checkout_identity(self) -> None:
+        """The real adapter builds explicit old selector argv before any fake observation."""
+        calls: list[Sequence[str]] = []
+        marker = ToolError("expected_inert_boundary")
+
+        def command(
+            _label: str,
+            argv: Sequence[str],
+            _env: Mapping[str, str],
+            _seconds: int,
+            _accepted: tuple[int, ...],
+        ) -> tuple[int, bytes]:
+            calls.append(argv)
+            raise marker
+
+        control = keeper.Control()
+        host = cast(
+            "receive.Host", cast("object", SimpleNamespace(control=control, command=command))
+        )
+
+        def check(_control: fetch_vm.Control) -> None:
+            pass
+
+        tools = cast("fetch_vm.NativeTools", cast("object", SimpleNamespace(check=check)))
+        options = keeper.Options(
+            output=Path("/inert"),
+            previous_revision=PREVIOUS,
+            previous_run_id=123,
+            previous_run_attempt=2,
+            previous_artifact_id=456,
+        )
+        with self.assertRaises(ToolError) as caught:
+            _ = keeper.acquire_previous(
+                host, tools, Path("/inert/native"), fetch_vm.Owners(), [], options, {}
+            )
+        self.assertIs(caught.exception, marker)
+        self.assertEqual(calls[0][1:5], ["release", "verify", "--repository", fetch_vm.REPOSITORY])
+        self.assertIn(PREVIOUS, calls[0])
+        self.assertNotIn(CURRENT, calls[0])
+        self.assertNotIn("--artifact-dir", calls[0])
+
+    def test_controller_late_restore_signal_remains_negative(self) -> None:
+        """Actual main return adopts a signal latched during final handler restoration."""
+        restore_count = 0
+        control = keeper.Control()
+
+        def install(_number: int, _handler: object) -> object:
+            nonlocal restore_count
+            restore_count += 1
+            if restore_count > HANDLER_COUNT:
+                control.signal(signal.SIGINT, None)
+            return signal.SIG_DFL
+
+        observed = {"passed": True}
+        argv = [
+            "keeper",
+            "--run-id",
+            "1",
+            "--run-attempt",
+            "1",
+            "--artifact-id",
+            "2",
+            "--server-artifact-id",
+            "3",
+            "--previous-revision",
+            PREVIOUS,
+            "--previous-run-id",
+            "4",
+            "--previous-run-attempt",
+            "1",
+            "--previous-artifact-id",
+            "5",
+            "--output",
+            "/inert",
+        ]
+        with (
+            patch.object(keeper, "Control", return_value=control),
+            patch.object(keeper, "run", return_value=observed),
+            patch.object(keeper, "write_private"),
+            patch.object(signal, "signal", side_effect=install),
+            patch.object(os, "umask", return_value=0o077),
+            patch.object(sys, "stdout", SimpleNamespace(buffer=io.BytesIO())),
+            patch.object(sys, "argv", argv),
+        ):
+            status = keeper.main()
+        self.assertEqual(status, 130)
+
+    def test_actual_two_frame_pipe_retains_owner_and_refuses_replay(self) -> None:
+        """Use one real pipe/selector, keeping the input open across both phases."""
+        read_fd, write_fd = os.pipe()
+        source = os.fdopen(read_fd, "rb")
+        wire: guest.Wire | None = None
+        control = guest.Control(time.monotonic())
+        observed: list[dict[str, object]] = []
+        rejected = False
+        try:
+            with patch.object(sys, "stdin", source):
+                wire = guest.Wire(control)
+                _ = os.write(write_fd, guest.encoded(frame()))
+                observed.append(wire.read())
+                wire.no_extra()
+                continuation = {"schemaVersion": 1, "kind": "continue", "runId": TOKEN}
+                _ = os.write(write_fd, guest.encoded(continuation))
+                observed.append(wire.read())
+                wire.no_extra()
+                _ = os.write(write_fd, guest.encoded(continuation))
+                try:
+                    wire.no_extra()
+                except ValueError:
+                    rejected = True
+        finally:
+            actions = [source.close, lambda: os.close(write_fd)]
+            if wire is not None:
+                actions.insert(0, wire.close)
+            cleanup = ops_guest.settle(actions)
+        self.assertIsNone(cleanup)
+        self.assertTrue(source.closed and wire is not None and wire.closed)
+        self.assertTrue(rejected)
+        self.assertEqual(observed, [frame(), continuation])
+
+    def test_config_owner_refuses_expiry_before_new_directory(self) -> None:
+        """An expired or signalled original control cannot admit config FD ownership."""
+        for status in (0, 130):
+            control = guest.Control(0.0)
+            control.status = status
+            with (
+                patch.object(time, "monotonic", return_value=31.0),
+                patch.object(ops_guest, "directory") as opening,
+                self.assertRaises(ValueError),
+            ):
+                _ = guest.ConfigInputs(control)
+            opening.assert_not_called()
+
+    def test_guest_late_restore_signal_remains_negative(self) -> None:
+        """The actual guest entry never promotes an earlier frame past late cancellation."""
+        control = guest.Control(time.monotonic())
+        closed: list[bool] = []
+        wire = cast(
+            "guest.Wire", cast("object", SimpleNamespace(close=lambda: closed.append(True)))
+        )
+        restores = 0
+
+        def install(_number: int, _handler: object) -> object:
+            nonlocal restores
+            restores += 1
+            if restores > HANDLER_COUNT:
+                control.signal(signal.SIGINT, None)
+            return signal.SIG_DFL
+
+        with (
+            patch.object(guest, "Control", return_value=control),
+            patch.object(guest, "Wire", return_value=wire),
+            patch.object(guest, "execute", return_value=result()),
+            patch.object(signal, "signal", side_effect=install),
+            patch.object(os, "umask", return_value=0o077),
+            patch.object(sys, "stdout", SimpleNamespace(buffer=io.BytesIO())),
+            patch.object(sys, "argv", ["guest"]),
+        ):
+            status = guest.main()
+        self.assertEqual(closed, [True])
+        self.assertEqual(status, 130)
+
+    def test_config_metadata_refusal_closes_each_new_original(self) -> None:
+        """Parent and current-stream metadata faults keep identity through close failures."""
+        fstat = os.fstat
+        close = os.close
+        adopt = stage.adopt
+        observations: list[tuple[bool, list[bool], bool]] = []
+
+        def exercise(boundary: int) -> tuple[bool, list[bool], bool]:
+            descriptors: list[int] = []
+            streams: list[BinaryIO] = []
+            primary = OSError("fixed_metadata_refusal")
+            count = 0
+            caught: BaseException | None = None
+            with tempfile.TemporaryDirectory() as temporary:
+                directory = Path(temporary)
+                _ = (directory / "migration.env").write_bytes(b"original")
+
+                def parent(_path: Path) -> int:
+                    fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+                    descriptors.append(fd)
+                    return fd
+
+                def metadata(fd: int) -> os.stat_result:
+                    nonlocal count
+                    count += 1
+                    if count == boundary:
+                        raise primary
+                    return fstat(fd)
+
+                def admitted(fd: int, mode: str) -> BinaryIO:
+                    stream = adopt(fd, mode)
+                    streams.append(stream)
+                    return stream
+
+                def closing(fd: int) -> None:
+                    close(fd)
+                    if fd in descriptors:
+                        message = "fixed_secondary_close"
+                        raise OSError(message)
+
+                try:
+                    with (
+                        patch.object(guest, "CONFIG", directory),
+                        patch.object(ops_guest, "directory", side_effect=parent),
+                        patch.object(os, "fstat", side_effect=metadata),
+                        patch.object(os, "close", side_effect=closing),
+                        patch.object(stage, "adopt", side_effect=admitted),
+                    ):
+                        _ = guest.ConfigInputs(guest.Control(time.monotonic()))
+                except OSError as error:
+                    caught = error
+                parent_closed = False
+                try:
+                    _ = fstat(descriptors[0])
+                except OSError:
+                    parent_closed = True
+                return caught is primary, [stream.closed for stream in streams], parent_closed
+
+        observations = [exercise(1), exercise(2)]
+        self.assertEqual(observations, [(True, [], True), (True, [True], True)])
+
+    def test_inspection_timing_hint_can_cross_real_bulk_output_holes(self) -> None:
+        """Sparse stdout is only a scheduling hint; all real admitted streams still close."""
+        actual_stat, actual_lstat, adopt = os.fstat, Path.lstat, stage.adopt
+        streams: list[BinaryIO] = []
+
+        def mapped(value: os.stat_result) -> os.stat_result:
+            fields = list(value)
+            fields[4] = fields[5] = 0
+            return os.stat_result(fields)
+
+        def metadata(fd: int) -> os.stat_result:
+            return mapped(actual_stat(fd))
+
+        def namespace(path: Path) -> os.stat_result:
+            return mapped(actual_lstat(path))
+
+        def admitted(fd: int, mode: str) -> BinaryIO:
+            stream = adopt(fd, mode)
+            streams.append(stream)
+            return stream
+
+        with tempfile.TemporaryDirectory() as temporary:
+            public = Path(temporary)
+            attempt = public / "results" / ("release." + TOKEN)
+            attempt.mkdir(parents=True, mode=0o700)
+            _ = (attempt / "001.stderr").write_bytes(b"")
+            _ = (attempt / "002.stderr").write_bytes(b"")
+            _ = (attempt / "002.stdout").write_text(
+                json.dumps({"id": ACTORS[0], "image": IMAGE_A, "state": {"Running": True}})
+            )
+            for path in attempt.iterdir():
+                path.chmod(0o600)
+            with (
+                patch.object(guest, "PUBLIC", public),
+                patch.object(os, "fstat", side_effect=metadata),
+                patch.object(Path, "lstat", autospec=True, side_effect=namespace),
+                patch.object(stage, "adopt", side_effect=admitted),
+            ):
+                observed = guest.inspection_seen(
+                    ACTORS[0], IMAGE_A, guest.Control(time.monotonic()), frozenset()
+                )
+            closed = [stream.closed for stream in streams]
+        self.assertTrue(observed)
+        self.assertEqual(closed, [True])
+
+    def test_workflow_is_explicit_and_does_not_increase_product_timeout(self) -> None:
+        """Only the new deliberate fixture uses a larger measured setup envelope."""
+        workflow = (ROOT / ".github/workflows/release-deploy-runtime.yml").read_text()
+        self.assertIn("timeout-minutes: 90", workflow)
+        self.assertNotIn("id-token:", workflow)
+        self.assertNotIn("--force", workflow)
+        self.assertIn("--previous-artifact-id", workflow)
+        self.assertIn("Compile trusted controllers before exposing", workflow)
+        self.assertIn("rustup toolchain install 1.99.0 --profile minimal", workflow)
+        self.assertNotIn("dtolnay/rust-toolchain@", workflow)
+
+
+if __name__ == "__main__":
+    _ = unittest.main()
