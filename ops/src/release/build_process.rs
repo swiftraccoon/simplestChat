@@ -41,6 +41,8 @@ pub(super) struct Invocation {
     pub environment: BTreeMap<OsString, OsString>,
     pub body_end: Instant,
     pub log: File,
+    /// Original archive writer loan. Binary stdout never enters the log.
+    pub archive: Option<File>,
     pub capture: bool,
     pub allow_failure: bool,
 }
@@ -74,6 +76,7 @@ pub(super) struct Observation {
     pub stdout_sha256: String,
     pub stderr_sha256: String,
     pub log: Option<Seal>,
+    pub archive: Option<Seal>,
     pub group_retired: bool,
     pub reaped: bool,
     pub stdout_eof: bool,
@@ -81,6 +84,7 @@ pub(super) struct Observation {
     pub stdout_closed: bool,
     pub stderr_closed: bool,
     pub log_closed: bool,
+    pub archive_closed: bool,
     pub elapsed: Duration,
     pub cleanup_errors: Vec<Failure>,
 }
@@ -97,6 +101,7 @@ impl Observation {
             stdout_sha256: String::new(),
             stderr_sha256: String::new(),
             log: None,
+            archive: None,
             group_retired: false,
             reaped: false,
             stdout_eof: false,
@@ -104,6 +109,7 @@ impl Observation {
             stdout_closed: false,
             stderr_closed: false,
             log_closed: false,
+            archive_closed: true,
             elapsed: Duration::ZERO,
             cleanup_errors: Vec::new(),
         }
@@ -120,8 +126,20 @@ struct Faults {
     stdout_close: bool,
     #[cfg(test)]
     log_close: bool,
+    #[cfg(test)]
+    archive_close: bool,
 }
 impl Faults {
+    fn archive_close(&self) -> bool {
+        #[cfg(test)]
+        {
+            self.archive_close
+        }
+        #[cfg(not(test))]
+        {
+            false
+        }
+    }
     fn stdout_close(&self) -> bool {
         #[cfg(test)]
         {
@@ -158,6 +176,8 @@ struct Streams {
     inspection: Vec<u8>,
     capture: bool,
     write_failed: bool,
+    archive: Option<File>,
+    archive_write_failed: bool,
 }
 impl Streams {
     fn new(capture: bool) -> Self {
@@ -175,6 +195,8 @@ impl Streams {
             inspection: Vec::new(),
             capture,
             write_failed: false,
+            archive: None,
+            archive_write_failed: false,
         }
     }
     fn complete(&self, observation: &Observation) -> bool {
@@ -196,11 +218,27 @@ impl Streams {
         } else {
             &mut observation.stderr_bytes
         };
-        let accepted = STREAM_LIMIT
-            .saturating_sub(*counter)
-            .min(bytes.len() as u64) as usize;
-        if log.write_all(&bytes[..accepted]).is_err() {
-            self.write_failed = true;
+        let archive = stdout && self.archive.is_some();
+        let limit = if archive {
+            crate::release::archive::MAX_ARCHIVE_BYTES
+        } else {
+            STREAM_LIMIT
+        };
+        let accepted = limit.saturating_sub(*counter).min(bytes.len() as u64) as usize;
+        let written = if archive {
+            self.archive
+                .as_mut()
+                .expect("selected original archive writer")
+                .write_all(&bytes[..accepted])
+        } else {
+            log.write_all(&bytes[..accepted])
+        };
+        if written.is_err() {
+            if archive {
+                self.archive_write_failed = true;
+            } else {
+                self.write_failed = true;
+            }
             self.stdout_stopped = true;
             self.stderr_stopped = true;
             return Err(Failure::Io);
@@ -211,9 +249,11 @@ impl Streams {
         } else {
             self.err_hash.update(&bytes[..accepted]);
         }
-        self.log_hash.update(&bytes[..accepted]);
-        self.log_bytes += accepted as u64;
-        if self.capture {
+        if !archive {
+            self.log_hash.update(&bytes[..accepted]);
+            self.log_bytes += accepted as u64;
+        }
+        if self.capture && !archive {
             let remaining = (INSPECTION_LIMIT as usize).saturating_sub(self.inspection.len());
             self.inspection
                 .extend_from_slice(&bytes[..accepted.min(remaining)]);
@@ -231,8 +271,10 @@ impl Streams {
         Ok(())
     }
 
-    /// A single owner writes the combined log in observed read order. Independent
-    /// reads prevent one full pipe from blocking its sibling's progress.
+    /// A single owner writes diagnostics in observed read order and, for save,
+    /// binary stdout into the original archive. Independent reads prevent one
+    /// full pipe from blocking its sibling's progress. File writes are synchronous
+    /// bounded chunks; the next owner check fences their elapsed time.
     async fn read_one(&mut self, log: &mut File, observation: &mut Observation) -> Result<()> {
         enum Read {
             Out(std::io::Result<usize>),
@@ -327,18 +369,22 @@ pub(super) async fn run(owner: &mut Owner, invocation: Invocation) -> Completion
 async fn run_with(owner: &mut Owner, invocation: Invocation, faults: Faults) -> Completion {
     let started = owner.now();
     let Invocation {
-        role: _role,
+        role,
         program,
         arguments,
         cwd,
         environment,
         body_end,
         mut log,
+        archive,
         capture,
         allow_failure,
     } = invocation;
     let mut observation = Observation::new();
     let mut streams = Streams::new(capture);
+    let has_archive = archive.is_some();
+    observation.archive_closed = !has_archive;
+    streams.archive = archive;
     let mut group = None;
     let mut completed_io_end = None;
     let admission = (|| {
@@ -347,6 +393,19 @@ async fn run_with(owner: &mut Owner, invocation: Invocation, faults: Faults) -> 
             return Err(Failure::Input);
         }
         log_admission(&log)?;
+        if let Some(archive) = &streams.archive {
+            if role != Role::Docker || capture {
+                return Err(Failure::Input);
+            }
+            log_admission(archive)?;
+            let archive_metadata = archive.metadata().map_err(|_| Failure::Io)?;
+            let log_metadata = log.metadata().map_err(|_| Failure::Io)?;
+            if archive_metadata.dev() == log_metadata.dev()
+                && archive_metadata.ino() == log_metadata.ino()
+            {
+                return Err(Failure::Input);
+            }
+        }
         // The operation already clips each body by its future phase reserves.
         // Refuse a malformed/late request rather than spend its finalizer time.
         if body_end <= owner.now()
@@ -443,6 +502,7 @@ async fn run_with(owner: &mut Owner, invocation: Invocation, faults: Faults) -> 
         }
         close_pipes(owner, &mut streams, &mut observation, &faults);
     }
+    finish_archive(owner, &mut streams, &mut observation, &faults);
     finish_log(owner, log, &streams, &mut observation, &faults);
     if completed_io_end.is_some_and(|end| owner.now() >= end) {
         observation.cleanup_error(owner, Failure::Deadline);
@@ -461,6 +521,8 @@ async fn run_with(owner: &mut Owner, invocation: Invocation, faults: Faults) -> 
             || !observation.stdout_closed
             || !observation.stderr_closed
             || !observation.log_closed
+            || !observation.archive_closed
+            || (has_archive && observation.archive.is_none())
         {
             return Err(Failure::Close);
         }
@@ -599,6 +661,38 @@ fn close_pipes(
         }
     }
 }
+fn finish_archive(
+    owner: &mut Owner,
+    streams: &mut Streams,
+    observation: &mut Observation,
+    faults: &Faults,
+) {
+    let Some(mut archive) = streams.archive.take() else {
+        return;
+    };
+    let flushed = archive.flush().and_then(|()| archive.sync_all());
+    if flushed.is_err() {
+        observation.cleanup_error(owner, Failure::Io);
+    }
+    match archive.metadata() {
+        Ok(metadata)
+            if metadata.len() == observation.stdout_bytes && !streams.archive_write_failed =>
+        {
+            observation.archive = Some(Seal {
+                bytes: observation.stdout_bytes,
+                sha256: hash(&streams.out_hash),
+                metadata,
+            });
+        }
+        _ => observation.cleanup_error(owner, Failure::Io),
+    }
+    let closed = nix::unistd::close(archive);
+    observation.archive_closed = closed.is_ok() && !faults.archive_close();
+    if !observation.archive_closed {
+        observation.cleanup_error(owner, Failure::Close);
+    }
+}
+
 fn finish_log(
     owner: &mut Owner,
     mut log: File,

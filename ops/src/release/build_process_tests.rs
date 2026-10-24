@@ -37,6 +37,7 @@ impl Fixture {
             environment: BTreeMap::from([("PATH".into(), "/usr/bin:/bin".into())]),
             body_end: Instant::now() + Duration::from_secs(3),
             log: self.log(),
+            archive: None,
             capture,
             allow_failure: false,
         }
@@ -68,6 +69,7 @@ fn settled(observation: &Observation) {
     assert!(observation.stdout_closed);
     assert!(observation.stderr_closed);
     assert!(observation.log_closed);
+    assert!(observation.archive_closed);
 }
 fn failed(completion: &Completion, failure: Failure) {
     assert!(matches!(&completion.result, Err(actual) if *actual == failure));
@@ -102,6 +104,187 @@ fn original_pipe_bytes_and_checked_log_seal_are_retained() {
         assert_eq!(report.log.metadata.len(), 6);
         assert_eq!(report.log.sha256, hash(&Sha256::new_with_prefix(&retained)));
         assert_eq!(owner.primary(), None);
+    });
+}
+
+fn archive(fixture: &Fixture) -> File {
+    OpenOptions::new()
+        .create_new(true)
+        .read(true)
+        .write(true)
+        .mode(0o600)
+        .open(fixture.0.join("image.tar"))
+        .unwrap()
+}
+
+#[test]
+fn binary_save_stdout_exceeds_diagnostic_limit_and_preserves_original_inode() {
+    runtime().block_on(async {
+        let fixture = Fixture::new();
+        let original = archive(&fixture);
+        let admitted = original.metadata().unwrap();
+        let mut request = fixture.request(
+            "dd if=/dev/zero bs=65536 count=48 2>/dev/null; printf diagnostic >&2",
+            false,
+        );
+        request.role = Role::Docker;
+        request.archive = Some(original.try_clone().unwrap());
+        let mut owner = owner();
+        let completion = run(&mut owner, request).await;
+        let original_metadata = original.metadata();
+        let bytes = fs::read(fixture.0.join("image.tar"));
+        let log_bytes = fs::read(fixture.0.join("command.log"));
+        let original_closed = nix::unistd::close(original);
+        original_closed.unwrap();
+        settled(&completion.observation);
+        assert!(completion.observation.stdout_eof && completion.observation.stderr_eof);
+        assert_eq!(completion.observation.stdout_bytes, 48 * 65536);
+        let retained = completion.observation.archive.as_ref().unwrap();
+        assert_eq!(retained.bytes, 48 * 65536);
+        assert_eq!(retained.metadata.ino(), admitted.ino());
+        assert_eq!(retained.metadata.dev(), admitted.dev());
+        assert_eq!(retained.metadata.ino(), original_metadata.unwrap().ino());
+        let bytes = bytes.unwrap();
+        assert!(bytes.iter().all(|byte| *byte == 0));
+        assert_eq!(bytes.len() as u64, retained.bytes);
+        assert_eq!(retained.sha256, hash(&Sha256::new_with_prefix(&bytes)));
+        assert_eq!(retained.sha256, completion.observation.stdout_sha256);
+        let report = completion.result.unwrap();
+        assert_eq!(report.log.bytes, 10);
+        assert!(report.inspection.is_empty());
+        assert_eq!(log_bytes.unwrap(), b"diagnostic");
+    });
+}
+
+#[test]
+fn archive_limit_bounds_each_write_before_it_reaches_the_original() {
+    let fixture = Fixture::new();
+    let mut streams = Streams::new(false);
+    streams.archive = Some(archive(&fixture));
+    let mut observation = Observation::new();
+    observation.stdout_bytes = crate::release::archive::MAX_ARCHIVE_BYTES - 2;
+    let mut log = fixture.log();
+    let overflow = streams.accept(true, b"abc", &mut log, &mut observation);
+    let peer_write = streams.accept(false, b"diagnostic", &mut log, &mut observation);
+    let archive_bytes = fs::read(fixture.0.join("image.tar"));
+    let log_bytes = fs::read(fixture.0.join("command.log"));
+    let archive_closed = nix::unistd::close(streams.archive.take().unwrap());
+    let log_closed = nix::unistd::close(log);
+    archive_closed.unwrap();
+    log_closed.unwrap();
+    assert_eq!(overflow, Err(Failure::Bounds));
+    assert_eq!(
+        observation.stdout_bytes,
+        crate::release::archive::MAX_ARCHIVE_BYTES
+    );
+    assert!(observation.output_limited && streams.stdout_stopped);
+    assert!(!streams.stderr_stopped);
+    assert_eq!(archive_bytes.unwrap(), b"ab");
+    peer_write.unwrap();
+    assert_eq!(log_bytes.unwrap(), b"diagnostic");
+    assert!(streams.inspection.is_empty());
+}
+
+#[test]
+fn archive_metadata_refusal_precedes_close_failure_and_log_peer_still_finishes() {
+    let runtime = runtime();
+    let _entered = runtime.enter();
+    let fixture = Fixture::new();
+    let mut streams = Streams::new(false);
+    let mut file = archive(&fixture);
+    file.write_all(b"unobserved byte").unwrap();
+    streams.archive = Some(file);
+    let mut observation = Observation::new();
+    observation.archive_closed = false;
+    let mut owner = owner();
+    let log = fixture.log();
+    let faults = Faults {
+        archive_close: true,
+        ..Faults::default()
+    };
+    finish_archive(&mut owner, &mut streams, &mut observation, &faults);
+    finish_log(&mut owner, log, &streams, &mut observation, &faults);
+    assert_eq!(owner.primary(), Some(Failure::Io));
+    assert_eq!(
+        observation.cleanup_errors,
+        vec![Failure::Io, Failure::Close]
+    );
+    assert!(!observation.archive_closed);
+    assert!(observation.archive.is_none());
+    assert!(observation.log_closed && observation.log.is_some());
+}
+
+#[test]
+fn failed_save_retains_partial_archive_and_settles_every_admitted_peer() {
+    runtime().block_on(async {
+        let fixture = Fixture::new();
+        let mut request = fixture.request("printf partial; printf failed >&2; exit 7", false);
+        request.role = Role::Docker;
+        request.archive = Some(archive(&fixture));
+        let mut owner = owner();
+        let completion = run(&mut owner, request).await;
+        failed(&completion, Failure::Command);
+        settled(&completion.observation);
+        assert_eq!(completion.observation.exit_status, Some(7));
+        assert_eq!(completion.observation.archive.as_ref().unwrap().bytes, 7);
+        assert_eq!(fs::read(fixture.0.join("image.tar")).unwrap(), b"partial");
+        assert_eq!(fs::read(fixture.0.join("command.log")).unwrap(), b"failed");
+    });
+}
+
+#[test]
+fn failed_archive_write_still_closes_log_pipes_and_child() {
+    runtime().block_on(async {
+        let fixture = Fixture::new();
+        nix::unistd::close(archive(&fixture)).unwrap();
+        let mut request = fixture.request("printf partial; printf diagnostic >&2", false);
+        request.role = Role::Docker;
+        request.archive = Some(File::open(fixture.0.join("image.tar")).unwrap());
+        let mut owner = owner();
+        let completion = run(&mut owner, request).await;
+        failed(&completion, Failure::Io);
+        settled(&completion.observation);
+        assert!(completion.observation.archive.is_none());
+        assert!(completion.observation.exit_status.is_some());
+        assert!(completion.observation.log.is_some());
+    });
+}
+
+#[test]
+fn archive_close_refusal_cannot_pass_or_replace_an_earlier_child_failure() {
+    runtime().block_on(async {
+        for (script, status, expected) in [
+            ("printf archive", 0, Failure::Close),
+            ("printf archive; exit 7", 7, Failure::Command),
+        ] {
+            let fixture = Fixture::new();
+            let mut request = fixture.request(script, false);
+            request.role = Role::Docker;
+            request.archive = Some(archive(&fixture));
+            let mut owner = owner();
+            let completion = run_with(
+                &mut owner,
+                request,
+                Faults {
+                    archive_close: true,
+                    ..Faults::default()
+                },
+            )
+            .await;
+            failed(&completion, expected);
+            assert_eq!(completion.observation.exit_status, Some(status));
+            assert!(completion.observation.group_retired && completion.observation.reaped);
+            assert!(completion.observation.stdout_closed && completion.observation.stderr_closed);
+            assert!(completion.observation.log_closed);
+            assert!(!completion.observation.archive_closed);
+            assert!(completion.observation.archive.is_some());
+            assert!(
+                completion
+                    .observation
+                    .cleanup_errors
+                    .contains(&Failure::Close)
+            );
+        }
     });
 }
 

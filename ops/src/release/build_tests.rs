@@ -167,6 +167,7 @@ struct Recorded {
     environment: BTreeMap<OsString, OsString>,
     capture: bool,
     allow_failure: bool,
+    archive: bool,
 }
 #[derive(Clone, Copy, Default)]
 enum Fault {
@@ -175,6 +176,8 @@ enum Fault {
     Child(i32),
     SourceExchange,
     ImageExchange,
+    ArchiveSealMismatch,
+    ArchiveUnclosed,
     ContextExchange,
     ContextExtra,
     ContextBeforeSeal,
@@ -191,10 +194,11 @@ struct Inert {
     temporary: Option<PathBuf>,
     context: Option<PathBuf>,
     global_metadata_absent: Option<bool>,
+    output: PathBuf,
     fault: Fault,
 }
 impl Inert {
-    fn new(case: Case, source: Vec<u8>, image: Vec<u8>, fault: Fault) -> Self {
+    fn new(case: Case, source: Vec<u8>, image: Vec<u8>, fault: Fault, output: PathBuf) -> Self {
         Self {
             case,
             source,
@@ -206,6 +210,7 @@ impl Inert {
             temporary: None,
             context: None,
             global_metadata_absent: None,
+            output,
             fault,
         }
     }
@@ -429,21 +434,16 @@ impl Inert {
             );
         }
         if command[..2] == ["image", "save"] {
-            let path = PathBuf::from(
-                command[command
-                    .iter()
-                    .position(|value| *value == "--output")
-                    .unwrap()
-                    + 1],
+            assert_eq!(command, ["image", "save", "--platform", "linux/amd64", TAG]);
+            assert!(request.archive.is_some());
+            return (
+                0,
+                if self.case.mutation == "fail" && self.case.value == "export" {
+                    Vec::new()
+                } else {
+                    self.image.clone()
+                },
             );
-            if !(self.case.mutation == "fail" && self.case.value == "export") {
-                Self::output(
-                    &path,
-                    &self.image,
-                    matches!(self.fault, Fault::ImageExchange),
-                );
-            }
-            return (0, Vec::new());
         }
         panic!("unexpected Docker role")
     }
@@ -512,12 +512,39 @@ impl Executor for Inert {
             environment: request.environment.clone(),
             capture: request.capture,
             allow_failure: request.allow_failure,
+            archive: request.archive.is_some(),
         });
-        request.log.write_all(&bytes).unwrap();
+        let archive = request.archive.take().map(|mut file| {
+            file.write_all(&bytes).unwrap();
+            file.flush().unwrap();
+            file.sync_all().unwrap();
+            let mut seal = Seal {
+                bytes: bytes.len() as u64,
+                sha256: sha(&bytes),
+                metadata: file.metadata().unwrap(),
+            };
+            close(file).unwrap();
+            if matches!(self.fault, Fault::ImageExchange) {
+                let path = self.output.join("image.tar");
+                let replacement = path.with_extension("foreign");
+                private(&replacement, &bytes, 0o600);
+                fs::rename(replacement, path).unwrap();
+            }
+            if matches!(self.fault, Fault::ArchiveSealMismatch) {
+                seal.sha256 = "0".repeat(64);
+            }
+            seal
+        });
+        let log_bytes = if archive.is_some() {
+            &[][..]
+        } else {
+            &bytes[..]
+        };
+        request.log.write_all(log_bytes).unwrap();
         request.log.flush().unwrap();
         let seal = Seal {
-            bytes: bytes.len() as u64,
-            sha256: sha(&bytes),
+            bytes: log_bytes.len() as u64,
+            sha256: sha(log_bytes),
             metadata: request.log.metadata().unwrap(),
         };
         close(request.log).unwrap();
@@ -548,6 +575,8 @@ impl Executor for Inert {
                 stdout_sha256: sha(&bytes),
                 stderr_sha256: sha(&[]),
                 log: Some(seal),
+                archive_closed: archive.is_none() || !matches!(self.fault, Fault::ArchiveUnclosed),
+                archive,
                 group_retired: true,
                 reaped: true,
                 stdout_eof: true,
@@ -671,7 +700,7 @@ async fn run(case: Case, source: Vec<u8>, image: Vec<u8>, fault: Fault) -> Run {
             }
         }
     }
-    let mut executor = Inert::new(case.clone(), source, image, fault);
+    let mut executor = Inert::new(case.clone(), source, image, fault, output.clone());
     let mut owner = Owner::new(
         Instant::now(),
         if case.export {
@@ -1052,6 +1081,78 @@ fn subordinate_reserved_exit_numbers_remain_command_failures_with_signed_private
 }
 
 #[test]
+fn archive_stdout_transport_closes_and_binds_original_before_publication() {
+    runtime().block_on(async {
+        for export in [false, true] {
+            let image = image_archive();
+            let result = run(
+                Case::simple("", export),
+                source_archive(),
+                image.clone(),
+                Fault::None,
+            )
+            .await;
+            assert!(result.attempt.result.is_ok(), "{:?}", result.attempt.result);
+            let save = result
+                .executor
+                .records
+                .iter()
+                .position(|record| record.action == "docker-save")
+                .unwrap();
+            let command = &result.executor.records[save];
+            assert!(command.archive && !command.capture && !command.allow_failure);
+            assert!(!command.argv.iter().any(|value| value == "--output"));
+            let journal = record(
+                &result
+                    .output
+                    .join(format!("{:02}-docker.outcome.json", save + 1)),
+            )
+            .unwrap();
+            let cleanup = &journal["cleanup"];
+            assert_eq!(cleanup["archiveClosed"], true);
+            assert_eq!(cleanup["archiveBytes"], u64::try_from(image.len()).unwrap());
+            assert_eq!(cleanup["archiveSha256"], sha(&image));
+            assert_eq!(cleanup["stdoutBytes"], cleanup["archiveBytes"]);
+            assert_eq!(cleanup["stdoutSha256"], cleanup["archiveSha256"]);
+            let metadata = fs::metadata(result.output.join("image.tar")).unwrap();
+            assert_eq!(cleanup["archiveIdentity"]["device"], metadata.dev());
+            assert_eq!(cleanup["archiveIdentity"]["inode"], metadata.ino());
+            assert!(result.output.join("release.json").is_file());
+            assert!(
+                fs::read(result.output.join(format!("{:02}-docker.log", save + 1)))
+                    .unwrap()
+                    .is_empty()
+            );
+        }
+    });
+}
+
+#[test]
+fn archive_transport_missing_close_or_mismatched_seal_refuses_both_selectors() {
+    runtime().block_on(async {
+        for export in [false, true] {
+            for fault in [Fault::ArchiveSealMismatch, Fault::ArchiveUnclosed] {
+                let result = run(
+                    Case::simple("", export),
+                    source_archive(),
+                    image_archive(),
+                    fault,
+                )
+                .await;
+                assert_eq!(result.attempt.result, Err(Failure::Changed));
+                assert_eq!(result.primary, Some(Failure::Changed));
+                assert_eq!(
+                    record(&result.output.join("outcome.json")).unwrap()["passed"],
+                    false
+                );
+                assert!(!result.output.join("release.candidate.json").exists());
+                assert!(!result.output.join("release.json").exists());
+            }
+        }
+    });
+}
+
+#[test]
 fn original_source_image_context_and_tool_witnesses_refuse_equal_byte_exchanges() {
     runtime().block_on(async {
         for fault in [
@@ -1226,6 +1327,7 @@ async fn reference(scenario: &str, fixture: &Fixture) -> Reference {
             ]),
             body_end: Instant::now() + Duration::from_secs(30),
             log,
+            archive: None,
             capture: true,
             allow_failure: false,
         },
@@ -1299,11 +1401,29 @@ fn compare_commands(actual: &Run, expected: &ReferenceCase) {
                 *value = "$FIXTURE/checkout/release".into();
             }
         }
-        let expected_argv: Vec<_> = expected_command
+        let mut expected_argv: Vec<_> = expected_command
             .argv
             .iter()
             .map(|value| reference_path(value))
             .collect();
+        if actual_command.action == "docker-save" {
+            // The sole reference transport delta: Docker stdout enters the
+            // original owned file instead of Docker replacing --output's inode.
+            assert!(actual_command.archive);
+            assert_eq!(expected_argv.len(), 10);
+            assert_eq!(
+                &expected_argv[3..7],
+                ["image", "save", "--platform", "linux/amd64"]
+            );
+            assert_eq!(
+                &expected_argv[7..9],
+                ["--output", "$FIXTURE/checkout/release/image.tar"]
+            );
+            assert_eq!(expected_argv[9], TAG);
+            drop(expected_argv.drain(7..9));
+        } else {
+            assert!(!actual_command.archive);
+        }
         assert_eq!(
             argv, expected_argv,
             "{} {}",
