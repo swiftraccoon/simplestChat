@@ -248,13 +248,13 @@ fn complete_native_verification_closes_its_frame_before_the_original_outer_end_f
         let mut operation = None;
         let started = Instant::now();
         let status = super::lifecycle(started, WHOLE, || {
+            let mut owner = Owner::new(started, WHOLE, RESERVE).unwrap();
             let runtime = tokio::runtime::Builder::new_multi_thread()
                 .worker_threads(2)
                 .enable_all()
                 .build()
                 .unwrap();
             let result = runtime.block_on(async {
-                let mut owner = Owner::new(started, WHOLE, RESERVE).unwrap();
                 let mut native = Native::default();
                 files::start_probe(None);
                 let result = execute(&options, &mut owner, &mut native).await;
@@ -268,7 +268,6 @@ fn complete_native_verification_closes_its_frame_before_the_original_outer_end_f
                 }
                 let final_check = owner.check(Window::Final);
                 let cause = owner.error();
-                drop(owner);
                 (
                     result,
                     emitted.and_then(|bytes| final_check.map(|()| bytes)),
@@ -281,7 +280,7 @@ fn complete_native_verification_closes_its_frame_before_the_original_outer_end_f
             let passed = result.0.is_ok() && result.1.is_ok();
             operation = Some(result);
             super::FRAME_CLOSED.set(true);
-            passed
+            (passed, Some(owner))
         });
         let after = fixture.snapshot();
         let trace = fixture::read(&fixture.home.join("argv"));
@@ -333,4 +332,62 @@ fn complete_native_verification_closes_its_frame_before_the_original_outer_end_f
             }
         );
     }
+}
+
+#[test]
+fn late_real_signals_after_runtime_restore_refuse_cached_success() {
+    use super::super::control::signal_tests::{self, Entry};
+    let Some(expected) = signal_tests::worker(Entry::Cached) else {
+        return signal_tests::supervise(Entry::Cached);
+    };
+    let previous = nix::sys::stat::umask(nix::sys::stat::Mode::from_bits_truncate(0o027));
+    let fixture = Fixture::new();
+    let options = options(&fixture);
+    let started = Instant::now();
+    let mut facts = None;
+    let code = lifecycle(started, WHOLE, || {
+        let mut owner = Owner::new(started, WHOLE, RESERVE).unwrap();
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .enable_all()
+            .build()
+            .unwrap();
+        let result = runtime.block_on(async {
+            files::start_probe(None);
+            let mut native = Native::default();
+            let result = execute(&options, &mut owner, &mut native).await;
+            let emitted = result
+                .as_ref()
+                .map_err(|cause| *cause)
+                .and_then(|bytes| emit_file(&fixture.root.join("emitted-envelope.json"), bytes));
+            if let Err(cause) = &emitted {
+                owner.record(*cause);
+            }
+            let passed = result.is_ok() && emitted.is_ok() && owner.check(Window::Final).is_ok();
+            (passed, emitted, files::take_probe(), native.observations)
+        });
+        drop(runtime);
+        let passed = result.0;
+        facts = Some(result);
+        (passed, Some(owner))
+    });
+    drop(fixture);
+    let restored = nix::sys::stat::umask(previous);
+    signal_tests::assert_finished(
+        code,
+        expected,
+        nix::sys::stat::Mode::from_bits_truncate(0o027),
+    );
+    let (passed, emitted, probes, observations) = facts.unwrap();
+    assert!(passed);
+    let envelope: Value = serde_json::from_slice(&emitted.unwrap()).unwrap();
+    assert_eq!(envelope["schemaVersion"], 1);
+    assert_eq!(observations.len(), 4);
+    assert!(observations.iter().all(|o| o.group_retired
+        && o.reaped
+        && o.stdin_closed
+        && o.stdout_closed
+        && o.stderr_closed));
+    assert!(probes.0 > 0 && probes.1 == 0);
+    assert_eq!(restored, nix::sys::stat::Mode::from_bits_truncate(0o027));
 }

@@ -234,25 +234,29 @@ thread_local! {
     static RUNTIME_DROPPED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 fn operation(started: Instant, end: Instant, options: &Options) -> bool {
-    let passed = tokio::runtime::Builder::new_multi_thread()
+    // The original registrations must precede our runtime's worker threads.
+    let mut owner = match Owner::new(started, options.whole, options.reserve) {
+        Ok(owner) => owner,
+        Err(_) => return false,
+    };
+    let passed = match tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
         .enable_all()
         .build()
-        .ok()
-        .is_some_and(|runtime| {
-            let passed = runtime.block_on(async {
-                match Owner::new(started, options.whole, options.reserve) {
-                    Ok(mut owner) => execute(options, &mut owner).is_ok(),
-                    Err(_) => false,
-                }
-            });
-            // Signals/Owner are gone and all native peers have received their
-            // finalizers before shutdown joins the runtime's own workers.
+    {
+        Ok(runtime) => {
+            let passed = runtime.block_on(async { execute(options, &mut owner).is_ok() });
             drop(runtime);
             #[cfg(test)]
             RUNTIME_DROPPED.set(true);
             passed
-        });
+        }
+        Err(_) => {
+            owner.record(Cause::Io);
+            false
+        }
+    };
+    let finished = owner.finish().is_ok();
     let completed = Instant::now();
     #[cfg(test)]
     let completed = COMPLETION_OFFSET.with(|offset| {
@@ -261,7 +265,7 @@ fn operation(started: Instant, end: Instant, options: &Options) -> bool {
             .and_then(|offset| end.checked_add(offset))
             .unwrap_or(completed)
     });
-    passed && completed < end
+    passed && finished && completed < end
 }
 /// Prepare unsigned server metadata in the existing artifact directory.
 ///

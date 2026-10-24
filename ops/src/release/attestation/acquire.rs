@@ -686,13 +686,18 @@ thread_local! {
     static FRAME_CLOSED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     static COMPLETION_SAW_CLOSED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
-fn lifecycle(started: Instant, whole: Duration, operation: impl FnOnce() -> bool) -> ExitCode {
+fn lifecycle(
+    started: Instant,
+    whole: Duration,
+    operation: impl FnOnce() -> (bool, Option<Owner>),
+) -> ExitCode {
     let Some(end) = started.checked_add(whole) else {
         return ExitCode::from(2);
     };
     let previous = nix::sys::stat::umask(nix::sys::stat::Mode::from_bits_truncate(0o077));
-    let passed = operation();
+    let (passed, owner) = operation();
     let _ = nix::sys::stat::umask(previous);
+    let finished = owner.is_some_and(|owner| owner.finish().is_ok());
     let completed = Instant::now();
     #[cfg(test)]
     let completed = {
@@ -702,7 +707,7 @@ fn lifecycle(started: Instant, whole: Duration, operation: impl FnOnce() -> bool
             .and_then(|offset| end.checked_add(offset))
             .unwrap_or(completed)
     };
-    if passed && completed < end {
+    if passed && finished && completed < end {
         ExitCode::SUCCESS
     } else {
         ExitCode::FAILURE
@@ -754,19 +759,22 @@ pub fn run(arguments: &[OsString]) -> ExitCode {
         }
     };
     lifecycle(started, options.whole, || {
+        let mut owner = match Owner::new(started, options.whole, options.reserve) {
+            Ok(owner) => owner,
+            Err(_) => return (false, None),
+        };
         let runtime = match tokio::runtime::Builder::new_multi_thread()
             .worker_threads(2)
             .enable_all()
             .build()
         {
             Ok(runtime) => runtime,
-            Err(_) => return false,
+            Err(_) => {
+                owner.record(Cause::Io);
+                return (false, Some(owner));
+            }
         };
         let passed = runtime.block_on(async {
-            let mut owner = match Owner::new(started, options.whole, options.reserve) {
-                Ok(owner) => owner,
-                Err(_) => return false,
-            };
             let result = execute(&options, &mut owner).await;
             let passed = result.is_ok();
             let bytes = result.unwrap_or_else(|_| {
@@ -778,7 +786,7 @@ pub fn run(arguments: &[OsString]) -> ExitCode {
             passed && owner.check(Window::Final).is_ok()
         });
         drop(runtime);
-        passed
+        (passed, Some(owner))
     })
 }
 

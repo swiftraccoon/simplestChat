@@ -1,6 +1,8 @@
 //! One original monotonic deadline, first cause and native signal registration.
 
-use crate::owned_process::Signals;
+#[path = "control_signals.rs"]
+pub(super) mod signals;
+use signals::Signals;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -68,6 +70,27 @@ impl Owner {
             #[cfg(test)]
             late_clock: None,
         })
+    }
+    /// Consume the original owner only after runtime/output/umask restoration.
+    /// Every registered signal is removed before retained flags and the original
+    /// deadline are sampled. An earlier primary refusal is never replaced.
+    pub fn finish(mut self) -> Result<()> {
+        #[cfg(test)]
+        if let Some(signal) = FINISH_SIGNAL.with(std::cell::Cell::take) {
+            let mask = nix::sys::stat::umask(nix::sys::stat::Mode::empty());
+            let _ = nix::sys::stat::umask(mask);
+            FINISH_MASK.set(Some(mask));
+            if signal_hook::low_level::raise(signal).is_err() {
+                self.record(Cause::Io);
+            }
+        }
+        if !self.signals.unregister() {
+            self.record(Cause::Close);
+        }
+        let result = self.check(Window::Final);
+        #[cfg(test)]
+        FINISHED.with(|finished| finished.set(Some(result)));
+        result
     }
     pub fn now(&self) -> Instant {
         #[cfg(test)]
@@ -205,3 +228,20 @@ pub(super) fn failed<T>(owner: &mut Owner, error: Cause) -> Result<T> {
     owner.record(error);
     Err(error)
 }
+
+#[cfg(test)]
+thread_local! {
+    pub(super) static FINISH_SIGNAL: std::cell::Cell<Option<i32>> = const {
+        std::cell::Cell::new(None)
+    };
+    pub(super) static FINISH_MASK: std::cell::Cell<Option<nix::sys::stat::Mode>> = const {
+        std::cell::Cell::new(None)
+    };
+    pub(super) static FINISHED: std::cell::Cell<Option<Result<()>>> = const {
+        std::cell::Cell::new(None)
+    };
+}
+
+#[cfg(test)]
+#[path = "control_signal_tests.rs"]
+pub(super) mod signal_tests;

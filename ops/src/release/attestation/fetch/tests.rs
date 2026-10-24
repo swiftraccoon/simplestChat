@@ -271,14 +271,12 @@ fn actual_outer_runtime_and_umask_restore_precede_the_original_end_fence() {
         let closed = std::cell::Cell::new(false);
         COMPLETED.set(Some(end));
         let code = lifecycle(start, Duration::from_secs(30), || {
+            let owner = Owner::new(start, Duration::from_secs(30), Duration::from_secs(5)).unwrap();
             let runtime = runtime();
-            runtime.block_on(async {
-                let _owner =
-                    Owner::new(start, Duration::from_secs(30), Duration::from_secs(5)).unwrap();
-            });
+            runtime.block_on(async {});
             drop(runtime);
             closed.set(true);
-            true
+            (true, Some(owner))
         });
         let restored = nix::sys::stat::umask(old);
         assert_eq!(restored, nix::sys::stat::Mode::from_bits_truncate(0o027));
@@ -485,4 +483,60 @@ fn post_admission_witness_reads_cannot_spend_the_original_ssh_tail() {
                 .contains("auth\ntoken")
         );
     }
+}
+
+#[test]
+fn late_real_signals_after_runtime_restore_refuse_fetch_success() {
+    use super::super::control::signal_tests::{self, Entry};
+    let Some(expected) = signal_tests::worker(Entry::Fetch) else {
+        return signal_tests::supervise(Entry::Fetch);
+    };
+    let previous = nix::sys::stat::umask(nix::sys::stat::Mode::from_bits_truncate(0o027));
+    let fixture = fixture::Fixture::new();
+    let options = options(&fixture, true);
+    let started = Instant::now();
+    let mut facts = None;
+    let code = lifecycle(started, options.local.whole, || {
+        let mut owner = Owner::new(started, options.local.whole, options.local.reserve).unwrap();
+        let runtime = runtime();
+        let result = runtime.block_on(async {
+            files::start_probe(None);
+            let bytes = execute(&options, started, &mut owner).await;
+            if let Err(cause) = verify::stdout(&mut owner, &bytes) {
+                owner.record(cause);
+            }
+            (
+                owner.check(Window::Final).is_ok(),
+                bytes,
+                files::take_probe(),
+            )
+        });
+        drop(runtime);
+        let passed = result.0;
+        facts = Some(result);
+        (passed, Some(owner))
+    });
+    let receiver = LAST_RECEIVER.with(|r| r.borrow_mut().take());
+    drop(fixture);
+    let restored = nix::sys::stat::umask(previous);
+    signal_tests::assert_finished(
+        code,
+        expected,
+        nix::sys::stat::Mode::from_bits_truncate(0o027),
+    );
+    let (passed, emitted, probes) = facts.unwrap();
+    assert!(passed);
+    let report: serde_json::Value = serde_json::from_slice(&emitted).unwrap();
+    assert_eq!(report["passed"], true);
+    let receiver = receiver.unwrap();
+    assert_eq!(receiver.exit, Some(0));
+    assert!(
+        receiver.group_retired
+            && receiver.reaped
+            && receiver.input_closed
+            && receiver.output_closed
+            && receiver.natural_eof
+    );
+    assert!(probes.0 > 0 && probes.1 == 0);
+    assert_eq!(restored, nix::sys::stat::Mode::from_bits_truncate(0o027));
 }

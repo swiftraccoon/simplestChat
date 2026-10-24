@@ -597,3 +597,37 @@ fn complete_operation_checks_its_original_end_after_owner_and_runtime_teardown()
         assert!(fixture.artifact.join("release-predicate.json").exists());
     }
 }
+
+#[test]
+fn late_real_signals_after_runtime_restore_refuse_prepare_success() {
+    use control::signal_tests::{self, Entry};
+    let Some(expected) = signal_tests::worker(Entry::Prepare) else {
+        return signal_tests::supervise(Entry::Prepare);
+    };
+    let previous = nix::sys::stat::umask(nix::sys::stat::Mode::from_bits_truncate(0o027));
+    let fixture = Fixture::new();
+    let options = fixture.options();
+    let started = Instant::now();
+    RUNTIME_DROPPED.set(false);
+    files::start_probe(None);
+    let passed = operation(started, started + options.whole, &options);
+    let probes = files::take_probe();
+    let copies = fixture.copies();
+    let predicate = fixture.artifact.join("release-predicate.json").exists();
+    let runtime_closed = RUNTIME_DROPPED.get();
+    drop(fixture);
+    let restored = nix::sys::stat::umask(previous);
+    signal_tests::assert_finished(
+        if passed {
+            ExitCode::SUCCESS
+        } else {
+            ExitCode::FAILURE
+        },
+        expected,
+        nix::sys::stat::Mode::from_bits_truncate(0o027),
+    );
+    assert!(runtime_closed && predicate);
+    assert_eq!(copies, 4);
+    assert!(probes.0 > 0 && probes.1 == 0);
+    assert_eq!(restored, nix::sys::stat::Mode::from_bits_truncate(0o027));
+}
