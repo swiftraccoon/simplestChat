@@ -234,7 +234,7 @@ impl Reader {
         if self.complete {
             return Ok(true);
         }
-        let mut buffer = [0; 8192];
+        let mut buffer = vec![0; 8192];
         let remaining = (self.maximum + 1 - self.bytes.len()).min(buffer.len());
         loop {
             self.file.readable().await?;

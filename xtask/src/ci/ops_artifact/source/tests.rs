@@ -200,3 +200,45 @@ fn incomplete_or_redirected_repository_checked_closes_both_original_chains() {
         }
     }
 }
+
+#[tokio::test(flavor = "current_thread")]
+async fn selected_git_multi_chunk_hash_has_a_small_unboxed_yielding_future() {
+    struct Yielding(usize);
+    impl Executor for Yielding {
+        async fn run(&mut self, _: crate::ci::command::Command) -> Result<Vec<u8>> {
+            panic!("selected Git measurement must not execute a command");
+        }
+        async fn ready(&mut self) -> Result<()> {
+            self.0 += 1;
+            tokio::task::yield_now().await;
+            Ok(())
+        }
+    }
+
+    let fixture = super::super::fixture::Fixture::new();
+    let path = fixture.kit.join("host-tools/bin/cc");
+    let original = vec![b'G'; 2 * 65536 + 37];
+    std::fs::write(&path, &original).unwrap();
+    let selected = request::GitSelection {
+        path: path.clone(),
+        sha256: sha(&original),
+        bytes: original.len() as u64,
+    };
+    let budget = Budget::default();
+    let clock = NativeClock;
+    let deadline = Deadline::new(&clock);
+    let mut executor = Yielding(0);
+    let opening = Git::open(&selected, &budget, &mut executor, &deadline);
+    let compact = std::mem::size_of_val(&opening) < 32 * 1024;
+    tokio::task::yield_now().await;
+    let git = opening.await;
+    let yielded = executor.0 >= 4;
+    let valid = git.as_ref().is_ok_and(|git| git.validate().is_ok());
+    let readback = std::fs::read(path);
+    let closed = git.and_then(Git::finish);
+    closed.unwrap();
+    assert!(compact && yielded && valid);
+    assert_eq!(budget.count(), 0);
+    assert_eq!(budget.close_counts().1, 0);
+    assert_eq!(readback.unwrap(), original);
+}

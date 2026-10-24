@@ -57,7 +57,7 @@ impl Git {
             }
             let mut digest = Sha256::new();
             let mut count = 0;
-            let mut buffer = [0u8; 64 * 1024];
+            let mut buffer = vec![0u8; 64 * 1024];
             let mut reader = leaf.file();
             loop {
                 executor.ready().await?;

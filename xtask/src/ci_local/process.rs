@@ -253,7 +253,7 @@ impl Runner {
         let reader = if let Some((mut reader, mut log)) = tee {
             Some(tokio::spawn(async move {
                 let mut failed = false;
-                let mut buffer = [0; 65536];
+                let mut buffer = vec![0; 65536];
                 loop {
                     let count = reader.read(&mut buffer).await?;
                     if count == 0 {

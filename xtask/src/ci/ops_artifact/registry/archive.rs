@@ -36,7 +36,7 @@ pub(super) async fn inflate_limited<E: Executor, C: Clock>(
 ) -> Result<Vec<u8>> {
     let mut gzip = flate2::bufread::GzDecoder::new(Cursor::new(bytes));
     let mut result = Vec::new();
-    let mut buffer = [0u8; 65536];
+    let mut buffer = vec![0u8; 65536];
     loop {
         executor.ready().await?;
         deadline.check(false)?;

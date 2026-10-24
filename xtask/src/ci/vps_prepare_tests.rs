@@ -23,9 +23,11 @@ assert os.path.exists(ROOT+'/ansible-finished')
 with open(ROOT+'/released','w') as out: out.write('released')
 "#;
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread")]
 async fn completed_preparation_closes_both_groups_and_streams_before_release() {
-    let mut fixture = PreparationFixture::new(
+    const MAX_FUTURE_BYTES: usize = 32 * 1024;
+    let signals = Signals::new().unwrap();
+    let constructing = PreparationFixture::new(
         LEASE,
         r#"
 os.write(1,b'private ansible output\n')
@@ -33,35 +35,39 @@ os.write(2,b'private ansible error\n')
 with open(ROOT+'/ansible-finished','w') as out: out.write('done')
 "#,
         240,
-    )
-    .await;
+    );
+    let construction_compact = std::mem::size_of_val(&constructing) < MAX_FUTURE_BYTES;
+    tokio::task::yield_now().await;
+    let mut fixture = constructing.await;
     let invocation = fixture.take();
-    let mut native = Native::new(
-        &fixture.caller,
-        &fixture.environment,
-        Signals::new().unwrap(),
-    );
-    native.vps_prepare(invocation, fixture.end).await.unwrap();
-    assert!(native.cleanup_passed());
-    assert_eq!(
-        std::fs::read_to_string(fixture.marker("frame-count")).unwrap(),
-        fixture.frame_bytes.to_string()
-    );
-    assert!(fixture.marker("released").exists());
+    let mut native = Native::new(&fixture.caller, &fixture.environment, signals);
+    // Keep the actual production owner unboxed on the ordinary test stack.
+    let preparing = native.vps_prepare(invocation, fixture.end);
+    let preparation_compact = std::mem::size_of_val(&preparing) < MAX_FUTURE_BYTES;
+    tokio::task::yield_now().await;
+    let prepared = preparing.await;
+    let cleanup_passed = native.cleanup_passed();
+    let frame_count = std::fs::read_to_string(fixture.marker("frame-count"));
+    let frame_bytes = fixture.frame_bytes;
+    let released = fixture.marker("released").exists();
     let captures = fixture.captures();
-    assert_eq!(
-        captures[0].as_ref().unwrap().stdout.bytes,
-        fixture.ready.len() as u64
-    );
+    let ready_bytes = fixture.ready.len() as u64;
+    let exits = fixture.exits();
+    drop(native);
+    let closed = fixture.finish();
+    prepared.unwrap();
+    closed.unwrap();
+    assert!(construction_compact && preparation_compact && cleanup_passed);
+    assert_eq!(frame_count.unwrap(), frame_bytes.to_string());
+    assert!(released);
+    assert_eq!(captures[0].as_ref().unwrap().stdout.bytes, ready_bytes);
     assert!(captures[1].as_ref().unwrap().stdout.bytes > 0);
     assert!(captures[1].as_ref().unwrap().stderr.bytes > 0);
-    assert!(fixture.exits().iter().all(|value| {
+    assert!(exits.iter().all(|value| {
         value
             .as_ref()
             .is_some_and(|v| v.status == Some(0) && v.settled)
     }));
-    drop(native);
-    fixture.finish().unwrap();
 }
 
 #[tokio::test]

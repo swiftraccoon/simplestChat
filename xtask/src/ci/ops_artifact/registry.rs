@@ -82,7 +82,7 @@ impl Cache {
                 .try_reserve_exact(before.len() as usize)
                 .map_err(|_| failure(1))?;
             let mut reader = file.file();
-            let mut buffer = [0u8; 65536];
+            let mut buffer = vec![0u8; 65536];
             loop {
                 deadline.check(false)?;
                 executor.ready().await?;

@@ -342,7 +342,7 @@ async fn frame(sender: &Sender, input: &File) -> Result<()> {
     }
     let mut source = input;
     let mut count = 0u64;
-    let mut bytes = [0; 65536];
+    let mut bytes = vec![0; 65536];
     loop {
         if !same(&before, &input.metadata().map_err(|_| failure(1))?) {
             return Err(failure(1));

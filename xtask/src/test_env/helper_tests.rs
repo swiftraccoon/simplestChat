@@ -283,3 +283,41 @@ async fn pipe_admission_rejects_nonpipes_and_write_only_ends_without_retaining_t
     assert!(rustix::fs::fcntl_getfl(&read).is_ok());
     nix::unistd::close(read).unwrap();
 }
+
+#[tokio::test(flavor = "current_thread")]
+async fn cancelled_pending_read_resumes_original_pipe_without_false_eof_or_lost_bytes() {
+    use std::io::Write;
+
+    let (read, write) = nix::unistd::pipe().unwrap();
+    let mut reader = Reader::new(File::from(read), 64).unwrap();
+    let mut writer = File::from(write);
+    let compact;
+    let premature;
+    {
+        let pending = reader.read_once();
+        compact = std::mem::size_of_val(&pending) < 4096;
+        tokio::pin!(pending);
+        premature = tokio::select! {
+            biased;
+            result = &mut pending => Some(result),
+            _ = tokio::task::yield_now() => None,
+        };
+        // Cancelling this one pending read returns its mutable borrow. No bytes
+        // were accepted and the Reader still owns the same original pipe.
+    }
+    let stayed_pending = !reader.complete && reader.bytes.is_empty();
+    writer.write_all(b"later original pipe bytes\n").unwrap();
+    nix::unistd::close(writer).unwrap();
+    let finishing = reader.finish();
+    let finish_compact = std::mem::size_of_val(&finishing) < 4096;
+    let finished = tokio::time::timeout(Duration::from_secs(5), finishing).await;
+    let complete = reader.complete;
+    let bytes = reader.bytes.clone();
+    let closed = reader.close();
+    finished.unwrap().unwrap();
+    closed.unwrap();
+    assert!(compact && finish_compact);
+    assert!(premature.is_none());
+    assert!(stayed_pending && complete);
+    assert_eq!(bytes, b"later original pipe bytes\n");
+}

@@ -583,3 +583,81 @@ async fn output_rehash_membership_modes_and_known_signal_deadline_fences() {
         124
     );
 }
+
+#[tokio::test(flavor = "current_thread")]
+async fn multi_chunk_cache_inflate_and_hydration_keep_small_unboxed_yielding_futures() {
+    struct Yielding(usize);
+    impl Executor for Yielding {
+        async fn run(&mut self, _: Command) -> Result<Vec<u8>> {
+            panic!("offline fixture must not invoke imported code or Cargo");
+        }
+        async fn ready(&mut self) -> Result<()> {
+            self.0 += 1;
+            tokio::task::yield_now().await;
+            Ok(())
+        }
+    }
+
+    let payload: Vec<u8> = (0..6146_u32)
+        .flat_map(|value| Sha256::digest(value.to_le_bytes()))
+        .collect();
+    let uncompressed = tar(&[
+        ("sample-1.2.3/Cargo.toml", manifest(), 0o644),
+        ("sample-1.2.3/src/inert.bin", &payload, 0o644),
+    ]);
+    let compressed = gzip(&uncompressed);
+    assert!(payload.len() > 2 * 65536);
+    assert!(compressed.len() > 2 * 65536);
+    let fixture = Fixture::new();
+    let request = fixture.request(&compressed);
+    let selected = lock::parse(&fs::read(&fixture.lock).unwrap())
+        .unwrap()
+        .remove(0);
+    let budget = Budget::default();
+    let cache = Cache::open(&request.archives_root, &budget);
+    let run = OwnedRun::local(&request.output, &budget);
+    let clock = clock();
+    let deadline = Deadline::new(&clock);
+    let mut executor = Yielding(0);
+    let observed: Result<_> = async {
+        let cache = cache.as_ref().map_err(|_| failure(1))?;
+        let run = run.as_ref().map_err(|_| failure(1))?;
+        let cached = cache.archive(&selected, &mut executor, &deadline);
+        let cache_compact = std::mem::size_of_val(&cached) < 32 * 1024;
+        tokio::task::yield_now().await;
+        let cached = cached.await?;
+        let inflating = archive::inflate(&compressed, &mut executor, &deadline);
+        let inflate_compact = std::mem::size_of_val(&inflating) < 32 * 1024;
+        tokio::task::yield_now().await;
+        let inflated = inflating.await?;
+        let hydrating = hydrate(&request, cache, run, &mut executor, &deadline);
+        let hydrate_compact = std::mem::size_of_val(&hydrating) < 32 * 1024;
+        tokio::task::yield_now().await;
+        let bytes = hydrating.await?;
+        let receipt: Value = serde_json::from_slice(&bytes).map_err(|_| failure(1))?;
+        let stored = fs::read(run.path.join("registry/sample-1.2.3/src/inert.bin"))
+            .map_err(|_| failure(1))?;
+        Ok((
+            cache_compact && inflate_compact && hydrate_compact,
+            cached,
+            inflated,
+            receipt,
+            stored,
+        ))
+    }
+    .await;
+    let yielded = executor.0 >= 12;
+    // Both original owners settle even when any observed stage returned Err.
+    let cache_closed = cache.and_then(Cache::finish);
+    let run_closed = run.and_then(OwnedRun::finish);
+    let (compact, cached, inflated, receipt, stored) = observed.unwrap();
+    cache_closed.unwrap();
+    run_closed.unwrap();
+    assert!(compact && yielded);
+    assert_eq!(cached, compressed);
+    assert_eq!(inflated, uncompressed);
+    assert_eq!(receipt["registryPackages"], 1);
+    assert_eq!(stored, payload);
+    assert_eq!(budget.count(), 0);
+    assert_eq!(budget.close_counts().1, 0);
+}

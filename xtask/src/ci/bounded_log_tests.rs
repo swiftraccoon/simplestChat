@@ -191,3 +191,90 @@ async fn an_output_write_failure_is_private_and_cannot_be_complete() {
     assert!(!error.message.contains("private-content"));
     assert!(fixture.bytes().is_empty());
 }
+
+#[tokio::test(flavor = "current_thread")]
+async fn small_unboxed_log_future_keeps_pending_pipe_bytes_through_later_polls() {
+    use tokio::io::AsyncWriteExt;
+
+    let fixture = Fixture::new();
+    let payload = vec![b'L'; 2 * 65536 + 37];
+    let (sender, reader) = tokio::net::unix::pipe::pipe().unwrap();
+    let (stop, stopped) = oneshot::channel();
+    let progress = Arc::new(Mutex::new(Progress {
+        bytes: 0,
+        digest: Sha256::new(),
+    }));
+    let reading = read_log(
+        reader,
+        fixture.file(),
+        payload.len() as u64,
+        stopped,
+        progress.clone(),
+    );
+    let compact = std::mem::size_of_val(&reading) < 32 * 1024;
+    tokio::pin!(reading);
+    // Lose only a temporary poll branch. The same owning operation remains
+    // pinned and retains its original receiver/output and nonempty read buffer.
+    let premature = tokio::select! {
+        biased;
+        result = &mut reading => Some(result),
+        _ = tokio::task::yield_now() => None,
+    };
+    let stayed_pending = premature.is_none();
+    let initial_bytes = progress.lock().unwrap().bytes;
+    let mut sender = Some(sender);
+    let attempted = if let Some(done) = premature {
+        let closed = sender
+            .take()
+            .unwrap()
+            .into_nonblocking_fd()
+            .and_then(|fd| nix::unistd::close(fd).map_err(std::io::Error::from));
+        Ok((done, closed))
+    } else {
+        let producing = async {
+            tokio::task::yield_now().await;
+            let written = sender.as_mut().unwrap().write_all(&payload).await;
+            let closed = sender
+                .take()
+                .unwrap()
+                .into_nonblocking_fd()
+                .and_then(|fd| nix::unistd::close(fd).map_err(std::io::Error::from));
+            written.and(closed)
+        };
+        tokio::time::timeout(Duration::from_secs(4), async {
+            tokio::join!(&mut reading, producing)
+        })
+        .await
+    };
+    // A timeout cancels only the borrowing producer; explicitly close its
+    // original sender and wake/join the retained reader before any assertion.
+    let sender_closed = sender
+        .take()
+        .map(|sender| {
+            sender
+                .into_nonblocking_fd()
+                .and_then(|fd| nix::unistd::close(fd).map_err(std::io::Error::from))
+        })
+        .transpose();
+    drop(stop);
+    let completed_in_time = attempted.is_ok();
+    let (done, written) = match attempted {
+        Ok(done) => done,
+        Err(_) => (reading.await, Ok(())),
+    };
+    sender_closed.unwrap();
+    written.unwrap();
+    let done = done.unwrap();
+    assert!(compact && completed_in_time);
+    assert!(stayed_pending);
+    assert_eq!(initial_bytes, 0);
+    assert!(done.complete);
+    assert_eq!(done.bytes, payload.len() as u64);
+    assert_eq!(fixture.bytes(), payload);
+    let expected: String = Sha256::digest(&payload)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
+    assert_eq!(done.sha256, expected);
+    assert_eq!(progress.lock().unwrap().bytes, done.bytes);
+}

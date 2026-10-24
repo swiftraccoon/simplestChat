@@ -224,7 +224,7 @@ async fn read_log(
     let mut bytes = 0_u64;
     let mut complete = false;
     let result: Result<()> = async {
-        let mut buffer = [0; 65536];
+        let mut buffer = vec![0; 65536];
         loop {
             tokio::select! {
                 biased;
