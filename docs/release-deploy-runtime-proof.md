@@ -5,7 +5,7 @@ host deployment and one deliberately failed replacement with successful rollback
 The complete 97-case native/unchanged-Python comparison passed locally in 365.12
 test seconds (367.785 seconds wall). Those fixtures use real private files, locks
 and owned inert children, with inert Docker/database/readiness replies. The VM
-controller/guest has 22 passing inert tests, and the corrected ordinary Ops suite
+controller/guest has 23 passing inert tests, and the corrected ordinary Ops suite
 passed 484 tests. This new workflow has not yet proved
 actual signature verification, installed-musl execution, Docker, PostgreSQL,
 Caddy/TLS or application rollback. Its runtime checks below remain required.

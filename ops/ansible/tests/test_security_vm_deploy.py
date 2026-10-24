@@ -30,7 +30,7 @@ import security_vm_deploy_guest as guest
 import security_vm_fetch as fetch_vm
 import security_vm_ops_guest as ops_guest
 import security_vm_stage_guest as stage
-from security_tools import ToolError
+from security_tools import ToolError, require
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -259,15 +259,58 @@ class DeployProofTests(unittest.TestCase):
             control.release_setup()
 
     def test_late_setup_cannot_admit_second_full_native_call(self) -> None:
-        """Missing setup admission refuses even when the final fixture clock is open."""
-        with patch.object(time, "monotonic", return_value=0.0):
-            control = keeper.Control()
-        with (
-            patch.object(time, "monotonic", return_value=600.0),
-            self.assertRaises(ToolError),
-        ):
-            control.release_setup()
-        self.assertTrue(control.setup)
+        """Explicit entry epochs make strict setup refusal independent of host uptime."""
+        for epoch in (0.0, 100.0, 10_000.0):
+            with self.subTest(epoch=epoch):
+                inside = keeper.Control(started=epoch)
+                original_end = inside.end
+                with patch.object(time, "monotonic", return_value=epoch + keeper.SETUP_SECONDS - 1):
+                    inside.release_setup()
+                self.assertFalse(inside.setup)
+                self.assertEqual(inside.end, original_end)
+                self.assertEqual(inside.body_end, original_end - keeper.FINALIZATION_SECONDS)
+
+                boundary = keeper.Control(started=epoch)
+                with (
+                    patch.object(time, "monotonic", return_value=epoch + keeper.SETUP_SECONDS),
+                    self.assertRaisesRegex(ToolError, "^fetch_vm_deadline$"),
+                ):
+                    boundary.release_setup()
+                self.assertTrue(boundary.setup)
+                self.assertEqual(boundary.started, epoch)
+                self.assertEqual(boundary.end, original_end)
+
+    def test_setup_final_fence_retains_phase_after_budget_observation(self) -> None:
+        """A passed debt check cannot grant setup after its original strict ceiling."""
+
+        def scenario(epoch: float) -> None:
+            control = keeper.Control(started=epoch)
+            original_end = control.end
+            clock = [epoch + keeper.SETUP_SECONDS - 1]
+            budget_observations: list[float] = []
+
+            def after_budget(value: object, code: str) -> None:
+                require(value, code)
+                if code == "deploy_vm_two_full_envelopes":
+                    budget_observations.append(control.whole_body_end - clock[0])
+                    clock[0] = epoch + keeper.SETUP_SECONDS + 0.1
+
+            with (
+                patch.object(time, "monotonic", side_effect=lambda: clock[0]),
+                patch.object(keeper, "require", side_effect=after_budget),
+                self.assertRaisesRegex(ToolError, "^fetch_vm_deadline$"),
+            ):
+                control.release_setup()
+            self.assertEqual(budget_observations, [keeper.CONTINUE_MINIMUM + 1])
+            self.assertGreater(clock[0], control.setup_end)
+            self.assertLess(control.whole_body_end - clock[0], keeper.CONTINUE_MINIMUM)
+            self.assertTrue(control.setup)
+            self.assertEqual(control.started, epoch)
+            self.assertEqual(control.end, original_end)
+
+        for epoch in (0.0, 100.0, 10_000.0):
+            with self.subTest(epoch=epoch):
+                scenario(epoch)
 
     def test_guest_continue_has_no_second_clock_or_replay(self) -> None:
         """Guest durations are subordinate to one entry epoch, never host instants."""

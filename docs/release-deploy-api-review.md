@@ -214,7 +214,13 @@ five-second TERM and five-second reap phases and joins nonconsuming terminal
 status before expecting natural zero. It retains every prior byte/close assertion
 and calls the same production finalizers. The failed trial remains retained.
 
-The VM controller/guest source has 22 passing inert tests. Actual authenticated
+The VM setup transition checks its original setup deadline before granting the
+full body. Epoch-independent tests cover the strict boundary and an observed
+clock advance after a successful two-call budget check; a late grant remains
+refused with setup still active. This also avoids a test's captured real-clock
+default factory accidentally using host uptime instead of its intended epoch.
+
+The VM controller/guest source has 23 passing inert tests. Actual authenticated
 signed-musl HostDeploy, Docker, PostgreSQL, Caddy/TLS and image rollback execution
 remain unrun for this fixture. Installed callers, bootstrap and production
 migration policy remain unchanged; no runtime or adoption proof follows from the
