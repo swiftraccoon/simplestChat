@@ -198,6 +198,7 @@ fn arguments_are_fixed_and_do_not_select_another_operation() {
                 "       simplestchat-ops release assets capture --path TAR\n",
                 "       simplestchat-ops release assets publish --capture REV TAR [--capture REV TAR]\n",
                 "       simplestchat-ops distribution inspect-executable --path PATH\n",
+                "       simplestchat-ops distribution install --request ABS --request-sha256 SHA\n",
                 "       simplestchat-ops distribution verify-pair --manifest PATH ",
                 "--path PATH --selection PATH\n",
                 "       simplestchat-ops distribution build-plan ",

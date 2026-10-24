@@ -82,12 +82,7 @@ fn decode<'a, T: Deserialize<'a>>(bytes: &'a [u8]) -> Result<T> {
     // unrelated API fields are ignored and cannot grant authority.
     serde_json::from_slice(bytes).map_err(|_| failure(1))
 }
-pub(super) fn admit(
-    repository: &[u8],
-    attempt: &[u8],
-    artifact: &[u8],
-    request: &Request,
-) -> Result<Envelope> {
+pub(super) fn admit_attempt(repository: &[u8], attempt: &[u8], request: &Request) -> Result<()> {
     let repository: Repository = decode(repository)?;
     repository.check()?;
     let attempt: Attempt = decode(attempt)?;
@@ -114,6 +109,18 @@ pub(super) fn admit(
     {
         return Err(failure(1));
     }
+    Ok(())
+}
+pub(super) fn admit(
+    repository: &[u8],
+    attempt: &[u8],
+    artifact: &[u8],
+    request: &Request,
+) -> Result<Envelope> {
+    admit_attempt(repository, attempt, request)?;
+    let selection = serde_json::to_value(request.selection.identity()).map_err(|_| failure(1))?;
+    let revision = selection["revision"].as_str().ok_or_else(|| failure(1))?;
+    let run = selection["buildRunId"].as_u64().ok_or_else(|| failure(1))?;
     let artifact: Artifact = decode(artifact)?;
     let expected_url = format!("{PREFIX}/actions/artifacts/{}", request.artifact_id);
     if artifact.id != request.artifact_id

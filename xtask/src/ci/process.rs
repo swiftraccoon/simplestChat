@@ -72,6 +72,11 @@ impl<'a> Native<'a> {
         let retained_ops = request.retained_ops.clone();
         let ops_acquire = request.ops_acquire.clone();
         let hosted_ops = request.hosted_ops.clone();
+        let ops_runtime = request.ops_runtime.clone();
+        let runtime_admission = ops_runtime
+            .as_ref()
+            .map(|proof| proof.begin(&request))
+            .transpose();
         let hosted_admission = hosted_ops
             .as_ref()
             .map(|proof| proof.begin(&request))
@@ -111,6 +116,7 @@ impl<'a> Native<'a> {
             .and(retained_admission.map(|_| ()))
             .and(acquire_admission.map(|_| ()))
             .and(hosted_admission.map(|_| ()))
+            .and(runtime_admission.map(|_| ()))
             .and(checks_admission.map(|_| ()))
             .and(benchmark_admission.map(|_| ()))
             .and({
@@ -140,6 +146,9 @@ impl<'a> Native<'a> {
             proof.observed_io(closed.as_ref().ok().cloned().flatten());
         }
         if let Some(proof) = hosted_ops {
+            proof.observed_io(closed.as_ref().ok().cloned().flatten());
+        }
+        if let Some(proof) = ops_runtime {
             proof.observed_io(closed.as_ref().ok().cloned().flatten());
         }
         if let Some(mdns) = mdns {
@@ -195,6 +204,8 @@ impl<'a> Native<'a> {
         } else if let Some(proof) = &request.ops_acquire {
             proof.context(request.program, &request.arguments)?
         } else if let Some(proof) = &request.hosted_ops {
+            proof.context(request.program, &request.arguments)?
+        } else if let Some(proof) = &request.ops_runtime {
             proof.context(request.program, &request.arguments)?
         } else if let Some(proof) = &request.source_git {
             proof.context()?.unwrap_or((self.root, self.environment))
@@ -268,6 +279,10 @@ impl<'a> Native<'a> {
             proof.validate(request.program, &request.arguments)?;
         }
         if let Some(proof) = &request.hosted_ops {
+            self.ready().await?;
+            proof.validate(request.program, &request.arguments)?;
+        }
+        if let Some(proof) = &request.ops_runtime {
             self.ready().await?;
             proof.validate(request.program, &request.arguments)?;
         }
@@ -619,6 +634,7 @@ fn executable(request: &Command) -> Result<&std::ffi::OsStr> {
         request.retained_ops.is_some(),
         request.ops_acquire.is_some(),
         request.hosted_ops.is_some(),
+        request.ops_runtime.is_some(),
         request.benchmark.is_some(),
         request.release_checks.is_some(),
         #[cfg(feature = "release-http-policy")]
@@ -640,6 +656,8 @@ fn executable(request: &Command) -> Result<&std::ffi::OsStr> {
             | Program::OpsMaterialCurl
             | Program::OpsDpkgDeb
             | Program::OpsHostCc
+            | Program::OpsRuntimeGit
+            | Program::OpsRuntimePython
             | Program::ComparisonGit
             | Program::ComparisonCargo
             | Program::ComparisonBenchmark
@@ -667,6 +685,11 @@ fn executable(request: &Command) -> Result<&std::ffi::OsStr> {
             .map(|p| p.as_os_str());
     }
     if let Some(proof) = &request.hosted_ops {
+        return proof
+            .validate(request.program, &request.arguments)
+            .map(|path| path.as_os_str());
+    }
+    if let Some(proof) = &request.ops_runtime {
         return proof
             .validate(request.program, &request.arguments)
             .map(|path| path.as_os_str());

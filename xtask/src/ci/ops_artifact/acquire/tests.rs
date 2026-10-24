@@ -165,6 +165,7 @@ async fn fresh_api_mismatch_refuses_zip_dispatch_even_with_zero_cli_status() {
         (2, "/run_attempt", json!(1)),
         (2, "/head_sha", json!("b".repeat(40))),
         (2, "/event", json!("workflow_dispatch")),
+        (2, "/status", json!("in_progress")),
         (2, "/conclusion", json!("failure")),
         (2, "/head_repository/id", json!(1)),
         (3, "/id", json!(457)),
@@ -192,7 +193,7 @@ async fn fresh_api_mismatch_refuses_zip_dispatch_even_with_zero_cli_status() {
             1,
             "{pointer}"
         );
-        assert_eq!(fake.calls, 4, "{pointer}");
+        assert_eq!(fake.calls, if index < 3 { 3 } else { 4 }, "{pointer}");
         assert!(!fixture.output.join("artifact.zip").exists());
         assert!(fake.replays.is_empty());
     }

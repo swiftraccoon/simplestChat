@@ -115,6 +115,49 @@ pub fn check(expected: &ExpectedHelpers) -> Result<Receipt> {
     check_with(&mut Native, expected)
 }
 
+/// Admit only the existing root/Linux/amd64/Debian13 platform profile. Reuse the
+/// original OS snapshot, namespace verification and all-attempt closes; do not
+/// inspect application configuration, read images.json or request entropy.
+pub(crate) fn platform_only() -> Result<()> {
+    platform_with(&mut Native)
+}
+
+fn platform_with(host: &mut impl Host) -> Result<()> {
+    host.identity()?.validate()?;
+    let mut tree = host.filesystem()?;
+    let observed = tree
+        .os_release()
+        .and_then(|bytes| platform::distribution(&bytes));
+    let closed = tree.finish();
+    observed.and(closed)
+}
+
+#[cfg(test)]
+#[test]
+fn installer_platform_facade_uses_only_original_os_snapshot_and_closes() {
+    let mut host = tests::FixtureHost::new();
+    std::fs::remove_file(host.root.join("etc/simplestchat-public/images.json")).unwrap();
+    std::fs::remove_dir(host.root.join("srv/simplestchat-public/releases")).unwrap();
+    std::fs::remove_dir(host.root.join("srv/simplestchat-public")).unwrap();
+    assert!(platform_with(&mut host).is_ok());
+    assert_eq!(host.random_calls, 0);
+    assert!(host.access.0.borrow().live.is_empty());
+    assert!(
+        host.access
+            .0
+            .borrow()
+            .reads
+            .iter()
+            .all(|path| path.ends_with("os-release"))
+    );
+
+    let mut failed = tests::FixtureHost::new();
+    failed.access.0.borrow_mut().fail_close = Some(1);
+    assert!(platform_with(&mut failed).is_err());
+    assert_eq!(failed.random_calls, 0);
+    assert!(failed.access.0.borrow().live.is_empty());
+}
+
 fn check_with(host: &mut impl Host, expected: &ExpectedHelpers) -> Result<Receipt> {
     host.identity()?.validate()?;
     let mut tree = host.filesystem()?;

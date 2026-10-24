@@ -1920,6 +1920,16 @@
       "reachability": "Reviewed 2026-10-23 for this exact main-push-only job step and immutable 89b12181fb390509a0842a86cc55eeb8eb928c1d action. Checkout disables persisted credentials. All installer arguments are fixed repository values; candidate artifacts, tokens and restored caches cannot select them. The existing official HTTPS rustup bootstrap trust boundary remains; its installer bytes are not independently checksum-pinned. The Ops producer has no signing permission. Only the separate signer, after all canonical required gates and the complete producer succeed, attests the three independently admitted fixed subjects. This informational finding review does not waive artifact, provenance, source or runtime checks.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md#github-actions-portability-findings"
+    },
+    {
+      "scanner": "zizmor",
+      "fingerprint": "superfluous-actions:0fb2d712953646c2c07edb9a959b25649b214c63cb1143b35266a007af663b35",
+      "scope": ".github/workflows/ops-runtime.yml#jobs/ops-runtime/steps/2/uses",
+      "owner": "swiftraccoon",
+      "rationale": "The manual Ops runtime controller must compile with the repository's exact Rust 1.99.0 toolchain. This immutable action installs the explicit version rather than relying on the hosted runner's default toolchain.",
+      "reachability": "Reviewed 2026-10-23 for only this exact same-repository main-only workflow-dispatch step and immutable 89b12181fb390509a0842a86cc55eeb8eb928c1d action. Checkout disables persisted credentials. The fixed repository input selects Rust 1.99.0 before compilation and before the sole runtime step receives GH_TOKEN; caller artifact identifiers cannot select installer source or arguments. The reviewed official HTTPS rustup bootstrap remains a runtime trust boundary, without an independent checksum claim for installer bytes. The workflow has only contents/actions read permissions and no signing or OIDC authority. This informational finding review does not waive source, artifact, provenance, runtime or finalization checks.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md#github-actions-portability-findings"
     }
   ]
 }

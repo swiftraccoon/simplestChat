@@ -1,0 +1,125 @@
+name: Authenticated Ops Debian runtime
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'Successful main CI run for this exact checkout revision'
+        type: string
+        required: true
+      run_attempt:
+        description: 'Exact successful CI run attempt'
+        type: string
+        required: true
+        default: '1'
+      artifact_id:
+        description: 'Signed Ops artifact ID from that CI attempt'
+        type: string
+        required: true
+
+permissions:
+  contents: read # Check out this workflow's exact source revision.
+  actions: read # Acquire the exact selected CI run and its artifact.
+
+concurrency:
+  group: ops-runtime-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  ops-runtime:
+    name: Authenticated Ops commands and first install on Debian 13
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'swiftraccoon/simplestChat' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.14.8'
+      - name: Install pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable (2026-10-01)
+        with:
+          toolchain: 1.99.0
+      - name: Prepare the owned guest and pinned controller tools
+        run: |
+          sudo rm -rf -- /usr/local/lib/android /usr/share/dotnet
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-x86 qemu-utils cloud-image-utils openssh-client curl acl
+          test -c /dev/kvm
+          sudo setfacl -m "u:$(id -un):rw" /dev/kvm
+          python3 -m venv "$RUNNER_TEMP/ops-controller"
+          "$RUNNER_TEMP/ops-controller/bin/python" -m pip --isolated install \
+            --require-hashes --only-binary=:all: -r ops/ansible/requirements.txt
+          python3 build/security_tools.py install --tools gh --directory "$RUNNER_TEMP/ops-gh"
+          ops_gh_executable="$(python3 build/security_tools.py path gh --directory "$RUNNER_TEMP/ops-gh")"
+          test "$ops_gh_executable" = "$RUNNER_TEMP/ops-gh/bin/gh"
+          printf '%s\n' "$RUNNER_TEMP/ops-controller/bin" "${ops_gh_executable%/gh}" >> "$GITHUB_PATH"
+      - name: Compile the controller before exposing its API credential
+        run: cargo build --locked -p xtask --bin xtask
+      - name: Pin the exact artifact request
+        id: request
+        env:
+          OPS_RUN_ID: ${{ inputs.run_id }}
+          OPS_RUN_ATTEMPT: ${{ inputs.run_attempt }}
+          OPS_ARTIFACT_ID: ${{ inputs.artifact_id }}
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          import tomllib
+          from pathlib import Path
+
+          def identifier(name):
+              raw = os.environ[name]
+              if not re.fullmatch(r'[1-9][0-9]{0,15}', raw) or int(raw) > 9007199254740991:
+                  raise SystemExit('Invalid Ops artifact identifier.')
+              return int(raw)
+
+          revision = os.environ['GITHUB_SHA']
+          if not re.fullmatch(r'[0-9a-f]{40}', revision):
+              raise SystemExit('Invalid Ops source revision.')
+          package = tomllib.loads(Path('Cargo.toml').read_text())['workspace']['package']['version']
+          request = {
+              'schemaVersion': 1,
+              'selection': {
+                  'repository': 'swiftraccoon/simplestChat',
+                  'revision': revision,
+                  'packageVersion': package,
+                  'target': 'x86_64-unknown-linux-musl',
+                  'protocolVersion': 1,
+                  'buildRunId': identifier('OPS_RUN_ID'),
+                  'runAttempt': identifier('OPS_RUN_ATTEMPT'),
+              },
+              'artifactId': identifier('OPS_ARTIFACT_ID'),
+              'output': str(Path(os.environ['RUNNER_TEMP']) / 'ops-runtime'),
+              'authentication': 'gh-token',
+          }
+          original = (json.dumps(request, separators=(',', ':')) + '\n').encode()
+          path = Path(os.environ['RUNNER_TEMP']) / 'ops-runtime-request.json'
+          descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+          with os.fdopen(descriptor, 'wb') as output:
+              output.write(original)
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write('sha256=' + hashlib.sha256(original).hexdigest() + '\n')
+          PY
+      - name: Authenticate, exercise and retire the exact Ops guest
+        timeout-minutes: 75
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OPS_REQUEST_SHA256: ${{ steps.request.outputs.sha256 }}
+        run: |
+          target/debug/xtask ops-artifact runtime \
+            --request "$RUNNER_TEMP/ops-runtime-request.json" \
+            --request-sha256 "$OPS_REQUEST_SHA256"
+      - name: Preserve the completed sanitized Ops summary
+        if: ${{ success() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ops-runtime-summary
+          path: ${{ runner.temp }}/ops-runtime/summary.json
+          if-no-files-found: error
+          retention-days: 14

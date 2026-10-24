@@ -27,6 +27,15 @@ struct Claims {
     evidence_digest_count: usize,
 }
 
+impl VerifiedPair {
+    /// Borrow the measured executable facts after matching the retained original
+    /// manifest and explicit selection. These facts do not authenticate the
+    /// origin of those inputs or authorize installation by themselves.
+    pub fn executable(&self) -> &ExecutableIdentity {
+        &self.executable
+    }
+}
+
 /// Use the already parsed manifest object after any external authentication of
 /// its SHA, retaining exactly those original bytes. The manifest path is never
 /// reopened. Binary admission reuses the inspector's whole-byte identity,

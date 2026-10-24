@@ -20,6 +20,7 @@ pub(super) mod recipe;
 mod registry;
 mod request;
 mod resolution;
+pub(in crate::ci) mod runtime;
 pub(crate) mod source;
 #[cfg(test)]
 mod tests;
@@ -31,7 +32,7 @@ use sha2::{Digest, Sha256};
 use std::time::{Duration, Instant};
 
 const USAGE: &str = "usage: cargo run --locked -q -p xtask -- ops-artifact \
-build|source|registry|verify-retained|acquire \
+build|source|registry|verify-retained|acquire|runtime \
 --request PATH --request-sha256 SHA256\n\
 cargo run --locked -q -p xtask -- ops-artifact hosted --output PATH\n\
 cargo run --locked -q -p xtask -- ops-artifact signing-inputs --directory PATH --output PATH";
@@ -47,7 +48,7 @@ pub(super) fn run(arguments: &[String]) -> anyhow::Result<std::process::ExitCode
         && namespace::path(std::path::Path::new(output))
     {
         return Ok(completed(
-            runtime()?.block_on(hosted::native(std::path::Path::new(output))),
+            tokio_runtime()?.block_on(hosted::native(std::path::Path::new(output))),
         ));
     }
     if let [operation, directory_flag, directory, output_flag, output] = arguments
@@ -57,10 +58,12 @@ pub(super) fn run(arguments: &[String]) -> anyhow::Result<std::process::ExitCode
         && namespace::path(std::path::Path::new(directory))
         && namespace::path(std::path::Path::new(output))
     {
-        return Ok(completed(runtime()?.block_on(hosted::signing_native(
-            std::path::Path::new(directory),
-            std::path::Path::new(output),
-        ))));
+        return Ok(completed(tokio_runtime()?.block_on(
+            hosted::signing_native(
+                std::path::Path::new(directory),
+                std::path::Path::new(output),
+            ),
+        )));
     }
     let [operation, request_flag, path, sha_flag, selected] = arguments else {
         eprintln!("{USAGE}");
@@ -68,22 +71,25 @@ pub(super) fn run(arguments: &[String]) -> anyhow::Result<std::process::ExitCode
     };
     if !matches!(
         operation.as_str(),
-        "build" | "source" | "registry" | "verify-retained" | "acquire"
+        "build" | "source" | "registry" | "verify-retained" | "acquire" | "runtime"
     ) || request_flag != "--request"
         || sha_flag != "--request-sha256"
         || !namespace::path(std::path::Path::new(path))
         || !digest(selected)
         || (operation == "verify-retained" && !verify::request_path(std::path::Path::new(path)))
         || (operation == "acquire" && !acquire::request_path(std::path::Path::new(path)))
+        || (operation == "runtime" && !runtime::request_path(std::path::Path::new(path)))
     {
         eprintln!("{USAGE}");
         return Ok(std::process::ExitCode::from(2));
     }
-    let result = runtime()?.block_on(async {
+    let result = tokio_runtime()?.block_on(async {
         if operation == "verify-retained" {
             verify::native(std::path::Path::new(path), selected).await
         } else if operation == "acquire" {
             acquire::native(std::path::Path::new(path), selected).await
+        } else if operation == "runtime" {
+            runtime::native(std::path::Path::new(path), selected).await
         } else if operation == "source" {
             source::native(std::path::Path::new(path), selected)
                 .await
@@ -101,7 +107,7 @@ pub(super) fn run(arguments: &[String]) -> anyhow::Result<std::process::ExitCode
     Ok(completed(result))
 }
 
-fn runtime() -> std::io::Result<tokio::runtime::Runtime> {
+fn tokio_runtime() -> std::io::Result<tokio::runtime::Runtime> {
     tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()

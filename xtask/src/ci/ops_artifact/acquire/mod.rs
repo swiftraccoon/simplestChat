@@ -9,7 +9,7 @@ mod execute;
 mod fault_tests;
 mod files;
 #[cfg(test)]
-mod fixture;
+pub(in crate::ci::ops_artifact) mod fixture;
 mod hash;
 mod metadata;
 #[cfg(test)]
@@ -21,6 +21,41 @@ mod tests;
 pub(in crate::ci) mod tools;
 
 use crate::tooling::{Failure, Result};
+pub(super) use execute::AuthenticatedAcquisition;
+pub(super) use files::PairPins;
+pub(super) use hash::Checkpoint as AcquisitionCheckpoint;
+pub(super) use plan::Clock as AcquisitionClock;
+use std::{sync::Arc, time::Instant};
+
+/// The caller owns the only clock, signal registration and process executor.
+/// The existing acquisition schedule is clipped to this original phase end.
+pub(super) struct Window {
+    pub clock: Arc<dyn AcquisitionClock>,
+    pub end: Instant,
+}
+
+pub(super) async fn observe_acquired<E: crate::ci::process::Executor>(
+    path: std::path::PathBuf,
+    selected: String,
+    caller: std::path::PathBuf,
+    environment: crate::tooling::Environment,
+    budget: super::namespace::Budget,
+    window: Window,
+    executor: &mut E,
+) -> Result<AuthenticatedAcquisition> {
+    let context = plan::Context::bounded(window.clock, window.end);
+    context.admit()?;
+    execute::observation(
+        path,
+        selected,
+        caller,
+        environment,
+        budget,
+        &context,
+        executor,
+    )
+    .await
+}
 
 pub(super) const ZIP: u64 = 300 * 1024 * 1024;
 pub(super) const SMALL: u64 = 64 * 1024;

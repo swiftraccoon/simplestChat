@@ -119,6 +119,11 @@ impl Workload {
                 .ok_or_else(|| fail("asset_operation_failed"))?,
         )
     }
+    /// Revalidate this same-process lock without exposing its descriptor or an
+    /// alternate managed root. Installation borrows this existing capability.
+    pub(crate) fn validate(&self) -> Result<()> {
+        self.check()
+    }
     pub fn finish(mut self) -> Result<()> {
         let store = self
             .store_root
@@ -171,5 +176,9 @@ impl Workload {
                 hook,
             },
         )?)
+    }
+    #[cfg(test)]
+    pub(crate) fn install_fixture(path: &std::path::Path, owner: u32) -> Result<Self> {
+        Self::fixture(path, owner, None)
     }
 }

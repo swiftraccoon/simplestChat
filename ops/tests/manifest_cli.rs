@@ -117,6 +117,7 @@ fn usage_and_help_never_read_a_manifest_or_start_another_command() {
                 "       simplestchat-ops release assets capture --path TAR\n",
                 "       simplestchat-ops release assets publish --capture REV TAR [--capture REV TAR]\n",
                 "       simplestchat-ops distribution inspect-executable --path PATH\n",
+                "       simplestchat-ops distribution install --request ABS --request-sha256 SHA\n",
                 "       simplestchat-ops distribution verify-pair --manifest PATH ",
                 "--path PATH --selection PATH\n",
                 "       simplestchat-ops distribution build-plan ",

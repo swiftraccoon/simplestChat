@@ -128,6 +128,77 @@ class ArchiveTests(unittest.TestCase):
             _ = tools.selected_files(asset(content), content)
 
 
+class OpsCallerTests(unittest.TestCase):
+    """The optional Ops caller is separate from default scanners and other platforms."""
+
+    def test_gh_is_optional_and_unsupported_platforms_refuse_before_transport(self) -> None:
+        """A caller selection cannot silently borrow another architecture's binary."""
+        catalog, _ = tools.load_lock()
+        self.assertEqual(set(catalog["gh"].platforms), {"linux-x86_64"})
+        self.assertNotIn("gh", tools.FAST_TOOLS)
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory) / "installed"
+            for platform in ("linux-aarch64", "darwin-arm64", "darwin-x86_64"):
+                with (
+                    self.subTest(platform=platform),
+                    patch.object(tools, "download") as download,
+                    self.assertRaisesRegex(tools.ToolError, "unsupported_tool_platform"),
+                ):
+                    _ = tools.install(["gh"], destination, target_platform=platform)
+                download.assert_not_called()
+                self.assertFalse(destination.exists())
+
+    def test_gh_nested_release_member_uses_existing_verified_install_and_reuse(self) -> None:
+        """Only the reviewed nested member is flattened; inert bytes are never executed."""
+        catalog, _ = tools.load_lock()
+        caller = catalog["gh"]
+        reviewed = caller.platforms["linux-x86_64"]
+        self.assertEqual(len(reviewed.files), 1)
+        member = next(iter(reviewed.files))
+        content = bundle([(member, EXECUTABLE), ("LICENSE", b"unselected license")])
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            lock = root / "lock.json"
+            _ = lock.write_text(
+                json.dumps(
+                    {
+                        "schemaVersion": 1,
+                        "tools": {
+                            "gh": {
+                                "version": caller.version,
+                                "executable": caller.executable,
+                                "platforms": {
+                                    "linux-x86_64": {
+                                        "url": reviewed.url,
+                                        "sha256": hashlib.sha256(content).hexdigest(),
+                                        "format": reviewed.format,
+                                        "files": reviewed.files,
+                                    }
+                                },
+                            }
+                        },
+                    }
+                )
+            )
+            destination = root / "installed"
+            with patch.object(tools, "download", return_value=content) as download:
+                _ = tools.install(
+                    ["gh"], destination, lock_path=lock, target_platform="linux-x86_64"
+                )
+            download.assert_called_once()
+            selected = tools.tool_path(
+                "gh", destination, lock_path=lock, target_platform="linux-x86_64"
+            )
+            self.assertEqual(selected, destination / "bin/gh")
+            self.assertEqual(selected.read_bytes(), EXECUTABLE)
+            self.assertEqual(list((destination / "bin").iterdir()), [selected])
+            with patch.object(tools, "download") as download:
+                _ = tools.install(
+                    ["gh"], destination, lock_path=lock, target_platform="linux-x86_64"
+                )
+            download.assert_not_called()
+
+
 class InstallationTests(unittest.TestCase):
     """A complete install is reusable only with unchanged identities and permissions."""
 

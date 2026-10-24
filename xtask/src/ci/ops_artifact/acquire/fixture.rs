@@ -24,10 +24,10 @@ use std::{
 };
 
 static NEXT: AtomicU64 = AtomicU64::new(0);
-pub(super) fn bytes(value: &Value) -> Vec<u8> {
+pub(in crate::ci::ops_artifact) fn bytes(value: &Value) -> Vec<u8> {
     serde_json::to_vec(value).unwrap()
 }
-pub(super) struct Fixture {
+pub(in crate::ci::ops_artifact) struct Fixture {
     pub root: PathBuf,
     pub input: PathBuf,
     pub output: PathBuf,
@@ -201,7 +201,7 @@ impl Drop for Fixture {
         fs::remove_dir_all(&self.root).unwrap();
     }
 }
-pub(super) struct Clock(pub Mutex<Instant>);
+pub(in crate::ci::ops_artifact) struct Clock(pub Mutex<Instant>);
 impl Clock {
     pub fn new() -> Self {
         Self(Mutex::new(Instant::now()))
@@ -215,7 +215,7 @@ impl plan::Clock for Clock {
         *self.0.lock().unwrap()
     }
 }
-pub(super) struct Fake {
+pub(in crate::ci::ops_artifact) struct Fake {
     pub outputs: Vec<Vec<u8>>,
     pub calls: usize,
     pub fail: Option<(usize, u8)>,

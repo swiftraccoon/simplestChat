@@ -8,12 +8,14 @@ must still recover any external resources a command created.
 
 from __future__ import annotations
 
+import fcntl
 import io
 import math
 import os
 import re
 import selectors
 import signal
+import stat
 import subprocess
 import sys
 import time
@@ -224,6 +226,26 @@ def pump(  # noqa: C901, PLR0912 -- One selector loop owns simultaneous input, o
         return child.wait(timeout=max(0.001, deadline - time.monotonic()))
 
 
+def _validate_input_file(source: BinaryIO, input_data: bytes) -> None:
+    """Borrow one original read-only regular descriptor at its initial cursor."""
+    try:
+        descriptor = source.fileno()
+        valid = (
+            not input_data
+            and source.readable()
+            and source.seekable()
+            and stat.S_ISREG(os.fstat(descriptor).st_mode)
+            and fcntl.fcntl(descriptor, fcntl.F_GETFL) & os.O_ACCMODE == os.O_RDONLY
+            and source.tell() == 0
+            and os.lseek(descriptor, 0, os.SEEK_CUR) == 0
+        )
+    except (OSError, ValueError):
+        valid = False
+    if not valid:
+        message = "invalid_process_input"
+        raise ProcessError(message)
+
+
 def run(  # noqa: PLR0913 -- Stream budgets and destinations are independent caller policies.
     argv: Sequence[str],
     *,
@@ -231,15 +253,23 @@ def run(  # noqa: PLR0913 -- Stream budgets and destinations are independent cal
     cwd: Path | None = None,
     env: Mapping[str, str] | None = None,
     input_data: bytes = b"",
+    input_file: BinaryIO | None = None,
     output: BinaryIO | None = None,
     error: BinaryIO | None = None,
 ) -> tuple[int, bytes, bytes]:
-    """Run explicit argv and return bounded captures for streams without destinations."""
+    """Run explicit argv and return bounded captures for streams without destinations.
+
+    An optional original read-only regular input file is borrowed at cursor zero,
+    never reopened or closed here. Its child reads advance the shared descriptor
+    cursor. Nonempty input_data and input_file are mutually exclusive.
+    """
+    if input_file is not None:
+        _validate_input_file(input_file, input_data)
     stdout = output if output is not None else io.BytesIO()
     stderr = error if error is not None else io.BytesIO()
     with subprocess.Popen(  # noqa: S603 -- reviewed argv; no shell interpolation.
         argv,
-        stdin=subprocess.PIPE,
+        stdin=subprocess.PIPE if input_file is None else input_file,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         cwd=cwd,

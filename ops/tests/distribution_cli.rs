@@ -1,4 +1,5 @@
-//! Execute only the inspector, with metadata-only candidates and an empty PATH.
+//! Inspect metadata-only candidates and refuse invalid installation requests.
+//! No candidate executes, no workload lock or managed destination is mutated.
 
 #[path = "../src/distribution_fixture.rs"]
 mod fixture;
@@ -7,7 +8,7 @@ use sha2::{Digest, Sha256};
 use std::{
     ffi::OsStr,
     fs,
-    os::unix::fs::{DirBuilderExt, symlink},
+    os::unix::fs::{DirBuilderExt, PermissionsExt, symlink},
     path::{Path, PathBuf},
     process::{Command, Output},
     sync::atomic::{AtomicUsize, Ordering},
@@ -137,4 +138,65 @@ fn argument_forms_cannot_execute_a_candidate_or_choose_transport() {
                 .contains("PRIVATE-PATH")
         );
     }
+}
+
+#[test]
+fn install_requires_original_pins_and_refuses_private_invalid_requests_without_effects() {
+    let root = Fixture::new();
+    let path = root.0.join("PRIVATE-request.json");
+    let original = b"{\"schemaVersion\":true,\"PRIVATE\":\"untrusted\"}";
+    fs::write(&path, original).unwrap();
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
+    let digest: String = Sha256::digest(original)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
+    for pin in [digest.as_str(), &"0".repeat(64)] {
+        let result = cli(&[
+            "distribution".as_ref(),
+            "install".as_ref(),
+            "--request".as_ref(),
+            path.as_os_str(),
+            "--request-sha256".as_ref(),
+            pin.as_ref(),
+        ]);
+        assert_eq!(result.status.code(), Some(1));
+        assert!(result.stderr.is_empty());
+        assert_eq!(
+            serde_json::from_slice::<Value>(&result.stdout).unwrap(),
+            serde_json::json!({"schemaVersion":1,"passed":false,"failure":"ops_install_unproven"})
+        );
+    }
+    for args in [
+        vec!["distribution", "install", "--request", "PRIVATE"],
+        vec![
+            "distribution",
+            "install",
+            "--request",
+            "PRIVATE",
+            "--request-sha256",
+            &digest,
+            "--root",
+            "/PRIVATE",
+        ],
+        vec![
+            "distribution",
+            "install",
+            "--request-sha256",
+            &digest,
+            "--request",
+            "PRIVATE",
+        ],
+    ] {
+        let result = cli(&args.iter().map(OsStr::new).collect::<Vec<_>>());
+        assert_eq!(result.status.code(), Some(2));
+        assert!(result.stdout.is_empty());
+        assert!(
+            !String::from_utf8(result.stderr)
+                .unwrap()
+                .contains("PRIVATE")
+        );
+    }
+    assert_eq!(fs::read(&path).unwrap(), original);
+    assert_eq!(fs::read_dir(&root.0).unwrap().count(), 1);
 }

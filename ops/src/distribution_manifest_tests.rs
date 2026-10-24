@@ -7,7 +7,7 @@ use std::{fs, os::unix::fs::symlink};
 
 use super::super::fixture as elf;
 #[path = "distribution_manifest_fixture.rs"]
-pub(super) mod fixture;
+pub(in crate::distribution) mod fixture;
 
 fn source() -> Value {
     fixture::manifest(&elf::fixture(true, false, false))

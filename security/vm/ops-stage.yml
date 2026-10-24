@@ -1,0 +1,102 @@
+---
+- name: Stage only trusted assertions inside the disposable Ops VM
+  hosts: benchmark_hosts
+  become: true
+  gather_facts: false
+  pre_tasks:
+    - name: Require the generated loopback fixture identity
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'vmfixture'
+          - ansible_host == '127.0.0.1'
+          - vm_fixture_run_id is match('^[a-f0-9]{32}$')
+          - vm_fixture_revision is match('^[a-f0-9]{40}$')
+
+    - name: Read only the cloud-init ownership marker
+      ansible.builtin.slurp:
+        src: /etc/simplestchat-vm-fixture
+      register: ops_fixture_marker
+      no_log: true
+
+    - name: Bind this operation to its exact guest
+      ansible.builtin.assert:
+        that:
+          - ops_fixture_marker.content | b64decode | trim == vm_fixture_run_id
+      no_log: true
+
+  tasks:
+    - name: Create the private assertion and read-only preflight directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+      loop:
+        - /root/simplestchat-vm-fixture
+        - /root/simplestchat-vm-fixture/ops-input
+        - /root/simplestchat-vm-fixture/python-cache
+        - /root/simplestchat-vm-fixture/tmp
+        - /etc/simplestchat-public
+        - /srv/simplestchat-public
+        - /srv/simplestchat-public/releases
+
+    - name: Create the fixed managed helper directory
+      ansible.builtin.file:
+        path: /usr/local/libexec/simplestchat-public
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Retain the original helper bytes for independent preflight comparison
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../ops/ansible/files/{{ item }}"
+        dest: "/usr/local/libexec/simplestchat-public/{{ item }}"
+        owner: root
+        group: root
+        mode: '0644'
+      loop:
+        - bounded_process.py
+        - release-public.py
+        - release_public.py
+        - release_artifact.py
+        - release_assets.py
+        - browser_assets.py
+        - release_json.py
+        - runtime_profile.py
+        - reboot-public.py
+        - reboot_public.py
+        - fetch-release.py
+        - release_fetch_receiver.py
+        - release_trust.py
+        - force_release.py
+
+    - name: Stage only the controller-owned Ops guest assertions and reference
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../{{ item.source }}"
+        dest: "/root/simplestchat-vm-fixture/{{ item.name }}"
+        owner: root
+        group: root
+        mode: '0600'
+      loop:
+        - source: build/security_vm_ops_guest.py
+          name: security_vm_ops_guest.py
+        - source: ops/ansible/files/release_preflight.py
+          name: release_preflight.py
+
+    - name: Bind assertion inputs to this run and revision
+      ansible.builtin.copy:
+        content: "{{ {'schemaVersion': 1, 'runId': vm_fixture_run_id, 'revision': vm_fixture_revision} | to_json }}\n"
+        dest: /root/simplestchat-vm-fixture/selection.json
+        owner: root
+        group: root
+        mode: '0600'
+
+    - name: Supply only a nonempty inert preflight configuration
+      ansible.builtin.copy:
+        content: "{}\n"
+        dest: /etc/simplestchat-public/images.json
+        owner: root
+        group: root
+        mode: '0600'

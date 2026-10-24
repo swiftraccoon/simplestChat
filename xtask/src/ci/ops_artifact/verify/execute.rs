@@ -35,6 +35,7 @@ struct State {
     metadata: Option<RetainedMetadata>,
     output: Option<Output>,
     tools: Option<Tools>,
+    executable: Option<simplestchat_ops::distribution::ExecutableIdentity>,
     expected: BTreeSet<String>,
 }
 type Shared = Arc<Mutex<State>>;
@@ -234,6 +235,7 @@ fn payloads(state: &mut State, budget: &Budget, checkpoint: &hash::Checkpoint) -
     )
     .map_err(|_| failure(1))?;
     metadata.check_pair(&pair).map_err(|_| failure(1))?;
+    state.executable = Some(pair.executable().clone());
     drop(_library);
     checkpoint.check()
 }
@@ -354,15 +356,17 @@ pub(super) async fn observation<E: Executor>(
             )
         })
         .await?;
-        let witness = stage(&state, context, executor, move |state, checkpoint| {
+        let (witness, executable) = stage(&state, context, executor, move |state, checkpoint| {
             let output = state.output.as_ref().ok_or_else(|| failure(1))?;
             output.verify_all(checkpoint)?;
-            output.witness()
+            let witness = output.witness()?;
+            Ok((witness, state.executable.take().ok_or_else(|| failure(1))?))
         })
         .await?;
         Ok(super::RetainedObservation {
             bytes: observation,
             witness,
+            executable,
         })
     }
     .await;

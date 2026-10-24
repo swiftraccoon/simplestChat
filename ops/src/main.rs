@@ -27,6 +27,7 @@ const USAGE: &str = concat!(
     "       simplestchat-ops release assets capture --path TAR\n",
     "       simplestchat-ops release assets publish --capture REV TAR [--capture REV TAR]\n",
     "       simplestchat-ops distribution inspect-executable --path PATH\n",
+    "       simplestchat-ops distribution install --request ABS --request-sha256 SHA\n",
     "       simplestchat-ops distribution verify-pair --manifest PATH ",
     "--path PATH --selection PATH\n",
     "       simplestchat-ops distribution build-plan --selection PATH --source-root PATH\n",
@@ -39,6 +40,34 @@ fn main() -> ExitCode {
     if args.len() == 1 && matches!(args[0].to_str(), Some("--help" | "-h")) {
         println!("{USAGE}");
         return ExitCode::SUCCESS;
+    }
+    if args.len() >= 2 && args[0] == "distribution" && args[1] == "install" {
+        if args.len() != 6 || args[2] != "--request" || args[4] != "--request-sha256" {
+            eprintln!("{USAGE}");
+            return ExitCode::from(2);
+        }
+        let result = args[5]
+            .to_str()
+            .ok_or(distribution::install::Failure::Unproven)
+            .and_then(|sha| distribution::install::install(Path::new(&args[3]), sha));
+        let (value, code) = match result {
+            Ok(receipt) => (serde_json::to_value(receipt), ExitCode::SUCCESS),
+            Err(error) => (
+                Ok(serde_json::json!({
+                    "schemaVersion":1,"passed":false,"failure":error.code(),
+                })),
+                ExitCode::from(error.exit_code()),
+            ),
+        };
+        let Ok(mut bytes) = value.and_then(|value| serde_json::to_vec(&value)) else {
+            return ExitCode::FAILURE;
+        };
+        bytes.push(b'\n');
+        return if std::io::stdout().lock().write_all(&bytes).is_ok() || code != ExitCode::SUCCESS {
+            code
+        } else {
+            ExitCode::FAILURE
+        };
     }
     if args.len() >= 2 && args[0] == "release" && args[1] == "assets" {
         let code = assets_cli::run(&args[2..]);

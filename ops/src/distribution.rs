@@ -8,6 +8,8 @@ mod elf;
 #[cfg(test)]
 #[path = "distribution_fixture.rs"]
 pub(crate) mod fixture;
+#[path = "distribution_install.rs"]
+pub mod install;
 #[path = "distribution_manifest.rs"]
 pub mod manifest;
 #[cfg(test)]

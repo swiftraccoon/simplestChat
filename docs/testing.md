@@ -86,6 +86,22 @@ dependencies and its exact three subjects. A successful hosted build and an
 actual post-CI acquisition are separate interoperability evidence; Debian host
 runtime and installation evidence are separate again.
 
+The [authenticated Ops Debian runtime and installer](../ops/README.md#authenticated-debian-runtime-and-first-installation)
+add delegated acquisition/verifier traces, original USTAR/member/source witnesses,
+closed keeper receipts, final replay faults and the fixed first-install lock and
+namespace tests. The source-projection tests reject extra imports, namespace
+changes and identical-byte inode substitutions while retaining the original
+checkout witnesses. Actual isolated Python import regressions place legacy
+bytecode and native-extension siblings in the caller checkout and execute only
+the closed projected keeper. Python keeper/guest fixtures use inert process and
+VM adapters;
+they do not execute the signed candidate or boot a guest. Borrowed regular-file
+stdin tests preserve the original inode after pathname replacement and retain
+caller ownership through process cancellation. Linux signal handling and the
+actual Debian executable/first-install behavior require their respective Linux
+tests and successful manual `ops-runtime.yml` run. The existing full application
+VM workflow remains a separate suite.
+
 Rust tests include native media checks; database tests are opt-in. Serial
 execution reduces UDP port-allocation races. Web tests use mocked browser APIs;
 the web build runs TypeScript checking and produces the production UI.

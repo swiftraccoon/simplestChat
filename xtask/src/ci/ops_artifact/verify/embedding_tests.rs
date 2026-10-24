@@ -24,6 +24,12 @@ async fn embedded_verification_returns_observation_without_publishing_to_stdout(
     let observation: Value = serde_json::from_slice(&retained.bytes).unwrap();
     assert_eq!(observation["kind"], "ops-retained-verification-observation");
     assert_eq!(observation["files"], 22);
+    let original =
+        simplestchat_ops::distribution::inspect(&fixture.output.join("simplestchat-ops")).unwrap();
+    assert_eq!(
+        serde_json::to_value(&retained.executable).unwrap(),
+        serde_json::to_value(original).unwrap()
+    );
     assert_eq!(fake.calls, 4);
     assert!(fake.replay.is_empty());
     assert!(

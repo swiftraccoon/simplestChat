@@ -7,8 +7,10 @@ import os
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 import unittest
+from pathlib import Path
 from unittest.mock import Mock, patch
 
 from test_support import ROOT
@@ -72,6 +74,82 @@ class BoundedProcessTests(unittest.TestCase):
             [sys.executable, "-c", script], cwd=ROOT, input_data=b"x" * 200000
         )
         self.assertEqual((status, output, error), (0, b"x" * 200000, b"e" * 100000))
+
+    def test_borrowed_input_uses_the_original_descriptor_and_remains_caller_owned(self) -> None:
+        """Replacing its old path cannot change the bytes delivered to the child."""
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "input"
+            _ = path.write_bytes(b"original" * 30000)
+            with path.open("rb") as source:
+                descriptor = source.fileno()
+                path.unlink()
+                _ = path.write_bytes(b"replacement")
+                status, output, error = process.run(
+                    [
+                        sys.executable,
+                        "-c",
+                        "import sys; sys.stdout.buffer.write(sys.stdin.buffer.read())",
+                    ],
+                    input_file=source,
+                )
+                self.assertEqual((status, output, error), (0, b"original" * 30000, b""))
+                self.assertFalse(source.closed)
+                self.assertEqual(source.fileno(), descriptor)
+                self.assertEqual(source.tell(), 240000)
+                _ = source.seek(0)
+                self.assertEqual(source.read(), b"original" * 30000)
+
+    def test_borrowed_input_admission_rejects_ambiguous_or_nonregular_sources(self) -> None:
+        """Bad input never acquires a child or consumes the caller's descriptor."""
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "input"
+            _ = path.write_bytes(b"payload")
+            with path.open("rb") as source, path.open("r+b") as writer:
+                _ = source.seek(1)
+                for selected, data in [(source, b""), (writer, b""), (io.BytesIO(), b"")]:
+                    with (
+                        self.subTest(selected=type(selected).__name__),
+                        patch.object(subprocess, "Popen") as launch,
+                        self.assertRaisesRegex(process.ProcessError, "invalid_process_input"),
+                    ):
+                        _ = process.run(
+                            [sys.executable, "-c", "pass"], input_file=selected, input_data=data
+                        )
+                    launch.assert_not_called()
+                _ = source.seek(0)
+                with (
+                    patch.object(subprocess, "Popen") as launch,
+                    self.assertRaisesRegex(process.ProcessError, "invalid_process_input"),
+                ):
+                    _ = process.run(
+                        [sys.executable, "-c", "pass"], input_file=source, input_data=b"extra"
+                    )
+                launch.assert_not_called()
+                self.assertEqual(source.tell(), 0)
+                reader, writer_fd = os.pipe()
+                os.close(writer_fd)
+                with (
+                    os.fdopen(reader, "rb") as pipe,
+                    patch.object(subprocess, "Popen") as launch,
+                    self.assertRaisesRegex(process.ProcessError, "invalid_process_input"),
+                ):
+                    _ = process.run([sys.executable, "-c", "pass"], input_file=pipe)
+                launch.assert_not_called()
+
+    def test_borrowed_input_is_retained_after_child_cancellation(self) -> None:
+        """Process-group cleanup leaves the borrowed source for its original owner."""
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "input"
+            _ = path.write_bytes(b"payload")
+            with path.open("rb") as source:
+                with self.assertRaisesRegex(process.ProcessError, "command_lease_lost"):
+                    _ = process.run(
+                        [sys.executable, "-c", "import time; time.sleep(30)"],
+                        input_file=source,
+                        limits=process.Limits(timeout=2, healthy=lambda: False),
+                    )
+                self.assertFalse(source.closed)
+                self.assertEqual(source.read(), b"payload")
 
     def test_output_limit_applies_before_writing_the_overflow_chunk(self) -> None:
         """Either destination stops exactly at its budget and the child is reaped."""

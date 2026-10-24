@@ -37,6 +37,7 @@ pub(super) struct Window {
 pub(super) struct RetainedObservation {
     pub bytes: Vec<u8>,
     pub witness: RetainedWitness,
+    pub executable: simplestchat_ops::distribution::ExecutableIdentity,
 }
 impl std::fmt::Debug for RetainedObservation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

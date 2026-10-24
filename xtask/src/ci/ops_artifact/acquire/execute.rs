@@ -32,6 +32,7 @@ struct State {
     output: Option<Output>,
     witness: Option<Witness>,
     retained: Option<verify::RetainedWitness>,
+    executable: Option<simplestchat_ops::distribution::ExecutableIdentity>,
     tools: Option<Tools>,
     envelope: Option<Envelope>,
     files: usize,
@@ -259,7 +260,78 @@ impl verify::RetainedClock for VerificationClock {
         self.0.now()
     }
 }
-pub(super) async fn transaction<E: Executor>(
+/// Original acquisition/verification witnesses, with no live descriptor or
+/// serialized authority constructor. Only the authenticated path creates this.
+pub(in crate::ci::ops_artifact) struct AuthenticatedAcquisition {
+    state: Shared,
+    observation: Vec<u8>,
+}
+impl std::fmt::Debug for AuthenticatedAcquisition {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("AuthenticatedOpsAcquisition")
+    }
+}
+impl AuthenticatedAcquisition {
+    pub(in crate::ci::ops_artifact) fn executable(
+        &self,
+    ) -> Result<simplestchat_ops::distribution::ExecutableIdentity> {
+        lock(&self.state)?
+            .executable
+            .clone()
+            .ok_or_else(|| failure(1))
+    }
+    pub(in crate::ci::ops_artifact) fn check(
+        &self,
+        budget: &Budget,
+        checkpoint: &hash::Checkpoint,
+    ) -> Result<()> {
+        let state = lock(&self.state)?;
+        state
+            .original
+            .as_ref()
+            .ok_or_else(|| failure(1))?
+            .read(budget, checkpoint)?;
+        state
+            .witness
+            .as_ref()
+            .ok_or_else(|| failure(1))?
+            .check(budget, checkpoint, true)?;
+        state
+            .retained
+            .as_ref()
+            .ok_or_else(|| failure(1))?
+            .check(budget, &checkpoint.retained())
+    }
+    pub(in crate::ci::ops_artifact) fn export_tar(
+        &self,
+        writer: &mut impl std::io::Write,
+        budget: &Budget,
+        checkpoint: &hash::Checkpoint,
+    ) -> Result<super::files::PairPins> {
+        self.check(budget, checkpoint)?;
+        let pins = {
+            let state = lock(&self.state)?;
+            let selected = serde_json::to_vec(
+                &state
+                    .request
+                    .as_ref()
+                    .ok_or_else(|| failure(1))?
+                    .selection
+                    .identity(),
+            )
+            .map_err(|_| failure(1))?;
+            state
+                .witness
+                .as_ref()
+                .ok_or_else(|| failure(1))?
+                .export_pair(writer, &selected, budget, checkpoint)?
+        };
+        self.check(budget, checkpoint)?;
+        Ok(pins)
+    }
+}
+
+pub(super) async fn observation<E: Executor>(
     path: PathBuf,
     selected: String,
     caller: PathBuf,
@@ -267,7 +339,7 @@ pub(super) async fn transaction<E: Executor>(
     budget: Budget,
     context: &Context,
     executor: &mut E,
-) -> Result<()> {
+) -> Result<AuthenticatedAcquisition> {
     let state = Arc::new(Mutex::new(State::default()));
     let result = async {
         let worker_path = path.clone();
@@ -290,6 +362,11 @@ pub(super) async fn transaction<E: Executor>(
         version(&call(&state, context, executor, &budget, 0).await?)?;
         let repository = call(&state, context, executor, &budget, 1).await?;
         let attempt = call(&state, context, executor, &budget, 2).await?;
+        metadata::admit_attempt(
+            &repository,
+            &attempt,
+            lock(&state)?.request.as_ref().ok_or_else(|| failure(1))?,
+        )?;
         let artifact = call(&state, context, executor, &budget, 3).await?;
         {
             let mut state = lock(&state)?;
@@ -325,6 +402,7 @@ pub(super) async fn transaction<E: Executor>(
         context.complete_verification()?;
         executor.ready().await?;
         let worker_budget = budget.clone();
+        let executable = verified.executable;
         let observation = stage(&state, context, executor, move |state, checkpoint| {
             verified
                 .witness
@@ -358,6 +436,7 @@ pub(super) async fn transaction<E: Executor>(
                 .witness
                 .check(&worker_budget, &checkpoint.retained())?;
             state.retained = Some(verified.witness);
+            state.executable = Some(executable);
             Ok(observation)
         })
         .await?;
@@ -372,12 +451,38 @@ pub(super) async fn transaction<E: Executor>(
     if !executor.cleanup_passed() {
         return Err(failure(1));
     }
+    Ok(AuthenticatedAcquisition { state, observation })
+}
+pub(super) async fn transaction<E: Executor>(
+    path: PathBuf,
+    selected: String,
+    caller: PathBuf,
+    environment: Environment,
+    budget: Budget,
+    context: &Context,
+    executor: &mut E,
+) -> Result<()> {
+    let authenticated = observation(
+        path,
+        selected,
+        caller,
+        environment,
+        budget.clone(),
+        context,
+        executor,
+    )
+    .await?;
     let replayed = executor
-        .replay(&observation, false, context.replay_deadline()?)
+        .replay(
+            &authenticated.observation,
+            false,
+            context.replay_deadline()?,
+        )
         .await;
     let pending = executor.ready().await;
     let advanced = context.complete_replay();
     let worker_budget = budget.clone();
+    let state = authenticated.state.clone();
     let final_files = stage(&state, context, executor, move |state, checkpoint| {
         state
             .original

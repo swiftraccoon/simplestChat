@@ -43,6 +43,17 @@ the upstream release and independently authenticate every changed digest before
 accepting a lock update. A checksum obtained from the same compromised upstream
 release would not establish publisher identity.
 
+The manual Ops runtime workflow separately selects GitHub CLI `2.102.0` through
+this same installer. Its reviewed release archive and member mapping support
+only Linux x86-64; other platforms are refused. It is outside the default fast
+scanner set. Bootstrap it into a separate prefix before supplying the Ops
+caller's token, then resolve the verified path:
+
+```sh
+python3 build/security_tools.py install --tools gh --directory /absolute/private/ops-gh
+python3 build/security_tools.py path gh --directory /absolute/private/ops-gh
+```
+
 The standalone Semgrep engine and its native libraries come from authenticated
 official wheels. The Python CLI, authentication integration and MCP dependencies
 are not installed. Every selected companion library participates in receipt

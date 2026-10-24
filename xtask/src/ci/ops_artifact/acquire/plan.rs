@@ -22,7 +22,7 @@ pub(super) const CAPS: [Duration; 5] = [
     Duration::from_secs(30),
     Duration::from_secs(180),
 ];
-pub(super) trait Clock: Send + Sync {
+pub(in crate::ci::ops_artifact) trait Clock: Send + Sync {
     fn now(&self) -> Instant;
 }
 pub(super) struct NativeClock;
@@ -34,6 +34,7 @@ impl Clock for NativeClock {
 pub(super) struct Context {
     pub clock: Arc<dyn Clock>,
     start: Instant,
+    end: Instant,
     last: Cell<Instant>,
     calls: Cell<usize>,
     archive_used: Cell<Duration>,
@@ -46,12 +47,18 @@ impl Context {
         Self {
             clock,
             start,
+            end: start + ENTRY,
             last: Cell::new(start),
             calls: Cell::new(0),
             archive_used: Cell::new(Duration::ZERO),
             verified: Cell::new(false),
             replayed: Cell::new(false),
         }
+    }
+    pub(super) fn bounded(clock: Arc<dyn Clock>, end: Instant) -> Self {
+        let mut context = Self::new(clock);
+        context.end = context.end.min(end);
+        context
     }
     pub fn now(&self) -> Result<Instant> {
         let now = self.clock.now();
@@ -62,7 +69,7 @@ impl Context {
         Ok(now)
     }
     pub fn end(&self) -> Instant {
-        self.start + ENTRY
+        self.end
     }
     pub fn remaining(&self) -> Result<Duration> {
         self.end()

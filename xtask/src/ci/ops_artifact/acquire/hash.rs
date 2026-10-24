@@ -11,13 +11,26 @@ use std::{
 };
 
 #[derive(Clone)]
-pub(super) struct Checkpoint {
+pub(in crate::ci::ops_artifact) struct Checkpoint {
     abort: Arc<AtomicBool>,
     clock: Arc<dyn super::plan::Clock>,
     start: Instant,
     end: Instant,
 }
 impl Checkpoint {
+    pub(in crate::ci::ops_artifact) fn from_owner(
+        clock: Arc<dyn super::plan::Clock>,
+        start: Instant,
+        end: Instant,
+        abort: Arc<AtomicBool>,
+    ) -> Self {
+        Self {
+            abort,
+            clock,
+            start,
+            end,
+        }
+    }
     #[cfg(test)]
     pub fn fixture() -> Self {
         let clock: Arc<dyn super::plan::Clock> = Arc::new(super::plan::NativeClock);

@@ -269,6 +269,9 @@ xtask/src/ci/ops_artifact/acquire/**
 !xtask/src/ci/ops_artifact/hosted/
 xtask/src/ci/ops_artifact/hosted/**
 !xtask/src/ci/ops_artifact/hosted/*.rs
+!xtask/src/ci/ops_artifact/runtime/
+xtask/src/ci/ops_artifact/runtime/**
+!xtask/src/ci/ops_artifact/runtime/*.rs
 !xtask/src/ci_evidence/
 xtask/src/ci_evidence/**
 !xtask/src/ci_evidence/*.rs

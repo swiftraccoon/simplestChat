@@ -667,7 +667,195 @@ pub(super) struct Witness {
     records: BTreeMap<String, Record>,
     payloads: BTreeMap<String, Record>,
 }
+/// Safe facts copied only from the original authenticated payload records.
+#[derive(Clone, Debug)]
+pub(in crate::ci::ops_artifact) struct FilePin {
+    sha256: String,
+    bytes: u64,
+}
+impl FilePin {
+    pub(in crate::ci::ops_artifact) fn sha256(&self) -> &str {
+        &self.sha256
+    }
+    pub(in crate::ci::ops_artifact) fn bytes(&self) -> u64 {
+        self.bytes
+    }
+}
+#[derive(Clone, Debug)]
+pub(in crate::ci::ops_artifact) struct PairPins {
+    manifest: FilePin,
+    selection: FilePin,
+    binary: FilePin,
+}
+impl PairPins {
+    pub(in crate::ci::ops_artifact) fn manifest(&self) -> &FilePin {
+        &self.manifest
+    }
+    pub(in crate::ci::ops_artifact) fn selection(&self) -> &FilePin {
+        &self.selection
+    }
+    pub(in crate::ci::ops_artifact) fn binary(&self) -> &FilePin {
+        &self.binary
+    }
+}
+
+struct OriginalReader<'a> {
+    file: &'a File,
+    checkpoint: &'a Checkpoint,
+    hash: Sha256,
+    count: u64,
+    primary: Option<crate::tooling::Failure>,
+}
+impl Read for OriginalReader<'_> {
+    fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+        if let Err(error) = self.checkpoint.check() {
+            super::keep(&mut self.primary, error);
+            return Err(std::io::Error::other("Original Ops transfer is unproven."));
+        }
+        let mut file = self.file;
+        match file.read(buffer) {
+            Ok(count) => {
+                self.hash.update(&buffer[..count]);
+                self.count += count as u64;
+                Ok(count)
+            }
+            Err(error) => {
+                super::keep(&mut self.primary, failure(1));
+                Err(error)
+            }
+        }
+    }
+}
+fn tar_member(builder: &mut tar::Builder<&mut impl Write>, name: &str, bytes: &[u8]) -> Result<()> {
+    let mut header = tar::Header::new_ustar();
+    header.set_size(bytes.len() as u64);
+    header.set_uid(0);
+    header.set_gid(0);
+    header.set_mode(0o600);
+    header.set_mtime(0);
+    header.set_entry_type(tar::EntryType::Regular);
+    header.set_cksum();
+    io(builder.append_data(&mut header, name, bytes))
+}
 impl Witness {
+    pub(super) fn export_pair(
+        &self,
+        writer: &mut impl Write,
+        selection: &[u8],
+        budget: &Budget,
+        checkpoint: &Checkpoint,
+    ) -> Result<PairPins> {
+        self.check(budget, checkpoint, true)?;
+        if selection.is_empty() || selection.len() > 16384 {
+            return Err(failure(1));
+        }
+        let parent = self.parent.reopen(budget)?;
+        let result = (|| {
+            let root = Held::open(
+                parent.file(),
+                self.path.file_name().ok_or_else(|| failure(1))?,
+                FLAGS | OFlags::DIRECTORY,
+                budget,
+            )?;
+            let result = (|| {
+                if !namespace::binding(&self.stamp, &io(root.file().metadata())?) {
+                    return Err(failure(1));
+                }
+                let input = Held::open(
+                    root.file(),
+                    OsStr::new("input"),
+                    FLAGS | OFlags::DIRECTORY,
+                    budget,
+                )?;
+                let result = (|| {
+                    let manifest = self
+                        .payloads
+                        .get("ops-release.json")
+                        .ok_or_else(|| failure(1))?;
+                    let binary = self
+                        .payloads
+                        .get("simplestchat-ops")
+                        .ok_or_else(|| failure(1))?;
+                    let bytes = check_record(input.file(), manifest, budget, checkpoint, true)?;
+                    ordinary(input.file(), &binary.name)?;
+                    let source = Held::open(input.file(), OsStr::new(&binary.name), FLAGS, budget)?;
+                    let copied = (|| {
+                        if !namespace::same(&binary.stamp, &io(source.file().metadata())?) {
+                            return Err(failure(1));
+                        }
+                        let mut reader = source.file();
+                        io(reader.seek(SeekFrom::Start(0)))?;
+                        let mut reader = OriginalReader {
+                            file: source.file(),
+                            checkpoint,
+                            hash: Sha256::new(),
+                            count: 0,
+                            primary: None,
+                        };
+                        let mut builder = tar::Builder::new(writer);
+                        tar_member(&mut builder, "ops-release.json", &bytes)?;
+                        tar_member(&mut builder, "ops-selection.json", selection)?;
+                        let mut header = tar::Header::new_ustar();
+                        header.set_size(binary.bytes);
+                        header.set_uid(0);
+                        header.set_gid(0);
+                        // Transport members are private data. Only the trusted
+                        // guest receiver authorizes the original inode's later
+                        // checked 0600 -> 0755 execution transition.
+                        header.set_mode(0o600);
+                        header.set_mtime(0);
+                        header.set_entry_type(tar::EntryType::Regular);
+                        header.set_cksum();
+                        let appended =
+                            io(builder.append_data(&mut header, "simplestchat-ops", &mut reader));
+                        if let Some(error) = reader.primary {
+                            return Err(error);
+                        }
+                        appended?;
+                        if reader.count != binary.bytes
+                            || super::super::hex(&reader.hash.finalize()) != binary.sha256
+                        {
+                            return Err(failure(1));
+                        }
+                        let mut source_file = source.file();
+                        let mut extra = [0];
+                        if io(source_file.read(&mut extra))? != 0
+                            || !namespace::same(&binary.stamp, &io(source.file().metadata())?)
+                        {
+                            return Err(failure(1));
+                        }
+                        visible(input.file(), binary, budget)?;
+                        io(builder.finish())?;
+                        checkpoint.check()?;
+                        Ok(PairPins {
+                            manifest: FilePin {
+                                sha256: manifest.sha256.clone(),
+                                bytes: manifest.bytes,
+                            },
+                            selection: FilePin {
+                                sha256: super::super::sha(selection),
+                                bytes: selection.len() as u64,
+                            },
+                            binary: FilePin {
+                                sha256: binary.sha256.clone(),
+                                bytes: binary.bytes,
+                            },
+                        })
+                    })();
+                    let closed = source.finish();
+                    copied.and_then(|pins| closed.map(|()| pins))
+                })();
+                let closed = input.finish();
+                result.and_then(|pins| closed.map(|()| pins))
+            })();
+            let closed = root.finish();
+            result.and_then(|pins| closed.map(|()| pins))
+        })();
+        let closed = parent.finish();
+        let pins = result.and_then(|pins| closed.map(|()| pins))?;
+        self.check(budget, checkpoint, true)?;
+        Ok(pins)
+    }
     pub fn check(&self, budget: &Budget, checkpoint: &Checkpoint, verified: bool) -> Result<()> {
         let parent = self.parent.reopen(budget)?;
         let root = Held::open(

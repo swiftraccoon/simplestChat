@@ -22,6 +22,8 @@ pub(super) enum Program {
     OpsMaterialCurl,
     OpsDpkgDeb,
     OpsHostCc,
+    OpsRuntimeGit,
+    OpsRuntimePython,
     ComparisonGit,
     ComparisonCargo,
     ComparisonBenchmark,
@@ -54,6 +56,8 @@ impl Program {
             Self::OpsMaterialCurl => "curl",
             Self::OpsDpkgDeb => "dpkg-deb",
             Self::OpsHostCc => "cc",
+            Self::OpsRuntimeGit => "git",
+            Self::OpsRuntimePython => "python3",
             Self::ComparisonGit => "git",
             Self::ComparisonCargo => "cargo",
             Self::ComparisonBenchmark => "load_test",
@@ -112,6 +116,7 @@ pub(super) struct Command {
     pub retained_ops: Option<std::sync::Arc<super::ops_artifact::verify::tools::Invocation>>,
     pub ops_acquire: Option<std::sync::Arc<super::ops_artifact::acquire::tools::Invocation>>,
     pub hosted_ops: Option<std::sync::Arc<super::ops_artifact::hosted::tools::Invocation>>,
+    pub ops_runtime: Option<std::sync::Arc<super::ops_artifact::runtime::tools::Invocation>>,
     /// Original latest dispatch time for an embedded source/build command.
     /// This can only narrow a selected Ops Git/compiler invocation.
     pub ops_stage_dispatch: Option<std::time::Instant>,
@@ -144,6 +149,7 @@ impl Command {
             retained_ops: None,
             ops_acquire: None,
             hosted_ops: None,
+            ops_runtime: None,
             ops_stage_dispatch: None,
             benchmark: None,
             benchmark_output: None,

@@ -8,6 +8,9 @@ the release runtime and the reference implementation. A separate read-only
 release preflight checks the fixed host paths without executing installed helpers.
 The browser-asset transaction commands described below can mutate only the fixed
 managed asset store while holding the existing workload lock.
+The separate Ops first-install command publishes one original-pinned executable
+at its fixed helper path. The authenticated Debian runtime owner exercises that
+operation in a disposable guest; installed Python callers retain their roles.
 
 ```sh
 cargo run --locked -q -p simplestchat-ops -- release manifest --path /path/to/release.json
@@ -1349,6 +1352,96 @@ handles GitHub's archive redirect; its normal redirect and trust-provider policy
 remains part of the selected client trust boundary. This operation authenticates
 retained bytes. It does not execute a candidate or install or replace a host tool.
 
+## Authenticated Debian runtime and first installation
+
+The manual [Ops runtime workflow](../.github/workflows/ops-runtime.yml) checks one
+signed Ops artifact from a successful main CI attempt for the workflow's exact
+checkout revision. Supply that CI run ID, attempt and signed artifact ID. The
+workflow uses a free Ubuntu 24.04 runner, the pinned caller `gh` bootstrap and a
+separate Debian 13 KVM guest. Its checkout is never selected by an input.
+Controller compilation and dependency installation precede the credential-bearing
+step. This workflow is separate from the full application deployment/restore VM.
+
+The local entry point uses the closed acquisition request schema above:
+
+```sh
+cargo build --locked -p xtask --bin xtask
+target/debug/xtask ops-artifact runtime \
+  --request /absolute/runtime-request.json --request-sha256 ORIGINAL_REQUEST_SHA256
+```
+
+Provide `GH_TOKEN` only to the compiled controller invocation. This operation
+also requires Linux x86-64, the owned-guest prerequisites, the current package
+version, protocol 1 and target `x86_64-unknown-linux-musl`. Its output directory
+must be fresh and absolute, with at most thirteen ordinary path components;
+the received request path permits sixteen. The request chooses an artifact identity and output;
+it cannot choose a host, command, compiler, guest image or executable path.
+
+One original cancellation owner and monotonic deadline cover fresh API identity,
+artifact download, certificate verification, transfer, guest work, destruction
+and final original-witness checks. Acquisition's retained manifest, binary and
+namespace witnesses remain live through final replay. A saved acquisition JSON
+or keeper receipt cannot reconstruct that authority.
+
+The controller constructs a bounded uncompressed USTAR with exactly three
+0600 members: original `ops-release.json`, controller-selected `ops-selection.json`
+and authenticated `simplestchat-ops`. Whole-transfer and individual SHA/count
+pins, the original installer-request bytes and the controller's typed executable
+identity cross the keeper boundary. The selected first-party keeper dependency
+closure is measured against Git HEAD and retained original files. The controller
+copies exactly those 26 files into a fresh private source tree and runs the
+keeper from that tree. Exact directory inventories, immutable metadata and file
+hashes are checked through dispatch, settlement and final replay. Unselected
+checkout siblings cannot supply Python imports; additions or substitutions in
+the execution tree refuse. Isolated Python also uses a fresh bytecode namespace.
+The source tree and any partial construction remain private output evidence.
+No candidate runs on the controller.
+
+The guest checks the complete 19-field executable identity, local pair policy,
+ordinary/base/fetch/force preflight against the unchanged Python oracle, typed
+negative cases, first installation and exact repeat. Its 28 ordered cases use
+fixed commands. Writers close before the original executable inode receives its
+checked executable mode; commands execute through the retained read-only file
+descriptor. Per-command completion observes the leader and pipes. Final owned
+VM destruction supplies guest process closure, with authenticated SSH, QMP,
+cloud-init and drainer observations checked separately.
+
+The owner allows 4,200 seconds after entry, reserving 3,900 seconds for the complete
+phase sequence and 300 seconds of slack. The keeper slot includes 30 seconds of
+setup, a 1,800-second body, 120-second TERM grace and 20-second Native settlement
+allowance. The workflow's 90-minute job also covers cold setup/compilation.
+These are admission/deadline policies, not measured cold-start promises or hard
+bounds on OS I/O, scheduling or reap. Only final CLI zero includes original
+readback, all explicit closes, replay and cancellation/deadline fences. The
+workflow uploads only the sanitized summary after success; a partial local
+`summary.json` is not independent success or installation authority.
+
+The binary's separate host entry is:
+
+```sh
+simplestchat-ops distribution install \
+  --request /absolute/install-request.json --request-sha256 ORIGINAL_REQUEST_SHA256
+```
+
+Call it only after the caller authenticates the artifact. Its closed original
+request contains `schemaVersion: 1` and `manifest`, `selection`, `binary` objects,
+each with `path`, `sha256` and `bytes`. It checks those original bytes and the
+pair policy, root/Linux x86-64/Debian 13, fixed configuration and the existing
+workload flock/journals. It publishes only
+`/usr/local/libexec/simplestchat-public/simplestchat-ops`, using a no-replace rename.
+Repeating the completed installation produces `changed: false` without filesystem
+changes. Foreign/different bytes, modes, links, unfinished journals
+or substituted namespace entries refuse. Errors after a known publication retain
+the visible executable for exact-identity retry; cleanup removes only owned
+temporary state. This command performs no certificate verification itself.
+
+The synchronous installer has a 120-second owner with 15 seconds reserved for
+finalization. Linux signalfd owns INT/TERM on its calling thread; other application
+threads must not leave those process signals unblocked. Observed deadline/INT/TERM
+retain statuses 124/130/143 after all-peer finalization. Blocked OS calls, panic,
+SIGKILL and process-crash recovery have no cleanup guarantee. This first-install
+operation adds no upgrade, uninstall or production caller migration.
+
 ## API review for Ops delivery
 
 This affected-component review follows the pinned
@@ -1364,7 +1457,14 @@ are not deserializable authority.
 Checked finalizers attempt acquired peers and retain the primary failure;
 fallback destructors do not panic. Blocking filesystem workers have abort
 checkpoints and are joined before the operation returns. OS close/reap calls
-remain outside a hard time bound. `C-DEBUG` and `C-DEBUG-NONEMPTY` apply to the
+remain outside a hard time bound. Linux source inventories use a borrowed
+directory cursor whose enclosing file has a checked close. The non-Linux inert
+fixtures use rustix 1.1.5's portable `Dir`, which exposes only destructor closure
+for its internal descriptor. This narrow safe-API limitation supplies no checked
+cursor-close evidence on those unsupported runtime targets; revisit it if the
+dependency adds a consuming close API or runtime target support changes.
+
+`C-DEBUG` and `C-DEBUG-NONEMPTY` apply to the
 cross-module invocation, request and retained-observation types, whose fixed
 nonempty debug output omits credentials and private paths. Filesystem witnesses
 stay internal and have no debug representation. `C-FAILURE`, `C-EXAMPLE` and `C-LINK` are

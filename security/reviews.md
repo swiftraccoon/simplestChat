@@ -207,6 +207,23 @@ installer finding at these two locations; source, provenance, artifact and
 runtime checks remain blocking. Hosted cold timing is not established by this
 review.
 
+The manual Ops runtime workflow adds one exact informational installer review at
+`ops-runtime.yml#jobs/ops-runtime/steps/2/uses`, also reviewed on 2026-10-23.
+The same immutable action source was re-read: its explicit `toolchain: 1.99.0`
+input reaches `rustup toolchain install` unchanged, rather than selecting the
+action's `stable` default or assuming the runner's installed toolchain. This
+matches `rust-toolchain.toml`. Its official HTTPS rustup bootstrap when absent
+retains the trust boundary above; installer bytes are not independently pinned
+by this review. The same-repository, main-only manual job disables persisted
+checkout credentials and compiles before its sole runtime step receives the
+read-only token. Caller artifact identifiers cannot select installer arguments.
+No signing or OIDC permission is granted. The exact feature fingerprint and
+2026-11-29 expiry are unchanged; this record covers only the informational finding
+at this new location. Artifact, provenance, source, runtime and finalization
+checks remain blocking. The `actions: read` permission is documented inline for
+acquiring the exact selected CI run and its artifact; it receives no exception.
+This review makes no claim about cold hosted compilation or guest runtime.
+
 ## Account-room action reference
 
 On 2026-10-18, the new manual-only account-room experiment produced one
