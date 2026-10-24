@@ -481,11 +481,11 @@ fn main() {
     // dependency order on linkers that still process archives left-to-right.
     println!("cargo:rustc-link-lib=static=mediasoup-worker");
     pkg_config::Config::new()
-        // Require the reviewed stable series and the CVE-2026-84782 fix.
+        // Require the reviewed stable series with the worker's DTLS 1.2 ceiling.
         // Future release series need their own compatibility review.
-        .range_version("4.0.3".."4.1.0")
+        .range_version("4.1.0".."4.2.0")
         .statik(true)
         .probe("openssl")
-        .expect("static OpenSSL >= 4.0.3 and < 4.1.0 is required");
+        .expect("static OpenSSL >= 4.1.0 and < 4.2.0 is required");
     println!("cargo:rustc-link-search=native={out_dir}");
 }

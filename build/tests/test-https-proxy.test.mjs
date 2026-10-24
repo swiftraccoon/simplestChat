@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 import { localPort, startTestHttpsProxy } from '../test-https-proxy.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
-const pinned = path.join(process.env.OPENSSL_DIR || path.join(root, 'target/openssl-4.0.3'), 'bin/openssl');
+const pinned = path.join(process.env.OPENSSL_DIR || path.join(root, 'target/openssl-4.1.0'), 'bin/openssl');
 // Unit tests can use the controller's crypto fixture tool. The browser wrapper
 // independently requires its canonical checksum-pinned OpenSSL installation.
 const opensslBinary = existsSync(pinned) ? pinned : '/usr/bin/openssl';

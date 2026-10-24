@@ -201,8 +201,8 @@ impl Fixture {
 
     fn install_native(&self) {
         for file in [
-            "target/openssl-4.0.3/lib/libssl.a",
-            "target/openssl-4.0.3/lib/libcrypto.a",
+            "target/openssl-4.1.0/lib/libssl.a",
+            "target/openssl-4.1.0/lib/libcrypto.a",
             "target/aws-lc-5.11.0/lib/libcrypto-awslc.a",
             "target/aws-lc-5.11.0/share/rust/aws_lc_bindings.rs",
         ] {
@@ -338,10 +338,10 @@ fn pins_the_toolchain_and_native_environment_and_refreshes_locked_web_dependenci
     for (key, relative) in [
         ("RUSTC", "toolchain/bin/rustc"),
         ("RUSTDOC", "toolchain/bin/rustdoc"),
-        ("OPENSSL_DIR", "target/openssl-4.0.3"),
+        ("OPENSSL_DIR", "target/openssl-4.1.0"),
         ("AWS_LC_SYS_SYSTEM_DIR", "target/aws-lc-5.11.0"),
         ("PIP_CONSTRAINT", "build/pip-constraints.txt"),
-        ("PKG_CONFIG_PATH", "target/openssl-4.0.3/lib/pkgconfig"),
+        ("PKG_CONFIG_PATH", "target/openssl-4.1.0/lib/pkgconfig"),
     ] {
         assert_eq!(
             child_env(&command, key),
@@ -508,7 +508,7 @@ fn installs_only_missing_native_prerequisites_and_skip_web_omits_all_npm_work() 
         .unwrap();
     assert_eq!(
         installer.arguments,
-        [f.root.join("target/openssl-4.0.3").to_str().unwrap()]
+        [f.root.join("target/openssl-4.1.0").to_str().unwrap()]
     );
     let f = Fixture::new();
     f.prepare(&["--skip-web"], &[], Platform::Other).unwrap();
@@ -574,7 +574,7 @@ fn missing_tools_constraints_and_selected_compilers_fail_before_installs() {
 #[test]
 fn both_openssl_archives_are_required_and_partial_aws_lc_is_refused() {
     let f = Fixture::new();
-    fs::remove_file(f.root.join("target/openssl-4.0.3/lib/libcrypto.a")).unwrap();
+    fs::remove_file(f.root.join("target/openssl-4.1.0/lib/libcrypto.a")).unwrap();
     f.prepare(&["--skip-web"], &[], Platform::Other).unwrap();
     assert_eq!(
         f.events()

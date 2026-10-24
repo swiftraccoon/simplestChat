@@ -570,12 +570,21 @@ namespace RTC
 
 		/* Set the global DTLS context. */
 
-		// Both DTLS 1.0 and 1.2 (requires OpenSSL >= 1.1.0).
+		// Retain the DTLS 1.2 ceiling when the library also supports DTLS 1.3.
 		DtlsTransport::sslCtx = SSL_CTX_new(DTLS_method());
 
 		if (!DtlsTransport::sslCtx)
 		{
 			LOG_OPENSSL_ERROR("SSL_CTX_new() failed");
+
+			goto error;
+		}
+
+		ret = SSL_CTX_set_max_proto_version(DtlsTransport::sslCtx, DTLS1_2_VERSION);
+
+		if (ret != 1)
+		{
+			LOG_OPENSSL_ERROR("SSL_CTX_set_max_proto_version() failed");
 
 			goto error;
 		}

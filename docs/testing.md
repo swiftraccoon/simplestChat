@@ -1605,7 +1605,7 @@ Optional vendor CodeQL runs use the same CLI with an explicit local flag:
 ```sh
 python3 build/security_codeql_local.py --revision "$(git rev-parse HEAD)" \
   --include-vendor --language c-cpp --suite all \
-  --openssl-prefix "$PWD/target/openssl-4.0.3" \
+  --openssl-prefix "$PWD/target/openssl-4.1.0" \
   --output "$PWD/results/codeql-native-local"
 ```
 

@@ -206,7 +206,7 @@ pub(crate) fn native_env(
             root.join(default)
         }
     };
-    let openssl_dir = prefix("OPENSSL_DIR", "target/openssl-4.0.3");
+    let openssl_dir = prefix("OPENSSL_DIR", "target/openssl-4.1.0");
     let aws_lc_dir = prefix("AWS_LC_SYS_SYSTEM_DIR", "target/aws-lc-5.11.0");
     let pip_constraint = root.join("build/pip-constraints.txt");
     let inputs = NativeInputs {

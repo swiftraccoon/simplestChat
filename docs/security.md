@@ -79,7 +79,7 @@ a deployment.
 
 Mutation checks require the documented native compiler, locked Cargo cache and
 checksum-pinned static OpenSSL prefix. `--openssl-prefix` defaults to `OPENSSL_DIR`
-or the checkout's `target/openssl-4.0.3`. The runner builds a private source copy
+or the checkout's `target/openssl-4.1.0`. The runner builds a private source copy
 and measures assertions over selected pure role, label and password policies.
 See [mutation checks](../security/mutation/README.md) for platform support, limits
 and failure interpretation. Unsupported tool platforms fail explicitly.
@@ -253,7 +253,7 @@ a Linux environment with the pinned OpenSSL prefix:
 ```sh
 python3 build/security_codeql_local.py --revision "$(git rev-parse HEAD)" \
   --include-vendor --language c-cpp --suite all \
-  --openssl-prefix "$PWD/target/openssl-4.0.3" \
+  --openssl-prefix "$PWD/target/openssl-4.1.0" \
   --output "$PWD/results/codeql-native-local"
 ```
 

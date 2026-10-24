@@ -150,7 +150,7 @@ def native_inventory() -> JsonObject:
     openssl = object_value(
         object_value(policy.report(ROOT / "vendor/native-components.json"))["openssl"]
     ).copy()
-    prefix = "/opt/openssl-4.0.3"
+    prefix = "/opt/openssl-4.1.0"
     disabled = b"shared\ndso\nmodule\nengine\n"
     libraries: list[JsonValue] = [
         {"library": name, "path": f"{prefix}/lib/lib{name}.a", "sha256": DIGEST, "size": 12}

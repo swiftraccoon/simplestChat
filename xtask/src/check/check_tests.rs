@@ -188,7 +188,7 @@ impl Fixture {
         ] {
             fixture.write(name, "never execute this fixture\n");
         }
-        fixture.install_native(&fixture.root.join("target/openssl-4.0.3"), false);
+        fixture.install_native(&fixture.root.join("target/openssl-4.1.0"), false);
         fixture.install_native(&fixture.root.join("target/aws-lc-5.11.0"), true);
         for name in ["npm", "rustup", "sh", "bash", "shellcheck", "node"] {
             fixture.executable(&fixture.bin.join(name), name);
@@ -507,13 +507,13 @@ fn rust_pins_native_inputs_all_target_clippy_and_warning_free_private_docs() {
         );
         assert_eq!(
             environment["OPENSSL_DIR"],
-            fixture.root.join("target/openssl-4.0.3").to_str().unwrap()
+            fixture.root.join("target/openssl-4.1.0").to_str().unwrap()
         );
         assert_eq!(
             environment["PKG_CONFIG_PATH"],
             fixture
                 .root
-                .join("target/openssl-4.0.3/lib/pkgconfig")
+                .join("target/openssl-4.1.0/lib/pkgconfig")
                 .to_str()
                 .unwrap()
         );
@@ -575,14 +575,14 @@ fn relative_native_prefixes_are_resolved_from_the_owned_checkout() {
         .run(
             &["--rust"],
             &[
-                ("OPENSSL_DIR", "target/openssl-4.0.3".into()),
+                ("OPENSSL_DIR", "target/openssl-4.1.0".into()),
                 ("AWS_LC_SYS_SYSTEM_DIR", "target/aws-lc-5.11.0".into()),
             ],
         )
         .unwrap();
     assert_eq!(
         fixture.events()[2].environment["OPENSSL_DIR"],
-        "target/openssl-4.0.3"
+        "target/openssl-4.1.0"
     );
 }
 
@@ -936,8 +936,8 @@ fn missing_toolchain_pin_stops_before_rustup() {
 #[test]
 fn missing_native_archive_or_bindings_stop_before_cargo() {
     for name in [
-        "target/openssl-4.0.3/lib/libssl.a",
-        "target/openssl-4.0.3/lib/libcrypto.a",
+        "target/openssl-4.1.0/lib/libssl.a",
+        "target/openssl-4.1.0/lib/libcrypto.a",
         "target/aws-lc-5.11.0/lib/libcrypto-awslc.a",
         "target/aws-lc-5.11.0/share/rust/aws_lc_bindings.rs",
     ] {

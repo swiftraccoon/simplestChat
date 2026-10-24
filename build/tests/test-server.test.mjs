@@ -16,7 +16,7 @@ const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
 execFileSync('cargo', ['build', '-q', '-p', 'xtask'], { cwd: repoRoot, stdio: 'inherit' });
 const xtask = path.join(repoRoot, 'target/debug/xtask');
 const fixture = fileURLToPath(new URL('./fixture-server.mjs', import.meta.url));
-const pinnedOpenSSL = process.env.OPENSSL_DIR || path.join(repoRoot, 'target/openssl-4.0.3');
+const pinnedOpenSSL = process.env.OPENSSL_DIR || path.join(repoRoot, 'target/openssl-4.1.0');
 // Controller-only unit tests can supply the OS crypto fixture explicitly; the
 // browser wrapper itself always defaults to the checksum-pinned installation.
 const fixtureOpenSSL = existsSync(path.join(pinnedOpenSSL, 'bin/openssl')) ? pinnedOpenSSL : '/usr';

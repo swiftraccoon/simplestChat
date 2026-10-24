@@ -334,7 +334,7 @@ fn workflow_fingerprint_steps_keep_their_scopes_order_guards_and_receipt_consume
         let expected_env = if job == "rust-test" {
             serde_json::json!({
                 "CI_CACHE_SCOPE":scope,
-                "PKG_CONFIG_PATH":"${{ github.workspace }}/target/openssl-4.0.3/lib/pkgconfig"
+                "PKG_CONFIG_PATH":"${{ github.workspace }}/target/openssl-4.1.0/lib/pkgconfig"
             })
         } else {
             serde_json::json!({"CI_CACHE_SCOPE":scope})

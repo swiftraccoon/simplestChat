@@ -73,7 +73,7 @@ const FILES: &[(&str, &str)] = &[
         "67fc3f19a4f3352e2383293cd68e36c899b7b59445d3bd7bf54f3523ac9a5166",
     ),
 ];
-const OPENSSL: &[u8] = b"OpenSSL 4.0.3 29 Sep 2026";
+const OPENSSL: &[u8] = b"OpenSSL 4.1.0 23 Oct 2026";
 const OLD_OPENSSL: &[u8] = b"OpenSSL 3.0.8";
 
 fn contains(bytes: &[u8], needle: &[u8]) -> bool {

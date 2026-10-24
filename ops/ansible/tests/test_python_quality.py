@@ -105,7 +105,7 @@ class PythonPolicyTests(unittest.TestCase):
             self.assertEqual(step["if"], build["if"])
             self.assertEqual(
                 obj(step, "env"),
-                {"PKG_CONFIG_PATH": "${{ github.workspace }}/target/openssl-4.0.3/lib/pkgconfig"},
+                {"PKG_CONFIG_PATH": "${{ github.workspace }}/target/openssl-4.1.0/lib/pkgconfig"},
             )
             self.assertNotIn("continue-on-error", step)
 

@@ -139,7 +139,7 @@ or findings for another package.
 
 The proof binds the archive and image configuration, source revision, application
 binary, actual ELF/native evidence files and SPDX SBOM. It requires authenticated
-static OpenSSL 4.0.3 with shared libraries, dynamic loading and engines disabled
+static OpenSSL 4.1.0 with shared libraries, dynamic loading and engines disabled
 while retaining built-in providers, including legacy algorithms;
 no loader cache, preload or hwcaps paths; no ELF audit/filter or RPATH/RUNPATH
 hooks; identical bytes for every present standard-directory candidate of each

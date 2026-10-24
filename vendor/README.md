@@ -109,7 +109,7 @@ invocation with `--message-format=json`. After building, it runs:
 python3 build/security_native.py --root /app \
   --vendor-report /app/vendor-evidence/report.json \
   --cargo-messages /app/cargo-build.json --cargo-home /root/.cargo \
-  --openssl-prefix /opt/openssl-4.0.3 --aws-lc-prefix /opt/aws-lc-5.11.0 \
+  --openssl-prefix /opt/openssl-4.1.0 --aws-lc-prefix /opt/aws-lc-5.11.0 \
   --output /app/native-components.build.json
 ```
 
@@ -340,23 +340,34 @@ Cargo ignores a dependency's
 nested lockfile, so removing that generated package artifact does not change
 workspace resolution. The replacement build:
 
-- requires pkg-config to find OpenSSL 4.0.3 or newer in the reviewed 4.0 series
-  (versions before 4.1.0);
+- requires pkg-config to find OpenSSL 4.1.0 or newer in the reviewed 4.1 series
+  (versions before 4.2.0);
 - forbids Meson fallback to a bundled copy;
 - requires static `libssl` and `libcrypto`; and
 - makes libsrtp use the same resolved dependency.
 
-The pinned source is OpenSSL 4.0.3, released 29 September 2026. The update follows
-the [OpenSSL security advisory](https://openssl-library.org/news/secadv/20260929.txt),
-including the High-severity DTLS issue CVE-2026-84782. The official source archive
-SHA-256 is `325b5c806167c13b40b1ffeadfe0248197c00eccc4cf123ec1e28d2d2fd216d9`;
+The pinned source is OpenSSL 4.1.0, released 23 October 2026. The official source
+archive SHA-256 is `50c17baf54cb008f6ce42d50deb4b28050a1aad711636cabd4b241c7e90cc2fd`;
 the installer verifies it before unpacking, and `native-components.json` binds
 both the source and installer hashes. The release PGP signature was verified
 against the official primary fingerprint
-`B146647E45A7B33947AB226B2A2C87D161692D40`. Cargo and Meson reject earlier 4.0 releases
+`B146647E45A7B33947AB226B2A2C87D161692D40`. Cargo and Meson reject earlier releases
 and other release lines. Updating the source pin requires rebuilding the worker,
 Rust executables, native test image and production/load-generator images;
-previous binaries and historical scan receipts do not acquire the fix.
+previous binaries and historical scan receipts do not acquire the update.
+
+OpenSSL 4.1 enables DTLS 1.3 for the generic DTLS method by default. The worker
+checks `SSL_CTX_set_max_proto_version(..., DTLS1_2_VERSION)` during context
+creation to retain the previous DTLS 1.2 ceiling without changing its minimum.
+Native tests use real in-process records to require DTLS 1.2 negotiation with a
+DTLS 1.3-capable peer in either role and reject a peer requiring DTLS 1.3. The
+release's known DTLS 1.3 and listener issues are not claimed fixed by this
+refresh; the worker does not enable DTLS 1.3 or use the new listener API.
+
+The preceding 4.0.3 pin, released 29 September 2026, incorporated the
+[OpenSSL security advisory](https://openssl-library.org/news/secadv/20260929.txt),
+including the High-severity DTLS issue CVE-2026-84782.
+
 OpenSSL 4 makes certificate subject-name access immutable. The maintained worker
 now constructs an owned name, copies it into the subject and issuer, and frees it
 on both success and failure. The native DTLS regression verifies both fields,
@@ -366,7 +377,7 @@ The maintained installer also configures `no-dso`, `no-module` and `no-engine`
 alongside `no-shared`. Dynamic provider and engine loading is disabled in these
 static libraries. Default and base providers remain built in; OpenSSL also builds
 the legacy provider in when modules are disabled, so this does **not** remove
-legacy algorithms. These settings follow the authenticated 4.0.3 source's
+legacy algorithms. These settings follow the authenticated 4.1.0 source's
 `Configure`, `providers/build.info` and `INSTALL.md` semantics.
 
 The installer records `shared`, `dso`, `module` and `engine` from the completed

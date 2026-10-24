@@ -84,8 +84,8 @@ jobs:
       - name: Configure native dependencies and media address
         run: |
           {
-            echo "OPENSSL_DIR=${RUNNER_TEMP}/simplestchat-openssl-4.0.3"
-            echo "PKG_CONFIG_PATH=${RUNNER_TEMP}/simplestchat-openssl-4.0.3/lib/pkgconfig"
+            echo "OPENSSL_DIR=${RUNNER_TEMP}/simplestchat-openssl-4.1.0"
+            echo "PKG_CONFIG_PATH=${RUNNER_TEMP}/simplestchat-openssl-4.1.0/lib/pkgconfig"
             echo "AWS_LC_SYS_SYSTEM_DIR=${RUNNER_TEMP}/simplestchat-aws-lc-5.11.0"
           } >> "${GITHUB_ENV}"
           cargo run --locked -q -p xtask -- media-ip --github-env

@@ -28,7 +28,7 @@ Install the pinned Rust/native dependencies from the
 [development setup](../docs/development.md), then run from the repository root:
 
 ```bash
-export OPENSSL_DIR="$PWD/target/openssl-4.0.3"
+export OPENSSL_DIR="$PWD/target/openssl-4.1.0"
 export PKG_CONFIG_PATH="$OPENSSL_DIR/lib/pkgconfig"
 export OPENSSL_STATIC=1
 export AWS_LC_SYS_SYSTEM_DIR="$PWD/target/aws-lc-5.11.0"

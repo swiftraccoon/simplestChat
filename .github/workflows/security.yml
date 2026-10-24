@@ -77,11 +77,11 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 75
     env:
-      OPENSSL_DIR: ${{ github.workspace }}/target/openssl-4.0.3
+      OPENSSL_DIR: ${{ github.workspace }}/target/openssl-4.1.0
       AWS_LC_SYS_SYSTEM_DIR: ${{ github.workspace }}/target/aws-lc-5.11.0
       AWS_LC_SYS_STATIC: '1'
       AWS_LC_SYS_SYSTEM_SKIP_VERSION_CHECK: '0'
-      PKG_CONFIG_PATH: ${{ github.workspace }}/target/openssl-4.0.3/lib/pkgconfig
+      PKG_CONFIG_PATH: ${{ github.workspace }}/target/openssl-4.1.0/lib/pkgconfig
       OPENSSL_STATIC: '1'
       PIP_CONSTRAINT: ${{ github.workspace }}/build/pip-constraints.txt
     steps:

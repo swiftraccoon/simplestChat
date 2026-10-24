@@ -347,8 +347,8 @@ libuv_proj = subproject(
 
 openssl_dep = dependency(
   'openssl',
-  # Require the reviewed stable series and the CVE-2026-84782 fix.
-  version: ['>=4.0.3', '<4.1.0'],
+  # Require the reviewed stable series with the worker's DTLS 1.2 ceiling.
+  version: ['>=4.1.0', '<4.2.0'],
   method: 'pkg-config',
   static: true,
   required: true,

@@ -234,7 +234,7 @@ async fn plan(
         };
         let openssl = env(environment, "OPENSSL_DIR")
             .map(PathBuf::from)
-            .unwrap_or_else(|| root.join("target/openssl-4.0.3"))
+            .unwrap_or_else(|| root.join("target/openssl-4.1.0"))
             .join("bin/openssl");
         if !openssl.is_absolute() || !executable(&openssl) {
             return Err(Stop::usage(

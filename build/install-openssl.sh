@@ -3,8 +3,8 @@ set -eu
 
 # Keep this in sync with the minimum enforced by the vendored mediasoup-sys
 # build. Use the current stable release, with external loading disabled.
-openssl_version='4.0.3'
-openssl_sha256='325b5c806167c13b40b1ffeadfe0248197c00eccc4cf123ec1e28d2d2fd216d9'
+openssl_version='4.1.0'
+openssl_sha256='50c17baf54cb008f6ce42d50deb4b28050a1aad711636cabd4b241c7e90cc2fd'
 openssl_url="https://github.com/openssl/openssl/releases/download/openssl-${openssl_version}/openssl-${openssl_version}.tar.gz"
 
 install_prefix=${1:-}

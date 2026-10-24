@@ -120,9 +120,9 @@ including its port when using Vite or a second instance.
 For release builds or direct Cargo commands, configure the native environment:
 
 ```sh
-build/install-openssl.sh "$PWD/target/openssl-4.0.3"
+build/install-openssl.sh "$PWD/target/openssl-4.1.0"
 build/install-aws-lc.sh "$PWD/target/aws-lc-5.11.0"
-export OPENSSL_DIR="$PWD/target/openssl-4.0.3"
+export OPENSSL_DIR="$PWD/target/openssl-4.1.0"
 export PKG_CONFIG_PATH="$OPENSSL_DIR/lib/pkgconfig"
 export OPENSSL_STATIC=1
 export AWS_LC_SYS_SYSTEM_DIR="$PWD/target/aws-lc-5.11.0"

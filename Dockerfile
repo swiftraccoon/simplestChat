@@ -77,10 +77,10 @@ RUN --mount=type=bind,from=image-review-inputs,source=/image-exceptions.json,tar
 # worker and Rust OpenSSL bindings use one version and the runtime cannot load
 # an older libssl with the same SONAME.
 COPY build/install-openssl.sh /usr/local/bin/install-simplestchat-openssl
-RUN /usr/local/bin/install-simplestchat-openssl /opt/openssl-4.0.3
-ENV OPENSSL_DIR=/opt/openssl-4.0.3 \
+RUN /usr/local/bin/install-simplestchat-openssl /opt/openssl-4.1.0
+ENV OPENSSL_DIR=/opt/openssl-4.1.0 \
     OPENSSL_STATIC=1 \
-    PKG_CONFIG_PATH=/opt/openssl-4.0.3/lib/pkgconfig
+    PKG_CONFIG_PATH=/opt/openssl-4.1.0/lib/pkgconfig
 
 # Verify rustup before executing it. TARGETARCH is supplied by Docker/BuildKit;
 # the uname fallback also supports direct Podman builds.
@@ -160,14 +160,14 @@ COPY migrations/*.sql ./migrations/
 RUN python3 build/security_tools.py path cargo-auditable --directory /opt/security-tools \
     && /opt/security-tools/bin/cargo-auditable auditable build --locked --release --bin simplestChat \
         --message-format=json > /app/cargo-build.json \
-    && strings target/release/simplestChat | grep -Fq 'OpenSSL 4.0.3 29 Sep 2026' \
+    && strings target/release/simplestChat | grep -Fq 'OpenSSL 4.1.0 23 Oct 2026' \
     && ! strings target/release/simplestChat | grep -Fq 'OpenSSL 3.0.8' \
     && ! ldd target/release/simplestChat | grep -Eq 'lib(ssl|crypto)\.so'
 COPY build/security_native.py build/security_awslc.py build/security_elf.py build/install-openssl.sh build/install-aws-lc.sh ./build/
 RUN python3 build/security_native.py --root /app \
     --vendor-report /app/vendor-evidence/report.json \
     --cargo-messages /app/cargo-build.json --cargo-home /root/.cargo \
-    --openssl-prefix /opt/openssl-4.0.3 --aws-lc-prefix /opt/aws-lc-5.11.0 \
+    --openssl-prefix /opt/openssl-4.1.0 --aws-lc-prefix /opt/aws-lc-5.11.0 \
     --output /app/native-components.build.json
 RUN python3 -c 'import pathlib, tarfile; \
     archive = tarfile.open("/opt/aws-lc-5.11.0/share/simplestchat/aws-lc-source.tar.gz"); \

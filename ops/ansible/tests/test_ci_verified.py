@@ -642,7 +642,7 @@ class VerifiedCacheTests(unittest.TestCase):
             ("test:stress", "test:stress-extra", False),
             ("cargo build --locked --workspace --bins", "cargo build --locked --bins", True),
             ('OPENSSL_STATIC: "1"', 'OPENSSL_STATIC: "0"', True),
-            ("target/openssl-4.0.3", "target/openssl-4.0.4", True),
+            ("target/openssl-4.1.0", "target/openssl-4.1.1", True),
             ("cache-key: rust-build", "cache-key: different-build", True),
         ):
             with self.subTest(before=before):
@@ -708,7 +708,7 @@ class VerifiedCacheTests(unittest.TestCase):
     def test_backend_dependency_guard_binds_generated_inputs_and_depinfo_bytes(self) -> None:
         """Generated files inherit pinned build inputs; restored dep-info is authenticated."""
         generated = "target/debug/build/mediasoup-sys-1234567890abcdef/out/fbs.rs"
-        openssl = "target/openssl-4.0.3/lib/libssl.a"
+        openssl = "target/openssl-4.1.0/lib/libssl.a"
         aws_lc = "target/aws-lc-5.11.0/lib/libcrypto-awslc.a"
         aws_bindings = "target/debug/build/aws-lc-sys-1234567890abcdef/out/bindings.rs"
         generated_inputs = (generated, openssl, aws_lc, aws_bindings)
@@ -720,7 +720,7 @@ class VerifiedCacheTests(unittest.TestCase):
         with patch.dict(
             os.environ,
             {
-                "OPENSSL_DIR": str(self.root / "target/openssl-4.0.3"),
+                "OPENSSL_DIR": str(self.root / "target/openssl-4.1.0"),
                 "AWS_LC_SYS_SYSTEM_DIR": str(self.root / "target/aws-lc-5.11.0"),
             },
         ):
@@ -883,7 +883,7 @@ class VerifiedWorkflowTests(unittest.TestCase):
             if string(step.get("uses", "")).startswith("actions/setup-python@")
         )
         self.assertEqual(obj(python, "with").get("update-environment", "true"), "true")
-        canonical = "${{ github.workspace }}/target/openssl-4.0.3/lib/pkgconfig"
+        canonical = "${{ github.workspace }}/target/openssl-4.1.0/lib/pkgconfig"
         self.assertEqual(string(obj(workflow, "env"), "PKG_CONFIG_PATH"), canonical)
 
         # setup-python writes GITHUB_ENV after workflow/job env has been applied.

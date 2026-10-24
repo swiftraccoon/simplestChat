@@ -48,7 +48,7 @@ impl Context {
         let openssl = PathBuf::from(selected(
             &environment,
             "OPENSSL_DIR",
-            root.join("target/openssl-4.0.3").as_os_str(),
+            root.join("target/openssl-4.1.0").as_os_str(),
         ));
         let temporary = PathBuf::from(selected(
             &environment,

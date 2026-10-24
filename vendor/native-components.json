@@ -65,14 +65,14 @@
     "license": "BSD-3-Clause"
   },
   "openssl": {
-    "version": "4.0.3",
+    "version": "4.1.0",
     "source": {
-      "id": "openssl-4.0.3",
-      "url": "https://github.com/openssl/openssl/releases/download/openssl-4.0.3/openssl-4.0.3.tar.gz",
-      "sha256": "325b5c806167c13b40b1ffeadfe0248197c00eccc4cf123ec1e28d2d2fd216d9",
+      "id": "openssl-4.1.0",
+      "url": "https://github.com/openssl/openssl/releases/download/openssl-4.1.0/openssl-4.1.0.tar.gz",
+      "sha256": "50c17baf54cb008f6ce42d50deb4b28050a1aad711636cabd4b241c7e90cc2fd",
       "format": "tar.gz"
     },
-    "installer_sha256": "e818884010bd16788d60cdcc68c191edbb0e4ca3576bd8b88ca2831a148aad94",
+    "installer_sha256": "973dfbef2c575beefd7ca735a146562ea79ccf5d68557779550f9e6ba9341cba",
     "license": "Apache-2.0",
     "configure_options": [
       "no-shared",

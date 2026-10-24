@@ -64,6 +64,29 @@ namespace RTC
 			return SSL_set_tlsext_use_srtp(transport.ssl, profile) == 0;
 		}
 
+		static int NegotiatedProtocolVersion(const DtlsTransport& transport)
+		{
+			return SSL_version(transport.ssl);
+		}
+
+		static int MaximumProtocolVersion(const DtlsTransport& transport)
+		{
+			return static_cast<int>(SSL_get_max_proto_version(transport.ssl));
+		}
+
+		static int MinimumProtocolVersion(const DtlsTransport& transport)
+		{
+			return static_cast<int>(SSL_get_min_proto_version(transport.ssl));
+		}
+
+		static bool SetPeerProtocolRange(DtlsTransport& transport, int minimum, int maximum)
+		{
+			// Only an owned opposite peer is widened. The worker endpoint retains
+			// the bound inherited from the production context.
+			return SSL_set_max_proto_version(transport.ssl, maximum) == 1 &&
+			       SSL_set_min_proto_version(transport.ssl, minimum) == 1;
+		}
+
 	private:
 		static long FailBioRead(
 		  BIO* bio, int operation, const char*, size_t, int command, long, int result, size_t*)
@@ -236,6 +259,57 @@ TEST_CASE("DTLS generated certificate retains its subject and self signature", "
 	  X509_get_pubkey(certificate), EVP_PKEY_free);
 	REQUIRE(publicKey != nullptr);
 	CHECK(X509_verify(certificate, publicKey.get()) == 1);
+}
+
+TEST_CASE("DTLS 1.3 capable peers negotiate the worker's DTLS 1.2 ceiling", "[dtls][dtls-version]")
+{
+	DtlsClass dtlsClass;
+	for (const bool workerIsClient : { false, true })
+	{
+		Pair pair;
+		auto& worker = workerIsClient ? *pair.client : *pair.server;
+		auto& peer   = workerIsClient ? *pair.server : *pair.client;
+		REQUIRE(Access::MaximumProtocolVersion(worker) == DTLS1_2_VERSION);
+		REQUIRE(Access::SetPeerProtocolRange(peer, DTLS1_2_VERSION, DTLS1_3_VERSION));
+		REQUIRE(Access::MaximumProtocolVersion(peer) == DTLS1_3_VERSION);
+		pair.Connect();
+		CHECK(Access::NegotiatedProtocolVersion(worker) == DTLS1_2_VERSION);
+		CHECK(Access::NegotiatedProtocolVersion(peer) == DTLS1_2_VERSION);
+		CHECK(pair.clientEvents.connected == 1);
+		CHECK(pair.serverEvents.connected == 1);
+		CHECK(pair.clientEvents.failed.empty());
+		CHECK(pair.serverEvents.failed.empty());
+
+		const uint8_t data[]{ 1, 2, 3 };
+		REQUIRE(pair.client->SendApplicationData(data, sizeof(data)));
+		REQUIRE(pair.server->SendApplicationData(data, sizeof(data)));
+		pair.Pump();
+		CHECK(pair.clientEvents.applicationData == 1);
+		CHECK(pair.serverEvents.applicationData == 1);
+	}
+}
+
+TEST_CASE("DTLS 1.3 only peers cannot connect to the worker", "[dtls][dtls-version]")
+{
+	DtlsClass dtlsClass;
+	for (const bool workerIsClient : { false, true })
+	{
+		Pair pair;
+		auto& worker = workerIsClient ? *pair.client : *pair.server;
+		auto& peer   = workerIsClient ? *pair.server : *pair.client;
+		REQUIRE(Access::MaximumProtocolVersion(worker) == DTLS1_2_VERSION);
+		REQUIRE(Access::SetPeerProtocolRange(peer, DTLS1_3_VERSION, DTLS1_3_VERSION));
+		REQUIRE(Access::MinimumProtocolVersion(peer) == DTLS1_3_VERSION);
+		REQUIRE(Access::MaximumProtocolVersion(peer) == DTLS1_3_VERSION);
+		pair.Start();
+		CHECK(pair.client->GetState() != State::CONNECTED);
+		CHECK(pair.server->GetState() != State::CONNECTED);
+		CHECK(pair.clientEvents.connected == 0);
+		CHECK(pair.serverEvents.connected == 0);
+		CHECK(pair.clientEvents.applicationData == 0);
+		CHECK(pair.serverEvents.applicationData == 0);
+		CHECK(pair.clientEvents.failed.size() + pair.serverEvents.failed.size() >= 1);
+	}
 }
 
 TEST_CASE("DTLS authenticated peer close retains its reason after reset", "[dtls][dtls-close]")

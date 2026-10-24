@@ -126,7 +126,7 @@
         {
           "path": "build.rs",
           "upstream_sha256": "8e776fe8ae227a3fa5a5df485967b19ce40d434a7249fdc70f4796395a06da9a",
-          "vendored_sha256": "c98640d063f4db4e6023c418593e048cc64a79caff77ff446d96bdb3de36c71b"
+          "vendored_sha256": "46ec021f11ab6ad69c37a321f6dc247e5fe27cff4f65d9bcc5d907dc9be51294"
         },
         {
           "path": "deps/libwebrtc/libwebrtc/call/rtp_transport_controller_send.cc",
@@ -181,7 +181,7 @@
         {
           "path": "meson.build",
           "upstream_sha256": "c5b7604af745a2b1fa00d39eb45f96c71443abea0e9b95597f9468ff5edd9959",
-          "vendored_sha256": "9aab35acd38f157d752636b4e5c173af86340ca4a5fb30261392178c34196171"
+          "vendored_sha256": "eef8032b6be1efc3177897c3fb962d14217f0684c7f338232822eb3a14ff0351"
         },
         {
           "path": "python-invoke-requirements.txt",
@@ -201,7 +201,7 @@
         {
           "path": "src/RTC/DtlsTransport.cpp",
           "upstream_sha256": "a13478960d24d52220415e6c590731c782792671f3e89fbe9ddb7610841fa350",
-          "vendored_sha256": "7f3dc23f5e3f9ca25b84bd61e9dec7b15e4f86ab3d740eb0be194557d61d61cc"
+          "vendored_sha256": "f11f539b5323ab6ce80dfd802241aed9429d8677c8ac9d2037761ae53a1cda0a"
         },
         {
           "path": "src/RTC/Producer.cpp",
@@ -316,7 +316,7 @@
         {
           "path": "test/src/RTC/TestDtlsTransport.cpp",
           "upstream_sha256": null,
-          "vendored_sha256": "fd49dab0d8ad072908e59780559f8715c66fb944d26aa6b8c2728628d8df9198"
+          "vendored_sha256": "03d1ed05493257136e344eebc1eeab6d3a23df9082a7e20c8b9c745df450ff87"
         },
         {
           "path": "test/src/RTC/TestMediaDiagnostics.cpp",
