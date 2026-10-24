@@ -34,6 +34,7 @@ struct Probe {
     copy: Option<(String, bool, u64)>,
     hash_ready: bool,
     hash_clock: Option<std::time::Instant>,
+    seal_mode: Option<String>,
 }
 #[cfg(test)]
 thread_local! {
@@ -46,6 +47,7 @@ thread_local! {
             copy: None,
             hash_ready: false,
             hash_clock: None,
+            seal_mode: None,
         })
     };
 }
@@ -95,6 +97,10 @@ fn copy_limit(
     } else {
         Ok(wanted)
     }
+}
+#[cfg(test)]
+pub(super) fn seal_mode_fault(name: String) {
+    PROBE.with(|p| p.borrow_mut().seal_mode = Some(name));
 }
 #[cfg(test)]
 pub(super) fn take_probe() -> (usize, usize) {
@@ -755,7 +761,27 @@ impl Retained {
     pub fn seal(&mut self, expected: &str, owner: &mut Owner) -> Result<()> {
         self.check(owner, Window::Body)?;
         control::io(owner, self.handle.file().sync_all())?;
+        #[cfg(test)]
+        if PROBE.with(|p| {
+            let mut p = p.borrow_mut();
+            if p.seal_mode
+                .as_ref()
+                .is_some_and(|name| OsStr::new(name) == self.name())
+            {
+                p.seal_mode.take().is_some()
+            } else {
+                false
+            }
+        }) {
+            mapped(owner, fchmod(self.file(), Mode::from_bits_truncate(0o644)))?;
+        }
         let stamp = control::io(owner, self.handle.file().metadata())?;
+        if !stamp.is_file()
+            || !binding(&self.witness.stamp, &stamp)
+            || stamp.nlink() != self.witness.stamp.nlink()
+        {
+            return mismatch(owner);
+        }
         self.witness.stamp = stamp;
         self.sealed = true;
         let actual = self.hash(owner)?;
@@ -831,3 +857,7 @@ impl Retained {
 pub(super) fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
+
+#[cfg(test)]
+#[path = "files_tests.rs"]
+mod tests;
