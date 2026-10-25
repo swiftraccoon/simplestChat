@@ -115,6 +115,7 @@ fn usage_and_help_never_read_a_manifest_or_start_another_command() {
                 "       simplestchat-ops release stage [OPTIONS]\n",
     "       simplestchat-ops release deploy [OPTIONS]\n",
     "       simplestchat-ops release backup verify [OPTIONS]\n",
+                "       simplestchat-ops release maintain-prerequisite [OPTIONS]\n",
     "       simplestchat-ops release attestation prepare [OPTIONS]\n",
                 "       simplestchat-ops release attestation verify [OPTIONS]\n",
                 "       simplestchat-ops release manifest --path PATH\n",

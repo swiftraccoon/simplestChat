@@ -2966,7 +2966,25 @@ The [Caddy run at `4322717`](https://github.com/swiftraccoon/simplestChat/action
 passed its finite TLS/storage prerequisite with cleanup and all VM lifecycle
 checks. The operational 900-second launcher and Rust fd0 transport remain unrun.
 No application deployment, caller cutover or authenticated Ops distribution is
-established. Run the two local fixture suites independently:
+established by that Caddy-only run.
+
+The separate manual fixed-launcher runtime fixture
+(`.github/workflows/maintenance-launcher-runtime.yml`) adds four independent signed-musl guests: positive, dirty source, controlled
+cancellation and the actual unchanged 900-second timeout. It joins the exact
+installed Ops inode, shallow source tree, native PID-namespace settlement,
+PostgreSQL state, naturally generated Caddy materials and known daemon actors.
+Its native API and ownership review
+records the fixed clock profile and local compiler/test evidence. The four
+actual trials and 11 new Linux-only FD/process methods remain unrun locally;
+this fixture does not replace operational Python or change a host caller.
+Run its 30 inert keeper tests with:
+
+```sh
+ops/ansible/.venv/bin/python -B -m unittest discover \
+  -s ops/ansible/tests -p 'test_security_vm_maintain_prerequisite.py' -v
+```
+
+Run the two earlier local prerequisite suites independently:
 
 ```sh
 ops/ansible/.venv/bin/python -B -m unittest discover \

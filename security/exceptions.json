@@ -1990,6 +1990,16 @@
       "reachability": "Reviewed 2026-10-24 for this exact new step only. Checkout disables persisted credentials; Python and Rust are explicitly pinned. The reviewed official HTTPS rustup bootstrap is unchanged. No API token or restored result selects installer arguments, and this job uses no result cache. Every reference comparison and all eleven required correctness/security results remain blocking.",
       "expires": "2026-11-29",
       "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/reviews.md#github-actions-portability-findings"
+    },
+    {
+      "scanner": "codeql",
+      "fingerprint": "codeql:ece698dca3f9f392c1b830efe410e4d218e30fa87652a5b1e3986bed5bfed0a0",
+      "scope": "build/security_vm_maintain_prerequisite_guest.py:741:745:19:6",
+      "owner": "swiftraccoon",
+      "rationale": "The StrictUndefined renderer emits only fixed tracked dotenv, Compose and PostgreSQL password/HBA/database-init SQL configuration in an owned disposable guest. Its actual guest fixture call supplies retained exact-source templates, fixed private domain/resource settings, selected image identities and newly generated 64-hex synthetic secrets. It produces no HTML or browser response; HTML escaping is not the encoding boundary for these configuration formats. No current-value byte discrepancy is claimed. JSON receipts and the original Caddyfile are separate outputs.",
+      "reachability": "Fresh original local CodeQL 2.27.1 Python security SARIF for 28a461e9e87e7920f1fd71d02a0c64971ba65fdf binds this exact query, primary range/message and complete source SHA256 53eb87b8921f0e96837507d334e84aaa9087625946804b7ad89b4fce68be2aa0. Only this local finding is reviewed; changed bytes require a fresh review. No test/path/query exclusion, automatic renewal, expiry extension or remote dismissal.",
+      "expires": "2026-11-29",
+      "review": "https://github.com/swiftraccoon/simplestChat/blob/main/security/codeql-review-2026-09-30.md#local-maintain-configuration-renderer"
     }
   ]
 }

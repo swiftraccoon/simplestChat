@@ -1,0 +1,97 @@
+name: Signed musl maintenance launcher prerequisite KVM runtime
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'Successful same-head main CI run containing signed Ops and server'
+        type: string
+        required: true
+      run_attempt:
+        description: 'Exact successful CI attempt'
+        type: string
+        required: true
+        default: '1'
+      artifact_id:
+        description: 'Signed Ops artifact ID from that exact CI attempt'
+        type: string
+        required: true
+
+permissions:
+  contents: read # Exact checkout only; no source or release writes.
+  actions: read # Acquire and authenticate the exact same-head Ops and server artifacts.
+
+concurrency:
+  group: maintenance-launcher-runtime-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  maintain-launcher-runtime:
+    name: Maintenance ${{ matrix.scenario }} in one fresh owned guest
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' &&
+      github.repository == 'swiftraccoon/simplestChat' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        scenario: [positive, dirty-source, cancel-owned-launcher, timeout-stopped-launcher]
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.14.8'
+      - name: Install only the exact controller toolchain
+        run: |
+          rustup toolchain install 1.99.0 --profile minimal \
+            --component rustfmt --component clippy --component rust-analyzer
+          rustup target add --toolchain 1.99.0 x86_64-unknown-linux-gnu
+      - name: Prepare the free owned KVM and pinned controller dependencies
+        run: |
+          sudo rm -rf -- /usr/local/lib/android /usr/share/dotnet
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-x86 qemu-utils cloud-image-utils \
+            openssh-client curl acl
+          test -c /dev/kvm
+          sudo setfacl -m "u:$(id -un):rw" /dev/kvm
+          python3 -m venv "$RUNNER_TEMP/maintain-controller"
+          "$RUNNER_TEMP/maintain-controller/bin/python" -m pip --isolated install \
+            --require-hashes --only-binary=:all: -r ops/ansible/requirements.txt
+          python3 build/security_tools.py install --tools gh --directory "$RUNNER_TEMP/maintain-gh"
+          maintain_gh="$(python3 build/security_tools.py path gh \
+            --directory "$RUNNER_TEMP/maintain-gh")"
+          test "$maintain_gh" = "$RUNNER_TEMP/maintain-gh/bin/gh"
+          printf '%s\n' "$RUNNER_TEMP/maintain-controller/bin" \
+            "${maintain_gh%/gh}" >> "$GITHUB_PATH"
+      - name: Compile trusted acquisition and passive ELF inspection before credentials
+        run: |
+          cargo build --locked -p xtask --bin xtask
+          cargo build --locked --release --target x86_64-unknown-linux-gnu \
+            -p simplestchat-ops --bin simplestchat-ops
+      - name: Authenticate same-head musl and observe the fixed complete launcher prerequisite
+        timeout-minutes: 35
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MAINTAIN_RUN_ID: ${{ inputs.run_id }}
+          MAINTAIN_RUN_ATTEMPT: ${{ inputs.run_attempt }}
+          MAINTAIN_ARTIFACT_ID: ${{ inputs.artifact_id }}
+          MAINTAIN_SCENARIO: ${{ matrix.scenario }}
+        run: |
+          python3 -B build/security_vm_maintain_prerequisite.py \
+            --run-id "$MAINTAIN_RUN_ID" --run-attempt "$MAINTAIN_RUN_ATTEMPT" \
+            --artifact-id "$MAINTAIN_ARTIFACT_ID" --scenario "$MAINTAIN_SCENARIO" \
+            --output "$RUNNER_TEMP/maintain-launcher-runtime"
+      - name: Retain only the closed current summary on success or failure
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: signed-musl-maintain-launcher-runtime-${{ matrix.scenario }}
+          path: ${{ runner.temp }}/maintain-launcher-runtime/summary.json
+          if-no-files-found: error
+          retention-days: 14
