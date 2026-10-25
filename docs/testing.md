@@ -2955,7 +2955,7 @@ reaps. Neither job proves the other's behavior or complete maintenance success.
 The optional workflow has no artifact selector, API token, production host,
 required-CI role or installed caller change.
 
-The Caddy 94-case suite and namespace 14-case boundary suite use the maintained strict
+The Caddy 97-case suite and namespace 14-case boundary suite use the maintained strict
 Python configuration. These local tests execute no actual helper role, namespace,
 KVM, Caddy or TLS. The separately recorded namespace run passed its finite catalog;
 Caddy stopped at prerequisites, and the operational 900-second launcher remains unrun.
@@ -3062,3 +3062,14 @@ The material fixture constructor also guards each current parent/file descriptor
 before metadata or reads. Actual admitted-FD child-open, metadata and read
 refusals paired with checked-close errors preserve the first exception and
 close every current descriptor before assertions.
+
+The source-bound leaf profile tests use real cryptography-generated signatures
+and certificates without BasicConstraints. The retained old-analyzer trial ran
+one positive regression and refused `leaf_constraints`; the corrected profile
+permits that extension to be absent only on the leaf. Both two- and three-cert
+chains pass, while present `ca=true`, missing/unsuitable KU, missing or
+client-only EKU, and either authority missing BasicConstraints remain negative.
+All other analyzer checks remain exercised unchanged. The actual `f3559e6`
+summary reports the grouped code rather than private extension facts, so these
+source/inert results do not identify its exact branch or prove a corrected
+engine/TLS/KVM trial.

@@ -35,6 +35,10 @@ class Policy:
     """Describe one small synthetic certificate, separate from real bootstrap authority."""
 
     ca: bool = False
+    basic_constraints: bool = True
+    key_usage: bool = True
+    digital_signature: bool = True
+    client_auth: bool = False
     path_length: int | None = None
     lifetime: timedelta = timedelta(hours=12)
     names: tuple[x509.GeneralName, ...] = (x509.DNSName(analyzer.NAME),)
@@ -61,10 +65,15 @@ def signed(
         .serial_number(x509.random_serial_number())
         .not_valid_before(NOW - timedelta(seconds=10))
         .not_valid_after(NOW - timedelta(seconds=10) + policy.lifetime)
-        .add_extension(x509.BasicConstraints(policy.ca, policy.path_length), critical=True)
-        .add_extension(
+    )
+    if policy.basic_constraints:
+        builder = builder.add_extension(
+            x509.BasicConstraints(policy.ca, policy.path_length), critical=True
+        )
+    if policy.key_usage:
+        builder = builder.add_extension(
             x509.KeyUsage(
-                digital_signature=True,
+                digital_signature=policy.digital_signature,
                 content_commitment=False,
                 key_encipherment=False,
                 data_encipherment=False,
@@ -76,17 +85,18 @@ def signed(
             ),
             critical=True,
         )
-        .add_extension(x509.SubjectKeyIdentifier.from_public_key(key.public_key()), critical=False)
-        .add_extension(
-            x509.AuthorityKeyIdentifier.from_issuer_public_key(signer.public_key()), critical=False
-        )
+    builder = builder.add_extension(
+        x509.SubjectKeyIdentifier.from_public_key(key.public_key()), critical=False
+    ).add_extension(
+        x509.AuthorityKeyIdentifier.from_issuer_public_key(signer.public_key()), critical=False
     )
     if policy.names:
         builder = builder.add_extension(x509.SubjectAlternativeName(policy.names), critical=False)
-    if policy.server_auth:
-        builder = builder.add_extension(
-            x509.ExtendedKeyUsage([ExtendedKeyUsageOID.SERVER_AUTH]), critical=False
+    if policy.server_auth or policy.client_auth:
+        purposes = ([ExtendedKeyUsageOID.SERVER_AUTH] if policy.server_auth else []) + (
+            [ExtendedKeyUsageOID.CLIENT_AUTH] if policy.client_auth else []
         )
+        builder = builder.add_extension(x509.ExtendedKeyUsage(purposes), critical=False)
     if policy.ocsp:
         builder = builder.add_extension(
             x509.AuthorityInformationAccess(
@@ -228,6 +238,57 @@ class MaterialTests(unittest.TestCase):
         equal(leaf["lifetimeSeconds"], 43_200)
         materials[analyzer.PATHS[4]] += pem(self.fixture.root)
         equal(analyzer.inspect(materials, NOW, REMAINING)["chainCertificateCount"], 3)
+
+    def test_leaf_without_basic_constraints_has_source_supported_non_ca_profile(self) -> None:
+        """Sign real bytes without BC; retain exact SAN, KU/EKU and both chain encodings."""
+        leaf = self.fixture.make_leaf(replace(Policy(), basic_constraints=False))
+        with self.assertRaises(x509.ExtensionNotFound):
+            _ = leaf.extensions.get_extension_for_class(x509.BasicConstraints)
+        materials = self.fixture.materials(leaf)
+        equal(analyzer.inspect(materials, NOW, REMAINING)["chainCertificateCount"], 2)
+        materials[analyzer.PATHS[4]] += pem(self.fixture.root)
+        equal(analyzer.inspect(materials, NOW, REMAINING)["chainCertificateCount"], 3)
+
+    def test_optional_leaf_bc_never_weakens_ca_or_mandatory_usage(self) -> None:
+        """A trusted issuer's signature cannot replace non-CA state or signing/server purpose."""
+        base = replace(Policy(), basic_constraints=False)
+        for policy in (
+            replace(Policy(), ca=True),
+            replace(base, names=()),
+            replace(base, digital_signature=False),
+            replace(base, sign_certificates=True),
+            replace(base, key_usage=False),
+            replace(base, server_auth=False),
+            replace(base, server_auth=False, client_auth=True),
+        ):
+            with self.subTest(policy=policy):
+                self.refuses(
+                    self.fixture.materials(self.fixture.make_leaf(policy)), "leaf_constraints"
+                )
+
+    def test_root_and_intermediate_still_require_explicit_basic_constraints(self) -> None:
+        """Only the leaf gets optional BC; neither actual signing authority can omit it."""
+        root = signed(
+            self.fixture.root_name,
+            self.fixture.root_name,
+            self.fixture.root_key,
+            self.fixture.root_key,
+            replace(self.fixture.root_policy, basic_constraints=False),
+        )
+        materials = self.fixture.materials()
+        materials[analyzer.PATHS[0]] = pem(root)
+        self.refuses(materials, "authority_constraints")
+        intermediate = signed(
+            self.fixture.intermediate_name,
+            self.fixture.root_name,
+            self.fixture.intermediate_key,
+            self.fixture.root_key,
+            replace(self.fixture.intermediate_policy, basic_constraints=False),
+        )
+        materials = self.fixture.materials()
+        materials[analyzer.PATHS[2]] = pem(intermediate)
+        materials[analyzer.PATHS[4]] = pem(self.fixture.leaf) + pem(intermediate)
+        self.refuses(materials, "authority_constraints")
 
     def test_output_contains_only_public_certificate_facts(self) -> None:
         """Public output contains no private PEM, supplied metadata, subjects, or live proof."""

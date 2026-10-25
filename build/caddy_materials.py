@@ -177,17 +177,24 @@ def _authority(certificate: x509.Certificate, *, root: bool) -> None:
 def _subject(certificate: x509.Certificate) -> None:
     try:
         names = certificate.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
-        constraints = certificate.extensions.get_extension_for_class(x509.BasicConstraints).value
         usage = certificate.extensions.get_extension_for_class(x509.KeyUsage).value
         extended = certificate.extensions.get_extension_for_class(x509.ExtendedKeyUsage).value
     except x509.ExtensionNotFound:
         _refuse("leaf_constraints")
+    try:
+        constraints = certificate.extensions.get_extension_for_class(x509.BasicConstraints).value
+    except x509.ExtensionNotFound:
+        constraints = None
     if list(names) != [x509.DNSName(NAME)]:
         _refuse("leaf_subject")
     common_names = certificate.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
     if common_names and (len(common_names) != 1 or common_names[0].value != NAME):
         _refuse("leaf_subject")
-    if constraints.ca or not usage.digital_signature or usage.key_cert_sign:
+    if (
+        (constraints is not None and constraints.ca)
+        or not usage.digital_signature
+        or usage.key_cert_sign
+    ):
         _refuse("leaf_constraints")
     if ExtendedKeyUsageOID.SERVER_AUTH not in extended:
         _refuse("leaf_constraints")
