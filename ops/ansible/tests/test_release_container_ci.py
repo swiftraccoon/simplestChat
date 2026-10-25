@@ -390,6 +390,7 @@ class ReleaseContainerCiTests(unittest.TestCase):
             {
                 "${{ runner.temp }}/container-smoke",
                 "${{ runner.temp }}/release-container/report.json",
+                "${{ runner.temp }}/simplestchat-config-validation-caddy-*/config-validation.json",
                 "${{ runner.temp }}/simplestchat-release",
                 "\n".join(
                     "${{ runner.temp }}/production-security/image/" + name
