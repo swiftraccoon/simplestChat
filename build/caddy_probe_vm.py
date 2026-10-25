@@ -70,6 +70,8 @@ GUEST_KEYS = frozenset(
         "cleanupException",
         "ioCheckpoint",
         "errnoCategory",
+        "tlsCheckpoint",
+        "tlsFailureCategory",
     }
 )
 EXPERIMENT = "caddy"
@@ -97,6 +99,27 @@ GUEST_PHASES = frozenset(
     )
 )
 # Reviewed literal policy refusals only; never export arbitrary exception text.
+GUEST_TLS_CHECKPOINTS = frozenset({"connect", "handshake", "chain", "request", "response", "close"})
+GUEST_TLS_FAILURE_CATEGORIES = frozenset(
+    {
+        "timeout",
+        "connection-refused",
+        "connection-reset",
+        "network-unreachable",
+        "host-unreachable",
+        "address-unavailable",
+        "permission",
+        "certificate-verification",
+        "tls",
+        "io",
+        "policy",
+        "unexpected",
+    }
+)
+GUEST_TLS_PHASES = frozenset(
+    {"natural-tls", "trust-install", "fresh-process", "negative-tls", "negative-copies"}
+)
+
 GUEST_REFUSAL_CODES = frozenset(
     {
         "acmez_version",
@@ -120,6 +143,17 @@ GUEST_REFUSAL_CODES = frozenset(
         "control_peer",
         "evidence_short_write",
         "external_contact_observed",
+        "endpoint_changed",
+        "endpoint_container",
+        "endpoint_identity",
+        "endpoint_inspection",
+        "endpoint_ipam",
+        "endpoint_ipv4",
+        "endpoint_membership",
+        "endpoint_network",
+        "endpoint_operational_ports",
+        "endpoint_single_network",
+        "endpoint_observed_refusal",
         "firewall_identity",
         "fixture_budget",
         "fixture_identity",
@@ -165,6 +199,7 @@ GUEST_REFUSAL_CODES = frozenset(
         "physical_interface",
         "python_public_chain_api_missing",
         "tls_chain",
+        "tls_deadline",
         "tls_not_ready",
         "tls_only_response",
         "tls_served_chain",
@@ -303,6 +338,10 @@ def failure_summary(
         "guestException": enum_value(state.get("guestException"), EXCEPTION_KINDS),
         "guestIoCheckpoint": enum_value(state.get("guestIoCheckpoint"), GUEST_IO_CHECKPOINTS),
         "guestErrnoCategory": enum_value(state.get("guestErrnoCategory"), GUEST_ERRNO_CATEGORIES),
+        "guestTlsCheckpoint": enum_value(state.get("guestTlsCheckpoint"), GUEST_TLS_CHECKPOINTS),
+        "guestTlsFailureCategory": enum_value(
+            state.get("guestTlsFailureCategory"), GUEST_TLS_FAILURE_CATEGORIES
+        ),
         "guestRefusalCode": enum_value(state.get("guestRefusalCode"), GUEST_REFUSAL_CODES),
         "guestCleanupException": enum_value(state.get("guestCleanupException"), EXCEPTION_KINDS),
         "guestCleanupPassed": state.get("guestCleanupPassed")
@@ -550,6 +589,14 @@ def guest_failure_record(raw: bytes, image: str) -> dict[str, object]:
                 if checkpoint == "containment"
                 else None,
                 "guestErrnoCategory": enum_value(value["errnoCategory"], GUEST_ERRNO_CATEGORIES),
+                "guestTlsCheckpoint": enum_value(value["tlsCheckpoint"], GUEST_TLS_CHECKPOINTS)
+                if checkpoint in GUEST_TLS_PHASES
+                else None,
+                "guestTlsFailureCategory": enum_value(
+                    value["tlsFailureCategory"], GUEST_TLS_FAILURE_CATEGORIES
+                )
+                if checkpoint in GUEST_TLS_PHASES
+                else None,
                 "guestRefusalCode": enum_value(value["failure"], GUEST_REFUSAL_CODES),
                 "guestCleanupException": enum_value(value["cleanupException"], EXCEPTION_KINDS),
                 "guestCleanupPassed": value["cleanupPassed"],

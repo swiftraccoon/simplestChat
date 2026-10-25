@@ -12,6 +12,7 @@ import errno
 import hashlib
 import http.client
 import io
+import ipaddress
 import json
 import math
 import os
@@ -70,6 +71,8 @@ class Report(TypedDict):
     cleanupException: str | None
     ioCheckpoint: str | None
     errnoCategory: str | None
+    tlsCheckpoint: str | None
+    tlsFailureCategory: str | None
 
 
 PHASES = frozenset(
@@ -204,10 +207,28 @@ TLS_ONLY_STATUS = 404
 PIDS = 128
 PCAP_HEADER = 24
 MAX_METADATA = 131072
+MAX_CONTAINER_EXIT = 255
 MAX_WIRE_ERRORS = 8192
 FIXTURE_NANO_CPUS = 500_000_000
 NORMAL_STOP_SECONDS = 30
 CONTAINER_TMP = "/tmp"  # noqa: S108 -- Exact reviewed container tmpfs destination.
+TLS_CHECKPOINTS = frozenset({"connect", "handshake", "chain", "request", "response", "close"})
+TLS_FAILURE_CATEGORIES = frozenset(
+    {
+        "timeout",
+        "connection-refused",
+        "connection-reset",
+        "network-unreachable",
+        "host-unreachable",
+        "address-unavailable",
+        "permission",
+        "certificate-verification",
+        "tls",
+        "io",
+        "policy",
+        "unexpected",
+    }
+)
 
 
 class PrototypeError(Exception):
@@ -988,6 +1009,298 @@ def validate(commands: Commands) -> dict[str, JsonValue]:
     return {"phase": "original-network-none-8m-validator", "exitStatus": 0}
 
 
+@dataclass(frozen=True)
+class Bridge:
+    """Join only the actual created network and the already inspected pinned image."""
+
+    identifier: str
+    name: str
+    image: str
+
+
+@dataclass(frozen=True)
+class Endpoint:
+    """Keep a private numeric target joined to this sole owner's immutable container ID."""
+
+    container: str
+    bridge: Bridge
+    address: str
+    prefix: int
+    endpoint: str
+    subnet: str
+    gateway: str
+    operational_bindings: int
+
+    def check(self, commands: Commands) -> None:
+        """Refuse observed identity/address replacement before another separate TLS probe."""
+        require(owned_endpoint(commands, self.container, self.bridge) == self, "endpoint_changed")
+        commands.control.check()
+
+    def facts(self) -> dict[str, JsonValue]:
+        """Never expose the private address, gateway, subnet or raw daemon response."""
+        return {
+            "transport": "owned-internal-bridge-ipv4",
+            "operationalLoopbackBindingCount": self.operational_bindings,
+            "publishedLoopbackPathProved": False,
+        }
+
+
+def one_inspection(raw: bytes) -> dict[str, object]:
+    """Admit one bounded daemon object; all queries use already owned IDs."""
+    rows = array(decode(raw))
+    require(len(rows) == 1, "endpoint_inspection")
+    return obj(rows[0])
+
+
+def operational_bindings(value: object) -> int:
+    """Distinguish requested ports from absent or actual fixed loopback publication."""
+    if value is None:
+        return 0
+    ports = obj(value)
+    expected = {"80/tcp": "80", "443/tcp": "443", "443/udp": "443"}
+    require(set(ports).issubset({*expected, "2019/tcp"}), "endpoint_operational_ports")
+    count = 0
+    for name, bindings in ports.items():
+        if name == "2019/tcp":
+            require(bindings is None or bindings == [], "endpoint_operational_ports")
+            continue
+        require(
+            bindings is None
+            or bindings == []
+            or bindings == [{"HostIp": "127.0.0.1", "HostPort": expected[name]}],
+            "endpoint_operational_ports",
+        )
+        if bindings:
+            count += 1
+    return count
+
+
+def bridge_addresses(
+    member: dict[str, object], network: dict[str, object]
+) -> tuple[str, int, str, str]:
+    """Use mature IPv4 parsing; refuse noncanonical, non-RFC1918 and gateway targets."""
+    configurations = array(obj(network["IPAM"])["Config"])
+    require(len(configurations) == 1, "endpoint_ipam")
+    configuration = obj(configurations[0])
+    subnet_text = text(configuration["Subnet"])
+    gateway_text = text(configuration["Gateway"])
+    address_text = text(member["IPAddress"])
+    subnet = ipaddress.IPv4Network(subnet_text, strict=True)
+    gateway = ipaddress.IPv4Address(gateway_text)
+    address = ipaddress.IPv4Address(address_text)
+    prefix = member["IPPrefixLen"]
+    private = tuple(
+        ipaddress.IPv4Network(value) for value in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")
+    )
+    require(
+        str(subnet) == subnet_text
+        and str(gateway) == gateway_text
+        and str(address) == address_text
+        and type(prefix) is int
+        and prefix == subnet.prefixlen
+        and any(subnet.subnet_of(value) for value in private)
+        and address in subnet
+        and gateway in subnet
+        and address not in (subnet.network_address, subnet.broadcast_address, gateway)
+        and not address.is_loopback
+        and not address.is_link_local
+        and not address.is_multicast
+        and not address.is_unspecified
+        and address != ipaddress.IPv4Address("10.0.2.2")
+        and member["Gateway"] == gateway_text,
+        "endpoint_ipv4",
+    )
+    return address_text, cast("int", prefix), subnet_text, gateway_text
+
+
+def container_identity(identifier: str, bridge: Bridge, row: dict[str, object]) -> None:
+    """Bind a daemon observation to the exact created ID and previously inspected image."""
+    require(
+        re.fullmatch(r"[a-f0-9]{64}", identifier)
+        and re.fullmatch(r"[a-f0-9]{64}", bridge.identifier)
+        and re.fullmatch(r"sha256:[a-f0-9]{64}", bridge.image)
+        and row["Id"] == identifier
+        and row["Image"] == bridge.image
+        and obj(row["Config"])["Image"] == IMAGE,
+        "endpoint_container",
+    )
+
+
+def bridge_identity(bridge: Bridge, network: dict[str, object]) -> None:
+    """Bind the original created network ID rather than only a network name."""
+    require(
+        network["Id"] == bridge.identifier
+        and network["Name"] == bridge.name
+        and network["Driver"] == "bridge"
+        and network["Scope"] == "local"
+        and network["Internal"] is True
+        and network["EnableIPv6"] is False
+        and obj(network["Options"])["com.docker.network.bridge.name"] == bridge.name,
+        "endpoint_network",
+    )
+
+
+@dataclass(frozen=True)
+class Refusal:
+    """Carry an observed nonzero exited/backoff state, never terminal or live-TLS authority."""
+
+    state: Literal["exited", "restarting"]
+    exit_status: int
+
+
+def observed_refusal(row: dict[str, object]) -> Refusal | None:
+    """Admit only the versioned engine's exact exited or restart-backoff flag combinations."""
+    state = obj(row["State"])
+    code = state.get("ExitCode")
+    pid = state.get("Pid")
+    if not (
+        state.get("Dead") is False
+        and state.get("Paused") is False
+        and state.get("OOMKilled") is False
+        and type(pid) is int
+        and pid == 0
+        and type(code) is int
+        and 0 < code <= MAX_CONTAINER_EXIT
+    ):
+        return None
+    if (
+        state.get("Status") == "exited"
+        and state.get("Running") is False
+        and state.get("Restarting") is False
+    ):
+        return Refusal("exited", code)
+    if (
+        state.get("Status") == "restarting"
+        and state.get("Running") is True
+        and state.get("Restarting") is True
+    ):
+        return Refusal("restarting", code)
+    return None
+
+
+def endpoint_observation(
+    identifier: str,
+    bridge: Bridge,
+    row: dict[str, object],
+    network: dict[str, object],
+) -> Endpoint:
+    """Join actual running container, sole network, IPAM and both endpoint observations."""
+    container_identity(identifier, bridge, row)
+    settings = obj(row["NetworkSettings"])
+    members = obj(settings["Networks"])
+    require(set(members) == {bridge.name}, "endpoint_single_network")
+    member = obj(members[bridge.name])
+    bridge_identity(bridge, network)
+    require(member["NetworkID"] == bridge.identifier, "endpoint_network")
+    state = obj(row["State"])
+    if observed_refusal(row) is not None:
+        refuse("endpoint_observed_refusal")
+    pid = state.get("Pid")
+    require(
+        state.get("Running") is True
+        and state.get("Status") == "running"
+        and state.get("Restarting") is False
+        and state.get("Paused") is False
+        and state.get("Dead") is False
+        and state.get("OOMKilled") is False
+        and type(pid) is int
+        and pid > 0,
+        "endpoint_container",
+    )
+    endpoint = text(member["EndpointID"])
+    require(re.fullmatch(r"[a-f0-9]{64}", endpoint), "endpoint_identity")
+    address, prefix, subnet, gateway = bridge_addresses(member, network)
+    containers = obj(network["Containers"])
+    require(set(containers) == {identifier}, "endpoint_membership")
+    peer = obj(containers[identifier])
+    require(
+        peer["EndpointID"] == endpoint and peer["IPv4Address"] == f"{address}/{prefix}",
+        "endpoint_membership",
+    )
+    return Endpoint(
+        identifier,
+        bridge,
+        address,
+        prefix,
+        endpoint,
+        subnet,
+        gateway,
+        operational_bindings(settings.get("Ports")),
+    )
+
+
+def owned_endpoint(commands: Commands, identifier: str, bridge: Bridge) -> Endpoint:
+    """Query exact actual IDs, with live original body fences before and after daemon reads."""
+    commands.control.check()
+    require(identifier in commands.owned, "foreign_container")
+    row = one_inspection(commands.call("endpoint-container", ["docker", "inspect", identifier]))
+    network = one_inspection(
+        commands.call("endpoint-network", ["docker", "network", "inspect", bridge.identifier])
+    )
+    result = endpoint_observation(identifier, bridge, row, network)
+    commands.control.check()
+    return result
+
+
+def negative_endpoint(
+    commands: Commands, identifier: str, bridge: Bridge
+) -> tuple[Endpoint | None, Refusal | None]:
+    """Separate exact-owned exited/backoff observations from any live TLS address authority."""
+    commands.control.check()
+    require(identifier in commands.owned, "foreign_container")
+    row = one_inspection(commands.call("negative-inspect", ["docker", "inspect", identifier]))
+    network = one_inspection(
+        commands.call("negative-network", ["docker", "network", "inspect", bridge.identifier])
+    )
+    container_identity(identifier, bridge, row)
+    bridge_identity(bridge, network)
+    require(obj(row["HostConfig"])["NetworkMode"] == bridge.name, "endpoint_network")
+    members = obj(obj(row["NetworkSettings"])["Networks"])
+    require(
+        set(members) == {bridge.name}
+        and obj(members[bridge.name])["NetworkID"] == bridge.identifier,
+        "endpoint_network",
+    )
+    refusal = observed_refusal(row)
+    if refusal is not None:
+        commands.control.check()
+        return None, refusal
+    target = endpoint_observation(identifier, bridge, row, network)
+    commands.control.check()
+    return target, None
+
+
+def tls_failure_category(error: BaseException) -> str:
+    """Classify only fixed connection/handshake families, never certificate or socket text."""
+    if isinstance(error, TimeoutError):
+        return "timeout"
+    if isinstance(error, ssl.SSLCertVerificationError):
+        return "certificate-verification"
+    if isinstance(error, ssl.SSLError):
+        return "tls"
+    if isinstance(error, OSError):
+        return (
+            {
+                errno.ECONNREFUSED: "connection-refused",
+                errno.ECONNRESET: "connection-reset",
+                errno.ENETUNREACH: "network-unreachable",
+                errno.EHOSTUNREACH: "host-unreachable",
+                errno.EADDRNOTAVAIL: "address-unavailable",
+                errno.EPERM: "permission",
+                errno.EACCES: "permission",
+            }.get(error.errno, "io")
+            if error.errno is not None
+            else "io"
+        )
+    return "policy" if isinstance(error, PrototypeError) else "unexpected"
+
+
+def tls_checkpoint(report: Report, checkpoint: str) -> None:
+    """Begin this fixed operation without letting a later close replace the first failed stage."""
+    report["tlsCheckpoint"] = checkpoint
+    report["tlsFailureCategory"] = None
+
+
 def public_chain(
     connection: ssl.SSLSocket,
     name: Literal["get_verified_chain", "get_unverified_chain"],
@@ -1005,70 +1318,147 @@ def public_chain(
     return cast("list[bytes]", values)
 
 
-def tls_probe(control: Control, context: ssl.SSLContext, hostname: str) -> dict[str, JsonValue]:
-    """Use actual public SSL verification, real chain bytes and a fixed TLS-only404 endpoint."""
-    control.check()
-    raw = socket.create_connection(("127.0.0.1", 443), timeout=control.remaining(3))
-    wrapped = None
-    response = None
+@dataclass
+class TlsAttempt:
+    """Share one subordinate phase end through socket I/O, checked closes and target recheck."""
+
+    target: Endpoint
+    report: Report
+    end: float
+    peers_closed: bool = False
+    phase_complete: bool = False
+    refused: bool = False
+    succeeded: bool = False
+
+    def remaining(self, control: Control) -> float:
+        """Fence late completion without resetting the original guest or phase clock."""
+        control.check()
+        left = self.end - time.monotonic()
+        require(left > 0, "tls_deadline")
+        return min(control.remaining(3), left)
+
+
+@dataclass
+class TlsPeers:
+    """Keep all three admitted socket/HTTP peers reachable across any exchange failure."""
+
+    raw: socket.socket | None = None
+    wrapped: ssl.SSLSocket | None = None
+    response: http.client.HTTPResponse | None = None
+
+    def close(self, first: BaseException | None) -> tuple[BaseException | None, bool]:
+        """Keep earlier exchange failure and separate actual checked-close success."""
+        actions = [
+            peer.close for peer in (self.response, self.wrapped, self.raw) if peer is not None
+        ]
+        closing = settle(actions)
+        return first or closing, closing is None
+
+
+def tls_exchange(
+    control: Control, attempt: TlsAttempt, wrapped: ssl.SSLSocket, peers: TlsPeers
+) -> dict[str, JsonValue]:
+    """Use public chain APIs and the exact original TLS-only request/response policy."""
+    report = attempt.report
+    tls_checkpoint(report, "chain")
+    chain = public_chain(wrapped, "get_verified_chain")
+    served = public_chain(wrapped, "get_unverified_chain")
+    require(len(served) in (2, MAX_CHAIN), "tls_served_chain")
+    tls_checkpoint(report, "request")
+    wrapped.settimeout(attempt.remaining(control))
+    wrapped.sendall(
+        b"GET /metrics HTTP/1.1\r\nHost: maintain.localhost\r\nConnection: close\r\n\r\n"
+    )
+    tls_checkpoint(report, "response")
+    wrapped.settimeout(attempt.remaining(control))
+    peers.response = http.client.HTTPResponse(wrapped)
+    peers.response.begin()
+    wrapped.settimeout(attempt.remaining(control))
+    require(
+        peers.response.status == TLS_ONLY_STATUS and len(peers.response.read(65537)) <= CHUNK,
+        "tls_only_response",
+    )
+    _ = attempt.remaining(control)
+    return {
+        "version": wrapped.version(),
+        "verifiedChainSha256": [hashlib.sha256(item).hexdigest() for item in chain],
+        "servedChainSha256": [hashlib.sha256(item).hexdigest() for item in served],
+        "status": 404,
+    }
+
+
+def tls_probe(
+    control: Control, context: ssl.SSLContext, hostname: str, attempt: TlsAttempt
+) -> dict[str, JsonValue]:
+    """Keep exact SNI/Host/trust while connecting only to the admitted owned bridge address."""
+    report = attempt.report
+    attempt.peers_closed = False
+    attempt.phase_complete = False
+    attempt.refused = False
+    attempt.succeeded = False
+    _ = attempt.remaining(control)
+    peers = TlsPeers()
     first: BaseException | None = None
     result: dict[str, JsonValue] = {}
     try:
-        wrapped = context.wrap_socket(raw, server_hostname=hostname)
-        control.check()
-        require(hasattr(wrapped, "get_verified_chain"), "python_public_chain_api_missing")
-        chain = public_chain(wrapped, "get_verified_chain")
-        served = public_chain(wrapped, "get_unverified_chain")
-        require(
-            served
-            and len(served) in (2, MAX_CHAIN)
-            and all(type(item) is bytes for item in served),
-            "tls_served_chain",
+        tls_checkpoint(report, "connect")
+        peers.raw = socket.create_connection(
+            (attempt.target.address, 443), timeout=attempt.remaining(control)
         )
-        require(
-            chain and len(chain) <= MAX_CHAIN and all(type(item) is bytes for item in chain),
-            "tls_chain",
-        )
-        wrapped.sendall(
-            b"GET /metrics HTTP/1.1\r\nHost: maintain.localhost\r\nConnection: close\r\n\r\n"
-        )
-        response = http.client.HTTPResponse(wrapped)
-        response.begin()
-        require(
-            response.status == TLS_ONLY_STATUS and len(response.read(65537)) <= CHUNK,
-            "tls_only_response",
-        )
-        result = {
-            "version": wrapped.version(),
-            "verifiedChainSha256": [hashlib.sha256(item).hexdigest() for item in chain],
-            "servedChainSha256": [hashlib.sha256(item).hexdigest() for item in served],
-            "status": 404,
-        }
-        control.check()
+        _ = attempt.remaining(control)
+        tls_checkpoint(report, "handshake")
+        peers.wrapped = context.wrap_socket(peers.raw, server_hostname=hostname)
+        _ = attempt.remaining(control)
+        result = tls_exchange(control, attempt, peers.wrapped, peers)
     except BaseException as error:  # noqa: BLE001 -- Settle every known peer.
         first = error
-    actions: list[Callable[[], object]] = []
-    if response is not None:
-        actions.append(response.close)
-    if wrapped is not None:
-        actions.append(wrapped.close)
-    actions.append(raw.close)
-    first = settle(actions, first)
+        report["tlsFailureCategory"] = tls_failure_category(error)
+    if first is None:
+        tls_checkpoint(report, "close")
+    first, attempt.peers_closed = peers.close(first)
+    try:
+        _ = attempt.remaining(control)
+    except BaseException as error:  # noqa: BLE001 -- Preserve the first error after all closes.
+        first = first or error
+    else:
+        attempt.phase_complete = True
     if first is not None:
+        if report["tlsFailureCategory"] is None:
+            report["tlsFailureCategory"] = tls_failure_category(first)
         raise first
     return result
 
 
-def wait_tls(commands: Commands, context: ssl.SSLContext) -> dict[str, JsonValue]:
-    """Retry completed refusal only within the original bounded experimental role."""
+def wait_tls(
+    commands: Commands, context: ssl.SSLContext, target: Endpoint, report: Report
+) -> dict[str, JsonValue]:
+    """Retry the freshly joined immutable target; recheck metadata once the phase completes."""
     end = time.monotonic() + commands.control.remaining(30)
+    attempt = TlsAttempt(target, report, end)
     while True:
+        commands.control.check()
+        if time.monotonic() >= end:
+            target.check(commands)
+            refuse("tls_not_ready")
+        _ = attempt.remaining(commands.control)
+        require(target.container in commands.owned, "foreign_container")
         try:
-            return tls_probe(commands.control, context, DOMAIN)
+            result = tls_probe(commands.control, context, DOMAIN, attempt)
         except (ConnectionError, ssl.SSLError):
-            require(time.monotonic() < end, "tls_not_ready")
+            if not attempt.peers_closed or not attempt.phase_complete:
+                raise
+            attempt.refused = True
+            if time.monotonic() >= end:
+                target.check(commands)
+                refuse("tls_not_ready")
             commands.control.check()
             time.sleep(min(0.1, max(0, end - time.monotonic())))
+        else:
+            attempt.succeeded = True
+            _ = attempt.remaining(commands.control)
+            target.check(commands)
+            _ = attempt.remaining(commands.control)
+            return result
 
 
 def profile(commands: Commands, identifier: str, data: Path, config: Path, bridge: str) -> None:
@@ -1142,12 +1532,32 @@ def bind_live_chain(observed: dict[str, JsonValue], materials: dict[str, JsonVal
     require(served == verified[:2] or served == verified, "held_served_chain")
 
 
-def negative_tls(control: Control, context: ssl.SSLContext, hostname: str) -> None:
-    """Observe a refused TLS handshake without inferring an application outcome."""
+def checked_tls(
+    commands: Commands, context: ssl.SSLContext, target: Endpoint, report: Report
+) -> dict[str, JsonValue]:
+    """Recheck the same owned endpoint before and after a separate trusted TLS operation."""
+    attempt = TlsAttempt(target, report, time.monotonic() + commands.control.remaining(30))
+    target.check(commands)
+    observed = tls_probe(commands.control, context, DOMAIN, attempt)
+    target.check(commands)
+    _ = attempt.remaining(commands.control)
+    return observed
+
+
+def negative_tls(
+    commands: Commands, context: ssl.SSLContext, hostname: str, target: Endpoint, report: Report
+) -> None:
+    """Observe only SSL refusal, with endpoint identity rechecked around the actual probe."""
+    attempt = TlsAttempt(target, report, time.monotonic() + commands.control.remaining(30))
+    target.check(commands)
     try:
-        _ = tls_probe(control, context, hostname)
+        _ = tls_probe(commands.control, context, hostname, attempt)
     except ssl.SSLError:
-        control.check()
+        if not attempt.peers_closed or not attempt.phase_complete:
+            raise
+        commands.control.check()
+        target.check(commands)
+        _ = attempt.remaining(commands.control)
         return
     refuse("negative_tls_accepted")
 
@@ -1257,10 +1667,52 @@ def binary_digest(commands: Commands, identifier: str) -> str:
     return digest
 
 
-def negative_copies(  # noqa: C901, PLR0915 -- Fixed two-copy experiment and custody.
+def negative_copy_outcome(
+    commands: Commands, target: Endpoint | None, report: Report, initial: Refusal | None
+) -> tuple[str, Refusal | None]:
+    """Use one negative-copy phase and one fresh state join only after clean retry exhaustion."""
+    if target is None:
+        return "refused-or-not-ready", initial
+    context = ssl.create_default_context(cafile=str(commands.root / "data/caddy" / MATERIALS[0]))
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
+    attempt = TlsAttempt(target, report, time.monotonic() + commands.control.remaining(30))
+    while True:
+        commands.control.check()
+        if time.monotonic() >= attempt.end:
+            require(
+                attempt.refused
+                and attempt.peers_closed
+                and attempt.phase_complete
+                and not attempt.succeeded,
+                "tls_deadline",
+            )
+            current, refusal = negative_endpoint(commands, target.container, target.bridge)
+            if current is not None:
+                require(current == target, "endpoint_changed")
+            commands.control.check()
+            return "refused-or-not-ready", refusal
+        try:
+            probe = tls_probe(commands.control, context, DOMAIN, attempt)
+        except (ConnectionError, ssl.SSLError):
+            if not attempt.peers_closed or not attempt.phase_complete:
+                raise
+            attempt.refused = True
+            commands.control.check()
+            time.sleep(min(0.1, max(0, attempt.end - time.monotonic())))
+        else:
+            attempt.succeeded = True
+            _ = attempt.remaining(commands.control)
+            target.check(commands)
+            _ = attempt.remaining(commands.control)
+            require(probe["status"] == TLS_ONLY_STATUS, "negative_tls_status")
+            return "tls-after-perturbation", None
+
+
+def negative_copies(  # noqa: C901 -- Fixed two-copy experiment and custody.
     commands: Commands,
     originals: Sequence[Original],
-    bridge: str,
+    bridge: Bridge,
+    report: Report,
 ) -> list[dict[str, JsonValue]]:
     """Perturb owned copies only; distinguish refusal from regeneration, never original reuse."""
     rows: list[dict[str, JsonValue]] = []
@@ -1309,22 +1761,12 @@ def negative_copies(  # noqa: C901, PLR0915 -- Fixed two-copy experiment and cus
         else:
             refuse("negative_material_accepted")
         identifier = commands.create(
-            "negative-create", normal_arguments(commands.root, data, config, bridge)
+            "negative-create", normal_arguments(commands.root, data, config, bridge.name)
         )
         _ = commands.call("negative-start", ["docker", "start", identifier])
+        target, refusal = negative_endpoint(commands, identifier, bridge)
         # A bounded live outcome is observational: Caddy may refuse or legitimately regenerate.
-        context = ssl.create_default_context(
-            cafile=str(commands.root / "data/caddy" / MATERIALS[0])
-        )
-        context.minimum_version = ssl.TLSVersion.TLSv1_2
-        outcome = "refused-or-not-ready"
-        try:
-            probe = wait_tls(commands, context)
-            outcome = "tls-after-perturbation"
-            require(probe["status"] == TLS_ONLY_STATUS, "negative_tls_status")
-        except (PrototypeError, ssl.SSLError, ConnectionError) as error:
-            if isinstance(error, PrototypeError) and str(error) != "tls_not_ready":
-                raise
+        outcome, refusal = negative_copy_outcome(commands, target, report, refusal)
         _ = commands.call("negative-stop", ["docker", "stop", "--time", "10", identifier], 15)
         commands.remove(identifier)
         changed = [
@@ -1341,6 +1783,9 @@ def negative_copies(  # noqa: C901, PLR0915 -- Fixed two-copy experiment and cus
                 "changedMaterialCount": len(changed),
                 "originalReuseClaimed": False,
                 "passiveMaterialsRefused": True,
+                "observedExitStatus": refusal.exit_status if refusal is not None else None,
+                "observedState": refusal.state if refusal is not None else "running",
+                "tlsAttempted": target is not None,
             }
         )
         for original in originals:
@@ -1393,6 +1838,8 @@ def main(  # noqa: C901, PLR0912, PLR0915 -- Keep one ownership frame.
         "cleanupException": None,
         "ioCheckpoint": None,
         "errnoCategory": None,
+        "tlsCheckpoint": None,
+        "tlsFailureCategory": None,
     }
     try:
         for number in handlers:
@@ -1490,6 +1937,8 @@ def main(  # noqa: C901, PLR0912, PLR0915 -- Keep one ownership frame.
             ],
             adopt=network_created,
         )
+        require(effects.network_id is not None, "network_unknown")
+        transport = Bridge(text(effects.network_id), bridge, text(image[0]["Id"]))
         report["checkpoint"] = "containment"
         report["ioCheckpoint"] = "containment-route"
         routes = array(decode(commands.call("route", ["ip", "-json", "route", "show", "default"])))
@@ -1615,7 +2064,8 @@ def main(  # noqa: C901, PLR0912, PLR0915 -- Keep one ownership frame.
         originals.append(Original.open(ca, control))
         public_context = ssl.create_default_context(cadata=originals[0].data.decode("ascii"))
         public_context.minimum_version = ssl.TLSVersion.TLSv1_2
-        first_tls = wait_tls(commands, public_context)
+        target = owned_endpoint(commands, identifier, transport)
+        first_tls = wait_tls(commands, public_context, target, report)
         # Keep each admitted original registered if a later material refuses.
         for relative in MATERIALS[1:]:
             originals.append(  # noqa: PERF401 -- Keep each admitted owner.
@@ -1632,7 +2082,7 @@ def main(  # noqa: C901, PLR0912, PLR0915 -- Keep one ownership frame.
         _ = commands.call("install-public-root", ["update-ca-certificates"])
         trusted = ssl.create_default_context()
         trusted.minimum_version = ssl.TLSVersion.TLSv1_2
-        trusted_tls = tls_probe(control, trusted, DOMAIN)
+        trusted_tls = checked_tls(commands, trusted, target, report)
         require(trusted_tls == first_tls, "tls_chain")
         bind_live_chain(trusted_tls, report["materials"])
         _ = commands.call("natural-stop", ["docker", "stop", "--time", "10", identifier], 15)
@@ -1646,19 +2096,20 @@ def main(  # noqa: C901, PLR0912, PLR0915 -- Keep one ownership frame.
         )
         profile(commands, fresh, root / "data", root / "config", bridge)
         _ = commands.call("fresh-start", ["docker", "start", fresh])
-        repeated = wait_tls(commands, trusted)
+        fresh_target = owned_endpoint(commands, fresh, transport)
+        repeated = wait_tls(commands, trusted, fresh_target, report)
         require(repeated == trusted_tls, "fresh_tls_changed")
         for original in originals:
             original.check(control)
         report["checkpoint"] = "negative-tls"
         empty = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         empty.minimum_version = ssl.TLSVersion.TLSv1_2
-        negative_tls(control, empty, DOMAIN)
-        negative_tls(control, trusted, "wrong.maintain.localhost")
+        negative_tls(commands, empty, DOMAIN, fresh_target, report)
+        negative_tls(commands, trusted, "wrong.maintain.localhost", fresh_target, report)
         report["observations"].extend(
             [
-                {"phase": "natural-tls", **trusted_tls},
-                {"phase": "fresh-process-same-seven", **repeated},
+                {"phase": "natural-tls", **trusted_tls, **target.facts()},
+                {"phase": "fresh-process-same-seven", **repeated, **fresh_target.facts()},
                 {"phase": "wrong-trust-and-hostname", "refused": True},
             ]
         )
@@ -1667,7 +2118,7 @@ def main(  # noqa: C901, PLR0912, PLR0915 -- Keep one ownership frame.
         report["checkpoint"] = "validator"
         report["observations"].append(validate(commands))
         report["checkpoint"] = "negative-copies"
-        report["observations"].extend(negative_copies(commands, originals, bridge))
+        report["observations"].extend(negative_copies(commands, originals, transport, report))
         report["checkpoint"] = "final-observations"
         for original in originals:
             original.check(control)
