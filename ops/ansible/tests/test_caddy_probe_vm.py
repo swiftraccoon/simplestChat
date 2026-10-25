@@ -60,6 +60,8 @@ def record() -> dict[str, object]:
         "checkpoint": "complete",
         "exception": None,
         "cleanupException": None,
+        "ioCheckpoint": None,
+        "errnoCategory": None,
     }
 
 
@@ -949,6 +951,36 @@ class WrapperTests(unittest.TestCase):
         )
         for invalid in ("", "unknown", "caddy;exit", "../namespace"):
             self.assertFalse(any(invalid in values for values in admitted.values()))
+
+    def test_containment_io_checkpoint_and_errno_are_closed_not_strerror_or_paths(self) -> None:
+        """Expose fixed kernel categories/local steps without ever projecting hostile strings."""
+        for checkpoint, category, expected in (
+            ("containment-marker-send", "EPERM", ("containment-marker-send", "EPERM")),
+            ("INERT-PRIVATE-PATH", "EPERM:/INERT/PRIVATE", (None, None)),
+        ):
+            value = record()
+            value.update(
+                {
+                    "passed": False,
+                    "checkpoint": "containment",
+                    "exception": "io",
+                    "failure": "INERT-PRIVATE",
+                    "ioCheckpoint": checkpoint,
+                    "errnoCategory": category,
+                }
+            )
+            state: dict[str, object] = {"checkpoint": "guest", "sshStatus": 1}
+            state.update(probe.guest_failure_record(encoded(value), probe.GUEST_IMAGE))
+            projected = probe.failure_summary(state, {"cleanupPassed": True}, None, restored=True)
+            self.assertEqual(
+                (projected["guestIoCheckpoint"], projected["guestErrnoCategory"]), expected
+            )
+            self.assertNotIn("INERT-PRIVATE", json.dumps(projected))
+        self.assertEqual(guest.IO_CHECKPOINTS, probe.GUEST_IO_CHECKPOINTS)
+        self.assertEqual(
+            set(guest.ERRNO_CATEGORIES.values()) | {"UNKNOWN", "OTHER"},
+            probe.GUEST_ERRNO_CATEGORIES,
+        )
 
 
 if __name__ == "__main__":

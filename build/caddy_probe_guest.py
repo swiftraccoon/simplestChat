@@ -8,6 +8,7 @@ VM; stdout is one closed metadata record after all known owners settle.
 from __future__ import annotations
 
 import argparse
+import errno
 import hashlib
 import http.client
 import io
@@ -67,6 +68,8 @@ class Report(TypedDict):
     checkpoint: str
     exception: str | None
     cleanupException: str | None
+    ioCheckpoint: str | None
+    errnoCategory: str | None
 
 
 PHASES = frozenset(
@@ -92,6 +95,51 @@ PHASES = frozenset(
         "complete",
     )
 )
+
+
+IO_CHECKPOINTS = frozenset(
+    {
+        "containment-route",
+        "containment-rule-file",
+        "containment-guard-install",
+        "containment-capture-start",
+        "containment-counter-before",
+        "containment-marker-open",
+        "containment-marker-send",
+        "containment-marker-close",
+        "containment-counter-after",
+        "containment-counter-validate",
+        "containment-capture-check",
+    }
+)
+ERRNO_CATEGORIES = {
+    errno.EPERM: "EPERM",
+    errno.EACCES: "EACCES",
+    errno.ENOENT: "ENOENT",
+    errno.EBADF: "EBADF",
+    errno.ENOSPC: "ENOSPC",
+    errno.EIO: "EIO",
+    errno.EINTR: "EINTR",
+    errno.EPIPE: "EPIPE",
+    errno.EAGAIN: "EAGAIN",
+}
+MARKER = b"INERT-CONTAINMENT-PROBE"
+MAX_COUNTER = 2**64 - 1
+
+
+def errno_category(error: BaseException | None) -> str | None:
+    """Expose only fixed symbolic errno categories, never strerror, filenames or arguments."""
+    if not isinstance(error, OSError):
+        return None
+    if error.errno is None:
+        return "UNKNOWN"
+    return ERRNO_CATEGORIES.get(error.errno, "OTHER")
+
+
+def io_checkpoint(report: Report | None, checkpoint: str) -> None:
+    """Record only this fixed containment operation's local observation boundary."""
+    if report is not None:
+        report["ioCheckpoint"] = checkpoint
 
 
 def exception_kind(error: BaseException | None) -> str | None:
@@ -1104,32 +1152,68 @@ def negative_tls(control: Control, context: ssl.SSLContext, hostname: str) -> No
     refuse("negative_tls_accepted")
 
 
-def guard_probe(commands: Commands, table: str) -> None:
-    """Prove host OUTPUT denial before any Caddy role; never address a real public service."""
-    observed = commands.call("guard-before", ["nft", "-json", "list", "table", "inet", table])
-    require(b'"drop"' in observed, "guard_observation")
-    source = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    first = None
-    try:
-        commands.control.check()
-        # RFC5737 documentation address. The already-installed OUTPUT hook must drop this.
-        _ = source.sendto(b"INERT-CONTAINMENT-PROBE", ("192.0.2.1", 53))
-    except BaseException as error:  # noqa: BLE001 -- Still close the actual socket.
-        first = error
-    first = settle((source.close,), first)
-    if first is not None:
-        raise first
-    values = obj(
-        decode(commands.call("guard-after", ["nft", "-json", "list", "table", "inet", table]))
-    )
+def blocked_counter(data: bytes, table: str) -> tuple[int, int]:
+    """Read exactly one named counter from the fixed owned inet table."""
+    values = obj(decode(data))
     counters = [
         obj(obj(row)["counter"]) for row in array(values["nftables"]) if "counter" in obj(row)
     ]
     blocked = [row for row in counters if row.get("name") == "blocked_output"]
+    require(len(blocked) == 1, "guard_observation")
+    value = blocked[0]
+    packets, size = value.get("packets"), value.get("bytes")
     require(
-        len(blocked) == 1 and type(blocked[0]["packets"]) is int and blocked[0]["packets"] >= 1,
-        "guard_not_effective",
+        value.get("family") == "inet"
+        and value.get("table") == table
+        and type(packets) is int
+        and type(size) is int
+        and 0 <= packets <= MAX_COUNTER
+        and 0 <= size <= MAX_COUNTER,
+        "guard_observation",
     )
+    return cast("int", packets), cast("int", size)
+
+
+def guard_probe(commands: Commands, table: str, report: Report | None = None) -> None:
+    """Prove this marker's fresh OUTPUT denial; no real public service is addressed."""
+    require(commands.watch is not None, "guard_capture_missing")
+    if commands.watch is not None:
+        commands.watch.check()
+    io_checkpoint(report, "containment-counter-before")
+    observed = commands.call("guard-before", ["nft", "-json", "list", "table", "inet", table])
+    require(b'"drop"' in observed, "guard_observation")
+    before = blocked_counter(observed, table)
+    io_checkpoint(report, "containment-marker-open")
+    source = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    first = None
+    try:
+        commands.control.check()
+        io_checkpoint(report, "containment-marker-send")
+        try:
+            sent = source.sendto(MARKER, ("192.0.2.1", 53))
+        except OSError as error:
+            # Ordinary Linux LOCAL_OUT NF_DROP returns EPERM. Only this exact send may refuse
+            # that way, and it is not accepted until fresh counter/capture checks below pass.
+            if error.errno != errno.EPERM:
+                raise
+        else:
+            require(sent == len(MARKER), "guard_marker_short")
+        commands.control.check()
+    except BaseException as error:  # noqa: BLE001 -- Retire the actual socket after any refusal.
+        first = error
+    if first is None:
+        io_checkpoint(report, "containment-marker-close")
+    first = settle((source.close,), first)
+    if first is not None:
+        raise first
+    io_checkpoint(report, "containment-counter-after")
+    observed = commands.call("guard-after", ["nft", "-json", "list", "table", "inet", table])
+    io_checkpoint(report, "containment-counter-validate")
+    after = blocked_counter(observed, table)
+    require(after[0] == before[0] + 1 and after[1] > before[1], "guard_not_effective")
+    io_checkpoint(report, "containment-capture-check")
+    if commands.watch is not None:
+        commands.watch.check()
 
 
 def binary_digest(commands: Commands, identifier: str) -> str:
@@ -1307,6 +1391,8 @@ def main(  # noqa: C901, PLR0912, PLR0915 -- Keep one ownership frame.
         "checkpoint": "admission",
         "exception": None,
         "cleanupException": None,
+        "ioCheckpoint": None,
+        "errnoCategory": None,
     }
     try:
         for number in handlers:
@@ -1405,20 +1491,25 @@ def main(  # noqa: C901, PLR0912, PLR0915 -- Keep one ownership frame.
             adopt=network_created,
         )
         report["checkpoint"] = "containment"
+        report["ioCheckpoint"] = "containment-route"
         routes = array(decode(commands.call("route", ["ip", "-json", "route", "show", "default"])))
         require(type(routes) is list and len(routes) == 1, "physical_interface")
         interface = text(obj(routes[0])["dev"])
         peer = "10.0.2.2"
         rules = firewall(table, interface, bridge, peer)
+        report["ioCheckpoint"] = "containment-rule-file"
         write_file(root / "guard.nft", rules.encode())
 
         def installed(_data: bytes) -> None:
             effects.guarded = True
 
+        report["ioCheckpoint"] = "containment-guard-install"
         _ = commands.call("guard-install", ["nft", "-f", str(root / "guard.nft")], adopt=installed)
+        report["ioCheckpoint"] = "containment-capture-start"
         watch = Watch.start(commands, interface, peer)
         commands.watch = watch
-        guard_probe(commands, table)
+        guard_probe(commands, table, report)
+        report["ioCheckpoint"] = None
 
         # No image pull, package manager, resolver grant or upstream request after this point.
         report["checkpoint"] = "module-graph"
@@ -1595,12 +1686,14 @@ def main(  # noqa: C901, PLR0912, PLR0915 -- Keep one ownership frame.
     except BaseException as error:  # noqa: BLE001 -- Settle every known peer.
         first = error
         report["exception"] = exception_kind(error)
+        report["errnoCategory"] = errno_category(error)
     finally:
         # Preserve the last body-phase refusal before admitting only bounded cleanup.
         checked = settle((control.check,), first)
         if first is None and checked is not None:
             report["checkpoint"] = "body-completion"
             report["exception"] = exception_kind(checked)
+            report["errnoCategory"] = errno_category(checked)
         first = checked
         control.settling = True
         actions: list[Callable[[], object]] = []
@@ -1639,6 +1732,7 @@ def main(  # noqa: C901, PLR0912, PLR0915 -- Keep one ownership frame.
         if first is None and cleanup_error is not None:
             report["checkpoint"] = "cleanup"
             report["exception"] = exception_kind(cleanup_error)
+            report["errnoCategory"] = errno_category(cleanup_error)
         report["cleanupException"] = exception_kind(cleanup_error)
         first = first or cleanup_error
         report["cleanupPassed"] = cleanup_error is None
@@ -1646,6 +1740,7 @@ def main(  # noqa: C901, PLR0912, PLR0915 -- Keep one ownership frame.
         if first is None and restored is not None:
             report["checkpoint"] = "restore"
             report["exception"] = exception_kind(restored)
+            report["errnoCategory"] = errno_category(restored)
         first = first or restored
         try:
             _ = os.umask(previous_mask)
@@ -1655,6 +1750,7 @@ def main(  # noqa: C901, PLR0912, PLR0915 -- Keep one ownership frame.
             if first is None:
                 report["checkpoint"] = "final-fence"
                 report["exception"] = exception_kind(error)
+                report["errnoCategory"] = errno_category(error)
             first = first or error
     report["passed"] = first is None
     if first is None:
