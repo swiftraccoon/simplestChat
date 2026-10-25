@@ -2,6 +2,16 @@ name: Maintenance prerequisites KVM experiment
 
 on:
   workflow_dispatch:
+    inputs:
+      experiment:
+        description: Fixed prerequisite experiment jobs to run
+        type: choice
+        required: true
+        default: both
+        options:
+          - both
+          - caddy
+          - namespace
 
 permissions:
   contents: read # Exact checkout only; no release or deployment authority.
@@ -15,7 +25,8 @@ jobs:
     name: Exact-source Caddy and confined natural TLS in disposable Debian
     if: >-
       ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' &&
-      github.repository == 'swiftraccoon/simplestChat' }}
+      github.repository == 'swiftraccoon/simplestChat' &&
+      (inputs.experiment == 'both' || inputs.experiment == 'caddy') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
@@ -71,7 +82,8 @@ jobs:
     name: Fixed PID namespace topology in disposable Debian
     if: >-
       ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' &&
-      github.repository == 'swiftraccoon/simplestChat' }}
+      github.repository == 'swiftraccoon/simplestChat' &&
+      (inputs.experiment == 'both' || inputs.experiment == 'namespace') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:

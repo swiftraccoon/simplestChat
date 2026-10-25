@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import ast
 import io
 import json
 import os
+import re
+import shlex
 import signal
 import stat
 import sys
@@ -21,6 +24,7 @@ from unittest.mock import patch
 from test_support import ROOT, obj, objects, yaml_value
 
 # isort: split
+import caddy_probe_guest as guest
 import caddy_probe_vm as probe
 import security_vm_fetch as fetch
 import security_vm_receive as receive
@@ -836,6 +840,115 @@ class WrapperTests(unittest.TestCase):
             self.assertEqual(retained["controllerCheckpoint"], "summary-output")
             self.assertNotIn("INERT-OUTPUT-REFUSAL", error.getvalue())
             self.assertNotIn("INERT-FLUSH-REFUSAL", error.getvalue())
+
+    def test_bootstrap_explicitly_installs_each_required_tool_provider_without_recommends(
+        self,
+    ) -> None:
+        """Exercise stage_guest argv construction without SSH, APT or package execution."""
+        installed: set[str] = set()
+        observed: list[str] = []
+
+        def command(name: str, argv: Sequence[str], *, timeout: float = 120) -> tuple[int, bytes]:
+            del timeout
+            observed.append(name)
+            if name == "guest-install":
+                remote = shlex.split(argv[-1])
+                words = shlex.split(remote[-1])
+                self.assertIn("--no-install-recommends", words)
+                start = words.index("install") + 1
+                installed.update(word for word in words[start:] if not word.startswith("-"))
+                return 0, b""
+            message = "inert stop before source/VM admission"
+            raise ToolError(message)
+
+        host = cast(
+            "probe.Host",
+            cast(
+                "object",
+                SimpleNamespace(
+                    fixed_tools={"ssh": SimpleNamespace(path=Path("/never-executed"))},
+                    run=command,
+                ),
+            ),
+        )
+        with self.assertRaises(ToolError):
+            _ = probe.stage_guest(host, Path("/unused"), 22, "a" * 32, {})
+        self.assertEqual(observed, ["guest-install", "guest-directory"])
+        providers = {
+            "docker": "docker-cli",
+            "nft": "nftables",
+            "tcpdump": "tcpdump",
+            "ip": "iproute2",
+            "update-ca-certificates": "ca-certificates",
+        }
+        self.assertEqual(
+            {role for role, package in providers.items() if package in installed}, set(providers)
+        )
+        self.assertIn("docker.io", installed)
+
+    def test_reviewed_static_refusal_codes_project_and_unknown_error_text_never_does(self) -> None:
+        """Bind the literal source catalog and admit only its exact members to output."""
+        tree = ast.parse((ROOT / "build/caddy_probe_guest.py").read_bytes())
+        literals: set[str] = set()
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id in {"require", "refuse"}
+            ):
+                for argument in node.args:
+                    if isinstance(argument, ast.Constant) and isinstance(argument.value, str):
+                        literals.add(argument.value)
+        self.assertEqual(probe.GUEST_REFUSAL_CODES, literals)
+        self.assertIn("tool_missing", literals)
+        for code, expected in (("tool_missing", "tool_missing"), ("INERT-PRIVATE-UNKNOWN", None)):
+            value = record()
+            value.update(
+                {
+                    "passed": False,
+                    "failure": code,
+                    "checkpoint": "guest-prerequisites",
+                    "exception": "policy",
+                }
+            )
+            state: dict[str, object] = {"checkpoint": "guest", "sshStatus": 1}
+            state.update(probe.guest_failure_record(encoded(value), probe.GUEST_IMAGE))
+            projected = probe.failure_summary(state, {"cleanupPassed": True}, None, restored=True)
+            self.assertEqual(projected["guestRefusalCode"], expected)
+            self.assertNotIn("INERT-PRIVATE-UNKNOWN", json.dumps(projected))
+        self.assertEqual(guest.PHASES, probe.GUEST_PHASES)
+
+    def test_experiment_choice_is_closed_defaultboth_and_unknown_cannot_admit_a_job(self) -> None:
+        """Parse exact fixed guard vocabulary without evaluating arbitrary expressions."""
+        workflow = yaml_value(
+            (ROOT / ".github/workflows/maintenance-prerequisites.yml").read_text(),
+            scalars_as_strings=True,
+        )
+        choice = obj(workflow, "on", "workflow_dispatch", "inputs", "experiment")
+        self.assertEqual(choice["type"], "choice")
+        self.assertEqual(choice["required"], "true")
+        self.assertEqual(choice["default"], "both")
+        self.assertEqual(choice["options"], ["both", "caddy", "namespace"])
+        prefix = (
+            "${{ github.event_name == 'workflow_dispatch' && "
+            + "github.ref == 'refs/heads/main' && "
+            + "github.repository == 'swiftraccoon/simplestChat' && "
+        )
+        admitted: dict[str, set[str]] = {}
+        for name, expected in (
+            ("caddy-prerequisites", "caddy"),
+            ("namespace-prerequisites", "namespace"),
+        ):
+            guard = " ".join(str(obj(workflow, "jobs", name)["if"]).split())
+            suffix = f"(inputs.experiment == 'both' || inputs.experiment == '{expected}') }}}}"
+            self.assertEqual(guard, prefix + suffix)
+            values = re.findall(r"inputs\.experiment == '(both|caddy|namespace)'", guard)
+            admitted[name] = set(values)
+        self.assertEqual(
+            {name for name, values in admitted.items() if "both" in values}, set(admitted)
+        )
+        for invalid in ("", "unknown", "caddy;exit", "../namespace"):
+            self.assertFalse(any(invalid in values for values in admitted.values()))
 
 
 if __name__ == "__main__":
