@@ -35,7 +35,7 @@ fn text(values: &[OsString]) -> Vec<&str> {
 fn controller_checks_preserve_the_python_gate_offline_flags_and_all_syntax_only_playbooks() {
     let fixture = Fixture::new(&["a.sh"]);
     let steps = steps(&fixture.0, Path::new("/owned tool/xtask")).unwrap();
-    assert_eq!(steps.len(), if cfg!(target_os = "linux") { 26 } else { 25 });
+    assert_eq!(steps.len(), if cfg!(target_os = "linux") { 27 } else { 26 });
     assert_eq!(steps[0].program, "/owned tool/xtask");
     assert_eq!(text(&steps[0].arguments), ["check", "--python"]);
     assert_eq!(
@@ -118,6 +118,8 @@ fn controller_checks_preserve_the_python_gate_offline_flags_and_all_syntax_only_
             "--test",
             "release_deploy_cli",
             "--test",
+            "release_backup_cli",
+            "--test",
             "archive_cli",
             "--test",
             "manifest_cli",
@@ -145,7 +147,7 @@ fn controller_checks_preserve_the_python_gate_offline_flags_and_all_syntax_only_
             "--exact"
         ]
     );
-    let builder = &steps[steps.len() - 9];
+    let builder = &steps[steps.len() - 10];
     assert_eq!(builder.program, "cargo");
     assert_eq!(
         text(&builder.arguments),
@@ -161,7 +163,7 @@ fn controller_checks_preserve_the_python_gate_offline_flags_and_all_syntax_only_
             "--exact",
         ]
     );
-    let prepare = &steps[steps.len() - 8];
+    let prepare = &steps[steps.len() - 9];
     assert_eq!(prepare.program, "cargo");
     assert_eq!(
         text(&prepare.arguments),
@@ -180,7 +182,7 @@ fn controller_checks_preserve_the_python_gate_offline_flags_and_all_syntax_only_
             "--exact",
         ]
     );
-    let verify = &steps[steps.len() - 7];
+    let verify = &steps[steps.len() - 8];
     assert_eq!(verify.program, "cargo");
     assert_eq!(
         text(&verify.arguments),
@@ -199,7 +201,7 @@ fn controller_checks_preserve_the_python_gate_offline_flags_and_all_syntax_only_
             "--exact",
         ]
     );
-    let fresh = &steps[steps.len() - 6];
+    let fresh = &steps[steps.len() - 7];
     assert_eq!(fresh.program, "cargo");
     assert_eq!(
         text(&fresh.arguments),
@@ -218,7 +220,7 @@ fn controller_checks_preserve_the_python_gate_offline_flags_and_all_syntax_only_
             "--exact",
         ]
     );
-    let fetch = &steps[steps.len() - 5];
+    let fetch = &steps[steps.len() - 6];
     assert_eq!(fetch.program, "cargo");
     assert_eq!(
         text(&fetch.arguments),
@@ -237,7 +239,7 @@ fn controller_checks_preserve_the_python_gate_offline_flags_and_all_syntax_only_
             "--exact",
         ]
     );
-    let receive = &steps[steps.len() - 4];
+    let receive = &steps[steps.len() - 5];
     assert_eq!(receive.program, "cargo");
     assert_eq!(
         text(&receive.arguments),
@@ -256,7 +258,7 @@ fn controller_checks_preserve_the_python_gate_offline_flags_and_all_syntax_only_
             "--exact",
         ]
     );
-    let stage = &steps[steps.len() - 3];
+    let stage = &steps[steps.len() - 4];
     assert_eq!(stage.program, "cargo");
     assert_eq!(
         text(&stage.arguments),
@@ -275,6 +277,27 @@ fn controller_checks_preserve_the_python_gate_offline_flags_and_all_syntax_only_
             "--exact",
         ]
     );
+    let restore = &steps[steps.len() - 3];
+    assert_eq!(restore.program, "cargo");
+    assert_eq!(
+        text(&restore.arguments),
+        [
+            "test",
+            "--locked",
+            "-p",
+            "simplestchat-ops",
+            "--lib",
+            concat!(
+                "release::attestation::restore::oracle_tests::",
+                "whole_restore_matches_unchanged_python",
+            ),
+            "--",
+            "--ignored",
+            "--exact",
+            "--test-threads=1",
+        ]
+    );
+    assert!(restore.group == Group::References(ReferenceGroup::Host));
     let deploy = &steps[steps.len() - 2];
     assert_eq!(deploy.program, "cargo");
     assert_eq!(
@@ -360,7 +383,7 @@ fn parallel_groups_partition_every_original_command_and_keep_full_python_discove
     assert_eq!(checks.len(), 16);
     assert_eq!(
         references.len(),
-        if cfg!(target_os = "linux") { 10 } else { 9 }
+        if cfg!(target_os = "linux") { 11 } else { 10 }
     );
     let expected: std::collections::BTreeSet<_> = all.iter().map(identity).collect();
     let actual: std::collections::BTreeSet<_> =
@@ -415,7 +438,7 @@ fn reference_matrix_groups_are_disjoint_complete_and_keep_each_comparison_whole(
             if cfg!(target_os = "linux") { 5 } else { 4 },
         ),
         (ReferenceGroup::Fetch, 2),
-        (ReferenceGroup::Host, 2),
+        (ReferenceGroup::Host, 3),
         (ReferenceGroup::Deploy, 1),
     ] {
         let subset = selected(plan(), Selection::Reference(group));

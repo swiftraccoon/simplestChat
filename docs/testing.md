@@ -1997,12 +1997,13 @@ tools and applies no playbook to a host.
 Hosted and local CI split that complete plan between `ci automation --checks`
 and `ci automation --references`. The first retains quality, syntax, ordinary
 Ops/CLI tests and full Python test discovery. The second owns every exact ignored
-whole-operation comparison: VPS controller/host, image builder and the seven
+whole-operation comparison: VPS controller/host, image builder and the eight
 release operations. With no selector the local command retains their original
 complete order. The checks job and reference matrix run in parallel under the
 same ten-minute ceiling per job; every entry must succeed before signing. Fixed
 reference groups are `foundation` (VPS controller/host, builder, prepare and cached
-verify), `fetch` (fresh acquisition and fetch), `host` (receive and stage),
+verify), `fetch` (fresh acquisition and fetch), `host` (receive, stage and standalone
+restore verification),
 and `deploy` (the complete host deployment comparison). For example,
 `cargo run --locked -q -p xtask -- ci automation --references deploy` selects
 the deployment comparison; replace `deploy` with another fixed group as needed.
@@ -2025,6 +2026,18 @@ reference matrix groups. Missing, duplicate, unknown or filtered groups fail
 completion even if an aggregate job result says success.
 The existing automation receipt proves only the checks
 job, with workflow/xtask changes invalidating prior keys.
+
+Standalone restore verification is one additional exact process in `host`, after
+receive and stage. A saved hosted host-comparison step took 136 seconds; the new
+90-scenario restore comparison took 95.343 seconds wall locally. Their approximate
+231-second sum is comparison-only, combines different environments and excludes
+bootstrap, compilation and contention. It is a placement estimate, not a hosted
+capacity guarantee. The full job still has ten minutes; a timeout fails its
+required matrix entry. Deploy remains separate, and no comparison is dropped,
+filtered or replaced by a receipt. The ordinary Ops gate also runs
+`release_backup_cli`. Tracked workflow, `xtask`, native and external Python oracle
+changes invalidate the existing checks/Rust-test keys; no cache namespace or
+fingerprint selection policy is broadened.
 
 The preceding receiver head's hosted automation took 537 seconds of its 600-second
 job limit, including 435 seconds in the complete automation command. Local staging
@@ -2882,6 +2895,37 @@ in one free Debian KVM guest. Native actor history and the separately inspected
 checksum probe have distinct claims; the probe establishes its own isolation.
 Source/inert checks alone do not establish signed Stage execution, production
 application deployment, a database migration, rollback or caller cutover.
+
+
+## Native standalone restore verification
+
+The complete `release backup verify` operation compares 90 finite scenarios with
+unchanged `restore_verify.py` main, using actual private files, locking, retained
+snapshots and owned inert child processes with Docker/database replies. The exact local comparison
+passed in 92.25 test seconds (95.343 seconds wall). It retains raw original/native
+outcomes and effects, including the named stricter readiness and admission profiles
+in the [affected API review](restore-verification-api-review.md). It does not
+establish authenticated musl distribution, a prepared-host public CLI run, actual
+PostgreSQL restore/amcheck or an operational caller switch.
+
+Run its sole ignored process in the pinned controller environment:
+
+```sh
+PYTHON_CHECK_ENV="$PWD/ops/ansible/.venv" \
+  cargo test --locked -p simplestchat-ops --lib \
+  release::attestation::restore::oracle_tests::whole_restore_matches_unchanged_python \
+  -- --ignored --exact --test-threads=1
+```
+
+Operations automation configures this exact command in the existing `host`
+reference group for hosted and local CI. The full local plan also retains it;
+`ci automation --references host` selects receive, stage and restore together.
+The broad all-features database test explicitly skips only the unique basename
+`whole_restore_matches_unchanged_python`. It must not launch this fixture under
+`--include-ignored`: its sole-process guard precedes the actual umask and Owner,
+and a broad or shortened selector is refused. The separate ordinary Ops gate runs
+`release_backup_cli`; full Python discovery retains the producer regressions.
+No job timeout, group/receipt roster, dependency or installed caller changes.
 
 
 ## Optional maintenance prerequisite experiments

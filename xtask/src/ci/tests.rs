@@ -822,12 +822,16 @@ fn operations_workspace_inputs_change_rust_keys_with_exact_python_parity() {
         "ops/src/lib.rs",
         "ops/src/release/manifest.rs",
         "ops/src/release/manifest_tests.rs",
+        "ops/src/release/attestation/restore.rs",
+        "ops/src/release/attestation/restore/oracle_tests.rs",
+        "ops/tests/release_backup_cli.rs",
     ];
     for path in inputs {
         fixture.write(path, b"original operations input\n");
     }
     fixture.git(&["add", "."]);
     for scope in [
+        Scope::Automation,
         Scope::RustLint,
         Scope::RustTest,
         Scope::Backend,
@@ -882,5 +886,51 @@ fn embedded_ops_catalog_changes_every_compiled_tool_key_with_exact_python_parity
         );
         fixture.write(adjacent, b"original unrelated JSON\n");
         assert_eq!(assert_key_parity(&fixture, scope), original, "{name}");
+    }
+}
+
+#[test]
+fn restore_reference_and_registration_inputs_invalidate_existing_success_receipts() {
+    let fixture = Fixture::new();
+    let paths = [
+        "ops/ansible/tests/release_restore_oracle.py",
+        "ops/ansible/tests/test_release_restore_oracle.py",
+        "xtask/src/ci/automation.rs",
+        ".github/workflows/ci.yml",
+    ];
+    for path in paths {
+        fixture.write(path, b"original restore comparison input\n");
+    }
+    fixture.git(&["add", "."]);
+    for scope in [Scope::Automation, Scope::RustTest] {
+        let key = assert_key_parity(&fixture, scope);
+        let directory = fixture
+            .context
+            .root
+            .join(format!("restore-{}", scope.name()));
+        receipts::save(&fixture.context, scope, &key, &directory).unwrap();
+        assert_eq!(
+            receipts::verify(&fixture.context, scope, &key, &directory).unwrap(),
+            "1".repeat(40)
+        );
+        for path in paths {
+            fixture.write(path, b"changed restore comparison input\n");
+            assert_ne!(
+                assert_key_parity(&fixture, scope),
+                key,
+                "{} {path}",
+                scope.name()
+            );
+            assert!(
+                receipts::verify(&fixture.context, scope, &key, &directory).is_err(),
+                "changed {path} cannot reuse the old {} receipt",
+                scope.name()
+            );
+            fixture.write(path, b"original restore comparison input\n");
+            assert_eq!(
+                receipts::verify(&fixture.context, scope, &key, &directory).unwrap(),
+                "1".repeat(40)
+            );
+        }
     }
 }

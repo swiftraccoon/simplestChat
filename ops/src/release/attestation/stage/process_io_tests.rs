@@ -99,6 +99,8 @@ fn run_case(
             faults,
             OUT_LIMIT,
             Io {
+                stderr: None,
+                capture_output: false,
                 input: input.as_ref(),
                 output: maximum.map(|maximum| Sink {
                     file: &output,
@@ -361,6 +363,8 @@ fn invalid_original_modes_offsets_and_sink_bounds_refuse_before_spawn() {
             &mut owner,
             request,
             Io {
+                stderr: None,
+                capture_output: false,
                 input: Some(&input),
                 output: Some(Sink {
                     file: &output,

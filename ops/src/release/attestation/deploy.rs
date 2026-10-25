@@ -8,7 +8,7 @@ mod options;
 mod oracle_tests;
 mod policy;
 pub(super) mod process;
-mod records;
+pub(super) mod records;
 #[cfg(test)]
 mod tests;
 

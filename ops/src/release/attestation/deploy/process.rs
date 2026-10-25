@@ -32,6 +32,8 @@ impl Executor for Native {
                 cleanup: request.cleanup,
             },
             Io {
+                stderr: None,
+                capture_output: false,
                 input: request.input,
                 output: request.output.map(|sink| Sink {
                     file: sink.file,
