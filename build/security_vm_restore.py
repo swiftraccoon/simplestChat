@@ -25,6 +25,7 @@ import security_vm_fetch as fetch
 import security_vm_ops as ops
 import security_vm_receive as receive
 import security_vm_restore_guest as guest
+import security_vm_restore_inputs as inputs
 import yaml
 from release_json import json_value, object_value, string_value
 from security_context import ROOT, executable
@@ -58,6 +59,7 @@ MIGRATIONS = tuple(
 GUEST_FILES = (
     "build/security_vm_restore_guest.py",
     "build/security_vm_stage_guest.py",
+    "build/security_vm_restore_inputs.py",
     "ops/ansible/files/restore_verify.py",
     "ops/ansible/files/restore-verify.sql",
     "ops/ansible/files/monitoring-schema.sql",
@@ -263,6 +265,98 @@ def fixture_config(original: fetch.Held, control: Control) -> tuple[str, str]:
     return image, version
 
 
+def source_bytes(original: fetch.Held, control: Control) -> bytes:
+    """Read bounded chunks from the retained source FD under the same original control."""
+    original.check(control)
+    _ = original.stream.seek(0)
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        control.check()
+        chunk = original.stream.read(min(65536, 2**20 + 1 - total))
+        control.check()
+        if not chunk:
+            break
+        total += len(chunk)
+        require(total <= 2**20, "restore_vm_source_bound")
+        chunks.append(chunk)
+    require(total == original.size, "restore_vm_source_bound")
+    original.check(control)
+    return b"".join(chunks)
+
+
+def fixture_archive(
+    sources: Mapping[str, fetch.Held], image: str, path: Path, control: Control
+) -> str:
+    """Pack only the exact source closure; its output becomes a separately held original."""
+    members = {name: source_bytes(sources[name], control) for name in inputs.MIGRATIONS}
+    members.update(
+        {
+            "monitoring-schema.sql": source_bytes(
+                sources["ops/ansible/files/monitoring-schema.sql"], control
+            ),
+            "public-runtime-grants.sql.j2": source_bytes(
+                sources["ops/ansible/templates/public-runtime-grants.sql.j2"], control
+            ),
+            "postgres-image.txt": (image + "\n").encode(),
+        }
+    )
+    data = inputs.pack(members, control.check)
+    control.check()
+    descriptor = os.open(
+        path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600
+    )
+    first: BaseException | None = None
+    try:
+        control.check()
+        inputs.write_fd(descriptor, data, control.check)
+    except BaseException as error:  # noqa: BLE001 -- The output must close on late/fault paths.
+        first = error
+    first = fetch.settle((lambda: os.close(descriptor), control.check), first)
+    if first is not None:
+        raise first
+    return hashlib.sha256(data).hexdigest()
+
+
+def timing(report: dict[str, object], name: str, control: Control) -> None:
+    """Record closed relative checkpoints, never treat timing as work authority."""
+    require(
+        name
+        in {
+            "authentication",
+            "boot",
+            "install",
+            "fixture-input-pack",
+            "fixture-setup",
+            "guest-setup",
+            "ready",
+            "native",
+            "body-end",
+        },
+        "restore_vm_timing_role",
+    )
+    elapsed = time.monotonic() - control.started
+    marks = cast("dict[str, object]", report["elapsedSeconds"])
+    marks[name] = round(elapsed, 3) if math.isfinite(elapsed) and 0 <= elapsed <= SECONDS else None
+
+
+def failure_kind(error: BaseException | None) -> str | None:
+    """Expose only a closed first-cause category, not raw private exception text."""
+    if error is None:
+        return None
+    if isinstance(error, OSError):
+        return "io"
+    if type(error) is ToolError:
+        arguments = cast("tuple[object, ...]", error.args)
+        if len(arguments) == 1 and type(arguments[0]) is str:
+            code = arguments[0]
+            if code in {"fetch_vm_deadline", "restore_vm_deadline"}:
+                return "deadline"
+            if code == "fetch_vm_cancelled":
+                return "signal"
+    return "refused"
+
+
 def run(  # noqa: C901, PLR0912, PLR0915 -- Ordered owners.
     options: Options,
     control: Control,
@@ -276,6 +370,8 @@ def run(  # noqa: C901, PLR0912, PLR0915 -- Ordered owners.
         "failure": "guard",
         "checkpoint": "guard",
         "cleanupPassed": False,
+        "failureKind": None,
+        "elapsedSeconds": {},
         "opsVerifierCalls": 0,
         "opsCases": [],
         "restoreProof": None,
@@ -385,6 +481,7 @@ def run(  # noqa: C901, PLR0912, PLR0915 -- Ordered owners.
                 "opsSelection": selection,
             }
         )
+        timing(report, "authentication", control)
         run_id = uuid.uuid4().hex
         report["runId"] = run_id
         archive, loan = receive.transfer(
@@ -399,10 +496,14 @@ def run(  # noqa: C901, PLR0912, PLR0915 -- Ordered owners.
         vm.prepare_disk(host, work, pin)
         vm.create_seed(host, work, port, run_id)
         active = owners.guest = vm.Guest(
-            host, vm.qemu_command(work, port, run_id), qmp_path=work / "qmp.sock"
+            host,
+            vm.qemu_command(work, port, run_id),
+            qmp_path=work / "qmp.sock",
+            lifetime_deadline=control.end,
         )
         host.guest = active
         vm.boot(host, active, work, port)
+        timing(report, "boot", control)
         report["failure"] = report["checkpoint"] = "install"
         ops.stage(cast("ops.Host", cast("object", host)), active, work, port, archive.options)
         installed = ops.exercise(
@@ -410,9 +511,31 @@ def run(  # noqa: C901, PLR0912, PLR0915 -- Ordered owners.
         )
         require(installed["passed"] is True, "restore_vm_ops33")
         report["opsCases"], report["install"] = installed["cases"], installed["install"]
+        timing(report, "install", control)
         receive.check_ops(tree, retained)
         tools.check(control)
         inventory = receive.prepared_inventory(owners, work, port, run_id, revision, control)
+        report["failure"] = report["checkpoint"] = "fixture-input-pack"
+        pg_image, engine_version = fixture_config(sources[HOST_FILES[0]], control)
+        fixture_path = output / "fixture-input.tar"
+        fixture_hash = fixture_archive(sources, pg_image, fixture_path, control)
+        fixture_original = fetch.Held.open(fixture_path, inputs.MAX_ARCHIVE, control)
+        owners.inputs.append(fixture_original)
+        require(fixture_original.sha256 == fixture_hash, "restore_vm_input_archive")
+        values = output / "fixture-input-vars.json"
+        write_private(
+            values,
+            receive.encoded(
+                {
+                    "vm_restore_input_archive": str(fixture_path),
+                    "vm_restore_input_sha256": fixture_hash,
+                }
+            ),
+            mode=0o600,
+        )
+        values_original = fetch.Held.open(values, MAX_RECORD, control)
+        owners.inputs.append(values_original)
+        timing(report, "fixture-input-pack", control)
         report["failure"] = report["checkpoint"] = "fixture-setup"
         _, data = host.run(
             "restore-fixture-setup",
@@ -421,11 +544,15 @@ def run(  # noqa: C901, PLR0912, PLR0915 -- Ordered owners.
                 "-i",
                 str(inventory),
                 str(ROOT / "ops/ansible/security-vm-restore.yml"),
+                "--extra-vars",
+                "@" + str(values),
             ],
             timeout=clipped(control, 300),
         )
         _ = vm.recap(data, unchanged=False)
-        pg_image, engine_version = fixture_config(sources[HOST_FILES[0]], control)
+        fixture_original.check(control)
+        values_original.check(control)
+        timing(report, "fixture-setup", control)
         expected = {
             "schemaVersion": 1,
             "scope": "RestoreVerificationRequest",
@@ -442,6 +569,7 @@ def run(  # noqa: C901, PLR0912, PLR0915 -- Ordered owners.
                 "bytes": retained["simplestchat-ops"].size,
             },
         }
+        report["failure"] = report["checkpoint"] = "guest-setup"
         session = receive.Session(ssh(host, work, port), host.env, control)
         session.send(expected)
         first_frame = session.line(clipped(control, 300))
@@ -462,12 +590,15 @@ def run(  # noqa: C901, PLR0912, PLR0915 -- Ordered owners.
             },
             "restore_vm_ready",
         )
+        timing(report, "guest-setup", control)
         control.advance()
+        timing(report, "ready", control)
         host.deadline = control.body_end
         require(control.whole_body_end - time.monotonic() >= DEBT, "restore_vm_native_debt")
         session.send({"schemaVersion": 1, "runId": run_id, "go": True})
         report["failure"] = report["checkpoint"] = "restore"
         final = projection(session.line(clipped(control, DEBT)), expected)
+        timing(report, "native", control)
         report["restoreProof"] = final
         require(final["passed"] is True, "restore_vm_trial_unproven")
         receive.check_ops(tree, retained)
@@ -478,6 +609,8 @@ def run(  # noqa: C901, PLR0912, PLR0915 -- Ordered owners.
     except BaseException as error:  # noqa: BLE001 -- Finalize every known peer after any failure.
         first = error
     finally:
+        report["failureKind"] = failure_kind(first)
+        first = fetch.settle((lambda: timing(report, "body-end", control),), first)
         # Observe the LIVE body before finalizers may use the original final end.
         try:
             control.check()
@@ -512,6 +645,8 @@ def run(  # noqa: C901, PLR0912, PLR0915 -- Ordered owners.
         cleanup = fetch.settle(actions)
         owned_cleanup = owners.finish(control, report)
         first = first or cleanup or owned_cleanup
+        if report["failureKind"] is None:
+            report["failureKind"] = failure_kind(first)
         report["cleanupPassed"] = (
             cleanup is None
             and owned_cleanup is None

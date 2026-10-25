@@ -18,6 +18,8 @@
           - ansible_facts.service_mgr == 'systemd'
           - vm_fixture_run_id is match('^[a-f0-9]{32}$')
           - vm_fixture_revision is match('^[a-f0-9]{40}$')
+          - vm_restore_input_archive is match('^/')
+          - vm_restore_input_sha256 is match('^[a-f0-9]{64}$')
     - name: Read the original cloud-init ownership marker
       ansible.builtin.slurp:
         src: /etc/simplestchat-vm-fixture
@@ -60,33 +62,34 @@
         owner: root
         group: root
         mode: '0750'
-    - name: Stage only the two fixed assertion modules
+    - name: Stage only the fixed assertion and input modules
       ansible.builtin.copy:
         src: "{{ playbook_dir }}/../../build/{{ item }}"
         dest: "/root/simplestchat-vm-fixture/{{ item }}"
         owner: root
         group: root
         mode: '0600'
-      loop: [security_vm_restore_guest.py, security_vm_stage_guest.py]
-    - name: Supply exact source SQL and historical seed policy inputs
-      ansible.builtin.copy:
-        src: "{{ playbook_dir }}/../../{{ item }}"
-        dest: "/root/simplestchat-vm-fixture/restore-input/{{ item | basename }}"
-        owner: root
-        group: root
-        mode: '0600'
       loop:
-        - ops/ansible/files/monitoring-schema.sql
-        - ops/ansible/templates/public-runtime-grants.sql.j2
-    - name: Stage every exact reviewed migration as private fixture input
+        - security_vm_restore_guest.py
+        - security_vm_stage_guest.py
+        - security_vm_restore_inputs.py
+    - name: Copy one retained fixed source closure instead of per-migration RPCs
       ansible.builtin.copy:
-        src: "{{ item }}"
-        dest: "/root/simplestchat-vm-fixture/restore-input/migrations/{{ item | basename }}"
+        src: "{{ vm_restore_input_archive }}"
+        dest: /root/simplestchat-vm-fixture/restore-input.tar
         owner: root
         group: root
         mode: '0600'
-      with_fileglob:
-        - "{{ playbook_dir }}/../../migrations/*.sql"
+    - name: Validate every member before unpacking only the empty fixed fixture namespace
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -I
+          - -B
+          - /root/simplestchat-vm-fixture/security_vm_restore_inputs.py
+          - --sha256
+          - "{{ vm_restore_input_sha256 }}"
+      changed_when: true
     - name: Retain the original verifier reference and fixed SQL profile
       ansible.builtin.copy:
         src: "{{ playbook_dir }}/../../ops/ansible/files/{{ item }}"
@@ -95,10 +98,3 @@
         group: root
         mode: '0644'
       loop: [restore_verify.py, restore-verify.sql]
-    - name: Bind seed image selection to the original group variables
-      ansible.builtin.copy:
-        content: "{{ scpub_postgres_image }}\n"
-        dest: /root/simplestchat-vm-fixture/restore-input/postgres-image.txt
-        owner: root
-        group: root
-        mode: '0600'

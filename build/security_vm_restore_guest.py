@@ -60,6 +60,15 @@ CHECKPOINTS = frozenset(
         "input",
         "sources",
         "database",
+        "database-config",
+        "database-version",
+        "database-tool",
+        "database-pull",
+        "database-image",
+        "database-anchor",
+        "database-create",
+        "database-start",
+        "database-ready",
         "seed",
         "snapshot",
         "ready",
@@ -281,7 +290,11 @@ class Wire:
 
 def source_path(name: str) -> tuple[Path, int]:
     """Map only the fixed source closure; never accept an arbitrary guest path."""
-    if name in {"build/security_vm_restore_guest.py", "build/security_vm_stage_guest.py"}:
+    if name in {
+        "build/security_vm_restore_guest.py",
+        "build/security_vm_stage_guest.py",
+        "build/security_vm_restore_inputs.py",
+    }:
         return ROOT / Path(name).name, 0o600
     if name in {"ops/ansible/files/restore_verify.py", "ops/ansible/files/restore-verify.sql"}:
         return LIBRARY / Path(name).name, 0o644
@@ -940,15 +953,19 @@ COMMIT;""")
             candidate.sha256 == binary["sha256"] and candidate.before.st_size == binary["bytes"]
         )
         self.commands.native = candidate
-        self.control.checkpoint = "database"
+        self.control.checkpoint = "database-config"
         configured = self.retain(INPUT / "postgres-image.txt", 0o600).data().decode().strip()
         require(configured == self.value["postgresImage"])
+        self.control.checkpoint = "database-version"
         version = (
             self.commands.checked(["version", "--format", "{{.Server.Version}}"]).decode().strip()
         )
         require(version == self.value["engineVersion"])
+        self.control.checkpoint = "database-tool"
         _ = self.retain(Path("/usr/bin/docker"), 0o755, ops.MAX_BINARY)
+        self.control.checkpoint = "database-pull"
         _ = self.commands.checked(["pull", configured], timeout=180)
+        self.control.checkpoint = "database-image"
         inspected = inspection(self.commands.checked(["image", "inspect", configured]))
         require(len(inspected) == 1)
         image = dictionary(inspected[0])
@@ -971,6 +988,7 @@ COMMIT;""")
                 for item in observed
             )
         )
+        self.control.checkpoint = "database-anchor"
         require(
             not self.commands.checked(
                 ["ps", "--all", "--quiet", "--no-trunc", "--filter", "name=^/" + ANCHOR + "$"]
@@ -980,6 +998,7 @@ COMMIT;""")
         arguments[arguments.index("--label") + 1] = (
             FIXTURE_LABEL + "=" + cast("str", self.value["runId"])
         )
+        self.control.checkpoint = "database-create"
         self.commands.creating_seed = True
         try:
             raw = self.commands.checked(arguments).decode().strip()
@@ -987,7 +1006,9 @@ COMMIT;""")
         finally:
             self.commands.creating_seed = False
             self.seed_id = self.seed_id or self.commands.created_seed
+        self.control.checkpoint = "database-start"
         _ = self.commands.checked(["start", required(self.seed_id)])
+        self.control.checkpoint = "database-ready"
         ready_end = min(time.monotonic() + 30, self.control.body_end)
         attempts = 0
         while True:
