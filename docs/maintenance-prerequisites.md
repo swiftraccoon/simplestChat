@@ -452,3 +452,35 @@ exception family and that code to the existing refusal field. Unknown codes,
 argument types and subclasses stay generic; no parser, certificate, key, path
 or exception text is exported. The seven-file analyzer and all PKI admission
 rules are unchanged. These diagnostics await another actual trial.
+
+The `f3559e6` trial `40224155293` reached the analyzer and refused the grouped
+`leaf_constraints` code after TLS close. Cleanup and restoration passed. That
+code groups missing SAN/BC/KU/EKU, a CA leaf, unsuitable key usage and missing
+server-auth purpose; the summary does not reveal which private extension failed.
+
+The [pinned CertMagic CSR builder][leaf-csr] adds the requested SAN without leaf
+BasicConstraints. Caddy's [internal issuer][leaf-issuer] supplies only a lifetime
+modifier to the [Smallstep signer][leaf-sign]. Its default
+[leaf conversion][leaf-template] supplies digital-signature key usage and
+server/client extended usage while leaving BasicConstraints unset; the
+[certificate conversion][leaf-certificate] sets that field only when present.
+The reviewed [Go1.26.0 emitter][leaf-go] emits the extension only when marked
+valid. Go1.26.0 is the Caddy module's language baseline, not an independently
+measured compiler patch for the downloaded binary. This establishes a source
+profile mismatch independently of the grouped runtime refusal.
+
+The analyzer now permits absent BasicConstraints only on the leaf. Present
+leaf constraints must still say `ca=false`; root and intermediate constraints
+remain mandatory. Exact DNS SAN, digital-signature KU without certificate
+signing, server-auth EKU, signatures, key bindings, chain membership, critical
+extensions, dates and renewal margins remain required. A synthetic signed chain
+without leaf BC passes both admitted encodings; CA/usage/authority neighbors
+remain refused. The actual private certificate's extension and a complete
+corrected Caddy runtime result remain unobserved.
+
+[leaf-csr]: https://github.com/caddyserver/certmagic/blob/v0.25.6/config.go
+[leaf-issuer]: https://github.com/caddyserver/caddy/blob/v2.11.7/modules/caddytls/internalissuer.go
+[leaf-sign]: https://github.com/smallstep/certificates/blob/v0.30.2/authority/tls.go
+[leaf-template]: https://github.com/smallstep/crypto/blob/v0.91.0/x509util/certificate_request.go
+[leaf-certificate]: https://github.com/smallstep/crypto/blob/v0.91.0/x509util/certificate.go
+[leaf-go]: https://github.com/golang/go/blob/go1.26.0/src/crypto/x509/x509.go
