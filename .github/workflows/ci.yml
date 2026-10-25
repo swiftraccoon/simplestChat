@@ -168,6 +168,8 @@ jobs:
         uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable (2026-10-01)
         with:
           toolchain: 1.99.0
+          # Complete the additive rust-toolchain.toml request before any Cargo proxy.
+          components: rustfmt, clippy, rust-analyzer
       - name: Install the isolated pinned reference environment
         run: |
           python3 -m venv "${RUNNER_TEMP}/ansible-controller"
