@@ -2477,10 +2477,10 @@ A final nonzero status invalidates any earlier line or private passive record.
 Kernel/daemon stalls are outside a hard wall guarantee. `--help` and the inherited
 limited-scope `--licenses` route run before host effects.
 
-The affected API and native profiles
-record ownership, exact cleanup authority, timing/path/JSON qualifications, SDK
-close limits and validation state. Actual authenticated signed-musl whole-host
-restore proof and any operational caller switch remain separate work.
+Actual authenticated signed-musl whole-host restore proof is owned by the
+optional three-case disposable KVM fixture
+(`.github/workflows/release-backup-runtime.yml`). Its source and inert checks
+pass; actual runtime proof and any operational caller switch remain pending.
 
 The CI comparison has one exact owner in the existing `host` reference group:
 `cargo run --locked -q -p xtask -- ci automation --references host`. This also runs
@@ -2488,5 +2488,7 @@ receive and stage comparisons under the pinned controller environment. Its
 standalone fully qualified command and scope are in the
 [testing guide](../docs/testing.md#native-standalone-restore-verification).
 Ordinary Ops testing includes `release_backup_cli`; broad ignored-test execution
-skips the uniquely named restore oracle. These configured routes do not establish
-a hosted pass, live database validation or authenticated caller cutover.
+skips the uniquely named restore oracle. The complete host reference group
+[passed at `1381912`](https://github.com/swiftraccoon/simplestChat/actions/runs/40219584194).
+That is hosted reference execution; actual database validation and authenticated
+caller cutover remain separate.

@@ -2932,6 +2932,15 @@ and a broad or shortened selector is refused. The separate ordinary Ops gate run
 `release_backup_cli`; full Python discovery retains the producer regressions.
 No job timeout, group/receipt roster, dependency or installed caller changes.
 
+The optional signed backup-verification runtime fixture
+(`.github/workflows/release-backup-runtime.yml`) adds three independent free Debian KVM cases: current data, a valid historical
+subset from a failed release, and a restorable privacy-invalid backup. It reuses
+the authenticated Ops installation and exercises the same installed musl binary
+with actual PostgreSQL. Each case retains its original 1800/120 fixture budget,
+360-second setup ceiling and one explicit native 1200/120 invocation. Source and
+28 inert tests pass; actual signature, PostgreSQL and KVM validation remains
+pending. Existing operational Python and nightly/offsite callers are unchanged.
+
 
 ## Optional maintenance prerequisite experiments
 
