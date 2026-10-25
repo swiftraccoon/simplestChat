@@ -2947,7 +2947,8 @@ pending. Existing operational Python and nightly/offsite callers are unchanged.
 The manual maintenance prerequisites KVM experiment
 (`.github/workflows/maintenance-prerequisites.yml`) has two independent free-runner jobs. One observes the exact pinned Caddy image,
 naturally generated local TLS material, guest-only public-root trust, fresh-process
-reuse and the existing network-none 8 MiB validator. Its guest OUTPUT/FORWARD and
+reuse and the existing network-none validator with separate 8 MiB `/data` and
+`/config` tmpfs mounts. Its guest OUTPUT/FORWARD and
 physical egress guards remain until the exact owned VM exits. The other runs the
 fixed PID-namespace topology catalog, with 11
 named cases and 14 fresh namespaces, original kernel handles and actual adopted
@@ -2957,8 +2958,10 @@ required-CI role or installed caller change.
 
 The Caddy 97-case suite and namespace 14-case boundary suite use the maintained strict
 Python configuration. These local tests execute no actual helper role, namespace,
-KVM, Caddy or TLS. The separately recorded namespace run passed its finite catalog;
-Caddy stopped at prerequisites, and the operational 900-second launcher remains unrun.
+KVM, Caddy or TLS. The separately recorded namespace run passed its finite catalog.
+The [Caddy run at `4322717`](https://github.com/swiftraccoon/simplestChat/actions/runs/40226216828)
+passed its finite TLS/storage prerequisite with cleanup and all VM lifecycle
+checks. The operational 900-second launcher and Rust fd0 transport remain unrun.
 No application deployment, caller cutover or authenticated Ops distribution is
 established. Run the two local fixture suites independently:
 
