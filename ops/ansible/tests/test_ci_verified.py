@@ -8,16 +8,18 @@ import platform
 import shlex
 import subprocess
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
-from typing import override
+from typing import cast, override
 from unittest.mock import patch
 
-from test_support import ROOT, obj, objects, string, yaml_value
+from test_support import ROOT, obj, objects, string, strings, yaml_value
 
 # isort: split
 import ci_verified as cache
 import native_security
+from release_json import json_value
 from security_tools import ToolError
 
 
@@ -836,6 +838,41 @@ class VerifiedWorkflowTests(unittest.TestCase):
             ],
         )
         self.assertLess(steps.index(install), steps.index(release))
+
+    def test_reference_rust_bootstrap_installs_every_declared_component_before_cargo(self) -> None:
+        """The explicit installer must cover the additive toolchain-file component request."""
+        workflow = yaml_value(
+            (ROOT / ".github/workflows/ci.yml").read_text(), scalars_as_strings=True
+        )
+        toolchain = json_value(
+            cast("object", tomllib.loads((ROOT / "rust-toolchain.toml").read_text()))
+        )
+        steps = objects(obj(workflow, "jobs", "automation-references"), "steps")
+        installers = [
+            step
+            for step in steps
+            if string(step.get("uses", "")).startswith("dtolnay/rust-toolchain@")
+        ]
+        self.assertEqual(len(installers), 1)
+        installer = installers[0]
+        self.assertEqual(
+            string(installer, "uses"),
+            "dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d",
+        )
+        self.assertEqual(
+            string(installer, "with", "toolchain"), string(toolchain, "toolchain", "channel")
+        )
+        self.assertIn("components", obj(installer, "with"))
+        self.assertEqual(
+            [part.strip() for part in string(installer, "with", "components").split(",")],
+            strings(toolchain, "toolchain", "components"),
+        )
+        first_cargo = next(
+            index for index, step in enumerate(steps) if "cargo " in string(step.get("run", ""))
+        )
+        self.assertLess(steps.index(installer), first_cargo)
+        self.assertNotIn("if", installer)
+        self.assertNotIn("continue-on-error", installer)
 
     def test_parallel_automation_keeps_every_reference_required_without_shared_receipts(
         self,

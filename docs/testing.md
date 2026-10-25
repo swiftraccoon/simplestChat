@@ -2006,6 +2006,18 @@ verify), `fetch` (fresh acquisition and fetch), `host` (receive and stage),
 and `deploy` (the complete host deployment comparison). For example,
 `cargo run --locked -q -p xtask -- ci automation --references deploy` selects
 the deployment comparison; replace `deploy` with another fixed group as needed.
+The reference matrix's pinned setup action explicitly requests every component
+in `rust-toolchain.toml` before the first Cargo invocation: `rustfmt`, `clippy`
+and `rust-analyzer`. The action otherwise uses the minimal install profile;
+Cargo's rustup proxy can provision additive toolchain-file components later.
+Actual run `40150788623` installed the minimal compiler successfully, completed
+its pinned Python installation, then failed at that later provisioning step on
+an existing `bin/cargo-clippy` conflict. The host-reference job ran no operation
+comparisons. The conflicting file's origin remains unproved. Completing the
+existing request during setup closes the implicit provisioning gap; it does not
+delete toolchains, repair arbitrary component corruption or establish that a
+future hosted run passes.
+
 Bare `--references` still runs every comparison. Matrix failure does not cancel the
 other groups. Reference comparisons always run and use no result cache.
 Local CI also requires a successful execution receipt for each of the four
