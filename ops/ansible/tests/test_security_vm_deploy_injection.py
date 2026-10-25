@@ -20,7 +20,9 @@ from unittest.mock import Mock, patch
 from test_support import ROOT
 
 # isort: split
+import release_container_fixture as render
 import release_container_harness as fixture
+import release_public as reference
 import security_vm_deploy_guest as guest
 import security_vm_deploy_injection as injection
 import security_vm_ops_guest as ops_guest
@@ -66,8 +68,298 @@ def empty_data(_maximum: int) -> bytes:
     return b""
 
 
+def private_data(path: Path, data: bytes) -> None:
+    """Populate an exclusively admitted private file before lending its original reader."""
+    _ = private_empty(path)
+    with path.open("r+b") as output:
+        _ = output.write(data)
+        output.flush()
+        os.fsync(output.fileno())
+
+
+def rollback_actor(identifier: str, image: str, service: str) -> dict[str, object]:
+    """Supply one lower daemon observation, joined separately by the actual guest policy."""
+    return {
+        "id": identifier,
+        "image": image,
+        "labels": {
+            "com.docker.compose.project": "simplestchat-public",
+            "com.docker.compose.service": service,
+            render.LABEL: TOKEN,
+            "com.docker.compose.config-hash": "f" * 64,
+        },
+        "state": {"Running": True, "OOMKilled": False, "StartedAt": "retained"},
+        "restarts": 0,
+    }
+
+
+def rollback_control_fault(kind: str, owner: guest.Injector, config: Path) -> None:
+    """Inject only three fixed local ownership/refusal neighbors after admission."""
+    if kind == "late":
+        owner.service_end = time.monotonic() - 1
+    if kind == "signal":
+        owner.commands.control.signal(15, None)
+    if kind == "protected":
+        with (config / "fixed").open("r+b") as output:
+            _ = output.write(b"changed")
+    if kind == "replaced-selection":
+        for name in reference.SELECTION:
+            path = config / name
+            with path.open("rb") as original:
+                raw = original.read()
+            replacement = config / (name + ".replacement")
+            private_data(replacement, raw)
+            _ = replacement.replace(path)
+
+
+def rollback_trial(kind: str) -> dict[str, object]:  # noqa: PLR0915 -- Settle one real local trial.
+    """Exercise actual selection readers, journal and sockets with only daemon data inert."""
+    result: dict[str, object] = {}
+    streams: list[BinaryIO] = []
+    adopt = stage.adopt
+
+    def admitted(descriptor: int, mode: str) -> BinaryIO:
+        stream = adopt(descriptor, mode)
+        streams.append(stream)
+        return stream
+
+    with tempfile.TemporaryDirectory(prefix="dr-", dir="/tmp") as temporary:
+        root = Path(temporary)
+        config, public = root / "config", root / "public"
+        for directory in (config, public, public / "results"):
+            directory.mkdir(mode=0o700)
+        attempt = public / "results" / ("release." + TOKEN)
+        attempt.mkdir(mode=0o700)
+        selected = {name: ("before:" + name).encode() for name in reference.SELECTION}
+        for name, data in selected.items():
+            private_data(config / name, data)
+        private_data(config / "fixed", b"untouched")
+        journal = {
+            "schemaVersion": 1,
+            "attempt": str(attempt),
+            "phase": "replace_application",
+            "finalized": False,
+        }
+        private_data(public / "release-state.json", json.dumps(journal).encode())
+        control = guest.Control(time.monotonic())
+        control.phase = "exercise"
+        commands = guest.Commands(
+            control, cast("guest.Wire", cast("object", SimpleNamespace(no_extra=lambda: None))), []
+        )
+        rollback = "e" * 64
+        rollback_image = "sha256:" + "6" * 64
+        pg, caddy = "7" * 64, "8" * 64
+        actors = {
+            rollback: rollback_actor(rollback, rollback_image, "simplestchat"),
+            pg: rollback_actor(pg, "sha256:" + "7" * 64, "postgres"),
+            caddy: rollback_actor(caddy, "sha256:" + "8" * 64, "caddy"),
+        }
+        dependencies = {
+            service: [identifier, "sha256:" + identifier, "retained", 0, "f" * 64]
+            for service, identifier in (("postgres", pg), ("caddy", caddy))
+        }
+        actor = actors[rollback]
+        labels = cast("dict[str, object]", actor["labels"])
+        state = cast("dict[str, object]", actor["state"])
+        changes: dict[str, tuple[dict[str, object], str, object]] = {
+            "image": (actor, "image", IMAGE),
+            "cid": (actor, "id", OLD),
+            "project": (labels, "com.docker.compose.project", "foreign"),
+            "service": (labels, "com.docker.compose.service", "foreign"),
+            "label": (labels, render.LABEL, "foreign"),
+            "not-running": (state, "Running", False),
+            "oom": (state, "OOMKilled", True),
+        }
+        if kind in changes:
+            target, key, changed = changes[kind]
+            target[key] = changed
+        if kind == "dependency":
+            actors[pg]["restarts"] = 1
+        if kind == "selection":
+            with (config / "app.env").open("r+b") as output:
+                _ = output.write(b"foreign")
+        if kind == "journal":
+            journal["phase"] = "complete"
+            with (public / "release-state.json").open("r+b") as output:
+                _ = output.truncate(0)
+                _ = output.write(json.dumps(journal).encode())
+
+        def inspect(_commands: object, identifier: str, _token: str) -> dict[str, object]:
+            return actors[identifier]
+
+        with (
+            patch.object(guest, "CONFIG", config),
+            patch.object(guest, "PUBLIC", public),
+            patch.object(injection, "SOCKET", root / "socket"),
+            patch.object(os, "fstat", side_effect=root_fstat),
+            patch.object(Path, "lstat", autospec=True, side_effect=root_lstat),
+            patch.object(stage, "adopt", side_effect=admitted),
+            patch.object(fixture, "inspect_owned", side_effect=inspect),
+            patch.object(
+                commands,
+                "compose",
+                return_value=guest.Command(
+                    0, (OLD if kind == "selection-cid" else rollback).encode(), root / "unused"
+                ),
+            ) as compose,
+            patch.object(commands, "docker") as docker,
+        ):
+            protected = stage.Original(
+                config / "fixed", 32, 0o600, cast("stage.Control", cast("object", control))
+            )
+            binding = SimpleNamespace(
+                image=IMAGE,
+                old=OLD,
+                token=TOKEN,
+                baseline=frozenset({OLD, pg, caddy}),
+                before=frozenset(),
+                rollback_image=rollback_image,
+                selection=selected,
+                dependencies=dependencies,
+                protected=protected,
+            )
+            owner: guest.Injector | None = None
+            left: socket.socket | None = None
+            right: socket.socket | None = None
+            first: BaseException | None = None
+            try:
+                owner = guest.Injector(
+                    commands, cast("guest.InjectionBinding", cast("object", binding))
+                )
+                left, right = socket.socketpair()
+                right.settimeout(0.02)
+                owner.client = left
+                owner.service_end = time.monotonic() + guest.INJECTION_SERVICE_SECONDS
+                owner.identifier, owner.stopped = IDENTIFIER, True
+                rollback_control_fault(kind, owner, config)
+                _ = owner.deliver(OLD if kind == "baseline" else rollback)
+                result["frame"] = injection.receive_json(right, time.monotonic() + 2)
+                result["stopped"] = owner.stopped
+                result["identifier"] = owner.identifier
+            except BaseException as error:  # noqa: BLE001 -- Collect after actual peer closes.
+                first = error
+            finally:
+                first = ops_guest.settle(
+                    tuple(item.close for item in (owner, right) if item is not None), first
+                )
+                first = ops_guest.settle((protected.close,), first)
+            result.update(
+                {
+                    "failed": first is not None,
+                    "composeCalls": compose.call_count,
+                    "dockerCalls": docker.call_count,
+                    "closed": protected.closed
+                    and all(stream.closed for stream in streams)
+                    and all(peer is None or peer.fileno() == -1 for peer in (left, right)),
+                }
+            )
+    return result
+
+
 class InspectionBarrierTests(unittest.TestCase):
     """Keep the observed effect, response and checked receipt boundaries distinct."""
+
+    def test_recreated_rollback_is_passed_only_after_restored_selection_and_owned_joins(
+        self,
+    ) -> None:
+        """New B can recover from stopped A without admitting another stop or unknown actor."""
+        actual = rollback_trial("valid")
+        self.assertEqual(
+            actual,
+            {
+                "frame": {"action": "pass"},
+                "stopped": True,
+                "identifier": IDENTIFIER,
+                "failed": False,
+                "composeCalls": 1,
+                "dockerCalls": 0,
+                "closed": True,
+            },
+        )
+
+    def test_rollback_neighbors_refuse_before_any_pass_and_close_all_actual_readers(self) -> None:
+        """Every fixed identity, selection, peer and original-body condition remains necessary."""
+        observations = [
+            rollback_trial(kind)
+            for kind in (
+                "image",
+                "cid",
+                "project",
+                "service",
+                "label",
+                "not-running",
+                "oom",
+                "dependency",
+                "selection",
+                "selection-cid",
+                "journal",
+                "protected",
+                "late",
+                "signal",
+            )
+        ]
+        self.assertTrue(all(item["failed"] and item["closed"] for item in observations))
+        self.assertTrue(
+            all("frame" not in item and item["dockerCalls"] == 0 for item in observations)
+        )
+
+    def test_previously_known_baseline_actor_keeps_the_existing_passthrough(self) -> None:
+        """The added new-CID branch leaves original baseline handling and stop ownership intact."""
+        actual = rollback_trial("baseline")
+        self.assertEqual(actual["frame"], {"action": "pass"})
+        self.assertEqual(actual["composeCalls"], 0)
+        self.assertEqual(actual["dockerCalls"], 0)
+        self.assertIs(actual["failed"], expr2=False)
+        self.assertIs(actual["closed"], expr2=True)
+
+    def test_restored_mutable_selection_can_have_new_inodes_with_identical_private_bytes(
+        self,
+    ) -> None:
+        """Atomic restoration changes leaf identity while the protected namespace stays owned."""
+        actual = rollback_trial("replaced-selection")
+        self.assertEqual(actual["frame"], {"action": "pass"})
+        self.assertIs(actual["failed"], expr2=False)
+        self.assertIs(actual["closed"], expr2=True)
+
+    def test_selection_read_refusal_stays_first_through_all_actual_reader_close_faults(
+        self,
+    ) -> None:
+        """A body refusal cannot become pass-through or be replaced by a later close refusal."""
+        lower_data, lower_close = stage.Original.data, stage.Original.close
+        primary, secondary = ValueError("fixed-read"), OSError("fixed-close")
+        originals: list[stage.Original] = []
+
+        def data(item: stage.Original, maximum: int = 2**20) -> bytes:
+            originals.append(item)
+            if item.path.name == "app.env":
+                raise primary
+            return lower_data(item, maximum)
+
+        def close(item: stage.Original) -> None:
+            lower_close(item)
+            raise secondary
+
+        with tempfile.TemporaryDirectory(prefix="ds-", dir="/tmp") as temporary:
+            config = Path(temporary)
+            for name in reference.SELECTION:
+                private_data(config / name, b"same-private-bytes")
+            control = guest.Control(time.monotonic())
+            first: BaseException | None = None
+            with (
+                patch.object(guest, "CONFIG", config),
+                patch.object(os, "fstat", side_effect=root_fstat),
+                patch.object(Path, "lstat", autospec=True, side_effect=root_lstat),
+                patch.object(stage.Original, "data", autospec=True, side_effect=data),
+                patch.object(stage.Original, "close", autospec=True, side_effect=close),
+            ):
+                try:
+                    _ = guest.selection_snapshot(control)
+                except (ValueError, OSError) as error:
+                    first = error
+            closed = all(item.closed and item.file.closed for item in originals)
+        self.assertIs(first, primary)
+        self.assertEqual(len(originals), 2)
+        self.assertTrue(closed)
 
     def test_exact_native_inspection_match_does_not_capture_other_docker_roles(self) -> None:
         """Only the complete reviewed format and one full CID can enter the bridge."""

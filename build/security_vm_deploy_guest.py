@@ -57,6 +57,7 @@ NATIVE_FINALIZATION = 60
 CONTINUE_MINIMUM = 3720
 MAX_IMAGE = 2 * 1024**3
 MAX_DUMP = 4 * 1024**3
+DEPENDENCY_FIELDS = 5
 HISTORY_LIMIT = 256
 ENV = {"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "LC_ALL": "C", "HOME": str(ROOT)}
 PROJECT_FILES = (
@@ -163,6 +164,8 @@ PREPARE_TOOLS = (
 MAX_SIGNED_EXIT = 255
 DIAGNOSTIC_SCOPE = "HostDeployVmFailureFacts"
 DIAGNOSTIC_PHASES = frozenset({"request", "prepare", "continue", "exercise"})
+SELECTION_CLASSES = frozenset({"current", "previous", "absent", "other", "unproven"})
+JOURNAL_CLASSES = frozenset({"rolled-back", "replace-unfinished", "complete", "other", "unproven"})
 DIAGNOSTIC_CHECKPOINTS = frozenset(
     {
         "request",
@@ -183,6 +186,7 @@ DIAGNOSTIC_CHECKPOINTS = frozenset(
         "negative-injection-namespace-entry",
         "negative-injection-request",
         "negative-injection-pass-through",
+        "negative-injection-rollback",
         "negative-injection-inspect",
         "negative-injection-stop",
         "negative-injection-receipt",
@@ -200,6 +204,15 @@ DIAGNOSTIC_CHECKPOINTS = frozenset(
             for suffix in (
                 "native",
                 "report",
+                "report-schema",
+                "report-fields",
+                "report-rollback",
+                "report-timestamps",
+                "report-backup",
+                "report-evidence",
+                "report-directory",
+                "report-process",
+                "report-attempts",
                 "outcome",
                 "journal",
                 "staged",
@@ -327,6 +340,8 @@ NATIVE_FACT_KEYS = frozenset(
         "nativeRawExit",
         "nativeReportState",
         "nativePassed",
+        "nativeRollbackAttempted",
+        "nativeRollbackPassed",
         "nativePhase",
         "nativeFailureLabel",
         "nativeCommandOrdinal",
@@ -345,6 +360,8 @@ DIAGNOSTIC_KEYS = NATIVE_FACT_KEYS | {
     "guestSignalStatus",
     "snapshotBoundary",
     "completedTrials",
+    "selectionClass",
+    "journalClass",
 }
 FAILURE_KINDS = frozenset(
     {
@@ -371,6 +388,8 @@ def native_facts(data: bytes | None, status: int | None) -> dict[str, object]:
         "nativeRawExit": status,
         "nativeReportState": "not-observed" if data is None else "invalid",
         "nativePassed": None,
+        "nativeRollbackAttempted": None,
+        "nativeRollbackPassed": None,
         "nativePhase": None,
         "nativeFailureLabel": None,
         "nativeCommandOrdinal": None,
@@ -386,6 +405,12 @@ def native_facts(data: bytes | None, status: int | None) -> dict[str, object]:
     result["nativeReportState"] = "decoded"
     passed = value.get("passed")
     result["nativePassed"] = passed if type(passed) is bool else None
+    for source, destination in (
+        ("rollbackAttempted", "nativeRollbackAttempted"),
+        ("rollbackPassed", "nativeRollbackPassed"),
+    ):
+        flag = value.get(source)
+        result[destination] = flag if type(flag) is bool else None
     phase = value.get("phase")
     result["nativePhase"] = (
         phase if phase in ("stage", "preflight", "replace_application", "complete") else None
@@ -464,6 +489,14 @@ def failure_projection(value: object, run_id: str) -> dict[str, object]:
     require(
         data["nativeFailureLabel"] is None or diagnostic_enum(data["nativeFailureLabel"], labels)
     )
+    require(
+        all(
+            data[key] is None or type(data[key]) is bool
+            for key in ("nativeRollbackAttempted", "nativeRollbackPassed")
+        )
+    )
+    require(diagnostic_enum(data["selectionClass"], SELECTION_CLASSES))
+    require(diagnostic_enum(data["journalClass"], JOURNAL_CLASSES))
     ordinal = data["nativeCommandOrdinal"]
     require(ordinal is None or (type(ordinal) is int and 0 < ordinal <= MAX_NATIVE_COMMANDS))
     return dict(data)
@@ -490,6 +523,8 @@ def failure_snapshot(
         "lastObservedExit": None if commands is None else commands.last_status,
         "guestSignalStatus": control.status,
         "completedTrials": 0 if owner is None else len(owner.trials),
+        "selectionClass": "unproven" if owner is None else owner.selection_class,
+        "journalClass": "unproven" if owner is None else owner.journal_class,
         "snapshotBoundary": "before-guest-finalizers",
         **(native_facts(None, None) if commands is None else commands.native_observation),
     }
@@ -1007,6 +1042,26 @@ class ConfigInputs:
                 raise first
 
 
+def selection_snapshot(control: Control) -> dict[str, bytes]:
+    """Read the three mutable selections through temporary original owners before native writes."""
+    originals: list[stage.Original] = []
+    first: BaseException | None = None
+    result: dict[str, bytes] = {}
+    try:
+        for name in reference.SELECTION:
+            original = retain(CONFIG / name, 2**20, PRIVATE_MODE, control, originals)
+            result[name] = original.data(2**20)
+        for original in originals:
+            original.check()
+    except BaseException as error:  # noqa: BLE001 -- Preserve admission before checked closes.
+        first = error
+    first = ops_guest.settle(tuple(original.close for original in originals), first)
+    if first is not None:
+        raise first
+    control.check()
+    return result
+
+
 @final
 class MigrationProbe:
     """Borrow the unchanged Stage checksum probe through this same bounded command owner."""
@@ -1043,6 +1098,10 @@ class InjectionBinding:
     token: str
     baseline: frozenset[str]
     before: frozenset[str]
+    rollback_image: str | None = None
+    selection: Mapping[str, bytes] | None = None
+    dependencies: Mapping[str, object] | None = None
+    protected: ConfigInputs | None = None
 
 
 @final
@@ -1325,16 +1384,79 @@ class Injector:
             raise first
         self.commands.control.check()
 
+    def check(self) -> None:
+        """Lend only this existing service/body guard to the fixed original-reader interface."""
+        self.check_active()
+
+    def check_rollback(self, identifier: str) -> None:
+        """Admit only the recreated current selected app while preserving both original peers."""
+        self.check_active()
+        require(self.stopped and self.identifier is not None and identifier != self.identifier)
+        require(
+            self.binding.rollback_image is not None
+            and self.binding.rollback_image != self.binding.image
+        )
+        require(self.binding.selection is not None and self.binding.dependencies is not None)
+        require(self.binding.protected is not None)
+        required(self.binding.protected).check()
+        self.check_active()
+        require(selection_snapshot(cast("Control", cast("object", self))) == self.binding.selection)
+        self.check_active()
+        attempt = active_attempt(self.binding.before, self.commands.control)
+        require(
+            read_record(PUBLIC / "release-state.json", self.commands.control)
+            == {
+                "schemaVersion": 1,
+                "attempt": str(attempt),
+                "phase": "replace_application",
+                "finalized": False,
+            }
+        )
+        self.check_active()
+        selected = self.commands.compose("ps", "--status", "running", "--quiet", "simplestchat")
+        require(digest(selected.text()) == identifier)
+        owned = fixture.inspect_owned(self.commands, identifier, self.binding.token)
+        labels = cast("dict[str, object]", owned["labels"])
+        state = cast("dict[str, object]", owned["state"])
+        require(owned["id"] == identifier and owned["image"] == self.binding.rollback_image)
+        require(labels.get("com.docker.compose.project") == "simplestchat-public")
+        require(labels.get(render.LABEL) == self.binding.token)
+        require(labels.get("com.docker.compose.service") == "simplestchat")
+        require(state.get("Running") is True and state.get("OOMKilled") is False)
+        for service in ("postgres", "caddy"):
+            expected = cast("list[object]", required(self.binding.dependencies)[service])
+            require(type(expected) is list and len(expected) == DEPENDENCY_FIELDS)
+            dependency = fixture.inspect_owned(
+                self.commands, digest(expected[0]), self.binding.token
+            )
+            dep_labels = cast("dict[str, object]", dependency["labels"])
+            dep_state = cast("dict[str, object]", dependency["state"])
+            require(dep_labels.get("com.docker.compose.service") == service)
+            require(dep_state.get("Running") is True and dep_state.get("OOMKilled") is False)
+            require(
+                [
+                    *reference.stable_container(dependency),
+                    digest(dep_labels.get("com.docker.compose.config-hash")),
+                ]
+                == expected
+            )
+        require(selection_snapshot(cast("Control", cast("object", self))) == self.binding.selection)
+        required(self.binding.protected).check()
+        self.check_active()
+
     def deliver(self, identifier: str) -> str | None:
         """Forward only original real output after the exact stop/receipt boundary."""
         self.check_active()
         client, deadline = required(self.client), required(self.service_end)
-        if identifier in self.binding.baseline:
+        if identifier in self.binding.baseline or self.stopped:
+            if identifier not in self.binding.baseline:
+                self.checkpoint = "negative-injection-rollback"
+                self.check_rollback(identifier)
             self.checkpoint = "negative-injection-pass-through"
             self.awaiting_ack = True
             injection.send_json(client, {"action": "pass"}, deadline)
             return None
-        require(not self.stopped and self.identifier is None and identifier != self.binding.old)
+        require(self.identifier is None and identifier != self.binding.old)
         self.checkpoint = "negative-injection-inspect"
         attempt = active_attempt(self.binding.before, self.commands.control)
         journal = read_record(PUBLIC / "release-state.json", self.commands.control)
@@ -1504,6 +1626,8 @@ class Fixture:
         self.protected: ConfigInputs | None = None
         self.trials: list[dict[str, object]] = []
         self.ca: stage.Original | None = None
+        self.selection_class = "unproven"
+        self.journal_class = "unproven"
 
     def system_tools(self) -> None:
         """Retain fixed package originals with exact per-role modes, never a generic mask."""
@@ -1918,6 +2042,133 @@ class Fixture:
             "restoreRehearsed": False,
         }
 
+    def recovery_diagnostic(self, before: frozenset[str]) -> None:
+        """Classify two existing private records without a new query, phase or authority."""
+        self.selection_class = "unproven"
+        self.journal_class = "unproven"
+        try:
+            self.control.check()
+            selected = read_record(CONFIG / "images.json", self.control)
+            _ = exact(selected, {"revision", "serverImage", "postgresImage", "caddyImage"})
+            revision = digest(selected["revision"], 40)
+            image = image_id(selected["serverImage"])
+            require(
+                selected["postgresImage"] == fixture.POSTGRES
+                and selected["caddyImage"] == fixture.CADDY
+            )
+            classification = "other"
+            for role, key in (("current", "revision"), ("previous", "previousRevision")):
+                if revision == self.value[key] and image == self.images.get(role):
+                    classification = role
+            self.control.check()
+            self.selection_class = classification
+        except FileNotFoundError:
+            self.selection_class = (
+                "absent" if ops_guest.settle((self.control.check,)) is None else "unproven"
+            )
+        except BaseException:  # noqa: BLE001 -- Best-effort metadata never replaces the body failure.
+            self.selection_class = "unproven"
+        try:
+            self.control.check()
+            attempt = active_attempt(before, self.control)
+            journal = read_record(PUBLIC / "release-state.json", self.control)
+            _ = exact(journal, {"schemaVersion", "attempt", "phase", "finalized"})
+            require(type(journal["schemaVersion"]) is int and journal["schemaVersion"] == 1)
+            require(journal["attempt"] == str(attempt) and type(journal["finalized"]) is bool)
+            require(type(journal["phase"]) is str)
+            self.control.check()
+            self.journal_class = {
+                ("rolled_back", True): "rolled-back",
+                ("replace_application", False): "replace-unfinished",
+                ("complete", True): "complete",
+            }.get((cast("str", journal["phase"]), cast("bool", journal["finalized"])), "other")
+        except BaseException:  # noqa: BLE001 -- Late, malformed or unavailable metadata is unknown.
+            self.journal_class = "unproven"
+
+    def native_report(
+        self, data: bytes, revision: str, *, negative: bool
+    ) -> tuple[dict[str, object], Path]:
+        """Accept actual whole pretty native JSON; final process exit remains independent."""
+        prefix = "negative" if negative else "positive"
+        self.checkpoint = prefix + "-report-schema"
+        names = {
+            "action",
+            "revision",
+            "startedAt",
+            "passed",
+            "phase",
+            "finishedAt",
+            "evidence",
+            "backupMigrations",
+            "browserAssets",
+            "quietWaitRequestedSeconds",
+            "quietWaitSeconds",
+            "roomsActiveAtQuietCheck",
+            "backupSha256",
+            "roomsActiveBeforeStop",
+            "roomsObservedBeforeStopAt",
+            "interruptionStartedAt",
+        }
+        names |= (
+            {"rollbackAttempted", "rollbackPassed", "failure"}
+            if negative
+            else {"interruptionFinishedAt"}
+        )
+        value = exact(record(data), names)
+        self.checkpoint = prefix + "-report-fields"
+        require(
+            value["action"] == "deploy"
+            and value["revision"] == revision
+            and value["passed"] is (not negative)
+            and value["phase"] == ("replace_application" if negative else "complete")
+            and value["quietWaitRequestedSeconds"] == value["quietWaitSeconds"] == 0
+        )
+        if negative:
+            self.checkpoint = prefix + "-report-rollback"
+            require(
+                value["rollbackAttempted"] is True
+                and value["rollbackPassed"] is True
+                and value["failure"] == "Application readiness deadline exceeded"
+            )
+        self.checkpoint = prefix + "-report-timestamps"
+        for key in (
+            "startedAt",
+            "finishedAt",
+            "interruptionStartedAt",
+            "roomsObservedBeforeStopAt",
+        ):
+            require(
+                isinstance(value[key], str)
+                and re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", cast("str", value[key]))
+            )
+        self.checkpoint = prefix + "-report-backup"
+        _ = digest(value["backupSha256"])
+        self.checkpoint = prefix + "-report-evidence"
+        require(isinstance(value["evidence"], str))
+        attempt = Path(cast("str", value["evidence"]))
+        require(
+            attempt.parent == PUBLIC / "results"
+            and re.fullmatch(r"release\.[a-f0-9]{32}", attempt.name)
+        )
+        self.checkpoint = prefix + "-report-directory"
+        metadata = attempt.lstat()
+        require(
+            stat.S_ISDIR(metadata.st_mode)
+            and metadata.st_uid == metadata.st_gid == 0
+            and stat.S_IMODE(metadata.st_mode) == DIRECTORY_MODE
+        )
+        return value, attempt
+
+    def observe_report(
+        self, data: bytes, revision: str, *, negative: bool, before: frozenset[str]
+    ) -> tuple[dict[str, object], Path]:
+        """Keep report refusal primary while collecting only passive existing-record classes."""
+        try:
+            return self.native_report(data, revision, negative=negative)
+        except BaseException:
+            self.recovery_diagnostic(before)
+            raise
+
     def native(  # noqa: PLR0915 -- One native operation and independent observations.
         self, revision: str, *, negative: bool
     ) -> dict[str, object]:
@@ -1931,7 +2182,7 @@ class Fixture:
         self.control.check()
         require(self.control.body_end - time.monotonic() >= NATIVE_SECONDS + 40)
         before = {path.name for path in (PUBLIC / "results").iterdir()}
-        selected = required(self.harness).selection()
+        selected = selection_snapshot(self.control)
         started = time.monotonic()
         since = stage.utc()
         injector: Injector | None = None
@@ -1954,6 +2205,10 @@ class Fixture:
                     required(self.harness).token,
                     baseline,
                     frozenset(before),
+                    rollback_image=self.images["current"],
+                    selection=selected,
+                    dependencies=self.baseline,
+                    protected=self.protected,
                 ),
             )
             self.commands.injector = injector
@@ -2000,8 +2255,12 @@ class Fixture:
             if injector is not None and not injector.stopped
             else prefix + "-report"
         )
-        report, attempt = native_report(result.data, revision, negative=negative)
+        report, attempt = self.observe_report(
+            result.data, revision, negative=negative, before=frozenset(before)
+        )
+        self.checkpoint = prefix + "-report-process"
         require((result.code != 0) if negative else result.code == 0)
+        self.checkpoint = prefix + "-report-attempts"
         require({path.name for path in (PUBLIC / "results").iterdir()} - before == {attempt.name})
         self.checkpoint = prefix + "-outcome"
         outcome_original = retain(
@@ -2280,66 +2539,6 @@ def manifest_hash(originals: Sequence[stage.Original], revision: str) -> str:
     ]
     require(len(selected) == 1)
     return selected[0].sha256
-
-
-def native_report(data: bytes, revision: str, *, negative: bool) -> tuple[dict[str, object], Path]:
-    """Accept actual whole pretty native JSON; final process exit remains independent."""
-    names = {
-        "action",
-        "revision",
-        "startedAt",
-        "passed",
-        "phase",
-        "finishedAt",
-        "evidence",
-        "backupMigrations",
-        "browserAssets",
-        "quietWaitRequestedSeconds",
-        "quietWaitSeconds",
-        "roomsActiveAtQuietCheck",
-        "backupSha256",
-        "roomsActiveBeforeStop",
-        "roomsObservedBeforeStopAt",
-        "interruptionStartedAt",
-    }
-    names |= (
-        {"rollbackAttempted", "rollbackPassed", "failure"}
-        if negative
-        else {"interruptionFinishedAt"}
-    )
-    value = exact(record(data), names)
-    require(
-        value["action"] == "deploy"
-        and value["revision"] == revision
-        and value["passed"] is (not negative)
-        and value["phase"] == ("replace_application" if negative else "complete")
-        and value["quietWaitRequestedSeconds"] == value["quietWaitSeconds"] == 0
-    )
-    if negative:
-        require(
-            value["rollbackAttempted"] is True
-            and value["rollbackPassed"] is True
-            and value["failure"] == "Application readiness deadline exceeded"
-        )
-    for key in ("startedAt", "finishedAt", "interruptionStartedAt", "roomsObservedBeforeStopAt"):
-        require(
-            isinstance(value[key], str)
-            and re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", cast("str", value[key]))
-        )
-    _ = digest(value["backupSha256"])
-    require(isinstance(value["evidence"], str))
-    attempt = Path(cast("str", value["evidence"]))
-    require(
-        attempt.parent == PUBLIC / "results"
-        and re.fullmatch(r"release\.[a-f0-9]{32}", attempt.name)
-    )
-    metadata = attempt.lstat()
-    require(
-        stat.S_ISDIR(metadata.st_mode)
-        and metadata.st_uid == metadata.st_gid == 0
-        and stat.S_IMODE(metadata.st_mode) == DIRECTORY_MODE
-    )
-    return value, attempt
 
 
 def native_ids(attempt: Path, control: Control, originals: list[stage.Original]) -> set[str]:

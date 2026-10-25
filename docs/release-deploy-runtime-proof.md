@@ -6,7 +6,7 @@ The complete 97-case native/unchanged-Python comparison passed locally in 365.12
 test seconds (367.785 seconds wall). Those fixtures use real private files, locks
 and owned inert children, with inert Docker/database/readiness replies. The VM
 controller/guest previously passed 32 inert tests, and the corrected ordinary Ops
-suite passed 484 tests. The revised barrier has 55 passing local inert tests,
+suite passed 484 tests. The earlier barrier had 55 passing local inert tests,
 including actual private files, local socketpairs and checked first-cause faults.
 Actual run `40146220125` at `e271a8c` completed and validated
 the signed-musl positive transaction, including its real Docker, PostgreSQL,
@@ -194,3 +194,48 @@ individual fixed tools, socket, each payload/manifest and schema admission.
 They expose no raw paths, input names, exception text or configuration. Actual
 complete positive and owned-rollback proof remains pending a fresh signed trial;
 no clocks, native role caps or deployment behavior changed.
+
+
+## Recreated rollback selection and report diagnostics
+
+Actual signed trial `40225761365` at `f3559e6` completed its positive transaction.
+The negative native transaction returned exit1, `passed: false`, phase
+`replace_application` and the closed readiness failure label. The guest then
+refused at `negative-report`. Guest and controller cleanup, original-input closes
+and QEMU zero were observed. The retained summary omitted rollback booleans and
+the specific failed report predicate, so it does not establish whether rollback
+failed or which report assertion refused.
+
+A separate source-derived inert regression establishes a fixture obstruction:
+after stopping candidate A, the former interposer rejected every application CID
+outside the pre-trial baseline. Native rollback can legitimately recreate B with
+a new CID. The repaired barrier permits only a read-only pass-through for that
+current Compose-selected CID, distinct from stopped A, joined to authenticated B's
+image and the exact project, service and run labels. Both dependency originals
+must still match their pre-trial ID, image, start, restart and configuration hash.
+The private unfinished replacement journal and restored selection contents are
+also required. Mutable selection files may have new inodes after native atomic
+restoration; exact bytes, private modes and owner checks remain required, while
+the original protected configuration directory and untouched input witnesses
+remain authoritative. This branch issues no second stop and does not pass an
+arbitrary unknown CID. It remains inside the existing20-second service interval
+and original guest body. The positive native dependency is unchanged.
+
+All existing strict native report predicates remain required. The failure summary
+now includes exact `rollbackAttempted`/`rollbackPassed` booleans or unknown, plus
+closed report sub-checkpoints for schema, fields, rollback, timestamps, backup,
+evidence path, directory, process and attempt inventory. On a report refusal,
+best-effort bounded reads classify existing selection metadata as current,
+previous, absent, other or unproven, and the attempt-bound journal as rolled-back,
+replace-unfinished, complete, other or unproven. These passive classes expose no
+raw IDs, paths, arguments, report text or configuration. Failed or late reads
+remain unproven and never replace the original report failure; no Docker query,
+new phase or timeout is introduced for these diagnostics.
+
+The old-source regression is retained as a matched failing test. New inert tests
+use actual private selection/journal files and local socketpairs, checking new-B
+admission, strict refusing neighbors, mutable inode replacement, checked reader
+closes, hostile metadata and preservation of the first report exception. They do
+not identify the failed runner's exact rollback outcome or establish a successful
+corrected signed VM trial. Native/core behavior, Python reference policy, report
+success predicates, role caps and all fixture budgets remain unchanged.

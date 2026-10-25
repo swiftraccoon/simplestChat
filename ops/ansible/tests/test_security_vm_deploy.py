@@ -245,6 +245,13 @@ class ObservedFile:
         self.closed = True
 
 
+def root_owner(value: os.stat_result) -> os.stat_result:
+    """Map only own-temp UID/GID observations while preserving actual metadata and identity."""
+    fields = list(value)
+    fields[4] = fields[5] = 0
+    return os.stat_result(fields)
+
+
 def failure_facts() -> dict[str, object]:
     """Make a closed passive failure row without executing or authenticating anything."""
     control = guest.Control(100.0)
@@ -270,6 +277,8 @@ def failure_facts() -> dict[str, object]:
                 value={"runId": TOKEN},
                 checkpoint="positive-native",
                 trials=[],
+                selection_class="unproven",
+                journal_class="unproven",
             ),
         ),
     )
@@ -278,6 +287,235 @@ def failure_facts() -> dict[str, object]:
 
 class DeployProofTests(unittest.TestCase):
     """Closed scalar profiles and real owner finalizers refuse concrete counterexamples."""
+
+    def test_rollback_flags_are_exact_passive_booleans_without_unknown_text(self) -> None:
+        """A failed rollback stays visible without changing report or process success predicates."""
+        results: list[dict[str, object]] = []
+        for attempted, passed in ((True, False), (False, True), ("secret", {"secret": 1})):
+            results.append(
+                guest.native_facts(
+                    json.dumps(
+                        {
+                            "action": "deploy",
+                            "passed": False,
+                            "phase": "replace_application",
+                            "rollbackAttempted": attempted,
+                            "rollbackPassed": passed,
+                        }
+                    ).encode(),
+                    1,
+                )
+            )
+        self.assertEqual([item["nativeRollbackAttempted"] for item in results], [True, False, None])
+        self.assertEqual([item["nativeRollbackPassed"] for item in results], [False, True, None])
+        self.assertNotIn("secret", json.dumps(results))
+        for key in (
+            "nativeRollbackAttempted",
+            "nativeRollbackPassed",
+            "selectionClass",
+            "journalClass",
+        ):
+            row = failure_facts()
+            row[key] = {"secret": "secret"}
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                _ = guest.failure_projection(row, TOKEN)
+
+    def test_report_subcheckpoints_keep_every_original_negative_predicate(self) -> None:
+        """The same negative assertions now identify only their closed validation group."""
+        outcomes: list[tuple[str, str, bool]] = []
+        with tempfile.TemporaryDirectory(prefix="dn-", dir="/tmp") as temporary:
+            public = Path(temporary)
+            (public / "results").mkdir(mode=0o700)
+            attempt = public / "results" / ("release." + TOKEN)
+            attempt.mkdir(mode=0o700)
+            row: dict[str, object] = dict.fromkeys(
+                {
+                    "backupMigrations",
+                    "browserAssets",
+                    "roomsActiveAtQuietCheck",
+                    "roomsActiveBeforeStop",
+                },
+                0,
+            )
+            row.update(
+                {
+                    "action": "deploy",
+                    "revision": PREVIOUS,
+                    "passed": False,
+                    "phase": "replace_application",
+                    "quietWaitRequestedSeconds": 0,
+                    "quietWaitSeconds": 0,
+                    "backupSha256": BINARY,
+                    "evidence": str(attempt),
+                    "rollbackAttempted": True,
+                    "rollbackPassed": True,
+                    "failure": "Application readiness deadline exceeded",
+                    **dict.fromkeys(
+                        (
+                            "startedAt",
+                            "finishedAt",
+                            "interruptionStartedAt",
+                            "roomsObservedBeforeStopAt",
+                        ),
+                        STAMP,
+                    ),
+                }
+            )
+            control = guest.Control(time.monotonic())
+            owner = guest.Fixture(
+                {"runId": TOKEN}, control, cast("guest.Wire", cast("object", SimpleNamespace()))
+            )
+            lower_lstat = Path.lstat
+
+            def metadata(path: Path) -> os.stat_result:
+                fields = list(lower_lstat(path))
+                fields[4] = fields[5] = 0
+                return os.stat_result(fields)
+
+            for key, value, expected in (
+                ("extra", "secret", "schema"),
+                ("phase", "complete", "fields"),
+                ("rollbackPassed", False, "rollback"),
+                ("startedAt", "secret", "timestamps"),
+                ("backupSha256", "secret", "backup"),
+                ("evidence", "/secret", "evidence"),
+                ("valid", None, "directory"),
+            ):
+                changed = dict(row)
+                if key != "valid":
+                    changed[key] = value
+                failed = False
+                with (
+                    patch.object(guest, "PUBLIC", public),
+                    patch.object(Path, "lstat", autospec=True, side_effect=metadata),
+                ):
+                    try:
+                        _ = owner.native_report(
+                            json.dumps(changed).encode(), PREVIOUS, negative=True
+                        )
+                    except ValueError:
+                        failed = True
+                outcomes.append((expected, owner.checkpoint, failed))
+        self.assertEqual(
+            outcomes,
+            [
+                (part, "negative-report-" + part, part != "directory")
+                for part in (
+                    "schema",
+                    "fields",
+                    "rollback",
+                    "timestamps",
+                    "backup",
+                    "evidence",
+                    "directory",
+                )
+            ],
+        )
+
+    def test_passive_recovery_metadata_is_bounded_and_cannot_replace_report_failure(self) -> None:
+        """Use actual private records and original readers, retaining only closed state classes."""
+        outcomes: list[tuple[object, ...]] = []
+        original_adopt = stage.adopt
+        original_lstat = Path.lstat
+        original_fstat = os.fstat
+        streams: list[BinaryIO] = []
+
+        def admitted(descriptor: int, mode: str) -> BinaryIO:
+            stream = original_adopt(descriptor, mode)
+            streams.append(stream)
+            return stream
+
+        def root_fstat(descriptor: int) -> os.stat_result:
+            return root_owner(original_fstat(descriptor))
+
+        def root_lstat(path: Path) -> os.stat_result:
+            return root_owner(original_lstat(path))
+
+        for kind in ("current", "previous", "other", "missing", "invalid", "late"):
+            with tempfile.TemporaryDirectory(prefix="dj-", dir="/tmp") as temporary:
+                public = Path(temporary)
+                config = public / "config"
+                config.mkdir(mode=0o700)
+                (public / "results").mkdir(mode=0o700)
+                attempt = public / "results" / ("release." + TOKEN)
+                attempt.mkdir(mode=0o700)
+                control = guest.Control(time.monotonic())
+                control.phase = "exercise"
+                owner = guest.Fixture(
+                    {"runId": TOKEN, "revision": CURRENT, "previousRevision": PREVIOUS},
+                    control,
+                    cast("guest.Wire", cast("object", SimpleNamespace())),
+                )
+                owner.images.update({"current": IMAGE_B, "previous": IMAGE_A})
+                selected = {
+                    "revision": PREVIOUS if kind == "previous" else CURRENT,
+                    "serverImage": IMAGE_A if kind == "previous" else IMAGE_B,
+                    "postgresImage": fixture.POSTGRES,
+                    "caddyImage": fixture.CADDY,
+                }
+                if kind == "other":
+                    selected["revision"] = "9" * 40
+                journal = {
+                    "schemaVersion": 1,
+                    "attempt": str(attempt),
+                    "phase": "rolled_back",
+                    "finalized": True,
+                }
+                for path, value in (
+                    (config / "images.json", selected),
+                    (public / "release-state.json", journal),
+                ):
+                    if kind == "missing" and path.name == "images.json":
+                        continue
+                    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                    with os.fdopen(descriptor, "wb") as output:
+                        _ = output.write(
+                            b"secret" if kind == "invalid" else json.dumps(value).encode()
+                        )
+                        output.flush()
+                if kind == "late":
+                    control.body = time.monotonic() - 1
+                primary = ValueError("private-first-report-error")
+                observed: BaseException | None = None
+                with (
+                    patch.object(guest, "PUBLIC", public),
+                    patch.object(guest, "CONFIG", config),
+                    patch.object(stage, "adopt", side_effect=admitted),
+                    patch.object(os, "fstat", side_effect=root_fstat),
+                    patch.object(
+                        Path,
+                        "lstat",
+                        autospec=True,
+                        side_effect=root_lstat,
+                    ),
+                    patch.object(owner, "native_report", side_effect=primary),
+                ):
+                    try:
+                        _ = owner.observe_report(
+                            b"private", PREVIOUS, negative=True, before=frozenset()
+                        )
+                    except ValueError as error:
+                        observed = error
+                outcomes.append(
+                    (
+                        kind,
+                        owner.selection_class,
+                        owner.journal_class,
+                        observed is primary,
+                        all(stream.closed for stream in streams),
+                    )
+                )
+        self.assertEqual(
+            outcomes,
+            [
+                ("current", "current", "rolled-back", True, True),
+                ("previous", "previous", "rolled-back", True, True),
+                ("other", "other", "rolled-back", True, True),
+                ("missing", "absent", "rolled-back", True, True),
+                ("invalid", "unproven", "unproven", True, True),
+                ("late", "unproven", "unproven", True, True),
+            ],
+        )
 
     def test_native_failure_projection_is_closed_and_never_echoes_unknown_text(self) -> None:
         """Reported semantic fields remain passive and distinct from the real signed exit."""
@@ -545,6 +783,7 @@ class DeployProofTests(unittest.TestCase):
             owner = object.__new__(guest.Fixture)
             owner.value, owner.control, owner.wire = frame(), control, wire
             owner.commands, owner.checkpoint, owner.trials = commands, "positive-native", []
+            owner.selection_class = owner.journal_class = "unproven"
 
             def exercise() -> dict[str, object]:
                 control.advance()
