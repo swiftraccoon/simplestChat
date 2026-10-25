@@ -437,3 +437,18 @@ cause and the corrected live transport/material experiment remain unproved.
   https://github.com/moby/moby/blob/v28.2.2/libnetwork/endpoint_info.go
 [moby-gateway-inspect]:
   https://github.com/moby/moby/blob/v28.2.2/daemon/container_operations.go
+
+The `1381912` Caddy trial passed initial endpoint admission and reached the
+`natural-tls` phase, then failed with `unexpected`, last TLS checkpoint `close`
+and no TLS failure category. Cleanup and restoration passed. This does not
+identify the failing operation or establish complete material admission.
+The guest now distinguishes the fixed post-TLS endpoint recheck, remaining
+material opens and analyzer call through `postTlsCheckpoint`. Successful analysis
+clears its marker before trust installation; a separate TLS observation clears
+old context before its initial endpoint check and marks its post-TLS recheck.
+A successful recheck and phase fence clear that marker before returning. Only exact
+`MaterialError` instances with one reviewed literal code can add a `material`
+exception family and that code to the existing refusal field. Unknown codes,
+argument types and subclasses stay generic; no parser, certificate, key, path
+or exception text is exported. The seven-file analyzer and all PKI admission
+rules are unchanged. These diagnostics await another actual trial.

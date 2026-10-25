@@ -73,6 +73,7 @@ class Report(TypedDict):
     errnoCategory: str | None
     tlsCheckpoint: str | None
     tlsFailureCategory: str | None
+    postTlsCheckpoint: str | None
 
 
 PHASES = frozenset(
@@ -145,10 +146,56 @@ def io_checkpoint(report: Report | None, checkpoint: str) -> None:
         report["ioCheckpoint"] = checkpoint
 
 
+POST_TLS_CHECKPOINTS = frozenset({"endpoint-recheck", "material-open", "material-analyze"})
+# Only exact analyzer errors with one reviewed literal may enter public metadata.
+MATERIAL_REFUSAL_CODES = frozenset(
+    {
+        "analyzer_prerequisite",
+        "authority_constraints",
+        "authority_path_length",
+        "certificate_chain",
+        "certificate_extension",
+        "certificate_ocsp",
+        "certificate_pem",
+        "certificate_renewal_window",
+        "certificate_signature",
+        "certificate_structure",
+        "certificate_validity",
+        "fixture_clock",
+        "leaf_constraints",
+        "leaf_subject",
+        "material_set",
+        "material_size",
+        "metadata_duplicate",
+        "metadata_json",
+        "metadata_schema",
+        "private_key_mismatch",
+        "private_key_pem",
+    }
+)
+
+
+def material_refusal(error: BaseException | None) -> str | None:
+    """Never stringify unknown arguments, subclasses or parser/cryptography diagnostics."""
+    if type(error) is not caddy_materials.MaterialError or len(error.args) != 1:
+        return None
+    code = cast("object", error.args[0])
+    return code if type(code) is str and code in MATERIAL_REFUSAL_CODES else None
+
+
+def failure_code(error: BaseException) -> str:
+    """Retain existing policy codes and only the closed exact-type analyzer domain."""
+    if type(error) is PrototypeError:
+        return str(error)
+    return material_refusal(error) or "prototype_failed"
+
+
 def exception_kind(error: BaseException | None) -> str | None:
     """Classify a fixed family without exposing any error text, class name or arguments."""
     if error is None:
         return None
+    if material_refusal(error) is not None:
+        return "material"
     catalog = (
         (TimeoutError, "timeout"),
         (KeyboardInterrupt, "signal"),
@@ -688,6 +735,26 @@ class Original:
         first = settle((lambda: os.close(self.fd), lambda: os.close(self.parent)))
         if first is not None:
             raise first
+
+
+def admit_materials(
+    root: Path, originals: list[Original], control: Control, report: Report
+) -> dict[str, JsonValue]:
+    """Distinguish fixed admission sites while retaining every successfully opened original."""
+    report["postTlsCheckpoint"] = "material-open"
+    for relative in MATERIALS[1:]:
+        originals.append(  # noqa: PERF401 -- Keep each admitted owner.
+            Original.open(root / "data/caddy" / relative, control)
+        )
+    report["postTlsCheckpoint"] = "material-analyze"
+    facts = caddy_materials.inspect(
+        dict(zip(MATERIALS, (item.data for item in originals), strict=True)),
+        datetime.now(UTC),
+        control.end - time.monotonic(),
+    )
+
+    report["postTlsCheckpoint"] = None
+    return facts
 
 
 @dataclass
@@ -1301,6 +1368,8 @@ def tls_failure_category(error: BaseException) -> str:
 
 def tls_checkpoint(report: Report, checkpoint: str) -> None:
     """Begin this fixed operation without letting a later close replace the first failed stage."""
+    if checkpoint == "connect":
+        report["postTlsCheckpoint"] = None
     report["tlsCheckpoint"] = checkpoint
     report["tlsFailureCategory"] = None
 
@@ -1460,8 +1529,10 @@ def wait_tls(
         else:
             attempt.succeeded = True
             _ = attempt.remaining(commands.control)
+            report["postTlsCheckpoint"] = "endpoint-recheck"
             target.check(commands)
             _ = attempt.remaining(commands.control)
+            report["postTlsCheckpoint"] = None
             return result
 
 
@@ -1540,11 +1611,14 @@ def checked_tls(
     commands: Commands, context: ssl.SSLContext, target: Endpoint, report: Report
 ) -> dict[str, JsonValue]:
     """Recheck the same owned endpoint before and after a separate trusted TLS operation."""
+    report["postTlsCheckpoint"] = None
     attempt = TlsAttempt(target, report, time.monotonic() + commands.control.remaining(30))
     target.check(commands)
     observed = tls_probe(commands.control, context, DOMAIN, attempt)
+    report["postTlsCheckpoint"] = "endpoint-recheck"
     target.check(commands)
     _ = attempt.remaining(commands.control)
+    report["postTlsCheckpoint"] = None
     return observed
 
 
@@ -1844,6 +1918,7 @@ def main(  # noqa: C901, PLR0912, PLR0915 -- Keep one ownership frame.
         "errnoCategory": None,
         "tlsCheckpoint": None,
         "tlsFailureCategory": None,
+        "postTlsCheckpoint": None,
     }
     try:
         for number in handlers:
@@ -2070,16 +2145,7 @@ def main(  # noqa: C901, PLR0912, PLR0915 -- Keep one ownership frame.
         public_context.minimum_version = ssl.TLSVersion.TLSv1_2
         target = owned_endpoint(commands, identifier, transport)
         first_tls = wait_tls(commands, public_context, target, report)
-        # Keep each admitted original registered if a later material refuses.
-        for relative in MATERIALS[1:]:
-            originals.append(  # noqa: PERF401 -- Keep each admitted owner.
-                Original.open(root / "data/caddy" / relative, control)
-            )
-        report["materials"] = caddy_materials.inspect(
-            dict(zip(MATERIALS, (item.data for item in originals), strict=True)),
-            datetime.now(UTC),
-            control.end - time.monotonic(),
-        )
+        report["materials"] = admit_materials(root, originals, control, report)
         report["checkpoint"] = "trust-install"
         candidate_root = Path("/usr/local/share/ca-certificates") / (table + ".crt")
         root_copy = TrustCopy.create(candidate_root, originals[0].data, control)
@@ -2211,7 +2277,7 @@ def main(  # noqa: C901, PLR0912, PLR0915 -- Keep one ownership frame.
     if first is None:
         report["checkpoint"] = "complete"
     if first is not None:
-        report["failure"] = str(first) if type(first) is PrototypeError else "prototype_failed"
+        report["failure"] = failure_code(first)
     encoded = (json.dumps(report, sort_keys=True, separators=(",", ":")) + "\n").encode()
     require(len(encoded) <= MAX_METADATA, "metadata_bound")
     require(sys.stdout.buffer.write(encoded) == len(encoded), "metadata_output_short")

@@ -64,6 +64,7 @@ def record() -> dict[str, object]:
         "errnoCategory": None,
         "tlsCheckpoint": None,
         "tlsFailureCategory": None,
+        "postTlsCheckpoint": None,
     }
 
 
@@ -903,7 +904,7 @@ class WrapperTests(unittest.TestCase):
                 for argument in node.args:
                     if isinstance(argument, ast.Constant) and isinstance(argument.value, str):
                         literals.add(argument.value)
-        self.assertEqual(probe.GUEST_REFUSAL_CODES, literals)
+        self.assertEqual(probe.GUEST_REFUSAL_CODES, literals | probe.GUEST_MATERIAL_REFUSAL_CODES)
         self.assertIn("tool_missing", literals)
         for code, expected in (("tool_missing", "tool_missing"), ("INERT-PRIVATE-UNKNOWN", None)):
             value = record()
@@ -1021,6 +1022,55 @@ class TlsFailureProjectionTests(unittest.TestCase):
             self.assertNotIn("INERT-PRIVATE", json.dumps(observed))
         self.assertEqual(guest.TLS_CHECKPOINTS, probe.GUEST_TLS_CHECKPOINTS)
         self.assertEqual(guest.TLS_FAILURE_CATEGORIES, probe.GUEST_TLS_FAILURE_CATEGORIES)
+
+
+class PostTlsProjectionTests(unittest.TestCase):
+    """Export fixed post-TLS sites and analyzer literals without untrusted diagnostic text."""
+
+    def test_post_tls_and_material_projection_is_closed_and_phase_scoped(self) -> None:
+        """Wrong types, unknown strings and unrelated phases cannot populate the new metadata."""
+        for phase, stage, code, expected in (
+            (
+                "natural-tls",
+                "endpoint-recheck",
+                "endpoint_changed",
+                ("endpoint-recheck", "endpoint_changed"),
+            ),
+            (
+                "natural-tls",
+                "material-open",
+                "material_profile",
+                ("material-open", "material_profile"),
+            ),
+            (
+                "natural-tls",
+                "material-analyze",
+                "leaf_constraints",
+                ("material-analyze", "leaf_constraints"),
+            ),
+            ("natural-tls", {"secret": "INERT-PRIVATE"}, ["INERT-PRIVATE"], (None, None)),
+            ("natural-tls", "INERT-PRIVATE", "INERT-PRIVATE", (None, None)),
+            ("containment", "material-analyze", "INERT-PRIVATE", (None, None)),
+        ):
+            value = record()
+            value.update(
+                {
+                    "passed": False,
+                    "checkpoint": phase,
+                    "exception": "material",
+                    "failure": code,
+                    "postTlsCheckpoint": stage,
+                }
+            )
+            state: dict[str, object] = {"checkpoint": "guest", "sshStatus": 1}
+            state.update(probe.guest_failure_record(encoded(value), probe.GUEST_IMAGE))
+            observed = probe.failure_summary(state, {"cleanupPassed": True}, None, restored=True)
+            self.assertEqual(
+                (observed["guestPostTlsCheckpoint"], observed["guestRefusalCode"]), expected
+            )
+            self.assertNotIn("INERT-PRIVATE", json.dumps(observed))
+        self.assertEqual(guest.POST_TLS_CHECKPOINTS, probe.GUEST_POST_TLS_CHECKPOINTS)
+        self.assertEqual(guest.MATERIAL_REFUSAL_CODES, probe.GUEST_MATERIAL_REFUSAL_CODES)
 
 
 if __name__ == "__main__":
