@@ -13,6 +13,19 @@ Ops bootstrap or authenticated artifact role is part of these experiments.
 
 ## Run and evidence status
 
+The corrected [Caddy-only run at
+`4322717`](https://github.com/swiftraccoon/simplestChat/actions/runs/40226216828)
+passed on 2026-10-25. Its controller and guest both reported success and cleanup;
+QEMU exited zero, and the drainer, authenticated SSH, QMP EOF and input-owner
+finalizers passed. The retained summary SHA256 is
+`99d854ca8b6932171045b1d87d5b47ba0c912d514d49587067d98c1f1506e12f`.
+Its source manifest binds the corrected analyzer to
+`00dd4740b86b2cef25acd77f6bc3075b6eec03497826d38d5d35dc9f2565bd98`.
+This closes the finite exact-source TLS/storage prerequisite described below,
+including natural material admission, fresh-process reuse, negative probes and
+the isolated validator. It establishes no application deployment, Rust fd0
+transport, full operational launcher or complete maintenance success.
+
 The first actual [manual run at
 e271a8c](https://github.com/swiftraccoon/simplestChat/actions/runs/40144805915)
 completed the namespace experiment: all 11 named cases and 14 fresh namespace
@@ -29,8 +42,8 @@ remains unproven. A later trial at `f54d8ed` reached `natural-tls` after the
 containment and module-graph observations, then returned the fixed
 `tls_not_ready` refusal. Its closed row recorded cleanup success. It retained no
 connection/handshake reason or observed engine version, so the exact cause of
-that connection failure remains unknown. No successful Caddy TLS/validator or
-complete maintenance proof is established.
+that connection failure remains unknown. Those earlier failures remain retained;
+the corrected success above does not reconstruct their private failure sites.
 
 The Caddy sources are [the controller](../build/caddy_probe_vm.py),
 [guest](../build/caddy_probe_guest.py), [passive analyzer](../build/caddy_materials.py)
@@ -475,8 +488,8 @@ remain mandatory. Exact DNS SAN, digital-signature KU without certificate
 signing, server-auth EKU, signatures, key bindings, chain membership, critical
 extensions, dates and renewal margins remain required. A synthetic signed chain
 without leaf BC passes both admitted encodings; CA/usage/authority neighbors
-remain refused. The actual private certificate's extension and a complete
-corrected Caddy runtime result remain unobserved.
+remain refused. The failed trial's exact private extension remains unobserved;
+the corrected runtime success is recorded above.
 
 [leaf-csr]: https://github.com/caddyserver/certmagic/blob/v0.25.6/config.go
 [leaf-issuer]: https://github.com/caddyserver/caddy/blob/v2.11.7/modules/caddytls/internalissuer.go
