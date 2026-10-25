@@ -1,0 +1,104 @@
+---
+- name: Prepare only the marked standalone restore verification guest
+  hosts: benchmark_hosts
+  become: true
+  gather_facts: true
+  vars_files:
+    - group_vars/benchmark_hosts.yml
+  pre_tasks:
+    - name: Require the exact disposable guest and selected source
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'vmfixture'
+          - ansible_host == '127.0.0.1'
+          - ansible_user == 'fixture'
+          - ansible_facts.distribution == 'Debian'
+          - ansible_facts.distribution_major_version == '13'
+          - ansible_facts.architecture == 'x86_64'
+          - ansible_facts.service_mgr == 'systemd'
+          - vm_fixture_run_id is match('^[a-f0-9]{32}$')
+          - vm_fixture_revision is match('^[a-f0-9]{40}$')
+    - name: Read the original cloud-init ownership marker
+      ansible.builtin.slurp:
+        src: /etc/simplestchat-vm-fixture
+      register: restore_fixture_marker
+      no_log: true
+    - name: Require its exact original bytes
+      ansible.builtin.assert:
+        that:
+          - restore_fixture_marker.content | b64decode == vm_fixture_run_id + '\n'
+      no_log: true
+  tasks:
+    - name: Install only Docker transport prerequisites
+      ansible.builtin.apt:
+        name: [ca-certificates, curl]
+        state: present
+        update_cache: true
+        install_recommends: false
+        fail_on_autoremove: true
+    - name: Reuse the unchanged pinned engine and CLI provisioning closure
+      ansible.builtin.import_tasks: tasks/docker.yml
+    - name: Create only private fixture and fixed public namespaces
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+      loop:
+        - /root/simplestchat-vm-fixture/restore-input
+        - /root/simplestchat-vm-fixture/restore-input/migrations
+        - /srv/simplestchat-public/results
+        - /srv/simplestchat-public/releases
+        - /etc/simplestchat-public
+        - /run/simplestchat-bench
+        - /var/lib/simplestchat-monitoring/restores
+    - name: Keep the operational state root profile
+      ansible.builtin.file:
+        path: /var/lib/simplestchat-monitoring
+        state: directory
+        owner: root
+        group: root
+        mode: '0750'
+    - name: Stage only the two fixed assertion modules
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../build/{{ item }}"
+        dest: "/root/simplestchat-vm-fixture/{{ item }}"
+        owner: root
+        group: root
+        mode: '0600'
+      loop: [security_vm_restore_guest.py, security_vm_stage_guest.py]
+    - name: Supply exact source SQL and historical seed policy inputs
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../{{ item }}"
+        dest: "/root/simplestchat-vm-fixture/restore-input/{{ item | basename }}"
+        owner: root
+        group: root
+        mode: '0600'
+      loop:
+        - ops/ansible/files/monitoring-schema.sql
+        - ops/ansible/templates/public-runtime-grants.sql.j2
+    - name: Stage every exact reviewed migration as private fixture input
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: "/root/simplestchat-vm-fixture/restore-input/migrations/{{ item | basename }}"
+        owner: root
+        group: root
+        mode: '0600'
+      with_fileglob:
+        - "{{ playbook_dir }}/../../migrations/*.sql"
+    - name: Retain the original verifier reference and fixed SQL profile
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../ops/ansible/files/{{ item }}"
+        dest: "/usr/local/libexec/simplestchat-public/{{ item }}"
+        owner: root
+        group: root
+        mode: '0644'
+      loop: [restore_verify.py, restore-verify.sql]
+    - name: Bind seed image selection to the original group variables
+      ansible.builtin.copy:
+        content: "{{ scpub_postgres_image }}\n"
+        dest: /root/simplestchat-vm-fixture/restore-input/postgres-image.txt
+        owner: root
+        group: root
+        mode: '0600'
