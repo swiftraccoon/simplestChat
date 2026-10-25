@@ -15,7 +15,9 @@ import os
 import re
 import selectors
 import signal
+import socket
 import stat
+import struct
 import subprocess
 import sys
 import time
@@ -32,6 +34,8 @@ PROJECT = ROOT / "deploy-source"
 INSTALLED = LIBRARY / "simplestchat-ops"
 MAX_RECORD = 131072
 MAX_FRAME = 16384
+MAX_DOCKER_TIMESTAMP = 64
+DOCKER_ZERO_TIME = "0001-01-01T00:00:00Z"
 MAX_STREAM = 2 * 1024**2
 MAX_COMMANDS = 384
 MAX_NATIVE_COMMANDS = 192
@@ -42,7 +46,7 @@ VALIDATOR_COUNT = 2
 PRIVATE_MODE = 0o600
 CADDY_MODE = 0o644
 DIRECTORY_MODE = 0o700
-INJECTOR_POLLS = 120
+INJECTION_SERVICE_SECONDS = 20
 EVIDENCE_FILES = 1536
 EVIDENCE_ARGC = 3
 LEDGER_FIELDS = 3
@@ -74,7 +78,11 @@ PROJECT_FILES = (
         )
     ),
 )
-GUEST_SOURCES = (*PROJECT_FILES, "build/security_vm_stage_guest.py")
+GUEST_SOURCES = (
+    *PROJECT_FILES,
+    "build/security_vm_stage_guest.py",
+    "build/security_vm_deploy_injection.py",
+)
 PREPARED_FIELDS = {
     "schemaVersion",
     "kind",
@@ -113,6 +121,7 @@ RESULT_FIELDS = {
 
 if __name__ == "__main__":
     sys.path[:0] = [str(ROOT), str(LIBRARY), str(PROJECT / "build")]
+import security_vm_deploy_injection as injection  # noqa: E402 -- Fixed negative-only fixture.
 import security_vm_ops_guest as ops_guest  # noqa: E402 -- Fixed owned source boundary.
 import security_vm_stage_guest as stage  # noqa: E402 -- Fixed owned source boundary.
 
@@ -147,6 +156,15 @@ DIAGNOSTIC_CHECKPOINTS = frozenset(
         "request",
         "prepare",
         "exercise",
+        "negative-injection-namespace-entry",
+        "negative-injection-request",
+        "negative-injection-pass-through",
+        "negative-injection-inspect",
+        "negative-injection-stop",
+        "negative-injection-receipt",
+        "negative-injection-delivery",
+        "negative-injection-acknowledged",
+        "negative-injection-close",
         "final-continuity",
         "separate-probe",
         "final-state",
@@ -700,16 +718,54 @@ class Commands:
         """Poll original ownership and the exact candidate injector."""
         try:
             self.check()
-            if self.injector is not None and not self.polling:
-                self.polling = True
-                try:
-                    self.injector.poll()
-                finally:
-                    self.polling = False
+            if self.injector is not None:
+                self.injector.check_active()
+                if not self.polling:
+                    self.polling = True
+                    try:
+                        self.injector.poll()
+                    finally:
+                        self.polling = False
         except (OSError, ValueError, RuntimeError) as error:
             self.first = self.first or error
             return False
         return True
+
+    def command_end(self, outer: float) -> float:
+        """Clip nested fixed injection commands to the same original service debt."""
+        if self.injector is not None and self.injector.service_end is not None:
+            return min(outer, self.injector.service_end)
+        return outer
+
+    def spawn(
+        self,
+        args: list[str],
+        candidate: stage.Original | None,
+        inherited: tuple[int, ...],
+        source: BinaryIO | None,
+    ) -> subprocess.Popen[bytes]:
+        """Register the actual namespace leader before its first health callback."""
+        entry = (
+            self.injector.entry(candidate, args)
+            if candidate is not None and self.injector is not None
+            else None
+        )
+        child = subprocess.Popen(  # noqa: S603 -- Fixed fixture role argv; no shell.
+            entry if entry is not None else args,
+            executable="/proc/self/fd/" + str(candidate.file.fileno())
+            if candidate is not None and entry is None
+            else None,
+            pass_fds=inherited,
+            stdin=source or subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=ENV,
+            cwd=ROOT,
+            start_new_session=True,
+        )
+        if entry is not None:
+            required(self.injector).leader_pid = child.pid
+        return child
 
     def run(  # noqa: C901, PLR0915 -- One owned child and all peers.
         self, args: list[str], **options: object
@@ -730,6 +786,7 @@ class Commands:
         timeout = options.get("timeout", 30)
         require(type(timeout) in (int, float))
         self.cleanup_deadline = self.control.end if self.control.settling else self.control.body_end
+        self.cleanup_deadline = self.command_end(self.cleanup_deadline)
         seconds = min(float(cast("float", timeout)), self.cleanup_deadline - time.monotonic())
         require(seconds > 0)
         success = options.get("success", True)
@@ -768,19 +825,7 @@ class Commands:
                 candidate.check()
                 inherited = (*inherited, candidate.file.fileno())
             self.check()
-            child = subprocess.Popen(  # noqa: S603 -- Fixed fixture role argv; no shell.
-                args,
-                executable="/proc/self/fd/" + str(candidate.file.fileno())
-                if candidate is not None
-                else None,
-                pass_fds=inherited,
-                stdin=source or subprocess.DEVNULL,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                env=ENV,
-                cwd=ROOT,
-                start_new_session=True,
-            )
+            child = self.spawn(args, candidate, inherited, source)
             status = bounded_process.pump(
                 child,
                 streams[0],
@@ -984,69 +1029,439 @@ class ActorBinding:
 
 
 @final
-class Injector:
-    """Observe and manually stop only this fixture's exact newly running candidate A.
+@dataclass(frozen=True)
+class InjectionBinding:
+    """Bind the one negative seam to the original trial and dependency identities."""
 
-    The bounded pump polls this synchronous observer. Missing the interval never
-    turns an otherwise successful operation into rollback proof.
+    image: str
+    old: str
+    token: str
+    baseline: frozenset[str]
+    before: frozenset[str]
+
+
+@final
+class Injector:
+    """Hold one real inspection response until the exact owned candidate is stopped.
+
+    Only the negative native process receives a private mount namespace. Its
+    fixed Docker interposer cannot forward the real running inspection before
+    this parent finishes the actual stop and seals its private receipt.
     """
 
-    def __init__(
-        self, commands: Commands, image: str, old: str, token: str, before: set[str]
-    ) -> None:
-        """Retain this fixed role and its original owners before checking effects."""
-        self.commands, self.image, self.old, self.token = commands, image, old, token
-        self.before = frozenset(before)
-        self.next_poll, self.polls = 0.0, 0
+    def __init__(self, commands: Commands, binding: InjectionBinding) -> None:
+        """Register each admitted socket before any later operation can fail."""
+        self.commands, self.binding = commands, binding
         self.identifier: str | None = None
         self.stopped = False
-        self.state_before: dict[str, object] | None = None
-        self.state_after: dict[str, object] | None = None
+        self.checkpoint = "negative-injection-namespace-entry"
+        self.service_end: float | None = None
+        self.client: socket.socket | None = None
+        self.server: socket.socket | None = None
+        self.socket_stamp: os.stat_result | None = None
+        self.requests = 0
+        self.leader_pid: int | None = None
+        self.awaiting_ack = False
+        self.closed = False
+        self.commands.check()
+        try:
+            self.server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            self.commands.check()
+            self.server.bind(str(injection.SOCKET))
+            injection.SOCKET.chmod(PRIVATE_MODE)
+            self.socket_stamp = injection.SOCKET.lstat()
+            require(stat.S_ISSOCK(self.socket_stamp.st_mode))
+            self.server.listen(1)
+            self.server.settimeout(0)
+            self.commands.check()
+        except BaseException as error:
+            first = ops_guest.settle((self.close,), error)
+            if first is not None:
+                raise first from None
+            raise
+
+    def write_owned(self, path: Path, data: bytes) -> stage.Original:
+        """Seal a new fixed private leaf and its directory before granting its receipt."""
+        self.check_active()
+        directory = os.open(
+            path.parent,
+            os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+        )
+        output: BinaryIO | None = None
+        before: os.stat_result | None = None
+        first: BaseException | None = None
+        try:
+            self.check_active()
+            before = os.fstat(directory)
+            require(stat.S_ISDIR(before.st_mode) and before.st_uid == before.st_gid == 0)
+            require(stat.S_IMODE(before.st_mode) == DIRECTORY_MODE)
+            descriptor = os.open(
+                path,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
+                0o600,
+            )
+            # adopt() consumes and checked-closes the raw descriptor on failure.
+            output = stage.adopt(descriptor, "wb")
+            self.check_active()
+            require(output.write(data) == len(data))
+            self.check_active()
+            output.flush()
+            self.check_active()
+            os.fsync(output.fileno())
+            self.check_active()
+        except BaseException as error:  # noqa: BLE001 -- First body error precedes all closes.
+            first = error
+        first = ops_guest.settle((output.close,) if output is not None else (), first)
+        if first is None:
+            try:
+                self.check_active()
+                os.fsync(directory)
+                self.check_active()
+                current = path.parent.lstat()
+                before = required(before)
+                require(
+                    (
+                        current.st_dev,
+                        current.st_ino,
+                        current.st_mode,
+                        current.st_uid,
+                        current.st_gid,
+                    )
+                    == (
+                        before.st_dev,
+                        before.st_ino,
+                        before.st_mode,
+                        before.st_uid,
+                        before.st_gid,
+                    )
+                )
+            except BaseException as error:  # noqa: BLE001 -- Directory failure is still primary.
+                first = error
+        first = ops_guest.settle((lambda: os.close(directory),), first)
+        if first is not None:
+            raise first
+        self.check_active()
+        return retain(
+            path,
+            MAX_RECORD,
+            PRIVATE_MODE,
+            self.commands.control,
+            self.commands.originals,
+        )
+
+    def entry(self, native: stage.Original, arguments: list[str]) -> list[str]:
+        """Prepare the private aliases before the negative NativeTool is discovered."""
+        expected = [
+            "simplestchat-ops",
+            "release",
+            "deploy",
+            "--revision",
+            "",
+            "--quiet-seconds",
+            "0",
+            "--timeout-seconds",
+            str(NATIVE_SECONDS),
+            "--finalization-seconds",
+            str(NATIVE_FINALIZATION),
+        ]
+        require(len(arguments) == len(expected))
+        revision = digest(arguments[4], 40)
+        expected[4] = revision
+        require(arguments == expected)
+        original = next(
+            value for value in self.commands.originals if value.path == Path("/usr/bin/docker")
+        )
+        original.check()
+        native.check()
+        _ = self.write_owned(injection.ALIAS, b"")
+        config = {
+            "schemaVersion": 1,
+            "nonce": self.binding.token,
+            "bodyEnd": self.commands.control.body_end,
+            "image": self.binding.image,
+            "realCliSha256": original.sha256,
+            "realCliStamp": list(ops_guest.stamp(original.before)),
+            "nativeSha256": native.sha256,
+            "nativeStamp": list(ops_guest.stamp(native.before)),
+            "namespaceInode": Path("/proc/self/ns/mnt").stat().st_ino,
+        }
+        _ = self.write_owned(injection.CONFIG, encoded(config))
+        self.check_active()
+        return [
+            "/usr/bin/unshare",
+            "--mount",
+            "--propagation",
+            "private",
+            "--fork",
+            "--kill-child=TERM",
+            "/usr/bin/python3",
+            "-I",
+            "-B",
+            str(injection.HELPER),
+            "--enter",
+            str(native.file.fileno()),
+            revision,
+        ]
+
+    def check_active(self) -> None:
+        """Retain the original body and refuse a vanished/extra-byte client."""
+        self.commands.control.check()
+        if self.service_end is None:
+            return
+        require(time.monotonic() < self.service_end and self.client is not None)
+        try:
+            # Framing sets operation timeouts; an explicit nonblocking peek
+            # must not inherit Python's preceding positive socket timeout.
+            required(self.client).settimeout(0)
+            pending = required(self.client).recv(1, socket.MSG_PEEK | socket.MSG_DONTWAIT)
+        except BlockingIOError:
+            return
+        if pending and self.awaiting_ack:
+            return
+        message = "deploy_vm_injection_peer_closed" if not pending else "deploy_vm_extra_request"
+        raise ValueError(message)
+
+    def peer_parent(self, pid: int) -> int:
+        """Read one fixed bounded kernel parent fact without exporting command bytes."""
+        self.check_active()
+        require(type(pid) is int and pid > 0)
+        descriptor = os.open(
+            Path("/proc") / str(pid) / "stat",
+            os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC,
+        )
+        first: BaseException | None = None
+        data = b""
+        try:
+            self.check_active()
+            data = os.read(descriptor, MAX_FRAME + 1)
+            self.check_active()
+        except BaseException as error:  # noqa: BLE001 -- Preserve kernel-read cause through close.
+            first = error
+        first = ops_guest.settle((lambda: os.close(descriptor),), first)
+        if first is not None:
+            raise first
+        require(len(data) <= MAX_FRAME and data.startswith(str(pid).encode() + b" ("))
+        _, separator, tail = data.rpartition(b") ")
+        fields = tail.split()
+        require(separator and len(fields) > 1 and fields[1].isdigit())
+        result = int(fields[1])
+        require(result > 0)
+        self.check_active()
+        return result
 
     def poll(self) -> None:
-        """Stop only the exact new signed candidate owned by this fixture."""
-        if self.stopped or time.monotonic() < self.next_poll:
+        """Service bounded fixed requests; the wrapper blocks instead of racing readiness."""
+        self.check_active()
+        require(self.server is not None)
+        try:
+            accepted = required(self.server).accept()
+            client = accepted[0]
+        except BlockingIOError:
             return
-        self.next_poll = time.monotonic() + 1
-        self.polls += 1
-        require(self.polls <= INJECTOR_POLLS)
-        observed = self.commands.compose(
-            "ps", "--status", "running", "--quiet", "simplestchat", timeout=2, success=False
+        self.client = client
+        self.checkpoint = "negative-injection-request"
+        self.service_end = min(
+            self.commands.control.body_end, time.monotonic() + INJECTION_SERVICE_SECONDS
         )
-        if observed.code != 0 or not observed.data.strip():
-            return
-        identifier = digest(observed.text())
-        value = fixture.inspect_owned(self.commands, identifier, self.token)
-        if identifier == self.old or value["image"] != self.image:
-            return
-        if not inspection_seen(identifier, self.image, self.commands.control, self.before):
-            return
-        state = cast("dict[str, object]", value["state"])
-        require(state.get("Running") is True and state.get("OOMKilled") is False)
-        self.identifier, self.state_before = identifier, state
-        _ = self.commands.docker("stop", "--time", "0", identifier, timeout=10)
-        after = fixture.inspect_owned(self.commands, identifier, self.token)
-        self.state_after = cast("dict[str, object]", after["state"])
+        self.requests += 1
+        first: BaseException | None = None
+        try:
+            require(self.requests <= MAX_NATIVE_COMMANDS)
+            raw_peer = client.getsockopt(socket.SOL_SOCKET, 17, struct.calcsize("3i"))
+            pid, uid, gid = struct.unpack("3i", raw_peer)
+            require(pid > 0 and uid == gid == 0 and self.leader_pid is not None)
+            client.settimeout(max(0.001, required(self.service_end) - time.monotonic()))
+            request_value = exact(
+                injection.receive_json(client, required(self.service_end)),
+                {"schemaVersion", "nonce", "identifier"},
+            )
+            require(type(request_value["schemaVersion"]) is int)
+            require(request_value["schemaVersion"] == 1)
+            require(request_value["nonce"] == self.binding.token)
+            identifier = digest(request_value["identifier"])
+            self.check_active()
+            require(self.peer_parent(self.peer_parent(pid)) == self.leader_pid)
+            self.check_active()
+            receipt_sha = self.deliver(identifier)
+            acknowledged = exact(
+                injection.receive_json(client, required(self.service_end)),
+                {"action", "nonce", "receiptSha256"},
+            )
+            require(
+                acknowledged
+                == {
+                    "action": "received",
+                    "nonce": self.binding.token,
+                    "receiptSha256": receipt_sha,
+                }
+            )
+            self.awaiting_ack = False
+            if receipt_sha is not None:
+                self.checkpoint = "negative-injection-acknowledged"
+            self.check_active()
+            injection.send_json(
+                client,
+                {
+                    "action": "complete",
+                    "nonce": self.binding.token,
+                    "receiptSha256": receipt_sha,
+                },
+                required(self.service_end),
+            )
+            self.check_active()
+        except BaseException as error:  # noqa: BLE001 -- Preserve service through close.
+            first = error
+        finally:
+            first = ops_guest.settle((client.close,), first)
+            self.client = None
+            self.service_end = None
+            self.awaiting_ack = False
+        if first is not None:
+            raise first
+        self.commands.control.check()
+
+    def deliver(self, identifier: str) -> str | None:
+        """Forward only original real output after the exact stop/receipt boundary."""
+        self.check_active()
+        client, deadline = required(self.client), required(self.service_end)
+        if identifier in self.binding.baseline:
+            self.checkpoint = "negative-injection-pass-through"
+            self.awaiting_ack = True
+            injection.send_json(client, {"action": "pass"}, deadline)
+            return None
+        require(not self.stopped and self.identifier is None and identifier != self.binding.old)
+        self.checkpoint = "negative-injection-inspect"
+        attempt = active_attempt(self.binding.before, self.commands.control)
+        journal = read_record(PUBLIC / "release-state.json", self.commands.control)
         require(
-            after["id"] == identifier
-            and after["image"] == self.image
-            and self.state_after.get("Running") is False
-            and self.state_after.get("FinishedAt") != state.get("StartedAt")
+            journal
+            == {
+                "schemaVersion": 1,
+                "attempt": str(attempt),
+                "phase": "replace_application",
+                "finalized": False,
+            }
         )
+        selected = self.commands.compose("ps", "--status", "running", "--quiet", "simplestchat")
+        require(digest(selected.text()) == identifier)
+        owned = fixture.inspect_owned(self.commands, identifier, self.binding.token)
+        labels = cast("dict[str, object]", owned["labels"])
+        require(owned["image"] == self.binding.image)
+        require(labels.get("com.docker.compose.service") == "simplestchat")
+        response = self.commands.docker("inspect", "--format", injection.NATIVE_FORMAT, identifier)
+        value = exact(record(response.data), {"id", "image", "state", "restarts", "configHash"})
+        state = cast("dict[str, object]", value["state"])
+        require(
+            response.code == 0
+            and value["id"] == identifier
+            and value["image"] == self.binding.image
+            and state.get("Running") is True
+            and state.get("OOMKilled") is False
+        )
+        stderr = retain(
+            response.error,
+            MAX_STREAM,
+            PRIVATE_MODE,
+            self.commands.control,
+            self.commands.originals,
+        ).data(MAX_STREAM)
+        before_finished = finished_at(state.get("FinishedAt"))
+        self.identifier = identifier
         self.commands.known.add(identifier)
+        self.check_active()
+        self.checkpoint = "negative-injection-stop"
+        stopped = self.commands.docker("stop", "--time", "0", identifier, timeout=10)
+        after = fixture.inspect_owned(self.commands, identifier, self.binding.token)
+        after_state = cast("dict[str, object]", after["state"])
+        require(
+            stopped.code == 0
+            and after["id"] == identifier
+            and after["image"] == self.binding.image
+            and after_state.get("Running") is False
+        )
+        after_finished = finished_at(after_state.get("FinishedAt"))
+        require(after_finished not in {before_finished, DOCKER_ZERO_TIME})
         self.stopped = True
+        receipt = {
+            "schemaVersion": 1,
+            "scope": "HostDeployInspectionBarrier",
+            "nonce": self.binding.token,
+            "identifier": identifier,
+            "image": self.binding.image,
+            "responseRawExit": response.code,
+            "stdoutBytes": len(response.data),
+            "stdoutSha256": hashlib.sha256(response.data).hexdigest(),
+            "stderrBytes": len(stderr),
+            "stderrSha256": hashlib.sha256(stderr).hexdigest(),
+            "runningBefore": True,
+            "runningAfter": False,
+            "stopRawExit": stopped.code,
+            "finishedChanged": True,
+        }
+        self.checkpoint = "negative-injection-receipt"
+        original = self.write_owned(injection.RECEIPT, encoded(receipt))
+        self.check_active()
+        self.checkpoint = "negative-injection-delivery"
+        self.awaiting_ack = True
+        injection.send_json(
+            client,
+            {
+                "action": "deliver",
+                "stdoutBytes": len(response.data),
+                "stderrBytes": len(stderr),
+                "receiptSha256": original.sha256,
+            },
+            deadline,
+        )
+        self.check_active()
+        injection.write_all(client, response.data, deadline)
+        self.check_active()
+        injection.write_all(client, stderr, deadline)
+        self.check_active()
+        return original.sha256
+
+    def close(self) -> None:
+        """Fence cleanup, close all sockets, and retire only the known live namespace leaf."""
+        if self.closed:
+            return
+        self.closed = True
+        body_error = ops_guest.settle((self.commands.control.check,))
+        actions = [value.close for value in (self.client, self.server) if value is not None]
+        first = ops_guest.settle(actions, body_error)
+        if self.socket_stamp is not None and body_error is None:
+            try:
+                self.commands.control.check()
+                require(
+                    ops_guest.stamp(injection.SOCKET.lstat()) == ops_guest.stamp(self.socket_stamp)
+                )
+                injection.SOCKET.unlink()
+                self.commands.control.check()
+            except BaseException as error:  # noqa: BLE001 -- Earlier close remains first.
+                first = first or error
+        first = ops_guest.settle((self.commands.control.check,), first)
+        if first is not None:
+            raise first
 
 
-def inspection_seen(identifier: str, image: str, control: Control, before: frozenset[str]) -> bool:
-    """Use bounded passive native output only to schedule the deliberate stop.
+def finished_at(value: object) -> str:
+    """Admit the bounded Docker timestamp shape without ordering or clock authority."""
+    require(isinstance(value, str))
+    text = cast("str", value)
+    require(
+        0 < len(text) <= MAX_DOCKER_TIMESTAMP
+        and re.fullmatch(
+            r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}"
+            + r"(?:\.[0-9]{1,9})?(?:Z|[+-][0-9]{2}:[0-9]{2})",
+            text,
+        )
+    )
+    return text
 
-    A complete matching inspection is a timing hint, never authentication or the
-    final actor/effect proof. Concurrent incomplete JSON means keep waiting.
-    """
+
+def active_attempt(before: frozenset[str], control: Control) -> Path:
+    """Bind one exact new native attempt without interpreting its output as authority."""
     control.check()
     created = [path for path in (PUBLIC / "results").iterdir() if path.name not in before]
-    if not created:
-        return False
     require(len(created) == 1)
     attempt = created[0]
     metadata = attempt.lstat()
@@ -1056,51 +1471,8 @@ def inspection_seen(identifier: str, image: str, control: Control, before: froze
         and metadata.st_uid == metadata.st_gid == 0
         and stat.S_IMODE(metadata.st_mode) == DIRECTORY_MODE
     )
-    for number in range(1, MAX_NATIVE_COMMANDS + 1):
-        control.check()
-        output = attempt / f"{number:03d}.stdout"
-        try:
-            descriptor = os.open(output, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK)
-        except FileNotFoundError:
-            # Bulk output has no stdout capture. The always-created stderr
-            # distinguishes that command from one not admitted yet.
-            try:
-                _ = (attempt / f"{number:03d}.stderr").lstat()
-            except FileNotFoundError:
-                break
-            continue
-        original = stage.adopt(descriptor, "rb")
-        first: BaseException | None = None
-        data = b""
-        try:
-            observed = os.fstat(original.fileno())
-            require(
-                stat.S_ISREG(observed.st_mode)
-                and observed.st_uid == observed.st_gid == 0
-                and stat.S_IMODE(observed.st_mode) == PRIVATE_MODE
-                and observed.st_nlink == 1
-            )
-            if observed.st_size <= MAX_RECORD:
-                data = original.read(MAX_RECORD + 1)
-            control.check()
-        except BaseException as error:  # noqa: BLE001 -- Keep body refusal through close.
-            first = error
-        first = ops_guest.settle((original.close,), first)
-        if first is not None:
-            raise first
-        try:
-            value = record(data)
-        except ValueError:
-            continue
-        state = value.get("state")
-        if (
-            value.get("id") == identifier
-            and value.get("image") == image
-            and isinstance(state, dict)
-            and cast("dict[str, object]", state).get("Running") is True
-        ):
-            return True
-    return False
+    control.check()
+    return attempt
 
 
 @final
@@ -1140,11 +1512,13 @@ class Fixture:
         require(source.sha256 == self.value["guestSha256"])
         for name, sha in cast("dict[str, object]", self.value["sourcePins"]).items():
             path = (
-                ROOT / "security_vm_stage_guest.py"
-                if name == "build/security_vm_stage_guest.py"
+                ROOT / Path(name).name
+                if name
+                in {"build/security_vm_stage_guest.py", "build/security_vm_deploy_injection.py"}
                 else PROJECT / name
             )
-            original = retain(path, 2**20, 0o600, self.control, self.originals)
+            mode = 0o755 if name == "build/security_vm_deploy_injection.py" else 0o600
+            original = retain(path, 2**20, mode, self.control, self.originals)
             require(original.sha256 == sha)
         for name, sha in cast("dict[str, object]", self.value["helperPins"]).items():
             path = ROOT / name if name == "security_vm_ops_guest.py" else LIBRARY / name
@@ -1170,6 +1544,8 @@ class Fixture:
             "/usr/bin/curl",
             "/usr/bin/openssl",
             "/usr/bin/nsenter",
+            "/usr/bin/unshare",
+            "/usr/bin/mount",
             "/usr/sbin/update-ca-certificates",
         ):
             _ = retain(Path(path), 320 * 1024**2, 0o755, self.control, self.originals)
@@ -1532,8 +1908,24 @@ class Fixture:
         injector: Injector | None = None
         if negative:
             old = digest(required(self.harness).service("simplestchat")["id"])
+            baseline = frozenset(
+                {
+                    old,
+                    *(
+                        str(cast("list[object]", self.baseline[name])[0])
+                        for name in ("postgres", "caddy")
+                    ),
+                }
+            )
             injector = Injector(
-                self.commands, self.images["previous"], old, required(self.harness).token, before
+                self.commands,
+                InjectionBinding(
+                    self.images["previous"],
+                    old,
+                    required(self.harness).token,
+                    baseline,
+                    frozenset(before),
+                ),
             )
             self.commands.injector = injector
         first: BaseException | None = None
@@ -1560,14 +1952,25 @@ class Fixture:
             )
         except BaseException as error:  # noqa: BLE001 -- Preserve first; settle all peers.
             first = error
+            if injector is not None:
+                self.checkpoint = injector.checkpoint
         finally:
+            if injector is not None:
+                before_close = first
+                first = ops_guest.settle((injector.close,), first)
+                if before_close is None and first is not None:
+                    self.checkpoint = "negative-injection-close"
             self.commands.injector = None
         if first is not None:
             raise first
         require(result is not None)
         result = cast("Command", result)
         until = stage.utc()
-        self.checkpoint = prefix + "-report"
+        self.checkpoint = (
+            injector.checkpoint
+            if injector is not None and not injector.stopped
+            else prefix + "-report"
+        )
         report, attempt = native_report(result.data, revision, negative=negative)
         require((result.code != 0) if negative else result.code == 0)
         require({path.name for path in (PUBLIC / "results").iterdir()} - before == {attempt.name})
@@ -1668,6 +2071,9 @@ class Fixture:
             "selected": observed,
             "injectedCandidateId": None if injector is None else injector.identifier,
             "manualStopObserved": False if injector is None else injector.stopped,
+            "dependencyProfile": "original-docker-cli"
+            if injector is None
+            else "negative-inspection-response-barrier-v1",
             "seconds": seconds,
         }
 
@@ -2094,6 +2500,7 @@ def public_trial(value: object, revision: str, *, negative: bool) -> dict[str, o
             "selected",
             "injectedCandidateId",
             "manualStopObserved",
+            "dependencyProfile",
             "seconds",
         },
     )
@@ -2105,6 +2512,8 @@ def public_trial(value: object, revision: str, *, negative: bool) -> dict[str, o
         and row["rollbackAttempted"] is negative
         and row["rollbackPassed"] is negative
         and row["manualStopObserved"] is negative
+        and row["dependencyProfile"]
+        == ("negative-inspection-response-barrier-v1" if negative else "original-docker-cli")
     )
     if negative:
         _ = digest(row["injectedCandidateId"])

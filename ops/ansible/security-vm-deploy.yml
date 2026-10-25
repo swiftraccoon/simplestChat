@@ -61,6 +61,13 @@
         group: root
         mode: '0600'
       loop: [security_vm_deploy_guest.py, security_vm_stage_guest.py]
+    - name: Copy only the fixed negative inspection barrier executable
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../build/security_vm_deploy_injection.py"
+        dest: /root/simplestchat-vm-fixture/security_vm_deploy_injection.py
+        owner: root
+        group: root
+        mode: '0755'
     - name: Project only the mature renderer and its complete fixed source inputs
       ansible.builtin.copy:
         src: "{{ playbook_dir }}/../../{{ item }}"

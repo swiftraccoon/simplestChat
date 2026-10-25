@@ -48,6 +48,7 @@ NEW_PATHS = (
     ".github/workflows/release-deploy-runtime.yml",
     "build/security_vm_deploy.py",
     "build/security_vm_deploy_guest.py",
+    "build/security_vm_deploy_injection.py",
     "ops/ansible/security-vm-deploy.yml",
     "ops/ansible/tests/test_security_vm_deploy.py",
 )
@@ -70,7 +71,11 @@ PROJECT_FILES = (
         )
     ),
 )
-GUEST_SOURCES = (*PROJECT_FILES, "build/security_vm_stage_guest.py")
+GUEST_SOURCES = (
+    *PROJECT_FILES,
+    "build/security_vm_stage_guest.py",
+    "build/security_vm_deploy_injection.py",
+)
 SOURCE_INPUTS = tuple(dict.fromkeys((*stage.SOURCE_INPUTS, *NEW_PATHS, *PROJECT_FILES)))
 
 
