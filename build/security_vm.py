@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 import platform
 import re
@@ -769,9 +770,22 @@ def qemu_command(work: Path, port: int, run_id: str) -> list[str]:
 class Guest:
     """Keep the exact QEMU leader unreaped until cleanup; never search by process name."""
 
-    def __init__(self, host: Host, argv: Sequence[str], *, qmp_path: Path | None = None) -> None:
-        """Start one owned process group and bounded pipe drainer without daemonization."""
+    def __init__(
+        self,
+        host: Host,
+        argv: Sequence[str],
+        *,
+        qmp_path: Path | None = None,
+        lifetime_deadline: float | None = None,
+    ) -> None:
+        """Keep optional original lifetime for readers, separate from role/body admission."""
+        if lifetime_deadline is not None:
+            require(
+                math.isfinite(lifetime_deadline) and lifetime_deadline > time.monotonic(),
+                "vm_lifetime_deadline",
+            )
         self.host = host
+        self.lifetime_deadline = lifetime_deadline
         self.failure: str | None = None
         self.drainer_errno: int | None = None
         self.drainer_status = "active"
@@ -788,7 +802,9 @@ class Guest:
         self.serial_tail = b""
         self.serial_milestones: set[str] = set()
         self.cloud_init: dict[str, object] | None = None
-        self.observer = Observer(qmp_path, host.deadline) if qmp_path is not None else None
+        self.observer = Observer(qmp_path, self.reader_deadline) if qmp_path is not None else None
+        if lifetime_deadline is not None:
+            require(time.monotonic() < host.deadline, "vm_deadline")
         self.child = subprocess.Popen(  # noqa: S603 -- Fixed reviewed QEMU/prlimit argv; no shell.
             argv,
             stdin=subprocess.DEVNULL,
@@ -812,6 +828,11 @@ class Guest:
             except BaseException:
                 self.close()
                 raise
+
+    @property
+    def reader_deadline(self) -> float:
+        """Retain legacy dynamic host behavior unless the original full lifetime is supplied."""
+        return self.host.deadline if self.lifetime_deadline is None else self.lifetime_deadline
 
     def startup_capture(self, content: bytes) -> None:
         """Retain a finite emulator-only prefix until SSH authenticates this exact guest."""
@@ -895,7 +916,7 @@ class Guest:
                     _ = selector.register(descriptor, selectors.EVENT_READ, name)
                     counts[descriptor] = 0
                 while selector.get_map() and not self.stopping.is_set():
-                    require(time.monotonic() < self.host.deadline, "vm_deadline")
+                    require(time.monotonic() < self.reader_deadline, "vm_deadline")
                     for key, _events in selector.select(0.1):
                         content = os.read(key.fd, 65536)
                         if not content:

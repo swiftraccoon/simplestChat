@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import fcntl
+import hashlib
 import io
 import json
 import os
@@ -30,6 +31,7 @@ import security_vm_ops_guest as ops_guest
 import security_vm_receive as receive
 import security_vm_restore as keeper
 import security_vm_restore_guest as guest
+import security_vm_restore_inputs as inputs
 import security_vm_stage_guest as stage
 import test_security_vm_ops_guest as ops_fixture
 from security_tools import ToolError
@@ -204,6 +206,94 @@ class RestoreClockTests(unittest.TestCase):
         with patch.object(time, "monotonic", return_value=1680):
             control.check()
         self.assertEqual((keeper.NATIVE, keeper.FINALIZATION, keeper.DEBT), (1200, 120, 1320))
+
+
+class RestoreSetupDiagnosticTests(unittest.TestCase):
+    """Keep setup observations finite, passive and independent of the original work fence."""
+
+    def test_relative_marks_and_first_failure_categories_exclude_private_text(self) -> None:
+        """Unknown labels refuse and actual first IO cannot become a late deadline category."""
+        control = keeper.Control(started=100)
+        report: dict[str, object] = {"elapsedSeconds": {}}
+        with patch.object(time, "monotonic", return_value=101.23456):
+            keeper.timing(report, "fixture-input-pack", control)
+            with self.assertRaises(ToolError):
+                keeper.timing(report, "PRIVATE_UNKNOWN_LABEL", control)
+        self.assertEqual(report["elapsedSeconds"], {"fixture-input-pack": 1.235})
+        first = OSError("PRIVATE_FILE_PATH_AND_DATA")
+        self.assertEqual(keeper.failure_kind(first), "io")
+        self.assertEqual(keeper.failure_kind(ToolError("restore_vm_deadline")), "deadline")
+        self.assertEqual(keeper.failure_kind(ToolError("fetch_vm_cancelled")), "signal")
+        self.assertEqual(keeper.failure_kind(ValueError("PRIVATE_ERROR")), "refused")
+        self.assertIsNone(keeper.failure_kind(None))
+        with patch.object(time, "monotonic", return_value=1901):
+            keeper.timing(report, "body-end", control)
+        self.assertIsNone(guest.dictionary(report["elapsedSeconds"])["body-end"])
+        self.assertNotIn("PRIVATE", json.dumps(report))
+
+    def test_failure_classification_never_formats_hostile_or_unknown_errors(self) -> None:
+        """Only one exact string argument on the exact ToolError type carries a known code."""
+        formatting: list[str] = []
+
+        @final
+        class HostileArgument:
+            @override
+            def __str__(self) -> str:
+                formatting.append("argument")
+                message = "PRIVATE_FORMATTING_SHOULD_NEVER_RUN"
+                raise RuntimeError(message)
+
+        @final
+        class HostileError(ToolError):
+            @override
+            def __str__(self) -> str:
+                formatting.append("subclass")
+                message = "PRIVATE_SUBCLASS_SHOULD_NEVER_RUN"
+                raise RuntimeError(message)
+
+        for error in (
+            HostileError("restore_vm_deadline"),
+            ToolError(),
+            ToolError("restore_vm_deadline", "PRIVATE_SECOND_ARGUMENT"),
+            ToolError(HostileArgument()),
+            ToolError(["fetch_vm_cancelled"]),
+            ToolError("PRIVATE_UNKNOWN_CODE"),
+        ):
+            self.assertEqual(keeper.failure_kind(error), "refused")
+        self.assertEqual(formatting, [])
+        for code in ("fetch_vm_deadline", "restore_vm_deadline"):
+            self.assertEqual(keeper.failure_kind(ToolError(code)), "deadline")
+        self.assertEqual(keeper.failure_kind(ToolError("fetch_vm_cancelled")), "signal")
+
+    def test_playbook_has_one_checked_archive_transfer_and_no_per_migration_rpc(self) -> None:
+        """The transport optimization keeps the fixed unpack command and exact checksum input."""
+        source = (ROOT / "ops/ansible/security-vm-restore.yml").read_text()
+        tasks = objects(yaml_value(source), 0, "tasks")
+        copies = [
+            obj(task, "ansible.builtin.copy") for task in tasks if "ansible.builtin.copy" in task
+        ]
+        copied = [copy for copy in copies if copy.get("src") == "{{ vm_restore_input_archive }}"]
+        self.assertEqual(len(copied), 1)
+        self.assertEqual(copied[0]["mode"], "0600")
+        command = next(
+            obj(task, "ansible.builtin.command")
+            for task in tasks
+            if "ansible.builtin.command" in task
+        )
+        self.assertEqual(
+            command["argv"],
+            [
+                "/usr/bin/python3",
+                "-I",
+                "-B",
+                "/root/simplestchat-vm-fixture/security_vm_restore_inputs.py",
+                "--sha256",
+                "{{ vm_restore_input_sha256 }}",
+            ],
+        )
+        self.assertNotIn("fileglob", source)
+        self.assertIn("build/security_vm_restore_inputs.py", keeper.GUEST_FILES)
+        self.assertEqual(inputs.MIGRATIONS, keeper.MIGRATIONS)
 
 
 class RestoreProjectionTests(unittest.TestCase):
@@ -487,10 +577,18 @@ class RestoreWholeControllerTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             _ = guest.native_projection(value, "current")
 
-    def test_whole_controller(  # noqa: C901, PLR0915 -- Ordered real owners.
-        self,
+    def controller_case(  # noqa: C901, PLR0915 -- Ordered real owners and paired failures.
+        self, *, faults: bool, body_error: bool
     ) -> None:
-        """Actual original files/TAR/Input must survive until a current child and QEMU verdict."""
+        """Settle actual originals after either a modeled verdict or paired errors."""
+        primary = OSError("PRIVATE_ORIGINAL_BODY")
+        timing_error = ValueError("PRIVATE_TIMING_OBSERVATION")
+        secondary = OSError("PRIVATE_SECONDARY_CLOSE")
+        classified: list[BaseException | None] = []
+        owned_archives: list[ops.Input] = []
+        original_archive_close = ops.Input.close
+        original_timing = keeper.timing
+        original_kind = keeper.failure_kind
         fixture_options, transfer = ops_fixture.fixture()
         payloads: dict[str, bytes] = {}
         with tarfile.open(fileobj=io.BytesIO(transfer), mode="r:") as archive:
@@ -501,6 +599,8 @@ class RestoreWholeControllerTests(unittest.TestCase):
                     with stream:
                         payloads[name] = stream.read()
         events: list[str] = []
+        transferred_sources: list[dict[str, bytes]] = []
+        case = self
         sessions: list[object] = []
         guests: list[object] = []
         held: list[fetch.Held] = []
@@ -541,7 +641,24 @@ class RestoreWholeControllerTests(unittest.TestCase):
                         write(self.output / "ops-acquired/input" / member, data)
                 elif name == "measure-signed-executable":
                     return 0, guest.encoded(fixture_options.measured)
-                elif name not in {"authenticate-retained-ops", "restore-fixture-setup"}:
+                elif name == "restore-fixture-setup":
+                    case.assertEqual(argv.count("--extra-vars"), 1)
+                    variables = guest.dictionary(
+                        cast(
+                            "object",
+                            json.loads(Path(argv[argv.index("--extra-vars") + 1][1:]).read_bytes()),
+                        )
+                    )
+                    case.assertEqual(
+                        set(variables), {"vm_restore_input_archive", "vm_restore_input_sha256"}
+                    )
+                    source = Path(cast("str", variables["vm_restore_input_archive"]))
+                    payload = source.read_bytes()
+                    case.assertEqual(
+                        hashlib.sha256(payload).hexdigest(), variables["vm_restore_input_sha256"]
+                    )
+                    transferred_sources.append(inputs.decode(payload, self.control.check))
+                elif name != "authenticate-retained-ops":
                     message = "unexpected_inert_command"
                     raise ValueError(message)
                 return 0, b""
@@ -557,6 +674,8 @@ class RestoreWholeControllerTests(unittest.TestCase):
             def close(self) -> None:
                 events.append("qemu-close")
                 self.closed = True
+                if faults:
+                    raise secondary
 
             def require_alive(self) -> None:
                 if self.closed:
@@ -613,6 +732,8 @@ class RestoreWholeControllerTests(unittest.TestCase):
                         "runId": self.expected["runId"],
                         "ready": True,
                     }
+                if body_error:
+                    raise primary
                 return {
                     "schemaVersion": 1,
                     "scope": "RestoreVerificationGuest",
@@ -632,11 +753,15 @@ class RestoreWholeControllerTests(unittest.TestCase):
 
             def finish(self) -> int:
                 events.append("session-finish")
+                if faults:
+                    raise secondary
                 return 0
 
             def close(self) -> None:
                 self.closed = True
                 events.append("session-close")
+                if faults:
+                    raise secondary
 
         Session.case = self
 
@@ -663,6 +788,24 @@ class RestoreWholeControllerTests(unittest.TestCase):
                     for name, expected in ops_guest.CASES
                 ],
             }
+
+        def close_archive(archive: ops.Input) -> None:
+            original_archive_close(archive)
+            owned_archives.append(archive)
+            events.append("archive-close")
+            if faults:
+                raise secondary
+
+        def mark(report: dict[str, object], name: str, control: keeper.Control) -> None:
+            if name == "body-end":
+                events.append("body-end-timing")
+                if faults:
+                    raise timing_error
+            original_timing(report, name, control)
+
+        def classify(error: BaseException | None) -> str | None:
+            classified.append(error)
+            return original_kind(error)
 
         with tempfile.TemporaryDirectory(prefix="restore-whole-inert-") as temporary:
             project = Path(temporary).resolve() / "project"
@@ -702,14 +845,55 @@ class RestoreWholeControllerTests(unittest.TestCase):
                 patch.object(ops, "stage", side_effect=staged),
                 patch.object(ops, "exercise", side_effect=installed),
                 patch.object(receive, "Session", Session),
+                patch.object(ops.Input, "close", close_archive),
+                patch.object(keeper, "timing", side_effect=mark),
+                patch.object(keeper, "failure_kind", side_effect=classify),
                 patch.dict(
                     os.environ, {"GH_TOKEN": "FIXTURE_TOKEN", "GITHUB_SHA": ops_fixture.REVISION}
                 ),
             ):
                 observed = keeper.run(options, control)
             all_originals_closed = all(item.stream.closed for item in held)
-        self.assertTrue(observed["passed"], (observed["failure"], observed["checkpoint"], events))
-        self.assertTrue(observed["cleanupPassed"])
+        self.assertEqual(
+            observed["passed"],
+            not faults,
+            (observed["failure"], observed["checkpoint"], events),
+        )
+        self.assertEqual(observed["cleanupPassed"], not faults)
+        self.assertTrue(all(archive.file.closed for archive in owned_archives))
+        self.assertEqual(len(owned_archives), 1)
+        if faults:
+            self.assertIs(classified[0], primary if body_error else None)
+            self.assertIs(classified[-1], primary if body_error else timing_error)
+            self.assertEqual(observed["failureKind"], "io" if body_error else "refused")
+            self.assertNotIn("body-end", guest.dictionary(observed["elapsedSeconds"]))
+        else:
+            self.assertIsNone(observed["failureKind"])
+        self.assertEqual(len(transferred_sources), 1)
+        transferred = transferred_sources[0]
+        self.assertEqual(set(transferred), set(inputs.MEMBERS))
+        for name in keeper.MIGRATIONS:
+            self.assertEqual(transferred[name], (ROOT / name).read_bytes())
+        for name, source in (
+            ("monitoring-schema.sql", "ops/ansible/files/monitoring-schema.sql"),
+            ("public-runtime-grants.sql.j2", "ops/ansible/templates/public-runtime-grants.sql.j2"),
+        ):
+            self.assertEqual(transferred[name], (ROOT / source).read_bytes())
+        marks = guest.dictionary(observed["elapsedSeconds"])
+        self.assertEqual(
+            set(marks),
+            ({"body-end"} if not faults else set())
+            | {
+                "authentication",
+                "boot",
+                "install",
+                "fixture-input-pack",
+                "fixture-setup",
+                "guest-setup",
+                "ready",
+                *(["native"] if not body_error else []),
+            },
+        )
         self.assertEqual(observed["opsVerifierCalls"], 6)
         self.assertEqual(len(cast("list[object]", observed["opsCases"])), 33)
         self.assertTrue(all_originals_closed)
@@ -719,6 +903,21 @@ class RestoreWholeControllerTests(unittest.TestCase):
         self.assertLess(events.index("ops33"), events.index("request"))
         self.assertLess(events.index("go"), events.index("session-finish"))
         self.assertLess(events.index("session-close"), events.index("qemu-close"))
+        self.assertLess(events.index("body-end-timing"), events.index("session-finish"))
+        self.assertLess(events.index("archive-close"), events.index("qemu-close"))
+        self.assertNotIn("PRIVATE", json.dumps(observed))
+
+    def test_whole_controller(self) -> None:
+        """Actual original files/TAR/Input survive until a current child and QEMU verdict."""
+        self.controller_case(faults=False, body_error=False)
+
+    def test_body_end_timing_failure_cannot_skip_any_admitted_owner(self) -> None:
+        """A failed observation makes success negative while every known peer still settles."""
+        self.controller_case(faults=True, body_error=False)
+
+    def test_original_body_failure_beats_timing_and_secondary_cleanup_faults(self) -> None:
+        """The exact first body exception survives timing and later actual archive-close errors."""
+        self.controller_case(faults=True, body_error=True)
 
 
 class RestoreFinalBoundaryTests(unittest.TestCase):

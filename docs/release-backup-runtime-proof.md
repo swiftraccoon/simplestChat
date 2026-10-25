@@ -33,8 +33,41 @@ native maximum1800. The remaining120 body seconds are independent observation
 and fixture PostgreSQL cleanup allowance; slow roles may still refuse. The
 existing QEMU1800 limit is unchanged.
 
-Cold setup has not been measured. If it cannot meet360, the proof remains
-unproven; another helper's clock or service budget cannot be borrowed. Native
+The first actual three-case trial, run40225833714, failed during setup after
+about360.46 to360.97 seconds. All three completed current Ops6 authentication and
+the33 install/custody cases; none reached the public native restore command. The
+historical case retained a database-setup deadline checkpoint and clean VM
+finalization. The current and privacy cases observed QEMU0 but failed the QMP EOF
+and output-drainer completion checks. These failures remain negative evidence;
+the precise first expensive setup role was not observed.
+
+The repair keeps reader lifetime separate from role admission. Restore gives the
+QMP observer and output drainer the original1800 end at QEMU creation; the live
+setup/role fence still governs new work, including the final pre-spawn check.
+Other VM callers retain their existing defaults. A real Unix QMP exchange and
+owned child/pipe test demonstrates that setup expiry can precede natural EOF;
+this source defect explains a possible cleanup failure, without establishing the
+cause of every actual failed trial.
+
+The fixture now packs the36 original migrations, monitoring schema, runtime
+grants and pinned PG image text into one retained data-only archive. One copy and
+one fixed unpack command replace39 separate source-file copy RPCs. The helper
+validates all40 headers, including its archive-only digest/length manifest, before
+creating any output. It admits only39 fixed regular private files through
+exclusive nofollow opens anchored to the original empty directories. It reads
+back each retained output, seals its complete metadata and joins final original
+bytes, stamps and namespace. Every admitted file closes after refusal; a final
+original deadline check follows all closes. Same-UID swap/restore races and
+blocked filesystem calls retain their cooperative-check qualifications.
+
+Closed relative controller checkpoints distinguish authentication, boot, install,
+input packing, playbook setup, guest setup, Ready and native completion. Guest
+setup checkpoints distinguish configuration, version, tool, pull, image, anchor,
+create, start and readiness. Only fixed first-cause categories and relative
+numbers are published; raw commands, errors, paths and source bytes stay private.
+The repaired cold setup has not run on a fresh guest. If it cannot meet360, the
+proof remains unproven; another helper's clock or service budget cannot be
+borrowed. Native
 role-debt arithmetic is785 inside B1080, leaving295 for filesystem/scheduling
 work. This is not a capacity or blocked-kernel hard-wall guarantee. Native R160
 stays inside B; strict readiness remains one live30 phase including settlement.
@@ -97,8 +130,10 @@ requires actual signed QEMU0 and all controller input/session/finalizer facts,
 then the original handler/umask/output/signal/deadline fence. Earlier success text
 or a passive freshness file cannot override a final nonzero status.
 
-Source, inert tests and workflow/Ansible checks pass for this integrated fixture.
-Actual authentication/installed CLI/PostgreSQL/amcheck/KVM execution remains
-unrun. This fixture does not establish same-selector repeat,64MiB capacity,
+Source and inert checks qualify the setup/lifetime repair. Actual Ops
+authentication/install and KVM setup ran in the failed trial described above;
+public native Restore/PostgreSQL restoration/amcheck and the repaired setup
+remain unproven until a fresh complete three-case run. This fixture does not establish
+same-selector repeat,64MiB capacity,
 unknown-create delivery recovery, arbitrary injected native close/timeout faults,
 production restore, app availability, offsite recovery or caller cutover.

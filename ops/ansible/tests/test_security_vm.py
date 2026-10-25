@@ -9,12 +9,15 @@ import os
 import platform
 import selectors
 import shlex
+import socket
+import subprocess
 import sys
 import tempfile
 import time
 import unittest
 from dataclasses import dataclass, field
 from pathlib import Path
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, cast, override
 from unittest.mock import patch
 
@@ -24,6 +27,7 @@ if TYPE_CHECKING:
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "build"))
 
 import security_vm as vm
+import security_vm_qmp as qmp
 from release_artifact import Manifest
 from security_findings import object_value
 from security_tools import ToolError
@@ -664,6 +668,127 @@ class StartupDiagnosticTests(unittest.TestCase):
         self.assertEqual(result, {"messages": [], "withheldLines": 3})
         result = vm.startup_errors(b"qemu: kvm\n" * (vm.MAX_STARTUP_LINES + 1))
         self.assertEqual(result["withheldLines"], 1)
+
+
+class ReaderLifetimeTests(unittest.TestCase):
+    """Actual Unix QMP/pipe EOF may follow a failed role while the original N stays live."""
+
+    def test_explicit_reader_lifetime_cannot_admit_expired_role_spawn(self) -> None:
+        """A live original N cannot authorize QEMU after its original setup role expires."""
+        with tempfile.TemporaryDirectory() as temporary:
+            host = vm.Host(Path(temporary), 2.0)
+            with (
+                patch.object(vm, "time", SimpleNamespace(monotonic=iter([1.0, 3.0]).__next__)),
+                patch.object(subprocess, "Popen") as launching,
+                self.assertRaises(ToolError),
+            ):
+                _ = vm.Guest(host, ["INERT_NEVER_LAUNCHED"], lifetime_deadline=10.0)
+            launching.assert_not_called()
+
+    def negotiate(self, channel: socket.socket, observer: qmp.Observer, end: float) -> None:
+        """Borrow the live peer for the real fixed greeting/acknowledgement exchange."""
+        greeting: dict[str, object] = {
+            "QMP": {
+                "version": {"qemu": {"major": 9, "minor": 0, "micro": 0}, "package": "inert"},
+                "capabilities": [],
+            }
+        }
+        channel.sendall((json.dumps(greeting) + "\n").encode())
+        command = b""
+        while not command.endswith(b"\n"):
+            part = channel.recv(1024)
+            self.assertTrue(part)
+            command += part
+        self.assertEqual(command, qmp.CAPABILITIES)
+        channel.sendall(b'{"return":{},"id":"capabilities"}\n')
+        while not observer.diagnostics()["capabilitiesNegotiated"] and time.monotonic() < end:
+            time.sleep(0.005)
+        self.assertTrue(observer.diagnostics()["capabilitiesNegotiated"])
+
+    def lifetime_case(self, *, explicit: bool) -> dict[str, object]:
+        """Use virtual phase expiry with real child0, pipe bytes and negotiated socket EOF."""
+        real_now, real_sleep = time.monotonic, time.sleep
+        clock = [1.0]
+
+        def now() -> float:
+            return clock[0]
+
+        scripted_time = SimpleNamespace(monotonic=now, sleep=real_sleep)
+        child_code = (
+            "from pathlib import Path; import sys,time\n"
+            "print('actual serial',flush=True); print('actual stderr',file=sys.stderr,flush=True)\n"
+            "while not Path(sys.argv[1]).exists(): time.sleep(.005)\n"
+        )
+        with (
+            tempfile.TemporaryDirectory(prefix="vm-life-", dir="/tmp") as temporary,
+            socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as listener,
+            patch.object(vm, "time", scripted_time),
+            patch.object(qmp, "time", scripted_time),
+        ):
+            root = Path(temporary).resolve()
+            path, release = root / "q.sock", root / "release"
+            listener.bind(str(path))
+            path.chmod(0o600)
+            listener.listen(1)
+            listener.settimeout(2)
+            host = vm.Host(root, 2.0)
+            guest = vm.Guest(
+                host,
+                [sys.executable, "-c", child_code, str(release)],
+                qmp_path=path,
+                lifetime_deadline=10.0 if explicit else None,
+            )
+            channel: socket.socket | None = None
+            try:
+                channel = listener.accept()[0]
+                channel.settimeout(2)
+                self.assertIsNotNone(guest.observer)
+                observer = cast("qmp.Observer", guest.observer)
+                stop = real_now() + 2
+                self.negotiate(channel, observer, stop)
+                clock[0] = 3.0  # Original role2 expired; original lifetime10 is still live.
+                if not explicit:
+                    while (
+                        guest.drainer_status == "active" or observer.failure is None
+                    ) and real_now() < stop:
+                        real_sleep(0.005)
+                channel.close()  # This is actual negotiated EOF, never an assigned flag.
+                channel = None
+                descriptor = os.open(release, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                os.close(descriptor)
+                while (
+                    vm.terminal_status(guest.child.pid)["state"] == "running" and real_now() < stop
+                ):
+                    real_sleep(0.005)
+            finally:
+                if channel is not None:
+                    channel.close()
+                guest.close()
+            with patch.object(subprocess, "Popen") as launching:
+                with self.assertRaises(ToolError):
+                    _ = host.run("late-role", [sys.executable, "-c", "raise SystemExit(99)"])
+                launching.assert_not_called()
+            facts = guest.diagnostics()
+            facts["pipesClosed"] = all(
+                stream is not None and stream.closed
+                for stream in (guest.child.stdout, guest.child.stderr)
+            )
+            return facts
+
+    def test_reader_original_lifetime_survives_phase_expiry_without_late_role_admission(
+        self,
+    ) -> None:
+        """Legacy phase-bound readers fail; explicit originalN readers see actual EOF/child0."""
+        legacy = self.lifetime_case(explicit=False)
+        full = self.lifetime_case(explicit=True)
+        for facts in (legacy, full):
+            self.assertEqual(facts["cleanupReturnCode"], 0)
+            self.assertIs(facts["pipesClosed"], expr2=True)
+        self.assertNotEqual(legacy["drainer"], "completed")
+        self.assertEqual(cast("dict[str, object]", legacy["qmp"])["failure"], "vm_qmp_deadline")
+        self.assertEqual(full["drainer"], "completed")
+        self.assertIs(cast("dict[str, object]", full["qmp"])["eofObserved"], expr2=True)
+        self.assertIsNone(cast("dict[str, object]", full["qmp"])["failure"])
 
 
 class LifecycleTests(unittest.TestCase):
