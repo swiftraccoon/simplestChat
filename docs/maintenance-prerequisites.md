@@ -22,8 +22,10 @@ maintenance remain unproved.
 
 Caddy stopped at guest prerequisites. Its 578-byte guest row was reconstructed
 against the retained SHA256 and identified the exact fixed `tool_missing` refusal.
-No Caddy image/module/TLS/validator success was established. The corrected Caddy
-trial remains pending; the unchanged namespace trial need not be repeated.
+The first corrected [Caddy-only run][containment-run] passed tool and initial
+image/network setup, then stopped in containment with an I/O exception. Cleanup
+was verified, but its exact local site/errno was not retained. That actual cause
+remains unproven; no Caddy module/TLS/validator success is established.
 
 The Caddy sources are [the controller](../build/caddy_probe_vm.py),
 [guest](../build/caddy_probe_guest.py), [passive analyzer](../build/caddy_materials.py)
@@ -134,8 +136,17 @@ An internal Docker bridge alone is not an exhaustive egress guard.
 A bounded known tcpdump child observes every non-control physical frame, excluding
 only that SSH peer and its ARP. Overflow, early exit, missing completion or any
 non-control packet prevents success. After guard installation, one inert UDP
-marker targets the RFC5737 documentation address192.0.2.1:53 and must increment
-the blocked OUTPUT counter. No public CA endpoint is configured or allowed.
+marker targets the RFC5737 documentation address 192.0.2.1:53. The fixed owned
+`blocked_output` counter is sampled before and after: exactly one fresh packet
+and an increasing byte total are required, with a live capture at both sides.
+A stale prior drop, missing/duplicate/wrong-table counter or extra activity
+refuses. Ordinary local Linux DROP can return `EPERM` from the marker send; only
+that exact send errno is tolerated pending all counter/capture checks. Other
+send/open/close errors, short sends and late completions remain failures. The [versioned Linux DROP
+handling][linux-drop] provides the source-backed
+expected-denial edge; it does not prove the actual recorded I/O site's cause.
+No firewall rule, privilege or original budget is relaxed. No public CA endpoint
+is configured or allowed.
 Actual confinement still requires the manual run. Both rulesets
 remain through guest exit and deferred resolver work. The exact owned VM's
 verified zero exit retires them; no successful nft-delete result is claimed.
@@ -213,9 +224,12 @@ SSH work directory or disk is retained by either artifact step.
 
 The negative schema always says `passed:false` and `metadataOnly:true`. It carries
 only the fixed experiment/controller checkpoint, strictly projected guest phase
-or named case, closed exception families and reviewed static policy refusal code,
-actually returned signed SSH status or null, bounded row byte count/SHA256, and separate cleanup/restoration/fence
-facts. Unknown guest fields or error text cannot enter it. The Caddy policy-code field accepts only its reviewed literal catalog; any other string is null. SDK
+or named case, closed exception families, reviewed static policy refusal code,
+and closed containment-local checkpoint/symbolic errno category,
+actually returned signed SSH status or null, bounded row byte count/SHA256, and separate
+cleanup/restoration/fence
+facts. Unknown guest fields or error text cannot enter it. The Caddy policy-code field accepts only
+its reviewed literal catalog; any other string is null. SDK
 refusal before a status return remains null; its initialized/default status is never substituted.
 The first observed refusal stays primary through cleanup and diagnostic output.
 A matching fixed JSON line is attempted on stderr when a file cannot be retained.
@@ -320,3 +334,6 @@ the binding. This inventory is source evidence, not actual image/runtime proof.
 [src25]: https://github.com/caddyserver/certmagic/blob/v0.25.6/filestorage.go
 [src26]: https://github.com/caddyserver/certmagic/blob/v0.25.6/ocsp.go
 [src27]: https://github.com/mholt/acmez/blob/v3.1.7/acme/ari.go
+
+[containment-run]: https://github.com/swiftraccoon/simplestChat/actions/runs/40146493305
+[linux-drop]: https://github.com/gregkh/linux/blob/v6.12.111/net/netfilter/core.c

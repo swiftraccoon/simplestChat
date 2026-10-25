@@ -2868,7 +2868,7 @@ reaps. Neither job proves the other's behavior or complete maintenance success.
 The optional workflow has no artifact selector, API token, production host,
 required-CI role or installed caller change.
 
-The Caddy 63-case suite and namespace 14-case boundary suite use the maintained strict
+The Caddy 69-case suite and namespace 14-case boundary suite use the maintained strict
 Python configuration. These local tests execute no actual helper role, namespace,
 KVM, Caddy or TLS. The separately recorded namespace run passed its finite catalog;
 Caddy stopped at prerequisites, and the operational 900-second launcher remains unrun.
@@ -2894,3 +2894,12 @@ No Caddy TLS or complete maintenance proof is established. The guest bootstrap
 now explicitly installs the separate Docker CLI with the daemon under the same
 no-recommends policy. A fixed workflow choice selects `both` (default), `caddy`
 or `namespace`; the corrected Caddy-only trial remains pending.
+
+The first corrected Caddy-only run reached containment after tool/image/network
+setup and failed with an I/O exception; cleanup passed, but no exact errno/site
+was retained. A source-backed Linux DROP `EPERM` marker edge is now handled only
+with a fresh exact named counter delta and live capture. Unrelated I/O, stale
+counters, close failures and original deadlines remain negative. Fixed local
+checkpoints and symbolic errno categories retain future failures without raw
+messages or paths. The actual recorded I/O cause and Caddy TLS proof remain
+unproven pending a further Caddy-only trial.

@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import errno
 import io
+import json
 import os
+import socket
 import ssl
 import tarfile
 import tempfile
@@ -87,6 +90,136 @@ def pump(data: bytes, status: int = 0) -> Callable[..., tuple[int, bytes, bytes]
         return status, b"", b""
 
     return run
+
+
+def counter_bytes(table: str, packets: int, size: int) -> bytes:
+    """Provide only an inert fixed-table NFT counter snapshot plus its drop rule."""
+    return json.dumps(
+        {
+            "nftables": [
+                {
+                    "counter": {
+                        "family": "inet",
+                        "table": table,
+                        "name": "blocked_output",
+                        "packets": packets,
+                        "bytes": size,
+                    }
+                },
+                {"rule": {"expr": [{"drop": None}]}},
+            ]
+        }
+    ).encode()
+
+
+class MarkerSocket:
+    """Own a real local socket while replacing only its network-send boundary."""
+
+    def __init__(
+        self,
+        actual: socket.socket,
+        clock: list[float],
+        fault: str,
+        errors: tuple[OSError, OSError],
+    ) -> None:
+        """Keep explicit owned fixture state, never a runtime command or network target."""
+        self.actual: socket.socket = actual
+        self.clock: list[float] = clock
+        self.fault: str = fault
+        self.errors: tuple[OSError, OSError] = errors
+
+    def sendto(self, data: bytes, address: tuple[str, int]) -> int:
+        """Supply a deterministic kernel-style observation, never an actual packet."""
+        if data != guest.MARKER or address != ("192.0.2.1", 53):
+            message = "unexpected fixed marker"
+            raise AssertionError(message)
+        if self.fault in {"eperm", "eacces", "eperm-close"}:
+            raise self.errors[0]
+        if self.fault in {"eio", "eio-close"}:
+            raise self.errors[1]
+        if self.fault == "late":
+            self.clock[0] = 150.0
+        return len(data) - 1 if self.fault == "short" else len(data)
+
+    def close(self) -> None:
+        """Close the real original before an optional checked-close refusal."""
+        self.actual.close()
+        if self.fault in {"eperm-close", "eio-close"}:
+            raise self.errors[1]
+
+
+def marker_fixture(
+    before: tuple[int, int], after: tuple[int, int], fault: str
+) -> dict[str, object]:
+    """Exercise only marker control flow and a real local Unix socket close, without sending."""
+    table = "sc_caddy_" + "a" * 12
+    actual = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+    descriptor = actual.fileno()
+    clock = [100.0]
+    control = guest.Control(100.0, 60, 10)
+    calls: list[str] = []
+    captures: list[bool] = []
+    admitted: list[bool] = []
+    report = cast("guest.Report", cast("object", {"ioCheckpoint": None}))
+    send_error = PermissionError(errno.EPERM, "INERT-PRIVATE", "/INERT/PRIVATE")
+    if fault == "eacces":
+        send_error = PermissionError(errno.EACCES, "INERT-PRIVATE", "/INERT/PRIVATE")
+    other_error = OSError(errno.EIO, "INERT-PRIVATE", "/INERT/PRIVATE")
+
+    class Capture:
+        """Model only a successful capture check; this is no pcap/runtime proof."""
+
+        def check(self) -> None:
+            """Record the required observation boundary without a child or capture."""
+            captures.append(True)
+
+    def factory(_family: int, _kind: int) -> MarkerSocket:
+        admitted.append(True)
+        return MarkerSocket(actual, clock, fault, (send_error, other_error))
+
+    def call(name: str, _argv: Sequence[str]) -> bytes:
+        calls.append(name)
+        packets, size = before if name == "guard-before" else after
+        return counter_bytes(table, packets, size)
+
+    commands = cast(
+        "guest.Commands",
+        cast(
+            "object",
+            SimpleNamespace(
+                control=control,
+                watch=Capture(),
+                call=call,
+            ),
+        ),
+    )
+    first: BaseException | None = None
+    original_closed = False
+    try:
+        with (
+            patch.object(socket, "socket", side_effect=factory),
+            patch.object(time, "monotonic", side_effect=lambda: clock[0]),
+        ):
+            guest.guard_probe(commands, table, report)
+    except BaseException as error:  # noqa: BLE001 -- Close the fixture's actual original afterward.
+        first = error
+    finally:
+        try:
+            _ = os.fstat(descriptor)
+        except OSError as error:
+            original_closed = error.errno == errno.EBADF
+        actual.close()
+    return {
+        "failure": first,
+        "sendError": send_error,
+        "otherError": other_error,
+        "closedBeforeFallback": original_closed,
+        "closed": actual.fileno() == -1,
+        "calls": calls,
+        "captures": len(captures),
+        "admitted": bool(admitted),
+        "ioCheckpoint": report["ioCheckpoint"],
+    }
 
 
 class PrototypeTests(unittest.TestCase):
@@ -505,6 +638,88 @@ class PrototypeTests(unittest.TestCase):
             self.assertRaisesRegex(guest.PrototypeError, "^guest_deadline$"),
         ):
             guest.negative_tls(control, context, guest.DOMAIN)
+
+    def test_marker_eperm_needs_fresh_named_counter_and_actual_socket_close(self) -> None:
+        """Accept only the fixed denial observation plus a fresh single-packet delta and capture."""
+        for fault in ("eperm", "success"):
+            with self.subTest(fault=fault):
+                value = marker_fixture((4, 200), (5, 250), fault)
+                self.assertIsNone(value["failure"])
+                self.assertTrue(value["closedBeforeFallback"])
+                self.assertTrue(value["closed"])
+                self.assertEqual(value["calls"], ["guard-before", "guard-after"])
+                self.assertEqual(value["captures"], 2)
+
+    def test_marker_eperm_never_accepts_stale_counter_extra_packets_or_empty_byte_delta(
+        self,
+    ) -> None:
+        """A preexisting drop or unrelated activity cannot stand in for this fixed attempt."""
+        for after in ((4, 200), (6, 300), (5, 200)):
+            with self.subTest(after=after):
+                value = marker_fixture((4, 200), after, "eperm")
+                self.assertIsInstance(value["failure"], guest.PrototypeError)
+                self.assertTrue(value["closedBeforeFallback"])
+                self.assertTrue(value["closed"])
+                self.assertEqual(value["ioCheckpoint"], "containment-counter-validate")
+
+    def test_unrelated_marker_io_and_checked_close_refusals_remain_negative(self) -> None:
+        """Preserve the actual first object through an actual socket close; waive no other errno."""
+        for fault in ("eacces", "eio", "eio-close", "eperm-close"):
+            with self.subTest(fault=fault):
+                value = marker_fixture((4, 200), (5, 250), fault)
+                expected = value["sendError"] if fault == "eacces" else value["otherError"]
+                self.assertIs(value["failure"], expected)
+                self.assertEqual(
+                    guest.errno_category(cast("BaseException", value["failure"])),
+                    "EACCES" if fault == "eacces" else "EIO",
+                )
+                self.assertTrue(value["closedBeforeFallback"])
+                self.assertTrue(value["closed"])
+                self.assertEqual(value["calls"], ["guard-before"])
+                if fault == "eperm-close":
+                    self.assertEqual(value["ioCheckpoint"], "containment-marker-close")
+                else:
+                    self.assertEqual(value["ioCheckpoint"], "containment-marker-send")
+
+    def test_marker_short_send_or_original_body_end_never_becomes_guard_success(self) -> None:
+        """Fence actual supplied completion and strict original epoch after the send returns."""
+        for fault in ("short", "late"):
+            with self.subTest(fault=fault):
+                value = marker_fixture((4, 200), (5, 250), fault)
+                self.assertIsInstance(value["failure"], guest.PrototypeError)
+                self.assertTrue(value["closedBeforeFallback"])
+                self.assertTrue(value["closed"])
+                self.assertEqual(value["calls"], ["guard-before"])
+
+    def test_named_counter_requires_exact_table_single_record_and_unsigned_numeric_fields(
+        self,
+    ) -> None:
+        """Reject ambiguous witnesses rather than treating any named number as proof."""
+        table = "sc_caddy_" + "a" * 12
+        original: dict[str, object] = {
+            "family": "inet",
+            "table": table,
+            "name": "blocked_output",
+            "packets": 4,
+            "bytes": 200,
+        }
+        for mutation in (
+            {"table": "other"},
+            {"family": "netdev"},
+            {"packets": True},
+            {"bytes": -1},
+            {"packets": 2**64},
+            {"name": "other"},
+        ):
+            value = original | mutation
+            raw = json.dumps({"nftables": [{"counter": value}]}).encode()
+            with self.subTest(mutation=mutation), self.assertRaises(guest.PrototypeError):
+                _ = guest.blocked_counter(raw, table)
+        duplicate = json.dumps(
+            {"nftables": [{"counter": original}, {"counter": original}]}
+        ).encode()
+        with self.assertRaises(guest.PrototypeError):
+            _ = guest.blocked_counter(duplicate, table)
 
 
 if __name__ == "__main__":

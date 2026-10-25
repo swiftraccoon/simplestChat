@@ -68,6 +68,8 @@ GUEST_KEYS = frozenset(
         "checkpoint",
         "exception",
         "cleanupException",
+        "ioCheckpoint",
+        "errnoCategory",
     }
 )
 EXPERIMENT = "caddy"
@@ -125,6 +127,8 @@ GUEST_REFUSAL_CODES = frozenset(
         "fixture_root",
         "foreign_container",
         "fresh_tls_changed",
+        "guard_capture_missing",
+        "guard_marker_short",
         "guard_not_effective",
         "guard_observation",
         "guard_retained_for_live_or_unknown_container",
@@ -175,6 +179,37 @@ GUEST_REFUSAL_CODES = frozenset(
         "wire_capture_not_ready",
         "wire_capture_stopped",
         "wire_error_bound",
+    }
+)
+
+GUEST_IO_CHECKPOINTS = frozenset(
+    {
+        "containment-route",
+        "containment-rule-file",
+        "containment-guard-install",
+        "containment-capture-start",
+        "containment-counter-before",
+        "containment-marker-open",
+        "containment-marker-send",
+        "containment-marker-close",
+        "containment-counter-after",
+        "containment-counter-validate",
+        "containment-capture-check",
+    }
+)
+GUEST_ERRNO_CATEGORIES = frozenset(
+    {
+        "EPERM",
+        "EACCES",
+        "ENOENT",
+        "EBADF",
+        "ENOSPC",
+        "EIO",
+        "EINTR",
+        "EPIPE",
+        "EAGAIN",
+        "UNKNOWN",
+        "OTHER",
     }
 )
 
@@ -266,6 +301,8 @@ def failure_summary(
         "guestCheckpoint": enum_value(state.get("guestCheckpoint"), GUEST_PHASES),
         "guestFailedCase": enum_value(state.get("guestFailedCase"), FAILED_CASES),
         "guestException": enum_value(state.get("guestException"), EXCEPTION_KINDS),
+        "guestIoCheckpoint": enum_value(state.get("guestIoCheckpoint"), GUEST_IO_CHECKPOINTS),
+        "guestErrnoCategory": enum_value(state.get("guestErrnoCategory"), GUEST_ERRNO_CATEGORIES),
         "guestRefusalCode": enum_value(state.get("guestRefusalCode"), GUEST_REFUSAL_CODES),
         "guestCleanupException": enum_value(state.get("guestCleanupException"), EXCEPTION_KINDS),
         "guestCleanupPassed": state.get("guestCleanupPassed")
@@ -509,6 +546,10 @@ def guest_failure_record(raw: bytes, image: str) -> dict[str, object]:
                 "guestRowAccepted": True,
                 "guestCheckpoint": checkpoint,
                 "guestException": error,
+                "guestIoCheckpoint": enum_value(value["ioCheckpoint"], GUEST_IO_CHECKPOINTS)
+                if checkpoint == "containment"
+                else None,
+                "guestErrnoCategory": enum_value(value["errnoCategory"], GUEST_ERRNO_CATEGORIES),
                 "guestRefusalCode": enum_value(value["failure"], GUEST_REFUSAL_CODES),
                 "guestCleanupException": enum_value(value["cleanupException"], EXCEPTION_KINDS),
                 "guestCleanupPassed": value["cleanupPassed"],
