@@ -2937,9 +2937,12 @@ The optional signed backup-verification runtime fixture
 subset from a failed release, and a restorable privacy-invalid backup. It reuses
 the authenticated Ops installation and exercises the same installed musl binary
 with actual PostgreSQL. Each case retains its original 1800/120 fixture budget,
-360-second setup ceiling and one explicit native 1200/120 invocation. Source and
-28 inert tests pass; actual signature, PostgreSQL and KVM validation remains
-pending. Existing operational Python and nightly/offsite callers are unchanged.
+360-second setup ceiling and one explicit native 1200/120 invocation. The
+[three-case signed run at `1f5098d`](https://github.com/swiftraccoon/simplestChat/actions/runs/40232524502)
+passed with actual installed-musl restore/amcheck, the expected privacy SQL
+refusal, preserved source state and complete fixture/VM cleanup. The proof guide
+records its exact artifacts, earlier failed trial and process-lifecycle limits.
+Existing operational Python and nightly/offsite callers are unchanged.
 
 
 ## Optional maintenance prerequisite experiments
