@@ -2448,3 +2448,45 @@ ordinary Ops suite passed 484 tests. The new VM fixture has 23 passing inert tes
 its actual signed-musl host runtime remains unrun. See the
 affected API review for ownership,
 accepted profiles, the inherited-stdio SDK close exception and validation scope.
+
+
+### Native standalone release-backup restore verification
+
+```sh
+simplestchat-ops release backup verify --release-attempt release.NAME \
+  --timeout-seconds 1200 --finalization-seconds 120
+```
+
+This explicit example verifies one root-owned recorded release backup on the fixed
+prepared Linux host. N/M are required,0<M<N<=1800;1200/120 is not a default or
+measured capacity guarantee. Existing installed Python, nightly/offsite callers
+and authenticated Ops bootstrap remain unchanged. The standalone Python reference
+has no whole-operation clock; the native readiness profile is stricter.
+
+The operation admits the source outcome/manifest and its nonempty exact subset
+ledger, including valid failed-release/pre-upgrade backups. It copies at most64MiB,
+restores into the current PostgreSQL image in a no-network, readonly disposable
+container with bounded tmpfs, checks the ledger/schema/privacy/amcheck, and
+requires exact joined container cleanup and snapshot removal before outcome and
+freshness publication. It never restores the live database or selects an arbitrary
+nightly/offsite path. All SQL/data/raw command evidence stays private.
+
+The original entry clock covers parsing, one actual workload lock, all processes,
+known cleanup inside B, output, runtime/mask restoration and signal finalization.
+A final nonzero status invalidates any earlier line or private passive record.
+Kernel/daemon stalls are outside a hard wall guarantee. `--help` and the inherited
+limited-scope `--licenses` route run before host effects.
+
+The affected API and native profiles
+record ownership, exact cleanup authority, timing/path/JSON qualifications, SDK
+close limits and validation state. Actual authenticated signed-musl whole-host
+restore proof and any operational caller switch remain separate work.
+
+The CI comparison has one exact owner in the existing `host` reference group:
+`cargo run --locked -q -p xtask -- ci automation --references host`. This also runs
+receive and stage comparisons under the pinned controller environment. Its
+standalone fully qualified command and scope are in the
+[testing guide](../docs/testing.md#native-standalone-restore-verification).
+Ordinary Ops testing includes `release_backup_cli`; broad ignored-test execution
+skips the uniquely named restore oracle. These configured routes do not establish
+a hosted pass, live database validation or authenticated caller cutover.

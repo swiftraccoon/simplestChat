@@ -25,6 +25,7 @@ const USAGE: &str = concat!(
     "       simplestchat-ops release receive [OPTIONS]\n",
     "       simplestchat-ops release stage [OPTIONS]\n",
     "       simplestchat-ops release deploy [OPTIONS]\n",
+    "       simplestchat-ops release backup verify [OPTIONS]\n",
     "       simplestchat-ops release attestation prepare [OPTIONS]\n",
     "       simplestchat-ops release attestation verify [OPTIONS]\n",
     "       simplestchat-ops release manifest --path PATH\n",
@@ -50,6 +51,9 @@ const USAGE: &str = concat!(
 
 fn main() -> ExitCode {
     let args: Vec<OsString> = std::env::args_os().skip(1).collect();
+    if args.len() >= 3 && args[0] == "release" && args[1] == "backup" && args[2] == "verify" {
+        return simplestchat_ops::release::backup::verify::run(&args[3..]);
+    }
     if args.len() >= 2 && args[0] == "release" && args[1] == "deploy" {
         return simplestchat_ops::release::deploy::run(&args[2..]);
     }

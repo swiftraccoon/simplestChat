@@ -146,6 +146,8 @@ fn steps(root: &Path, executable: &Path) -> std::io::Result<Vec<Step>> {
             "--test",
             "release_deploy_cli",
             "--test",
+            "release_backup_cli",
+            "--test",
             "archive_cli",
             "--test",
             "manifest_cli",
@@ -312,6 +314,25 @@ fn steps(root: &Path, executable: &Path) -> std::io::Result<Vec<Step>> {
             "--",
             "--ignored",
             "--exact",
+        ],
+    ));
+    steps.push(Step::reference(
+        ReferenceGroup::Host,
+        "cargo",
+        &[
+            "test",
+            "--locked",
+            "-p",
+            "simplestchat-ops",
+            "--lib",
+            concat!(
+                "release::attestation::restore::oracle_tests::",
+                "whole_restore_matches_unchanged_python",
+            ),
+            "--",
+            "--ignored",
+            "--exact",
+            "--test-threads=1",
         ],
     ));
     steps.push(Step::reference(

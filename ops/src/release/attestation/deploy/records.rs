@@ -10,6 +10,15 @@ use std::{
     os::unix::fs::{FileExt, MetadataExt},
 };
 
+#[cfg(test)]
+pub(in crate::release::attestation) fn start_probe() {
+    super::files::start_probe();
+}
+#[cfg(test)]
+pub(in crate::release::attestation) fn take_probe() -> (usize, usize) {
+    super::files::take_probe()
+}
+
 pub(super) fn check(owner: &mut Owner, recovery: bool) -> Result<()> {
     if recovery {
         owner.final_work()
@@ -86,6 +95,8 @@ enum Protection {
     Private,
     Tool,
     Caddy,
+    RestoreSql,
+    RestoreInput,
 }
 struct Admission<'a> {
     uid: u32,
@@ -94,7 +105,7 @@ struct Admission<'a> {
     expected: Option<&'a Metadata>,
 }
 
-pub(super) struct Record {
+pub(in crate::release::attestation) struct Record {
     file: Option<File>,
     parent: Dir,
     name: String,
@@ -161,6 +172,80 @@ impl Record {
             },
         )
     }
+    /// Restore's readonly reference inputs allow existing positive link counts.
+    /// Private writers and all other operations retain their one-link rule.
+    pub fn restore_input(
+        parent: Dir,
+        name: &str,
+        uid: u32,
+        maximum: u64,
+        owner: &mut Owner,
+    ) -> Result<Self> {
+        Self::open_in(
+            parent,
+            name,
+            owner,
+            false,
+            Admission {
+                uid,
+                maximum,
+                protection: Protection::RestoreInput,
+                expected: None,
+            },
+        )
+    }
+    /// Remove only this original name while retaining the anonymous input owner.
+    pub fn unname(&mut self, owner: &mut Owner) -> Result<()> {
+        self.verify(owner, false)?;
+        rustix::fs::unlinkat(
+            self.parent.file(),
+            self.name.as_str(),
+            rustix::fs::AtFlags::empty(),
+        )
+        .map_err(|_| {
+            owner.record(Cause::Io);
+            Cause::Io
+        })?;
+        self.displaced(owner)?;
+        self.verify(owner, false)
+    }
+    /// Only the fixed installed restore SQL has this readonly public profile.
+    pub fn restore_sql(parent: Dir, uid: u32, owner: &mut Owner) -> Result<Self> {
+        Self::open_in(
+            parent,
+            "restore-verify.sql",
+            owner,
+            false,
+            Admission {
+                uid,
+                maximum: u64::MAX,
+                protection: Protection::RestoreSql,
+                expected: None,
+            },
+        )
+    }
+    /// Retire exactly this visible original; retain checked close even on refusal.
+    pub fn retire(mut self, owner: &mut Owner, recovery: bool) -> Result<()> {
+        let result = (|| {
+            self.verify(owner, recovery)?;
+            rustix::fs::unlinkat(
+                self.parent.file(),
+                self.name.as_str(),
+                rustix::fs::AtFlags::empty(),
+            )
+            .map_err(|_| {
+                owner.record(Cause::Io);
+                Cause::Io
+            })?;
+            self.displaced(owner)?;
+            check(owner, recovery)
+        })();
+        if let Err(cause) = result {
+            owner.record(cause);
+        }
+        self.finish(owner);
+        result
+    }
     fn open_in(
         parent: Dir,
         name: &str,
@@ -212,12 +297,15 @@ impl Record {
             }
             let mode = value.stamp.mode() & 0o7777;
             let permissions = match protection {
-                Protection::Private => mode == 0o600,
+                Protection::Private | Protection::RestoreInput => mode == 0o600,
                 Protection::Tool => mode & 0o111 != 0,
                 Protection::Caddy => matches!(mode, 0o600 | 0o644),
+                Protection::RestoreSql => mode == 0o644,
             };
             let links = match protection {
-                Protection::Caddy => value.stamp.nlink() > 0,
+                Protection::Caddy | Protection::RestoreSql | Protection::RestoreInput => {
+                    value.stamp.nlink() > 0
+                }
                 _ => value.stamp.nlink() == 1,
             };
             if !value.stamp.is_file()
@@ -448,7 +536,7 @@ impl Drop for Record {
 }
 
 #[derive(Default)]
-pub(super) struct Records {
+pub(in crate::release::attestation) struct Records {
     pub files: Vec<Record>,
     sealed: Vec<Sealed>,
 }

@@ -18,3 +18,5 @@ mod verification_fixture;
 pub(super) mod stage;
 
 pub(super) mod deploy;
+
+pub(super) mod restore;

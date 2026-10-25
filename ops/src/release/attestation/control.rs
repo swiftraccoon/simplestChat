@@ -154,6 +154,20 @@ impl Owner {
             self.deploy_recovery = None;
         }
     }
+    /// The standalone restore borrows the same exclusive body-debt mechanism.
+    /// No additional owner, clock, primary cause or overlapping phase is created.
+    pub fn begin_restore_candidate(&mut self, end: Instant) -> Result<()> {
+        self.begin_deploy_candidate(end)
+    }
+    pub fn end_restore_candidate(&mut self) {
+        self.end_deploy_candidate();
+    }
+    pub fn begin_restore_cleanup(&mut self) -> Result<()> {
+        self.begin_deploy_recovery()
+    }
+    pub fn end_restore_cleanup(&mut self) {
+        self.end_deploy_recovery();
+    }
     /// Narrow the existing body checkpoints while the admitted SSH protocol
     /// still owes its original transport tail. This does not change B or N.
     pub fn begin_receiver_protocol(&mut self, end: Instant) -> Result<()> {

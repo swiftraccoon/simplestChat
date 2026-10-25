@@ -14,7 +14,7 @@ use std::{
     os::{
         fd::OwnedFd,
         unix::{
-            fs::FileExt,
+            fs::{FileExt, MetadataExt},
             process::{CommandExt, ExitStatusExt},
         },
     },
@@ -48,6 +48,8 @@ pub(in crate::release::attestation) struct Invocation {
 pub(in crate::release::attestation) struct Io<'a> {
     pub input: Option<&'a File>,
     pub output: Option<Sink<'a>>,
+    pub stderr: Option<Sink<'a>>,
+    pub capture_output: bool,
     pub allow_nonzero: bool,
 }
 pub(in crate::release::attestation) struct Sink<'a> {
@@ -73,6 +75,9 @@ pub(in crate::release::attestation) struct Observation {
     pub bulk_bytes: u64,
     pub bulk_sha256: String,
     pub bulk_complete: bool,
+    pub stderr_sink_bytes: u64,
+    pub stderr_sink_sha256: String,
+    pub stderr_sink_complete: bool,
     pub stdout_closed: bool,
     pub stderr_closed: bool,
     pub stdin_close_attempted: bool,
@@ -92,6 +97,8 @@ pub(in crate::release::attestation) struct Observation {
     pub group_retired: bool,
     pub reaped: bool,
     pub timed_out: bool,
+    /// Actual deadlines of this invocation, excluding an inherited primary cause.
+    pub role_timed_out: bool,
     pub elapsed: Duration,
     pub cleanup_errors: Vec<Cause>,
 }
@@ -106,6 +113,9 @@ impl Observation {
             bulk_bytes: 0,
             bulk_sha256: String::new(),
             bulk_complete: false,
+            stderr_sink_bytes: 0,
+            stderr_sink_sha256: String::new(),
+            stderr_sink_complete: false,
             stdout_closed: false,
             stderr_closed: false,
             stdin_close_attempted: false,
@@ -124,6 +134,7 @@ impl Observation {
             group_retired: false,
             reaped: false,
             timed_out: false,
+            role_timed_out: false,
             elapsed: Duration::ZERO,
             cleanup_errors: Vec::new(),
         }
@@ -154,7 +165,13 @@ struct Faults {
     #[cfg(test)]
     bulk_write_after: Option<u64>,
     #[cfg(test)]
+    stderr_write_after: Option<u64>,
+    #[cfg(test)]
+    terminal_before_read: bool,
+    #[cfg(test)]
     late_bulk_read: bool,
+    #[cfg(test)]
+    late_stderr_read: bool,
 }
 impl Faults {
     fn close(&self, stream: u8) -> bool {
@@ -211,16 +228,22 @@ struct Streams {
     error_capture: Vec<u8>,
     out_limit: u64,
     bulk: bool,
+    capture_bulk: bool,
     pending: usize,
     bulk_hash: Sha256,
+    stderr_pending: usize,
+    stderr_sink_hash: Sha256,
 }
 impl Streams {
     fn new(out_limit: u64) -> Self {
         Self {
             out_limit,
             bulk: false,
+            capture_bulk: false,
             pending: 0,
             bulk_hash: Sha256::new(),
+            stderr_pending: 0,
+            stderr_sink_hash: Sha256::new(),
             stdout: None,
             stderr: None,
             out_stopped: false,
@@ -255,9 +278,13 @@ impl Streams {
         hash.update(bytes);
         if stdout && self.bulk {
             self.pending = accepted;
+            if self.capture_bulk {
+                self.captured.extend_from_slice(&bytes[..accepted]);
+            }
         } else if stdout {
             self.captured.extend_from_slice(&bytes[..accepted]);
         } else {
+            self.stderr_pending = accepted;
             self.error_capture.extend_from_slice(&bytes[..accepted]);
         }
         if *count > limit {
@@ -391,6 +418,58 @@ impl Streams {
         }
         Ok(())
     }
+    fn commit_stderr(
+        &mut self,
+        sink: &Sink<'_>,
+        owner: &mut Owner,
+        observed: &mut Observation,
+        end: Instant,
+        _faults: &Faults,
+    ) -> Result<()> {
+        let count = std::mem::take(&mut self.stderr_pending);
+        let mut offset = 0;
+        while offset < count {
+            owner.final_work()?;
+            owner
+                .cleanup_before(end)
+                .inspect_err(|cause| owner.record(*cause))?;
+            let finish = count;
+            #[cfg(test)]
+            let finish = if let Some(after) = _faults.stderr_write_after {
+                if observed.stderr_sink_bytes >= after {
+                    owner.record(Cause::Io);
+                    return Err(Cause::Io);
+                }
+                finish.min(offset + (after - observed.stderr_sink_bytes) as usize)
+            } else {
+                finish
+            };
+            let result = sink
+                .file
+                .write_at(&self.err_buffer[offset..finish], observed.stderr_sink_bytes);
+            let written = match result {
+                Ok(0) => {
+                    owner.record(Cause::Io);
+                    return Err(Cause::Io);
+                }
+                Ok(count) => count,
+                Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+                Err(_) => {
+                    owner.record(Cause::Io);
+                    return Err(Cause::Io);
+                }
+            };
+            self.stderr_sink_hash
+                .update(&self.err_buffer[offset..offset + written]);
+            offset += written;
+            observed.stderr_sink_bytes += written as u64;
+            owner.final_work()?;
+            owner
+                .cleanup_before(end)
+                .inspect_err(|cause| owner.record(*cause))?;
+        }
+        Ok(())
+    }
     fn close(&mut self, owner: &mut Owner, observed: &mut Observation, faults: &Faults) {
         if let Some(pipe) = self.stdout.take() {
             observed.stdout_close_attempted = true;
@@ -424,6 +503,7 @@ fn hash(value: &Sha256) -> String {
 fn check_end(owner: &mut Owner, observed: &mut Observation, end: Instant) {
     if owner.cleanup_before(end).is_err() {
         observed.timed_out = true;
+        observed.role_timed_out = true;
         observed.secondary(owner, Cause::Deadline);
     }
 }
@@ -479,6 +559,7 @@ async fn run_io_with(
         .map_or(capture_limit, |sink| sink.maximum);
     let mut streams = Streams::new(out_limit);
     streams.bulk = io.output.is_some();
+    streams.capture_bulk = io.capture_output;
     observed.stdin_inherited = io.input.is_some();
     let mut group = None;
     let admission = (|| {
@@ -506,7 +587,11 @@ async fn run_io_with(
                 }
             || request.settlement_end > owner.end()
         {
+            observed.role_timed_out = true;
             return Err(Cause::Deadline);
+        }
+        if io.capture_output && (io.output.is_none() || out_limit > OUT_LIMIT) {
+            return Err(Cause::Input);
         }
         if let Some(sink) = &io.output {
             let metadata = sink.file.metadata().map_err(|_| Cause::Io)?;
@@ -521,6 +606,28 @@ async fn run_io_with(
                 || metadata.len() != 0
                 || flags.intersection(rustix::fs::OFlags::ACCMODE) == rustix::fs::OFlags::RDONLY
             {
+                return Err(Cause::Input);
+            }
+        }
+        if let Some(sink) = &io.stderr {
+            let metadata = sink.file.metadata().map_err(|_| Cause::Io)?;
+            let flags = rustix::fs::fcntl_getfl(sink.file).map_err(|_| Cause::Io)?;
+            let descriptor_flags = rustix::io::fcntl_getfd(sink.file).map_err(|_| Cause::Io)?;
+            let mut original = sink.file;
+            if original.stream_position().map_err(|_| Cause::Io)? != 0
+                || !descriptor_flags.contains(rustix::io::FdFlags::CLOEXEC)
+                || sink.maximum != ERR_LIMIT
+                || !metadata.is_file()
+                || metadata.len() != 0
+                || flags.intersection(rustix::fs::OFlags::ACCMODE) == rustix::fs::OFlags::RDONLY
+            {
+                return Err(Cause::Input);
+            }
+        }
+        if let (Some(output), Some(error)) = (&io.output, &io.stderr) {
+            let first = output.file.metadata().map_err(|_| Cause::Io)?;
+            let second = error.file.metadata().map_err(|_| Cause::Io)?;
+            if first.dev() == second.dev() && first.ino() == second.ino() {
                 return Err(Cause::Input);
             }
         }
@@ -560,6 +667,13 @@ async fn run_io_with(
         Ok(())
     })();
     if let Err(cause) = admission {
+        if cause == Cause::Deadline
+            && (owner.now() >= request.body_end
+                || owner.now() >= request.settlement_end
+                || owner.now() >= owner.end())
+        {
+            observed.role_timed_out = true;
+        }
         owner.record(cause);
     }
     if let Some(group) = &mut group {
@@ -604,10 +718,14 @@ async fn run_io_with(
                 owner.check(Window::Body)
             };
             if active.is_err() {
+                if owner.now() >= request.body_end || owner.now() >= request.settlement_end {
+                    observed.role_timed_out = true;
+                }
                 break;
             }
             if owner.now() >= request.body_end {
                 observed.timed_out = true;
+                observed.role_timed_out = true;
                 owner.record(Cause::Deadline);
                 break;
             }
@@ -619,12 +737,33 @@ async fn run_io_with(
                     break;
                 }
             }
+            #[cfg(test)]
+            if faults.terminal_before_read
+                && !matches!(
+                    tokio::time::timeout_at(
+                        request.body_end.into(),
+                        owned_process::exited(group.pid()),
+                    )
+                    .await,
+                    Ok(Ok(()))
+                )
+            {
+                observed.timed_out = true;
+                observed.role_timed_out = true;
+                owner.record(Cause::Deadline);
+                break;
+            }
             let read = streams.read_one(&mut observed, &faults).await;
             #[cfg(test)]
             if faults.late_bulk_read && observed.stdout_bytes > 0 {
                 owner.observe_at(request.body_end);
             }
-            let deferred_bound = io.output.is_some() && read == Err(Cause::Bounds);
+            #[cfg(test)]
+            if faults.late_stderr_read && observed.stderr_bytes > 0 {
+                owner.observe_at(request.body_end);
+            }
+            let deferred_bound =
+                (io.output.is_some() || io.stderr.is_some()) && read == Err(Cause::Bounds);
             if let Err(cause) = read {
                 // The overflow is already observed. Retaining its bounded
                 // output prefix cannot defer or replace that first refusal.
@@ -644,6 +783,7 @@ async fn run_io_with(
             if active.is_err() || owner.now() >= request.body_end {
                 if owner.now() >= request.body_end {
                     observed.timed_out = true;
+                    observed.role_timed_out = true;
                     owner.record(Cause::Deadline);
                 }
                 break;
@@ -651,6 +791,13 @@ async fn run_io_with(
             if let Some(sink) = &io.output
                 && let Err(cause) =
                     streams.commit(sink, owner, &mut observed, request.body_end, &faults)
+            {
+                owner.record(cause);
+                break;
+            }
+            if let Some(sink) = &io.stderr
+                && let Err(cause) =
+                    streams.commit_stderr(sink, owner, &mut observed, request.body_end, &faults)
             {
                 owner.record(cause);
                 break;
@@ -687,12 +834,19 @@ async fn run_io_with(
         check_end(owner, &mut observed, request.settlement_end);
     }
     streams.pending = 0;
+    streams.stderr_pending = 0;
     observed.bulk_sha256 = hash(&streams.bulk_hash);
     observed.bulk_complete = io.output.is_some()
         && observed.stdout_body_eof
         && !observed.stdout_limited
         && observed.bulk_bytes == observed.stdout_bytes
         && observed.bulk_sha256 == hash(&streams.out_hash);
+    observed.stderr_sink_sha256 = hash(&streams.stderr_sink_hash);
+    observed.stderr_sink_complete = io.stderr.is_some()
+        && observed.stderr_body_eof
+        && !observed.stderr_limited
+        && observed.stderr_sink_bytes == observed.stderr_bytes
+        && observed.stderr_sink_sha256 == hash(&streams.err_hash);
     observed.stdout_sha256 = hash(&streams.out_hash);
     observed.stderr_sha256 = hash(&streams.err_hash);
     observed.timed_out |= owner.error() == Some(Cause::Deadline);
@@ -729,7 +883,8 @@ async fn run_io_with(
             } else {
                 observed.exit_status == Some(0)
             })
-            || io.output.is_some() && !observed.bulk_complete)
+            || io.output.is_some() && !observed.bulk_complete
+            || io.stderr.is_some() && !observed.stderr_sink_complete)
     {
         owner.record(Cause::Close);
     }
@@ -739,6 +894,7 @@ async fn run_io_with(
     observed.elapsed = completed.saturating_duration_since(started);
     if completed >= request.settlement_end {
         observed.timed_out = true;
+        observed.role_timed_out = true;
         observed.secondary(owner, Cause::Deadline);
     }
     let result = owner.error().map_or(Ok(()), Err);
@@ -760,30 +916,41 @@ async fn settle(
 ) {
     let pid = group.pid();
     if owner.error().is_some() {
-        if owned_process::reserved(pid) {
-            match rustix::process::kill_process_group(pid, rustix::process::Signal::TERM) {
-                Ok(()) | Err(rustix::io::Errno::SRCH) => {}
-                Err(_) => observed.secondary(owner, Cause::Io),
+        let terminal = match owned_process::exited_now(pid) {
+            Ok(terminal) => terminal,
+            Err(_) => {
+                observed.secondary(owner, Cause::Io);
+                false
             }
-        } else {
-            observed.secondary(owner, Cause::Close);
-        }
-        let term_end = end
-            .checked_sub(REAP)
-            .unwrap_or(end)
-            .min(owner.now().checked_add(TERM).unwrap_or(end));
-        while owner.now() < term_end {
-            let _ = owner.check(Window::Final);
-            match owned_process::exited_now(pid) {
-                Ok(true) => break,
-                Ok(false) => {}
-                Err(_) => {
-                    observed.secondary(owner, Cause::Io);
-                    break;
+        };
+        // A terminal leader still reserves the exact group for finish_before.
+        // Skip only optional TERM; descendants are always retired before reap.
+        if !terminal {
+            if owned_process::reserved(pid) {
+                match rustix::process::kill_process_group(pid, rustix::process::Signal::TERM) {
+                    Ok(()) | Err(rustix::io::Errno::SRCH) => {}
+                    Err(_) => observed.secondary(owner, Cause::Io),
                 }
+            } else {
+                observed.secondary(owner, Cause::Close);
             }
-            if let Err(cause) = streams.read_one(observed, faults).await {
-                observed.secondary(owner, cause);
+            let term_end = end
+                .checked_sub(REAP)
+                .unwrap_or(end)
+                .min(owner.now().checked_add(TERM).unwrap_or(end));
+            while owner.now() < term_end {
+                let _ = owner.check(Window::Final);
+                match owned_process::exited_now(pid) {
+                    Ok(true) => break,
+                    Ok(false) => {}
+                    Err(_) => {
+                        observed.secondary(owner, Cause::Io);
+                        break;
+                    }
+                }
+                if let Err(cause) = streams.read_one(observed, faults).await {
+                    observed.secondary(owner, cause);
+                }
             }
         }
     }
@@ -814,6 +981,9 @@ async fn settle(
         }
     }
     if !terminal {
+        if owner.now() >= reap_end {
+            observed.role_timed_out = true;
+        }
         observed.secondary(owner, Cause::Deadline);
         if owned_process::reserved(pid) && group.child().kill().is_err() {
             observed.secondary(owner, Cause::Close);
@@ -843,3 +1013,7 @@ mod tests;
 #[cfg(test)]
 #[path = "process_io_tests.rs"]
 mod io_tests;
+
+#[cfg(test)]
+#[path = "process_restore_io_tests.rs"]
+mod restore_io_tests;

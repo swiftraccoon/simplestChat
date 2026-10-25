@@ -1111,6 +1111,8 @@ class VerifiedWorkflowTests(unittest.TestCase):
                     "whole_stage_matches_unchanged_python",
                     "--skip",
                     "whole_deploy_matches_unchanged_python",
+                    "--skip",
+                    "whole_restore_matches_unchanged_python",
                 ],
             )
             self.assertLess(steps.index(build), steps.index(execute))
@@ -1170,6 +1172,107 @@ class VerifiedWorkflowTests(unittest.TestCase):
                         self.assertNotIn("restore-keys", obj(step, "with"))
                     if "xtask -- ci " in string(step.get("run", "")):
                         self.assertNotIn("${{", string(step, "run"))
+
+
+class RestoreCiIntegrationTests(unittest.TestCase):
+    """Check new restore ownership and real receipt invalidation without executing Git."""
+
+    @staticmethod
+    def write_input(path: Path, data: bytes) -> None:
+        """Create private fixture inputs with Git's ordinary non-executable file profile."""
+        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(descriptor, "wb") as output:
+            if output.write(data) != len(data):
+                message = "short_fixed_fixture_write"
+                raise OSError(message)
+            output.flush()
+
+    def test_restore_inputs_invalidate_existing_checks_and_rust_receipts_without_git(self) -> None:
+        """The fixed index projection changes bytes, not cache policy or selected sources."""
+        paths = (
+            "ops/src/release/attestation/restore.rs",
+            "ops/src/release/attestation/restore/oracle_tests.rs",
+            "ops/tests/release_backup_cli.rs",
+            "ops/ansible/tests/release_restore_oracle.py",
+            "ops/ansible/tests/test_release_restore_oracle.py",
+            "xtask/src/ci/automation.rs",
+            ".github/workflows/ci.yml",
+        )
+        index = b"".join(("100644 " + "a" * 40 + " 0\t" + name + "\0").encode() for name in paths)
+        with tempfile.TemporaryDirectory(prefix="restore-ci-receipt-") as temporary:
+            root = Path(temporary)
+            for name in paths:
+                self.write_input(root / name, b"original restore CI input\n")
+
+            def tracked(
+                arguments: list[str], **_options: object
+            ) -> subprocess.CompletedProcess[bytes]:
+                self.assertEqual(arguments, ["git", "ls-files", "--stage", "-z"])
+                return subprocess.CompletedProcess(arguments, 0, stdout=index)
+
+            with (
+                patch.object(subprocess, "run", side_effect=tracked),
+                patch.object(
+                    cache, "runner_identity", return_value="local:owned@sha256:" + "a" * 64
+                ),
+                patch.dict(
+                    os.environ,
+                    {
+                        "GITHUB_REF": "refs/heads/main",
+                        "GITHUB_EVENT_NAME": "push",
+                        "GITHUB_SHA": "1" * 40,
+                    },
+                ),
+            ):
+                for scope in ("automation", "rust-test"):
+                    key = cache.cache_key(root, scope)
+                    receipt = root / ("receipt-" + scope)
+                    cache.save(root, scope, key, receipt)
+                    self.assertEqual(cache.verify(root, scope, key, receipt), "1" * 40)
+                    for name in paths:
+                        with self.subTest(scope=scope, changed=name):
+                            self.write_input(root / name, b"changed restore CI input\n")
+                            self.assertNotEqual(cache.cache_key(root, scope), key)
+                            with self.assertRaisesRegex(ToolError, "ci_cache_inputs_changed"):
+                                _ = cache.verify(root, scope, key, receipt)
+                            self.write_input(root / name, b"original restore CI input\n")
+                            self.assertEqual(cache.verify(root, scope, key, receipt), "1" * 40)
+
+    def test_restore_has_one_exact_host_owner_and_an_explicit_broad_skip(self) -> None:
+        """A broad ignored test run cannot bypass the pinned sole-process comparison."""
+        source = (ROOT / "xtask/src/ci/automation.rs").read_text()
+        name = "whole_restore_matches_unchanged_python"
+        self.assertEqual(source.count('"' + name + '"'), 1)
+        before, after = source.split('"' + name + '"')
+        owned = before.rsplit("steps.push(Step::reference(", 1)[1] + after.split("));", 1)[0]
+        self.assertIn("ReferenceGroup::Host", owned)
+        self.assertIn('"release::attestation::restore::oracle_tests::"', owned)
+        for flag in ("--lib", "--ignored", "--exact", "--test-threads=1"):
+            self.assertIn('"' + flag + '"', owned)
+        self.assertEqual(source.count('"release_backup_cli"'), 1)
+        jobs = obj(
+            yaml_value((ROOT / ".github/workflows/ci.yml").read_text(), scalars_as_strings=True),
+            "jobs",
+        )
+        reference = obj(jobs, "automation-references")
+        self.assertEqual(string(reference, "timeout-minutes"), "10")
+        self.assertEqual(
+            obj(obj(reference, "strategy"), "matrix"),
+            {"group": ["foundation", "fetch", "host", "deploy"]},
+        )
+        self.assertNotIn("if", reference)
+        for step in objects(reference, "steps"):
+            self.assertNotIn("actions/cache/", string(step.get("uses", "")))
+        steps = objects(obj(jobs, "rust-test"), "steps")
+        command = next(
+            string(step, "run")
+            for step in steps
+            if string(step.get("run", "")).startswith("cargo test ")
+        )
+        arguments = shlex.split(command)
+        self.assertEqual(arguments.count(name), 1)
+        self.assertEqual(arguments[arguments.index(name) - 1], "--skip")
 
 
 if __name__ == "__main__":
