@@ -2946,7 +2946,7 @@ reaps. Neither job proves the other's behavior or complete maintenance success.
 The optional workflow has no artifact selector, API token, production host,
 required-CI role or installed caller change.
 
-The Caddy 85-case suite and namespace 14-case boundary suite use the maintained strict
+The Caddy 87-case suite and namespace 14-case boundary suite use the maintained strict
 Python configuration. These local tests execute no actual helper role, namespace,
 KVM, Caddy or TLS. The separately recorded namespace run passed its finite catalog;
 Caddy stopped at prerequisites, and the operational 900-second launcher remains unrun.
@@ -3014,3 +3014,21 @@ The pinned Caddy base OCI configuration exposes `2019/tcp` in addition to the
 three requested ports. A fixture accepts that admin key only when unbound
 (null or empty); every actual admin host binding and every other unknown port
 remain refused. Unbound EXPOSE metadata never proves operational publication.
+
+The `8c6b451` Caddy trial reached endpoint admission and refused `endpoint_ipv4`
+before TLS, with cleanup/restoration verified. No exact address predicate or
+successful TLS is established by that summary. The versioned Moby
+[bridge join][moby-gateway-join], [endpoint accessor][moby-gateway-endpoint] and
+[inspect update][moby-gateway-inspect] permit an empty inspected container
+`Gateway` while IPAM retains its gateway. The fixture accepts only that empty string or the exact
+canonical
+IPAM gateway, with a distinct closed `endpoint_gateway` refusal for null,
+missing, foreign or nonstring values. IPAM canonical/subnet checks and gateway
+exclusion from target selection remain unchanged; all live validation is pending.
+
+[moby-gateway-join]:
+  https://github.com/moby/moby/blob/v28.2.2/libnetwork/drivers/bridge/bridge_linux.go
+[moby-gateway-endpoint]:
+  https://github.com/moby/moby/blob/v28.2.2/libnetwork/endpoint_info.go
+[moby-gateway-inspect]:
+  https://github.com/moby/moby/blob/v28.2.2/daemon/container_operations.go

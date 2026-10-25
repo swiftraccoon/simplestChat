@@ -145,6 +145,7 @@ GUEST_REFUSAL_CODES = frozenset(
         "external_contact_observed",
         "endpoint_changed",
         "endpoint_container",
+        "endpoint_gateway",
         "endpoint_identity",
         "endpoint_inspection",
         "endpoint_ipam",
