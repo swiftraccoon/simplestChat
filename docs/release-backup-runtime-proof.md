@@ -7,6 +7,13 @@ native invocation. Existing installed Python, nightly/offsite callers and
 operational bootstrap remain unchanged. No application, Caddy or server artifact
 is required or authenticated by this fixture.
 
+The [three-case run on 2026-10-25](https://github.com/swiftraccoon/simplestChat/actions/runs/40232524502)
+passed at revision `1f5098dff8b01b5dc6f970ca416327794496427e`. The current and
+historical cases completed native verification with exit code 0; the privacy case
+observed the expected native exit code 1 and fixed SQL refusal. All three completed
+fixture cleanup and the QMP, output-drainer and QEMU exit 0 lifecycle checks.
+These are isolated synthetic-data trials, with the limits described below.
+
 The controller owns current Ops acquisition and retained verification (six actual
 GH attestation verifier invocations), the exact original fifteen-member payload,
 transfer, install/repeat and all33 existing Ops custody/install cases. It retains
@@ -65,11 +72,14 @@ input packing, playbook setup, guest setup, Ready and native completion. Guest
 setup checkpoints distinguish configuration, version, tool, pull, image, anchor,
 create, start and readiness. Only fixed first-cause categories and relative
 numbers are published; raw commands, errors, paths and source bytes stay private.
-The repaired cold setup has not run on a fresh guest. If it cannot meet360, the
-proof remains unproven; another helper's clock or service budget cannot be
-borrowed. Native
-role-debt arithmetic is785 inside B1080, leaving295 for filesystem/scheduling
-work. This is not a capacity or blocked-kernel hard-wall guarantee. Native R160
+The repaired setup reached Ready at 287.528 seconds for current, 313.569 for
+historical and 288.172 for privacy, measured from each keeper's original start.
+All three fit the unchanged 360-second setup ceiling. Their body-end checkpoints
+were 290.970, 319.277 and 291.726 seconds respectively. These observations establish
+this finite trial, not a cold-start completion guarantee. Another helper's clock
+or service budget cannot be borrowed. Native role debt is 785 seconds within its
+1080-second body, leaving 295 seconds for filesystem and scheduling work. This
+is not a capacity or blocked-kernel hard-wall guarantee. Native R160
 stays inside B; strict readiness remains one live30 phase including settlement.
 
 The root-owned fixture uses the repository-pinned PG18 image, all36 original
@@ -105,9 +115,9 @@ A start event alone precedes task execution and cannot prove completion. The
 conservative event profile is source-bound to
 [Moby v28.2.2 exec emission](https://github.com/moby/moby/blob/v28.2.2/daemon/exec.go)
 and [completion](https://github.com/moby/moby/blob/v28.2.2/daemon/monitor.go).
-The repository's pinned Docker29.8.2 event schema remains unproven until the
-actual guest run; missing or different evidence refuses the proof. Final selectors and
-exact-CID absence are independent from native report claims. Fixture cleanup
+The three successful guest cases joined the required event schema on the pinned
+Docker 29.8.2 engine. Missing or different evidence still refuses the proof.
+Final selectors and exact-CID absence are independent from native report claims. Fixture cleanup
 removes only its separately joined source CID; it never removes native leftovers
 by name to hide a failure. Known fixture daemon cleanup stays inside the original
 guest body, even
@@ -130,10 +140,28 @@ requires actual signed QEMU0 and all controller input/session/finalizer facts,
 then the original handler/umask/output/signal/deadline fence. Earlier success text
 or a passive freshness file cannot override a final nonzero status.
 
-Source and inert checks qualify the setup/lifetime repair. Actual Ops
-authentication/install and KVM setup ran in the failed trial described above;
-public native Restore/PostgreSQL restoration/amcheck and the repaired setup
-remain unproven until a fresh complete three-case run. This fixture does not establish
+The successful run completed six actual Ops attestation verifier calls and all 33
+custody/install cases in each guest, then exercised the authenticated installed
+musl public command. Current and historical cases observed restore and amcheck
+execution, independent actor isolation/removal, unchanged source ledger/counts,
+released locks and the expected freshness/output records. The privacy case
+observed restore and its SQL refusal, preserved prior freshness bytes, emitted no
+success outcome and removed its actor. Each retained summary's source hashes
+matched the exact revision before this documentation update.
+
+The retained artifact ZIPs were checked against GitHub's SHA256 digests before
+their summaries were parsed:
+
+- Current, artifact 12614100358:
+  `5484a8d26e034b9139e692c5cdc62d724826eca190e8ac2345671d1891498c3f`.
+- Historical subset, artifact 12614285134:
+  `2cbd9f8f514608981be66dc2196eded4066a364d150640e2f31241939e44df54`.
+- Privacy refusal, artifact 12613679478:
+  `6603315309662e84d1ce03624a05e1aa52f11b2994d3cf9274c7e90f818b604a`.
+
+The earlier failed run remains negative evidence. Process-pump and native
+internal lifecycle qualifications above still apply; in particular, independent
+retirement of every guest client group is not established. This fixture does not establish
 same-selector repeat,64MiB capacity,
 unknown-create delivery recovery, arbitrary injected native close/timeout faults,
 production restore, app availability, offsite recovery or caller cutover.
