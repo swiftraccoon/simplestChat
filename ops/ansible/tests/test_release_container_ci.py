@@ -274,6 +274,28 @@ class ReleaseContainerCiTests(unittest.TestCase):
             self.assertNotIn("continue-on-error", step)
             self.assertNotIn("if", step)
 
+    def test_controller_setup_follows_validation_and_still_overlaps_image_work(self) -> None:
+        """Host package setup starts after validation, while its later handoff stays required."""
+        ordered = (
+            COMPOSE_TOOL,
+            "Validate Compose rendering",
+            "Validate Caddyfile",
+            "Preserve caddy validation metadata",
+            PREPARE_START,
+            "Build production container",
+            PREPARE,
+            INTEGRATION,
+        )
+        indexes = [self.steps.index(self.step(name)) for name in ordered]
+        self.assertEqual(indexes, sorted(indexes))
+        for name in ("Validate Caddyfile", PREPARE_START, "Build production container", PREPARE):
+            self.assertNotIn("if", self.step(name))
+            self.assertNotIn("continue-on-error", self.step(name))
+        self.assertEqual(
+            self.step("Preserve caddy validation metadata")["if"],
+            "${{ always() && !env.ACT }}",
+        )
+
     def test_root_disposable_opt_in_is_explicit_bounded_and_preserves_failure(self) -> None:
         """Verify root disposable opt in is explicit bounded and preserves failure."""
         integration = self.step(INTEGRATION)

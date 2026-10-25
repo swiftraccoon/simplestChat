@@ -1046,14 +1046,6 @@ jobs:
         if: ${{ env.ACT }}
         run: build/ci-local-docker.sh
 
-      # The release fixture's controller needs about twenty seconds of apt and
-      # pip work that shares nothing with the image build. Start it here and
-      # collect it after the build instead of paying for it on the critical path.
-      # The origin-bound broker retains bounded output for the collection step.
-      # The launcher hands off before returning; it makes no worker-exit claim.
-      - name: Start the isolated release-container controller build
-        run: cargo run --locked -q -p xtask -- ci release-controller start
-
       - name: Install checksum-pinned production Compose
         timeout-minutes: 3
         shell: bash
@@ -1079,6 +1071,12 @@ jobs:
           path: ${{ runner.temp }}/simplestchat-config-validation-caddy-*/config-validation.json
           if-no-files-found: ignore
           retention-days: 7
+
+      # Keep the fixed apt/venv/pip bootstrap after configuration validation.
+      # It can overlap the image build; the later collector checks its result.
+      # The launcher hands off before returning; it makes no worker-exit claim.
+      - name: Start the isolated release-container controller build
+        run: cargo run --locked -q -p xtask -- ci release-controller start
 
       # Publish newly compiled application layers when build inputs change.
       # A dependency-only immutable key otherwise keeps restoring the first
