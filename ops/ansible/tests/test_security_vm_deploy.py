@@ -9,6 +9,7 @@ import json
 import os
 import selectors
 import signal
+import stat
 import subprocess
 import sys
 import tempfile
@@ -23,6 +24,7 @@ from test_support import ROOT
 
 # isort: split
 import bounded_process
+import release_artifact as artifact
 import release_container_fixture as render
 import release_container_harness as fixture
 import security_vm_deploy as keeper
@@ -1301,6 +1303,179 @@ class DeployProofTests(unittest.TestCase):
         self.assertIn("Compile trusted controllers before exposing", workflow)
         self.assertIn("rustup toolchain install 1.99.0 --profile minimal", workflow)
         self.assertNotIn("dtolnay/rust-toolchain@", workflow)
+
+
+class PrepareAdmissionTests(unittest.TestCase):
+    """Exact package modes and fixed diagnostic stages, without executing any tool."""
+
+    def mode_case(self, role: str, mode: int, *, change: bool = False) -> tuple[bool, bool, bool]:
+        """Use real file mode/hash/FDs, projecting only nonroot fixture UID/GID to zero."""
+        fstat, lstat, adopt = os.fstat, Path.lstat, stage.adopt
+        streams: list[BinaryIO] = []
+        originals: list[stage.Original] = []
+        admitted, changed = False, False
+
+        def root_metadata(value: os.stat_result) -> os.stat_result:
+            fields = list(value)
+            fields[4] = fields[5] = 0
+            return os.stat_result(
+                fields, {"st_mtime_ns": value.st_mtime_ns, "st_ctime_ns": value.st_ctime_ns}
+            )
+
+        def file_metadata(fd: int) -> os.stat_result:
+            return root_metadata(fstat(fd))
+
+        def path_metadata(path: Path) -> os.stat_result:
+            return root_metadata(lstat(path))
+
+        def opened(fd: int, form: str) -> BinaryIO:
+            stream = adopt(fd, form)
+            streams.append(stream)
+            return stream
+
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "inert-package-tool"
+            descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with stage.adopt(descriptor, "wb") as output:
+                _ = output.write(b"inert bytes, never an executable workload\n")
+                output.flush()
+                os.fchmod(output.fileno(), mode)
+            control = guest.Control(time.monotonic())
+            instance = guest.Fixture(frame(), control, cast("guest.Wire", object()))
+            expected = next(bits for name, _, bits in guest.PREPARE_TOOLS if name == role)
+            try:
+                with (
+                    patch.object(guest, "PREPARE_TOOLS", ((role, str(path), expected),)),
+                    patch.object(os, "fstat", side_effect=file_metadata),
+                    patch.object(Path, "lstat", autospec=True, side_effect=path_metadata),
+                    patch.object(stage, "adopt", side_effect=opened),
+                ):
+                    instance.system_tools()
+                    originals.extend(instance.originals)
+                    admitted = True
+                    if change:
+                        path.chmod(0o755)
+                        try:
+                            originals[0].check()
+                        except ValueError:
+                            changed = True
+            except ValueError:
+                pass
+            first = ops_guest.settle(tuple(original.close for original in instance.originals))
+            settled = first is None and bool(streams) and all(stream.closed for stream in streams)
+        return admitted, changed, settled
+
+    def test_exact_mount_package_mode_does_not_relax_other_tools(self) -> None:
+        """The former0755 mount profile rejects the real4755 source shape, not its bytes."""
+        for role, mode, expected in (
+            ("mount", 0o4755, True),
+            ("mount", 0o755, False),
+            ("mount", 0o2755, False),
+            ("mount", 0o6755, False),
+            ("mount", 0o4777, False),
+            ("docker", 0o755, True),
+            ("docker", 0o4755, False),
+        ):
+            with self.subTest(role=role, mode=oct(mode)):
+                self.assertEqual(self.mode_case(role, mode), (expected, False, True))
+        self.assertEqual(self.mode_case("mount", 0o4755, change=True), (True, True, True))
+
+    def admission_failure(self, checkpoint: str) -> dict[str, object]:
+        """Run the real source-admission order with only fixed external-root observations inert."""
+        control = guest.Control(time.monotonic())
+        instance = guest.Fixture(frame(), control, cast("guest.Wire", object()))
+        primary = ValueError("private-caller-path-and-secret-must-not-escape")
+
+        def boundary() -> None:
+            if instance.checkpoint == checkpoint:
+                raise primary
+
+        def retain(
+            _path: Path,
+            _maximum: int,
+            _mode: int,
+            _control: guest.Control,
+            originals: list[stage.Original],
+        ) -> stage.Original:
+            boundary()
+            original = cast(
+                "stage.Original",
+                cast(
+                    "object",
+                    SimpleNamespace(
+                        sha256=BINARY,
+                        before=SimpleNamespace(st_size=100),
+                        check=lambda: None,
+                    ),
+                ),
+            )
+            originals.append(original)
+            return original
+
+        def marker(_path: Path, _maximum: int, _mode: int) -> tuple[bytes, os.stat_result]:
+            boundary()
+            return (TOKEN + "\n").encode(), os.stat_result((0,) * 10)
+
+        def metadata(_path: Path) -> os.stat_result:
+            boundary()
+            return cast(
+                "os.stat_result", cast("object", SimpleNamespace(st_mode=stat.S_IFSOCK, st_uid=0))
+            )
+
+        def manifest(path: Path) -> dict[str, object]:
+            boundary()
+            migrations = (
+                ["different"]
+                if checkpoint == "prepare-schema" and path.parent.name == PREVIOUS
+                else []
+            )
+            return {"revision": path.parent.name, "migrations": migrations}
+
+        def resolved(path: Path, *, strict: bool = False) -> Path:
+            _ = strict
+            return path
+
+        with (
+            patch.object(os, "geteuid", return_value=0),
+            patch.object(sys, "platform", "linux"),
+            patch.object(ops_guest, "read_fixed", side_effect=marker),
+            patch.object(guest, "retain", side_effect=retain),
+            patch.object(Path, "resolve", autospec=True, side_effect=resolved),
+            patch.object(Path, "lstat", autospec=True, side_effect=metadata),
+            patch.object(artifact, "validate_manifest", side_effect=manifest),
+            patch.object(stage, "archive_graph", return_value=({IMAGE_A}, {})),
+            self.assertRaises(ValueError) as got,
+        ):
+            instance.sources()
+        if checkpoint != "prepare-schema":
+            self.assertIs(got.exception, primary)
+        return guest.failure_snapshot("prepare", instance, got.exception, control)
+
+    def test_prepare_admission_checkpoints_survive_without_raw_context(self) -> None:
+        """Every new fixed admission stage can identify a failure before the first command."""
+        for checkpoint in (
+            "prepare-marker",
+            "prepare-guest-source",
+            "prepare-projected-source",
+            "prepare-helper",
+            "prepare-installed-native",
+            "prepare-tool-mount",
+            "prepare-socket",
+            "prepare-current-payload",
+            "prepare-current-manifest",
+            "prepare-previous-payload",
+            "prepare-previous-manifest",
+            "prepare-schema",
+        ):
+            with self.subTest(checkpoint=checkpoint):
+                row = self.admission_failure(checkpoint)
+                self.assertEqual(row["checkpoint"], checkpoint)
+                self.assertEqual(row["lastObservedOrdinal"], 0)
+                self.assertEqual(guest.failure_projection(row, TOKEN), row)
+                self.assertNotIn("private-caller-path", json.dumps(row))
+        row["checkpoint"] = "prepare-tool-private-caller-secret"
+        with self.assertRaises(ValueError):
+            _ = guest.failure_projection(row, TOKEN)
 
 
 if __name__ == "__main__":

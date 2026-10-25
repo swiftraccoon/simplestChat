@@ -169,3 +169,28 @@ does not recover the failed runner's exact timing. The deterministic barrier
 repairs fixture ordering; no native/core behavior, DB policy, caller or budget is
 changed. A successful complete deploy/rollback proof still requires an actual
 signed runtime trial of this revised fixture.
+
+## Prepare admission package profile
+
+Actual signed trial `40221931668` at `1381912` failed in guest preparation before
+any observer command or native deployment was observed. Its sanitized summary
+retained `ValueError`, ordinal zero and no completed trials, with successful VM
+and input cleanup. It did not identify the exact rejected source or metadata.
+The current source required every fixed system tool to have mode0755. Debian's
+[official mount package](
+https://deb.debian.org/debian/pool/main/u/util-linux/mount_2.41.5-0+deb13u1_amd64.deb)
+contains root:root `usr/bin/mount` with exact mode04755; its package SHA256 is
+`eb70a615114ac40123768beb20e302554d5cb7edb33290be7e418ebe1075c878`.
+These HTTPS package bytes and archive metadata establish a narrow fixture
+profile mismatch, not the failed guest's actual file mode or independent APT
+signature verification. The actual trial cause remains unconfirmed.
+
+Only the fixed mount role now requires04755. Other fixed tools still require
+exact0755; the unchanged original-file owner retains root ownership, one link,
+identity, all mode bits and before/after byte hashes. There is no general setuid
+mask, alternate-mode fallback, tool chmod or production policy change. Closed
+prepare checkpoints distinguish marker, source, helper, installed binary,
+individual fixed tools, socket, each payload/manifest and schema admission.
+They expose no raw paths, input names, exception text or configuration. Actual
+complete positive and owned-rollback proof remains pending a fresh signed trial;
+no clocks, native role caps or deployment behavior changed.

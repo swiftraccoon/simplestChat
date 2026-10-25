@@ -148,6 +148,18 @@ require, exact, digest, integer, record = (
 )
 
 
+# Only the package-provided mount role has Debian's exact setuid-root mode.
+PREPARE_TOOLS = (
+    ("docker", "/usr/bin/docker", 0o755),
+    ("curl", "/usr/bin/curl", 0o755),
+    ("openssl", "/usr/bin/openssl", 0o755),
+    ("nsenter", "/usr/bin/nsenter", 0o755),
+    ("unshare", "/usr/bin/unshare", 0o755),
+    ("mount", "/usr/bin/mount", 0o4755),
+    ("update-ca-certificates", "/usr/sbin/update-ca-certificates", 0o755),
+)
+
+
 MAX_SIGNED_EXIT = 255
 DIAGNOSTIC_SCOPE = "HostDeployVmFailureFacts"
 DIAGNOSTIC_PHASES = frozenset({"request", "prepare", "continue", "exercise"})
@@ -155,6 +167,18 @@ DIAGNOSTIC_CHECKPOINTS = frozenset(
     {
         "request",
         "prepare",
+        "prepare-marker",
+        "prepare-guest-source",
+        "prepare-projected-source",
+        "prepare-helper",
+        "prepare-installed-native",
+        *("prepare-tool-" + role for role, _, _ in PREPARE_TOOLS),
+        "prepare-socket",
+        "prepare-current-payload",
+        "prepare-current-manifest",
+        "prepare-previous-payload",
+        "prepare-previous-manifest",
+        "prepare-schema",
         "exercise",
         "negative-injection-namespace-entry",
         "negative-injection-request",
@@ -901,25 +925,6 @@ def retain(
     return original
 
 
-def pinned_payload(
-    value: Mapping[str, object], revision: str, control: Control, originals: list[stage.Original]
-) -> tuple[artifact.Manifest, set[str], dict[str, object]]:
-    """Bind canonical transferred bytes to authenticated controller originals."""
-    directory = PUBLIC / "releases" / revision
-    for name, maximum in (("release.json", 2**20), ("image.tar", MAX_IMAGE)):
-        original = retain(directory / name, maximum, 0o600, control, originals)
-        pin = cast("dict[str, object]", value[name])
-        require(original.sha256 == pin["sha256"] and original.before.st_size == pin["bytes"])
-    control.check()
-    manifest = artifact.validate_manifest(directory / "release.json")
-    require(manifest["revision"] == revision)
-    identities, configuration = stage.archive_graph(directory / "image.tar", manifest)
-    control.check()
-    for original in originals:
-        original.check()
-    return manifest, identities, configuration
-
-
 def dependency_digest(value: Mapping[str, object]) -> str:
     """Hash only the closed immutable dependency observations."""
     require(set(value) == {"postgres", "caddy"})
@@ -1500,16 +1505,47 @@ class Fixture:
         self.trials: list[dict[str, object]] = []
         self.ca: stage.Original | None = None
 
+    def system_tools(self) -> None:
+        """Retain fixed package originals with exact per-role modes, never a generic mask."""
+        for role, path, mode in PREPARE_TOOLS:
+            self.checkpoint = "prepare-tool-" + role
+            _ = retain(Path(path), 320 * 1024**2, mode, self.control, self.originals)
+
+    def payload(
+        self, role: str, revision: str
+    ) -> tuple[artifact.Manifest, set[str], dict[str, object]]:
+        """Bind exact transferred bytes and identify only a closed current/previous stage."""
+        require(role in ("current", "previous"))
+        self.checkpoint = "prepare-" + role + "-payload"
+        value = cast("dict[str, object]", self.value[role])
+        directory = PUBLIC / "releases" / revision
+        for name, maximum in (("release.json", 2**20), ("image.tar", MAX_IMAGE)):
+            original = retain(directory / name, maximum, 0o600, self.control, self.originals)
+            pin = cast("dict[str, object]", value[name])
+            require(original.sha256 == pin["sha256"] and original.before.st_size == pin["bytes"])
+        self.checkpoint = "prepare-" + role + "-manifest"
+        self.control.check()
+        manifest = artifact.validate_manifest(directory / "release.json")
+        require(manifest["revision"] == revision)
+        identities, configuration = stage.archive_graph(directory / "image.tar", manifest)
+        self.control.check()
+        for original in self.originals:
+            original.check()
+        return manifest, identities, configuration
+
     def sources(self) -> None:
         """Retain source, tools, installed binary and both signed payloads."""
         self.control.check()
         require(os.geteuid() == 0 and sys.platform == "linux")
+        self.checkpoint = "prepare-marker"
         marker, _ = ops_guest.read_fixed(Path("/etc/simplestchat-vm-fixture"), 128, 0o600)
         require(marker == (str(self.value["runId"]) + "\n").encode())
+        self.checkpoint = "prepare-guest-source"
         source = retain(
             ROOT / "security_vm_deploy_guest.py", 2**20, 0o600, self.control, self.originals
         )
         require(source.sha256 == self.value["guestSha256"])
+        self.checkpoint = "prepare-projected-source"
         for name, sha in cast("dict[str, object]", self.value["sourcePins"]).items():
             path = (
                 ROOT / Path(name).name
@@ -1520,6 +1556,7 @@ class Fixture:
             mode = 0o755 if name == "build/security_vm_deploy_injection.py" else 0o600
             original = retain(path, 2**20, mode, self.control, self.originals)
             require(original.sha256 == sha)
+        self.checkpoint = "prepare-helper"
         for name, sha in cast("dict[str, object]", self.value["helperPins"]).items():
             path = ROOT / name if name == "security_vm_ops_guest.py" else LIBRARY / name
             original = retain(
@@ -1530,6 +1567,7 @@ class Fixture:
                 self.originals,
             )
             require(original.sha256 == sha)
+        self.checkpoint = "prepare-installed-native"
         self.installed = retain(
             INSTALLED, ops_guest.MAX_BINARY, 0o755, self.control, self.originals
         )
@@ -1539,16 +1577,8 @@ class Fixture:
             and self.installed.before.st_size == binary["bytes"]
         )
         self.commands.native = self.installed
-        for path in (
-            "/usr/bin/docker",
-            "/usr/bin/curl",
-            "/usr/bin/openssl",
-            "/usr/bin/nsenter",
-            "/usr/bin/unshare",
-            "/usr/bin/mount",
-            "/usr/sbin/update-ca-certificates",
-        ):
-            _ = retain(Path(path), 320 * 1024**2, 0o755, self.control, self.originals)
+        self.system_tools()
+        self.checkpoint = "prepare-socket"
         self.control.check()
         socket_path = Path("/var/run/docker.sock").resolve(strict=True)
         socket_stamp = socket_path.lstat()
@@ -1558,14 +1588,13 @@ class Fixture:
             ("current", str(self.value["revision"])),
             ("previous", str(self.value["previousRevision"])),
         ):
-            manifest, identities, config = pinned_payload(
-                cast("dict[str, object]", self.value[role]), revision, self.control, self.originals
-            )
+            manifest, identities, config = self.payload(role, revision)
             if role == "current":
                 self.current = manifest
             else:
                 self.previous = manifest
             self.graphs[role] = identities, config
+        self.checkpoint = "prepare-schema"
         require(
             self.current is not None
             and self.previous is not None
