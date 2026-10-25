@@ -10,6 +10,9 @@ mod effect_tests;
 mod replacement;
 #[path = "retention.rs"]
 mod retention;
+#[cfg(test)]
+#[path = "rollback_effect_tests.rs"]
+mod rollback_effect_tests;
 #[path = "steps.rs"]
 mod steps;
 
@@ -22,6 +25,7 @@ use super::{
     Access, Bulk, CommandOutput, Executor, Invocation, Options, Outcome, Role, budget,
     policy::{self, *},
     records::{self, Record, Records},
+    rollback_diagnostic::{Boundary, Stage, Trace},
 };
 use crate::{
     json::Json,
@@ -200,6 +204,7 @@ struct State {
     assets: Option<assets::host::HostStore>,
     commands: usize,
     failure: Option<String>,
+    rollback: Trace,
     candidate_end: Option<Instant>,
     asset_id: Option<String>,
     asset_remove_attempted: bool,
@@ -225,6 +230,7 @@ impl State {
             assets: None,
             commands: 0,
             failure: None,
+            rollback: Trace::default(),
             candidate_end: None,
             asset_id: None,
             asset_remove_attempted: false,
@@ -388,6 +394,8 @@ impl State {
         let recovery = request.recovery;
         let io = (request.input, request.output);
         let retirement = role == Role::AssetRemove;
+        self.rollback.operation();
+        self.rollback.boundary(Boundary::OriginalsBefore);
         if retirement {
             let exact = self
                 .asset_id
@@ -396,38 +404,48 @@ impl State {
             if !exact {
                 return control::failed(owner, Cause::Input);
             }
-            self.retirement_witness(access, owner)?;
+            let checked = self.retirement_witness(access, owner);
+            self.rollback.observe(checked)?;
         } else {
-            self.originals(access, owner, recovery)?;
+            let checked = self.originals(access, owner, recovery);
+            self.rollback.observe(checked)?;
         }
+        self.rollback.boundary(Boundary::RoleCeiling);
         let now = owner.now();
         let end = self.body_end(owner, recovery);
-        let body_end = now
-            .checked_add(Duration::from_secs(role.seconds()))
-            .ok_or(Cause::Deadline)?
-            .min(end.checked_sub(budget::SETTLE).ok_or(Cause::Deadline)?);
-        if body_end <= now {
-            return control::failed(owner, Cause::Deadline);
-        }
-        let settlement_end = body_end
-            .checked_add(budget::SETTLE)
-            .ok_or(Cause::Deadline)?
-            .min(end);
+        let ceiling = (|| {
+            let body_end = now
+                .checked_add(Duration::from_secs(role.seconds()))
+                .ok_or(Cause::Deadline)?
+                .min(end.checked_sub(budget::SETTLE).ok_or(Cause::Deadline)?);
+            if body_end <= now {
+                return control::failed(owner, Cause::Deadline);
+            }
+            let settlement_end = body_end
+                .checked_add(budget::SETTLE)
+                .ok_or(Cause::Deadline)?
+                .min(end);
+            Ok((body_end, settlement_end))
+        })();
+        let (body_end, settlement_end) = self.rollback.observe(ceiling)?;
         self.commands += 1;
         if retirement {
             self.asset_remove_admitted = true;
         }
         let attempt = self.attempt();
+        self.rollback.boundary(Boundary::StdoutAdmission);
         let stdout = if io.1.is_none() {
-            Some(self.records.prepare_log(
+            let opened = self.records.prepare_log(
                 &attempt,
                 &format!("{:03}.stdout", self.commands),
                 owner,
                 recovery,
-            )?)
+            );
+            Some(self.rollback.observe(opened)?)
         } else {
             None
         };
+        self.rollback.boundary(Boundary::StderrAdmission);
         let stderr = match self.records.prepare_log(
             &attempt,
             &format!("{:03}.stderr", self.commands),
@@ -436,6 +454,7 @@ impl State {
         ) {
             Ok(value) => value,
             Err(cause) => {
+                self.rollback.refuse(cause);
                 if let Some(at) = stdout {
                     if recovery {
                         let _ = self.records.finish_log(at, &[], owner, true);
@@ -446,6 +465,9 @@ impl State {
                 return Err(cause);
             }
         };
+        if stdout.is_some() {
+            self.rollback.logs_admitted(self.commands);
+        }
         let curl = matches!(role, Role::Ready | Role::Metrics);
         let arguments = if curl {
             arguments
@@ -457,6 +479,7 @@ impl State {
         if retirement {
             self.asset_remove_dispatched = true;
         }
+        self.rollback.boundary(Boundary::Executor);
         let output = executor
             .run(
                 owner,
@@ -494,12 +517,20 @@ impl State {
             }
         }
         if let Some(cause) = output.error {
+            if cause == Cause::Command && output.status.is_some_and(|status| status != 0) {
+                self.rollback.boundary(Boundary::ExitStatus);
+            }
+            self.rollback.refuse(cause);
             owner.record(cause);
         }
         if !output.settled {
+            self.rollback.boundary(Boundary::Settlement);
+            self.rollback.refuse(Cause::Close);
             owner.record(Cause::Close);
         }
         if output.status != Some(0) && !curl {
+            self.rollback.boundary(Boundary::ExitStatus);
+            self.rollback.refuse(Cause::Command);
             self.command_failure(owner);
         }
         if let Some((at, _)) = io.1 {
@@ -531,11 +562,16 @@ impl State {
             }
             return Err(cause);
         }
+        self.rollback.boundary(Boundary::StderrSeal);
         let error_log = self
             .records
             .finish_log(stderr, &output.stderr, owner, recovery);
-        let output_log =
-            stdout.map(|at| self.records.finish_log(at, &output.stdout, owner, recovery));
+        let error_log = self.rollback.observe(error_log);
+        self.rollback.boundary(Boundary::StdoutSeal);
+        let output_log = stdout.map(|at| {
+            let written = self.records.finish_log(at, &output.stdout, owner, recovery);
+            self.rollback.observe(written)
+        });
         self.latch_failure(owner);
         error_log?;
         if let Some(result) = output_log {
@@ -547,11 +583,15 @@ impl State {
         if !output.settled {
             return Err(Cause::Close);
         }
+        self.rollback.boundary(Boundary::OriginalsAfter);
         if retirement {
-            self.retirement_witness(access, owner)?;
+            let checked = self.retirement_witness(access, owner);
+            self.rollback.observe(checked)?;
         } else {
-            self.originals(access, owner, recovery)?;
+            let checked = self.originals(access, owner, recovery);
+            self.rollback.observe(checked)?;
         }
+        self.rollback.operation();
         Ok(output)
     }
     async fn docker(

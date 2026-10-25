@@ -970,6 +970,130 @@ fn failure_profile(scenario: &str) -> Option<(&'static str, &'static str)> {
     }
 }
 
+// These are native-only passive recovery facts. Each named whole-reference
+// row still compares every original report field, daemon effect and raw file.
+fn rollback_profile(scenario: &str) -> Option<(&'static str, &'static str, Option<&'static str>)> {
+    Some(match scenario {
+        "candidate-up-close-rollback-up" | "rollback-up" => ("up", "command", Some("rollback-up")),
+        "rollback-stop" => ("stop", "command", Some("rollback-stop")),
+        "app-stop" => ("stop", "command", Some("app-stop")),
+        "rollback-compose-write" => ("selection-compose-write", "io", None),
+        "rollback-assets" => ("assets-select", "io", None),
+        "rollback-wrong-image" => ("application-image", "policy", None),
+        "rollback-loop-unready" => ("loopback-readiness", "policy", None),
+        "rollback-public-unready" => ("public-readiness", "policy", None),
+        "database-restarted" | "rollback-dependency" => ("database-continuity", "policy", None),
+        "proxy-restarted" => ("proxy-continuity", "policy", None),
+        _ => return None,
+    })
+}
+
+fn rollback_expected(scenario: &str, observed: &Value) -> io::Result<Option<Value>> {
+    let Some((stage, cause, role)) = rollback_profile(scenario) else {
+        return Ok(None);
+    };
+    let log_ordinal = if let Some(role) = role {
+        let calls = observed["daemon"]["calls"]
+            .as_array()
+            .ok_or_else(|| io::Error::other("missing original daemon calls"))?;
+        let commands = observed["commands"]
+            .as_array()
+            .ok_or_else(|| io::Error::other("missing original command calls"))?;
+        let matching = calls
+            .iter()
+            .enumerate()
+            .filter(|(_, call)| call["role"] == role)
+            .collect::<Vec<_>>();
+        let expected_matches = if scenario == "app-stop" { 2 } else { 1 };
+        if matching.len() != expected_matches
+            || (scenario == "app-stop"
+                && (observed["daemon"]["ups"] != 0
+                    || observed["daemon"]["stops"] != 2
+                    || calls.iter().any(|call| {
+                        matches!(call["role"].as_str(), Some("candidate-up" | "rollback-up"))
+                    })))
+        {
+            return Err(io::Error::other("changed named recovery role multiplicity"));
+        }
+        let suffix: &[&str] = if matches!(role, "rollback-stop" | "app-stop") {
+            &["stop", "--timeout", "30", "simplestchat"]
+        } else {
+            &[
+                "up",
+                "--detach",
+                "--no-build",
+                "--pull",
+                "never",
+                "--no-deps",
+                "simplestchat",
+            ]
+        };
+        let fixed_suffix = |value: &Value| {
+            value.as_array().is_some_and(|args| {
+                args.len() >= suffix.len()
+                    && args[args.len() - suffix.len()..]
+                        .iter()
+                        .zip(suffix)
+                        .all(|(actual, expected)| actual.as_str() == Some(*expected))
+            })
+        };
+        if calls.len() != commands.len()
+            || matching.iter().any(|(index, call)| {
+                *index >= 192
+                    || call["status"] != 7
+                    || commands[*index]["status"] != 7
+                    || !fixed_suffix(&call["argv"])
+                    || !fixed_suffix(&commands[*index]["argv"])
+            })
+        {
+            return Err(io::Error::other("changed original recovery refusal"));
+        }
+        // app-stop is the sole repeated profile: both failures happen before
+        // any up, so the mandatory rollback stop still has that same role.
+        Some(matching.last().unwrap().0 + 1)
+    } else {
+        None
+    };
+    Ok(Some(json!({
+        "stage":stage,
+        "boundary":if role.is_some() {"exit-status"} else {"operation"},
+        "cause":cause,
+        "logOrdinal":log_ordinal,
+    })))
+}
+
+fn rollback_projection(
+    scenario: &str,
+    native: &Value,
+    original: &Value,
+    observed: &Value,
+) -> io::Result<Value> {
+    let original_failed =
+        original["rollbackAttempted"] == true && original["rollbackPassed"] == false;
+    let native_failed = native["rollbackAttempted"] == true && native["rollbackPassed"] == false;
+    if original.get("rollbackFailure").is_some() {
+        return Err(io::Error::other("original recovery schema changed"));
+    }
+    let expected = rollback_expected(scenario, observed)?;
+    let Some(expected) = expected else {
+        if native.get("rollbackFailure").is_some() || original_failed || native_failed {
+            return Err(io::Error::other("unnamed native recovery diagnostic"));
+        }
+        return Ok(native.clone());
+    };
+    if !original_failed
+        || !native_failed
+        || original["passed"] != false
+        || native["passed"] != false
+        || native.get("rollbackFailure") != Some(&expected)
+    {
+        return Err(io::Error::other("changed named native recovery diagnostic"));
+    }
+    let mut projected = native.clone();
+    projected.as_object_mut().unwrap().remove("rollbackFailure");
+    Ok(projected)
+}
+
 fn failure_projection(scenario: &str, native: &Value, original: &Value) -> io::Result<Value> {
     let Some((native_code, original_message)) = failure_profile(scenario) else {
         return Err(io::Error::other("unknown named diagnostic profile"));
@@ -984,6 +1108,274 @@ fn failure_projection(scenario: &str, native: &Value, original: &Value) -> io::R
     let mut projected = native.clone();
     projected["failure"] = original["failure"].clone();
     Ok(projected)
+}
+
+fn recovery_observation(role: Option<&str>) -> Value {
+    let Some(role) = role else {
+        return Value::Null;
+    };
+    let argv = if matches!(role, "rollback-stop" | "app-stop") {
+        json!(["stop", "--timeout", "30", "simplestchat"])
+    } else {
+        json!([
+            "up",
+            "--detach",
+            "--no-build",
+            "--pull",
+            "never",
+            "--no-deps",
+            "simplestchat"
+        ])
+    };
+    if role == "app-stop" {
+        json!({"daemon":{"ups":0,"stops":2,"calls":[
+            {"role":role,"status":7,"argv":argv},
+            {"role":role,"status":7,"argv":argv}]},
+            "commands":[{"status":7,"argv":argv},{"status":7,"argv":argv}]})
+    } else {
+        json!({"daemon":{"calls":[{"role":"earlier","status":0},
+            {"role":role,"status":7,"argv":argv}]},
+            "commands":[{"status":0},{"status":7,"argv":argv}]})
+    }
+}
+
+#[test]
+fn named_recovery_profiles_preserve_raw_frames_and_every_other_field() {
+    for (scenario, stage, cause, role) in [
+        (
+            "candidate-up-close-rollback-up",
+            "up",
+            "command",
+            Some("rollback-up"),
+        ),
+        ("rollback-up", "up", "command", Some("rollback-up")),
+        ("rollback-stop", "stop", "command", Some("rollback-stop")),
+        ("app-stop", "stop", "command", Some("app-stop")),
+        (
+            "rollback-compose-write",
+            "selection-compose-write",
+            "io",
+            None,
+        ),
+        ("rollback-assets", "assets-select", "io", None),
+        ("rollback-wrong-image", "application-image", "policy", None),
+        (
+            "rollback-loop-unready",
+            "loopback-readiness",
+            "policy",
+            None,
+        ),
+        (
+            "rollback-public-unready",
+            "public-readiness",
+            "policy",
+            None,
+        ),
+        ("database-restarted", "database-continuity", "policy", None),
+        ("rollback-dependency", "database-continuity", "policy", None),
+        ("proxy-restarted", "proxy-continuity", "policy", None),
+    ] {
+        let observed = recovery_observation(role);
+        let original = json!({"passed":false,"rollbackAttempted":true,"rollbackPassed":false,
+            "failure":"original-primary","strict":"retained"});
+        let diagnostic = json!({"stage":stage,"cause":cause,
+            "boundary":if role.is_some() {"exit-status"} else {"operation"},
+            "logOrdinal":role.map(|_|2)});
+        let mut native = original.clone();
+        native["rollbackFailure"] = diagnostic.clone();
+        // Stdout and outcome.json each consume a separate native frame; the
+        // actual captured objects and raw on-disk pins remain untouched.
+        for frame in [native.clone(), native.clone()] {
+            assert_eq!(
+                rollback_projection(scenario, &frame, &original, &observed).unwrap(),
+                original,
+                "{scenario}"
+            );
+            assert_eq!(frame["rollbackFailure"], diagnostic);
+        }
+        native["strict"] = json!("changed");
+        assert_ne!(
+            rollback_projection(scenario, &native, &original, &observed).unwrap(),
+            original,
+            "{scenario}: no unrelated field is normalized"
+        );
+    }
+}
+
+#[test]
+fn recovery_profiles_refuse_neighbor_cases_shapes_and_status_contradictions() {
+    let original = json!({"passed":false,"rollbackAttempted":true,"rollbackPassed":false});
+    let observed = recovery_observation(Some("rollback-stop"));
+    let diagnostic = json!({"stage":"stop","boundary":"exit-status",
+        "cause":"command","logOrdinal":2});
+    let mut native = original.clone();
+    native["rollbackFailure"] = diagnostic;
+    for scenario in ["success", "candidate-up", "another-case"] {
+        assert!(rollback_projection(scenario, &native, &original, &observed).is_err());
+    }
+    for (key, value) in [
+        ("stage", json!("private/path")),
+        ("boundary", json!("opaque-error")),
+        ("cause", json!("INERT_SECRET")),
+        ("logOrdinal", Value::Null),
+        ("logOrdinal", json!(0)),
+        ("logOrdinal", json!(1)),
+        ("logOrdinal", json!(193)),
+        ("unknown", json!("INERT_SECRET")),
+    ] {
+        let mut changed = native.clone();
+        changed["rollbackFailure"][key] = value;
+        assert!(rollback_projection("rollback-stop", &changed, &original, &observed).is_err());
+    }
+    let mut missing = native.clone();
+    missing.as_object_mut().unwrap().remove("rollbackFailure");
+    assert!(rollback_projection("rollback-stop", &missing, &original, &observed).is_err());
+    for (key, value) in [
+        ("passed", true),
+        ("rollbackAttempted", false),
+        ("rollbackPassed", true),
+    ] {
+        let mut changed = native.clone();
+        changed[key] = json!(value);
+        assert!(rollback_projection("rollback-stop", &changed, &original, &observed).is_err());
+        let mut changed = original.clone();
+        changed[key] = json!(value);
+        assert!(rollback_projection("rollback-stop", &native, &changed, &observed).is_err());
+    }
+    let mut changed = original.clone();
+    changed["rollbackFailure"] = native["rollbackFailure"].clone();
+    assert!(rollback_projection("rollback-stop", &native, &changed, &observed).is_err());
+}
+
+#[test]
+fn recovery_command_ordinal_requires_the_exact_original_completed_role() {
+    let observed = recovery_observation(Some("rollback-up"));
+    assert_eq!(
+        rollback_expected("rollback-up", &observed)
+            .unwrap()
+            .unwrap()["logOrdinal"],
+        2
+    );
+    for changed in [
+        {
+            let mut value = observed.clone();
+            value["commands"][1]["status"] = json!(0);
+            value
+        },
+        {
+            let mut value = observed.clone();
+            value["daemon"]["calls"][1]["status"] = Value::Null;
+            value
+        },
+        {
+            let mut value = observed.clone();
+            value["daemon"]["calls"][0]["role"] = json!("rollback-up");
+            value
+        },
+        {
+            let mut value = observed.clone();
+            value["daemon"]["calls"][1]["role"] = json!("another-role");
+            value
+        },
+        {
+            let mut value = observed.clone();
+            value["commands"][1]["argv"] = json!(["up", "another-service"]);
+            value
+        },
+        {
+            let mut value = observed;
+            let _ = value["commands"].as_array_mut().unwrap().pop();
+            value
+        },
+    ] {
+        assert!(rollback_expected("rollback-up", &changed).is_err());
+    }
+}
+
+#[test]
+fn repeated_app_stop_requires_both_failures_before_any_up() {
+    let stop = json!(["stop", "--timeout", "30", "simplestchat"]);
+    let observed = json!({"daemon":{"ups":0,"stops":2,"calls":[
+        {"role":"app-stop","status":7,"argv":stop},
+        {"role":"ps-simplestchat","status":0},
+        {"role":"container-inspect","status":0},
+        {"role":"failure-logs","status":0},
+        {"role":"app-stop","status":7,"argv":stop}]},
+        "commands":[{"status":7,"argv":stop},{"status":0},{"status":0},{"status":0},
+            {"status":7,"argv":stop}]});
+    assert_eq!(
+        rollback_expected("app-stop", &observed).unwrap().unwrap(),
+        json!({"stage":"stop","boundary":"exit-status","cause":"command","logOrdinal":5})
+    );
+    assert!(rollback_expected("rollback-stop", &observed).is_err());
+    for changed in [
+        {
+            let mut value = observed.clone();
+            value["daemon"]["calls"][0]["role"] = json!("earlier");
+            value
+        },
+        {
+            let mut value = observed.clone();
+            value["daemon"]["calls"][1]["role"] = json!("app-stop");
+            value
+        },
+        {
+            let mut value = observed.clone();
+            value["daemon"]["calls"][0]["status"] = json!(0);
+            value
+        },
+        {
+            let mut value = observed.clone();
+            value["commands"][0]["status"] = json!(0);
+            value
+        },
+        {
+            let mut value = observed.clone();
+            value["commands"][0]["argv"] = json!(["stop", "another-service"]);
+            value
+        },
+        {
+            let mut value = observed.clone();
+            value["daemon"]["ups"] = json!(1);
+            value
+        },
+        {
+            let mut value = observed.clone();
+            value["daemon"]["stops"] = json!(1);
+            value
+        },
+        {
+            let mut value = observed.clone();
+            value["daemon"]["calls"][2]["role"] = json!("candidate-up");
+            value
+        },
+        {
+            let mut value = observed;
+            value["daemon"]["calls"][2]["role"] = json!("rollback-up");
+            value
+        },
+    ] {
+        assert!(rollback_expected("app-stop", &changed).is_err());
+    }
+}
+
+#[test]
+fn recovery_diagnostic_is_absent_on_success_and_successful_rollback() {
+    for original in [
+        json!({"passed":true}),
+        json!({"passed":false,"rollbackAttempted":false}),
+        json!({"passed":false,"rollbackAttempted":true,"rollbackPassed":true}),
+    ] {
+        assert_eq!(
+            rollback_projection("success", &original, &original, &Value::Null).unwrap(),
+            original
+        );
+        let mut changed = original.clone();
+        changed["rollbackFailure"] = Value::Null;
+        assert!(rollback_projection("success", &changed, &original, &Value::Null).is_err());
+    }
+    let unprofiled = json!({"passed":false,"rollbackAttempted":true,"rollbackPassed":false});
+    assert!(rollback_projection("another-case", &unprofiled, &unprofiled, &Value::Null).is_err());
 }
 
 #[test]
@@ -1442,10 +1834,12 @@ fn compare(reference: &Oracle, native: &NativeCase, root: &Path, finished: bool)
             "{name}: actual reference fault"
         );
     }
-    if failure_profile(name).is_some() {
-        assert_eq!(native_reports.len(), 1);
-        assert_eq!(reports.as_array().unwrap().len(), 1);
-        native_reports[0] = failure_projection(name, &native_reports[0], &reports[0]).unwrap();
+    assert_eq!(native_reports.len(), reports.as_array().unwrap().len());
+    for (native, original) in native_reports.iter_mut().zip(reports.as_array().unwrap()) {
+        *native = rollback_projection(name, native, original, observed).unwrap();
+        if failure_profile(name).is_some() {
+            *native = failure_projection(name, native, original).unwrap();
+        }
     }
     assert_eq!(
         Value::Array(native_reports),
@@ -1484,6 +1878,24 @@ fn compare(reference: &Oracle, native: &NativeCase, root: &Path, finished: bool)
             comparison_tree(actual_path, &root.join("native"), reference, true).unwrap();
         let mut expected =
             comparison_tree(expected_path, &reference_root, reference, false).unwrap();
+        if actual
+            .get("outcome.json")
+            .and_then(|file| file.get("value"))
+            .is_some()
+        {
+            actual["outcome.json"]["value"] = rollback_projection(
+                name,
+                &actual["outcome.json"]["value"],
+                &expected["outcome.json"]["value"],
+                observed,
+            )
+            .unwrap();
+        } else {
+            assert!(
+                rollback_profile(name).is_none(),
+                "{name}: recovery outcome remains required"
+            );
+        }
         if failure_profile(name).is_some() {
             actual["outcome.json"]["value"] = failure_projection(
                 name,

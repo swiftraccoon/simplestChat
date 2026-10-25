@@ -281,3 +281,41 @@ Artifact 12612769885 was downloaded and its ZIP SHA256 verified before parsing:
 Its retained source hashes matched the exact trial source before this prose
 update. The summary SHA256 is
 `2f9cea7809ae27792faabf9a41f4183eca491bc2084c7d9dec637d9257765da9`.
+
+## Signed diagnostic trial at `47094af`
+
+The [signed diagnostic trial](https://github.com/swiftraccoon/simplestChat/actions/runs/40237650754)
+again completed its positive deployment and failed at `negative-report-rollback`.
+The negative native call returned 1 with `rollbackAttempted: true` and
+`rollbackPassed: false`, target A still selected in `images.json`, and an
+unfinished replacement journal. All 77 retained source hashes matched the exact
+trial revision. Ops 6, all 33 custody/install cases, current and previous server 8,
+original-input closure, cleanup and every VM lifecycle check passed, including
+QEMU exit 0. Cold Docker setup took 143.687 seconds.
+
+The corrected command tuple identifies the actual native deploy call at ordinal
+82, exit 1. The new bounded tail was available for native log ordinals 98–105.
+None of those eight stream pairs matched the exact barrier-refusal marker;
+that does not establish its absence earlier in the operation. Nonempty streams
+remain opaque byte counts, not retained messages or inferred command failures.
+The rollback's inspection/logging block is best-effort, and later input or record
+fences can refuse before another command is dispatched. `images.json` is the
+third restored selection file, so its class does not establish whether the first
+two restoration writes began. The exact fatal recovery boundary remains unknown.
+No unchanged rerun or larger clock is justified by those observations alone.
+
+Artifact 12615434470 had ZIP SHA256
+`7cf87a1ff1341aceb1d3a5a723af425ce5b4475c0e6ac0b016caeed8649e53a0`,
+verified before parsing. Its summary SHA256 is
+`127ef510b578b690eee99f70f58360aab9bfa146abc5d4e1a91f7a596cadb2bc`.
+The complete positive/owned-rollback proof remains unproven; these are disposable
+fixture observations, with no production transaction or caller change.
+
+The native Rust report now has an optional closed `rollbackFailure` record for
+an attempted, failed rollback. It retains the first mandatory recovery stage,
+boundary, cause and nullable admitted log ordinal separately from the original
+application failure. The [native API review](release-deploy-api-review.md#failed-rollback-diagnostics)
+describes its contract and the twelve exact legacy-comparison profiles. The
+Python VM harness remains frozen and does not project this new object. Actual
+capture of it belongs to the Rust orchestration migration; no additional Python
+collector or successful corrected runtime is claimed here.

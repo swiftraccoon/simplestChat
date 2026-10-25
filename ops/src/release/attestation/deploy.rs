@@ -9,6 +9,7 @@ mod oracle_tests;
 mod policy;
 pub(super) mod process;
 pub(super) mod records;
+mod rollback_diagnostic;
 #[cfg(test)]
 mod tests;
 

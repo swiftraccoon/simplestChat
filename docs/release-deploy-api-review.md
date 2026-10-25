@@ -225,3 +225,55 @@ signed-musl HostDeploy, Docker, PostgreSQL, Caddy/TLS and image rollback executi
 remain unrun for this fixture. Installed callers, bootstrap and production
 migration policy remain unchanged; no runtime or adoption proof follows from the
 local comparison.
+
+
+## Failed rollback diagnostics
+
+An attempted rollback that returns failure now includes the optional closed
+`rollbackFailure` object in its existing report and `outcome.json`. Its fields
+are `stage`, `boundary`, `cause` and nullable `logOrdinal`. The first three use
+private finite enums; no exception text, arguments, configuration, identifiers,
+paths or output is copied. The original application failure, rollback booleans,
+process status and final owner verdict remain authoritative and unchanged.
+Successful operations and successful rollbacks omit this field.
+
+The trace is active only during mandatory recovery. Recovery admission, the
+stop, individual selection reads and writes, asset selection, startup, image
+checks, readiness, dependency continuity and final journal have fixed stages.
+Command boundaries distinguish original checks and role admission, retained
+log creation, execution, settlement, nonzero status, evidence sealing and final
+witnesses. A returned executor error or completed nonzero is retained before
+later evidence writes. The deliberately best-effort diagnostic command block
+cannot become this mandatory recovery failure, and the trace never replaces
+the original owner's first cause or starts a further recovery attempt.
+
+`logOrdinal` names an admitted stdout/stderr log pair, not proof of dispatch or
+command completion. Pre-admission and noncommand failures have no ordinal. The
+actual positive native integer is retained without introducing a production
+command cap. The fixture's separate last-eight log reader still recognizes only
+ordinals 1 through 192; its scan bound does not constrain this passive field.
+Malformed, late or unknown fixture observations never supply cleanup authority.
+
+This is an explicit additive native diagnostic profile. The unchanged Python
+reference has no such object. The genuine comparison validates the exact
+addition for twelve named failed-rollback cases before removing only that field
+for the legacy comparison, independently for stdout reports and `outcome.json`.
+Actual native reports and raw retained tree observations remain intact. All
+other fields, selected files, modes and command effects remain strict. A
+successful or unrelated case cannot use this profile.
+
+The Python VM harness and its tests remain frozen at the published reference.
+Their failed-report decoder does not project this new diagnostic. A Rust
+replacement for that orchestration is required for its signed runtime capture;
+no additional Python implementation is part of this change. The native
+extension does not establish the cause of the retained signed `47094af` failure
+or a corrected signed runtime. Native compiler/unit checks and the genuine
+reference comparison are recorded separately from that runtime requirement.
+
+The native validation passed GNU/musl all-target Clippy, warning-free private
+Rustdoc, the full host Ops library suite (444 passed, 11 existing ignored
+fixtures), seven current comparison-contract tests, and all 97 whole-operation
+reference cases. The genuine comparison took 420.808 seconds wall locally. The
+reference producer and all tracked Python files remain unchanged. These are
+inert/native filesystem and process checks, without a real engine or signed VM
+trial of this diagnostic extension.

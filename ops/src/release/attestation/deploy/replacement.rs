@@ -411,8 +411,11 @@ impl State {
             self.latch_failure(owner);
             report["rollbackAttempted"] = json!(replaced);
             if replaced {
-                let recovery = owner.begin_deploy_recovery();
+                self.rollback.start(Stage::RecoveryAdmission);
+                let recovery = self.rollback.observe(owner.begin_deploy_recovery());
                 let rollback = if recovery.is_ok() {
+                    // Optional diagnostic commands do not belong to mandatory recovery.
+                    self.rollback.pause();
                     self.rollback(access, selection, owner, executor).await
                 } else {
                     recovery
@@ -421,6 +424,12 @@ impl State {
                     owner.end_deploy_recovery();
                 }
                 report["rollbackPassed"] = json!(rollback.is_ok());
+                let diagnostic = self.rollback.finish();
+                if rollback.is_err()
+                    && let Some(diagnostic) = diagnostic
+                {
+                    report["rollbackFailure"] = json!(diagnostic);
+                }
             }
             Err(cause)
         } else {
@@ -438,6 +447,9 @@ impl State {
         owner: &mut Owner,
         executor: &mut impl Executor,
     ) -> Result<()> {
+        if recovery {
+            self.rollback.stage(Stage::DatabaseContinuity);
+        }
         let after_db = self
             .container(access, "postgres", recovery, owner, executor)
             .await?;
@@ -452,6 +464,9 @@ impl State {
                     "A retained dependency restarted during release"
                 },
             );
+        }
+        if recovery {
+            self.rollback.stage(Stage::ProxyContinuity);
         }
         let after_proxy = self
             .container(access, "caddy", recovery, owner, executor)
@@ -525,79 +540,97 @@ impl State {
             Ok(())
         }
         .await;
-        self.compose(
-            access,
-            argv(&["stop", "--timeout", "30", "simplestchat"]),
-            None,
-            true,
-            owner,
-            executor,
-        )
-        .await?;
-        for name in SELECTION {
-            let before = self
-                .records
-                .files
-                .iter()
-                .find(|file| {
-                    file.path()
-                        .file_name()
-                        .is_some_and(|v| v == format!("before-{name}").as_str())
-                })
-                .ok_or(Cause::Changed)?;
-            let data = before.bytes(1024 * 1024, owner, true)?;
-            #[cfg(test)]
-            if name == "compose.public.yml" {
-                self.fault(super::super::files::Fault::RollbackComposeWrite, owner)?;
+        self.rollback.start(Stage::Stop);
+        let mandatory: Result<()> = async {
+            self.compose(
+                access,
+                argv(&["stop", "--timeout", "30", "simplestchat"]),
+                None,
+                true,
+                owner,
+                executor,
+            )
+            .await?;
+            for (name, (read, write)) in SELECTION.into_iter().zip([
+                (Stage::SelectionComposeRead, Stage::SelectionComposeWrite),
+                (Stage::SelectionEnvRead, Stage::SelectionEnvWrite),
+                (Stage::SelectionImagesRead, Stage::SelectionImagesWrite),
+            ]) {
+                self.rollback.stage(read);
+                let before = self
+                    .records
+                    .files
+                    .iter()
+                    .find(|file| {
+                        file.path()
+                            .file_name()
+                            .is_some_and(|v| v == format!("before-{name}").as_str())
+                    })
+                    .ok_or(Cause::Changed)?;
+                let data = before.bytes(1024 * 1024, owner, true)?;
+                self.rollback.stage(write);
+                #[cfg(test)]
+                if name == "compose.public.yml" {
+                    self.fault(super::super::files::Fault::RollbackComposeWrite, owner)?;
+                }
+                self.atomic(&self.config().clone(), name, &data, owner, true)?;
             }
-            self.atomic(&self.config().clone(), name, &data, owner, true)?;
+            self.rollback.stage(Stage::AssetsSelect);
+            let revision = self.policy(owner, text(old, "revision"))?;
+            #[cfg(test)]
+            self.fault(super::super::files::Fault::RollbackAssets, owner)?;
+            self.assets
+                .as_mut()
+                .ok_or(Cause::Changed)?
+                .select(revision, owner, true)
+                .map_err(|_| {
+                    owner.record(Cause::Policy);
+                    Cause::Policy
+                })?;
+            self.rollback.stage(Stage::Up);
+            self.compose(
+                access,
+                argv(&[
+                    "up",
+                    "--detach",
+                    "--no-build",
+                    "--pull",
+                    "never",
+                    "--no-deps",
+                    "simplestchat",
+                ]),
+                None,
+                true,
+                owner,
+                executor,
+            )
+            .await?;
+            self.rollback.stage(Stage::ApplicationInspect);
+            let app = self
+                .container(access, "simplestchat", true, owner, executor)
+                .await?;
+            self.rollback.stage(Stage::ApplicationImage);
+            self.policy(
+                owner,
+                ensure(
+                    app.get("image").is_some_and(|image| {
+                        old.get("serverImage")
+                            .is_some_and(|expected| expected.semantic_eq(image))
+                    }),
+                    "Rollback image mismatch",
+                ),
+            )?;
+            self.rollback.stage(Stage::LoopbackReadiness);
+            self.ready(access, None, 30, true, owner, executor).await?;
+            self.rollback.stage(Stage::PublicReadiness);
+            self.ready(access, Some(origin), 30, true, owner, executor)
+                .await?;
+            self.continuity(access, database, proxy, true, owner, executor)
+                .await?;
+            self.rollback.stage(Stage::JournalFinalize);
+            self.journal("rolled_back", true, owner, true)
         }
-        let revision = self.policy(owner, text(old, "revision"))?;
-        #[cfg(test)]
-        self.fault(super::super::files::Fault::RollbackAssets, owner)?;
-        self.assets
-            .as_mut()
-            .ok_or(Cause::Changed)?
-            .select(revision, owner, true)
-            .map_err(|_| {
-                owner.record(Cause::Policy);
-                Cause::Policy
-            })?;
-        self.compose(
-            access,
-            argv(&[
-                "up",
-                "--detach",
-                "--no-build",
-                "--pull",
-                "never",
-                "--no-deps",
-                "simplestchat",
-            ]),
-            None,
-            true,
-            owner,
-            executor,
-        )
-        .await?;
-        let app = self
-            .container(access, "simplestchat", true, owner, executor)
-            .await?;
-        self.policy(
-            owner,
-            ensure(
-                app.get("image").is_some_and(|image| {
-                    old.get("serverImage")
-                        .is_some_and(|expected| expected.semantic_eq(image))
-                }),
-                "Rollback image mismatch",
-            ),
-        )?;
-        self.ready(access, None, 30, true, owner, executor).await?;
-        self.ready(access, Some(origin), 30, true, owner, executor)
-            .await?;
-        self.continuity(access, database, proxy, true, owner, executor)
-            .await?;
-        self.journal("rolled_back", true, owner, true)
+        .await;
+        self.rollback.observe(mandatory)
     }
 }
