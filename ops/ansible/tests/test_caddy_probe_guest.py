@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import errno
 import io
+import ipaddress
 import json
 import os
 import socket
@@ -12,6 +13,7 @@ import tarfile
 import tempfile
 import time
 import unittest
+from contextlib import ExitStack
 from pathlib import Path
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, BinaryIO, cast, override
@@ -21,12 +23,246 @@ from test_support import ROOT
 
 # isort: split
 import bounded_process
+import caddy_materials
 import caddy_probe_guest as guest
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
 CID = "a" * 64
+
+
+NETWORK = "b" * 64
+ENGINE_IMAGE = "sha256:" + "c" * 64
+BRIDGE = "sc0123456789ab"
+ADDRESS = "172.19.0.2"
+TLS_PHASE_END = 130.0
+UNSPECIFIED = str(ipaddress.IPv4Address(0))
+
+
+def transport_fixture() -> tuple[guest.Bridge, dict[str, object], dict[str, object]]:
+    """Supply two joined inert daemon observations, never an actual daemon or packet."""
+    bridge = guest.Bridge(NETWORK, BRIDGE, ENGINE_IMAGE)
+    row: dict[str, object] = {
+        "Id": CID,
+        "Image": ENGINE_IMAGE,
+        "Config": {"Image": guest.IMAGE},
+        "HostConfig": {"NetworkMode": BRIDGE},
+        "State": {
+            "Running": True,
+            "OOMKilled": False,
+            "Status": "running",
+            "Pid": 123,
+            "Restarting": False,
+            "Paused": False,
+            "Dead": False,
+        },
+        "NetworkSettings": {
+            "Networks": {
+                BRIDGE: {
+                    "NetworkID": NETWORK,
+                    "EndpointID": "e" * 64,
+                    "IPAddress": ADDRESS,
+                    "IPPrefixLen": 16,
+                    "Gateway": "172.19.0.1",
+                }
+            },
+            "Ports": {"443/tcp": None, "443/udp": None, "80/tcp": None},
+        },
+    }
+    network: dict[str, object] = {
+        "Id": NETWORK,
+        "Name": BRIDGE,
+        "Driver": "bridge",
+        "Scope": "local",
+        "Internal": True,
+        "EnableIPv6": False,
+        "Options": {"com.docker.network.bridge.name": BRIDGE},
+        "IPAM": {"Config": [{"Subnet": "172.19.0.0/16", "Gateway": "172.19.0.1"}]},
+        "Containers": {CID: {"EndpointID": "e" * 64, "IPv4Address": ADDRESS + "/16"}},
+    }
+    return bridge, row, network
+
+
+def terminal_fixture() -> tuple[guest.Bridge, dict[str, object], dict[str, object]]:
+    """Supply a joined exact-owned exit with no usable address or live-network claim."""
+    bridge, row, network = transport_fixture()
+    row["HostConfig"] = {"NetworkMode": BRIDGE}
+    row["State"] = {
+        "Running": False,
+        "Pid": 0,
+        "Status": "exited",
+        "ExitCode": 1,
+        "Restarting": False,
+        "Dead": False,
+        "Paused": False,
+        "OOMKilled": False,
+    }
+    row["NetworkSettings"] = {"Networks": {BRIDGE: {"NetworkID": NETWORK}}}
+    network["Containers"] = {}
+    return bridge, row, network
+
+
+def backoff_fixture() -> tuple[guest.Bridge, dict[str, object], dict[str, object]]:
+    """Supply Moby v28.2.2 SetRestarting/StateString-shaped metadata, not a terminal process."""
+    bridge, row, network = terminal_fixture()
+    guest.obj(row["State"]).update({"Running": True, "Restarting": True, "Status": "restarting"})
+    return bridge, row, network
+
+
+def phase_fixture(
+    case: str, *, refused: bool
+) -> tuple[guest.Bridge, dict[str, object], dict[str, object]]:
+    """Use only the three fixed lower daemon states exercised by the phase trial."""
+    if not refused:
+        return transport_fixture()
+    return backoff_fixture() if case == "backoff" else terminal_fixture()
+
+
+def transport_target() -> guest.Endpoint:
+    """Admit the same exact finite observation through the production pure policy."""
+    return guest.endpoint_observation(CID, *transport_fixture())
+
+
+def transport_report() -> guest.Report:
+    """Provide only the fields used by the actual TLS diagnostic boundary."""
+    return cast("guest.Report", cast("object", {"tlsCheckpoint": None, "tlsFailureCategory": None}))
+
+
+class TransportSocket:
+    """Keep a real local original while replacing only TLS/network observations."""
+
+    def __init__(self, actual: socket.socket, clock: list[float], fault: str) -> None:
+        """Retain an owned AF_UNIX socket; never perform a TLS handshake or network send."""
+        self.actual: socket.socket = actual
+        self.clock: list[float] = clock
+        self.fault: str = fault
+        self.request: bytes = b""
+        self.timeouts: list[float] = []
+        self.responses: list[io.BytesIO] = []
+        self.primary: ssl.SSLCertVerificationError = ssl.SSLCertVerificationError(
+            "INERT-PRIVATE-SSL"
+        )
+
+    def get_verified_chain(self) -> list[bytes]:
+        """Return inert bytes for the public-only chain adapter."""
+        if self.fault in {"ssl-refusal", "ssl-close", "ssl-late-close"}:
+            self.clock[0] = 129.0 if self.fault == "ssl-late-close" else self.clock[0]
+            raise self.primary
+        return [b"leaf", b"intermediate", b"root"]
+
+    def get_unverified_chain(self) -> list[bytes]:
+        """Return the permitted leaf and held intermediate shape."""
+        return [b"leaf", b"intermediate"]
+
+    def sendall(self, raw: bytes) -> None:
+        """Observe the exact fixed original request without actually sending."""
+        self.request = raw
+        if self.fault == "request-close":
+            raise PermissionError(errno.EPERM, "INERT-PRIVATE-REQUEST")
+
+    def settimeout(self, seconds: float) -> None:
+        """Retain each clipped timeout for an independent bound assertion."""
+        self.timeouts.append(seconds)
+
+    def makefile(self, _mode: str) -> BinaryIO:
+        """Feed the actual mature HTTP parser an inert bounded response."""
+        response = io.BytesIO(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n")
+        self.responses.append(response)
+        return response
+
+    def version(self) -> str:
+        """Expose no real negotiated TLS claim from a fake."""
+        return "INERT-TLS"
+
+    def close(self) -> None:
+        """Close the original before an optional late clock or close refusal."""
+        self.actual.close()
+        if self.fault in {"close-late", "ssl-late-close"}:
+            self.clock[0] = 131.0
+        if self.fault in {"close", "request-close", "ssl-close"}:
+            message = "INERT-PRIVATE-CLOSE"
+            raise OSError(message)
+
+
+def transport_exchange(
+    fault: str = "",
+    phase_end: float = 130.0,
+    consumer: str = "probe",
+    *,
+    clock: list[float] | None = None,
+    recheck: Callable[[guest.Commands], None] | None = None,
+) -> dict[str, object]:
+    """Exercise the actual exchange/cleanup using owned local FDs and fake TLS boundaries."""
+    clock = [100.0] if clock is None else clock
+    control = guest.Control(100.0, 900, 60)
+    target = transport_target()
+    report = transport_report()
+    raw, other = socket.socketpair()
+    wrapped = TransportSocket(other, clock, fault)
+    connect: list[tuple[tuple[str, int], float]] = []
+    names: list[str] = []
+    errors = (ssl.SSLCertVerificationError("INERT-PRIVATE-CERT"), OSError("INERT-PRIVATE-IO"))
+
+    def connected(address: tuple[str, int], *, timeout: float) -> socket.socket:
+        connect.append((address, timeout))
+        if fault == "connect":
+            raise errors[1]
+        if fault == "connect-late":
+            clock[0] = 131.0
+        return raw
+
+    def handshake(_raw: socket.socket, *, server_hostname: str) -> ssl.SSLSocket:
+        names.append(server_hostname)
+        if fault == "handshake":
+            raise errors[0]
+        return cast("ssl.SSLSocket", cast("object", wrapped))
+
+    context = cast("ssl.SSLContext", cast("object", SimpleNamespace(wrap_socket=handshake)))
+    failure: BaseException | None = None
+    result: dict[str, guest.JsonValue] | None = None
+    copy_outcome: tuple[str, guest.Refusal | None] | None = None
+    try:
+        with (
+            patch.object(time, "monotonic", side_effect=lambda: clock[0]),
+            patch.object(socket, "create_connection", side_effect=connected),
+            patch.object(guest.Endpoint, "check", side_effect=recheck),
+            patch.object(ssl, "create_default_context", return_value=context),
+        ):
+            try:
+                commands = guest.Commands(Path("/unused"), control, owned=[CID])
+                if consumer == "negative":
+                    guest.negative_tls(commands, context, guest.DOMAIN, target, report)
+                elif consumer == "wait":
+                    result = guest.wait_tls(commands, context, target, report)
+                elif consumer == "copy":
+                    target, code = guest.negative_endpoint(commands, CID, target.bridge)
+                    copy_outcome = guest.negative_copy_outcome(commands, target, report, code)
+                else:
+                    result = guest.tls_probe(
+                        control, context, guest.DOMAIN, guest.TlsAttempt(target, report, phase_end)
+                    )
+            except BaseException as error:  # noqa: BLE001 -- Collect facts after all real closes.
+                failure = error
+        facts: dict[str, object] = {
+            "failure": failure,
+            "result": result,
+            "connect": connect,
+            "names": names,
+            "request": wrapped.request,
+            "timeouts": wrapped.timeouts,
+            "responseClosed": all(item.closed for item in wrapped.responses),
+            "rawClosed": raw.fileno() == -1,
+            "wrappedClosed": other.fileno() == -1,
+            "report": report,
+            "errors": errors,
+            "expectedPrimary": wrapped.primary,
+            "copyOutcome": copy_outcome,
+        }
+    finally:
+        raw.close()
+        other.close()
+    return facts
 
 
 class CloseFault:
@@ -632,12 +868,16 @@ class PrototypeTests(unittest.TestCase):
     def test_negative_tls_does_not_swallow_deadline_refusal(self) -> None:
         """A timeout or cancellation cannot be counted as a wrong-trust proof."""
         control = guest.Control(time.monotonic(), 60, 10)
+        commands = guest.Commands(Path("/unused"), control, owned=[CID])
+        target = transport_target()
+        report = transport_report()
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         with (
+            patch.object(guest.Endpoint, "check"),
             patch.object(guest, "tls_probe", side_effect=guest.PrototypeError("guest_deadline")),
             self.assertRaisesRegex(guest.PrototypeError, "^guest_deadline$"),
         ):
-            guest.negative_tls(control, context, guest.DOMAIN)
+            guest.negative_tls(commands, context, guest.DOMAIN, target, report)
 
     def test_marker_eperm_needs_fresh_named_counter_and_actual_socket_close(self) -> None:
         """Accept only the fixed denial observation plus a fresh single-packet delta and capture."""
@@ -720,6 +960,601 @@ class PrototypeTests(unittest.TestCase):
         ).encode()
         with self.assertRaises(guest.PrototypeError):
             _ = guest.blocked_counter(duplicate, table)
+
+
+class InternalBridgeTransportTests(unittest.TestCase):
+    """Exercise only closed lower daemon/TLS observations, never an engine or live TLS peer."""
+
+    def test_endpoint_accepts_only_joined_private_bridge_without_claiming_publication(self) -> None:
+        """Requested loopback ports may be operationally absent on an internal network."""
+        bridge, row, network = transport_fixture()
+        target = guest.endpoint_observation(CID, bridge, row, network)
+        self.assertEqual(target.address, ADDRESS)
+        self.assertEqual(
+            target.facts(),
+            {
+                "transport": "owned-internal-bridge-ipv4",
+                "operationalLoopbackBindingCount": 0,
+                "publishedLoopbackPathProved": False,
+            },
+        )
+        port_cases: tuple[tuple[object, int], ...] = (
+            (None, 0),
+            ({}, 0),
+            ({"443/tcp": []}, 0),
+            ({"2019/tcp": None}, 0),
+            ({"2019/tcp": []}, 0),
+            ({"2019/tcp": None, "443/tcp": [{"HostIp": "127.0.0.1", "HostPort": "443"}]}, 1),
+            ({"443/tcp": [{"HostIp": "127.0.0.1", "HostPort": "443"}]}, 1),
+        )
+        for ports, expected in port_cases:
+            self.assertEqual(guest.operational_bindings(ports), expected)
+
+    def test_exposed_admin_port_may_be_unbound_but_never_host_published(self) -> None:
+        """The pinned base EXPOSE metadata cannot authorize any admin binding or unknown port."""
+        for host in ("127.0.0.1", UNSPECIFIED, ""):
+            with self.subTest(host=host), self.assertRaises(guest.PrototypeError):
+                _ = guest.operational_bindings(
+                    {
+                        "2019/tcp": [{"HostIp": host, "HostPort": "2019"}],
+                    }
+                )
+        with self.assertRaises(guest.PrototypeError):
+            _ = guest.operational_bindings({"9000/tcp": None})
+
+    def test_endpoint_rejects_wrong_identity_network_state_and_foreign_publication(self) -> None:
+        """A known name, requested port or equal-looking address is never sufficient authority."""
+        cases: tuple[tuple[str, tuple[str, ...], object], ...] = (
+            ("container", ("Id",), "f" * 64),
+            ("container", ("Image",), "sha256:" + "f" * 64),
+            ("container", ("Config", "Image"), "foreign-image"),
+            ("container", ("State", "Running"), False),
+            ("container", ("State", "OOMKilled"), True),
+            ("container", ("NetworkSettings", "Networks"), {}),
+            ("container", ("NetworkSettings", "Networks", BRIDGE, "NetworkID"), "f" * 64),
+            ("container", ("NetworkSettings", "Networks", BRIDGE, "EndpointID"), "f" * 64),
+            ("network", ("Id",), "f" * 64),
+            ("network", ("Name",), "foreign-network"),
+            ("network", ("Internal",), False),
+            ("network", ("Driver",), "host"),
+            ("network", ("EnableIPv6",), True),
+            ("network", ("Containers",), {}),
+            ("network", ("Containers", CID, "IPv4Address"), "172.19.0.3/16"),
+            (
+                "container",
+                ("NetworkSettings", "Ports"),
+                {
+                    "443/tcp": [{"HostIp": UNSPECIFIED, "HostPort": "443"}],
+                },
+            ),
+        )
+        for name, path, replacement in cases:
+            with self.subTest(name=name, path=path):
+                bridge, row, network = transport_fixture()
+                current = row if name == "container" else network
+                for key in path[:-1]:
+                    current = guest.obj(current[key])
+                current[path[-1]] = replacement
+                with self.assertRaises(guest.PrototypeError):
+                    _ = guest.endpoint_observation(CID, bridge, row, network)
+
+    def test_endpoint_rejects_unusable_noncanonical_out_of_subnet_and_control_peer_ip(self) -> None:
+        """Reject ambient names, foreign subnets, special addresses and the SSH control peer."""
+        for address in (
+            "localhost",
+            "127.0.0.1",
+            "169.254.1.2",
+            "224.0.0.1",
+            UNSPECIFIED,
+            "8.8.8.8",
+            "172.20.0.2",
+            "172.19.0.0",
+            "172.19.255.255",
+            "172.19.0.1",
+            "172.019.0.2",
+            "::1",
+        ):
+            with self.subTest(address=address):
+                bridge, row, network = transport_fixture()
+                member = guest.obj(guest.obj(guest.obj(row["NetworkSettings"])["Networks"])[BRIDGE])
+                member["IPAddress"] = address
+                with self.assertRaises((guest.PrototypeError, ValueError)):
+                    _ = guest.endpoint_observation(CID, bridge, row, network)
+        bridge, row, network = transport_fixture()
+        member = guest.obj(guest.obj(guest.obj(row["NetworkSettings"])["Networks"])[BRIDGE])
+        member.update({"IPAddress": "10.0.2.2", "Gateway": "10.0.0.1", "IPPrefixLen": 8})
+        network["IPAM"] = {"Config": [{"Subnet": "10.0.0.0/8", "Gateway": "10.0.0.1"}]}
+        guest.obj(network["Containers"])[CID] = {
+            "EndpointID": "e" * 64,
+            "IPv4Address": "10.0.2.2/8",
+        }
+        with self.assertRaisesRegex(guest.PrototypeError, "^endpoint_ipv4$"):
+            _ = guest.endpoint_observation(CID, bridge, row, network)
+
+    def test_owned_endpoint_queries_exact_ids_and_refuses_stale_or_late_observation(self) -> None:
+        """Both metadata queries and final live checks precede any address adoption."""
+        bridge, row, network = transport_fixture()
+        clock = [100.0]
+        commands = guest.Commands(Path("/unused"), guest.Control(100.0, 60, 10), owned=[CID])
+        calls: list[list[str]] = []
+
+        def observed(_role: str, argv: Sequence[str]) -> bytes:
+            calls.append(list(argv))
+            return json.dumps([network if "network" in argv else row]).encode()
+
+        with (
+            patch.object(time, "monotonic", side_effect=lambda: clock[0]),
+            patch.object(guest.Commands, "call", side_effect=observed),
+        ):
+            target = guest.owned_endpoint(commands, CID, bridge)
+            self.assertEqual(
+                calls,
+                [
+                    ["docker", "inspect", CID],
+                    ["docker", "network", "inspect", NETWORK],
+                ],
+            )
+            member = guest.obj(guest.obj(guest.obj(row["NetworkSettings"])["Networks"])[BRIDGE])
+            member["IPAddress"] = "172.19.0.3"
+            guest.obj(guest.obj(network["Containers"])[CID])["IPv4Address"] = "172.19.0.3/16"
+            with self.assertRaisesRegex(guest.PrototypeError, "^endpoint_changed$"):
+                target.check(commands)
+            clock[0] = 151.0
+            before = len(calls)
+            with self.assertRaisesRegex(guest.PrototypeError, "^guest_deadline$"):
+                _ = guest.owned_endpoint(commands, CID, bridge)
+            self.assertEqual(len(calls), before)
+            clock[0] = 100.0
+            commands.owned.clear()
+            with self.assertRaisesRegex(guest.PrototypeError, "^foreign_container$"):
+                _ = guest.owned_endpoint(commands, CID, bridge)
+            self.assertEqual(len(calls), before)
+
+    def test_transport_changes_only_numeric_destination_and_clips_all_io_timeouts(self) -> None:
+        """The real HTTP parser sees the original Host/request; trust and SNI are untouched."""
+        value = transport_exchange(phase_end=102.0)
+        self.assertIsNone(value["failure"])
+        self.assertEqual(value["connect"], [((ADDRESS, 443), 2.0)])
+        self.assertEqual(value["names"], [guest.DOMAIN])
+        self.assertEqual(
+            value["request"],
+            b"GET /metrics HTTP/1.1\r\nHost: maintain.localhost\r\nConnection: close\r\n\r\n",
+        )
+        self.assertEqual(set(cast("list[float]", value["timeouts"])), {2.0})
+        self.assertTrue(value["rawClosed"])
+        self.assertTrue(value["wrappedClosed"])
+        self.assertTrue(value["responseClosed"])
+        self.assertEqual(guest.MAX_COMMANDS, 128)
+
+    def test_tls_failures_keep_closed_stage_and_first_cause_after_all_known_peer_closes(
+        self,
+    ) -> None:
+        """Keep the first failed site across connection, trust and checked-close failures."""
+        for fault, stage, category in (
+            ("connect", "connect", "io"),
+            ("handshake", "handshake", "certificate-verification"),
+            ("request-close", "request", "permission"),
+            ("close", "close", "io"),
+            ("connect-late", "connect", "policy"),
+            ("close-late", "close", "policy"),
+        ):
+            with self.subTest(fault=fault):
+                value = transport_exchange(fault)
+                self.assertIsNotNone(value["failure"])
+                report = cast("dict[str, object]", value["report"])
+                self.assertEqual(
+                    (report["tlsCheckpoint"], report["tlsFailureCategory"]), (stage, category)
+                )
+                self.assertNotIn("INERT-PRIVATE", json.dumps(report))
+                self.assertTrue(value["responseClosed"])
+                if fault != "connect":
+                    self.assertTrue(value["rawClosed"])
+                if fault not in {"connect", "handshake", "connect-late"}:
+                    self.assertTrue(value["wrappedClosed"])
+                if fault == "request-close":
+                    self.assertIsInstance(value["failure"], PermissionError)
+
+    def test_wait_tls_never_accepts_late_success_or_starts_an_expired_next_probe(self) -> None:
+        """Refuse the old-helper late-success counterexample and expired retries."""
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        for case in ("late-success", "late-recheck", "expired"):
+            with self.subTest(case=case):
+                clock = [100.0]
+                control = guest.Control(100.0, 900, 60)
+                commands = guest.Commands(Path("/unused"), control, owned=[CID])
+                probes: list[float] = []
+
+                def probe(
+                    _control: guest.Control,
+                    _context: ssl.SSLContext,
+                    _hostname: str,
+                    _attempt: guest.TlsAttempt,
+                    *,
+                    state: tuple[list[float], str, list[float]] = (clock, case, probes),
+                ) -> dict[str, guest.JsonValue]:
+                    current_clock, current_case, current_probes = state
+                    _attempt.peers_closed = True
+                    _attempt.phase_complete = True
+                    current_probes.append(current_clock[0])
+                    if current_case == "expired":
+                        current_clock[0] = 130.0
+                        raise ConnectionRefusedError
+                    current_clock[0] = 131.0 if current_case == "late-success" else 129.0
+                    return {"status": 404}
+
+                def recheck(
+                    _commands: guest.Commands,
+                    *,
+                    state: tuple[list[float], str] = (clock, case),
+                ) -> None:
+                    current_clock, current_case = state
+                    if current_case == "late-recheck":
+                        current_clock[0] = 131.0
+
+                def now(current: list[float] = clock) -> float:
+                    return current[0]
+
+                with (
+                    patch.object(time, "monotonic", side_effect=now),
+                    patch.object(guest, "tls_probe", side_effect=probe),
+                    patch.object(guest.Endpoint, "check", side_effect=recheck),
+                    self.assertRaisesRegex(
+                        guest.PrototypeError,
+                        "^tls_not_ready$" if case == "expired" else "^tls_deadline$",
+                    ),
+                ):
+                    _ = guest.wait_tls(commands, context, transport_target(), transport_report())
+                self.assertEqual(probes, [100.0])
+
+
+def terminal_daemon(calls: list[str]) -> Callable[..., bytes]:
+    """Return only fixed negative-copy daemon observations, with no subprocess or engine."""
+
+    def call(
+        role: str,
+        _argv: Sequence[str],
+        _seconds: float = 30,
+        *,
+        adopt: Callable[[bytes], None] | None = None,
+    ) -> bytes:
+        calls.append(role)
+        if role == "negative-create":
+            raw = (CID + "\n").encode()
+        elif role == "negative-inspect":
+            _, row, _ = terminal_fixture()
+            raw = json.dumps([row]).encode()
+        elif role == "negative-network":
+            _, _, network = terminal_fixture()
+            raw = json.dumps([network]).encode()
+        elif role in {"negative-start", "negative-stop", "remove"}:
+            raw = b""
+        else:
+            message = "unexpected inert role"
+            raise AssertionError(message)
+        if adopt is not None:
+            adopt(raw)
+        return raw
+
+    return call
+
+
+def copy_phase_exchange(case: str) -> dict[str, object]:
+    """Observe a real clean-refusal phase plus a fresh fixed daemon transition, without live TLS."""
+    clock = [100.0]
+    terminal = [False]
+    queries: list[list[str]] = []
+    original_check = guest.Endpoint.check
+    original_control_check = guest.Control.check
+    expected = transport_target()
+
+    def observation(_role: str, argv: Sequence[str]) -> bytes:
+        queries.append(list(argv))
+        if terminal[0] and case == "global-expiry":
+            clock[0] = 941.0
+        _, row, network = phase_fixture(case, refused=terminal[0])
+        replacements: dict[str, tuple[dict[str, object], str, str]] = {
+            "wrong-cid": (row, "Id", "f" * 64),
+            "wrong-image": (row, "Image", "sha256:" + "f" * 64),
+            "wrong-network": (network, "Id", "f" * 64),
+        }
+        if terminal[0] and case in replacements:
+            target, key, value = replacements[case]
+            target[key] = value
+        return json.dumps([network if "network" in argv else row]).encode()
+
+    def sleep(_seconds: float) -> None:
+        # Model elapsed scheduling time after the actual clean refusal, never reset the end.
+        clock[0] = 130.0
+        terminal[0] = True
+
+    def recheck(commands: guest.Commands) -> None:
+        if case == "successful-tls":
+            terminal[0] = True
+        original_check(expected, commands)
+
+    def checked(control: guest.Control) -> None:
+        if case == "signal" and clock[0] >= TLS_PHASE_END:
+            control.cancelled = True
+        original_control_check(control)
+
+    fault = {
+        "successful-tls": "",
+        "late-close": "ssl-late-close",
+        "failed-close": "ssl-close",
+    }.get(case, "ssl-refusal")
+    with (
+        patch.object(guest.Commands, "call", side_effect=observation),
+        patch.object(time, "sleep", side_effect=sleep),
+        patch.object(guest.Control, "check", checked),
+    ):
+        result = transport_exchange(fault, consumer="copy", clock=clock, recheck=recheck)
+    result["queries"] = queries
+    return result
+
+
+def descriptor_closed(descriptor: int) -> bool:
+    """Observe the actual original after all explicit test-owner finalizers have returned."""
+    try:
+        _ = os.fstat(descriptor)
+    except OSError as error:
+        return error.errno == errno.EBADF
+    return False
+
+
+class CaddyNegativeSettlementTests(unittest.TestCase):
+    """Separate exact-owned terminal refusal from live transport and checked-close authority."""
+
+    def test_terminal_refusal_has_no_endpoint_and_wrong_terminal_identity_never_qualifies(
+        self,
+    ) -> None:
+        """Only observed exited/nonzero/non-OOM exact-owned instances may skip a live TLS probe."""
+        control = guest.Control(time.monotonic(), 900, 60)
+        commands = guest.Commands(Path("/unused"), control, owned=[CID])
+        mutations: tuple[tuple[str, object], ...] = (
+            ("accepted", None),
+            ("ExitCode", 0),
+            ("ExitCode", True),
+            ("ExitCode", None),
+            ("Restarting", True),
+            ("Dead", True),
+            ("Paused", True),
+            ("OOMKilled", True),
+            ("Status", "created"),
+            ("identity", "f" * 64),
+            ("network", "f" * 64),
+        )
+        for key, value in mutations:
+            with self.subTest(key=key):
+                bridge, row, network = terminal_fixture()
+                if key == "identity":
+                    row["Id"] = value
+                elif key == "network":
+                    network["Id"] = value
+                elif key != "accepted":
+                    guest.obj(row["State"])[key] = value
+                with patch.object(
+                    guest.Commands,
+                    "call",
+                    side_effect=[
+                        json.dumps([row]).encode(),
+                        json.dumps([network]).encode(),
+                    ],
+                ):
+                    if key == "accepted":
+                        self.assertEqual(
+                            guest.negative_endpoint(commands, CID, bridge),
+                            (None, guest.Refusal("exited", 1)),
+                        )
+                    else:
+                        with self.assertRaises(guest.PrototypeError):
+                            _ = guest.negative_endpoint(commands, CID, bridge)
+                with self.assertRaises(guest.PrototypeError):
+                    _ = guest.endpoint_observation(CID, bridge, row, network)
+
+    def test_negative_copies_can_observe_exact_owned_exit_without_constructing_tls(self) -> None:
+        """Run the full negative-copy loop with real retained files and inert daemon data."""
+        descriptors: list[int] = []
+        calls: list[str] = []
+        with tempfile.TemporaryDirectory() as directory, ExitStack() as stack:
+            root = Path(directory).resolve()
+            inputs = root / "inputs"
+            inputs.mkdir(mode=0o700)
+            for index in range(len(guest.MATERIALS)):
+                guest.write_file(inputs / str(index), ("original-" + str(index)).encode())
+            originals: list[guest.Original] = []
+            # Only the test's UID admission differs: retain actual originals/stamps/checks/closes.
+            for index in range(len(guest.MATERIALS)):
+                path = inputs / str(index)
+                parent = os.open(inputs, os.O_RDONLY | os.O_DIRECTORY)
+                _ = stack.callback(os.close, parent)
+                descriptor = os.open(path, os.O_RDONLY)
+                _ = stack.callback(os.close, descriptor)
+                descriptors.extend((parent, descriptor))
+                originals.append(
+                    guest.Original(
+                        parent,
+                        descriptor,
+                        path,
+                        os.fstat(descriptor),
+                        os.fstat(parent),
+                        os.pread(descriptor, guest.CHUNK, 0),
+                    )
+                )
+            control = guest.Control(time.monotonic(), 900, 60)
+            commands = guest.Commands(root, control)
+            bridge, _, _ = terminal_fixture()
+
+            with (
+                patch.object(guest.Commands, "call", side_effect=terminal_daemon(calls)),
+                patch.object(os, "chown"),
+                patch.object(
+                    caddy_materials, "inspect", side_effect=caddy_materials.MaterialError()
+                ),
+                patch.object(
+                    ssl, "create_default_context", side_effect=AssertionError("unexpected TLS")
+                ),
+            ):
+                rows = guest.negative_copies(commands, originals, bridge, transport_report())
+            known = list(commands.owned)
+            for original in originals:
+                original.check(control)
+        closed = [descriptor_closed(descriptor) for descriptor in descriptors]
+        self.assertTrue(all(closed))
+        self.assertEqual(known, [])
+        self.assertEqual(
+            calls,
+            [
+                "negative-create",
+                "negative-start",
+                "negative-inspect",
+                "negative-network",
+                "negative-stop",
+                "remove",
+            ]
+            * 2,
+        )
+        self.assertEqual([row["outcome"] for row in rows], ["refused-or-not-ready"] * 2)
+        self.assertEqual([row["observedExitStatus"] for row in rows], [1, 1])
+        self.assertEqual([row["tlsAttempted"] for row in rows], [False, False])
+
+    def test_ssl_refusal_with_secondary_close_error_never_counts_or_retries(self) -> None:
+        """Keep the same first SSL object while every actual original retires before assertions."""
+        settled = transport_exchange("ssl-refusal", consumer="negative")
+        self.assertIsNone(settled["failure"])
+        for consumer in ("negative", "wait"):
+            with self.subTest(consumer=consumer):
+                value = transport_exchange("ssl-close", consumer=consumer)
+                self.assertIs(value["failure"], value["expectedPrimary"])
+                self.assertTrue(value["rawClosed"])
+                self.assertTrue(value["wrappedClosed"])
+                self.assertEqual(len(cast("list[object]", value["connect"])), 1)
+                report = cast("dict[str, object]", value["report"])
+                self.assertEqual(report["tlsFailureCategory"], "certificate-verification")
+
+
+class CaddyNegativePhaseTests(unittest.TestCase):
+    """Keep only actually clean phase-live refusals eligible for later terminal observation."""
+
+    def test_running_copy_may_exit_before_its_fresh_negative_boundary_only_with_exact_joins(
+        self,
+    ) -> None:
+        """Join initial running and final typed-exit observations under one original clock."""
+        value = copy_phase_exchange("terminal")
+        self.assertIsNone(value["failure"])
+        self.assertEqual(value["copyOutcome"], ("refused-or-not-ready", guest.Refusal("exited", 1)))
+        self.assertTrue(value["rawClosed"])
+        self.assertTrue(value["wrappedClosed"])
+        self.assertEqual(len(cast("list[object]", value["connect"])), 1)
+        self.assertEqual(
+            value["queries"],
+            [
+                ["docker", "inspect", CID],
+                ["docker", "network", "inspect", NETWORK],
+            ]
+            * 2,
+        )
+        backoff = copy_phase_exchange("backoff")
+        self.assertIsNone(backoff["failure"])
+        self.assertEqual(
+            backoff["copyOutcome"], ("refused-or-not-ready", guest.Refusal("restarting", 1))
+        )
+        self.assertEqual(backoff["queries"], value["queries"])
+        for case in (
+            "wrong-cid",
+            "wrong-image",
+            "wrong-network",
+            "global-expiry",
+            "signal",
+            "successful-tls",
+            "late-close",
+            "failed-close",
+        ):
+            with self.subTest(case=case):
+                refused = copy_phase_exchange(case)
+                self.assertIsNotNone(refused["failure"])
+                self.assertIsNone(refused["copyOutcome"])
+                self.assertTrue(refused["rawClosed"])
+                self.assertTrue(refused["wrappedClosed"])
+                if case in {"late-close", "failed-close"}:
+                    self.assertIs(refused["failure"], refused["expectedPrimary"])
+                    self.assertEqual(len(cast("list[object]", refused["queries"])), 2)
+
+    def test_ssl_refusal_never_qualifies_when_successful_close_completes_after_phase_end(
+        self,
+    ) -> None:
+        """Keep the first SSL object while refusing every late-close negative observation."""
+        for consumer in ("negative", "wait"):
+            with self.subTest(consumer=consumer):
+                value = transport_exchange("ssl-late-close", consumer=consumer)
+                self.assertIs(value["failure"], value["expectedPrimary"])
+                self.assertTrue(value["rawClosed"])
+                self.assertTrue(value["wrappedClosed"])
+                self.assertEqual(len(cast("list[object]", value["connect"])), 1)
+
+
+class CaddyRestartObservationTests(unittest.TestCase):
+    """Bind versioned engine backoff flags without calling them terminal or serving authority."""
+
+    def test_exact_owned_restart_backoff_is_refusal_but_never_a_live_tls_target(self) -> None:
+        """Observe Moby-shaped Running/Restarting true and Pid0 with a nonzero exit."""
+        control = guest.Control(time.monotonic(), 900, 60)
+        commands = guest.Commands(Path("/unused"), control, owned=[CID])
+        mutations: tuple[tuple[str, object], ...] = (
+            ("accepted", None),
+            ("ExitCode", 0),
+            ("ExitCode", True),
+            ("ExitCode", None),
+            ("Pid", 123),
+            ("Pid", False),
+            ("Pid", None),
+            ("Running", False),
+            ("Restarting", False),
+            ("Status", "running"),
+            ("Dead", True),
+            ("Paused", True),
+            ("OOMKilled", True),
+        )
+        for key, value in mutations:
+            with self.subTest(key=key, value=value):
+                bridge, row, network = backoff_fixture()
+                if key != "accepted":
+                    guest.obj(row["State"])[key] = value
+                with patch.object(
+                    guest.Commands,
+                    "call",
+                    side_effect=[
+                        json.dumps([row]).encode(),
+                        json.dumps([network]).encode(),
+                    ],
+                ):
+                    if key == "accepted":
+                        self.assertEqual(
+                            guest.negative_endpoint(commands, CID, bridge),
+                            (None, guest.Refusal("restarting", 1)),
+                        )
+                    else:
+                        with self.assertRaises(guest.PrototypeError):
+                            _ = guest.negative_endpoint(commands, CID, bridge)
+                with self.assertRaises(guest.PrototypeError):
+                    _ = guest.endpoint_observation(CID, bridge, row, network)
+
+    def test_live_endpoint_requires_unpaused_running_state_with_positive_typed_pid(self) -> None:
+        """A Running flag alone cannot authorize a connection to backoff, paused or dead state."""
+        for key, value in (
+            ("Pid", 0),
+            ("Pid", True),
+            ("Pid", -1),
+            ("Pid", None),
+            ("Status", "restarting"),
+            ("Restarting", True),
+            ("Paused", True),
+            ("Dead", True),
+        ):
+            with self.subTest(key=key, value=value):
+                bridge, row, network = transport_fixture()
+                guest.obj(row["State"])[key] = value
+                with self.assertRaises(guest.PrototypeError):
+                    _ = guest.endpoint_observation(CID, bridge, row, network)
 
 
 if __name__ == "__main__":

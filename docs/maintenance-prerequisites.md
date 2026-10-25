@@ -25,7 +25,12 @@ against the retained SHA256 and identified the exact fixed `tool_missing` refusa
 The first corrected [Caddy-only run][containment-run] passed tool and initial
 image/network setup, then stopped in containment with an I/O exception. Cleanup
 was verified, but its exact local site/errno was not retained. That actual cause
-remains unproven; no Caddy module/TLS/validator success is established.
+remains unproven. A later trial at `f54d8ed` reached `natural-tls` after the
+containment and module-graph observations, then returned the fixed
+`tls_not_ready` refusal. Its closed row recorded cleanup success. It retained no
+connection/handshake reason or observed engine version, so the exact cause of
+that connection failure remains unknown. No successful Caddy TLS/validator or
+complete maintenance proof is established.
 
 The Caddy sources are [the controller](../build/caddy_probe_vm.py),
 [guest](../build/caddy_probe_guest.py), [passive analyzer](../build/caddy_materials.py)
@@ -164,10 +169,52 @@ there is no engine-wide prune or foreign-resource cleanup.
 The fixture uses `maintain.localhost` and the exact unchanged root Caddyfile,
 normal data/config and readonly config/browser-asset mounts, UID/GID10001,
 readonly root and the normal bounded tmpfs/capability/log profile. Minimum
-256MiB/0.5CPU and loopback-only published ports are deliberate disposable-fixture
+256MiB/0.5CPU and requested loopback-only ports are deliberate disposable-fixture
 choices, not production-host equivalence. Actual inspect fields must match the
-selected arguments. No manual baseline certificate, TLS/issuer directive or
-certificate mount is injected. The upstream can remain inert: fixed `/metrics`
+selected arguments. Requested `HostConfig.PortBindings` do not prove operational
+publication: versioned Moby v28.2.2 source excludes internal networks from
+external-connectivity programming, where bridge port mappings are allocated.
+This is a source-backed explanation of a possible transport mismatch, not an
+observation of the failed guest's engine version or exact connection cause.
+
+The corrected fixture retains its internal network and every existing firewall,
+physical-egress, capture and resource bound. After start, it joins the exact owned
+container ID, already inspected pinned image content ID, fixed image reference,
+sole attached network and actual created network ID. Both container and network
+inspections must agree on endpoint ID, canonical RFC1918 IPv4 address/prefix and
+IPAM subnet/gateway membership. Special addresses, the SSH control peer, another
+container/network and observed replacement are refused. The operational port map
+may be absent, empty or contain only the exact requested loopback mappings.
+The pinned base image's hash-joined OCI configuration additionally declares
+admin port `2019/tcp`; that key is admitted only when null or empty. Any actual
+admin binding, including loopback, and every other unknown port are refused.
+Only the three requested bindings contribute to the bounded zero-to-three
+count. These metadata observations never establish the published path.
+
+TLS connects directly to that owned internal bridge IPv4 address. SNI remains
+`maintain.localhost`, the HTTP Host and `/metrics` request remain exact, and trust,
+Caddyfile and all seven materials are unchanged. This is a finite direct-bridge
+transport profile; it does not prove production loopback port publication. The
+same target is rechecked after each bounded TLS phase and before/after separate
+probes. Retries retain the initial joined target under the sole container owner;
+there is no Docker query on every retry. The unchanged 128-command cap applies to
+these additional observations as well. Transient same-UID/daemon mutation and
+restoration between checks is not excluded.
+
+One original 30-second TLS phase end fences retry admission, actual I/O completion,
+checked closes and successful target rechecks. Error paths also record a live
+post-close phase fence while retaining the actual first SSL exception.
+Socket timeouts are clipped to three seconds, the remaining phase and original
+guest body. Late success cannot
+become positive merely because the outer clock has room. Blocking kernel work,
+filesystem observations and socket close are cooperatively fenced, not a hard
+wall-clock guarantee. Closed stage/reason enums distinguish connection,
+handshake, chain, request, response and close observations without exposing an
+address, certificate detail or raw exception. A diagnostic is the observed TLS
+attempt site, not authentication of a root cause.
+
+No manual baseline certificate, TLS/issuer directive or certificate mount is injected.
+The upstream can remain inert: fixed `/metrics`
 HTTP404 establishes TLS only, never backend, application or DB success.
 
 The actual selected Caddy must generate seven natural original files:
@@ -203,13 +250,41 @@ Real default guest trust and hostname verification must bind both observed TLS
 chains to the held leaf/intermediate/root. A fresh normal Caddy process over the
 same data/config must retain all seven original bytes/stamps and identical real
 TLS chains. Wrong trust and wrong hostname must produce actual SSL refusal;
-a deadline or cancellation is not a wrong-trust proof.
+a deadline or cancellation is not a wrong-trust proof. The actual initial SSL
+refusal remains primary if a later checked close also fails, but that attempt
+cannot be retried or counted as a valid negative observation. The independent
+checked-close fact must be positive before either acceptance.
 
 The actual existing network-none validator uses the unchanged config/env, user,
 caps,256MiB/pids128/log limits and separate8MiB `/data` and `/config` tmpfs. Its
 real wait status must be0. Two private copies remove the leaf key or corrupt
 issuer metadata. Passive material admission must reject them; actual Caddy
 refusal or regeneration is observed separately and never called original reuse.
+An exact-owned, image/network-joined instance observed exited with a typed
+nonzero status and PID0, without OOM/dead/paused ambiguity, may be recorded as
+refused without constructing a live TLS target. The unchanged `unless-stopped`
+policy can also enter restart backoff: the versioned Moby v28.2.2
+[`SetRestarting` source][moby-state] sets both `Running` and `Restarting` true, records the nonzero
+exit and clears
+PID to zero. That exact `restarting` state may be observed as refusal, never as
+terminal proof. The private metadata uses `observedState` and
+`observedExitStatus`, not a claimed terminal exit. A live target instead
+requires status `running`, a positive typed PID, and false restarting, paused,
+dead and OOM flags. The actual guest engine version and historical failure
+cause remain unproved. An unknown or foreign instance never qualifies. Serving
+instances retain every live endpoint/TLS identity check; secondary close errors
+and unrelated exceptions stay negative. If an initially running copy later exits, only an actual
+unsuccessful
+SSL/connection attempt with every known close successful and its recorded
+post-close phase fence still live can reach retry exhaustion and request a
+fresh exact-owned exited/backoff observation. The fixed negative-copy loop
+performs that single fresh join directly, rather than reclassifying an exception
+from the strict positive TLS path. This final failed-observation metadata check
+uses remaining original guest body time and existing command caps; it does not
+open another TLS retry window or create a new retirement tail. Unknown identity,
+image/network mismatch, global expiry/cancellation, a successful TLS response or
+an unsettled/late close cannot downgrade to observed refusal. Neither this
+state observation nor a failed handshake proves a causal certificate diagnosis.
 No renewal-time, ARI/OCSP network or installed-maintenance temporal parity is
 inferred from these tests.
 
@@ -337,3 +412,5 @@ the binding. This inventory is source evidence, not actual image/runtime proof.
 
 [containment-run]: https://github.com/swiftraccoon/simplestChat/actions/runs/40146493305
 [linux-drop]: https://github.com/gregkh/linux/blob/v6.12.111/net/netfilter/core.c
+
+[moby-state]: https://github.com/moby/moby/blob/v28.2.2/container/state.go

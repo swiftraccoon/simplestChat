@@ -2897,7 +2897,7 @@ reaps. Neither job proves the other's behavior or complete maintenance success.
 The optional workflow has no artifact selector, API token, production host,
 required-CI role or installed caller change.
 
-The Caddy 69-case suite and namespace 14-case boundary suite use the maintained strict
+The Caddy 85-case suite and namespace 14-case boundary suite use the maintained strict
 Python configuration. These local tests execute no actual helper role, namespace,
 KVM, Caddy or TLS. The separately recorded namespace run passed its finite catalog;
 Caddy stopped at prerequisites, and the operational 900-second launcher remains unrun.
@@ -2932,3 +2932,36 @@ counters, close failures and original deadlines remain negative. Fixed local
 checkpoints and symbolic errno categories retain future failures without raw
 messages or paths. The actual recorded I/O cause and Caddy TLS proof remain
 unproven pending a further Caddy-only trial.
+
+
+The Caddy transport correction retains the internal bridge and all
+containment/capture/resource caps. It selects only the fresh owned container's
+joined internal IPv4 endpoint, rechecks the same container/image/network/address
+around TLS phases, and observes actual port mappings separately from requested
+ones. SNI, Host, trust, Caddyfile and natural seven-file material policy remain
+unchanged. Direct bridge TLS does not establish the production loopback-published
+path. Closed connection/handshake diagnostics contain no raw address or error
+text. Source fixtures cover wrong identities, special/foreign addresses, stale
+observations and late phase completion, including the old helper's admitted
+31-second success under a 30-second phase. No actual engine, TLS or KVM result is
+established by this correction; the `f54d8ed` trial remains `tls_not_ready` with
+its exact connection cause unknown. The suite also exercises a full
+real-file negative-copy loop over exact-owned terminal daemon observations,
+refuses ambiguous/foreign terminal identities, and pairs actual local descriptor
+closes with SSL refusal. A close error retains the initial SSL exception and
+cannot become successful negative proof or a retry. Further timing fixtures
+join an initially running copy to a later exact-owned nonzero exit only after
+an actual clean phase-live refusal. They reject foreign identity/image/network,
+global expiry/cancellation, successful-TLS downgrade and a successful close that
+finishes after the TLS phase. Final observed-state metadata uses only remaining guest
+body time and the existing command caps, never another TLS window. Versioned
+Moby-shaped fixtures distinguish nonzero restart backoff (`Running` and
+`Restarting` true, PID0) from live unpaused serving state; backoff is only an
+observed refusal and never terminal proof. The fixed `unless-stopped` policy is
+unchanged. Negative retry exhaustion performs one fresh joined state query;
+positive/fresh TLS paths remain strict.
+
+The pinned Caddy base OCI configuration exposes `2019/tcp` in addition to the
+three requested ports. A fixture accepts that admin key only when unbound
+(null or empty); every actual admin host binding and every other unknown port
+remain refused. Unbound EXPOSE metadata never proves operational publication.

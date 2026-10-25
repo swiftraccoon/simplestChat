@@ -62,6 +62,8 @@ def record() -> dict[str, object]:
         "cleanupException": None,
         "ioCheckpoint": None,
         "errnoCategory": None,
+        "tlsCheckpoint": None,
+        "tlsFailureCategory": None,
     }
 
 
@@ -981,6 +983,44 @@ class WrapperTests(unittest.TestCase):
             set(guest.ERRNO_CATEGORIES.values()) | {"UNKNOWN", "OTHER"},
             probe.GUEST_ERRNO_CATEGORIES,
         )
+
+
+class TlsFailureProjectionTests(unittest.TestCase):
+    """Keep transport diagnostics closed even if guest metadata is hostile."""
+
+    def test_only_fixed_tls_categories_survive_and_only_in_tls_phases(self) -> None:
+        """Never project arbitrary addresses, names, certificate details or exception messages."""
+        for phase, stage, category, expected in (
+            ("natural-tls", "connect", "connection-refused", ("connect", "connection-refused")),
+            (
+                "fresh-process",
+                "handshake",
+                "certificate-verification",
+                ("handshake", "certificate-verification"),
+            ),
+            ("natural-tls", "INERT-PRIVATE-IP", {"secret": "INERT-PRIVATE"}, (None, None)),
+            ("containment", "connect", "timeout", (None, None)),
+        ):
+            value = record()
+            value.update(
+                {
+                    "passed": False,
+                    "checkpoint": phase,
+                    "exception": "io",
+                    "failure": "tls_not_ready",
+                    "tlsCheckpoint": stage,
+                    "tlsFailureCategory": category,
+                }
+            )
+            state: dict[str, object] = {"checkpoint": "guest", "sshStatus": 1}
+            state.update(probe.guest_failure_record(encoded(value), probe.GUEST_IMAGE))
+            observed = probe.failure_summary(state, {"cleanupPassed": True}, None, restored=True)
+            self.assertEqual(
+                (observed["guestTlsCheckpoint"], observed["guestTlsFailureCategory"]), expected
+            )
+            self.assertNotIn("INERT-PRIVATE", json.dumps(observed))
+        self.assertEqual(guest.TLS_CHECKPOINTS, probe.GUEST_TLS_CHECKPOINTS)
+        self.assertEqual(guest.TLS_FAILURE_CATEGORIES, probe.GUEST_TLS_FAILURE_CATEGORIES)
 
 
 if __name__ == "__main__":
