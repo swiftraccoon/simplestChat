@@ -313,7 +313,7 @@ fn workflow_fingerprint_steps_keep_their_scopes_order_guards_and_receipt_consume
         serde_saphyr::from_slice(&fs::read(root.join(".github/workflows/ci.yml")).unwrap())
             .unwrap();
     for (job, scope, count) in [
-        ("automation", "automation", 17),
+        ("automation", "automation", 18),
         ("rust-lint", "rust-lint", 13),
         ("rust-test", "rust-test", 20),
         ("browser", "backend", 43),
