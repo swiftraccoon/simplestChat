@@ -3,7 +3,7 @@
 use super::{
     capture::Capture,
     engine::{self, Clock, Core, OwnedContainer, Policy, Scope},
-    files::{Artifacts, Inputs, LOG_LIMIT},
+    files::{AdapterFailure, Artifacts, CommandObservation, Inputs, LOG_LIMIT},
     plan::{self, Context},
 };
 use crate::{
@@ -32,6 +32,8 @@ struct Evidence {
     cli_groups_settled: bool,
     source_closed: bool,
     status_before_publication: u8,
+    last_command: Option<CommandObservation>,
+    first_adapter_failure: Option<AdapterFailure>,
 }
 
 pub(super) fn early(inputs: Inputs, artifacts: Artifacts, error: Failure) -> Result<()> {
@@ -288,6 +290,8 @@ pub(super) async fn run<E: Executor, C: Clock>(
     };
     let primary = primary.and(pending).and(source).and(settled);
     evidence.status_before_publication = primary.as_ref().err().map_or(0, |error| error.code);
+    evidence.last_command = artifacts.last_command();
+    evidence.first_adapter_failure = artifacts.first_adapter_failure();
     // Facts observed before publication do not certify the later directory
     // closes, output replay, final cancellation fence or process exit.
     let record = serde_json::to_vec_pretty(&evidence)

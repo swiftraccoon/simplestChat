@@ -111,3 +111,70 @@ fn current_owner_private_directory_and_log_count_bounds_gate_payload_admission()
     assert!(artifacts.log(LOG_LIMIT + 1).is_err());
     artifacts.finish().unwrap();
 }
+
+#[test]
+fn fixed_adapter_failure_keeps_original_role_status_and_no_private_payload() {
+    use crate::{
+        ci::command::{Command, Program},
+        tooling::Failure,
+    };
+    let fixture = Fixture::new(Kind::Caddy);
+    let artifacts = Artifacts::new(&fixture.context).unwrap();
+    let request = Command::capture(
+        Program::Docker,
+        &["--host", "PRIVATE_ENDPOINT", "info", "PRIVATE"],
+    );
+    let first = artifacts.command(&request);
+    let primary = artifacts.observed::<()>(
+        first,
+        AdapterStage::Executor,
+        Err(Failure::new(124, "PRIVATE_FAILURE")),
+    );
+    let mut cleanup = Command::capture(Program::Docker, &["container", "rm", "PRIVATE_ID"]);
+    cleanup.cleanup = true;
+    let last = artifacts.command(&cleanup);
+    let secondary = artifacts.observed::<()>(
+        last,
+        AdapterStage::LogReadback,
+        Err(Failure::child_exit(42)),
+    );
+    let report = serde_json::json!({"first": artifacts.first_adapter_failure(),
+        "last": artifacts.last_command()});
+    let closed = artifacts.finish();
+    assert_eq!(primary.unwrap_err().code, 124);
+    assert_eq!(secondary.unwrap_err().code, 42);
+    closed.unwrap();
+    assert_eq!(report["first"]["command"]["role"], "daemon");
+    assert_eq!(report["first"]["command"]["logOrdinal"], 0);
+    assert_eq!(report["first"]["command"]["cleanup"], false);
+    assert_eq!(report["first"]["stage"], "executor");
+    assert_eq!(report["first"]["code"], 124);
+    assert!(report["first"]["childExitCode"].is_null());
+    assert_eq!(report["last"]["role"], "remove");
+    assert_eq!(report["last"]["cleanup"], true);
+    assert!(!report.to_string().contains("PRIVATE"));
+}
+
+#[test]
+fn actual_child_status_is_optional_and_unknown_roles_never_echo_arguments() {
+    use crate::{
+        ci::command::{Command, Program},
+        tooling::Failure,
+    };
+    let fixture = Fixture::new(Kind::Caddy);
+    let artifacts = Artifacts::new(&fixture.context).unwrap();
+    let request = Command::capture(Program::Docker, &["PRIVATE_ROLE", "PRIVATE_CONFIG"]);
+    let observation = artifacts.command(&request);
+    let result = artifacts.observed::<()>(
+        observation,
+        AdapterStage::Executor,
+        Err(Failure::child_exit(124)),
+    );
+    let report = serde_json::to_value(artifacts.first_adapter_failure()).unwrap();
+    let closed = artifacts.finish();
+    assert_eq!(result.unwrap_err().code, 124);
+    closed.unwrap();
+    assert_eq!(report["command"]["role"], "unclassified");
+    assert_eq!(report["childExitCode"], 124);
+    assert!(!report.to_string().contains("PRIVATE"));
+}

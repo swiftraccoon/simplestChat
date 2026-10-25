@@ -122,6 +122,42 @@ class PythonPolicyTests(unittest.TestCase):
             ],
         )
 
+    def test_configuration_metadata_retention_never_uploads_command_logs(self) -> None:
+        """Keep fixed passive JSON after failures without retaining the private directory."""
+        workflow = yaml_value(
+            (ROOT / ".github/workflows/ci.yml").read_text(), scalars_as_strings=True
+        )
+        for kind, job_name in (("promtool", "automation"), ("caddy", "deployment")):
+            steps = objects(obj(workflow, "jobs", job_name), "steps")
+            validate = next(
+                step
+                for step in steps
+                if step.get("run") == "cargo run --locked -q -p xtask -- ci validate-config " + kind
+            )
+            upload = next(
+                step
+                for step in steps
+                if step.get("name") == "Preserve " + kind + " validation metadata"
+            )
+            self.assertLess(steps.index(validate), steps.index(upload))
+            self.assertEqual(string(upload, "if"), "${{ always() && !env.ACT }}")
+            self.assertEqual(
+                string(upload, "uses"),
+                "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+            )
+            self.assertEqual(
+                obj(upload, "with"),
+                {
+                    "name": "config-validation-" + kind,
+                    "path": "${{ runner.temp }}/simplestchat-config-validation-"
+                    + kind
+                    + "-*/config-validation.json",
+                    "if-no-files-found": "ignore",
+                    "retention-days": "7",
+                },
+            )
+            self.assertNotIn("continue-on-error", validate)
+
     def test_offline_configuration_validators_keep_existing_jobs_guards_and_fixed_inputs(
         self,
     ) -> None:
