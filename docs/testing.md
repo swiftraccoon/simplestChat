@@ -2039,6 +2039,16 @@ filtered or replaced by a receipt. The ordinary Ops gate also runs
 changes invalidate the existing checks/Rust-test keys; no cache namespace or
 fingerprint selection policy is broadened.
 
+The production-image job completes Compose and Caddy validation, including the
+always-retained closed validation metadata, before starting the release-fixture
+controller's fixed apt/venv/pip bootstrap. That bootstrap still starts before the
+image build and is collected afterward through the same checked handoff. The
+`8c6b451` trial timed out at the first Docker daemon-identity query, before any
+validator container was created. Its underlying cause and whether the earlier
+bootstrap was still active are unknown. The ordering change prevents this
+bootstrap's package work from overlapping validation; it changes no command,
+retry, deadline, required gate or cleanup policy and is not a proven cause fix.
+
 The preceding receiver head's hosted automation took 537 seconds of its 600-second
 job limit, including 435 seconds in the complete automation command. Local staging
 adds about 52 seconds of native/reference comparison and 74 seconds of Python
