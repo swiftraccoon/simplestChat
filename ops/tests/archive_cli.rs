@@ -196,6 +196,7 @@ fn arguments_are_fixed_and_do_not_select_another_operation() {
                 "       simplestchat-ops release stage [OPTIONS]\n",
     "       simplestchat-ops release deploy [OPTIONS]\n",
     "       simplestchat-ops release backup verify [OPTIONS]\n",
+                "       simplestchat-ops release maintain-prerequisite [OPTIONS]\n",
     "       simplestchat-ops release attestation prepare [OPTIONS]\n",
                 "       simplestchat-ops release attestation verify [OPTIONS]\n",
                 "       simplestchat-ops release manifest --path PATH\n",

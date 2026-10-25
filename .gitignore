@@ -73,3 +73,5 @@ __pycache__/
 
 !/docs/maintenance-prerequisites.md
 !/docs/maintain-namespace-prototype.md
+!/docs/maintain-native-prerequisite-api-review.md
+!/docs/maintenance-launcher-runtime-proof.md

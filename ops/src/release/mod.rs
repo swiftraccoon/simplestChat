@@ -22,3 +22,5 @@ pub mod deploy;
 pub mod stage;
 
 pub mod backup;
+
+pub mod maintain_prerequisite;

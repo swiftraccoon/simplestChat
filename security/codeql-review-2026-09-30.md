@@ -1091,3 +1091,41 @@ query, analyzer version, range, message and complete-source digest. Existing
 records are unchanged. Owner `swiftraccoon` and expiry `2026-11-29` match the
 original review; no query/path exclusion, automatic renewal, expiry extension
 or remote dismissal is added. Hosted ingestion remains a separate required check.
+
+
+<a id="local-maintain-configuration-renderer"></a>
+
+## Local finding: maintenance prerequisite configuration renderer (2026-10-25)
+
+Fresh local CodeQL `2.27.1` Python security analysis of
+`28a461e9e87e7920f1fd71d02a0c64971ba65fdf` reports
+`py/jinja2/autoescape-false` in
+`build/security_vm_maintain_prerequisite_guest.py`, range `741:745:19:6`.
+The complete-source SHA256 is
+`53eb87b8921f0e96837507d334e84aaa9087625946804b7ad89b4fce68be2aa0`,
+rendered-message SHA256 is
+`67d39a5d4ef9fe9e92c004f6e11032202a7db050c6da7640e07df5b9eda66694`,
+and exact fingerprint is
+`codeql:ece698dca3f9f392c1b830efe410e4d218e30fa87652a5b1e3986bed5bfed0a0`.
+This is a local original-SARIF observation, without a GitHub alert number or
+remote dismissal.
+
+`rendered_inputs` uses `StrictUndefined` to render the fixed tracked dotenv,
+Compose, PostgreSQL password/HBA and database-init SQL templates. The actual guest
+fixture call uses its retained exact-source mapping, fixed private domain and
+resource settings, selected image identities, and newly generated 64-hex
+synthetic secrets. The outputs are configuration bytes inside the disposable
+owned guest; they are not HTML, a browser response or user-supplied templates.
+JSON receipts and the original Caddyfile are emitted separately. HTML escaping
+is not the encoding boundary for these configuration formats. The constrained
+current fixture values do not establish an escaping-related byte difference;
+this decision rests on the absence of an HTML/browser sink.
+
+This review covers only that complete source, query, analyzer version, primary
+range and rendered message. The exception names owner `swiftraccoon` and expires
+`2026-11-29`, matching the existing review horizon. It adds no path/query
+exclusion, automatic renewal or remote alert action. Changed bytes require a
+fresh source review and independently matching analysis. The same analysis
+also identified two older inert Caddy test contexts without an explicit TLS
+minimum; those tests now set TLS1.2, matching the real fixture. No exception
+covers that TLS finding. Hosted ingestion remains a separate required check.

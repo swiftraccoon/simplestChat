@@ -911,6 +911,7 @@ class PrototypeTests(unittest.TestCase):
         target = transport_target()
         report = transport_report()
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
         with (
             patch.object(guest.Endpoint, "check"),
             patch.object(guest, "tls_probe", side_effect=guest.PrototypeError("guest_deadline")),
@@ -1240,6 +1241,7 @@ class InternalBridgeTransportTests(unittest.TestCase):
     def test_wait_tls_never_accepts_late_success_or_starts_an_expired_next_probe(self) -> None:
         """Refuse the old-helper late-success counterexample and expired retries."""
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
         for case in ("late-success", "late-recheck", "expired"):
             with self.subTest(case=case):
                 clock = [100.0]
