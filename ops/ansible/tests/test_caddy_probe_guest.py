@@ -990,6 +990,50 @@ class InternalBridgeTransportTests(unittest.TestCase):
         for ports, expected in port_cases:
             self.assertEqual(guest.operational_bindings(ports), expected)
 
+    def test_internal_endpoint_gateway_may_be_empty_or_exact_canonical_ipam_gateway(self) -> None:
+        """An absent internal default route must not alter the joined target or IPAM exclusion."""
+        expected = transport_target()
+        for gateway in ("", "172.19.0.1"):
+            with self.subTest(gateway=gateway):
+                bridge, row, network = transport_fixture()
+                member = guest.obj(guest.obj(guest.obj(row["NetworkSettings"])["Networks"])[BRIDGE])
+                member["Gateway"] = gateway
+                self.assertEqual(guest.endpoint_observation(CID, bridge, row, network), expected)
+
+    def test_bad_or_missing_endpoint_gateway_is_distinct_and_does_not_weaken_ipam(self) -> None:
+        """Null/unknown/default-route data stay refused without exposing actual address strings."""
+        gateways: tuple[object, ...] = (
+            None,
+            False,
+            0,
+            [],
+            {},
+            "172.19.0.254",
+            "172.019.0.1",
+            "missing",
+        )
+        for gateway in gateways:
+            with self.subTest(gateway=gateway):
+                bridge, row, network = transport_fixture()
+                member = guest.obj(guest.obj(guest.obj(row["NetworkSettings"])["Networks"])[BRIDGE])
+                if gateway == "missing":
+                    del member["Gateway"]
+                else:
+                    member["Gateway"] = gateway
+                with self.assertRaisesRegex(guest.PrototypeError, "^endpoint_gateway$"):
+                    _ = guest.endpoint_observation(CID, bridge, row, network)
+        bridge, row, network = transport_fixture()
+        member = guest.obj(guest.obj(guest.obj(row["NetworkSettings"])["Networks"])[BRIDGE])
+        member.update({"Gateway": "", "IPAddress": "172.19.0.1"})
+        with self.assertRaisesRegex(guest.PrototypeError, "^endpoint_ipv4$"):
+            _ = guest.endpoint_observation(CID, bridge, row, network)
+        member["IPAddress"] = ADDRESS
+        guest.obj(network["IPAM"])["Config"] = [
+            {"Subnet": "172.19.0.0/16", "Gateway": "172.019.0.1"},
+        ]
+        with self.assertRaises(ValueError):
+            _ = guest.endpoint_observation(CID, bridge, row, network)
+
     def test_exposed_admin_port_may_be_unbound_but_never_host_published(self) -> None:
         """The pinned base EXPOSE metadata cannot authorize any admin binding or unknown port."""
         for host in ("127.0.0.1", UNSPECIFIED, ""):

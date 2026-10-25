@@ -1106,9 +1106,13 @@ def bridge_addresses(
         and not address.is_link_local
         and not address.is_multicast
         and not address.is_unspecified
-        and address != ipaddress.IPv4Address("10.0.2.2")
-        and member["Gateway"] == gateway_text,
+        and address != ipaddress.IPv4Address("10.0.2.2"),
         "endpoint_ipv4",
+    )
+    member_gateway = member.get("Gateway")
+    require(
+        type(member_gateway) is str and member_gateway in ("", gateway_text),
+        "endpoint_gateway",
     )
     return address_text, cast("int", prefix), subnet_text, gateway_text
 

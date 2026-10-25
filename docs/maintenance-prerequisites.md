@@ -182,8 +182,17 @@ physical-egress, capture and resource bound. After start, it joins the exact own
 container ID, already inspected pinned image content ID, fixed image reference,
 sole attached network and actual created network ID. Both container and network
 inspections must agree on endpoint ID, canonical RFC1918 IPv4 address/prefix and
-IPAM subnet/gateway membership. Special addresses, the SSH control peer, another
-container/network and observed replacement are refused. The operational port map
+IPAM subnet/gateway membership. On an internal bridge the inspected container
+`Gateway` may be empty in versioned Moby v28.2.2: the
+[internal bridge join][moby-gateway-join] skips `SetGateway`, the
+[endpoint accessor][moby-gateway-endpoint] returns its join gateway, and the
+[daemon inspect update][moby-gateway-inspect] sets the field only for a non-nil value. The
+IPAM gateway still must be canonical and within the admitted subnet, and it
+remains excluded as a TLS target. The container field accepts only an empty
+string or that exact canonical IPAM gateway; null, missing, other values and
+nonstrings yield the fixed `endpoint_gateway` refusal. Special addresses, the
+SSH control peer, another container/network and observed replacement are refused. The operational
+port map
 may be absent, empty or contain only the exact requested loopback mappings.
 The pinned base image's hash-joined OCI configuration additionally declares
 admin port `2019/tcp`; that key is admitted only when null or empty. Any actual
@@ -414,3 +423,17 @@ the binding. This inventory is source evidence, not actual image/runtime proof.
 [linux-drop]: https://github.com/gregkh/linux/blob/v6.12.111/net/netfilter/core.c
 
 [moby-state]: https://github.com/moby/moby/blob/v28.2.2/container/state.go
+
+The `8c6b451` Caddy run `40217392468` stopped at `natural-tls` with
+`endpoint_ipv4` before any TLS attempt; guest/controller cleanup and restoration
+passed. Actual addresses were intentionally absent from public evidence. The
+empty internal-container gateway correction is justified by the versioned
+engine source chain, not proof of which predicate failed in that run. Its exact
+cause and the corrected live transport/material experiment remain unproved.
+
+[moby-gateway-join]:
+  https://github.com/moby/moby/blob/v28.2.2/libnetwork/drivers/bridge/bridge_linux.go
+[moby-gateway-endpoint]:
+  https://github.com/moby/moby/blob/v28.2.2/libnetwork/endpoint_info.go
+[moby-gateway-inspect]:
+  https://github.com/moby/moby/blob/v28.2.2/daemon/container_operations.go
