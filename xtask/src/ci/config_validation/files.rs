@@ -3,6 +3,7 @@
 use super::plan::{Context, failure};
 use crate::{ci::release_controller::files::Directory, tooling::Result};
 use rustix::fs::{Mode, OFlags};
+use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::{
     cell::Cell,
@@ -149,10 +150,87 @@ impl Inputs {
     }
 }
 
+/// Fixed labels only; command arguments, failure text and output never enter metadata.
+#[derive(Clone, Copy, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub(super) enum CommandRole {
+    Context,
+    Daemon,
+    ImageCatalog,
+    ImagePull,
+    ImageInspect,
+    Create,
+    Inspect,
+    Start,
+    Wait,
+    Logs,
+    Locate,
+    Remove,
+    Unclassified,
+}
+impl CommandRole {
+    fn of(command: &crate::ci::command::Command) -> Self {
+        use crate::ci::command::Program;
+        if command.program != Program::Docker {
+            return Self::Unclassified;
+        }
+        let offset = usize::from(command.arguments.first().is_some_and(|v| v == "--host")) * 2;
+        let first = command.arguments.get(offset).and_then(|v| v.to_str());
+        let second = command.arguments.get(offset + 1).and_then(|v| v.to_str());
+        match (first, second) {
+            (Some("context"), Some("inspect")) => Self::Context,
+            (Some("info"), _) => Self::Daemon,
+            (Some("image"), Some("ls")) => Self::ImageCatalog,
+            (Some("pull"), _) => Self::ImagePull,
+            (Some("image"), Some("inspect")) => Self::ImageInspect,
+            (Some("container"), Some("create")) => Self::Create,
+            (Some("container"), Some("inspect")) => Self::Inspect,
+            (Some("container"), Some("start")) => Self::Start,
+            (Some("container"), Some("wait")) => Self::Wait,
+            (Some("logs"), _) => Self::Logs,
+            (Some("container"), Some("ls")) => Self::Locate,
+            (Some("container"), Some("rm")) => Self::Remove,
+            _ => Self::Unclassified,
+        }
+    }
+}
+#[derive(Clone, Copy, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub(super) enum AdapterStage {
+    Admission,
+    Ready,
+    Budget,
+    LogAdmission,
+    LogPipe,
+    PreDispatchBudget,
+    Executor,
+    LogReadback,
+    PostDispatchBudget,
+}
+#[derive(Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct CommandObservation {
+    /// Zero-based private log ordinal; failures before log admission allocate no file.
+    log_ordinal: usize,
+    role: CommandRole,
+    cleanup: bool,
+}
+#[derive(Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct AdapterFailure {
+    command: CommandObservation,
+    stage: AdapterStage,
+    /// Adapter refusal status; this alone is not an observed child exit.
+    code: u8,
+    child_exit_code: Option<u8>,
+}
+
 pub(super) struct Artifacts {
     pub token: String,
     directory: Directory,
     next: Cell<usize>,
+    last_command: Cell<Option<CommandObservation>>,
+    first_adapter_failure: Cell<Option<AdapterFailure>>,
 }
 pub(super) struct Log {
     pub name: String,
@@ -198,7 +276,42 @@ impl Artifacts {
             token,
             directory,
             next: Cell::new(0),
+            last_command: Cell::new(None),
+            first_adapter_failure: Cell::new(None),
         })
+    }
+    pub fn command(&self, command: &crate::ci::command::Command) -> CommandObservation {
+        let observation = CommandObservation {
+            log_ordinal: self.next.get(),
+            role: CommandRole::of(command),
+            cleanup: command.cleanup,
+        };
+        self.last_command.set(Some(observation));
+        observation
+    }
+    pub fn observed<T>(
+        &self,
+        command: CommandObservation,
+        stage: AdapterStage,
+        result: Result<T>,
+    ) -> Result<T> {
+        if let Err(error) = &result
+            && self.first_adapter_failure.get().is_none()
+        {
+            self.first_adapter_failure.set(Some(AdapterFailure {
+                command,
+                stage,
+                code: error.code,
+                child_exit_code: error.is_child_exit().then_some(error.code),
+            }));
+        }
+        result
+    }
+    pub fn last_command(&self) -> Option<CommandObservation> {
+        self.last_command.get()
+    }
+    pub fn first_adapter_failure(&self) -> Option<AdapterFailure> {
+        self.first_adapter_failure.get()
     }
     pub fn write(&self, name: &str, bytes: &[u8]) -> Result<()> {
         if !matches!(

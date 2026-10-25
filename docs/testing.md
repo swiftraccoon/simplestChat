@@ -1338,10 +1338,27 @@ before final EOF drain, explicit log close and anchored readback. This does not
 bound the engine's own log storage or prove closure of detached/privileged groups.
 Raw daemon/configuration output stays private; console output is a fixed bounded
 guest-status projection. `config-validation.json` records prepublication facts;
-its presence is not final CLI success. Zero additionally requires all input and
-output closes, CLI/resource proof, bounded replay, pending-signal and deadline
-fences. Owned fake processes/files/engines and the actual retained shell commands
-provide inert coverage; no real engine or validator workload was run for this port.
+its presence is not final CLI success. The two CI jobs retain only this exact
+JSON basename even after failure; they never upload its private parent, command
+logs, configurations or ownership records. The report adds a fixed command role,
+zero-based private-log ordinal and adapter stage for its first observed adapter
+failure. Its numeric refusal code is distinct from an optional observed child exit;
+unknown child status stays null. Later cleanup cannot replace this first anchor.
+Errors outside the adapter can leave that field null, and failures before report
+publication can leave no artifact. Existing selected-input, engine and endpoint
+hashes remain passive equality observations.
+
+The 13e8065 hosted Promtool attempt returned 124 after about five seconds, with
+guest status unavailable. Endpoint discovery completed, but no command metadata
+was retained; the failed role and cause remain unknown. This diagnostic change
+preserves that trial and all existing command caps, watchdogs and cleanup rules.
+It does not establish a successful validator run or justify increasing a timeout.
+
+Zero additionally requires all input and output closes, CLI/resource proof,
+bounded replay, pending-signal and deadline fences. Owned fake processes, files,
+engines and the actual retained shell commands provide inert coverage. This
+diagnostic overlay adds no new real-engine or validator workload; the failed
+hosted trial above does not establish guest execution or success.
 
 ### App-only releases and rollback
 

@@ -1,7 +1,10 @@
 //! Docker metadata also uses the existing combined pipe's explicit finish path.
 
 use super::engine::{Policy, Scope};
-use super::{files::Artifacts, plan::failure};
+use super::{
+    files::{AdapterStage, Artifacts},
+    plan::failure,
+};
 use crate::{
     ci::{
         bounded_log,
@@ -34,39 +37,71 @@ fn available(started: Instant, request: &Command) -> Result<std::time::Duration>
 }
 impl<E: Executor> Executor for Capture<'_, E> {
     async fn run(&mut self, mut request: Command) -> Result<Vec<u8>> {
+        let observation = self.artifacts.command(&request);
         if request.program != Program::Docker
             || request.combined_log.is_some()
             || request.stdout.is_some()
         {
-            return Err(failure());
+            return self
+                .artifacts
+                .observed(observation, AdapterStage::Admission, Err(failure()));
         }
         if !request.cleanup {
-            self.inner.ready().await?;
+            self.artifacts
+                .observed(observation, AdapterStage::Ready, self.inner.ready().await)?;
         }
-        request.timeout = request.timeout.min(available(self.started, &request)?);
-        let maximum = request.capture.take().ok_or_else(failure)?;
-        let (file, log) = self.artifacts.log(maximum)?;
-        request.combined_log = Some(Arc::new(bounded_log::Log::start(file, maximum)?));
+        request.timeout = request.timeout.min(self.artifacts.observed(
+            observation,
+            AdapterStage::Budget,
+            available(self.started, &request),
+        )?);
+        let maximum = self.artifacts.observed(
+            observation,
+            AdapterStage::Admission,
+            request.capture.take().ok_or_else(failure),
+        )?;
+        let (file, log) = self.artifacts.observed(
+            observation,
+            AdapterStage::LogAdmission,
+            self.artifacts.log(maximum),
+        )?;
+        request.combined_log = Some(Arc::new(self.artifacts.observed(
+            observation,
+            AdapterStage::LogPipe,
+            bounded_log::Log::start(file, maximum),
+        )?));
         // Prefix/log admission can block in the filesystem; recheck before the
         // only dispatch and explicitly finish an unforwarded pipe on refusal.
         match available(self.started, &request) {
             Ok(left) => request.timeout = request.timeout.min(left),
             Err(error) => {
+                // Record this original refusal before settling the unforwarded pipe.
+                let primary = self.artifacts.observed::<Vec<u8>>(
+                    observation,
+                    AdapterStage::PreDispatchBudget,
+                    Err(error),
+                );
                 if let Some(log) = request.combined_log.take()
                     && let Ok(log) = Arc::try_unwrap(log)
                 {
                     let _ = log.finish().await;
                 }
-                return Err(error);
+                return primary;
             }
         }
         let request_cleanup = request.cleanup;
-        let result = self.inner.run(request).await;
+        let result = self.artifacts.observed(
+            observation,
+            AdapterStage::Executor,
+            self.inner.run(request).await,
+        );
         // The original file owner has finished, including setup/spawn failures.
         // Read only its admitted inode through the retained namespace.
         let read = self.artifacts.read_log(&log);
         result?;
-        let bytes = read?;
+        let bytes = self
+            .artifacts
+            .observed(observation, AdapterStage::LogReadback, read)?;
         let policy = Policy::validation();
         let limit = if request_cleanup {
             policy.watchdog()
@@ -74,7 +109,11 @@ impl<E: Executor> Executor for Capture<'_, E> {
             policy.watchdog() - policy.reserve()
         };
         if self.started.elapsed() >= limit {
-            return Err(Scope::Validation.expired());
+            return self.artifacts.observed(
+                observation,
+                AdapterStage::PostDispatchBudget,
+                Err(Scope::Validation.expired()),
+            );
         }
         Ok(bytes)
     }

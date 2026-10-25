@@ -122,6 +122,15 @@ jobs:
         if: steps.verified.outputs.cache-hit != 'true'
         run: cargo run --locked -q -p xtask -- ci validate-config promtool
 
+      - name: Preserve promtool validation metadata
+        if: ${{ always() && !env.ACT }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: config-validation-promtool
+          path: ${{ runner.temp }}/simplestchat-config-validation-promtool-*/config-validation.json
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Record the successful automation verification
         if: steps.verified.outputs.cache-hit != 'true'
         env:
@@ -1058,6 +1067,15 @@ jobs:
         env:
           TRUSTED_PROXY_SECRET: ci-only-proxy-secret-00000000000000000000000000000000
         run: cargo run --locked -q -p xtask -- ci validate-config caddy
+
+      - name: Preserve caddy validation metadata
+        if: ${{ always() && !env.ACT }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: config-validation-caddy
+          path: ${{ runner.temp }}/simplestchat-config-validation-caddy-*/config-validation.json
+          if-no-files-found: ignore
+          retention-days: 7
 
       # Publish newly compiled application layers when build inputs change.
       # A dependency-only immutable key otherwise keeps restoring the first

@@ -120,14 +120,19 @@ async fn metadata_timeout_and_signals_preserve_primary_after_owned_group_and_log
         };
         let (result, ()) = tokio::join!(capture.run(request), cancel);
         let error = result.unwrap_err();
+        let settled = native.cleanup_passed();
+        let retained = fs::read(fixture.artifacts().join("command-000.log")).unwrap();
+        let observed = serde_json::to_value(artifacts.first_adapter_failure()).unwrap();
+        let closed = artifacts.finish();
+        closed.unwrap();
         assert_eq!(error.code, code);
         assert!(!error.message.contains("PRIVATE_METADATA"));
-        assert!(native.cleanup_passed());
-        assert_eq!(
-            fs::read(fixture.artifacts().join("command-000.log")).unwrap(),
-            b"PRIVATE_METADATA\n"
-        );
-        artifacts.finish().unwrap();
+        assert!(settled);
+        assert_eq!(retained, b"PRIVATE_METADATA\n");
+        assert_eq!(observed["stage"], "executor");
+        assert_eq!(observed["code"], code);
+        assert!(observed["childExitCode"].is_null());
+        assert!(!observed.to_string().contains("PRIVATE"));
     }
 }
 
