@@ -5,10 +5,16 @@ host deployment and one deliberately failed replacement with successful rollback
 The complete 97-case native/unchanged-Python comparison passed locally in 365.12
 test seconds (367.785 seconds wall). Those fixtures use real private files, locks
 and owned inert children, with inert Docker/database/readiness replies. The VM
-controller/guest has 23 passing inert tests, and the corrected ordinary Ops suite
-passed 484 tests. This new workflow has not yet proved
-actual signature verification, installed-musl execution, Docker, PostgreSQL,
-Caddy/TLS or application rollback. Its runtime checks below remain required.
+controller/guest previously passed 32 inert tests, and the corrected ordinary Ops
+suite passed 484 tests. The revised barrier has 55 passing local inert tests,
+including actual private files, local socketpairs and checked first-cause faults.
+Actual run `40146220125` at `e271a8c` completed and validated
+the signed-musl positive transaction, including its real Docker, PostgreSQL,
+Caddy/TLS, backup, actor and continuity checks. It then failed at `negative-report`:
+the intended failed replacement instead returned native exit zero, `passed: true`
+and phase `complete`. The controller retained one completed trial and successful
+VM/input cleanup with QEMU zero. This is a failed whole fixture; rollback remains
+unproved. The revised negative coordination described below has not run in a VM.
 Production Python, installed callers, bootstrap and upgrade policy remain unchanged.
 
 Select a successful same-head main CI run and its signed Ops and server B
@@ -31,14 +37,35 @@ original custody. All GH roles use the checked private tool environment.
 Only A is loaded during fixture bootstrap. Authenticated B's canonical archive
 and manifest are transferred, and actual installed-musl `release deploy` must
 perform its own staging/import. The positive transaction replaces A with B.
-A second transaction targets A; a fixed observer must see the exact new owned
-signed-A container running, manually stop that full ID, and observe it stopped.
-That transaction must exit nonzero at the native readiness deadline in
-replacement, report attempted successful rollback, restore B and finalize the
-rollback journal. Completed matching native app-inspection output is only a
-timing hint before the stop, not authority for its final effect. Missing an injection
-interval, an unrelated earlier refusal, a recovered stop or a passive JSON
-claim cannot substitute for those observations. No derived images or Python
+A second transaction targets A. Its Docker dependency uses the fixed
+`negative-inspection-response-barrier-v1` fixture profile. Only this native call
+runs in a private mount namespace; the positive call uses `original-docker-cli`.
+The original parent Docker inode and authenticated installed Ops binary stay
+unchanged. The namespace binds an original-CLI alias and a source-pinned fixed
+interposer before native tool discovery. Every nonmatching argument vector execs
+the original CLI. Only the exact native application-inspection format and full
+container ID can enter a private, bounded local socket exchange.
+
+The parent joins that request to the new private `replace_application` attempt,
+current selected app, exact fixture labels and authenticated A image. It captures
+the real successful running inspection, stops that exact known ID and observes it
+stopped, then fsyncs and checked-closes a private receipt and its directory. Only afterward can the
+wrapper forward the original inspection bytes and status. It never fabricates a
+running or readiness reply. The fixed client has no subprocess; actual Docker
+queries and the stop remain owned by the existing parent command owner. The
+mount-entry children inherit the owned group. Parent service has a narrower
+20-second cap from its actual entry, clipped to the same original body. Native's
+unchanged 30-second inspection deadline remains authoritative; the fixture does
+not reconstruct its exact start or claim hard cancellation of blocked I/O.
+
+The native caller must then exit nonzero at the readiness deadline in replacement,
+report attempted successful rollback, restore B and finalize the rollback journal.
+The actual stop receipt, full daemon history and all independent continuity checks
+remain mandatory. This is an explicitly interposed negative dependency profile,
+not proof that the negative used byte-identical original CLI dispatch. Unknown
+identity, bad frames, vanished peers, late work or receipt/reply/close failure
+refuse the fixture. A missing stop, unrelated earlier refusal, recovered stop or
+passive JSON claim cannot substitute for rollback. No derived images or Python
 deploy fallback establish either result.
 
 The guest runs real PostgreSQL and Caddy with a guest-local generated CA and
@@ -133,7 +160,12 @@ They do not establish a successful authenticated VM deployment.
 
 The first real signed host-deploy trial failed after authentication and initial
 fixture readiness; its VM and original-input cleanup completed. Its prior
-success-only artifact rule lost the private failure context. Source audit found
-no causal native/prerequisite mismatch, so no native/core behavior or DB policy
-is changed on that basis. The next actual runtime trial must use these bounded
-facts to identify the cause; a successful deploy/rollback proof remains pending.
+success-only artifact rule lost the private failure context. The later bounded
+diagnostics established the successful positive and missed negative described
+above. A source-derived inert counterexample executes the prior observer and
+health callback across its one-second blind interval: native inspection,
+readiness and completion can all finish before another poll is admitted. This
+does not recover the failed runner's exact timing. The deterministic barrier
+repairs fixture ordering; no native/core behavior, DB policy, caller or budget is
+changed. A successful complete deploy/rollback proof still requires an actual
+signed runtime trial of this revised fixture.

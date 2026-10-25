@@ -118,6 +118,9 @@ def trial(*, negative: bool) -> dict[str, object]:
         "selected": {"revision": CURRENT, "image": IMAGE_B, "appId": "6" * 64},
         "injectedCandidateId": "7" * 64 if negative else None,
         "manualStopObserved": negative,
+        "dependencyProfile": "negative-inspection-response-barrier-v1"
+        if negative
+        else "original-docker-cli",
         "seconds": 10.0,
     }
 
@@ -1265,50 +1268,28 @@ class DeployProofTests(unittest.TestCase):
         observations = [exercise(1), exercise(2)]
         self.assertEqual(observations, [(True, [], True), (True, [True], True)])
 
-    def test_inspection_timing_hint_can_cross_real_bulk_output_holes(self) -> None:
-        """Sparse stdout is only a scheduling hint; all real admitted streams still close."""
-        actual_stat, actual_lstat, adopt = os.fstat, Path.lstat, stage.adopt
-        streams: list[BinaryIO] = []
-
-        def mapped(value: os.stat_result) -> os.stat_result:
-            fields = list(value)
-            fields[4] = fields[5] = 0
-            return os.stat_result(fields)
-
-        def metadata(fd: int) -> os.stat_result:
-            return mapped(actual_stat(fd))
+    def test_new_attempt_namespace_requires_one_exact_private_directory(self) -> None:
+        """The coordination seam cannot select a foreign/multiple native attempt."""
+        actual_lstat = Path.lstat
 
         def namespace(path: Path) -> os.stat_result:
-            return mapped(actual_lstat(path))
-
-        def admitted(fd: int, mode: str) -> BinaryIO:
-            stream = adopt(fd, mode)
-            streams.append(stream)
-            return stream
+            fields = list(actual_lstat(path))
+            fields[4] = fields[5] = 0
+            return os.stat_result(fields)
 
         with tempfile.TemporaryDirectory() as temporary:
             public = Path(temporary)
             attempt = public / "results" / ("release." + TOKEN)
             attempt.mkdir(parents=True, mode=0o700)
-            _ = (attempt / "001.stderr").write_bytes(b"")
-            _ = (attempt / "002.stderr").write_bytes(b"")
-            _ = (attempt / "002.stdout").write_text(
-                json.dumps({"id": ACTORS[0], "image": IMAGE_A, "state": {"Running": True}})
-            )
-            for path in attempt.iterdir():
-                path.chmod(0o600)
             with (
                 patch.object(guest, "PUBLIC", public),
-                patch.object(os, "fstat", side_effect=metadata),
                 patch.object(Path, "lstat", autospec=True, side_effect=namespace),
-                patch.object(stage, "adopt", side_effect=admitted),
             ):
-                observed = guest.inspection_seen(
-                    ACTORS[0], IMAGE_A, guest.Control(time.monotonic()), frozenset()
-                )
-            closed = [stream.closed for stream in streams]
-        self.assertTrue(observed)
-        self.assertEqual(closed, [True])
+                observed = guest.active_attempt(frozenset(), guest.Control(time.monotonic()))
+                (attempt.parent / ("release." + "2" * 32)).mkdir(mode=0o700)
+                with self.assertRaises(ValueError):
+                    _ = guest.active_attempt(frozenset(), guest.Control(time.monotonic()))
+        self.assertEqual(observed, attempt)
 
     def test_workflow_is_explicit_and_does_not_increase_product_timeout(self) -> None:
         """Only the new deliberate fixture uses a larger measured setup envelope."""
