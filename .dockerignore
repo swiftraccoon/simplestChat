@@ -52,6 +52,9 @@ ops/src/release/attestation/deploy/**
 !ops/src/release/attestation/fetch/
 ops/src/release/attestation/fetch/**
 !ops/src/release/attestation/fetch/*.rs
+!ops/src/release/attestation/maintain_prerequisite/
+ops/src/release/attestation/maintain_prerequisite/**
+!ops/src/release/attestation/maintain_prerequisite/*.rs
 !ops/src/release/attestation/receive/
 ops/src/release/attestation/receive/**
 !ops/src/release/attestation/receive/*.rs
