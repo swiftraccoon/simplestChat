@@ -2946,7 +2946,7 @@ reaps. Neither job proves the other's behavior or complete maintenance success.
 The optional workflow has no artifact selector, API token, production host,
 required-CI role or installed caller change.
 
-The Caddy 87-case suite and namespace 14-case boundary suite use the maintained strict
+The Caddy 94-case suite and namespace 14-case boundary suite use the maintained strict
 Python configuration. These local tests execute no actual helper role, namespace,
 KVM, Caddy or TLS. The separately recorded namespace run passed its finite catalog;
 Caddy stopped at prerequisites, and the operational 900-second launcher remains unrun.
@@ -3032,3 +3032,24 @@ exclusion from target selection remain unchanged; all live validation is pending
   https://github.com/moby/moby/blob/v28.2.2/libnetwork/endpoint_info.go
 [moby-gateway-inspect]:
   https://github.com/moby/moby/blob/v28.2.2/daemon/container_operations.go
+
+The post-TLS diagnostic fixtures distinguish a failed endpoint metadata recheck
+after a completed TLS exchange, a later original-file open, and the unchanged
+material analyzer. They retain actual local originals through admission failure
+and checked cleanup, exercise the real metadata-schema refusal, and reject
+unknown codes, non-scalar arguments and error subclasses from public projection.
+A secondary close refusal cannot replace the first admission error. The three
+new checkpoint literals and analyzer-code catalog are checked against the
+controller's bounded projection; no arbitrary guest value enters its summary.
+The `1381912` actual `unexpected` failure remains unexplained by its historical
+TLS `close` checkpoint, and no complete Caddy material/TLS result is claimed.
+
+A real synthetic certificate chain exercises successful analyzer completion and
+clears its checkpoint before the next phase. Separate trusted-TLS fixtures
+refuse the initial metadata check without stale material context and mark a
+post-success endpoint refusal distinctly. These tests add no live authority.
+
+The material fixture constructor also guards each current parent/file descriptor
+before metadata or reads. Actual admitted-FD child-open, metadata and read
+refusals paired with checked-close errors preserve the first exception and
+close every current descriptor before assertions.

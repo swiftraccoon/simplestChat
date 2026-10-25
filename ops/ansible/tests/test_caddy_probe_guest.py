@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import errno
 import io
 import ipaddress
@@ -19,6 +20,7 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING, BinaryIO, cast, override
 from unittest.mock import patch
 
+from test_caddy_materials import NOW, Fixture
 from test_support import ROOT
 
 # isort: split
@@ -28,6 +30,7 @@ import caddy_probe_guest as guest
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
+    from datetime import datetime
 
 CID = "a" * 64
 
@@ -126,7 +129,38 @@ def transport_target() -> guest.Endpoint:
 
 def transport_report() -> guest.Report:
     """Provide only the fields used by the actual TLS diagnostic boundary."""
-    return cast("guest.Report", cast("object", {"tlsCheckpoint": None, "tlsFailureCategory": None}))
+    return cast(
+        "guest.Report",
+        cast(
+            "object", {"tlsCheckpoint": None, "tlsFailureCategory": None, "postTlsCheckpoint": None}
+        ),
+    )
+
+
+def material_original(path: Path) -> guest.Original:
+    """Guard each current actual descriptor until the complete fixture owner can be returned."""
+    parent = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+    descriptor: int | None = None
+    try:
+        descriptor = os.open(path, os.O_RDONLY)
+        return guest.Original(
+            parent,
+            descriptor,
+            path,
+            os.fstat(descriptor),
+            os.fstat(parent),
+            os.pread(descriptor, guest.CHUNK, 0),
+        )
+    except BaseException as error:  # noqa: BLE001 -- Attempt every current checked close.
+        first = guest.settle(
+            tuple(
+                lambda item=item: os.close(item)
+                for item in (descriptor, parent)
+                if item is not None
+            ),
+            error,
+        )
+        raise cast("BaseException", first) from None
 
 
 class TransportSocket:
@@ -233,8 +267,11 @@ def transport_exchange(
                 commands = guest.Commands(Path("/unused"), control, owned=[CID])
                 if consumer == "negative":
                     guest.negative_tls(commands, context, guest.DOMAIN, target, report)
-                elif consumer == "wait":
-                    result = guest.wait_tls(commands, context, target, report)
+                elif consumer in {"wait", "checked"}:
+                    report["postTlsCheckpoint"] = "material-analyze"
+                    result = {"wait": guest.wait_tls, "checked": guest.checked_tls}[consumer](
+                        commands, context, target, report
+                    )
                 elif consumer == "copy":
                     target, code = guest.negative_endpoint(commands, CID, target.bridge)
                     copy_outcome = guest.negative_copy_outcome(commands, target, report, code)
@@ -262,6 +299,8 @@ def transport_exchange(
     finally:
         raw.close()
         other.close()
+    facts["fixtureRawClosed"] = raw.fileno() == -1
+    facts["fixtureWrappedClosed"] = other.fileno() == -1
     return facts
 
 
@@ -1599,6 +1638,253 @@ class CaddyRestartObservationTests(unittest.TestCase):
                 guest.obj(row["State"])[key] = value
                 with self.assertRaises(guest.PrototypeError):
                     _ = guest.endpoint_observation(CID, bridge, row, network)
+
+
+class PostTlsDiagnosticTests(unittest.TestCase):
+    """Keep exact post-TLS admission failures distinct without making them proof of a cause."""
+
+    def test_fixture_admission_closes_current_fds_even_with_secondary_close_error(self) -> None:
+        """Keep the first open/metadata/read refusal while closing every current actual FD."""
+        actual_open, actual_fstat, actual_pread, actual_close = (
+            os.open,
+            os.fstat,
+            os.pread,
+            os.close,
+        )
+        for point in ("child-open", "metadata", "read"):
+            with self.subTest(point=point), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory).resolve()
+                path = root / "material"
+                guest.write_file(path, b"INERT")
+                descriptors: list[int] = []
+                primary = OSError("INERT-PRIVATE-ADMISSION")
+                secondary = OSError("INERT-PRIVATE-CLOSE")
+                first: BaseException | None = None
+                closed = False
+
+                def close_refusal(descriptor: int, error: OSError = secondary) -> None:
+                    actual_close(descriptor)
+                    raise error
+
+                try:
+                    descriptors.append(actual_open(root, os.O_RDONLY | os.O_DIRECTORY))
+                    if point != "child-open":
+                        descriptors.append(actual_open(path, os.O_RDONLY))
+                    with (
+                        patch.object(os, "open", side_effect=[*descriptors, primary]),
+                        patch.object(
+                            os,
+                            "fstat",
+                            side_effect=primary if point == "metadata" else actual_fstat,
+                        ),
+                        patch.object(
+                            os, "pread", side_effect=primary if point == "read" else actual_pread
+                        ),
+                        patch.object(os, "close", side_effect=close_refusal),
+                    ):
+                        try:
+                            _ = material_original(path)
+                        except BaseException as error:  # noqa: BLE001 -- Observe only after closes.
+                            first = error
+                    closed = all(descriptor_closed(item) for item in descriptors)
+                finally:
+                    for item in descriptors:
+                        if not descriptor_closed(item):
+                            actual_close(item)
+                self.assertTrue(closed)
+                self.assertIs(first, primary)
+
+    def test_only_reviewed_exact_material_errors_are_public(self) -> None:
+        """Unknown arguments and subclasses never supply text, even with a reviewed-looking code."""
+        tree = ast.parse((ROOT / "build/caddy_materials.py").read_text())
+        literals = {
+            node.args[0].value
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "_refuse"
+            and node.args
+            and isinstance(node.args[0], ast.Constant)
+            and isinstance(node.args[0].value, str)
+        }
+        self.assertEqual(literals, guest.MATERIAL_REFUSAL_CODES)
+        for code in guest.MATERIAL_REFUSAL_CODES:
+            error = caddy_materials.MaterialError(code)
+            self.assertEqual(guest.failure_code(error), code)
+            self.assertEqual(guest.exception_kind(error), "material")
+
+        class UnknownMaterial(caddy_materials.MaterialError):
+            """Never let a subclass change the fixed diagnostic domain."""
+
+            @override
+            def __str__(self) -> str:
+                message = "unknown material error was stringified"
+                raise AssertionError(message)
+
+        for error in (
+            UnknownMaterial("metadata_schema"),
+            caddy_materials.MaterialError("INERT-PRIVATE"),
+            caddy_materials.MaterialError(["INERT-PRIVATE"]),
+            caddy_materials.MaterialError({"secret": "INERT-PRIVATE"}),
+            caddy_materials.MaterialError("metadata_schema", "INERT-PRIVATE"),
+            caddy_materials.MaterialError(),
+        ):
+            self.assertEqual(guest.failure_code(error), "prototype_failed")
+            self.assertEqual(guest.exception_kind(error), "unexpected")
+
+    def test_successful_tls_then_endpoint_failure_keeps_its_own_checkpoint(self) -> None:
+        """All actual TLS fixture descriptors close before the independent metadata refusal."""
+        primary = guest.PrototypeError("endpoint_changed")
+
+        def recheck(_commands: guest.Commands) -> None:
+            raise primary
+
+        observed = transport_exchange(consumer="wait", recheck=recheck)
+        self.assertIs(observed["failure"], primary)
+        self.assertEqual(
+            cast("dict[str, object]", observed["report"])["postTlsCheckpoint"],
+            "endpoint-recheck",
+        )
+        self.assertTrue(observed["rawClosed"])
+        self.assertTrue(observed["wrappedClosed"])
+        self.assertTrue(observed["responseClosed"])
+
+        for consumer in ("wait", "checked"):
+            completed = transport_exchange(consumer=consumer)
+            self.assertIsNone(completed["failure"])
+            self.assertIsNone(cast("dict[str, object]", completed["report"])["postTlsCheckpoint"])
+            self.assertTrue(completed["rawClosed"])
+            self.assertTrue(completed["wrappedClosed"])
+            self.assertTrue(completed["responseClosed"])
+
+    def test_checked_tls_scopes_early_and_post_success_metadata_failures(self) -> None:
+        """A stale material marker cannot survive entry; the actual later join has its own site."""
+        for at_entry in (True, False):
+            with self.subTest(at_entry=at_entry):
+                primary = guest.PrototypeError("endpoint_changed")
+                calls = [0]
+
+                def recheck(
+                    _commands: guest.Commands,
+                    *,
+                    state: tuple[bool, list[int], BaseException] = (at_entry, calls, primary),
+                ) -> None:
+                    early, count, error = state
+                    count[0] += 1
+                    if early or count[0] > 1:
+                        raise error
+
+                observed = transport_exchange(consumer="checked", recheck=recheck)
+                self.assertIs(observed["failure"], primary)
+                self.assertEqual(
+                    cast("dict[str, object]", observed["report"])["postTlsCheckpoint"],
+                    None if at_entry else "endpoint-recheck",
+                )
+                self.assertEqual(bool(observed["connect"]), not at_entry)
+                self.assertTrue(observed["fixtureRawClosed"])
+                self.assertTrue(observed["fixtureWrappedClosed"])
+                self.assertTrue(observed["responseClosed"])
+
+    def test_actual_synthetic_material_success_clears_marker_before_next_phase(self) -> None:
+        """Run unchanged certificate admission over real files and close every original first."""
+        supplied = Fixture().materials()
+        pool: list[guest.Original] = []
+        report = transport_report()
+        control = guest.Control(time.monotonic(), 900, 60)
+        first: BaseException | None = None
+        result: dict[str, guest.JsonValue] = {}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            descriptors: list[int] = []
+            try:
+                for index, name in enumerate(guest.MATERIALS):
+                    path = root / str(index)
+                    guest.write_file(path, supplied[name])
+                    original = material_original(path)
+                    pool.append(original)
+                    descriptors.extend((original.parent, original.fd))
+                retained = pool[:1]
+
+                def observed_now(_zone: object) -> datetime:
+                    return NOW
+
+                with (
+                    patch.object(guest.Original, "open", side_effect=pool[1:]),
+                    patch.object(guest, "datetime", SimpleNamespace(now=observed_now)),
+                ):
+                    result = guest.admit_materials(root, retained, control, report)
+            except BaseException as error:  # noqa: BLE001 -- Close all actual originals first.
+                first = error
+            first = guest.settle(tuple(item.close for item in pool), first)
+            closed = all(descriptor_closed(item) for item in descriptors)
+        self.assertTrue(closed)
+        self.assertIsNone(first)
+        self.assertEqual(result["analysis"], "retained-materials-only")
+        self.assertIsNone(report["postTlsCheckpoint"])
+
+    def test_material_open_and_actual_analyzer_failures_keep_all_known_originals(self) -> None:
+        """Retain actual files/FDs; distinguish missing admission from the unchanged JSON policy."""
+        for stage in ("material-open", "material-analyze"):
+            with self.subTest(stage=stage), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory).resolve()
+                originals: list[guest.Original] = []
+                descriptors: list[int] = []
+                report = transport_report()
+                control = guest.Control(time.monotonic(), 900, 60)
+                opened = [0]
+                first_retained_count = 2
+
+                def lower_open(
+                    _path: Path,
+                    _control: guest.Control,
+                    *,
+                    state: tuple[Path, str, list[int], list[int], int] = (
+                        root,
+                        stage,
+                        descriptors,
+                        opened,
+                        first_retained_count,
+                    ),
+                ) -> guest.Original:
+                    own_root, own_stage, own_descriptors, own_opened, cutoff = state
+                    # Lower only UID/profile admission; retain real private files and descriptors.
+                    if own_stage == "material-open" and own_opened[0] == cutoff:
+                        _ = os.open(own_root / "missing", os.O_RDONLY)
+                    path = own_root / str(own_opened[0])
+                    guest.write_file(path, b'{"INERT-PRIVATE":true}')
+                    original = material_original(path)
+                    own_descriptors.extend((original.parent, original.fd))
+                    own_opened[0] += 1
+                    return original
+
+                first: BaseException | None = None
+                try:
+                    originals.append(lower_open(root, control))
+                    with patch.object(guest.Original, "open", side_effect=lower_open):
+                        _ = guest.admit_materials(root, originals, control, report)
+                except BaseException as error:  # noqa: BLE001 -- Close all actual originals first.
+                    first = error
+                secondary = OSError("INERT-PRIVATE-CLOSE")
+
+                def close_refusal(error: OSError = secondary) -> None:
+                    raise error
+
+                settled = guest.settle(
+                    (*tuple(item.close for item in originals), close_refusal), first
+                )
+                closed = all(descriptor_closed(item) for item in descriptors)
+                self.assertTrue(closed)
+                self.assertIs(settled, first)
+                self.assertEqual(report["postTlsCheckpoint"], stage)
+                self.assertEqual(len(originals), 2 if stage == "material-open" else 7)
+                if stage == "material-open":
+                    self.assertIsInstance(first, FileNotFoundError)
+                else:
+                    self.assertIs(type(first), caddy_materials.MaterialError)
+                    self.assertEqual(
+                        guest.failure_code(cast("BaseException", first)), "metadata_schema"
+                    )
+                self.assertNotIn("INERT-PRIVATE", json.dumps(report))
 
 
 if __name__ == "__main__":
