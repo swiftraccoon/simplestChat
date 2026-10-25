@@ -133,6 +133,29 @@ checkpoint distinguishes positive/negative native execution, report parsing,
 saved outcome/journal/staged/backup validation, actor history and continuity.
 The completed-trial count is separate from a native child exit.
 
+Each invocation now keeps its own observer ordinal, role and actual nullable
+status through nested callbacks. The outer invocation restores that complete
+tuple when it finishes. A retained inert-child regression reproduced the old
+mixed tuple, which combined a nested inspection role with the outer native exit.
+An unobserved status stays unknown; no default failure or success code is used.
+
+At a native report refusal, the fixture also attempts a bounded classification of
+the last eight numbered stdout/stderr log pairs in the independently located
+private attempt. The directory scan admits at most 448 entries and exact ordinals
+1 through 192. Log leaves open relative to the retained directory descriptor with
+nofollow, private-file and size checks; each stream is capped at 2 MiB. Only byte
+counts and the closed classes empty, exact inspection-barrier refusal or opaque
+are exposed. The barrier class requires the whole fixed message, not a substring.
+No raw log bytes or content hashes are published.
+
+Missing, unsafe, unreadable, late or unsuccessfully closed evidence remains
+unknown. Every admitted stream and directory still attempts close, and diagnostic
+failure preserves the original report refusal. The barrier class records the
+exact fixed message in that log; its presence or absence does not identify the
+fatal rollback cause. Earlier failures keep this tail unavailable. This tail is
+neither complete command history nor authentication, settlement or successful
+rollback evidence.
+
 A native raw signed leader exit is retained separately from selected passive
 `passed`/`phase` JSON fields. The report may claim success while the child exits
 nonzero; neither field alone authorizes the runtime proof. Fixed reviewed
@@ -239,3 +262,22 @@ closes, hostile metadata and preservation of the first report exception. They do
 not identify the failed runner's exact rollback outcome or establish a successful
 corrected signed VM trial. Native/core behavior, Python reference policy, report
 success predicates, role caps and all fixture budgets remain unchanged.
+
+The [next signed trial at `1f5098d`](https://github.com/swiftraccoon/simplestChat/actions/runs/40232523609)
+completed the positive transaction and failed at `negative-report-rollback`.
+The actual negative native exit was 1, with `rollbackAttempted: true` and
+`rollbackPassed: false`. Selection metadata still named the previous revision
+(the negative transaction's target A), and the replacement journal remained
+unfinished. These observations locate the failed recovery more precisely than
+the earlier summary; they do not identify the failed native recovery command.
+The new-B source regression remains valid but did not close this whole trial.
+Six Ops verifier calls, eight verifier calls per server, all 33 custody/install
+cases, original-input closure and every VM lifecycle check passed. Cleanup
+completed with QEMU exit 0. The complete deployment/owned-rollback proof remains
+unproven.
+
+Artifact 12612769885 was downloaded and its ZIP SHA256 verified before parsing:
+`a26ea81e092b4049311eddf820196e9d2c2f9595b22bfe6addfbb689bc8e5aff`.
+Its retained source hashes matched the exact trial source before this prose
+update. The summary SHA256 is
+`2f9cea7809ae27792faabf9a41f4183eca491bc2084c7d9dec637d9257765da9`.

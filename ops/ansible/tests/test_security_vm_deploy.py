@@ -29,6 +29,7 @@ import release_container_fixture as render
 import release_container_harness as fixture
 import security_vm_deploy as keeper
 import security_vm_deploy_guest as guest
+import security_vm_deploy_injection as injection
 import security_vm_fetch as fetch_vm
 import security_vm_ops_guest as ops_guest
 import security_vm_stage_guest as stage
@@ -256,7 +257,12 @@ def failure_facts() -> dict[str, object]:
     """Make a closed passive failure row without executing or authenticating anything."""
     control = guest.Control(100.0)
     commands = guest.Commands(control, cast("guest.Wire", cast("object", SimpleNamespace())), [])
-    commands.sequence, commands.last_status, commands.last_role = 7, 1, "native-deploy"
+    commands.sequence, commands.last_ordinal, commands.last_status, commands.last_role = (
+        7,
+        7,
+        1,
+        "native-deploy",
+    )
     commands.native_observation = guest.native_facts(
         json.dumps(
             {
@@ -279,6 +285,7 @@ def failure_facts() -> dict[str, object]:
                 trials=[],
                 selection_class="unproven",
                 journal_class="unproven",
+                native_log_tail=guest.unknown_native_logs(),
             ),
         ),
     )
@@ -778,12 +785,18 @@ class DeployProofTests(unittest.TestCase):
                 ),
             )
             commands = guest.Commands(control, wire, [])
-            commands.sequence, commands.last_status, commands.last_role = 7, 1, "native-deploy"
+            commands.sequence, commands.last_ordinal, commands.last_status, commands.last_role = (
+                7,
+                7,
+                1,
+                "native-deploy",
+            )
             commands.native_observation = guest.native_facts(native_data, 1)
             owner = object.__new__(guest.Fixture)
             owner.value, owner.control, owner.wire = frame(), control, wire
             owner.commands, owner.checkpoint, owner.trials = commands, "positive-native", []
             owner.selection_class = owner.journal_class = "unproven"
+            owner.native_log_tail = guest.unknown_native_logs()
 
             def exercise() -> dict[str, object]:
                 control.advance()
@@ -793,7 +806,12 @@ class DeployProofTests(unittest.TestCase):
                 raise primary
 
             def finish(first: BaseException | None) -> BaseException | None:
-                commands.sequence, commands.last_status, commands.last_role = 99, 0, "trust-update"
+                (
+                    commands.sequence,
+                    commands.last_ordinal,
+                    commands.last_status,
+                    commands.last_role,
+                ) = (99, 99, 0, "trust-update")
                 fixture_file.close()
                 return first
 
@@ -1715,6 +1733,286 @@ class PrepareAdmissionTests(unittest.TestCase):
         row["checkpoint"] = "prepare-tool-private-caller-secret"
         with self.assertRaises(ValueError):
             _ = guest.failure_projection(row, TOKEN)
+
+
+class NativeLogDiagnosticsTests(unittest.TestCase):
+    """Only fixed whole-byte classes and paired actual invocation facts may leave the fixture."""
+
+    def tail(  # noqa: C901 -- One actual FD fault fixture; all closes precede assertions.
+        self, root: Path, *, fault: str = "none"
+    ) -> dict[str, object]:
+        """Use actual original FDs and checked closes around an injected late boundary."""
+        control = guest.Control(100.0)
+        control.phase = "exercise"
+        clock = [100.0]
+        streams: list[BinaryIO] = []
+        descriptors: dict[int, str] = {}
+        real_adopt, real_fstat, real_lstat = stage.adopt, os.fstat, Path.lstat
+        real_open, real_close, real_stat = os.open, os.close, os.stat
+
+        def opened(
+            path: str | Path, flags: int, mode: int = 0o600, *, dir_fd: int | None = None
+        ) -> int:
+            descriptor = real_open(path, flags, mode, dir_fd=dir_fd)
+            descriptors[descriptor] = Path(path).name
+            return descriptor
+
+        def closed(descriptor: int) -> None:
+            real_close(descriptor)
+            if fault == "directory-close":
+                message = "PRIVATE_DIRECTORY_CLOSE_FAILURE"
+                raise OSError(message)
+
+        def adopted(descriptor: int, mode: str) -> BinaryIO:
+            original = real_adopt(descriptor, mode)
+            streams.append(original)
+
+            def read(maximum: int) -> bytes:
+                value = original.read(maximum)
+                if descriptors[descriptor] == "010.stderr":
+                    if fault == "late":
+                        clock[0] = control.body
+                    if fault == "read":
+                        message = "PRIVATE_READ_FAILURE"
+                        raise OSError(message)
+                return value
+
+            def close() -> None:
+                original.close()
+                if fault == "close" and descriptors[descriptor] == "010.stderr":
+                    message = "PRIVATE_CLOSE_FAILURE"
+                    raise OSError(message)
+
+            return cast(
+                "BinaryIO",
+                cast("object", SimpleNamespace(read=read, close=close, fileno=original.fileno)),
+            )
+
+        def root_fstat(descriptor: int) -> os.stat_result:
+            return root_owner(real_fstat(descriptor))
+
+        def root_lstat(path: Path) -> os.stat_result:
+            return root_owner(real_lstat(path))
+
+        def root_stat(
+            path: str | Path, *, dir_fd: int | None = None, follow_symlinks: bool = True
+        ) -> os.stat_result:
+            return root_owner(real_stat(path, dir_fd=dir_fd, follow_symlinks=follow_symlinks))
+
+        with (
+            patch.object(time, "monotonic", side_effect=lambda: clock[0]),
+            patch.object(os, "fstat", side_effect=root_fstat),
+            patch.object(Path, "lstat", autospec=True, side_effect=root_lstat),
+            patch.object(os, "stat", side_effect=root_stat),
+            patch.object(stage, "adopt", side_effect=adopted),
+            patch.object(os, "open", side_effect=opened),
+            patch.object(os, "close", side_effect=closed),
+        ):
+            result = guest.native_log_tail(root, control)
+        self.assertTrue(all(stream.closed for stream in streams))
+        for descriptor in descriptors:
+            with self.assertRaises(OSError):
+                _ = real_fstat(descriptor)
+        return result
+
+    def write(self, path: Path, data: bytes) -> None:
+        """Create only an own-temp private fixture, using the existing checked adoption path."""
+        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        output = stage.adopt(descriptor, "wb")
+        count: int | None = None
+        first: BaseException | None = None
+        try:
+            count = output.write(data)
+            output.flush()
+        except BaseException as error:  # noqa: BLE001 -- Fixture original always closes.
+            first = error
+        first = ops_guest.settle((output.close,), first)
+        if first is not None:
+            raise first
+        self.assertTrue(output.closed)
+        self.assertEqual(count, len(data))
+
+    def test_last_eight_are_exact_whole_byte_classes_with_missing_bulk_stdout_unknown(self) -> None:
+        """Never export payloads, substrings, secret digests or arbitrary names."""
+        private = b"PRIVATE_URL_OR_CONFIG"
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for ordinal in range(1, 11):
+                self.write(root / f"{ordinal:03}.stderr", b"")
+            self.write(root / "009.stdout", injection.FAILURE + private)
+            self.write(root / "010.stdout", b"")
+            _ = (root / "010.stderr").write_bytes(injection.FAILURE)
+            observed = self.tail(root)
+        rows = cast("list[dict[str, object]]", observed["rows"])
+        self.assertEqual([row["ordinal"] for row in rows], list(range(3, 11)))
+        self.assertEqual(observed["state"], "partial")
+        self.assertEqual(
+            rows[-1]["stderr"],
+            {"present": True, "class": "barrier-refused", "bytes": len(injection.FAILURE)},
+        )
+        self.assertEqual(rows[-1]["stdout"], {"present": True, "class": "empty", "bytes": 0})
+        self.assertEqual(cast("dict[str, object]", rows[-2]["stdout"])["class"], "opaque")
+        self.assertIsNone(cast("dict[str, object]", rows[0]["stdout"])["present"])
+        self.assertNotIn("PRIVATE", json.dumps(observed))
+        self.assertEqual(guest.log_tail_projection(observed), observed)
+
+    def test_symlink_oversize_read_close_and_late_files_never_become_known_classes(self) -> None:
+        """Every actual admitted original closes before the refusal assertions."""
+        outcomes: list[dict[str, object]] = []
+        for fault in ("symlink", "oversize", "read", "close", "late", "directory-close"):
+            with tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                self.write(root / "010.stdout", b"")
+                if fault == "symlink":
+                    (root / "010.stderr").symlink_to("absent")
+                else:
+                    self.write(root / "010.stderr", injection.FAILURE)
+                    if fault == "oversize":
+                        with (root / "010.stderr").open("r+b") as output:
+                            _ = output.truncate(guest.MAX_STREAM + 1)
+                observed = self.tail(root, fault=fault)
+                outcomes.append(observed)
+        for fault, observed in zip(
+            ("symlink", "oversize", "read", "close", "late", "directory-close"),
+            outcomes,
+            strict=True,
+        ):
+            if fault in {"late", "directory-close"}:
+                self.assertEqual(observed, guest.unknown_native_logs())
+            else:
+                row = cast("list[dict[str, object]]", observed["rows"])[0]
+                self.assertIsNone(cast("dict[str, object]", row["stderr"])["present"])
+                self.assertEqual(observed["state"], "partial")
+
+    def test_out_of_range_inventory_and_hostile_projection_fail_closed(self) -> None:
+        """Bound names, row count and every typed metadata field without copying secrets."""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.write(root / "193.stderr", injection.FAILURE)
+            observed = self.tail(root)
+        self.assertEqual(observed, guest.unknown_native_logs())
+        changes: tuple[dict[str, object], ...] = (
+            {"state": {"PRIVATE": 1}, "lastOrdinal": None, "rows": []},
+            {"state": "available", "lastOrdinal": True, "rows": []},
+            {"state": "available", "lastOrdinal": None, "rows": [], "PRIVATE": "SECRET"},
+            {
+                "state": "available",
+                "lastOrdinal": 1,
+                "rows": [
+                    {
+                        "ordinal": 1,
+                        "stdout": {"present": True, "class": "SECRET", "bytes": 6},
+                        "stderr": {"present": None, "class": None, "bytes": None},
+                    }
+                ],
+            },
+        )
+        for changed in changes:
+            with self.assertRaises(ValueError) as raised:
+                _ = guest.log_tail_projection(changed)
+            self.assertNotIn("PRIVATE", str(raised.exception))
+            self.assertNotIn("SECRET", str(raised.exception))
+
+    def test_nested_actual_child_pair_is_restored_to_outer_native_invocation(self) -> None:
+        """The real outer child1 cannot inherit nested docker-inspect role/ordinal0 facts."""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            control = guest.Control(time.monotonic())
+            wire = cast("guest.Wire", cast("object", SimpleNamespace(no_extra=lambda: None)))
+            commands = guest.Commands(control, wire, [])
+            real_spawn = cast("type[subprocess.Popen[bytes]]", subprocess.Popen)
+            real_pump = bounded_process.pump
+            children: list[subprocess.Popen[bytes]] = []
+
+            def spawn(*_args: object, **_options: object) -> subprocess.Popen[bytes]:
+                child = real_spawn(
+                    [sys.executable, "-c", "import sys;sys.exit(1)"],
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    start_new_session=True,
+                )
+                children.append(child)
+                return child
+
+            def pump(
+                child: subprocess.Popen[bytes],
+                output: BinaryIO,
+                error: BinaryIO,
+                limits: bounded_process.Limits,
+            ) -> int:
+                # Simulate the existing synchronous nested observer callback's completed tuple.
+                commands.sequence += 1
+                commands.last_ordinal = commands.sequence
+                commands.last_role, commands.last_status = "docker-inspect", 0
+                return real_pump(child, output, error, limits)
+
+            observed: guest.Command | None = None
+            with (
+                patch.object(guest, "ROOT", root),
+                patch.object(commands, "spawn", side_effect=spawn),
+                patch.object(bounded_process, "pump", side_effect=pump),
+            ):
+                observed = commands.run(["simplestchat-ops", "release", "deploy"], success=False)
+            peers_closed = all(
+                stream is None or stream.closed
+                for child in children
+                for stream in (child.stdin, child.stdout, child.stderr)
+            )
+            settled = all(child.returncode == 1 for child in children)
+        self.assertIsNotNone(observed)
+        self.assertTrue(peers_closed and settled)
+        self.assertEqual(commands.sequence, 2)
+        self.assertEqual(
+            (commands.last_ordinal, commands.last_role, commands.last_status),
+            (1, "native-deploy", 1),
+        )
+
+    def test_parent_rename_cannot_redirect_the_original_directory_leaf(self) -> None:
+        """Actual path replacement supplies no authority to read the foreign marker."""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            visible, moved, foreign = root / "visible", root / "held", root / "foreign"
+            visible.mkdir(mode=0o700)
+            foreign.mkdir(mode=0o700)
+            self.write(visible / "001.stderr", b"")
+            self.write(foreign / "001.stderr", injection.FAILURE)
+            descriptor = os.open(visible, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+            control = guest.Control(100.0)
+            real_fstat, real_stat = os.fstat, os.stat
+            before: os.stat_result | None = None
+            result: dict[str, object] = {}
+            first: BaseException | None = None
+            try:
+                before = real_fstat(descriptor)
+                _ = visible.rename(moved)
+                _ = foreign.rename(visible)
+
+                def root_fstat(number: int) -> os.stat_result:
+                    return root_owner(real_fstat(number))
+
+                def root_stat(
+                    path: str | Path, *, dir_fd: int | None = None, follow_symlinks: bool = True
+                ) -> os.stat_result:
+                    return root_owner(
+                        real_stat(path, dir_fd=dir_fd, follow_symlinks=follow_symlinks)
+                    )
+
+                with (
+                    patch.object(time, "monotonic", return_value=100.0),
+                    patch.object(os, "fstat", side_effect=root_fstat),
+                    patch.object(os, "stat", side_effect=root_stat),
+                ):
+                    result = guest.native_log_stream(descriptor, "001.stderr", control)
+            except BaseException as error:  # noqa: BLE001 -- Directory original always closes.
+                first = error
+            first = ops_guest.settle((lambda: os.close(descriptor),), first)
+            self.assertIsNone(first)
+            self.assertEqual(result, {"present": True, "class": "empty", "bytes": 0})
+            self.assertIsNotNone(before)
+            self.assertEqual(cast("os.stat_result", before).st_ino, moved.stat().st_ino)
+            with self.assertRaises(OSError):
+                _ = real_fstat(descriptor)
 
 
 if __name__ == "__main__":

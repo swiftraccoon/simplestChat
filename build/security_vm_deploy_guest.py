@@ -39,6 +39,8 @@ DOCKER_ZERO_TIME = "0001-01-01T00:00:00Z"
 MAX_STREAM = 2 * 1024**2
 MAX_COMMANDS = 384
 MAX_NATIVE_COMMANDS = 192
+NATIVE_LOG_TAIL = 8
+NATIVE_LOG_ENTRIES = MAX_NATIVE_COMMANDS * 2 + 64
 FRAME_COUNT = 2
 TRIAL_COUNT = 2
 ACTOR_COUNT = 4
@@ -362,6 +364,7 @@ DIAGNOSTIC_KEYS = NATIVE_FACT_KEYS | {
     "completedTrials",
     "selectionClass",
     "journalClass",
+    "nativeLogTail",
 }
 FAILURE_KINDS = frozenset(
     {
@@ -446,6 +449,176 @@ def diagnostic_enum(value: object, choices: frozenset[str] | set[str]) -> bool:
     return type(value) is str and value in choices
 
 
+def unknown_native_logs() -> dict[str, object]:
+    """Keep absent/unsafe/unreadable diagnostic evidence explicitly unknown."""
+    return {"state": "unavailable", "lastOrdinal": None, "rows": []}
+
+
+def log_tail_projection(value: object) -> dict[str, object]:
+    """Project only eight closed numbered observations, never content or content hashes."""
+    tail = exact(value, {"state", "lastOrdinal", "rows"})
+    require(diagnostic_enum(tail["state"], {"unavailable", "available", "partial"}))
+    require(type(tail["rows"]) is list)
+    rows = cast("list[object]", tail["rows"])
+    require(len(rows) <= NATIVE_LOG_TAIL)
+    ordinals: list[int] = []
+    partial = False
+    for raw in rows:
+        row = exact(raw, {"ordinal", "stdout", "stderr"})
+        ordinals.append(integer(row["ordinal"], 1, MAX_NATIVE_COMMANDS))
+        for name in ("stdout", "stderr"):
+            stream = exact(row[name], {"present", "class", "bytes"})
+            present = stream["present"]
+            require(present is None or type(present) is bool)
+            if present is not True:
+                require(stream["class"] is None and stream["bytes"] is None)
+                partial |= present is None
+                continue
+            require(diagnostic_enum(stream["class"], {"empty", "barrier-refused", "opaque"}))
+            count = integer(stream["bytes"], 0, MAX_STREAM)
+            require((stream["class"] == "empty") is (count == 0))
+            require(stream["class"] != "barrier-refused" or count == len(injection.FAILURE))
+    require(ordinals == sorted(set(ordinals)))
+    require(tail["lastOrdinal"] == (ordinals[-1] if ordinals else None))
+    if tail["lastOrdinal"] is not None:
+        _ = integer(tail["lastOrdinal"], 1, MAX_NATIVE_COMMANDS)
+    if tail["state"] == "unavailable":
+        require(not rows and tail["lastOrdinal"] is None)
+    else:
+        require((tail["state"] == "partial") is partial)
+    return dict(tail)
+
+
+def native_log_stream(directory: int, name: str, control: Control) -> dict[str, object]:
+    """Read only a numeric leaf relative to the original admitted directory FD."""
+    unknown: dict[str, object] = {"present": None, "class": None, "bytes": None}
+    stream: BinaryIO | None = None
+    result: dict[str, object] = unknown
+    first: BaseException | None = None
+    try:
+        control.check()
+        match = re.fullmatch(r"([0-9]{3})\.(stdout|stderr)", name)
+        require(match is not None and 0 < int(required(match)[1]) <= MAX_NATIVE_COMMANDS)
+        descriptor = os.open(
+            name,
+            os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC,
+            dir_fd=directory,
+        )
+        stream = stage.adopt(descriptor, "rb")
+        control.check()
+        before = os.fstat(stream.fileno())
+        require(
+            stat.S_ISREG(before.st_mode)
+            and before.st_uid == before.st_gid == 0
+            and stat.S_IMODE(before.st_mode) == PRIVATE_MODE
+            and before.st_nlink == 1
+            and 0 <= before.st_size <= MAX_STREAM
+        )
+        data = bytearray()
+        while True:
+            control.check()
+            chunk = stream.read(min(65536, before.st_size + 1 - len(data)))
+            control.check()
+            if not chunk:
+                break
+            data.extend(chunk)
+            require(len(data) <= before.st_size)
+        require(len(data) == before.st_size)
+        control.check()
+        require(ops_guest.stamp(os.fstat(stream.fileno())) == ops_guest.stamp(before))
+        control.check()
+        require(
+            ops_guest.stamp(os.stat(name, dir_fd=directory, follow_symlinks=False))
+            == ops_guest.stamp(before)
+        )
+        control.check()
+        result = {
+            "present": True,
+            "class": "empty"
+            if not data
+            else "barrier-refused"
+            if bytes(data) == injection.FAILURE
+            else "opaque",
+            "bytes": len(data),
+        }
+    except BaseException as error:  # noqa: BLE001 -- Every admitted stream still closes.
+        first = error
+    actions: list[Callable[[], None]] = []
+    if stream is not None:
+        actions.append(stream.close)
+    actions.append(control.check)
+    first = ops_guest.settle(actions, first)
+    return result if first is None else unknown
+
+
+def native_log_tail(attempt: Path, control: Control) -> dict[str, object]:
+    """Read a bounded last-eight inventory from the original private attempt directory."""
+    descriptor = -1
+    scan = None
+    first: BaseException | None = None
+    result = unknown_native_logs()
+    try:
+        control.check()
+        descriptor = os.open(attempt, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        before = os.fstat(descriptor)
+        require(
+            stat.S_ISDIR(before.st_mode)
+            and before.st_uid == before.st_gid == 0
+            and stat.S_IMODE(before.st_mode) == DIRECTORY_MODE
+        )
+        control.check()
+        require(ops_guest.stamp(attempt.lstat()) == ops_guest.stamp(before))
+        control.check()
+        scan = os.scandir(descriptor)
+        ordinals: set[int] = set()
+        for count, entry in enumerate(scan, 1):
+            control.check()
+            require(count <= NATIVE_LOG_ENTRIES)
+            match = re.fullmatch(r"([0-9]{3})\.(stdout|stderr)", entry.name)
+            if match is not None:
+                ordinal = int(match[1])
+                require(0 < ordinal <= MAX_NATIVE_COMMANDS)
+                ordinals.add(ordinal)
+        control.check()
+        rows: list[dict[str, object]] = []
+        for ordinal in sorted(ordinals)[-NATIVE_LOG_TAIL:]:
+            control.check()
+            require(ops_guest.stamp(os.fstat(descriptor)) == ops_guest.stamp(before))
+            require(ops_guest.stamp(attempt.lstat()) == ops_guest.stamp(before))
+            rows.append(
+                {
+                    "ordinal": ordinal,
+                    **{
+                        name: native_log_stream(descriptor, f"{ordinal:03}.{name}", control)
+                        for name in ("stdout", "stderr")
+                    },
+                }
+            )
+        control.check()
+        require(ops_guest.stamp(os.fstat(descriptor)) == ops_guest.stamp(before))
+        require(ops_guest.stamp(attempt.lstat()) == ops_guest.stamp(before))
+        partial = any(
+            cast("dict[str, object]", row[name])["present"] is None
+            for row in rows
+            for name in ("stdout", "stderr")
+        )
+        result = {
+            "state": "partial" if partial else "available",
+            "lastOrdinal": max(ordinals) if ordinals else None,
+            "rows": rows,
+        }
+    except BaseException as error:  # noqa: BLE001 -- Read-only diagnostic remains best effort.
+        first = error
+    actions: list[Callable[[], None]] = []
+    if scan is not None:
+        actions.append(scan.close)
+    if descriptor >= 0:
+        actions.append(lambda: os.close(descriptor))
+    actions.append(control.check)
+    first = ops_guest.settle(actions, first)
+    return log_tail_projection(result) if first is None else unknown_native_logs()
+
+
 def failure_projection(value: object, run_id: str) -> dict[str, object]:
     """Accept one exact bounded diagnostic schema without copying unknown nested data."""
     data = exact(value, set(DIAGNOSTIC_KEYS))
@@ -468,7 +641,10 @@ def failure_projection(value: object, run_id: str) -> dict[str, object]:
         data["lastObservedRole"] is None
         or diagnostic_enum(data["lastObservedRole"], DIAGNOSTIC_ROLES)
     )
-    _ = integer(data["lastObservedOrdinal"], 0, MAX_COMMANDS)
+    observed = integer(data["lastObservedOrdinal"], 0, MAX_COMMANDS)
+    require((data["lastObservedRole"] is None) is (observed == 0))
+    require(observed != 0 or data["lastObservedExit"] is None)
+    _ = log_tail_projection(data["nativeLogTail"])
     _ = integer(data["completedTrials"], 0, TRIAL_COUNT)
     for key in ("lastObservedExit", "nativeRawExit"):
         require(
@@ -518,13 +694,14 @@ def failure_snapshot(
         "phase": phase,
         "checkpoint": phase if owner is None else owner.checkpoint,
         "firstFailureKind": kind if kind is None or kind in FAILURE_KINDS else "OtherError",
-        "lastObservedOrdinal": 0 if commands is None else commands.sequence,
+        "lastObservedOrdinal": 0 if commands is None else commands.last_ordinal,
         "lastObservedRole": None if commands is None else commands.last_role,
         "lastObservedExit": None if commands is None else commands.last_status,
         "guestSignalStatus": control.status,
         "completedTrials": 0 if owner is None else len(owner.trials),
         "selectionClass": "unproven" if owner is None else owner.selection_class,
         "journalClass": "unproven" if owner is None else owner.journal_class,
+        "nativeLogTail": unknown_native_logs() if owner is None else owner.native_log_tail,
         "snapshotBoundary": "before-guest-finalizers",
         **(native_facts(None, None) if commands is None else commands.native_observation),
     }
@@ -743,6 +920,7 @@ class Commands:
         self.last_failure: JsonObject | None = None
         self.cleanup_deadline: float | None = None
         self.last_status: int | None = None
+        self.last_ordinal = 0
         self.last_role: str | None = None
         self.native_observation = native_facts(None, None)
         self.socket: tuple[Path, os.stat_result] | None = None
@@ -838,9 +1016,9 @@ class Commands:
         )
         self.check()
         self.sequence += 1
-        self.last_role = command_role(args)
-        self.last_status = None
+        role = command_role(args)
         sequence = self.sequence
+        self.last_role, self.last_ordinal, self.last_status = role, sequence, None
         require(self.sequence <= MAX_COMMANDS)
         timeout = options.get("timeout", 30)
         require(type(timeout) in (int, float))
@@ -856,6 +1034,7 @@ class Commands:
         first: BaseException | None = None
         consumed = False
         status, data = 1, b""
+        observed_status: int | None = None
         try:
             input_path = options.get("input_path")
             if input_path is not None:
@@ -894,7 +1073,8 @@ class Commands:
                 ),
             )
             consumed = True
-            self.last_status = status
+            observed_status = status
+            self.last_role, self.last_ordinal, self.last_status = role, sequence, status
             self.native_observation = (
                 native_facts(None, status) if candidate is not None else self.native_observation
             )
@@ -914,7 +1094,9 @@ class Commands:
             self.last_failure = {"phase": "owned-observer", "passed": False}
             if child is not None and not consumed and child.returncode is None:
                 first = ops_guest.settle((lambda: bounded_process.stop(child),), first)
+            observed_status = child.returncode if child is not None else None
         finally:
+            self.last_role, self.last_ordinal, self.last_status = role, sequence, observed_status
             actions = [stream.close for stream in streams]
             if child is not None:
                 actions.extend(
@@ -1628,6 +1810,7 @@ class Fixture:
         self.ca: stage.Original | None = None
         self.selection_class = "unproven"
         self.journal_class = "unproven"
+        self.native_log_tail = unknown_native_logs()
 
     def system_tools(self) -> None:
         """Retain fixed package originals with exact per-role modes, never a generic mask."""
@@ -2046,6 +2229,12 @@ class Fixture:
         """Classify two existing private records without a new query, phase or authority."""
         self.selection_class = "unproven"
         self.journal_class = "unproven"
+        self.native_log_tail = unknown_native_logs()
+        try:
+            attempt = active_attempt(before, self.control)
+            self.native_log_tail = native_log_tail(attempt, self.control)
+        except BaseException:  # noqa: BLE001 -- New metadata never replaces the native refusal.
+            self.native_log_tail = unknown_native_logs()
         try:
             self.control.check()
             selected = read_record(CONFIG / "images.json", self.control)
