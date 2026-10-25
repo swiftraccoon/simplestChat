@@ -2868,10 +2868,10 @@ reaps. Neither job proves the other's behavior or complete maintenance success.
 The optional workflow has no artifact selector, API token, production host,
 required-CI role or installed caller change.
 
-The Caddy 60-case suite and namespace 14-case boundary suite use the maintained strict
-Python configuration. These are source/local fixtures, without actual helper-role,
-namespace, KVM, Caddy, TLS or network-containment execution. Both actual experiments
-and the operational 900-second launcher remain unrun until separately recorded.
+The Caddy 63-case suite and namespace 14-case boundary suite use the maintained strict
+Python configuration. These local tests execute no actual helper role, namespace,
+KVM, Caddy or TLS. The separately recorded namespace run passed its finite catalog;
+Caddy stopped at prerequisites, and the operational 900-second launcher remains unrun.
 No application deployment, caller cutover or authenticated Ops distribution is
 established. Run the two local fixture suites independently:
 
@@ -2887,3 +2887,10 @@ exact closed failure-summary artifact under `always()`. Its fixed negative
 checkpoint/case/status/error metadata contains no raw streams, keys, work or
 configuration. Missing or partial metadata is unavailable evidence; final nonzero
 exit invalidates passive bytes and never becomes success through retention.
+
+The e271a8c optional run passed the finite namespace experiment (11 cases / 14
+trials) and failed Caddy at a hash-bound `tool_missing` prerequisite refusal.
+No Caddy TLS or complete maintenance proof is established. The guest bootstrap
+now explicitly installs the separate Docker CLI with the daemon under the same
+no-recommends policy. A fixed workflow choice selects `both` (default), `caddy`
+or `namespace`; the corrected Caddy-only trial remains pending.

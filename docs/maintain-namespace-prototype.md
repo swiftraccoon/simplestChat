@@ -1,6 +1,6 @@
 # PID namespace topology prerequisite probe
 
-This is an unexecuted, test-only Python reference prototype. Production maintain work will use
+This is a test-only Python reference prototype. Production maintain work will use
 Rust. The prototype changes no installed caller, launcher, bootstrap or product timeout and has
 no production authority. It executes no Docker command, server image, application, database or
 real launcher.
@@ -39,8 +39,8 @@ There is deliberately no `--mount-proc`. The original host `/proc` mount must re
 the operational launcher uses Docker host PIDs in `/proc/$pid/ns/net`. The probe opens only its
 own known host-PID namespace handle and `/proc/self/fd` alias; it neither enters a foreign network
 namespace nor executes Docker. It does not demonstrate the complete unchanged 900-second launcher.
-The immutable Bash fixture preserves representative original timeout 180/kill 5 and timeout 15/kill 2
-forms with inert leaf programs. It contains no externally supplied shell text or command.
+The immutable Bash fixture preserves representative original timeout 180/kill 5 and timeout
+15/kill 2 forms with inert leaf programs. It contains no externally supplied shell text or command.
 
 Before GO, PID1 sends its original namespace FD and self pidfd with SCM_RIGHTS. The receiver checks
 kernel SCM_CREDENTIALS, NS_GET_NSTYPE=CLONE_NEWPID and the pidfd's kernel NSpid mapping in receiver
@@ -80,8 +80,8 @@ The fixed catalog contains eleven named cases and fourteen fresh namespace trial
 - host-proc-netns-role: original host-PID lookup and retained namespace-FD alias remain usable.
 
 PID1 stays alive while it consumes every direct/adopted child to actual ECHILD. WNOHANG returning 0
-means a live child, never an empty realm. Repeated namespace KILL covers a cleanup fork concurrent with an
-earlier signal. Even past the observed deadline, known children are consumed rather than detached;
+means a live child, never an empty realm. Repeated namespace KILL covers a cleanup fork
+concurrent with an earlier signal. Even past the observed deadline, known children are consumed rather than detached;
 that late cleanup cannot make the test positive. Namespace-init death and unshare kill-child are
 fallback containment only, not positive ECHILD or userland-reap evidence. Received truncated or
 malformed rights close even when the frame is refused. All original channels, rights, returned
@@ -126,8 +126,8 @@ explicit-epoch body/final transition, fixed Debian metadata-profile refusal, par
 registration/restoration and supplied
 wait-result ownership ordering. They execute no namespace helper role, Linux namespace operation,
 VM, process launcher or network. A mocked wait record is a negative decoder-order regression;
-it is not a kernel-reap or namespace-positive proof. The actual 11-case/14-trial run and the
-unchanged operational 900-second launcher remain unexecuted until a separate authorized trial.
+it is not a kernel-reap or namespace-positive proof. The finite 11-case/14-trial run is recorded
+below; the unchanged operational 900-second launcher remains unexecuted.
 
 The optional manual job uploads the positive summary only after success and always
 attempts a separate exact `failure-summary.json` artifact. Negative metadata is a
@@ -139,3 +139,15 @@ Missing, partial or late metadata remains unavailable, not proof; the original e
 still fences new output admission and final nonzero exit invalidates passive bytes.
 The 14 inert tests include hostile unknown-field projection, real local partial-file
 closure and late-output handling without executing any actual helper role or VM.
+
+The actual e271a8c manual run completed all 11 named cases and 14 fresh namespace
+trials with verified cleanup. That finite source/kernel observation does not
+prove Rust fd0 transport or the full unchanged 900-second operational launcher.
+The optional workflow's finite experiment choice selects `both` (default),
+`caddy` or `namespace` jobs only; no value becomes a helper or shell argument.
+
+The observed guest profile used kernel `6.12.111+deb13-cloud-amd64`, coreutils
+`9.7-3`, util-linux `2.41.5-0+deb13u1` and Bash `5.2.37-2+b10`. Retained tool
+hashes, package identities and reviewed matching primary utility sources
+corroborate this finite observation. They are not a reproducible binary-build,
+kernel-configuration, production-systemd or complete launcher proof.

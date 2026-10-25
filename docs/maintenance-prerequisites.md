@@ -13,23 +13,38 @@ Ops bootstrap or authenticated artifact role is part of these experiments.
 
 ## Run and evidence status
 
+The first actual [manual run at
+e271a8c](https://github.com/swiftraccoon/simplestChat/actions/runs/40144805915)
+completed the namespace experiment: all 11 named cases and 14 fresh namespace
+trials passed with verified cleanup. This establishes that finite source/kernel
+profile only; Rust fd0 transport, the full 900-second launcher and operational
+maintenance remain unproved.
+
+Caddy stopped at guest prerequisites. Its 578-byte guest row was reconstructed
+against the retained SHA256 and identified the exact fixed `tool_missing` refusal.
+No Caddy image/module/TLS/validator success was established. The corrected Caddy
+trial remains pending; the unchanged namespace trial need not be repeated.
+
 The Caddy sources are [the controller](../build/caddy_probe_vm.py),
 [guest](../build/caddy_probe_guest.py), [passive analyzer](../build/caddy_materials.py)
-and their three `test_caddy*.py` suites. The focused suite retains the original 51
-inert cases and adds repository/negative-metadata regressions (60 total). The
-companion [namespace prototype](maintain-namespace-prototype.md) has two helpers
-and 14 inert protocol/clock/FD/workflow cases. Together the focused suites have 74
-local file/crypto/fake-process tests under the maintained strict configuration.
-They execute no actual helper role, namespace, KVM, Docker or natural TLS.
+and their three local suites. Focused source tests include negative metadata,
+first-cause, bootstrap dependency and fixed workflow-choice regressions. They are
+inert local file/crypto/fake-process checks, not actual engine or TLS proof.
 
-Actual Caddy issuance/reuse, DNS containment, the real 8 MiB validator and the
-namespace 11-case/14-trial kernel catalog remain **unrun** until separately
-recorded manual jobs. The unchanged operational 900-second launcher is also
-unrun. Neither source/inert checks nor one experiment establish complete
-maintenance, application health, caller cutover or the other experiment's result.
-
-Use the manual workflow on `main` in the canonical repository. It installs the
-existing hash-pinned Python controller requirements and free KVM/SSH tools.
+Use the manual workflow on `main` in the canonical repository. The finite
+`experiment` choice is `both` (default), `caddy` or `namespace`; it selects only
+the two independent fixed jobs. It is never interpolated into a helper or shell
+and grants no case, command, host, image or timeout selector. The corrected trial
+uses `experiment=caddy`, without repeating the unchanged namespace job. It
+installs the existing hash-pinned Python controller requirements and free KVM/SSH tools.
+Inside the owned guest, the Caddy bootstrap explicitly installs both `docker.io`
+and `docker-cli` while preserving `--no-install-recommends`.
+[Debian 13 docker.io](https://packages.debian.org/trixie/docker.io) recommends the
+separate CLI package rather than depending on it; its
+[daemon package files](https://packages.debian.org/trixie/amd64/docker.io/filelist)
+exclude `/usr/bin/docker`, supplied by
+[docker-cli](https://packages.debian.org/trixie/amd64/docker-cli/filelist). The
+required tool guards remain unchanged.
 The Caddy job uses explicit fixture N=1800/M=120/G=60. The namespace job retains
 its fixed 1800-second original envelope, body 1680/finalization 120, with subordinate
 guest/case durations clipped from that same clock. These are separate experiments;
@@ -198,10 +213,10 @@ SSH work directory or disk is retained by either artifact step.
 
 The negative schema always says `passed:false` and `metadataOnly:true`. It carries
 only the fixed experiment/controller checkpoint, strictly projected guest phase
-or named case, closed exception families, actually returned signed SSH status
-or null, bounded row byte count/SHA256, and separate cleanup/restoration/fence
-facts. Unknown guest fields or error text cannot enter it. SDK refusal before a
-status return remains null; its initialized/default status is never substituted.
+or named case, closed exception families and reviewed static policy refusal code,
+actually returned signed SSH status or null, bounded row byte count/SHA256, and separate cleanup/restoration/fence
+facts. Unknown guest fields or error text cannot enter it. The Caddy policy-code field accepts only its reviewed literal catalog; any other string is null. SDK
+refusal before a status return remains null; its initialized/default status is never substituted.
 The first observed refusal stays primary through cleanup and diagnostic output.
 A matching fixed JSON line is attempted on stderr when a file cannot be retained.
 
