@@ -6,6 +6,10 @@ use std::ffi::OsString;
 use std::path::Path;
 use std::process::ExitCode;
 
+mod python_captures;
+mod python_inventory;
+mod python_shards;
+
 const PLAYBOOKS: [&str; 10] = [
     "site.yml",
     "public.yml",
@@ -52,7 +56,14 @@ impl Selection {
     }
 }
 
+#[derive(Clone, Copy)]
+enum StepKind {
+    Command,
+    PythonDiscovery,
+}
+
 struct Step {
+    kind: StepKind,
     group: Group,
     program: OsString,
     arguments: Vec<OsString>,
@@ -61,6 +72,7 @@ struct Step {
 impl Step {
     fn new(program: impl Into<OsString>, arguments: &[&str]) -> Self {
         Self {
+            kind: StepKind::Command,
             group: Group::Checks,
             program: program.into(),
             arguments: arguments.iter().map(OsString::from).collect(),
@@ -112,6 +124,7 @@ fn steps(root: &Path, executable: &Path) -> std::io::Result<Vec<Step>> {
         ));
     }
     steps.push(Step {
+        kind: StepKind::Command,
         group: Group::Checks,
         program: "shellcheck".into(),
         arguments: scripts
@@ -353,17 +366,10 @@ fn steps(root: &Path, executable: &Path) -> std::io::Result<Vec<Step>> {
             "--exact",
         ],
     ));
-    steps.push(Step::new(
-        "python",
-        &[
-            "-m",
-            "unittest",
-            "discover",
-            "-s",
-            "ops/ansible/tests",
-            "-v",
-        ],
-    ));
+    steps.push(Step {
+        kind: StepKind::PythonDiscovery,
+        ..Step::new("python", &python_shards::BASE_ARGUMENTS)
+    });
     Ok(steps)
 }
 
@@ -392,8 +398,9 @@ fn checks(root: &Path, environment: &Environment, selection: Selection) -> tooli
         steps(root, &executable).map_err(|error| Failure::new(1, error.to_string()))?,
         selection,
     );
-    execute(&steps, |step| {
-        tooling::run(root, environment, &step.program, &step.arguments)
+    execute(&steps, |step| match step.kind {
+        StepKind::Command => tooling::run(root, environment, &step.program, &step.arguments),
+        StepKind::PythonDiscovery => python_shards::run(root, environment),
     })
 }
 

@@ -245,6 +245,9 @@ test('every Rust/browser source and migration in the repository reaches the buil
 
 test('context excludes local-only descendants while retaining production inputs', () => {
   for (const rule of [
+    '!xtask/src/ci/automation/',
+    'xtask/src/ci/automation/**',
+    '!xtask/src/ci/automation/*.rs',
     '!xtask/src/ci/ops_artifact/maintain_runtime/',
     'xtask/src/ci/ops_artifact/maintain_runtime/**',
     '!xtask/src/ci/ops_artifact/maintain_runtime/*.rs',
@@ -295,6 +298,8 @@ test('context excludes local-only descendants while retaining production inputs'
     'xtask/notes.md', 'xtask/src/CLAUDE.md', 'web/CLAUDE.md', 'web/.env',
     'xtask/src/check/private.env', 'xtask/src/run_local/private.env',
     'xtask/src/ci/private.env', 'xtask/src/ci_local/private.env',
+    'xtask/src/ci/automation/private.env',
+    'xtask/src/ci/automation/retained/artifact.zip',
     'xtask/src/ci_evidence/private.env',
     'xtask/src/ci_retention/private.env',
     'xtask/src/ci/codeql_cache/private.env',
@@ -360,6 +365,10 @@ test('context excludes local-only descendants while retaining production inputs'
     'ops/src/release/attestation/restore/process.rs',
     'load_tests/Cargo.toml', 'load_tests/src/main.rs', 'load_tests/src/metrics/measurement.rs',
     'xtask/Cargo.toml', 'xtask/src/main.rs',
+    'xtask/src/ci/automation/python_inventory.rs',
+    'xtask/src/ci/automation/python_captures.rs',
+    'xtask/src/ci/automation/python_shards.rs',
+    'xtask/src/ci/automation/python_shards_tests.rs',
     'xtask/src/ci/ops_artifact/capacity_vps/prepare.rs',
     'xtask/src/ci/ops_artifact/maintain_runtime/execute.rs',
     'xtask/src/ci/ops_artifact/maintain_runtime/qmp.rs',

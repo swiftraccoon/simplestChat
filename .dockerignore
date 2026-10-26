@@ -183,6 +183,9 @@ xtask/src/check/**
 !xtask/src/ci/
 xtask/src/ci/**
 !xtask/src/ci/*.rs
+!xtask/src/ci/automation/
+xtask/src/ci/automation/**
+!xtask/src/ci/automation/*.rs
 !xtask/src/ci/production_image/
 xtask/src/ci/production_image/**
 !xtask/src/ci/production_image/*.rs
