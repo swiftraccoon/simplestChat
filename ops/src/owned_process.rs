@@ -68,6 +68,80 @@ use rustix::process::{Pid, Signal as ProcessSignal, WaitId, WaitIdOptions};
 use std::time::{Duration, Instant};
 use tokio::signal::unix::{Signal, SignalKind};
 
+/// Opaque synchronous INT/TERM ownership that outlives a Tokio runtime.
+///
+/// A whole outer operation creates exactly one instance before worker/runtime
+/// creation and lends its observations to every child owner. This does not own
+/// or retire children. Destruction is refusal cleanup; positive completion must
+/// call [`Self::finish`] and retain its result through the original final fence.
+///
+/// # Examples
+///
+/// On a Unix host, retain the same registration across runtime teardown and
+/// check its result against the original deadline. This example starts no child
+/// processes; callers must finish their own child owners before this boundary.
+///
+/// ```no_run
+/// use simplestchat_ops::owned_process::{CompletionSignals, Error};
+/// use std::time::{Duration, Instant};
+///
+/// # fn main() -> Result<(), Error> {
+/// let end = Instant::now() + Duration::from_secs(30);
+/// let mut signals = CompletionSignals::new()?;
+/// let runtime = tokio::runtime::Builder::new_current_thread()
+///     .enable_all()
+///     .build()
+///     .map_err(|_| Error::Supervision)?;
+/// drop(runtime);
+/// let interrupted = signals.finish()?;
+/// if interrupted.is_some() || Instant::now() >= end {
+///     return Err(Error::Supervision);
+/// }
+/// # Ok(())
+/// # }
+/// ```
+pub struct CompletionSignals(crate::release::attestation::CompletionFlags);
+impl std::fmt::Debug for CompletionSignals {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("CompletionSignals")
+    }
+}
+impl CompletionSignals {
+    /// Register the existing safe atomic implementation, without a runtime.
+    ///
+    /// # Errors
+    /// Returns a fixed supervision error if either registration refuses. Any
+    /// already admitted registration is removed by the original implementation.
+    pub fn new() -> Result<Self, Error> {
+        crate::release::attestation::CompletionFlags::new()
+            .map(Self)
+            .map_err(io)
+    }
+    /// Observe sticky INT/TERM without consuming or transferring ownership.
+    ///
+    /// INT takes precedence when both flags are set. This adapter does not store
+    /// signal arrival order; the caller must latch its first observed status.
+    pub fn status(&self) -> Option<u8> {
+        self.0.status()
+    }
+    /// Remove every registration, then sample the retained original flags.
+    ///
+    /// This is synchronous and valid after runtime and umask restoration. It
+    /// never creates a replacement registration or changes a caller's deadline.
+    ///
+    /// # Errors
+    /// Returns a fixed supervision error if any checked unregister refuses.
+    pub fn finish(&mut self) -> Result<Option<u8>, Error> {
+        let closed = self.0.unregister();
+        let signal = self.0.status();
+        if closed {
+            Ok(signal)
+        } else {
+            Err(Error::Supervision)
+        }
+    }
+}
+
 #[path = "owned_process_cleanup.rs"]
 mod cleanup;
 pub use cleanup::{finish, finish_before};

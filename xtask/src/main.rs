@@ -33,7 +33,7 @@ Commands:
   public-smoke  Check an explicitly authorized HTTPS origin; writes ONE PUBLIC TEST MESSAGE.
                 Requires --features public-smoke; private summary only; see public-smoke --help.
   ops-artifact  Export source, hydrate registry, build unsigned Ops, or verify retained Ops;
-                fixed recipe only, with no signing, installation or candidate execution.
+                fixed recipe; maintain-runtime owns the optional signed maintenance KVM proof.
   check         Run installed-tool quality gates: [--web|--rust|--python|--helpers].
                 Default runs all groups, without installs or application services.
   container-benchmark Standalone root/Linux private benchmark run or locked recovery;

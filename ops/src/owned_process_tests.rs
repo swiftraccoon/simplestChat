@@ -66,6 +66,85 @@ fn public_owners_preserve_send_and_sync_contracts() {
 
     assert_send_sync::<super::Group>();
     assert_send_sync::<super::Signals>();
+    assert_send_sync::<super::CompletionSignals>();
+}
+
+#[test]
+fn completion_signals_survive_runtime_teardown_in_actual_owned_children() {
+    let Ok(number) = std::env::var("SIMPLESTCHAT_COMPLETION_SIGNAL") else {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        runtime.block_on(completion_signal_children());
+        return;
+    };
+    assert!(matches!(number.as_str(), "INT" | "TERM"));
+    let mut owner = super::CompletionSignals::new().unwrap();
+    assert_eq!(owner.status(), None);
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    runtime.block_on(async {
+        tokio::task::yield_now().await;
+    });
+    drop(runtime);
+    let (signal, code) = if number == "INT" {
+        (rustix::process::Signal::INT, 130)
+    } else {
+        (rustix::process::Signal::TERM, 143)
+    };
+    rustix::process::kill_process(rustix::process::getpid(), signal).unwrap();
+    let end = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    while owner.status().is_none() && std::time::Instant::now() < end {
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+    let observed = owner.status();
+    let repeated = owner.status();
+    let finished = owner.finish();
+    assert_eq!(observed, Some(code));
+    assert_eq!(repeated, Some(code));
+    assert_eq!(finished.unwrap(), Some(code));
+    // The final observation is the same retained atomic, not another registration.
+    assert_eq!(owner.status(), Some(code));
+}
+
+async fn completion_signal_children() {
+    use std::{
+        os::unix::process::CommandExt,
+        process::{Command, Stdio},
+        time::{Duration, Instant},
+    };
+    let mut facts = Vec::new();
+    for signal in ["INT", "TERM"] {
+        let child = Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                concat!(
+                    "owned_process::tests::",
+                    "completion_signals_survive_runtime_teardown_in_actual_owned_children"
+                ),
+                "--nocapture",
+            ])
+            .env("SIMPLESTCHAT_COMPLETION_SIGNAL", signal)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .process_group(0)
+            .spawn()
+            .unwrap();
+        let mut group = super::Group::new(child);
+        let end = Instant::now() + Duration::from_secs(10);
+        let terminal = tokio::time::timeout_at(end.into(), super::exited(group.pid())).await;
+        let retired = super::finish_before(group.pid(), end).await;
+        let reaped = group.reap().await;
+        facts.push((terminal, retired, reaped));
+    }
+    for (terminal, retired, reaped) in facts {
+        assert!(matches!(terminal, Ok(Ok(()))) && retired);
+        assert!(reaped.unwrap().success());
+    }
 }
 
 #[test]

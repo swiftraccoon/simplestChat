@@ -83,7 +83,7 @@ jobs:
           MAINTAIN_ARTIFACT_ID: ${{ inputs.artifact_id }}
           MAINTAIN_SCENARIO: ${{ matrix.scenario }}
         run: |
-          python3 -B build/security_vm_maintain_prerequisite.py \
+          target/debug/xtask ops-artifact maintain-runtime \
             --run-id "$MAINTAIN_RUN_ID" --run-attempt "$MAINTAIN_RUN_ATTEMPT" \
             --artifact-id "$MAINTAIN_ARTIFACT_ID" --scenario "$MAINTAIN_SCENARIO" \
             --output "$RUNNER_TEMP/maintain-launcher-runtime"

@@ -11,6 +11,7 @@ mod files_tests;
 #[cfg(test)]
 mod fixture;
 pub(super) mod hosted;
+mod maintain_runtime;
 mod materials;
 #[cfg(test)]
 mod materials_tests;
@@ -37,9 +38,16 @@ build|source|registry|verify-retained|acquire|runtime \
 --request PATH --request-sha256 SHA256\n\
 cargo run --locked -q -p xtask -- ops-artifact hosted --output PATH\n\
 cargo run --locked -q -p xtask -- ops-artifact signing-inputs --directory PATH --output PATH\n\
-cargo run --locked -q -p xtask -- ops-artifact runtime-diagnostics";
+cargo run --locked -q -p xtask -- ops-artifact runtime-diagnostics\n\
+xtask ops-artifact maintain-runtime --run-id N --run-attempt N --artifact-id N \
+--scenario CASE --output ABS";
 
 pub(super) fn run(arguments: &[String]) -> anyhow::Result<std::process::ExitCode> {
+    if let Some((operation, arguments)) = arguments.split_first()
+        && operation == "maintain-runtime"
+    {
+        return Ok(maintain_runtime::run(arguments));
+    }
     if arguments == ["--help"] {
         println!("{USAGE}");
         return Ok(std::process::ExitCode::SUCCESS);

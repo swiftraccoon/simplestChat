@@ -1,0 +1,1500 @@
+//! One fixed disposable Debian VM, private SSH identity and always-joined readers.
+
+#[path = "qmp.rs"]
+mod qmp;
+#[path = "session.rs"]
+mod session;
+pub(super) use session::Session;
+
+use super::{
+    Error, Result,
+    control::Control,
+    files::{self, Original},
+    process::Runner,
+};
+use serde_json::{Value, json};
+use session::Pipe;
+use sha2::{Digest, Sha512};
+use simplestchat_ops::owned_process::{Group, exited_now, finish_before, reserved};
+use std::{
+    ffi::OsString,
+    fs::{self, File, Metadata, OpenOptions},
+    io::{Read, Write},
+    net::TcpListener,
+    os::{
+        fd::OwnedFd,
+        unix::{
+            fs::{FileExt, FileTypeExt, MetadataExt, OpenOptionsExt},
+            process::ExitStatusExt,
+        },
+    },
+    path::{Path, PathBuf},
+    process::{ExitStatus, Stdio},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
+    time::{Duration, Instant},
+};
+use tokio::task::JoinHandle;
+
+const GIB: u64 = 1024 * 1024 * 1024;
+const IMAGE_MAX: u64 = 2 * GIB;
+const STREAM_MAX: usize = 2 * 1024 * 1024;
+const POLL: Duration = Duration::from_millis(100);
+
+fn remember(first: &mut Option<Error>, failure: &Arc<Mutex<Option<Error>>>, result: Result<()>) {
+    if let Err(error) = result {
+        first.get_or_insert(error);
+        failure
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get_or_insert(error);
+    }
+}
+fn live(end: Instant) -> Result<()> {
+    if Instant::now() >= end {
+        Err(Error::Deadline)
+    } else {
+        Ok(())
+    }
+}
+fn close(file: File) -> Result<()> {
+    nix::unistd::close(file).map_err(|_| Error::Close)
+}
+
+struct TaskGuard {
+    health: Arc<AtomicBool>,
+    failure: Arc<Mutex<Option<Error>>>,
+    completed: bool,
+}
+impl Drop for TaskGuard {
+    fn drop(&mut self) {
+        if !self.completed {
+            self.failure
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .get_or_insert(Error::Close);
+        }
+        self.health.store(false, Ordering::SeqCst);
+    }
+}
+
+pub(super) fn preflight(work: &Path, control: &mut Control) -> Result<()> {
+    control.check()?;
+    let uname = rustix::system::uname();
+    if uname.sysname() != c"Linux"
+        || uname.machine() != c"x86_64"
+        || rustix::process::geteuid().is_root()
+    {
+        return Err(Error::Refused);
+    }
+    let kvm = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .custom_flags(
+            rustix::fs::OFlags::NOFOLLOW.bits() as i32 | rustix::fs::OFlags::CLOEXEC.bits() as i32,
+        )
+        .open("/dev/kvm")
+        .map_err(|_| Error::Refused)?;
+    let checked = kvm.metadata().map_err(|_| Error::Io).and_then(|m| {
+        if m.file_type().is_char_device() {
+            control.check()
+        } else {
+            Err(Error::Refused)
+        }
+    });
+    if let Err(error) = checked {
+        control.record(error);
+    }
+    let closed = files::close(kvm, control);
+    checked?;
+    closed?;
+    let disk = rustix::fs::statvfs(work).map_err(|_| Error::Io)?;
+    if u128::from(disk.f_bavail) * u128::from(disk.f_frsize) < u128::from(24 * GIB) {
+        return Err(Error::Refused);
+    }
+    control.check()?;
+    let mut file = File::open("/proc/meminfo").map_err(|_| Error::Io)?;
+    let memory: Result<Vec<u8>> = (|| {
+        let mut data = Vec::new();
+        let mut block = [0; 4096];
+        loop {
+            control.check()?;
+            let count = match file.read(&mut block) {
+                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+                value => value.map_err(|_| Error::Io)?,
+            };
+            control.check()?;
+            if count == 0 {
+                break;
+            }
+            data.extend_from_slice(&block[..count]);
+            if data.len() > 65536 {
+                return Err(Error::Refused);
+            }
+        }
+        Ok(data)
+    })();
+    if let Err(error) = memory {
+        control.record(error);
+    }
+    let closed = files::close(file, control);
+    let memory = memory?;
+    closed?;
+    let text = std::str::from_utf8(&memory).map_err(|_| Error::Refused)?;
+    let available = text
+        .lines()
+        .filter_map(|line| line.strip_prefix("MemAvailable:"))
+        .map(|value| value.split_whitespace().collect::<Vec<_>>())
+        .collect::<Vec<_>>();
+    let [fields] = available.as_slice() else {
+        return Err(Error::Refused);
+    };
+    if fields.len() != 2
+        || fields[1] != "kB"
+        || !fields[0].bytes().all(|b| b.is_ascii_digit())
+        || fields[0].parse::<u64>().map_err(|_| Error::Refused)? < 5 * 1024 * 1024
+    {
+        return Err(Error::Refused);
+    }
+    control.check()
+}
+
+fn pin(data: &[u8]) -> Result<(String, String)> {
+    let row = super::decode(data)?;
+    let object = row.as_object().ok_or(Error::Refused)?;
+    let expected = [
+        "schemaVersion",
+        "distribution",
+        "architecture",
+        "url",
+        "sha512",
+        "checksumsUrl",
+    ];
+    if object.len() != expected.len()
+        || expected.iter().any(|name| !object.contains_key(*name))
+        || row["schemaVersion"].as_u64() != Some(1)
+        || row["distribution"] != "Debian 13"
+        || row["architecture"] != "amd64"
+    {
+        return Err(Error::Refused);
+    }
+    let url = row["url"].as_str().ok_or(Error::Refused)?;
+    let expression = regex::Regex::new(concat!(
+        "^https://cloud\\.debian\\.org/images/cloud/trixie/([0-9]{8}-[0-9]+)/",
+        "debian-13-genericcloud-amd64-([0-9]{8}-[0-9]+)\\.qcow2$"
+    ))
+    .map_err(|_| Error::Refused)?;
+    let parts = expression.captures(url).ok_or(Error::Refused)?;
+    let digest = row["sha512"].as_str().ok_or(Error::Refused)?;
+    if parts.get(1).map(|v| v.as_str()) != parts.get(2).map(|v| v.as_str())
+        || row["checksumsUrl"]
+            != format!(
+                "{}/SHA512SUMS",
+                url.rsplit_once('/').ok_or(Error::Refused)?.0
+            )
+        || digest.len() != 128
+        || !digest
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    {
+        return Err(Error::Refused);
+    }
+    Ok((url.into(), digest.into()))
+}
+
+fn verify_cloud(original: &Original, expected: &str, control: &mut Control) -> Result<()> {
+    if original.bytes == 0 || original.bytes > IMAGE_MAX {
+        return Err(Error::Refused);
+    }
+    original.metadata(control)?;
+    let mut hash = Sha512::new();
+    let mut offset = 0;
+    let mut bytes = [0; 65536];
+    loop {
+        control.check()?;
+        let count = match original.file()?.read_at(&mut bytes, offset) {
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+            value => value.map_err(|_| Error::Io)?,
+        };
+        control.check()?;
+        if count == 0 {
+            break;
+        }
+        offset += count as u64;
+        if offset > IMAGE_MAX {
+            return Err(Error::Refused);
+        }
+        hash.update(&bytes[..count]);
+    }
+    if offset != original.bytes || files::hex(&hash.finalize()) != expected {
+        return Err(Error::Changed);
+    }
+    original.metadata(control)
+}
+
+fn quote(value: &str) -> Result<String> {
+    if value.contains('\0') || value.len() > 4096 {
+        return Err(Error::Input);
+    }
+    Ok(format!("'{}'", value.replace('\'', "'\\''")))
+}
+fn ssh_arguments(work: &Path, port: u16, command: &[String]) -> Result<Vec<OsString>> {
+    if port < 1024 || command.is_empty() {
+        return Err(Error::Input);
+    }
+    let mut arguments = vec!["-F".into(), "/dev/null".into()];
+    for option in [
+        "BatchMode=yes".into(),
+        "IdentitiesOnly=yes".into(),
+        "IdentityAgent=none".into(),
+        "ForwardAgent=no".into(),
+        "PasswordAuthentication=no".into(),
+        "KbdInteractiveAuthentication=no".into(),
+        "StrictHostKeyChecking=yes".into(),
+        "GlobalKnownHostsFile=/dev/null".into(),
+        format!(
+            "UserKnownHostsFile={}",
+            work.join("known_hosts").to_str().ok_or(Error::Input)?
+        ),
+        "ProxyCommand=none".into(),
+        "ProxyJump=none".into(),
+        "ControlMaster=no".into(),
+        "ControlPath=none".into(),
+        "ControlPersist=no".into(),
+        "ConnectTimeout=5".into(),
+        "ConnectionAttempts=1".into(),
+        "ServerAliveInterval=5".into(),
+        "ServerAliveCountMax=2".into(),
+    ] {
+        arguments.extend(["-o".into(), OsString::from(option)]);
+    }
+    arguments.extend([
+        "-i".into(),
+        work.join("client").into_os_string(),
+        "-p".into(),
+        port.to_string().into(),
+        "fixture@127.0.0.1".into(),
+        command
+            .iter()
+            .map(|s| quote(s))
+            .collect::<Result<Vec<_>>>()?
+            .join(" ")
+            .into(),
+    ]);
+    Ok(arguments)
+}
+
+pub(super) async fn retire(
+    group: &mut Group,
+    end: Instant,
+    grace: Duration,
+) -> (bool, Result<ExitStatus>) {
+    let pid = group.pid();
+    let mut valid = reserved(pid);
+    let mut permission_unproven = false;
+    let terminal = exited_now(pid);
+    if terminal == Ok(false) && valid {
+        match rustix::process::kill_process_group(pid, rustix::process::Signal::TERM) {
+            Ok(()) | Err(rustix::io::Errno::SRCH) => {}
+            Err(rustix::io::Errno::PERM) => permission_unproven = true,
+            Err(_) => valid = false,
+        }
+        let phase = (Instant::now() + grace).min(end);
+        while Instant::now() < phase {
+            match exited_now(pid) {
+                Ok(true) => break,
+                Ok(false) => {}
+                Err(_) => {
+                    valid = false;
+                    break;
+                }
+            }
+            tokio::time::sleep(POLL.min(phase.saturating_duration_since(Instant::now()))).await;
+        }
+    } else if terminal.is_err() {
+        valid = false;
+    }
+    let finished = finish_before(pid, end).await;
+    // The existing exact-group final proof alone can discharge a narrow TERM/PERM race.
+    if finished {
+        permission_unproven = false;
+    }
+    valid &= finished && !permission_unproven;
+    let reaped = group.reap().await.map_err(|_| Error::Close);
+    (valid, reaped)
+}
+
+#[cfg(all(test, target_os = "linux"))]
+thread_local! {
+    static DISK_OPEN_FLAGS: std::cell::Cell<Option<rustix::fs::OFlags>> = const {
+        std::cell::Cell::new(None)
+    };
+}
+
+struct MutableDisk {
+    file: Option<File>,
+    path: PathBuf,
+    before: Metadata,
+}
+impl MutableDisk {
+    fn open(path: &Path, control: &mut Control) -> Result<Self> {
+        control.check()?;
+        let file = OpenOptions::new()
+            .read(true)
+            .custom_flags(
+                rustix::fs::OFlags::NOFOLLOW.bits() as i32
+                    | rustix::fs::OFlags::CLOEXEC.bits() as i32
+                    | rustix::fs::OFlags::NONBLOCK.bits() as i32,
+            )
+            .open(path)
+            .map_err(|_| Error::Io)?;
+        #[cfg(all(test, target_os = "linux"))]
+        DISK_OPEN_FLAGS.set(rustix::fs::fcntl_getfl(&file).ok());
+        let before = match file.metadata() {
+            Ok(value) => value,
+            Err(_) => {
+                control.record(Error::Io);
+                let _ = files::close(file, control);
+                return Err(Error::Io);
+            }
+        };
+        let mut value = Self {
+            file: Some(file),
+            path: path.into(),
+            before,
+        };
+        if let Err(error) = value.check(control) {
+            control.record(error);
+            let _ = value.finish(control);
+            return Err(error);
+        }
+        Ok(value)
+    }
+    fn check(&self, control: &mut Control) -> Result<()> {
+        control.check()?;
+        let held = self
+            .file
+            .as_ref()
+            .ok_or(Error::Close)?
+            .metadata()
+            .map_err(|_| Error::Io)?;
+        let visible = fs::symlink_metadata(&self.path).map_err(|_| Error::Changed)?;
+        let same = |m: &Metadata| {
+            m.is_file()
+                && m.uid() == rustix::process::getuid().as_raw()
+                && (m.dev(), m.ino(), m.mode(), m.uid(), m.gid(), m.nlink())
+                    == (
+                        self.before.dev(),
+                        self.before.ino(),
+                        self.before.mode(),
+                        self.before.uid(),
+                        self.before.gid(),
+                        1,
+                    )
+                && m.len() <= 17 * GIB
+        };
+        if !same(&held) || !same(&visible) {
+            return Err(Error::Changed);
+        }
+        control.check()
+    }
+    fn finish(&mut self, control: &mut Control) -> Result<()> {
+        self.file
+            .take()
+            .map(|file| files::close(file, control))
+            .unwrap_or(Ok(()))
+    }
+}
+
+#[derive(Default)]
+struct ReaderFacts {
+    first: Option<Error>,
+    eof: [bool; 2],
+    closed: [bool; 4],
+    bytes: [usize; 2],
+    joined: bool,
+    completed: bool,
+}
+struct ReaderOwned {
+    pipes: [Option<Pipe>; 2],
+    logs: [Option<File>; 2],
+}
+impl ReaderOwned {
+    fn finish(&mut self, facts: &mut ReaderFacts, failure: &Arc<Mutex<Option<Error>>>) {
+        for (i, pipe) in self.pipes.iter_mut().enumerate() {
+            if let Some(pipe) = pipe {
+                remember(&mut facts.first, failure, pipe.finish());
+                facts.closed[i] = pipe.closed;
+            }
+        }
+        for (i, file) in self.logs.iter_mut().enumerate() {
+            if let Some(mut file) = file.take() {
+                remember(
+                    &mut facts.first,
+                    failure,
+                    file.flush().map_err(|_| Error::Io),
+                );
+                let result = close(file);
+                facts.closed[i + 2] = result.is_ok();
+                remember(&mut facts.first, failure, result);
+            }
+        }
+    }
+}
+
+pub(super) struct Vm {
+    work: PathBuf,
+    port: u16,
+    end: Instant,
+    originals: Vec<Original>,
+    overlay: Option<MutableDisk>,
+    group: Option<Group>,
+    qmp: Option<qmp::Observer>,
+    reader: Option<JoinHandle<()>>,
+    monitor: Option<JoinHandle<()>>,
+    owned: Arc<Mutex<ReaderOwned>>,
+    facts: Arc<Mutex<ReaderFacts>>,
+    health: Arc<AtomicBool>,
+    failure: Arc<Mutex<Option<Error>>>,
+    closing: Arc<AtomicBool>,
+    stop_reader: Arc<AtomicBool>,
+    authenticated: bool,
+    cloud_init: bool,
+    first: Option<Error>,
+    status: Option<i32>,
+    retired: bool,
+    reaped: bool,
+    closed: bool,
+}
+
+impl Vm {
+    pub async fn create(
+        runner: &mut Runner,
+        control: &mut Control,
+        work: &Path,
+        run_id: &str,
+    ) -> Result<Self> {
+        if control.settling {
+            return Err(Error::Refused);
+        }
+        preflight(work, control)?;
+        if run_id.len() != 32
+            || !run_id
+                .bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+            || fs::canonicalize(work).map_err(|_| Error::Io)? != work
+            || work.join("qmp.sock").as_os_str().as_encoded_bytes().len() > 100
+        {
+            return Err(Error::Input);
+        }
+        let directory = fs::symlink_metadata(work).map_err(|_| Error::Io)?;
+        if !directory.is_dir()
+            || directory.uid() != rustix::process::getuid().as_raw()
+            || directory.mode() & 0o777 != 0o700
+        {
+            return Err(Error::Refused);
+        }
+        // No reader task can be admitted without the caller's already entered runtime.
+        tokio::runtime::Handle::try_current().map_err(|_| Error::Refused)?;
+        control.check()?;
+        let listener = TcpListener::bind(("127.0.0.1", 0)).map_err(|_| Error::Io)?;
+        let selected = listener
+            .local_addr()
+            .map(|address| address.port())
+            .map_err(|_| Error::Io);
+        if let Err(error) = selected {
+            control.record(error);
+        }
+        let closed = nix::unistd::close(listener).map_err(|_| Error::Close);
+        if let Err(error) = closed {
+            control.cleanup_failed = true;
+            control.record(error);
+        }
+        let port = selected?;
+        closed?;
+        control.check()?;
+        let mut vm = Self {
+            work: work.into(),
+            port,
+            end: control.end(),
+            originals: Vec::new(),
+            overlay: None,
+            group: None,
+            qmp: None,
+            reader: None,
+            monitor: None,
+            owned: Arc::new(Mutex::new(ReaderOwned {
+                pipes: [None, None],
+                logs: [None, None],
+            })),
+            facts: Arc::new(Mutex::new(ReaderFacts::default())),
+            health: Arc::new(AtomicBool::new(true)),
+            failure: Arc::new(Mutex::new(None)),
+            closing: Arc::new(AtomicBool::new(false)),
+            stop_reader: Arc::new(AtomicBool::new(false)),
+            authenticated: false,
+            cloud_init: false,
+            first: None,
+            status: None,
+            retired: false,
+            reaped: false,
+            closed: false,
+        };
+        let result = vm.prepare(runner, control, run_id).await;
+        if let Err(error) = result {
+            let observed = *vm
+                .failure
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let error = observed.unwrap_or(error);
+            remember(&mut vm.first, &vm.failure, Err(error));
+            control.record(error);
+            if vm.finish(control).await.is_err() {
+                control.cleanup_failed = true;
+            }
+            return Err(error);
+        }
+        Ok(vm)
+    }
+    fn hold(&mut self, name: &str, maximum: u64, control: &mut Control) -> Result<usize> {
+        let original = Original::open(&self.work.join(name), maximum, control)?;
+        self.originals.push(original);
+        Ok(self.originals.len() - 1)
+    }
+    async fn prepare(
+        &mut self,
+        runner: &mut Runner,
+        control: &mut Control,
+        run_id: &str,
+    ) -> Result<()> {
+        let (url, expected) = pin(&runner.source("security/vm/debian-cloud.json", control)?)?;
+        let image = self.work.join("base.qcow2");
+        runner
+            .run(
+                control,
+                "download-cloud",
+                "curl",
+                vec![
+                    "--disable".into(),
+                    "--fail".into(),
+                    "--silent".into(),
+                    "--show-error".into(),
+                    "--location".into(),
+                    "--proto".into(),
+                    "=https".into(),
+                    "--proto-redir".into(),
+                    "=https".into(),
+                    "--connect-timeout".into(),
+                    "15".into(),
+                    "--max-time".into(),
+                    "300".into(),
+                    "--max-filesize".into(),
+                    IMAGE_MAX.to_string().into(),
+                    "--output".into(),
+                    image.clone().into_os_string(),
+                    url.into(),
+                ],
+                Duration::from_secs(310),
+                &[0],
+            )
+            .await?;
+        let base = self.hold("base.qcow2", IMAGE_MAX, control)?;
+        verify_cloud(&self.originals[base], &expected, control)?;
+        let info = runner
+            .run(
+                control,
+                "cloud-image-info",
+                "qemu-img",
+                vec![
+                    "info".into(),
+                    "--output=json".into(),
+                    image.clone().into_os_string(),
+                ],
+                Duration::from_secs(120),
+                &[0],
+            )
+            .await?;
+        let value = super::decode(&info.stdout)?;
+        if value["format"] != "qcow2"
+            || value["virtual-size"]
+                .as_u64()
+                .is_none_or(|n| n == 0 || n > 16 * GIB)
+            || value
+                .get("backing-filename")
+                .is_some_and(|v| !v.is_null() && v != "")
+            || value
+                .get("snapshots")
+                .is_some_and(|v| !v.is_null() && v != &json!([]))
+        {
+            return Err(Error::Refused);
+        }
+        self.originals[base].metadata(control)?;
+        runner
+            .run(
+                control,
+                "cloud-overlay",
+                "qemu-img",
+                vec![
+                    "create".into(),
+                    "-f".into(),
+                    "qcow2".into(),
+                    "-F".into(),
+                    "qcow2".into(),
+                    "-b".into(),
+                    image.into_os_string(),
+                    self.work.join("guest.qcow2").into_os_string(),
+                    "16G".into(),
+                ],
+                Duration::from_secs(120),
+                &[0],
+            )
+            .await?;
+        self.overlay = Some(MutableDisk::open(&self.work.join("guest.qcow2"), control)?);
+        for name in ["client", "host"] {
+            runner
+                .run(
+                    control,
+                    &format!("key-{name}"),
+                    "ssh-keygen",
+                    vec![
+                        "-q".into(),
+                        "-t".into(),
+                        "ed25519".into(),
+                        "-N".into(),
+                        "".into(),
+                        "-C".into(),
+                        "vm-fixture".into(),
+                        "-f".into(),
+                        self.work.join(name).into_os_string(),
+                    ],
+                    Duration::from_secs(120),
+                    &[0],
+                )
+                .await?;
+            self.hold(name, 8192, control)?;
+            self.hold(&format!("{name}.pub"), 4096, control)?;
+        }
+        let read = |name: &str, originals: &[Original], control: &mut Control| -> Result<Vec<u8>> {
+            originals
+                .iter()
+                .find(|o| o.path.file_name().is_some_and(|n| n == name))
+                .ok_or(Error::Refused)?
+                .data(8192, control)
+        };
+        let key = regex::Regex::new("^ssh-ed25519 [A-Za-z0-9+/=]+ vm-fixture$")
+            .map_err(|_| Error::Refused)?;
+        let client = String::from_utf8(read("client.pub", &self.originals, control)?)
+            .map_err(|_| Error::Refused)?;
+        let host = String::from_utf8(read("host.pub", &self.originals, control)?)
+            .map_err(|_| Error::Refused)?;
+        let client = client.trim();
+        let host = host.trim();
+        if !key.is_match(client) || !key.is_match(host) {
+            return Err(Error::Refused);
+        }
+        let private = String::from_utf8(read("host", &self.originals, control)?)
+            .map_err(|_| Error::Refused)?;
+        let config = json!({"hostname":"simplestchat-fixture",
+            "ssh_pwauth":false,"disable_root":true,
+            "ssh_keys":{"ed25519_private":private,"ed25519_public":host},
+            "users":[{"name":"fixture","lock_passwd":true,"shell":"/bin/bash",
+                "sudo":["ALL=(ALL) NOPASSWD:ALL"],"ssh_authorized_keys":[client]}],
+            "write_files":[{"path":"/etc/simplestchat-vm-fixture",
+                "owner":"root:root",
+                "permissions":"0600","content":format!("{run_id}\n")}]});
+        let mut user = b"#cloud-config\n".to_vec();
+        user.extend(serde_json::to_vec(&config).map_err(|_| Error::Input)?);
+        user.push(b'\n');
+        files::write(&self.work.join("user-data"), &user, control)?;
+        files::write(
+            &self.work.join("meta-data"),
+            &serde_json::to_vec(&json!({
+            "instance-id":run_id,"local-hostname":"simplestchat-fixture"}))
+            .map_err(|_| Error::Input)?,
+            control,
+        )?;
+        files::write(
+            &self.work.join("known_hosts"),
+            format!("[127.0.0.1]:{} {host}\n", self.port).as_bytes(),
+            control,
+        )?;
+        for name in ["user-data", "meta-data", "known_hosts"] {
+            self.hold(name, 16384, control)?;
+        }
+        runner
+            .run(
+                control,
+                "cloud-seed",
+                "cloud-localds",
+                vec![
+                    self.work.join("seed.img").into_os_string(),
+                    self.work.join("user-data").into_os_string(),
+                    self.work.join("meta-data").into_os_string(),
+                ],
+                Duration::from_secs(120),
+                &[0],
+            )
+            .await?;
+        self.hold("seed.img", 16 * 1024 * 1024, control)?;
+        self.launch(runner, control, run_id)?;
+        runner.set_guest_health(self.health(), self.failure());
+        self.boot(runner, control).await
+    }
+    fn launch(&mut self, runner: &mut Runner, control: &mut Control, run_id: &str) -> Result<()> {
+        self.metadata(control)?;
+        let arguments = qemu_arguments(
+            &self.work,
+            self.port,
+            run_id,
+            runner.tool("prlimit", control)?,
+            runner.tool("qemu-system-x86_64", control)?,
+        )?;
+        let stdout = runner.log("qemu", "stdout", control)?;
+        let stderr = match runner.log("qemu", "stderr", control) {
+            Ok(value) => value,
+            Err(error) => {
+                control.record(error);
+                let _ = files::close(stdout, control);
+                return Err(error);
+            }
+        };
+        {
+            let mut owned = self.owned.lock().map_err(|_| Error::Io)?;
+            owned.logs = [Some(stdout), Some(stderr)];
+        }
+        let mut command = runner.command("timeout", &arguments, control)?;
+        command
+            .env("MALLOC_ARENA_MAX", "2")
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        control.check()?;
+        self.group = Some(Group::new(command.spawn().map_err(|_| Error::Io)?));
+        let child = self.group.as_mut().ok_or(Error::Close)?.child();
+        let files = [
+            child.stdout.take().map(|p| File::from(OwnedFd::from(p))),
+            child.stderr.take().map(|p| File::from(OwnedFd::from(p))),
+        ];
+        let mut first = None;
+        {
+            let mut owned = self.owned.lock().map_err(|_| Error::Io)?;
+            for (index, file) in files.into_iter().enumerate() {
+                match file.map(|file| Pipe::new(file, control)).transpose() {
+                    Ok(Some(pipe)) => owned.pipes[index] = Some(pipe),
+                    Ok(None) => {
+                        first.get_or_insert(Error::Close);
+                        control.record(Error::Close);
+                    }
+                    Err(error) => {
+                        first.get_or_insert(error);
+                        control.record(error);
+                    }
+                }
+            }
+        }
+        if let Some(error) = first {
+            return Err(error);
+        }
+        control.check()?;
+        self.start_readers();
+        self.qmp = Some(qmp::Observer::start(
+            &self.work.join("qmp.sock"),
+            self.end,
+            self.health.clone(),
+            self.closing.clone(),
+            self.failure.clone(),
+        )?);
+        control.check()
+    }
+    pub fn port(&self) -> u16 {
+        self.port
+    }
+    pub fn health(&self) -> Arc<AtomicBool> {
+        self.health.clone()
+    }
+    pub fn failure(&self) -> Arc<Mutex<Option<Error>>> {
+        self.failure.clone()
+    }
+    fn metadata(&self, control: &mut Control) -> Result<()> {
+        if let Some(error) = *self
+            .failure
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+        {
+            control.record(error);
+        }
+        control.check()?;
+        for original in &self.originals {
+            original.metadata(control)?;
+        }
+        if let Some(disk) = &self.overlay {
+            disk.check(control)?;
+        }
+        control.check()
+    }
+    pub fn check(&mut self, control: &mut Control) -> Result<()> {
+        self.metadata(control)?;
+        if self.closed || !self.health.load(Ordering::SeqCst) {
+            return Err(Error::Refused);
+        }
+        if let Some(group) = &self.group {
+            if exited_now(group.pid()).map_err(|_| Error::Close)? {
+                return Err(Error::Refused);
+            }
+        } else {
+            return Err(Error::Close);
+        }
+        if let Some(observer) = &self.qmp {
+            observer.check()?;
+        } else {
+            return Err(Error::Refused);
+        }
+        control.check()
+    }
+    pub fn ssh(
+        &self,
+        runner: &Runner,
+        control: &mut Control,
+        command: &[String],
+    ) -> Result<Vec<OsString>> {
+        if control.settling {
+            return Err(Error::Refused);
+        }
+        self.metadata(control)?;
+        let _ = runner.tool("ssh", control)?;
+        if !self.health.load(Ordering::SeqCst) || self.closed {
+            return Err(Error::Refused);
+        }
+        ssh_arguments(&self.work, self.port, command)
+    }
+    async fn boot(&mut self, runner: &mut Runner, control: &mut Control) -> Result<()> {
+        for attempt in 0..24 {
+            self.check(control)?;
+            let arguments = self.ssh(runner, control, &["/usr/bin/true".into()])?;
+            let result = runner
+                .run(
+                    control,
+                    "ssh-ready",
+                    "ssh",
+                    arguments,
+                    Duration::from_secs(8),
+                    &[0, 255],
+                )
+                .await?;
+            self.check(control)?;
+            if result.status == 0 {
+                self.authenticated = true;
+                break;
+            }
+            if attempt == 23 {
+                return Err(Error::Refused);
+            }
+            tokio::time::sleep(
+                Duration::from_secs(2).min(control.remaining(Duration::from_secs(2))?),
+            )
+            .await;
+            control.check()?;
+        }
+        let arguments = self.ssh(
+            runner,
+            control,
+            &[
+                "sudo".into(),
+                "-n".into(),
+                "cloud-init".into(),
+                "status".into(),
+                "--wait".into(),
+                "--format=json".into(),
+            ],
+        )?;
+        let result = runner
+            .run(
+                control,
+                "cloud-init",
+                "ssh",
+                arguments,
+                Duration::from_secs(180),
+                &[0, 1, 2],
+            )
+            .await?;
+        self.cloud_init = cloud_passed(&result.stdout, result.status)?;
+        if !self.cloud_init {
+            return Err(Error::Refused);
+        }
+        self.check(control)
+    }
+}
+
+fn qemu_arguments(
+    work: &Path,
+    port: u16,
+    run_id: &str,
+    prlimit: OsString,
+    qemu: OsString,
+) -> Result<Vec<OsString>> {
+    let path = |name: &str| {
+        work.join(name)
+            .to_str()
+            .map(str::to_owned)
+            .ok_or(Error::Input)
+    };
+    Ok(vec![
+        "--signal=TERM".into(),
+        "--kill-after=5s".into(),
+        "1800s".into(),
+        prlimit,
+        format!("--as={}", 5 * GIB).into(),
+        format!("--fsize={}", 17 * GIB).into(),
+        "--cpu=3600".into(),
+        "--nofile=1024".into(),
+        "--nproc=512".into(),
+        "--core=0".into(),
+        "--".into(),
+        qemu,
+        "-name".into(),
+        format!("simplestchat-ci-{run_id}").into(),
+        "-no-user-config".into(),
+        "-nodefaults".into(),
+        "-machine".into(),
+        "q35,accel=kvm".into(),
+        "-cpu".into(),
+        "host".into(),
+        "-smp".into(),
+        "2".into(),
+        "-m".into(),
+        "3072".into(),
+        "-object".into(),
+        "main-loop,id=ci-main-loop,thread-pool-max=8".into(),
+        "-display".into(),
+        "none".into(),
+        "-device".into(),
+        "VGA".into(),
+        "-monitor".into(),
+        "none".into(),
+        "-qmp".into(),
+        format!(
+            "unix:{},server=on,wait=on",
+            path("qmp.sock")?.replace(',', ",,")
+        )
+        .into(),
+        "-serial".into(),
+        "stdio".into(),
+        "-sandbox".into(),
+        "on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny".into(),
+        "-blockdev".into(),
+        json!({"driver":"qcow2","node-name":"rootdisk",
+            "file":{"driver":"file","filename":path("guest.qcow2")?}})
+        .to_string()
+        .into(),
+        "-device".into(),
+        "virtio-blk-pci,drive=rootdisk".into(),
+        "-blockdev".into(),
+        json!({"driver":"raw","node-name":"seed","read-only":true,
+            "file":{"driver":"file","filename":path("seed.img")?}})
+        .to_string()
+        .into(),
+        "-device".into(),
+        "virtio-blk-pci,drive=seed".into(),
+        "-netdev".into(),
+        format!("user,id=net0,hostfwd=tcp:127.0.0.1:{port}-:22").into(),
+        "-device".into(),
+        "virtio-net-pci,netdev=net0".into(),
+    ])
+}
+
+impl Vm {
+    fn start_readers(&mut self) {
+        let owned = self.owned.clone();
+        let facts = self.facts.clone();
+        let health = self.health.clone();
+        let closing = self.closing.clone();
+        let stop = self.stop_reader.clone();
+        let end = self.end;
+        let failure = self.failure.clone();
+        let guard = TaskGuard {
+            health: health.clone(),
+            failure: failure.clone(),
+            completed: false,
+        };
+        self.reader = Some(tokio::spawn(async move {
+            let mut guard = guard;
+            let result: Result<()> = async {
+                loop {
+                    live(end)?;
+                    if stop.load(Ordering::SeqCst) {
+                        return Err(Error::Close);
+                    }
+                    let complete = {
+                        let mut owned = owned.lock().map_err(|_| Error::Io)?;
+                        let mut facts = facts.lock().map_err(|_| Error::Io)?;
+                        let mut block = [0; 65536];
+                        for index in 0..2 {
+                            let pipe = owned.pipes[index].as_mut().ok_or(Error::Close)?;
+                            if pipe.eof {
+                                continue;
+                            }
+                            live(end)?;
+                            if let Some(count) = pipe.read(&mut block)? {
+                                facts.eof[index] = pipe.eof;
+                                facts.bytes[index] = pipe.bytes;
+                                live(end)?;
+                                if pipe.bytes > STREAM_MAX {
+                                    return Err(Error::Refused);
+                                }
+                                if count > 0 {
+                                    let output = owned.logs[index].as_mut().ok_or(Error::Close)?;
+                                    let mut written = 0;
+                                    while written < count {
+                                        live(end)?;
+                                        let n = match output.write(&block[written..count]) {
+                                            Err(e)
+                                                if e.kind() == std::io::ErrorKind::Interrupted =>
+                                            {
+                                                continue;
+                                            }
+                                            value => value.map_err(|_| Error::Io)?,
+                                        };
+                                        live(end)?;
+                                        if n == 0 {
+                                            return Err(Error::Io);
+                                        }
+                                        written += n;
+                                    }
+                                } else if !closing.load(Ordering::SeqCst) {
+                                    return Err(Error::Refused);
+                                }
+                            }
+                        }
+                        facts.eof.iter().all(|e| *e)
+                    };
+                    if complete {
+                        return live(end);
+                    }
+                    tokio::time::sleep(POLL.min(end.saturating_duration_since(Instant::now())))
+                        .await;
+                }
+            }
+            .await;
+            if let Err(error) = result {
+                failure
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .get_or_insert(error);
+                health.store(false, Ordering::SeqCst);
+            }
+            let mut data = facts
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            data.completed = result.is_ok();
+            remember(&mut data.first, &failure, result);
+            let mut owned = owned
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            owned.finish(&mut data, &failure);
+            if let Some(error) = data.first {
+                failure
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .get_or_insert(error);
+                health.store(false, Ordering::SeqCst);
+            }
+            guard.completed = true;
+        }));
+        if let Some(group) = &self.group {
+            let pid = group.pid();
+            let health = self.health.clone();
+            let closing = self.closing.clone();
+            let observed_failure = self.failure.clone();
+            let guard = TaskGuard {
+                health: health.clone(),
+                failure: observed_failure.clone(),
+                completed: false,
+            };
+            self.monitor = Some(tokio::spawn(async move {
+                let mut guard = guard;
+                while !closing.load(Ordering::SeqCst) {
+                    let failure = if Instant::now() >= end {
+                        Some(Error::Deadline)
+                    } else {
+                        match exited_now(pid) {
+                            Ok(false) => None,
+                            Ok(true) => Some(Error::Refused),
+                            Err(_) => Some(Error::Close),
+                        }
+                    };
+                    if let Some(error) = failure {
+                        observed_failure
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner)
+                            .get_or_insert(error);
+                        health.store(false, Ordering::SeqCst);
+                        guard.completed = true;
+                        return;
+                    }
+                    tokio::time::sleep(POLL.min(end.saturating_duration_since(Instant::now())))
+                        .await;
+                }
+                guard.completed = true;
+            }));
+        }
+    }
+    pub async fn finish(&mut self, control: &mut Control) -> Result<Value> {
+        if !self.closed {
+            let observed = *self
+                .failure
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            self.first = self.first.or(observed);
+            self.closed = true;
+            self.closing.store(true, Ordering::SeqCst);
+            self.health.store(false, Ordering::SeqCst);
+            if let Some(mut monitor) = self.monitor.take() {
+                match tokio::time::timeout_at(
+                    tokio::time::Instant::from_std(self.end),
+                    &mut monitor,
+                )
+                .await
+                {
+                    Ok(Ok(())) => {}
+                    Ok(Err(_)) => {
+                        remember(&mut self.first, &self.failure, Err(Error::Close));
+                    }
+                    Err(_) => {
+                        remember(&mut self.first, &self.failure, Err(Error::Deadline));
+                        monitor.abort();
+                        let _ = monitor.await;
+                    }
+                }
+            }
+            // No nonconsuming PID monitor remains when this sole owner consumes wait.
+            if let Some(group) = &mut self.group {
+                let (retired, reaped) = retire(group, self.end, Duration::from_secs(5)).await;
+                self.retired = retired;
+                if !retired {
+                    remember(&mut self.first, &self.failure, Err(Error::Close));
+                }
+                match reaped {
+                    Ok(status) => {
+                        self.reaped = true;
+                        self.status = status.code().or_else(|| status.signal().map(|n| -n));
+                        if let Some(status) = self.status.filter(|n| *n != 0) {
+                            remember(&mut self.first, &self.failure, Err(Error::Child(status)));
+                        }
+                        if self.status.is_none() {
+                            remember(&mut self.first, &self.failure, Err(Error::Close));
+                        }
+                    }
+                    Err(error) => {
+                        remember(&mut self.first, &self.failure, Err(error));
+                    }
+                }
+            }
+            if let Some(mut reader) = self.reader.take() {
+                let end = (Instant::now() + Duration::from_secs(1)).min(self.end);
+                match tokio::time::timeout_at(tokio::time::Instant::from_std(end), &mut reader)
+                    .await
+                {
+                    Ok(Ok(())) => {}
+                    Ok(Err(_)) => {
+                        remember(&mut self.first, &self.failure, Err(Error::Close));
+                    }
+                    Err(_) => {
+                        remember(&mut self.first, &self.failure, Err(Error::Close));
+                        self.stop_reader.store(true, Ordering::SeqCst);
+                        let end = (Instant::now() + Duration::from_secs(5)).min(self.end);
+                        if tokio::time::timeout_at(tokio::time::Instant::from_std(end), &mut reader)
+                            .await
+                            .is_err()
+                        {
+                            reader.abort();
+                            let _ = reader.await;
+                        }
+                    }
+                }
+                self.facts
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .joined = true;
+            }
+            {
+                let mut data = self
+                    .facts
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let mut owned = self
+                    .owned
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                owned.finish(&mut data, &self.failure);
+                if let Some(error) = data.first {
+                    remember(&mut self.first, &self.failure, Err(error));
+                }
+            }
+            if let Some(observer) = &mut self.qmp
+                && let Err(error) = observer.finish().await
+            {
+                remember(&mut self.first, &self.failure, Err(error));
+            }
+            if let Some(error) = self.first {
+                control.record(error);
+            }
+            if let Some(disk) = &mut self.overlay {
+                let checked = disk.check(control);
+                if let Err(error) = checked {
+                    control.record(error);
+                }
+                remember(&mut self.first, &self.failure, checked);
+                remember(&mut self.first, &self.failure, disk.finish(control));
+            }
+            for original in &mut self.originals {
+                remember(&mut self.first, &self.failure, original.finish(control));
+            }
+            remember(&mut self.first, &self.failure, control.check());
+            remember(&mut self.first, &self.failure, live(self.end));
+            let data = self
+                .facts
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if !self.authenticated
+                || !self.cloud_init
+                || !self.reaped
+                || !self.retired
+                || !data.joined
+                || !data.eof.iter().all(|v| *v)
+                || !data.closed.iter().all(|v| *v)
+            {
+                remember(&mut self.first, &self.failure, Err(Error::Close));
+            }
+            if self.qmp.is_none() {
+                remember(&mut self.first, &self.failure, Err(Error::Close));
+            }
+        }
+        let observed = *self
+            .failure
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(error) = observed.or(self.first) {
+            control.record(error);
+            Err(error)
+        } else {
+            Ok(self.diagnostics())
+        }
+    }
+    pub fn diagnostics(&self) -> Value {
+        let data = self
+            .facts
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let qmp = self.qmp.as_ref().map(qmp::Observer::diagnostics);
+        json!({"qemuReaped":self.reaped,"qemuExitedZero":self.status==Some(0),
+            "qemuReturnCode":self.status,"groupRetired":self.retired,
+            "authenticatedSsh":self.authenticated,
+            "drainerCompleted":data.joined&&data.completed&&data.first.is_none()
+                &&data.eof.iter().all(|v|*v)
+                &&data.closed.iter().all(|v|*v),"cloudInitPassed":self.cloud_init,
+            "stdoutBytes":data.bytes[0],"stderrBytes":data.bytes[1],
+            "stdoutEof":data.eof[0],"stderrEof":data.eof[1],
+            "allReturnedPipesAndLogsClosed":data.closed.iter().all(|v|*v),
+            "qmp":qmp,"closeReturned":self.closed&&self.first.is_none()
+                &&self.failure.lock().unwrap_or_else(std::sync::PoisonError::into_inner).is_none()})
+    }
+}
+
+fn cloud_errors(row: &Value) -> Result<bool> {
+    let errors = row["errors"].as_array().ok_or(Error::Refused)?;
+    let recoverable = row["recoverable_errors"]
+        .as_object()
+        .ok_or(Error::Refused)?;
+    if recoverable.len() + 1 > 17 {
+        return Err(Error::Refused);
+    }
+    let mut count = 0;
+    for group in std::iter::once(errors).chain(
+        recoverable
+            .values()
+            .map(|v| v.as_array())
+            .collect::<Option<Vec<_>>>()
+            .ok_or(Error::Refused)?,
+    ) {
+        if group.len() > 128 {
+            return Err(Error::Refused);
+        }
+        for value in group {
+            let message = value.as_str().ok_or(Error::Refused)?;
+            if message.chars().count() > 4096 {
+                return Err(Error::Refused);
+            }
+            count += 1;
+        }
+    }
+    if count > 512 {
+        return Err(Error::Refused);
+    }
+    Ok(count == 0)
+}
+fn cloud_passed(bytes: &[u8], status: i32) -> Result<bool> {
+    if bytes.len() > 65536 {
+        return Err(Error::Refused);
+    }
+    let row = super::decode(bytes)?;
+    let running = ["not started", "running", "done", "disabled"];
+    let label = row["status"].as_str().ok_or(Error::Refused)?;
+    let extended = row["extended_status"].as_str().ok_or(Error::Refused)?;
+    if !running.contains(&label) && label != "error" {
+        return Err(Error::Refused);
+    }
+    if !running.contains(&extended)
+        && !matches!(extended, "degraded done" | "degraded running")
+        && !running
+            .iter()
+            .any(|name| extended == format!("error - {name}"))
+    {
+        return Err(Error::Refused);
+    }
+    let stages = ["init-local", "init", "modules-config", "modules-final"];
+    if row.get("stage").is_none()
+        || (!row["stage"].is_null()
+            && row["stage"]
+                .as_str()
+                .is_none_or(|value| !stages.contains(&value)))
+    {
+        return Err(Error::Refused);
+    }
+    let mut healthy = cloud_errors(&row)?;
+    let mut count = 0;
+    for stage in stages {
+        if let Some(value) = row.get(stage) {
+            healthy &= cloud_errors(value)?;
+            count += 1;
+        }
+    }
+    Ok(status == 0
+        && label == "done"
+        && extended == "done"
+        && row["stage"].is_null()
+        && count == 4
+        && healthy)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn fifo_disk_is_opened_nonblocking_and_refused_before_vm_use() {
+        use std::os::unix::fs::PermissionsExt;
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let root = std::env::temp_dir().canonicalize().unwrap().join(format!(
+            "maintain-disk-fifo-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::SeqCst)
+        ));
+        fs::create_dir(&root).unwrap();
+        fs::set_permissions(&root, fs::Permissions::from_mode(0o700)).unwrap();
+        let mut control = Control::new(Instant::now()).unwrap();
+        let mut parent = None;
+        let mut keeper = None;
+        let mut disk = None;
+        let attempted: Result<()> = (|| {
+            parent = Some(File::open(&root).map_err(|_| Error::Io)?);
+            rustix::fs::mkfifoat(
+                parent.as_ref().ok_or(Error::Close)?,
+                "guest.qcow2",
+                rustix::fs::Mode::from_bits_truncate(0o600),
+            )
+            .map_err(|_| Error::Io)?;
+            // Keep both ends open so a regression missing NONBLOCK cannot hang
+            // this test. The separate observed kernel flag still detects it.
+            keeper = Some(
+                OpenOptions::new()
+                    .read(true)
+                    .write(true)
+                    .custom_flags(
+                        (rustix::fs::OFlags::NONBLOCK
+                            | rustix::fs::OFlags::NOFOLLOW
+                            | rustix::fs::OFlags::CLOEXEC)
+                            .bits() as i32,
+                    )
+                    .open(root.join("guest.qcow2"))
+                    .map_err(|_| Error::Io)?,
+            );
+            DISK_OPEN_FLAGS.set(None);
+            disk = Some(MutableDisk::open(&root.join("guest.qcow2"), &mut control)?);
+            Ok(())
+        })();
+        let flags = DISK_OPEN_FLAGS.get();
+        if let Err(error) = attempted {
+            control.record(error);
+        }
+        let disk_close = disk.as_mut().map(|disk| disk.finish(&mut control));
+        let mut closed = Ok(());
+        for file in [keeper.take(), parent.take()].into_iter().flatten() {
+            let result = close(file);
+            closed = closed.and(result);
+        }
+        control.settle();
+        let finished = control.finish();
+        let removed = fs::remove_dir_all(root);
+        assert_eq!(attempted, Err(Error::Changed));
+        assert!(flags.is_some_and(|flags| flags.contains(rustix::fs::OFlags::NONBLOCK)));
+        assert!(disk_close.is_none());
+        assert_eq!(closed, Ok(()));
+        assert_eq!(finished, Err(Error::Changed));
+        assert!(removed.is_ok());
+    }
+    #[test]
+    fn exact_pin_rejects_cross_version_and_untrusted_scheme() {
+        let original = include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../security/vm/debian-cloud.json"
+        ));
+        assert!(pin(original).is_ok());
+        for changed in [
+            String::from_utf8_lossy(original).replace("https:", "http:"),
+            String::from_utf8_lossy(original)
+                .replace("debian-13-genericcloud", "debian-12-genericcloud"),
+        ] {
+            assert!(pin(changed.as_bytes()).is_err());
+        }
+    }
+    #[test]
+    fn ssh_is_single_fixed_loopback_destination_without_ambient_policy() {
+        let args =
+            ssh_arguments(Path::new("/tmp/owned"), 2222, &["true; 'quoted'".into()]).unwrap();
+        assert!(args.iter().any(|s| s == "fixture@127.0.0.1"));
+        assert!(args.iter().any(|s| s == "StrictHostKeyChecking=yes"));
+        assert!(args.iter().any(|s| s == "GlobalKnownHostsFile=/dev/null"));
+        assert_eq!(
+            args.last(),
+            Some(&OsString::from("'true; '\\''quoted'\\'''"))
+        );
+        assert!(ssh_arguments(Path::new("/tmp/owned"), 22, &["true".into()]).is_err());
+    }
+    #[test]
+    fn cloud_completion_requires_all_four_clean_stages_and_actual_zero() {
+        let clean = json!({"errors":[],"recoverable_errors":{}});
+        let mut row = json!({"status":"done","extended_status":"done","stage":null,
+            "errors":[],"recoverable_errors":{},"init-local":clean,"init":clean,
+            "modules-config":clean,"modules-final":clean});
+        assert_eq!(
+            cloud_passed(&serde_json::to_vec(&row).unwrap(), 0),
+            Ok(true)
+        );
+        assert_eq!(
+            cloud_passed(&serde_json::to_vec(&row).unwrap(), 2),
+            Ok(false)
+        );
+        row["modules-final"]["errors"] = json!(["INERT_SECRET"]);
+        assert_eq!(
+            cloud_passed(&serde_json::to_vec(&row).unwrap(), 0),
+            Ok(false)
+        );
+        row.as_object_mut().unwrap().remove("stage");
+        assert_eq!(
+            cloud_passed(&serde_json::to_vec(&row).unwrap(), 0),
+            Err(Error::Refused)
+        );
+    }
+}

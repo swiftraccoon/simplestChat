@@ -2,6 +2,7 @@
 
 mod bindings;
 pub(super) mod control;
+pub(crate) use control::signals::Signals as CompletionFlags;
 mod files;
 pub mod prepare;
 pub mod verify;
