@@ -408,9 +408,11 @@ command cleanup covers descendants remaining in its group.
 
 The same pinned compiler step now precedes this check, before automation cache
 lookup. Rejected CI subjects therefore pay toolchain setup and any cold xtask
-compilation first; hosted Linux timing remains unmeasured. Local Git commits
-continue using the bootstrap-free POSIX hook. Byte-oracle and inert Git-process
-fixtures check these boundaries without installing tools or contacting a host.
+compilation first. The subject step took 50.6 and 59.4 seconds in hosted runs
+`40243312977` and `40248975462`; these include cold bootstrap rather than only
+grammar validation. Local Git commits continue using the bootstrap-free POSIX
+hook. Byte-oracle and inert Git-process fixtures check these boundaries without
+installing tools or contacting a host.
 
 Use Python 3.12 or newer and the pinned controller/checking environment:
 
@@ -420,6 +422,41 @@ ops/ansible/.venv/bin/pip install -r build/python-requirements.txt
 cargo run --locked -q -p xtask -- check --python
 PATH="$PWD/ops/ansible/.venv/bin:$PATH" \
   ops/ansible/.venv/bin/python -m unittest discover -s ops/ansible/tests -v
+```
+
+The shared `ci automation --checks` command preserves the quality, syntax and
+standalone Ops checks, then runs the same Python suite in two owned processes.
+Both use standard discovery/imports; disjoint `-k module_name.*` selections come
+from the sorted, alternating flat test-module inventory. Unsupported names,
+packages, symlinks and inventory changes refuse rather than omit coverage.
+With inherited `DISPOSABLE_TEST_DATABASE=1`, one original discovery process runs
+without selectors so database-mutating cases stay serial. The separate workflow
+database checks keep their existing owners.
+
+An ordinary test failure is retained while the peer finishes naturally. Spawn,
+I/O, cancellation and deadline failures settle every admitted child before the
+operation returns. One 600-second unit-suite interval starts before preparation,
+reserves 30 seconds for finalization, and spans both children, runtime teardown,
+replay, closes and the final signal check. The outer ten-minute job limit stays
+independent and can expire earlier. Combined stdout/stderr is capped at eight
+MiB per child and replayed in order after both settle. Success requires every
+selected child and finalizer; group cleanup does not certify escaped sessions,
+all SDK descriptors or a hard bound on blocked kernel I/O.
+
+The cancelled `c8c04c4` job passed validation but expired at receipt creation; its
+2,108 Python cases took 332.757 seconds versus 266.512 in the previous successful
+run. On this Mac, unchanged sequential discovery passed the same 2,108 cases in
+227.871 seconds. The Rust runner's 997- and 1,111-case processes passed in 110.052
+and 131.246 seconds, with the exact same case-ID multiset and 17 existing skips.
+The complete automation command, including quality, Ansible and native checks,
+took 230.516 seconds locally. These measurements use the same pinned Python
+environment with no database; they do not establish hosted timing or the
+five-minute CI ceiling and one-minute target. The direct unittest command above
+remains the sequential baseline. Run focused inert ownership tests with:
+
+```sh
+cargo test --locked -p xtask --bin xtask \
+  ci::automation::python_shards::tests:: -- --test-threads=1
 ```
 
 The source gate runs Ruff's complete stable rule set, its formatter, and

@@ -391,6 +391,22 @@ fn parallel_groups_partition_every_original_command_and_keep_full_python_discove
     assert_eq!(expected.len(), all.len());
     assert_eq!(actual, expected);
     assert_eq!(checks.len() + references.len(), all.len());
+    assert_eq!(
+        checks
+            .iter()
+            .filter(|step| matches!(step.kind, StepKind::PythonDiscovery))
+            .count(),
+        1,
+    );
+    assert!(matches!(
+        checks.last().unwrap().kind,
+        StepKind::PythonDiscovery
+    ));
+    assert!(
+        references
+            .iter()
+            .all(|step| matches!(step.kind, StepKind::Command))
+    );
     assert_eq!(checks.last().unwrap().program, "python");
     assert_eq!(
         text(&checks.last().unwrap().arguments),
