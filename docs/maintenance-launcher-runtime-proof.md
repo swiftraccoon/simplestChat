@@ -168,6 +168,23 @@ the selected backend was not instrumented. This does not establish GitHub CPU
 behavior or whole-controller setup time. Fresh signed runtime validation is
 required before claiming the setup fits.
 
+The [profile-fix trial](https://github.com/swiftraccoon/simplestChat/actions/runs/40260587499)
+at `1860514` authenticated both distributions and matched all 135 source pins.
+Source bundling completed at cumulative elapsed times of 60–107 seconds. All
+four cases then failed at the coarse installation checkpoint and reported
+successful cleanup. No maintenance guest or native launcher proof was
+established; empty outer case lists do not
+establish that no inner cases ran.
+
+The Rust child environment had incorrectly selected `LC_ALL=C`, while the
+frozen reference selects a UTF-8 locale. Pinned Ansible 2.21.4 rejects that locale
+before loading a playbook. A local invocation of the actual pinned Ansible
+reproduced exit 1 with `C` and exit 0 with the reference Darwin UTF-8 locale.
+The controller now sets both `LANG` and `LC_ALL` to the reference platform value.
+This establishes a deterministic prerequisite defect; the failed hosted trial
+retained no stage stderr, so it does not directly establish that run's stderr or
+exclude later failures. The corrected signed runtime must still pass.
+
 The Rust outer controller has separate native protocol, custody, deadline,
 recap, work-retirement and actual owned-child signal tests. The frozen suites and
 source catalog checks are not a full cross-language orchestration comparison.

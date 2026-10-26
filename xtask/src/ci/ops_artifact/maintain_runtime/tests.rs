@@ -211,8 +211,7 @@ fn strict_wire_rejects_duplicate_keys_trailing_records_nonfinite_and_deep_input(
         Some(u64::MAX)
     );
 }
-#[test]
-fn all_thirty_three_original_ops_cases_and_install_repeat_are_mandatory() {
+fn ops_receipt() -> Value {
     let rows = catalog::OPS_CASES
         .iter()
         .map(|(name, status)| {
@@ -220,14 +219,188 @@ fn all_thirty_three_original_ops_cases_and_install_repeat_are_mandatory() {
         "exitStatus":status,"passed":true})
         })
         .collect::<Vec<_>>();
-    let value = json!({"schemaVersion":1,"scope":"OpsDebianGuestReceipt","runId":"a".repeat(32),
+    json!({"schemaVersion":1,"scope":"OpsDebianGuestReceipt","runId":"a".repeat(32),
         "passed":true,"failure":null,"cases":rows,
-        "install":{"firstChanged":true,"secondChanged":false}});
-    assert!(projection::ops(value.clone(), &"a".repeat(32), 0).is_ok());
+        "install":{"firstChanged":true,"secondChanged":false}})
+}
+#[test]
+fn all_thirty_three_original_ops_cases_and_install_repeat_are_mandatory() {
+    let value = ops_receipt();
+    assert!(
+        projection::admit_ops(value.clone(), &"a".repeat(32), 0)
+            .unwrap()
+            .require_success()
+            .is_ok()
+    );
     let mut missing = value.clone();
     missing["cases"].as_array_mut().unwrap().pop();
-    assert!(projection::ops(missing, &"a".repeat(32), 0).is_err());
-    assert!(projection::ops(value, &"a".repeat(32), 7).is_err());
+    assert!(projection::admit_ops(missing, &"a".repeat(32), 0).is_err());
+    assert!(projection::admit_ops(value, &"a".repeat(32), 7).is_err());
+}
+#[test]
+fn negative_ops_prefix_is_preserved_before_positive_completion_is_refused() {
+    let mut value = ops_receipt();
+    value["passed"] = false.into();
+    value["failure"] = "cases".into();
+    value["cases"].as_array_mut().unwrap().truncate(6);
+    // The frozen guest clamps a signalled candidate's recorded status to zero,
+    // while retaining passed=false from its actual unexpected signal status.
+    value["cases"][5]["exitStatus"] = 0.into();
+    value["cases"][5]["passed"] = false.into();
+    value["install"] = json!({"firstChanged":null,"secondChanged":null});
+    let mut report = json!({"opsCases":[],"passed":false});
+    assert_eq!(
+        execute::observe_ops_receipt(
+            &mut report,
+            &serde_json::to_vec(&value).unwrap(),
+            &"a".repeat(32),
+            1,
+        ),
+        Err(Error::Refused)
+    );
+    assert_eq!(report["opsCases"], value["cases"]);
+    assert_eq!(report["install"], value["install"]);
+    assert_eq!(report["opsGuestFailure"], "cases");
+    assert_eq!(report["passed"], false);
+    assert_eq!(
+        report["installDiagnostic"],
+        json!({"checkpoint":"guest-result","rawExit":1})
+    );
+}
+#[test]
+fn closed_failed_guest_receipts_remain_negative_with_empty_or_complete_prefixes() {
+    for failure in [
+        "guard",
+        "transfer",
+        "boot",
+        "stage",
+        "cases",
+        "cleanup",
+        "cancelled",
+        "deadline",
+        "unavailable",
+    ] {
+        for complete in [false, true] {
+            let mut value = ops_receipt();
+            value["passed"] = false.into();
+            value["failure"] = failure.into();
+            if !complete {
+                value["cases"] = json!([]);
+                value["install"] = json!({"firstChanged":null,"secondChanged":null});
+            }
+            let raw = match failure {
+                "deadline" => 124,
+                "cancelled" => 143,
+                _ => 1,
+            };
+            let receipt = projection::admit_ops(value.clone(), &"a".repeat(32), raw).unwrap();
+            assert_eq!(receipt.cases(), &value["cases"]);
+            assert_eq!(receipt.require_success(), Err(Error::Refused));
+            assert!(projection::admit_ops(value, &"a".repeat(32), 0).is_err());
+        }
+    }
+}
+#[test]
+fn failed_receipt_neighbors_never_publish_candidate_strings_or_invalid_fields() {
+    let mut base = ops_receipt();
+    base["passed"] = false.into();
+    base["failure"] = "cases".into();
+    base["cases"].as_array_mut().unwrap().truncate(2);
+    for (pointer, bad) in [
+        ("/failure", json!("SECRET")),
+        ("/failure", Value::Null),
+        ("/runId", json!("SECRET")),
+        ("/schemaVersion", json!(true)),
+        ("/passed", json!(0)),
+        ("/cases/0/name", json!("SECRET")),
+        ("/cases/0/exitStatus", json!(true)),
+        ("/cases/0/exitStatus", json!(1.0)),
+        ("/cases/0/exitStatus", json!(-1)),
+        ("/cases/0/exitStatus", json!(256)),
+        ("/cases/0/exitStatus", json!(0)),
+        ("/cases/0/passed", json!("SECRET")),
+        ("/install/firstChanged", json!(1)),
+        ("/install/secondChanged", json!("SECRET")),
+    ] {
+        let mut value = base.clone();
+        *value.pointer_mut(pointer).unwrap() = bad;
+        let mut report = json!({"opsCases":[]});
+        assert!(
+            execute::observe_ops_receipt(
+                &mut report,
+                &serde_json::to_vec(&value).unwrap(),
+                &"a".repeat(32),
+                1,
+            )
+            .is_err()
+        );
+        assert_eq!(report["opsCases"], json!([]));
+        assert!(report.get("install").is_none());
+        assert!(report.get("opsGuestFailure").is_none());
+        assert_eq!(
+            report["installDiagnostic"]["checkpoint"],
+            "guest-projection"
+        );
+        assert!(!serde_json::to_string(&report).unwrap().contains("SECRET"));
+    }
+    for extra in [false, true] {
+        let mut value = base.clone();
+        if extra {
+            value["cases"] = ops_receipt()["cases"].clone();
+            value["cases"].as_array_mut().unwrap().push(json!({
+                "name":"SECRET","exitStatus":0,"passed":false
+            }));
+        } else {
+            value["cases"].as_array_mut().unwrap().swap(0, 1);
+        }
+        assert!(projection::admit_ops(value, &"a".repeat(32), 1).is_err());
+    }
+}
+#[test]
+fn bounded_decode_projection_and_child_failures_remain_distinct_without_raw_output() {
+    for (bytes, checkpoint) in [
+        (vec![b'x'; 65537], "guest-bounds"),
+        (b"SECRET".to_vec(), "guest-decode"),
+        (b"{\"SECRET\":1}".to_vec(), "guest-projection"),
+        (b"{\"SECRET\":1,\"SECRET\":2}".to_vec(), "guest-decode"),
+    ] {
+        let mut report = json!({"opsCases":[]});
+        assert!(execute::observe_ops_receipt(&mut report, &bytes, &"a".repeat(32), 1).is_err());
+        assert_eq!(
+            report["installDiagnostic"],
+            json!({"checkpoint":checkpoint,"rawExit":1})
+        );
+        assert_eq!(report["opsCases"], json!([]));
+        assert!(!serde_json::to_string(&report).unwrap().contains("SECRET"));
+    }
+    for error in [Error::Io, Error::Deadline, Error::Child(255)] {
+        let mut report = json!({"installDiagnostic":{"checkpoint":"stage-command","rawExit":null}});
+        assert_eq!(execute::install_command_error(&mut report, error), error);
+        assert_eq!(
+            report["installDiagnostic"]["rawExit"],
+            match error {
+                Error::Child(status) => json!(status),
+                _ => Value::Null,
+            }
+        );
+        assert_eq!(report["installDiagnostic"]["checkpoint"], "stage-command");
+    }
+}
+#[test]
+fn successful_receipt_preserves_the_existing_summary_shape() {
+    let value = ops_receipt();
+    let mut report = json!({"opsCases":[]});
+    execute::observe_ops_receipt(
+        &mut report,
+        &serde_json::to_vec(&value).unwrap(),
+        &"a".repeat(32),
+        0,
+    )
+    .unwrap();
+    assert_eq!(
+        report,
+        json!({"opsCases":value["cases"],"install":value["install"]})
+    );
 }
 #[test]
 fn native_catalog_is_bound_to_every_original_literal_role_and_thirty_six_migrations() {

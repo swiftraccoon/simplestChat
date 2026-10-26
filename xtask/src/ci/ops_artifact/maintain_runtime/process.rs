@@ -69,10 +69,17 @@ impl Runner {
     pub fn new(root: PathBuf, output: PathBuf, control: &mut Control) -> Result<Self> {
         control.check()?;
         let local = output.join("ansible-local");
+        // Ansible requires a UTF-8 locale even when Python enables UTF-8 mode.
+        let locale = if cfg!(target_os = "linux") {
+            "C.UTF-8"
+        } else {
+            "en_US.UTF-8"
+        };
         let mut env = BTreeMap::from([
             ("PATH".into(), std::env::var_os("PATH").ok_or(Error::Input)?),
             ("HOME".into(), output.as_os_str().into()),
-            ("LC_ALL".into(), "C".into()),
+            ("LANG".into(), locale.into()),
+            ("LC_ALL".into(), locale.into()),
             (
                 "ANSIBLE_CONFIG".into(),
                 root.join("ops/ansible/ansible.cfg").into_os_string(),

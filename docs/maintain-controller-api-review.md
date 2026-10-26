@@ -102,6 +102,20 @@ remain separate from the guest experiment's verdict. Public summaries contain
 only closed metadata, hashes and actual status/lifecycle facts; credentials,
 raw streams, config, keys, dumps and paths stay private.
 
+Installation failures retain a closed `installDiagnostic` checkpoint and the
+actual child exit when available. Guest receipt admission validates the exact
+identity, ordered prefix of at most 33 fixed cases, byte-range recorded exits,
+nullable boolean install facts and frozen failure vocabulary. Only admitted
+facts are copied into the report before positive completion is required;
+malformed or secret-bearing neighbors publish no candidate content. A valid
+failed guest retains its closed `opsGuestFailure` and stays an ordinary failed
+prerequisite, including inner 124/143 statuses. A case row with recorded
+`exitStatus: 0` and `passed: false` remains valid negative evidence. Positive
+completion still requires all 33 successful cases, the original install facts
+and actual exit zero. Successful summaries retain their existing shape. This applies
+`C-VALIDATE` and `C-GOOD-ERR` without promoting diagnostics into execution
+authority or changing outer signal ownership.
+
 Known blocking limits remain: synchronous filesystem/hash/close, OS process APIs
 and SDK operations are cooperatively fenced, not cancellable per syscall. A
 same-UID swap-and-restore wholly between witnesses is outside the claim. Failed
