@@ -934,3 +934,28 @@ fn restore_reference_and_registration_inputs_invalidate_existing_success_receipt
         }
     }
 }
+#[test]
+fn rust_maintenance_controller_and_actual_workflow_invalidate_existing_success_fingerprints() {
+    for scope in [
+        Scope::Automation,
+        Scope::RustLint,
+        Scope::RustTest,
+        Scope::CodeqlRust,
+    ] {
+        for name in [
+            "xtask/src/ci/ops_artifact/maintain_runtime/execute.rs",
+            "xtask/src/ci/ops_artifact/maintain_runtime/vm.rs",
+            "ops/src/owned_process.rs",
+            "ops/src/release/attestation/control_signals.rs",
+        ] {
+            assert!(inputs::selected(scope, name), "{scope:?}: {name}");
+        }
+    }
+    let workflow = ".github/workflows/maintenance-launcher-runtime.yml";
+    for scope in [Scope::Automation, Scope::RustLint, Scope::RustTest] {
+        assert!(inputs::selected(scope, workflow));
+    }
+    // Runtime launch policy is an Actions/automation input, not a source needed
+    // to reconstruct the Rust analyzer's compiler extraction.
+    assert!(!inputs::selected(Scope::CodeqlRust, workflow));
+}

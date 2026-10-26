@@ -13,7 +13,7 @@ use std::{
     },
 };
 
-pub(super) struct Signals {
+pub(crate) struct Signals {
     interrupt: Arc<AtomicBool>,
     terminate: Arc<AtomicBool>,
     registrations: [Option<SigId>; 2],
@@ -21,6 +21,16 @@ pub(super) struct Signals {
     seen_terminate: bool,
 }
 impl Signals {
+    /// Observe sticky flags without consuming another caller's observation.
+    pub fn status(&self) -> Option<u8> {
+        if self.interrupt.load(Ordering::SeqCst) {
+            Some(130)
+        } else if self.terminate.load(Ordering::SeqCst) {
+            Some(143)
+        } else {
+            None
+        }
+    }
     pub fn new() -> io::Result<Self> {
         let mut signals = Self {
             interrupt: Arc::new(AtomicBool::new(false)),

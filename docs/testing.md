@@ -2952,6 +2952,27 @@ Existing operational Python and nightly/offsite callers are unchanged.
 
 ## Optional maintenance prerequisite experiments
 
+The four-case launcher workflow now selects the Rust outer entry
+`xtask ops-artifact maintain-runtime`; the previous Python controller remains an
+unchanged reference. Its [API review](maintain-controller-api-review.md) names
+the still-executed frozen guest/bootstrap roles and the independent child versus
+outer clocks. The same 1,800-second outer limit and 120-second reserve apply,
+with a 510-second setup cap and 1,170 seconds required before GO.
+
+```sh
+cargo test --locked -p xtask ci::ops_artifact::maintain_runtime::
+cargo test --locked -p simplestchat-ops \
+  owned_process::tests::completion_signals_survive_runtime_teardown_in_actual_owned_children
+node --test build/tests/container-inputs.test.mjs
+```
+
+Native tests cover closed guest/native status and phase joins, complete Ops33
+receipts, real input/namespace mutations, full recap refusal, fixed work cleanup
+and actual isolated-child INT/TERM after runtime teardown. Exact reference
+catalog/source assertions and the existing unmodified Python suites remain
+separate evidence. They do not prove full cross-language controller equivalence
+or actual signed four-case PostgreSQL/Caddy/900-launcher runtime success.
+
 The manual [maintenance prerequisites KVM experiment](maintenance-prerequisites.md)
 has two independent free-runner jobs. One observes the exact pinned Caddy image,
 naturally generated local TLS material, guest-only public-root trust, fresh-process

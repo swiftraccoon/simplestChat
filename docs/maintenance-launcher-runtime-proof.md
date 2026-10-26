@@ -7,6 +7,24 @@ prerequisite experiment for a future complete native maintenance operation.
 Installed Python, the operational launcher, host callers and bootstrap stay
 unchanged. Source and inert checks alone do not establish the real launcher proof.
 
+The optional workflow invokes the Rust outer controller:
+
+```sh
+target/debug/xtask ops-artifact maintain-runtime \
+  --run-id "$MAINTAIN_RUN_ID" --run-attempt "$MAINTAIN_RUN_ATTEMPT" \
+  --artifact-id "$MAINTAIN_ARTIFACT_ID" --scenario "$MAINTAIN_SCENARIO" \
+  --output "$RUNNER_TEMP/maintain-launcher-runtime"
+```
+
+The command admits only this exact hosted main workflow and a fresh absolute output
+prefix. Run IDs, artifact ID, scenario and output are required. It owns acquisition,
+retained inputs, source bundle, QEMU, SSH/QMP, pipe readers, fixed Ansible bootstrap,
+the Ready/GO exchange, closed summary and finalization. It does not launch the old
+Python outer controller. The guest, Ops33 guest checks, fixed helper modules,
+Ansible setup and unchanged operational launcher still execute their existing
+Python/shell roles. Every tracked Python source remains byte-identical. This is
+an outer-controller migration; it does not claim an entirely Rust guest.
+
 The workflow owns four independent fresh Debian 13 guests: `positive`,
 `dirty-source`, `cancel-owned-launcher` and `timeout-stopped-launcher`. Each guest
 has its own original 1800-second keeper interval, 120-second finalization reserve,
@@ -40,8 +58,9 @@ retained-original closes use the original 120-second finalization reserve. No
 Docker or firewall query is deferred into that reserve.
 
 Only the signed same-head Ops/server selections from the exact successful CI run
-and attempt are accepted. The source-built GNU controller performs passive ELF
-inspection; actual guest execution uses the installed authenticated musl inode.
+and attempt are accepted. The source-built GNU controller performs fresh/cached
+verification and passive ELF inspection; actual guest execution uses the installed
+authenticated musl inode.
 The Ops 33 process is separate: installed content and namespace are freshly joined
 after it returns, then that exact read-only installed FD spans native execution
 and finalizers. Earlier JSON is passive and supplies no execution authority.
@@ -116,11 +135,20 @@ umask restoration, stdout and the original final signal/deadline fence.
 The retained first I/O, policy or explicit clock/signal refusal remains its own
 failure category when a later cleanup deadline also determines the final status.
 
-Local validation includes 30 keeper inert tests, strict checks over 295 Python
+Frozen reference validation includes 30 keeper inert tests, strict checks over 295 Python
 sources/stubs, the full 2108-test Python suite (17 expected skips), actionlint
 and offline Ansible checks. Native validation includes GNU/musl compilation and
-Clippy plus nine portable contract tests. The new Linux
-FD/process methods and the actual signed four-case launcher/PostgreSQL/Caddy KVM
-proof remain unrun for this fixture.
+Clippy plus nine portable contract tests.
+[CI run 40239549127](https://github.com/swiftraccoon/simplestChat/actions/runs/40239549127/job/121309236662)
+at `27d5aa8` exercised all 20 native maintenance methods, including the 11 Linux
+FD/process methods; the later
+[`8f228ba` CI](https://github.com/swiftraccoon/simplestChat/actions/runs/40243312977)
+also passed with those Rust bytes unchanged. The actual signed four-case
+launcher/PostgreSQL/Caddy KVM proof remains unrun for this fixture.
+The new Rust outer controller has separate native protocol, custody, deadline,
+recap, work-retirement and actual owned-child signal tests. Compiler/native test
+results for the completed caller-switch composition must be bound separately;
+the frozen suites and source catalog checks are not a full cross-language
+orchestration comparison. See its [API review](maintain-controller-api-review.md).
 It does not establish whole native maintenance parity, a production upgrade,
 capacity, arbitrary injected faults, caller cutover or changed database policy.

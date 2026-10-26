@@ -244,6 +244,11 @@ test('every Rust/browser source and migration in the repository reaches the buil
 });
 
 test('context excludes local-only descendants while retaining production inputs', () => {
+  for (const rule of [
+    '!xtask/src/ci/ops_artifact/maintain_runtime/',
+    'xtask/src/ci/ops_artifact/maintain_runtime/**',
+    '!xtask/src/ci/ops_artifact/maintain_runtime/*.rs',
+  ]) assert.ok(ignoreRules.includes(rule), 'the fixed Rust controller needs narrow traversal');
   for (const filename of [
     '.env', 'CLAUDE.md', 'results/local/report.json',
     'ops/private.env', 'ops/src/private.env', 'ops/src/release/private.env',
@@ -313,6 +318,8 @@ test('context excludes local-only descendants while retaining production inputs'
     'xtask/src/ci/performance_compare/private.env',
     'xtask/src/ci/performance_compare/unlisted.sh',
     'xtask/src/ci/ops_artifact/private.env',
+    'xtask/src/ci/ops_artifact/maintain_runtime/private.env',
+    'xtask/src/ci/ops_artifact/maintain_runtime/retained/artifact.zip',
     'xtask/src/ci/ops_artifact/capacity_vps/private.env',
     'xtask/src/ci/ops_artifact/capacity_vps/retained/ops-attestation.jsonl',
     'xtask/src/ci/ops_artifact/source/private.env',
@@ -354,6 +361,8 @@ test('context excludes local-only descendants while retaining production inputs'
     'load_tests/Cargo.toml', 'load_tests/src/main.rs', 'load_tests/src/metrics/measurement.rs',
     'xtask/Cargo.toml', 'xtask/src/main.rs',
     'xtask/src/ci/ops_artifact/capacity_vps/prepare.rs',
+    'xtask/src/ci/ops_artifact/maintain_runtime/execute.rs',
+    'xtask/src/ci/ops_artifact/maintain_runtime/qmp.rs',
     'web/package.json', 'web/package-lock.json', 'web/tsconfig.json',
     'web/tsconfig.app.json', 'web/tsconfig.tools.json', 'web/vite.config.ts',
     'web/index.html', 'web/bundle-budget.json', 'web/scripts/check-bundle.mjs',
