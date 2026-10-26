@@ -3005,6 +3005,10 @@ catalog/source assertions and the existing unmodified Python suites remain
 separate evidence. They do not prove full cross-language controller equivalence
 or actual signed four-case PostgreSQL/Caddy/900-launcher runtime success.
 
+The dev/test profile optimizes the pinned `sha2` dependency so full retained-input
+checks do not run unoptimized compression. Integrity checks and clocks are
+unchanged; hosted runtime success remains required.
+
 The manual maintenance prerequisites KVM experiment
 (`.github/workflows/maintenance-prerequisites.yml`) has two independent free-runner jobs. One observes the exact pinned Caddy image,
 naturally generated local TLS material, guest-only public-root trust, fresh-process
