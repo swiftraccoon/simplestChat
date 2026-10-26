@@ -23,6 +23,76 @@ fn checkpoint(report: &mut Value, name: &str) {
     report["checkpoint"] = name.into();
     report["failure"] = name.into();
 }
+
+#[derive(Clone, Copy)]
+enum InstallCheckpoint {
+    Inventory,
+    StageCommand,
+    StageRecap,
+    StageIntegrity,
+    GuestCommand,
+    GuestBounds,
+    GuestDecode,
+    GuestProjection,
+    GuestResult,
+    Integrity,
+}
+impl InstallCheckpoint {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Inventory => "inventory",
+            Self::StageCommand => "stage-command",
+            Self::StageRecap => "stage-recap",
+            Self::StageIntegrity => "stage-integrity",
+            Self::GuestCommand => "guest-command",
+            Self::GuestBounds => "guest-bounds",
+            Self::GuestDecode => "guest-decode",
+            Self::GuestProjection => "guest-projection",
+            Self::GuestResult => "guest-result",
+            Self::Integrity => "integrity",
+        }
+    }
+}
+fn install_checkpoint(report: &mut Value, checkpoint: InstallCheckpoint, raw: Option<i32>) {
+    report["installDiagnostic"] = json!({"checkpoint":checkpoint.name(),"rawExit":raw});
+}
+pub(super) fn install_command_error(report: &mut Value, error: Error) -> Error {
+    // Only the actual observed child status may replace this diagnostic's unknown value.
+    if let Error::Child(status) = error {
+        report["installDiagnostic"]["rawExit"] = status.into();
+    }
+    error
+}
+fn clear_install_diagnostic(report: &mut Value) {
+    if let Some(object) = report.as_object_mut() {
+        object.remove("installDiagnostic");
+    }
+}
+pub(super) fn observe_ops_receipt(
+    report: &mut Value,
+    bytes: &[u8],
+    run_id: &str,
+    raw: i32,
+) -> Result<()> {
+    install_checkpoint(report, InstallCheckpoint::GuestBounds, Some(raw));
+    if bytes.len() > 65536 {
+        return Err(Error::Refused);
+    }
+    install_checkpoint(report, InstallCheckpoint::GuestDecode, Some(raw));
+    let value = decode(bytes)?;
+    install_checkpoint(report, InstallCheckpoint::GuestProjection, Some(raw));
+    let receipt = projection::admit_ops(value, run_id, raw)?;
+    report["opsCases"] = receipt.cases().clone();
+    report["install"] = receipt.install().clone();
+    install_checkpoint(report, InstallCheckpoint::GuestResult, Some(raw));
+    if let Some(failure) = receipt.failure() {
+        report["opsGuestFailure"] = failure.into();
+    }
+    receipt.require_success()?;
+    clear_install_diagnostic(report);
+    Ok(())
+}
+
 fn timing(report: &mut Value, name: &str, control: &mut Control) -> Result<()> {
     control.check()?;
     let elapsed = Instant::now()
@@ -262,6 +332,7 @@ impl Owners {
         runner.set_guest_health(vm.health(), vm.failure());
         timing(report, "boot", control)?;
         checkpoint(report, "install");
+        install_checkpoint(report, InstallCheckpoint::Inventory, None);
         let inventory = inventory(runner, control, vm, options, &run)?;
         let argv = vec![
             "-i".into(),
@@ -271,6 +342,7 @@ impl Owners {
                 .join("security/vm/ops-stage.yml")
                 .into_os_string(),
         ];
+        install_checkpoint(report, InstallCheckpoint::StageCommand, None);
         let staged = runner
             .run(
                 control,
@@ -280,9 +352,17 @@ impl Owners {
                 Duration::from_secs(180),
                 &[0],
             )
-            .await?;
+            .await
+            .map_err(|error| install_command_error(report, error))?;
+        install_checkpoint(report, InstallCheckpoint::StageRecap, Some(staged.status));
         recap(&staged.stdout)?;
+        install_checkpoint(
+            report,
+            InstallCheckpoint::StageIntegrity,
+            Some(staged.status),
+        );
         vm.check(control)?;
+        install_checkpoint(report, InstallCheckpoint::GuestCommand, None);
         let mut command = vec![
             "/usr/bin/sudo".to_string(),
             "-n".into(),
@@ -306,17 +386,15 @@ impl Owners {
                 Duration::from_secs(1800),
                 transfer.original.file()?,
             )
-            .await?;
-        if observed.stdout.len() > 65536 {
-            return Err(Error::Refused);
-        }
-        let installed = projection::ops(decode(&observed.stdout)?, &run, observed.status)?;
-        report["opsCases"] = installed["cases"].clone();
-        report["install"] = installed["install"].clone();
+            .await
+            .map_err(|error| install_command_error(report, error))?;
+        observe_ops_receipt(report, &observed.stdout, &run, observed.status)?;
+        install_checkpoint(report, InstallCheckpoint::Integrity, Some(observed.status));
         ops.check(control)?;
         transfer.original.check(control)?;
         vm.check(control)?;
         timing(report, "install", control)?;
+        clear_install_diagnostic(report);
         let bundle = self.bundle.as_ref().ok_or(Error::Refused)?;
         let values = runner.output.join("fixture-input-vars.json");
         files::write(
