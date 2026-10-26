@@ -106,3 +106,8 @@ mediasoup-sys = { path = "vendor/mediasoup-sys-0.19.0" }
 [profile.release.build-override]
 opt-level = 0
 strip = false
+
+# Retained controller inputs are fully rehashed at each execution boundary.
+# Optimize SHA-256 compression in developer and test builds too.
+[profile.dev.package."sha2@0.11.0"]
+opt-level = 3

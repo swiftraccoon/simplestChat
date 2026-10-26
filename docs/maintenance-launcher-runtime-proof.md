@@ -143,12 +143,34 @@ Clippy plus nine portable contract tests.
 at `27d5aa8` exercised all 20 native maintenance methods, including the 11 Linux
 FD/process methods; the later
 [`8f228ba` CI](https://github.com/swiftraccoon/simplestChat/actions/runs/40243312977)
-also passed with those Rust bytes unchanged. The actual signed four-case
-launcher/PostgreSQL/Caddy KVM proof remains unrun for this fixture.
-The new Rust outer controller has separate native protocol, custody, deadline,
-recap, work-retirement and actual owned-child signal tests. Compiler/native test
-results for the completed caller-switch composition must be bound separately;
-the frozen suites and source catalog checks are not a full cross-language
-orchestration comparison. See its [API review](maintain-controller-api-review.md).
+also passed with those Rust bytes unchanged. The later
+[`78929c0` CI](https://github.com/swiftraccoon/simplestChat/actions/runs/40254585622)
+passed all required checks and signing, including 44 Rust outer-controller tests
+and 18 automation tests on Linux.
+
+The first [four-case Rust controller run](https://github.com/swiftraccoon/simplestChat/actions/runs/40256150380)
+failed all four cases during the unchanged 510-second setup interval. Both
+distributions authenticated in every case. Three cases reached source bundling;
+the cancellation case reached boot and could not confirm cleanup. Its failed
+constructor retained no QEMU diagnostics, so that negative does not establish a
+physical resource leak. No case reached the guest launcher or Ops33 installation
+checks. The launcher/PostgreSQL/Caddy proof remains incomplete.
+
+The debug controller fully hashes every retained source and tool before and after
+each child. The dev/test profile now optimizes only the pinned `sha2` dependency,
+preserving all those checks, verifier calls and original clocks. A private local
+probe exercised unchanged `Original` admission, sixteen rechecks and checked
+close: nineteen full hashes of the same 64 MiB file. Three alternating pairs on
+an Apple M5 Max with Rust 1.99.0 measured medians of 4.52 seconds before and
+0.464 seconds after, with identical digests. Timings exclude fixture creation and
+compilation and use a warm file cache. The host reports SHA-256 instructions;
+the selected backend was not instrumented. This does not establish GitHub CPU
+behavior or whole-controller setup time. Fresh signed runtime validation is
+required before claiming the setup fits.
+
+The Rust outer controller has separate native protocol, custody, deadline,
+recap, work-retirement and actual owned-child signal tests. The frozen suites and
+source catalog checks are not a full cross-language orchestration comparison.
+See its [API review](maintain-controller-api-review.md).
 It does not establish whole native maintenance parity, a production upgrade,
 capacity, arbitrary injected faults, caller cutover or changed database policy.
