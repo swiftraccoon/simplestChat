@@ -182,6 +182,13 @@ impl Collector {
 pub(super) enum PacketClass {
     Arp,
     Ipv4,
+    Ipv4Icmp,
+    Ipv4Igmp,
+    Ipv4Tcp,
+    Ipv4Udp,
+    Ipv4Dhcp,
+    Ipv4Ntp,
+    Ipv4Dns,
     Ipv6,
     Icmpv6RouterAdvertisement,
     Other,
@@ -203,6 +210,80 @@ fn pcap_u32(bytes: &[u8], offset: usize, little: bool) -> Option<u32> {
     } else {
         u32::from_be_bytes(word)
     })
+}
+
+/// Refine only complete first IPv4/transport headers, never payload validity.
+fn ipv4_header_class(frame: &[u8], original: u32) -> PacketClass {
+    let observed = (|| {
+        let ip = frame.get(14..)?;
+        let version = *ip.first()?;
+        let ihl = usize::from(version & 15) * 4;
+        if version >> 4 != 4 || !(20..=60).contains(&ihl) {
+            return None;
+        }
+        ip.get(..ihl)?;
+        let total = usize::from(pcap_u16(ip, 2, false)?);
+        if total < ihl
+            || total.checked_add(14)? > usize::try_from(original).ok()?
+            || pcap_u16(ip, 6, false)? & !0x4000 != 0
+        {
+            return None;
+        }
+        let transport = ip.get(ihl..)?;
+        let minimum = match *ip.get(9)? {
+            1 | 2 | 17 => 8,
+            6 => 20,
+            _ => return None,
+        };
+        if total < ihl.checked_add(minimum)? {
+            return None;
+        }
+        transport.get(..minimum)?;
+        match ip[9] {
+            1 => Some(PacketClass::Ipv4Icmp),
+            2 => Some(PacketClass::Ipv4Igmp),
+            6 => {
+                let tcp_header = usize::from(transport[12] >> 4) * 4;
+                if !(20..=60).contains(&tcp_header) || total < ihl + tcp_header {
+                    return None;
+                }
+                transport.get(..tcp_header)?;
+                let source = pcap_u16(transport, 0, false)?;
+                let destination = pcap_u16(transport, 2, false)?;
+                Some(if [source, destination].contains(&53) {
+                    PacketClass::Ipv4Dns
+                } else {
+                    PacketClass::Ipv4Tcp
+                })
+            }
+            17 => {
+                let udp_length = usize::from(pcap_u16(transport, 4, false)?);
+                if udp_length < 8 || udp_length > total - ihl {
+                    return None;
+                }
+                let source = pcap_u16(transport, 0, false)?;
+                let destination = pcap_u16(transport, 2, false)?;
+                let dns = [source, destination].contains(&53);
+                let ntp = [source, destination].contains(&123);
+                if dns && ntp {
+                    return None;
+                }
+                Some(
+                    if [source, destination] == [67, 68] || [source, destination] == [68, 67] {
+                        PacketClass::Ipv4Dhcp
+                    } else if ntp {
+                        PacketClass::Ipv4Ntp
+                    } else if dns {
+                        PacketClass::Ipv4Dns
+                    } else {
+                        PacketClass::Ipv4Udp
+                    },
+                )
+            }
+            _ => None,
+        }
+    })();
+    observed.unwrap_or(PacketClass::Ipv4)
 }
 
 /// Best-effort first Ethernet-header class, never packet validity or origin.
@@ -234,7 +315,7 @@ pub(super) fn first_packet_class(bytes: &[u8]) -> PacketClass {
         let frame = bytes.get(40..40usize.checked_add(captured)?)?;
         Some(match frame.get(12..14)? {
             [0x08, 0x06] => PacketClass::Arp,
-            [0x08, 0x00] => PacketClass::Ipv4,
+            [0x08, 0x00] => ipv4_header_class(frame, original),
             [0x86, 0xdd] => {
                 if frame.get(14).is_some_and(|v| v >> 4 == 6)
                     && frame.get(20) == Some(&58)
@@ -276,6 +357,13 @@ impl CaptureStage {
             Self::Short => "capture-short",
             Self::Data(PacketClass::Arp) => "capture-data-arp",
             Self::Data(PacketClass::Ipv4) => "capture-data-ipv4",
+            Self::Data(PacketClass::Ipv4Icmp) => "capture-data-ipv4-icmp",
+            Self::Data(PacketClass::Ipv4Igmp) => "capture-data-ipv4-igmp",
+            Self::Data(PacketClass::Ipv4Tcp) => "capture-data-ipv4-tcp",
+            Self::Data(PacketClass::Ipv4Udp) => "capture-data-ipv4-udp",
+            Self::Data(PacketClass::Ipv4Dhcp) => "capture-data-ipv4-dhcp",
+            Self::Data(PacketClass::Ipv4Ntp) => "capture-data-ipv4-ntp",
+            Self::Data(PacketClass::Ipv4Dns) => "capture-data-ipv4-dns",
             Self::Data(PacketClass::Ipv6) => "capture-data-ipv6",
             Self::Data(PacketClass::Icmpv6RouterAdvertisement) => {
                 "capture-data-icmpv6-router-advertisement"

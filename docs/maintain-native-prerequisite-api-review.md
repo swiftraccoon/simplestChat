@@ -260,6 +260,14 @@ header classifier is diagnostic only: it establishes no origin, direction,
 checksum or complete-packet validity and never admits captured traffic. No raw
 bytes, addresses, names, timestamps or packet payload are exported.
 
+IPv4 headers may receive one of seven narrower fixed hints: ICMP, IGMP, TCP,
+UDP, DHCP, NTP or DNS. The last three identify selected port combinations,
+not a validated application protocol. Only captured, bounded headers are read;
+the fixed snapshot may omit the remaining payload. Unsupported, ambiguous,
+fragmented or malformed headers retain the generic IPv4 class. These hints add
+no direction, peer or timing evidence. The failed 900-second trial that reported
+`capture-data-ipv4` remains unclassified beyond that Ethernet header class.
+
 Earlier body or cleanup errors retain their original checkpoint. The matching
 Rust outer decoder admits only the new literal failure labels; passing receipts
 still require `complete`. This changes no wire fields or verdict requirements.
@@ -269,6 +277,39 @@ snapshot, waits, retirement grace, firewall and original deadlines are unchanged
 The earlier 900-second receipt remains negative: its capture failure was not
 exported precisely enough to identify the cause. New diagnostics do not turn it
 into evidence of packet contents or successful containment observation.
+
+## Built-in none-network lifecycle
+
+The fixed validator and migration containers use Docker's built-in `none`
+network. Pinned
+[Compose creation](https://github.com/docker/compose/blob/42f48072bbf92ee9b0e43f9fdf2008d03546e7ca/pkg/compose/create.go)
+does not mark that mode `NetworkDisabled`. Pinned
+[Docker allocation and endpoint handling](https://github.com/moby/moby/blob/8af9fe3a36bab3e039862a2ab1cef1880c9b4d03/daemon/container_operations.go)
+therefore emits connect/disconnect events for that built-in network, even though
+its driver is `null`. The owned fixture bridge has a different network ID.
+Requiring every network event to carry only the bridge ID rejects this expected
+transition. This is a deterministic source counterexample; the failed hosted
+summary does not expose the exact event or inner refusal branch.
+An owned pinned-Docker inspection confirms the initial built-in profile without
+creating or starting an inner container. It does not execute network events or
+establish a running PostgreSQL membership observation.
+
+The observer binds the built-in network's inspected identity and profile before
+the launcher and checks it again during final observation. Its event exception
+is restricted to the already identified validator and sole migration actor,
+with one ordered connect/disconnect pair each. Docker's fixed lifecycle connects
+after creation and disconnects during cleanup before the die event. Complete
+actor histories and all existing bridge, PostgreSQL and inventory checks remain
+required. The built-in network grants no command, signal or retirement authority.
+
+Daemon-observation failures use ten fixed operation checkpoints to distinguish
+actor identity, inventory, validation input, event shape, actor classification,
+rename, action history, network history, PostgreSQL history and final traces.
+Only the retained first failure selects a label; earlier causes keep precedence,
+and successful observation keeps the existing phase checkpoint. Labels contain
+no event values, IDs, names or command text, add no wire fields, and cannot be
+used as a passing receipt's checkpoint. The frozen Python observer stays unchanged.
+A fresh signed four-scenario runtime remains required after this correction.
 
 ## Validation state
 

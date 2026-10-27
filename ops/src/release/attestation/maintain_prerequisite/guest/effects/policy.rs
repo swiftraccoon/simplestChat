@@ -52,6 +52,143 @@ pub(super) fn created_id(bytes: &[u8]) -> Result<String> {
     require(digest(id))?;
     Ok(id.to_owned())
 }
+
+/// Passive identity of Docker's predefined null network; grants no cleanup authority.
+pub(super) struct NoneNetwork {
+    id: String,
+    profile: Value,
+}
+impl NoneNetwork {
+    pub fn admit(row: &Value, postgres: &str) -> Result<Self> {
+        let id = string(&row["Id"])?;
+        require(digest(id) && digest(postgres))?;
+        require(
+            row["Name"] == "none"
+                && row["Driver"] == "null"
+                && row["Scope"] == "local"
+                && row["EnableIPv4"] == true
+                && row["EnableIPv6"] == false
+                && row["Internal"] == false
+                && row["Attachable"] == false
+                && row["Ingress"] == false
+                && row["ConfigOnly"] == false
+                && row["ConfigFrom"] == json!({"Network":""})
+                && row["IPAM"] == json!({"Driver":"default","Options":null,"Config":null})
+                && row["Options"] == json!({})
+                && row["Labels"] == json!({}),
+        )?;
+        chrono::DateTime::parse_from_rfc3339(string(&row["Created"])?)
+            .map_err(|_| Error::Refused)?;
+        let members = object(&row["Containers"])?;
+        require(members.len() == 1 && members.contains_key(postgres))?;
+        let member = &members[postgres];
+        object(member)?;
+        require(
+            member["Name"] == "simplestchat-public-postgres-1"
+                && digest(string(&member["EndpointID"])?),
+        )?;
+        Ok(Self {
+            id: id.to_owned(),
+            profile: row.clone(),
+        })
+    }
+    pub fn id(&self) -> &str {
+        &self.id
+    }
+    pub fn check(&self, row: &Value) -> Result<()> {
+        require(row == &self.profile)
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum NoneConnection {
+    Connected,
+    Disconnected,
+}
+
+/// Only the launcher's validator and one migration may transiently use null networking.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(super) struct NoneHistory(BTreeMap<String, NoneConnection>);
+impl NoneHistory {
+    pub fn observe(
+        &mut self,
+        row: &Value,
+        network: &NoneNetwork,
+        validation: Option<&str>,
+        services: &BTreeMap<String, String>,
+        traces: &BTreeMap<String, Vec<String>>,
+    ) -> Result<()> {
+        let attrs = &row["Actor"]["Attributes"];
+        let container = string(&attrs["container"])?;
+        let migration = services.get(container).is_some_and(|s| s == "migrate")
+            && services
+                .values()
+                .filter(|s| s.as_str() == "migrate")
+                .count()
+                == 1;
+        let validator = validation == Some(container) && !services.contains_key(container);
+        require(
+            row["Type"] == "network"
+                && row["Actor"]["ID"] == network.id
+                && object(attrs)?.len() == 3
+                && attrs["name"] == "none"
+                && attrs["type"] == "null"
+                && digest(container)
+                && (migration || validator),
+        )?;
+        let phases = traces.get(container).ok_or(Error::Refused)?;
+        let following = match string(&row["Action"])? {
+            "connect" => {
+                require(
+                    phases == &["create"] && !self.0.contains_key(container) && self.0.len() < 2,
+                )?;
+                NoneConnection::Connected
+            }
+            "disconnect" => {
+                require(
+                    phases == &["create", "start"]
+                        && self.0.get(container) == Some(&NoneConnection::Connected),
+                )?;
+                NoneConnection::Disconnected
+            }
+            _ => return Err(Error::Refused),
+        };
+        self.0.insert(container.into(), following);
+        Ok(())
+    }
+    pub fn complete(&self, validation: &str, services: &BTreeMap<String, String>) -> Result<()> {
+        let migrations = services
+            .iter()
+            .filter(|(_, service)| service.as_str() == "migrate")
+            .map(|(id, _)| id.as_str())
+            .collect::<Vec<_>>();
+        require(
+            digest(validation)
+                && migrations.len() == 1
+                && digest(migrations[0])
+                && validation != migrations[0]
+                && self.0.len() == 2
+                && [validation, migrations[0]]
+                    .iter()
+                    .all(|id| self.0.get(*id) == Some(&NoneConnection::Disconnected)),
+        )
+    }
+}
+
+pub(super) fn validator_role(attributes: &Value, expected_name: &str) -> Result<()> {
+    let run = expected_name
+        .strip_prefix("scpub-")
+        .and_then(|name| name.strip_suffix("-validate"))
+        .ok_or(Error::Refused)?;
+    require(
+        run.len() == 32
+            && run
+                .bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+            && attributes["name"] == expected_name
+            && attributes["simplestchat.public.validation"] == run,
+    )
+}
 pub(super) fn server_image(
     row: &Value,
     archive: &crate::release::archive::VerifiedArchive,

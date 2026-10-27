@@ -269,6 +269,13 @@ fn closed_capture_checkpoints_preserve_failed_guest_metadata_without_positive_co
         "capture-close",
         "capture-data-arp",
         "capture-data-ipv4",
+        "capture-data-ipv4-icmp",
+        "capture-data-ipv4-igmp",
+        "capture-data-ipv4-tcp",
+        "capture-data-ipv4-udp",
+        "capture-data-ipv4-dhcp",
+        "capture-data-ipv4-ntp",
+        "capture-data-ipv4-dns",
         "capture-data-ipv6",
         "capture-data-icmpv6-router-advertisement",
         "capture-data-other",
@@ -299,7 +306,52 @@ fn closed_capture_checkpoints_preserve_failed_guest_metadata_without_positive_co
     }
 }
 #[test]
-fn capture_checkpoint_neighbors_refuse_unknown_or_unsafe_diagnostics() {
+fn closed_daemon_checkpoints_preserve_failed_guest_metadata_without_positive_completion() {
+    for checkpoint in [
+        "daemon-actor-identity",
+        "daemon-inventory",
+        "daemon-validation-input",
+        "daemon-event-shape",
+        "daemon-actor-classification",
+        "daemon-rename",
+        "daemon-action-history",
+        "daemon-network-history",
+        "daemon-pg-history",
+        "daemon-final-traces",
+    ] {
+        let mut failed = case("positive");
+        failed["passed"] = false.into();
+        failed["failure"] = "refused".into();
+        failed["checkpoint"] = checkpoint.into();
+        failed["finalStatus"] = 1.into();
+        failed["cleanupPassed"] = false.into();
+        failed["observations"]["daemonEffectsUncertain"] = true.into();
+        failed["observations"]["observedExpectedDaemonJoins"] = false.into();
+        failed["observations"]["noObservedUnexpectedMutatingEvents"] = false.into();
+        let decoded = decode(&serde_json::to_vec(&failed).unwrap()).unwrap();
+        let admitted = projection::guest(decoded, &expected("positive")).unwrap();
+        assert_eq!(admitted, failed);
+        assert_eq!(admitted.as_object().unwrap().len(), 14);
+        assert_eq!(admitted["observations"].as_object().unwrap().len(), 24);
+        assert_eq!(
+            admitted["nativeFrame"]["facts"].as_object().unwrap().len(),
+            40
+        );
+        assert_eq!(admitted["passed"], false);
+        assert_eq!(admitted["nativeRawExit"], 0);
+        assert_eq!(admitted["nativeFrame"]["passed"], true);
+
+        let mut passed = case("positive");
+        passed["checkpoint"] = checkpoint.into();
+        let decoded = decode(&serde_json::to_vec(&passed).unwrap()).unwrap();
+        assert_eq!(
+            projection::guest(decoded, &expected("positive")),
+            Err(Error::Refused)
+        );
+    }
+}
+#[test]
+fn diagnostic_checkpoint_neighbors_refuse_unknown_or_unsafe_diagnostics() {
     let mut failed = case("positive");
     failed["passed"] = false.into();
     failed["failure"] = "refused".into();
@@ -310,9 +362,23 @@ fn capture_checkpoint_neighbors_refuse_unknown_or_unsafe_diagnostics() {
         json!("capture-data-ethernet"),
         json!("capture-data-IPv4"),
         json!("capture-data-ipv4 "),
+        json!("capture-data-ipv4-arp"),
+        json!("capture-data-ipv4-UDP"),
+        json!("capture-data-ipv4-tcp "),
+        json!("capture-data-ipv4-dns\nSECRET"),
+        json!("capture-data-ipv4-ntp/SECRET"),
+        json!("capture-data-ipv4-dhcp\u{0}SECRET"),
         json!("capture-data-icmpv6-router-advertisement/SECRET"),
         json!("capture-live\nSECRET"),
         json!("capture-data-unknown\u{0}SECRET"),
+        json!("daemon"),
+        json!("daemon-history"),
+        json!("Daemon-rename"),
+        json!("daemon_actor_identity"),
+        json!("daemon-inventory "),
+        json!("daemon-pg-history\nSECRET"),
+        json!("daemon-event-shape/SECRET"),
+        json!("daemon-final-traces\u{0}SECRET"),
         json!("SECRET"),
         Value::Null,
         json!(false),
@@ -328,18 +394,25 @@ fn capture_checkpoint_neighbors_refuse_unknown_or_unsafe_diagnostics() {
         assert!(!format!("{error:?}").contains("SECRET"));
     }
     // Checkpoint vocabulary adds neither a failure category nor a schema field.
-    failed["checkpoint"] = "capture-data-arp".into();
-    for (name, value) in [
-        ("failure", json!("capture-data-arp")),
-        ("captureData", json!("SECRET")),
+    for checkpoint in [
+        "capture-data-arp",
+        "capture-data-ipv4-dhcp",
+        "daemon-pg-history",
     ] {
-        let mut row = failed.clone();
-        row[name] = value;
-        let decoded = decode(&serde_json::to_vec(&row).unwrap()).unwrap();
-        assert_eq!(
-            projection::guest(decoded, &expected("positive")),
-            Err(Error::Refused)
-        );
+        failed["checkpoint"] = checkpoint.into();
+        for (name, value) in [
+            ("failure", json!(checkpoint)),
+            ("captureData", json!("SECRET")),
+            ("daemonDiagnostic", json!("SECRET")),
+        ] {
+            let mut row = failed.clone();
+            row[name] = value;
+            let decoded = decode(&serde_json::to_vec(&row).unwrap()).unwrap();
+            assert_eq!(
+                projection::guest(decoded, &expected("positive")),
+                Err(Error::Refused)
+            );
+        }
     }
 }
 #[test]

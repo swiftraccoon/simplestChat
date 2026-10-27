@@ -37,6 +37,7 @@ pub(super) struct Fixture {
     bridge: String,
     table: String,
     network: Option<String>,
+    none_network: Option<policy::NoneNetwork>,
     pg: Option<String>,
     proxy: Option<String>,
     app: Option<String>,
@@ -64,6 +65,7 @@ impl Fixture {
             bridge: format!("sc{}", &request.run_id[..12]),
             table: format!("sc_maintain_{}", &request.run_id[..12]),
             network: None,
+            none_network: None,
             pg: None,
             proxy: None,
             app: None,
@@ -778,6 +780,19 @@ impl Fixture {
         )
         .await?;
         ctx.check()?;
+        let none = policy::one(
+            &Self::docker(
+                ctx,
+                "builtin-none-admission",
+                &["network".into(), "inspect".into(), "none".into()],
+                15,
+            )
+            .await?,
+        )?;
+        self.none_network = Some(policy::NoneNetwork::admit(
+            &none,
+            self.pg.as_deref().ok_or(Error::Refused)?,
+        )?);
         self.attempts_before = directory_names(Path::new(PUBLIC).join("results").as_path())?;
         require(
             self.attempts_before.is_empty()

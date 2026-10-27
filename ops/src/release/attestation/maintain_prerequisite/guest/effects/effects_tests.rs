@@ -289,6 +289,288 @@ fn postgres_exec_history_joins_create_start_die_and_exact_command_counts() {
     assert!(policy::pg_exec_history(&wrong_order, &commands, "/bin/sh -c ready").is_err());
 }
 
+fn builtin_none_row() -> Value {
+    json!({"Id":id('b'),"Name":"none","Driver":"null","Scope":"local",
+        "Created":"2026-10-27T00:00:00.000000001Z","EnableIPv4":true,"EnableIPv6":false,
+        "Internal":false,"Attachable":false,"Ingress":false,"ConfigOnly":false,
+        "ConfigFrom":{"Network":""},"IPAM":{"Driver":"default","Options":null,"Config":null},
+        "Options":{},"Labels":{},"Status":{"IPAM":{}},
+        "Containers":{(id('a')):{"Name":"simplestchat-public-postgres-1","EndpointID":id('e'),
+            "MacAddress":"","IPv4Address":"","IPv6Address":""}}})
+}
+fn none_event(container: char, action: &str) -> Value {
+    json!({"Type":"network","Action":action,"Actor":{"ID":id('b'),
+        "Attributes":{"name":"none","type":"null","container":id(container)}}})
+}
+fn none_history_observe(
+    history: &mut policy::NoneHistory,
+    row: &Value,
+    phases: &[&str],
+) -> super::Result<()> {
+    let actor = row["Actor"]["Attributes"]["container"]
+        .as_str()
+        .unwrap_or("");
+    let traces = BTreeMap::from([(
+        actor.to_owned(),
+        phases.iter().map(|phase| (*phase).to_owned()).collect(),
+    )]);
+    history.observe(
+        row,
+        &policy::NoneNetwork::admit(&builtin_none_row(), &id('a')).unwrap(),
+        Some(&id('c')),
+        &BTreeMap::from([(id('d'), "migrate".into())]),
+        &traces,
+    )
+}
+
+#[test]
+fn builtin_none_identity_preserves_the_known_postgres_member_and_entire_profile() {
+    let good = builtin_none_row();
+    let original = policy::NoneNetwork::admit(&good, &id('a')).unwrap();
+    assert_eq!(original.id(), id('b'));
+    assert_eq!(original.check(&good), Ok(()));
+    for (pointer, value) in [
+        ("/Id", json!("short")),
+        ("/Name", json!("bridge")),
+        ("/Driver", json!("bridge")),
+        ("/Scope", json!("swarm")),
+        ("/Created", json!("yesterday")),
+        ("/EnableIPv4", json!(false)),
+        ("/EnableIPv6", json!(true)),
+        ("/Internal", json!(true)),
+        ("/Attachable", json!(true)),
+        ("/Ingress", json!(true)),
+        ("/ConfigOnly", json!(true)),
+        ("/ConfigFrom/Network", json!("other")),
+        ("/IPAM/Config", json!([])),
+        ("/IPAM/Options", json!({})),
+        ("/Options", Value::Null),
+        ("/Labels", json!({"foreign":"actor"})),
+        ("/Containers", json!({})),
+    ] {
+        let mut row = good.clone();
+        *row.pointer_mut(pointer).unwrap() = value;
+        assert!(
+            policy::NoneNetwork::admit(&row, &id('a')).is_err(),
+            "{pointer}"
+        );
+        assert_eq!(original.check(&row), Err(Error::Refused), "{pointer}");
+    }
+    for (name, value) in [("EndpointID", json!("")), ("Name", json!("other-postgres"))] {
+        let mut row = good.clone();
+        row["Containers"][id('a')][name] = value;
+        assert!(policy::NoneNetwork::admit(&row, &id('a')).is_err());
+    }
+    let mut foreign = good.clone();
+    foreign["Containers"][id('f')] = good["Containers"][id('a')].clone();
+    assert!(policy::NoneNetwork::admit(&foreign, &id('a')).is_err());
+    let mut replaced = good.clone();
+    replaced["Containers"][id('a')]["EndpointID"] = json!(id('f'));
+    assert!(policy::NoneNetwork::admit(&replaced, &id('a')).is_ok());
+    assert_eq!(original.check(&replaced), Err(Error::Refused));
+    let mut changed_status = good;
+    changed_status["Status"]["IPAM"]["new"] = json!(0);
+    assert_eq!(original.check(&changed_status), Err(Error::Refused));
+}
+
+#[test]
+fn null_network_requires_complete_pairs_for_exact_validator_and_migration() {
+    let services = BTreeMap::from([(id('d'), "migrate".into())]);
+    let mut history = policy::NoneHistory::default();
+    assert_eq!(history.complete(&id('c'), &services), Err(Error::Refused));
+    for actor in ['c', 'd'] {
+        assert_eq!(
+            none_history_observe(&mut history, &none_event(actor, "connect"), &["create"]),
+            Ok(())
+        );
+        assert_eq!(history.complete(&id('c'), &services), Err(Error::Refused));
+        assert_eq!(
+            none_history_observe(
+                &mut history,
+                &none_event(actor, "disconnect"),
+                &["create", "start"],
+            ),
+            Ok(())
+        );
+    }
+    assert_eq!(history.complete(&id('c'), &services), Ok(()));
+    assert_eq!(history.complete(&id('f'), &services), Err(Error::Refused));
+    assert_eq!(
+        history.complete(&id('c'), &BTreeMap::new()),
+        Err(Error::Refused)
+    );
+}
+
+#[test]
+fn null_network_refuses_foreign_unclassified_or_malformed_events_before_mutation() {
+    for (pointer, value) in [
+        ("/Type", json!("container")),
+        ("/Action", json!("create")),
+        ("/Actor/ID", json!(id('f'))),
+        ("/Actor/Attributes/name", json!("bridge")),
+        ("/Actor/Attributes/type", json!("bridge")),
+        ("/Actor/Attributes/container", json!(id('a'))),
+        ("/Actor/Attributes/container", json!(id('f'))),
+        ("/Actor/Attributes/container", json!(id('é'))),
+        ("/Actor/Attributes/container", json!("short")),
+        ("/Actor/Attributes/container", Value::Null),
+    ] {
+        let mut row = none_event('c', "connect");
+        *row.pointer_mut(pointer).unwrap() = value;
+        let mut history = policy::NoneHistory::default();
+        let before = history.clone();
+        assert_eq!(
+            none_history_observe(&mut history, &row, &["create"]),
+            Err(Error::Refused)
+        );
+        assert_eq!(history, before, "{pointer}");
+    }
+    let mut extra = none_event('c', "connect");
+    extra["Actor"]["Attributes"]["unexpected"] = json!("value");
+    assert!(
+        none_history_observe(&mut policy::NoneHistory::default(), &extra, &["create"]).is_err()
+    );
+    let network = policy::NoneNetwork::admit(&builtin_none_row(), &id('a')).unwrap();
+    let traces = BTreeMap::from([(id('d'), vec!["create".into()])]);
+    for services in [
+        BTreeMap::new(),
+        BTreeMap::from([(id('d'), "simplestchat".into())]),
+        BTreeMap::from([(id('d'), "migrate".into()), (id('f'), "migrate".into())]),
+    ] {
+        assert!(
+            policy::NoneHistory::default()
+                .observe(
+                    &none_event('d', "connect"),
+                    &network,
+                    Some(&id('c')),
+                    &services,
+                    &traces
+                )
+                .is_err()
+        );
+    }
+    assert!(
+        policy::NoneHistory::default()
+            .observe(
+                &none_event('c', "connect"),
+                &network,
+                None,
+                &BTreeMap::new(),
+                &traces
+            )
+            .is_err()
+    );
+}
+
+#[test]
+fn null_network_refuses_missing_duplicate_late_and_reversed_pair_edges() {
+    let mut history = policy::NoneHistory::default();
+    assert!(
+        none_history_observe(
+            &mut history,
+            &none_event('c', "disconnect"),
+            &["create", "start"]
+        )
+        .is_err()
+    );
+    assert!(
+        none_history_observe(
+            &mut history,
+            &none_event('c', "connect"),
+            &["create", "start"]
+        )
+        .is_err()
+    );
+    none_history_observe(&mut history, &none_event('c', "connect"), &["create"]).unwrap();
+    let connected = history.clone();
+    assert!(none_history_observe(&mut history, &none_event('c', "connect"), &["create"]).is_err());
+    assert_eq!(history, connected);
+    for phases in [&["create"][..], &["create", "start", "die"][..], &[][..]] {
+        assert!(
+            none_history_observe(&mut history, &none_event('c', "disconnect"), phases).is_err()
+        );
+        assert_eq!(history, connected);
+    }
+    none_history_observe(
+        &mut history,
+        &none_event('c', "disconnect"),
+        &["create", "start"],
+    )
+    .unwrap();
+    let disconnected = history.clone();
+    assert!(
+        none_history_observe(
+            &mut history,
+            &none_event('c', "disconnect"),
+            &["create", "start"]
+        )
+        .is_err()
+    );
+    assert_eq!(history, disconnected);
+}
+
+#[test]
+fn null_validator_role_joins_its_private_attempt_name_and_exact_run_label() {
+    let name = "scpub-0123456789abcdef0123456789abcdef-validate";
+    let attrs =
+        json!({"name":name,"simplestchat.public.validation":"0123456789abcdef0123456789abcdef"});
+    assert_eq!(policy::validator_role(&attrs, name), Ok(()));
+    for invalid in [
+        json!({"name":name}),
+        json!({"name":name,"simplestchat.public.validation":"ffffffffffffffffffffffffffffffff"}),
+        json!({"name":"other","simplestchat.public.validation":"0123456789abcdef0123456789abcdef"}),
+    ] {
+        assert_eq!(policy::validator_role(&invalid, name), Err(Error::Refused));
+    }
+    for invalid in ["scpub-short-validate", "scpub-é-validate", "other", ""] {
+        assert_eq!(policy::validator_role(&attrs, invalid), Err(Error::Refused));
+    }
+}
+
+#[test]
+fn daemon_failure_checkpoint_records_first_error_before_later_phase_pop() {
+    use super::super::Control;
+    use super::observation::{DaemonStage, daemon_result};
+    use std::time::{Duration, Instant};
+    for failed in [true, false] {
+        let mut control = Control::new(Instant::now() - Duration::from_secs(31)).unwrap();
+        control.checkpoint = "daemon-observe";
+        let end = control.end();
+        let body = if failed { Err(Error::Refused) } else { Ok(()) };
+        let result = daemon_result(&mut control, None, DaemonStage::NetworkHistory, body);
+        assert_eq!(control.pop_phase(None), Err(Error::Deadline));
+        let checkpoint = control.checkpoint;
+        control.begin_settling();
+        let finished = control.finish();
+        assert_eq!(result, body);
+        assert_eq!(control.status, 124);
+        assert_eq!(control.end(), end);
+        if failed {
+            assert_eq!(finished, Err(Error::Refused));
+            assert_eq!(checkpoint, "daemon-network-history");
+        } else {
+            assert_eq!(finished, Err(Error::Deadline));
+            assert_eq!(checkpoint, "daemon-observe");
+        }
+    }
+    let mut control = Control::new(Instant::now()).unwrap();
+    control.checkpoint = "native";
+    control.record(Error::Io);
+    let earlier = control.first;
+    assert_eq!(
+        daemon_result(
+            &mut control,
+            earlier,
+            DaemonStage::Rename,
+            Err(Error::Refused)
+        ),
+        Err(Error::Refused)
+    );
+    control.begin_settling();
+    assert_eq!(control.finish(), Err(Error::Io));
+    assert_eq!(control.checkpoint, "native");
+}
+
 #[test]
 fn natural_caddy_arguments_keep_normal_mounts_and_coordinated_owned_identity() {
     let args = policy::normal_arguments(
@@ -372,6 +654,158 @@ fn classic_capture(ether_type: [u8; 2], payload: &[u8], little: bool) -> Vec<u8>
     bytes.extend_from_slice(&ether_type);
     bytes.extend_from_slice(payload);
     bytes
+}
+
+fn ipv4_capture(
+    protocol: u8,
+    ports: [u16; 2],
+    options: usize,
+    payload: usize,
+    little: bool,
+) -> Vec<u8> {
+    let ihl = 20 + options;
+    let mut ip = vec![0; ihl + payload];
+    ip[0] = 0x40 | u8::try_from(ihl / 4).unwrap();
+    let total = u16::try_from(ip.len()).unwrap();
+    ip[2..4].copy_from_slice(&total.to_be_bytes());
+    ip[6..8].copy_from_slice(&0x4000u16.to_be_bytes());
+    ip[8] = 64;
+    ip[9] = protocol;
+    if [6, 17].contains(&protocol) {
+        ip[ihl..ihl + 2].copy_from_slice(&ports[0].to_be_bytes());
+        ip[ihl + 2..ihl + 4].copy_from_slice(&ports[1].to_be_bytes());
+        if protocol == 6 {
+            ip[ihl + 12] = 0x50;
+        } else {
+            ip[ihl + 4..ihl + 6].copy_from_slice(&u16::try_from(payload).unwrap().to_be_bytes());
+        }
+    }
+    let mut bytes = classic_capture([0x08, 0x00], &ip, little);
+    let captured = u32::try_from((bytes.len() - 40).min(128)).unwrap();
+    bytes[32..36].copy_from_slice(&if little {
+        captured.to_le_bytes()
+    } else {
+        captured.to_be_bytes()
+    });
+    bytes.truncate(40 + usize::try_from(captured).unwrap());
+    bytes
+}
+
+#[test]
+fn ipv4_header_hints_cover_protocols_ports_options_and_both_capture_byte_orders() {
+    use super::actors::{CaptureStage, PacketClass, capture_output, first_packet_class};
+    for (protocol, ports, options, payload, expected, label) in [
+        (1, [0, 0], 0, 8, PacketClass::Ipv4Icmp, "icmp"),
+        (2, [0, 0], 0, 8, PacketClass::Ipv4Igmp, "igmp"),
+        (6, [8000, 443], 0, 20, PacketClass::Ipv4Tcp, "tcp"),
+        (6, [123, 8000], 4, 20, PacketClass::Ipv4Tcp, "tcp"),
+        (17, [8000, 8001], 40, 8, PacketClass::Ipv4Udp, "udp"),
+        (17, [68, 67], 0, 512, PacketClass::Ipv4Dhcp, "dhcp"),
+        (17, [67, 68], 4, 300, PacketClass::Ipv4Dhcp, "dhcp"),
+        (17, [123, 123], 0, 48, PacketClass::Ipv4Ntp, "ntp"),
+        (17, [8000, 123], 0, 48, PacketClass::Ipv4Ntp, "ntp"),
+        (17, [123, 8000], 0, 48, PacketClass::Ipv4Ntp, "ntp"),
+        (17, [8000, 53], 0, 8, PacketClass::Ipv4Dns, "dns"),
+        (17, [53, 8000], 4, 8, PacketClass::Ipv4Dns, "dns"),
+        (6, [8000, 53], 0, 20, PacketClass::Ipv4Dns, "dns"),
+        (6, [53, 8000], 0, 20, PacketClass::Ipv4Dns, "dns"),
+        (17, [67, 67], 0, 8, PacketClass::Ipv4Udp, "udp"),
+        (17, [68, 8000], 0, 8, PacketClass::Ipv4Udp, "udp"),
+    ] {
+        for little in [false, true] {
+            let mut bytes = ipv4_capture(protocol, ports, options, payload, little);
+            for nanoseconds in [false, true] {
+                if nanoseconds {
+                    bytes[..4].copy_from_slice(&if little {
+                        [0x4d, 0x3c, 0xb2, 0xa1]
+                    } else {
+                        [0xa1, 0xb2, 0x3c, 0x4d]
+                    });
+                }
+                assert_eq!(first_packet_class(&bytes), expected);
+                let stage = CaptureStage::Data(expected);
+                assert_eq!(stage.checkpoint(), format!("capture-data-ipv4-{label}"));
+                assert_eq!(capture_output(0, &bytes, &[]), Some(stage));
+            }
+        }
+    }
+}
+
+#[test]
+fn ipv4_snapped_payload_needs_complete_headers_but_never_the_entire_datagram() {
+    use super::actors::{CaptureStage, PacketClass, capture_output, first_packet_class};
+    let bytes = ipv4_capture(17, [68, 67], 0, 512, true);
+    assert_eq!(bytes.len(), 40 + 128);
+    assert_eq!(u32::from_le_bytes(bytes[32..36].try_into().unwrap()), 128);
+    assert_eq!(u32::from_le_bytes(bytes[36..40].try_into().unwrap()), 546);
+    assert_eq!(first_packet_class(&bytes), PacketClass::Ipv4Dhcp);
+    assert_eq!(
+        capture_output(0, &bytes, &[]),
+        Some(CaptureStage::Data(PacketClass::Ipv4Dhcp))
+    );
+    for (protocol, payload) in [(6, 20), (17, 8)] {
+        let bytes = ipv4_capture(protocol, [8000, 8001], 4, payload, true);
+        let full = bytes.len() - 40;
+        for captured in 14..full {
+            let mut short = bytes[..40 + captured].to_vec();
+            short[32..36].copy_from_slice(&u32::try_from(captured).unwrap().to_le_bytes());
+            assert_eq!(first_packet_class(&short), PacketClass::Ipv4, "{captured}");
+            assert_eq!(
+                capture_output(0, &short, &[]),
+                Some(CaptureStage::Data(PacketClass::Ipv4))
+            );
+        }
+    }
+}
+
+#[test]
+fn ipv4_ambiguous_ports_fragments_and_malformed_headers_keep_generic_refusal() {
+    use super::actors::{CaptureStage, PacketClass, capture_output, first_packet_class};
+    const IP: usize = 40 + 14;
+    let good = ipv4_capture(17, [68, 67], 0, 512, true);
+    let mut neighbors = Vec::new();
+    for (offset, value) in [(0, 0x65), (0, 0x44), (0, 0x40), (0, 0x4f), (9, 99)] {
+        let mut row = good.clone();
+        row[IP + offset] = value;
+        neighbors.push(row);
+    }
+    for (offset, value) in [
+        (2, 19u16),
+        (2, 27),
+        (6, 0x2000),
+        (6, 0x0001),
+        (6, 0x2001),
+        (6, 0x8000),
+        (20 + 4, 0),
+        (20 + 4, 7),
+        (20 + 4, 513),
+    ] {
+        let mut row = good.clone();
+        row[IP + offset..IP + offset + 2].copy_from_slice(&value.to_be_bytes());
+        neighbors.push(row);
+    }
+    let mut original_too_short = good;
+    original_too_short[36..40].copy_from_slice(&130u32.to_le_bytes());
+    neighbors.push(original_too_short);
+    neighbors.push(ipv4_capture(17, [53, 123], 0, 8, true));
+    neighbors.push(ipv4_capture(17, [123, 53], 0, 8, true));
+    neighbors.push(ipv4_capture(1, [0, 0], 0, 7, true));
+    neighbors.push(ipv4_capture(2, [0, 0], 0, 7, true));
+    for data_offset in [0x40, 0xf0] {
+        let mut row = ipv4_capture(6, [53, 8000], 0, 20, true);
+        row[IP + 20 + 12] = data_offset;
+        neighbors.push(row);
+    }
+    let mut tcp_header_snapped = ipv4_capture(6, [53, 8000], 40, 60, true);
+    tcp_header_snapped[IP + 60 + 12] = 0xf0;
+    neighbors.push(tcp_header_snapped);
+    for row in neighbors {
+        assert_eq!(first_packet_class(&row), PacketClass::Ipv4);
+        assert_eq!(
+            capture_output(0, &row, &[]),
+            Some(CaptureStage::Data(PacketClass::Ipv4))
+        );
+    }
 }
 
 #[test]
