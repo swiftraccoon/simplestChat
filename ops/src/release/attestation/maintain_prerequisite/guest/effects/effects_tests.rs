@@ -340,6 +340,495 @@ fn event_stream_keeps_partial_records_and_refuses_duplicate_or_oversized_neighbo
     assert_eq!(rows.len(), 2048);
 }
 
+fn classic_capture(ether_type: [u8; 2], payload: &[u8], little: bool) -> Vec<u8> {
+    let mut bytes = vec![0; 40];
+    let encode16 = |v: u16| {
+        if little {
+            v.to_le_bytes()
+        } else {
+            v.to_be_bytes()
+        }
+    };
+    let encode32 = |v: u32| {
+        if little {
+            v.to_le_bytes()
+        } else {
+            v.to_be_bytes()
+        }
+    };
+    bytes[..4].copy_from_slice(&if little {
+        [0xd4, 0xc3, 0xb2, 0xa1]
+    } else {
+        [0xa1, 0xb2, 0xc3, 0xd4]
+    });
+    bytes[4..6].copy_from_slice(&encode16(2));
+    bytes[6..8].copy_from_slice(&encode16(4));
+    bytes[16..20].copy_from_slice(&encode32(128));
+    bytes[20..24].copy_from_slice(&encode32(1));
+    let count = u32::try_from(14 + payload.len()).unwrap();
+    bytes[32..36].copy_from_slice(&encode32(count));
+    bytes[36..40].copy_from_slice(&encode32(count));
+    bytes.extend_from_slice(&[0; 12]);
+    bytes.extend_from_slice(&ether_type);
+    bytes.extend_from_slice(payload);
+    bytes
+}
+
+#[test]
+fn capture_header_classes_never_admit_a_nonempty_capture_or_change_empty_rule() {
+    use super::actors::{CaptureStage, PacketClass, capture_output, first_packet_class};
+    let mut advertisement = vec![0; 56];
+    advertisement[0] = 0x60;
+    advertisement[4..6].copy_from_slice(&16u16.to_be_bytes());
+    advertisement[6] = 58;
+    advertisement[40] = 134;
+    for (kind, payload, class) in [
+        ([0x08, 0x06], vec![], PacketClass::Arp),
+        ([0x08, 0x00], vec![0x45], PacketClass::Ipv4),
+        ([0x86, 0xdd], vec![0x60; 40], PacketClass::Ipv6),
+        (
+            [0x86, 0xdd],
+            advertisement.clone(),
+            PacketClass::Icmpv6RouterAdvertisement,
+        ),
+        ([0x81, 0x00], vec![], PacketClass::Other),
+    ] {
+        for little in [true, false] {
+            let mut bytes = classic_capture(kind, &payload, little);
+            for nanoseconds in [false, true] {
+                if nanoseconds {
+                    bytes[..4].copy_from_slice(&if little {
+                        [0x4d, 0x3c, 0xb2, 0xa1]
+                    } else {
+                        [0xa1, 0xb2, 0x3c, 0x4d]
+                    });
+                }
+                assert_eq!(first_packet_class(&bytes), class);
+                assert_eq!(
+                    capture_output(0, &bytes, &[]),
+                    Some(CaptureStage::Data(class))
+                );
+            }
+        }
+    }
+    // Preserve the existing byte-count rule; this diagnostic adds no positive parser gate.
+    assert_eq!(capture_output(0, &[0; 24], &[0; 8192]), None);
+    assert_eq!(capture_output(1, &[0; 24], &[]), Some(CaptureStage::Status));
+    assert_eq!(capture_output(0, &[0; 23], &[]), Some(CaptureStage::Short));
+    assert_eq!(
+        capture_output(0, &[0; 24], &[0; 8193]),
+        Some(CaptureStage::Bounds)
+    );
+    assert_eq!(
+        capture_output(0, &vec![0; 1024 * 1024 + 1], &[]),
+        Some(CaptureStage::Bounds)
+    );
+    for (offset, value) in [(0, 0x40), (6, 0), (40, 133), (41, 1)] {
+        let mut changed = advertisement.clone();
+        changed[offset] = value;
+        let bytes = classic_capture([0x86, 0xdd], &changed, true);
+        assert_eq!(first_packet_class(&bytes), PacketClass::Ipv6);
+        assert_eq!(
+            capture_output(0, &bytes, &[]),
+            Some(CaptureStage::Data(PacketClass::Ipv6))
+        );
+    }
+}
+
+#[test]
+fn malformed_capture_headers_and_truncated_first_records_remain_unknown_refusals() {
+    use super::actors::{CaptureStage, PacketClass, capture_output, first_packet_class};
+    let bytes = classic_capture([0x08, 0x06], &[], true);
+    for end in 0..bytes.len() {
+        assert_eq!(
+            first_packet_class(&bytes[..end]),
+            PacketClass::Unknown,
+            "{end}"
+        );
+        if end > 24 {
+            assert_eq!(
+                capture_output(0, &bytes[..end], &[]),
+                Some(CaptureStage::Data(PacketClass::Unknown))
+            );
+        }
+    }
+    for (offset, value) in [
+        (0, 0u32),
+        (4, 3),
+        (16, 0),
+        (16, 129),
+        (20, 101),
+        (20, 113),
+        (32, 0),
+        (32, 13),
+        (32, 129),
+        (32, u32::MAX),
+        (36, 13),
+    ] {
+        let mut changed = bytes.clone();
+        changed[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
+        assert_eq!(
+            first_packet_class(&changed),
+            PacketClass::Unknown,
+            "{offset}"
+        );
+        assert_eq!(
+            capture_output(0, &changed, &[]),
+            Some(CaptureStage::Data(PacketClass::Unknown))
+        );
+    }
+    let mut oversized = bytes;
+    oversized.resize(1024 * 1024 + 1, 0);
+    assert_eq!(first_packet_class(&oversized), PacketClass::Unknown);
+}
+
+#[test]
+fn capture_failure_retains_first_error_stage_through_later_close_or_clock_failure() {
+    use super::actors::{CaptureFailure, CaptureStage, PacketClass};
+    let mut failure = CaptureFailure::default();
+    assert_eq!(
+        failure.observe(
+            CaptureStage::Data(PacketClass::Arp),
+            Err::<(), _>(Error::Refused)
+        ),
+        Err(Error::Refused)
+    );
+    assert_eq!(
+        failure.observe(CaptureStage::Close, Err::<(), _>(Error::Close)),
+        Err(Error::Close)
+    );
+    assert_eq!(
+        failure.observe(CaptureStage::Live, Err::<(), _>(Error::Deadline)),
+        Err(Error::Deadline)
+    );
+    assert_eq!(
+        failure.diagnostic(),
+        Some((Error::Refused, "capture-data-arp"))
+    );
+    assert_eq!(failure.observe(CaptureStage::Live, Ok(())), Ok(()));
+    assert_eq!(
+        failure.diagnostic(),
+        Some((Error::Refused, "capture-data-arp"))
+    );
+    let mut bounds = CaptureFailure::default();
+    assert_eq!(
+        bounds.observe(CaptureStage::Live, Err::<(), _>(Error::Bounds)),
+        Err(Error::Bounds)
+    );
+    assert_eq!(bounds.diagnostic(), Some((Error::Bounds, "capture-bounds")));
+}
+
+#[test]
+fn capture_checkpoint_cannot_replace_an_earlier_body_or_cleanup_failure() {
+    use super::super::{Control, local_checkpoint};
+    use std::time::Instant;
+    let previous = "source-observe";
+    let watch = Some((Error::Refused, "capture-data-arp"));
+    assert_eq!(
+        local_checkpoint(
+            previous,
+            None,
+            Err(Error::Refused),
+            watch,
+            Some(Error::Refused)
+        ),
+        "capture-data-arp"
+    );
+    for earlier in [Error::Io, Error::Refused, Error::Deadline, Error::Terminate] {
+        let mut owner = Control::new(Instant::now()).unwrap();
+        owner.record(earlier);
+        let original = owner.first;
+        owner.record(Error::Refused);
+        owner.begin_settling();
+        let checkpoint =
+            local_checkpoint(previous, original, Err(Error::Refused), watch, owner.first);
+        let ended = owner.finish();
+        assert_eq!(ended, Err(earlier));
+        assert_eq!(owner.first, Some(earlier));
+        assert_eq!(checkpoint, previous);
+    }
+    for (local, watch, first) in [
+        (Ok(()), watch, Some(Error::Refused)),
+        (Err(Error::Io), watch, Some(Error::Io)),
+        (Err(Error::Refused), None, Some(Error::Refused)),
+        (Err(Error::Refused), watch, Some(Error::Deadline)),
+        (Err(Error::Refused), watch, None),
+    ] {
+        assert_eq!(
+            local_checkpoint(previous, None, local, watch, first),
+            previous
+        );
+    }
+}
+
+struct ReplacementHistory {
+    row: Value,
+    services: BTreeMap<String, String>,
+    traces: BTreeMap<String, Vec<String>>,
+}
+
+impl ReplacementHistory {
+    fn new() -> Self {
+        let retired = ["create", "start", "die", "destroy"]
+            .map(String::from)
+            .to_vec();
+        Self {
+            // Synthetic identities; the field shape matches a stopped Moby rename event.
+            row: json!({"Type":"container","Action":"rename","Actor":{
+                "ID":id('a'),"Attributes":{
+                    "name":"simplestchat-public-simplestchat-1",
+                    "oldName":"/bbbbbbbbbbbb_simplestchat-public-simplestchat-1",
+                    "image":format!("sha256:{}",id('f')),
+                    "simplestchat.maintain-prerequisite":"0123456789abcdef0123456789abcdef",
+                    "com.docker.compose.project":"simplestchat-public",
+                    "com.docker.compose.service":"simplestchat",
+                    "com.docker.compose.container-number":"1",
+                    "com.docker.compose.replace":"simplestchat-1"}}}),
+            services: BTreeMap::from([
+                (id('a'), "simplestchat".into()),
+                (id('b'), "simplestchat".into()),
+                (id('c'), "migrate".into()),
+                (id('d'), "caddy".into()),
+            ]),
+            traces: BTreeMap::from([
+                (id('a'), vec!["create".into()]),
+                (id('b'), retired.clone()),
+                (id('c'), retired.clone()),
+                (id('d'), vec!["create".into(), "start".into()]),
+                (id('e'), retired),
+            ]),
+        }
+    }
+
+    fn check(&self) -> super::Result<()> {
+        self.check_identity(&id('a'), "/simplestchat-public-simplestchat-1")
+    }
+
+    fn check_identity(&self, app: &str, name: &str) -> super::Result<()> {
+        super::observation::app_replacement_rename(
+            &self.row,
+            app,
+            name,
+            "0123456789abcdef0123456789abcdef",
+            &format!("sha256:{}", id('f')),
+            &self.services,
+            &self.traces,
+        )
+    }
+
+    fn complete(&self) -> super::Result<()> {
+        super::observation::expected_daemon_traces(
+            &id('e'),
+            &id('a'),
+            &id('d'),
+            &self.services,
+            &self.traces,
+        )
+    }
+}
+
+#[test]
+fn replacement_rename_joins_retired_identity_before_mandatory_trace_completion() {
+    let mut history = ReplacementHistory::new();
+    let before = history.traces.clone();
+    assert_eq!(history.check(), Ok(()));
+    assert_eq!(history.traces, before);
+    assert_eq!(history.complete(), Err(Error::Refused));
+    history
+        .traces
+        .get_mut(&id('a'))
+        .unwrap()
+        .push("rename".into());
+    assert_eq!(history.complete(), Err(Error::Refused));
+    history
+        .traces
+        .get_mut(&id('a'))
+        .unwrap()
+        .push("start".into());
+    assert_eq!(history.complete(), Ok(()));
+}
+
+#[test]
+fn replacement_rename_refuses_unjoined_event_fields_without_changing_trace() {
+    for (pointer, value) in [
+        ("/Type", json!("network")),
+        ("/Action", json!("start")),
+        ("/Actor/ID", json!(id('b'))),
+        ("/Actor/ID", Value::Null),
+        ("/Actor/Attributes", Value::Null),
+        (
+            "/Actor/Attributes/image",
+            json!(format!("sha256:{}", id('e'))),
+        ),
+        (
+            "/Actor/Attributes/simplestchat.maintain-prerequisite",
+            json!("ffffffffffffffffffffffffffffffff"),
+        ),
+        (
+            "/Actor/Attributes/com.docker.compose.project",
+            json!("another-project"),
+        ),
+        (
+            "/Actor/Attributes/com.docker.compose.service",
+            json!("migrate"),
+        ),
+        (
+            "/Actor/Attributes/com.docker.compose.container-number",
+            json!("2"),
+        ),
+        (
+            "/Actor/Attributes/com.docker.compose.replace",
+            json!("another-1"),
+        ),
+        (
+            "/Actor/Attributes/name",
+            json!("/simplestchat-public-simplestchat-1"),
+        ),
+        (
+            "/Actor/Attributes/name",
+            json!("bbbbbbbbbbbb_simplestchat-public-simplestchat-1"),
+        ),
+        (
+            "/Actor/Attributes/oldName",
+            json!("bbbbbbbbbbbb_simplestchat-public-simplestchat-1"),
+        ),
+        (
+            "/Actor/Attributes/oldName",
+            json!("/aaaaaaaaaaaa_simplestchat-public-simplestchat-1"),
+        ),
+        (
+            "/Actor/Attributes/oldName",
+            json!("/bbbbbbbbbbbb_simplestchat-public-simplestchat-2"),
+        ),
+    ] {
+        let mut history = ReplacementHistory::new();
+        *history.row.pointer_mut(pointer).unwrap() = value;
+        let before = history.traces.clone();
+        assert_eq!(history.check(), Err(Error::Refused), "{pointer}");
+        assert_eq!(history.traces, before, "{pointer}");
+    }
+    for name in [
+        "image",
+        "oldName",
+        "name",
+        "com.docker.compose.container-number",
+        "com.docker.compose.replace",
+    ] {
+        let mut history = ReplacementHistory::new();
+        history.row["Actor"]["Attributes"]
+            .as_object_mut()
+            .unwrap()
+            .remove(name);
+        assert_eq!(history.check(), Err(Error::Refused), "{name}");
+    }
+}
+
+#[test]
+fn replacement_rename_requires_canonical_distinct_ids_and_fresh_inspected_name() {
+    let history = ReplacementHistory::new();
+    for name in [
+        "simplestchat-public-simplestchat-1",
+        "//simplestchat-public-simplestchat-1",
+        "/simplestchat-public-simplestchat-2",
+        "/bbbbbbbbbbbb_simplestchat-public-simplestchat-1",
+        "",
+    ] {
+        assert_eq!(history.check_identity(&id('a'), name), Err(Error::Refused));
+    }
+    for invalid in [String::new(), "a".into(), id('A'), id('é')] {
+        let mut history = ReplacementHistory::new();
+        history.services.remove(&id('a'));
+        history
+            .services
+            .insert(invalid.clone(), "simplestchat".into());
+        history.row["Actor"]["ID"] = json!(invalid);
+        assert_eq!(
+            history.check_identity(&invalid, "/simplestchat-public-simplestchat-1"),
+            Err(Error::Refused)
+        );
+        let mut history = ReplacementHistory::new();
+        history.services.remove(&id('b'));
+        history.services.insert(invalid, "simplestchat".into());
+        assert_eq!(history.check(), Err(Error::Refused));
+    }
+    let mut missing = ReplacementHistory::new();
+    missing.services.remove(&id('b'));
+    assert_eq!(missing.check(), Err(Error::Refused));
+    let mut foreign = ReplacementHistory::new();
+    foreign.services.insert(id('f'), "simplestchat".into());
+    assert_eq!(foreign.check(), Err(Error::Refused));
+    let mut wrong_role = ReplacementHistory::new();
+    wrong_role.services.insert(id('b'), "migrate".into());
+    assert_eq!(wrong_role.check(), Err(Error::Refused));
+}
+
+#[test]
+fn replacement_rename_refuses_duplicate_late_or_unretired_histories() {
+    for phases in [
+        vec![],
+        vec!["start"],
+        vec!["create", "create"],
+        vec!["create", "rename"],
+        vec!["create", "start"],
+        vec!["create", "rename", "start"],
+    ] {
+        let mut history = ReplacementHistory::new();
+        history
+            .traces
+            .insert(id('a'), phases.into_iter().map(String::from).collect());
+        let before = history.traces.clone();
+        assert_eq!(history.check(), Err(Error::Refused));
+        assert_eq!(history.traces, before);
+    }
+    for phases in [
+        vec![],
+        vec!["create", "start"],
+        vec!["create", "start", "die"],
+        vec!["create", "start", "destroy", "die"],
+        vec!["create", "start", "die", "destroy", "destroy"],
+    ] {
+        let mut history = ReplacementHistory::new();
+        history
+            .traces
+            .insert(id('b'), phases.into_iter().map(String::from).collect());
+        assert_eq!(history.check(), Err(Error::Refused));
+    }
+    let mut missing = ReplacementHistory::new();
+    missing.traces.remove(&id('b'));
+    assert_eq!(missing.check(), Err(Error::Refused));
+}
+
+#[test]
+fn completed_daemon_trace_requires_one_rename_and_preserves_peer_lifecycles() {
+    for phases in [
+        vec!["create", "start"],
+        vec!["rename", "create", "start"],
+        vec!["create", "start", "rename"],
+        vec!["create", "rename", "rename", "start"],
+        vec!["create", "rename", "start", "die"],
+    ] {
+        let mut history = ReplacementHistory::new();
+        history
+            .traces
+            .insert(id('a'), phases.into_iter().map(String::from).collect());
+        assert_eq!(history.complete(), Err(Error::Refused));
+    }
+    for actor in ['b', 'c', 'd', 'e'] {
+        let mut history = ReplacementHistory::new();
+        history.traces.insert(
+            id('a'),
+            vec!["create".into(), "rename".into(), "start".into()],
+        );
+        assert_eq!(history.complete(), Ok(()));
+        history
+            .traces
+            .get_mut(&id(actor))
+            .unwrap()
+            .push("rename".into());
+        assert_eq!(history.complete(), Err(Error::Refused));
+    }
+}
+
 fn proxy_row() -> Value {
     json!({"Id":id('a'),"Image":format!("sha256:{}",id('b')),
         "Config":{"User":"10001:10001","Image":"caddy@sha256:fixed"},

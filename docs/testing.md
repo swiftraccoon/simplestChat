@@ -3071,6 +3071,23 @@ The create argument remains `--cap-add NET_BIND_SERVICE`. This corrects an
 inherited frozen-reference defect; neither the Docker profile observation nor
 the unit tests establish fresh signed VM or TLS success.
 
+Daemon observation tests require the one pinned-Compose application replacement
+rename, joined to the selected app, retired old app, exact names and labels and
+the complete ordered lifecycle. They retain refusals for missing, duplicate,
+late, foreign, wrong-service and malformed-identity events. A separate private
+Rust probe uses a real pinned-Docker create/rename event with a synthetic retired
+context and an inert image; it does not start a container or establish complete
+Compose, hosted-branch or VM equivalence. Existing kill/stop rules are unchanged.
+
+Capture diagnostic tests cover classic-PCAP endian/magic variants, bounded first
+header classes and truncated or malformed headers. Every nonempty capture still
+refuses, and the prior exact 24-byte/zero-status rule remains. First-failure tests
+retain earlier body/cleanup causes instead of replacing them during local capture
+retirement. The outer decoder accepts only the fourteen new literal checkpoints
+on failed receipts and rejects them on passing receipts, together with unknown
+labels and added fields. These metadata tests do not identify the previous
+timeout capture's contents or establish a successful fresh containment proof.
+
 The native guest's fixed bridge profile enables host-loopback publication with
 outbound masquerading disabled, under the unchanged three default-drop firewall
 hooks. Network regressions require this exact profile and its canonical IPAM

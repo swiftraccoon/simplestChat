@@ -256,6 +256,93 @@ fn incomplete_refusals_keep_null_hashes_actual_large_counts_and_unknown_statuses
     );
 }
 #[test]
+fn closed_capture_checkpoints_preserve_failed_guest_metadata_without_positive_completion() {
+    let scenario = "timeout-stopped-launcher";
+    for checkpoint in [
+        "capture-live",
+        "capture-bounds",
+        "capture-eof",
+        "capture-stop",
+        "capture-wait",
+        "capture-status",
+        "capture-short",
+        "capture-close",
+        "capture-data-arp",
+        "capture-data-ipv4",
+        "capture-data-ipv6",
+        "capture-data-icmpv6-router-advertisement",
+        "capture-data-other",
+        "capture-data-unknown",
+    ] {
+        let mut failed = case(scenario);
+        failed["passed"] = false.into();
+        failed["failure"] = "refused".into();
+        failed["checkpoint"] = checkpoint.into();
+        failed["finalStatus"] = 1.into();
+        failed["cleanupPassed"] = false.into();
+        failed["observations"]["noObservedExternalPackets"] = false.into();
+        let decoded = decode(&serde_json::to_vec(&failed).unwrap()).unwrap();
+        let admitted = projection::guest(decoded, &expected(scenario)).unwrap();
+        assert_eq!(admitted, failed);
+        assert_eq!(admitted.as_object().unwrap().len(), 14);
+        assert_eq!(admitted["passed"], false);
+        assert_eq!(admitted["nativeRawExit"], 124);
+        assert_eq!(admitted["nativeFrame"]["failure"], "deadline");
+
+        let mut passed = case(scenario);
+        passed["checkpoint"] = checkpoint.into();
+        let decoded = decode(&serde_json::to_vec(&passed).unwrap()).unwrap();
+        assert_eq!(
+            projection::guest(decoded, &expected(scenario)),
+            Err(Error::Refused)
+        );
+    }
+}
+#[test]
+fn capture_checkpoint_neighbors_refuse_unknown_or_unsafe_diagnostics() {
+    let mut failed = case("positive");
+    failed["passed"] = false.into();
+    failed["failure"] = "refused".into();
+    failed["finalStatus"] = 1.into();
+    for checkpoint in [
+        json!("capture"),
+        json!("capture-data"),
+        json!("capture-data-ethernet"),
+        json!("capture-data-IPv4"),
+        json!("capture-data-ipv4 "),
+        json!("capture-data-icmpv6-router-advertisement/SECRET"),
+        json!("capture-live\nSECRET"),
+        json!("capture-data-unknown\u{0}SECRET"),
+        json!("SECRET"),
+        Value::Null,
+        json!(false),
+        json!(1),
+        json!([]),
+        json!({"capture-data-arp":true}),
+    ] {
+        let mut row = failed.clone();
+        row["checkpoint"] = checkpoint;
+        let decoded = decode(&serde_json::to_vec(&row).unwrap()).unwrap();
+        let error = projection::guest(decoded, &expected("positive")).unwrap_err();
+        assert_eq!(error, Error::Refused);
+        assert!(!format!("{error:?}").contains("SECRET"));
+    }
+    // Checkpoint vocabulary adds neither a failure category nor a schema field.
+    failed["checkpoint"] = "capture-data-arp".into();
+    for (name, value) in [
+        ("failure", json!("capture-data-arp")),
+        ("captureData", json!("SECRET")),
+    ] {
+        let mut row = failed.clone();
+        row[name] = value;
+        let decoded = decode(&serde_json::to_vec(&row).unwrap()).unwrap();
+        assert_eq!(
+            projection::guest(decoded, &expected("positive")),
+            Err(Error::Refused)
+        );
+    }
+}
+#[test]
 fn strict_wire_rejects_duplicate_keys_trailing_records_nonfinite_and_deep_input() {
     for data in [
         b"{\"passed\":true,\"passed\":false}".as_slice(),
