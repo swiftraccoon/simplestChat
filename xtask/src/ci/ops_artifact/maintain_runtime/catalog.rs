@@ -177,6 +177,12 @@ pub(super) fn sources() -> BTreeSet<String> {
         "ops/src/release/attestation/maintain_prerequisite.rs",
         "xtask/Cargo.toml",
         "xtask/src/main.rs",
+        "xtask/src/tooling.rs",
+        "xtask/src/ci/mod.rs",
+        "xtask/src/ci/runner.rs",
+        "xtask/src/ci/apt_mirror.rs",
+        "xtask/src/ci/release_controller_files.rs",
+        "xtask/src/ci/release_controller_plan.rs",
         "xtask/src/ci/ops_artifact.rs",
         "xtask/src/ci/ops_artifact/fixture.rs",
         "xtask/src/ci/ops_artifact/fixture_driver.rs",
@@ -192,6 +198,9 @@ pub(super) fn sources() -> BTreeSet<String> {
         "docs/testing.md",
     ] {
         names.insert(name.into());
+    }
+    for name in ["files", "files_tests", "policy", "tests"] {
+        names.insert(format!("xtask/src/ci/apt_mirror/{name}.rs"));
     }
     for name in ["identity", "process", "protocol", "supervisor", "tests"] {
         names.insert(format!(

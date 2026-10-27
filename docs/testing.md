@@ -1216,6 +1216,24 @@ its path.
 
 ## Container and CI checks
 
+Hosted Ubuntu 24.04 CI prepares its existing APT mirror list through the fixed,
+no-argument `xtask ci apt-mirror` entry before browser or KVM dependencies. The
+root operation requires Linux/X64, the hosted GitHub context and the actual
+Ubuntu/Noble release; ACT is excluded. The workflows invoke the already compiled
+absolute binary through narrowly scoped sudo environment preservation. Local
+disposable CI skips that preparation, and Cargo never runs as root.
+
+Only the known 144-byte runner list or its exact preferred form is accepted.
+Priorities select the existing official archive first, security second and Azure
+third; all three URI bytes remain unchanged. Source definitions, pockets, keys,
+APT authentication, package requests and existing install timeouts are unchanged.
+Root-owned retained directories and regular-file checks precede a checked atomic
+replacement, readback and explicit closes. An already preferred list is read-only.
+Late failures remain failures even when the preferred file is visible; atomic
+visibility is not a lock against another root writer. Focused policy and owned
+filesystem tests do not establish faster hosted delivery or successful package
+installation; those require the actual CI logs.
+
 With Docker available:
 
 ```sh

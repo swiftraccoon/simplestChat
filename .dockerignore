@@ -189,6 +189,9 @@ xtask/src/check/**
 !xtask/src/ci/
 xtask/src/ci/**
 !xtask/src/ci/*.rs
+!xtask/src/ci/apt_mirror/
+xtask/src/ci/apt_mirror/**
+!xtask/src/ci/apt_mirror/*.rs
 !xtask/src/ci/automation/
 xtask/src/ci/automation/**
 !xtask/src/ci/automation/*.rs

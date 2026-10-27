@@ -51,6 +51,7 @@ Commands:
                 copy-evidence preserves a fixed private local-CI artifact projection.
                 production-image builds and verifies the immutable CI production image.
                 install-compose installs the authenticated Compose release in explicit CI.
+                apt-mirror prefers official archives in the fixed root/hosted Ubuntu profile.
                 audit-rust installs verified audit tooling and applies the advisory policy.
                 release-checks discovers Chromium and requires \
                 --http-policy-binary ABSOLUTE_FEATURE_BINARY.

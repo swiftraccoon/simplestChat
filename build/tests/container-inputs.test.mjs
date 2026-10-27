@@ -245,6 +245,9 @@ test('every Rust/browser source and migration in the repository reaches the buil
 
 test('context excludes local-only descendants while retaining production inputs', () => {
   for (const rule of [
+    '!xtask/src/ci/apt_mirror/',
+    'xtask/src/ci/apt_mirror/**',
+    '!xtask/src/ci/apt_mirror/*.rs',
     '!xtask/src/ci/automation/',
     'xtask/src/ci/automation/**',
     '!xtask/src/ci/automation/*.rs',
@@ -302,6 +305,10 @@ test('context excludes local-only descendants while retaining production inputs'
     'xtask/notes.md', 'xtask/src/CLAUDE.md', 'web/CLAUDE.md', 'web/.env',
     'xtask/src/check/private.env', 'xtask/src/run_local/private.env',
     'xtask/src/ci/private.env', 'xtask/src/ci_local/private.env',
+    'xtask/src/ci/apt_mirror/private.env',
+    'xtask/src/ci/apt_mirror/unreviewed.sh',
+    'xtask/src/ci/apt_mirror/retained/apt-mirrors.txt',
+    'xtask/src/ci/apt_mirror/retained/artifact.zip',
     'xtask/src/ci/automation/private.env',
     'xtask/src/ci/automation/retained/artifact.zip',
     'xtask/src/ci_evidence/private.env',
@@ -369,6 +376,10 @@ test('context excludes local-only descendants while retaining production inputs'
     'ops/src/release/attestation/restore/process.rs',
     'load_tests/Cargo.toml', 'load_tests/src/main.rs', 'load_tests/src/metrics/measurement.rs',
     'xtask/Cargo.toml', 'xtask/src/main.rs',
+    'xtask/src/ci/apt_mirror.rs',
+    'xtask/src/ci/apt_mirror/policy.rs',
+    'xtask/src/ci/apt_mirror/files.rs',
+    'xtask/src/ci/apt_mirror/tests.rs',
     'xtask/src/ci/automation/python_inventory.rs',
     'xtask/src/ci/automation/python_captures.rs',
     'xtask/src/ci/automation/python_shards.rs',

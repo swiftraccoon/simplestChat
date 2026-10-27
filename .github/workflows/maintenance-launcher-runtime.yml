@@ -52,6 +52,17 @@ jobs:
           rustup toolchain install 1.99.0 --profile minimal \
             --component rustfmt --component clippy --component rust-analyzer
           rustup target add --toolchain 1.99.0 x86_64-unknown-linux-gnu
+      - name: Compile trusted acquisition and passive ELF inspection before credentials
+        run: |
+          cargo build --locked -p xtask --bin xtask
+          cargo build --locked --release --target x86_64-unknown-linux-gnu \
+            -p simplestchat-ops --bin simplestchat-ops
+      - name: Prefer official Ubuntu archive mirrors for KVM dependencies
+        if: ${{ !env.ACT }}
+        timeout-minutes: 1
+        run: |
+          sudo --preserve-env=GITHUB_ACTIONS,ImageOS,RUNNER_OS,RUNNER_ARCH,RUNNER_ENVIRONMENT,ACT \
+            -- "$GITHUB_WORKSPACE/target/debug/xtask" ci apt-mirror
       - name: Prepare the free owned KVM and pinned controller dependencies
         run: |
           sudo rm -rf -- /usr/local/lib/android /usr/share/dotnet
@@ -70,11 +81,6 @@ jobs:
           test "$maintain_gh" = "$RUNNER_TEMP/maintain-gh/bin/gh"
           printf '%s\n' "$RUNNER_TEMP/maintain-controller/bin" \
             "${maintain_gh%/gh}" >> "$GITHUB_PATH"
-      - name: Compile trusted acquisition and passive ELF inspection before credentials
-        run: |
-          cargo build --locked -p xtask --bin xtask
-          cargo build --locked --release --target x86_64-unknown-linux-gnu \
-            -p simplestchat-ops --bin simplestchat-ops
       - name: Authenticate same-head musl and observe the fixed complete launcher prerequisite
         timeout-minutes: 35
         env:
