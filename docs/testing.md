@@ -3010,6 +3010,15 @@ locates a candidate: the signed predicate and current metadata must still bind
 both Ops and server to the requested successful run and exact attempt. Failed
 authentication never falls back to an older artifact.
 
+The fixed three-member transfer writer is tested through its production path at
+all twenty possible member offsets modulo a 10,240-byte TAR record. It keeps the
+library's 1,024-byte zero terminator and adds no whole-record padding. The former
+padding generated a 10,752-byte tail at offset 9,728, which the unchanged Rust and
+frozen Python readers reject. Tests retain the header/order/member-hash checks
+and separately reject wrong roles, short or nonzero terminators and over-limit
+padding; generated output must have the exact minimal tail.
+These are archive/custody checks, not fresh signature or VM execution proof.
+
 ```sh
 cargo test --locked -p xtask ci::ops_artifact::maintain_runtime::
 cargo test --locked -p xtask ci::ops_artifact::hosted::
