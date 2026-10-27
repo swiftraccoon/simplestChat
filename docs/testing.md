@@ -3216,9 +3216,21 @@ Read, write, capacity, deadline or close uncertainty in the evidence owner leave
 this diagnostic unavailable. Complete native Ubuntu QEMU fixtures bind the finite
 classes `host-forward-setup`, `backing-file-missing`, `qcow2-format` and
 `image-write-lock` to their entire expected records and admitted arguments.
+The `kvm-access` class additionally matches the exact two-line permission-denied
+record observed in a signed hosted trial, with its admitted QMP prefix.
 A complete unknown message is `unclassified`; no raw streams,
 paths or arguments enter the receipt. The optional diagnostic supplies no
 execution authority and does not change schema 2's positive 29-field shape.
+
+The workflow grants `/dev/kvm` read/write access to the runner's existing primary
+group. Linux KVM emits device-change events, and Ubuntu's systemd uaccess policy
+can flush named-user ACL entries on those events while preserving named groups.
+A one-time user ACL can therefore admit the first VM and fail a later open.
+The group grant retains the nonroot controller and leaves world permissions and
+device ownership unchanged. The hosted failure's complete stderr identifies a
+KVM permission denial; its actual host ACL transition was not exported. The
+uaccess explanation is source-backed, and fresh signed two-boot runtime remains
+the required integration evidence.
 
 The native guest's fixed bridge profile enables host-loopback publication with
 outbound masquerading disabled, under the unchanged three default-drop firewall

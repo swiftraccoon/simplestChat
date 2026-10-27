@@ -203,8 +203,21 @@ write-lock classes; complete unknown output is `unclassified`. Unrelated later
 cleanup failures do not erase those earlier passive observations. The existing
 conservative `cleanup_failed` rollup is not a close-syscall counter. This metadata neither
 replaces the primary error nor changes either QEMU record or positive summary
-shape. Source and pipe tests do not establish the cause of a hosted startup
-failure; exact actual runtime evidence remains necessary.
+shape. An exact full-record hash from a signed hosted trial additionally binds
+the `kvm-access` class to QEMU's two-line KVM permission denial. A class records
+the emitted error, not an unobserved host ACL change.
+
+The privileged workflow setup grants only the current runner's primary group
+read/write access to `/dev/kvm`. [Linux KVM device-change events](https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/virt/kvm/kvm_main.c)
+can invoke [systemd's ACL refresh](https://github.com/systemd/systemd-stable/blob/387a14a7b67b8b76adaed4175e14bb7e39b2f738/src/shared/devnode-acl.c#L19-L47),
+which removes named-user entries while preserving named groups.
+[Ubuntu's versioned source package](https://archive.ubuntu.com/ubuntu/pool/main/s/systemd/systemd_255.4-1ubuntu8.18.debian.tar.xz)
+selects device mode `0660`, enabling the conditional KVM uaccess rule.
+This source-backed mechanism explains how a one-time user grant can admit the
+first VM yet fail a later open; the old hosted ACL state was not exported.
+The group grant keeps device ownership, world permissions, controller identity,
+resource limits and all runtime admission checks intact. Inert Linux ACL tests
+are distinct from actual KVM/udev events and a successful signed two-boot proof.
 
 QEMU readers and QMP retain the immutable outer end across phase changes. Their
 typed first failure is recorded before a later clock check or generic unhealthy
