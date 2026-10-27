@@ -3029,6 +3029,15 @@ the production command builder and checks that its retained parent directory
 and source bytes stay unchanged. This import check performs no application
 seeding; the signed VM trial must still establish that operation.
 
+The Caddy profile uses the pinned Docker daemon's canonical inspection value,
+`CAP_NET_BIND_SERVICE`. A local Docker 29.8.2 daemon/client experiment with the
+exact pinned Caddy image and normal create arguments reproduced that value;
+the earlier bare-name predicate refused it before Caddy start. The regression
+also refuses the bare alias, extra or wrong capabilities, an empty list and null.
+The create argument remains `--cap-add NET_BIND_SERVICE`. This corrects an
+inherited frozen-reference defect; neither the Docker profile observation nor
+the unit tests establish fresh signed VM or TLS success.
+
 Guest feature checks require the project's pinned OpenSSL headers/libraries;
 default Ops/xtask bootstrap builds leave native crypto disabled. Signed-material,
 actual local TLS, inert-file handoff and maintenance-table firewall tests cover

@@ -242,7 +242,7 @@ fn event_stream_keeps_partial_records_and_refuses_duplicate_or_oversized_neighbo
 fn proxy_row() -> Value {
     json!({"Id":id('a'),"Image":format!("sha256:{}",id('b')),
         "Config":{"User":"10001:10001","Image":"caddy@sha256:fixed"},
-        "HostConfig":{"ReadonlyRootfs":true,"CapDrop":["ALL"],"CapAdd":["NET_BIND_SERVICE"],"Init":true,
+        "HostConfig":{"ReadonlyRootfs":true,"CapDrop":["ALL"],"CapAdd":["CAP_NET_BIND_SERVICE"],"Init":true,
             "Memory":268435456,"PidsLimit":128,"NanoCpus":500000000,"SecurityOpt":["no-new-privileges"],
             "NetworkMode":"sc0123456789ab","RestartPolicy":{"Name":"unless-stopped","MaximumRetryCount":0},
             "PortBindings":{"80/tcp":[{"HostIp":"127.0.0.1","HostPort":"80"}],
@@ -272,8 +272,12 @@ fn proxy_profile_requires_normal_split_mounts_restrictions_and_loopback_ports() 
         ("/HostConfig/ReadonlyRootfs", json!(false)),
         (
             "/HostConfig/CapAdd",
-            json!(["NET_BIND_SERVICE", "SYS_ADMIN"]),
+            json!(["CAP_NET_BIND_SERVICE", "CAP_SYS_ADMIN"]),
         ),
+        ("/HostConfig/CapAdd", json!(["NET_BIND_SERVICE"])),
+        ("/HostConfig/CapAdd", json!(["CAP_SYS_ADMIN"])),
+        ("/HostConfig/CapAdd", json!([])),
+        ("/HostConfig/CapAdd", Value::Null),
         ("/HostConfig/Memory", json!(268435456.0)),
         ("/Mounts/0/RW", json!(true)),
         (
