@@ -147,6 +147,20 @@ Metadata/namespace live checks are separated from full pre/post/final hashing.
 The SDK-owned duplicate transferred to `Stdio` has no checked parent-close return;
 the retained original is checked and explicitly closed separately. There is no
 full stdin-consumption acknowledgment. No unsafe/raw-FD recovery is introduced.
+The private VM's user backend explicitly enables IPv4 and disables provider IPv6
+before boot. Its SSH, forwarding, inventory and fixture service endpoints use
+IPv4. Reviewed [QEMU 8.2.2 options](https://github.com/qemu/qemu/blob/11aa0b1ff115b86160c4d37e7c37e6a6b13b77ea/qemu-options.hx#L3025)
+support the separate selectors. In the reviewed
+[libslirp 4.7.0 startup](https://github.com/qemu/libslirp/blob/3ad1710a96678fe79066b1469cead4058713a1d9/src/ip6_icmp.c#L13),
+disabled IPv6 returns before the router-advertisement timer is created. The
+hosted package identifies QEMU 8.2.2 with Ubuntu patches; the installed libslirp
+version and the captured advertisement's sender were not exported. The profile
+therefore prevents this reviewed provider capability without claiming the prior
+packet's origin, absence of all guest IPv6 or successful hosted bootstrap.
+An argument regression joins the provider, network device and SSH client to
+the same private IPv4 forward. Other VM arguments are unchanged. Capture, firewall,
+clock and finalization checks remain independent and still require fresh success.
+
 QEMU readers and QMP retain the immutable outer end across phase changes. Their
 typed first failure is recorded before a later clock check or generic unhealthy
 refusal. Direct/group facts do not establish arbitrary descendant retirement.

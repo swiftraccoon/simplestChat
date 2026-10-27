@@ -3144,6 +3144,18 @@ on failed receipts and rejects them on passing receipts, together with unknown
 labels and added fields. These metadata tests do not identify the previous
 timeout capture's contents or establish a successful fresh containment proof.
 
+The native maintenance VM's sole user-network backend explicitly selects
+`ipv4=on,ipv6=off` before boot. SSH, its host forward, controller inventory and
+fixture services use IPv4. This disables an unused provider capability whose
+reviewed network stack can generate periodic IPv6 router advertisements; it
+does not identify the sender of a captured advertisement. The argument regression
+joins the backend, network device and SSH client to the same private forward.
+Disks, QMP, sandbox and resource limits are unchanged. Guest firewall,
+capture rules and the empty-capture requirement stay unchanged, including
+refusal of every other packet. This profile needs fresh hosted bootstrap and
+full-timeout evidence. Earlier generic IPv4 captures remain unexplained, and
+the frozen Python fixture retains its existing network profile.
+
 The native guest's fixed bridge profile enables host-loopback publication with
 outbound masquerading disabled, under the unchanged three default-drop firewall
 hooks. Network regressions require this exact profile and its canonical IPAM
