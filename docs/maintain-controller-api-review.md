@@ -141,6 +141,15 @@ PostgreSQL/Caddy/900-second launcher transaction. The latest frozen-guest run
 passed Ops33 then failed at rendering; the new native guest still needs fresh
 four-case runtime evidence.
 
+The generated `.git/shallow` administrative input is validated and explicitly
+closed before Git receives the namespace. The first fetch can create `.git/logs`
+and change the parent directory's link count, so that input cannot remain an
+immutable source owner across import. Authenticated bundle and project-source
+owners retain their existing checks, alongside the final revision, tree,
+one-commit boundary, connectivity and clean-worktree checks. Generic file and
+parent bindings remain unchanged. A local Git reproduction covers this ownership
+handoff; it does not establish a successful signed VM trial.
+
 Known blocking limits remain: synchronous filesystem/hash/close, OS process APIs
 and SDK operations are cooperatively fenced, not cancellable per syscall. A
 same-UID swap-and-restore wholly between witnesses is outside the claim. Failed
