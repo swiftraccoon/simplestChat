@@ -142,6 +142,38 @@ struct Broken {
     attempted: usize,
     last: Vec<u8>,
 }
+
+#[test]
+fn closed_transport_labels_are_optional_deduplicated_and_do_not_read_clocks() {
+    let clock = Arc::new(Clock {
+        now: Mutex::new(Instant::now()),
+        calls: AtomicUsize::new(0),
+    });
+    let plan = Plan::new(clock.clone());
+    plan.check().unwrap();
+    let calls = clock.calls.load(Ordering::SeqCst);
+    let mut bytes = Vec::new();
+    let mut progress = Progress::new(&plan, &mut bytes);
+    progress.enter(Phase::Download);
+    let result = Err::<(), _>(Failure::child_exit(28));
+    progress.material_refused(MaterialKind::Catalog, 69, 70, &result);
+    progress.transport_timeout(MaterialKind::Catalog, 69, 70, None);
+    progress.transport_timeout(
+        MaterialKind::Catalog,
+        69,
+        70,
+        Some(Timeout::ConnectUnspecified),
+    );
+    progress.transport_timeout(MaterialKind::Registry, 1, 2, Some(Timeout::Unknown));
+    progress.finish(&result);
+    progress.transport_timeout(MaterialKind::Catalog, 1, 2, Some(Timeout::TlsReported));
+    assert_eq!(clock.calls.load(Ordering::SeqCst), calls);
+    let text = std::str::from_utf8(&bytes).unwrap();
+    assert_eq!(text.matches("event=transport-timeout ").count(), 1);
+    assert!(text.contains("category=reported-connect-timeout-unspecified "));
+    assert!(text.contains("event=finished status=28 refusedPhase=download "));
+    assert!(bytes.len() <= MAX_BYTES);
+}
 impl Write for Broken {
     fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
         self.attempted += bytes.len();

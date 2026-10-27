@@ -554,13 +554,16 @@ impl Executor for FakeCli {
                     .filter(|call| call.starts_with("curl:"))
                     .count();
                 let kind = match self.fail {
+                    Some("curl-timeout") => "curl-timeout",
                     Some("catalog-second") if ordinal == 2 => "catalog-second",
                     Some("registry-first") if url.starts_with("https://static.crates.io/") => {
                         "registry-first"
                     }
                     _ => "curl",
                 };
-                stderr = if kind == "curl" {
+                stderr = if kind == "curl-timeout" {
+                    b"curl: (28) SSL connection timeout\nOPS_HTTP_STATUS:200:000\n".to_vec()
+                } else if kind == "curl" {
                     b"OPS_HTTP_STATUS:200:200\n".to_vec()
                 } else {
                     b"PRIVATE material refusal body\n".to_vec()
@@ -677,7 +680,9 @@ impl Executor for FakeCli {
         let seals = finish_logs(command.separate_logs.take().unwrap(), stdout, stderr).await?;
         proof.observed_io(Some(seals));
         if self.fail == Some(kind) {
-            Err(if matches!(kind, "catalog-second" | "registry-first") {
+            Err(if kind == "curl-timeout" {
+                crate::tooling::Failure::child_exit(28)
+            } else if matches!(kind, "catalog-second" | "registry-first") {
                 crate::tooling::Failure::child_exit(23)
             } else {
                 failure(42)
@@ -703,6 +708,35 @@ impl Executor for FakeCli {
     fn cleanup_passed(&self) -> bool {
         self.clean
     }
+}
+
+#[tokio::test]
+async fn whole_timeout_trace_is_closed_and_keeps_the_original_material_refusal() {
+    let (fixture, stages, cli, result, diagnostics) =
+        Box::pin(operation(Some("curl-timeout"))).await;
+    let error = result.expect_err("material timeout refuses the whole producer");
+    assert_eq!(error.code, 28);
+    assert!(error.is_child_exit());
+    assert_eq!(stages, ["source"]);
+    assert_eq!(cli.calls.len(), 1);
+    let text = std::str::from_utf8(&diagnostics).unwrap();
+    assert!(text.contains("event=material-refused kind=catalog ordinal=1 total=7 status=28 "));
+    assert!(text.contains(
+        "event=transport-timeout kind=catalog ordinal=1 total=7 category=reported-tls-timeout "
+    ));
+    assert_eq!(text.matches("event=transport-timeout ").count(), 1);
+    assert!(
+        text.lines()
+            .last()
+            .unwrap()
+            .contains("event=finished status=28 refusedPhase=download ")
+    );
+    assert!(
+        !text.contains("PRIVATE")
+            && !text.contains("https://")
+            && !text.contains(fixture.root.to_str().unwrap())
+    );
+    assert!(diagnostics.len() <= super::super::progress::MAX_BYTES);
 }
 
 struct DiagnosticSink {

@@ -102,6 +102,26 @@ fn compiled_catalog_binds_original_content_and_closed_component_graph() {
     assert_eq!(catalog.identity.sha256, super::super::sha(original));
     assert_eq!(catalog.identity.bytes, original.len());
     let decoded: Value = serde_json::from_slice(original).unwrap();
+    let musl_index = catalog
+        .artifacts
+        .iter()
+        .position(|artifact| artifact.name == "musl")
+        .unwrap();
+    let musl = &catalog.artifacts[musl_index];
+    assert_eq!(musl.bytes, 1_086_574);
+    assert_eq!(
+        musl.sha256,
+        "8c16adf94bfd61358cf884353a4c0b71837ed792e7b7f056c86354436cf05bdb"
+    );
+    for locator in [
+        "https://git.musl-libc.org/cgit/musl/snapshot/musl-7813e9119eb5fe681b6750b8a033a0490bca0941.tar.gz",
+        "https://codeload.github.com/ifduyue/musl/tar.gz/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "https://codeload.github.com/other/musl/tar.gz/7813e9119eb5fe681b6750b8a033a0490bca0941",
+    ] {
+        let mut changed = decoded.clone();
+        changed["artifacts"][musl_index]["url"] = json!(locator);
+        fixture::expect_error(Catalog::decode(&serde_json::to_vec(&changed).unwrap()), 1);
+    }
     for (pointer, value) in [
         ("/profile", json!("PRIVATE")),
         ("/rustVersion", json!("1.100.0")),

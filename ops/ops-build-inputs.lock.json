@@ -1034,7 +1034,7 @@
     {
       "name": "musl",
       "format": "native-gzip",
-      "url": "https://git.musl-libc.org/cgit/musl/snapshot/musl-7813e9119eb5fe681b6750b8a033a0490bca0941.tar.gz",
+      "url": "https://codeload.github.com/ifduyue/musl/tar.gz/7813e9119eb5fe681b6750b8a033a0490bca0941",
       "sha256": "8c16adf94bfd61358cf884353a4c0b71837ed792e7b7f056c86354436cf05bdb",
       "bytes": 1086574,
       "version": "1.2.6+7813e9119eb5",

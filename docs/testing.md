@@ -76,6 +76,16 @@ capture admission, archive/kit processing, copying, evidence assembly and final
 replay. Production fixes those stages and the compiled catalog, with no runtime
 override. These fixtures establish orchestration behavior rather than a cold
 hosted build or the truth of synthetic producer observations.
+
+Failure-only transport fixtures cover actual inert curl exit 28 with original
+paired captures, closed timeout labels and refusal of diagnostic emission after
+capture, close or deadline failures. Unknown text and neighboring private data
+must not be published or promoted to a specific cause. These checks preserve
+the primary child failure, successful-download validation and original limits;
+they do not diagnose a live hosted network or establish archive availability.
+The catalog regression retains the original musl archive hash and size while
+rejecting the former locator, another mirror owner and another commit.
+
 Rust installer fixtures include file-only manifests with explicit structural
 parent directories. Those directories admit no undeclared files, links or empty
 siblings; declaration-kind mismatches and missing declared entries still fail.

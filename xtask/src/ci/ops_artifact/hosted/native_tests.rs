@@ -85,6 +85,7 @@ async fn actual_curl_original_streams_are_independent_and_environment_is_credent
     let tree = Tree::create(&fixture.root.join("download"), &budget).unwrap();
     let (tree, name) = fetch::run(tree, 0, download(), &tools, &mut native, &plan, end)
         .await
+        .result
         .unwrap();
     assert_eq!(
         tree.read(&name, 32, &mut || Ok(())).unwrap(),
@@ -132,7 +133,9 @@ async fn actual_nonzero_overflow_and_metadata_failure_cannot_authorize_material_
         let mut selected = download();
         selected.maximum = maximum;
         fixture::expect_error(
-            fetch::run(tree, 0, selected, &tools, &mut native, &plan, end).await,
+            fetch::run(tree, 0, selected, &tools, &mut native, &plan, end)
+                .await
+                .result,
             expected,
         );
         assert!(native.cleanup_passed());
@@ -224,6 +227,9 @@ impl Executor for AfterCurl<'_> {
             "changed-seal" => {
                 fs::write(directory.join("capture-0.stdout"), b"changed-bytes").unwrap()
             }
+            "finish-inventory" => {
+                fs::write(directory.join("unregistered"), b"PRIVATE extra file").unwrap()
+            }
             "deadline" => self.clock.advance(Duration::from_secs(90)),
             _ => {}
         }
@@ -243,7 +249,104 @@ impl Executor for AfterCurl<'_> {
         }
     }
     fn cleanup_passed(&self) -> bool {
-        self.native.cleanup_passed()
+        self.fault != "uncertain-native" && self.native.cleanup_passed()
+    }
+}
+
+#[tokio::test]
+async fn actual_timeout_child_exports_only_closed_reported_categories() {
+    use fetch::Timeout;
+    for (line, expected) in [
+        ("SSL connection timeout", Timeout::TlsReported),
+        (
+            "Resolving timed out after 10012 milliseconds",
+            Timeout::ResolutionReported,
+        ),
+        (
+            "Connection timed out after 10012 milliseconds",
+            Timeout::ConnectUnspecified,
+        ),
+        (
+            "Failed to connect to git.musl-libc.org port 443 after 10012 ms: Timeout was reached",
+            Timeout::ConnectUnspecified,
+        ),
+        (
+            "Operation timed out after 120000 milliseconds with 0 bytes received",
+            Timeout::OperationReported,
+        ),
+        (
+            "Operation timed out after 120000 milliseconds with 0 out of 123 bytes received",
+            Timeout::OperationReported,
+        ),
+        ("SSL connection timeout PRIVATE-token", Timeout::Unknown),
+        ("PRIVATE https://secret.invalid/path", Timeout::Unknown),
+    ] {
+        let fixture = fixture::Fixture::new();
+        let budget = Budget::default();
+        let body = format!(
+            "printf partial; printf '%s' 'curl: (28) {line}\nOPS_HTTP_STATUS:200:000\n' >&2; exit 28"
+        );
+        let tools = tools(&fixture, &body, &budget);
+        let plan = plan::Plan::new(Arc::new(plan::NativeClock));
+        let end = plan.now().unwrap() + Duration::from_secs(90);
+        let env = Environment::new();
+        let mut native = Native::new(&fixture.root, &env, Signals::new().unwrap());
+        let tree = Tree::create(&fixture.root.join("download"), &budget).unwrap();
+        let mut selected = download();
+        // The exact actual Linux failure fixture belongs to its original URL;
+        // a subsequently changed acquisition locator cannot relabel that host.
+        selected.url = "https://git.musl-libc.org/cgit/musl/snapshot/musl-7813e9119eb5fe681b6750b8a033a0490bca0941.tar.gz".into();
+        let attempt = fetch::run(tree, 0, selected, &tools, &mut native, &plan, end).await;
+        let timeout = attempt.timeout;
+        let error = attempt.result.err().expect("actual curl child failed");
+        let clean = native.cleanup_passed();
+        tools.finish().unwrap();
+        closed(&budget);
+        assert_eq!(error.code, 28);
+        assert!(error.is_child_exit() && clean);
+        assert_eq!(timeout, Some(expected));
+    }
+}
+
+#[tokio::test]
+async fn actual_timeout_body_keeps_primary_and_suppresses_unsettled_observations() {
+    for fault in [
+        "missing-seal",
+        "changed-seal",
+        "finish-inventory",
+        "deadline",
+        "late-term",
+        "uncertain-native",
+    ] {
+        let fixture = fixture::Fixture::new();
+        let budget = Budget::default();
+        let tools = tools(
+            &fixture,
+            "printf partial; printf 'curl: (28) SSL connection timeout\\nOPS_HTTP_STATUS:200:000\\n' >&2; exit 28",
+            &budget,
+        );
+        let clock = Arc::new(fixture::Clock::new());
+        let plan = plan::Plan::new(clock.clone());
+        let end = plan.now().unwrap() + Duration::from_secs(90);
+        let env = Environment::new();
+        let mut executor = AfterCurl {
+            native: Native::new(&fixture.root, &env, Signals::new().unwrap()),
+            fault,
+            clock,
+        };
+        let tree = Tree::create(&fixture.root.join("download"), &budget).unwrap();
+        let attempt = fetch::run(tree, 0, download(), &tools, &mut executor, &plan, end).await;
+        let error = attempt
+            .result
+            .err()
+            .expect("original timeout must remain negative");
+        let clean = executor.cleanup_passed();
+        tools.finish().unwrap();
+        closed(&budget);
+        assert_eq!(error.code, 28, "{fault}");
+        assert!(error.is_child_exit(), "{fault}");
+        assert_eq!(clean, fault != "uncertain-native", "{fault}");
+        assert_eq!(attempt.timeout, None, "{fault}");
     }
 }
 
@@ -275,7 +378,8 @@ async fn actual_fetch_keeps_original_child_class_and_status_over_post_body_fault
         };
         let tree = Tree::create(&fixture.root.join("download"), &budget).unwrap();
         let result = fetch::run(tree, 0, download(), &tools, &mut executor, &plan, end).await;
-        let error = match result {
+        assert!(result.timeout.is_none());
+        let error = match result.result {
             Err(error) => error,
             Ok((tree, _)) => {
                 tree.finish().unwrap();
