@@ -147,6 +147,15 @@ and actual VM lifecycle remain separate mandatory observations.
 
 ## Closed output and ownership limits
 
+The guest compares Caddy's added capabilities with the exact current Docker
+inspection value `["CAP_NET_BIND_SERVICE"]`; the normal create argument remains
+`--cap-add NET_BIND_SERVICE`. An owned Docker 29.8.2 daemon/client experiment
+using the pinned Caddy image exposed the inherited bare-name comparison defect
+before Caddy start. Extra, wrong, missing or noncanonical capability observations
+remain refusals. The frozen Python reference is unchanged. This adapter
+correction does not change the actual capability grant, mount/UID policy, TLS
+validation, retained-file witnesses or original time budget.
+
 One bounded JSON report contains schemaVersion, experiment, trial, passed, phase,
 failure and facts. The complete closed inner failure enum propagates unchanged
 unless an earlier outer failure already owns the result. The facts contain fixed

@@ -226,7 +226,7 @@ pub(super) fn proxy_profile(
             && config["Image"] == image_ref
             && host["ReadonlyRootfs"] == true
             && host["CapDrop"] == json!(["ALL"])
-            && host["CapAdd"] == json!(["NET_BIND_SERVICE"])
+            && host["CapAdd"] == json!(["CAP_NET_BIND_SERVICE"])
             && host["Init"] == true
             && host["Memory"].as_u64() == Some(256 * 1024 * 1024)
             && host["PidsLimit"].as_u64() == Some(128)
