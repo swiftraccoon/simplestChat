@@ -30,6 +30,13 @@ pub(super) fn complete(
         let destination = format!("host-tools/sysroot/usr/bin/{name}");
         graph.copy(tree, &source, &destination, checkpoint)?;
     }
+    // Debian's alternatives maintainer scripts never run during material import.
+    // These two fixed upstream build roles bind only to measured package bytes.
+    for (program, alias) in [("dash", "sh"), ("mawk", "awk")] {
+        let source = format!("host-tools/sysroot/usr/bin/{program}");
+        let destination = format!("host-tools/sysroot/usr/bin/{alias}");
+        graph.copy(tree, &source, &destination, checkpoint)?;
+    }
     // Modern Ubuntu uses /usr merging. Materialize those controlled aliases
     // with independent files so linker scripts cannot reach the host's /lib.
     for component in ["lib", "lib64"] {
@@ -67,6 +74,8 @@ pub(super) fn complete(
         return Err(failure(1));
     }
     tree.write("host-tools/bin/cc", shim::CC, true)?;
+    tree.write("host-tools/bin/musl-cc", shim::MUSL_CC, true)?;
+    tree.write("host-tools/musl-gcc.specs", shim::MUSL_SPECS, false)?;
     tree.check()
 }
 

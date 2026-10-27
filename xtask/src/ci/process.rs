@@ -695,6 +695,9 @@ fn executable(request: &Command) -> Result<&std::ffi::OsStr> {
             | Program::OpsMaterialCurl
             | Program::OpsDpkgDeb
             | Program::OpsHostCc
+            | Program::OpsKitShell
+            | Program::OpsKitPerl
+            | Program::OpsKitMake
             | Program::OpsRuntimeGit
             | Program::OpsRuntimePython
             | Program::OpsVpsGit

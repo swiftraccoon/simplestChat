@@ -1,4 +1,4 @@
-//! Owned filesystem regressions; no compiler or candidate executes.
+//! Owned filesystem regressions; only the shared inert driver may be compiled.
 
 use super::{fixture::*, namespace::*, *};
 use std::{

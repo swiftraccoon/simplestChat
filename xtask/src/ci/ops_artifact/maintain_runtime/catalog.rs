@@ -59,10 +59,6 @@ pub(super) const MIGRATIONS: [&str; 36] = [
 pub(super) fn guest_sources() -> BTreeSet<String> {
     let mut names = BTreeSet::new();
     for name in [
-        "build/security_vm_maintain_prerequisite_guest.py",
-        "build/security_vm_stage_guest.py",
-        "build/caddy_probe_guest.py",
-        "build/caddy_materials.py",
         "Caddyfile",
         "docker-compose.yml",
         "ops/ansible/files/deploy-public.sh",
@@ -102,6 +98,8 @@ pub(super) fn sources() -> BTreeSet<String> {
     }
     for name in [
         "Cargo.toml",
+        // The unchanged outer image selector reads this fixed literal as data.
+        "build/caddy_probe_guest.py",
         "Cargo.lock",
         "rust-toolchain.toml",
         "build/security_vm_fetch.py",
@@ -168,15 +166,95 @@ pub(super) fn sources() -> BTreeSet<String> {
         ));
     }
     for name in [
+        "ops/Cargo.toml",
+        "ops/ops-build-inputs.lock.json",
+        "ops/src/lib.rs",
+        "ops/src/main.rs",
+        "ops/src/distribution_build_plan.rs",
+        "ops/src/distribution_build_plan_tests.rs",
+        "ops/src/release/mod.rs",
+        "ops/src/release/maintain_prerequisite.rs",
+        "ops/src/release/attestation/maintain_prerequisite.rs",
+        "xtask/Cargo.toml",
         "xtask/src/main.rs",
         "xtask/src/ci/ops_artifact.rs",
+        "xtask/src/ci/ops_artifact/fixture.rs",
+        "xtask/src/ci/ops_artifact/fixture_driver.rs",
+        "xtask/src/ci/ops_artifact/fixture_driver_tests.rs",
+        "xtask/src/ci/ops_artifact/native_tests.rs",
+        "xtask/src/ci/ops_artifact/recipe.rs",
+        "xtask/src/ci/ops_artifact/resolution.rs",
         "xtask/src/ci/tests.rs",
         "ops/src/owned_process.rs",
         "ops/src/owned_process_tests.rs",
         "ops/src/release/attestation.rs",
         "ops/src/release/attestation/control_signals.rs",
+        "docs/testing.md",
     ] {
         names.insert(name.into());
+    }
+    for name in ["identity", "process", "protocol", "supervisor", "tests"] {
+        names.insert(format!(
+            "ops/src/release/attestation/maintain_prerequisite/{name}.rs"
+        ));
+    }
+    for name in [
+        "control",
+        "effects/actors",
+        "effects/effects_tests",
+        "effects/mod",
+        "effects/observation",
+        "effects/policy",
+        "files",
+        "guest_tests",
+        "materials",
+        "materials_tests",
+        "mod",
+        "native",
+        "observation",
+        "process",
+        "protocol",
+        "render",
+        "render_tests",
+        "sources",
+        "tls",
+        "tls_tests",
+    ] {
+        names.insert(format!(
+            "ops/src/release/attestation/maintain_prerequisite/guest/{name}.rs"
+        ));
+    }
+    for name in [
+        "archive",
+        "archive_tests",
+        "catalog",
+        "context",
+        "coordinator",
+        "coordinator_tests",
+        "fetch",
+        "files",
+        "files_tests",
+        "fixture",
+        "kit",
+        "mod",
+        "native_build",
+        "native_build_tests",
+        "native_provenance",
+        "native_tests",
+        "plan",
+        "progress",
+        "progress_tests",
+        "provenance",
+        "shim",
+        "signing",
+        "signing_tests",
+        "tests",
+        "tools",
+        "whole_tests",
+        "worker",
+        "worker_tests",
+    ] {
+        names.insert(format!("xtask/src/ci/ops_artifact/hosted/{name}.rs"));
     }
     names
 }

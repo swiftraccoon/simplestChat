@@ -2984,15 +2984,20 @@ Existing operational Python and nightly/offsite callers are unchanged.
 
 ## Optional maintenance prerequisite experiments
 
-The four-case launcher workflow now selects the Rust outer entry
+The four-case launcher workflow selects the Rust outer entry
 `xtask ops-artifact maintain-runtime`; the previous Python controller remains an
-unchanged reference. Its API review names
-the still-executed frozen guest/bootstrap roles and the independent child versus
-outer clocks. The same 1,800-second outer limit and 120-second reserve apply,
+unchanged reference. The
+authenticated installed Ops binary now owns the explicit native guest role,
+with exactly 52 project source pins and 15 operational helper pins. Frozen Python
+still supplies Ops33, Ansible and operational helpers. The same 1,800-second
+outer limit and 120-second reserve apply,
 with a 510-second setup cap and 1,170 seconds required before GO.
 
 ```sh
 cargo test --locked -p xtask ci::ops_artifact::maintain_runtime::
+cargo test --locked -p xtask ci::ops_artifact::hosted::
+cargo test --locked -p simplestchat-ops --features maintain-guest --lib \
+  release::attestation::maintain_prerequisite::guest:: -- --test-threads=1
 cargo test --locked -p simplestchat-ops \
   owned_process::tests::completion_signals_survive_runtime_teardown_in_actual_owned_children
 node --test build/tests/container-inputs.test.mjs
@@ -3004,6 +3009,14 @@ and actual isolated-child INT/TERM after runtime teardown. Exact reference
 catalog/source assertions and the existing unmodified Python suites remain
 separate evidence. They do not prove full cross-language controller equivalence
 or actual signed four-case PostgreSQL/Caddy/900-launcher runtime success.
+
+Guest feature checks require the project's pinned OpenSSL headers/libraries;
+default Ops/xtask bootstrap builds leave native crypto disabled. Signed-material,
+actual local TLS, inert-file handoff and maintenance-table firewall tests cover
+the new guest's finite contracts. The distributed producer selects the optional
+feature and its authenticated 69-archive patched-musl/OpenSSL 4.1.0 static kit.
+Inert producer tests do not establish its cold build, final signed static ELF or
+fresh guest execution. All Python remains frozen.
 
 The dev/test profile optimizes the pinned `sha2` dependency so full retained-input
 checks do not run unoptimized compression. Integrity checks and clocks are
@@ -3035,11 +3048,11 @@ The separate manual fixed-launcher runtime fixture
 cancellation and the actual unchanged 900-second timeout. It joins the exact
 installed Ops inode, shallow source tree, native PID-namespace settlement,
 PostgreSQL state, naturally generated Caddy materials and known daemon actors.
-Its native API and ownership review
-records the fixed clock profile and local compiler/test evidence. The four
-actual trials and 11 new Linux-only FD/process methods remain unrun locally;
-this fixture does not replace operational Python or change a host caller.
-Run its 30 inert keeper tests with:
+Earlier Linux CI ran
+the fixed run/init FD/process methods; the latest frozen-guest trial passed Ops33
+then failed at rendering. All four fresh signed trials remain required for the
+new guest route. This fixture does not replace operational Python or change a
+host caller. Run its 30 unchanged reference keeper tests with:
 
 ```sh
 ops/ansible/.venv/bin/python -B -m unittest discover \

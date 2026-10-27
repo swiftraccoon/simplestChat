@@ -9,13 +9,21 @@ publish.workspace = true
 [lints]
 workspace = true
 
+[features]
+default = []
+# Only the authenticated distributed Ops artifact needs the native fixture guest.
+# Default xtask/bootstrap builds must not acquire an OpenSSL dependency.
+maintain-guest = ["dep:asn1-rs", "dep:openssl", "dep:x509-parser"]
+
 [dependencies]
+asn1-rs = { version = "=0.7.2", default-features = false, features = ["bigint"], optional = true }
 chrono = { version = "0.4.45", default-features = false, features = ["std"] }
 flate2 = { version = "=1.1.10", default-features = false, features = ["rust_backend"] }
 getrandom = "=0.4.3"
 httparse = "=1.10.1"
 nix = { version = "0.31.3", default-features = false, features = ["fs", "process", "signal"] }
 object = { version = "=0.40.0", default-features = false, features = ["read_core", "elf", "std"] }
+openssl = { version = "=0.10.81", optional = true }
 rawzip = "=0.5.2"
 regex-syntax = "0.8.11"
 rustix = { version = "1.1.5", default-features = false, features = [
@@ -27,6 +35,7 @@ sha2 = "0.11.0"
 signal-hook = { version = "=0.4.5", default-features = false }
 simplestchat-load-test = { path = "../load_tests", default-features = false, features = ["capacity-runtime"] }
 tar = { version = "=0.4.46", default-features = false }
+x509-parser = { version = "=0.18.1", default-features = false, optional = true }
 
 tokio = { version = "1.53.2", default-features = false, features = [
     "io-util", "macros", "process", "rt-multi-thread", "signal", "sync", "time",

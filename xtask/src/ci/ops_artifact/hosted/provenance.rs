@@ -44,6 +44,9 @@ pub(super) fn check(
     for (name, bytes) in documents {
         // Each source is already SHA-bound to the strict retained assembly
         // metadata. These selected JSON fields do not supply signature authority.
+        if bytes.is_empty() || bytes.len() > 65536 {
+            return Err(failure(1));
+        }
         let value: Value = serde_json::from_slice(bytes).map_err(|_| failure(1))?;
         decoded.insert(name.as_str(), value);
     }
@@ -104,5 +107,11 @@ pub(super) fn check(
     {
         return Err(failure(1));
     }
-    Ok(())
+    super::native_provenance::check(
+        kit,
+        &decoded["producer-recipe.json"],
+        &decoded["producer-resolution.json"],
+        &decoded["producer-toolchain.json"],
+        catalog,
+    )
 }

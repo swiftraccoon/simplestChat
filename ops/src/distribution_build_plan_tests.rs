@@ -28,6 +28,9 @@ fn plan_separates_declared_claims_measured_inventory_and_unresolved_recipe_slots
             {"kind":"literal","value":"simplestchat-ops"},
             {"kind":"literal","value":"--target"},
             {"kind":"literal","value":TARGET},
+            {"kind":"literal","value":"--no-default-features"},
+            {"kind":"literal","value":"--features"},
+            {"kind":"literal","value":"simplestchat-ops/maintain-guest"},
             {"kind":"literal","value":"--target-dir"},
             {"kind":"slot","value":"targetDirectory"},
         ])
@@ -50,9 +53,9 @@ fn plan_separates_declared_claims_measured_inventory_and_unresolved_recipe_slots
             "-C",
             "target-cpu=x86-64",
             "-C",
-            "link-self-contained=yes",
+            "link-self-contained=no",
             "-C",
-            "linker-flavor=ld.lld"
+            "linker-flavor=gcc"
         ]
     );
     let public = value.to_string();
@@ -64,5 +67,7 @@ fn plan_separates_declared_claims_measured_inventory_and_unresolved_recipe_slots
     ] {
         assert!(!public.contains(private));
     }
-    assert_eq!(value["prerequisites"].as_array().unwrap().len(), 9);
+    assert_eq!(value["prerequisites"].as_array().unwrap().len(), 10);
+    assert_eq!(value["recipe"]["defaultFeatures"], false);
+    assert_eq!(value["recipe"]["features"], json!(["maintain-guest"]));
 }

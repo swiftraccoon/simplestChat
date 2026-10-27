@@ -5,6 +5,9 @@ use super::control::Cause;
 use super::control::{Owner, Window};
 use std::{ffi::OsString, process::ExitCode};
 
+#[cfg(feature = "maintain-guest")]
+mod guest;
+
 #[cfg(target_os = "linux")]
 mod identity;
 #[cfg(target_os = "linux")]
@@ -123,6 +126,12 @@ impl Options {
 /// Only the explicit prerequisite route can enter the fixed native roles.
 /// Earlier JSON is passive; the returned status includes every final fence.
 pub fn run(args: &[OsString]) -> ExitCode {
+    if args.first().is_some_and(|arg| arg == "guest") {
+        #[cfg(feature = "maintain-guest")]
+        return guest::run(&args[1..]);
+        #[cfg(not(feature = "maintain-guest"))]
+        return ExitCode::from(2);
+    }
     #[cfg(target_os = "linux")]
     {
         let origin = match protocol::now() {

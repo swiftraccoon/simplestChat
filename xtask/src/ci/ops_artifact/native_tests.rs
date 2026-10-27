@@ -215,6 +215,9 @@ async fn fixed_inert_tools_emit_a_closed_unsigned_bundle_without_running_candida
             "simplestchat-ops",
             "--target",
             TARGET,
+            "--no-default-features",
+            "--features",
+            "simplestchat-ops/maintain-guest",
             "--manifest-path",
             run.path.join("source/Cargo.toml").to_str().unwrap(),
             "--target-dir",
@@ -258,12 +261,9 @@ async fn fixed_inert_tools_emit_a_closed_unsigned_bundle_without_running_candida
 #[tokio::test]
 async fn external_metadata_manifest_refuses_build_and_does_not_publish_unsigned_inventory() {
     let fixture = Fixture::new();
-    let cargo = fixture.kit.join("toolchain/bin/cargo");
-    let script = fs::read_to_string(&cargo).unwrap().replace(
-        "'manifest_path':manifest",
-        "'manifest_path':'/PRIVATE-SENTINEL/Cargo.toml'",
-    );
-    fs::write(cargo, script).unwrap();
+    let mut metadata = fixture.metadata();
+    metadata["packages"][0]["manifest_path"] = "/PRIVATE-SENTINEL/Cargo.toml".into();
+    fixture.set_metadata(&metadata);
     let budget = Budget::default();
     let request = fixture.request(&budget).await;
     let run = OwnedRun::fixture(&fixture.output, &budget).unwrap();
@@ -288,12 +288,7 @@ async fn external_metadata_manifest_refuses_build_and_does_not_publish_unsigned_
 #[tokio::test]
 async fn known_build_failure_preserves_status_and_settles_private_log() {
     let fixture = Fixture::new();
-    let cargo = fixture.kit.join("toolchain/bin/cargo");
-    let script = fs::read_to_string(&cargo).unwrap().replace(
-        "os.write(2,b'PRIVATE-STDERR\\n')",
-        "os.write(2,b'PRIVATE-STDERR\\n')\n    sys.exit(100)",
-    );
-    fs::write(cargo, script).unwrap();
+    fixture.fail_build();
     let budget = Budget::default();
     let request = fixture.request(&budget).await;
     let run = OwnedRun::fixture(&fixture.output, &budget).unwrap();

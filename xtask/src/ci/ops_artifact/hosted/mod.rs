@@ -14,6 +14,10 @@ mod files_tests;
 #[cfg(test)]
 mod fixture;
 mod kit;
+mod native_build;
+#[cfg(test)]
+mod native_build_tests;
+mod native_provenance;
 #[cfg(test)]
 mod native_tests;
 mod plan;

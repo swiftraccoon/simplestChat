@@ -25,6 +25,63 @@ exec "$ops_host_tools/sysroot/usr/bin/x86_64-linux-gnu-gcc-13" \
   "-B$ops_host_tools/sysroot/usr/bin/" "$@"
 "##;
 
+/// The compiler consumes only measured target headers/CRT and the fixed specs.
+/// The producer supplies OPS_MUSL_ROOT in its cleared, checked environment.
+pub(super) const MUSL_CC: &[u8] = br##"#!/bin/sh
+case "$0" in
+  /*/host-tools/bin/musl-cc) ;;
+  *) exit 1 ;;
+esac
+ops_host_tools=${0%/bin/musl-cc}
+exec "$ops_host_tools/sysroot/usr/bin/x86_64-linux-gnu-gcc-13" \
+  "--sysroot=$ops_host_tools/sysroot" \
+  "-B$ops_host_tools/sysroot/usr/lib/gcc/x86_64-linux-gnu/13/" \
+  "-B$ops_host_tools/sysroot/usr/libexec/gcc/x86_64-linux-gnu/13/" \
+  "-B$ops_host_tools/sysroot/usr/bin/" \
+  "-specs=$ops_host_tools/musl-gcc.specs" "$@"
+"##;
+
+/// Upstream musl's GCC specs with explicit static PIE startup and no ambient
+/// target prefix. GCC's builtin getenv function preserves relocation of the kit.
+pub(super) const MUSL_SPECS: &[u8] = concat!(
+    "%rename cpp_options old_cpp_options\n",
+    "\n",
+    "*cpp_options:\n",
+    "-nostdinc -isystem %:getenv(OPS_MUSL_ROOT /include) -isystem include%s %",
+    "(old_cpp_options)\n",
+    "\n",
+    "*cc1:\n",
+    "%(cc1_cpu) -nostdinc -isystem %:getenv(OPS_MUSL_ROOT /include) -isystem ",
+    "include%s\n",
+    "\n",
+    "*link_libgcc:\n",
+    "-L%:getenv(OPS_MUSL_ROOT /lib) -L .%s\n",
+    "\n",
+    "*libgcc:\n",
+    "libgcc.a%s %:if-exists(libgcc_eh.a%s)\n",
+    "\n",
+    "*startfile:\n",
+    "%{!shared:%{static-pie:%:getenv(OPS_MUSL_ROOT /lib/rcrt1.o);:%:getenv(OP",
+    "S_MUSL_ROOT /lib/Scrt1.o)}} %:getenv(OPS_MUSL_ROOT /lib/crti.o) crtbegin",
+    "S.o%s\n",
+    "\n",
+    "*endfile:\n",
+    "crtendS.o%s %:getenv(OPS_MUSL_ROOT /lib/crtn.o)\n",
+    "\n",
+    "*link:\n",
+    "-L%:getenv(OPS_MUSL_ROOT /lib) -nostdlib %{shared:-shared} %{static:-sta",
+    "tic} %{static-pie:-static -pie --no-dynamic-linker -z text} %{rdynamic:-",
+    "export-dynamic}\n",
+    "\n",
+    "*esp_link:\n",
+    "\n",
+    "*esp_options:\n",
+    "\n",
+    "*esp_cpp_options:\n",
+    "\n",
+)
+.as_bytes();
+
 pub(super) fn environment(root: &Path) -> Result<[(String, std::ffi::OsString); 3]> {
     if !super::super::namespace::path(root) {
         return Err(failure(1));

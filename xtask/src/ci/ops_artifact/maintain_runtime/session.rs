@@ -156,10 +156,10 @@ impl Session {
             &[
                 "/usr/bin/sudo".into(),
                 "-n".into(),
-                "/usr/bin/python3".into(),
-                "-I".into(),
-                "-B".into(),
-                "/root/simplestchat-vm-fixture/security_vm_maintain_prerequisite_guest.py".into(),
+                "/usr/local/libexec/simplestchat-public/simplestchat-ops".into(),
+                "release".into(),
+                "maintain-prerequisite".into(),
+                "guest".into(),
             ],
         )?;
         let mut command = runner.command("ssh", &args, control)?;

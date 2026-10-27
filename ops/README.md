@@ -1459,8 +1459,8 @@ The environment check is an admission policy; the eventual GitHub certificate
 provides signer identity authority.
 
 [ops-build-inputs.lock.json](ops-build-inputs.lock.json) pins the exact HTTPS
-origins, SHA-256 values and sizes of four Rust 1.99.0 archives and 38 Ubuntu
-24.04 packages. The registry archives are selected from the original exported
+origins, SHA-256 values and sizes of four Rust 1.99.0 archives, 63 Ubuntu
+24.04 packages and two native source archives. The registry archives are selected from the original exported
 Cargo lockfile. Downloads, extraction, registry copying and complete-tree
 readback precede the existing offline producer. Rust installer-v3 declarations
 are checked against the selected entry kinds. File-only
@@ -1480,6 +1480,22 @@ program, startup-object and search-directory selections before the build.
 The hosted operating system, `/bin/sh` and dynamic loader remain trusted runtime
 inputs. Offline Cargo configuration is not a compiler filesystem sandbox or
 complete network isolation.
+
+The distributed artifact explicitly enables `maintain-guest`; default Ops and
+`xtask` bootstrap builds exclude its OpenSSL/X.509 dependencies. The builder
+compiles patched musl commit `7813e9119eb5fe681b6750b8a033a0490bca0941`
+and OpenSSL 4.1.0 out of tree using the measured compiler, make, Perl and shell
+roles. The musl revision includes the upstream CVE-2026-107891 repair. Selected
+headers, static archives and startup objects enter the immutable kit only after
+bounded readback and ELF/archive admission. Its fixed musl compiler adapter uses
+those target inputs for static PIE, with Rust's bundled target CRT disabled.
+OpenSSL shared libraries, dynamic loading, modules and engines are disabled.
+The source pins, observed build configuration, library identities and output
+inventory accompany the existing evidence documents. Public musl/OpenSSL license
+notices are carried in `producer-toolchain.json`, bound to the builder's observed
+notice bytes. The signer checks these joins and the selected guest feature;
+passive recipe declarations alone cannot authorize a signature. Source admission
+and host unit tests do not establish a successful Linux build or runtime trial.
 
 The internal hosted owner has a 3,600-second scheduling profile, beginning after
 `cargo run` bootstrap and compilation. The job's external 65-minute watchdog

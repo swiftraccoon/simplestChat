@@ -2,7 +2,7 @@
 //! Real source/registry/producer adapters are separately tested. These synthetic
 //! bytes are never compiled/executed and cannot replace the production catalog.
 
-use super::super::{archive_tests, fixture};
+use super::super::{archive_tests, fixture, native_build_tests, signing_tests};
 use super::*;
 use crate::ci::{
     command::{Program, SeparateLogs},
@@ -127,7 +127,34 @@ fn tiny_deb_tar() -> Vec<u8> {
                 )
             }),
     );
+    files.extend(["dash", "mawk", "perl", "make"].map(|name| {
+        (
+            format!("usr/bin/{name}"),
+            format!("inert {name} role").into_bytes(),
+        )
+    }));
     archive_tests::tar_files(&files)
+}
+fn tiny_native(artifact: &super::super::catalog::Artifact) -> Vec<u8> {
+    let (entry, notice, bytes) = match artifact.name.as_str() {
+        "musl" => ("configure", "COPYRIGHT", b"Inert musl notice\n".as_slice()),
+        "openssl" => (
+            "Configure",
+            "LICENSE.txt",
+            b"Inert OpenSSL notice\n".as_slice(),
+        ),
+        _ => panic!("unexpected native fixture source"),
+    };
+    archive_tests::gzip(&archive_tests::tar_files(&[
+        (
+            format!("{}/{entry}", artifact.archive_root),
+            b"inert configure input".to_vec(),
+        ),
+        (
+            format!("{}/{notice}", artifact.archive_root),
+            bytes.to_vec(),
+        ),
+    ]))
 }
 fn catalog() -> (Catalog, BTreeMap<String, Vec<u8>>) {
     let compiled = Catalog::load().unwrap();
@@ -135,14 +162,16 @@ fn catalog() -> (Catalog, BTreeMap<String, Vec<u8>>) {
     let mut downloads = BTreeMap::new();
     let mut has_deb = false;
     for mut artifact in compiled.artifacts {
-        let bytes = if artifact.format == Format::RustGzip {
-            tiny_rust(&artifact)
-        } else {
-            if has_deb {
-                continue;
+        let bytes = match artifact.format {
+            Format::RustGzip => tiny_rust(&artifact),
+            Format::NativeGzip => tiny_native(&artifact),
+            Format::UbuntuDeb => {
+                if has_deb {
+                    continue;
+                }
+                has_deb = true;
+                DEB.to_vec()
             }
-            has_deb = true;
-            DEB.to_vec()
         };
         artifact.sha256 = super::super::super::sha(&bytes);
         artifact.bytes = bytes.len() as u64;
@@ -156,10 +185,10 @@ fn catalog() -> (Catalog, BTreeMap<String, Vec<u8>>) {
     let total = artifacts.iter().map(|artifact| artifact.bytes).sum();
     let catalog = Catalog {
         identity: super::super::catalog::Identity {
-            profile: "ops-hosted-kit-v1",
+            profile: "ops-hosted-kit-v2",
             sha256: super::super::super::sha(b"PRIVATE synthetic fixture catalog"),
             bytes: 1,
-            archives: 5,
+            archives: artifacts.len(),
             archive_bytes: total,
         },
         artifacts,
@@ -271,6 +300,24 @@ impl Stages for FakeStages {
         ));
         mkdir(binary_path.parent().unwrap());
         fs::write(&binary_path, &binary).unwrap();
+        let mut toolchain = signing_tests::toolchain_observation();
+        let kit_root = Path::new(request["builderKit"]["path"].as_str().unwrap());
+        for (role, relative) in [
+            ("cargo", "toolchain/bin/cargo"),
+            ("rustc", "toolchain/bin/rustc"),
+            (
+                "rustLld",
+                "toolchain/lib/rustlib/x86_64-unknown-linux-gnu/bin/rust-lld",
+            ),
+            ("hostCc", "host-tools/bin/cc"),
+            ("muslCc", "host-tools/bin/musl-cc"),
+        ] {
+            let bytes = fs::read(kit_root.join(relative)).unwrap();
+            toolchain["selectedTools"][role] = json!({
+                "sha256":super::super::super::sha(&bytes),"bytes":bytes.len()
+            });
+        }
+        let metadata = b"inert observed Cargo metadata\n";
         let documents = [
             (
                 "producer-materials.json",
@@ -281,9 +328,16 @@ impl Stages for FakeStages {
                 json!({"schemaVersion":1,"kind":"ops-cargo-observation","commandStatus":0,
                 "cargoAndProbeCliGroupsSettled":true,"sourceConfigAndToolOwnersClosed":true}),
             ),
-            ("producer-recipe.json", json!({"schemaVersion":1})),
-            ("producer-resolution.json", json!({"schemaVersion":1})),
-            ("producer-toolchain.json", json!({"schemaVersion":1})),
+            ("producer-recipe.json", signing_tests::recipe_observation()),
+            (
+                "producer-resolution.json",
+                json!({"schemaVersion":1,
+                "profile":"ops-producer-resolution-v2",
+                "originalSha256":super::super::super::sha(metadata),"originalBytes":metadata.len(),
+                "packages":4,"workspaceMembers":1,"scope":"observedOpsFeaturesAndManifestLocations",
+                "opsFeatures":["maintain-guest"]}),
+            ),
+            ("producer-toolchain.json", toolchain),
         ];
         let mut hashes = BTreeMap::new();
         for (name, value) in documents {
@@ -323,6 +377,79 @@ struct FakeCli {
     clock: Arc<fixture::Clock>,
     replayed: Vec<u8>,
     clean: bool,
+}
+fn write_generated(path: &Path, bytes: &[u8], executable: bool) {
+    mkdir(path.parent().unwrap());
+    fs::write(path, bytes).unwrap();
+    fs::set_permissions(
+        path,
+        fs::Permissions::from_mode(if executable { 0o700 } else { 0o600 }),
+    )
+    .unwrap();
+}
+fn musl_outputs(work: &Path, corrupt: bool) {
+    write_generated(
+        &work.join("musl-prefix/include/stdio.h"),
+        b"inert musl header\n",
+        false,
+    );
+    write_generated(
+        &work.join("musl-prefix/bin/musl-gcc"),
+        b"inert generated compiler wrapper",
+        true,
+    );
+    write_generated(
+        &work.join("musl-prefix/lib/musl-gcc.specs"),
+        format!(
+            "inert stock specs prefix={}\n",
+            work.join("musl-prefix").display()
+        )
+        .as_bytes(),
+        false,
+    );
+    for name in [
+        "crt1.o",
+        "Scrt1.o",
+        "rcrt1.o",
+        "crti.o",
+        "crtn.o",
+        "libc.a",
+        "libm.a",
+        "librt.a",
+        "libpthread.a",
+        "libcrypt.a",
+        "libutil.a",
+        "libxnet.a",
+        "libresolv.a",
+        "libdl.a",
+    ] {
+        let mut object = native_build_tests::elf();
+        let bytes = if name.ends_with(".o") {
+            object
+        } else if name == "libc.a" {
+            if corrupt {
+                object[18..20].copy_from_slice(&183_u16.to_le_bytes());
+            }
+            native_build_tests::archive(&object)
+        } else {
+            b"!<arch>\n".to_vec()
+        };
+        write_generated(&work.join("musl-prefix/lib").join(name), &bytes, false);
+    }
+}
+fn openssl_outputs(work: &Path) {
+    write_generated(
+        &work.join("openssl-prefix/include/openssl/ssl.h"),
+        b"inert OpenSSL header\n",
+        false,
+    );
+    for name in ["libssl.a", "libcrypto.a"] {
+        write_generated(
+            &work.join("openssl-prefix/lib").join(name),
+            &native_build_tests::archive(&native_build_tests::elf()),
+            false,
+        );
+    }
 }
 async fn finish_logs(
     logs: Arc<SeparateLogs>,
@@ -437,6 +564,55 @@ impl Executor for FakeCli {
                     .into_bytes()
                 };
                 ("cc", stdout)
+            }
+            Program::OpsKitShell => {
+                assert_eq!(directory.file_name().unwrap(), "build-musl");
+                let work = directory.parent().unwrap();
+                assert_eq!(
+                    command.arguments[0],
+                    work.join("musl/configure").as_os_str()
+                );
+                self.calls.push("native-shell:configure-musl".into());
+                ("native-shell", b"inert configure stdout\n".to_vec())
+            }
+            Program::OpsKitPerl => {
+                assert_eq!(directory.file_name().unwrap(), "build-openssl");
+                let work = directory.parent().unwrap();
+                assert_eq!(
+                    command.arguments[0],
+                    work.join("openssl/Configure").as_os_str()
+                );
+                write_generated(
+                    &directory.join("configdata.pm"),
+                    &native_build_tests::config(&work.join("openssl-prefix")),
+                    false,
+                );
+                self.calls.push("native-perl:configure-openssl".into());
+                ("native-perl", b"inert Configure stdout\n".to_vec())
+            }
+            Program::OpsKitMake => {
+                let work = directory.parent().unwrap();
+                let musl = directory.file_name().unwrap() == "build-musl";
+                let target = command.arguments.last().unwrap().to_str().unwrap();
+                let target = if target.starts_with("SHELL=") {
+                    "build"
+                } else {
+                    target
+                };
+                assert!(matches!(
+                    (musl, target),
+                    (true, "build" | "install") | (false, "build_sw" | "install_sw")
+                ));
+                self.calls.push(format!(
+                    "native-make:{}:{target}",
+                    if musl { "musl" } else { "openssl" }
+                ));
+                if target == "install" {
+                    musl_outputs(work, self.fail == Some("native-output"));
+                } else if target == "install_sw" {
+                    openssl_outputs(work);
+                }
+                ("native-make", b"inert make stdout\n".to_vec())
             }
             _ => panic!("unexpected CLI role"),
         };
@@ -587,10 +763,21 @@ async fn whole_private_fixture_reaches_all_five_phases_and_nine_evidence_publica
     let (fixture, stages, cli, result, _) = Box::pin(operation(None)).await;
     result.unwrap();
     assert_eq!(stages, ["source", "registry", "producer"]);
-    assert_eq!(cli.calls.len(), 21);
-    assert!(cli.calls[..6].iter().all(|call| call.starts_with("curl:")));
-    assert_eq!(cli.calls[6], "dpkg");
-    assert!(cli.calls[7..].iter().all(|call| call.starts_with("cc:")));
+    assert_eq!(cli.calls.len(), 29);
+    assert!(cli.calls[..8].iter().all(|call| call.starts_with("curl:")));
+    assert_eq!(cli.calls[8], "dpkg");
+    assert!(cli.calls[9..23].iter().all(|call| call.starts_with("cc:")));
+    assert_eq!(
+        cli.calls[23..],
+        [
+            "native-shell:configure-musl",
+            "native-make:musl:build",
+            "native-make:musl:install",
+            "native-perl:configure-openssl",
+            "native-make:openssl:build_sw",
+            "native-make:openssl:install_sw",
+        ]
+    );
     let observation: Value = serde_json::from_slice(&cli.replayed).unwrap();
     assert_eq!(observation["artifact"]["evidenceCount"], 9);
     assert_eq!(
@@ -612,6 +799,43 @@ async fn whole_private_fixture_reaches_all_five_phases_and_nine_evidence_publica
             .collect::<Vec<_>>(),
         provenance::NAMES
     );
+    let hosted_kit = index["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|entry| entry["logicalName"] == "hosted-kit.json")
+        .unwrap();
+    let hosted_kit: Value = serde_json::from_slice(
+        &fs::read(
+            fixture
+                .root
+                .join("result/unsigned")
+                .join(hosted_kit["payload"].as_str().unwrap()),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let native = &hosted_kit["native"];
+    assert_eq!(native["outputInventory"]["files"], 20);
+    assert_eq!(native["libraries"].as_object().unwrap().len(), 16);
+    assert_eq!(
+        native["libraries"]["native/musl/lib/libc.a"]["sha256"],
+        super::super::super::sha(&native_build_tests::archive(&native_build_tests::elf()))
+    );
+    assert_eq!(native["libraries"]["native/musl/lib/libm.a"]["objects"], 0);
+    let (selected, _) = catalog();
+    for artifact in selected
+        .artifacts
+        .iter()
+        .filter(|artifact| artifact.format == Format::NativeGzip)
+    {
+        assert_eq!(
+            native["sourceArchivePins"][&artifact.name],
+            json!({
+                "sha256":artifact.sha256,"bytes":artifact.bytes,"version":artifact.version
+            })
+        );
+    }
 }
 #[tokio::test]
 async fn whole_private_fixture_retains_failure_and_blocks_later_stages_or_positive_replay() {
@@ -619,6 +843,10 @@ async fn whole_private_fixture_retains_failure_and_blocks_later_stages_or_positi
         "curl",
         "dpkg",
         "cc",
+        "native-shell",
+        "native-perl",
+        "native-make",
+        "native-output",
         "producer",
         "cleanup",
         "late-clock",
@@ -631,10 +859,22 @@ async fn whole_private_fixture_retains_failure_and_blocks_later_stages_or_positi
                 "late-clock" => 124,
                 "late-signal" => 143,
                 "cleanup" => 1,
+                "native-output" => 1,
                 _ => 42,
             },
         );
-        if ["curl", "dpkg", "cc", "producer"].contains(&fail) {
+        if [
+            "curl",
+            "dpkg",
+            "cc",
+            "native-shell",
+            "native-perl",
+            "native-make",
+            "native-output",
+            "producer",
+        ]
+        .contains(&fail)
+        {
             assert!(!fixture.root.join("result/unsigned").exists());
             assert!(cli.replayed.is_empty());
         }
@@ -642,7 +882,16 @@ async fn whole_private_fixture_retains_failure_and_blocks_later_stages_or_positi
             assert_eq!(stages, ["source"]);
             assert_eq!(cli.calls.len(), 1);
         }
-        if ["dpkg", "cc"].contains(&fail) {
+        if [
+            "dpkg",
+            "cc",
+            "native-shell",
+            "native-perl",
+            "native-make",
+            "native-output",
+        ]
+        .contains(&fail)
+        {
             assert_eq!(stages, ["source", "registry"]);
         }
         if ["late-clock", "late-signal"].contains(&fail) {
@@ -656,6 +905,10 @@ async fn whole_private_fixture_retains_failure_and_blocks_later_stages_or_positi
 async fn diagnostics_keep_stage_primary_and_late_completion_errors_after_all_owned_closes() {
     for broken in [false, true] {
         for (fail, code, phase) in [
+            ("native-shell", 42, "kit"),
+            ("native-perl", 42, "kit"),
+            ("native-make", 42, "kit"),
+            ("native-output", 1, "kit"),
             ("producer", 42, "producer"),
             ("producer-deadline", 124, "producer"),
             ("producer-int", 130, "producer"),

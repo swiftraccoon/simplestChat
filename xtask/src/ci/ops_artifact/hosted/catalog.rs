@@ -19,7 +19,24 @@ pub(super) enum Format {
     RustGzip,
     #[serde(rename = "ubuntu-deb")]
     UbuntuDeb,
+    #[serde(rename = "native-gzip")]
+    NativeGzip,
 }
+
+pub(super) const MUSL_COMMIT: &str = "7813e9119eb5fe681b6750b8a033a0490bca0941";
+const ROOTS: [&str; 11] = [
+    "gcc-13-x86-64-linux-gnu",
+    "binutils-x86-64-linux-gnu",
+    "libc6-dev",
+    "make",
+    "perl",
+    "coreutils",
+    "sed",
+    "grep",
+    "mawk",
+    "dash",
+    "findutils",
+];
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -95,7 +112,7 @@ impl Catalog {
         }
         let wire: Wire = serde_json::from_slice(bytes).map_err(|_| failure(1))?;
         if wire.schema_version != 1
-            || wire.profile != "ops-hosted-kit-v1"
+            || wire.profile != "ops-hosted-kit-v2"
             || wire.rust_version != context::VERSION
             || wire.host != context::HOST
             || wire.target != context::TARGET
@@ -105,14 +122,9 @@ impl Catalog {
             || wire.rust_manifest.bytes == 0
             || wire.rust_manifest.bytes > 4 * 1024 * 1024
             || wire.ubuntu_indices.len() != 3
-            || wire.ubuntu_roots
-                != [
-                    "gcc-13-x86-64-linux-gnu",
-                    "binutils-x86-64-linux-gnu",
-                    "libc6-dev",
-                ]
+            || wire.ubuntu_roots != ROOTS
             || wire.artifacts.len() < 5
-            || wire.artifacts.len() > 64
+            || wire.artifacts.len() > 96
         {
             return Err(failure(1));
         }
@@ -139,6 +151,7 @@ impl Catalog {
         }
         let mut names = BTreeSet::new();
         let mut rust = BTreeSet::new();
+        let mut native = BTreeSet::new();
         let mut total = 0_u64;
         for artifact in &wire.artifacts {
             if !token(&artifact.name)
@@ -156,6 +169,40 @@ impl Catalog {
                 .checked_add(artifact.bytes)
                 .ok_or_else(|| failure(1))?;
             match artifact.format {
+                Format::NativeGzip => {
+                    let (version, root, url) = match artifact.name.as_str() {
+                        "musl" => (
+                            "1.2.6+7813e9119eb5".to_owned(),
+                            format!("musl-{MUSL_COMMIT}"),
+                            format!(
+                                concat!(
+                                    "https://git.musl-libc.org/cgit/musl/snapshot/",
+                                    "musl-{}.tar.gz"
+                                ),
+                                MUSL_COMMIT
+                            ),
+                        ),
+                        "openssl" => (
+                            "4.1.0".to_owned(),
+                            "openssl-4.1.0".to_owned(),
+                            concat!(
+                                "https://github.com/openssl/openssl/releases/download/",
+                                "openssl-4.1.0/openssl-4.1.0.tar.gz"
+                            )
+                            .to_owned(),
+                        ),
+                        _ => return Err(failure(1)),
+                    };
+                    if artifact.version != version
+                        || artifact.archive_root != root
+                        || artifact.url != url
+                        || !artifact.component.is_empty()
+                        || !artifact.dependencies.is_empty()
+                        || !native.insert(artifact.name.clone())
+                    {
+                        return Err(failure(1));
+                    }
+                }
                 Format::RustGzip => {
                     let (package, target) =
                         if let Some(package) = artifact.name.strip_suffix(context::HOST) {
@@ -213,7 +260,10 @@ impl Catalog {
                 format!("rust-std-{}", context::TARGET),
             ),
         ];
-        if total > MAX_TOTAL || rust != expected.into_iter().collect() {
+        if total > MAX_TOTAL
+            || rust != expected.into_iter().collect()
+            || native != BTreeSet::from(["musl".to_owned(), "openssl".to_owned()])
+        {
             return Err(failure(1));
         }
         for artifact in &wire.artifacts {
@@ -223,7 +273,7 @@ impl Catalog {
         }
         Ok(Self {
             identity: Identity {
-                profile: "ops-hosted-kit-v1",
+                profile: "ops-hosted-kit-v2",
                 sha256: super::super::sha(bytes),
                 bytes: bytes.len(),
                 archives: wire.artifacts.len(),

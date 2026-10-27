@@ -104,3 +104,79 @@ fn only_fixed_independently_governed_registry_can_be_delegated() {
     fixture::expect_error(tree.finish(), 1);
     assert_eq!(budget.count(), 0);
 }
+
+#[test]
+fn generated_native_outputs_are_outside_source_checks_and_immutable_inventory() {
+    for build_workspace in [false, true] {
+        let fixture = fixture::Fixture::new();
+        let budget = Budget::default();
+        let mut tree = Tree::create(&fixture.root.join("tree"), &budget).unwrap();
+        tree.write("musl/src/original.c", b"source", false).unwrap();
+        tree.check().unwrap();
+        fs::create_dir(tree.run.path.join("musl/generated")).unwrap();
+        fs::set_permissions(
+            tree.run.path.join("musl/generated"),
+            fs::Permissions::from_mode(0o700),
+        )
+        .unwrap();
+        fs::write(
+            tree.run.path.join("musl/generated/output.o"),
+            b"generated object",
+        )
+        .unwrap();
+        fs::write(tree.run.path.join("configure.log"), b"generated log").unwrap();
+        tree.check_build_sources().unwrap();
+        assert!(!tree.records.contains_key("musl/generated/output.o"));
+        assert!(!tree.records.contains_key("configure.log"));
+        fixture::expect_error(tree.check(), 1);
+        if build_workspace {
+            tree.finish_build().unwrap();
+        } else {
+            fixture::expect_error(tree.finish(), 1);
+        }
+        assert_eq!(budget.count(), 0);
+        let (attempted, fallback) = budget.close_counts();
+        assert!(attempted > 0);
+        assert_eq!(fallback, 0);
+    }
+}
+
+#[test]
+fn native_build_outputs_never_waive_original_source_custody() {
+    for case in ["bytes", "inode", "mode", "parent"] {
+        let fixture = fixture::Fixture::new();
+        let budget = Budget::default();
+        let mut tree = Tree::create(&fixture.root.join("tree"), &budget).unwrap();
+        tree.write("openssl/src/original.c", b"source", false)
+            .unwrap();
+        fs::write(tree.run.path.join("generated.log"), b"unadmitted output").unwrap();
+        let original = tree.run.path.join("openssl/src/original.c");
+        match case {
+            "bytes" => fs::write(original, b"tamper").unwrap(),
+            "inode" => {
+                fs::rename(&original, fixture.root.join("held-original")).unwrap();
+                fs::write(original, b"source").unwrap();
+            }
+            "mode" => fs::set_permissions(original, fs::Permissions::from_mode(0o700)).unwrap(),
+            "parent" => {
+                fs::rename(
+                    tree.run.path.join("openssl/src"),
+                    fixture.root.join("held-parent"),
+                )
+                .unwrap();
+                fs::create_dir(tree.run.path.join("openssl/src")).unwrap();
+                fs::set_permissions(
+                    tree.run.path.join("openssl/src"),
+                    fs::Permissions::from_mode(0o700),
+                )
+                .unwrap();
+                fs::write(original, b"source").unwrap();
+            }
+            _ => unreachable!(),
+        }
+        fixture::expect_error(tree.check_build_sources(), 1);
+        fixture::expect_error(tree.finish_build(), 1);
+        assert_eq!(budget.count(), 0);
+        assert_eq!(budget.close_counts().1, 0);
+    }
+}

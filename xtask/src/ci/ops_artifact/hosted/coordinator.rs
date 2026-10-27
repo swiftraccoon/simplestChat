@@ -11,7 +11,7 @@ use super::{
     context::{ArtifactKind, Context},
     failure, fetch,
     files::Tree,
-    kit,
+    kit, native_build,
     plan::{self, Plan},
     progress::{Checkpoint, Edge, Phase, Progress},
     provenance, signing,
@@ -49,6 +49,7 @@ impl super::super::Clock for StageClock {
 struct Owners {
     downloads: Option<Tree>,
     kit: Option<Tree>,
+    native: Option<Tree>,
     tools: Option<Tools>,
 }
 impl Owners {
@@ -59,6 +60,9 @@ impl Owners {
         }
         if let Some(owner) = self.kit.take() {
             result = result.and(owner.finish());
+        }
+        if let Some(owner) = self.native.take() {
+            result = result.and(owner.finish_build());
         }
         if let Some(owner) = self.tools.take() {
             result = result.and(owner.finish());
@@ -552,7 +556,9 @@ async fn produce_with<E: Executor, S: Stages>(
         progress.enter(Phase::Kit);
         let end = plan.begin(3)?;
         owners.kit = Some(Tree::create(&run.path.join("kit"), budget)?);
+        owners.native = Some(Tree::create(&run.path.join("native-work"), budget)?);
         let mut graph = Graph::default();
+        let mut native_graph = Graph::default();
         let total = catalog.artifacts.len();
         for (index, (artifact, original_name)) in
             catalog.artifacts.iter().zip(material_names).enumerate()
@@ -577,23 +583,76 @@ async fn produce_with<E: Executor, S: Stages>(
                 original_name
             };
             let file = owners.downloads.as_ref().unwrap().open(&name)?;
-            let tree = owners.kit.take().ok_or_else(|| failure(1))?;
-            let (tree, imported) =
-                import(tree, graph, file, artifact.clone(), plan, executor, end).await?;
-            graph = imported;
-            owners.kit = Some(tree);
+            if artifact.format == Format::NativeGzip {
+                let tree = owners.native.take().ok_or_else(|| failure(1))?;
+                let (tree, imported) = import(
+                    tree,
+                    native_graph,
+                    file,
+                    artifact.clone(),
+                    plan,
+                    executor,
+                    end,
+                )
+                .await?;
+                native_graph = imported;
+                owners.native = Some(tree);
+            } else {
+                let tree = owners.kit.take().ok_or_else(|| failure(1))?;
+                let (tree, imported) =
+                    import(tree, graph, file, artifact.clone(), plan, executor, end).await?;
+                graph = imported;
+                owners.kit = Some(tree);
+            }
             progress.kit(Checkpoint::Import, Edge::Complete, index + 1, total);
         }
         progress.kit(Checkpoint::Resolve, Edge::Begin, 1, 1);
         let tree = owners.kit.take().ok_or_else(|| failure(1))?;
         owners.kit = Some(complete_kit(tree, graph, plan, executor, end).await?);
+        let mut tree = owners.native.take().ok_or_else(|| failure(1))?;
+        owners.native = Some(
+            worker::work(
+                plan,
+                executor,
+                end,
+                move |checkpoint| {
+                    let result = native_graph.resolve(&mut tree, &mut || checkpoint.check());
+                    if let Err(error) = result {
+                        let _ = tree.finish();
+                        return Err(error);
+                    }
+                    Ok(tree)
+                },
+                Tree::finish,
+            )
+            .await?,
+        );
         progress.kit(Checkpoint::Resolve, Edge::Complete, 1, 1);
         owners
             .tools
             .as_mut()
             .unwrap()
             .admit_cc(&run.path.join("kit"))?;
+        owners
+            .tools
+            .as_mut()
+            .unwrap()
+            .admit_native(&run.path.join("kit"))?;
         probes(&mut owners, progress, executor, end, &mut next).await?;
+        let native_observation = native_build::build(
+            native_build::NativeBuild {
+                catalog: &catalog,
+                work: owners.native.as_ref().unwrap(),
+                tools: owners.tools.as_ref().unwrap(),
+                plan,
+                end,
+            },
+            owners.kit.as_mut().unwrap(),
+            owners.downloads.as_mut().unwrap(),
+            executor,
+            &mut next,
+        )
+        .await?;
         progress.kit(Checkpoint::RegistryCopy, Edge::Begin, 1, 1);
         materials::copy_bounded(
             &run.path.join("registry/registry"),
@@ -667,7 +726,8 @@ async fn produce_with<E: Executor, S: Stages>(
             "archives":catalog.identity.archives,"archiveBytes":catalog.identity.archive_bytes,
             "registrySha256":registry_sha,"lockSha256":lock_sha,"kit":kit_identity,
             "resolverProbes":kit::arguments().len(),
-            "compilerRuntime":"hostedOsAndDynamicLoaderTrusted"
+            "compilerRuntime":"hostedOsAndDynamicLoaderTrusted",
+            "native":native_observation,
         }))?;
         let context_bytes = provenance::encoded(context)?;
         let documents = BTreeMap::from([
@@ -759,6 +819,7 @@ async fn produce_with<E: Executor, S: Stages>(
             "registry-request.json",
             "registry",
             "kit",
+            "native-work",
             "producer-request.json",
             "build",
             "hosted-context.json",

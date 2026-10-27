@@ -55,7 +55,7 @@ fn decoded<T>(
     let mut source = file;
     source.seek(SeekFrom::Start(0)).map_err(|_| failure(1))?;
     match format {
-        Format::RustGzip => {
+        Format::RustGzip | Format::NativeGzip => {
             let mut buffered = BufReader::new(source);
             let value = {
                 let mut gzip = GzDecoder::new(&mut buffered);
@@ -115,9 +115,16 @@ fn discard(
     }
     Ok(())
 }
+fn git_comment(data: &[u8]) -> bool {
+    data.len() == 52
+        && &data[..11] == b"52 comment="
+        && data[51] == b'\n'
+        && data[11..51].iter().all(u8::is_ascii_hexdigit)
+}
 fn preflight(
     reader: &mut (dyn Read + '_),
     checkpoint: &mut (dyn FnMut() -> Result<()> + '_),
+    native: bool,
 ) -> Result<()> {
     let mut headers = 0usize;
     let mut extension = false;
@@ -148,6 +155,19 @@ fn preflight(
                 if size > files::MAX_FILE {
                     return Err(failure(1));
                 }
+            }
+            b'g' if native => {
+                // Git archive records only its commit as a global PAX comment.
+                if size != 52 {
+                    return Err(failure(1));
+                }
+                let mut data = [0u8; 52];
+                reader.read_exact(&mut data).map_err(|_| failure(1))?;
+                if !git_comment(&data) {
+                    return Err(failure(1));
+                }
+                discard(reader, 460, checkpoint)?;
+                continue;
             }
             b'L' | b'K' => {
                 if extension || size == 0 || size > 8192 {
@@ -182,6 +202,15 @@ fn name(raw: &[u8], directory: bool) -> Result<String> {
 }
 fn selected(artifact: &Artifact, raw: &str) -> Result<Option<String>> {
     match artifact.format {
+        Format::NativeGzip => {
+            if raw == artifact.archive_root {
+                return Ok(None);
+            }
+            let within = raw
+                .strip_prefix(&format!("{}/", artifact.archive_root))
+                .ok_or_else(|| failure(1))?;
+            Ok(Some(format!("{}/{within}", artifact.name)))
+        }
         Format::RustGzip => {
             if raw == artifact.archive_root {
                 return Ok(None);
@@ -207,6 +236,8 @@ fn selected(artifact: &Artifact, raw: &str) -> Result<Option<String>> {
                 "usr/include",
                 "lib",
                 "lib64",
+                "usr/share/perl",
+                "usr/share/perl5",
             ]
             .iter()
             .any(|prefix| {
@@ -237,9 +268,10 @@ fn target(artifact: &Artifact, destination: &str, raw: &str, hard: bool) -> Resu
     let base = match artifact.format {
         Format::RustGzip => "toolchain",
         Format::UbuntuDeb => "host-tools/sysroot",
+        Format::NativeGzip => artifact.name.as_str(),
     };
     let joined = if raw.starts_with('/') {
-        if artifact.format == Format::RustGzip {
+        if artifact.format != Format::UbuntuDeb {
             return Err(failure(1));
         }
         format!("{base}/{}", raw.trim_start_matches('/'))
@@ -276,7 +308,9 @@ impl Graph {
         tree: &mut Tree,
         checkpoint: &mut impl FnMut() -> Result<()>,
     ) -> Result<()> {
-        decoded(file, artifact.format, checkpoint, preflight)?;
+        decoded(file, artifact.format, checkpoint, |reader, checkpoint| {
+            preflight(reader, checkpoint, artifact.format == Format::NativeGzip)
+        })?;
         let mut seen = BTreeSet::new();
         let mut metadata = BTreeMap::new();
         let mut installed = BTreeMap::new();
@@ -286,6 +320,17 @@ impl Graph {
                 checkpoint()?;
                 let mut entry = entry.map_err(|_| failure(1))?;
                 let kind = entry.header().entry_type();
+                if artifact.format == Format::NativeGzip && kind.as_byte() == b'g' {
+                    let mut data = Vec::new();
+                    (&mut entry)
+                        .take(53)
+                        .read_to_end(&mut data)
+                        .map_err(|_| failure(1))?;
+                    if entry.size() != 52 || !git_comment(&data) {
+                        return Err(failure(1));
+                    }
+                    continue;
+                }
                 if kind.is_dir() && entry.size() != 0 {
                     return Err(failure(1));
                 }
