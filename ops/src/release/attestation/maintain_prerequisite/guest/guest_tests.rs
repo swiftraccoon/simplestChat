@@ -96,6 +96,27 @@ fn admission_failure_keeps_actual_guest_signal_or_deadline_status_after_finalize
     assert_eq!(failed_status(143), 143);
     assert_eq!(failed_status(7), 1);
 }
+#[test]
+fn guest_failure_category_keeps_the_first_cause_through_cleanup() {
+    for (error, category) in [
+        (Error::Input, "input"),
+        (Error::Changed, "changed"),
+        (Error::Command, "command"),
+        (Error::Bounds, "bounds"),
+        (Error::Refused, "refused"),
+    ] {
+        let mut control = Control::new(Instant::now()).unwrap();
+        control.record(error);
+        control.begin_recovery();
+        control.record(Error::Close);
+        control.begin_settling();
+        let result = control.finish();
+        assert_eq!(result, Err(error));
+        assert_eq!(control.first.map(Error::category), Some(category));
+        assert_eq!(control.status, 0);
+        assert_eq!(failed_status(control.status), 1);
+    }
+}
 fn native_value() -> Value {
     let mut facts = serde_json::Map::new();
     for name in observation::BOOLEANS {

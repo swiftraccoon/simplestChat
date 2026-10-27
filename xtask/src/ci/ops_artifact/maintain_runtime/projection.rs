@@ -290,6 +290,16 @@ pub(super) fn guest(value: Value, expected: &Value) -> Result<Value> {
                 "render-assets",
                 "render-assets-receipt",
                 "render-tools",
+                "network-collector",
+                "network-create",
+                "network-marker",
+                "network-profile",
+                "network-route",
+                "network-firewall",
+                "network-guard",
+                "network-capture",
+                "network-capture-ready",
+                "network-probe",
                 "database-setup",
                 "caddy-natural",
                 "ready",
@@ -338,7 +348,17 @@ pub(super) fn guest(value: Value, expected: &Value) -> Result<Value> {
         || (!value["failure"].is_null()
             && !allowed(
                 &value["failure"],
-                &["io", "deadline", "cancelled", "refused", "native-status"],
+                &[
+                    "input",
+                    "changed",
+                    "command",
+                    "bounds",
+                    "io",
+                    "deadline",
+                    "cancelled",
+                    "refused",
+                    "native-status",
+                ],
             ))
         || !value["finalStatus"]
             .as_u64()

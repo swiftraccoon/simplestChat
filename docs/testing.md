@@ -3056,6 +3056,26 @@ with all eight QEMU epochs fully closed; that report does not identify which
 render operation refused. These diagnostics still require fresh signed runtime
 qualification and establish no native launcher or 900-second result.
 
+The `0d8e7594` trial also failed all four before native execution. Its
+`render-tools` label remained active through the following network operation;
+it did not isolate a tool-admission failure. Successful collector finalization,
+known network-create adoption and clean guest recovery place the source-derived
+failure region before successful guard-install adoption. The exact hosted branch
+was not exported. An owned Docker 29.8.2 control produced the expected bridge
+profile; the exact firewall output also passed an Ubuntu `nft --check` control.
+Neither local control identifies the hosted refusal or proves guest containment.
+
+Network diagnostics now enter `network-collector` before the first effect and
+distinguish creation, marker join, profile, route, firewall preparation, guard
+installation, capture startup/readiness and the guard probe through fixed
+`network-*` checkpoints. The first guest Rust refusal kind also retains the
+closed `input`, `changed`, `command` or `bounds` category instead of generic
+`refused`. No raw diagnostics or extra wire fields are added. Decoder regressions
+preserve truthful negative metadata while refusing unknown values, injected text,
+extra fields and passing receipts with a failure category or setup checkpoint.
+These changes need their own fresh signed qualification; no underlying setup
+correction or successful four-case result is claimed.
+
 Repeated CI attempts can retain server artifacts with the same commit-based
 name. Discovery selects the unique newest matching creation instant, refusing
 malformed matching timestamps or a tied newest instant. That timestamp only

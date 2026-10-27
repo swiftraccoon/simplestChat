@@ -52,11 +52,15 @@ pub(super) type Result<T> = std::result::Result<T, Error>;
 impl Error {
     pub fn category(self) -> &'static str {
         match self {
+            Self::Input => "input",
+            Self::Changed => "changed",
+            Self::Command => "command",
+            Self::Bounds => "bounds",
+            Self::Refused => "refused",
             Self::Io | Self::Close => "io",
             Self::Deadline => "deadline",
             Self::Interrupt | Self::Terminate => "cancelled",
             Self::NativeStatus => "native-status",
-            _ => "refused",
         }
     }
 }

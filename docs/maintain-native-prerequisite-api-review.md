@@ -38,6 +38,24 @@ It does not identify a failed branch within one group, alter an operation or
 weaken finalization. The current signed four-case failure at the older broad
 `render` checkpoint remains unexplained by these source diagnostics.
 
+Network setup enters `network-collector` before its first operation, followed by
+the fixed `network-create`, `network-marker`, `network-profile`, `network-route`,
+`network-firewall`, `network-guard`, `network-capture`, `network-capture-ready`
+and `network-probe` checkpoints. This closes the earlier label gap: in the
+`0d8e7594` trial, `render-tools` remained active during subsequent network setup.
+It did not establish that tool admission failed. Each new label still describes
+an operation group, not proof that a child started or a particular syscall failed.
+
+The existing guest `Input`, `Changed`, `Command` and `Bounds` variants preserve
+their finite categories as `input`, `changed`, `command` and `bounds` rather than
+collapsing to `refused`. This records the first Rust refusal kind; `changed` can
+also describe an input/profile mismatch and does not by itself prove mutation.
+Other category/status mappings, the fourteen-key guest receipt, positive
+completion and all cleanup obligations remain unchanged. The paired decoder
+admits only those fixed values and still rejects any nonnull failure on success.
+These affected `C-VALIDATE`, `C-GOOD-ERR` and `C-SERDE` decisions expose no raw
+arguments, paths, event rows, child output or error messages.
+
 The safe OpenSSL adapter owns its contexts and TLS stream through the Rust
 binding; certificate/key borrows remain within their owning objects. It adds no
 first-party raw pointers, unsafe code or foreign callbacks. The pinned native
