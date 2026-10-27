@@ -4,12 +4,82 @@ import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { runInNewContext } from "node:vm";
 
 const require = createRequire(import.meta.url);
 const {
   createBrowserOwner,
 } = require("../../web/e2e/runner-browser-owner.cjs");
 const SafeReporter = require("../../web/e2e/runner-reporter.cjs");
+
+test("ui stress marks a returned negative workload report as a failed runner step", async () => {
+  const source = await readFile(
+    new URL("../../web/e2e/specs/stress.spec.cjs", import.meta.url),
+    "utf8",
+  );
+  for (const passed of [false, true]) {
+    let scenario, assertionFailure, stepFailure;
+    let runs = 0;
+    const steps = [];
+    const suiteRuntime = {
+      env: { UI_STRESS_E2E: "1" },
+      async step(name, work) {
+        try {
+          await work();
+          steps.push({ name, passed: true });
+        } catch (error) {
+          stepFailure = error;
+          steps.push({ name, passed: false });
+          throw error;
+        }
+      },
+    };
+    runInNewContext(source, {
+      require(id) {
+        if (id === "../runner-fixtures.cjs")
+          return {
+            test(name, work) {
+              assert.equal(name, "ui-stress");
+              assert.equal(scenario, undefined);
+              scenario = work;
+            },
+            expect(actual) {
+              return {
+                toBe(expected) {
+                  try {
+                    assert.equal(actual, expected);
+                  } catch (error) {
+                    assertionFailure = error;
+                    throw error;
+                  }
+                },
+              };
+            },
+          };
+        assert.equal(id, "../ui-stress.cjs");
+        return {
+          async run(env, runtime) {
+            assert.equal(env, suiteRuntime.env);
+            assert.equal(runtime, suiteRuntime);
+            runs++;
+            return { passed };
+          },
+        };
+      },
+    });
+    assert.equal(typeof scenario, "function");
+    const operation = scenario({ suiteRuntime });
+    if (passed) await operation;
+    else {
+      await assert.rejects(operation, (error) => error === assertionFailure);
+      assert.equal(stepFailure, assertionFailure);
+    }
+    assert.equal(runs, 1);
+    assert.deepEqual(steps, [
+      { name: "bounded authenticated room workload and cleanup", passed },
+    ]);
+  }
+});
 
 function fixture({ connectFailure = false, saveFailure = false } = {}) {
   const servers = [],

@@ -542,6 +542,14 @@ owned-room deletion, zero remaining server memberships/connections and clean
 browser/server exits are required. The helper supplies a private, temporary
 metrics credential; reports exclude passwords, tokens and message contents.
 
+Concurrent traffic failures identify the first failing task: `sender`,
+`interactions` or `reconnect`. Sampling failures use fixed operation codes for
+RSS, page observation, CDP, timing summaries and metrics reads/decoding; existing
+gate codes are preserved. Native exception messages and stacks are excluded.
+The workload step includes the final report assertion, so a completed negative
+report fails that step. Workload schedules, deadlines, queue gates and cleanup
+requirements are unchanged.
+
 Timings are informational, not INP, capacity or memory-leak guarantees. Animation
 frame callbacks do not prove paint. Compare identical harnesses and workloads
 with frozen assets, fresh databases and no competing builds; use multiple

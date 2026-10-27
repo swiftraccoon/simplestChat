@@ -42,6 +42,61 @@ const check = (condition, code) => {
 };
 const identity = (value) => typeof value === 'string' && /^[a-zA-Z0-9_-]{1,128}$/.test(value);
 
+const SAMPLE_FAILURES = Object.freeze({
+  rss: 'sample_rss_failed',
+  page: 'sample_page_failed',
+  cdp_performance: 'sample_cdp_performance_failed',
+  cdp_dom: 'sample_cdp_dom_failed',
+  cpu_counters: 'sample_cpu_counters_failed',
+  timings: 'sample_timing_summary_failed',
+  metrics_read: 'sample_metrics_read_failed',
+  metrics_decode: 'sample_metrics_decode_failed',
+  counter_delta: 'sample_server_counter_delta_failed',
+});
+
+/** Keep existing gates; never retain a native exception or caller text in metadata. */
+async function sampleOperation(operation, work) {
+  check(Object.hasOwn(SAMPLE_FAILURES, operation), 'sample_operation_invalid');
+  try {
+    return await work();
+  } catch (error) {
+    if (error instanceof StressFailure) throw error;
+    throw new StressFailure(SAMPLE_FAILURES[operation]);
+  }
+}
+
+/** Join exactly the three traffic peers, latching their first error before abort. */
+async function settleTraffic(tasks, abort, report) {
+  check(Array.isArray(tasks) && tasks.length === 3, 'traffic_task_inventory');
+  const names = ['sender', 'interactions', 'reconnect'];
+  let first;
+  await Promise.allSettled(
+    tasks.map((task, index) =>
+      Promise.resolve(task).catch((error) => {
+        if (!first) {
+          first = { task: names[index], error };
+          report.failure ??= failureMetadata('chat_traffic', error, first);
+        }
+        abort.abort();
+        throw error;
+      }),
+    ),
+  );
+  return first;
+}
+
+function failureMetadata(stage, error, trafficFailure) {
+  const value = { stage, code: error instanceof StressFailure ? error.code : 'operation_failed' };
+  if (
+    trafficFailure &&
+    trafficFailure.error === error &&
+    ['sender', 'interactions', 'reconnect'].includes(trafficFailure.task)
+  ) {
+    value.task = trafficFailure.task;
+  }
+  return value;
+}
+
 /** Playwright evaluate() has no action timeout; do not let a wedged page block release. */
 async function cleanupWithin(action, milliseconds = 2000) {
   let timer;
@@ -284,6 +339,7 @@ async function run(env = process.env, runner = {}) {
   let roomDeleted = false;
   let workloadPassed = false;
   let trafficStarted;
+  let trafficFailure;
   let closePromise;
   const started = performance.now();
   const closeBrowser = () =>
@@ -315,7 +371,7 @@ async function run(env = process.env, runner = {}) {
     } while (performance.now() < until);
     throw new StressFailure(code);
   }
-  async function counts() {
+  async function counts(sampling = false) {
     const response = await fetch(`${config.base}/metrics`, {
       redirect: 'error',
       signal: AbortSignal.timeout(5000),
@@ -337,7 +393,8 @@ async function run(env = process.env, runner = {}) {
       await reader.cancel().catch(() => {});
     }
     const body = Buffer.concat(chunks, size).toString('utf8');
-    return { ...serverCounts(body), counters: serverCounters(body) };
+    const decode = () => ({ ...serverCounts(body), counters: serverCounters(body) });
+    return sampling ? sampleOperation('metrics_decode', decode) : decode();
   }
   const state = (client) => client.page.evaluate(() => window.__uiStress.status());
   function validState(value) {
@@ -350,22 +407,29 @@ async function run(env = process.env, runner = {}) {
   async function sample(label, closedQueueAllowance = 0) {
     healthy();
     const measured = [];
-    const rss = execFileSync('ps', ['-o', 'rss=', '-p', String(config.serverPid)], {
-      encoding: 'utf8',
-      timeout: 2000,
-      maxBuffer: 4096,
-    }).trim();
+    const rss = await sampleOperation('rss', () =>
+      execFileSync('ps', ['-o', 'rss=', '-p', String(config.serverPid)], {
+        encoding: 'utf8',
+        timeout: 2000,
+        maxBuffer: 4096,
+      }).trim(),
+    );
     check(/^[0-9]+$/.test(rss), 'server_rss_unavailable');
     for (const client of clients) {
-      const observation = await client.page.evaluate(() => window.__uiStress.sample());
-      validState(observation);
-      const current = Object.fromEntries(
-        (await client.cdp.send('Performance.getMetrics')).metrics.map((metric) => [
-          metric.name,
-          metric.value,
-        ]),
+      const observation = await sampleOperation('page', async () => {
+        const value = await client.page.evaluate(() => window.__uiStress.sample());
+        validState(value);
+        return value;
+      });
+      const current = await sampleOperation('cdp_performance', async () =>
+        Object.fromEntries(
+          (await client.cdp.send('Performance.getMetrics')).metrics.map((metric) => [
+            metric.name,
+            metric.value,
+          ]),
+        ),
       );
-      const dom = await client.cdp.send('Memory.getDOMCounters');
+      const dom = await sampleOperation('cdp_dom', () => client.cdp.send('Memory.getDOMCounters'));
       check(
         Number.isFinite(current.JSHeapUsedSize) && current.JSHeapUsedSize > 0,
         'heap_metric_unavailable',
@@ -375,7 +439,9 @@ async function run(env = process.env, runner = {}) {
         viewport: client.viewport,
         jsHeapUsedBytes: current.JSHeapUsedSize,
         ...dom,
-        cpuDelta: client.previous ? cpuDelta(client.previous, current) : null,
+        cpuDelta: client.previous
+          ? await sampleOperation('cpu_counters', () => cpuDelta(client.previous, current))
+          : null,
         observation: {
           seenMessages: observation.seenIds.length,
           renderedMessages: observation.renderedIds.length,
@@ -391,15 +457,19 @@ async function run(env = process.env, runner = {}) {
           protocolErrors: observation.protocolErrors,
           payloadValidatedMessages: observation.payloadValidatedMessages,
         },
-        timings: Object.fromEntries(
-          Object.entries(observation.timings).map(([key, values]) => [key, distribution(values)]),
+        timings: await sampleOperation('timings', () =>
+          Object.fromEntries(
+            Object.entries(observation.timings).map(([key, values]) => [key, distribution(values)]),
+          ),
         ),
       });
       client.previous = current;
     }
-    const server = await counts();
+    const server = await sampleOperation('metrics_read', () => counts(true));
     const previous = report.phases.at(-1)?.server ?? report.initialServer;
-    const delta = serverCounterDelta(previous.counters, server.counters);
+    const delta = await sampleOperation('counter_delta', () =>
+      serverCounterDelta(previous.counters, server.counters),
+    );
     // Preserve departure races separately from the clean traffic phases.
     const gated = label !== 'post_leave_quiescent';
     let gateFailed = false;
@@ -809,17 +879,8 @@ async function run(env = process.env, runner = {}) {
         await sample('after_reconnect', messages.length - beforeCloseMessages + 2);
       })(),
     ];
-    let workloadError;
-    await Promise.allSettled(
-      tasks.map((task) =>
-        task.catch((error) => {
-          workloadError ??= error;
-          abort.abort();
-          throw error;
-        }),
-      ),
-    );
-    if (workloadError) throw workloadError;
+    trafficFailure = await settleTraffic(tasks, abort, report);
+    if (trafficFailure) throw trafficFailure.error;
     healthy();
     check(
       messages.length === config.messages &&
@@ -928,10 +989,7 @@ async function run(env = process.env, runner = {}) {
     report.checks.ownedRoomDeleted = true;
     workloadPassed = true;
   } catch (error) {
-    report.failure ??= {
-      stage,
-      code: error instanceof StressFailure ? error.code : 'operation_failed',
-    };
+    report.failure ??= failureMetadata(stage, error, trafficFailure);
     if (report.traffic) {
       report.traffic.acceptedMessages = messages.length;
       report.traffic.elapsedMs = performance.now() - trafficStarted;
@@ -1075,4 +1133,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { run, Guest, cleanupWithin };
+module.exports = { run, Guest, cleanupWithin, sampleOperation, settleTraffic, failureMetadata };

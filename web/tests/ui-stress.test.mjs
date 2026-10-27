@@ -5,7 +5,13 @@ import test from 'node:test';
 import { runInNewContext } from 'node:vm';
 
 const require = createRequire(import.meta.url);
-const { cleanupWithin, Guest } = require('../e2e/ui-stress.cjs');
+const {
+  cleanupWithin,
+  Guest,
+  sampleOperation,
+  settleTraffic,
+  failureMetadata,
+} = require('../e2e/ui-stress.cjs');
 const {
   configuration,
   distribution,
@@ -23,6 +29,171 @@ const owned = {
   TEST_METRICS_TOKEN: 'a'.repeat(64),
   TEST_SERVER_PID: '12345',
 };
+
+const deferred = () => {
+  let resolve;
+  let reject;
+  const promise = new Promise((done, failed) => {
+    resolve = done;
+    reject = failed;
+  });
+  return { promise, resolve, reject };
+};
+
+test('sample failures use closed operation codes without native error data', async () => {
+  for (const [operation, code] of Object.entries({
+    rss: 'sample_rss_failed',
+    page: 'sample_page_failed',
+    cdp_performance: 'sample_cdp_performance_failed',
+    cdp_dom: 'sample_cdp_dom_failed',
+    cpu_counters: 'sample_cpu_counters_failed',
+    timings: 'sample_timing_summary_failed',
+    metrics_read: 'sample_metrics_read_failed',
+    metrics_decode: 'sample_metrics_decode_failed',
+    counter_delta: 'sample_server_counter_delta_failed',
+  })) {
+    assert.equal(await sampleOperation(operation, () => 42), 42);
+    for (const work of [
+      () => {
+        throw new Error('PRIVATE_URL_PASSWORD');
+      },
+      () => Promise.reject(new Error('PRIVATE_STACK_COOKIE', { cause: 'PRIVATE_CAUSE' })),
+    ]) {
+      let failure;
+      await assert.rejects(sampleOperation(operation, work), (error) => {
+        failure = error;
+        return error.code === code && error.message === code && !Object.hasOwn(error, 'cause');
+      });
+      const metadata = failureMetadata('chat_traffic', failure);
+      assert.deepEqual(metadata, { stage: 'chat_traffic', code });
+      assert.equal(JSON.stringify(metadata).includes('PRIVATE'), false);
+    }
+  }
+  let called = false;
+  await assert.rejects(
+    sampleOperation('PRIVATE_UNREVIEWED_OPERATION', () => {
+      called = true;
+    }),
+    (error) => error.code === 'sample_operation_invalid',
+  );
+  assert.equal(called, false);
+});
+
+test('existing stress gate objects and details survive sample attribution unchanged', async () => {
+  const gate = { failure: null, waiters: new Set() };
+  Guest.prototype.fail.call(gate, 'server_counter_gate_failed');
+  const original = gate.failure;
+  original.details = { privateValue: 'PRIVATE_GATE_DETAIL' };
+  await assert.rejects(
+    sampleOperation('cpu_counters', () => {
+      throw original;
+    }),
+    (error) => error === original && error.details === original.details,
+  );
+  assert.deepEqual(failureMetadata('chat_traffic', original), {
+    stage: 'chat_traffic',
+    code: 'server_counter_gate_failed',
+  });
+  assert.equal(
+    JSON.stringify(failureMetadata('chat_traffic', original)).includes('PRIVATE'),
+    false,
+  );
+});
+
+test('traffic retains the first task before abort and waits for every peer to settle', async () => {
+  const sender = deferred();
+  const interactions = deferred();
+  const reconnect = deferred();
+  const aborted = deferred();
+  const abort = new AbortController();
+  const report = {};
+  const original = new Error('PRIVATE_RECONNECT_EXCEPTION');
+  let settled = false;
+  const completion = settleTraffic(
+    [sender.promise, interactions.promise, reconnect.promise],
+    abort,
+    report,
+  ).then((value) => {
+    settled = true;
+    return value;
+  });
+  abort.signal.addEventListener(
+    'abort',
+    () => {
+      assert.deepEqual(report.failure, {
+        stage: 'chat_traffic',
+        code: 'operation_failed',
+        task: 'reconnect',
+      });
+      sender.reject(new DOMException('PRIVATE_ABORT_EXCEPTION', 'AbortError'));
+      aborted.resolve();
+    },
+    { once: true },
+  );
+  reconnect.reject(original);
+  await aborted.promise;
+  assert.equal(settled, false);
+  const firstMetadata = report.failure;
+  report.failure ??= { stage: 'chat_traffic', code: 'workload_deadline' };
+  interactions.resolve();
+  const first = await completion;
+  assert.equal(first.error, original);
+  assert.equal(first.task, 'reconnect');
+  assert.equal(report.failure, firstMetadata);
+  assert.equal(JSON.stringify(report.failure).includes('PRIVATE'), false);
+});
+
+test('traffic attribution covers the fixed task roster and preserves an earlier deadline', async () => {
+  for (const [index, task] of ['sender', 'interactions', 'reconnect'].entries()) {
+    const original = new Error('PRIVATE_NATIVE_ERROR');
+    const tasks = [Promise.resolve(), Promise.resolve(), Promise.resolve()];
+    tasks[index] = Promise.reject(original);
+    const report = {};
+    const first = await settleTraffic(tasks, new AbortController(), report);
+    assert.equal(first.error, original);
+    assert.equal(first.task, task);
+    assert.deepEqual(report.failure, { stage: 'chat_traffic', code: 'operation_failed', task });
+  }
+  const earlier = { stage: 'chat_traffic', code: 'workload_deadline' };
+  const report = { failure: earlier };
+  const original = new Error('PRIVATE_LATE_ABORT');
+  await settleTraffic(
+    [Promise.reject(original), Promise.resolve(), Promise.resolve()],
+    new AbortController(),
+    report,
+  );
+  assert.equal(report.failure, earlier);
+  assert.deepEqual(
+    failureMetadata('chat_traffic', original, {
+      task: 'PRIVATE_UNREVIEWED_TASK',
+      error: original,
+    }),
+    { stage: 'chat_traffic', code: 'operation_failed' },
+  );
+  assert.equal(
+    await settleTraffic(
+      [Promise.resolve(), Promise.resolve(), Promise.resolve()],
+      new AbortController(),
+      {},
+    ),
+    undefined,
+  );
+  const empty = await settleTraffic(
+    [Promise.reject(undefined), Promise.resolve(), Promise.resolve()],
+    new AbortController(),
+    {},
+  );
+  assert.equal(empty.task, 'sender');
+  assert.equal(empty.error, undefined);
+  assert.deepEqual(failureMetadata('chat_traffic', undefined), {
+    stage: 'chat_traffic',
+    code: 'operation_failed',
+  });
+  await assert.rejects(
+    settleTraffic([], new AbortController(), {}),
+    (error) => error.code === 'traffic_task_inventory',
+  );
+});
 
 test('UI stress requires owned local services and exact bounded profiles', () => {
   const full = configuration(owned);
