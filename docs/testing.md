@@ -3076,6 +3076,32 @@ extra fields and passing receipts with a failure category or setup checkpoint.
 These changes need their own fresh signed qualification; no underlying setup
 correction or successful four-case result is claimed.
 
+The subsequent `df7314d3` trial reached `network-route` and refused before native
+execution. Pinned [libslirp DHCP handling][maintain-restricted-dhcp] omits the
+default router in restricted mode. Setup now uses the bounded passive lookup
+`ip -json -4 route get 10.0.2.2`, admitting the exact direct peer/source and safe
+physical device into a private validated type. Wrong, routed, multipath,
+non-unicast, unsafe and ambiguous replies remain refused. The firewall, capture
+filter, packet allowance, setup deadline and remaining native debt are unchanged.
+No default route, DNS service or external packet probe is added.
+
+The existing single guard datagram now targets the unused on-link sentinel
+`10.0.2.254:53`, so it can exercise the output DROP rule without a default route.
+It retains the payload, one-attempt count, exact completed-send/EPERM rule,
+checked close and fresh counter increment. Route-unreachable errors remain
+negative, and the unchanged capture must still contain no packet records.
+
+Pure receiver tests include canonical direct routes, parsed ancillary metadata
+and malformed/unsafe neighbors, plus the sentinel's fixed subnet/address bounds.
+A separate owned Linux control removed its
+default route and captured an empty default list plus a direct lookup with the
+expected destination/source. That synthetic Ubuntu/iproute control and the
+primary-source mismatch do not expose the historical guest's route contents or
+prove fresh Debian/QEMU containment. Signed four-case qualification, including
+the genuine 900-second scenario, is still required.
+
+[maintain-restricted-dhcp]: https://github.com/qemu/libslirp/blob/3ad1710a96678fe79066b1469cead4058713a1d9/src/bootp.c#L273-L288
+
 Repeated CI attempts can retain server artifacts with the same commit-based
 name. Discovery selects the unique newest matching creation instant, refusing
 malformed matching timestamps or a tied newest instant. That timestamp only

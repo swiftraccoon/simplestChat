@@ -56,6 +56,167 @@ fn strict_daemon_json_and_raw_zero_identifiers_refuse_ambiguous_or_partial_input
     assert!(policy::ids(format!("{}\n{}\n", id('a'), id('a')).as_bytes()).is_err());
 }
 
+fn control_route() -> Value {
+    // Synthetic FIB JSON, not an observed guest route or packet/containment proof.
+    json!([{"dst":"10.0.2.2","dev":"ens3","prefsrc":"10.0.2.15",
+        "flags":[],"uid":0,"cache":[]}])
+}
+
+#[test]
+fn guard_probe_is_on_link_but_outside_control_and_fixture_assignments() {
+    let sentinel = policy::GUARD_PROBE_ADDRESS;
+    let network = u32::from(std::net::Ipv4Addr::new(10, 0, 2, 0));
+    assert_eq!(u32::from(sentinel) & 0xffff_ff00, network);
+    // Reviewed libslirp 4.7.0 leases sixteen addresses starting at 10.0.2.15.
+    for last in [0, 2, 3, 255].into_iter().chain(15..=30) {
+        assert_ne!(sentinel, std::net::Ipv4Addr::new(10, 0, 2, last));
+    }
+    let (row, network) = endpoint_rows();
+    let fixture = endpoint(&row, &network).unwrap();
+    let mask = u32::MAX
+        .checked_shl(u32::from(32 - fixture.prefix))
+        .unwrap();
+    assert_ne!(
+        u32::from(sentinel) & mask,
+        u32::from(fixture.address) & mask
+    );
+}
+
+#[test]
+fn control_peer_route_admits_direct_lookup_without_a_default_gateway() {
+    for device in ["ens3", "eth_0-1", "enp0123456789ab"] {
+        for explicit_type in [false, true] {
+            let mut route = control_route();
+            route[0]["dev"] = device.into();
+            route[0]["ancillary"] = json!({"opaque":[1,"retained"]});
+            if explicit_type {
+                route[0]["type"] = "unicast".into();
+            }
+            let selected =
+                policy::control_interface(&serde_json::to_vec(&route).unwrap(), "sc0123456789ab")
+                    .unwrap();
+            assert_eq!(selected.as_str(), device);
+        }
+    }
+}
+
+#[test]
+fn control_peer_route_refuses_foreign_destinations_sources_and_non_unicast_types() {
+    for (field, value) in [
+        ("dst", json!("10.0.2.3")),
+        ("dst", json!("10.0.2.2/32")),
+        ("dst", json!("010.0.2.2")),
+        ("dst", Value::Null),
+        ("dst", json!(true)),
+        ("prefsrc", json!("10.0.2.2")),
+        ("prefsrc", json!("10.0.2.16")),
+        ("prefsrc", json!("010.0.2.15")),
+        ("prefsrc", Value::Null),
+        ("prefsrc", json!([])),
+        ("type", json!("local")),
+        ("type", json!("blackhole")),
+        ("type", json!("unreachable")),
+        ("type", json!("UNICAST")),
+        ("type", Value::Null),
+        ("type", json!(false)),
+    ] {
+        let mut invalid = control_route();
+        invalid[0][field] = value;
+        assert!(
+            policy::control_interface(&serde_json::to_vec(&invalid).unwrap(), "sc0123456789ab",)
+                .is_err(),
+            "{field}"
+        );
+    }
+}
+
+#[test]
+fn control_peer_route_rejects_every_routed_or_multipath_field_even_when_null() {
+    for field in ["gateway", "via", "multipath", "nexthops", "nhid"] {
+        for value in [
+            Value::Null,
+            json!("10.0.2.2"),
+            json!([]),
+            json!({}),
+            json!(0),
+            json!(false),
+        ] {
+            let mut invalid = control_route();
+            invalid[0][field] = value;
+            assert!(
+                policy::control_interface(
+                    &serde_json::to_vec(&invalid).unwrap(),
+                    "sc0123456789ab",
+                )
+                .is_err(),
+                "{field}"
+            );
+        }
+    }
+}
+
+#[test]
+fn control_peer_route_requires_safe_distinct_device_and_all_identity_fields() {
+    for device in [
+        json!(""),
+        json!("lo"),
+        json!("sc0123456789ab"),
+        json!("abcdefghijklmnop"),
+        json!("eth0.1"),
+        json!("eth0/SECRET"),
+        json!("eth0\nSECRET"),
+        json!("eth0\u{0}SECRET"),
+        json!("eth0 "),
+        json!("éth0"),
+        Value::Null,
+        json!(false),
+        json!(1),
+        json!([]),
+        json!({}),
+    ] {
+        let mut invalid = control_route();
+        invalid[0]["dev"] = device;
+        assert!(
+            policy::control_interface(&serde_json::to_vec(&invalid).unwrap(), "sc0123456789ab",)
+                .is_err()
+        );
+    }
+    for field in ["dst", "prefsrc", "dev"] {
+        let mut missing = control_route();
+        missing[0].as_object_mut().unwrap().remove(field);
+        assert!(
+            policy::control_interface(&serde_json::to_vec(&missing).unwrap(), "sc0123456789ab",)
+                .is_err()
+        );
+    }
+}
+
+#[test]
+fn control_peer_route_rejects_multiple_missing_or_ambiguous_json_rows() {
+    for value in [
+        Value::Null,
+        json!([]),
+        json!([null]),
+        json!([false]),
+        json!({"dst":"10.0.2.2","dev":"ens3","prefsrc":"10.0.2.15"}),
+        json!([control_route()[0].clone(), control_route()[0].clone()]),
+    ] {
+        assert!(
+            policy::control_interface(&serde_json::to_vec(&value).unwrap(), "sc0123456789ab",)
+                .is_err()
+        );
+    }
+    for bytes in [
+        br#"[{"dst":"10.0.2.2","dev":"ens3","dev":"ens3","prefsrc":"10.0.2.15"}]"#.as_slice(),
+        br#"[{"dst":"10.0.2.2","dev":"ens3","prefsrc":"10.0.2.15","prefsrc":"10.0.2.15"}]"#,
+        br#"[{"dst":"10.0.2.2","dev":"ens3","prefsrc":"10.0.2.15"}]{}"#,
+        br#"[{"dst":"10.0.2.2","dev":"ens3","prefsrc":"10.0.2.15","uid":NaN}]"#,
+        br#"[{"dst":"10.0.2.2","dev":"ens3","prefsrc":"10.0.2.15"}"#,
+    ] {
+        assert!(policy::control_interface(bytes, "sc0123456789ab").is_err());
+    }
+}
+
 #[test]
 fn bridge_requires_one_fixed_ordinary_profile_without_masquerading() {
     let (_, network) = endpoint_rows();

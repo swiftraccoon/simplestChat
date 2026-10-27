@@ -35,7 +35,7 @@ admits only these literals, keeps the same fourteen-key guest receipt, and still
 requires `complete` for success. This affected `C-VALIDATE`, `C-GOOD-ERR` and
 `C-SERDE` review adds no raw path, filename, configuration, child output or errno.
 It does not identify a failed branch within one group, alter an operation or
-weaken finalization. The current signed four-case failure at the older broad
+weaken finalization. The historical signed four-case failure at the older broad
 `render` checkpoint remains unexplained by these source diagnostics.
 
 Network setup enters `network-collector` before its first operation, followed by
@@ -55,6 +55,37 @@ completion and all cleanup obligations remain unchanged. The paired decoder
 admits only those fixed values and still rejects any nonnull failure on success.
 These affected `C-VALIDATE`, `C-GOOD-ERR` and `C-SERDE` decisions expose no raw
 arguments, paths, event rows, child output or error messages.
+
+The restricted guest selects its physical control interface from a passive
+`ip -json -4 route get 10.0.2.2` lookup under the existing 30-second command cap.
+Pinned [libslirp DHCP code][restricted-dhcp] intentionally omits router and DNS
+options in restricted mode. The old requirement for exactly one default route
+therefore contradicts the prepared guest's network profile. QEMU's
+[fixed user-network defaults][control-network-defaults] retain the on-link peer
+`10.0.2.2` and guest DHCP address `10.0.2.15`; SSH can use that link without a
+default router. The new lookup neither sends a packet probe nor installs a route.
+
+The private `ControlInterface` constructor admits exactly one strict JSON object
+with those canonical destination/source strings, a safe non-loopback device
+distinct from the fixture bridge, and no gateway, via, multipath, nexthops or
+nexthop-ID field, including null. Any explicit type must be `unicast`. Parsed
+ancillary metadata is not given an invented exact-key schema. Only the admitted
+name reaches the unchanged firewall and capture code; there is no arbitrary-route
+fallback, default-route restoration or DNS change. `C-NEWTYPE`, `C-STRUCT-PRIVATE`,
+`C-GETTER` and `C-VALIDATE` apply to this private validated value. It is a passive
+name snapshot, not a retained device handle or proof against later privileged
+network changes. All existing containment observations remain required.
+
+The existing single UDP guard probe uses the fixed unused on-link sentinel
+`10.0.2.254:53`. An off-link target without a default route can fail before the
+firewall and cannot establish a fresh drop-counter increment. The sentinel is
+outside the control/DNS addresses and the fixed DHCP pool. Payload, one-attempt
+count, exact completed-send/EPERM handling, checked socket close, fresh counter
+comparison and zero-record capture remain required. A route-unreachable error
+does not become containment evidence; no route is installed to make it pass.
+
+[restricted-dhcp]: https://github.com/qemu/libslirp/blob/3ad1710a96678fe79066b1469cead4058713a1d9/src/bootp.c#L273-L288
+[control-network-defaults]: https://github.com/qemu/qemu/blob/11aa0b1ff115b86160c4d37e7c37e6a6b13b77ea/net/slirp.c#L433-L437
 
 The safe OpenSSL adapter owns its contexts and TLS stream through the Rust
 binding; certificate/key borrows remain within their owning objects. It adds no
