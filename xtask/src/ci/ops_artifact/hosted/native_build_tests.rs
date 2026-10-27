@@ -1,5 +1,7 @@
 //! Inert build inputs and actual mature-format parsing; no target program runs.
-use super::{files::Tree, fixture, native_build as native, plan, tools::Tools};
+use super::{
+    archive::Graph, files::Tree, fixture, kit, native_build as native, plan, tools::Tools,
+};
 use crate::{
     ci::{
         command::{Command, SeparateLogs},
@@ -15,7 +17,7 @@ use std::{
     ffi::OsStr,
     fs,
     io::Write,
-    os::unix::fs::{PermissionsExt, symlink},
+    os::unix::fs::{MetadataExt, PermissionsExt, symlink},
     path::Path,
     sync::Arc,
     time::Duration,
@@ -68,6 +70,23 @@ fn fixed_build_commands_keep_out_of_tree_sources_two_jobs_and_cleared_native_env
     );
     assert_eq!(steps[0].directory, work.join("build-musl"));
     assert_eq!(steps[3].directory, work.join("build-openssl"));
+    let expected_include = format!("-I{}", root.join(kit::LINUX_INCLUDE).display());
+    assert_eq!(
+        steps[3]
+            .args
+            .iter()
+            .filter(|arg| arg.as_encoded_bytes().starts_with(b"-I"))
+            .collect::<Vec<_>>(),
+        [&std::ffi::OsString::from(expected_include)]
+    );
+    assert_eq!(
+        steps
+            .iter()
+            .map(|step| step.maximum.as_secs())
+            .collect::<Vec<_>>(),
+        [60, 240, 45, 60, 300, 60]
+    );
+    assert!(!steps[3].args.iter().any(|arg| arg == "no-secure-memory"));
     for step in &steps {
         assert!(
             !step
@@ -108,6 +127,145 @@ fn fixed_build_commands_keep_out_of_tree_sources_two_jobs_and_cleared_native_env
         assert!(!env.contains_key(OsStr::new("LD_PRELOAD")));
         assert!(!env.contains_key(OsStr::new("PERL5OPT")));
         assert!(!env.contains_key(OsStr::new("CFLAGS")));
+    }
+}
+
+#[test]
+fn linux_uapi_projection_is_complete_nofollow_and_excludes_gnu_libc_headers() {
+    for case in [
+        "ok",
+        "linux",
+        "asm-generic",
+        "asm",
+        "missing-mman",
+        "empty-mman",
+        "symlink-mman",
+    ] {
+        let fixture = fixture::Fixture::new();
+        let budget = Budget::default();
+        let mut tree = Tree::create(&fixture.root.join("kit"), &budget).unwrap();
+        for name in [
+            "host-tools/sysroot/usr/bin/x86_64-linux-gnu-gcc-13",
+            "toolchain/bin/cargo",
+            "toolchain/bin/rustc",
+            "toolchain/lib/rustlib/x86_64-unknown-linux-gnu/bin/rust-lld",
+        ] {
+            tree.write(name, b"inert executable admission role\n", true)
+                .unwrap();
+        }
+        tree.directory("toolchain/lib/rustlib/x86_64-unknown-linux-musl/lib")
+            .unwrap();
+        for name in ["as", "ld", "ar", "nm", "ranlib", "strip"] {
+            tree.write(
+                &format!("host-tools/sysroot/usr/bin/x86_64-linux-gnu-{name}"),
+                b"inert binutils admission role\n",
+                true,
+            )
+            .unwrap();
+        }
+        for name in ["dash", "mawk"] {
+            tree.write(
+                &format!("host-tools/sysroot/usr/bin/{name}"),
+                b"inert shell/awk admission role\n",
+                true,
+            )
+            .unwrap();
+        }
+        for (source, subtree, bytes) in [
+            ("linux/mman.h", "linux", b"inert kernel mman\n".as_slice()),
+            (
+                "linux/nested/feature.h",
+                "linux",
+                b"inert nested kernel header\n".as_slice(),
+            ),
+            (
+                "asm-generic/mman-common.h",
+                "asm-generic",
+                b"inert generic header\n".as_slice(),
+            ),
+            (
+                "x86_64-linux-gnu/asm/mman.h",
+                "asm",
+                b"inert architecture header\n".as_slice(),
+            ),
+        ] {
+            if case == subtree || (case == "missing-mman" && source == "linux/mman.h") {
+                continue;
+            }
+            tree.write(
+                &format!("host-tools/sysroot/usr/include/{source}"),
+                if case == "empty-mman" && source == "linux/mman.h" {
+                    b""
+                } else {
+                    bytes
+                },
+                false,
+            )
+            .unwrap();
+        }
+        for name in [
+            "stdio.h",
+            "features.h",
+            "sys/mman.h",
+            "bits/libc-header-start.h",
+            "x86_64-linux-gnu/bits/wordsize.h",
+            "linux-other/unrelated.h",
+        ] {
+            tree.write(
+                &format!("host-tools/sysroot/usr/include/{name}"),
+                b"must stay outside the UAPI projection\n",
+                false,
+            )
+            .unwrap();
+        }
+        if case == "symlink-mman" {
+            let source = tree
+                .run
+                .path
+                .join("host-tools/sysroot/usr/include/linux/mman.h");
+            fs::remove_file(&source).unwrap();
+            symlink("../stdio.h", &source).unwrap();
+        }
+        let result = kit::complete(&mut tree, &mut Graph::default(), &mut || Ok(()));
+        if case == "ok" {
+            result.unwrap();
+            let projected = tree
+                .records
+                .keys()
+                .filter(|name| name.starts_with(&format!("{}/", kit::LINUX_INCLUDE)))
+                .map(|name| name.strip_prefix(kit::LINUX_INCLUDE).unwrap())
+                .collect::<Vec<_>>();
+            assert_eq!(
+                projected,
+                [
+                    "/asm-generic/mman-common.h",
+                    "/asm/mman.h",
+                    "/linux/mman.h",
+                    "/linux/nested/feature.h",
+                ]
+            );
+            for (source, destination) in [
+                ("linux/mman.h", "linux/mman.h"),
+                ("asm-generic/mman-common.h", "asm-generic/mman-common.h"),
+                ("x86_64-linux-gnu/asm/mman.h", "asm/mman.h"),
+            ] {
+                let original = &tree.records[&format!("host-tools/sysroot/usr/include/{source}")];
+                let projected = &tree.records[&format!("{}/{destination}", kit::LINUX_INCLUDE)];
+                assert_eq!(projected.sha256, original.sha256);
+                assert_eq!(projected.bytes, original.bytes);
+                assert_ne!(projected.stamp.ino(), original.stamp.ino());
+                assert_eq!(projected.stamp.mode() & 0o7777, 0o600);
+            }
+        } else {
+            fixture::expect_error(result, 1);
+        }
+        if case == "symlink-mman" {
+            fixture::expect_error(tree.finish(), 1);
+        } else {
+            tree.finish().unwrap();
+        }
+        assert_eq!(budget.count(), 0);
+        assert_eq!(budget.close_counts().1, 0);
     }
 }
 

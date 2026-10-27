@@ -133,6 +133,20 @@ fn tiny_deb_tar() -> Vec<u8> {
             format!("inert {name} role").into_bytes(),
         )
     }));
+    files.extend([
+        (
+            "usr/include/linux/mman.h".into(),
+            b"inert Linux UAPI mman header\n".to_vec(),
+        ),
+        (
+            "usr/include/asm-generic/mman-common.h".into(),
+            b"inert generic UAPI header\n".to_vec(),
+        ),
+        (
+            "usr/include/x86_64-linux-gnu/asm/mman.h".into(),
+            b"inert x86-64 UAPI header\n".to_vec(),
+        ),
+    ]);
     archive_tests::tar_files(&files)
 }
 fn tiny_native(artifact: &super::super::catalog::Artifact) -> Vec<u8> {

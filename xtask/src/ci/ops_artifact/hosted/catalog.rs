@@ -24,13 +24,14 @@ pub(super) enum Format {
 }
 
 pub(super) const MUSL_COMMIT: &str = "7813e9119eb5fe681b6750b8a033a0490bca0941";
-const ROOTS: [&str; 11] = [
+const ROOTS: [&str; 12] = [
     "gcc-13-x86-64-linux-gnu",
     "binutils-x86-64-linux-gnu",
     "libc6-dev",
     "make",
     "perl",
     "coreutils",
+    "diffutils",
     "sed",
     "grep",
     "mawk",

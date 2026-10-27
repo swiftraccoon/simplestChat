@@ -639,6 +639,7 @@ async fn produce_with<E: Executor, S: Stages>(
             .unwrap()
             .admit_native(&run.path.join("kit"))?;
         probes(&mut owners, progress, executor, end, &mut next).await?;
+        progress.kit(Checkpoint::NativeBuild, Edge::Begin, 1, 1);
         let native_observation = native_build::build(
             native_build::NativeBuild {
                 catalog: &catalog,
@@ -653,6 +654,7 @@ async fn produce_with<E: Executor, S: Stages>(
             &mut next,
         )
         .await?;
+        progress.kit(Checkpoint::NativeBuild, Edge::Complete, 1, 1);
         progress.kit(Checkpoint::RegistryCopy, Edge::Begin, 1, 1);
         materials::copy_bounded(
             &run.path.join("registry/registry"),

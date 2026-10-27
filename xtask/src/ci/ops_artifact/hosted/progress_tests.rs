@@ -94,3 +94,79 @@ fn failed_writes_spend_the_same_lifetime_ceiling_and_keep_one_reserved_terminal_
     assert!(terminal.contains("event=finished status=143 refusedPhase=kit"));
     assert!(!terminal.contains("PRIVATE"));
 }
+
+#[test]
+fn full_accepted_archive_rosters_leave_all_later_probes_build_and_terminal_observable() {
+    for total in [69, 70, 96] {
+        let clock = Arc::new(super::super::fixture::Clock::new());
+        let plan = Plan::new(clock.clone());
+        let original_end = plan.end();
+        clock.advance(super::super::plan::ENTRY - Duration::from_secs(1));
+        plan.check().unwrap();
+        let mut bytes = Vec::new();
+        let mut progress = Progress::new(&plan, &mut bytes);
+        for phase in [Phase::Source, Phase::Download, Phase::Registry] {
+            progress.enter(phase);
+            progress.complete();
+        }
+        progress.enter(Phase::Kit);
+        for ordinal in 1..=total {
+            progress.kit(Checkpoint::Import, Edge::Begin, ordinal, total);
+            progress.kit(Checkpoint::Import, Edge::Complete, ordinal, total);
+        }
+        for edge in [Edge::Begin, Edge::Complete] {
+            progress.kit(Checkpoint::Resolve, edge, 1, 1);
+        }
+        for ordinal in 1..=14 {
+            progress.kit(Checkpoint::Probe, Edge::Begin, ordinal, 14);
+            progress.kit(Checkpoint::Probe, Edge::Complete, ordinal, 14);
+        }
+        for checkpoint in [
+            Checkpoint::NativeBuild,
+            Checkpoint::RegistryCopy,
+            Checkpoint::Measure,
+        ] {
+            progress.kit(checkpoint, Edge::Begin, 1, 1);
+            progress.kit(checkpoint, Edge::Complete, 1, 1);
+        }
+        progress.complete();
+        for phase in [Phase::Producer, Phase::Assembly] {
+            progress.enter(phase);
+            progress.complete();
+        }
+        progress.finish(&Ok(()));
+        assert!(progress.finished());
+        assert_eq!(plan.end(), original_end);
+        assert!(bytes.len() <= MAX_BYTES);
+        let text = std::str::from_utf8(&bytes).unwrap();
+        let imports = text
+            .lines()
+            .filter(|line| line.contains("checkpoint=import "))
+            .collect::<Vec<_>>();
+        assert_eq!(imports.len(), if total <= 70 { 20 } else { 26 });
+        for ordinal in [1, 8, 64, total] {
+            for edge in ["begin", "complete"] {
+                assert!(text.contains(&format!(
+                    "checkpoint=import event={edge} ordinal={ordinal} total={total} "
+                )));
+            }
+        }
+        assert!(!text.contains("checkpoint=import event=begin ordinal=2 "));
+        for ordinal in 1..=14 {
+            for edge in ["begin", "complete"] {
+                assert!(text.contains(&format!(
+                    "checkpoint=probe event={edge} ordinal={ordinal} total=14 "
+                )));
+            }
+        }
+        for checkpoint in ["resolve", "native-build", "registry-copy", "measure"] {
+            for edge in ["begin", "complete"] {
+                assert!(text.contains(&format!(
+                    "checkpoint={checkpoint} event={edge} ordinal=1 total=1 "
+                )));
+            }
+        }
+        assert!(text.contains("event=finished status=0 refusedPhase=none "));
+        assert_eq!(text.matches("event=finished ").count(), 1);
+    }
+}
