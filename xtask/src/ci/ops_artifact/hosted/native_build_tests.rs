@@ -145,7 +145,7 @@ fn fixed_build_commands_keep_out_of_tree_sources_two_jobs_and_cleared_native_env
 }
 
 #[test]
-fn linux_uapi_projection_is_complete_nofollow_and_excludes_gnu_libc_headers() {
+fn fixed_uapi_and_rust_unwind_projections_preserve_only_the_selected_originals() {
     for case in [
         "ok",
         "linux",
@@ -154,6 +154,16 @@ fn linux_uapi_projection_is_complete_nofollow_and_excludes_gnu_libc_headers() {
         "missing-mman",
         "empty-mman",
         "symlink-mman",
+        "missing-unwind",
+        "empty-unwind",
+        "invalid-unwind",
+        "wrong-target-unwind",
+        "thin-unwind",
+        "changed-unwind",
+        "symlink-unwind",
+        "hardlink-unwind",
+        "collision-unwind",
+        "late-unwind",
     ] {
         let fixture = fixture::Fixture::new();
         let budget = Budget::default();
@@ -167,8 +177,49 @@ fn linux_uapi_projection_is_complete_nofollow_and_excludes_gnu_libc_headers() {
             tree.write(name, b"inert executable admission role\n", true)
                 .unwrap();
         }
-        tree.directory("toolchain/lib/rustlib/x86_64-unknown-linux-musl/lib")
+        tree.directory(kit::TARGET_LIB).unwrap();
+        let unwind_source = format!("{}/self-contained/libunwind.a", kit::TARGET_LIB);
+        let unwind_destination = format!("{}/libunwind.a", kit::TARGET_LIB);
+        let mut object = elf();
+        if case == "wrong-target-unwind" {
+            object[18..20].copy_from_slice(&183_u16.to_le_bytes());
+        }
+        let unwind = match case {
+            "empty-unwind" => Vec::new(),
+            "invalid-unwind" => b"not a target archive".to_vec(),
+            "thin-unwind" => b"!<thin>\n".to_vec(),
+            _ => archive(&object),
+        };
+        if case != "missing-unwind" {
+            tree.write(&unwind_source, &unwind, false).unwrap();
+        }
+        for sibling in ["libc.a", "rcrt1.o"] {
+            tree.write(
+                &format!("{}/self-contained/{sibling}", kit::TARGET_LIB),
+                b"must remain outside the target library search root",
+                false,
+            )
             .unwrap();
+        }
+        let source_path = tree.run.path.join(&unwind_source);
+        match case {
+            "changed-unwind" => fs::write(&source_path, b"changed original archive").unwrap(),
+            "symlink-unwind" => {
+                fs::remove_file(&source_path).unwrap();
+                symlink("libc.a", &source_path).unwrap();
+            }
+            "hardlink-unwind" => fs::hard_link(
+                &source_path,
+                tree.run
+                    .path
+                    .join(format!("{}/self-contained/alias.a", kit::TARGET_LIB)),
+            )
+            .unwrap(),
+            "collision-unwind" => tree
+                .write(&unwind_destination, b"different existing archive", false)
+                .unwrap(),
+            _ => {}
+        }
         for name in ["as", "ld", "ar", "nm", "ranlib", "strip"] {
             tree.write(
                 &format!("host-tools/sysroot/usr/bin/x86_64-linux-gnu-{name}"),
@@ -240,9 +291,41 @@ fn linux_uapi_projection_is_complete_nofollow_and_excludes_gnu_libc_headers() {
             fs::remove_file(&source).unwrap();
             symlink("../stdio.h", &source).unwrap();
         }
-        let result = kit::complete(&mut tree, &mut Graph::default(), &mut || Ok(()));
+        let result = kit::complete(&mut tree, &mut Graph::default(), &mut || {
+            if case == "late-unwind" {
+                Err(super::failure(143))
+            } else {
+                Ok(())
+            }
+        });
         if case == "ok" {
             result.unwrap();
+            let original = &tree.records[&unwind_source];
+            let projected = &tree.records[&unwind_destination];
+            assert_eq!(projected.sha256, original.sha256);
+            assert_eq!(projected.bytes, original.bytes);
+            assert_ne!(projected.stamp.ino(), original.stamp.ino());
+            assert_eq!(projected.stamp.mode() & 0o7777, 0o600);
+            assert_eq!(
+                native::archive(
+                    &tree
+                        .read(&unwind_destination, 65536, &mut || Ok(()))
+                        .unwrap(),
+                    false
+                )
+                .unwrap(),
+                1
+            );
+            assert!(
+                !tree
+                    .records
+                    .contains_key(&format!("{}/libc.a", kit::TARGET_LIB))
+            );
+            assert!(
+                !tree
+                    .records
+                    .contains_key(&format!("{}/rcrt1.o", kit::TARGET_LIB))
+            );
             let projected = tree
                 .records
                 .keys()
@@ -271,9 +354,16 @@ fn linux_uapi_projection_is_complete_nofollow_and_excludes_gnu_libc_headers() {
                 assert_eq!(projected.stamp.mode() & 0o7777, 0o600);
             }
         } else {
-            fixture::expect_error(result, 1);
+            fixture::expect_error(result, if case == "late-unwind" { 143 } else { 1 });
         }
-        if case == "symlink-mman" {
+        if [
+            "symlink-mman",
+            "changed-unwind",
+            "symlink-unwind",
+            "hardlink-unwind",
+        ]
+        .contains(&case)
+        {
             fixture::expect_error(tree.finish(), 1);
         } else {
             tree.finish().unwrap();

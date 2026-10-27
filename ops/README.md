@@ -673,9 +673,9 @@ and `build --frozen --release -p simplestchat-ops --bin simplestchat-ops --targe
 x86_64-unknown-linux-musl --target-dir` followed by the owned target-directory
 slot. Its clear-then-set environment contains explicit Cargo/home/temp, compiler,
 linker and authenticated host-tools directory slots. No ambient PATH fallback
-is authorized. Target encoded rustflags select static CRT, baseline x86-64 CPU,
-self-contained linking and the `ld.lld` flavor. They replace this workspace's
-global GNU RPATH through Cargo's documented
+is authorized. Target encoded rustflags select static CRT and baseline x86-64
+CPU, disable Rust's bundled CRT selection and use the GCC linker driver. They
+replace this workspace's global GNU RPATH through Cargo's documented
 [flag precedence](https://doc.rust-lang.org/cargo/reference/config.html#buildrustflags).
 Explicit `--target` keeps those target flags away from host proc macros. Rust's
 [linker options](https://doc.rust-lang.org/rustc/codegen-options/index.html#link-self-contained)
@@ -1477,8 +1477,10 @@ GNU `rust-std` 1.99.0 component, whose file-only manifest omits it. The exceptio
 requires that component/root and a zero-byte directory header; it admits no
 children, sibling directories, files or links without their own declarations.
 The measured host compiler kit contains its package sysroot, fixed GCC/binutils
-roles and an execution adapter
-that replaces itself with that GCC. Resolver probes check the compiler's owned
+roles and the pinned Rust target's validated `libunwind.a` projected into the
+already selected target library directory. No sibling bundled libc or CRT
+objects enter that projection. An execution adapter replaces itself with that
+GCC. Resolver probes check the compiler's owned
 program, startup-object and search-directory selections before the build.
 The hosted operating system, `/bin/sh` and dynamic loader remain trusted runtime
 inputs. Offline Cargo configuration is not a compiler filesystem sandbox or

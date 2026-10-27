@@ -9,7 +9,11 @@ use crate::ci::{
     ops_artifact::verify::tools::{Captures, Seal},
 };
 use serde_json::json;
-use std::{fs, io::Write, os::unix::fs::PermissionsExt};
+use std::{
+    fs,
+    io::Write,
+    os::unix::fs::{MetadataExt, PermissionsExt},
+};
 
 const CRATE: &[u8] = b"tiny original crate bytes";
 const DEB: &[u8] = b"tiny original deb bytes";
@@ -46,7 +50,7 @@ fn request(path: &Path, selected: &str) -> Value {
     serde_json::from_slice(&bytes).unwrap()
 }
 fn tiny_rust(artifact: &super::super::catalog::Artifact) -> Vec<u8> {
-    let files = match artifact.component.as_str() {
+    let mut files = match artifact.component.as_str() {
         "rustc" => vec![
             ("bin/rustc".to_owned(), b"inert rustc".to_vec()),
             (
@@ -63,6 +67,12 @@ fn tiny_rust(artifact: &super::super::catalog::Artifact) -> Vec<u8> {
             b"inert std".to_vec(),
         )],
     };
+    if artifact.component == "rust-std-x86_64-unknown-linux-musl" {
+        files.push((
+            "lib/rustlib/x86_64-unknown-linux-musl/lib/self-contained/libunwind.a".into(),
+            native_build_tests::archive(&native_build_tests::elf()),
+        ));
+    }
     let manifest = files
         .iter()
         .map(|(name, _)| format!("file:{name}\n"))
@@ -794,6 +804,22 @@ async fn operation_with_sink(
 async fn whole_private_fixture_reaches_all_five_phases_and_nine_evidence_publication() {
     let (fixture, stages, cli, result, _) = Box::pin(operation(None)).await;
     result.unwrap();
+    let target = fixture
+        .root
+        .join("result/kit")
+        .join(super::super::kit::TARGET_LIB);
+    let original_unwind = target.join("self-contained/libunwind.a");
+    let projected_unwind = target.join("libunwind.a");
+    assert_eq!(
+        fs::read(&projected_unwind).unwrap(),
+        fs::read(&original_unwind).unwrap()
+    );
+    assert_ne!(
+        fs::metadata(&projected_unwind).unwrap().ino(),
+        fs::metadata(&original_unwind).unwrap().ino()
+    );
+    assert!(!target.join("libc.a").exists());
+    assert!(!target.join("rcrt1.o").exists());
     assert_eq!(stages, ["source", "registry", "producer"]);
     assert_eq!(cli.calls.len(), 29);
     assert!(cli.calls[..8].iter().all(|call| call.starts_with("curl:")));
