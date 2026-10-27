@@ -698,6 +698,7 @@ fn retained_catalog_covers_every_native_guest_and_hosted_producer_module() {
     for prefix in [
         "ops/src/release/attestation/maintain_prerequisite",
         "xtask/src/ci/ops_artifact/hosted",
+        "xtask/src/ci/apt_mirror",
     ] {
         let mut pending = vec![root.join(prefix)];
         let mut actual = std::collections::BTreeSet::new();
@@ -732,6 +733,12 @@ fn retained_catalog_covers_every_native_guest_and_hosted_producer_module() {
     for name in [
         "ops/Cargo.toml",
         "xtask/Cargo.toml",
+        "xtask/src/tooling.rs",
+        "xtask/src/ci/mod.rs",
+        "xtask/src/ci/runner.rs",
+        "xtask/src/ci/apt_mirror.rs",
+        "xtask/src/ci/release_controller_files.rs",
+        "xtask/src/ci/release_controller_plan.rs",
         "ops/ops-build-inputs.lock.json",
         "xtask/src/ci/ops_artifact/recipe.rs",
         "xtask/src/ci/ops_artifact/resolution.rs",

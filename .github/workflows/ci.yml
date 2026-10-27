@@ -671,6 +671,13 @@ jobs:
       - name: Migrate disposable test database with the real server
         run: cargo run --locked -q -p xtask -- test-server true
 
+      - name: Prefer official Ubuntu archive mirrors for browser dependencies
+        if: ${{ !env.ACT }}
+        timeout-minutes: 1
+        run: |
+          sudo --preserve-env=GITHUB_ACTIONS,ImageOS,RUNNER_OS,RUNNER_ARCH,RUNNER_ENVIRONMENT,ACT \
+            -- "$GITHUB_WORKSPACE/target/debug/xtask" ci apt-mirror
+
       - name: Build UI and install pinned browser tooling
         id: browser-tooling
         run: |
@@ -1146,6 +1153,13 @@ jobs:
         with:
           path: ${{ runner.temp }}/rollover-playwright
           key: rollover-chromium-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('web/e2e/package-lock.json') }}
+
+      - name: Prefer official Ubuntu archive mirrors for rollover dependencies
+        if: ${{ !env.ACT }}
+        timeout-minutes: 1
+        run: |
+          sudo --preserve-env=GITHUB_ACTIONS,ImageOS,RUNNER_OS,RUNNER_ARCH,RUNNER_ENVIRONMENT,ACT \
+            -- "$GITHUB_WORKSPACE/target/debug/xtask" ci apt-mirror
 
       - name: Install pinned rollover browser tooling
         timeout-minutes: 10

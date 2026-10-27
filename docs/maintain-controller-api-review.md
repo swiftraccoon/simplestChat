@@ -89,6 +89,30 @@ and no VM was booted. It is not a hosted byte saving, speed or boot proof;
 the fresh signed runtime remains required. The workflow's 45-minute ceiling and
 all original controller/guest deadlines remain unchanged.
 
+The workflow compiles the unchanged default GNU controllers before dependency
+preparation, still before credentials. That permits the fixed root-only Rust
+`ci apt-mirror` helper to prepare the existing hosted Ubuntu 24.04 mirror list
+before APT. The helper admits only the source-bound original or preferred
+144-byte profile and changes its three priorities, retaining every URI. It
+checks hosted context, OS, retained root-owned namespaces and original files,
+then publishes through a checked atomic replacement and readback. Repository
+definitions, keys and package requests are read-only; the helper runs no APT or
+network child and gains no guest or production-host authority. ACT skips this
+hosted preparation. New preparation stays within the unchanged job ceiling;
+the original package-install and controller/guest limits remain intact.
+The outer source catalogue includes all five helper Rust files, its dispatcher,
+retained-directory implementation and active shared support files, bringing the
+selected source roster to 213. Guest sources, operational helper pins and the
+closed success shapes stay unchanged.
+
+For this helper, `C-VALIDATE`, `C-CTOR`, `C-STRUCT-PRIVATE` and `C-GOOD-ERR` apply
+through closed context/profile admission, private retained owners and fixed
+errors that omit file contents. `C-DTOR-FAIL` applies through checked closes and
+conservative late failure; `C-DTOR-BLOCK` retains the filesystem-stall limitation.
+Atomic visibility and optimistic metadata fences do not lock out a privileged
+concurrent writer. Policy/owned-filesystem tests are not APT-install, faster
+mirror or fresh signed VM evidence.
+
 Completed Ops 3 and server 4 observations are recorded immediately after the
 corresponding current child succeeds, even if a later retained check refuses.
 The exact four-subject verification-digest object is decoded before custody is
