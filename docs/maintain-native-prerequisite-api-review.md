@@ -183,6 +183,13 @@ original result-phase ceiling, checked before and after those observations.
 Only then can the natural-join fact become true. Later physical group retirement,
 reap, drain and checked closes still run under original N; they cannot promote a
 late join to success or grant another result timeout.
+The receiver drains queued authenticated phase packets before treating an exited
+wrapper as a missing result. Queue emptiness is observed after terminal status;
+an interrupted receive retries under the same caller deadline. Each packet keeps
+its original nonce, credential, rights, ordering and result-phase checks, and a
+valid result ends the drain before peer EOF. Without an admitted final result,
+inner fact fields remain defaults rather than observations of launcher startup
+or inner cleanup. A partial failed report cannot establish those events.
 No production panic/unwind guarantee is made. The inert test fixture explicitly
 restores flags, closes registered originals and finishes its owner on setup failure.
 

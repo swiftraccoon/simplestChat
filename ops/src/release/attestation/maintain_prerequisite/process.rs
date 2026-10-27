@@ -253,8 +253,13 @@ impl<'fd> Channel<'fd> {
             owner.cleanup_before(end)
         }
     }
-    pub fn attempt(&self, owner: &mut Owner, cleanup: bool) -> Result<Option<Packet>> {
-        let original_end = owner.end();
+    pub fn attempt(
+        &self,
+        owner: &mut Owner,
+        end: Instant,
+        cleanup: bool,
+    ) -> Result<Option<Packet>> {
+        let original_end = end.min(owner.end());
         Self::ready(owner, original_end, cleanup)?;
         if net::sockopt::socket_passcred(self.fd).map_err(|_| Cause::Io)? != self.credentials {
             return fail(owner, Cause::Changed);
@@ -263,15 +268,19 @@ impl<'fd> Channel<'fd> {
         let mut space =
             [MaybeUninit::uninit(); rustix::cmsg_space!(ScmRights(4), ScmCredentials(1))];
         let mut ancillary = RecvAncillaryBuffer::new(&mut space);
-        let received = match net::recvmsg(
-            self.fd,
-            &mut [IoSliceMut::new(&mut data)],
-            &mut ancillary,
-            RecvFlags::DONTWAIT | RecvFlags::CMSG_CLOEXEC,
-        ) {
-            Ok(v) => v,
-            Err(rustix::io::Errno::AGAIN | rustix::io::Errno::INTR) => return Ok(None),
-            Err(_) => return fail(owner, Cause::Io),
+        let received = loop {
+            Self::ready(owner, original_end, cleanup)?;
+            match net::recvmsg(
+                self.fd,
+                &mut [IoSliceMut::new(&mut data)],
+                &mut ancillary,
+                RecvFlags::DONTWAIT | RecvFlags::CMSG_CLOEXEC,
+            ) {
+                Ok(value) => break value,
+                Err(rustix::io::Errno::INTR) => continue,
+                Err(rustix::io::Errno::AGAIN) => return Ok(None),
+                Err(_) => return fail(owner, Cause::Io),
+            }
         };
         let mut packet = Packet {
             bytes: Vec::new(),
@@ -329,7 +338,7 @@ impl<'fd> Channel<'fd> {
     pub fn receive(&self, owner: &mut Owner, end: Instant, cleanup: bool) -> Result<Packet> {
         loop {
             Self::ready(owner, end, cleanup)?;
-            if let Some(packet) = self.attempt(owner, cleanup)? {
+            if let Some(packet) = self.attempt(owner, end, cleanup)? {
                 if let Err(first) = Self::ready(owner, end, cleanup) {
                     owner.record(first);
                     let _ = packet.finish(owner);
