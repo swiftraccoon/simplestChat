@@ -50,6 +50,104 @@ async fn retained_data(ctx: &mut Context, path: &Path, maximum: u64) -> Result<(
     Ok((bytes, ctx.originals[index].sha256.clone()))
 }
 
+/// Admit only Compose's replacement-app rename before changing its trace.
+pub(super) fn app_replacement_rename(
+    row: &Value,
+    app_id: &str,
+    inspected_name: &str,
+    run_id: &str,
+    image: &str,
+    services: &BTreeMap<String, String>,
+    traces: &BTreeMap<String, Vec<String>>,
+) -> Result<()> {
+    const NAME: &str = "simplestchat-public-simplestchat-1";
+    require(policy::digest(app_id) && inspected_name == format!("/{NAME}"))?;
+    let apps = services
+        .iter()
+        .filter(|(_, service)| service.as_str() == "simplestchat")
+        .map(|(id, _)| id.as_str())
+        .collect::<Vec<_>>();
+    require(apps.len() == 2 && apps.contains(&app_id))?;
+    let old_id = apps
+        .into_iter()
+        .find(|id| *id != app_id)
+        .ok_or(Error::Refused)?;
+    // Digest admission proves the prefix boundary is ASCII and in range.
+    require(policy::digest(old_id))?;
+    let attributes = &row["Actor"]["Attributes"];
+    policy::object(attributes)?;
+    require(
+        row["Type"] == "container"
+            && row["Action"] == "rename"
+            && row["Actor"]["ID"] == app_id
+            && attributes[LABEL] == run_id
+            && attributes["com.docker.compose.project"] == PROJECT
+            && attributes["com.docker.compose.service"] == "simplestchat"
+            && attributes["com.docker.compose.container-number"] == "1"
+            && attributes["com.docker.compose.replace"] == "simplestchat-1"
+            && attributes["image"] == image
+            && attributes["name"] == NAME
+            && attributes["oldName"] == format!("/{}_{NAME}", &old_id[..12])
+            && traces.get(app_id).is_some_and(|v| v == &["create"])
+            && traces
+                .get(old_id)
+                .is_some_and(|v| v == &["create", "start", "die", "destroy"]),
+    )
+}
+
+/// Require the complete fixed actor histories, including app replacement.
+pub(super) fn expected_daemon_traces(
+    validation: &str,
+    app: &str,
+    proxy: &str,
+    services: &BTreeMap<String, String>,
+    traces: &BTreeMap<String, Vec<String>>,
+) -> Result<()> {
+    require(
+        traces
+            .get(validation)
+            .is_some_and(|v| v == &["create", "start", "die", "destroy"]),
+    )?;
+    let migration = services
+        .iter()
+        .filter(|(_, s)| s.as_str() == "migrate")
+        .map(|(id, _)| id.as_str())
+        .collect::<Vec<_>>();
+    let apps = services
+        .iter()
+        .filter(|(_, s)| s.as_str() == "simplestchat")
+        .map(|(id, _)| id.as_str())
+        .collect::<Vec<_>>();
+    let proxies = services
+        .iter()
+        .filter(|(_, s)| s.as_str() == "caddy")
+        .map(|(id, _)| id.as_str())
+        .collect::<Vec<_>>();
+    require(
+        migration.len() == 1
+            && traces
+                .get(migration[0])
+                .is_some_and(|v| v == &["create", "start", "die", "destroy"]),
+    )?;
+    require(
+        apps.len() == 2
+            && apps.contains(&app)
+            && traces
+                .get(app)
+                .is_some_and(|v| v == &["create", "rename", "start"]),
+    )?;
+    for id in apps {
+        if id != app {
+            require(
+                traces
+                    .get(id)
+                    .is_some_and(|v| v == &["create", "start", "die", "destroy"]),
+            )?;
+        }
+    }
+    require(proxies == [proxy] && traces.get(proxy).is_some_and(|v| v == &["create", "start"]))
+}
+
 impl Fixture {
     async fn attempt(&mut self, ctx: &mut Context) -> Result<Option<PathBuf>> {
         ctx.control.check()?;
@@ -191,9 +289,12 @@ impl Fixture {
     async fn daemon_observe(&mut self, ctx: &mut Context, attempt: Option<&Path>) -> Result<()> {
         ctx.control.checkpoint = "daemon-observe";
         let positive = ctx.request.scenario == "positive";
+        let mut app_name = None;
         if positive {
             let image = self.image.clone();
-            self.app = Some(self.service(ctx, "simplestchat", &image).await?.0);
+            let (id, row) = self.service(ctx, "simplestchat", &image).await?;
+            self.app = Some(id);
+            app_name = Some(policy::string(&row["Name"])?.to_owned());
             let image = self.caddy_image.clone();
             self.proxy = Some(self.service(ctx, "caddy", &image).await?.0);
         }
@@ -275,6 +376,22 @@ impl Fixture {
                         )?;
                         validation = Some(id.to_owned());
                     }
+                    if action == "rename" {
+                        app_replacement_rename(
+                            row,
+                            self.app.as_deref().ok_or(Error::Refused)?,
+                            app_name.as_deref().ok_or(Error::Refused)?,
+                            &ctx.request.run_id,
+                            &self.image,
+                            &services,
+                            &traces,
+                        )?;
+                        traces
+                            .get_mut(id)
+                            .ok_or(Error::Refused)?
+                            .push(action.into());
+                        continue;
+                    }
                     let phases = traces.entry(id.into()).or_default();
                     require(
                         ["create", "start", "kill", "die", "stop", "destroy"].contains(&action),
@@ -316,51 +433,12 @@ impl Fixture {
         }
         policy::pg_exec_history(&pg_rows, &self.expected_pg_commands(ctx)?, &self.pg_health)?;
         if positive {
-            let validation = validation.ok_or(Error::Refused)?;
-            require(
-                traces
-                    .get(&validation)
-                    .is_some_and(|v| v == &["create", "start", "die", "destroy"]),
-            )?;
-            let migration = services
-                .iter()
-                .filter(|(_, s)| s.as_str() == "migrate")
-                .map(|(id, _)| id)
-                .collect::<Vec<_>>();
-            let apps = services
-                .iter()
-                .filter(|(_, s)| s.as_str() == "simplestchat")
-                .map(|(id, _)| id)
-                .collect::<Vec<_>>();
-            let proxies = services
-                .iter()
-                .filter(|(_, s)| s.as_str() == "caddy")
-                .map(|(id, _)| id)
-                .collect::<Vec<_>>();
-            require(
-                migration.len() == 1
-                    && traces
-                        .get(migration[0])
-                        .is_some_and(|v| v == &["create", "start", "die", "destroy"]),
-            )?;
-            let app = self.app.as_ref().ok_or(Error::Refused)?;
-            require(
-                apps.len() == 2
-                    && apps.contains(&app)
-                    && traces.get(app).is_some_and(|v| v == &["create", "start"]),
-            )?;
-            for id in apps {
-                if id != app {
-                    require(
-                        traces
-                            .get(id)
-                            .is_some_and(|v| v == &["create", "start", "die", "destroy"]),
-                    )?;
-                }
-            }
-            let proxy = self.proxy.as_ref().ok_or(Error::Refused)?;
-            require(
-                proxies == [proxy] && traces.get(proxy).is_some_and(|v| v == &["create", "start"]),
+            expected_daemon_traces(
+                validation.as_deref().ok_or(Error::Refused)?,
+                self.app.as_deref().ok_or(Error::Refused)?,
+                self.proxy.as_deref().ok_or(Error::Refused)?,
+                &services,
+                &traces,
             )?;
         }
         ctx.observed.set("observedExpectedDaemonJoins", true)?;
@@ -815,6 +893,9 @@ impl Fixture {
             self.unknown_effect || self.create_uncertain,
         )?;
         first.map_or(Ok(()), Err)
+    }
+    pub fn capture_failure(&self) -> Option<(Error, &'static str)> {
+        self.monitors.lock().ok()?.watch.as_ref()?.failure()
     }
     pub async fn finish_local(&mut self, ctx: &mut Context) -> Result<()> {
         if self.local_finished {

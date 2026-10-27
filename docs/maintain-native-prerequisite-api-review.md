@@ -227,6 +227,49 @@ nested cgroup boundary. That trial supplies no HTTP, installed-firewall or
 hosted-failure-cause proof. Policy regression checks and source analysis leave
 the fresh signed four-scenario runtime required.
 
+## Expected application replacement rename
+
+The fixed launcher briefly enables registration for seeding, then recreates the
+application with the installed policy. Pinned
+[Compose 5.6.0](https://github.com/docker/compose/blob/42f48072bbf92ee9b0e43f9fdf2008d03546e7ca/pkg/compose/reconcile.go)
+creates that replacement under a temporary name, retires the previous app and
+renames the replacement before starting it. The observer joins this one rename
+to the freshly inspected current app, exact project/service/run/image labels,
+the sole retired old app, its CID prefix and the inspected canonical name.
+The final current-app trace must be `create, rename, start`; missing, duplicate,
+late, foreign, incorrectly named or other-service renames refuse. Existing
+kill/stop rules and every other actor, PostgreSQL and inventory check remain.
+Event data grants no command, signal or cleanup authority.
+
+An owned Docker 29.8.2 create/rename experiment records the actual event shape
+without starting its container, consistent with the pinned
+[daemon rename implementation](https://github.com/moby/moby/blob/8af9fe3a36bab3e039862a2ab1cef1880c9b4d03/daemon/rename.go).
+Its image is an inert pinned Caddy surrogate and the old CID context is synthetic;
+it does not execute Compose, establish the hosted failure's exact inner branch or
+prove the full app replacement. The frozen Python observer remains unchanged.
+The current failed positive receipt records successful native execution followed
+by an independent daemon-observation refusal. It stays negative evidence; a fresh
+complete signed runtime remains required after the observer correction.
+
+Capture retirement failures have a closed diagnostic checkpoint vocabulary. If
+the watcher supplies the first local failure, the receipt identifies its live,
+bound, EOF, stop, wait, status, short-capture or close check. A nonempty capture
+may additionally receive a fixed first-header class: ARP, IPv4, IPv6, direct
+ICMPv6 router advertisement, other or unknown. The small checked classic-PCAP
+header classifier is diagnostic only: it establishes no origin, direction,
+checksum or complete-packet validity and never admits captured traffic. No raw
+bytes, addresses, names, timestamps or packet payload are exported.
+
+Earlier body or cleanup errors retain their original checkpoint. The matching
+Rust outer decoder admits only the new literal failure labels; passing receipts
+still require `complete`. This changes no wire fields or verdict requirements.
+The empty-capture rule remains raw status zero, exactly 24 stdout bytes and at
+most 8,192 stderr bytes; the 1 MiB capture limit, 4,096-packet ceiling, 128-byte
+snapshot, waits, retirement grace, firewall and original deadlines are unchanged.
+The earlier 900-second receipt remains negative: its capture failure was not
+exported precisely enough to identify the cause. New diagnostics do not turn it
+into evidence of packet contents or successful containment observation.
+
 ## Validation state
 
 The earlier fixed run/init body passed GNU/musl compilation and Clippy, nine

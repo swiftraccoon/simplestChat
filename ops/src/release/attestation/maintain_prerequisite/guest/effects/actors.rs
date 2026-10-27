@@ -178,10 +178,155 @@ impl Collector {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum PacketClass {
+    Arp,
+    Ipv4,
+    Ipv6,
+    Icmpv6RouterAdvertisement,
+    Other,
+    Unknown,
+}
+
+fn pcap_u16(bytes: &[u8], offset: usize, little: bool) -> Option<u16> {
+    let word = bytes.get(offset..offset.checked_add(2)?)?.try_into().ok()?;
+    Some(if little {
+        u16::from_le_bytes(word)
+    } else {
+        u16::from_be_bytes(word)
+    })
+}
+fn pcap_u32(bytes: &[u8], offset: usize, little: bool) -> Option<u32> {
+    let word = bytes.get(offset..offset.checked_add(4)?)?.try_into().ok()?;
+    Some(if little {
+        u32::from_le_bytes(word)
+    } else {
+        u32::from_be_bytes(word)
+    })
+}
+
+/// Best-effort first Ethernet-header class, never packet validity or origin.
+///
+/// Only the first bounded classic-PCAP record is inspected. Addresses, times,
+/// later records and direction are neither returned nor validated. Every data
+/// class remains a refusal under the unchanged 24-byte empty-capture rule.
+pub(super) fn first_packet_class(bytes: &[u8]) -> PacketClass {
+    let observed = (|| {
+        if bytes.len() > 1024 * 1024 {
+            return None;
+        }
+        let little = match bytes.get(..4)? {
+            [0xd4, 0xc3, 0xb2, 0xa1] | [0x4d, 0x3c, 0xb2, 0xa1] => true,
+            [0xa1, 0xb2, 0xc3, 0xd4] | [0xa1, 0xb2, 0x3c, 0x4d] => false,
+            _ => return None,
+        };
+        let captured = usize::try_from(pcap_u32(bytes, 32, little)?).ok()?;
+        let original = pcap_u32(bytes, 36, little)?;
+        if pcap_u16(bytes, 4, little)? != 2
+            || pcap_u16(bytes, 6, little)? != 4
+            || pcap_u32(bytes, 16, little)? != 128
+            || pcap_u32(bytes, 20, little)? != 1
+            || !(14..=128).contains(&captured)
+            || u32::try_from(captured).ok()? > original
+        {
+            return None;
+        }
+        let frame = bytes.get(40..40usize.checked_add(captured)?)?;
+        Some(match frame.get(12..14)? {
+            [0x08, 0x06] => PacketClass::Arp,
+            [0x08, 0x00] => PacketClass::Ipv4,
+            [0x86, 0xdd] => {
+                if frame.get(14).is_some_and(|v| v >> 4 == 6)
+                    && frame.get(20) == Some(&58)
+                    && pcap_u16(frame, 18, false).is_some_and(|n| n >= 16)
+                    && frame.get(54..70).is_some_and(|icmp| icmp[..2] == [134, 0])
+                {
+                    PacketClass::Icmpv6RouterAdvertisement
+                } else {
+                    PacketClass::Ipv6
+                }
+            }
+            _ => PacketClass::Other,
+        })
+    })();
+    observed.unwrap_or(PacketClass::Unknown)
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum CaptureStage {
+    Live,
+    Bounds,
+    Eof,
+    Stop,
+    Wait,
+    Status,
+    Short,
+    Data(PacketClass),
+    Close,
+}
+impl CaptureStage {
+    pub fn checkpoint(self) -> &'static str {
+        match self {
+            Self::Live => "capture-live",
+            Self::Bounds => "capture-bounds",
+            Self::Eof => "capture-eof",
+            Self::Stop => "capture-stop",
+            Self::Wait => "capture-wait",
+            Self::Status => "capture-status",
+            Self::Short => "capture-short",
+            Self::Data(PacketClass::Arp) => "capture-data-arp",
+            Self::Data(PacketClass::Ipv4) => "capture-data-ipv4",
+            Self::Data(PacketClass::Ipv6) => "capture-data-ipv6",
+            Self::Data(PacketClass::Icmpv6RouterAdvertisement) => {
+                "capture-data-icmpv6-router-advertisement"
+            }
+            Self::Data(PacketClass::Other) => "capture-data-other",
+            Self::Data(PacketClass::Unknown) => "capture-data-unknown",
+            Self::Close => "capture-close",
+        }
+    }
+}
+
+#[derive(Default)]
+pub(super) struct CaptureFailure(Option<(Error, CaptureStage)>);
+impl CaptureFailure {
+    pub fn observe<T>(&mut self, stage: CaptureStage, result: Result<T>) -> Result<T> {
+        if let Err(error) = result {
+            let stage = match error {
+                Error::Bounds => CaptureStage::Bounds,
+                Error::Close => CaptureStage::Close,
+                _ => stage,
+            };
+            self.0.get_or_insert((error, stage));
+        }
+        result
+    }
+    fn result(&self) -> Result<()> {
+        self.0.map_or(Ok(()), |(error, _)| Err(error))
+    }
+    pub fn diagnostic(&self) -> Option<(Error, &'static str)> {
+        self.0.map(|(error, stage)| (error, stage.checkpoint()))
+    }
+}
+
+pub(super) fn capture_output(status: i32, out: &[u8], err: &[u8]) -> Option<CaptureStage> {
+    if status != 0 {
+        Some(CaptureStage::Status)
+    } else if out.len() > 1024 * 1024 || err.len() > 8192 {
+        Some(CaptureStage::Bounds)
+    } else if out.len() < 24 {
+        Some(CaptureStage::Short)
+    } else if out.len() > 24 {
+        Some(CaptureStage::Data(first_packet_class(out)))
+    } else {
+        None
+    }
+}
+
 pub(super) struct Watch {
     actor: Running,
     pub closed: bool,
-    failure: Option<Error>,
+    failure: CaptureFailure,
 }
 impl Watch {
     pub async fn start(ctx: &mut Context, interface: &str) -> Result<Self> {
@@ -209,7 +354,7 @@ impl Watch {
         let mut value = Self {
             actor,
             closed: false,
-            failure: None,
+            failure: CaptureFailure::default(),
         };
         let configured = (|| {
             value.actor.set_retirement_grace(Duration::from_secs(1))?;
@@ -226,27 +371,22 @@ impl Watch {
         Ok(value)
     }
     pub fn check(&mut self, control: &mut Control) -> Result<()> {
-        if let Some(error) = self.failure {
-            return Err(error);
-        }
+        self.failure.result()?;
+        let mut stage = CaptureStage::Live;
         let result = (|| {
             control.check()?;
             require(!self.closed)?;
             let chunk = self.actor.pump(control)?;
             let (out, err) = self.actor.snapshot();
-            require(
-                out.len() <= 1024 * 1024
-                    && err.len() <= 8192
-                    && !chunk.stdout_eof
-                    && !chunk.stderr_eof
-                    && self.actor.running()?,
-            )?;
+            stage = CaptureStage::Bounds;
+            require(out.len() <= 1024 * 1024 && err.len() <= 8192)?;
+            stage = CaptureStage::Eof;
+            require(!chunk.stdout_eof && !chunk.stderr_eof)?;
+            stage = CaptureStage::Live;
+            require(self.actor.running()?)?;
             control.check()
         })();
-        if let Err(error) = result {
-            self.failure.get_or_insert(error);
-        }
-        result
+        self.failure.observe(stage, result)
     }
     pub fn ready(&self) -> bool {
         self.actor
@@ -257,36 +397,39 @@ impl Watch {
     }
     pub async fn finish(&mut self, control: &mut Control) -> Result<()> {
         if self.closed {
-            return self.failure.map_or(Ok(()), Err);
+            return self.failure.result();
         }
-        let mut first = self.failure;
         if let Err(error) = self.check(control) {
-            first.get_or_insert(error);
             control.record(error);
         }
         self.closed = true;
+        let mut stage = CaptureStage::Stop;
         let result = async {
             if self.actor.running()? {
                 self.actor.signal(control, rustix::process::Signal::INT)?;
             }
+            stage = CaptureStage::Wait;
             let observed = self.actor.wait(control, Duration::from_secs(5)).await?;
-            require(
-                observed.status == 0
-                    && observed.stdout.len() == 24
-                    && observed.stderr.len() <= 8192,
-            )?;
+            if let Some(failed) =
+                capture_output(observed.status, &observed.stdout, &observed.stderr)
+            {
+                stage = failed;
+                return Err(Error::Refused);
+            }
+            stage = CaptureStage::Live;
             control.check()
         }
         .await;
-        if let Err(error) = result {
-            first.get_or_insert(error);
+        if let Err(error) = self.failure.observe(stage, result) {
             control.record(error);
         }
-        if let Err(error) = self.actor.finish(control).await {
-            first.get_or_insert(error);
+        let closed = self.actor.finish(control).await.map(|_| ());
+        if let Err(error) = self.failure.observe(CaptureStage::Close, closed) {
             control.record(error);
         }
-        self.failure = first;
-        first.map_or(Ok(()), Err)
+        self.failure.result()
+    }
+    pub fn failure(&self) -> Option<(Error, &'static str)> {
+        self.failure.diagnostic()
     }
 }
