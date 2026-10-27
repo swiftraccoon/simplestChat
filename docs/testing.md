@@ -3025,6 +3025,13 @@ and separately reject wrong roles, short or nonzero terminators and over-limit
 padding; generated output must have the exact minimal tail.
 These are archive/custody checks, not fresh signature or VM execution proof.
 
+Controller setup uses `--no-install-recommends` with explicit firmware and CA
+packages. An owned minimal Ubuntu 24.04 APT simulation preserves the required
+QEMU/ISO/network/trust closure and common package versions while omitting unused
+GUI, UEFI and remote-storage recommendations. It installed no packages and is
+not boot or hosted-performance proof. QEMU boot, cloud-init and all four cases
+still require the actual signed workflow under its unchanged 45-minute limit.
+
 ```sh
 cargo test --locked -p xtask ci::ops_artifact::maintain_runtime::
 cargo test --locked -p xtask ci::ops_artifact::hosted::

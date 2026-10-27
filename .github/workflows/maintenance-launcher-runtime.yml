@@ -56,8 +56,9 @@ jobs:
         run: |
           sudo rm -rf -- /usr/local/lib/android /usr/share/dotnet
           sudo apt-get update
-          sudo apt-get install -y qemu-system-x86 qemu-utils cloud-image-utils \
-            openssh-client curl acl
+          sudo apt-get install -y --no-install-recommends \
+            qemu-system-x86 qemu-utils cloud-image-utils seabios ipxe-qemu \
+            openssh-client curl ca-certificates acl
           test -c /dev/kvm
           sudo setfacl -m "u:$(id -un):rw" /dev/kvm
           python3 -m venv "$RUNNER_TEMP/maintain-controller"

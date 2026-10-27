@@ -74,6 +74,21 @@ checks. The transfer identity is computed from the actual new archive bytes.
 The frozen Python writer and readers remain unchanged; byte-for-byte writer
 equivalence is not claimed. Regression cases exercise the production Rust writer
 at every possible 512-byte member alignment and retain malformed-tail refusals.
+
+The manual workflow installs headless controller prerequisites without APT's
+recommended packages. QEMU, image/cloud tools, SSH, curl, ACL, CA certificates,
+SeaBIOS and iPXE firmware are explicit. The fixed QEMU invocation uses
+local QCOW2/raw drives, VGA with display disabled, and virtio/user networking;
+it does not select GUI, UEFI or remote block drivers. The resolved Ubuntu 24.04
+QEMU package requires both firmware packages, its system data and common tools.
+APT repository signature and package-hash policy are unchanged. A minimal-image
+resolver comparison retained every common package version and required firmware,
+trust, ISO and network components while reducing the planned closure from
+308 packages/167,846,296 archive bytes to 80/36,634,508. No packages were installed
+and no VM was booted. It is not a hosted byte saving, speed or boot proof;
+the fresh signed runtime remains required. The workflow's 45-minute ceiling and
+all original controller/guest deadlines remain unchanged.
+
 Completed Ops 3 and server 4 observations are recorded immediately after the
 corresponding current child succeeds, even if a later retained check refuses.
 The exact four-subject verification-digest object is decoded before custody is
