@@ -55,6 +55,12 @@ ops/src/release/attestation/fetch/**
 !ops/src/release/attestation/maintain_prerequisite/
 ops/src/release/attestation/maintain_prerequisite/**
 !ops/src/release/attestation/maintain_prerequisite/*.rs
+!ops/src/release/attestation/maintain_prerequisite/guest/
+ops/src/release/attestation/maintain_prerequisite/guest/**
+!ops/src/release/attestation/maintain_prerequisite/guest/*.rs
+!ops/src/release/attestation/maintain_prerequisite/guest/effects/
+ops/src/release/attestation/maintain_prerequisite/guest/effects/**
+!ops/src/release/attestation/maintain_prerequisite/guest/effects/*.rs
 !ops/src/release/attestation/receive/
 ops/src/release/attestation/receive/**
 !ops/src/release/attestation/receive/*.rs

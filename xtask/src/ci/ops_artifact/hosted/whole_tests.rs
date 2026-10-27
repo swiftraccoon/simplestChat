@@ -504,6 +504,24 @@ impl Executor for FakeCli {
         let mut stderr = Vec::new();
         let (kind, stdout) = match command.program {
             Program::OpsMaterialCurl => {
+                let arguments = command
+                    .arguments
+                    .iter()
+                    .map(|value| value.to_str().unwrap())
+                    .collect::<Vec<_>>();
+                // Release assets redirect; following them stays bounded and HTTPS-only.
+                assert!(
+                    arguments
+                        .windows(3)
+                        .any(|values| values == ["--location", "--max-redirs", "3"])
+                );
+                for protocol in ["--proto", "--proto-redir"] {
+                    assert!(
+                        arguments
+                            .windows(2)
+                            .any(|values| values == [protocol, "=https"])
+                    );
+                }
                 let url = command.arguments.last().unwrap().to_str().unwrap();
                 self.calls.push(format!("curl:{url}"));
                 stderr = b"OPS_HTTP_STATUS:200:200\n".to_vec();

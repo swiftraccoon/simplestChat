@@ -1460,7 +1460,10 @@ provides signer identity authority.
 
 [ops-build-inputs.lock.json](ops-build-inputs.lock.json) pins the exact HTTPS
 origins, SHA-256 values and sizes of four Rust 1.99.0 archives, 63 Ubuntu
-24.04 packages and two native source archives. The registry archives are selected from the original exported
+24.04 packages and two native source archives. Acquisition follows at most three
+HTTPS redirects within the original request deadline; terminal HTTP 200 and exact
+complete size/hash admission remain required before extraction. The registry
+archives are selected from the original exported
 Cargo lockfile. Downloads, extraction, registry copying and complete-tree
 readback precede the existing offline producer. Rust installer-v3 declarations
 are checked against the selected entry kinds. File-only
