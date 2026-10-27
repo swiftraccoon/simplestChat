@@ -2993,6 +2993,13 @@ still supplies Ops33, Ansible and operational helpers. The same 1,800-second
 outer limit and 120-second reserve apply,
 with a 510-second setup cap and 1,170 seconds required before GO.
 
+Repeated CI attempts can retain server artifacts with the same commit-based
+name. Discovery selects the unique newest matching creation instant, refusing
+malformed matching timestamps or a tied newest instant. That timestamp only
+locates a candidate: the signed predicate and current metadata must still bind
+both Ops and server to the requested successful run and exact attempt. Failed
+authentication never falls back to an older artifact.
+
 ```sh
 cargo test --locked -p xtask ci::ops_artifact::maintain_runtime::
 cargo test --locked -p xtask ci::ops_artifact::hosted::
@@ -3014,7 +3021,7 @@ Guest feature checks require the project's pinned OpenSSL headers/libraries;
 default Ops/xtask bootstrap builds leave native crypto disabled. Signed-material,
 actual local TLS, inert-file handoff and maintenance-table firewall tests cover
 the new guest's finite contracts. The distributed producer selects the optional
-feature and its authenticated 69-archive patched-musl/OpenSSL 4.1.0 static kit.
+feature and its authenticated 70-archive patched-musl/OpenSSL 4.1.0 static kit.
 Inert producer tests do not establish its cold build, final signed static ELF or
 fresh guest execution. All Python remains frozen.
 

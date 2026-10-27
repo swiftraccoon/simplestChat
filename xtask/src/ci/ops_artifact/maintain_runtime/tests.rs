@@ -4,6 +4,68 @@ use super::*;
 use serde_json::{Value, json};
 use std::time::{Duration, Instant};
 
+fn artifact(id: Value, created: Value) -> Value {
+    json!({"name":"simplestchat-production-revision","id":id,"created_at":created})
+}
+fn listing(rows: Vec<Value>) -> Value {
+    json!({"total_count":rows.len(),"artifacts":rows})
+}
+
+#[test]
+fn server_discovery_uses_unique_newest_instant_without_treating_it_as_admission() {
+    let old = artifact(json!(1), json!("2026-10-27T05:00:00Z"));
+    let newer = artifact(json!(2), json!("2026-10-27T01:00:00.001-04:00"));
+    let unrelated = json!({"name":"another-artifact","id":false,"created_at":null});
+    for rows in [
+        vec![old.clone(), newer.clone(), unrelated.clone()],
+        vec![newer.clone(), unrelated, old.clone()],
+        vec![old.clone(), old, newer],
+    ] {
+        assert_eq!(auth::server_artifact(&listing(rows), "revision"), Ok(2));
+    }
+    // Discovery must not silently select an older artifact when the newest
+    // candidate will fail the unchanged expiry or exact-attempt authentication.
+    let mut newest = artifact(json!(3), json!("2026-10-27T05:01:00Z"));
+    newest["expired"] = true.into();
+    assert_eq!(
+        auth::server_artifact(
+            &listing(vec![
+                artifact(json!(1), json!("2026-10-27T05:00:00Z")),
+                newest,
+            ]),
+            "revision",
+        ),
+        Ok(3),
+    );
+}
+
+#[test]
+fn server_discovery_refuses_ambiguous_or_malformed_matching_candidates() {
+    let good = artifact(json!(1), json!("2026-10-27T05:00:00Z"));
+    for bad in [
+        artifact(json!(2), json!("2026-10-27T01:00:00-04:00")),
+        artifact(json!(2), json!("not-a-timestamp")),
+        artifact(json!(2), json!("2026-10-27T05:00:00")),
+        artifact(json!(2), json!("0".repeat(65))),
+        artifact(json!(2), Value::Null),
+        artifact(json!(0), json!("2026-10-27T05:01:00Z")),
+        artifact(json!(true), json!("2026-10-27T05:01:00Z")),
+        artifact(json!(2.0), json!("2026-10-27T05:01:00Z")),
+        artifact(json!(1_u64 << 53), json!("2026-10-27T05:01:00Z")),
+    ] {
+        assert!(auth::server_artifact(&listing(vec![good.clone(), bad]), "revision").is_err());
+    }
+    for invalid in [
+        listing(vec![]),
+        listing(vec![json!({"name":"another-artifact"})]),
+        json!({"total_count":0,"artifacts":[good.clone()]}),
+        json!({"total_count":true,"artifacts":[good.clone()]}),
+        listing(vec![good; 101]),
+    ] {
+        assert!(auth::server_artifact(&invalid, "revision").is_err());
+    }
+}
+
 fn expected(scenario: &str) -> Value {
     json!({"runId":"a".repeat(32),"revision":"b".repeat(40),"scenario":scenario,
         "sourcePins":{"ops/ansible/files/deploy-public.sh":"c".repeat(64)},
