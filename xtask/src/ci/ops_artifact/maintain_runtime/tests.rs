@@ -306,6 +306,38 @@ fn closed_capture_checkpoints_preserve_failed_guest_metadata_without_positive_co
     }
 }
 #[test]
+fn closed_render_checkpoints_preserve_pre_native_refusal_without_admitting_success() {
+    for checkpoint in [
+        "render",
+        "render-inert-handoff",
+        "render-files",
+        "render-helpers",
+        "render-directories",
+        "render-assets",
+        "render-assets-receipt",
+        "render-tools",
+    ] {
+        let mut failed = case("positive");
+        failed["passed"] = false.into();
+        failed["failure"] = "refused".into();
+        failed["checkpoint"] = checkpoint.into();
+        failed["finalStatus"] = 1.into();
+        failed["nativeRawExit"] = Value::Null;
+        failed["nativeFrame"] = Value::Null;
+        let decoded = decode(&serde_json::to_vec(&failed).unwrap()).unwrap();
+        let admitted = projection::guest(decoded, &expected("positive")).unwrap();
+        assert_eq!(admitted, failed);
+        assert_eq!(admitted.as_object().unwrap().len(), 14);
+
+        let mut passed = case("positive");
+        passed["checkpoint"] = checkpoint.into();
+        assert_eq!(
+            projection::guest(passed, &expected("positive")),
+            Err(Error::Refused)
+        );
+    }
+}
+#[test]
 fn closed_daemon_checkpoints_preserve_failed_guest_metadata_without_positive_completion() {
     for checkpoint in [
         "daemon-actor-identity",
@@ -379,6 +411,10 @@ fn diagnostic_checkpoint_neighbors_refuse_unknown_or_unsafe_diagnostics() {
         json!("daemon-pg-history\nSECRET"),
         json!("daemon-event-shape/SECRET"),
         json!("daemon-final-traces\u{0}SECRET"),
+        json!("render-file"),
+        json!("render-helpers/SECRET"),
+        json!("render-assets-receipt\nSECRET"),
+        json!("render-tools\u{0}SECRET"),
         json!("SECRET"),
         Value::Null,
         json!(false),
@@ -398,6 +434,8 @@ fn diagnostic_checkpoint_neighbors_refuse_unknown_or_unsafe_diagnostics() {
         "capture-data-arp",
         "capture-data-ipv4-dhcp",
         "daemon-pg-history",
+        "render-files",
+        "render-assets-receipt",
     ] {
         failed["checkpoint"] = checkpoint.into();
         for (name, value) in [
