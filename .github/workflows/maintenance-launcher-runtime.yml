@@ -71,7 +71,9 @@ jobs:
             qemu-system-x86 qemu-utils cloud-image-utils seabios ipxe-qemu \
             openssh-client curl ca-certificates acl
           test -c /dev/kvm
-          sudo setfacl -m "u:$(id -un):rw" /dev/kvm
+          # KVM change events can flush named-user uaccess entries between boots.
+          # Keep access scoped to the runner's existing primary group.
+          sudo setfacl -m "g:$(id -g):rw" /dev/kvm
           python3 -m venv "$RUNNER_TEMP/maintain-controller"
           "$RUNNER_TEMP/maintain-controller/bin/python" -m pip --isolated install \
             --require-hashes --only-binary=:all: -r ops/ansible/requirements.txt

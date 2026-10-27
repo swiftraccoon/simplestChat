@@ -431,6 +431,7 @@ enum StderrClass {
     BackingFileMissing,
     Qcow2Format,
     ImageWriteLock,
+    KvmAccess,
     Unclassified,
 }
 impl StderrClass {
@@ -440,6 +441,7 @@ impl StderrClass {
             Self::BackingFileMissing => "backing-file-missing",
             Self::Qcow2Format => "qcow2-format",
             Self::ImageWriteLock => "image-write-lock",
+            Self::KvmAccess => "kvm-access",
             Self::Unclassified => "unclassified",
         }
     }
@@ -447,7 +449,7 @@ impl StderrClass {
 
 #[derive(Clone)]
 struct StartupProfile {
-    records: [(StderrClass, String); 4],
+    records: [(StderrClass, String); 5],
 }
 impl StartupProfile {
     fn new(arguments: &[OsString], work: &Path) -> Option<Self> {
@@ -500,6 +502,13 @@ impl StartupProfile {
                     format!(
                         "{wait}{block}Failed to get \"write\" lock\n\
                      Is another process using the image [{disk}]?\n"
+                    ),
+                ),
+                (
+                    StderrClass::KvmAccess,
+                    format!(
+                        "{wait}Could not access KVM kernel module: Permission denied\n\
+                         {program}: failed to initialize kvm: Permission denied\n"
                     ),
                 ),
             ],
@@ -2262,6 +2271,29 @@ mod tests {
             ] {
                 let record = format!("{wait}{block}{suffix}");
                 assert_eq!(profile.classify(record.as_bytes()).name(), expected);
+            }
+            // The recovered hosted tail is fixed; all paths here remain contextual fixtures.
+            let permission_tail = concat!(
+                "Could not access KVM kernel module: Permission denied\n",
+                "qemu-system-x86_64: failed to initialize kvm: Permission denied\n"
+            );
+            assert_eq!(permission_tail.len(), 118);
+            let kvm = format!("{wait}{permission_tail}");
+            assert_eq!(profile.classify(kvm.as_bytes()).name(), "kvm-access");
+            for neighbor in [
+                kvm.replace("Permission denied", "Operation not permitted"),
+                kvm.replace("Permission denied", "No such file or directory"),
+                kvm.replace(
+                    "Could not access KVM kernel module: Permission denied\n",
+                    "",
+                ),
+                kvm.replace(
+                    "qemu-system-x86_64: failed to initialize kvm: Permission denied\n",
+                    "",
+                ),
+                permission_tail.to_owned(),
+            ] {
+                assert_eq!(profile.classify(neighbor.as_bytes()).name(), "unclassified");
             }
             for (kind, record) in &profile.records {
                 assert_eq!(profile.classify(record.as_bytes()).name(), kind.name());
