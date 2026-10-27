@@ -258,9 +258,11 @@ impl Fixture {
         ctx.check()
     }
     pub async fn setup_network(&mut self, ctx: &mut Context) -> Result<()> {
+        ctx.control.checkpoint = "network-collector";
         let collector = Collector::start(ctx).await?;
         self.monitors.lock().map_err(|_| Error::Io)?.collector = Some(collector);
         actors::install(ctx, &self.monitors);
+        ctx.control.checkpoint = "network-create";
         self.unknown_effect = true;
         let args = [
             "docker".into(),
@@ -295,6 +297,7 @@ impl Fixture {
             )
             .await?;
         ctx.check()?;
+        ctx.control.checkpoint = "network-marker";
         let id = self.network.clone().ok_or(Error::Refused)?;
         let previous = ctx.control.push_phase(Duration::from_secs(5))?;
         let joined = async {
@@ -330,6 +333,7 @@ impl Fixture {
         .await;
         let ended = ctx.control.pop_phase(previous);
         joined.and(ended)?;
+        ctx.control.checkpoint = "network-profile";
         let network = policy::one(
             &Self::docker(
                 ctx,
@@ -340,6 +344,7 @@ impl Fixture {
             .await?,
         )?;
         policy::bridge(&network, &id, &self.bridge)?;
+        ctx.control.checkpoint = "network-route";
         let routes = policy::decode(
             &Self::call(
                 ctx,
@@ -358,10 +363,12 @@ impl Fixture {
         let routes = routes.as_array().ok_or(Error::Refused)?;
         require(routes.len() == 1)?;
         let interface = policy::string(&routes[0]["dev"])?;
+        ctx.control.checkpoint = "network-firewall";
         let rules = policy::firewall(&self.table, interface, &self.bridge)?;
         let path = Path::new(PRIVATE).join("guard.nft");
         let guard = super::files::write_new(&path, rules.as_bytes(), 0, 0o600, &mut ctx.control)?;
         ctx.originals.push(guard);
+        ctx.control.checkpoint = "network-guard";
         let guarded = &mut self.guarded;
         ctx.check()?;
         ctx.commands
@@ -381,8 +388,10 @@ impl Fixture {
             )
             .await?;
         ctx.check()?;
+        ctx.control.checkpoint = "network-capture";
         let watch = Watch::start(ctx, interface).await?;
         self.monitors.lock().map_err(|_| Error::Io)?.watch = Some(watch);
+        ctx.control.checkpoint = "network-capture-ready";
         let previous = ctx.control.push_phase(Duration::from_secs(5))?;
         let ready = async {
             loop {
@@ -405,6 +414,7 @@ impl Fixture {
         .await;
         let ended = ctx.control.pop_phase(previous);
         ready.and(ended)?;
+        ctx.control.checkpoint = "network-probe";
         self.guard_probe(ctx).await?;
         ctx.observed.set("collectorMarkerJoined", true)
     }

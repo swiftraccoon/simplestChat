@@ -338,6 +338,53 @@ fn closed_render_checkpoints_preserve_pre_native_refusal_without_admitting_succe
     }
 }
 #[test]
+fn network_checkpoints_and_typed_failures_preserve_negative_receipts_only() {
+    for checkpoint in [
+        "network-collector",
+        "network-create",
+        "network-marker",
+        "network-profile",
+        "network-route",
+        "network-firewall",
+        "network-guard",
+        "network-capture",
+        "network-capture-ready",
+        "network-probe",
+    ] {
+        for category in ["input", "changed", "command", "bounds", "refused"] {
+            let mut failed = case("positive");
+            failed["passed"] = false.into();
+            failed["failure"] = category.into();
+            failed["checkpoint"] = checkpoint.into();
+            failed["finalStatus"] = 1.into();
+            failed["nativeRawExit"] = Value::Null;
+            failed["nativeFrame"] = Value::Null;
+            for value in failed["observations"].as_object_mut().unwrap().values_mut() {
+                *value = false.into();
+            }
+            failed["observations"]["collectorFinalized"] = true.into();
+            let decoded = decode(&serde_json::to_vec(&failed).unwrap()).unwrap();
+            let admitted = projection::guest(decoded, &expected("positive")).unwrap();
+            assert_eq!(admitted, failed);
+            assert_eq!(admitted.as_object().unwrap().len(), 14);
+        }
+        let mut passed = case("positive");
+        passed["checkpoint"] = checkpoint.into();
+        assert_eq!(
+            projection::guest(passed, &expected("positive")),
+            Err(Error::Refused)
+        );
+    }
+    for category in ["input", "changed", "command", "bounds"] {
+        let mut passed = case("positive");
+        passed["failure"] = category.into();
+        assert_eq!(
+            projection::guest(passed, &expected("positive")),
+            Err(Error::Refused)
+        );
+    }
+}
+#[test]
 fn closed_daemon_checkpoints_preserve_failed_guest_metadata_without_positive_completion() {
     for checkpoint in [
         "daemon-actor-identity",
@@ -415,6 +462,14 @@ fn diagnostic_checkpoint_neighbors_refuse_unknown_or_unsafe_diagnostics() {
         json!("render-helpers/SECRET"),
         json!("render-assets-receipt\nSECRET"),
         json!("render-tools\u{0}SECRET"),
+        json!("network"),
+        json!("network-collect"),
+        json!("network_capture"),
+        json!("Network-create"),
+        json!("network-marker "),
+        json!("network-firewall/SECRET"),
+        json!("network-capture-ready\nSECRET"),
+        json!("network-probe\u{0}SECRET"),
         json!("SECRET"),
         Value::Null,
         json!(false),
@@ -436,12 +491,15 @@ fn diagnostic_checkpoint_neighbors_refuse_unknown_or_unsafe_diagnostics() {
         "daemon-pg-history",
         "render-files",
         "render-assets-receipt",
+        "network-create",
+        "network-probe",
     ] {
         failed["checkpoint"] = checkpoint.into();
         for (name, value) in [
             ("failure", json!(checkpoint)),
             ("captureData", json!("SECRET")),
             ("daemonDiagnostic", json!("SECRET")),
+            ("networkDiagnostic", json!("SECRET")),
         ] {
             let mut row = failed.clone();
             row[name] = value;
@@ -451,6 +509,33 @@ fn diagnostic_checkpoint_neighbors_refuse_unknown_or_unsafe_diagnostics() {
                 Err(Error::Refused)
             );
         }
+    }
+}
+#[test]
+fn guest_failure_categories_refuse_unknown_strings_and_nonstring_neighbors() {
+    for category in [
+        json!("Input"),
+        json!("changed "),
+        json!("command/SECRET"),
+        json!("bounds\nSECRET"),
+        json!("input\u{0}SECRET"),
+        json!("COMMAND_FAILED"),
+        json!(false),
+        json!(1),
+        json!([]),
+        json!({"command":"SECRET"}),
+    ] {
+        let mut failed = case("positive");
+        failed["passed"] = false.into();
+        failed["failure"] = category;
+        failed["checkpoint"] = "network-guard".into();
+        failed["finalStatus"] = 1.into();
+        failed["nativeRawExit"] = Value::Null;
+        failed["nativeFrame"] = Value::Null;
+        let decoded = decode(&serde_json::to_vec(&failed).unwrap()).unwrap();
+        let error = projection::guest(decoded, &expected("positive")).unwrap_err();
+        assert_eq!(error, Error::Refused);
+        assert!(!format!("{error:?}").contains("SECRET"));
     }
 }
 #[test]
