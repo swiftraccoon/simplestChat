@@ -3200,6 +3200,20 @@ and response schemas remain unchanged. Local handoff and mutation tests establis
 custody and bounded policy, while fresh signed four-case execution remains the
 runtime requirement.
 
+Unexpected VM stream EOF remains an immediate proof failure, but its existing
+reader continues draining the still-bounded peer under the same clock and
+settlement windows. Later EOF or successful closes cannot restore the VM's
+cleanup verdict. A settled nonzero startup before SSH admission may add the
+failure-only `vmStartupDiagnostic`: the preparation/restricted epoch, actual
+signed `rawStatus`, closed `stderrClass` and complete retained `stderrSha256`.
+Read, write, capacity, deadline or close uncertainty in the evidence owner leaves
+this diagnostic unavailable. Complete native Ubuntu QEMU fixtures bind the finite
+classes `host-forward-setup`, `backing-file-missing`, `qcow2-format` and
+`image-write-lock` to their entire expected records and admitted arguments.
+A complete unknown message is `unclassified`; no raw streams,
+paths or arguments enter the receipt. The optional diagnostic supplies no
+execution authority and does not change schema 2's positive 29-field shape.
+
 The native guest's fixed bridge profile enables host-loopback publication with
 outbound masquerading disabled, under the unchanged three default-drop firewall
 hooks. Network regressions require this exact profile and its canonical IPAM
