@@ -1497,6 +1497,10 @@ OpenSSL receives only the measured Linux UAPI `linux`, `asm-generic` and x86-64
 `asm` header trees alongside musl's headers; the GNU libc headers are not added
 to its include path. The pinned `diffutils` package supplies its `cmp` build and
 installation comparisons.
+OpenSSL 4.1's engine setting must retain its upstream disabled-by-default state;
+the deprecated `no-engine` option is omitted. The validator reads the generated
+`configdata.pm` as data and admits its upstream executable modes only for that
+fixed metadata role. Header and library readers keep their ordinary-file modes.
 The source pins, observed build configuration, library identities and output
 inventory accompany the existing evidence documents. Public musl/OpenSSL license
 notices are carried in `producer-toolchain.json`, bound to the builder's observed
@@ -1515,7 +1519,8 @@ scheduling and reap stalls have no hard wall-clock bound.
 
 Progress diagnostics share a 16 KiB lifetime limit with a reserved terminal
 record. Archive imports report both edges of the first, every eighth and last
-item, leaving room for all compiler probes and the native-build checkpoint.
+item, leaving room for all compiler probes, the six native commands and output
+admission checkpoints.
 These records report observed progress only: the last visible checkpoint does
 not identify the failed command, and a missing completion record is not proof
 that its operation failed. The terminal status remains authoritative.

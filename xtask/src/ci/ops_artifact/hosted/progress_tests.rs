@@ -121,11 +121,15 @@ fn full_accepted_archive_rosters_leave_all_later_probes_build_and_terminal_obser
             progress.kit(Checkpoint::Probe, Edge::Begin, ordinal, 14);
             progress.kit(Checkpoint::Probe, Edge::Complete, ordinal, 14);
         }
-        for checkpoint in [
-            Checkpoint::NativeBuild,
-            Checkpoint::RegistryCopy,
-            Checkpoint::Measure,
-        ] {
+        progress.kit(Checkpoint::NativeBuild, Edge::Begin, 1, 1);
+        for ordinal in 1..=6 {
+            progress.kit(Checkpoint::NativeCommand, Edge::Begin, ordinal, 6);
+            progress.kit(Checkpoint::NativeCommand, Edge::Complete, ordinal, 6);
+        }
+        progress.kit(Checkpoint::NativeOutputs, Edge::Begin, 1, 1);
+        progress.kit(Checkpoint::NativeOutputs, Edge::Complete, 1, 1);
+        progress.kit(Checkpoint::NativeBuild, Edge::Complete, 1, 1);
+        for checkpoint in [Checkpoint::RegistryCopy, Checkpoint::Measure] {
             progress.kit(checkpoint, Edge::Begin, 1, 1);
             progress.kit(checkpoint, Edge::Complete, 1, 1);
         }
@@ -159,7 +163,20 @@ fn full_accepted_archive_rosters_leave_all_later_probes_build_and_terminal_obser
                 )));
             }
         }
-        for checkpoint in ["resolve", "native-build", "registry-copy", "measure"] {
+        for ordinal in 1..=6 {
+            for edge in ["begin", "complete"] {
+                assert!(text.contains(&format!(
+                    "checkpoint=native-command event={edge} ordinal={ordinal} total=6 "
+                )));
+            }
+        }
+        for checkpoint in [
+            "resolve",
+            "native-build",
+            "native-outputs",
+            "registry-copy",
+            "measure",
+        ] {
             for edge in ["begin", "complete"] {
                 assert!(text.contains(&format!(
                     "checkpoint={checkpoint} event={edge} ordinal=1 total=1 "

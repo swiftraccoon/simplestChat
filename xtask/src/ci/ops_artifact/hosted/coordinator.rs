@@ -652,6 +652,7 @@ async fn produce_with<E: Executor, S: Stages>(
             owners.downloads.as_mut().unwrap(),
             executor,
             &mut next,
+            progress,
         )
         .await?;
         progress.kit(Checkpoint::NativeBuild, Edge::Complete, 1, 1);
