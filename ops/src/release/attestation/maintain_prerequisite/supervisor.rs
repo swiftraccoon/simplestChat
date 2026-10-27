@@ -100,6 +100,7 @@ fn command(path: &str) -> Command {
         .env_clear()
         .env("PATH", "/usr/sbin:/usr/bin:/sbin:/bin")
         .env("LC_ALL", "C")
+        .env("PYTHONDONTWRITEBYTECODE", "1")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -1349,5 +1350,136 @@ mod join_tests {
                 assert!(reaped && peers);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod bytecode_tests {
+    use super::command;
+    use crate::owned_process::{Group, exited, finish_before};
+    use serde_json::json;
+    use std::{
+        fs,
+        io::{Read, Seek},
+        os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt},
+        path::PathBuf,
+        process::Stdio,
+        sync::atomic::{AtomicU64, Ordering},
+        time::{Duration, Instant},
+    };
+
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    struct Fixture(PathBuf);
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[tokio::test]
+    async fn actual_frozen_seed_import_preserves_retained_parent_without_bytecode() {
+        let end = Instant::now() + Duration::from_secs(30);
+        let body_end = end - Duration::from_secs(3);
+        let path = std::env::temp_dir().join(format!(
+            "maintain-seed-bytecode-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir(&path).unwrap();
+        let fixture = Fixture(path);
+        fs::set_permissions(&fixture.0, fs::Permissions::from_mode(0o700)).unwrap();
+        let bench = fixture.0.join("bench");
+        fs::create_dir(&bench).unwrap();
+        fs::set_permissions(&bench, fs::Permissions::from_mode(0o700)).unwrap();
+        let sources = [
+            "seed-public-room.py",
+            "seed_public_room.py",
+            "release_json.py",
+        ]
+        .map(|name| {
+            let source = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("ansible/files")
+                .join(name);
+            let target = bench.join(name);
+            fs::copy(&source, &target).unwrap();
+            (source.clone(), target, fs::read(source).unwrap())
+        });
+        let logs = ["stdout", "stderr"].map(|name| {
+            fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create_new(true)
+                .mode(0o600)
+                .open(fixture.0.join(name))
+                .unwrap()
+        });
+        let before = fs::symlink_metadata(&bench).unwrap();
+        let python = std::env::var_os("PYTHON").unwrap_or_else(|| "/usr/bin/python3".into());
+        assert!(Instant::now() < body_end);
+        let child = command(python.to_str().expect("PYTHON is an interpreter path"))
+            .arg(bench.join("seed-public-room.py"))
+            .arg("--help")
+            .current_dir(&bench)
+            .stdout(Stdio::from(logs[0].try_clone().unwrap()))
+            .stderr(Stdio::from(logs[1].try_clone().unwrap()))
+            .spawn()
+            .unwrap();
+        let mut group = Group::new(child);
+        let natural = tokio::time::timeout_at(body_end.into(), exited(group.pid())).await;
+        let retired = finish_before(group.pid(), end).await;
+        let reaped = group.reap().await;
+        let captured = logs.map(|mut file| {
+            let mut bytes = Vec::new();
+            let read = file
+                .rewind()
+                .and_then(|()| (&mut file).take(4097).read_to_end(&mut bytes));
+            let closed = nix::unistd::close(file);
+            (read, closed, bytes)
+        });
+        let after = fs::symlink_metadata(&bench).unwrap();
+        let cache_absent = !bench.join("__pycache__").exists();
+        let sources_unchanged = sources.iter().all(|(source, target, bytes)| {
+            fs::read(source).unwrap() == *bytes && fs::read(target).unwrap() == *bytes
+        });
+        let removed = fs::remove_dir_all(&fixture.0);
+        assert!(matches!(natural, Ok(Ok(()))) && retired);
+        assert_eq!(reaped.unwrap().code(), Some(1));
+        let [stdout, stderr] = captured.map(|(read, closed, bytes)| {
+            read.unwrap();
+            closed.unwrap();
+            assert!(bytes.len() <= 4096);
+            bytes
+        });
+        removed.unwrap();
+        assert!(stdout.len() + stderr.len() <= 4096 && stderr.is_empty());
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&stdout).unwrap(),
+            json!({
+                "schemaVersion":1,"passed":false,"changed":false,"ownerCreated":false,
+                "roomCreated":false,"ownerFileCreated":false,"existingSettingsPreserved":false,
+                "refreshSessionRevoked":null,"failure":"arguments_not_supported",
+                "ownerCredentialFile":"/etc/simplestchat-public/owner.json"
+            })
+        );
+        assert!(cache_absent && sources_unchanged);
+        assert_eq!(
+            (
+                before.dev(),
+                before.ino(),
+                before.mode(),
+                before.uid(),
+                before.gid(),
+                before.nlink()
+            ),
+            (
+                after.dev(),
+                after.ino(),
+                after.mode(),
+                after.uid(),
+                after.gid(),
+                after.nlink()
+            )
+        );
+        assert!(Instant::now() < end);
     }
 }

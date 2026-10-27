@@ -3023,6 +3023,12 @@ reflog directory. Immutable project-source checks and the one-commit revision,
 tree and clean-worktree checks still apply. This local ownership evidence is
 separate from the signed VM experiment.
 
+The native launcher's cleared environment also suppresses Python bytecode.
+A Linux regression runs the unchanged seed helper's argument-refusal path through
+the production command builder and checks that its retained parent directory
+and source bytes stay unchanged. This import check performs no application
+seeding; the signed VM trial must still establish that operation.
+
 Guest feature checks require the project's pinned OpenSSL headers/libraries;
 default Ops/xtask bootstrap builds leave native crypto disabled. Signed-material,
 actual local TLS, inert-file handoff and maintenance-table firewall tests cover
