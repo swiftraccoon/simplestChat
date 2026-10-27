@@ -918,6 +918,13 @@ media API parameters can contain credentials. The step timeline retains fixed
 scenario names, timing and outcomes. Existing diagnostic, canary, soak and
 performance measurement commands retain their standalone execution paths.
 
+UI stress checks its final report verdict inside the bounded-workload runner
+step. A completed negative report fails that step even when cleanup succeeds.
+The first failing traffic task and otherwise opaque sampling operations retain
+fixed diagnostic codes; raw exception messages and call logs are omitted.
+Report completion does not mean every workload assertion ran: use its retained
+phases to distinguish completed checks from work abandoned after a failure.
+
 The WebKit follow-speaker reload issue remains open as of 2026-10-24 with
 Playwright 1.64.0 / WebKit 27.2 (r2370). A fresh run of the complete original
 community journey passed 44 checks with the existing Chromium-only measurement
