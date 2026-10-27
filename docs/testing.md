@@ -1090,6 +1090,12 @@ COMMUNITY_E2E=1 cargo run -q -p xtask -- test-env \
   node web/e2e/community.cjs
 ```
 
+The notification-policy check waits for the sender's committed history row and
+cleared pending-send recovery before closing its conversation. Recovery displays
+the original message text before confirmation; matching that text alone does not
+establish a completed send. Intentional response-loss cases keep their separate
+close/reopen and idempotent-retry checks.
+
 The focused Rust database case
 `database_public_message_removal_scrubs_durable_history_without_runtime_copy`
 persists messages, removes the runtime copy, and verifies old-history deletion,
