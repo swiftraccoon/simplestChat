@@ -12,8 +12,10 @@ fn endpoint_rows() -> (Value, Value) {
     let row = json!({"Id":container,"NetworkSettings":{"Networks":{"sc0123456789ab":{
         "NetworkID":network,"IPAddress":"172.20.0.2","IPPrefixLen":16,"Gateway":"172.20.0.1","EndpointID":endpoint}}},
         "State":{"Running":true,"Restarting":false,"Paused":false,"Dead":false,"OOMKilled":false,"Status":"running","Pid":123}});
-    let network = json!({"Id":id('b'),"Name":"sc0123456789ab","Driver":"bridge","Scope":"local","Internal":true,"EnableIPv6":false,
-        "Options":{"com.docker.network.bridge.name":"sc0123456789ab"},"IPAM":{"Config":[{"Subnet":"172.20.0.0/16","Gateway":"172.20.0.1"}]},
+    let network = json!({"Id":id('b'),"Name":"sc0123456789ab","Driver":"bridge","Scope":"local","Internal":false,"EnableIPv6":false,
+        "Options":{"com.docker.network.bridge.name":"sc0123456789ab",
+            "com.docker.network.bridge.enable_ip_masquerade":"false"},
+        "IPAM":{"Config":[{"Subnet":"172.20.0.0/16","Gateway":"172.20.0.1"}]},
         "Containers":{(container):{"EndpointID":id('c'),"IPv4Address":"172.20.0.2/16"}}});
     (row, network)
 }
@@ -52,6 +54,73 @@ fn strict_daemon_json_and_raw_zero_identifiers_refuse_ambiguous_or_partial_input
         assert!(policy::created_id(&bytes).is_err());
     }
     assert!(policy::ids(format!("{}\n{}\n", id('a'), id('a')).as_bytes()).is_err());
+}
+
+#[test]
+fn bridge_requires_one_fixed_ordinary_profile_without_masquerading() {
+    let (_, network) = endpoint_rows();
+    let check = |row: &Value| policy::bridge(row, &id('b'), "sc0123456789ab");
+    assert_eq!(check(&network), Ok(()));
+    for value in [json!(true), Value::Null, json!("false"), json!(0)] {
+        let mut invalid = network.clone();
+        invalid["Internal"] = value;
+        assert_eq!(check(&invalid), Err(Error::Refused));
+    }
+    let mut missing = network.clone();
+    assert!(
+        missing
+            .as_object_mut()
+            .unwrap()
+            .remove("Internal")
+            .is_some()
+    );
+    assert_eq!(check(&missing), Err(Error::Refused));
+    for value in [
+        json!("true"),
+        json!(false),
+        json!(true),
+        Value::Null,
+        json!("FALSE"),
+        json!("0"),
+        json!(""),
+    ] {
+        let mut invalid = network.clone();
+        invalid["Options"]["com.docker.network.bridge.enable_ip_masquerade"] = value;
+        assert_eq!(check(&invalid), Err(Error::Refused));
+    }
+    for name in [
+        "com.docker.network.bridge.name",
+        "com.docker.network.bridge.enable_ip_masquerade",
+    ] {
+        let mut missing = network.clone();
+        assert!(
+            missing["Options"]
+                .as_object_mut()
+                .unwrap()
+                .remove(name)
+                .is_some()
+        );
+        assert_eq!(check(&missing), Err(Error::Refused));
+    }
+    for value in [Value::Null, json!([]), json!({})] {
+        let mut invalid = network.clone();
+        invalid["Options"] = value;
+        assert_eq!(check(&invalid), Err(Error::Refused));
+    }
+    for (name, value) in [
+        (
+            "com.docker.network.bridge.gateway_mode_ipv4",
+            json!("routed"),
+        ),
+        ("com.docker.network.bridge.enable_icc", json!("true")),
+    ] {
+        let mut invalid = network.clone();
+        invalid["Options"][name] = value;
+        assert_eq!(check(&invalid), Err(Error::Refused));
+    }
+    let mut wrong_name = network.clone();
+    wrong_name["Options"]["com.docker.network.bridge.name"] = json!("scffffffffffff");
+    assert_eq!(check(&wrong_name), Err(Error::Refused));
 }
 
 #[test]
@@ -97,6 +166,38 @@ fn endpoint_joins_private_ipam_and_the_entire_observed_peer_inventory() {
     let mut public = network.clone();
     public["IPAM"]["Config"][0]["Subnet"] = json!("192.0.2.0/24");
     assert!(endpoint(&row, &public).is_err());
+}
+
+#[test]
+fn endpoint_requires_its_canonical_gateway_to_equal_the_admitted_ipam_gateway() {
+    let (row, network) = endpoint_rows();
+    assert_eq!(
+        endpoint(&row, &network).unwrap().gateway.to_string(),
+        "172.20.0.1"
+    );
+    for value in [
+        json!(""),
+        json!("172.20.0.3"),
+        json!("172.020.0.1"),
+        Value::Null,
+        json!(false),
+    ] {
+        let mut invalid = row.clone();
+        invalid["NetworkSettings"]["Networks"]["sc0123456789ab"]["Gateway"] = value;
+        assert_eq!(endpoint(&invalid, &network), Err(Error::Refused));
+    }
+    let mut missing = row.clone();
+    assert!(
+        missing["NetworkSettings"]["Networks"]["sc0123456789ab"]
+            .as_object_mut()
+            .unwrap()
+            .remove("Gateway")
+            .is_some()
+    );
+    assert_eq!(endpoint(&missing, &network), Err(Error::Refused));
+    let mut different = network.clone();
+    different["IPAM"]["Config"][0]["Gateway"] = json!("172.20.0.4");
+    assert_eq!(endpoint(&row, &different), Err(Error::Refused));
 }
 
 #[test]

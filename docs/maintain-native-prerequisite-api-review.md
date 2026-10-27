@@ -193,6 +193,40 @@ or inner cleanup. A partial failed report cannot establish those events.
 No production panic/unwind guarantee is made. The inert test fixture explicitly
 restores flags, closes registered originals and finishes its owner on setup failure.
 
+## Native guest network profile
+
+The native guest uses one owned ordinary IPv4 bridge with
+`com.docker.network.bridge.enable_ip_masquerade=false`. Its closed inspection
+requires `Internal=false`, IPv6 disabled and exactly the two selected options:
+the original bridge name and the string `false` for masquerading. The container
+gateway must equal the canonical admitted IPAM gateway. Internal bridges, an
+empty gateway, enabled masquerading and additional routing options refuse.
+The frozen Python guest retains its earlier internal-network profile.
+
+This deliberately changes the disposable network profile so the unchanged
+launcher and seed helper can use their actual host-loopback backend at
+`127.0.0.1:3000`. At the exact Docker engine commit
+[`8af9fe3a36bab3e039862a2ab1cef1880c9b4d03`](https://github.com/moby/moby/blob/8af9fe3a36bab3e039862a2ab1cef1880c9b4d03/daemon/libnetwork/drivers/bridge/bridge_linux.go),
+internal endpoints omit a gateway; gateway selection controls NAT publication
+in [the port-mapping implementation](https://github.com/moby/moby/blob/8af9fe3a36bab3e039862a2ab1cef1880c9b4d03/daemon/libnetwork/drivers/bridge/port_mapping_linux.go).
+Direct container-IP TLS does not establish host-loopback publication. The
+fixture adds no forwarding relay or alternate launcher/readiness path.
+
+All three existing default-drop hooks remain byte-identical: host output,
+forwarding and the pinned physical interface's netdev egress. They are installed
+before application or Caddy actors start and remain through guest exit. Only
+loopback, the sole owned bridge and the original SSH control exception are
+admitted in their existing roles; Docker's later forwarding rules do not
+override an earlier drop. The actual guard probe, packet capture, actor/network
+joins and final cleanup remain mandatory. An ordinary bridge is not authority
+for physical egress or a production-network equivalence claim.
+
+The exact local Docker 29.8.2 daemon/client and pinned Caddy image were acquired
+for a comparison, but the emulated provider refused container startup at its
+nested cgroup boundary. That trial supplies no HTTP, installed-firewall or
+hosted-failure-cause proof. Policy regression checks and source analysis leave
+the fresh signed four-scenario runtime required.
+
 ## Validation state
 
 The earlier fixed run/init body passed GNU/musl compilation and Clippy, nine
