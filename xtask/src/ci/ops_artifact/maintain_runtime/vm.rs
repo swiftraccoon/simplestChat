@@ -998,7 +998,7 @@ fn qemu_arguments(
         "-device".into(),
         "virtio-blk-pci,drive=seed".into(),
         "-netdev".into(),
-        format!("user,id=net0,hostfwd=tcp:127.0.0.1:{port}-:22").into(),
+        format!("user,id=net0,ipv4=on,ipv6=off,hostfwd=tcp:127.0.0.1:{port}-:22").into(),
         "-device".into(),
         "virtio-net-pci,netdev=net0".into(),
     ])
@@ -1471,6 +1471,55 @@ mod tests {
             Some(&OsString::from("'true; '\\''quoted'\\'''"))
         );
         assert!(ssh_arguments(Path::new("/tmp/owned"), 22, &["true".into()]).is_err());
+    }
+    #[test]
+    fn ipv4_provider_and_ssh_join_the_same_private_forward_and_device() {
+        let work = Path::new("/tmp/owned, fixture");
+        for port in [2222, 65535] {
+            let args = qemu_arguments(
+                work,
+                port,
+                "0123456789abcdef0123456789abcdef",
+                "/usr/bin/prlimit".into(),
+                "/usr/bin/qemu-system-x86_64".into(),
+            )
+            .unwrap();
+            let args = args.iter().map(|v| v.to_str().unwrap()).collect::<Vec<_>>();
+            let networks = args
+                .windows(2)
+                .filter(|pair| pair[0] == "-netdev")
+                .collect::<Vec<_>>();
+            assert_eq!(networks.len(), 1);
+            let fields = networks[0][1].split(',').collect::<Vec<_>>();
+            assert_eq!(fields.len(), 5);
+            assert_eq!(fields[0], "user");
+            let options = fields[1..]
+                .iter()
+                .map(|value| value.split_once('=').unwrap())
+                .collect::<std::collections::BTreeMap<_, _>>();
+            assert_eq!(options.len(), 4);
+            assert_eq!(options["ipv4"], "on");
+            assert_eq!(options["ipv6"], "off");
+            assert_eq!(options["hostfwd"], format!("tcp:127.0.0.1:{port}-:22"));
+            let devices = args
+                .windows(2)
+                .filter(|pair| pair[0] == "-device")
+                .map(|pair| pair[1])
+                .filter(|device| device.starts_with("virtio-net-pci"))
+                .collect::<Vec<_>>();
+            assert_eq!(
+                devices,
+                [format!("virtio-net-pci,netdev={}", options["id"])]
+            );
+            let ssh = ssh_arguments(work, port, &["true".into()]).unwrap();
+            let forwarded = ssh
+                .windows(2)
+                .filter(|pair| pair[0] == "-p")
+                .map(|pair| &pair[1])
+                .collect::<Vec<_>>();
+            assert_eq!(forwarded, [&OsString::from(port.to_string())]);
+            assert!(ssh.iter().any(|value| value == "fixture@127.0.0.1"));
+        }
     }
     #[test]
     fn cloud_completion_requires_all_four_clean_stages_and_actual_zero() {
