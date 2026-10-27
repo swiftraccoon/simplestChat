@@ -106,7 +106,13 @@ async function checkNotificationPreferences(
   const text = 'Muted alerts still deliver this private message';
   await sender.dialog.getByLabel('Private message', { exact: true }).fill(text);
   await sender.dialog.getByLabel('Private message', { exact: true }).press('Enter');
-  await sender.dialog.getByText(text, { exact: true }).waitFor();
+  // Pending recovery displays the same text before its HTTP receipt is consumed.
+  // Keep the send owner open until both retained delivery and confirmation settle.
+  await sender.dialog
+    .locator('.history-messages .history-message')
+    .getByText(text, { exact: true })
+    .waitFor();
+  await sender.dialog.locator('.pm-unconfirmed').waitFor({ state: 'hidden' });
   await close(sender.dialog);
   await close(sender.inbox);
   const unread = owner.waitForResponse(
