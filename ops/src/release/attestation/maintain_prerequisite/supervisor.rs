@@ -477,6 +477,7 @@ fn wait_outer(
     let mut settled = None;
     let mut result_deadline_ns = None;
     let mut forwarded = false;
+    let mut terminal_seen = false;
     loop {
         let observed = if settled.is_some() {
             owner.final_work()
@@ -514,8 +515,12 @@ fn wait_outer(
         {
             owner.record(first);
         }
-        let cleanup = owner.error().is_some() || settled.is_some();
-        if let Some(packet) = channel.attempt(owner, cleanup)? {
+        loop {
+            let cleanup = owner.error().is_some() || settled.is_some();
+            let receive_end = settled.unwrap_or_else(|| owner.end());
+            let Some(packet) = channel.attempt(owner, receive_end, cleanup)? else {
+                break;
+            };
             let result = (|| {
                 if !same_credential(packet.credential, peer.credential) || !packet.rights.is_empty()
                 {
@@ -595,11 +600,16 @@ fn wait_outer(
         if owner.now() >= owner.end() {
             return fail(owner, Cause::Deadline);
         }
+        if terminal_seen {
+            // Only a genuinely empty queue observed after reserved terminal
+            // status can prove that the child omitted its closed result.
+            return fail(owner, Cause::Command);
+        }
         if slots.leader.as_ref().ok_or(Cause::Input)?.terminal(owner)? {
-            // A child exiting without the closed result remains unproven.
-            if slots.result.is_none() {
-                return fail(owner, Cause::Command);
-            }
+            // Result can be queued between the previous EAGAIN and this
+            // observation. Drain once more before judging it absent.
+            terminal_seen = true;
+            continue;
         }
         std::thread::sleep(Duration::from_millis(5));
     }
@@ -1481,5 +1491,252 @@ mod bytecode_tests {
             )
         );
         assert!(Instant::now() < end);
+    }
+}
+
+#[cfg(test)]
+mod result_queue_tests {
+    use super::*;
+    use std::time::Instant;
+
+    #[derive(Clone, Copy)]
+    enum Case {
+        Complete,
+        Failed,
+        Missing,
+        Nonce,
+        Credential,
+        Rights,
+        Ordering,
+        Late,
+        ChangedEnd,
+    }
+    struct Observed {
+        result: Result<()>,
+        first: Option<Cause>,
+        facts: Option<Facts>,
+        natural: bool,
+        reaped: bool,
+        pipes_closed: bool,
+        sockets_closed: bool,
+        flags_restored: bool,
+        deadline_retained: bool,
+        close_count: usize,
+        all_closes_passed: bool,
+        finished: Result<()>,
+    }
+    fn queued(case: Case) -> Observed {
+        identity::CLOSED.with(|events| events.borrow_mut().clear());
+        let start = Instant::now();
+        let mut owner = Owner::new(start, Duration::from_secs(30), Duration::from_secs(3)).unwrap();
+        let original_end = owner.end();
+        let mut sockets = Vec::new();
+        let mut leader = None;
+        let mut output = None;
+        let mut error = None;
+        let mut facts = None;
+        let mut natural_end = None;
+        let mut flags_restored = false;
+        let mut original_result_end = None;
+        let result = (|| {
+            let pair = rustix::net::socketpair(
+                rustix::net::AddressFamily::UNIX,
+                rustix::net::SocketType::SEQPACKET,
+                rustix::net::SocketFlags::CLOEXEC,
+                None,
+            )
+            .map_err(|_| Cause::Io)?;
+            sockets.extend([pair.0, pair.1]);
+            let receiver = Channel::new(sockets[0].as_fd(), true, &mut owner)?;
+            let sender = match Channel::new(sockets[1].as_fd(), false, &mut owner) {
+                Ok(value) => value,
+                Err(first) => {
+                    let _ = receiver.finish(&mut owner);
+                    return Err(first);
+                }
+            };
+            let received = (|| {
+                let clock = Clock::new(protocol::now()?)?;
+                let nonce = "a".repeat(32);
+                let end_ns = if matches!(case, Case::Late) {
+                    clock.origin + 1
+                } else {
+                    protocol::now()? + 3_000_000_000
+                };
+                original_result_end = Some(Instant::now() + Duration::from_secs(4));
+                let mut settled = Frame::new(Kind::Settled, &nonce, Trial::Normal, clock);
+                settled.phase_deadline_ns = Some(end_ns);
+                let mut terminal = Frame::new(Kind::Result, &nonce, Trial::Normal, clock);
+                terminal.phase_deadline_ns = Some(if matches!(case, Case::ChangedEnd) {
+                    end_ns - 1
+                } else {
+                    end_ns
+                });
+                terminal.phase = Phase::Complete;
+                terminal.facts = Some(Facts {
+                    private_go: true,
+                    launcher_started: true,
+                    echild: true,
+                    launcher_raw_status: Some(if matches!(case, Case::Failed) { 1 } else { 0 }),
+                    ..Facts::default()
+                });
+                if matches!(case, Case::Failed) {
+                    terminal.failure = Some(Failure::Command);
+                }
+                if matches!(case, Case::Nonce) {
+                    terminal.nonce = "b".repeat(32);
+                }
+                let send_end = owner.now() + Duration::from_secs(3);
+                if !matches!(case, Case::Ordering) {
+                    sender.send(&settled, &[], &mut owner, send_end, false)?;
+                }
+                if !matches!(case, Case::Missing) {
+                    let rights = if matches!(case, Case::Rights) {
+                        vec![sockets[1].as_fd()]
+                    } else {
+                        Vec::new()
+                    };
+                    sender.send(&terminal, &rights, &mut owner, send_end, false)?;
+                }
+                // These real datagrams are queued before an inert wrapper is
+                // spawned and observed naturally terminal, without consuming it.
+                // The harness sender is local; this proves no PID namespace.
+                leader = Some(Leader::new(
+                    command("/usr/bin/true").spawn().map_err(|_| Cause::Io)?,
+                ));
+                let peers = captures(leader.as_mut().ok_or(Cause::Io)?, &mut owner)?;
+                output = Some(peers.0);
+                error = Some(peers.1);
+                while !leader.as_ref().ok_or(Cause::Io)?.terminal(&mut owner)? {
+                    owner.check(Window::Body)?;
+                    std::thread::sleep(Duration::from_millis(1));
+                }
+                let mut credential =
+                    rustix::net::sockopt::socket_peercred(&sockets[0]).map_err(|_| Cause::Io)?;
+                if matches!(case, Case::Credential) {
+                    credential.gid =
+                        rustix::process::Gid::from_raw(credential.gid.as_raw().wrapping_add(1));
+                }
+                let peer = Peer {
+                    credential: Some(credential),
+                    nonce: &nonce,
+                    clock,
+                    trial: Trial::Normal,
+                };
+                let mut slots = WaitSlots {
+                    leader: &mut leader,
+                    output: &mut output,
+                    error: &mut error,
+                    result: &mut facts,
+                    natural_end: &mut natural_end,
+                };
+                wait_outer(
+                    &receiver,
+                    &peer,
+                    &mut owner,
+                    &mut Phase::Ready,
+                    &mut slots,
+                    &[],
+                )
+            })();
+            flags_restored = sender.finish(&mut owner);
+            flags_restored &= receiver.finish(&mut owner);
+            received
+        })();
+        if let Err(first) = result {
+            owner.record(first);
+        }
+        let natural = settle_wrapper(
+            &mut leader,
+            &mut output,
+            &mut error,
+            &mut owner,
+            natural_end,
+        );
+        let first = owner.error();
+        let reaped = leader
+            .as_ref()
+            .is_some_and(|child| child.consumed && child.status == Some(0));
+        let pipes_closed = [&output, &error].iter().all(|slot| {
+            slot.as_ref()
+                .is_some_and(|capture| capture.eof && capture.closed)
+        });
+        let sockets_closed = identity::close_all(&mut owner, sockets);
+        let deadline_retained = owner.end() == original_end
+            && natural_end.is_none_or(|end| {
+                original_result_end.is_some_and(|original| end < original && end <= original_end)
+            });
+        let closes = identity::CLOSED.with(|events| std::mem::take(&mut *events.borrow_mut()));
+        let close_count = closes.len();
+        let all_closes_passed = closes.into_iter().all(|closed| closed);
+        let finished = owner.finish();
+        Observed {
+            result,
+            first,
+            facts,
+            natural,
+            reaped,
+            pipes_closed,
+            sockets_closed,
+            flags_restored,
+            deadline_retained,
+            close_count,
+            all_closes_passed,
+            finished,
+        }
+    }
+
+    #[test]
+    fn queued_settled_and_result_survive_natural_wrapper_exit() {
+        for case in [Case::Complete, Case::Failed] {
+            let observed = queued(case);
+            let expected = if matches!(case, Case::Failed) {
+                Some(Cause::Command)
+            } else {
+                None
+            };
+            assert_eq!(observed.result, Ok(()));
+            assert_eq!(observed.first, expected);
+            let facts = observed.facts.unwrap();
+            assert!(facts.private_go && facts.launcher_started && facts.echild);
+            assert_eq!(
+                facts.launcher_raw_status,
+                Some(if expected.is_some() { 1 } else { 0 })
+            );
+            assert!(observed.natural && observed.reaped && observed.pipes_closed);
+            assert!(
+                observed.sockets_closed && observed.flags_restored && observed.deadline_retained
+            );
+            assert!(observed.all_closes_passed);
+            assert_eq!(observed.close_count, 4);
+            assert_eq!(observed.finished, expected.map_or(Ok(()), Err));
+        }
+    }
+
+    #[test]
+    fn queued_result_refusals_still_close_every_original() {
+        for (case, expected) in [
+            (Case::Missing, Cause::Command),
+            (Case::Nonce, Cause::Policy),
+            (Case::Credential, Cause::Policy),
+            (Case::Rights, Cause::Policy),
+            (Case::Ordering, Cause::Policy),
+            (Case::Late, Cause::Deadline),
+            (Case::ChangedEnd, Cause::Deadline),
+        ] {
+            let observed = queued(case);
+            assert_eq!(observed.result, Err(expected));
+            assert_eq!(observed.first, Some(expected));
+            assert!(observed.facts.is_none() && observed.reaped && observed.pipes_closed);
+            assert!(
+                observed.sockets_closed && observed.flags_restored && observed.deadline_retained
+            );
+            assert!(observed.all_closes_passed);
+            assert_eq!(
+                observed.close_count,
+                if matches!(case, Case::Rights) { 5 } else { 4 }
+            );
+            assert_eq!(observed.finished, Err(expected));
+        }
     }
 }

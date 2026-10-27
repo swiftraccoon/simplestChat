@@ -3039,6 +3039,13 @@ the production command builder and checks that its retained parent directory
 and source bytes stay unchanged. This import check performs no application
 seeding; the signed VM trial must still establish that operation.
 
+A Linux seqpacket regression queues the settled and final result frames before
+an owned inert wrapper exits naturally. The receiver must consume the queued
+result before classifying terminal status as a missing result, retaining the
+original result deadline and all packet checks. Missing, invalid or late frames
+remain refusals. This exercises result delivery and ownership without executing
+the application launcher or proving the complete guest transaction.
+
 The Caddy profile uses the pinned Docker daemon's canonical inspection value,
 `CAP_NET_BIND_SERVICE`. A local Docker 29.8.2 daemon/client experiment with the
 exact pinned Caddy image and normal create arguments reproduced that value;
