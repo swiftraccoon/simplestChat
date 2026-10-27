@@ -106,6 +106,17 @@ remain separate from the guest experiment's verdict. Public summaries contain
 only closed metadata, hashes and actual status/lifecycle facts; credentials,
 raw streams, config, keys, dumps and paths stay private.
 
+Server discovery handles retained artifacts from repeated CI attempts through
+one private pure selector (`C-VALIDATE`, `C-GOOD-ERR`). It bounds the listing and
+matching timestamp strings, compares parsed RFC3339 instants with full precision,
+and refuses a tied newest instant or malformed matching metadata. A creation
+instant only locates the next download. Existing signature, current artifact
+ID/digest, successful workflow and exact run-attempt checks remain authoritative;
+an expired or unauthentic newest candidate cannot trigger an older fallback.
+Reordered rows, offset-equivalent instants, subsecond ordering, older ties and
+malformed neighbors have source tests. This adds no API call, runtime authority,
+deadline extension or claim that acquisition occurred.
+
 Installation failures retain a closed `installDiagnostic` checkpoint and the
 actual child exit when available. Guest receipt admission validates the exact
 identity, ordered prefix of at most 33 fixed cases, byte-range recorded exits,

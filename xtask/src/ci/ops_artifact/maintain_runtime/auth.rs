@@ -320,6 +320,39 @@ fn current(
         "revision":options.revision,"artifactZipBytes":zip.bytes,"zipSha256":zip.sha256}),
     )
 }
+/// Locate a candidate across retained attempts. Creation time only selects the
+/// download: its signatures, exact attempt and current metadata still authorize it.
+pub(super) fn server_artifact(listing: &Value, revision: &str) -> Result<u64> {
+    let rows = listing["artifacts"].as_array().ok_or(Error::Refused)?;
+    if listing["total_count"].as_u64() != Some(rows.len() as u64) || rows.len() > 100 {
+        return Err(Error::Refused);
+    }
+    let wanted = format!("simplestchat-production-{revision}");
+    let mut candidates = rows
+        .iter()
+        .filter(|row| row["name"] == wanted)
+        .map(|row| {
+            let timestamp = row["created_at"]
+                .as_str()
+                .filter(|value| value.len() <= 64)
+                .ok_or(Error::Refused)?;
+            let created =
+                chrono::DateTime::parse_from_rfc3339(timestamp).map_err(|_| Error::Refused)?;
+            let id = row["id"]
+                .as_u64()
+                .filter(|value| *value > 0 && *value < (1 << 53))
+                .ok_or(Error::Refused)?;
+            Ok((created, id))
+        })
+        .collect::<Result<Vec<_>>>()?;
+    candidates.sort_unstable_by_key(|candidate| std::cmp::Reverse(candidate.0));
+    let (newest, older) = candidates.split_first().ok_or(Error::Refused)?;
+    if older.first().is_some_and(|next| next.0 == newest.0) {
+        return Err(Error::Refused);
+    }
+    Ok(newest.1)
+}
+
 pub(super) async fn server(
     runner: &mut Runner,
     control: &mut Control,
@@ -336,22 +369,7 @@ pub(super) async fn server(
         ),
     )
     .await?;
-    let rows = listing["artifacts"].as_array().ok_or(Error::Refused)?;
-    if listing["total_count"].as_u64() != Some(rows.len() as u64) || rows.len() > 100 {
-        return Err(Error::Refused);
-    }
-    let wanted = format!("simplestchat-production-{}", options.revision);
-    let matching = rows
-        .iter()
-        .filter(|row| row["name"] == wanted)
-        .collect::<Vec<_>>();
-    if matching.len() != 1 {
-        return Err(Error::Refused);
-    }
-    let id = matching[0]["id"]
-        .as_u64()
-        .filter(|value| *value > 0 && *value < (1 << 53))
-        .ok_or(Error::Refused)?;
+    let id = server_artifact(&listing, &options.revision)?;
     let parent = runner.output.join("server-acquired");
     let mut argv = args(&[
         "release",
