@@ -316,13 +316,13 @@ fn workflow_fingerprint_steps_keep_their_scopes_order_guards_and_receipt_consume
         ("automation", "automation", 18),
         ("rust-lint", "rust-lint", 13),
         ("rust-test", "rust-test", 20),
-        ("browser", "backend", 43),
+        ("browser", "backend", 44),
     ] {
         let steps = workflow.jobs[job]["steps"].as_array().unwrap();
         assert_eq!(
             steps.len(),
             count,
-            "The cache output change adds or removes no {job} step"
+            "The {job} workflow retains its reviewed step inventory"
         );
         let matching: Vec<_> = steps
             .iter()
