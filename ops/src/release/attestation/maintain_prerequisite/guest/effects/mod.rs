@@ -345,26 +345,25 @@ impl Fixture {
         )?;
         policy::bridge(&network, &id, &self.bridge)?;
         ctx.control.checkpoint = "network-route";
-        let routes = policy::decode(
+        let interface = policy::control_interface(
             &Self::call(
                 ctx,
                 "physical-route",
                 &[
                     "ip".into(),
                     "-json".into(),
+                    "-4".into(),
                     "route".into(),
-                    "show".into(),
-                    "default".into(),
+                    "get".into(),
+                    "10.0.2.2".into(),
                 ],
                 30,
             )
             .await?,
+            &self.bridge,
         )?;
-        let routes = routes.as_array().ok_or(Error::Refused)?;
-        require(routes.len() == 1)?;
-        let interface = policy::string(&routes[0]["dev"])?;
         ctx.control.checkpoint = "network-firewall";
-        let rules = policy::firewall(&self.table, interface, &self.bridge)?;
+        let rules = policy::firewall(&self.table, interface.as_str(), &self.bridge)?;
         let path = Path::new(PRIVATE).join("guard.nft");
         let guard = super::files::write_new(&path, rules.as_bytes(), 0, 0o600, &mut ctx.control)?;
         ctx.originals.push(guard);
@@ -389,7 +388,7 @@ impl Fixture {
             .await?;
         ctx.check()?;
         ctx.control.checkpoint = "network-capture";
-        let watch = Watch::start(ctx, interface).await?;
+        let watch = Watch::start(ctx, interface.as_str()).await?;
         self.monitors.lock().map_err(|_| Error::Io)?.watch = Some(watch);
         ctx.control.checkpoint = "network-capture-ready";
         let previous = ctx.control.push_phase(Duration::from_secs(5))?;
@@ -437,7 +436,7 @@ impl Fixture {
             ctx.control.check()?;
             match socket.send_to(
                 b"INERT-CONTAINMENT-PROBE",
-                SocketAddrV4::new(Ipv4Addr::new(192, 0, 2, 1), 53),
+                SocketAddrV4::new(policy::GUARD_PROBE_ADDRESS, 53),
             ) {
                 Ok(size) => require(size == b"INERT-CONTAINMENT-PROBE".len())?,
                 Err(error) if error.raw_os_error() == Some(1) => {}

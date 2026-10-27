@@ -12,6 +12,10 @@ pub(super) const PROJECT: &str = "simplestchat-public";
 pub(super) const CONFIG: &str = "/etc/simplestchat-public";
 pub(super) const PUBLIC: &str = "/srv/simplestchat-public";
 
+/// A disallowed on-link peer reaches the output hook without a default router.
+/// This avoids treating an earlier routing failure as evidence of a firewall drop.
+pub(super) const GUARD_PROBE_ADDRESS: Ipv4Addr = Ipv4Addr::new(10, 0, 2, 254);
+
 pub(super) fn require(value: bool) -> Result<()> {
     if value { Ok(()) } else { Err(Error::Refused) }
 }
@@ -415,6 +419,40 @@ pub(super) fn proxy_profile(
                     "443/udp":[{"HostIp":"127.0.0.1","HostPort":"443"}]
                 }),
     )
+}
+
+/// Device admitted from the fixed, direct route to the fixture's control peer.
+pub(super) struct ControlInterface(String);
+impl ControlInterface {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+/// The restricted provider supplies an on-link peer without a default router.
+pub(super) fn control_interface(bytes: &[u8], bridge: &str) -> Result<ControlInterface> {
+    let route = one(bytes)?;
+    require(route["dst"] == "10.0.2.2" && route["prefsrc"] == "10.0.2.15")?;
+    let fields = object(&route)?;
+    for name in ["gateway", "via", "multipath", "nexthops", "nhid"] {
+        require(!fields.contains_key(name))?;
+    }
+    require(
+        fields
+            .get("type")
+            .is_none_or(|kind| kind.as_str() == Some("unicast")),
+    )?;
+    let device = string(&route["dev"])?;
+    require(
+        !device.is_empty()
+            && device.len() <= 15
+            && device
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || b"_-".contains(&byte))
+            && device != "lo"
+            && device != bridge,
+    )?;
+    Ok(ControlInterface(device.to_owned()))
 }
 
 pub(super) fn firewall(table: &str, interface: &str, bridge: &str) -> Result<String> {
