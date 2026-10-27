@@ -1498,6 +1498,9 @@ roles. The musl revision includes the upstream CVE-2026-107891 repair. Selected
 headers, static archives and startup objects enter the immutable kit only after
 bounded readback and ELF/archive admission. Its fixed musl compiler adapter uses
 those target inputs for static PIE, with Rust's bundled target CRT disabled.
+Its generated GCC specs preserve upstream musl's two blank lines after each
+empty `esp` specification, including the final one. Removing a separator can
+make GCC reject the complete specs file before preprocessing any source.
 OpenSSL shared libraries, dynamic loading, modules and engines are disabled.
 OpenSSL receives only the measured Linux UAPI `linux`, `asm-generic` and x86-64
 `asm` header trees alongside musl's headers; the GNU libc headers are not added
