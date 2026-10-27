@@ -618,6 +618,11 @@ impl Owners {
                 report["preparationQemu"] = preparation;
             }
             report["qemu"] = vm.diagnostics();
+            if result.is_err()
+                && let Some(diagnostic) = vm.startup_diagnostic()
+            {
+                report["vmStartupDiagnostic"] = diagnostic;
+            }
             remember(&mut first, result.map(|_| ()), control);
         }
         // Keep the same actual payload originals through every VM finalizer.

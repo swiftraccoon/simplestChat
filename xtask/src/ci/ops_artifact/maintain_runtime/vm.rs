@@ -16,7 +16,7 @@ use super::{
 };
 use serde_json::{Value, json};
 use session::Pipe;
-use sha2::{Digest, Sha512};
+use sha2::{Digest, Sha256, Sha512};
 use simplestchat_ops::owned_process::{Group, exited_now, finish_before, reserved};
 use std::{
     ffi::OsString,
@@ -425,35 +425,282 @@ impl MutableDisk {
     }
 }
 
+#[derive(Clone, Copy)]
+enum StderrClass {
+    HostForwardSetup,
+    BackingFileMissing,
+    Qcow2Format,
+    ImageWriteLock,
+    Unclassified,
+}
+impl StderrClass {
+    fn name(self) -> &'static str {
+        match self {
+            Self::HostForwardSetup => "host-forward-setup",
+            Self::BackingFileMissing => "backing-file-missing",
+            Self::Qcow2Format => "qcow2-format",
+            Self::ImageWriteLock => "image-write-lock",
+            Self::Unclassified => "unclassified",
+        }
+    }
+}
+
+#[derive(Clone)]
+struct StartupProfile {
+    records: [(StderrClass, String); 4],
+}
+impl StartupProfile {
+    fn new(arguments: &[OsString], work: &Path) -> Option<Self> {
+        let option = |name: &str| {
+            arguments.windows(2).find(|pair| pair[0] == name)?[1]
+                .to_str()
+                .map(str::to_owned)
+        };
+        let at = arguments
+            .iter()
+            .position(|value| value == "-name")?
+            .checked_sub(1)?;
+        let program = Path::new(&arguments[at]).file_name()?.to_str()?;
+        let qmp = option("-qmp")?;
+        let root = option("-blockdev")?;
+        let network = option("-netdev")?;
+        let forward = network.split_once("hostfwd=")?.1;
+        let socket = qmp.strip_suffix(",wait=on")?;
+        let wait = format!(
+            "{program}: -qmp {qmp}: info: QEMU waiting for connection on: \
+             disconnected:{socket}\n"
+        );
+        let block = format!("{program}: -blockdev {root}: ");
+        let base = work.join("base.qcow2");
+        let disk = work.join("guest.qcow2");
+        let base = base.to_str()?;
+        let disk = disk.to_str()?;
+        Some(Self {
+            records: [
+                (
+                    StderrClass::HostForwardSetup,
+                    format!(
+                        "{wait}{program}: -netdev {network}: Could not set up host forwarding rule \
+                     '{forward}'\n"
+                    ),
+                ),
+                (
+                    StderrClass::BackingFileMissing,
+                    format!(
+                        "{wait}{block}Could not open backing file: Could not open '{base}': \
+                     No such file or directory\n"
+                    ),
+                ),
+                (
+                    StderrClass::Qcow2Format,
+                    format!("{wait}{block}Image is not in qcow2 format\n"),
+                ),
+                (
+                    StderrClass::ImageWriteLock,
+                    format!(
+                        "{wait}{block}Failed to get \"write\" lock\n\
+                     Is another process using the image [{disk}]?\n"
+                    ),
+                ),
+            ],
+        })
+    }
+    fn classify(&self, bytes: &[u8]) -> StderrClass {
+        self.records
+            .iter()
+            .find(|(_, record)| record.as_bytes() == bytes)
+            .map(|(kind, _)| *kind)
+            .unwrap_or(StderrClass::Unclassified)
+    }
+}
+
+struct StderrObservation {
+    class: StderrClass,
+    sha256: String,
+}
+
+#[derive(Clone, Copy)]
+enum ReaderFault {
+    UnexpectedEof,
+    Uncertain(Error),
+}
 #[derive(Default)]
 struct ReaderFacts {
     first: Option<Error>,
     eof: [bool; 2],
+    faulted: [bool; 2],
     closed: [bool; 4],
     bytes: [usize; 2],
     joined: bool,
     completed: bool,
+    uncertain: bool,
+    stderr: Option<StderrObservation>,
+}
+impl ReaderFacts {
+    fn fail(
+        &mut self,
+        fault: ReaderFault,
+        failure: &Arc<Mutex<Option<Error>>>,
+        health: &AtomicBool,
+    ) {
+        let error = match fault {
+            ReaderFault::UnexpectedEof => Error::Refused,
+            ReaderFault::Uncertain(error) => {
+                self.uncertain = true;
+                self.stderr = None;
+                error
+            }
+        };
+        remember(&mut self.first, failure, Err(error));
+        health.store(false, Ordering::SeqCst);
+    }
+    fn evidence_uncertain(&mut self) {
+        self.uncertain = true;
+        self.stderr = None;
+    }
 }
 struct ReaderOwned {
     pipes: [Option<Pipe>; 2],
     logs: [Option<File>; 2],
 }
 impl ReaderOwned {
+    fn pump(
+        &mut self,
+        facts: &mut ReaderFacts,
+        failure: &Arc<Mutex<Option<Error>>>,
+        health: &AtomicBool,
+        closing: &AtomicBool,
+        limits: [usize; 2],
+        end: Instant,
+    ) -> Result<bool> {
+        if let Err(error) = live(end) {
+            facts.fail(ReaderFault::Uncertain(error), failure, health);
+            return Err(error);
+        }
+        let mut block = [0; 65536];
+        for (index, limit) in limits.into_iter().enumerate() {
+            if facts.eof[index] || facts.faulted[index] {
+                continue;
+            }
+            let observed: Result<()> = (|| {
+                live(end)?;
+                let pipe = self.pipes[index].as_mut().ok_or(Error::Close)?;
+                let count = pipe.read(&mut block)?;
+                facts.eof[index] = pipe.eof;
+                facts.bytes[index] = pipe.bytes;
+                live(end)?;
+                let Some(count) = count else {
+                    return Ok(());
+                };
+                if pipe.bytes > limit {
+                    return Err(Error::Refused);
+                }
+                if count == 0 {
+                    if !closing.load(Ordering::SeqCst) {
+                        facts.fail(ReaderFault::UnexpectedEof, failure, health);
+                    }
+                    return Ok(());
+                }
+                let output = self.logs[index].as_mut().ok_or(Error::Close)?;
+                let mut written = 0;
+                while written < count {
+                    live(end)?;
+                    let n = match output.write(&block[written..count]) {
+                        Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+                        value => value.map_err(|_| Error::Io)?,
+                    };
+                    live(end)?;
+                    if n == 0 {
+                        return Err(Error::Io);
+                    }
+                    written += n;
+                }
+                Ok(())
+            })();
+            if let Err(error) = observed {
+                facts.faulted[index] = true;
+                facts.fail(ReaderFault::Uncertain(error), failure, health);
+                if matches!(error, Error::Deadline) {
+                    return Err(error);
+                }
+            }
+        }
+        Ok((0..2).all(|index| facts.eof[index] || facts.faulted[index]))
+    }
+    fn stderr_observation(
+        &self,
+        facts: &ReaderFacts,
+        profile: Option<&StartupProfile>,
+        end: Instant,
+    ) -> Result<StderrObservation> {
+        live(end)?;
+        if facts.uncertain || !facts.eof.iter().all(|value| *value) {
+            return Err(Error::Refused);
+        }
+        let file = self.logs[1].as_ref().ok_or(Error::Close)?;
+        let before = file.metadata().map_err(|_| Error::Io)?;
+        if !before.is_file()
+            || before.nlink() != 1
+            || before.uid() != rustix::process::getuid().as_raw()
+            || before.mode() & 0o7777 != 0o600
+            || before.len() != facts.bytes[1] as u64
+        {
+            return Err(Error::Changed);
+        }
+        let mut hash = Sha256::new();
+        let mut prefix = Vec::new();
+        let mut offset = 0;
+        let mut block = [0; 65536];
+        while offset < before.len() {
+            live(end)?;
+            let maximum = (before.len() - offset).min(block.len() as u64) as usize;
+            let count = match file.read_at(&mut block[..maximum], offset) {
+                Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+                value => value.map_err(|_| Error::Io)?,
+            };
+            live(end)?;
+            if count == 0 {
+                return Err(Error::Io);
+            }
+            offset += count as u64;
+            hash.update(&block[..count]);
+            if before.len() <= 8192 {
+                prefix.extend_from_slice(&block[..count]);
+            }
+        }
+        if !files::same(&before, &file.metadata().map_err(|_| Error::Io)?) {
+            return Err(Error::Changed);
+        }
+        live(end)?;
+        Ok(StderrObservation {
+            class: profile
+                .map(|profile| profile.classify(&prefix))
+                .unwrap_or(StderrClass::Unclassified),
+            sha256: files::hex(&hash.finalize()),
+        })
+    }
     fn finish(&mut self, facts: &mut ReaderFacts, failure: &Arc<Mutex<Option<Error>>>) {
         for (i, pipe) in self.pipes.iter_mut().enumerate() {
             if let Some(pipe) = pipe {
-                remember(&mut facts.first, failure, pipe.finish());
+                let closed = pipe.finish();
+                if closed.is_err() {
+                    facts.evidence_uncertain();
+                }
+                remember(&mut facts.first, failure, closed);
                 facts.closed[i] = pipe.closed;
             }
         }
         for (i, file) in self.logs.iter_mut().enumerate() {
             if let Some(mut file) = file.take() {
-                remember(
-                    &mut facts.first,
-                    failure,
-                    file.flush().map_err(|_| Error::Io),
-                );
+                let flushed = file.flush().map_err(|_| Error::Io);
+                if flushed.is_err() {
+                    facts.evidence_uncertain();
+                }
+                remember(&mut facts.first, failure, flushed);
                 let result = close(file);
+                if result.is_err() {
+                    facts.evidence_uncertain();
+                }
                 facts.closed[i + 2] = result.is_ok();
                 remember(&mut facts.first, failure, result);
             }
@@ -483,7 +730,8 @@ pub(super) struct Vm {
     failure: Arc<Mutex<Option<Error>>>,
     closing: Arc<AtomicBool>,
     stop_reader: Arc<AtomicBool>,
-    authenticated: bool,
+    authenticated: Arc<AtomicBool>,
+    startup_profile: Option<StartupProfile>,
     cloud_init: bool,
     first: Option<Error>,
     status: Option<i32>,
@@ -519,7 +767,8 @@ impl Vm {
             failure: Arc::new(Mutex::new(None)),
             closing: Arc::new(AtomicBool::new(false)),
             stop_reader: Arc::new(AtomicBool::new(false)),
-            authenticated: false,
+            authenticated: Arc::new(AtomicBool::new(false)),
+            startup_profile: None,
             cloud_init: false,
             first: None,
             status: None,
@@ -813,6 +1062,7 @@ impl Vm {
             self.restricted,
             seconds,
         )?;
+        self.startup_profile = StartupProfile::new(&arguments, &self.work);
         command
             .args(arguments)
             .env("MALLOC_ARENA_MAX", "2")
@@ -1081,7 +1331,7 @@ impl Vm {
                 .await?;
             self.check(control)?;
             if result.status == 0 {
-                self.authenticated = true;
+                self.authenticated.store(true, Ordering::SeqCst);
                 break;
             }
             if attempt == 23 {
@@ -1247,6 +1497,8 @@ impl Vm {
             failure: failure.clone(),
             completed: false,
         };
+        let authenticated = self.authenticated.clone();
+        let profile = self.startup_profile.clone();
         self.reader = Some(tokio::spawn(async move {
             let mut guard = guard;
             let result: Result<()> = async {
@@ -1258,45 +1510,7 @@ impl Vm {
                     let complete = {
                         let mut owned = owned.lock().map_err(|_| Error::Io)?;
                         let mut facts = facts.lock().map_err(|_| Error::Io)?;
-                        let mut block = [0; 65536];
-                        for (index, limit) in limits.into_iter().enumerate() {
-                            let pipe = owned.pipes[index].as_mut().ok_or(Error::Close)?;
-                            if pipe.eof {
-                                continue;
-                            }
-                            live(end)?;
-                            if let Some(count) = pipe.read(&mut block)? {
-                                facts.eof[index] = pipe.eof;
-                                facts.bytes[index] = pipe.bytes;
-                                live(end)?;
-                                if pipe.bytes > limit {
-                                    return Err(Error::Refused);
-                                }
-                                if count > 0 {
-                                    let output = owned.logs[index].as_mut().ok_or(Error::Close)?;
-                                    let mut written = 0;
-                                    while written < count {
-                                        live(end)?;
-                                        let n = match output.write(&block[written..count]) {
-                                            Err(e)
-                                                if e.kind() == std::io::ErrorKind::Interrupted =>
-                                            {
-                                                continue;
-                                            }
-                                            value => value.map_err(|_| Error::Io)?,
-                                        };
-                                        live(end)?;
-                                        if n == 0 {
-                                            return Err(Error::Io);
-                                        }
-                                        written += n;
-                                    }
-                                } else if !closing.load(Ordering::SeqCst) {
-                                    return Err(Error::Refused);
-                                }
-                            }
-                        }
-                        facts.eof.iter().all(|e| *e)
+                        owned.pump(&mut facts, &failure, &health, &closing, limits, end)?
                     };
                     if complete {
                         return live(end);
@@ -1306,22 +1520,29 @@ impl Vm {
                 }
             }
             .await;
-            if let Err(error) = result {
-                failure
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .get_or_insert(error);
-                health.store(false, Ordering::SeqCst);
-            }
             let mut data = facts
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            data.completed = result.is_ok();
-            remember(&mut data.first, &failure, result);
+            if let Err(error) = result {
+                data.fail(ReaderFault::Uncertain(error), &failure, &health);
+            }
+            data.completed = result.is_ok() && data.first.is_none();
             let mut owned = owned
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if !authenticated.load(Ordering::SeqCst)
+                && !data.uncertain
+                && data.eof.iter().all(|value| *value)
+            {
+                match owned.stderr_observation(&data, profile.as_ref(), end) {
+                    Ok(observed) => data.stderr = Some(observed),
+                    Err(error) => data.fail(ReaderFault::Uncertain(error), &failure, &health),
+                }
+            }
             owned.finish(&mut data, &failure);
+            if let Err(error) = live(end) {
+                data.fail(ReaderFault::Uncertain(error), &failure, &health);
+            }
             if let Some(error) = data.first {
                 failure
                     .lock()
@@ -1435,9 +1656,17 @@ impl Vm {
                 {
                     Ok(Ok(())) => {}
                     Ok(Err(_)) => {
+                        self.facts
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner)
+                            .evidence_uncertain();
                         remember(&mut self.first, &self.failure, Err(Error::Close));
                     }
                     Err(_) => {
+                        self.facts
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner)
+                            .evidence_uncertain();
                         remember(&mut self.first, &self.failure, Err(Error::Close));
                         self.stop_reader.store(true, Ordering::SeqCst);
                         let end = (Instant::now() + Duration::from_secs(5)).min(settlement_end);
@@ -1493,7 +1722,7 @@ impl Vm {
                         || !facts.joined
                         || !facts.eof.iter().all(|value| *value)
                         || !facts.closed.iter().all(|value| *value)
-                        || !self.authenticated
+                        || !self.authenticated.load(Ordering::SeqCst)
                         || !self.cloud_init
                         || self.qmp.is_none()
                     {
@@ -1525,7 +1754,7 @@ impl Vm {
                 .facts
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if !self.authenticated
+            if !self.authenticated.load(Ordering::SeqCst)
                 || !self.cloud_init
                 || !self.reaped
                 || !self.retired
@@ -1554,6 +1783,31 @@ impl Vm {
             Ok(self.diagnostics())
         }
     }
+    /// Complete bounded stderr evidence is passive and only describes failed startup.
+    pub fn startup_diagnostic(&self) -> Option<Value> {
+        if !self.closed
+            || !self.reaped
+            || self.authenticated.load(Ordering::SeqCst)
+            || Instant::now() >= self.end
+        {
+            return None;
+        }
+        let status = self.status.filter(|value| *value != 0)?;
+        let data = self.facts.lock().ok()?;
+        if data.uncertain
+            || !data.joined
+            || !data.eof.iter().all(|value| *value)
+            || !data.closed.iter().all(|value| *value)
+        {
+            return None;
+        }
+        let stderr = data.stderr.as_ref()?;
+        Some(
+            json!({"epoch":if self.restricted {"restricted"} else {"preparation"},
+            "rawStatus":status,"stderrClass":stderr.class.name(),
+            "stderrSha256":stderr.sha256}),
+        )
+    }
     pub fn diagnostics(&self) -> Value {
         let data = self
             .facts
@@ -1562,7 +1816,7 @@ impl Vm {
         let qmp = self.qmp.as_ref().map(qmp::Observer::diagnostics);
         json!({"qemuReaped":self.reaped,"qemuExitedZero":self.status==Some(0),
             "qemuReturnCode":self.status,"groupRetired":self.retired,
-            "authenticatedSsh":self.authenticated,
+            "authenticatedSsh":self.authenticated.load(Ordering::SeqCst),
             "drainerCompleted":data.joined&&data.completed&&data.first.is_none()
                 &&data.eof.iter().all(|v|*v)
                 &&data.closed.iter().all(|v|*v),"cloudInitPassed":self.cloud_init,
@@ -1653,6 +1907,387 @@ fn cloud_passed(bytes: &[u8], status: i32) -> Result<bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    mod reader_tests {
+        use super::*;
+        use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+        use std::sync::atomic::AtomicU64;
+
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        struct Fixture {
+            vm: Vm,
+            control: Control,
+            writers: [Option<File>; 2],
+            root: PathBuf,
+        }
+        impl Fixture {
+            fn new() -> Self {
+                let root = Path::new("/tmp").canonicalize().unwrap().join(format!(
+                    "qemu-reader-{}-{}",
+                    std::process::id(),
+                    NEXT.fetch_add(1, Ordering::SeqCst)
+                ));
+                fs::DirBuilder::new().mode(0o700).create(&root).unwrap();
+                fs::set_permissions(&root, fs::Permissions::from_mode(0o700)).unwrap();
+                let mut control = Control::new(Instant::now()).unwrap();
+                let mut vm = Vm::epoch(
+                    root.clone(),
+                    2222,
+                    Instant::now() + Duration::from_secs(10),
+                    "a".repeat(32),
+                    true,
+                );
+                let mut writers = [None, None];
+                for (index, writer) in writers.iter_mut().enumerate() {
+                    let (read, write) = nix::unistd::pipe().unwrap();
+                    vm.owned.lock().unwrap().pipes[index] =
+                        Some(Pipe::new(File::from(read), &mut control).unwrap());
+                    *writer = Some(File::from(write));
+                    vm.owned.lock().unwrap().logs[index] = Some(
+                        files::private_file(&root.join(format!("stream-{index}")), &mut control)
+                            .unwrap(),
+                    );
+                }
+                let arguments = qemu_arguments(
+                    &root,
+                    2222,
+                    &"a".repeat(32),
+                    "/usr/bin/prlimit".into(),
+                    "/usr/bin/qemu-system-x86_64".into(),
+                    true,
+                    10,
+                )
+                .unwrap();
+                vm.startup_profile = StartupProfile::new(&arguments, &root);
+                Self {
+                    vm,
+                    control,
+                    writers,
+                    root,
+                }
+            }
+            fn write(&mut self, index: usize, bytes: &[u8]) {
+                self.writers[index]
+                    .as_mut()
+                    .unwrap()
+                    .write_all(bytes)
+                    .unwrap();
+            }
+            fn close_writer(&mut self, index: usize) {
+                if let Some(writer) = self.writers[index].take() {
+                    close(writer).unwrap();
+                }
+            }
+            fn pump(&mut self, limits: [usize; 2], closing: bool) -> Result<bool> {
+                self.vm.closing.store(closing, Ordering::SeqCst);
+                self.vm.owned.lock().unwrap().pump(
+                    &mut self.vm.facts.lock().unwrap(),
+                    &self.vm.failure,
+                    &self.vm.health,
+                    &self.vm.closing,
+                    limits,
+                    self.vm.end,
+                )
+            }
+            async fn drain(&mut self, limits: [usize; 2], closing: bool) -> Result<bool> {
+                // Each bounded poll may consume payload without observing the following EOF.
+                // The same immutable fixture end still fences every subsequent poll.
+                loop {
+                    match self.pump(limits, closing) {
+                        Ok(false) => tokio::task::yield_now().await,
+                        result => return result,
+                    }
+                }
+            }
+            fn settle_streams(&mut self) {
+                let mut facts = self.vm.facts.lock().unwrap();
+                let mut owned = self.vm.owned.lock().unwrap();
+                if !facts.uncertain && facts.eof.iter().all(|value| *value) {
+                    facts.stderr = owned
+                        .stderr_observation(&facts, self.vm.startup_profile.as_ref(), self.vm.end)
+                        .ok();
+                }
+                owned.finish(&mut facts, &self.vm.failure);
+            }
+            async fn finish(mut self) {
+                for index in 0..2 {
+                    self.close_writer(index);
+                }
+                if let Some(mut task) = self.vm.reader.take() {
+                    let end = tokio::time::Instant::from_std(self.vm.end);
+                    if tokio::time::timeout_at(end, &mut task).await.is_err() {
+                        task.abort();
+                        let _ = task.await;
+                    }
+                }
+                {
+                    let mut facts = self.vm.facts.lock().unwrap();
+                    self.vm
+                        .owned
+                        .lock()
+                        .unwrap()
+                        .finish(&mut facts, &self.vm.failure);
+                }
+                if let Some(first) = *self.vm.failure.lock().unwrap() {
+                    self.control.record(first);
+                }
+                self.control.settle();
+                let _ = self.control.finish();
+                let logs_closed = self
+                    .vm
+                    .owned
+                    .lock()
+                    .unwrap()
+                    .logs
+                    .iter()
+                    .all(Option::is_none);
+                let pipes_closed = self
+                    .vm
+                    .owned
+                    .lock()
+                    .unwrap()
+                    .pipes
+                    .iter()
+                    .flatten()
+                    .all(|pipe| pipe.closed);
+                let removed = fs::remove_dir_all(self.root);
+                assert!(logs_closed && pipes_closed);
+                assert!(removed.is_ok());
+            }
+        }
+
+        #[tokio::test]
+        async fn stdout_eof_latches_before_delayed_peer_and_keeps_complete_stderr_negative() {
+            let mut fixture = Fixture::new();
+            let end = fixture.vm.end;
+            fixture.vm.start_readers();
+            fixture.close_writer(0);
+            let fence = (Instant::now() + Duration::from_secs(3)).min(end);
+            while fixture.vm.health.load(Ordering::SeqCst) && Instant::now() < fence {
+                tokio::task::yield_now().await;
+            }
+            let refused_before_peer = *fixture.vm.failure.lock().unwrap();
+            let bytes = [b'x'; 265];
+            fixture.write(1, &bytes);
+            fixture.close_writer(1);
+            let mut task = fixture.vm.reader.take().unwrap();
+            let joined =
+                tokio::time::timeout_at(tokio::time::Instant::from_std(end), &mut task).await;
+            if joined.is_err() {
+                task.abort();
+                let _ = task.await;
+            }
+            let joined = matches!(joined, Ok(Ok(())));
+            fixture.vm.facts.lock().unwrap().joined = joined;
+            // Only the enclosing process status is synthetic in this pipe-owner test.
+            fixture.vm.closed = true;
+            fixture.vm.reaped = true;
+            fixture.vm.status = Some(1);
+            let diagnostic = fixture.vm.startup_diagnostic();
+            let physical = {
+                let facts = fixture.vm.facts.lock().unwrap();
+                (facts.eof, facts.closed, facts.bytes, facts.completed)
+            };
+            let before = fixture.vm.diagnostics();
+            fixture.finish().await;
+            assert_eq!(refused_before_peer, Some(Error::Refused));
+            assert!(joined);
+            assert_eq!(physical, ([true; 2], [true; 4], [0, 265], false));
+            assert_eq!(before["drainerCompleted"], false);
+            assert_eq!(before["closeReturned"], false);
+            let diagnostic = diagnostic.unwrap();
+            assert_eq!(diagnostic["rawStatus"], 1);
+            assert_eq!(diagnostic["stderrClass"], "unclassified");
+            assert_eq!(
+                diagnostic["stderrSha256"],
+                files::hex(&Sha256::digest(bytes))
+            );
+        }
+
+        #[tokio::test]
+        async fn both_eof_orders_drain_peer_and_never_replace_a_prior_error() {
+            for first in 0..2 {
+                let mut fixture = Fixture::new();
+                *fixture.vm.failure.lock().unwrap() = Some(Error::Io);
+                fixture.close_writer(first);
+                let incomplete = fixture.pump([STREAM_MAX; 2], false);
+                fixture.write(1 - first, b"peer evidence");
+                fixture.close_writer(1 - first);
+                let complete = fixture.drain([STREAM_MAX; 2], false).await;
+                fixture.settle_streams();
+                let (eof, closed) = {
+                    let state = fixture.vm.facts.lock().unwrap();
+                    (state.eof, state.closed)
+                };
+                let first_error = *fixture.vm.failure.lock().unwrap();
+                fixture.finish().await;
+                assert_eq!(incomplete, Ok(false));
+                assert_eq!(complete, Ok(true));
+                assert_eq!(eof, [true; 2]);
+                assert_eq!(closed, [true; 4]);
+                assert_eq!(first_error, Some(Error::Io));
+            }
+        }
+
+        #[tokio::test]
+        async fn bounded_leg_overflow_and_real_log_write_error_still_settle_the_peer() {
+            for write_error in [false, true] {
+                let mut fixture = Fixture::new();
+                if write_error {
+                    let original = fixture.vm.owned.lock().unwrap().logs[0].take().unwrap();
+                    close(original).unwrap();
+                    let read_only = File::open(fixture.root.join("stream-0")).unwrap();
+                    fixture.vm.owned.lock().unwrap().logs[0] = Some(read_only);
+                }
+                fixture.write(0, b"12345");
+                fixture.close_writer(0);
+                fixture.write(1, b"bounded peer");
+                fixture.close_writer(1);
+                let result = fixture
+                    .drain(
+                        [if write_error { STREAM_MAX } else { 4 }, STREAM_MAX],
+                        false,
+                    )
+                    .await;
+                fixture.settle_streams();
+                let observed = {
+                    let state = fixture.vm.facts.lock().unwrap();
+                    (
+                        state.faulted[0],
+                        state.eof[1],
+                        state.bytes[1],
+                        state.uncertain,
+                        state.stderr.is_none(),
+                        state.closed,
+                    )
+                };
+                fixture.finish().await;
+                assert_eq!(result, Ok(true));
+                assert_eq!(observed, (true, true, 12, true, true, [true; 4]));
+            }
+        }
+
+        #[tokio::test]
+        async fn expected_closing_and_incomplete_or_late_evidence_keep_their_distinctions() {
+            let mut fixture = Fixture::new();
+            fixture.close_writer(0);
+            let incomplete = fixture.pump([STREAM_MAX; 2], false);
+            let unavailable = fixture
+                .vm
+                .owned
+                .lock()
+                .unwrap()
+                .stderr_observation(&fixture.vm.facts.lock().unwrap(), None, fixture.vm.end)
+                .is_err();
+            fixture.vm.end = Instant::now();
+            let late = fixture.pump([STREAM_MAX; 2], false);
+            fixture.finish().await;
+            assert_eq!(incomplete, Ok(false));
+            assert!(unavailable);
+            assert_eq!(late, Err(Error::Deadline));
+            let mut fixture = Fixture::new();
+            fixture.close_writer(0);
+            fixture.close_writer(1);
+            let complete = fixture.pump([STREAM_MAX; 2], true);
+            fixture.settle_streams();
+            let first = *fixture.vm.failure.lock().unwrap();
+            fixture.vm.closed = true;
+            fixture.vm.reaped = true;
+            fixture.vm.facts.lock().unwrap().joined = true;
+            fixture.vm.status = Some(1);
+            let before_ssh = fixture.vm.startup_diagnostic();
+            fixture.vm.status = Some(0);
+            let zero = fixture.vm.startup_diagnostic();
+            fixture.vm.status = None;
+            let unknown = fixture.vm.startup_diagnostic();
+            fixture.vm.status = Some(1);
+            fixture.vm.authenticated.store(true, Ordering::SeqCst);
+            let admitted = fixture.vm.startup_diagnostic();
+            fixture.finish().await;
+            assert_eq!(complete, Ok(true));
+            assert_eq!(first, None);
+            assert!(before_ssh.is_some());
+            assert!(zero.is_none() && unknown.is_none() && admitted.is_none());
+        }
+
+        #[test]
+        fn startup_classes_require_the_full_bound_records_not_substrings() {
+            let work = Path::new("/tmp/owned");
+            let arguments = qemu_arguments(
+                work,
+                2222,
+                &"a".repeat(32),
+                "/usr/bin/prlimit".into(),
+                "/usr/bin/qemu-system-x86_64".into(),
+                true,
+                10,
+            )
+            .unwrap();
+            let profile = StartupProfile::new(&arguments, work).unwrap();
+            let wait = concat!(
+                "qemu-system-x86_64: -qmp unix:/tmp/owned/qmp-restricted.sock,server=on,wait=on: ",
+                "info: QEMU waiting for connection on: ",
+                "disconnected:unix:/tmp/owned/qmp-restricted.sock,server=on\n"
+            );
+            let network = concat!(
+                "qemu-system-x86_64: -netdev user,id=net0,restrict=on,ipv4=on,ipv6=off,",
+                "hostfwd=tcp:127.0.0.1:2222-:22: Could not set up host forwarding rule ",
+                "'tcp:127.0.0.1:2222-:22'\n"
+            );
+            let literal = format!("{wait}{network}");
+            assert_eq!(
+                profile.classify(literal.as_bytes()).name(),
+                "host-forward-setup"
+            );
+            let block = concat!(
+                "qemu-system-x86_64: -blockdev {\"driver\":\"qcow2\",\"file\":{",
+                "\"driver\":\"file\",\"filename\":\"/tmp/owned/guest.qcow2\"},",
+                "\"node-name\":\"rootdisk\"}: "
+            );
+            for (suffix, expected) in [
+                (
+                    concat!(
+                        "Could not open backing file: Could not open ",
+                        "'/tmp/owned/base.qcow2': No such file or directory\n"
+                    ),
+                    "backing-file-missing",
+                ),
+                ("Image is not in qcow2 format\n", "qcow2-format"),
+                (
+                    concat!(
+                        "Failed to get \"write\" lock\n",
+                        "Is another process using the image [/tmp/owned/guest.qcow2]?\n"
+                    ),
+                    "image-write-lock",
+                ),
+            ] {
+                let record = format!("{wait}{block}{suffix}");
+                assert_eq!(profile.classify(record.as_bytes()).name(), expected);
+            }
+            for (kind, record) in &profile.records {
+                assert_eq!(profile.classify(record.as_bytes()).name(), kind.name());
+                for altered in [
+                    format!("{record}private neighbor\n"),
+                    record.replace("/tmp/owned", "/tmp/foreign"),
+                    record.replace("qemu-system-x86_64:", "foreign:"),
+                    record.trim_end().to_owned(),
+                ] {
+                    assert_eq!(profile.classify(altered.as_bytes()).name(), "unclassified");
+                }
+            }
+            let wrong_port = literal.replace("2222", "2223");
+            assert_eq!(
+                profile.classify(wrong_port.as_bytes()).name(),
+                "unclassified"
+            );
+            assert_eq!(
+                profile
+                    .classify(b"Could not set up host forwarding rule")
+                    .name(),
+                "unclassified"
+            );
+        }
+    }
+
     #[tokio::test]
     async fn incomplete_preparation_epoch_cannot_claim_closure_or_fresh_health() {
         let mut control = Control::new(Instant::now()).unwrap();

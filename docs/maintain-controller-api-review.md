@@ -187,6 +187,25 @@ and argument checks are distinct from actual cold-boot compatibility and a fresh
 four-case empty-capture proof. Restriction removes first-instance provider sockets;
 it does not assert that guest background traffic is absent.
 
+An unexpected reader EOF latches the original failure and marks health false
+immediately. The same reader still attempts the bounded peer under its existing
+end and settlement windows; it gains no replacement task or discard budget.
+Logical failure remains distinct from complete evidence: late EOF and checked
+closes do not restore `drainerCompleted` or `closeReturned`. `C-GOOD-ERR` and
+`C-DTOR-FAIL` apply to that separation. On failed nonzero startup before SSH
+admission, an optional `vmStartupDiagnostic` contains only epoch, actual signed
+status, a closed stderr class and its complete SHA-256. It is derived through
+the same retained log descriptor before checked close, with no path reopen.
+Read/write/capacity/clock/close uncertainty in that evidence owner prevents
+publication. Four actual native Ubuntu QEMU error fixtures bind exact complete
+records and admitted arguments to forwarding, missing-backing, qcow-format and
+write-lock classes; complete unknown output is `unclassified`. Unrelated later
+cleanup failures do not erase those earlier passive observations. The existing
+conservative `cleanup_failed` rollup is not a close-syscall counter. This metadata neither
+replaces the primary error nor changes either QEMU record or positive summary
+shape. Source and pipe tests do not establish the cause of a hosted startup
+failure; exact actual runtime evidence remains necessary.
+
 QEMU readers and QMP retain the immutable outer end across phase changes. Their
 typed first failure is recorded before a later clock check or generic unhealthy
 refusal. Direct/group facts do not establish arbitrary descendant retirement.
