@@ -25,6 +25,54 @@ const RUNTIME_PRIVILEGES: &str = concat!(
 fn close_phase<T>(result: Result<T>, ended: Result<()>) -> Result<T> {
     result.and_then(|value| ended.map(|()| value))
 }
+
+#[derive(Clone, Copy)]
+pub(super) enum DaemonStage {
+    ActorIdentity,
+    Inventory,
+    ValidationInput,
+    EventShape,
+    ActorClassification,
+    Rename,
+    ActionHistory,
+    NetworkHistory,
+    PgHistory,
+    FinalTraces,
+}
+impl DaemonStage {
+    fn checkpoint(self) -> &'static str {
+        match self {
+            Self::ActorIdentity => "daemon-actor-identity",
+            Self::Inventory => "daemon-inventory",
+            Self::ValidationInput => "daemon-validation-input",
+            Self::EventShape => "daemon-event-shape",
+            Self::ActorClassification => "daemon-actor-classification",
+            Self::Rename => "daemon-rename",
+            Self::ActionHistory => "daemon-action-history",
+            Self::NetworkHistory => "daemon-network-history",
+            Self::PgHistory => "daemon-pg-history",
+            Self::FinalTraces => "daemon-final-traces",
+        }
+    }
+}
+
+pub(super) fn daemon_result(
+    control: &mut super::super::Control,
+    earlier: Option<Error>,
+    stage: DaemonStage,
+    result: Result<()>,
+) -> Result<()> {
+    if let Err(error) = result {
+        let first = earlier.is_none() && control.first.is_none_or(|first| first == error);
+        // Record a returned policy error before the caller's later phase-pop fence.
+        control.record(error);
+        if first {
+            control.checkpoint = stage.checkpoint();
+        }
+    }
+    result
+}
+
 fn private_attempt_name(value: &str) -> bool {
     value
         .strip_prefix("deploy.")
@@ -287,165 +335,211 @@ impl Fixture {
         ]))
     }
     async fn daemon_observe(&mut self, ctx: &mut Context, attempt: Option<&Path>) -> Result<()> {
-        ctx.control.checkpoint = "daemon-observe";
-        let positive = ctx.request.scenario == "positive";
-        let mut app_name = None;
-        if positive {
-            let image = self.image.clone();
-            let (id, row) = self.service(ctx, "simplestchat", &image).await?;
-            self.app = Some(id);
-            app_name = Some(policy::string(&row["Name"])?.to_owned());
-            let image = self.caddy_image.clone();
-            self.proxy = Some(self.service(ctx, "caddy", &image).await?.0);
+        let earlier = ctx.control.first;
+        if earlier.is_none() {
+            ctx.control.checkpoint = "daemon-observe";
         }
-        let current = policy::ids(
-            &Self::docker(
-                ctx,
-                "fresh-actor-inventory",
-                &[
-                    "ps".into(),
-                    "--all".into(),
-                    "--quiet".into(),
-                    "--no-trunc".into(),
-                ],
-                15,
-            )
-            .await?,
-        )?;
-        let mut expected = BTreeSet::from([self.pg.clone().ok_or(Error::Refused)?]);
-        if positive {
-            expected.insert(self.app.clone().ok_or(Error::Refused)?);
-            expected.insert(self.proxy.clone().ok_or(Error::Refused)?);
-        }
-        require(current == expected)?;
-        ctx.observed.set("freshActorInventoryJoined", true)?;
-        let validation_name = if positive && let Some(path) = attempt {
-            Some(
-                String::from_utf8(
-                    retained_data(ctx, &path.join("validation-name.txt"), 131072)
-                        .await?
-                        .0,
+        let mut stage = DaemonStage::ActorIdentity;
+        let result = async {
+            let positive = ctx.request.scenario == "positive";
+            let mut app_name = None;
+            if positive {
+                let image = self.image.clone();
+                let (id, row) = self.service(ctx, "simplestchat", &image).await?;
+                self.app = Some(id);
+                app_name = Some(policy::string(&row["Name"])?.to_owned());
+                let image = self.caddy_image.clone();
+                self.proxy = Some(self.service(ctx, "caddy", &image).await?.0);
+            }
+            stage = DaemonStage::Inventory;
+            let current = policy::ids(
+                &Self::docker(
+                    ctx,
+                    "fresh-actor-inventory",
+                    &[
+                        "ps".into(),
+                        "--all".into(),
+                        "--quiet".into(),
+                        "--no-trunc".into(),
+                    ],
+                    15,
                 )
-                .map_err(|_| Error::Refused)?
-                .trim()
-                .to_owned(),
-            )
-        } else {
-            None
-        };
-        let mut traces: BTreeMap<String, Vec<String>> = BTreeMap::new();
-        let mut services: BTreeMap<String, String> = BTreeMap::new();
-        let mut validation = None;
-        let mut mutations = BTreeSet::new();
-        let mut pg_rows = Vec::new();
-        for row in &self.native_rows {
-            let action = policy::string(&row["Action"])?;
-            let actor = &row["Actor"];
-            let attributes = &actor["Attributes"];
-            policy::object(attributes)?;
-            let id = policy::string(&actor["ID"])?;
-            match policy::string(&row["Type"])? {
-                "container" => {
-                    require(policy::digest(id))?;
-                    if Some(id) == self.pg.as_deref() {
-                        pg_rows.push(row.clone());
-                        continue;
-                    }
-                    require(positive)?;
-                    let service = attributes["com.docker.compose.service"].as_str();
-                    if service.is_some_and(|s| ["simplestchat", "migrate", "caddy"].contains(&s)) {
-                        let service = service.ok_or(Error::Refused)?;
-                        require(
-                            attributes[LABEL] == ctx.request.run_id
-                                && attributes["com.docker.compose.project"] == PROJECT
-                                && if service == "caddy" {
-                                    attributes["image"] == self.caddy_image
-                                        || attributes["image"] == ctx.request.caddy_image
-                                } else {
-                                    attributes["image"] == self.image
-                                },
-                        )?;
-                        services.insert(id.into(), service.into());
-                    } else {
-                        require(
-                            validation_name
-                                .as_deref()
-                                .is_some_and(|name| attributes["name"] == name)
-                                && (attributes["image"] == ctx.request.caddy_image
-                                    || attributes["image"] == self.caddy_image),
-                        )?;
-                        validation = Some(id.to_owned());
-                    }
-                    if action == "rename" {
-                        app_replacement_rename(
-                            row,
-                            self.app.as_deref().ok_or(Error::Refused)?,
-                            app_name.as_deref().ok_or(Error::Refused)?,
-                            &ctx.request.run_id,
-                            &self.image,
-                            &services,
-                            &traces,
-                        )?;
-                        traces
-                            .get_mut(id)
-                            .ok_or(Error::Refused)?
-                            .push(action.into());
-                        continue;
-                    }
-                    let phases = traces.entry(id.into()).or_default();
-                    require(
-                        ["create", "start", "kill", "die", "stop", "destroy"].contains(&action),
-                    )?;
-                    if action == "kill" {
-                        require(
-                            service.is_some_and(|s| ["migrate", "simplestchat"].contains(&s))
-                                && phases == &["create", "start"]
-                                && attributes["signal"] == "15",
-                        )?;
-                    } else if action == "stop" {
-                        require(
-                            service.is_some_and(|s| ["migrate", "simplestchat"].contains(&s))
-                                && phases == &["create", "start", "die"],
-                        )?;
-                    }
-                    if ["kill", "stop"].contains(&action) {
-                        require(
-                            Some(id) != self.app.as_deref()
-                                && mutations.insert((id.to_owned(), action.to_owned())),
-                        )?;
-                    }
-                    if ["create", "start", "die", "destroy"].contains(&action) {
-                        phases.push(action.into());
-                        if action == "die"
-                            && (service == Some("migrate") || validation.as_deref() == Some(id))
+                .await?,
+            )?;
+            let mut expected = BTreeSet::from([self.pg.clone().ok_or(Error::Refused)?]);
+            if positive {
+                expected.insert(self.app.clone().ok_or(Error::Refused)?);
+                expected.insert(self.proxy.clone().ok_or(Error::Refused)?);
+            }
+            require(current == expected)?;
+            ctx.observed.set("freshActorInventoryJoined", true)?;
+            stage = DaemonStage::NetworkHistory;
+            let none = self.none_network.as_ref().ok_or(Error::Refused)?;
+            let fresh_none = policy::one(
+                &Self::docker(
+                    ctx,
+                    "builtin-none-fresh",
+                    &["network".into(), "inspect".into(), none.id().into()],
+                    15,
+                )
+                .await?,
+            )?;
+            none.check(&fresh_none)?;
+            stage = DaemonStage::ValidationInput;
+            let validation_name = if positive && let Some(path) = attempt {
+                Some(
+                    String::from_utf8(
+                        retained_data(ctx, &path.join("validation-name.txt"), 131072)
+                            .await?
+                            .0,
+                    )
+                    .map_err(|_| Error::Refused)?
+                    .trim()
+                    .to_owned(),
+                )
+            } else {
+                None
+            };
+            let mut traces: BTreeMap<String, Vec<String>> = BTreeMap::new();
+            let mut services: BTreeMap<String, String> = BTreeMap::new();
+            let mut validation = None;
+            let mut mutations = BTreeSet::new();
+            let mut pg_rows = Vec::new();
+            let mut none_history = policy::NoneHistory::default();
+            for row in &self.native_rows {
+                stage = DaemonStage::EventShape;
+                let action = policy::string(&row["Action"])?;
+                let actor = &row["Actor"];
+                let attributes = &actor["Attributes"];
+                policy::object(attributes)?;
+                let id = policy::string(&actor["ID"])?;
+                match policy::string(&row["Type"])? {
+                    "container" => {
+                        require(policy::digest(id))?;
+                        if Some(id) == self.pg.as_deref() {
+                            pg_rows.push(row.clone());
+                            continue;
+                        }
+                        require(positive)?;
+                        stage = DaemonStage::ActorClassification;
+                        let service = attributes["com.docker.compose.service"].as_str();
+                        if service
+                            .is_some_and(|s| ["simplestchat", "migrate", "caddy"].contains(&s))
                         {
-                            require(attributes["exitCode"] == "0")?;
+                            let service = service.ok_or(Error::Refused)?;
+                            require(
+                                attributes[LABEL] == ctx.request.run_id
+                                    && attributes["com.docker.compose.project"] == PROJECT
+                                    && if service == "caddy" {
+                                        attributes["image"] == self.caddy_image
+                                            || attributes["image"] == ctx.request.caddy_image
+                                    } else {
+                                        attributes["image"] == self.image
+                                    },
+                            )?;
+                            services.insert(id.into(), service.into());
+                        } else {
+                            policy::validator_role(
+                                attributes,
+                                validation_name.as_deref().ok_or(Error::Refused)?,
+                            )?;
+                            require(
+                                validation_name
+                                    .as_deref()
+                                    .is_some_and(|name| attributes["name"] == name)
+                                    && (attributes["image"] == ctx.request.caddy_image
+                                        || attributes["image"] == self.caddy_image),
+                            )?;
+                            validation = Some(id.to_owned());
+                        }
+                        if action == "rename" {
+                            stage = DaemonStage::Rename;
+                            app_replacement_rename(
+                                row,
+                                self.app.as_deref().ok_or(Error::Refused)?,
+                                app_name.as_deref().ok_or(Error::Refused)?,
+                                &ctx.request.run_id,
+                                &self.image,
+                                &services,
+                                &traces,
+                            )?;
+                            traces
+                                .get_mut(id)
+                                .ok_or(Error::Refused)?
+                                .push(action.into());
+                            continue;
+                        }
+                        stage = DaemonStage::ActionHistory;
+                        let phases = traces.entry(id.into()).or_default();
+                        require(
+                            ["create", "start", "kill", "die", "stop", "destroy"].contains(&action),
+                        )?;
+                        if action == "kill" {
+                            require(
+                                service.is_some_and(|s| ["migrate", "simplestchat"].contains(&s))
+                                    && phases == &["create", "start"]
+                                    && attributes["signal"] == "15",
+                            )?;
+                        } else if action == "stop" {
+                            require(
+                                service.is_some_and(|s| ["migrate", "simplestchat"].contains(&s))
+                                    && phases == &["create", "start", "die"],
+                            )?;
+                        }
+                        if ["kill", "stop"].contains(&action) {
+                            require(
+                                Some(id) != self.app.as_deref()
+                                    && mutations.insert((id.to_owned(), action.to_owned())),
+                            )?;
+                        }
+                        if ["create", "start", "die", "destroy"].contains(&action) {
+                            phases.push(action.into());
+                            if action == "die"
+                                && (service == Some("migrate") || validation.as_deref() == Some(id))
+                            {
+                                require(attributes["exitCode"] == "0")?;
+                            }
                         }
                     }
+                    "network" => {
+                        stage = DaemonStage::NetworkHistory;
+                        require(positive)?;
+                        if Some(id) == self.network.as_deref() {
+                            require(["connect", "disconnect"].contains(&action))?;
+                        } else {
+                            none_history.observe(
+                                row,
+                                none,
+                                validation.as_deref(),
+                                &services,
+                                &traces,
+                            )?;
+                        }
+                    }
+                    _ => return Err(Error::Refused),
                 }
-                "network" => require(
-                    positive
-                        && Some(id) == self.network.as_deref()
-                        && ["connect", "disconnect"].contains(&action),
-                )?,
-                _ => return Err(Error::Refused),
             }
+            stage = DaemonStage::PgHistory;
+            policy::pg_exec_history(&pg_rows, &self.expected_pg_commands(ctx)?, &self.pg_health)?;
+            if positive {
+                stage = DaemonStage::FinalTraces;
+                expected_daemon_traces(
+                    validation.as_deref().ok_or(Error::Refused)?,
+                    self.app.as_deref().ok_or(Error::Refused)?,
+                    self.proxy.as_deref().ok_or(Error::Refused)?,
+                    &services,
+                    &traces,
+                )?;
+                none_history.complete(validation.as_deref().ok_or(Error::Refused)?, &services)?;
+            }
+            ctx.observed.set("observedExpectedDaemonJoins", true)?;
+            ctx.observed
+                .set("noObservedUnexpectedMutatingEvents", true)?;
+            self.unknown_effect = false;
+            Ok(())
         }
-        policy::pg_exec_history(&pg_rows, &self.expected_pg_commands(ctx)?, &self.pg_health)?;
-        if positive {
-            expected_daemon_traces(
-                validation.as_deref().ok_or(Error::Refused)?,
-                self.app.as_deref().ok_or(Error::Refused)?,
-                self.proxy.as_deref().ok_or(Error::Refused)?,
-                &services,
-                &traces,
-            )?;
-        }
-        ctx.observed.set("observedExpectedDaemonJoins", true)?;
-        ctx.observed
-            .set("noObservedUnexpectedMutatingEvents", true)?;
-        self.unknown_effect = false;
-        Ok(())
+        .await;
+        daemon_result(&mut ctx.control, earlier, stage, result)
     }
     async fn database_observe(&mut self, ctx: &mut Context, attempt: Option<&Path>) -> Result<()> {
         ctx.control.checkpoint = "database-observe";
