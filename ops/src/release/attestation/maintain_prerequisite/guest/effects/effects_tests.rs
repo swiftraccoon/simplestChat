@@ -1530,3 +1530,91 @@ fn proxy_profile_requires_normal_split_mounts_restrictions_and_loopback_ports() 
         .push(good["Mounts"][0].clone());
     assert!(check(&extra).is_err());
 }
+
+#[test]
+fn proxy_profile_joins_both_project_security_options_without_accepting_overrides() {
+    let image = format!("sha256:{}", id('b'));
+    let check = |row: &Value| {
+        policy::proxy_profile(
+            row,
+            &id('a'),
+            &image,
+            "caddy@sha256:fixed",
+            "sc0123456789ab",
+        )
+    };
+    let arguments = policy::normal_arguments(
+        "caddy@sha256:fixed",
+        "sc0123456789ab",
+        "0123456789abcdef0123456789abcdef",
+    );
+    let natural = arguments
+        .windows(2)
+        .filter(|pair| pair[0] == "--security-opt")
+        .map(|pair| pair[1].as_str())
+        .collect::<Vec<_>>();
+    let template = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/ansible/templates/public-compose.yml.j2"
+    ));
+    let caddy = template
+        .split_once("\n  caddy:\n")
+        .unwrap()
+        .1
+        .split_once("\n  migrate:\n")
+        .unwrap()
+        .0;
+    let security = caddy
+        .split_once("    security_opt:\n")
+        .unwrap()
+        .1
+        .split_once("    sysctls:\n")
+        .unwrap()
+        .0;
+    let managed = security
+        .lines()
+        .filter_map(|line| line.trim().strip_prefix("- "))
+        .collect::<Vec<_>>();
+    assert_eq!(natural.len(), 1);
+    assert_eq!(managed.len(), 1);
+    for options in [json!(natural), json!(managed)] {
+        let mut row = proxy_row();
+        row["HostConfig"]["SecurityOpt"] = options;
+        assert!(check(&row).is_ok());
+    }
+    for options in [
+        Value::Null,
+        json!([]),
+        json!("no-new-privileges"),
+        json!([true]),
+        json!([1]),
+        json!([null]),
+        json!(["no-new-privileges:false"]),
+        json!(["no-new-privileges=false"]),
+        json!(["no-new-privileges=true"]),
+        json!(["no-new-privileges:True"]),
+        json!(["no-new-privileges:1"]),
+        json!([" no-new-privileges"]),
+        json!(["no-new-privileges "]),
+        json!(["no-new-privileges", "no-new-privileges"]),
+        json!(["no-new-privileges:true", "no-new-privileges:true"]),
+        json!(["no-new-privileges", "no-new-privileges:true"]),
+        json!(["no-new-privileges", "no-new-privileges:false"]),
+        json!(["no-new-privileges:false", "no-new-privileges"]),
+        json!(["no-new-privileges:true", "no-new-privileges=false"]),
+        json!(["no-new-privileges", "seccomp=unconfined"]),
+    ] {
+        let mut row = proxy_row();
+        row["HostConfig"]["SecurityOpt"] = options.clone();
+        assert_eq!(check(&row), Err(Error::Refused), "{options:?}");
+    }
+    let mut missing = proxy_row();
+    assert!(
+        missing["HostConfig"]
+            .as_object_mut()
+            .unwrap()
+            .remove("SecurityOpt")
+            .is_some()
+    );
+    assert_eq!(check(&missing), Err(Error::Refused));
+}

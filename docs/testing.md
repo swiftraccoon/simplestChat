@@ -3102,6 +3102,15 @@ The create argument remains `--cap-add NET_BIND_SERVICE`. This corrects an
 inherited frozen-reference defect; neither the Docker profile observation nor
 the unit tests establish fresh signed VM or TLS success.
 
+Fresh TLS endpoint admission accepts exactly one enabled no-new-privileges
+option: the raw-create form `no-new-privileges` or the Compose-preserved form
+`no-new-privileges:true`. The regression derives both forms from their actual
+project constructors. False, malformed, missing, duplicate, contradictory and
+extra options refuse. Image, endpoint, mount, capability, certificate, key and
+fresh handshake checks remain separate. A `tls-observe` refusal can occur at
+this profile check before any handshake; that checkpoint alone does not identify
+a cryptographic failure.
+
 Daemon failure metadata distinguishes ten closed operation checkpoints without
 exporting event values, IDs, names or command text. The outer decoder admits
 these labels only on failed receipts; successful guests still require `complete`.

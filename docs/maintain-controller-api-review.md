@@ -206,6 +206,17 @@ fixes nor local tests establish real nftables behavior or the complete signed
 PostgreSQL/Caddy/900-second launcher transaction. Fresh four-case runtime evidence
 remains required.
 
+Fresh endpoint admission requires one enabled no-new-privileges option, accepting
+the project's bare raw-create form and its Compose `:true` form.
+[Compose preserves the original option](https://github.com/docker/compose/blob/42f48072bbf92ee9b0e43f9fdf2008d03546e7ca/pkg/compose/create.go#L588),
+and [Moby interprets it](https://github.com/moby/moby/blob/8af9fe3a36bab3e039862a2ab1cef1880c9b4d03/daemon/daemon_unix.go#L204)
+without canonicalizing the raw inspected list. Missing, malformed, false,
+duplicate, contradictory and extra options refuse; image and TLS checks retain
+their existing predicates. This applies `C-VALIDATE` at the representation
+boundary without reducing privilege constraints or accepting a saved TLS proof.
+Constructor-derived tests establish the profile contract, not an earlier
+hosted inspection value or a fresh handshake.
+
 The daemon observer separates stopped state from publication of the `die` event.
 In pinned Moby, [state notification](https://github.com/moby/moby/blob/8af9fe3a36bab3e039862a2ab1cef1880c9b4d03/daemon/container/state.go)
 precedes [monitor event publication](https://github.com/moby/moby/blob/8af9fe3a36bab3e039862a2ab1cef1880c9b4d03/daemon/monitor.go),
