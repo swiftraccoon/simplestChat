@@ -372,13 +372,14 @@ pub(super) fn proxy_profile(
             && host["PidsLimit"].as_u64() == Some(128)
             && host["NanoCpus"].as_u64() == Some(500_000_000),
     )?;
-    require(
-        host["SecurityOpt"]
-            .as_array()
-            .ok_or(Error::Refused)?
-            .iter()
-            .any(|v| v == "no-new-privileges"),
-    )?;
+    // Our raw-create and Compose profiles each select one enabled NNP option.
+    // A neighboring override must not turn a matching true flag into authority.
+    let security_options = host["SecurityOpt"].as_array().ok_or(Error::Refused)?;
+    require(matches!(
+        security_options.as_slice(),
+        [Value::String(option)]
+            if matches!(option.as_str(), "no-new-privileges" | "no-new-privileges:true")
+    ))?;
     let expected = BTreeMap::from([
         (
             "/etc/caddy/Caddyfile",
