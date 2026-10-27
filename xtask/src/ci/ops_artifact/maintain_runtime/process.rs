@@ -43,6 +43,35 @@ const TOOLS: &[&str] = &[
     "ssh-keygen",
     "ansible-playbook",
 ];
+type HealthPair<'a> = (&'a Arc<AtomicBool>, &'a Arc<Mutex<Option<Error>>>);
+
+fn replacement_health(
+    current: Option<HealthPair<'_>>,
+    old: HealthPair<'_>,
+    next: HealthPair<'_>,
+    control: &mut Control,
+) -> Result<()> {
+    control.check()?;
+    let (health, failure) = current.ok_or(Error::Changed)?;
+    if !Arc::ptr_eq(health, old.0)
+        || !Arc::ptr_eq(failure, old.1)
+        || Arc::ptr_eq(old.0, next.0)
+        || Arc::ptr_eq(old.1, next.1)
+    {
+        return Err(Error::Changed);
+    }
+    if let Some(error) = *old.1.lock().map_err(|_| Error::Close)? {
+        control.record(error);
+        return Err(error);
+    }
+    if old.0.load(Ordering::SeqCst)
+        || !next.0.load(Ordering::SeqCst)
+        || next.1.lock().map_err(|_| Error::Close)?.is_some()
+    {
+        return Err(Error::Refused);
+    }
+    control.check()
+}
 struct Tool {
     alias: PathBuf,
     original: Original,
@@ -171,6 +200,24 @@ impl Runner {
     pub fn set_guest_health(&mut self, value: Arc<AtomicBool>, failure: Arc<Mutex<Option<Error>>>) {
         self.guest_health = Some(value);
         self.guest_failure = Some(failure);
+    }
+    pub(super) fn replace_guest_health(
+        &mut self,
+        old_health: &Arc<AtomicBool>,
+        old_failure: &Arc<Mutex<Option<Error>>>,
+        health: Arc<AtomicBool>,
+        failure: Arc<Mutex<Option<Error>>>,
+        control: &mut Control,
+    ) -> Result<()> {
+        replacement_health(
+            self.guest_health.as_ref().zip(self.guest_failure.as_ref()),
+            (old_health, old_failure),
+            (&health, &failure),
+            control,
+        )?;
+        self.guest_health = Some(health);
+        self.guest_failure = Some(failure);
+        Ok(())
     }
     pub fn source(&self, name: &str, control: &mut Control) -> Result<Vec<u8>> {
         self.sources
@@ -584,6 +631,96 @@ fn lookup(name: &str) -> Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn health_handoff_requires_the_closed_original_pair_and_preserves_first_failure() {
+        let old = (Arc::new(AtomicBool::new(false)), Arc::new(Mutex::new(None)));
+        let next = (Arc::new(AtomicBool::new(true)), Arc::new(Mutex::new(None)));
+        let mut control = Control::new(Instant::now()).unwrap();
+        let start = control.start;
+        let end = control.end();
+        assert_eq!(
+            replacement_health(
+                Some((&old.0, &old.1)),
+                (&old.0, &old.1),
+                (&next.0, &next.1),
+                &mut control
+            ),
+            Ok(())
+        );
+        old.0.store(true, Ordering::SeqCst);
+        assert_eq!(
+            replacement_health(
+                Some((&old.0, &old.1)),
+                (&old.0, &old.1),
+                (&next.0, &next.1),
+                &mut control
+            ),
+            Err(Error::Refused)
+        );
+        old.0.store(false, Ordering::SeqCst);
+        assert_eq!(
+            replacement_health(
+                Some((&next.0, &old.1)),
+                (&old.0, &old.1),
+                (&next.0, &next.1),
+                &mut control
+            ),
+            Err(Error::Changed)
+        );
+        assert_eq!(
+            replacement_health(
+                Some((&old.0, &old.1)),
+                (&old.0, &old.1),
+                (&old.0, &next.1),
+                &mut control
+            ),
+            Err(Error::Changed)
+        );
+        *next.1.lock().unwrap() = Some(Error::Io);
+        assert_eq!(
+            replacement_health(
+                Some((&old.0, &old.1)),
+                (&old.0, &old.1),
+                (&next.0, &next.1),
+                &mut control
+            ),
+            Err(Error::Refused)
+        );
+        *next.1.lock().unwrap() = None;
+        *old.1.lock().unwrap() = Some(Error::Changed);
+        assert_eq!(
+            replacement_health(
+                Some((&old.0, &old.1)),
+                (&old.0, &old.1),
+                (&next.0, &next.1),
+                &mut control
+            ),
+            Err(Error::Changed)
+        );
+        assert_eq!(control.first, Some(Error::Changed));
+        assert_eq!((control.start, control.end()), (start, end));
+        control.settle();
+        assert_eq!(control.finish(), Err(Error::Changed));
+    }
+    #[test]
+    fn health_handoff_cannot_reset_an_expired_original_setup_clock() {
+        let old = (Arc::new(AtomicBool::new(false)), Arc::new(Mutex::new(None)));
+        let next = (Arc::new(AtomicBool::new(true)), Arc::new(Mutex::new(None)));
+        let mut control = Control::new(Instant::now() - super::super::control::SETUP).unwrap();
+        let end = control.end();
+        assert_eq!(
+            replacement_health(
+                Some((&old.0, &old.1)),
+                (&old.0, &old.1),
+                (&next.0, &next.1),
+                &mut control
+            ),
+            Err(Error::Deadline)
+        );
+        assert_eq!(control.end(), end);
+        assert_eq!(*old.1.lock().unwrap(), None);
+        assert_eq!(control.finish(), Err(Error::Deadline));
+    }
     #[test]
     fn replacing_a_real_tool_alias_with_identical_text_is_still_changed() {
         let path = std::env::temp_dir().join(format!("maintain-link-{}", std::process::id()));

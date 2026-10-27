@@ -433,11 +433,46 @@ impl Owners {
         bundle.original.check(control)?;
         server.check(control)?;
         ops.check(control)?;
+        let (postgres, engine, caddy) = fixture_config(runner, control)?;
+        // Acquire network-dependent images before destroying the preparation
+        // network stack. The fresh restricted guest admits only local digests.
+        for (role, selected) in [("postgres", &postgres), ("caddy", &caddy)] {
+            let arguments = vm.ssh(
+                runner,
+                control,
+                &[
+                    "/usr/bin/sudo".into(),
+                    "-n".into(),
+                    "/usr/bin/docker".into(),
+                    "--host".into(),
+                    "unix:///var/run/docker.sock".into(),
+                    "pull".into(),
+                    selected.clone(),
+                ],
+            )?;
+            runner
+                .run(
+                    control,
+                    &format!("prepare-{role}-image"),
+                    "ssh",
+                    arguments,
+                    Duration::from_secs(90),
+                    &[0],
+                )
+                .await?;
+            vm.check(control)?;
+        }
+        let restarted = vm.restart_restricted(runner, control, &run).await;
+        if let Some(preparation) = vm.preparation_diagnostics() {
+            report["preparationQemu"] = preparation;
+        }
+        restarted.map(|_| ())?;
+        vm.check(control)?;
+        runner.integrity(control)?;
         timing(report, "fixture-setup", control)?;
         checkpoint(report, "guest-setup");
         self.session = Some(Session::start(vm, runner, control).await?);
         let session = self.session.as_mut().ok_or(Error::Refused)?;
-        let (postgres, engine, caddy) = fixture_config(runner, control)?;
         control.check()?;
         let sample = Instant::now();
         let sources = catalog::guest_sources()
@@ -579,6 +614,9 @@ impl Owners {
         }
         if let Some(vm) = &mut self.vm {
             let result = vm.finish(control).await;
+            if let Some(preparation) = vm.preparation_diagnostics() {
+                report["preparationQemu"] = preparation;
+            }
             report["qemu"] = vm.diagnostics();
             remember(&mut first, result.map(|_| ()), control);
         }
@@ -603,7 +641,7 @@ impl Owners {
     }
 }
 pub(super) async fn run(options: &Options, control: &mut Control) -> Value {
-    let mut report = json!({"schemaVersion":1,
+    let mut report = json!({"schemaVersion":2,
         "scope":"SignedMuslMaintenanceLauncherPrerequisiteKvm",
         "scenario":options.scenario,"passed":false,"failure":"guard","checkpoint":"guard",
         "cleanupPassed":false,"failureKind":null,"elapsedSeconds":{},"opsVerifierCalls":0,
@@ -613,7 +651,7 @@ pub(super) async fn run(options: &Options, control: &mut Control) -> Value {
         "nativeTarget":"x86_64-unknown-linux-musl",
         "controllerImplementation":"rust-outer-controller",
         "controllerBinaryUse":"source-built-gnu-acquisition-and-passive-ELF-inspection-only",
-        "guestClientWholeGroupIndependentlyObserved":false});
+        "guestClientWholeGroupIndependentlyObserved":false,"preparationQemu":null});
     let mut owners = Owners::new();
     if let Err(error) = owners.body(options, control, &mut report).await {
         control.record(error);

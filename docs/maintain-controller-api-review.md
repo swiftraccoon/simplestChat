@@ -102,7 +102,7 @@ hosted preparation. New preparation stays within the unchanged job ceiling;
 the original package-install and controller/guest limits remain intact.
 The outer source catalogue includes all five helper Rust files, its dispatcher,
 retained-directory implementation and active shared support files, bringing the
-selected source roster to 213. Guest sources, operational helper pins and the
+selected source roster to 213 at that checkpoint. Guest sources, operational helper pins and the
 closed success shapes stay unchanged.
 
 For this helper, `C-VALIDATE`, `C-CTOR`, `C-STRUCT-PRIVATE` and `C-GOOD-ERR` apply
@@ -160,6 +160,32 @@ packet's origin, absence of all guest IPv6 or successful hosted bootstrap.
 An argument regression joins the provider, network device and SSH client to
 the same private IPv4 forward. Other VM arguments are unchanged. Capture, firewall,
 clock and finalization checks remain independent and still require fresh success.
+
+The prepared-guest operation adds one fixed cold restart after acquisition,
+bringing the selected source roster to 214. It prewarms only the two pinned
+container images and requires checked guest `sync -f /` completion. It then
+settles the first process/group/reaper, QMP observer, readers, pipes and logs,
+seals the overlay, and reopens the same immutable inputs and prepared disk.
+One private namespace witness spans this handoff and closes before the next
+spawn. Original file identities, metadata and hashes, port, nonce and absolute
+end must still match. A foreign second socket or any failed settlement refuses.
+The fresh backend uses `restrict=on` with the original explicit SSH host forward;
+fresh SSH and cloud-init admission precede the native guest. Local image admission
+replaces guest image pulls; natural TLS materials are still generated afterward.
+
+`C-VALIDATE`, `C-STRUCT-PRIVATE`, `C-GOOD-ERR` and `C-DTOR-FAIL` apply through the
+opaque prepared-file owner, checked handoff and retained first-failure facts.
+No ownership trait duplicates its live directory witness. Filesystem hashes are
+streamed with bounded memory; `C-DTOR-BLOCK` retains the cooperative syscall
+qualification. Both serial instances share the original setup/body/whole ends,
+admission debt, per-stream 2 MiB limit and QMP 65536-byte/128-message limit.
+The second watchdog is clipped to the remaining original end. Summary schema 2
+adds mandatory `preparationQemu` alongside `qemu`, each using the same 14-field
+closure contract; consumers must admit both and their aggregate limits. The
+guest's wire schema and failure vocabulary do not change. Custody/mutation tests
+and argument checks are distinct from actual cold-boot compatibility and a fresh
+four-case empty-capture proof. Restriction removes first-instance provider sockets;
+it does not assert that guest background traffic is absent.
 
 QEMU readers and QMP retain the immutable outer end across phase changes. Their
 typed first failure is recorded before a later clock check or generic unhealthy

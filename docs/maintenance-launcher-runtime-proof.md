@@ -40,6 +40,20 @@ current API 2 identity, transfer, cold Docker/images, source import, empty DB an
 natural Caddy preparation. The successful Restore fixture's measured setup does
 not establish that this larger setup fits 510. Slow or incomplete setup refuses.
 
+Preparation acquires the exact PostgreSQL/Caddy images in the first VM instance,
+requires checked guest filesystem synchronization, and completely settles that
+instance before re-admitting the same prepared disk and original boot/SSH inputs.
+A fresh second user-network backend selects `restrict=on,ipv4=on,ipv6=off` with
+the existing explicit SSH host forward. It receives fresh SSH/cloud-init admission;
+the guest then inspects local image identities and generates natural TLS material.
+Both serial instances share the original clock and aggregate stream/QMP limits.
+This isolates acquisition's provider connections without exempting any captured
+packet. Summary schema 2 adds `preparationQemu` with the same complete cleanup
+shape as `qemu`; acceptance requires both records and their aggregate limits.
+Guest schemas, capture window, zero-packet rule and all deadlines remain intact.
+Local source/custody checks do not establish that this preparation fits the cap
+or that the subsequent actual four-case launcher proof passes.
+
 The native 925-second known debt is the actual unchanged 900 work cap, three fixed
 five-second control phases, five seconds for TERM and five for reap. Native B990
 leaves 65 seconds of unmeasured filesystem/scheduling margin. Its run entry captures

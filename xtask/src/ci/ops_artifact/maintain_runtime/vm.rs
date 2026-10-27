@@ -1,5 +1,7 @@
 //! One fixed disposable Debian VM, private SSH identity and always-joined readers.
 
+#[path = "prepared.rs"]
+mod prepared;
 #[path = "qmp.rs"]
 mod qmp;
 #[path = "session.rs"]
@@ -42,6 +44,21 @@ const GIB: u64 = 1024 * 1024 * 1024;
 const IMAGE_MAX: u64 = 2 * GIB;
 const STREAM_MAX: usize = 2 * 1024 * 1024;
 const POLL: Duration = Duration::from_millis(100);
+
+fn watchdog_seconds(end: Instant, now: Instant) -> Result<u64> {
+    let seconds = end.saturating_duration_since(now).as_secs().min(1800);
+    if seconds == 0 {
+        Err(Error::Deadline)
+    } else {
+        Ok(seconds)
+    }
+}
+fn remaining_streams(observed: [usize; 2]) -> Result<[usize; 2]> {
+    Ok([
+        STREAM_MAX.checked_sub(observed[0]).ok_or(Error::Refused)?,
+        STREAM_MAX.checked_sub(observed[1]).ok_or(Error::Refused)?,
+    ])
+}
 
 fn remember(first: &mut Option<Error>, failure: &Arc<Mutex<Option<Error>>>, result: Result<()>) {
     if let Err(error) = result {
@@ -448,6 +465,12 @@ pub(super) struct Vm {
     work: PathBuf,
     port: u16,
     end: Instant,
+    run_id: String,
+    restricted: bool,
+    preparation: Option<Value>,
+    handoff: Option<prepared::Prepared>,
+    stream_limits: [usize; 2],
+    qmp_limits: qmp::Limits,
     originals: Vec<Original>,
     overlay: Option<MutableDisk>,
     group: Option<Group>,
@@ -470,6 +493,41 @@ pub(super) struct Vm {
 }
 
 impl Vm {
+    fn epoch(work: PathBuf, port: u16, end: Instant, run_id: String, restricted: bool) -> Self {
+        Self {
+            work,
+            port,
+            end,
+            run_id,
+            restricted,
+            preparation: None,
+            handoff: None,
+            stream_limits: [STREAM_MAX; 2],
+            qmp_limits: qmp::Limits::default(),
+            originals: Vec::new(),
+            overlay: None,
+            group: None,
+            qmp: None,
+            reader: None,
+            monitor: None,
+            owned: Arc::new(Mutex::new(ReaderOwned {
+                pipes: [None, None],
+                logs: [None, None],
+            })),
+            facts: Arc::new(Mutex::new(ReaderFacts::default())),
+            health: Arc::new(AtomicBool::new(true)),
+            failure: Arc::new(Mutex::new(None)),
+            closing: Arc::new(AtomicBool::new(false)),
+            stop_reader: Arc::new(AtomicBool::new(false)),
+            authenticated: false,
+            cloud_init: false,
+            first: None,
+            status: None,
+            retired: false,
+            reaped: false,
+            closed: false,
+        }
+    }
     pub async fn create(
         runner: &mut Runner,
         control: &mut Control,
@@ -515,33 +573,7 @@ impl Vm {
         let port = selected?;
         closed?;
         control.check()?;
-        let mut vm = Self {
-            work: work.into(),
-            port,
-            end: control.end(),
-            originals: Vec::new(),
-            overlay: None,
-            group: None,
-            qmp: None,
-            reader: None,
-            monitor: None,
-            owned: Arc::new(Mutex::new(ReaderOwned {
-                pipes: [None, None],
-                logs: [None, None],
-            })),
-            facts: Arc::new(Mutex::new(ReaderFacts::default())),
-            health: Arc::new(AtomicBool::new(true)),
-            failure: Arc::new(Mutex::new(None)),
-            closing: Arc::new(AtomicBool::new(false)),
-            stop_reader: Arc::new(AtomicBool::new(false)),
-            authenticated: false,
-            cloud_init: false,
-            first: None,
-            status: None,
-            retired: false,
-            reaped: false,
-            closed: false,
-        };
+        let mut vm = Self::epoch(work.into(), port, control.end(), run_id.into(), false);
         let result = vm.prepare(runner, control, run_id).await;
         if let Err(error) = result {
             let observed = *vm
@@ -744,15 +776,15 @@ impl Vm {
     }
     fn launch(&mut self, runner: &mut Runner, control: &mut Control, run_id: &str) -> Result<()> {
         self.metadata(control)?;
-        let arguments = qemu_arguments(
-            &self.work,
-            self.port,
-            run_id,
-            runner.tool("prlimit", control)?,
-            runner.tool("qemu-system-x86_64", control)?,
-        )?;
-        let stdout = runner.log("qemu", "stdout", control)?;
-        let stderr = match runner.log("qemu", "stderr", control) {
+        let prlimit = runner.tool("prlimit", control)?;
+        let qemu = runner.tool("qemu-system-x86_64", control)?;
+        let label = if self.restricted {
+            "qemu-restricted"
+        } else {
+            "qemu"
+        };
+        let stdout = runner.log(label, "stdout", control)?;
+        let stderr = match runner.log(label, "stderr", control) {
             Ok(value) => value,
             Err(error) => {
                 control.record(error);
@@ -764,14 +796,33 @@ impl Vm {
             let mut owned = self.owned.lock().map_err(|_| Error::Io)?;
             owned.logs = [Some(stdout), Some(stderr)];
         }
-        let mut command = runner.command("timeout", &arguments, control)?;
+        let mut command = runner.command("timeout", &[], control)?;
+        if let Some(handoff) = &self.handoff {
+            handoff.verify_ready(self, control)?;
+        }
+        if self.end != control.end() {
+            return Err(Error::Changed);
+        }
+        let seconds = watchdog_seconds(self.end, Instant::now())?;
+        let arguments = qemu_arguments(
+            &self.work,
+            self.port,
+            run_id,
+            prlimit,
+            qemu,
+            self.restricted,
+            seconds,
+        )?;
         command
+            .args(arguments)
             .env("MALLOC_ARENA_MAX", "2")
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
         control.check()?;
         self.group = Some(Group::new(command.spawn().map_err(|_| Error::Io)?));
+        // The frozen disk witness ends only after the actual writer is owned.
+        self.handoff = None;
         let child = self.group.as_mut().ok_or(Error::Close)?.child();
         let files = [
             child.stdout.take().map(|p| File::from(OwnedFd::from(p))),
@@ -799,13 +850,29 @@ impl Vm {
         }
         control.check()?;
         self.start_readers();
-        self.qmp = Some(qmp::Observer::start(
-            &self.work.join("qmp.sock"),
-            self.end,
-            self.health.clone(),
-            self.closing.clone(),
-            self.failure.clone(),
-        )?);
+        let qmp_path = self.work.join(if self.restricted {
+            "qmp-restricted.sock"
+        } else {
+            "qmp.sock"
+        });
+        self.qmp = Some(if self.restricted {
+            qmp::Observer::start_limited(
+                &qmp_path,
+                self.end,
+                self.health.clone(),
+                self.closing.clone(),
+                self.failure.clone(),
+                self.qmp_limits,
+            )?
+        } else {
+            qmp::Observer::start(
+                &qmp_path,
+                self.end,
+                self.health.clone(),
+                self.closing.clone(),
+                self.failure.clone(),
+            )?
+        });
         control.check()
     }
     pub fn port(&self) -> u16 {
@@ -816,6 +883,135 @@ impl Vm {
     }
     pub fn failure(&self) -> Arc<Mutex<Option<Error>>> {
         self.failure.clone()
+    }
+    pub fn preparation_diagnostics(&self) -> Option<Value> {
+        self.preparation.clone()
+    }
+
+    /// Settle the prepared VM before admitting a fresh, restricted provider.
+    pub async fn restart_restricted(
+        &mut self,
+        runner: &mut Runner,
+        control: &mut Control,
+        run_id: &str,
+    ) -> Result<Value> {
+        let captured = async {
+            control.check()?;
+            if !control.setup
+                || control.settling
+                || self.restricted
+                || self.closed
+                || self.preparation.is_some()
+                || self.handoff.is_some()
+                || self.end != control.end()
+                || self.run_id != run_id
+            {
+                return Err(Error::Refused);
+            }
+            self.check(control)?;
+            runner.check(control)?;
+            // Guest writes must reach the prepared root filesystem before the
+            // QEMU writer is stopped and its overlay becomes immutable input.
+            let arguments = self.ssh(
+                runner,
+                control,
+                &[
+                    "/usr/bin/sudo".into(),
+                    "-n".into(),
+                    "/usr/bin/sync".into(),
+                    "-f".into(),
+                    "/".into(),
+                ],
+            )?;
+            runner
+                .run(
+                    control,
+                    "prepared-root-sync",
+                    "ssh",
+                    arguments,
+                    Duration::from_secs(30),
+                    &[0],
+                )
+                .await?;
+            self.check(control)?;
+            self.handoff = Some(prepared::Prepared::capture(self, control)?);
+            Ok(())
+        }
+        .await;
+        if let Err(error) = captured {
+            control.record(error);
+            let _ = self.finish(control).await;
+            self.preparation = Some(self.diagnostics());
+            return Err(error);
+        }
+        let settled = self.finish_epoch(control, true).await;
+        let first = self.diagnostics();
+        self.preparation = Some(first.clone());
+        if let Err(error) = settled {
+            control.record(error);
+            let _ = self.finish(control).await;
+            return Err(error);
+        }
+        let remaining = (|| {
+            control.check()?;
+            let facts = self.facts.lock().map_err(|_| Error::Close)?;
+            let streams = remaining_streams(facts.bytes)?;
+            let qmp = self.qmp.as_ref().ok_or(Error::Close)?.remaining()?;
+            Ok((streams, qmp))
+        })();
+        let (stream_limits, qmp_limits) = match remaining {
+            Ok(value) => value,
+            Err(error) => {
+                control.record(error);
+                remember(&mut self.first, &self.failure, Err(error));
+                let _ = self.finish(control).await;
+                return Err(error);
+            }
+        };
+        let old_health = self.health();
+        let old_failure = self.failure();
+        let handoff = self.handoff.take();
+        let mut next = Self::epoch(
+            self.work.clone(),
+            self.port,
+            self.end,
+            self.run_id.clone(),
+            true,
+        );
+        next.preparation = Some(first.clone());
+        next.handoff = handoff;
+        next.stream_limits = stream_limits;
+        next.qmp_limits = qmp_limits;
+        // The old epoch has no remaining live process, task, pipe or original.
+        *self = next;
+        let restarted = async {
+            runner.replace_guest_health(
+                &old_health,
+                &old_failure,
+                self.health(),
+                self.failure(),
+                control,
+            )?;
+            let mut handoff = self.handoff.take().ok_or(Error::Changed)?;
+            let admitted = handoff.admit(self, control);
+            self.handoff = Some(handoff);
+            admitted?;
+            let finished = self.handoff.as_mut().ok_or(Error::Changed)?.finish(control);
+            finished?;
+            self.launch(runner, control, run_id)?;
+            self.boot(runner, control).await?;
+            self.check(control)
+        }
+        .await;
+        if let Err(error) = restarted {
+            control.record(error);
+            remember(&mut self.first, &self.failure, Err(error));
+            if self.finish(control).await.is_err() {
+                control.cleanup_failed = true;
+            }
+            return Err(error);
+        }
+        Ok(first)
     }
     fn metadata(&self, control: &mut Control) -> Result<()> {
         if let Some(error) = *self
@@ -933,7 +1129,29 @@ fn qemu_arguments(
     run_id: &str,
     prlimit: OsString,
     qemu: OsString,
+    restricted: bool,
+    seconds: u64,
 ) -> Result<Vec<OsString>> {
+    if port < 1024
+        || !(1..=1800).contains(&seconds)
+        || !files::safe_path(work)
+        || run_id.len() != 32
+        || !run_id
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        || work
+            .join(if restricted {
+                "qmp-restricted.sock"
+            } else {
+                "qmp.sock"
+            })
+            .as_os_str()
+            .as_encoded_bytes()
+            .len()
+            > 100
+    {
+        return Err(Error::Input);
+    }
     let path = |name: &str| {
         work.join(name)
             .to_str()
@@ -943,7 +1161,7 @@ fn qemu_arguments(
     Ok(vec![
         "--signal=TERM".into(),
         "--kill-after=5s".into(),
-        "1800s".into(),
+        format!("{seconds}s").into(),
         prlimit,
         format!("--as={}", 5 * GIB).into(),
         format!("--fsize={}", 17 * GIB).into(),
@@ -976,7 +1194,12 @@ fn qemu_arguments(
         "-qmp".into(),
         format!(
             "unix:{},server=on,wait=on",
-            path("qmp.sock")?.replace(',', ",,")
+            path(if restricted {
+                "qmp-restricted.sock"
+            } else {
+                "qmp.sock"
+            })?
+            .replace(',', ",,")
         )
         .into(),
         "-serial".into(),
@@ -998,7 +1221,12 @@ fn qemu_arguments(
         "-device".into(),
         "virtio-blk-pci,drive=seed".into(),
         "-netdev".into(),
-        format!("user,id=net0,ipv4=on,ipv6=off,hostfwd=tcp:127.0.0.1:{port}-:22").into(),
+        if restricted {
+            format!("user,id=net0,restrict=on,ipv4=on,ipv6=off,hostfwd=tcp:127.0.0.1:{port}-:22")
+        } else {
+            format!("user,id=net0,ipv4=on,ipv6=off,hostfwd=tcp:127.0.0.1:{port}-:22")
+        }
+        .into(),
         "-device".into(),
         "virtio-net-pci,netdev=net0".into(),
     ])
@@ -1012,6 +1240,7 @@ impl Vm {
         let closing = self.closing.clone();
         let stop = self.stop_reader.clone();
         let end = self.end;
+        let limits = self.stream_limits;
         let failure = self.failure.clone();
         let guard = TaskGuard {
             health: health.clone(),
@@ -1030,7 +1259,7 @@ impl Vm {
                         let mut owned = owned.lock().map_err(|_| Error::Io)?;
                         let mut facts = facts.lock().map_err(|_| Error::Io)?;
                         let mut block = [0; 65536];
-                        for index in 0..2 {
+                        for (index, limit) in limits.into_iter().enumerate() {
                             let pipe = owned.pipes[index].as_mut().ok_or(Error::Close)?;
                             if pipe.eof {
                                 continue;
@@ -1040,7 +1269,7 @@ impl Vm {
                                 facts.eof[index] = pipe.eof;
                                 facts.bytes[index] = pipe.bytes;
                                 live(end)?;
-                                if pipe.bytes > STREAM_MAX {
+                                if pipe.bytes > limit {
                                     return Err(Error::Refused);
                                 }
                                 if count > 0 {
@@ -1141,6 +1370,14 @@ impl Vm {
         }
     }
     pub async fn finish(&mut self, control: &mut Control) -> Result<Value> {
+        self.finish_epoch(control, false).await
+    }
+    async fn finish_epoch(&mut self, control: &mut Control, keep_handoff: bool) -> Result<Value> {
+        let settlement_end = if keep_handoff {
+            control.body_end().min(self.end)
+        } else {
+            self.end
+        };
         if !self.closed {
             let observed = *self
                 .failure
@@ -1152,7 +1389,7 @@ impl Vm {
             self.health.store(false, Ordering::SeqCst);
             if let Some(mut monitor) = self.monitor.take() {
                 match tokio::time::timeout_at(
-                    tokio::time::Instant::from_std(self.end),
+                    tokio::time::Instant::from_std(settlement_end),
                     &mut monitor,
                 )
                 .await
@@ -1170,7 +1407,7 @@ impl Vm {
             }
             // No nonconsuming PID monitor remains when this sole owner consumes wait.
             if let Some(group) = &mut self.group {
-                let (retired, reaped) = retire(group, self.end, Duration::from_secs(5)).await;
+                let (retired, reaped) = retire(group, settlement_end, Duration::from_secs(5)).await;
                 self.retired = retired;
                 if !retired {
                     remember(&mut self.first, &self.failure, Err(Error::Close));
@@ -1192,7 +1429,7 @@ impl Vm {
                 }
             }
             if let Some(mut reader) = self.reader.take() {
-                let end = (Instant::now() + Duration::from_secs(1)).min(self.end);
+                let end = (Instant::now() + Duration::from_secs(1)).min(settlement_end);
                 match tokio::time::timeout_at(tokio::time::Instant::from_std(end), &mut reader)
                     .await
                 {
@@ -1203,7 +1440,7 @@ impl Vm {
                     Err(_) => {
                         remember(&mut self.first, &self.failure, Err(Error::Close));
                         self.stop_reader.store(true, Ordering::SeqCst);
-                        let end = (Instant::now() + Duration::from_secs(5)).min(self.end);
+                        let end = (Instant::now() + Duration::from_secs(5)).min(settlement_end);
                         if tokio::time::timeout_at(tokio::time::Instant::from_std(end), &mut reader)
                             .await
                             .is_err()
@@ -1232,13 +1469,44 @@ impl Vm {
                     remember(&mut self.first, &self.failure, Err(error));
                 }
             }
-            if let Some(observer) = &mut self.qmp
-                && let Err(error) = observer.finish().await
-            {
-                remember(&mut self.first, &self.failure, Err(error));
+            if let Some(observer) = &mut self.qmp {
+                let finished = if keep_handoff {
+                    observer.finish_before(settlement_end).await
+                } else {
+                    observer.finish().await
+                };
+                if let Err(error) = finished {
+                    remember(&mut self.first, &self.failure, Err(error));
+                }
             }
             if let Some(error) = self.first {
                 control.record(error);
+            }
+            if keep_handoff {
+                let mut handoff = self.handoff.take();
+                let sealed = (|| {
+                    let facts = self.facts.lock().map_err(|_| Error::Close)?;
+                    if self.first.is_some()
+                        || !self.reaped
+                        || !self.retired
+                        || self.status != Some(0)
+                        || !facts.joined
+                        || !facts.eof.iter().all(|value| *value)
+                        || !facts.closed.iter().all(|value| *value)
+                        || !self.authenticated
+                        || !self.cloud_init
+                        || self.qmp.is_none()
+                    {
+                        return Err(Error::Close);
+                    }
+                    drop(facts);
+                    handoff.as_mut().ok_or(Error::Changed)?.seal(self, control)
+                })();
+                self.handoff = handoff;
+                if let Err(error) = sealed {
+                    control.record(error);
+                }
+                remember(&mut self.first, &self.failure, sealed);
             }
             if let Some(disk) = &mut self.overlay {
                 let checked = disk.check(control);
@@ -1270,6 +1538,10 @@ impl Vm {
             if self.qmp.is_none() {
                 remember(&mut self.first, &self.failure, Err(Error::Close));
             }
+        }
+        if !keep_handoff && let Some(mut handoff) = self.handoff.take() {
+            let finished = handoff.finish(control);
+            remember(&mut self.first, &self.failure, finished);
         }
         let observed = *self
             .failure
@@ -1381,6 +1653,38 @@ fn cloud_passed(bytes: &[u8], status: i32) -> Result<bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[tokio::test]
+    async fn incomplete_preparation_epoch_cannot_claim_closure_or_fresh_health() {
+        let mut control = Control::new(Instant::now()).unwrap();
+        let mut vm = Vm::epoch(
+            PathBuf::from("/tmp/inert-unstarted"),
+            2222,
+            control.end(),
+            "a".repeat(32),
+            false,
+        );
+        let old_health = vm.health();
+        assert_eq!(vm.finish_epoch(&mut control, true).await, Err(Error::Close));
+        assert!(Arc::ptr_eq(&old_health, &vm.health));
+        assert!(!old_health.load(Ordering::SeqCst));
+        let facts = vm.diagnostics();
+        assert_eq!(facts["qemuReaped"], false);
+        assert_eq!(facts["qemuExitedZero"], false);
+        assert_eq!(facts["qemuReturnCode"], Value::Null);
+        assert_eq!(facts["closeReturned"], false);
+        control.settle();
+        assert_eq!(control.finish(), Err(Error::Close));
+    }
+    #[test]
+    fn two_epochs_share_each_original_stream_allowance() {
+        assert_eq!(remaining_streams([0, STREAM_MAX]), Ok([STREAM_MAX, 0]));
+        assert_eq!(
+            remaining_streams([1024, 8192]),
+            Ok([STREAM_MAX - 1024, STREAM_MAX - 8192])
+        );
+        assert_eq!(remaining_streams([STREAM_MAX + 1, 0]), Err(Error::Refused));
+        assert_eq!(remaining_streams([0, usize::MAX]), Err(Error::Refused));
+    }
     #[cfg(target_os = "linux")]
     #[test]
     fn fifo_disk_is_opened_nonblocking_and_refused_before_vm_use() {
@@ -1482,6 +1786,8 @@ mod tests {
                 "0123456789abcdef0123456789abcdef",
                 "/usr/bin/prlimit".into(),
                 "/usr/bin/qemu-system-x86_64".into(),
+                false,
+                1800,
             )
             .unwrap();
             let args = args.iter().map(|v| v.to_str().unwrap()).collect::<Vec<_>>();
@@ -1519,6 +1825,74 @@ mod tests {
                 .collect::<Vec<_>>();
             assert_eq!(forwarded, [&OsString::from(port.to_string())]);
             assert!(ssh.iter().any(|value| value == "fixture@127.0.0.1"));
+        }
+    }
+    #[test]
+    fn restricted_epoch_keeps_the_same_forward_disk_and_original_watchdog() {
+        let work = Path::new("/tmp/owned");
+        let run = "0123456789abcdef0123456789abcdef";
+        let arguments = |restricted, seconds| {
+            qemu_arguments(
+                work,
+                2222,
+                run,
+                "/usr/bin/prlimit".into(),
+                "/usr/bin/qemu-system-x86_64".into(),
+                restricted,
+                seconds,
+            )
+        };
+        let first = arguments(false, 1800).unwrap();
+        let second = arguments(true, 721).unwrap();
+        let differences = first
+            .iter()
+            .zip(&second)
+            .filter(|(a, b)| a != b)
+            .collect::<Vec<_>>();
+        assert_eq!(differences.len(), 3);
+        assert!(second.iter().any(|v| v == "721s"));
+        assert!(second.iter().any(|v| v
+            == concat!(
+                "user,id=net0,restrict=on,ipv4=on,ipv6=off,",
+                "hostfwd=tcp:127.0.0.1:2222-:22"
+            )));
+        assert!(
+            second
+                .iter()
+                .any(|v| v == "unix:/tmp/owned/qmp-restricted.sock,server=on,wait=on")
+        );
+        for seconds in [0, 1801, u64::MAX] {
+            assert!(arguments(true, seconds).is_err());
+        }
+        assert!(arguments(true, 1).is_ok());
+        let now = Instant::now();
+        let end = now + Duration::from_secs(1800);
+        assert_eq!(
+            watchdog_seconds(end, now + Duration::from_millis(1001)),
+            Ok(1798)
+        );
+        assert_eq!(
+            watchdog_seconds(end, end - Duration::from_millis(999)),
+            Err(Error::Deadline)
+        );
+        assert_eq!(watchdog_seconds(end, end), Err(Error::Deadline));
+    }
+    #[test]
+    fn restricted_socket_retains_the_original_exact_path_bound() {
+        let name = "qmp-restricted.sock";
+        for (length, accepted) in [(100usize, true), (101, false)] {
+            let root = PathBuf::from(format!("/{}", "a".repeat(length - name.len() - 2)));
+            assert_eq!(root.join(name).as_os_str().as_encoded_bytes().len(), length);
+            let arguments = qemu_arguments(
+                &root,
+                2222,
+                "0123456789abcdef0123456789abcdef",
+                "/usr/bin/prlimit".into(),
+                "/usr/bin/qemu-system-x86_64".into(),
+                true,
+                30,
+            );
+            assert_eq!(arguments.is_ok(), accepted);
         }
     }
     #[test]

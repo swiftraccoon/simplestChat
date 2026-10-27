@@ -3163,7 +3163,7 @@ explicit first-capture witness preserves its checkpoint, including a first
 capture during cleanup, without equating unrelated errors with the same code.
 These checks locate observation, not packet transmission, ownership or direction.
 
-The native maintenance VM's sole user-network backend explicitly selects
+The native maintenance VM's user-network backend explicitly selects
 `ipv4=on,ipv6=off` before boot. SSH, its host forward, controller inventory and
 fixture services use IPv4. This disables an unused provider capability whose
 reviewed network stack can generate periodic IPv6 router advertisements; it
@@ -3174,6 +3174,31 @@ capture rules and the empty-capture requirement stay unchanged, including
 refusal of every other packet. This profile needs fresh hosted bootstrap and
 full-timeout evidence. Earlier generic IPv4 captures remain unexplained, and
 the frozen Python fixture retains its existing network profile.
+
+The Rust controller prepares one guest disk in two serial VM instances. The first
+instance performs the existing authenticated installation and Ansible bootstrap,
+then pulls the exact pinned PostgreSQL and Caddy images. A checked guest
+`sudo -n /usr/bin/sync -f /` must finish before retirement. The controller reaps
+and closes the first QEMU, readers and QMP observer, seals the prepared overlay
+while its original inputs remain held, closes those inputs, and re-admits the
+same disk, base, seed, SSH identities and
+forward. One retained directory witness spans that handoff and closes before the
+second spawn. The second backend additionally selects `restrict=on`; it retains
+the explicit SSH host forward and receives fresh SSH/cloud-init admission. Guest
+setup inspects the local images and their exact digest/platform identities. Fresh
+natural TLS material is generated after this restart. Neither a successful image
+pull nor the restart alone proves an empty subsequent capture.
+
+Both instances share the original 510/1680/1800-second setup/body/whole ends and
+the original 1170-second admission debt. Stdout and stderr each retain their
+aggregate 2 MiB cap; QMP retains its aggregate 65536-byte/128-message cap. A failed
+first retirement, changed file or namespace, exhausted budget or failed second
+admission prevents the native invocation. Outer summaries now use schema version
+2 and add `preparationQemu`, with the same complete 14-field cleanup contract as
+`qemu`. Consumers must require both records and the aggregate caps; guest request
+and response schemas remain unchanged. Local handoff and mutation tests establish
+custody and bounded policy, while fresh signed four-case execution remains the
+runtime requirement.
 
 The native guest's fixed bridge profile enables host-loopback publication with
 outbound masquerading disabled, under the unchanged three default-drop firewall

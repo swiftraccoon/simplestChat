@@ -222,13 +222,8 @@ impl Fixture {
             } else {
                 ctx.request.caddy_image.clone()
             };
-            Self::docker(
-                ctx,
-                &format!("{role}-pull"),
-                &["pull".into(), selected.clone()],
-                90,
-            )
-            .await?;
+            // The controller prewarms this exact digest before its preparation
+            // VM is retired. This restricted epoch has no image acquisition.
             let observed = Self::docker(
                 ctx,
                 &format!("{role}-image"),
