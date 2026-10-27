@@ -73,12 +73,11 @@ pub(super) const MUSL_SPECS: &[u8] = concat!(
     "tic} %{static-pie:-static -pie --no-dynamic-linker -z text} %{rdynamic:-",
     "export-dynamic}\n",
     "\n",
-    "*esp_link:\n",
-    "\n",
-    "*esp_options:\n",
-    "\n",
-    "*esp_cpp_options:\n",
-    "\n",
+    // Preserve upstream's two blank lines after each empty specification.
+    // GCC otherwise consumes the next header as its body and rejects EOF.
+    "*esp_link:\n\n\n",
+    "*esp_options:\n\n\n",
+    "*esp_cpp_options:\n\n\n",
 )
 .as_bytes();
 
