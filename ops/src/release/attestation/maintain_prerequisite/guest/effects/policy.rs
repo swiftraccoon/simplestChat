@@ -108,9 +108,13 @@ pub(super) fn bridge(row: &Value, id: &str, name: &str) -> Result<()> {
             && row["Name"] == name
             && row["Driver"] == "bridge"
             && row["Scope"] == "local"
-            && row["Internal"] == true
+            && row["Internal"] == false
             && row["EnableIPv6"] == false
-            && row["Options"]["com.docker.network.bridge.name"] == name,
+            && row["Options"]
+                == json!({
+                    "com.docker.network.bridge.name":name,
+                    "com.docker.network.bridge.enable_ip_masquerade":"false"
+                }),
     )
 }
 
@@ -177,8 +181,7 @@ pub(super) fn endpoint(
             && !address.is_unspecified()
             && address != Ipv4Addr::new(10, 0, 2, 2),
     )?;
-    let member_gateway = string(&member["Gateway"])?;
-    require(member_gateway.is_empty() || member_gateway == gateway.to_string())?;
+    require(canonical_ip(&member["Gateway"])? == gateway)?;
     let actual = object(&network["Containers"])?;
     require(actual.keys().cloned().collect::<BTreeSet<_>>() == *peers)?;
     let endpoint_id = string(&member["EndpointID"])?;

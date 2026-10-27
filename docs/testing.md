@@ -3055,6 +3055,16 @@ The create argument remains `--cap-add NET_BIND_SERVICE`. This corrects an
 inherited frozen-reference defect; neither the Docker profile observation nor
 the unit tests establish fresh signed VM or TLS success.
 
+The native guest's fixed bridge profile enables host-loopback publication with
+outbound masquerading disabled, under the unchanged three default-drop firewall
+hooks. Network regressions require this exact profile and its canonical IPAM
+gateway; internal networks, missing/enabled masquerading, extra routing options
+and an empty or changed endpoint gateway refuse. The frozen Python fixture keeps
+its old internal bridge. A local exact-Docker comparison stopped at a nested
+cgroup startup refusal, so it establishes neither HTTP publication nor firewall
+enforcement. The fresh signed VM must prove the unchanged launcher's actual
+loopback readiness, natural TLS, containment and complete finalization.
+
 Guest feature checks require the project's pinned OpenSSL headers/libraries;
 default Ops/xtask bootstrap builds leave native crypto disabled. Signed-material,
 actual local TLS, inert-file handoff and maintenance-table firewall tests cover
