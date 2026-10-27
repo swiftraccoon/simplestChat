@@ -239,6 +239,16 @@ one-commit boundary, connectivity and clean-worktree checks. Generic file and
 parent bindings remain unchanged. A local Git reproduction covers this ownership
 handoff; it does not establish a successful signed VM trial.
 
+An observed live capture longer than its 24-byte header is an irreversible
+refusal at the next monitor check. Partial startup output is allowed; final
+status zero and exactly 24 bytes remain required. The watch records explicit
+first-failure provenance before returning, so a shared error code cannot replace
+an earlier body, collector, deadline or close cause. Recovery keeps pumping the
+watch while known-role finalizers run under the original clock. Its latched
+failure still returns after physical settlement and prevents success. This
+applies `C-GOOD-ERR` and `C-DTOR-FAIL` without accepting captured traffic or
+changing the capture window, filter, capacities or finalization protocol.
+
 Known blocking limits remain: synchronous filesystem/hash/close, OS process APIs
 and SDK operations are cooperatively fenced, not cancellable per syscall. A
 same-UID swap-and-restore wholly between witnesses is outside the claim. Failed

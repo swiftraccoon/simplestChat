@@ -953,46 +953,38 @@ fn capture_failure_retains_first_error_stage_through_later_close_or_clock_failur
 }
 
 #[test]
-fn capture_checkpoint_cannot_replace_an_earlier_body_or_cleanup_failure() {
+fn capture_checkpoint_requires_an_explicit_primary_capture_witness() {
     use super::super::{Control, local_checkpoint};
+    use super::actors::{CaptureFailure, CaptureStage, PacketClass};
     use std::time::Instant;
     let previous = "source-observe";
-    let watch = Some((Error::Refused, "capture-data-arp"));
     assert_eq!(
-        local_checkpoint(
-            previous,
-            None,
-            Err(Error::Refused),
-            watch,
-            Some(Error::Refused)
-        ),
+        local_checkpoint(previous, Some("capture-data-arp")),
         "capture-data-arp"
     );
-    for earlier in [Error::Io, Error::Refused, Error::Deadline, Error::Terminate] {
+    for earlier in [
+        Error::Io,
+        Error::Refused,
+        Error::Deadline,
+        Error::Terminate,
+        Error::Close,
+    ] {
         let mut owner = Control::new(Instant::now()).unwrap();
         owner.record(earlier);
-        let original = owner.first;
+        let mut unowned = CaptureFailure::default();
+        let _ = unowned.observe(
+            CaptureStage::Data(PacketClass::Arp),
+            Err::<(), _>(Error::Refused),
+        );
         owner.record(Error::Refused);
+        let checkpoint = local_checkpoint(previous, unowned.primary_checkpoint());
         owner.begin_settling();
-        let checkpoint =
-            local_checkpoint(previous, original, Err(Error::Refused), watch, owner.first);
         let ended = owner.finish();
         assert_eq!(ended, Err(earlier));
         assert_eq!(owner.first, Some(earlier));
         assert_eq!(checkpoint, previous);
     }
-    for (local, watch, first) in [
-        (Ok(()), watch, Some(Error::Refused)),
-        (Err(Error::Io), watch, Some(Error::Io)),
-        (Err(Error::Refused), None, Some(Error::Refused)),
-        (Err(Error::Refused), watch, Some(Error::Deadline)),
-        (Err(Error::Refused), watch, None),
-    ] {
-        assert_eq!(
-            local_checkpoint(previous, None, local, watch, first),
-            previous
-        );
-    }
+    assert_eq!(local_checkpoint(previous, None), previous);
 }
 
 struct ReplacementHistory {
