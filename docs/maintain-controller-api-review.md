@@ -189,9 +189,21 @@ parent. The maintenance firewall uses its own `sc_maintain_` table identity;
 the frozen Caddy-only helper's `sc_caddy_` restriction is not reused. Inert
 mutation/rule tests cover those composition corrections. Neither the source
 fixes nor local tests establish real nftables behavior or the complete signed
-PostgreSQL/Caddy/900-second launcher transaction. The latest frozen-guest run
-passed Ops33 then failed at rendering; the new native guest still needs fresh
-four-case runtime evidence.
+PostgreSQL/Caddy/900-second launcher transaction. Fresh four-case runtime evidence
+remains required.
+
+The daemon observer separates stopped state from publication of the `die` event.
+In pinned Moby, [state notification](https://github.com/moby/moby/blob/8af9fe3a36bab3e039862a2ab1cef1880c9b4d03/daemon/container/state.go)
+precedes [monitor event publication](https://github.com/moby/moby/blob/8af9fe3a36bab3e039862a2ab1cef1880c9b4d03/daemon/monitor.go),
+while [the stop waiter](https://github.com/moby/moby/blob/8af9fe3a36bab3e039862a2ab1cef1880c9b4d03/daemon/stop.go)
+can publish `stop` independently. The private action-history join admits that
+early stop only after the same retired app or migration actor's admitted
+signal-15 kill. Final histories still require `die,destroy`; current-app, role,
+signal, duplicate and unknown-action checks remain. Early kill-error recovery without
+that joined kill remains refused. This applies `C-VALIDATE` and `C-GOOD-ERR`
+without changing resource ownership, deadlines, failure vocabulary or containment.
+Trace tests establish the closed ordering policy, not the precise refused event
+in an earlier hosted report or a successful complete guest transaction.
 
 The generated `.git/shallow` administrative input is validated and explicitly
 closed before Git receives the namespace. The first fetch can create `.git/logs`

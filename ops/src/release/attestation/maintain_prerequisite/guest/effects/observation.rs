@@ -143,6 +143,51 @@ pub(super) fn app_replacement_rename(
     )
 }
 
+/// Join admitted actor actions without ordering a successful stop after die.
+///
+/// The stopped waiter may publish stop before the monitor publishes die. This
+/// early form requires the same actor's already admitted TERM; final traces
+/// still require die and destroy. Early error-recovery stops without that TERM remain
+/// outside this narrow profile.
+pub(super) fn container_action(
+    row: &Value,
+    service: Option<&str>,
+    app: Option<&str>,
+    validation: Option<&str>,
+    traces: &mut BTreeMap<String, Vec<String>>,
+    mutations: &mut BTreeSet<(String, String)>,
+) -> Result<()> {
+    let action = policy::string(&row["Action"])?;
+    let id = policy::string(&row["Actor"]["ID"])?;
+    let attributes = &row["Actor"]["Attributes"];
+    let phases = traces.entry(id.into()).or_default();
+    require(["create", "start", "kill", "die", "stop", "destroy"].contains(&action))?;
+    if action == "kill" {
+        require(
+            service.is_some_and(|s| ["migrate", "simplestchat"].contains(&s))
+                && phases == &["create", "start"]
+                && attributes["signal"] == "15",
+        )?;
+    } else if action == "stop" {
+        let early = phases == &["create", "start"]
+            && mutations.contains(&(id.to_owned(), "kill".to_owned()));
+        require(
+            service.is_some_and(|s| ["migrate", "simplestchat"].contains(&s))
+                && (phases == &["create", "start", "die"] || early),
+        )?;
+    }
+    if ["kill", "stop"].contains(&action) {
+        require(Some(id) != app && mutations.insert((id.to_owned(), action.to_owned())))?;
+    }
+    if ["create", "start", "die", "destroy"].contains(&action) {
+        phases.push(action.into());
+        if action == "die" && (service == Some("migrate") || validation == Some(id)) {
+            require(attributes["exitCode"] == "0")?;
+        }
+    }
+    Ok(())
+}
+
 /// Require the complete fixed actor histories, including app replacement.
 pub(super) fn expected_daemon_traces(
     validation: &str,
@@ -470,36 +515,14 @@ impl Fixture {
                             continue;
                         }
                         stage = DaemonStage::ActionHistory;
-                        let phases = traces.entry(id.into()).or_default();
-                        require(
-                            ["create", "start", "kill", "die", "stop", "destroy"].contains(&action),
+                        container_action(
+                            row,
+                            service,
+                            self.app.as_deref(),
+                            validation.as_deref(),
+                            &mut traces,
+                            &mut mutations,
                         )?;
-                        if action == "kill" {
-                            require(
-                                service.is_some_and(|s| ["migrate", "simplestchat"].contains(&s))
-                                    && phases == &["create", "start"]
-                                    && attributes["signal"] == "15",
-                            )?;
-                        } else if action == "stop" {
-                            require(
-                                service.is_some_and(|s| ["migrate", "simplestchat"].contains(&s))
-                                    && phases == &["create", "start", "die"],
-                            )?;
-                        }
-                        if ["kill", "stop"].contains(&action) {
-                            require(
-                                Some(id) != self.app.as_deref()
-                                    && mutations.insert((id.to_owned(), action.to_owned())),
-                            )?;
-                        }
-                        if ["create", "start", "die", "destroy"].contains(&action) {
-                            phases.push(action.into());
-                            if action == "die"
-                                && (service == Some("migrate") || validation.as_deref() == Some(id))
-                            {
-                                require(attributes["exitCode"] == "0")?;
-                            }
-                        }
                     }
                     "network" => {
                         stage = DaemonStage::NetworkHistory;
