@@ -148,6 +148,42 @@ impl Read for Bytes<'_> {
         Ok(count)
     }
 }
+fn write_archive(
+    file: &mut std::fs::File,
+    pins: [&Original; 3],
+    control: &mut Control,
+) -> Result<()> {
+    let mut builder = tar::Builder::new(&mut *file);
+    for (name, original) in ["ops-release.json", "ops-selection.json", "simplestchat-ops"]
+        .iter()
+        .zip(pins)
+    {
+        original.check(control)?;
+        let mut header = tar::Header::new_ustar();
+        header.set_path(name).map_err(|_| Error::Input)?;
+        header.set_mode(0o600);
+        header.set_uid(0);
+        header.set_gid(0);
+        header.set_mtime(0);
+        header.set_entry_type(tar::EntryType::Regular);
+        header.set_size(original.bytes);
+        header.set_cksum();
+        let reader = Bytes {
+            original,
+            control,
+            at: 0,
+        };
+        builder.append(&header, reader).map_err(|_| Error::Io)?;
+        original.check(control)?;
+    }
+    // Builder supplies both zero end blocks. Extra record padding can make
+    // the tail 10,752 bytes, exceeding the unchanged receiver's 10,240 bound.
+    builder.finish().map_err(|_| Error::Io)?;
+    drop(builder);
+    file.flush().map_err(|_| Error::Io)?;
+    file.sync_all().map_err(|_| Error::Io)?;
+    control.check()
+}
 pub(super) async fn transfer(
     runner: &mut Runner,
     control: &mut Control,
@@ -172,40 +208,7 @@ pub(super) async fn transfer(
     let names = ["ops-release.json", "ops-selection.json", "simplestchat-ops"];
     let path = runner.output.join("ops-transfer.tar");
     let mut file = files::private_file(&path, control)?;
-    let body = (|| {
-        let mut builder = tar::Builder::new(&mut file);
-        for (name, original) in names.iter().zip(pins) {
-            original.check(control)?;
-            let mut header = tar::Header::new_ustar();
-            header.set_path(name).map_err(|_| Error::Input)?;
-            header.set_mode(0o600);
-            header.set_uid(0);
-            header.set_gid(0);
-            header.set_mtime(0);
-            header.set_entry_type(tar::EntryType::Regular);
-            header.set_size(original.bytes);
-            header.set_cksum();
-            let reader = Bytes {
-                original,
-                control,
-                at: 0,
-            };
-            builder.append(&header, reader).map_err(|_| Error::Io)?;
-            original.check(control)?;
-        }
-        builder.finish().map_err(|_| Error::Io)?;
-        drop(builder);
-        let length = file.metadata().map_err(|_| Error::Io)?.len();
-        let padding = (10240 - length % 10240) % 10240;
-        file.write_all(&vec![
-            0;
-            usize::try_from(padding).map_err(|_| Error::Input)?
-        ])
-        .map_err(|_| Error::Io)?;
-        file.flush().map_err(|_| Error::Io)?;
-        file.sync_all().map_err(|_| Error::Io)?;
-        control.check()
-    })();
+    let body = write_archive(&mut file, pins, control);
     if let Err(error) = body {
         control.record(error);
     }
@@ -425,6 +428,181 @@ mod tests {
         fs::create_dir(&path).unwrap();
         fs::canonicalize(path).unwrap()
     }
+    #[derive(Clone, Copy)]
+    enum ArchiveVariant {
+        Minimal,
+        OldRecordPadding,
+        ShortTail,
+        NonzeroTail,
+        ExcessTail,
+        WrongRole,
+    }
+    struct ArchiveObservation {
+        admitted: Result<()>,
+        member_end: u64,
+        bytes: u64,
+        zero_tail: bool,
+        closed: bool,
+        finished: Result<()>,
+    }
+    fn archive_observation(binary_blocks: usize, variant: ArchiveVariant) -> ArchiveObservation {
+        let path = work();
+        let mut control = Control::new(Instant::now()).unwrap();
+        let mut pins = Vec::new();
+        let mut writer = None;
+        let mut original = None;
+        let mut member_end = 0;
+        let mut bytes = 0;
+        let mut zero_tail = false;
+        let archive_path = path.join("transfer.tar");
+        let body = (|| {
+            for (name, data) in [
+                ("ops-release.json", vec![b'm'; 1769]),
+                ("ops-selection.json", b"selection".to_vec()),
+                ("simplestchat-ops", vec![b'b'; binary_blocks * 512 - 17]),
+            ] {
+                let leaf = path.join(name);
+                files::write(&leaf, &data, &mut control)?;
+                pins.push(Original::open(&leaf, 65536, &mut control)?);
+            }
+            member_end = pins
+                .iter()
+                .map(|pin| 512 + pin.bytes.div_ceil(512) * 512)
+                .sum();
+            writer = Some(files::private_file(&archive_path, &mut control)?);
+            let file = writer.as_mut().ok_or(Error::Refused)?;
+            write_archive(file, [&pins[0], &pins[1], &pins[2]], &mut control)?;
+            match variant {
+                ArchiveVariant::Minimal => {}
+                ArchiveVariant::OldRecordPadding => {
+                    // Reproduce the old writer's extra record padding, not a
+                    // claim that this helper existed in the old source.
+                    let length = file.metadata().map_err(|_| Error::Io)?.len();
+                    let padding = (10240 - length % 10240) % 10240;
+                    file.write_all(&vec![0; padding as usize])
+                        .map_err(|_| Error::Io)?;
+                }
+                ArchiveVariant::ShortTail => {
+                    file.set_len(member_end + 512).map_err(|_| Error::Io)?;
+                }
+                ArchiveVariant::NonzeroTail => {
+                    file.seek(io::SeekFrom::Start(member_end + 512))
+                        .map_err(|_| Error::Io)?;
+                    file.write_all(&[1]).map_err(|_| Error::Io)?;
+                }
+                ArchiveVariant::ExcessTail => {
+                    file.set_len(member_end + 10752).map_err(|_| Error::Io)?;
+                }
+                ArchiveVariant::WrongRole => {
+                    let mut header = tar::Header::new_ustar();
+                    header.set_path("unexpected.json").map_err(|_| Error::Io)?;
+                    header.set_size(pins[0].bytes);
+                    header.set_mode(0o600);
+                    header.set_uid(0);
+                    header.set_gid(0);
+                    header.set_entry_type(tar::EntryType::Regular);
+                    header.set_cksum();
+                    file.seek(io::SeekFrom::Start(0)).map_err(|_| Error::Io)?;
+                    file.write_all(header.as_bytes()).map_err(|_| Error::Io)?;
+                }
+            }
+            file.flush().map_err(|_| Error::Io)?;
+            file.sync_all().map_err(|_| Error::Io)?;
+            control.check()
+        })();
+        if let Err(error) = body {
+            control.record(error);
+        }
+        let closed_writer = writer
+            .take()
+            .map_or(Ok(()), |file| files::close(file, &mut control));
+        let admitted = (|| {
+            body.and(closed_writer)?;
+            original = Some(Original::open(&archive_path, 65536, &mut control)?);
+            let held = original.as_ref().ok_or(Error::Refused)?;
+            bytes = held.bytes;
+            let data = held.data(65536, &mut control)?;
+            zero_tail = data
+                .get(member_end as usize..)
+                .is_some_and(|tail| tail.iter().all(|byte| *byte == 0));
+            admit_archive(held, [&pins[0], &pins[1], &pins[2]], &mut control)
+        })();
+        if let Err(error) = admitted {
+            control.record(error);
+        }
+        control.settle();
+        let mut closed = closed_writer.is_ok();
+        if let Some(original) = &mut original {
+            closed &= original.finish(&mut control).is_ok();
+        }
+        for pin in &mut pins {
+            closed &= pin.finish(&mut control).is_ok();
+        }
+        let finished = control.finish();
+        closed &= fs::remove_dir_all(&path).is_ok();
+        ArchiveObservation {
+            admitted,
+            member_end,
+            bytes,
+            zero_tail,
+            closed,
+            finished,
+        }
+    }
+
+    #[test]
+    fn fixed_writer_keeps_two_zero_end_blocks_for_all_twenty_record_alignments() {
+        let mut offsets = std::collections::BTreeSet::new();
+        for blocks in 1..=20 {
+            let observed = archive_observation(blocks, ArchiveVariant::Minimal);
+            assert_eq!(observed.admitted, Ok(()), "binary blocks {blocks}");
+            assert_eq!(observed.bytes, observed.member_end + 1024);
+            assert!(observed.zero_tail && observed.closed);
+            assert_eq!(observed.finished, Ok(()));
+            offsets.insert(observed.member_end % 10240);
+        }
+        assert_eq!(
+            offsets,
+            (0..20)
+                .map(|block| block * 512)
+                .collect::<std::collections::BTreeSet<u64>>()
+        );
+    }
+
+    #[test]
+    fn old_record_padding_reproduces_the_rejected_last_block_alignment() {
+        for (blocks, remainder, expected_tail) in
+            [(10, 9216, 1024), (11, 9728, 10752), (12, 0, 10240)]
+        {
+            let observed = archive_observation(blocks, ArchiveVariant::OldRecordPadding);
+            let expected = if remainder == 9728 {
+                Err(Error::Refused)
+            } else {
+                Ok(())
+            };
+            assert_eq!(observed.member_end % 10240, remainder);
+            assert_eq!(observed.bytes - observed.member_end, expected_tail);
+            assert_eq!(observed.admitted, expected);
+            assert!(observed.zero_tail && observed.closed);
+            assert_eq!(observed.finished, expected);
+        }
+    }
+
+    #[test]
+    fn fixed_reader_keeps_refusing_short_nonzero_excess_tail_and_wrong_member_role() {
+        for variant in [
+            ArchiveVariant::ShortTail,
+            ArchiveVariant::NonzeroTail,
+            ArchiveVariant::ExcessTail,
+            ArchiveVariant::WrongRole,
+        ] {
+            let observed = archive_observation(11, variant);
+            assert_eq!(observed.admitted, Err(Error::Refused));
+            assert!(observed.closed);
+            assert_eq!(observed.finished, Err(Error::Refused));
+        }
+    }
+
     #[test]
     fn fixed_bundle_and_transfer_keep_nlink_mode_and_readonly_offset_admission() {
         let path = work();

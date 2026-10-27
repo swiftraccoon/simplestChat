@@ -61,6 +61,19 @@ source inputs, original parent namespaces and selected bytes stay held through t
 and post-VM finalization. Current API identity and actual verifier completion are
 separate from passive result JSON. Saved receipts or paths cannot instantiate
 positive custody. Retention does not authorize controller execution of musl.
+
+The fixed three-member USTAR writer retains the pinned TAR library's two
+512-byte zero terminator blocks. It does not add padding to a 10,240-byte whole
+record. Such extra padding can create a 10,752-byte tail when the final member
+boundary is 9,728 modulo 10,240, causing both the controller and frozen guest
+readers to refuse the writer's own output. The actual d540 signed binary has
+that alignment. Removing the extra writer padding preserves the existing
+1,024-to-10,240-byte zero-tail admission range, fixed names/order/headers,
+per-member hashes, archive digest/length and all original custody/deadline
+checks. The transfer identity is computed from the actual new archive bytes.
+The frozen Python writer and readers remain unchanged; byte-for-byte writer
+equivalence is not claimed. Regression cases exercise the production Rust writer
+at every possible 512-byte member alignment and retain malformed-tail refusals.
 Completed Ops 3 and server 4 observations are recorded immediately after the
 corresponding current child succeeds, even if a later retained check refuses.
 The exact four-subject verification-digest object is decoded before custody is
