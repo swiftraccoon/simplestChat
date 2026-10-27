@@ -636,6 +636,73 @@ pub(super) struct Materials {
     staged_kit: Snapshot,
 }
 impl Materials {
+    /// Public third-party notices accompany the native binary in an existing
+    /// signed evidence document. No arbitrary kit data is exposed.
+    pub fn native_notices(&self) -> Result<serde_json::Value> {
+        let mut notices = Vec::new();
+        for (name, relative) in [
+            ("musl", "native/musl/COPYRIGHT"),
+            ("openssl", "native/openssl/LICENSE.txt"),
+        ] {
+            self.kit.verify()?;
+            let entry = self
+                .kit_snapshot
+                .entries
+                .get(relative)
+                .ok_or_else(|| failure(1))?;
+            if entry.directory || entry.executable || entry.stamp.len() > 32768 {
+                return Err(failure(1));
+            }
+            let parts = relative.split('/').collect::<Vec<_>>();
+            let mut owners: Vec<Held> = Vec::new();
+            let read = (|| {
+                let mut selected = String::new();
+                for (index, part) in parts.iter().enumerate() {
+                    if !selected.is_empty() {
+                        selected.push('/');
+                    }
+                    selected.push_str(part);
+                    let expected = &self
+                        .kit_snapshot
+                        .entries
+                        .get(&selected)
+                        .ok_or_else(|| failure(1))?
+                        .stamp;
+                    let parent = owners.last().map_or(self.kit.file(), Held::file);
+                    let flags = namespace::FLAGS
+                        | if index + 1 < parts.len() {
+                            OFlags::DIRECTORY
+                        } else {
+                            OFlags::empty()
+                        };
+                    let held = Held::open(parent, OsStr::new(part), flags, self.kit.budget())?;
+                    owners.push(held);
+                    if !namespace::same(expected, &io(owners.last().unwrap().file().metadata())?) {
+                        return Err(failure(1));
+                    }
+                }
+                let file = owners.last().ok_or_else(|| failure(1))?.file();
+                let mut bytes = Vec::new();
+                io(file.take(32769).read_to_end(&mut bytes))?;
+                if bytes.len() as u64 != entry.stamp.len()
+                    || Sha256::digest(&bytes)[..] != entry.digest
+                    || !namespace::same(&entry.stamp, &io(file.metadata())?)
+                {
+                    return Err(failure(1));
+                }
+                let text = String::from_utf8(bytes).map_err(|_| failure(1))?;
+                Ok(serde_json::json!({"component":name,"sha256":hex(&entry.digest),"text":text}))
+            })();
+            let mut closed = Ok(());
+            for held in owners.into_iter().rev() {
+                closed = closed.and(held.finish());
+            }
+            let value = read.and_then(|value| closed.map(|()| value))?;
+            self.kit.verify()?;
+            notices.push(value);
+        }
+        Ok(serde_json::Value::Array(notices))
+    }
     pub fn tool_digest(&self, relative: &str) -> Result<serde_json::Value> {
         let entry = self
             .staged_kit
@@ -740,7 +807,7 @@ impl Materials {
         }
         if kit_snapshot.entries.keys().any(|path| {
             !path.is_empty()
-                && !["toolchain", "host-tools", "registry"]
+                && !["toolchain", "host-tools", "registry", "native"]
                     .contains(&path.split('/').next().unwrap())
         }) {
             return Err(failure(1));

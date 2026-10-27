@@ -1,4 +1,4 @@
-//! Synthetic complete installer/deb graphs. No real package body is acquired.
+//! Synthetic complete installer/deb/native graphs. No real archive is acquired.
 
 use super::super::namespace::Budget;
 use super::{
@@ -105,6 +105,25 @@ fn deb() -> Artifact {
         .into_iter()
         .find(|p| p.format == Format::UbuntuDeb)
         .unwrap()
+}
+fn native() -> Artifact {
+    Catalog::load()
+        .unwrap()
+        .artifacts
+        .into_iter()
+        .find(|artifact| artifact.name == "musl" && artifact.format == Format::NativeGzip)
+        .unwrap()
+}
+fn pax(key: &str, value: &str) -> Vec<u8> {
+    let tail = format!(" {key}={value}\n");
+    let mut size = tail.len() + 1;
+    loop {
+        let actual = tail.len() + size.to_string().len();
+        if actual == size {
+            return format!("{size}{tail}").into_bytes();
+        }
+        size = actual;
+    }
 }
 fn admitted(artifact: &Artifact, bytes: &[u8], expected: bool, resolve: bool) -> Option<Vec<u8>> {
     let fixture = fixture::Fixture::new();
@@ -452,4 +471,179 @@ fn identical_cross_package_files_merge_but_conflicting_payload_or_mode_refuses()
     );
     tree.finish().unwrap();
     assert_eq!(budget.count(), 0);
+}
+
+#[test]
+fn only_native_gzip_accepts_the_exact_git_global_comment_record() {
+    let artifact = native();
+    let name = format!("{}/COPYRIGHT", artifact.archive_root);
+    let comment = pax("comment", &"a".repeat(40));
+    assert_eq!(comment.len(), 52);
+    let global = Entry {
+        name: "pax_global_header",
+        data: &comment,
+        kind: b'g',
+        target: None,
+    };
+    let bytes = gzip(&tar(&[global, file(&name, b"native input")]));
+    assert_eq!(
+        admitted(&artifact, &bytes, true, true).unwrap(),
+        b"native input"
+    );
+
+    let global = Entry {
+        name: "pax_global_header",
+        data: &comment,
+        kind: b'g',
+        target: None,
+    };
+    let (rust_artifact, rust_bytes) = rust(b"file:bin/rustc\n", b"3\n", &[global]);
+    admitted(&rust_artifact, &rust_bytes, false, false);
+    let deb_bytes = tar(&[
+        Entry {
+            name: "pax_global_header",
+            data: &comment,
+            kind: b'g',
+            target: None,
+        },
+        file("usr/bin/payload", b"deb input"),
+    ]);
+    admitted(&deb(), &deb_bytes, false, false);
+}
+
+#[test]
+fn native_global_pax_cannot_change_paths_or_expand_the_metadata_exception() {
+    let artifact = native();
+    let name = format!("{}/COPYRIGHT", artifact.archive_root);
+    let mut wrong_length = pax("comment", &"a".repeat(40));
+    wrong_length[..2].copy_from_slice(b"51");
+    for data in [
+        pax("unknown", &"a".repeat(40)),
+        pax("path", &format!("/{}", "a".repeat(42))),
+        pax("path", &format!("{}x", "../".repeat(14))),
+        pax("comment", &"a".repeat(39)),
+        pax("comment", &"a".repeat(41)),
+        pax("comment", &"z".repeat(40)),
+        [pax("comment", &"a".repeat(40)), pax("path", "/escape")].concat(),
+        wrong_length,
+    ] {
+        let bytes = gzip(&tar(&[
+            Entry {
+                name: "pax_global_header",
+                data: &data,
+                kind: b'g',
+                target: None,
+            },
+            file(&name, b"native input"),
+        ]));
+        admitted(&artifact, &bytes, false, false);
+    }
+    let local = pax("path", "../escape");
+    let bytes = gzip(&tar(&[
+        Entry {
+            name: "pax_local_header",
+            data: &local,
+            kind: b'x',
+            target: None,
+        },
+        file(&name, b"native input"),
+    ]));
+    admitted(&artifact, &bytes, false, false);
+}
+
+#[test]
+fn native_projection_refuses_traversal_absolute_names_and_escaping_links() {
+    let artifact = native();
+    let original = format!("{}/include/original", artifact.archive_root);
+    let alias = format!("{}/links/alias", artifact.archive_root);
+    for name in [
+        format!("{}/../escape", artifact.archive_root),
+        format!("/{}/include/original", artifact.archive_root),
+        "unselected-sibling/payload".to_owned(),
+    ] {
+        let mut bytes = tar(&[file(&original, b"native input")]);
+        let mut header = tar::Header::new_gnu();
+        header.as_mut_bytes().copy_from_slice(&bytes[..512]);
+        header.as_mut_bytes()[..100].fill(0);
+        header.as_mut_bytes()[..name.len()].copy_from_slice(name.as_bytes());
+        header.set_cksum();
+        bytes[..512].copy_from_slice(header.as_bytes());
+        admitted(&artifact, &gzip(&bytes), false, false);
+    }
+    for (kind, target) in [
+        (b'2', "../../escape"),
+        (b'2', "../../host-tools/bin/cc"),
+        (b'2', "/include/original"),
+        (b'1', "/include/original"),
+        (b'1', "../escape"),
+    ] {
+        let bytes = gzip(&tar(&[
+            file(&original, b"native input"),
+            Entry {
+                name: &alias,
+                data: b"",
+                kind,
+                target: Some(target),
+            },
+        ]));
+        admitted(&artifact, &bytes, false, true);
+    }
+}
+
+#[test]
+fn native_relative_symlinks_materialize_exact_bytes_and_target_modes() {
+    let artifact = native();
+    let original = format!("{}/include/original", artifact.archive_root);
+    let alias = format!("{}/links/alias", artifact.archive_root);
+    for (archive_mode, expected_mode) in [(0o644, 0o600), (0o755, 0o700)] {
+        let fixture = fixture::Fixture::new();
+        let budget = Budget::default();
+        let mut bytes = tar(&[
+            file(&original, b"native input\0bytes"),
+            Entry {
+                name: &alias,
+                data: b"",
+                kind: b'2',
+                target: Some("../include/original"),
+            },
+        ]);
+        let mut header = tar::Header::new_gnu();
+        header.as_mut_bytes().copy_from_slice(&bytes[..512]);
+        header.set_mode(archive_mode);
+        header.set_cksum();
+        bytes[..512].copy_from_slice(header.as_bytes());
+        let source = fixture.root.join("archive");
+        fs::write(&source, gzip(&bytes)).unwrap();
+        let input = fs::File::open(source).unwrap();
+        let mut tree = Tree::create(&fixture.root.join("native"), &budget).unwrap();
+        let mut graph = Graph::default();
+        graph
+            .import(&input, &artifact, &mut tree, &mut || Ok(()))
+            .unwrap();
+        assert_eq!(tree.records.len(), 1);
+        graph.resolve(&mut tree, &mut || Ok(())).unwrap();
+        let names = ["musl/include/original", "musl/links/alias"];
+        assert_eq!(
+            tree.records.keys().map(String::as_str).collect::<Vec<_>>(),
+            names
+        );
+        for name in names {
+            assert_eq!(
+                tree.read(name, 1024, &mut || Ok(())).unwrap(),
+                b"native input\0bytes"
+            );
+            let stamp = fs::symlink_metadata(tree.run.path.join(name)).unwrap();
+            assert!(stamp.is_file());
+            assert_eq!(stamp.mode() & 0o7777, expected_mode);
+            assert_eq!(stamp.nlink(), 1);
+        }
+        assert_ne!(
+            tree.records[names[0]].stamp.ino(),
+            tree.records[names[1]].stamp.ino()
+        );
+        nix::unistd::close(input).unwrap();
+        tree.finish().unwrap();
+        assert_eq!(budget.count(), 0);
+        assert_eq!(budget.close_counts().1, 0);
+    }
 }

@@ -424,6 +424,17 @@ fn native_catalog_is_bound_to_every_original_literal_role_and_thirty_six_migrati
         assert!(ops.contains(&format!("\"{name}\"")));
     }
     assert_eq!(catalog::MIGRATIONS.len(), 36);
+    assert_eq!(catalog::guest_sources().len(), 52);
+    assert_eq!(catalog::HELPERS.len(), 15);
+    for old_proof in [
+        "build/security_vm_maintain_prerequisite_guest.py",
+        "build/security_vm_stage_guest.py",
+        "build/caddy_probe_guest.py",
+        "build/caddy_materials.py",
+    ] {
+        assert!(!catalog::guest_sources().contains(old_proof));
+    }
+    assert!(catalog::sources().contains("build/caddy_probe_guest.py"));
     assert!(
         !catalog::sources()
             .iter()
@@ -431,7 +442,7 @@ fn native_catalog_is_bound_to_every_original_literal_role_and_thirty_six_migrati
     );
 }
 #[test]
-fn workflow_entry_changes_outer_execution_without_replacing_the_guest_or_caps() {
+fn workflow_entry_keeps_caps_and_selects_the_installed_native_guest() {
     let workflow = include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../.github/workflows/maintenance-launcher-runtime.yml"
@@ -448,6 +459,63 @@ fn workflow_entry_changes_outer_execution_without_replacing_the_guest_or_caps() 
     ));
     assert!(original.contains("SECONDS = 1800") && original.contains("SETUP = 510"));
     assert!(original.contains("DEBT = NATIVE + OBSERVATION"));
+    let session = include_str!("session.rs");
+    assert!(session.contains("\"/usr/local/libexec/simplestchat-public/simplestchat-ops\".into()"));
+    assert!(
+        session.contains("\"maintain-prerequisite\".into()")
+            && session.contains("\"guest\".into()")
+    );
+    assert!(!session.contains("security_vm_maintain_prerequisite_guest.py"));
+}
+#[test]
+fn retained_catalog_covers_every_native_guest_and_hosted_producer_module() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap();
+    let catalog = catalog::sources();
+    for prefix in [
+        "ops/src/release/attestation/maintain_prerequisite",
+        "xtask/src/ci/ops_artifact/hosted",
+    ] {
+        let mut pending = vec![root.join(prefix)];
+        let mut actual = std::collections::BTreeSet::new();
+        while let Some(directory) = pending.pop() {
+            for entry in std::fs::read_dir(directory).unwrap() {
+                let entry = entry.unwrap();
+                let kind = entry.file_type().unwrap();
+                assert!(!kind.is_symlink());
+                if kind.is_dir() {
+                    pending.push(entry.path());
+                } else if entry.path().extension().is_some_and(|value| value == "rs") {
+                    assert!(kind.is_file());
+                    actual.insert(
+                        entry
+                            .path()
+                            .strip_prefix(root)
+                            .unwrap()
+                            .to_str()
+                            .unwrap()
+                            .to_owned(),
+                    );
+                }
+            }
+        }
+        let retained = catalog
+            .iter()
+            .filter(|name| name.starts_with(&format!("{prefix}/")))
+            .cloned()
+            .collect();
+        assert_eq!(actual, retained, "{prefix}");
+    }
+    for name in [
+        "ops/Cargo.toml",
+        "xtask/Cargo.toml",
+        "ops/ops-build-inputs.lock.json",
+        "xtask/src/ci/ops_artifact/recipe.rs",
+        "xtask/src/ci/ops_artifact/resolution.rs",
+    ] {
+        assert!(catalog.contains(name), "{name}");
+    }
 }
 #[test]
 fn earlier_io_identity_survives_later_setup_expiry_and_failed_rephase() {

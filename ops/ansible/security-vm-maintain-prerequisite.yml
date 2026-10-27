@@ -44,9 +44,6 @@
           - iproute2
           - util-linux
           - coreutils
-          - python3-jinja2
-          - python3-yaml
-          - python3-cryptography
         state: present
         update_cache: true
         install_recommends: false
@@ -77,18 +74,6 @@
         owner: root
         group: root
         mode: '0755'
-    - name: Stage only the fixed source-bound guest modules
-      ansible.builtin.copy:
-        src: "{{ playbook_dir }}/../../build/{{ item }}"
-        dest: "/root/simplestchat-vm-fixture/{{ item }}"
-        owner: root
-        group: root
-        mode: '0600'
-      loop:
-        - security_vm_maintain_prerequisite_guest.py
-        - security_vm_stage_guest.py
-        - caddy_probe_guest.py
-        - caddy_materials.py
     - name: Copy one retained original source bundle
       ansible.builtin.copy:
         src: "{{ vm_maintain_bundle_path }}"

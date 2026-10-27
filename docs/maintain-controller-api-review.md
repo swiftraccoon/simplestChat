@@ -6,10 +6,14 @@ as a reference. The Rust entry owns the entire outer operation and the same
 four-case caller switch. It does not call `Program::OpsRuntimePython`, import a
 Python controller or add a general VM execution interface.
 
-The remaining Python execution is explicit: existing Ansible dependency/tool
-bootstrap, the fixed Ops 33 guest, the frozen maintenance guest and its staged
-helpers, and unchanged operational launcher helpers. No tracked Python bytes,
-installed service callers, backup/DB policies or bootstrap interfaces change.
+The guest session now executes the authenticated installed Ops binary's explicit
+`release maintain-prerequisite guest` role. Its closed request admits exactly
+52 project source pins and 15 operational helper pins; the former four proof-only
+Python guest/material sources are excluded from that guest set. Existing Ansible
+bootstrap, the fixed Ops33 guest and operational launcher helpers keep their
+Python roles. No tracked Python bytes, installed service callers, backup/DB
+policies or bootstrap interfaces change. The optional crypto feature and static
+producer closure are described in the [native API review](maintain-native-prerequisite-api-review.md).
 
 The affected guideline decisions use the
 [adopted API inventory](rust-api-checklist.md). `C-CTOR`, `C-FAILURE` and
@@ -35,7 +39,7 @@ keeps the original flags for the final sample. Drop is negative fallback only.
 
 The outer profile remains N1800/M120, with 510 seconds for setup and 1,170 seconds
 required before GO. Native run/init share their own original 1050/60 interval.
-The frozen guest's invocation/output end and
+The native guest's invocation/output end and
 the outer body remain independent authoritative backstops; GO does not transport
 the outer absolute clock. There is no 4200 profile, second outer clock, default
 budget, timeout increase or fallback retry.
@@ -115,6 +119,16 @@ completion still requires all 33 successful cases, the original install facts
 and actual exit zero. Successful summaries retain their existing shape. This applies
 `C-VALIDATE` and `C-GOOD-ERR` without promoting diagnostics into execution
 authority or changing outer signal ownership.
+
+The guest's fixed renderer retires only the admitted inert `images.json` with
+exact `{}\n` bytes, root ownership and mode0600 under its original root0700
+parent. The maintenance firewall uses its own `sc_maintain_` table identity;
+the frozen Caddy-only helper's `sc_caddy_` restriction is not reused. Inert
+mutation/rule tests cover those composition corrections. Neither the source
+fixes nor local tests establish real nftables behavior or the complete signed
+PostgreSQL/Caddy/900-second launcher transaction. The latest frozen-guest run
+passed Ops33 then failed at rendering; the new native guest still needs fresh
+four-case runtime evidence.
 
 Known blocking limits remain: synchronous filesystem/hash/close, OS process APIs
 and SDK operations are cooperatively fenced, not cancellable per syscall. A

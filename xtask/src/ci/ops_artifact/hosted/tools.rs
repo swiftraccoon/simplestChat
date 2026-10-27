@@ -30,6 +30,9 @@ pub(super) enum Role {
     Curl,
     DpkgDeb,
     CcProbe,
+    NativeShell,
+    NativePerl,
+    NativeMake,
 }
 impl Role {
     pub(super) fn program(self) -> Program {
@@ -37,6 +40,9 @@ impl Role {
             Self::Curl => Program::OpsMaterialCurl,
             Self::DpkgDeb => Program::OpsDpkgDeb,
             Self::CcProbe => Program::OpsHostCc,
+            Self::NativeShell => Program::OpsKitShell,
+            Self::NativePerl => Program::OpsKitPerl,
+            Self::NativeMake => Program::OpsKitMake,
         }
     }
 }
@@ -181,6 +187,9 @@ pub(super) struct Tools {
     curl: Option<Arc<Executable>>,
     dpkg: Option<Arc<Executable>>,
     cc: Option<Arc<Executable>>,
+    native_shell: Option<Arc<Executable>>,
+    native_perl: Option<Arc<Executable>>,
+    native_make: Option<Arc<Executable>>,
     _permits: Vec<Permit>,
 }
 
@@ -191,7 +200,10 @@ impl Tools {
             curl: None,
             dpkg: None,
             cc: None,
-            _permits: budget.reserve(4)?,
+            native_shell: None,
+            native_perl: None,
+            native_make: None,
+            _permits: budget.reserve(7)?,
         };
         let selected: Result<()> = (|| {
             value.git = Some(Arc::new(
@@ -230,6 +242,22 @@ impl Tools {
         ));
         Ok(())
     }
+    pub fn admit_native(&mut self, kit: &Path) -> Result<()> {
+        if self.native_shell.is_some() || self.native_perl.is_some() || self.native_make.is_some() {
+            return Err(failure(1));
+        }
+        for (owner, name) in [
+            (&mut self.native_shell, "dash"),
+            (&mut self.native_perl, "perl"),
+            (&mut self.native_make, "make"),
+        ] {
+            *owner = Some(Arc::new(
+                Executable::open(&kit.join("host-tools/sysroot/usr/bin").join(name))
+                    .map_err(|_| failure(1))?,
+            ));
+        }
+        Ok(())
+    }
     pub fn invocation(&self, spec: InvocationSpec) -> Result<Arc<Invocation>> {
         let InvocationSpec {
             role,
@@ -246,6 +274,9 @@ impl Tools {
             Role::Curl => self.curl.as_ref(),
             Role::DpkgDeb => self.dpkg.as_ref(),
             Role::CcProbe => self.cc.as_ref(),
+            Role::NativeShell => self.native_shell.as_ref(),
+            Role::NativePerl => self.native_perl.as_ref(),
+            Role::NativeMake => self.native_make.as_ref(),
         }
         .ok_or_else(|| failure(1))?
         .clone();
@@ -254,7 +285,12 @@ impl Tools {
         if start >= latest
             || !super::super::namespace::path(&directory)
             || body.is_zero()
-            || body > plan::DOWNLOAD
+            || body
+                > match role {
+                    Role::NativeMake => Duration::from_secs(300),
+                    Role::NativeShell | Role::NativePerl => Duration::from_secs(60),
+                    _ => plan::DOWNLOAD,
+                }
             || stdout_maximum == 0
             || stdout_maximum > super::files::MAX_FILE
         {
@@ -280,7 +316,15 @@ impl Tools {
     }
     pub fn finish(mut self) -> Result<()> {
         let mut result = Ok(());
-        for owner in [&mut self.cc, &mut self.dpkg, &mut self.curl, &mut self.git] {
+        for owner in [
+            &mut self.native_make,
+            &mut self.native_perl,
+            &mut self.native_shell,
+            &mut self.cc,
+            &mut self.dpkg,
+            &mut self.curl,
+            &mut self.git,
+        ] {
             if let Some(owner) = owner.take() {
                 let closed = Arc::try_unwrap(owner)
                     .map_err(|_| failure(1))

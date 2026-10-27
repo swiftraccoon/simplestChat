@@ -504,7 +504,9 @@ impl Tree {
         self.records.insert(name.to_owned(), record);
         Ok(())
     }
-    pub fn check(&self) -> Result<()> {
+    /// Native source trees retain every imported input across compilation.
+    /// Generated outputs are admitted separately; this checks no output inventory.
+    pub fn check_build_sources(&self) -> Result<()> {
         self.run.check()?;
         if let Some(original) = &self.registry {
             let directory = Held::open(
@@ -540,6 +542,10 @@ impl Tree {
         for record in self.records.values() {
             self.open(&record.name)?.finish()?;
         }
+        Ok(())
+    }
+    pub fn check(&self) -> Result<()> {
+        self.check_build_sources()?;
         let mut folders = vec![String::new()];
         folders.extend(self.directories.keys().cloned());
         for folder in folders {
@@ -614,6 +620,13 @@ impl Tree {
     }
     pub fn finish(self) -> Result<()> {
         let checked = self.check();
+        let closed = self.run.finish();
+        checked.and(closed)
+    }
+    /// Only the native build workspace may contain compiler-generated files.
+    /// Its source originals and root still undergo checked finalization.
+    pub fn finish_build(self) -> Result<()> {
+        let checked = self.check_build_sources();
         let closed = self.run.finish();
         checked.and(closed)
     }

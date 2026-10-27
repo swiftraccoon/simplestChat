@@ -246,6 +246,9 @@ impl ChainWitness {
     }
 }
 impl Chain {
+    pub fn budget(&self) -> &Budget {
+        &self.budget
+    }
     pub fn witness(&self) -> Result<ChainWitness> {
         self.verify()?;
         Ok(ChainWitness {

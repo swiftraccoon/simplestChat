@@ -93,8 +93,8 @@ fn hosted_identity_has_fixed_authority_and_safe_numeric_identity() {
 #[test]
 fn compiled_catalog_binds_original_content_and_closed_component_graph() {
     let catalog = Catalog::load().unwrap();
-    assert_eq!(catalog.artifacts.len(), 42);
-    assert_eq!(catalog.identity.archive_bytes, 335323098);
+    assert_eq!(catalog.artifacts.len(), 69);
+    assert_eq!(catalog.identity.archive_bytes, 409515864);
     let original = include_bytes!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../ops/ops-build-inputs.lock.json"

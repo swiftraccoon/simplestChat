@@ -18,14 +18,12 @@ use std::{
 
 pub(super) const CONFIG: &[u8] = b"[source.crates-io]\nreplace-with = \"ops-producer-registry\"\n\
 [source.ops-producer-registry]\ndirectory = \"kit/registry\"\n[net]\noffline = true\n";
-pub(super) const FLAGS: &str = concat!(
-    "-C\u{1f}target-feature=+crt-static\u{1f}-C\u{1f}target-cpu=x86-64\u{1f}",
-    "-C\u{1f}link-self-contained=yes\u{1f}-C\u{1f}linker-flavor=ld.lld",
-);
+pub(super) const FLAGS: &str = simplestchat_ops::distribution::build_plan::MUSL_RUSTFLAGS;
 const CARGO: &str = "toolchain/bin/cargo";
 const RUSTC: &str = "toolchain/bin/rustc";
 const LLD: &str = "toolchain/lib/rustlib/x86_64-unknown-linux-gnu/bin/rust-lld";
 const CC: &str = "host-tools/bin/cc";
+const MUSL_CC: &str = "host-tools/bin/musl-cc";
 
 /// Only these direct execution roles can be passed to Native. Linker and host
 /// tools are pinned material inputs, not independently supervised descendants.
@@ -132,6 +130,7 @@ pub(super) struct Tools {
     pub rustc: Arc<Tool>,
     lld: Tool,
     cc: Tool,
+    musl_cc: Tool,
     pub identities: serde_json::Value,
 }
 impl Tools {
@@ -154,7 +153,8 @@ impl Tools {
             Ok(Self {
                 identities: serde_json::json!({"cargo":materials.tool_digest(CARGO)?,
                 "rustc":materials.tool_digest(RUSTC)?,"rustLld":materials.tool_digest(LLD)?,
-                "hostCc":host_cc}),
+                "hostCc":host_cc,"muslCc":materials.tool_digest(MUSL_CC)?,
+                "nativeLicenseNotices":materials.native_notices()?}),
                 cargo: Arc::new(Tool::open(
                     root.clone(),
                     CARGO,
@@ -168,6 +168,7 @@ impl Tools {
                     materials.kit_stamps(RUSTC)?,
                 )?),
                 lld: Tool::open(root.clone(), LLD, None, materials.kit_stamps(LLD)?)?,
+                musl_cc: Tool::open(root.clone(), MUSL_CC, None, materials.kit_stamps(MUSL_CC)?)?,
                 cc: Tool::open(root.clone(), CC, None, materials.kit_stamps(CC)?)?,
                 root: root.clone(),
             })
@@ -187,6 +188,7 @@ impl Tools {
         self.rustc.walk(true)?;
         self.lld.walk(true)?;
         self.cc.walk(true)?;
+        self.musl_cc.walk(true)?;
         Ok(())
     }
     pub fn finish(self) -> Result<()> {
@@ -194,6 +196,7 @@ impl Tools {
         drop(self.rustc);
         drop(self.lld);
         drop(self.cc);
+        drop(self.musl_cc);
         match Arc::try_unwrap(self.root) {
             Ok(root) => root.chain.finish(),
             Err(_) => Err(failure(1)),
@@ -258,13 +261,24 @@ impl Recipe {
             ("RUSTC", run.path.join("kit").join(RUSTC).into_os_string()),
             (
                 "CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER",
-                run.path.join("kit").join(LLD).into(),
+                run.path.join("kit").join(MUSL_CC).into(),
             ),
             (
                 "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER",
                 run.path.join("kit").join(CC).into(),
             ),
             ("CC", run.path.join("kit").join(CC).into_os_string()),
+            (
+                "CC_x86_64_unknown_linux_musl",
+                run.path.join("kit").join(MUSL_CC).into(),
+            ),
+            ("OPS_MUSL_ROOT", run.path.join("kit/native/musl").into()),
+            (
+                "X86_64_UNKNOWN_LINUX_MUSL_OPENSSL_DIR",
+                run.path.join("kit/native/openssl").into(),
+            ),
+            ("X86_64_UNKNOWN_LINUX_MUSL_OPENSSL_STATIC", "1".into()),
+            ("X86_64_UNKNOWN_LINUX_MUSL_OPENSSL_NO_VENDOR", "1".into()),
             ("CARGO_ENCODED_RUSTFLAGS", FLAGS.into()),
             ("CARGO_INCREMENTAL", "0".into()),
             ("CARGO_TERM_COLOR", "never".into()),
@@ -360,6 +374,9 @@ impl Recipe {
         .map(OsString::from)
         .collect::<Vec<_>>();
         args.extend([
+            "--no-default-features".into(),
+            "--features".into(),
+            "simplestchat-ops/maintain-guest".into(),
             OsString::from("--manifest-path"),
             run.path.join("source/Cargo.toml").into(),
         ]);
@@ -372,13 +389,14 @@ impl Recipe {
         args
     }
     pub fn projection(&self) -> serde_json::Value {
-        serde_json::json!({"schemaVersion":1,"profile":"ops-producer-recipe-v1",
+        serde_json::json!({"schemaVersion":1,"profile":"ops-producer-recipe-v2",
             "workingDirectory":"freshRunRoot","manifest":"stagedSource/Cargo.toml",
             "configuration":"generatedDirectorySourceOnly","environmentPolicy":"clearThenSet",
             "environmentNames":(self.environment.keys()
                 .map(|k|k.to_string_lossy()).collect::<Vec<_>>()),
             "rustflags":FLAGS,"target":TARGET,"host":HOST,"toolchainVersion":super::VERSION,
-            "staticPieExpectation":"pinnedTargetDefaultOnly","candidateExecuted":false})
+            "defaultFeatures":false,"features":["maintain-guest"],
+            "staticPieExpectation":"authenticatedMuslStaticPieCrt","candidateExecuted":false})
     }
     pub fn finish(self) -> Result<()> {
         let mut closed = true;

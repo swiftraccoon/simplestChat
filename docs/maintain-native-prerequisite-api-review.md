@@ -3,12 +3,49 @@
 This proof route is one part of the complete maintenance runtime fixture. It does
 not replace `release_public.py`, install a new default caller, change maintenance
 policy or run the production workflow. The operational Python remains the reference.
-The complete keeper, real database/Caddy fixture, source witnesses, tests and actual
-signed guest evidence must accompany this native body before publication.
+The complete guest, real database/Caddy fixture, source witnesses, tests and actual
+signed evidence remain required for the runtime claim.
+
+The optional `maintain-guest` build now supplies the explicit
+`release maintain-prerequisite guest` role selected by the Rust outer controller.
+It admits exactly 52 project source pins and 15 operational helper pins, owns one
+Ready/GO exchange and invokes the fixed run/init body once. The four former
+proof-only Python guest/material sources are excluded from that request;
+operational Python, Ops33 and Ansible remain unchanged. Default Ops/xtask
+bootstrap builds keep native crypto disabled. The distributed feature requires
+the authenticated patched-musl/OpenSSL 4.1.0 static kit and final static ELF proof;
+local host OpenSSL availability does not establish that producer closure.
+
+## Guest API and dependency decisions
+
+The affected `C-FEATURE` boundary is additive and disabled by default. The hosted
+recipe selects only `maintain-guest`; observed Cargo metadata must resolve the
+three exact crypto dependencies and ASN.1 bigint support. `C-VALIDATE` and
+`C-GOOD-ERR` apply to the closed request, render vocabulary, certificate policy
+and bounded public failure categories. Runtime JSON is decoded before use;
+private configuration, native errors and key bytes are never public diagnostics.
+`C-SERDE` applies to data receipts, not live descriptor or process owners.
+
+The safe OpenSSL adapter owns its contexts and TLS stream through the Rust
+binding; certificate/key borrows remain within their owning objects. It adds no
+first-party raw pointers, unsafe code or foreign callbacks. The pinned native
+library supplies the ABI and cryptographic operations; X.509 parsing alone does
+not establish signature or TLS validity. TLS requires explicit root trust,
+hostname/SNI, the actual verified chain and bounded HTTP framing. First-party
+panic/unwind behavior across foreign boundaries is not introduced or promised.
+
+`C-DTOR-FAIL` and `C-DTOR-BLOCK` apply to acquired files, sockets, processes and
+build workspaces. Their explicit finalizers preserve the first failure and
+attempt all registered peers; dropping a handle is not positive cleanup proof.
+Known raw-zero process effects are registered before later logging, close or
+deadline refusals. Generated native build outputs have a separate owned tree;
+the original source records remain checked, while the consumer kit retains its
+complete immutable inventory. This is an affected-change review, not a
+retrospective certification of the crate or workspace.
 
 ## Fixed entry and clock
 
-In a prepared disposable Debian guest, the keeper invokes exactly:
+In a prepared disposable Debian guest, the explicit guest role invokes exactly:
 
 ```text
 /usr/local/libexec/simplestchat-public/simplestchat-ops \
@@ -22,7 +59,7 @@ unchanged launcher can establish its Git refusal. There is no command, executabl
 root, socket, host or duration selector. The internal `init` role requires actual
 Linux PID1 and the original private paired socket on borrowed standard input.
 
-The keeper retains its original 1800-second interval, with 120 seconds reserved
+The guest retains its original 1800-second interval, with 120 seconds reserved
 and body ending at 1680. Native work receives one 1050-second interval with
 60 seconds reserved. Its 990-second body contains 925 seconds of known debt:
 launcher 900, READY/GO/result five each, TERM five and reap five. The remaining
@@ -137,26 +174,44 @@ restores flags, closes registered originals and finishes its owner on setup fail
 
 ## Validation state
 
-The integrated native source passed GNU and musl all-target compilation and
-Clippy (14.373 s and 18.735 s). Nine portable contract tests passed on Darwin
-(20.072 s wall). The unchanged production body also passed Darwin all-target
-Clippy (9.609 s) and warning-free GNU private Rustdoc (1.776 s). The complete host Ops library
-suite passed 436 tests with 11 existing explicitly ignored reference/child
-fixtures (51.503 s wall). Those ignored fixtures are separate from the 11 new
-Linux-only FD/process methods, which have not yet executed. The six existing
-archive/manifest CLI tests passed with the new route in their exact usage
-expectations (0.855 s wall).
+The earlier fixed run/init body passed GNU/musl compilation and Clippy, nine
+portable Darwin contract tests, and all 20 native maintenance methods in
+[Linux CI 40239549127](https://github.com/swiftraccoon/simplestChat/actions/runs/40239549127).
+Those Linux methods include actual process/FD, inherited-clock and late-observation
+checks; they do not execute the whole PostgreSQL/Caddy launcher transaction.
 
-Earlier private candidates retained 12 and then two Clippy style findings; their
-repairs and failed gate captures are retained locally. The current source passed
-independent source review and the checks above. These checks do not execute a
-PID namespace, the operational launcher or a Docker engine. The 20 new test
-methods cover closed parsing, inherited clocks, actual local process/FD
-admission and close ordering, credential-disabled channel admission and late
-receive/EOF refusal; only the nine portable methods have run locally.
-Three Linux timing tests derive injected late observations from the exact phase
-end and retained owner origin, with both zero and ten seconds of simulated setup.
-They do not assume that registration or child creation takes less than a second.
-Actual Linux FD/process execution, signed installation and all four fresh guest
-trials remain required. The older Python namespace 11/14 observation does not
-certify this native fd0 transport or the complete unchanged launcher.
+The new guest adds actual signed-material/TLS corpus tests, strict source/render
+admission, an inert `images.json` handoff with root ownership and mode `0600` under
+its original root parent with mode `0700`, and fixed `sc_maintain_` firewall tests.
+It retains the 510-second setup cap, requires 1170 seconds before its single
+1050/60 native call, and keeps the 1800-second guest interval with 120 reserved.
+Known process effects are adopted before later capture/close errors can hide
+them; cleanup failure and later time/signal status cannot erase the first cause.
+Native producer tests use inert commands and parsed ELF/archive fixtures; they
+do not establish an actual cold musl/OpenSSL build or signed execution.
+
+Local validation of the integrated change passed the complete Rust quality gate
+(workspace all-target/all-feature Clippy, generated contracts and warning-free
+private Rustdoc). The Darwin Ops library passed 489 tests, including all 43 guest
+tests, with 11 existing ignored fixtures. All 53 hosted producer/signer tests
+passed after the archive and whole-fixture integration repairs; the generic
+producer's nine native supervision tests also passed. The default TLS-free
+`xtask` graph cross-checked for Linux musl and excluded OpenSSL/X.509/ASN.1.
+The 30 frozen Python keeper tests and offline Ansible lint passed. These checks
+leave the actual Linux native build and fresh signed VM trials unverified.
+
+The first exact CodeQL trial reported three public-certificate vector removals
+as cleartext logging. Independent flow/model review found the pinned generated
+`Vec::remove` logging-sink model and certificate-name heuristic; these paths
+contain no logging operation or private key. The code now consumes checked
+one-element certificate arrays instead of mutating those vectors. No query,
+policy exception or secret-handling rule was weakened; fresh exact-revision
+analysis remains required after this ownership simplification.
+
+The latest four-case runtime of the frozen guest passed all 33 Ops cases but
+failed at `render` before native execution. Its retained I/O refusal is distinct
+from the source-proven inert-file collision and Caddy-helper table-prefix mismatch.
+The [runtime guide](maintenance-launcher-runtime-proof.md) records the actual
+failed trial and evidence limits. Fresh CI, final static/signed inputs and all
+four real guest trials are still required for the new guest route. The earlier
+Python namespace and Caddy-only runs do not certify this complete transaction.

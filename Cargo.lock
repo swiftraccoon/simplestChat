@@ -187,6 +187,7 @@ dependencies = [
  "asn1-rs-impl",
  "displaydoc",
  "nom",
+ "num-bigint",
  "num-traits",
  "rusticata-macros",
  "thiserror 2.0.21",
@@ -3507,12 +3508,14 @@ dependencies = [
 name = "simplestchat-ops"
 version = "0.1.0"
 dependencies = [
+ "asn1-rs 0.7.2",
  "chrono",
  "flate2",
  "getrandom 0.4.3",
  "httparse",
  "nix",
  "object",
+ "openssl",
  "rawzip",
  "regex-syntax",
  "rustix",
@@ -3523,6 +3526,7 @@ dependencies = [
  "simplestchat-load-test",
  "tar",
  "tokio",
+ "x509-parser 0.18.1",
 ]
 
 [[package]]
@@ -4864,6 +4868,7 @@ dependencies = [
  "flate2",
  "futures-util",
  "nix",
+ "object",
  "rawzip",
  "regex",
  "reqwest",

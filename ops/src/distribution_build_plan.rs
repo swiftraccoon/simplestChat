@@ -17,6 +17,13 @@ use std::path::Path;
 
 pub use inventory::{SourceInventory, collect_inputs};
 
+/// Encoded target-only flags for the authenticated external musl/CRT profile.
+/// The producer still has to admit its compiler, sysroot and native archives.
+pub const MUSL_RUSTFLAGS: &str = concat!(
+    "-C\u{1f}target-feature=+crt-static\u{1f}-C\u{1f}target-cpu=x86-64\u{1f}",
+    "-C\u{1f}link-self-contained=no\u{1f}-C\u{1f}linker-flavor=gcc",
+);
+
 /// Private paths, directory names and operating-system errors are never output.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Failure {
@@ -52,6 +59,9 @@ pub enum Slot {
     CargoExecutable,
     RustcExecutable,
     RustLldExecutable,
+    MuslCcExecutable,
+    AuthenticatedMuslDirectory,
+    AuthenticatedOpenSslDirectory,
     AuthenticatedHostToolsDirectory,
     StagingSourceRoot,
     CargoHome,
@@ -85,6 +95,8 @@ pub struct Recipe {
     environment: Vec<EnvironmentEntry>,
     toolchain_version: &'static str,
     host_toolchain: &'static str,
+    default_features: bool,
+    features: [&'static str; 1],
 }
 
 /// Public output deliberately lacks success, executable digest, signature,
@@ -97,7 +109,7 @@ pub struct BuildPlan {
     claims: SourceIdentity,
     inventory: SourceInventory,
     recipe: Recipe,
-    prerequisites: [&'static str; 9],
+    prerequisites: [&'static str; 10],
 }
 
 /// Construct a recipe without starting a process or resolving any slot. Cargo's
@@ -115,17 +127,17 @@ pub fn plan(selection: &Selection, inventory: &SourceInventory) -> BuildPlan {
         ("RUSTC", slot(Slot::RustcExecutable)),
         (
             "CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER",
-            slot(Slot::RustLldExecutable),
+            slot(Slot::MuslCcExecutable),
         ),
+        ("CARGO_ENCODED_RUSTFLAGS", literal(MUSL_RUSTFLAGS)),
+        ("CC_x86_64_unknown_linux_musl", slot(Slot::MuslCcExecutable)),
+        ("OPS_MUSL_ROOT", slot(Slot::AuthenticatedMuslDirectory)),
         (
-            "CARGO_ENCODED_RUSTFLAGS",
-            literal(concat!(
-                "-C\u{1f}target-feature=+crt-static\u{1f}",
-                "-C\u{1f}target-cpu=x86-64\u{1f}",
-                "-C\u{1f}link-self-contained=yes\u{1f}",
-                "-C\u{1f}linker-flavor=ld.lld",
-            )),
+            "X86_64_UNKNOWN_LINUX_MUSL_OPENSSL_DIR",
+            slot(Slot::AuthenticatedOpenSslDirectory),
         ),
+        ("X86_64_UNKNOWN_LINUX_MUSL_OPENSSL_STATIC", literal("1")),
+        ("X86_64_UNKNOWN_LINUX_MUSL_OPENSSL_NO_VENDOR", literal("1")),
         ("CARGO_INCREMENTAL", literal("0")),
         ("CARGO_TERM_COLOR", literal("never")),
         ("LC_ALL", literal("C")),
@@ -152,6 +164,9 @@ pub fn plan(selection: &Selection, inventory: &SourceInventory) -> BuildPlan {
                 literal("simplestchat-ops"),
                 literal("--target"),
                 literal(TARGET),
+                literal("--no-default-features"),
+                literal("--features"),
+                literal("simplestchat-ops/maintain-guest"),
                 literal("--target-dir"),
                 slot(Slot::TargetDirectory),
             ],
@@ -159,12 +174,15 @@ pub fn plan(selection: &Selection, inventory: &SourceInventory) -> BuildPlan {
             environment,
             toolchain_version: "1.99.0",
             host_toolchain: "x86_64-unknown-linux-gnu",
+            default_features: false,
+            features: ["maintain-guest"],
         },
         prerequisites: [
             "freshOwnedStagingWithControlledAncestorsAndConfig",
             "inventoriedBytesStagedAndRebound",
             "authenticatedCargoRustcRustLldAndTargetComponents",
             "authenticatedHostToolsAndRuntimeClosure",
+            "authenticatedStaticMuslAndOpenSslTargetInputs",
             "authenticatedPrepopulatedCargoRegistry",
             "isolatedCargoHomeWithoutUnmeasuredConfig",
             "ownedEmptyTargetDirectory",
