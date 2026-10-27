@@ -88,6 +88,11 @@ those original ELF files through parent proc-FD aliases; those aliases are only
 valid in the checked outer namespace role. Init executes the unchanged fixed
 `/usr/local/bin/simplestchat-public-deploy` path with no arguments, preserving its
 `$0` behavior. Fixed launcher, timeout and original tool hashes/metadata remain held.
+Each cleared native command environment sets `PYTHONDONTWRITEBYTECODE=1`.
+The unchanged launcher imports the installed Python seed helpers; suppressing
+their bytecode keeps the retained helper directory's link count stable.
+An actual-helper regression invokes the existing argument-refusal route and
+checks the parent binding and source bytes without performing seeding.
 Before/after witnesses do not eliminate every privileged same-UID swap/restore race
 for the launcher's fixed path or other operational inputs; the keeper's original
 source/input witnesses remain independently required.
