@@ -1059,6 +1059,25 @@ impl ReplacementHistory {
             &self.traces,
         )
     }
+
+    fn action(
+        &mut self,
+        row: &Value,
+        mutations: &mut BTreeSet<(String, String)>,
+    ) -> super::Result<()> {
+        let service = row["Actor"]["ID"]
+            .as_str()
+            .and_then(|actor| self.services.get(actor))
+            .map(String::as_str);
+        super::observation::container_action(
+            row,
+            service,
+            Some(&id('a')),
+            Some(&id('e')),
+            &mut self.traces,
+            mutations,
+        )
+    }
 }
 
 #[test]
@@ -1260,6 +1279,193 @@ fn completed_daemon_trace_requires_one_rename_and_preserves_peer_lifecycles() {
             .unwrap()
             .push("rename".into());
         assert_eq!(history.complete(), Err(Error::Refused));
+    }
+}
+
+fn container_action_row(actor: char, action: &str) -> Value {
+    json!({"Action":action,"Actor":{"ID":id(actor),
+        "Attributes":{"signal":"15","exitCode":"0"}}})
+}
+
+#[test]
+fn stopped_waiter_and_monitor_orders_join_the_same_complete_retired_actor() {
+    // Synthetic source-proven schedules, not retained hosted event rows.
+    for actor in ['b', 'c'] {
+        for actions in [
+            &["create", "start", "kill", "stop", "die", "destroy"][..],
+            &["create", "start", "kill", "die", "stop", "destroy"][..],
+            &["create", "start", "die", "stop", "destroy"][..],
+        ] {
+            let mut history = ReplacementHistory::new();
+            history.traces.insert(id(actor), Vec::new());
+            history.traces.insert(
+                id('a'),
+                vec!["create".into(), "rename".into(), "start".into()],
+            );
+            let mut mutations = BTreeSet::new();
+            for action in actions {
+                assert_eq!(
+                    history.action(&container_action_row(actor, action), &mut mutations),
+                    Ok(()),
+                    "actor={actor}, action={action}"
+                );
+            }
+            assert_eq!(history.complete(), Ok(()));
+        }
+    }
+}
+
+#[test]
+fn early_stop_requires_the_same_actors_already_admitted_term() {
+    for unrelated in [None, Some((id('c'), "kill".to_owned()))] {
+        let mut history = ReplacementHistory::new();
+        history
+            .traces
+            .insert(id('b'), vec!["create".into(), "start".into()]);
+        let mut mutations = unrelated.into_iter().collect();
+        assert_eq!(
+            history.action(&container_action_row('b', "stop"), &mut mutations),
+            Err(Error::Refused)
+        );
+    }
+}
+
+#[test]
+fn admitted_early_stop_cannot_replace_final_die_or_destroy() {
+    for final_actions in [&[][..], &["die"][..], &["destroy"][..]] {
+        let mut history = ReplacementHistory::new();
+        history.traces.insert(id('c'), Vec::new());
+        history.traces.insert(
+            id('a'),
+            vec!["create".into(), "rename".into(), "start".into()],
+        );
+        let mut mutations = BTreeSet::new();
+        for action in ["create", "start", "kill", "stop"]
+            .into_iter()
+            .chain(final_actions.iter().copied())
+        {
+            assert_eq!(
+                history.action(&container_action_row('c', action), &mut mutations),
+                Ok(())
+            );
+        }
+        assert_eq!(history.complete(), Err(Error::Refused));
+    }
+}
+
+#[test]
+fn auxiliary_actions_remain_unique_and_require_a_started_unretired_actor() {
+    for action in ["kill", "stop"] {
+        let mut history = ReplacementHistory::new();
+        history.traces.insert(id('b'), Vec::new());
+        let mut mutations = BTreeSet::new();
+        for action in ["create", "start", "kill"] {
+            assert_eq!(
+                history.action(&container_action_row('b', action), &mut mutations),
+                Ok(())
+            );
+        }
+        if action == "stop" {
+            assert_eq!(
+                history.action(&container_action_row('b', "stop"), &mut mutations),
+                Ok(())
+            );
+        }
+        let before = mutations.clone();
+        assert_eq!(
+            history.action(&container_action_row('b', action), &mut mutations),
+            Err(Error::Refused)
+        );
+        assert_eq!(mutations, before);
+    }
+    for phases in [
+        vec![],
+        vec!["create"],
+        vec!["create", "start", "die", "destroy"],
+    ] {
+        for action in ["kill", "stop"] {
+            let mut history = ReplacementHistory::new();
+            history.traces.insert(
+                id('b'),
+                phases.iter().map(|phase| (*phase).to_owned()).collect(),
+            );
+            let mut mutations = BTreeSet::from([(id('b'), "kill".to_owned())]);
+            assert_eq!(
+                history.action(&container_action_row('b', action), &mut mutations),
+                Err(Error::Refused)
+            );
+        }
+    }
+}
+
+#[test]
+fn admitted_stop_does_not_relax_kill_order_or_term_signal() {
+    for signal in [
+        json!("9"),
+        json!(15),
+        json!("TERM"),
+        json!("SIGTERM"),
+        Value::Null,
+    ] {
+        let mut history = ReplacementHistory::new();
+        history
+            .traces
+            .insert(id('c'), vec!["create".into(), "start".into()]);
+        let mut row = container_action_row('c', "kill");
+        row["Actor"]["Attributes"]["signal"] = signal;
+        assert_eq!(
+            history.action(&row, &mut BTreeSet::new()),
+            Err(Error::Refused)
+        );
+    }
+    let mut history = ReplacementHistory::new();
+    history
+        .traces
+        .insert(id('c'), vec!["create".into(), "start".into(), "die".into()]);
+    assert_eq!(
+        history.action(&container_action_row('c', "kill"), &mut BTreeSet::new()),
+        Err(Error::Refused)
+    );
+}
+
+#[test]
+fn auxiliary_actions_still_refuse_current_app_validator_and_other_roles() {
+    for actor in ['a', 'd', 'e', 'f'] {
+        for (action, phases) in [
+            ("kill", vec!["create", "start"]),
+            ("stop", vec!["create", "start", "die"]),
+        ] {
+            let mut history = ReplacementHistory::new();
+            history
+                .traces
+                .insert(id(actor), phases.into_iter().map(String::from).collect());
+            assert_eq!(
+                history.action(&container_action_row(actor, action), &mut BTreeSet::new()),
+                Err(Error::Refused)
+            );
+        }
+    }
+}
+
+#[test]
+fn container_actions_keep_closed_vocabulary_and_zero_exit_requirements() {
+    for action in ["attach", "update", "restart", "rename", "exec_die", ""] {
+        let mut history = ReplacementHistory::new();
+        assert_eq!(
+            history.action(&container_action_row('b', action), &mut BTreeSet::new()),
+            Err(Error::Refused)
+        );
+    }
+    for actor in ['c', 'e'] {
+        for code in [json!("1"), json!(0), Value::Null] {
+            let mut history = ReplacementHistory::new();
+            let mut row = container_action_row(actor, "die");
+            row["Actor"]["Attributes"]["exitCode"] = code;
+            assert_eq!(
+                history.action(&row, &mut BTreeSet::new()),
+                Err(Error::Refused)
+            );
+        }
     }
 }
 

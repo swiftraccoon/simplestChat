@@ -3112,7 +3112,18 @@ the complete ordered lifecycle. They retain refusals for missing, duplicate,
 late, foreign, wrong-service and malformed-identity events. A separate private
 Rust probe uses a real pinned-Docker create/rename event with a synthetic retired
 context and an inert image; it does not start a container or establish complete
-Compose, hosted-branch or VM equivalence. Existing kill/stop rules are unchanged.
+Compose, hosted-branch or VM equivalence.
+
+Stop observation also accounts for the pinned daemon's separate state and event
+notifications. Moby can wake a stopped-container waiter before publishing `die`,
+so `stop` may follow `create,start` for an admitted retired app or migration.
+This early stop additionally requires that actor's already admitted signal-15
+`kill`. The complete final history still requires `die,destroy`; signal checks,
+roles, current-app exclusion, duplicate rejection and unknown-action refusals
+remain. An early kill-error recovery without the joined kill remains outside this
+narrow profile. Trace fixtures cover both stop/die orders and incomplete or
+foreign histories. This source-proven ordering does not identify the precise
+event refused by an earlier hosted `daemon-action-history` report.
 
 Capture diagnostic tests cover classic-PCAP endian/magic variants, bounded first
 header classes and truncated or malformed headers. IPv4 cases include options,
