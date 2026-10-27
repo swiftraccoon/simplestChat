@@ -26,6 +26,18 @@ and bounded public failure categories. Runtime JSON is decoded before use;
 private configuration, native errors and key bytes are never public diagnostics.
 `C-SERDE` applies to data receipts, not live descriptor or process owners.
 
+Guest render failures retain the fixed operation checkpoint: `render` for pure
+source rendering, then `render-inert-handoff`, `render-files`, `render-helpers`,
+`render-directories`, `render-assets`, `render-assets-receipt` or `render-tools`.
+The producer assigns the next label before its existing operation; the guest
+transaction saves the failed label before finalization. The paired outer decoder
+admits only these literals, keeps the same fourteen-key guest receipt, and still
+requires `complete` for success. This affected `C-VALIDATE`, `C-GOOD-ERR` and
+`C-SERDE` review adds no raw path, filename, configuration, child output or errno.
+It does not identify a failed branch within one group, alter an operation or
+weaken finalization. The current signed four-case failure at the older broad
+`render` checkpoint remains unexplained by these source diagnostics.
+
 The safe OpenSSL adapter owns its contexts and TLS stream through the Rust
 binding; certificate/key borrows remain within their owning objects. It adds no
 first-party raw pointers, unsafe code or foreign callbacks. The pinned native

@@ -201,7 +201,9 @@ async fn rendered_files(ctx: &mut Context, image: &str) -> Result<()> {
     }
     // Deliberate fixture correction: retire only the validated original inert
     // Ops preflight input before any exclusive real configuration publication.
+    ctx.control.checkpoint = "render-inert-handoff";
     files::inert_images_handoff(&mut ctx.control)?;
+    ctx.control.checkpoint = "render-files";
     for (name, bytes) in outputs {
         let uid = if [
             "postgres-admin-password",
@@ -228,6 +230,7 @@ async fn rendered_files(ctx: &mut Context, image: &str) -> Result<()> {
             .ok_or(Error::Close)?
             .require_parent(0, 0o700, &mut ctx.control)?;
     }
+    ctx.control.checkpoint = "render-helpers";
     for (target, source, mode) in [
         (
             "/usr/local/bin/simplestchat-public-deploy",
@@ -275,6 +278,7 @@ async fn rendered_files(ctx: &mut Context, image: &str) -> Result<()> {
             ctx.originals.push(original);
         }
     }
+    ctx.control.checkpoint = "render-directories";
     for (name, uid, mode) in [
         ("postgres", 999, 0o700),
         ("postgres-socket", 999, 0o755),
@@ -283,6 +287,7 @@ async fn rendered_files(ctx: &mut Context, image: &str) -> Result<()> {
     ] {
         create_directory(&Path::new(PUBLIC).join(name), uid, mode, &mut ctx.control)?;
     }
+    ctx.control.checkpoint = "render-assets";
     ctx.check()?;
     let cap = ctx.control.remaining(Duration::from_secs(1800))?;
     let output = ctx
@@ -300,8 +305,10 @@ async fn rendered_files(ctx: &mut Context, image: &str) -> Result<()> {
             &[0],
         )
         .await?;
+    ctx.control.checkpoint = "render-assets-receipt";
     assets_initialized(&output.stdout)?;
     ctx.check()?;
+    ctx.control.checkpoint = "render-tools";
     for (role, path) in [
         ("public", "/usr/local/bin/simplestchat-public"),
         ("unshare", "/usr/bin/unshare"),

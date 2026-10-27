@@ -3040,6 +3040,22 @@ still supplies Ops33, Ansible and operational helpers. The same 1,800-second
 outer limit and 120-second reserve apply,
 with a 510-second setup cap and 1,170 seconds required before GO.
 
+The guest's render failure checkpoint distinguishes pure rendering (`render`),
+the exact inert-input handoff (`render-inert-handoff`), configuration publication
+(`render-files`), helper custody (`render-helpers`), data-directory creation
+(`render-directories`), the actual assets child (`render-assets`), its decoded
+receipt (`render-assets-receipt`) and final tool admission (`render-tools`).
+Only those fixed values cross the outer decoder; no raw file or child details
+are exported. Decoder regressions preserve pre-native failures and null native
+results, reject those labels as success checkpoints, and refuse unknown labels,
+failure categories and extra fields. The first failed checkpoint survives guest
+cleanup. A label identifies its operation group; `render-assets` also covers
+pre-spawn checks and does not prove the child started. The earlier four-case
+`3982fd5d` run failed at the broad `render` label
+with all eight QEMU epochs fully closed; that report does not identify which
+render operation refused. These diagnostics still require fresh signed runtime
+qualification and establish no native launcher or 900-second result.
+
 Repeated CI attempts can retain server artifacts with the same commit-based
 name. Discovery selects the unique newest matching creation instant, refusing
 malformed matching timestamps or a tied newest instant. That timestamp only
