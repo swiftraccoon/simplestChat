@@ -617,7 +617,7 @@ impl Executor for FakeCli {
                 write_generated(
                     &directory.join("configdata.pm"),
                     &native_build_tests::config(&work.join("openssl-prefix")),
-                    false,
+                    true,
                 );
                 self.calls.push("native-perl:configure-openssl".into());
                 ("native-perl", b"inert Configure stdout\n".to_vec())

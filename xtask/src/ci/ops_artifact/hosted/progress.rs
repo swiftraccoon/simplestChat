@@ -44,6 +44,8 @@ pub(super) enum Checkpoint {
     Resolve,
     Probe,
     NativeBuild,
+    NativeCommand,
+    NativeOutputs,
     RegistryCopy,
     Measure,
 }
@@ -54,6 +56,8 @@ impl Checkpoint {
             Self::Resolve => "resolve",
             Self::Probe => "probe",
             Self::NativeBuild => "native-build",
+            Self::NativeCommand => "native-command",
+            Self::NativeOutputs => "native-outputs",
             Self::RegistryCopy => "registry-copy",
             Self::Measure => "measure",
         }

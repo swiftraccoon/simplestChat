@@ -7,6 +7,7 @@ use super::{
     files::{self, Tree},
     kit,
     plan::Plan,
+    progress::{Checkpoint, Edge, Progress},
     tools::{InvocationSpec, Role, Tools},
 };
 use crate::{
@@ -168,7 +169,6 @@ pub(super) fn arguments(work: &Path, root: &Path) -> Vec<Step> {
                 "no-shared".into(),
                 "no-dso".into(),
                 "no-module".into(),
-                "no-engine".into(),
                 "no-tests".into(),
             ],
             Duration::from_secs(60),
@@ -306,6 +306,11 @@ fn check_build_directories(work: &Tree, directories: &[BuildDirectory]) -> Resul
 pub(super) struct Generated<'a> {
     pub tree: &'a Tree,
 }
+#[derive(Clone, Copy)]
+enum OutputKind {
+    Data,
+    Configuration,
+}
 impl Generated<'_> {
     fn directories(&self, name: &str) -> Result<Vec<(Held, Metadata)>> {
         if !files::safe(name) {
@@ -372,6 +377,28 @@ impl Generated<'_> {
         maximum: u64,
         checkpoint: &mut impl FnMut() -> Result<()>,
     ) -> Result<Vec<u8>> {
+        self.read(name, maximum, OutputKind::Data, checkpoint)
+    }
+    /// Configure makes this fixed metadata script executable with 0755 & ~umask.
+    /// Read it passively under its own role; headers/libraries retain data modes.
+    pub(super) fn configuration(
+        &self,
+        checkpoint: &mut impl FnMut() -> Result<()>,
+    ) -> Result<Vec<u8>> {
+        self.read(
+            "build-openssl/configdata.pm",
+            CONFIG_MAX,
+            OutputKind::Configuration,
+            checkpoint,
+        )
+    }
+    fn read(
+        &self,
+        name: &str,
+        maximum: u64,
+        kind: OutputKind,
+        checkpoint: &mut impl FnMut() -> Result<()>,
+    ) -> Result<Vec<u8>> {
         if !files::safe(name) {
             return Err(failure(1));
         }
@@ -387,10 +414,14 @@ impl Generated<'_> {
             )?;
             let result = (|| {
                 let before = file.file().metadata().map_err(|_| failure(1))?;
+                let valid_mode = match kind {
+                    OutputKind::Data => matches!(before.mode() & 0o7777, 0o600 | 0o644 | 0o444),
+                    OutputKind::Configuration => matches!(before.mode() & 0o7777, 0o700 | 0o755),
+                };
                 if !before.is_file()
                     || before.nlink() != 1
                     || before.uid() != rustix::process::getuid().as_raw()
-                    || !matches!(before.mode() & 0o7777, 0o600 | 0o644 | 0o444)
+                    || !valid_mode
                     || before.len() > maximum
                 {
                     return Err(failure(1));
@@ -506,7 +537,7 @@ fn scalar(line: &str) -> Result<(String, String)> {
     if key.is_empty()
         || !key
             .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-'))
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b'+'))
         || value
             .bytes()
             .any(|b| matches!(b, 0..=31 | 127 | b'\\' | b'"' | b'$' | b'@' | b'\''))
@@ -541,7 +572,10 @@ pub(super) fn config(bytes: &[u8], prefix: &Path) -> Result<Value> {
         }
     }
     for key in DISABLED.into_iter().chain(["tests"]) {
-        if disabled.get(key).map(String::as_str) != Some("option") {
+        // Pinned OpenSSL 4.1 removed engine support. Its deprecated no-engine
+        // option leaves this actual default marker rather than setting option.
+        let reason = if key == "engine" { "default" } else { "option" };
+        if disabled.get(key).map(String::as_str) != Some(reason) {
             return Err(failure(1));
         }
     }
@@ -644,7 +678,7 @@ fn import_outputs(
 ) -> Result<Value> {
     let generated = Generated { tree: work };
     let mut checkpoint = || fence(plan, end);
-    let configdata = generated.data("build-openssl/configdata.pm", CONFIG_MAX, &mut checkpoint)?;
+    let configdata = generated.configuration(&mut checkpoint)?;
     let disabled = config(&configdata, &work.run.path.join("openssl-prefix"))?;
     let stock_specs = generated.data("musl-prefix/lib/musl-gcc.specs", 65536, &mut checkpoint)?;
     if !std::str::from_utf8(&stock_specs)
@@ -775,6 +809,7 @@ pub(super) async fn build<E: Executor>(
     downloads: &mut Tree,
     executor: &mut E,
     next: &mut usize,
+    progress: &mut Progress<'_>,
 ) -> Result<Value> {
     let NativeBuild {
         catalog,
@@ -800,13 +835,20 @@ pub(super) async fn build<E: Executor>(
             };
             directories.push(BuildDirectory { name, owner, stamp });
         }
-        for step in arguments(&work.run.path, &kit.run.path) {
+        for (index, step) in arguments(&work.run.path, &kit.run.path)
+            .into_iter()
+            .enumerate()
+        {
+            progress.kit(Checkpoint::NativeCommand, Edge::Begin, index + 1, 6);
             check_build_directories(work, &directories)?;
             let ran = request.run(downloads, executor, next, kit, step).await;
             let checked = check_build_directories(work, &directories);
             ran.and(checked)?;
+            progress.kit(Checkpoint::NativeCommand, Edge::Complete, index + 1, 6);
         }
+        progress.kit(Checkpoint::NativeOutputs, Edge::Begin, 1, 1);
         let observation = import_outputs(work, kit, plan, end, catalog)?;
+        progress.kit(Checkpoint::NativeOutputs, Edge::Complete, 1, 1);
         executor.ready().await?;
         fence(plan, end)?;
         Ok(observation)

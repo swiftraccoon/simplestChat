@@ -24,7 +24,7 @@ use std::{
 };
 
 pub(super) fn config(prefix: &Path) -> Vec<u8> {
-    format!("our %config = (\n    \"libdir\" => \"lib\",\n    \"prefix\" => \"{}\",\n    \"target\" => \"linux-x86_64\",\n    \"version\" => \"4.1.0\"\n);\nour %disabled = (\n    \"dso\" => \"option\",\n    \"engine\" => \"option\",\n    \"module\" => \"option\",\n    \"shared\" => \"option\",\n    \"tests\" => \"option\"\n);\n",prefix.display()).into_bytes()
+    format!("our %config = (\n    \"libdir\" => \"lib\",\n    \"prefix\" => \"{}\",\n    \"target\" => \"linux-x86_64\",\n    \"version\" => \"4.1.0\"\n);\nour %disabled = (\n    \"asan\" => \"default\",\n    \"buildtest-c++\" => \"default\",\n    \"dso\" => \"option\",\n    \"engine\" => \"default\",\n    \"module\" => \"option\",\n    \"shared\" => \"option\",\n    \"tests\" => \"option\",\n    \"uplink\" => \"no uplink_arch\"\n);\n",prefix.display()).into_bytes()
 }
 #[test]
 fn generated_config_requires_actual_explicit_disabled_profile_and_target_identity() {
@@ -47,7 +47,20 @@ fn generated_config_requires_actual_explicit_disabled_profile_and_target_identit
         text.replace("/owned/openssl-prefix", "/unowned/prefix"),
         text.replace("\"libdir\" => \"lib\"", "\"libdir\" => \"lib64\""),
         text.replace("\"tests\" => \"option\"", "\"tests\" => \"default\""),
-        text.replace("\"engine\" => \"option\"", "\"engine\" => do { 1 }"),
+        text.replace("\"engine\" => \"default\",\n", ""),
+        text.replace("\"engine\" => \"default\"", "\"engine\" => \"option\""),
+        text.replace("\"engine\" => \"default\"", "\"engine\" => \"cascade\""),
+        text.replace("\"engine\" => \"default\"", "\"engine\" => do { 1 }"),
+        text.replace(
+            "\"buildtest-c++\" => \"default\",",
+            "\"buildtest-c++\" => \"default\",\n    \"buildtest-c++\" => \"default\",",
+        ),
+        text.replace("buildtest-c++", "buildtest-c++;system"),
+        text.replace("\"asan\" => \"default\"", "\"asan\" => \"\\$value\""),
+        text.replace(
+            "\"target\" => \"linux-x86_64\",",
+            "\"target\" => \"linux-x86_64\",\n    \"target\" => \"linux-x86_64\",",
+        ),
         format!("{text}{text}"),
     ] {
         fixture::expect_error(native::config(changed.as_bytes(), prefix), 1);
@@ -96,9 +109,10 @@ fn fixed_build_commands_keep_out_of_tree_sources_two_jobs_and_cleared_native_env
         );
         assert!(step.maximum <= Duration::from_secs(300));
     }
-    for option in ["no-shared", "no-dso", "no-module", "no-engine", "no-tests"] {
+    for option in ["no-shared", "no-dso", "no-module", "no-tests"] {
         assert!(steps[3].args.iter().any(|arg| arg == option));
     }
+    assert!(!steps[3].args.iter().any(|arg| arg == "no-engine"));
     for musl in [true, false] {
         let env = native::environment(root, work, musl).unwrap();
         assert_eq!(
@@ -324,6 +338,85 @@ fn actual_archive_and_elf_parsers_refuse_wrong_target_thin_and_nonobjects() {
 }
 
 #[test]
+fn configuration_metadata_uses_only_its_fixed_path_and_exact_executable_modes() {
+    for mode in [0o700, 0o755, 0o600, 0o644, 0o444, 0o750, 0o770, 0o777] {
+        let fixture = fixture::Fixture::new();
+        let budget = Budget::default();
+        let tree = Tree::create(&fixture.root.join("native-work"), &budget).unwrap();
+        let directory = tree.run.path.join("build-openssl");
+        fs::create_dir(&directory).unwrap();
+        let path = directory.join("configdata.pm");
+        let prefix = tree.run.path.join("openssl-prefix");
+        let bytes = config(&prefix);
+        fs::write(&path, &bytes).unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(mode)).unwrap();
+        let generated = native::Generated { tree: &tree };
+        let selected = generated.configuration(&mut || Ok(()));
+        if matches!(mode, 0o700 | 0o755) {
+            let selected = selected.unwrap();
+            assert_eq!(selected, bytes);
+            native::config(&selected, &prefix).unwrap();
+        } else {
+            fixture::expect_error(selected, 1);
+        }
+        let ordinary = generated.data("build-openssl/configdata.pm", 65536, &mut || Ok(()));
+        if matches!(mode, 0o600 | 0o644 | 0o444) {
+            assert_eq!(ordinary.unwrap(), bytes);
+        } else {
+            fixture::expect_error(ordinary, 1);
+        }
+        // A configuration-specific mode cannot authorize executable headers.
+        let include = tree.run.path.join("musl-prefix/include");
+        fs::create_dir_all(&include).unwrap();
+        let header = include.join("a.h");
+        fs::write(&header, b"inert header\n").unwrap();
+        fs::set_permissions(&header, fs::Permissions::from_mode(0o700)).unwrap();
+        fixture::expect_error(
+            generated.data("musl-prefix/include/a.h", 65536, &mut || Ok(())),
+            1,
+        );
+        tree.finish_build().unwrap();
+        assert_eq!(budget.count(), 0);
+        assert_eq!(budget.close_counts().1, 0);
+    }
+}
+
+#[test]
+fn configuration_metadata_refuses_other_paths_links_and_late_checks_with_checked_closes() {
+    for case in ["wrong-path", "symlink", "hardlink", "interrupt"] {
+        let fixture = fixture::Fixture::new();
+        let budget = Budget::default();
+        let tree = Tree::create(&fixture.root.join("native-work"), &budget).unwrap();
+        let directory = tree.run.path.join("build-openssl");
+        fs::create_dir(&directory).unwrap();
+        let path = directory.join("configdata.pm");
+        fs::write(&path, config(&tree.run.path.join("openssl-prefix"))).unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+        match case {
+            "wrong-path" => fs::rename(&path, directory.join("other.pm")).unwrap(),
+            "symlink" => {
+                fs::rename(&path, directory.join("other.pm")).unwrap();
+                symlink("other.pm", &path).unwrap();
+            }
+            "hardlink" => fs::hard_link(&path, directory.join("other.pm")).unwrap(),
+            _ => {}
+        }
+        let generated = native::Generated { tree: &tree };
+        let selected = generated.configuration(&mut || {
+            if case == "interrupt" {
+                Err(super::failure(143))
+            } else {
+                Ok(())
+            }
+        });
+        fixture::expect_error(selected, if case == "interrupt" { 143 } else { 1 });
+        tree.finish_build().unwrap();
+        assert_eq!(budget.count(), 0);
+        assert_eq!(budget.close_counts().1, 0);
+    }
+}
+
+#[test]
 fn generated_headers_are_sorted_nofollow_and_all_selected_originals_close_on_refusal() {
     for case in [
         "ok",
@@ -506,10 +599,26 @@ async fn failed_build_preserves_child_status_seals_both_logs_checks_sources_and_
         plan: &plan,
         end,
     };
+    let mut diagnostics = Vec::new();
+    let mut progress = super::progress::Progress::new(&plan, &mut diagnostics);
+    progress.enter(super::progress::Phase::Kit);
     fixture::expect_error(
-        native::build(request, &mut kit, &mut downloads, &mut executor, &mut next).await,
+        native::build(
+            request,
+            &mut kit,
+            &mut downloads,
+            &mut executor,
+            &mut next,
+            &mut progress,
+        )
+        .await,
         23,
     );
+    let diagnostics = std::str::from_utf8(&diagnostics).unwrap();
+    assert!(diagnostics.contains("checkpoint=native-command event=begin ordinal=1 total=6 "));
+    assert!(!diagnostics.contains("checkpoint=native-command event=complete "));
+    assert!(!diagnostics.contains("checkpoint=native-outputs "));
+    assert!(!diagnostics.contains("actual failed inert build"));
     assert_eq!(executor.calls, 1);
     assert!(executor.ready >= 3);
     assert_eq!(next, 1);
