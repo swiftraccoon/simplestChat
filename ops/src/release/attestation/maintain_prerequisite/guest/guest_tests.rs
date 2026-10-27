@@ -287,3 +287,223 @@ fn unknown_observation_names_and_missing_success_facts_cannot_be_promoted() {
     assert_eq!(facts.as_value().as_object().unwrap().len(), 24);
     assert!(!facts.as_value().to_string().contains("SECRET"));
 }
+
+#[tokio::test]
+async fn real_git_import_closes_mutable_boundary_and_keeps_project_sources_immutable() {
+    use crate::owned_process::{Group, exited, finish_before};
+    use std::{
+        io::Read,
+        os::unix::{fs::MetadataExt, fs::OpenOptionsExt, process::CommandExt},
+        process::{Command, Stdio},
+    };
+
+    async fn git(root: &Path, end: Instant, args: &[&str]) -> String {
+        let body_end = end - Duration::from_secs(3);
+        assert!(Instant::now() < body_end);
+        let output = root.join(format!("git-{}", NEXT.fetch_add(1, Ordering::Relaxed)));
+        let mut file = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(output)
+            .unwrap();
+        let child = Command::new("/usr/bin/git")
+            .args([
+                "-c",
+                "core.logAllRefUpdates=true",
+                "-c",
+                "core.hooksPath=/dev/null",
+            ])
+            .args(args)
+            .env_clear()
+            .env("PATH", "/usr/bin:/bin")
+            .env("HOME", root)
+            .env("LC_ALL", "C")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .current_dir(root)
+            .process_group(0)
+            .stdin(Stdio::null())
+            .stdout(Stdio::from(file.try_clone().unwrap()))
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+        let mut group = Group::new(child);
+        let natural = tokio::time::timeout_at(body_end.into(), exited(group.pid())).await;
+        let retired = finish_before(group.pid(), end).await;
+        let reaped = group.reap().await;
+        let mut bytes = Vec::new();
+        let read = std::io::Seek::rewind(&mut file)
+            .and_then(|()| (&mut file).take(4097).read_to_end(&mut bytes));
+        let closed = nix::unistd::close(file);
+        assert!(matches!(natural, Ok(Ok(()))) && retired);
+        assert!(reaped.unwrap().success());
+        read.unwrap();
+        closed.unwrap();
+        assert!(bytes.len() <= 4096 && Instant::now() < end);
+        String::from_utf8(bytes).unwrap()
+    }
+
+    let started = Instant::now();
+    let end = started + Duration::from_secs(30);
+    let fixture = Fixture::new();
+    let source = fixture.0.join("source");
+    let source = source.to_str().unwrap();
+    let bundle = fixture.0.join("source.bundle");
+    let bundle = bundle.to_str().unwrap();
+    git(&fixture.0, end, &["init", "--quiet", source]).await;
+    fs::write(Path::new(source).join("README.md"), b"immutable project\n").unwrap();
+    git(&fixture.0, end, &["-C", source, "add", "README.md"]).await;
+    git(
+        &fixture.0,
+        end,
+        &[
+            "-C",
+            source,
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "-c",
+            "commit.gpgSign=false",
+            "commit",
+            "--quiet",
+            "-m",
+            "fixture",
+        ],
+    )
+    .await;
+    let revision = git(&fixture.0, end, &["-C", source, "rev-parse", "HEAD"]).await;
+    let tree = git(&fixture.0, end, &["-C", source, "rev-parse", "HEAD^{tree}"]).await;
+    git(
+        &fixture.0,
+        end,
+        &["-C", source, "bundle", "create", bundle, "HEAD"],
+    )
+    .await;
+    for close_before_fetch in [false, true] {
+        let destination = fixture.0.join(if close_before_fetch {
+            "closed"
+        } else {
+            "retained"
+        });
+        let destination = destination.to_str().unwrap();
+        git(&fixture.0, end, &["init", "--quiet", destination]).await;
+        let boundary = Path::new(destination).join(".git/shallow");
+        fs::write(&boundary, revision.as_bytes()).unwrap();
+        fs::set_permissions(&boundary, fs::Permissions::from_mode(0o600)).unwrap();
+        let mut control = Control::new(started).unwrap();
+        let mut original = Original::fixture(&boundary, 41, 0o600, &mut control).unwrap();
+        let leaf = fs::symlink_metadata(&boundary).unwrap();
+        let parent = fs::symlink_metadata(boundary.parent().unwrap()).unwrap();
+        assert!(!Path::new(destination).join(".git/logs").exists());
+        if close_before_fetch {
+            original.finish(&mut control).unwrap();
+            assert!(matches!(original.file(), Err(Error::Close)));
+        }
+        git(
+            &fixture.0,
+            end,
+            &[
+                "-C",
+                destination,
+                "fetch",
+                "--quiet",
+                "--no-tags",
+                "--no-write-fetch-head",
+                bundle,
+                "HEAD:refs/remotes/source/main",
+            ],
+        )
+        .await;
+        let leaf_unchanged = files::same(&leaf, &fs::symlink_metadata(&boundary).unwrap());
+        let parent_after = fs::symlink_metadata(boundary.parent().unwrap()).unwrap();
+        let boundary_bytes = fs::read(&boundary).unwrap();
+        let logs_created = Path::new(destination).join(".git/logs").is_dir();
+        if !close_before_fetch {
+            let checked = original.check(&mut control);
+            let closed = original.finish(&mut control);
+            control.begin_settling();
+            let finished = control.finish();
+            assert!(leaf_unchanged && logs_created && parent_after.nlink() > parent.nlink());
+            assert_eq!(boundary_bytes, revision.as_bytes());
+            assert_eq!(checked, Err(Error::Changed));
+            assert_eq!(closed, Err(Error::Changed));
+            assert_eq!(finished, Err(Error::Changed));
+            assert!(matches!(original.file(), Err(Error::Close)));
+            continue;
+        }
+        assert!(leaf_unchanged && logs_created && parent_after.nlink() > parent.nlink());
+        assert_eq!(boundary_bytes, revision.as_bytes());
+        git(
+            &fixture.0,
+            end,
+            &[
+                "-C",
+                destination,
+                "checkout",
+                "--quiet",
+                "--detach",
+                revision.trim(),
+            ],
+        )
+        .await;
+        assert_eq!(
+            git(&fixture.0, end, &["-C", destination, "rev-parse", "HEAD"]).await,
+            revision
+        );
+        assert_eq!(
+            git(
+                &fixture.0,
+                end,
+                &["-C", destination, "rev-parse", "HEAD^{tree}"]
+            )
+            .await,
+            tree
+        );
+        assert_eq!(
+            git(
+                &fixture.0,
+                end,
+                &["-C", destination, "rev-list", "--count", "HEAD"]
+            )
+            .await,
+            "1\n"
+        );
+        git(
+            &fixture.0,
+            end,
+            &["-C", destination, "fsck", "--connectivity-only"],
+        )
+        .await;
+        assert_eq!(
+            git(
+                &fixture.0,
+                end,
+                &[
+                    "-C",
+                    destination,
+                    "status",
+                    "--porcelain",
+                    "--untracked-files=all"
+                ]
+            )
+            .await,
+            ""
+        );
+        let project = Path::new(destination).join("README.md");
+        fs::set_permissions(&project, fs::Permissions::from_mode(0o600)).unwrap();
+        let mut retained = Original::fixture(&project, 64, 0o600, &mut control).unwrap();
+        retained.check(&mut control).unwrap();
+        fs::write(project, b"changed immutable project\n").unwrap();
+        let checked = retained.check(&mut control);
+        let closed = retained.finish(&mut control);
+        control.begin_settling();
+        let finished = control.finish();
+        assert_eq!(checked, Err(Error::Changed));
+        assert_eq!(closed, Err(Error::Changed));
+        assert_eq!(finished, Err(Error::Changed));
+    }
+    assert!(Instant::now() < end);
+}

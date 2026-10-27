@@ -185,14 +185,16 @@ pub(super) async fn prepare(ctx: &mut Context) -> Result<()> {
     let root = ctx.source_root.to_str().ok_or(Error::Input)?.to_owned();
     let revision = ctx.request.revision.clone();
     git(ctx, "source-init", &["init", "--quiet", &root]).await?;
-    let shallow = files::write_new(
+    let mut shallow = files::write_new(
         &ctx.source_root.join(".git/shallow"),
         format!("{revision}\n").as_bytes(),
         0,
         0o600,
         &mut ctx.control,
     )?;
-    ctx.originals.push(shallow);
+    // Git owns its administrative namespace during import. A first fetch may
+    // create .git/logs, changing the retained shallow file's parent binding.
+    shallow.finish(&mut ctx.control)?;
     git(
         ctx,
         "source-fetch",

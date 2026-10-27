@@ -3017,6 +3017,12 @@ catalog/source assertions and the existing unmodified Python suites remain
 separate evidence. They do not prove full cross-language controller equivalence
 or actual signed four-case PostgreSQL/Caddy/900-launcher runtime success.
 
+The source-import regression uses real local Git operations to cover its mutable
+administrative namespace: the shallow input closes before fetch can create a
+reflog directory. Immutable project-source checks and the one-commit revision,
+tree and clean-worktree checks still apply. This local ownership evidence is
+separate from the signed VM experiment.
+
 Guest feature checks require the project's pinned OpenSSL headers/libraries;
 default Ops/xtask bootstrap builds leave native crypto disabled. Signed-material,
 actual local TLS, inert-file handoff and maintenance-table firewall tests cover
