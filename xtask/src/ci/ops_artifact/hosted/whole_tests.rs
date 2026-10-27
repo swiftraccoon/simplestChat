@@ -548,8 +548,24 @@ impl Executor for FakeCli {
                 }
                 let url = command.arguments.last().unwrap().to_str().unwrap();
                 self.calls.push(format!("curl:{url}"));
-                stderr = b"OPS_HTTP_STATUS:200:200\n".to_vec();
-                ("curl", self.downloads.get(url).unwrap().clone())
+                let ordinal = self
+                    .calls
+                    .iter()
+                    .filter(|call| call.starts_with("curl:"))
+                    .count();
+                let kind = match self.fail {
+                    Some("catalog-second") if ordinal == 2 => "catalog-second",
+                    Some("registry-first") if url.starts_with("https://static.crates.io/") => {
+                        "registry-first"
+                    }
+                    _ => "curl",
+                };
+                stderr = if kind == "curl" {
+                    b"OPS_HTTP_STATUS:200:200\n".to_vec()
+                } else {
+                    b"PRIVATE material refusal body\n".to_vec()
+                };
+                (kind, self.downloads.get(url).unwrap().clone())
             }
             Program::OpsDpkgDeb => {
                 self.calls.push("dpkg".into());
@@ -661,7 +677,11 @@ impl Executor for FakeCli {
         let seals = finish_logs(command.separate_logs.take().unwrap(), stdout, stderr).await?;
         proof.observed_io(Some(seals));
         if self.fail == Some(kind) {
-            Err(failure(42))
+            Err(if matches!(kind, "catalog-second" | "registry-first") {
+                crate::tooling::Failure::child_exit(23)
+            } else {
+                failure(42)
+            })
         } else {
             Ok(Vec::new())
         }
@@ -802,8 +822,13 @@ async fn operation_with_sink(
 }
 #[tokio::test]
 async fn whole_private_fixture_reaches_all_five_phases_and_nine_evidence_publication() {
-    let (fixture, stages, cli, result, _) = Box::pin(operation(None)).await;
+    let (fixture, stages, cli, result, diagnostics) = Box::pin(operation(None)).await;
     result.unwrap();
+    assert!(
+        !std::str::from_utf8(&diagnostics)
+            .unwrap()
+            .contains("material-refused")
+    );
     let target = fixture
         .root
         .join("result/kit")
@@ -893,6 +918,46 @@ async fn whole_private_fixture_reaches_all_five_phases_and_nine_evidence_publica
                 "sha256":artifact.sha256,"bytes":artifact.bytes,"version":artifact.version
             })
         );
+    }
+}
+
+#[tokio::test]
+async fn material_refusals_report_only_the_actual_local_position_after_owned_settlement() {
+    for broken in [false, true] {
+        for (fail, kind, ordinal, total, calls) in [
+            ("catalog-second", "catalog", 2, 7, 2),
+            ("registry-first", "registry", 1, 1, 8),
+        ] {
+            let (fixture, stages, cli, result, diagnostics) =
+                Box::pin(operation_with_sink(Some(fail), broken)).await;
+            let error = result.unwrap_err();
+            assert_eq!(error.code, 23);
+            assert!(error.is_child_exit());
+            assert_eq!(stages, ["source"]);
+            assert_eq!(cli.calls.len(), calls);
+            assert!(cli.calls.iter().all(|call| call.starts_with("curl:")));
+            assert!(!fixture.root.join("result/unsigned").exists());
+            assert!(cli.replayed.is_empty());
+            let text = std::str::from_utf8(&diagnostics).unwrap();
+            let material = text
+                .lines()
+                .filter(|line| line.contains("event=material-refused"))
+                .collect::<Vec<_>>();
+            assert_eq!(material.len(), 1);
+            assert!(material[0].contains(&format!(
+                "kind={kind} ordinal={ordinal} total={total} status=23 "
+            )));
+            assert!(
+                text.lines()
+                    .last()
+                    .unwrap()
+                    .contains("event=finished status=23 refusedPhase=download ")
+            );
+            assert!(!text.contains("PRIVATE"));
+            assert!(!text.contains("https://"));
+            assert!(!text.contains(fixture.root.to_str().unwrap()));
+            assert!(diagnostics.len() <= super::super::progress::MAX_BYTES);
+        }
     }
 }
 #[tokio::test]

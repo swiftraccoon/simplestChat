@@ -13,7 +13,7 @@ use super::{
     files::Tree,
     kit, native_build,
     plan::{self, Plan},
-    progress::{Checkpoint, Edge, Phase, Progress},
+    progress::{Checkpoint, Edge, MaterialKind, Phase, Progress},
     provenance, signing,
     tools::{InvocationSpec, Role, Tools},
     worker,
@@ -461,9 +461,9 @@ async fn produce_with<E: Executor, S: Stages>(
         owners.downloads = Some(Tree::create(&run.path.join("downloads"), budget)?);
         let mut material_names = Vec::new();
         let mut next = 0;
-        for artifact in &catalog.artifacts {
+        for (index, artifact) in catalog.artifacts.iter().enumerate() {
             let tree = owners.downloads.take().ok_or_else(|| failure(1))?;
-            let (tree, name) = fetch::run(
+            let fetched = fetch::run(
                 tree,
                 next,
                 fetch::Download {
@@ -477,7 +477,14 @@ async fn produce_with<E: Executor, S: Stages>(
                 plan,
                 end,
             )
-            .await?;
+            .await;
+            progress.material_refused(
+                MaterialKind::Catalog,
+                index + 1,
+                catalog.artifacts.len(),
+                &fetched,
+            );
+            let (tree, name) = fetched?;
             next += 1;
             owners.downloads = Some(tree);
             material_names.push(name);
@@ -487,9 +494,10 @@ async fn produce_with<E: Executor, S: Stages>(
             return Err(failure(1));
         }
         let mut archive_bytes = 0u64;
-        for archive in archives {
+        let total = archives.len();
+        for (index, archive) in archives.into_iter().enumerate() {
             let tree = owners.downloads.take().ok_or_else(|| failure(1))?;
-            let (tree, name) = fetch::run(
+            let fetched = fetch::run(
                 tree,
                 next,
                 fetch::Download {
@@ -506,7 +514,9 @@ async fn produce_with<E: Executor, S: Stages>(
                 plan,
                 end,
             )
-            .await?;
+            .await;
+            progress.material_refused(MaterialKind::Registry, index + 1, total, &fetched);
+            let (tree, name) = fetched?;
             next += 1;
             archive_bytes = archive_bytes
                 .checked_add(tree.records[&name].bytes)

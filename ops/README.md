@@ -1463,8 +1463,12 @@ origins, SHA-256 values and sizes of four Rust 1.99.0 archives, 64 Ubuntu
 24.04 packages and two native source archives. Acquisition follows at most three
 HTTPS redirects within the original request deadline; terminal HTTP 200 and exact
 complete size/hash admission remain required before extraction. The registry
-archives are selected from the original exported
-Cargo lockfile. Downloads, extraction, registry copying and complete-tree
+and catalog failure diagnostics identify only the material class, ordinal,
+total and original status. URLs, package names and response bodies stay private.
+Failed fetches admit available paired capture seals before checked tree cleanup;
+later capture or cleanup failures cannot replace the original child failure.
+The registry archives are selected from the original exported Cargo lockfile.
+Downloads, extraction, registry copying and complete-tree
 readback precede the existing offline producer. Rust installer-v3 declarations
 are checked against the selected entry kinds. File-only
 manifests allow archive directories that are proper ancestors of declared

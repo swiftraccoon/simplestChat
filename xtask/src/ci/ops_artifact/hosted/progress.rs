@@ -78,6 +78,20 @@ impl Edge {
     }
 }
 
+#[derive(Clone, Copy)]
+pub(super) enum MaterialKind {
+    Catalog,
+    Registry,
+}
+impl MaterialKind {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Catalog => "catalog",
+            Self::Registry => "registry",
+        }
+    }
+}
+
 pub(super) struct Progress<'a> {
     owner: &'a Plan,
     sink: &'a mut dyn Write,
@@ -86,6 +100,7 @@ pub(super) struct Progress<'a> {
     started: bool,
     finished: bool,
     refused: Option<(Phase, u8)>,
+    material_reported: bool,
 }
 impl<'a> Progress<'a> {
     pub fn new(owner: &'a Plan, sink: &'a mut dyn Write) -> Self {
@@ -97,6 +112,7 @@ impl<'a> Progress<'a> {
             started: false,
             finished: false,
             refused: None,
+            material_reported: false,
         }
     }
     pub fn owner(&self) -> &'a Plan {
@@ -168,6 +184,38 @@ impl<'a> Progress<'a> {
                 edge.name(),
                 ordinal,
                 total,
+                self.owner.observed_elapsed().as_millis()
+            ),
+            false,
+        );
+    }
+    /// Report only the first refused material, without exposing its identity or
+    /// changing its result. Successful downloads spend no diagnostic bytes.
+    pub fn material_refused<T>(
+        &mut self,
+        kind: MaterialKind,
+        ordinal: usize,
+        total: usize,
+        result: &Result<T>,
+    ) {
+        let Err(error) = result else {
+            return;
+        };
+        if self.finished || self.material_reported {
+            return;
+        }
+        self.material_reported = true;
+        self.refused(result);
+        self.emit(
+            format!(
+                concat!(
+                    "ops-hosted phase=download event=material-refused kind={} ",
+                    "ordinal={} total={} status={} ownerObservedElapsedMs={}\n"
+                ),
+                kind.name(),
+                ordinal,
+                total,
+                error.code,
                 self.owner.observed_elapsed().as_millis()
             ),
             false,

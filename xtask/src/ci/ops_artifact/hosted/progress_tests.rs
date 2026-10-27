@@ -57,6 +57,87 @@ fn progress_reads_only_the_original_validated_sample_without_admitting_or_sampli
     assert_eq!(clock.calls.load(Ordering::SeqCst), calls + 1);
 }
 
+#[test]
+fn material_refusals_keep_original_status_first_position_and_privacy_without_clock_reads() {
+    for (kind, name, ordinal, total, code) in [
+        (MaterialKind::Catalog, "catalog", 70, 70, 23),
+        (MaterialKind::Registry, "registry", 1024, 1024, 124),
+    ] {
+        let clock = Arc::new(Clock {
+            now: Mutex::new(Instant::now()),
+            calls: AtomicUsize::new(0),
+        });
+        let plan = Plan::new(clock.clone());
+        let end = plan.end();
+        *clock.now.lock().unwrap() += Duration::from_millis(100);
+        plan.check().unwrap();
+        let calls = clock.calls.load(Ordering::SeqCst);
+        *clock.now.lock().unwrap() += Duration::from_secs(5);
+        let mut bytes = Vec::new();
+        let mut progress = Progress::new(&plan, &mut bytes);
+        progress.enter(Phase::Download);
+        let before = progress.attempted;
+        progress.material_refused(kind, 1, total, &Ok(()));
+        assert_eq!(progress.attempted, before);
+        let result = Err::<(), _>(Failure::new(
+            code,
+            "PRIVATE https://example.invalid/archive?token=secret source/name body",
+        ));
+        progress.material_refused(kind, ordinal, total, &result);
+        progress.material_refused(
+            MaterialKind::Catalog,
+            1,
+            1,
+            &Err::<(), _>(Failure::new(143, "PRIVATE later refusal")),
+        );
+        progress.finish(&result);
+        progress.material_refused(kind, 1, total, &result);
+        assert_eq!(clock.calls.load(Ordering::SeqCst), calls);
+        assert_eq!(plan.end(), end);
+        assert_eq!(plan.observed_elapsed(), Duration::from_millis(100));
+        let text = std::str::from_utf8(&bytes).unwrap();
+        let expected = format!(
+            concat!(
+                "phase=download event=material-refused kind={} ordinal={} ",
+                "total={} status={} ownerObservedElapsedMs=100\n"
+            ),
+            name, ordinal, total, code
+        );
+        assert!(text.contains(&expected));
+        assert_eq!(text.matches("event=material-refused ").count(), 1);
+        assert_eq!(text.matches("event=finished ").count(), 1);
+        assert!(text.contains(&format!(
+            "event=finished status={code} refusedPhase=download "
+        )));
+        assert!(!text.contains("PRIVATE"));
+        assert!(!text.contains("https://"));
+        assert!(!text.contains("source/name"));
+        assert!(!text.contains("secret"));
+    }
+}
+
+#[test]
+fn material_diagnostics_cannot_replace_an_already_recorded_primary_refusal() {
+    let plan = Plan::new(Arc::new(super::super::fixture::Clock::new()));
+    let mut bytes = Vec::new();
+    let mut progress = Progress::new(&plan, &mut bytes);
+    progress.enter(Phase::Source);
+    let primary = Err::<(), _>(Failure::new(143, "PRIVATE primary"));
+    progress.refused(&primary);
+    progress.enter(Phase::Download);
+    progress.material_refused(
+        MaterialKind::Registry,
+        2,
+        3,
+        &Err::<(), _>(Failure::new(23, "PRIVATE material refusal")),
+    );
+    progress.finish(&primary);
+    let text = std::str::from_utf8(&bytes).unwrap();
+    assert!(text.contains("kind=registry ordinal=2 total=3 status=23 "));
+    assert!(text.contains("event=finished status=143 refusedPhase=source "));
+    assert!(!text.contains("PRIVATE"));
+}
+
 struct Broken {
     attempted: usize,
     last: Vec<u8>,
@@ -92,6 +173,28 @@ fn failed_writes_spend_the_same_lifetime_ceiling_and_keep_one_reserved_terminal_
     assert!(sink.attempted > MAX_BYTES - TERMINAL_RESERVE * 2);
     let terminal = std::str::from_utf8(&sink.last).unwrap();
     assert!(terminal.contains("event=finished status=143 refusedPhase=kit"));
+    assert!(!terminal.contains("PRIVATE"));
+}
+
+#[test]
+fn material_refusal_keeps_reserved_terminal_attempt_after_the_same_byte_ceiling_is_spent() {
+    let plan = Plan::new(Arc::new(super::super::fixture::Clock::new()));
+    let mut sink = Broken {
+        attempted: 0,
+        last: Vec::new(),
+    };
+    let mut progress = Progress::new(&plan, &mut sink);
+    progress.enter(Phase::Download);
+    for ordinal in 1..=10000 {
+        progress.kit(Checkpoint::Import, Edge::Begin, ordinal, 10000);
+    }
+    let result = Err::<(), _>(Failure::new(124, "PRIVATE material failure"));
+    progress.material_refused(MaterialKind::Registry, 1024, 1024, &result);
+    progress.finish(&result);
+    assert!(sink.attempted <= MAX_BYTES);
+    assert!(sink.attempted > MAX_BYTES - TERMINAL_RESERVE * 2);
+    let terminal = std::str::from_utf8(&sink.last).unwrap();
+    assert!(terminal.contains("event=finished status=124 refusedPhase=download "));
     assert!(!terminal.contains("PRIVATE"));
 }
 
