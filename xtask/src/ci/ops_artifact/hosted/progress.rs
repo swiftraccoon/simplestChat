@@ -43,6 +43,7 @@ pub(super) enum Checkpoint {
     Import,
     Resolve,
     Probe,
+    NativeBuild,
     RegistryCopy,
     Measure,
 }
@@ -52,6 +53,7 @@ impl Checkpoint {
             Self::Import => "import",
             Self::Resolve => "resolve",
             Self::Probe => "probe",
+            Self::NativeBuild => "native-build",
             Self::RegistryCopy => "registry-copy",
             Self::Measure => "measure",
         }
@@ -142,6 +144,16 @@ impl<'a> Progress<'a> {
         );
     }
     pub fn kit(&mut self, checkpoint: Checkpoint, edge: Edge, ordinal: usize, total: usize) {
+        // Import rosters can contain 96 archives. Keep both edges of the first,
+        // every eighth and last item so later probes/builds retain visibility
+        // inside the same lifetime byte ceiling. Sampling grants no authority.
+        if matches!(checkpoint, Checkpoint::Import)
+            && ordinal != 1
+            && !ordinal.is_multiple_of(8)
+            && ordinal != total
+        {
+            return;
+        }
         self.emit(
             format!(
                 concat!(

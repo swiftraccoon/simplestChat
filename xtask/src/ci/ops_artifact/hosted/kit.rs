@@ -18,6 +18,52 @@ pub(super) const CRT: [&str; 7] = [
     "libgcc.a",
     "libc.so",
 ];
+pub(super) const LINUX_INCLUDE: &str = "host-tools/linux-headers/include";
+
+/// Keep the measured Linux UAPI separate from GNU libc's include search path.
+/// Graph copy retains original inode checks, complete hashes and checked closes;
+/// only these three package subtrees may enter the OpenSSL include projection.
+/// C-GOOD-ERR/C-DTOR-FAIL retain the existing fixed refusal and owner finalizers.
+fn linux_headers(
+    tree: &mut Tree,
+    graph: &mut Graph,
+    checkpoint: &mut impl FnMut() -> Result<()>,
+) -> Result<()> {
+    if tree
+        .records
+        .get("host-tools/sysroot/usr/include/linux/mman.h")
+        .is_none_or(|record| record.bytes == 0)
+    {
+        return Err(failure(1));
+    }
+    for (source, destination) in [
+        ("linux", "linux"),
+        ("asm-generic", "asm-generic"),
+        ("x86_64-linux-gnu/asm", "asm"),
+    ] {
+        checkpoint()?;
+        let prefix = format!("host-tools/sysroot/usr/include/{source}/");
+        let names = tree
+            .records
+            .keys()
+            .filter(|name| name.starts_with(&prefix))
+            .cloned()
+            .collect::<Vec<_>>();
+        if names.is_empty() {
+            return Err(failure(1));
+        }
+        for source in names {
+            let suffix = source.strip_prefix(&prefix).ok_or_else(|| failure(1))?;
+            graph.copy(
+                tree,
+                &source,
+                &format!("{LINUX_INCLUDE}/{destination}/{suffix}"),
+                checkpoint,
+            )?;
+        }
+    }
+    Ok(())
+}
 
 pub(super) fn complete(
     tree: &mut Tree,
@@ -25,6 +71,7 @@ pub(super) fn complete(
     checkpoint: &mut impl FnMut() -> Result<()>,
 ) -> Result<()> {
     graph.resolve(tree, checkpoint)?;
+    linux_headers(tree, graph, checkpoint)?;
     for name in ["as", "ld", "ar", "nm", "ranlib", "strip"] {
         let source = format!("host-tools/sysroot/usr/bin/x86_64-linux-gnu-{name}");
         let destination = format!("host-tools/sysroot/usr/bin/{name}");

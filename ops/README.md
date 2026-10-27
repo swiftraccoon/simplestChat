@@ -1459,7 +1459,7 @@ The environment check is an admission policy; the eventual GitHub certificate
 provides signer identity authority.
 
 [ops-build-inputs.lock.json](ops-build-inputs.lock.json) pins the exact HTTPS
-origins, SHA-256 values and sizes of four Rust 1.99.0 archives, 63 Ubuntu
+origins, SHA-256 values and sizes of four Rust 1.99.0 archives, 64 Ubuntu
 24.04 packages and two native source archives. Acquisition follows at most three
 HTTPS redirects within the original request deadline; terminal HTTP 200 and exact
 complete size/hash admission remain required before extraction. The registry
@@ -1493,6 +1493,10 @@ headers, static archives and startup objects enter the immutable kit only after
 bounded readback and ELF/archive admission. Its fixed musl compiler adapter uses
 those target inputs for static PIE, with Rust's bundled target CRT disabled.
 OpenSSL shared libraries, dynamic loading, modules and engines are disabled.
+OpenSSL receives only the measured Linux UAPI `linux`, `asm-generic` and x86-64
+`asm` header trees alongside musl's headers; the GNU libc headers are not added
+to its include path. The pinned `diffutils` package supplies its `cmp` build and
+installation comparisons.
 The source pins, observed build configuration, library identities and output
 inventory accompany the existing evidence documents. Public musl/OpenSSL license
 notices are carried in `producer-toolchain.json`, bound to the builder's observed
@@ -1508,6 +1512,13 @@ phases. Each subprocess body is clipped to the remaining phase budget with its
 settlement allowance retained. Individual per-command maxima are not additive
 completion guarantees: a slow cold download or build can time out. Filesystem,
 scheduling and reap stalls have no hard wall-clock bound.
+
+Progress diagnostics share a 16 KiB lifetime limit with a reserved terminal
+record. Archive imports report both edges of the first, every eighth and last
+item, leaving room for all compiler probes and the native-build checkpoint.
+These records report observed progress only: the last visible checkpoint does
+not identify the failed command, and a missing completion record is not proof
+that its operation failed. The terminal status remains authoritative.
 
 Kit preparation has a 540-second slot. All phase slots plus the 300-second final
 reserve total 3,540 seconds, leaving 60 seconds for initial setup and gaps within

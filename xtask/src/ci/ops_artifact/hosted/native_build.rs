@@ -117,6 +117,8 @@ pub(super) struct Step {
 pub(super) fn arguments(work: &Path, root: &Path) -> Vec<Step> {
     let musl = work.join("musl-prefix");
     let openssl = work.join("openssl-prefix");
+    let mut linux_include = OsString::from("-I");
+    linux_include.push(root.join(kit::LINUX_INCLUDE).as_os_str());
     let shell = format!(
         "SHELL={}",
         root.join("host-tools/sysroot/usr/bin/dash").display()
@@ -162,6 +164,7 @@ pub(super) fn arguments(work: &Path, root: &Path) -> Vec<Step> {
                 "linux-x86_64".into(),
                 format!("--prefix={}", openssl.display()).into(),
                 "--libdir=lib".into(),
+                linux_include,
                 "no-shared".into(),
                 "no-dso".into(),
                 "no-module".into(),
