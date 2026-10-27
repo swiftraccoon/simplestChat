@@ -9,7 +9,7 @@ use super::{
     worker,
 };
 use crate::{
-    ci::{command::Command, process::Executor},
+    ci::{command::Command, ops_artifact::verify::tools::Captures, process::Executor},
     tooling::{Environment, Result},
 };
 use std::{
@@ -67,6 +67,36 @@ fn arguments(url: &str, body: Duration) -> Vec<OsString> {
     )
     .collect()
 }
+
+/// Complete paired seals remain cleanup evidence after a failed child. Only a
+/// successful child may additionally authorize HTTP status and archive bytes.
+/// The caller owns the Tree and must explicitly finish it on every refusal.
+pub(super) fn admit(
+    tree: &mut Tree,
+    names: &[String; 2],
+    seals: &Captures,
+    download: &Download,
+    successful: bool,
+    checkpoint: &mut impl FnMut() -> Result<()>,
+) -> Result<()> {
+    tree.captured(names, seals, checkpoint)?;
+    if successful {
+        if tree.read(&names[1], 65536, checkpoint)? != b"OPS_HTTP_STATUS:200:200\n" {
+            return Err(failure(1));
+        }
+        let record = &tree.records[&names[0]];
+        if record.sha256 != download.sha256
+            || record.bytes == 0
+            || record.bytes > download.maximum
+            || download.bytes.is_some_and(|n| n != record.bytes)
+        {
+            return Err(failure(1));
+        }
+        tree.check()?;
+    }
+    Ok(())
+}
+
 pub(super) async fn run<E: Executor>(
     tree: Tree,
     index: usize,
@@ -102,42 +132,38 @@ pub(super) async fn run<E: Executor>(
         command.hosted_ops = Some(proof.clone());
         let ran = executor.run(command).await;
         drop(permits);
-        ran?;
-        let seals = proof.captures()?;
+        let seals = proof.captures();
+        drop(proof);
+        let successful = ran.is_ok();
         let saved = names.clone();
         let mut tree = owner.take().unwrap();
-        let tree = worker::work(
+        let admitted = worker::work(
             plan,
             executor,
             end,
             move |checkpoint| {
-                let admitted = tree
-                    .captured(&saved, &seals, &mut || checkpoint.check())
-                    .and_then(|()| {
-                        if tree.read(&saved[1], 65536, &mut || checkpoint.check())?
-                            != b"OPS_HTTP_STATUS:200:200\n"
-                        {
-                            return Err(failure(1));
-                        }
-                        let record = &tree.records[&saved[0]];
-                        if record.sha256 != download.sha256
-                            || record.bytes == 0
-                            || record.bytes > download.maximum
-                            || download.bytes.is_some_and(|n| n != record.bytes)
-                        {
-                            return Err(failure(1));
-                        }
-                        tree.check()
-                    });
-                if let Err(error) = admitted {
-                    let _ = tree.finish();
-                    return Err(error);
+                let admitted = seals.and_then(|seals| {
+                    admit(
+                        &mut tree,
+                        &saved,
+                        &seals,
+                        &download,
+                        successful,
+                        &mut || checkpoint.check(),
+                    )
+                });
+                if !successful || admitted.is_err() {
+                    let closed = tree.finish();
+                    return admitted.and(closed).and(Err(failure(1)));
                 }
                 Ok(tree)
             },
             Tree::finish,
         )
-        .await?;
+        .await;
+        // An actual child/status failure precedes admission, close or worker
+        // deadline failures. Never return a live Tree when that body failed.
+        let tree = ran.and(admitted)?;
         Ok((tree, names[0].clone()))
     }
     .await;

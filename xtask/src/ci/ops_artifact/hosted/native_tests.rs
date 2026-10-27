@@ -13,7 +13,7 @@ use crate::{
         process::{Executor, Native},
     },
     owned_process::Signals,
-    tooling::Environment,
+    tooling::{Environment, Failure, Result},
 };
 use std::{
     fs,
@@ -136,6 +136,157 @@ async fn actual_nonzero_overflow_and_metadata_failure_cannot_authorize_material_
             expected,
         );
         assert!(native.cleanup_passed());
+        tools.finish().unwrap();
+        closed(&budget);
+    }
+}
+
+#[tokio::test]
+async fn actual_failed_http_child_seals_are_admitted_for_complete_tree_settlement() {
+    let fixture = fixture::Fixture::new();
+    let budget = Budget::default();
+    let tools = tools(
+        &fixture,
+        "printf partial; printf 'PRIVATE-http-error\\n' >&2; exit 22",
+        &budget,
+    );
+    let clock = Arc::new(plan::NativeClock);
+    let mut tree = Tree::create(&fixture.root.join("download"), &budget).unwrap();
+    let proof = tools
+        .invocation(InvocationSpec {
+            role: Role::Curl,
+            args: vec![],
+            directory: tree.run.path.clone(),
+            environment: Environment::new(),
+            body: Duration::from_secs(5),
+            stdout_maximum: 32,
+            input: None,
+            clock: clock.clone(),
+            latest: plan::Clock::now(&*clock) + Duration::from_secs(10),
+        })
+        .unwrap();
+    let (logs, names, permits) = tree.capture(7, 32).await.unwrap();
+    let mut command = Command::capture(Role::Curl.program(), &[]);
+    command.capture = None;
+    command.timeout = Duration::from_secs(5);
+    command.grace = Duration::from_secs(5);
+    command.separate_logs = Some(logs);
+    command.hosted_ops = Some(proof.clone());
+    let env = Environment::new();
+    let mut native = Native::new(&fixture.root, &env, Signals::new().unwrap());
+    let error = native.run(command).await.unwrap_err();
+    assert_eq!(error.code, 22);
+    assert!(error.is_child_exit());
+    drop(permits);
+    let seals = proof.captures().unwrap();
+    drop(proof);
+    fetch::admit(
+        &mut tree,
+        &names,
+        &seals,
+        &download(),
+        false,
+        &mut || Ok(()),
+    )
+    .unwrap();
+    assert_eq!(tree.records.len(), 2);
+    assert_eq!(
+        tree.records[&names[0]].sha256,
+        super::super::sha(b"partial")
+    );
+    assert_eq!(
+        tree.records[&names[1]].sha256,
+        super::super::sha(b"PRIVATE-http-error\n")
+    );
+    assert_ne!(tree.records[&names[0]].sha256, download().sha256);
+    assert!(native.cleanup_passed());
+    tree.finish().unwrap();
+    tools.finish().unwrap();
+    closed(&budget);
+}
+
+/// Run the actual reserved group first, then inject only a post-body ownership
+/// fault. No Log or executable Arc survives beyond this adapter invocation.
+struct AfterCurl<'a> {
+    native: Native<'a>,
+    fault: &'static str,
+    clock: Arc<fixture::Clock>,
+}
+impl Executor for AfterCurl<'_> {
+    async fn run(&mut self, command: Command) -> Result<Vec<u8>> {
+        let proof = command.hosted_ops.as_ref().unwrap().clone();
+        let program = command.program;
+        let arguments = command.arguments.clone();
+        let ran = self.native.run(command).await;
+        let directory = proof.context(program, &arguments)?.0.to_owned();
+        match self.fault {
+            "missing-seal" => proof.observed_io(None),
+            "changed-seal" => {
+                fs::write(directory.join("capture-0.stdout"), b"changed-bytes").unwrap()
+            }
+            "deadline" => self.clock.advance(Duration::from_secs(90)),
+            _ => {}
+        }
+        drop(proof);
+        if self.fault == "body-term" {
+            Err(Failure::new(143, "PRIVATE original terminal cause"))
+        } else {
+            ran
+        }
+    }
+    async fn ready(&mut self) -> Result<()> {
+        self.native.ready().await?;
+        if self.fault == "late-term" {
+            Err(Failure::new(143, "PRIVATE later terminal cause"))
+        } else {
+            Ok(())
+        }
+    }
+    fn cleanup_passed(&self) -> bool {
+        self.native.cleanup_passed()
+    }
+}
+
+#[tokio::test]
+async fn actual_fetch_keeps_original_child_class_and_status_over_post_body_faults() {
+    for (fault, exit, expected, child_exit) in [
+        ("none", 22, 22, true),
+        ("missing-seal", 22, 22, true),
+        ("changed-seal", 22, 22, true),
+        ("deadline", 22, 22, true),
+        ("late-term", 22, 22, true),
+        ("body-term", 0, 143, false),
+        ("missing-seal", 0, 1, false),
+        ("changed-seal", 0, 1, false),
+    ] {
+        let fixture = fixture::Fixture::new();
+        let budget = Budget::default();
+        let body =
+            format!("printf archive-bytes; printf 'OPS_HTTP_STATUS:200:200\\n' >&2; exit {exit}");
+        let tools = tools(&fixture, &body, &budget);
+        let clock = Arc::new(fixture::Clock::new());
+        let plan = plan::Plan::new(clock.clone());
+        let end = plan.now().unwrap() + Duration::from_secs(90);
+        let env = Environment::new();
+        let mut executor = AfterCurl {
+            native: Native::new(&fixture.root, &env, Signals::new().unwrap()),
+            fault,
+            clock,
+        };
+        let tree = Tree::create(&fixture.root.join("download"), &budget).unwrap();
+        let result = fetch::run(tree, 0, download(), &tools, &mut executor, &plan, end).await;
+        let error = match result {
+            Err(error) => error,
+            Ok((tree, _)) => {
+                tree.finish().unwrap();
+                panic!("post-body fault must remain a refusal");
+            }
+        };
+        assert_eq!(error.code, expected, "{fault}");
+        assert_eq!(error.is_child_exit(), child_exit, "{fault}");
+        assert!(executor.cleanup_passed());
+        assert!(fixture.root.join("download/capture-0.stdout").is_file());
+        assert!(fixture.root.join("download/capture-0.stderr").is_file());
         tools.finish().unwrap();
         closed(&budget);
     }
