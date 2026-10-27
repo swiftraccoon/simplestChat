@@ -1,7 +1,7 @@
 //! Fixed compiler roles and resolver evidence. No executable is considered
 //! relocatable merely because its archive was copied to a different prefix.
 
-use super::{archive::Graph, failure, files::Tree, shim};
+use super::{archive::Graph, failure, files::Tree, native_build, shim};
 use crate::tooling::Result;
 use std::{
     ffi::OsString,
@@ -19,6 +19,27 @@ pub(super) const CRT: [&str; 7] = [
     "libc.so",
 ];
 pub(super) const LINUX_INCLUDE: &str = "host-tools/linux-headers/include";
+pub(super) const TARGET_LIB: &str = "toolchain/lib/rustlib/x86_64-unknown-linux-musl/lib";
+
+/// External musl supplies libc and CRT, while Rust's target std still requests
+/// `-lunwind`. Project only that manifest-admitted compiler runtime archive into
+/// the existing target library search path; no bundled libc or CRT is selected.
+fn unwind(
+    tree: &mut Tree,
+    graph: &mut Graph,
+    checkpoint: &mut impl FnMut() -> Result<()>,
+) -> Result<()> {
+    let source = format!("{TARGET_LIB}/self-contained/libunwind.a");
+    let bytes = tree.read(&source, super::files::MAX_FILE, checkpoint)?;
+    native_build::archive(&bytes, false)?;
+    checkpoint()?;
+    graph.copy(
+        tree,
+        &source,
+        &format!("{TARGET_LIB}/libunwind.a"),
+        checkpoint,
+    )
+}
 
 /// Keep the measured Linux UAPI separate from GNU libc's include search path.
 /// Graph copy retains original inode checks, complete hashes and checked closes;
@@ -71,6 +92,7 @@ pub(super) fn complete(
     checkpoint: &mut impl FnMut() -> Result<()>,
 ) -> Result<()> {
     graph.resolve(tree, checkpoint)?;
+    unwind(tree, graph, checkpoint)?;
     linux_headers(tree, graph, checkpoint)?;
     for name in ["as", "ld", "ar", "nm", "ranlib", "strip"] {
         let source = format!("host-tools/sysroot/usr/bin/x86_64-linux-gnu-{name}");
@@ -114,10 +136,7 @@ pub(super) fn complete(
             return Err(failure(1));
         }
     }
-    if !tree
-        .directory_names()
-        .any(|p| p == "toolchain/lib/rustlib/x86_64-unknown-linux-musl/lib")
-    {
+    if !tree.directory_names().any(|p| p == TARGET_LIB) {
         return Err(failure(1));
     }
     tree.write("host-tools/bin/cc", shim::CC, true)?;
