@@ -376,7 +376,10 @@ impl CaptureStage {
 }
 
 #[derive(Default)]
-pub(super) struct CaptureFailure(Option<(Error, CaptureStage)>);
+pub(super) struct CaptureFailure {
+    first: Option<(Error, CaptureStage)>,
+    owns_primary: bool,
+}
 impl CaptureFailure {
     pub fn observe<T>(&mut self, stage: CaptureStage, result: Result<T>) -> Result<T> {
         if let Err(error) = result {
@@ -385,16 +388,86 @@ impl CaptureFailure {
                 Error::Close => CaptureStage::Close,
                 _ => stage,
             };
-            self.0.get_or_insert((error, stage));
+            self.first.get_or_insert((error, stage));
         }
         result
     }
     fn result(&self) -> Result<()> {
-        self.0.map_or(Ok(()), |(error, _)| Err(error))
+        self.first.map_or(Ok(()), |(error, _)| Err(error))
     }
     pub fn diagnostic(&self) -> Option<(Error, &'static str)> {
-        self.0.map(|(error, stage)| (error, stage.checkpoint()))
+        self.first.map(|(error, stage)| (error, stage.checkpoint()))
     }
+    fn primary_available(control: &Control) -> bool {
+        control.first.is_none() && control.status == 0 && !control.cleanup_failed
+    }
+    fn observe_control<T>(
+        &mut self,
+        available_before: bool,
+        stage: CaptureStage,
+        result: Result<T>,
+        control: &mut Control,
+    ) -> Result<T> {
+        let first_capture = self.first.is_none();
+        let observed = self.observe(stage, result);
+        if let Err(error) = observed {
+            // Control has one mutable borrower: an intervening recorded error
+            // belongs to this checked watch operation. Signals/deadlines still
+            // retain their original checkpoint through their terminal status.
+            if first_capture && available_before && control.status == 0 {
+                self.owns_primary = true;
+                control.checkpoint = self.first.map_or("capture-live", |(_, s)| s.checkpoint());
+            }
+            control.record(error);
+        }
+        observed
+    }
+    fn live_result(
+        &mut self,
+        available_before: bool,
+        stage: CaptureStage,
+        result: Result<()>,
+        control: &mut Control,
+    ) -> Result<()> {
+        let observed = self.observe_control(available_before, stage, result, control);
+        if control.is_recovering() {
+            // The transaction has already left its body. Keep pumping and
+            // recording capture faults without vetoing known-role retirement;
+            // only the actual original control fence may prevent those calls.
+            control.check()
+        } else {
+            observed.and(self.result())
+        }
+    }
+    pub fn primary_checkpoint(&self) -> Option<&'static str> {
+        if self.owns_primary {
+            self.diagnostic().map(|(_, checkpoint)| checkpoint)
+        } else {
+            None
+        }
+    }
+}
+
+fn live_capture(
+    out: &[u8],
+    err: &[u8],
+    eof: [bool; 2],
+    running: impl FnOnce() -> Result<bool>,
+    control: &mut Control,
+    stage: &mut CaptureStage,
+) -> Result<()> {
+    *stage = CaptureStage::Bounds;
+    require(out.len() <= 1024 * 1024 && err.len() <= 8192)?;
+    *stage = CaptureStage::Eof;
+    require(!eof[0] && !eof[1])?;
+    *stage = CaptureStage::Live;
+    require(running()?)?;
+    control.check()?;
+    if out.len() > 24 {
+        *stage = CaptureStage::Data(first_packet_class(out));
+        return Err(Error::Refused);
+    }
+    Ok(())
 }
 
 pub(super) fn capture_output(status: i32, out: &[u8], err: &[u8]) -> Option<CaptureStage> {
@@ -459,22 +532,26 @@ impl Watch {
         Ok(value)
     }
     pub fn check(&mut self, control: &mut Control) -> Result<()> {
-        self.failure.result()?;
+        if !control.is_recovering() {
+            self.failure.result()?;
+        }
+        let available = CaptureFailure::primary_available(control);
         let mut stage = CaptureStage::Live;
         let result = (|| {
             control.check()?;
             require(!self.closed)?;
             let chunk = self.actor.pump(control)?;
             let (out, err) = self.actor.snapshot();
-            stage = CaptureStage::Bounds;
-            require(out.len() <= 1024 * 1024 && err.len() <= 8192)?;
-            stage = CaptureStage::Eof;
-            require(!chunk.stdout_eof && !chunk.stderr_eof)?;
-            stage = CaptureStage::Live;
-            require(self.actor.running()?)?;
-            control.check()
+            live_capture(
+                out,
+                err,
+                [chunk.stdout_eof, chunk.stderr_eof],
+                || self.actor.running(),
+                control,
+                &mut stage,
+            )
         })();
-        self.failure.observe(stage, result)
+        self.failure.live_result(available, stage, result, control)
     }
     pub fn ready(&self) -> bool {
         self.actor
@@ -491,6 +568,7 @@ impl Watch {
             control.record(error);
         }
         self.closed = true;
+        let available = CaptureFailure::primary_available(control);
         let mut stage = CaptureStage::Stop;
         let result = async {
             if self.actor.running()? {
@@ -508,16 +586,354 @@ impl Watch {
             control.check()
         }
         .await;
-        if let Err(error) = self.failure.observe(stage, result) {
-            control.record(error);
-        }
+        let _ = self
+            .failure
+            .observe_control(available, stage, result, control);
+        let available = CaptureFailure::primary_available(control);
         let closed = self.actor.finish(control).await.map(|_| ());
-        if let Err(error) = self.failure.observe(CaptureStage::Close, closed) {
-            control.record(error);
-        }
+        let _ = self
+            .failure
+            .observe_control(available, CaptureStage::Close, closed, control);
         self.failure.result()
     }
-    pub fn failure(&self) -> Option<(Error, &'static str)> {
-        self.failure.diagnostic()
+    pub fn primary_checkpoint(&self) -> Option<&'static str> {
+        self.failure.primary_checkpoint()
+    }
+}
+
+#[cfg(test)]
+mod live_capture_tests {
+    use super::*;
+
+    fn packet() -> Vec<u8> {
+        let mut bytes = vec![0; 24];
+        bytes[..4].copy_from_slice(&[0xd4, 0xc3, 0xb2, 0xa1]);
+        bytes[4..6].copy_from_slice(&2_u16.to_le_bytes());
+        bytes[6..8].copy_from_slice(&4_u16.to_le_bytes());
+        bytes[16..20].copy_from_slice(&128_u32.to_le_bytes());
+        bytes[20..24].copy_from_slice(&1_u32.to_le_bytes());
+        bytes.extend_from_slice(&[0; 8]);
+        bytes.extend_from_slice(&54_u32.to_le_bytes());
+        bytes.extend_from_slice(&54_u32.to_le_bytes());
+        let mut frame = [0; 54];
+        frame[12..14].copy_from_slice(&0x0800_u16.to_be_bytes());
+        frame[14] = 0x45;
+        frame[16..18].copy_from_slice(&40_u16.to_be_bytes());
+        frame[23] = 6;
+        frame[34..36].copy_from_slice(&12345_u16.to_be_bytes());
+        frame[36..38].copy_from_slice(&443_u16.to_be_bytes());
+        frame[46] = 0x50;
+        bytes.extend_from_slice(&frame);
+        bytes
+    }
+
+    fn sample(
+        failure: &mut CaptureFailure,
+        control: &mut Control,
+        out: &[u8],
+        err: &[u8],
+        eof: [bool; 2],
+        running: impl FnOnce() -> Result<bool>,
+    ) -> Result<()> {
+        let available = CaptureFailure::primary_available(control);
+        let mut stage = CaptureStage::Live;
+        let result = live_capture(out, err, eof, running, control, &mut stage);
+        failure.live_result(available, stage, result, control)
+    }
+
+    #[test]
+    fn irreversible_packet_refuses_at_ready_and_native_boundaries_without_resetting_time() {
+        let bytes = packet();
+        assert_eq!(first_packet_class(&bytes), PacketClass::Ipv4Tcp);
+        for checkpoint in ["ready", "native"] {
+            let mut control = Control::new(Instant::now()).unwrap();
+            let end = control.end();
+            control.checkpoint = checkpoint;
+            let mut failure = CaptureFailure::default();
+            assert_eq!(
+                sample(&mut failure, &mut control, &bytes, &[], [false; 2], || Ok(
+                    true
+                )),
+                Err(Error::Refused)
+            );
+            assert_eq!(control.first, Some(Error::Refused));
+            assert_eq!(control.checkpoint, "capture-data-ipv4-tcp");
+            assert_eq!(failure.primary_checkpoint(), Some("capture-data-ipv4-tcp"));
+            // A later empty snapshot cannot erase an already failed capture.
+            assert_eq!(
+                sample(
+                    &mut failure,
+                    &mut control,
+                    &[0; 24],
+                    &[],
+                    [false; 2],
+                    || Ok(true)
+                ),
+                Err(Error::Refused)
+            );
+            control.begin_recovery();
+            control.begin_settling();
+            assert_eq!(control.finish(), Err(Error::Refused));
+            assert_eq!(control.end(), end);
+        }
+    }
+
+    #[test]
+    fn startup_header_prefixes_remain_live_but_record_prefixes_irreversibly_refuse() {
+        for size in 0..=24 {
+            let mut control = Control::new(Instant::now()).unwrap();
+            let mut failure = CaptureFailure::default();
+            assert_eq!(
+                sample(
+                    &mut failure,
+                    &mut control,
+                    &vec![0; size],
+                    &[],
+                    [false; 2],
+                    || { Ok(true) }
+                ),
+                Ok(())
+            );
+            assert_eq!(control.first, None);
+            assert_eq!(failure.primary_checkpoint(), None);
+            assert_eq!(control.finish(), Ok(()));
+        }
+        let mut control = Control::new(Instant::now()).unwrap();
+        let mut failure = CaptureFailure::default();
+        assert_eq!(
+            sample(
+                &mut failure,
+                &mut control,
+                &[0; 25],
+                &[],
+                [false; 2],
+                || Ok(true)
+            ),
+            Err(Error::Refused)
+        );
+        assert_eq!(failure.primary_checkpoint(), Some("capture-data-unknown"));
+        assert_eq!(capture_output(0, &[0; 23], &[]), Some(CaptureStage::Short));
+        assert_eq!(capture_output(0, &[0; 24], &[]), None);
+        assert_eq!(capture_output(1, &[0; 24], &[]), Some(CaptureStage::Status));
+        assert_eq!(control.finish(), Err(Error::Refused));
+    }
+
+    #[test]
+    fn bounds_eof_running_and_actual_clock_fences_keep_precedence_over_packet_data() {
+        for (out, err, eof, running, expected) in [
+            (
+                vec![0; 1024 * 1024 + 1],
+                vec![],
+                [true; 2],
+                Ok(false),
+                CaptureStage::Bounds,
+            ),
+            (
+                packet(),
+                vec![0; 8193],
+                [false; 2],
+                Ok(true),
+                CaptureStage::Bounds,
+            ),
+            (
+                packet(),
+                vec![],
+                [true, false],
+                Ok(false),
+                CaptureStage::Eof,
+            ),
+            (packet(), vec![], [false; 2], Ok(false), CaptureStage::Live),
+            (
+                packet(),
+                vec![],
+                [false; 2],
+                Err(Error::Close),
+                CaptureStage::Close,
+            ),
+        ] {
+            let mut control = Control::new(Instant::now()).unwrap();
+            let mut failure = CaptureFailure::default();
+            assert!(sample(&mut failure, &mut control, &out, &err, eof, || running).is_err());
+            assert_eq!(failure.primary_checkpoint(), Some(expected.checkpoint()));
+            assert!(control.finish().is_err());
+        }
+        let mut control = Control::new(Instant::now()).unwrap();
+        control.checkpoint = "native";
+        let end = control.end();
+        assert_eq!(control.push_phase(Duration::ZERO), Err(Error::Deadline));
+        let mut failure = CaptureFailure::default();
+        assert_eq!(
+            sample(
+                &mut failure,
+                &mut control,
+                &packet(),
+                &[],
+                [false; 2],
+                || Ok(true)
+            ),
+            Err(Error::Deadline)
+        );
+        assert_eq!(failure.primary_checkpoint(), None);
+        assert_eq!(control.checkpoint, "native");
+        assert_eq!(control.first, Some(Error::Deadline));
+        control.begin_settling();
+        assert_eq!(control.finish(), Err(Error::Deadline));
+        assert_eq!(control.end(), end);
+    }
+
+    #[test]
+    fn prior_body_collector_clock_and_close_causes_cannot_become_capture_primary() {
+        for earlier in [
+            Error::Io,
+            Error::Refused,
+            Error::Bounds,
+            Error::Command,
+            Error::Deadline,
+            Error::Interrupt,
+            Error::Terminate,
+            Error::Close,
+        ] {
+            let mut control = Control::new(Instant::now()).unwrap();
+            control.checkpoint = "daemon-observe";
+            control.record(earlier);
+            let mut failure = CaptureFailure::default();
+            let _ = sample(
+                &mut failure,
+                &mut control,
+                &packet(),
+                &[],
+                [false; 2],
+                || Ok(true),
+            );
+            assert_eq!(control.first, Some(earlier));
+            assert_eq!(control.checkpoint, "daemon-observe");
+            assert_eq!(failure.primary_checkpoint(), None);
+            control.begin_recovery();
+            control.begin_settling();
+            assert_eq!(control.finish(), Err(earlier));
+        }
+    }
+
+    #[test]
+    fn recovery_still_checks_live_snapshots_and_final_refusal_survives_later_close() {
+        let mut control = Control::new(Instant::now()).unwrap();
+        let end = control.end();
+        let mut failure = CaptureFailure::default();
+        assert!(
+            sample(
+                &mut failure,
+                &mut control,
+                &packet(),
+                &[],
+                [false; 2],
+                || Ok(true)
+            )
+            .is_err()
+        );
+        control.begin_recovery();
+        let mut inspected = false;
+        assert_eq!(
+            sample(
+                &mut failure,
+                &mut control,
+                &packet(),
+                &[],
+                [false; 2],
+                || {
+                    inspected = true;
+                    Ok(true)
+                }
+            ),
+            Ok(())
+        );
+        assert!(inspected);
+        let available = CaptureFailure::primary_available(&control);
+        assert_eq!(
+            failure.live_result(
+                available,
+                CaptureStage::Live,
+                Err(Error::Close),
+                &mut control
+            ),
+            Ok(())
+        );
+        assert_eq!(failure.result(), Err(Error::Refused));
+        assert_eq!(failure.primary_checkpoint(), Some("capture-data-ipv4-tcp"));
+        assert_eq!(control.push_phase(Duration::ZERO), Err(Error::Deadline));
+        assert_eq!(
+            sample(
+                &mut failure,
+                &mut control,
+                &packet(),
+                &[],
+                [false; 2],
+                || Ok(true)
+            ),
+            Err(Error::Deadline)
+        );
+        assert_eq!(control.status, 124);
+        control.begin_settling();
+        assert_eq!(control.finish(), Err(Error::Refused));
+        assert_eq!(control.end(), end);
+    }
+
+    #[test]
+    fn first_watch_failure_during_cleanup_replaces_the_saved_success_checkpoint_only() {
+        for earlier in [None, Some(Error::Refused)] {
+            let mut control = Control::new(Instant::now()).unwrap();
+            control.checkpoint = "source-observe";
+            if let Some(error) = earlier {
+                control.record(error);
+            }
+            let saved = control.checkpoint;
+            control.begin_recovery();
+            let mut failure = CaptureFailure::default();
+            assert_eq!(
+                sample(
+                    &mut failure,
+                    &mut control,
+                    &packet(),
+                    &[],
+                    [false; 2],
+                    || Ok(true)
+                ),
+                Ok(())
+            );
+            let checkpoint =
+                super::super::super::local_checkpoint(saved, failure.primary_checkpoint());
+            assert_eq!(
+                checkpoint,
+                if earlier.is_none() {
+                    "capture-data-ipv4-tcp"
+                } else {
+                    saved
+                }
+            );
+            assert_eq!(failure.result(), Err(Error::Refused));
+            control.begin_settling();
+            assert_eq!(control.finish(), Err(Error::Refused));
+        }
+    }
+
+    #[test]
+    fn watch_owned_close_uses_before_operation_provenance_not_matching_error_values() {
+        let mut control = Control::new(Instant::now()).unwrap();
+        let mut failure = CaptureFailure::default();
+        let available = CaptureFailure::primary_available(&control);
+        // A checked watch owner may record its close error before returning it.
+        control.cleanup_failed = true;
+        control.record(Error::Close);
+        assert_eq!(
+            failure.observe_control(
+                available,
+                CaptureStage::Close,
+                Err::<(), _>(Error::Close),
+                &mut control
+            ),
+            Err(Error::Close)
+        );
+        assert_eq!(failure.primary_checkpoint(), Some("capture-close"));
+        control.begin_settling();
+        assert_eq!(control.finish(), Err(Error::Close));
     }
 }

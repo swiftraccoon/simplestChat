@@ -3147,6 +3147,16 @@ on failed receipts and rejects them on passing receipts, together with unknown
 labels and added fields. These metadata tests do not identify the previous
 timeout capture's contents or establish a successful fresh containment proof.
 
+Live monitor checks also refuse a capture as soon as they observe more than
+the 24-byte header. Such data cannot later become an empty capture, so an
+already failed monitor cannot authorize GO or continued native work. Partial
+startup headers remain admissible until finalization. Recovery continues to
+pump and record the watch while attempting known actor and network retirement
+under the original clock; final capture refusal still prevents success. An
+explicit first-capture witness preserves its checkpoint, including a first
+capture during cleanup, without equating unrelated errors with the same code.
+These checks locate observation, not packet transmission, ownership or direction.
+
 The native maintenance VM's sole user-network backend explicitly selects
 `ipv4=on,ipv6=off` before boot. SSH, its host forward, controller inventory and
 fixture services use IPv4. This disables an unused provider capability whose

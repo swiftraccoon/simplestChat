@@ -1011,8 +1011,13 @@ impl Fixture {
         )?;
         first.map_or(Ok(()), Err)
     }
-    pub fn capture_failure(&self) -> Option<(Error, &'static str)> {
-        self.monitors.lock().ok()?.watch.as_ref()?.failure()
+    pub fn primary_capture_checkpoint(&self) -> Option<&'static str> {
+        self.monitors
+            .lock()
+            .ok()?
+            .watch
+            .as_ref()?
+            .primary_checkpoint()
     }
     pub async fn finish_local(&mut self, ctx: &mut Context) -> Result<()> {
         if self.local_finished {

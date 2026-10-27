@@ -392,21 +392,8 @@ fn failed_status(status: u8) -> u8 {
     }
 }
 
-fn local_checkpoint(
-    previous: &'static str,
-    earlier: Option<Error>,
-    local: Result<()>,
-    watch: Option<(Error, &'static str)>,
-    first_after: Option<Error>,
-) -> &'static str {
-    match (earlier, local, watch, first_after) {
-        (None, Err(error), Some((watch_error, checkpoint)), Some(first))
-            if error == watch_error && first == watch_error =>
-        {
-            checkpoint
-        }
-        _ => previous,
-    }
+fn local_checkpoint(previous: &'static str, primary_capture: Option<&'static str>) -> &'static str {
+    primary_capture.unwrap_or(previous)
 }
 
 async fn transaction(ctx: &mut Context) -> Value {
@@ -420,15 +407,8 @@ async fn transaction(ctx: &mut Context) -> Value {
     let body_cleanup = fixture.finish_body(ctx).await;
     let mut cleanup = first(&mut ctx.control, body_cleanup);
     ctx.control.begin_settling();
-    let earlier = ctx.control.first;
     let local = fixture.finish_local(ctx).await;
-    checkpoint = local_checkpoint(
-        checkpoint,
-        earlier,
-        local,
-        fixture.capture_failure(),
-        ctx.control.first,
-    );
+    checkpoint = local_checkpoint(checkpoint, fixture.primary_capture_checkpoint());
     cleanup &= first(&mut ctx.control, local);
     for original in &mut ctx.originals {
         let result = original.finish(&mut ctx.control);

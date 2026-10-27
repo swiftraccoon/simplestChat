@@ -57,6 +57,9 @@ impl Control {
     pub fn body_end(&self) -> Instant {
         self.body
     }
+    pub fn is_recovering(&self) -> bool {
+        self.recovering
+    }
     pub fn phase_end(&self) -> Instant {
         let end = if self.settling {
             self.end
