@@ -7,7 +7,7 @@
 //! body error text; C-RW-VALUE borrows the mature Write interface without taking
 //! descriptor or close ownership. Reporting grants no completion authority.
 
-use super::plan::Plan;
+use super::{fetch::Timeout, plan::Plan};
 use crate::tooling::Result;
 use std::io::Write;
 
@@ -101,6 +101,7 @@ pub(super) struct Progress<'a> {
     finished: bool,
     refused: Option<(Phase, u8)>,
     material_reported: bool,
+    transport_reported: bool,
 }
 impl<'a> Progress<'a> {
     pub fn new(owner: &'a Plan, sink: &'a mut dyn Write) -> Self {
@@ -113,6 +114,7 @@ impl<'a> Progress<'a> {
             finished: false,
             refused: None,
             material_reported: false,
+            transport_reported: false,
         }
     }
     pub fn owner(&self) -> &'a Plan {
@@ -216,6 +218,37 @@ impl<'a> Progress<'a> {
                 ordinal,
                 total,
                 error.code,
+                self.owner.observed_elapsed().as_millis()
+            ),
+            false,
+        );
+    }
+    /// The fetch owner supplies this passive label only after its complete
+    /// paired captures and original failed-download owner have settled.
+    pub fn transport_timeout(
+        &mut self,
+        kind: MaterialKind,
+        ordinal: usize,
+        total: usize,
+        timeout: Option<Timeout>,
+    ) {
+        let Some(timeout) = timeout else {
+            return;
+        };
+        if self.finished || self.transport_reported || !self.material_reported {
+            return;
+        }
+        self.transport_reported = true;
+        self.emit(
+            format!(
+                concat!(
+                    "ops-hosted phase=download event=transport-timeout kind={} ",
+                    "ordinal={} total={} category={} ownerObservedElapsedMs={}\n"
+                ),
+                kind.name(),
+                ordinal,
+                total,
+                timeout.name(),
                 self.owner.observed_elapsed().as_millis()
             ),
             false,

@@ -1501,6 +1501,16 @@ those target inputs for static PIE, with Rust's bundled target CRT disabled.
 Its generated GCC specs preserve upstream musl's two blank lines after each
 empty `esp` specification, including the final one. Removing a separator can
 make GCC reject the complete specs file before preprocessing any source.
+
+The fixed musl download locator uses GitHub codeload for the unofficial
+`ifduyue/musl` mirror. Its archive was compared byte for byte with the retained
+upstream snapshot before adoption: both are 1,086,574 bytes with SHA256
+`8c16adf94bfd61358cf884353a4c0b71837ed792e7b7f056c86354436cf05bdb`.
+That complete archive pin remains the input authority; the mirror supplies
+transport. The compiled catalog retains the original archive hash, size, root
+and version and admits only this exact commit locator. Retrieval retains its HTTPS,
+connection/body deadlines and no-retry policy.
+
 OpenSSL shared libraries, dynamic loading, modules and engines are disabled.
 OpenSSL receives only the measured Linux UAPI `linux`, `asm-generic` and x86-64
 `asm` header trees alongside musl's headers; the GNU libc headers are not added
@@ -1530,6 +1540,14 @@ Progress diagnostics share a 16 KiB lifetime limit with a reserved terminal
 record. Archive imports report both edges of the first, every eighth and last
 item, leaving room for all compiler probes, the six native commands and output
 admission checkpoints.
+For an actual curl exit 28, an additional closed timeout label may describe
+what curl reported: resolution, TLS, an unspecified connection phase, operation,
+or unclassified. A connection-phase timeout does not identify TCP as the cause;
+that phase can include DNS and TLS. The label uses only the admitted original
+stderr after paired capture checks and checked finalization. Unavailable or
+late evidence yields no label. Raw stderr, URLs, addresses and error text stay
+private. This observation shares the existing diagnostic ceiling and changes
+no result, retry policy, transport setting or original time budget.
 These records report observed progress only: the last visible checkpoint does
 not identify the failed command, and a missing completion record is not proof
 that its operation failed. The terminal status remains authoritative.

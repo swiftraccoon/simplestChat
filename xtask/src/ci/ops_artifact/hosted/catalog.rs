@@ -176,11 +176,7 @@ impl Catalog {
                             "1.2.6+7813e9119eb5".to_owned(),
                             format!("musl-{MUSL_COMMIT}"),
                             format!(
-                                concat!(
-                                    "https://git.musl-libc.org/cgit/musl/snapshot/",
-                                    "musl-{}.tar.gz"
-                                ),
-                                MUSL_COMMIT
+                                "https://codeload.github.com/ifduyue/musl/tar.gz/{MUSL_COMMIT}"
                             ),
                         ),
                         "openssl" => (

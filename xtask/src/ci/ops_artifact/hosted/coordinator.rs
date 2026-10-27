@@ -482,9 +482,15 @@ async fn produce_with<E: Executor, S: Stages>(
                 MaterialKind::Catalog,
                 index + 1,
                 catalog.artifacts.len(),
-                &fetched,
+                &fetched.result,
             );
-            let (tree, name) = fetched?;
+            progress.transport_timeout(
+                MaterialKind::Catalog,
+                index + 1,
+                catalog.artifacts.len(),
+                fetched.timeout,
+            );
+            let (tree, name) = fetched.result?;
             next += 1;
             owners.downloads = Some(tree);
             material_names.push(name);
@@ -515,8 +521,9 @@ async fn produce_with<E: Executor, S: Stages>(
                 end,
             )
             .await;
-            progress.material_refused(MaterialKind::Registry, index + 1, total, &fetched);
-            let (tree, name) = fetched?;
+            progress.material_refused(MaterialKind::Registry, index + 1, total, &fetched.result);
+            progress.transport_timeout(MaterialKind::Registry, index + 1, total, fetched.timeout);
+            let (tree, name) = fetched.result?;
             next += 1;
             archive_bytes = archive_bytes
                 .checked_add(tree.records[&name].bytes)
