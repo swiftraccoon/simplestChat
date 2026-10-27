@@ -35,6 +35,49 @@ const CONNECT: Duration = Duration::from_secs(10);
 const POLL: Duration = Duration::from_millis(100);
 const CLOSE: Duration = Duration::from_secs(1);
 const CAPABILITIES: &[u8] = b"{\"execute\":\"qmp_capabilities\",\"id\":\"capabilities\"}\r\n";
+
+/// Remaining aggregate input allowance; only a completed observer can debit it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct Limits {
+    bytes: usize,
+    messages: usize,
+}
+impl Default for Limits {
+    fn default() -> Self {
+        Self {
+            bytes: MAX_BYTES,
+            messages: MAX_MESSAGES,
+        }
+    }
+}
+impl Limits {
+    fn admit(self) -> Observed<()> {
+        if self.bytes == 0 || self.bytes > MAX_BYTES {
+            return Err(Code::ByteLimit);
+        }
+        if self.messages == 0 || self.messages > MAX_MESSAGES {
+            return Err(Code::MessageLimit);
+        }
+        Ok(())
+    }
+    fn remaining(self, bytes: usize, messages: usize) -> Observed<Self> {
+        Ok(Self {
+            bytes: self.bytes.checked_sub(bytes).ok_or(Code::ByteLimit)?,
+            messages: self
+                .messages
+                .checked_sub(messages)
+                .ok_or(Code::MessageLimit)?,
+        })
+    }
+}
+
+fn socket_name(path: &Path) -> bool {
+    matches!(
+        path.file_name().and_then(OsStr::to_str),
+        Some("qmp.sock" | "qmp-restricted.sock")
+    )
+}
+
 const REASONS: &[&str] = &[
     "none",
     "host-error",
@@ -164,6 +207,7 @@ impl From<&Metadata> for Stamp {
 
 #[derive(Default)]
 struct Facts {
+    limits: Limits,
     connected: bool,
     greeting: bool,
     negotiated: bool,
@@ -182,6 +226,19 @@ struct Facts {
     cleanup_incomplete: bool,
 }
 impl Facts {
+    fn byte_limit(&self) -> Observed<()> {
+        if self.bytes > self.limits.bytes {
+            Err(Code::ByteLimit)
+        } else {
+            Ok(())
+        }
+    }
+    fn remaining(&self) -> Observed<Limits> {
+        if !self.complete() {
+            return Err(Code::ObservationIncomplete);
+        }
+        self.limits.remaining(self.bytes, self.messages)
+    }
     fn fail(&mut self, code: Code) {
         // The Python reference overwrites its code on incomplete cleanup.
         // This closed Rust shape preserves first cause and exposes that debt
@@ -193,7 +250,7 @@ impl Facts {
     }
     fn message(&mut self, raw: &[u8]) -> Observed<bool> {
         self.messages += 1;
-        if self.messages > MAX_MESSAGES {
+        if self.messages > self.limits.messages {
             return Err(Code::MessageLimit);
         }
         let message = super::super::decode(raw).map_err(|_| Code::Json)?;
@@ -313,7 +370,7 @@ impl State {
         live(Instant::now(), end)?;
         let directory = path.parent().ok_or(Code::Path)?;
         if !path.is_absolute()
-            || path.file_name() != Some(OsStr::new("qmp.sock"))
+            || !socket_name(path)
             || path.as_os_str().as_bytes().len() > MAX_PATH
             || directory.canonicalize().map_err(|_| Code::Path)? != directory
         {
@@ -593,9 +650,7 @@ async fn read(
             }
             return Ok(());
         }
-        if locked(shared).facts.bytes > MAX_BYTES {
-            return Err(Code::ByteLimit);
-        }
+        locked(shared).facts.byte_limit()?;
         pending.extend_from_slice(&buffer[..count]);
         while let Some(at) = pending.iter().position(|byte| *byte == b'\n') {
             if at > MAX_LINE {
@@ -682,6 +737,20 @@ impl Observer {
         closing: Arc<AtomicBool>,
         failure: Arc<Mutex<Option<Error>>>,
     ) -> Result<Self> {
+        Self::start_limited(path, end, health, closing, failure, Limits::default())
+    }
+    pub(super) fn start_limited(
+        path: &Path,
+        end: Instant,
+        health: Arc<AtomicBool>,
+        closing: Arc<AtomicBool>,
+        failure: Arc<Mutex<Option<Error>>>,
+        limits: Limits,
+    ) -> Result<Self> {
+        limits.admit().map_err(|code| {
+            unhealthy(&health, &failure, code.error());
+            code.error()
+        })?;
         let handle = tokio::runtime::Handle::try_current().map_err(|_| {
             unhealthy(&health, &failure, Code::Start.error());
             Code::Start.error()
@@ -691,6 +760,7 @@ impl Observer {
             unhealthy(&health, &failure, code.error());
             code.error()
         })?;
+        state.facts.limits = limits;
         if let Err(code) = live(Instant::now(), end) {
             state.fail(code);
             state.close_parent();
@@ -729,6 +799,14 @@ impl Observer {
     pub(super) fn diagnostics(&self) -> Value {
         locked(&self.shared).facts.diagnostics()
     }
+    pub(super) fn remaining(&self) -> Result<Limits> {
+        self.check()?;
+        let state = locked(&self.shared);
+        if !self.finished || self.task.is_some() {
+            return Err(Code::ObservationIncomplete.error());
+        }
+        state.facts.remaining().map_err(Code::error)
+    }
     async fn join_before(&mut self, end: Instant) -> bool {
         let Some(task) = self.task.as_mut() else {
             return locked(&self.shared).facts.task_joined;
@@ -755,24 +833,22 @@ impl Observer {
         }
     }
     pub(super) async fn finish(&mut self) -> Result<Value> {
+        self.finish_before(self.end).await
+    }
+    pub(super) async fn finish_before(&mut self, end: Instant) -> Result<Value> {
+        let end = end.min(self.end);
         if !self.finished {
-            if let Err(code) = live(Instant::now(), self.end) {
+            if let Err(code) = live(Instant::now(), end) {
                 locked(&self.shared).fail(code);
             }
-            if !self
-                .join_before(clipped(Instant::now(), CLOSE, self.end))
-                .await
-            {
+            if !self.join_before(clipped(Instant::now(), CLOSE, end)).await {
                 {
                     let mut state = locked(&self.shared);
                     state.facts.forced_stop = true;
                     state.fail(Code::ObservationIncomplete);
                 }
                 self.stop.store(true, Ordering::Release);
-                if !self
-                    .join_before(clipped(Instant::now(), CLOSE, self.end))
-                    .await
-                {
+                if !self.join_before(clipped(Instant::now(), CLOSE, end)).await {
                     locked(&self.shared).fail(Code::CleanupIncomplete);
                     if let Some(task) = self.task.take() {
                         task.abort();
@@ -786,13 +862,16 @@ impl Observer {
             let mut state = locked(&self.shared);
             state.close_stream();
             state.close_parent();
-            if let Err(code) = live(Instant::now(), self.end) {
+            if let Err(code) = live(Instant::now(), end) {
                 state.fail(code);
             }
             if !state.facts.complete() && state.facts.failure.is_none() {
                 state.fail(Code::ObservationIncomplete);
             }
             self.finished = true;
+        }
+        if let Err(code) = live(Instant::now(), end) {
+            locked(&self.shared).fail(code);
         }
         self.check()?;
         let state = locked(&self.shared);
@@ -842,6 +921,140 @@ mod tests {
             Ok(false)
         );
         facts
+    }
+    fn completed() -> Facts {
+        Facts {
+            connected: true,
+            eof: true,
+            stream_close_attempted: true,
+            stream_closed: true,
+            parent_close_attempted: true,
+            parent_closed: true,
+            task_joined: true,
+            ..negotiated()
+        }
+    }
+    #[test]
+    fn completed_epoch_debits_the_original_aggregate_allowance_without_json_authority() {
+        let mut first = completed();
+        first.bytes = MAX_BYTES - 4096;
+        first.messages = MAX_MESSAGES - 3;
+        let remaining = first.remaining().unwrap();
+        assert_eq!(
+            remaining,
+            Limits {
+                bytes: 4096,
+                messages: 3
+            }
+        );
+        let mut second = completed();
+        second.limits = remaining;
+        second.bytes = 4096;
+        second.messages = 3;
+        assert_eq!(
+            second.remaining().unwrap(),
+            Limits {
+                bytes: 0,
+                messages: 0
+            }
+        );
+        second.bytes += 1;
+        assert_eq!(second.remaining(), Err(Code::ByteLimit));
+        second.bytes -= 1;
+        second.messages += 1;
+        assert_eq!(second.remaining(), Err(Code::MessageLimit));
+        first.task_joined = false;
+        assert_eq!(first.remaining(), Err(Code::ObservationIncomplete));
+        assert!(
+            !first
+                .diagnostics()
+                .as_object()
+                .unwrap()
+                .contains_key("limits")
+        );
+    }
+    #[test]
+    fn selected_limits_bound_real_message_acceptance_and_observed_bytes() {
+        let mut facts = Facts {
+            limits: Limits {
+                bytes: 7,
+                messages: 2,
+            },
+            ..Facts::default()
+        };
+        assert_eq!(facts.message(&hello()), Ok(true));
+        facts.greeting = true;
+        assert_eq!(
+            facts.message(br#"{"return":{},"id":"capabilities"}"#),
+            Ok(false)
+        );
+        assert_eq!(
+            facts.message(br#"{"event":"OPAQUE"}"#),
+            Err(Code::MessageLimit)
+        );
+        assert_eq!(facts.messages, 3);
+        facts.bytes = 7;
+        assert_eq!(facts.byte_limit(), Ok(()));
+        facts.bytes = 8;
+        assert_eq!(facts.byte_limit(), Err(Code::ByteLimit));
+        assert_eq!(facts.diagnostics()["bytes"], 8);
+    }
+    #[test]
+    fn empty_or_widened_allowances_refuse_before_any_observer_is_started() {
+        for limits in [
+            Limits {
+                bytes: 0,
+                messages: 1,
+            },
+            Limits {
+                bytes: MAX_BYTES + 1,
+                messages: 1,
+            },
+            Limits {
+                bytes: 1,
+                messages: 0,
+            },
+            Limits {
+                bytes: 1,
+                messages: MAX_MESSAGES + 1,
+            },
+        ] {
+            let health = Arc::new(AtomicBool::new(true));
+            let failure = Arc::new(Mutex::new(None));
+            let started = Observer::start_limited(
+                Path::new("/not-opened/qmp.sock"),
+                Instant::now() + Duration::from_secs(1),
+                health.clone(),
+                Arc::new(AtomicBool::new(false)),
+                failure.clone(),
+                limits,
+            );
+            assert!(matches!(started, Err(Error::Refused)));
+            assert!(!health.load(Ordering::Acquire));
+            assert_eq!(*failure.lock().unwrap(), Some(Error::Refused));
+        }
+        assert_eq!(
+            Limits::default(),
+            Limits {
+                bytes: 65536,
+                messages: 128
+            }
+        );
+    }
+    #[test]
+    fn only_the_two_fixed_epoch_socket_basenames_are_admitted() {
+        for path in ["/owned/qmp.sock", "/owned/qmp-restricted.sock"] {
+            assert!(socket_name(Path::new(path)));
+        }
+        for path in [
+            "/owned/qmp.sock.extra",
+            "/owned/qmp-restricted.sock.extra",
+            "/owned/qmp-preparation.sock",
+            "/owned/qmp.sock/child",
+            "/",
+        ] {
+            assert!(!socket_name(Path::new(path)));
+        }
     }
     #[test]
     fn only_closed_events_are_projected_and_unknown_data_is_withheld() {

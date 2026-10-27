@@ -1,4 +1,4 @@
-//! Complete Rust outer keeper with an active frozen transitional Python guest.
+//! Rust outer keeper for the native guest and frozen installation comparisons.
 
 mod auth;
 mod catalog;
@@ -50,10 +50,10 @@ pub(super) fn run(arguments: &[String]) -> std::process::ExitCode {
         Err(_) => {
             control.record(Error::Io);
             control.settle();
-            serde_json::json!({"schemaVersion":1,
+            serde_json::json!({"schemaVersion":2,
                 "scope":"SignedMuslMaintenanceLauncherPrerequisiteKvm",
                 "scenario":options.scenario,"passed":false,"failure":"runtime",
-                "failureKind":"io","cleanupPassed":false})
+                "failureKind":"io","cleanupPassed":false,"preparationQemu":null})
         }
     };
     let _ = nix::sys::stat::umask(previous);

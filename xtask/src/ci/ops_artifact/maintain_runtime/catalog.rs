@@ -151,6 +151,7 @@ pub(super) fn sources() -> BTreeSet<String> {
         "files",
         "mod",
         "options",
+        "prepared",
         "process",
         "projection",
         "qmp",
