@@ -1,5 +1,6 @@
 //! Closed input roles. The remote directory is a fixed bootstrap namespace,
-//! not an arbitrary destination or authentication statement.
+//! beneath the executable helper ancestor, not an arbitrary destination or
+//! authentication statement. The transport caller checks the host mount policy.
 
 use super::failure;
 use crate::tooling::Result;
@@ -71,7 +72,7 @@ fn remote(path: &Path) -> bool {
         return false;
     };
     let Some(nonce) = text
-        .strip_prefix("/run/simplestchat-ops-bootstrap/")
+        .strip_prefix("/usr/local/libexec/simplestchat-ops-bootstrap/")
         .and_then(|tail| tail.strip_suffix("/input"))
     else {
         return false;

@@ -99,7 +99,8 @@ fn stat(task: &Value, path: &str, register: &str) -> Check<()> {
     )
 }
 fn delivery_contract(auth: &[Value]) -> Check<()> {
-    require(auth.len() == 28, "closed-delivery-actions")?;
+    require(auth.len() == 32, "closed-delivery-actions")?;
+    executable_bootstrap_contract(auth)?;
     for task in auth {
         default_failure(task)?;
         require(task.get("rescue").is_none(), "no-recovery-bypass")?;
@@ -191,7 +192,7 @@ fn delivery_contract(auth: &[Value]) -> Check<()> {
                     "{{ { 'schemaVersion': 1, 'selection': scpub_ops_selection, ",
                     "'artifactId': scpub_ops_artifact_id, ",
                     "'output': scpub_ops_controller ~ '/export', 'authentication': 'gh-token', ",
-                    "'remoteInput': '/run/simplestchat-ops-bootstrap/' ~ ",
+                    "'remoteInput': '/usr/local/libexec/simplestchat-ops-bootstrap/' ~ ",
                     "scpub_ops_nonce ~ '/input' ",
                     "} | combine({'installedBinary': { 'sha256': scpub_ops_old.stat.checksum, ",
                     "'bytes': scpub_ops_old.stat.size }} ",
@@ -239,7 +240,8 @@ fn delivery_contract(auth: &[Value]) -> Check<()> {
     require(
         parent["ansible.builtin.stat"]
             == json!({
-                "path":"/run/simplestchat-ops-bootstrap", "follow":false, "get_checksum":false
+                "path":"/usr/local/libexec/simplestchat-ops-bootstrap",
+                "follow":false, "get_checksum":false
             })
             && parent["register"] == "scpub_ops_parent",
         "bootstrap-stat",
@@ -254,7 +256,7 @@ fn delivery_contract(auth: &[Value]) -> Check<()> {
                     "/usr/bin/mkdir",
                     "--mode=0700",
                     "--",
-                    "/run/simplestchat-ops-bootstrap",
+                    "/usr/local/libexec/simplestchat-ops-bootstrap",
                 ],
         "absent-parent-only",
     )?;
@@ -333,6 +335,80 @@ fn delivery_contract(auth: &[Value]) -> Check<()> {
                 })
             && install["environment"]["PATH"] == "/usr/sbin:/usr/bin:/sbin:/bin",
         "first-execution-custody",
+    )
+}
+
+fn executable_bootstrap_contract(auth: &[Value]) -> Check<()> {
+    let (selection_at, _) = named(
+        auth,
+        "Match the exact maintenance revision and trusted controller paths",
+    )?;
+    let (parent_at, parent) = named(
+        auth,
+        "Inspect the fixed executable bootstrap ancestor without following links",
+    )?;
+    require(
+        parent["ansible.builtin.stat"]
+            == json!({"path":"/usr/local/libexec", "follow":false, "get_checksum":false})
+            && parent["register"] == "scpub_ops_exec_parent",
+        "executable-ancestor-stat",
+    )?;
+    let (profile_at, profile) = named(
+        auth,
+        "Require the protected existing executable bootstrap ancestor",
+    )?;
+    assertions(
+        profile,
+        &[
+            "scpub_ops_exec_parent.stat.isdir | default(false)",
+            "not (scpub_ops_exec_parent.stat.islnk | default(false))",
+            "scpub_ops_exec_parent.stat.uid == 0",
+            "scpub_ops_exec_parent.stat.gid == 0",
+            "scpub_ops_exec_parent.stat.mode == '0755'",
+        ],
+    )?;
+    let (mount_at, mount) = named(
+        auth,
+        "Read the fixed executable bootstrap ancestor mount options",
+    )?;
+    require(
+        arguments(mount)?
+            == [
+                "/usr/bin/findmnt",
+                "--noheadings",
+                "--raw",
+                "--output",
+                "OPTIONS",
+                "--target",
+                "/usr/local/libexec",
+            ]
+            && mount["register"] == "scpub_ops_exec_mount"
+            && mount["changed_when"] == false
+            && mount["timeout"] == 15,
+        "executable-mount-observation",
+    )?;
+    let (admission_at, admission) = named(
+        auth,
+        "Require one executable bootstrap mount without changing mount policy",
+    )?;
+    assertions(
+        admission,
+        &[
+            "scpub_ops_exec_mount.stdout_lines | length == 1",
+            "scpub_ops_exec_mount.stdout == (scpub_ops_exec_mount.stdout | trim)",
+            r"scpub_ops_exec_mount.stdout is match('^[^\\s,]+(,[^\\s,]+)*$')",
+            "'noexec' not in scpub_ops_exec_mount.stdout.split(',')",
+        ],
+    )?;
+    let (temporary_at, _) = named(auth, "Create a private controller evidence directory")?;
+    require(
+        selection_at == 0
+            && parent_at == selection_at + 1
+            && profile_at == parent_at + 1
+            && mount_at == profile_at + 1
+            && admission_at == mount_at + 1
+            && admission_at < temporary_at,
+        "executable-preflight-before-export",
     )
 }
 fn rendering_contract(tasks: &[Value]) -> Check<()> {
@@ -607,8 +683,15 @@ fn current_contract(document: &Value, source_document: &Value) -> Check<()> {
     require(
         credential_at < export_at
             && export_at < receipt_at
-            && receipt["ansible.builtin.set_fact"]["scpub_ops_receipt"]
-                == "{{ scpub_ops_export.stdout | from_json }}",
+            && receipt["ansible.builtin.set_fact"]
+                == json!({
+                    "scpub_ops_receipt":"{{ scpub_ops_export.stdout | from_json }}",
+                    "scpub_ops_remote":concat!(
+                        "/usr/local/libexec/simplestchat-ops-bootstrap/",
+                        "{{ scpub_ops_nonce }}"
+                    ),
+                    "cacheable":false
+                }),
         "rc-before-json",
     )?;
     let (_, base) = named(auth, "Require a private existing bootstrap parent")?;
@@ -1357,7 +1440,9 @@ fn request_types_private_rendering_and_fresh_transport_cannot_be_weakened() {
     );
     delivery["block"].as_array_mut().unwrap().push(json!({
         "name":"Delete unknown bootstrap state",
-        "ansible.builtin.file":{"path":"/run/simplestchat-ops-bootstrap", "state":"absent"}
+        "ansible.builtin.file":{
+            "path":"/usr/local/libexec/simplestchat-ops-bootstrap", "state":"absent"
+        }
     }));
     assert!(current_contract(&changed, &source).is_err());
     for (name, field, value) in [
@@ -1506,6 +1591,101 @@ fn docker_context_admits_only_the_two_fixed_legacy_yaml_inputs() {
     );
     assert_ne!(unlisted, text);
     assert!(reference_context_contract(&unlisted).is_err());
+}
+
+#[test]
+fn executable_bootstrap_preflight_and_fixed_namespace_cannot_be_bypassed() {
+    let (caller, source) = original_documents();
+    assert!(current_contract(&caller, &source).is_ok());
+    let names = [
+        "Inspect the fixed executable bootstrap ancestor without following links",
+        "Require the protected existing executable bootstrap ancestor",
+        "Read the fixed executable bootstrap ancestor mount options",
+        "Require one executable bootstrap mount without changing mount policy",
+    ];
+    for name in names {
+        for (field, value) in [
+            ("when", json!(false)),
+            ("ignore_errors", json!(true)),
+            ("failed_when", json!(false)),
+        ] {
+            let mut changed = caller.clone();
+            auth_task_mut(&mut changed, name)[field] = value;
+            assert!(
+                current_contract(&changed, &source).is_err(),
+                "{name}: {field}"
+            );
+        }
+        let mut changed = caller.clone();
+        let delivery = task_mut(
+            &mut changed,
+            "pre_tasks",
+            "Deliver the signed current Ops executable through native policy",
+        );
+        let tasks = delivery["block"].as_array_mut().unwrap();
+        let (at, _) = named(tasks, name).unwrap();
+        tasks.remove(at);
+        assert!(
+            current_contract(&changed, &source).is_err(),
+            "missing {name}"
+        );
+    }
+    for (name, count) in [(names[1], 5), (names[3], 4)] {
+        for index in 0..count {
+            let mut changed = caller.clone();
+            auth_task_mut(&mut changed, name)["ansible.builtin.assert"]["that"][index] =
+                json!(true);
+            assert!(
+                current_contract(&changed, &source).is_err(),
+                "{name}: {index}"
+            );
+        }
+    }
+    for argv in [
+        json!([
+            "/usr/bin/findmnt",
+            "--output",
+            "TARGET",
+            "/usr/local/libexec"
+        ]),
+        json!([
+            "/usr/bin/findmnt",
+            "--output",
+            "OPTIONS",
+            "--target",
+            "/run"
+        ]),
+        json!(["/usr/bin/mount", "-o", "remount,exec", "/run"]),
+    ] {
+        let mut changed = caller.clone();
+        auth_task_mut(&mut changed, names[2])["ansible.builtin.command"]["argv"] = argv;
+        assert!(current_contract(&changed, &source).is_err());
+    }
+    let mut changed = caller.clone();
+    auth_task_mut(&mut changed, names[0])["ansible.builtin.stat"]["follow"] = json!(true);
+    assert!(current_contract(&changed, &source).is_err());
+    let mut changed = caller.clone();
+    let delivery = task_mut(
+        &mut changed,
+        "pre_tasks",
+        "Deliver the signed current Ops executable through native policy",
+    );
+    let tasks = delivery["block"].as_array_mut().unwrap();
+    let (admission, _) = named(tasks, names[3]).unwrap();
+    let (export, _) = named(
+        tasks,
+        "Authenticate and export the exact signed pair through Rust",
+    )
+    .unwrap();
+    tasks.swap(admission, export);
+    assert!(current_contract(&changed, &source).is_err());
+    let mut changed = caller.clone();
+    auth_task_mut(
+        &mut changed,
+        "Read the current receipt only after actual native command success",
+    )["ansible.builtin.set_fact"]["scpub_ops_remote"] =
+        json!("/run/simplestchat-ops-bootstrap/{{ scpub_ops_nonce }}");
+    assert!(current_contract(&changed, &source).is_err());
 }
 
 /// Exercise GNU tar itself; structural argv equality cannot detect conflicting flags.

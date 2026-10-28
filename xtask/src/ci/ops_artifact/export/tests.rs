@@ -20,7 +20,7 @@ fn wire(fixture: &Fixture) -> Value {
     let mut wire = fixture.wire.clone();
     wire["output"] = json!(fixture.root.join("exported"));
     wire["remoteInput"] = json!(format!(
-        "/run/simplestchat-ops-bootstrap/{}/input",
+        "/usr/local/libexec/simplestchat-ops-bootstrap/{}/input",
         "a".repeat(32)
     ));
     wire
@@ -196,11 +196,29 @@ fn request_closes_optional_custody_remote_namespace_and_all_numeric_and_path_nei
     }
     for remote in [
         "/run/other/input".to_owned(),
-        format!("/run/simplestchat-ops-bootstrap/{}/input", "A".repeat(32)),
-        format!("/run/simplestchat-ops-bootstrap/{}/input", "a".repeat(31)),
-        format!("/run/simplestchat-ops-bootstrap/{}/input/", "a".repeat(32)),
+        format!("/run/simplestchat-ops-bootstrap/{}/input", "a".repeat(32)),
         format!(
-            "/run/simplestchat-ops-bootstrap/{}/../input",
+            "/usr/local/libexec/simplestchat-public/bootstrap/{}/input",
+            "a".repeat(32)
+        ),
+        format!(
+            "/usr/local/libexec/simplestchat-ops-bootstrap-other/{}/input",
+            "a".repeat(32)
+        ),
+        format!(
+            "/usr/local/libexec/simplestchat-ops-bootstrap/{}/input",
+            "A".repeat(32)
+        ),
+        format!(
+            "/usr/local/libexec/simplestchat-ops-bootstrap/{}/input",
+            "a".repeat(31)
+        ),
+        format!(
+            "/usr/local/libexec/simplestchat-ops-bootstrap/{}/input/",
+            "a".repeat(32)
+        ),
+        format!(
+            "/usr/local/libexec/simplestchat-ops-bootstrap/{}/../input",
             "a".repeat(32)
         ),
     ] {

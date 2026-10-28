@@ -103,6 +103,22 @@ retained-descriptor execution against a hostile root. The controller build and
 GitHub client are caller-trusted prerequisites. Bootstrap/export and maintenance
 retain their separate original budgets and protected evidence directories.
 
+The controller accepts only the fixed executable bootstrap input namespace
+`/usr/local/libexec/simplestchat-ops-bootstrap/<32 lowercase hex>/input`.
+The previous `/run` prefix is refused: hardened hosts can mount `/run` with
+`noexec`, and changing that protection is not part of delivery. Before credentials
+or authenticated export, the caller checks the existing root-owned 0755
+`/usr/local/libexec` final directory without following links and requires one
+well-formed `findmnt --output OPTIONS` line without a `noexec` token. It never
+remounts a filesystem. The private 0700 base remains a sibling of the canonical
+installation directory; native installer inputs under that managed destination
+remain refused. The signed Ops installer already accepts these protected
+absolute input paths; this is a trusted controller/caller compatibility change,
+not a signed Ops API or mount-policy relaxation. Separate observations still
+depend on trusted root/SSH keepers, not atomic namespace or mount isolation.
+Per-attempt evidence now persists across reboot; no automatic retirement,
+aggregate disk quota or lifetime bound is introduced.
+
 Successful application staging retains its original verified predicate without
 reserializing it or replacing different existing evidence. Before Ops export,
 the caller joins its repository, revision, CI run and attempt to the typed Ops
