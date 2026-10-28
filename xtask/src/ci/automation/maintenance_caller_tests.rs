@@ -1,5 +1,6 @@
 //! Current native caller contracts, including passive staged-identity custody.
-//! This does not execute Ansible/Jinja, SSH, authentication, tar or maintenance.
+//! A Linux test executes fixed GNU tar extraction; no Ansible/Jinja, SSH,
+//! authentication, candidate executable or maintenance runs here.
 use serde_json::{Value, json};
 
 type Check<T> = Result<T, &'static str>;
@@ -659,7 +660,6 @@ fn current_contract(document: &Value, source_document: &Value) -> Check<()> {
                     "--keep-old-files",
                     "--no-same-owner",
                     "--no-same-permissions",
-                    "--no-overwrite-dir",
                     "--no-wildcards",
                     "--",
                     "ops-release.json",
@@ -1506,4 +1506,181 @@ fn docker_context_admits_only_the_two_fixed_legacy_yaml_inputs() {
     );
     assert_ne!(unlisted, text);
     assert!(reference_context_contract(&unlisted).is_err());
+}
+
+/// Exercise GNU tar itself; structural argv equality cannot detect conflicting flags.
+#[cfg(target_os = "linux")]
+#[tokio::test]
+async fn gnu_tar_fixed_transport_extracts_and_refuses_existing_members() {
+    use simplestchat_ops::owned_process::{Group, exited_now, finish_before, reserved};
+    use std::{
+        fs,
+        io::Write,
+        os::unix::{
+            fs::{DirBuilderExt, MetadataExt, OpenOptionsExt},
+            process::CommandExt,
+        },
+        process::{Command, ExitStatus, Stdio},
+        sync::atomic::{AtomicU64, Ordering},
+        time::{Duration, Instant},
+    };
+
+    // One interval includes YAML parsing, fixture preparation and both owned children.
+    let end = Instant::now() + Duration::from_secs(30);
+    let body = end - Duration::from_secs(5);
+    async fn invoke(arguments: &[std::ffi::OsString], body: Instant, end: Instant) -> ExitStatus {
+        assert!(Instant::now() < body, "original tar body deadline");
+        let child = Command::new(&arguments[0])
+            .args(&arguments[1..])
+            .env_clear()
+            .env("PATH", "/usr/bin:/bin")
+            .env("LC_ALL", "C")
+            .process_group(0)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+        let mut group = Group::new(child);
+        let pid = group.pid();
+        let observed = loop {
+            match exited_now(pid) {
+                Ok(true) => break true,
+                Ok(false) if Instant::now() < body => {
+                    tokio::time::sleep(Duration::from_millis(5)).await;
+                }
+                _ => break false,
+            }
+        };
+        // Do not timeout/drop a disarmed wait: settle this exact reservation first.
+        let retired = finish_before(pid, end).await;
+        let reaped = group.reap().await;
+        assert!(observed && retired && !reserved(pid));
+        let status = reaped.unwrap();
+        assert!(Instant::now() < end, "original tar cleanup deadline");
+        status
+    }
+
+    let (caller, _) = original_documents();
+    let (_, delivery) = named(
+        sequence(&caller[0]["pre_tasks"]).unwrap(),
+        "Deliver the signed current Ops executable through native policy",
+    )
+    .unwrap();
+    let (_, extract) = named(
+        sequence(&delivery["block"]).unwrap(),
+        "Extract only the three fixed members into the fresh private directory",
+    )
+    .unwrap();
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    let root = std::env::temp_dir().canonicalize().unwrap().join(format!(
+        "simplestchat-maintenance-tar-{}-{}",
+        std::process::id(),
+        NEXT.fetch_add(1, Ordering::Relaxed),
+    ));
+    fs::DirBuilder::new().mode(0o700).create(&root).unwrap();
+    let input = root.join("input");
+    fs::DirBuilder::new().mode(0o700).create(&input).unwrap();
+    let archive = root.join("ops-pair.tar");
+    let members: [(&str, &[u8]); 3] = [
+        ("ops-release.json", b"{\"fixture\":\"manifest\"}\n"),
+        ("ops-selection.json", b"{\"fixture\":\"selection\"}\n"),
+        ("simplestchat-ops", b"INERT_BINARY_BYTES\0\xff"),
+    ];
+    let mut tar = tar::Builder::new(Vec::new());
+    for (name, bytes) in members {
+        let mut header = tar::Header::new_ustar();
+        header.set_mode(0o600);
+        header.set_uid(0);
+        header.set_gid(0);
+        header.set_mtime(0);
+        header.set_size(bytes.len() as u64);
+        header.set_entry_type(tar::EntryType::Regular);
+        header.set_cksum();
+        tar.append_data(&mut header, name, bytes).unwrap();
+    }
+    let bytes = tar.into_inner().unwrap();
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(&archive)
+        .unwrap();
+    file.write_all(&bytes).unwrap();
+    nix::unistd::close(file).unwrap();
+    let mut replaced = [0, 0];
+    let arguments = arguments(extract)
+        .unwrap()
+        .into_iter()
+        .map(|argument| match argument {
+            "{{ scpub_ops_remote }}/ops-pair.tar" => {
+                replaced[0] += 1;
+                archive.clone().into_os_string()
+            }
+            "{{ scpub_ops_remote }}/input" => {
+                replaced[1] += 1;
+                input.clone().into_os_string()
+            }
+            literal => std::ffi::OsString::from(literal),
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(replaced, [1, 1]);
+    assert_eq!(arguments[0], "/usr/bin/tar");
+    let first = invoke(&arguments, body, end).await;
+    let first_files = members.map(|(name, expected)| {
+        let path = input.join(name);
+        let metadata = fs::symlink_metadata(&path);
+        let data = fs::read(&path);
+        (name, expected, metadata, data)
+    });
+    // This independent edit makes a silent overwrite observable, rather than
+    // accepting equal archive bytes as evidence that keep-old-files worked.
+    fs::write(input.join("ops-release.json"), b"EXISTING_PRIVATE_SENTINEL").unwrap();
+    let before = members.map(|(name, _)| {
+        let path = input.join(name);
+        let metadata = fs::symlink_metadata(&path).unwrap();
+        (
+            metadata.dev(),
+            metadata.ino(),
+            metadata.mode(),
+            fs::read(path).unwrap(),
+        )
+    });
+    let second = invoke(&arguments, body, end).await;
+    let after = members.map(|(name, _)| {
+        let path = input.join(name);
+        let metadata = fs::symlink_metadata(&path).unwrap();
+        (
+            metadata.dev(),
+            metadata.ino(),
+            metadata.mode(),
+            fs::read(path).unwrap(),
+        )
+    });
+    let mut names = fs::read_dir(&input)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect::<Vec<_>>();
+    names.sort();
+    // Remove only this fixture's fixed files; unknown additions refuse cleanup.
+    for (name, _) in members {
+        fs::remove_file(input.join(name)).unwrap();
+    }
+    fs::remove_file(archive).unwrap();
+    fs::remove_dir(input).unwrap();
+    fs::remove_dir(root).unwrap();
+    assert_eq!(first.code(), Some(0));
+    for (_, expected, metadata, data) in first_files {
+        let metadata = metadata.unwrap();
+        assert!(metadata.is_file() && metadata.nlink() == 1);
+        assert_eq!(metadata.mode() & 0o7777, 0o600);
+        assert_eq!(data.unwrap(), expected);
+    }
+    assert_eq!(
+        names,
+        members.map(|(name, _)| std::ffi::OsString::from(name))
+    );
+    assert_eq!(second.code(), Some(2));
+    assert_eq!(before, after);
+    assert!(Instant::now() < end);
 }
