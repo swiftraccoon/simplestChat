@@ -5,13 +5,16 @@ Docker/OCI image archives, and inspects local executable identities. Its product
 release builder can invoke the selected local Git and Docker tools to build or
 export an unsigned image. Local unsigned artifact preparation can write a new
 private directory, as described below. Python remains the reference implementation
-and the installed release runtime. A separate read-only
+and retains application staging, routine app-only release and other keeper roles.
+Prepared-host maintenance has the explicit native caller described below.
+A separate read-only
 release preflight checks the fixed host paths without executing installed helpers.
 The browser-asset transaction commands described below can mutate only the fixed
 managed asset store while holding the existing workload lock.
-The separate Ops first-install command publishes one original-pinned executable
-at its fixed helper path. The authenticated Debian runtime owner exercises that
-operation in a disposable guest; installed Python callers retain their roles.
+The separate Ops install/upgrade commands publish one original-pinned executable
+at its fixed helper path. The prepared maintenance caller authenticates its
+delivery through the native controller before that executable runs. Existing
+Python files remain frozen; this is not a repository-wide runtime cutover.
 
 ```sh
 cargo run --locked -q -p simplestchat-ops -- release manifest --path /path/to/release.json
@@ -71,15 +74,16 @@ Its default graph excludes the server, mediasoup and native TLS; capacity logic
 is shared with the load-test crate. The manual argument parser follows `xtask`
 for this small command surface and avoids adding a CLI framework dependency.
 
-No binary is installed by Ansible or added to the production image. Host
-execution requires a separate attested operations artifact, an inspected static
-`x86_64-unknown-linux-musl` build, harmless CLI checks on Debian 13, and
-controller-side verification before any installed binary executes. Static CRT
-selection alone does not prove the final binary's dependencies; inspect the
-result as the [Rust linkage reference](https://doc.rust-lang.org/reference/linkage.html#static-and-dynamic-c-runtimes)
-recommends. The existing signed server artifact and its ten-file contract stay
-unchanged. Python's controller-supplied preflight remains the bootstrap trust
-boundary until binary provenance, ABI and installation ownership are established.
+The prepared maintenance playbook installs or upgrades the separate attested
+Ops artifact at its fixed host helper path; it adds no binary to the production
+image. Host execution requires the inspected static
+`x86_64-unknown-linux-musl` build, Debian 13 runtime evidence and current
+controller-side authentication before candidate execution. Static CRT selection
+alone does not prove the final binary's dependencies; the
+[linkage reference](https://doc.rust-lang.org/reference/linkage.html#static-and-dynamic-c-runtimes)
+describes that distinction. The signed server artifact and its ten-file contract
+stay unchanged. Existing Ansible/SSH, controller/client/toolchain and root host
+trust remain explicit keepers, not properties established by artifact JSON.
 
 ## Production release build and export
 
@@ -2461,10 +2465,11 @@ intended for dedicated synchronous use outside an entered Tokio runtime. The
 [affected API review](../docs/release-stage-api-review.md) records private
 ownership, parser boundaries and the named reference differences.
 
-The unchanged Python stage action, deployment/force/maintenance controllers,
-Ansible jobs, prepared-helper preflight and authenticated Ops bootstrap remain
-operational. First installation and identical repeat are distinct from an Ops
-upgrade. Source implementation and inert fixtures do not establish Docker
+Python staging, routine deployment/force callers and prepared-helper preflight
+retain their roles. Prepared maintenance has the separate authenticated
+[native caller](#explicit-prepared-host-maintenance). First installation and
+identical repeat remain distinct from an explicit Ops upgrade.
+Source implementation and inert fixtures do not establish Docker
 execution, signed musl readiness, measured caller budgets or a production switch.
 The separate free Debian KVM proof must authenticate both artifact contracts,
 execute the installed native stage first/repeat and check original publication,
@@ -2508,13 +2513,14 @@ failure can invalidate an earlier complete report or leave partial stdout.
 Private evidence remains protected and may contain command output/configuration;
 reports must be shared only under the existing operator privacy policy.
 
-The installed Python runtime, operational callers, maintenance and authenticated
-upgrade/bootstrap remain unchanged. Source/oracle checks do not prove actual
+The standalone app-only caller retains its Python runtime. Prepared maintenance
+and its authenticated bootstrap are described separately below. Source/oracle
+checks do not prove actual
 Docker/DB/Caddy/TLS or signed-musl host execution. The complete 97-case comparison
 against unchanged Python passed locally in 365.12 test seconds, using real private
 files, locks and owned inert children with inert service replies. The corrected
 ordinary Ops suite passed 484 tests. The new VM fixture has 23 passing inert tests;
-its actual signed-musl host runtime remains unrun. See the
+its standalone app-only signed-musl host runtime remains unrun. See the
 [affected API review](../docs/release-deploy-api-review.md) for ownership,
 accepted profiles, the inherited-stdio SDK close exception and validation scope.
 
@@ -2612,8 +2618,14 @@ fixture observations remain separate. A nonzero final process exit invalidates
 any earlier report. The affected API and ownership decisions are in the
 [maintenance review](../docs/release-maintain-api-review.md).
 
-The source route alone does not change an installed Ansible caller or
-establish authenticated executable delivery. `distribution install` retains its
+The supported prepared-host caller is the direct maintenance playbook, after
+signed application staging and a caller-trusted controller build before
+credentials. The [operator sequence](ansible/RELEASES.md#prepare-the-controller-before-credentials)
+specifies the breaking typed-input migration; the frozen deployment wrapper
+cannot supply these Ops inputs. This caller transition does not replace the
+Python staging, app-only deployment or reference routes.
+
+`distribution install` retains its
 schema 1 first-install/exact-repeat contract. Explicit `distribution upgrade`
 uses schema 2 with `installedBinary {sha256, bytes}` as expected-old custody.
 It verifies and atomically exchanges only that known original under the actual
@@ -2631,3 +2643,22 @@ final custody checks. Actual exit 0, current verification and original files mus
 all agree; saved JSON does not construct authentication authority. The transfer's
 binary remains 0600 until a trusted receiver verifies its pins and makes the
 controlled executable transition.
+
+After the existing signed application stage succeeds, its keeper retains the
+original verified predicate beside the staged manifest, refusing different
+existing bytes. Before Ops export, the caller joins that predicate's repository,
+revision, run and attempt to the typed Ops selection and joins its manifest hash
+to the actual staged `release.json`. These are passive custody and intent checks;
+the completed application verifier and current native Ops verifier remain the
+authentication authorities. Root/controller/SSH remain trusted keepers.
+
+The thin Ansible caller keeps only existing transport operations: private
+nonce creation, SSH copy, pre-parser transfer and pre-execution binary byte
+joins, fixed-member extraction, candidate install/upgrade and canonical
+`release maintain` invocation. Signature, selection, request, installation,
+deadline and cleanup policy remains in Rust. Expected-old host pins describe
+custody, never historical authentication. Ansible's separate stat/chmod/exec
+calls do not establish retained-FD atomic execution against an adversarial
+root. Bootstrap inputs are deliberately retained in private per-attempt
+directories, with no automatic retirement. The operator guide states the
+payload bounds, disk and reboot qualifications.

@@ -29,9 +29,10 @@ cargo run --locked -q -p simplestchat-ops -- release manifest --path /path/to/re
 ```
 
 This validates metadata only; it does not authenticate an image archive or
-signature and cannot authorize deployment. It starts no host operation. The
-Python release commands below remain the supported runtime. No operations
-binary is installed on the host or included in the production image yet.
+signature and cannot authorize deployment. It starts no host operation.
+Application staging and routine app-only releases retain their Python
+runtime. Prepared-host maintenance uses the separately authenticated Ops
+executable described below; it is not part of the production image.
 
 The same tool can inspect the original uncompressed image archive against that
 validated manifest without extracting, loading or running it:
@@ -47,7 +48,7 @@ which may contain private environment values. This checks transfer integrity
 and the existing Docker/OCI metadata policy; it does not authenticate signatures,
 validate filesystem-layer contents independently or authorize deployment. The
 [archive domain and resource limits](../README.md#offline-image-archives) are
-explicit. Python remains the supported release runtime.
+explicit. Diagnostic inspection does not change the selected runtime route.
 
 ## Browser assets across replacement and rollback
 
@@ -59,18 +60,11 @@ that predates retention. HTML always revalidates with `no-cache, no-store,
 must-revalidate`; `/app-version.json` is uncached selected-revision metadata.
 The browser offers an explicit update action and does not reload an active call.
 
-Install the stable proxy capability once on an existing site, during an explicitly
-selected maintenance window:
+Install the stable proxy capability once on an existing site through the
+[direct maintenance workflow](#schema-and-configuration-changes-the-maintenance-release),
+setting the typed boolean `scpub_browser_assets_upgrade` to `true`.
 
-```sh
-python3 build/deploy.py \
-  --inventory ops/ansible/inventory.local.yml \
-  --repository OWNER/REPOSITORY \
-  --origin https://chat.example.com \
-  --install-helpers --maintenance --browser-assets-upgrade
-```
-
-This flag stages the candidate Compose and Caddyfile, compares the Caddyfile with
+This choice stages the candidate Compose and Caddyfile, compares the Caddyfile with
 the exact release Git object, validates it using the already pinned running
 Caddy binary, and permits only the fixed readonly public-store mount in the
 resolved Compose change. The app and proxy stop for the normal maintenance
@@ -215,13 +209,12 @@ matching repository/revision, source input and migration hashes, successful buil
 evidence, archive digest, production image identity, and packaged migrations are
 still required. The host rechecks the transferred bytes and uses the same workload
 lock, checked backup, readiness, application rollback, and database/proxy continuity
-checks. Schema changes still require the separate explicit `--maintenance` option;
-failed maintenance retains its selection for inspection instead of rolling back a
-possibly changed schema. No failed operation is retried automatically.
-
-`--force --maintenance` requires clean HEAD to equal the published `origin/main`
-tip, checked before building or staging, because the maintenance launcher fetches
-that source revision. App-only `--force` supports unpushed commits.
+checks. Schema and configuration changes require the separate
+[direct maintenance workflow](#schema-and-configuration-changes-the-maintenance-release),
+which requires a signed Ops artifact. The frozen wrapper
+`--force --maintenance` route does not supply its required inputs.
+App-only `--force` supports unpushed commits. No failed operation is retried
+automatically.
 
 Controller and host outcomes record `forced: true`, `githubAttested: false`, and
 `ciVerification: skipped-explicit-force`. This does not certify CI, image scanning,
@@ -408,79 +401,244 @@ public message and verifies two guest connections; it does not test media.
 ## Schema and configuration changes: the maintenance release
 
 An app-only deployment refuses a candidate whose packaged migrations differ from
-the database ledger. When the candidate adds migrations (or the runtime grants
-changed), release it through the maintenance launcher instead:
+the database ledger. For migrations, runtime grants, supported settings changes
+or the browser-asset proxy transition, use the direct playbook sequence below on
+an already provisioned public host. Run one release, helper update or maintenance
+operation at a time. Deployment identity changes still require the separate
+[public deployment workflow](PUBLIC.md).
+
+This is a breaking maintenance caller change. The frozen `build/deploy.py` /
+`build/release_deploy.py` wrapper supplies none of the new Ops inputs; its
+`--maintenance` and `--force --maintenance` routes cannot drive this contract.
+Use the direct playbooks below. Routine app-only and explicit force app-only
+releases keep their existing entry points. This maintenance path requires a
+signed Ops artifact and has no unsigned force bootstrap fallback. Existing
+Python remains in application staging, Ansible and retained reference helpers.
+
+### Prepare the controller before credentials
+
+Use the caller-trusted checkout and pinned toolchain. Build the default `xtask`
+before obtaining or providing GitHub credentials. For an arm64 macOS controller:
 
 ```sh
-ops/ansible/.venv/bin/python build/deploy.py --inventory ops/ansible/inventory.local.yml \
-  --repository OWNER/REPOSITORY --origin https://chat.example.com \
-  --limit public_vps --quiet-seconds 0 --maintenance
+/usr/bin/env -u GH_TOKEN -u GITHUB_TOKEN cargo build --locked -p xtask --bin xtask \
+  --target aarch64-apple-darwin --target-dir target/native-maintenance-controller
 ```
 
-Add `--install-helpers` after reviewing helper changes when the installed helpers
-do not match this checkout.
+On an x86_64 GNU/Linux controller use `--target x86_64-unknown-linux-gnu` instead.
+The resulting executable is
+`target/native-maintenance-controller/<target>/debug/xtask`; supply its absolute
+path below. The explicit target directory avoids relying on an older default
+build. The caller trusts the checkout, compiler and resulting controller; the
+playbook does not establish their provenance.
 
-Migration `022_require_current_sessions.sql` deliberately deletes all existing
-refresh sessions before requiring a nonnullable refresh-family hash. Release it
-through this maintenance path: every signed-in client must sign in once afterward.
-Accounts, passwords, passkeys, recovery keys and room memberships remain intact.
-There is no compatibility parser for older refresh formats or sessionless access
-tokens. Review this sign-in impact alongside the usual pre-release backup; do not
-edit the already-published migrations 010 or 013 to avoid the reset.
+Select an absolute caller-trusted GitHub CLI **2.102.0** executable whose canonical
+basename is `gh`. Its version check is separate from trusting the client binary.
+Put that executable's directory first on `PATH` for application staging. After
+the source build, authenticate it with `gh auth login --hostname github.com`, or
+provide `GH_TOKEN` to the playbook. The maintenance caller uses `GH_TOKEN` when
+supplied and otherwise reads the user's token through the selected `gh` client;
+it never sends that token to the host. Existing controller Python and pinned
+[Ansible dependencies](README.md) are still required.
 
-By default, the controller waits for the commit's CI and stages the image while
-chat stays online, exactly as a routine release does, then runs
-`ops/ansible/maintenance.yml`:
-it checks out the revision's source under `/srv/simplestchat-bench/sources/`
-(the launcher checks the packaged SQL against it), renders `app.env.candidate`
-from the current template with the host's facts (sizing and new settings may
-change; the secrets, the origin, the address, the image and `RUN_MIGRATIONS`
-may not, or the helper refuses it before the backup), renders the runtime
-grants, and runs `release-public.py maintain <commit> --candidate-env …` as a
-transient unit. That action requires the applied ledger to be a prefix of the
-candidate's packaged migrations, takes the live dump with its receipt, stops
-the app and then the proxy (Caddy's grace period would otherwise wait on the
-app's sockets), installs the candidate configuration with the new image
-(`outcome.json` lists the changed keys as `environmentChanges`), and hands
-over to `/usr/local/bin/simplestchat-public-deploy`,
-which migrates, applies the grants, restarts the app and the proxy, and keeps
-its own evidence under `results/deploy.*`. The helper then requires the staged
-image to be running on the same database container with the candidate's
-ledger, and records `interruptionStartedAt`/`FinishedAt` in its `outcome.json`
-(about 10 s on 2026-09-28). A failed launcher keeps the new selection and the
-stopped containers for inspection: the schema may already have moved, so there
-is no automatic rollback. Do not rerun `maintain` against stopped services: its
-preflight expects a live application. Inspect the failed release and launcher
-`outcome.json`, selected configuration, migration ledger and retained migration
-container. After resolving the recorded cause and establishing that no migration
-is still running, use the explicit bounded launcher command in
-[PUBLIC.md](PUBLIC.md#deploy-explicitly) to finish the selected deployment. The
-launcher refuses a retained migration container until its state has been reviewed
-and recovered. Preserve its evidence; deleting the journal or blindly removing
-containers does not establish a safe retry. A later successful launcher does not
-change the original failed release outcome.
+### Select both signed artifacts explicitly
 
-A settings-only maintenance can reuse the selected image when the candidate
-environment has validated changes. An identical image and unchanged configuration
-are refused before backup or interruption. `backupMigrations` in the release
-outcome records the applied ledger before migration separately from the target
-revision; restore verification checks the archive against that older ledger.
-Every restore requires this recorded ledger. Development evidence created before
-this contract is rejected; the verifier does not substitute the target schema.
+Choose one reviewed revision and its successful main-push CI **run and attempt**.
+Select the application and Ops artifact IDs from that exact run, rather than
+using the latest artifact or treating the two IDs as interchangeable:
 
-Pass `--install-helpers` whenever `release_public.py` changed, as for any release.
+```sh
+gh api repos/swiftraccoon/simplestChat/actions/runs/CI_RUN_ID/attempts/RUN_ATTEMPT \
+  --jq '{id, run_attempt, head_sha, event, conclusion}'
+gh api repos/swiftraccoon/simplestChat/actions/runs/CI_RUN_ID/artifacts \
+  --jq '.artifacts[] | {id, name, expired}'
+```
+
+The signed application name is `simplestchat-production-REVISION`; the separate
+Ops name is `simplestchat-ops-REVISION-x86_64-unknown-linux-musl`. API listings
+help select coordinates; the subsequent current signature verification is still
+required. Re-run attempts are distinct identities even for the same commit.
+
+Create an owner-readable `maintenance-vars.json` outside version control. Replace
+every uppercase placeholder below before execution. IDs, `buildRunId` and
+`runAttempt` must be unquoted JSON integers, never strings or booleans. The native
+decoder preserves and checks those distinctions; the playbook does not coerce
+them. The template uses the current workspace package version `0.1.0`; update it
+only to the version actually declared by the selected checkout and signed Ops
+distribution. The repository, protocol and target are the current supported
+export profile.
+
+```json
+{
+  "scpub_release_repository": "swiftraccoon/simplestChat",
+  "scpub_release_artifact_id": APPLICATION_ARTIFACT_ID,
+  "scpub_release_expected_revision": "REVISION_40_LOWERCASE_HEX",
+  "scpub_release_ci_run": CI_RUN_ID,
+  "scpub_release_deploy": false,
+  "scpub_release_revision": "REVISION_40_LOWERCASE_HEX",
+  "scpub_ops_xtask": "/absolute/controller/target/native-maintenance-controller/TARGET/debug/xtask",
+  "scpub_ops_gh_executable": "/absolute/trusted/bin/gh",
+  "scpub_ops_artifact_id": OPS_ARTIFACT_ID,
+  "scpub_ops_selection": {
+    "repository": "swiftraccoon/simplestChat",
+    "revision": "REVISION_40_LOWERCASE_HEX",
+    "packageVersion": "0.1.0",
+    "protocolVersion": 1,
+    "target": "x86_64-unknown-linux-musl",
+    "buildRunId": CI_RUN_ID,
+    "runAttempt": RUN_ATTEMPT
+  },
+  "scpub_browser_assets_upgrade": false
+}
+```
+
+Keep the existing reviewed inventory and its host-key/SSH settings. The selected
+revision must match in both contracts and contain this maintenance implementation.
+Do not combine a newer caller with an older signed Ops executable lacking it.
+The expected installed binary's digest and length are collected from the fixed
+host path only as custody for a possible replacement; they do not authenticate
+the old binary or establish its signing history.
+
+### Stage, then run native maintenance
+
+Stage the signed application while chat stays online:
+
+```sh
+ANSIBLE_CONFIG=ops/ansible/ansible.cfg \
+  ops/ansible/.venv/bin/ansible-playbook \
+  -i ops/ansible/inventory.local.yml ops/ansible/release.yml \
+  -e @maintenance-vars.json
+```
+
+`scpub_release_deploy: false` is the existing stage-only interface; there is no
+`build/deploy.py --stage-only` option. The release playbook independently verifies
+the selected application artifact and its exact CI provenance. Omitting prepared
+mode reconciles the existing release helpers without stopping chat. On later
+attempts, add `-e scpub_release_prepared=true` only when those helpers match this
+checkout; a mismatch refuses instead of silently reusing them. A successful
+stage does not run maintenance.
+
+Successful signed staging also retains the original verified
+`release-predicate.json` beside the staged manifest, as root:root 0600.
+An existing retained predicate must have the exact same bytes and private
+profile; staging refuses a different run or attempt's predicate at the same
+revision rather than overwriting it. Existing staging without this retained
+predicate must be repeated with the selected signed application before maintenance.
+
+Before exporting Ops, the maintenance caller joins the application variables,
+retained predicate and actual staged manifest to the Ops repository, revision,
+CI run and attempt. The predicate's `fileDigests['release.json']` must match the
+published manifest's SHA256. These are passive original-byte and intended-identity
+joins under the trusted controller/root/SSH keepers. The earlier completed signed
+application verification and the current native Ops verification remain the
+respective authentication authorities. Parsing retained JSON or a generic saved
+success flag does not establish a fresh API observation or signature verification.
+The application verifier still derives its selected attempt from the current CI
+run; the retained signed attempt must equal the explicitly selected Ops attempt.
+
+After staging succeeds, run the maintenance playbook directly:
+
+```sh
+ANSIBLE_CONFIG=ops/ansible/ansible.cfg \
+  ops/ansible/.venv/bin/ansible-playbook \
+  -i ops/ansible/inventory.local.yml ops/ansible/maintenance.yml \
+  -e @maintenance-vars.json
+```
+
+For the one-time legacy browser-asset proxy transition, set the JSON boolean
+`scpub_browser_assets_upgrade` to `true`. It stages only the fixed reviewed
+Compose/Caddy changes and keeps the selected dependency images. Leave it false
+for ordinary schema or settings maintenance; it permits no arbitrary proxy change.
+
+The playbook invokes the source-built Rust exporter synchronously and requires
+its actual exit zero before consuming its current receipt. Opaque authenticated
+acquisition verifies the exact signed Ops revision/run/attempt/artifact and
+produces a pinned three-member transfer plus an original installer request.
+Trusted Ansible/SSH transfers these into a fresh private host nonce directory.
+It joins the received tar's hash and length before parsing, then joins the
+candidate's hash and length before making it executable. The authenticated
+candidate's native `distribution install` or `distribution upgrade` must finish
+successfully before the fixed canonical executable runs. Native installation
+owns the input, expected-old, workload-lock, journal and canonical-publication
+checks. A JSON success flag or saved receipt never substitutes for this current
+verification and actual process result. These separate transport/stat/chmod/exec
+calls do not claim retained-descriptor atomic execution against a hostile root.
+
+The existing tasks obtain the exact source, render a protected candidate
+environment from current host facts and secrets, and render runtime grants.
+The final transient unit invokes
+`/usr/local/libexec/simplestchat-public/simplestchat-ops release maintain` with the
+exact revision, candidate environment, explicit proxy choice and **1800/60**
+whole/finalization seconds. Export has its own original 1860-second profile;
+bootstrap and staging are separate operations. These are operation limits,
+not a measured downtime or hard wall-clock guarantee. Slow preparation can
+refuse before interruption when the source-derived first-stop debt no longer
+fits; retained stage or delivery evidence may already exist.
+
+Maintenance admits the applied migration checksum subset, including holes,
+then requires the exact candidate ledger after the native launcher. It validates
+configuration identity and settings, retains browser assets, publishes a listed
+live backup and receipt before stopping the app, then stops the proxy. Listing
+the dump is not a restore test. It durably publishes the new selection and
+candidate configuration, runs the native launcher under the original owner,
+then reacquires the actual workload lock for final readiness, selected image,
+unchanged database container and exact ledger checks. `environmentChanges` in
+the outcome lists admitted changed setting names. See the
+[native maintenance contract](../README.md#explicit-prepared-host-maintenance)
+for deadlines and ownership details.
+
+A failed launcher keeps the selected state for inspection; the schema may have
+changed, so maintenance starts no application rollback. Do not rerun against
+stopped services: preflight expects a live application. Inspect the original
+release and launcher outcomes, selected configuration, migration ledger and
+retained migration container. After resolving the recorded cause and establishing
+that no migration is still running, use the explicit bounded launcher command in
+[PUBLIC.md](PUBLIC.md#deploy-explicitly) to finish that selected deployment.
+Preserve the evidence; deleting journals or blindly removing containers does not
+establish a safe retry. Later recovery cannot turn the original failure into a
+successful maintenance outcome. A nonzero final process exit invalidates an
+earlier complete report.
+
+A settings-only maintenance can reuse the selected image with validated changes.
+An identical image and unchanged configuration are refused before backup or
+interruption. `backupMigrations` records the applied ledger before migration
+separately from the target revision; restore verification requires that recorded
+ledger and never substitutes the target schema.
+
+### Retained delivery evidence and sign-in impact
+
+The caller deliberately retains the new private controller export and the
+root-only host bootstrap nonce directory on success and failure. Paths are
+reported after successful installation; the original controller request also
+records the remote nonce for earlier failures. Each successful remote bootstrap
+payload is below 514 MiB: tar at most 257 MiB, extracted binary at most 256 MiB,
+manifest at most 64 KiB, selection at most 16 KiB and installer request at most
+16 KiB. This is a per-attempt payload bound, not an aggregate disk quota, a bound
+on transient Ansible copy staging or a retention lifetime. Repeated attempts keep
+separate nonces. The host path is beneath `/run` and may disappear at reboot;
+copy needed evidence into protected operational storage before then. Application
+staging, backups and other controller evidence require additional disk space.
+There is no automatic bootstrap cleanup or owned native retirement command yet.
+Do not substitute recursive unknown-path deletion for such an owner.
+
+Migration `022_require_current_sessions.sql` deliberately deletes existing
+refresh sessions before requiring a nonnullable refresh-family hash. Every
+signed-in client must sign in once afterward. Accounts, passwords, passkeys,
+recovery keys and memberships remain intact. Older refresh formats and
+sessionless access tokens have no compatibility parser. Review that impact with
+the pre-release backup; do not edit published migrations 010 or 013 to avoid it.
 
 The managed application and migration services retain the image's audited
 `/app/simplestChat` command, non-root user and working directory. Release selection,
 the initial deployment launcher and reboot preparation reject alternate commands,
 healthchecks, lifecycle hooks, unreviewed mounts and dynamic-loader overrides.
 `LD_*`, `OPENSSL_*`, `GLIBC_TUNABLES`, `GCONV_PATH` and `LOCPATH` are forbidden even
-when their values are empty. The only additional application mount is the
-read-only PostgreSQL socket; `/tmp` remains bounded and `noexec`. The validators
-inspect the resolved Compose model, including environment files, and retain
-fixed diagnostics instead of configuration values. These restrictions define
-the supported managed profile; an administrator's separate command or modified
-container is outside its image-specific applicability evidence.
+when empty. The additional application mount is the readonly PostgreSQL socket;
+`/tmp` stays bounded and `noexec`. Validators inspect the resolved Compose model,
+including environment files, and retain fixed diagnostics instead of values.
+These restrictions define the supported managed profile; an administrator's
+separate command or modified container is outside its applicability evidence.
+
 
 ## Reboots and user recovery
 

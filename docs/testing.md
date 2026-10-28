@@ -431,25 +431,38 @@ python3 -m venv ops/ansible/.venv
 ops/ansible/.venv/bin/pip install -r build/python-requirements.txt
 cargo run --locked -q -p xtask -- check --python
 PATH="$PWD/ops/ansible/.venv/bin:$PATH" \
-  ops/ansible/.venv/bin/python -m unittest discover -s ops/ansible/tests -v
+  cargo run --locked -q -p xtask -- ci automation --checks
 ```
 
-The shared `ci automation --checks` command preserves the quality, syntax and
-standalone Ops checks, then runs the same Python suite in two owned processes.
-Both use standard discovery/imports; disjoint `-k module_name.*` selections come
-from the sorted, alternating flat test-module inventory. Unsupported names,
-packages, symlinks and inventory changes refuse rather than omit coverage.
-With inherited `DISPOSABLE_TEST_DATABASE=1`, one original discovery process runs
-without selectors so database-mutating cases stay serial. The separate workflow
-database checks keep their existing owners.
+The shared `ci automation --checks` command preserves quality, syntax and
+standalone Ops checks. Its complete suite uses two current discovery children
+plus one frozen maintenance-class child. Disjoint module selectors come from
+the sorted, alternating flat inventory. The unchanged release-playbook module
+has twelve tests: its ten release cases and one public-selection case run against
+current YAML; its one legacy maintenance case runs unchanged against explicitly
+byte-pinned old YAML in a private runtime copy. No Python source or loader is
+added. Current native caller policy is checked by Rust YAML contract and mutation
+tests. The module's full content pin prevents future classes from being silently
+omitted by this explicit class split.
+
+With inherited `DISPOSABLE_TEST_DATABASE=1`, there is one current discovery
+child with explicit module/class selectors plus the read-only legacy child.
+Database-mutating cases still share one current process. Unsupported names,
+packages, symlinks, byte-pin changes and observed inventory changes refuse.
+The separate workflow database checks keep their existing owners. Direct raw
+`python -m unittest discover` is no longer the complete current suite: it would
+apply the frozen old-launcher assertion to the new native caller. Focused
+unchanged modules may still be run directly; use the Rust driver for the complete
+current/reference contract.
 
 An ordinary test failure is retained while the peer finishes naturally. Spawn,
 I/O, cancellation and deadline failures settle every admitted child before the
 operation returns. One 600-second unit-suite interval starts before preparation,
-reserves 30 seconds for finalization, and spans both children, runtime teardown,
+reserves 30 seconds for finalization, and spans all active children, runtime teardown,
 replay, closes and the final signal check. The outer ten-minute job limit stays
 independent and can expire earlier. Combined stdout/stderr is capped at eight
-MiB per child and replayed in order after both settle. Success requires every
+MiB per current child and one MiB for the legacy child, then replayed in fixed
+role order after all settle. Success requires every
 selected child and finalizer; group cleanup does not certify escaped sessions,
 all SDK descriptors or a hard bound on blocked kernel I/O.
 
@@ -461,8 +474,9 @@ and 131.246 seconds, with the exact same case-ID multiset and 17 existing skips.
 The complete automation command, including quality, Ansible and native checks,
 took 230.516 seconds locally. These measurements use the same pinned Python
 environment with no database; they do not establish hosted timing or the
-five-minute CI ceiling and one-minute target. The direct unittest command above
-remains the sequential baseline. Run focused inert ownership tests with:
+five-minute CI ceiling and one-minute target. Those measurements precede the
+native caller/class split; direct discovery was that historical sequential
+baseline and is not advertised as today's complete suite. Run focused inert ownership tests with:
 
 ```sh
 cargo test --locked -p xtask --bin xtask \

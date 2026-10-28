@@ -94,8 +94,39 @@ Authenticated export must compose from the opaque current acquisition, retain
 it through exact three-member transfer and installer-request publication, then
 rejoin original files and current verification before actual exit 0. A serialized
 observation or an `authenticated` boolean cannot construct this authority.
-SSH delivery and the installed caller remain separate until whole-operation
-runtime evidence supports their cutover. All existing Python files stay frozen.
+The prepared maintenance playbook now delivers that authenticated export through
+the existing Ansible/SSH keepers. It requires actual exporter exit 0, joins the
+received tar before parsing and the candidate before execution, then requires
+native install/upgrade exit 0 before canonical maintenance. Signature and native
+installation policy remain in Rust; separate stat/chmod/exec calls do not provide
+retained-descriptor execution against a hostile root. The controller build and
+GitHub client are caller-trusted prerequisites. Bootstrap/export and maintenance
+retain their separate original budgets and protected evidence directories.
+
+Successful application staging retains its original verified predicate without
+reserializing it or replacing different existing evidence. Before Ops export,
+the caller joins its repository, revision, CI run and attempt to the typed Ops
+selection, and its manifest digest to the actual staged file. These are passive
+custody and intent checks under the existing trusted keepers. They construct no
+authentication authority; completed application verification and current opaque
+Ops acquisition remain required. `C-VALIDATE`, `C-CUSTOM-TYPE`, `C-GOOD-ERR` and
+`C-SERDE` apply to these boundaries and the preserved numeric/boolean distinctions.
+All existing Python files stay frozen. The
+[operator sequence](../ops/ansible/RELEASES.md#prepare-the-controller-before-credentials)
+documents the breaking migration from the frozen maintenance wrapper.
+
+The unchanged Python maintenance class remains an executable reference against
+its byte-pinned original YAML. The Rust regression owner creates only private
+byte-identical copies of that existing module and two fixed YAML references;
+the other classes still inspect current source. Three process roles in the
+ordinary profile, or one database discovery plus that readonly reference, share
+the existing original 600/30 owner, bounded captures, first cause, all-peer
+retirement and checked closes. Held files and content hashes detect observed
+changes; they do not isolate Python imports from privileged same-UID swaps.
+`C-DTOR-FAIL`, `C-DTOR-BLOCK` and `C-RW-VALUE` retain their explicit finalization
+and borrowed-output decisions. No Python loader, dependency or renewed timer is
+introduced. Rust contracts cover current caller wiring and negative handoffs;
+those source checks do not execute Ansible, SSH or signature verification.
 
 Local transaction tests execute real files, backup publication and flock
 handoffs with finite synthetic daemon/launcher responses. They cover migration

@@ -1,0 +1,128 @@
+---
+- name: Replace the public application through the maintenance launcher
+  hosts: benchmark_hosts
+  become: true
+  # The candidate app.env sizes the app from the host's CPUs and memory.
+  gather_facts: true
+  serial: 1
+  vars:
+    ansible_pipelining: true
+    scbench_revision: "{{ scpub_release_revision }}"
+  pre_tasks:
+    - name: Require a staged exact revision on the prepared public host
+      ansible.builtin.assert:
+        that:
+          - scpub_enabled | bool
+          - scpub_release_revision is defined
+          - scpub_release_revision is match('^[a-f0-9]{40}$')
+          - scpub_config == '/etc/simplestchat-public'
+          - scpub_root == '/srv/simplestchat-public'
+        fail_msg: Stage the exact 40-character revision with release.yml first.
+  tasks:
+    # The launcher checks the packaged migrations against this clean checkout.
+    - name: Obtain the exact application source for the launcher's checks
+      ansible.builtin.import_tasks: tasks/source.yml
+
+    - name: Read the selected image identity for the candidate configuration
+      ansible.builtin.slurp:
+        src: "{{ scpub_config }}/images.json"
+      register: scpub_selected_images
+
+    - name: Read protected secrets for private configuration rendering
+      ansible.builtin.slurp:
+        src: "{{ scpub_config }}/secrets.json"
+      register: scpub_secret_file
+      no_log: true
+
+    - name: Keep secret values out of logs and persistent fact caches
+      ansible.builtin.set_fact:
+        scpub_secrets: "{{ scpub_secret_file.content | b64decode | from_json }}"
+        scpub_server_image: "{{ (scpub_selected_images.content | b64decode | from_json).serverImage }}"
+        cacheable: false
+      no_log: true
+
+    - name: Read the managed relay secret for candidate rendering
+      ansible.builtin.slurp:
+        src: /etc/simplestchat-turn/secret
+      register: scpub_maintenance_turn_secret
+      when: scpub_turn_enabled | bool
+      no_log: true
+
+    - name: Retain the relay secret only in memory
+      ansible.builtin.set_fact:
+        scpub_turn_secret: "{{ scpub_maintenance_turn_secret.content | b64decode }}"
+        cacheable: false
+      when: scpub_turn_enabled | bool
+      no_log: true
+
+    # The helper installs it with the image after the stop, once its identity
+    # lines (secrets, origin, address, RUN_MIGRATIONS) match the installed file.
+    - name: Render the candidate application configuration from the host's facts
+      ansible.builtin.template:
+        src: public-app.env.j2
+        dest: "{{ scpub_config }}/app.env.candidate"
+        owner: root
+        group: root
+        mode: '0600'
+      no_log: true
+
+    - name: Render the runtime grants the launcher applies after migrating
+      ansible.builtin.template:
+        src: public-runtime-grants.sql.j2
+        dest: "{{ scpub_config }}/runtime-grants.sql"
+        owner: root
+        group: root
+        mode: '0600'
+
+    - name: Render only the explicitly requested browser asset proxy transition
+      when: scpub_browser_assets_upgrade | default(false) | bool
+      block:
+        - name: Keep immutable dependency selections during the proxy transition
+          ansible.builtin.set_fact:
+            scpub_postgres_image: "{{ (scpub_selected_images.content | b64decode | from_json).postgresImage }}"
+            scpub_caddy_image: "{{ (scpub_selected_images.content | b64decode | from_json).caddyImage }}"
+            cacheable: false
+
+        - name: Render the candidate proxy mount without replacing live configuration
+          ansible.builtin.template:
+            src: public-compose.yml.j2
+            dest: "{{ scpub_config }}/compose.public.yml.candidate"
+            owner: root
+            group: root
+            mode: '0600'
+
+        - name: Stage the exact maintained Caddyfile for source and pinned binary validation
+          ansible.builtin.copy:
+            src: "{{ playbook_dir }}/../../Caddyfile"
+            dest: "{{ scpub_config }}/Caddyfile.candidate"
+            owner: root
+            group: root
+            mode: '0600'
+
+        - name: Initialize storage and expiration before installing its readonly mount
+          ansible.builtin.import_tasks: tasks/browser-assets.yml
+          vars:
+            scpub_browser_assets_revision: "{{ (scpub_selected_images.content | b64decode | from_json).revision }}"
+            scpub_browser_assets_record_installed: false
+
+    - name: Replace the application through the launcher as a transient unit
+      vars:
+        ansible_python_interpreter: /usr/bin/python3
+      ansible.builtin.command:
+        argv:
+          - systemd-run
+          - "--unit=simplestchat-maintenance-{{ scpub_release_revision[:12] }}-{{ lookup('ansible.builtin.pipe', 'date -u +%Y%m%dT%H%M%S') }}"
+          - --property=Type=exec
+          - --property=RuntimeMaxSec=1800
+          - --property=TimeoutStopSec=240
+          - --wait
+          - /usr/bin/python3
+          - -B
+          - /usr/local/libexec/simplestchat-public/release-public.py
+          - maintain
+          - "{{ scpub_release_revision }}"
+          - --candidate-env
+          - "{{ scpub_config }}/app.env.candidate"
+          - "{{ '--browser-assets-upgrade' if scpub_browser_assets_upgrade | default(false) | bool else '--no-browser-assets-upgrade' }}"
+      changed_when: true
+      when: not ansible_check_mode

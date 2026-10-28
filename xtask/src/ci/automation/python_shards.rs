@@ -1,4 +1,4 @@
-//! Fixed standard-library unittest discovery with two process-local shards.
+//! Two current discovery shards and one fixed frozen maintenance-class child.
 //!
 //! One N600 interval begins before inventory/setup, reserves30 seconds for
 //! retirement/log completion/replay and remains authoritative through runtime
@@ -11,10 +11,13 @@
 //! borrows the output writer. No new public API, dependency or Python loader.
 
 use super::{python_captures::Captures, python_inventory::Inventory};
+#[path = "python_legacy_maintenance.rs"]
+mod legacy;
 use crate::{
     ci::bounded_log::{Finished, Log},
     tooling::{self, Environment, Failure},
 };
+use legacy::LegacyMaintenance;
 use rustix::process::{WaitId, WaitIdOptions};
 use simplestchat_ops::owned_process::{CompletionSignals, Group, finish_before};
 use std::{
@@ -38,6 +41,29 @@ const WHOLE: Duration = Duration::from_secs(600);
 const FINAL: Duration = Duration::from_secs(30);
 const GRACE: Duration = Duration::from_secs(5);
 const POLL: Duration = Duration::from_millis(10);
+const SLOTS: usize = 3;
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum Role {
+    CurrentFirst,
+    CurrentSecond,
+    MaintenanceLegacy,
+}
+impl Role {
+    pub(super) fn index(self) -> usize {
+        match self {
+            Self::CurrentFirst => 0,
+            Self::CurrentSecond => 1,
+            Self::MaintenanceLegacy => 2,
+        }
+    }
+    pub(super) fn maximum_log(self) -> u64 {
+        if self == Self::MaintenanceLegacy {
+            1024 * 1024
+        } else {
+            super::python_captures::MAX_LOG
+        }
+    }
+}
 pub(super) type Outcome<T> = std::result::Result<T, Cause>;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -86,24 +112,23 @@ impl Profile {
             Self::Parallel
         }
     }
-    fn count(self) -> usize {
-        if self == Self::Parallel { 2 } else { 1 }
+    fn roles(self) -> &'static [Role] {
+        if self == Self::Parallel {
+            &[
+                Role::CurrentFirst,
+                Role::CurrentSecond,
+                Role::MaintenanceLegacy,
+            ]
+        } else {
+            &[Role::CurrentFirst, Role::MaintenanceLegacy]
+        }
     }
-    fn arguments(self, inventory: &Inventory) -> Vec<Vec<OsString>> {
-        (0..self.count())
-            .map(|ordinal| {
-                let mut args = BASE_ARGUMENTS
-                    .iter()
-                    .map(OsString::from)
-                    .collect::<Vec<_>>();
-                if self == Self::Parallel {
-                    for module in &inventory.groups[ordinal] {
-                        args.extend([OsString::from("-k"), OsString::from(format!("{module}.*"))]);
-                    }
-                }
-                args
-            })
-            .collect()
+    fn arguments(self, inventory: &Inventory) -> Outcome<Vec<(Role, Vec<OsString>)>> {
+        let mut result =
+            legacy::routing::current_arguments(&inventory.groups, self == Self::Database)
+                .map_err(|_| Cause::Inventory)?;
+        result.push((Role::MaintenanceLegacy, legacy::routing::legacy_arguments()));
+        Ok(result)
     }
 }
 
@@ -120,7 +145,7 @@ pub(super) struct Control {
     #[cfg(test)]
     worker: bool,
     #[cfg(test)]
-    admitted: Option<std::sync::Arc<[std::sync::atomic::AtomicI32; 2]>>,
+    admitted: Option<std::sync::Arc<[std::sync::atomic::AtomicI32; SLOTS]>>,
 }
 impl Control {
     fn new(started: Instant) -> Outcome<Self> {
@@ -217,7 +242,11 @@ fn terminal(group: &Group) -> Outcome<Option<u8>> {
     }
 }
 
-fn observe(groups: &[Option<Group>; 2], statuses: &mut [Option<u8>; 2], control: &mut Control) {
+fn observe(
+    groups: &[Option<Group>; SLOTS],
+    statuses: &mut [Option<u8>; SLOTS],
+    control: &mut Control,
+) {
     for (ordinal, group) in groups.iter().enumerate() {
         if statuses[ordinal].is_some() {
             continue;
@@ -325,35 +354,51 @@ async fn perform(
     environment: &Environment,
     inventory: &Inventory,
     captures: &mut Captures,
+    legacy: &LegacyMaintenance,
     profile: Profile,
     control: &mut Control,
-) -> [Option<Finished>; 2] {
-    let mut groups: [Option<Group>; 2] = [None, None];
-    let mut logs: [Option<Log>; 2] = [None, None];
-    let mut statuses = [None, None];
-    let arguments = profile.arguments(inventory);
-    for ordinal in 0..profile.count() {
+) -> [Option<Finished>; SLOTS] {
+    let mut groups: [Option<Group>; SLOTS] = [None, None, None];
+    let mut logs: [Option<Log>; SLOTS] = [None, None, None];
+    let mut statuses = [None, None, None];
+    let Some(arguments) = control.remember(profile.arguments(inventory)) else {
+        return [None, None, None];
+    };
+    for (role, arguments) in arguments {
+        let ordinal = role.index();
         if control.body_fence().is_err() || control.stop {
             break;
         }
         if control.remember(inventory.current()).is_none() {
             break;
         }
-        logs[ordinal] = control.remember(captures.log(ordinal));
+        let current = legacy.current(control);
+        if control.remember(current).is_none() {
+            break;
+        }
+        logs[ordinal] = control.remember(captures.log(role));
         let Some(log) = logs[ordinal].as_mut() else {
             break;
         };
         if control.body_fence().is_err() {
             break;
         }
+        let child_environment = if role == Role::MaintenanceLegacy {
+            control.remember(legacy.environment(environment))
+        } else {
+            Some(environment.clone())
+        };
+        let Some(child_environment) = child_environment else {
+            break;
+        };
         #[cfg(test)]
         let launched = if control.spawn_refusal == Some(ordinal) {
             Err(Cause::Spawn(127))
         } else {
-            spawn(root, environment, &arguments[ordinal], log, control)
+            spawn(root, &child_environment, &arguments, log, control)
         };
         #[cfg(not(test))]
-        let launched = spawn(root, environment, &arguments[ordinal], log, control);
+        let launched = spawn(root, &child_environment, &arguments, log, control);
         groups[ordinal] = control.remember(launched);
         #[cfg(test)]
         if let (Some(group), Some(pids)) = (&groups[ordinal], &control.admitted) {
@@ -379,7 +424,11 @@ async fn perform(
                 control.note(Cause::Io);
             }
         }
-        if (0..profile.count()).all(|ordinal| statuses[ordinal].is_some()) {
+        if profile
+            .roles()
+            .iter()
+            .all(|role| statuses[role.index()].is_some())
+        {
             break;
         }
         tokio::time::sleep(POLL).await;
@@ -413,16 +462,21 @@ async fn perform(
     let end = control.end;
     let retired = tokio::join!(
         retire(groups[0].as_ref(), end),
-        retire(groups[1].as_ref(), end)
+        retire(groups[1].as_ref(), end),
+        retire(groups[2].as_ref(), end)
     );
-    if !retired.0 || !retired.1 {
+    if !retired.0 || !retired.1 || !retired.2 {
         control.note(Cause::Cleanup);
     }
     let _ = control.final_fence();
-    // Both exact groups have received final signals before either consuming
-    // wait. Await both reaps without timeout/drop of the disarmed wait owner.
-    let reaped = tokio::join!(reap(groups[0].take()), reap(groups[1].take()));
-    for (ordinal, result) in [reaped.0, reaped.1].into_iter().enumerate() {
+    // All exact groups receive final signals before any consuming wait.
+    // Await all reaps without timeout/drop of the disarmed wait owners.
+    let reaped = tokio::join!(
+        reap(groups[0].take()),
+        reap(groups[1].take()),
+        reap(groups[2].take())
+    );
+    for (ordinal, result) in [reaped.0, reaped.1, reaped.2].into_iter().enumerate() {
         if let Some(status) = control.remember(result).flatten() {
             if statuses[ordinal].is_some_and(|prior| prior != status) {
                 control.note(Cause::Cleanup);
@@ -433,17 +487,22 @@ async fn perform(
         }
     }
     let _ = control.final_fence();
-    // Shared Log retains its existing2s EOF +1s stop tail. Both are joined
+    // Shared Log retains its existing2s EOF +1s stop tail. All are joined
     // inside the original reserve and post-fenced; no new caller budget starts.
-    let _ = control.fence(control.end - Duration::from_secs(6));
-    let finished = tokio::join!(finish_log(logs[0].take()), finish_log(logs[1].take()));
+    let _ = control.fence(control.end - Duration::from_secs(9));
+    let finished = tokio::join!(
+        finish_log(logs[0].take()),
+        finish_log(logs[1].take()),
+        finish_log(logs[2].take())
+    );
     let finished = [
         control.remember(finished.0).flatten(),
         control.remember(finished.1).flatten(),
+        control.remember(finished.2).flatten(),
     ];
     let _ = control.final_fence();
-    for item in finished.iter().take(profile.count()) {
-        if item.is_none() {
+    for role in profile.roles() {
+        if finished[role.index()].is_none() {
             control.note(Cause::Io);
         }
     }
@@ -458,12 +517,17 @@ fn run_with(
 ) -> Outcome<()> {
     let mut inventory = None;
     let mut captures = None;
-    let mut finished = [None, None];
+    let mut finished = [None, None, None];
+    let mut legacy = LegacyMaintenance::empty();
     let profile = Profile::from_env(environment);
     if control.body_fence().is_ok() {
         inventory = control.remember(Inventory::read(root));
     }
     if inventory.is_some() && control.body_fence().is_ok() {
+        let prepared = legacy.prepare(root, environment, &mut control);
+        control.remember(prepared);
+    }
+    if inventory.is_some() && !control.stop && control.body_fence().is_ok() {
         captures = control.remember(Captures::create(environment));
     }
     if let (Some(inventory), Some(captures)) = (inventory.as_ref(), captures.as_mut()) {
@@ -477,6 +541,7 @@ fn run_with(
                     environment,
                     inventory,
                     captures,
+                    &legacy,
                     profile,
                     &mut control,
                 ));
@@ -489,10 +554,16 @@ fn run_with(
     if let Some(inventory) = &inventory {
         control.remember(inventory.current());
     }
+    if legacy.ready_for_final_check() {
+        let current = legacy.current(&mut control);
+        control.remember(current);
+    }
     if let Some(captures) = &captures {
-        for (ordinal, item) in finished.iter().enumerate().take(profile.count()) {
+        for role in profile.roles() {
+            let ordinal = role.index();
+            let item = &finished[ordinal];
             if let Some(item) = item {
-                let replayed = captures.replay(ordinal, item, output, &mut control);
+                let replayed = captures.replay(*role, item, output, &mut control);
                 control.remember(replayed);
             }
         }
@@ -502,6 +573,8 @@ fn run_with(
     if let Some(captures) = &mut captures {
         control.remember(captures.close());
     }
+    let closed = legacy.close(&mut control);
+    control.remember(closed);
     if let Some(inventory) = &mut inventory {
         control.remember(inventory.current());
         control.remember(inventory.close());

@@ -132,7 +132,16 @@ socket-only PostgreSQL, protected credentials and an initial guest lobby.
 For routine updates to that prepared host, use the
 [single-command release](../ops/ansible/RELEASES.md#routine-update-use-the-image-ci-tested).
 It deploys the exact image retained by successful CI without rebuilding, replacing
-only the application while keeping the database and proxy running.
+only the application while keeping the database and proxy running. Schema or
+supported settings changes use the separate
+[direct maintenance workflow](../ops/ansible/RELEASES.md#stage-then-run-native-maintenance):
+stage the signed application, then authenticate and install/upgrade the separate
+native Ops helper before canonical maintenance. The caller joins the retained
+original signed application predicate and staged manifest hash to the same Ops
+repository, revision, run and attempt; retained JSON alone is not authentication.
+The frozen deployment wrapper does not supply that workflow's new typed Ops
+inputs. The application remains containerized; existing Python staging and
+Ansible keep their documented roles.
 
 1. Point your domain at the host and set Caddy's `CADDY_DOMAIN` environment
    variable (or edit its example hostname). Set `ALLOWED_ORIGINS` to the exact

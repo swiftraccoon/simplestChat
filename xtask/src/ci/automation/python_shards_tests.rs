@@ -41,6 +41,28 @@ impl Fixture {
         ] {
             fixture.test_file(name, "");
         }
+        fs::write(
+            fixture
+                .root
+                .join("ops/ansible/tests/test_release_playbook.py"),
+            include_bytes!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../ops/ansible/tests/test_release_playbook.py"
+            )),
+        )
+        .unwrap();
+        let reference = fixture.root.join("xtask/src/ci/automation/reference");
+        fs::create_dir_all(&reference).unwrap();
+        fs::write(
+            reference.join("maintenance-python.yml"),
+            include_bytes!("reference/maintenance-python.yml"),
+        )
+        .unwrap();
+        fs::write(
+            reference.join("source-python.yml"),
+            include_bytes!("reference/source-python.yml"),
+        )
+        .unwrap();
         fixture
     }
 
@@ -66,12 +88,12 @@ impl Fixture {
         let now = Instant::now();
         let mut control = Control::new(now).unwrap();
         control.body = now + Duration::from_secs(10);
-        control.end = now + Duration::from_secs(15);
+        control.end = now + Duration::from_secs(20);
         control
     }
 
-    fn observed_control(&self) -> (Control, Arc<[AtomicI32; 2]>) {
-        let admitted = Arc::new([AtomicI32::new(0), AtomicI32::new(0)]);
+    fn observed_control(&self) -> (Control, Arc<[AtomicI32; SLOTS]>) {
+        let admitted = Arc::new([AtomicI32::new(0), AtomicI32::new(0), AtomicI32::new(0)]);
         let mut control = self.control();
         control.admitted = Some(admitted.clone());
         control.worker = true;
@@ -79,7 +101,7 @@ impl Fixture {
     }
 
     fn workers_gone(&self) -> bool {
-        (0..2).all(|ordinal| {
+        (0..SLOTS).all(|ordinal| {
             let path = self.path.join(format!("{ordinal}.started"));
             if !path.exists() {
                 return true;
@@ -97,11 +119,9 @@ impl Fixture {
 
     fn captures_removed(&self) -> bool {
         fs::read_dir(&self.path).unwrap().all(|entry| {
-            !entry
-                .unwrap()
-                .file_name()
-                .to_string_lossy()
-                .starts_with("simplestchat-python-shards-")
+            let name = entry.unwrap().file_name().to_string_lossy().into_owned();
+            !name.starts_with("simplestchat-python-shards-")
+                && !name.starts_with("simplestchat-maintenance-reference-")
         })
     }
 }
@@ -112,7 +132,7 @@ impl Drop for Fixture {
     }
 }
 
-fn originals_reaped(admitted: &[AtomicI32; 2], expected: usize) -> bool {
+fn originals_reaped(admitted: &[AtomicI32; SLOTS], expected: usize) -> bool {
     let observed = admitted
         .iter()
         .map(|value| value.load(Ordering::SeqCst))
@@ -149,7 +169,7 @@ fn flat_inventory_covers_each_module_once_and_preserves_the_discovery_contract()
     fixture.test_file("helper.py", "");
     let mut inventory = Inventory::read(&fixture.root).unwrap();
     let groups = inventory.groups.clone();
-    let commands = Profile::Parallel.arguments(&inventory);
+    let commands = Profile::Parallel.arguments(&inventory).unwrap();
     let current = inventory.current();
     let closed = inventory.close();
     assert!(current.is_ok());
@@ -157,42 +177,47 @@ fn flat_inventory_covers_each_module_once_and_preserves_the_discovery_contract()
     assert_eq!(
         groups,
         [
-            vec!["test_alpha", "test_gamma"],
-            vec!["test_beta", "test_zeta"]
+            vec!["test_alpha", "test_gamma", "test_zeta"],
+            vec!["test_beta", "test_release_playbook"]
         ]
     );
     let first: BTreeSet<_> = groups[0].iter().collect();
     let second: BTreeSet<_> = groups[1].iter().collect();
     assert!(first.is_disjoint(&second));
-    assert_eq!(first.union(&second).count(), 4);
-    assert_eq!(Profile::Parallel.count(), 2);
-    assert_eq!(commands.len(), 2);
-    for (ordinal, command) in commands.iter().enumerate() {
+    assert_eq!(first.union(&second).count(), 5);
+    assert_eq!(Profile::Parallel.roles().len(), 3);
+    assert_eq!(commands.len(), 3);
+    for (role, command) in &commands {
+        if *role == Role::MaintenanceLegacy {
+            assert_eq!(*command, legacy::routing::legacy_arguments());
+            continue;
+        }
         assert_eq!(&strings(command)[..6], BASE_ARGUMENTS);
-        let expected = groups[ordinal]
-            .iter()
-            .flat_map(|name| ["-k".to_owned(), format!("{name}.*")])
-            .collect::<Vec<_>>();
-        assert_eq!(strings(&command[6..]), expected);
+        assert!(!strings(command).contains(&"test_release_playbook.*"));
     }
 }
 
 #[test]
-fn disposable_database_keeps_one_original_discovery_without_selectors() {
+fn disposable_database_keeps_one_current_discovery_and_one_frozen_legacy_class() {
     let fixture = Fixture::new();
     let mut inventory = Inventory::read(&fixture.root).unwrap();
     let mut environment = fixture.environment();
     let default = Profile::from_env(&environment);
     environment.insert("DISPOSABLE_TEST_DATABASE".into(), "1".into());
     let selected = Profile::from_env(&environment);
-    let arguments = selected.arguments(&inventory);
+    let arguments = selected.arguments(&inventory).unwrap();
     let closed = inventory.close();
     assert!(closed.is_ok());
     assert_eq!(default, Profile::Parallel);
     assert_eq!(selected, Profile::Database);
-    assert_eq!(selected.count(), 1);
-    assert_eq!(arguments.len(), 1);
-    assert_eq!(strings(&arguments[0]), BASE_ARGUMENTS);
+    assert_eq!(
+        selected.roles(),
+        &[Role::CurrentFirst, Role::MaintenanceLegacy]
+    );
+    assert_eq!(arguments.len(), 2);
+    assert_eq!(&strings(&arguments[0].1)[..6], BASE_ARGUMENTS);
+    assert!(!strings(&arguments[0].1).contains(&"test_release_playbook.*"));
+    assert_eq!(arguments[1].1, legacy::routing::legacy_arguments());
     environment.insert("DISPOSABLE_TEST_DATABASE".into(), "true".into());
     assert_eq!(Profile::from_env(&environment), Profile::Parallel);
 }
@@ -299,33 +324,33 @@ fn rust_inert_worker() {
     );
     let plan: WorkerPlan = serde_json::from_str(encoded.to_str().unwrap()).unwrap();
     assert_eq!(plan.program, "python");
-    assert!(plan.arguments.len() >= BASE_ARGUMENTS.len());
-    assert_eq!(
-        plan.arguments[..BASE_ARGUMENTS.len()]
-            .iter()
-            .map(String::as_str)
-            .collect::<Vec<_>>(),
-        BASE_ARGUMENTS,
-    );
-    let tail = &plan.arguments[BASE_ARGUMENTS.len()..];
-    let (ordinal, count) = if tail.is_empty() {
-        (0, 1)
+    let ordinal = if plan.arguments == strings(&legacy::routing::legacy_arguments()) {
+        2
     } else {
-        assert_eq!(tail.len(), 4);
-        assert_eq!(tail[0], "-k");
-        assert_eq!(tail[2], "-k");
-        let patterns = [tail[1].as_str(), tail[3].as_str()];
-        if patterns == ["test_alpha.*", "test_gamma.*"] {
-            (0, 2)
+        assert_eq!(
+            plan.arguments[..6]
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+            BASE_ARGUMENTS
+        );
+        if plan.arguments.iter().any(|value| value == "test_alpha.*") {
+            0
         } else {
-            assert_eq!(patterns, ["test_beta.*", "test_zeta.*"]);
-            (1, 2)
+            1
         }
+    };
+    let active = if std::env::var_os("DISPOSABLE_TEST_DATABASE").as_deref()
+        == Some(std::ffi::OsStr::new("1"))
+    {
+        vec![0, 2]
+    } else {
+        vec![0, 1, 2]
     };
     let mode = std::env::var("SIMPLESTCHAT_TEST_SHARD_MODE").unwrap();
     assert!(matches!(
         mode.as_str(),
-        "Complete" | "FailFirst" | "WaitCancel"
+        "Complete" | "FailFirst" | "FailLegacy" | "WaitCancel" | "OverflowLegacy"
     ));
     let root = PathBuf::from(std::env::var_os("FIXTURE_ROOT").unwrap())
         .canonicalize()
@@ -365,7 +390,10 @@ fn rust_inert_worker() {
     )
     .unwrap();
     let end = Instant::now() + Duration::from_secs(6);
-    while count == 2 && !root.join(format!("{}.started", 1 - ordinal)).is_file() {
+    while !active
+        .iter()
+        .all(|peer| root.join(format!("{peer}.started")).is_file())
+    {
         if worker_signal(&mut signals, &root, ordinal) {
             return;
         }
@@ -384,6 +412,15 @@ fn rust_inert_worker() {
             }
             thread::sleep(Duration::from_millis(5));
         }
+    }
+    if mode == "OverflowLegacy" && ordinal == 2 {
+        let _ = std::io::stdout().write_all(&vec![b'x'; 1024 * 1024 + 4096]);
+        let _ = std::io::stdout().flush();
+        let _ = signals.finish();
+        return;
+    }
+    if mode == "FailLegacy" && ordinal == 2 {
+        worker_expired(&mut signals, 23);
     }
     if mode == "FailFirst" && ordinal == 0 {
         fs::write(root.join("0.failed"), b"actual exit23").unwrap();
@@ -417,7 +454,7 @@ fn actual_workers_overlap_preserve_context_and_replay_in_shard_order() {
     let result = run_with(&fixture.root, &fixture.environment(), control, &mut output);
     let gone = fixture.workers_gone();
     let removed = fixture.captures_removed();
-    let records = (0..2)
+    let records = (0..SLOTS)
         .map(|ordinal| {
             serde_json::from_slice::<serde_json::Value>(
                 &fs::read(fixture.path.join(format!("{ordinal}.arguments.json"))).unwrap(),
@@ -425,7 +462,7 @@ fn actual_workers_overlap_preserve_context_and_replay_in_shard_order() {
             .unwrap()
         })
         .collect::<Vec<_>>();
-    assert!(originals_reaped(&admitted, 2));
+    assert!(originals_reaped(&admitted, 3));
     assert_eq!(result, Ok(()));
     assert!(gone);
     assert!(removed);
@@ -433,11 +470,11 @@ fn actual_workers_overlap_preserve_context_and_replay_in_shard_order() {
     let first = replay.find("shard-0-complete").unwrap();
     let second = replay.find("shard-1-complete").unwrap();
     assert!(first < second);
-    for record in records {
+    for (ordinal, record) in records.into_iter().enumerate() {
         assert_eq!(record["cwd"], fixture.root.to_string_lossy().as_ref());
         assert_eq!(record["literal"], "literal value with spaces");
         assert_eq!(record["program"], "python");
-        assert_eq!(record["pythonPathPresent"], false);
+        assert_eq!(record["pythonPathPresent"], ordinal == 2);
     }
 }
 
@@ -452,7 +489,7 @@ fn failed_child_does_not_cancel_its_peer_and_both_originals_settle() {
     let gone = fixture.workers_gone();
     let completed = fixture.path.join("1.completed").is_file();
     let removed = fixture.captures_removed();
-    assert!(originals_reaped(&admitted, 2));
+    assert!(originals_reaped(&admitted, 3));
     assert_eq!(
         result,
         Err(Cause::Child {
@@ -518,7 +555,7 @@ fn injected_cancellation_retires_both_original_groups_before_return() {
             let end = Instant::now() + Duration::from_secs(5);
             let mut ready = false;
             while Instant::now() < end {
-                if path.join("0.started").is_file() && path.join("1.started").is_file() {
+                if (0..SLOTS).all(|ordinal| path.join(format!("{ordinal}.started")).is_file()) {
                     ready = true;
                     break;
                 }
@@ -531,9 +568,9 @@ fn injected_cancellation_retires_both_original_groups_before_return() {
         (result, coordinator.join().unwrap())
     });
     let gone = fixture.workers_gone();
-    let terms = (0..2).all(|ordinal| fixture.path.join(format!("{ordinal}.term")).is_file());
+    let terms = (0..SLOTS).all(|ordinal| fixture.path.join(format!("{ordinal}.term")).is_file());
     let removed = fixture.captures_removed();
-    assert!(originals_reaped(&admitted, 2));
+    assert!(originals_reaped(&admitted, 3));
     assert!(both_started);
     assert_eq!(result, Err(Cause::Signal(143)));
     assert!(terms);
@@ -562,9 +599,9 @@ fn replay_io_refusal_cannot_hide_peer_retirement_or_leave_captures() {
     let result = run_with(&fixture.root, &fixture.environment(), control, &mut output);
     let gone = fixture.workers_gone();
     let completed =
-        (0..2).all(|ordinal| fixture.path.join(format!("{ordinal}.completed")).is_file());
+        (0..SLOTS).all(|ordinal| fixture.path.join(format!("{ordinal}.completed")).is_file());
     let removed = fixture.captures_removed();
-    assert!(originals_reaped(&admitted, 2));
+    assert!(originals_reaped(&admitted, 3));
     assert_eq!(result, Err(Cause::Io));
     assert!(output.writes > 0);
     assert!(completed);
@@ -583,4 +620,191 @@ fn expired_original_body_refuses_before_spawning_any_worker() {
     assert!(!fixture.path.join("0.started").exists());
     assert!(!fixture.path.join("1.started").exists());
     assert!(fixture.captures_removed());
+}
+
+#[test]
+fn third_spawn_refusal_retires_both_admitted_current_groups() {
+    let fixture = Fixture::new();
+    let (mut control, admitted) = fixture.observed_control();
+    control.spawn_refusal = Some(2);
+    let result = run_with(
+        &fixture.root,
+        &fixture.environment(),
+        control,
+        &mut Vec::new(),
+    );
+    assert_eq!(result, Err(Cause::Spawn(127)));
+    assert!(originals_reaped(&admitted, 2));
+    assert!(fixture.workers_gone());
+    assert!(fixture.captures_removed());
+}
+#[test]
+fn database_profile_keeps_one_current_group_and_one_legacy_group() {
+    let fixture = Fixture::new();
+    let mut environment = fixture.environment();
+    environment.insert("DISPOSABLE_TEST_DATABASE".into(), "1".into());
+    let (control, admitted) = fixture.observed_control();
+    assert_eq!(
+        run_with(&fixture.root, &environment, control, &mut Vec::new()),
+        Ok(())
+    );
+    assert!(originals_reaped(&admitted, 2));
+    assert_eq!(admitted[1].load(Ordering::SeqCst), 0);
+    assert!(fixture.path.join("0.completed").is_file());
+    assert!(fixture.path.join("2.completed").is_file());
+    assert!(fixture.captures_removed());
+}
+#[test]
+fn legacy_failure_does_not_suppress_current_peer_work_or_cleanup() {
+    let fixture = Fixture::new();
+    let mut environment = fixture.environment();
+    environment.insert("SIMPLESTCHAT_TEST_SHARD_MODE".into(), "FailLegacy".into());
+    let (control, admitted) = fixture.observed_control();
+    assert_eq!(
+        run_with(&fixture.root, &environment, control, &mut Vec::new()),
+        Err(Cause::Child {
+            ordinal: 2,
+            status: 23
+        })
+    );
+    assert!(originals_reaped(&admitted, 3));
+    assert!(fixture.path.join("0.completed").is_file());
+    assert!(fixture.path.join("1.completed").is_file());
+    assert!(fixture.captures_removed());
+}
+#[test]
+fn legacy_capture_overflow_cannot_report_success_or_leave_workers() {
+    let fixture = Fixture::new();
+    let mut environment = fixture.environment();
+    environment.insert(
+        "SIMPLESTCHAT_TEST_SHARD_MODE".into(),
+        "OverflowLegacy".into(),
+    );
+    let (control, admitted) = fixture.observed_control();
+    assert!(run_with(&fixture.root, &environment, control, &mut Vec::new()).is_err());
+    assert!(originals_reaped(&admitted, 3));
+    assert!(fixture.workers_gone());
+    assert!(fixture.captures_removed());
+}
+#[test]
+fn legacy_original_and_copy_pins_are_observed_and_all_known_closes_are_attempted() {
+    let fixture = Fixture::new();
+    let mut control = fixture.control();
+    let mut owner = LegacyMaintenance::empty();
+    owner
+        .prepare(&fixture.root, &fixture.environment(), &mut control)
+        .unwrap();
+    let private = owner.private_root().unwrap().to_owned();
+    let copied = private.join("ops/ansible/tests/test_release_playbook.py");
+    assert_eq!(
+        fs::read(&copied).unwrap(),
+        fs::read(
+            fixture
+                .root
+                .join("ops/ansible/tests/test_release_playbook.py")
+        )
+        .unwrap()
+    );
+    let mut bytes = fs::read(&copied).unwrap();
+    bytes[0] ^= 1;
+    fs::write(&copied, bytes).unwrap();
+    assert_eq!(owner.current(&mut control), Err(Cause::Inventory));
+    owner.inject_close_refusal(0);
+    assert_eq!(owner.close(&mut control), Err(Cause::Inventory));
+    assert!(owner.all_known_handles_closed());
+    assert_eq!(owner.close_attempts(), 11);
+    assert!(!private.exists());
+    assert!(control.finish().is_ok());
+}
+#[test]
+fn unknown_legacy_namespace_is_preserved_and_cleanup_refuses() {
+    let fixture = Fixture::new();
+    let mut control = fixture.control();
+    let mut owner = LegacyMaintenance::empty();
+    owner
+        .prepare(&fixture.root, &fixture.environment(), &mut control)
+        .unwrap();
+    let private = owner.private_root().unwrap().to_owned();
+    fs::write(private.join("ops/ansible/tests/unknown"), b"unowned").unwrap();
+    assert_eq!(owner.close(&mut control), Err(Cause::Cleanup));
+    assert!(owner.all_known_handles_closed());
+    assert!(private.join("ops/ansible/tests/unknown").is_file());
+    assert!(control.finish().is_ok());
+}
+#[test]
+fn source_pin_failure_never_starts_a_child_and_retains_first_cause() {
+    let fixture = Fixture::new();
+    let path = fixture
+        .root
+        .join("ops/ansible/tests/test_release_playbook.py");
+    let mut bytes = fs::read(&path).unwrap();
+    bytes[0] ^= 1;
+    fs::write(&path, bytes).unwrap();
+    let (control, admitted) = fixture.observed_control();
+    assert_eq!(
+        run_with(
+            &fixture.root,
+            &fixture.environment(),
+            control,
+            &mut Vec::new()
+        ),
+        Err(Cause::Inventory)
+    );
+    assert!(originals_reaped(&admitted, 0));
+    assert!(fixture.captures_removed());
+}
+#[test]
+fn checked_close_refusal_still_closes_every_known_file_and_keeps_prior_cause() {
+    let fixture = Fixture::new();
+    let mut control = fixture.control();
+    let mut owner = LegacyMaintenance::empty();
+    owner
+        .prepare(&fixture.root, &fixture.environment(), &mut control)
+        .unwrap();
+    let private = owner.private_root().unwrap().to_owned();
+    owner.inject_close_refusal(0);
+    control.note(Cause::Child {
+        ordinal: 2,
+        status: 23,
+    });
+    let closed = owner.close(&mut control);
+    assert_eq!(closed, Err(Cause::Close));
+    control.remember(closed);
+    assert!(owner.all_known_handles_closed());
+    assert_eq!(owner.close_attempts(), 11);
+    assert!(!private.exists());
+    assert_eq!(
+        control.finish(),
+        Err(Cause::Child {
+            ordinal: 2,
+            status: 23
+        })
+    );
+}
+#[test]
+fn symlink_and_hardlinked_frozen_sources_refuse_without_a_child() {
+    for hard in [false, true] {
+        let fixture = Fixture::new();
+        let source = fixture
+            .root
+            .join("ops/ansible/tests/test_release_playbook.py");
+        let saved = fixture.path.join("held-source");
+        fs::rename(&source, &saved).unwrap();
+        if hard {
+            fs::hard_link(&saved, &source).unwrap();
+        } else {
+            symlink(&saved, &source).unwrap();
+        }
+        let mut control = fixture.control();
+        let mut owner = LegacyMaintenance::empty();
+        assert_eq!(
+            owner.prepare(&fixture.root, &fixture.environment(), &mut control),
+            Err(Cause::Inventory)
+        );
+        assert!(owner.close(&mut control).is_ok());
+        assert!(owner.all_known_handles_closed());
+        assert!(!fixture.path.join("0.started").exists());
+        assert!(fixture.captures_removed());
+        assert!(control.finish().is_ok());
+    }
 }
