@@ -254,7 +254,6 @@
               - --keep-old-files
               - --no-same-owner
               - --no-same-permissions
-              - --no-overwrite-dir
               - --no-wildcards
               - --
               - ops-release.json
