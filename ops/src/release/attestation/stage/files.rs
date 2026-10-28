@@ -173,6 +173,49 @@ impl Drop for Pending {
     }
 }
 impl Records {
+    /// Compare candidate input identity with all still-owned atomic records,
+    /// including a temporary generation not yet admitted for publication.
+    pub fn input_aliases(&self, input: &File, owner: &mut Owner) -> Result<bool> {
+        owner.check(Window::Body)?;
+        let selected = control::io(owner, input.metadata())?;
+        if let Some(original) = &self.initial_journal {
+            let stamp = control::io(owner, original.file().metadata())?;
+            if selected.dev() == stamp.dev() && selected.ino() == stamp.ino() {
+                return Ok(true);
+            }
+        }
+        for item in &self.files {
+            owner.check(Window::Body)?;
+            let stamp = control::io(owner, item.file.as_ref().ok_or(Cause::Close)?.metadata())?;
+            if selected.dev() == stamp.dev() && selected.ino() == stamp.ino() {
+                return Ok(true);
+            }
+        }
+        owner.check(Window::Body)?;
+        Ok(false)
+    }
+    /// Require the latest owned generation before an unlocked interval may
+    /// resume its original transaction. Equal replacement bytes are not enough.
+    pub fn check_owned(&self, parent: &Dir, name: &str, owner: &mut Owner) -> Result<()> {
+        let mut matching = self
+            .files
+            .iter()
+            .filter(|item| item.parent.path() == parent.path() && item.name == name);
+        let item = matching.next().ok_or(Cause::Changed)?;
+        if matching.next().is_some() {
+            return control::failed(owner, Cause::Changed);
+        }
+        item.verify(owner, false)
+    }
+    /// Handoff boundaries retain the complete owned record inventory, including
+    /// a freshly published staged marker that is not an original input file.
+    pub fn check_all(&self, owner: &mut Owner) -> Result<()> {
+        self.check_guard(owner)?;
+        for item in &self.files {
+            item.verify(owner, false)?;
+        }
+        owner.check(Window::Body)
+    }
     #[cfg(test)]
     fn fault(&mut self, name: &str, bytes: &[u8], boundary: u8) -> bool {
         if self.fault.is_none() {

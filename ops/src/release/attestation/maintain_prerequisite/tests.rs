@@ -84,7 +84,7 @@ fn internal_init_roundtrip_keeps_trial_nonce_and_same_clock() {
             assert_eq!(actual, nonce);
             assert_eq!(actual_clock, clock);
         }
-        Options::Run(_) => panic!("wrong fixed role"),
+        Options::Run(_) | Options::NormalInit { .. } => panic!("wrong fixed role"),
     }
     assert!(matches!(
         Options::parse(&args(&[
@@ -112,6 +112,109 @@ fn absolute_init_interval_cannot_reset_or_extend() {
         ("1", "990000000001", "1050000000002"),
     ] {
         assert!(Clock::parse(values.0, values.1, values.2).is_err());
+    }
+}
+
+#[test]
+fn inherited_normal_init_keeps_original_origin_without_widening_fixed_entry() {
+    let origin = 1_000_000_000u64;
+    let end = origin + 1500 * 1_000_000_000;
+    let body = end - FINAL * 1_000_000_000;
+    let nonce = "a".repeat(32);
+    let words = args(&[
+        "normal-init",
+        "--nonce",
+        &nonce,
+        "--origin-monotonic-ns",
+        &origin.to_string(),
+        "--body-deadline-monotonic-ns",
+        &body.to_string(),
+        "--deadline-monotonic-ns",
+        &end.to_string(),
+    ]);
+    match Options::parse(&words).unwrap() {
+        Options::NormalInit {
+            nonce: actual,
+            clock,
+        } => {
+            assert_eq!(actual, nonce);
+            assert_eq!(clock.origin, origin);
+            assert_eq!(clock.body, body);
+            assert_eq!(clock.end, end);
+        }
+        _ => panic!("wrong inherited normal role"),
+    }
+    assert!(Clock::parse(&origin.to_string(), &body.to_string(), &end.to_string()).is_err());
+    let mut with_trial = words;
+    with_trial.extend(args(&["--trial", "cancel-owned-launcher"]));
+    assert!(Options::parse(&with_trial).is_err());
+}
+
+#[test]
+fn inherited_clock_refuses_noncanonical_or_unbounded_parent_intervals() {
+    assert!(Clock::parse_inherited("1", "1740000000001", "1800000000001").is_ok());
+    for (origin, body, end) in [
+        ("0", "1740000000000", "1800000000000"),
+        ("01", "1740000000001", "1800000000001"),
+        ("1", "1740000000002", "1800000000002"),
+        ("1", "1740000000002", "1800000000001"),
+        ("1", "1", "60000000001"),
+        ("2", "1", "60000000001"),
+        ("18446744073709551616", "1740000000001", "1800000000001"),
+    ] {
+        assert!(Clock::parse_inherited(origin, body, end).is_err());
+    }
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn inherited_clock_carries_preparation_in_the_original_parent_interval() {
+    use std::time::{Duration, Instant};
+    let started = Instant::now()
+        .checked_sub(Duration::from_secs(100))
+        .unwrap();
+    let mut owner =
+        Owner::new(started, Duration::from_secs(1800), Duration::from_secs(60)).unwrap();
+    let end = started + Duration::from_secs(1400);
+    let body = end - Duration::from_secs(FINAL);
+    let clock = Clock::inherited(&mut owner, body, end).unwrap();
+    let interval = clock.end - clock.origin;
+    let work = clock.body - clock.origin;
+    let original_end = owner.end();
+    let original_body = owner.body_end();
+    let checked = clock.require_work(&mut owner);
+    let finished = owner.finish();
+    assert_eq!(interval, 1400 * 1_000_000_000);
+    assert_eq!(work, 1340 * 1_000_000_000);
+    assert_eq!(original_end, started + Duration::from_secs(1800));
+    assert_eq!(original_body, started + Duration::from_secs(1740));
+    assert_eq!(checked, Ok(()));
+    assert_eq!(finished, Ok(()));
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn borrowed_normal_refuses_insufficient_debt_before_any_native_effect() {
+    use std::time::{Duration, Instant};
+    for preparation in [Duration::ZERO, Duration::from_secs(100)] {
+        let started = Instant::now().checked_sub(preparation).unwrap();
+        let mut owner =
+            Owner::new(started, Duration::from_secs(1800), Duration::from_secs(60)).unwrap();
+        let original_end = owner.end();
+        let original_body = owner.body_end();
+        let ceiling = owner.now() + Duration::from_secs(KNOWN + FINAL);
+        let mut observed = None;
+        let result = launch_normal(&mut owner, ceiling, &mut observed);
+        let retained_end = owner.end();
+        let retained_body = owner.body_end();
+        let first = owner.error();
+        let finished = owner.finish();
+        assert!(matches!(result, Err(Cause::Deadline)));
+        assert!(observed.is_none());
+        assert_eq!(retained_end, original_end);
+        assert_eq!(retained_body, original_body);
+        assert_eq!(first, Some(Cause::Deadline));
+        assert_eq!(finished, Err(Cause::Deadline));
     }
 }
 #[test]

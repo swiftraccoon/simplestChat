@@ -64,6 +64,12 @@ pub(super) fn exact(value: &Value, names: &[&str]) -> Result<()> {
 }
 impl Request {
     pub fn decode(bytes: &[u8]) -> Result<Self> {
+        Self::decode_for(bytes, false)
+    }
+    pub fn decode_host(bytes: &[u8]) -> Result<Self> {
+        Self::decode_for(bytes, true)
+    }
+    fn decode_for(bytes: &[u8], host: bool) -> Result<Self> {
         let value = decode(bytes)?;
         let request: Self = serde_json::from_value(value).map_err(|_| Error::Input)?;
         let image = |value: &str| {
@@ -83,20 +89,29 @@ impl Request {
                     .all(|v| !v.is_empty() && v.bytes().all(|b| b.is_ascii_digit()))
         };
         if request.schema_version != 1
-            || request.scope != "MaintainLauncherPrerequisiteRequest"
-            || ![
-                "positive",
-                "dirty-source",
-                "cancel-owned-launcher",
-                "timeout-stopped-launcher",
-            ]
+            || request.scope
+                != if host {
+                    "PreparedHostMaintenanceRequest"
+                } else {
+                    "MaintainLauncherPrerequisiteRequest"
+                }
+            || !(if host {
+                &["host-success", "host-launcher-refusal"][..]
+            } else {
+                &[
+                    "positive",
+                    "dirty-source",
+                    "cancel-owned-launcher",
+                    "timeout-stopped-launcher",
+                ][..]
+            })
             .contains(&request.scenario.as_str())
             || !digest(&request.run_id, 32)
             || !digest(&request.revision, 40)
             || !digest(&request.source_tree, 40)
-            || !(1..=510).contains(&request.setup_seconds)
-            || !(1170..=1680).contains(&request.body_seconds)
-            || !(1170..=1800).contains(&request.end_seconds)
+            || !(1..=if host { 1560 } else { 510 }).contains(&request.setup_seconds)
+            || !(if host { 2040..=3660 } else { 1170..=1680 }).contains(&request.body_seconds)
+            || !(if host { 2040..=3780 } else { 1170..=1800 }).contains(&request.end_seconds)
             || request.end_seconds <= request.body_seconds
             || request.end_seconds - request.body_seconds > 120
             || !image(&request.postgres_image)
@@ -126,6 +141,17 @@ impl Request {
             return Err(Error::Input);
         }
         Ok(request)
+    }
+    pub fn is_host(&self) -> bool {
+        self.scope == "PreparedHostMaintenanceRequest"
+    }
+    /// The new host profile first establishes the same positive cold baseline.
+    pub fn native_scenario(&self) -> &str {
+        if self.is_host() {
+            "positive"
+        } else {
+            &self.scenario
+        }
     }
     pub fn trial(&self) -> &'static str {
         match self.scenario.as_str() {

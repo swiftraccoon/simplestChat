@@ -5,6 +5,7 @@ mod catalog;
 mod control;
 mod execute;
 mod files;
+mod host_projection;
 mod options;
 mod process;
 mod projection;
@@ -16,21 +17,31 @@ mod work;
 
 /// Synchronous outer owner survives runtime teardown, mask restoration and output.
 pub(super) fn run(arguments: &[String]) -> std::process::ExitCode {
+    run_for(arguments, options::Purpose::Prerequisite)
+}
+pub(super) fn run_host(arguments: &[String]) -> std::process::ExitCode {
+    run_for(arguments, options::Purpose::Host)
+}
+fn run_for(arguments: &[String], purpose: options::Purpose) -> std::process::ExitCode {
     use std::{io::Write, time::Instant};
     let started = Instant::now();
-    let options = match options::Options::parse(arguments) {
+    let parsed = match purpose {
+        options::Purpose::Prerequisite => options::Options::parse(arguments),
+        options::Purpose::Host => options::Options::parse_host(arguments),
+    };
+    let options = match parsed {
         Ok(None) => {
-            println!("{}", options::USAGE);
+            println!("{}", purpose.usage());
             return std::process::ExitCode::SUCCESS;
         }
         Ok(Some(value)) => value,
         Err(_) => {
-            eprintln!("{}", options::USAGE);
+            eprintln!("{}", purpose.usage());
             return std::process::ExitCode::from(2);
         }
     };
     let previous = nix::sys::stat::umask(nix::sys::stat::Mode::from_bits_truncate(0o077));
-    let mut control = match control::Control::new(started) {
+    let mut control = match control::Control::for_purpose(started, purpose) {
         Ok(value) => value,
         Err(_) => {
             let _ = nix::sys::stat::umask(previous);
@@ -51,7 +62,7 @@ pub(super) fn run(arguments: &[String]) -> std::process::ExitCode {
             control.record(Error::Io);
             control.settle();
             serde_json::json!({"schemaVersion":2,
-                "scope":"SignedMuslMaintenanceLauncherPrerequisiteKvm",
+                "scope":purpose.summary_scope(),
                 "scenario":options.scenario,"passed":false,"failure":"runtime",
                 "failureKind":"io","cleanupPassed":false,"preparationQemu":null})
         }

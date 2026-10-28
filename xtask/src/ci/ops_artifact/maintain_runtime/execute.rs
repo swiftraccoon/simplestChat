@@ -2,10 +2,11 @@
 
 use super::{
     Error, Result, auth, catalog,
-    control::{Control, DEBT, SETUP},
+    control::Control,
     decode,
     files::{self, Original},
-    options::Options,
+    host_projection,
+    options::{Options, Purpose},
     process::Runner,
     projection, source,
     vm::{self, Session, Vm},
@@ -98,7 +99,7 @@ fn timing(report: &mut Value, name: &str, control: &mut Control) -> Result<()> {
     let elapsed = Instant::now()
         .checked_duration_since(control.start)
         .ok_or(Error::Deadline)?;
-    if elapsed >= super::control::WHOLE {
+    if elapsed >= control.whole() {
         return Err(Error::Deadline);
     }
     report["elapsedSeconds"][name] = json!((elapsed.as_secs_f64() * 1000.0).round() / 1000.0);
@@ -282,6 +283,9 @@ impl Owners {
         control: &mut Control,
         report: &mut Value,
     ) -> Result<()> {
+        if options.purpose != control.purpose() {
+            return Err(Error::Input);
+        }
         options.guard()?;
         control.check()?;
         let parent = options.output.parent().ok_or(Error::Input)?;
@@ -470,6 +474,43 @@ impl Owners {
         vm.check(control)?;
         runner.integrity(control)?;
         timing(report, "fixture-setup", control)?;
+        if options.purpose == Purpose::Host {
+            checkpoint(report, "host-upgrade");
+            let arguments = vm.ssh(
+                runner,
+                control,
+                &[
+                    "/usr/bin/sudo".into(),
+                    "-n".into(),
+                    "/root/simplestchat-vm-fixture/ops-input/simplestchat-ops".into(),
+                    "release".into(),
+                    "maintain-prerequisite".into(),
+                    "host-upgrade".into(),
+                ],
+            )?;
+            let upgraded = runner
+                .run(
+                    control,
+                    "host-upgrade",
+                    "ssh",
+                    arguments,
+                    Duration::from_secs(120),
+                    &[0],
+                )
+                .await?;
+            if upgraded.stdout.len() > 16384 {
+                return Err(Error::Refused);
+            }
+            report["hostUpgrade"] = host_projection::upgrade(
+                decode(&upgraded.stdout)?,
+                &run,
+                &ops.pin("simplestchat-ops")?.sha256,
+                upgraded.status,
+            )?;
+            ops.check(control)?;
+            vm.check(control)?;
+            timing(report, "host-upgrade", control)?;
+        }
         checkpoint(report, "guest-setup");
         self.session = Some(Session::start(vm, runner, control).await?);
         let session = self.session.as_mut().ok_or(Error::Refused)?;
@@ -507,27 +548,50 @@ impl Owners {
             })
             .collect::<Result<std::collections::BTreeMap<_, _>>>()?;
         let pin = |original: &Original| json!({"sha256":original.sha256,"bytes":original.bytes});
-        let expected = json!({"schemaVersion":1,"scope":"MaintainLauncherPrerequisiteRequest",
+        let request_scope = match options.purpose {
+            Purpose::Prerequisite => "MaintainLauncherPrerequisiteRequest",
+            Purpose::Host => "PreparedHostMaintenanceRequest",
+        };
+        let setup_seconds = (control.start + control.setup_limit())
+            .saturating_duration_since(sample)
+            .as_secs();
+        let expected = json!({"schemaVersion":1,"scope":request_scope,
             "postgresImage":postgres,"engineVersion":engine,"caddyImage":caddy,"runId":run,
             "revision":options.revision,"scenario":options.scenario,
-            "setupSeconds":(control.start+SETUP).saturating_duration_since(sample).as_secs(),
+            "setupSeconds":setup_seconds,
             "bodySeconds":control.whole_body_end().saturating_duration_since(sample).as_secs(),
             "endSeconds":control.end().saturating_duration_since(sample).as_secs(),
             "sourcePins":sources,"helperPins":helpers,"binary":pin(ops.pin("simplestchat-ops")?),
             "manifest":pin(server.pin("release.json")?),"archive":pin(server.pin("image.tar")?),
             "sourceBundle":pin(&bundle.original),"sourceTree":bundle.tree});
         session.send(&expected, control).await?;
-        let end = control
-            .body_end()
-            .min(Instant::now() + Duration::from_secs(300));
+        let end = match options.purpose {
+            Purpose::Prerequisite => control
+                .body_end()
+                .min(Instant::now() + Duration::from_secs(300)),
+            Purpose::Host => control.body_end(),
+        };
         let first = session.line(control, end).await?;
-        if first["scope"] == "MaintainLauncherPrerequisiteGuest" {
-            report["maintainProof"] = projection::guest(first, &expected)?;
+        let (guest_scope, ready_scope) = match options.purpose {
+            Purpose::Prerequisite => (
+                "MaintainLauncherPrerequisiteGuest",
+                "MaintainLauncherPrerequisiteReady",
+            ),
+            Purpose::Host => (
+                "PreparedHostMaintenanceGuest",
+                "PreparedHostMaintenanceReady",
+            ),
+        };
+        if first["scope"] == guest_scope {
+            report[options.purpose.proof_key()] = match options.purpose {
+                Purpose::Prerequisite => projection::guest(first, &expected)?,
+                Purpose::Host => host_projection::guest(first, &expected)?,
+            };
             return Err(Error::Refused);
         }
         projection::exact(&first, &["schemaVersion", "scope", "runId", "ready"])?;
         if first
-            != json!({"schemaVersion":1,"scope":"MaintainLauncherPrerequisiteReady",
+            != json!({"schemaVersion":1,"scope":ready_scope,
             "runId":run,"ready":true})
         {
             return Err(Error::Refused);
@@ -543,7 +607,7 @@ impl Owners {
         if control
             .whole_body_end()
             .saturating_duration_since(Instant::now())
-            < DEBT
+            < control.debt()
         {
             return Err(Error::Deadline);
         }
@@ -552,10 +616,16 @@ impl Owners {
             .send(&json!({"schemaVersion":1,"runId":run,"go":true}), control)
             .await?;
         checkpoint(report, "native");
-        let end = control.body_end().min(Instant::now() + DEBT);
-        let final_frame = projection::guest(session.line(control, end).await?, &expected)?;
+        let end = control
+            .body_end()
+            .min(Instant::now() + control.response_debt());
+        let frame = session.line(control, end).await?;
+        let final_frame = match options.purpose {
+            Purpose::Prerequisite => projection::guest(frame, &expected)?,
+            Purpose::Host => host_projection::guest(frame, &expected)?,
+        };
         let passed = final_frame["passed"] == true;
-        report["maintainProof"] = final_frame;
+        report[options.purpose.proof_key()] = final_frame;
         timing(report, "native", control)?;
         if !passed {
             return Err(Error::Refused);
@@ -647,7 +717,7 @@ impl Owners {
 }
 pub(super) async fn run(options: &Options, control: &mut Control) -> Value {
     let mut report = json!({"schemaVersion":2,
-        "scope":"SignedMuslMaintenanceLauncherPrerequisiteKvm",
+        "scope":options.purpose.summary_scope(),
         "scenario":options.scenario,"passed":false,"failure":"guard","checkpoint":"guard",
         "cleanupPassed":false,"failureKind":null,"elapsedSeconds":{},"opsVerifierCalls":0,
         "opsCases":[],"maintainProof":null,"serverVerifierCalls":0,
@@ -657,6 +727,14 @@ pub(super) async fn run(options: &Options, control: &mut Control) -> Value {
         "controllerImplementation":"rust-outer-controller",
         "controllerBinaryUse":"source-built-gnu-acquisition-and-passive-ELF-inspection-only",
         "guestClientWholeGroupIndependentlyObserved":false,"preparationQemu":null});
+    if options.purpose == Purpose::Host {
+        report
+            .as_object_mut()
+            .expect("fixed report object")
+            .remove("maintainProof");
+        report["hostProof"] = Value::Null;
+        report["hostUpgrade"] = Value::Null;
+    }
     let mut owners = Owners::new();
     if let Err(error) = owners.body(options, control, &mut report).await {
         control.record(error);

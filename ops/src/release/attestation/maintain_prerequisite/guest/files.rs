@@ -205,6 +205,9 @@ impl Original {
     pub fn file(&self) -> Result<&File> {
         self.file.as_ref().ok_or(Error::Close)
     }
+    pub fn closed(&self) -> bool {
+        self.file.is_none() && self.parent.is_none()
+    }
     pub fn require_parent(&self, uid: u32, mode: u32, control: &mut Control) -> Result<()> {
         self.check_metadata(control)?;
         let held = self

@@ -233,59 +233,13 @@ impl State {
         report["roomsObservedBeforeStopAt"] = json!(timestamp());
         Ok(())
     }
-    pub(super) async fn candidate(
+    pub(super) fn selection_journal(
         &mut self,
         access: &Access,
-        old: &Json,
-        new_image: &str,
+        services: &Json,
+        mut compose: String,
         owner: &mut Owner,
-        executor: &mut impl Executor,
-    ) -> Result<(Vec<u8>, Vec<u8>)> {
-        let data = self.bytes("compose.public.yml", 1024 * 1024, owner)?;
-        // Path.read_text() performs universal CRLF/CR newline translation;
-        // rollback copies below retain the exact original bytes separately.
-        let mut compose = self
-            .policy(owner, raw_text(&data))?
-            .replace("\r\n", "\n")
-            .replace('\r', "\n");
-        let before_data = self
-            .compose(
-                access,
-                argv(&["--profile", "maintenance", "config", "--format", "json"]),
-                None,
-                false,
-                owner,
-                executor,
-            )
-            .await?;
-        let before = self.policy(owner, decode(&before_data))?;
-        let old_image = self.policy(owner, text(old, "serverImage"))?;
-        let socket = access.root.join("postgres-socket");
-        let socket = socket.to_str().ok_or(Cause::Input)?;
-        self.policy(owner, policy::compose(&before, socket, old_image))?;
-        let services = self.policy(owner, member(&before, "services"))?;
-        let proxy = self.policy(owner, member(services, "caddy"))?;
-        let store = access.root.join("browser-assets");
-        self.policy(
-            owner,
-            browser_mount(proxy, store.to_str().ok_or(Cause::Input)?),
-        )?;
-        self.input("browser-assets-installed.json", 512, access, owner)?;
-        self.input("Caddyfile", u64::MAX, access, owner)?;
-        let receipt = self.bytes("browser-assets-installed.json", 512, owner)?;
-        let receipt = self.policy(owner, decode(&receipt))?;
-        let caddy = &self.records.files[self.inputs["Caddyfile"]];
-        let valid = object(&receipt).is_ok_and(|v| v.len() == 2)
-            && receipt
-                .get("schemaVersion")
-                .is_some_and(|v| v.semantic_eq(&Json::Integer("1".into())))
-            && receipt.get("caddyfileSha256").and_then(Json::string) == caddy.sha256();
-        if !valid {
-            return self.refused(
-                owner,
-                "Browser asset proxy configuration changed; use explicit maintenance",
-            );
-        }
+    ) -> Result<(String, bool)> {
         #[cfg(test)]
         let journal = access
             .root
@@ -353,6 +307,62 @@ impl State {
                 changed = true;
             }
         }
+        Ok((compose, changed))
+    }
+    pub(super) async fn candidate(
+        &mut self,
+        access: &Access,
+        old: &Json,
+        new_image: &str,
+        owner: &mut Owner,
+        executor: &mut impl Executor,
+    ) -> Result<(Vec<u8>, Vec<u8>)> {
+        let data = self.bytes("compose.public.yml", 1024 * 1024, owner)?;
+        // Path.read_text() performs universal CRLF/CR newline translation;
+        // rollback copies below retain the exact original bytes separately.
+        let compose = self
+            .policy(owner, raw_text(&data))?
+            .replace("\r\n", "\n")
+            .replace('\r', "\n");
+        let before_data = self
+            .compose(
+                access,
+                argv(&["--profile", "maintenance", "config", "--format", "json"]),
+                None,
+                false,
+                owner,
+                executor,
+            )
+            .await?;
+        let before = self.policy(owner, decode(&before_data))?;
+        let old_image = self.policy(owner, text(old, "serverImage"))?;
+        let socket = access.root.join("postgres-socket");
+        let socket = socket.to_str().ok_or(Cause::Input)?;
+        self.policy(owner, policy::compose(&before, socket, old_image))?;
+        let services = self.policy(owner, member(&before, "services"))?;
+        let proxy = self.policy(owner, member(services, "caddy"))?;
+        let store = access.root.join("browser-assets");
+        self.policy(
+            owner,
+            browser_mount(proxy, store.to_str().ok_or(Cause::Input)?),
+        )?;
+        self.input("browser-assets-installed.json", 512, access, owner)?;
+        self.input("Caddyfile", u64::MAX, access, owner)?;
+        let receipt = self.bytes("browser-assets-installed.json", 512, owner)?;
+        let receipt = self.policy(owner, decode(&receipt))?;
+        let caddy = &self.records.files[self.inputs["Caddyfile"]];
+        let valid = object(&receipt).is_ok_and(|v| v.len() == 2)
+            && receipt
+                .get("schemaVersion")
+                .is_some_and(|v| v.semantic_eq(&Json::Integer("1".into())))
+            && receipt.get("caddyfileSha256").and_then(Json::string) == caddy.sha256();
+        if !valid {
+            return self.refused(
+                owner,
+                "Browser asset proxy configuration changed; use explicit maintenance",
+            );
+        }
+        let (compose, changed) = self.selection_journal(access, services, compose, owner)?;
         let needle = format!("image: \"{old_image}\"");
         self.policy(
             owner,
@@ -421,7 +431,11 @@ impl State {
     }
 }
 
-fn expected_selection(before: &Json, image: &str, journal: bool) -> policy::Result<Json> {
+pub(super) fn expected_selection(
+    before: &Json,
+    image: &str,
+    journal: bool,
+) -> policy::Result<Json> {
     let mut expected = before.clone();
     let services = object_mut(
         object_mut(&mut expected)?

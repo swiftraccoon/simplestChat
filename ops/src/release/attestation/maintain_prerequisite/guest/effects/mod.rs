@@ -1,6 +1,8 @@
 //! Owned daemon effects and independent observations for the fixed guest.
 
 mod actors;
+#[path = "../host/effects.rs"]
+mod host;
 mod observation;
 mod policy;
 #[cfg(test)]
@@ -739,6 +741,10 @@ impl Fixture {
         let materials = materials::analyze(&bytes, SystemTime::now(), remaining)?;
         proof.bind(&materials)?;
         self.materials = Some(materials);
+        if ctx.request.is_host() {
+            ctx.control.checkpoint = "host-trust";
+            super::host::prepare_trust(ctx, &root_bytes).await?;
+        }
         Self::docker(
             ctx,
             "natural-caddy-stop",

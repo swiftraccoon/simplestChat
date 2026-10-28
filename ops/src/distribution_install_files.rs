@@ -146,6 +146,7 @@ struct Temporary {
     published: bool,
     executable: bool,
     copied: bool,
+    displaced: Option<usize>,
 }
 pub(super) struct Tree {
     pub access: Access,
@@ -383,6 +384,19 @@ impl Tree {
         phase: Phase,
         collect: bool,
     ) -> Result<Vec<u8>> {
+        let (bytes, digest) = self.read_digest(id, owner, phase, collect)?;
+        if digest != self.entries[id].pin.sha256 {
+            return Err(Failure::Unproven);
+        }
+        Ok(bytes)
+    }
+    fn read_digest(
+        &self,
+        id: usize,
+        owner: &mut Owner,
+        phase: Phase,
+        collect: bool,
+    ) -> Result<(Vec<u8>, String)> {
         let entry = &self.entries[id];
         self.visible(id)?;
         if !same(&entry.before, &io(self.file(id).metadata())?) {
@@ -411,14 +425,12 @@ impl Tree {
             }
         }
         owner.check(phase)?;
-        if io(reader.read(&mut buffer[..1]))? != 0
-            || hex(&hash.finalize()) != entry.pin.sha256
-            || !same(&entry.before, &io(reader.metadata())?)
+        if io(reader.read(&mut buffer[..1]))? != 0 || !same(&entry.before, &io(reader.metadata())?)
         {
             return Err(Failure::Unproven);
         }
         self.visible(id)?;
-        Ok(bytes)
+        Ok((bytes, hex(&hash.finalize())))
     }
     pub fn physical(&self, id: usize) -> PathBuf {
         self.access.physical(&self.entries[id].path)
@@ -507,6 +519,68 @@ impl Tree {
         self.read(id, owner, Phase::Body, false)?;
         Ok(true)
     }
+    /// Return the original old entry to replace, or None for an exact repeat.
+    /// Neither a missing leaf nor any identity outside the two fixed pins is
+    /// upgraded. The measured digest selects policy, not a fallback after refusal.
+    pub fn upgrade_existing(
+        &mut self,
+        parent: usize,
+        candidate: &Pin,
+        installed: &request::InstalledBinary,
+        owner: &mut Owner,
+    ) -> Result<Option<usize>> {
+        if !self.absent(parent, TEMP)? || self.absent(parent, request::NAME)? {
+            return Err(Failure::Unproven);
+        }
+        self.capacity()?;
+        self.ordinary(parent, request::NAME)?;
+        let file = self.access.opened(File::from(sys(rustix::fs::openat(
+            self.dir_file(parent),
+            request::NAME,
+            FLAGS,
+            Mode::empty(),
+        ))?));
+        let before = match io(file.metadata()).and_then(|stamp| {
+            if self.regular(&stamp, 0o755)
+                && (stamp.len() == candidate.bytes || stamp.len() == installed.bytes)
+            {
+                Ok(stamp)
+            } else {
+                Err(Failure::Unproven)
+            }
+        }) {
+            Ok(stamp) => stamp,
+            Err(error) => {
+                let _ = self.access.close(file);
+                return Err(error);
+            }
+        };
+        let path = Path::new("/")
+            .join(request::DESTINATION)
+            .join(request::NAME);
+        let mut pin = candidate.clone();
+        pin.path = path.clone();
+        pin.bytes = before.len();
+        let id = self.entries.len();
+        self.entries.push(Entry {
+            file: Some(file),
+            before,
+            parent,
+            name: request::NAME.into(),
+            path,
+            pin,
+            active: true,
+        });
+        let (_, observed) = self.read_digest(id, owner, Phase::Body, false)?;
+        if observed == candidate.sha256 && self.entries[id].pin.bytes == candidate.bytes {
+            return Ok(None);
+        }
+        if observed != installed.sha256 || self.entries[id].pin.bytes != installed.bytes {
+            return Err(Failure::Unproven);
+        }
+        self.entries[id].pin.sha256 = installed.sha256.clone();
+        Ok(Some(id))
+    }
     pub fn verify_directories(&self) -> Result<()> {
         for (id, entry) in self.directories.iter().enumerate() {
             let stamp = io(self.dir_file(id).metadata())?;
@@ -539,9 +613,34 @@ impl Tree {
         owner: &mut Owner,
         guard: &crate::release::assets::Workload,
     ) -> Result<()> {
+        self.publish_selected(parent, source, None, owner, guard)
+    }
+    pub fn replace(
+        &mut self,
+        parent: usize,
+        source: usize,
+        previous: usize,
+        owner: &mut Owner,
+        guard: &crate::release::assets::Workload,
+    ) -> Result<()> {
+        self.publish_selected(parent, source, Some(previous), owner, guard)
+    }
+    fn publish_selected(
+        &mut self,
+        parent: usize,
+        source: usize,
+        previous: Option<usize>,
+        owner: &mut Owner,
+        guard: &crate::release::assets::Workload,
+    ) -> Result<()> {
         owner.check(Phase::Body)?;
         self.verify_directories()?;
-        if !self.absent(parent, TEMP)? || !self.absent(parent, request::NAME)? {
+        if !self.absent(parent, TEMP)? {
+            return Err(Failure::Unproven);
+        }
+        if let Some(previous) = previous {
+            self.read(previous, owner, Phase::Body, false)?;
+        } else if !self.absent(parent, request::NAME)? {
             return Err(Failure::Unproven);
         }
         self.capacity()?;
@@ -578,6 +677,7 @@ impl Tree {
             published: false,
             executable: false,
             copied: false,
+            displaced: None,
         });
         self.access.event("created", "")?;
         sys(rustix::fs::fchmod(
@@ -601,6 +701,9 @@ impl Tree {
         self.access.event("before-publish", "")?;
         self.verify_directories()?;
         self.visible(id)?;
+        if let Some(previous) = previous {
+            self.read(previous, owner, Phase::Body, false)?;
+        }
         guard.validate().map_err(|_| Failure::Unproven)?;
         owner.check(Phase::Body)?;
         sys(rustix::fs::renameat_with(
@@ -608,14 +711,23 @@ impl Tree {
             TEMP,
             self.dir_file(parent),
             request::NAME,
-            RenameFlags::NOREPLACE,
+            if previous.is_some() {
+                RenameFlags::EXCHANGE
+            } else {
+                RenameFlags::NOREPLACE
+            },
         ))?;
         // This publication is known BEFORE every fallible post-rename probe.
         self.temporary.as_mut().unwrap().published = true;
+        self.temporary.as_mut().unwrap().displaced = previous;
         self.entries[id].name = request::NAME.into();
         self.entries[id].path = Path::new("/")
             .join(request::DESTINATION)
             .join(request::NAME);
+        if let Some(previous) = previous {
+            self.entries[previous].name = TEMP.into();
+            self.entries[previous].path = Path::new("/").join(request::DESTINATION).join(TEMP);
+        }
         self.access.event("after-publish", "")?;
         let stamp = io(self.file(id).metadata())?;
         if !changed_time_only(&self.entries[id].before, &stamp) {
@@ -623,6 +735,7 @@ impl Tree {
         }
         self.entries[id].before = stamp;
         self.read(id, owner, Phase::Body, false)?;
+        self.retire_displaced(owner, Phase::Body)?;
         self.access.event("fsync-parent", "")?;
         io(self.dir_file(parent).sync_all())?;
         owner.check(Phase::Body)
@@ -713,12 +826,61 @@ impl Tree {
         self.read(id, owner, Phase::Body, false)?;
         Ok(())
     }
-    fn cleanup_temporary(&mut self) -> Result<()> {
+    fn rejoin_renamed(&mut self, id: usize) -> Result<()> {
+        let stamp = io(self.file(id).metadata())?;
+        if !changed_time_only(&self.entries[id].before, &stamp) {
+            return Err(Failure::Unproven);
+        }
+        self.entries[id].before = stamp;
+        self.visible(id)
+    }
+    fn retire_displaced(&mut self, owner: &mut Owner, phase: Phase) -> Result<()> {
+        let Some(temp) = &self.temporary else {
+            return Ok(());
+        };
+        let Some(previous) = temp.displaced else {
+            return Ok(());
+        };
+        if !self.entries[previous].active {
+            return Ok(());
+        }
+        let candidate = temp.entry;
+        self.verify_directories()?;
+        self.rejoin_renamed(candidate)?;
+        self.rejoin_renamed(previous)?;
+        self.read(candidate, owner, phase, false)?;
+        self.read(previous, owner, phase, false)?;
+        self.access.event("before-retire-upgrade", "")?;
+        self.verify_directories()?;
+        self.read(candidate, owner, phase, false)?;
+        self.read(previous, owner, phase, false)?;
+        let parent = self.entries[previous].parent;
+        let name = self.entries[previous].name.clone();
+        sys(rustix::fs::unlinkat(
+            self.dir_file(parent),
+            &name,
+            AtFlags::empty(),
+        ))?;
+        self.entries[previous].active = false;
+        let stamp = io(self.file(previous).metadata())?;
+        let before = &self.entries[previous].before;
+        if !identity(before, &stamp)
+            || before.mode() != stamp.mode()
+            || before.len() != stamp.len()
+            || stamp.nlink() != 0
+            || (before.mtime(), before.mtime_nsec()) != (stamp.mtime(), stamp.mtime_nsec())
+        {
+            return Err(Failure::Unproven);
+        }
+        self.access.event("after-retire-upgrade", "")?;
+        io(self.dir_file(parent).sync_all())
+    }
+    fn cleanup_temporary(&mut self, owner: &mut Owner) -> Result<()> {
         let Some(temp) = &self.temporary else {
             return Ok(());
         };
         if temp.published {
-            return Ok(());
+            return self.retire_displaced(owner, Phase::Finalize);
         }
         let id = temp.entry;
         let mode = if temp.executable { 0o755 } else { 0o600 };
@@ -767,7 +929,7 @@ impl Tree {
         Ok(())
     }
     pub fn finish(mut self, owner: &mut Owner) -> Result<()> {
-        let mut primary = self.cleanup_temporary().err();
+        let mut primary = self.cleanup_temporary(owner).err();
         for id in 0..self.entries.len() {
             if self.entries[id].active
                 && let Err(error) = self.read(id, owner, Phase::Finalize, false)

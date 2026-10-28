@@ -2554,3 +2554,70 @@ skips the uniquely named restore oracle. The complete host reference group
 [passed at `1381912`](https://github.com/swiftraccoon/simplestChat/actions/runs/40219584194).
 That is hosted reference execution; actual database validation and authenticated
 caller cutover remain separate.
+
+## Explicit prepared-host maintenance
+
+The native source route for the complete maintenance transaction is:
+
+```sh
+/usr/local/libexec/simplestchat-public/simplestchat-ops release maintain --revision "$REVISION" \
+  --candidate-env /etc/simplestchat-public/app.env.candidate \
+  --no-browser-assets-upgrade \
+  --timeout-seconds 1800 --finalization-seconds 60
+```
+
+This example supplies both budgets; neither is a default. The fixed prepared
+Linux host requires root, the installed canonical executable shown above, and
+explicit `0 < M < N <= 1800`. The native launcher checks that executable's inode;
+a noncanonical invocation can fail after selection. Omit `--candidate-env`
+when there is no reviewed environment. `--browser-assets-upgrade` admits the
+reviewed legacy-to-public-asset proxy transition; it requires the staged exact
+Caddyfile and Compose candidate. It does not grant arbitrary proxy changes.
+
+Maintenance stages and validates the exact image, admits the applied migration
+checksum subset, validates reviewed settings and the complete effective Compose
+selection, retains browser assets, then publishes a listed live backup and its
+receipt before stopping anything. It stops the app before the proxy, publishes
+selection durably, consumes the candidate environment and finalizes the selected
+journal. All asset-store borrowers close before the actual first unlock. The
+normal launcher inherits the original owner and clock. A fresh actual flock
+then guards final readiness, selected image/configuration, unchanged database
+container and the exact final migration ledger. Launcher failure keeps the new
+selection for inspection and does not start application rollback.
+
+The source-derived first-stop debt is 1,411 seconds inside the original body,
+including the native launcher's own 60-second local tail. For the example above,
+preparation must finish with more than that debt remaining; slow/cold preparation
+can refuse before interruption. Stage work and retained evidence may already
+exist when that happens. Local finalization has its own original reserve; no
+child, retry or second lock acquisition restarts the deadline. Blocked OS I/O,
+reap and close are outside a hard wall-clock guarantee. The globally accepted
+`--quiet-seconds` option preserves the reference behavior: maintenance does not
+wait for quiet rooms.
+
+The passive `maintenanceEvidence` fields record original-owner elapsed
+nanoseconds for backup publication, first stop dispatch, unlock and guarded
+reacquisition. Partial null fields are not zero or successful evidence. Dispatch
+means the bounded executor was entered; actual Docker completion and independent
+fixture observations remain separate. A nonzero final process exit invalidates
+any earlier report.
+
+The source route alone does not change an installed Ansible caller or
+establish authenticated executable delivery. `distribution install` retains its
+schema 1 first-install/exact-repeat contract. Explicit `distribution upgrade`
+uses schema 2 with `installedBinary {sha256, bytes}` as expected-old custody.
+It verifies and atomically exchanges only that known original under the actual
+workload lock. A late failure keeps the published candidate and refuses uncertain
+pending state. Neither installer authenticates signatures itself.
+
+`xtask ops-artifact export --request ABS --request-sha256 SHA` composes current
+signature verification from the opaque authenticated acquisition and publishes
+an exact three-member tar plus a pinned installer request. Its closed request
+adds `remoteInput` under `/run/simplestchat-ops-bootstrap/<32 lowercase hex>/input`
+and optionally the expected installed binary pin to the existing exact Ops
+selection/artifact/authentication fields. The separate 1,860-second controller
+profile includes the unchanged full acquisition allowance, export, replay and
+final custody checks. Actual exit 0, current verification and original files must
+all agree; saved JSON does not construct authentication authority. The transfer's
+binary remains 0600 until a trusted receiver verifies its pins and makes the
+controlled executable transition.

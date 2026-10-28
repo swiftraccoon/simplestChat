@@ -58,6 +58,9 @@ ops/src/release/attestation/maintain_prerequisite/**
 !ops/src/release/attestation/maintain_prerequisite/guest/
 ops/src/release/attestation/maintain_prerequisite/guest/**
 !ops/src/release/attestation/maintain_prerequisite/guest/*.rs
+!ops/src/release/attestation/maintain_prerequisite/guest/host/
+ops/src/release/attestation/maintain_prerequisite/guest/host/**
+!ops/src/release/attestation/maintain_prerequisite/guest/host/*.rs
 !ops/src/release/attestation/maintain_prerequisite/guest/effects/
 ops/src/release/attestation/maintain_prerequisite/guest/effects/**
 !ops/src/release/attestation/maintain_prerequisite/guest/effects/*.rs
@@ -67,6 +70,9 @@ ops/src/release/attestation/receive/**
 !ops/src/release/attestation/stage/
 ops/src/release/attestation/stage/**
 !ops/src/release/attestation/stage/*.rs
+!ops/src/release/attestation/stage/reentry/
+ops/src/release/attestation/stage/reentry/**
+!ops/src/release/attestation/stage/reentry/*.rs
 !ops/src/release/attestation/restore/
 ops/src/release/attestation/restore/**
 !ops/src/release/attestation/restore/*.rs
@@ -299,6 +305,9 @@ xtask/src/ci/ops_artifact/**
 !xtask/src/ci/ops_artifact/maintain_runtime/
 xtask/src/ci/ops_artifact/maintain_runtime/**
 !xtask/src/ci/ops_artifact/maintain_runtime/*.rs
+!xtask/src/ci/ops_artifact/export/
+xtask/src/ci/ops_artifact/export/**
+!xtask/src/ci/ops_artifact/export/*.rs
 !xtask/src/ci/ops_artifact/source/
 xtask/src/ci/ops_artifact/source/**
 !xtask/src/ci/ops_artifact/source/*.rs

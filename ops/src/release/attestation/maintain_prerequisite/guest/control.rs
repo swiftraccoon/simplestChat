@@ -17,11 +17,27 @@ pub(super) struct Control {
     body: Instant,
     end: Instant,
     phase: Option<Instant>,
+    host: bool,
+    host_post: Option<Instant>,
     signals: CompletionSignals,
 }
 
 impl Control {
     pub fn new(start: Instant) -> Result<Self> {
+        Self::new_role(start, false)
+    }
+    pub fn new_host(start: Instant) -> Result<Self> {
+        Self::new_role(start, true)
+    }
+    /// The separate pre-guest upgrade helper has its own fixed 120/15 scope.
+    pub fn new_upgrade(start: Instant) -> Result<Self> {
+        let mut owner = Self::new_role(start, false)?;
+        owner.setup_end = start + Duration::from_secs(105);
+        owner.body = owner.setup_end;
+        owner.end = start + Duration::from_secs(120);
+        Ok(owner)
+    }
+    fn new_role(start: Instant, host: bool) -> Result<Self> {
         Ok(Self {
             start,
             status: 0,
@@ -32,17 +48,25 @@ impl Control {
             settling: false,
             recovering: false,
             setup_end: start + Duration::from_secs(30),
-            body: start + Duration::from_secs(1680),
-            end: start + Duration::from_secs(1710),
+            body: start + Duration::from_secs(if host { 3660 } else { 1680 }),
+            end: start + Duration::from_secs(if host { 3690 } else { 1710 }),
             phase: None,
+            host,
+            host_post: None,
             signals: CompletionSignals::new().map_err(|_| Error::Io)?,
         })
+    }
+    pub fn monitor_limit(&self) -> Duration {
+        Duration::from_secs(if self.host { 3780 } else { 1800 })
     }
     pub fn record(&mut self, error: Error) {
         self.first.get_or_insert(error);
     }
     pub fn configure(&mut self, request: &Request) -> Result<()> {
         self.check()?;
+        if self.host != request.is_host() {
+            return Err(Error::Input);
+        }
         self.setup_end = self.start + Duration::from_secs(request.setup_seconds);
         self.body = self.start + Duration::from_secs(request.body_seconds);
         self.end = self.start + Duration::from_secs(request.end_seconds);
@@ -52,10 +76,10 @@ impl Control {
         self.check()
     }
     pub fn end(&self) -> Instant {
-        self.end
+        self.host_post.map_or(self.end, |post| post.min(self.end))
     }
     pub fn body_end(&self) -> Instant {
-        self.body
+        self.host_post.map_or(self.body, |post| post.min(self.body))
     }
     pub fn is_recovering(&self) -> bool {
         self.recovering
@@ -70,6 +94,7 @@ impl Control {
         } else {
             self.body
         };
+        let end = self.host_post.map_or(end, |post| post.min(end));
         if self.settling {
             end
         } else {
@@ -145,10 +170,31 @@ impl Control {
         checked
     }
     pub fn advance(&mut self) -> Result<()> {
+        self.advance_with_debt(1170)
+    }
+    pub fn advance_host(&mut self) -> Result<()> {
+        if !self.host {
+            return Err(Error::Input);
+        }
+        self.advance_with_debt(2040)
+    }
+    /// Clamp the new host purpose's entire post-native response, including all
+    /// recovery, stream joins and explicit closes. Reentry never resets it.
+    pub fn host_post(&mut self) -> Result<()> {
+        if !self.host {
+            return Err(Error::Input);
+        }
+        let checked = self.check();
+        if self.host_post.is_none() {
+            self.host_post = Some((Instant::now() + Duration::from_secs(120)).min(self.body));
+        }
+        checked.and(self.check())
+    }
+    fn advance_with_debt(&mut self, seconds: u64) -> Result<()> {
         self.check()?;
         if !self.setup
             || self.cleanup_failed
-            || self.body.saturating_duration_since(Instant::now()) < Duration::from_secs(1170)
+            || self.body.saturating_duration_since(Instant::now()) < Duration::from_secs(seconds)
         {
             return Err(Error::Deadline);
         }
@@ -192,6 +238,48 @@ impl Control {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn whole_host_and_upgrade_are_explicit_purposes_without_original_cap_changes() {
+        let start = Instant::now();
+        let mut original = Control::new(start).unwrap();
+        assert_eq!(original.monitor_limit(), Duration::from_secs(1800));
+        assert_eq!(original.advance_host(), Err(Error::Input));
+        original.begin_settling();
+        original.finish().unwrap();
+        let mut host = Control::new_host(start).unwrap();
+        assert_eq!(host.monitor_limit(), Duration::from_secs(3780));
+        host.begin_settling();
+        host.finish().unwrap();
+        let mut upgrade = Control::new_upgrade(start).unwrap();
+        assert_eq!(
+            upgrade.body_end().duration_since(start),
+            Duration::from_secs(105)
+        );
+        assert_eq!(
+            upgrade.end().duration_since(start),
+            Duration::from_secs(120)
+        );
+        upgrade.begin_settling();
+        upgrade.finish().unwrap();
+    }
+    #[test]
+    fn host_post_ceiling_survives_reentry_recovery_and_local_settlement() {
+        let mut owner = Control::new_host(Instant::now()).unwrap();
+        owner.setup = false;
+        let original_end = owner.end;
+        owner.host_post().unwrap();
+        let ceiling = owner.phase_end();
+        assert!(ceiling < original_end);
+        owner.host_post().unwrap();
+        assert_eq!(owner.phase_end(), ceiling);
+        owner.begin_recovery();
+        assert_eq!(owner.phase_end(), ceiling);
+        owner.begin_settling();
+        assert_eq!(owner.phase_end(), ceiling);
+        assert_eq!(owner.end, original_end);
+        assert_eq!(owner.end(), ceiling);
+        owner.finish().unwrap();
+    }
     #[test]
     fn expired_setup_never_widens_go_or_resets_the_original_final_end() {
         let mut owner = Control::new(Instant::now()).unwrap();

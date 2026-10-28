@@ -149,6 +149,7 @@ pub(super) fn sources() -> BTreeSet<String> {
         "control",
         "execute",
         "files",
+        "host_projection",
         "mod",
         "options",
         "prepared",
@@ -178,6 +179,7 @@ pub(super) fn sources() -> BTreeSet<String> {
         "ops/src/release/attestation/maintain_prerequisite.rs",
         "xtask/Cargo.toml",
         "xtask/src/main.rs",
+        "xtask/src/owned_process.rs",
         "xtask/src/tooling.rs",
         "xtask/src/ci/mod.rs",
         "xtask/src/ci/runner.rs",
@@ -197,6 +199,33 @@ pub(super) fn sources() -> BTreeSet<String> {
         "ops/src/release/attestation.rs",
         "ops/src/release/attestation/control_signals.rs",
         "docs/testing.md",
+        ".github/workflows/maintenance-host-runtime.yml",
+        "ops/README.md",
+        "ops/src/release/maintain.rs",
+        "ops/src/release/attestation/maintain.rs",
+        "ops/src/release/attestation/control.rs",
+        "ops/src/release/attestation/control_maintain_tests.rs",
+        "ops/src/release/attestation/control_signal_tests.rs",
+        "ops/src/release/attestation/files.rs",
+        "ops/src/release/attestation/files_tests.rs",
+        "ops/src/release/workload.rs",
+        "ops/src/release/manifest.rs",
+        "ops/src/release/manifest_tests.rs",
+        "ops/src/release/stage.rs",
+        "ops/src/release/attestation/stage.rs",
+        "ops/src/release/deploy.rs",
+        "ops/src/release/attestation/deploy.rs",
+        "ops/src/release/archive.rs",
+        "ops/src/json.rs",
+        "ops/src/files.rs",
+        "ops/src/files_tests.rs",
+        "ops/src/files_scope_tests.rs",
+        "ops/src/distribution_install.rs",
+        "ops/src/distribution_install_files.rs",
+        "ops/src/distribution_install_control.rs",
+        "ops/src/distribution_install_request.rs",
+        "ops/src/distribution_install_tests.rs",
+        "ops/tests/release_maintain_cli.rs",
     ] {
         names.insert(name.into());
     }
@@ -209,6 +238,85 @@ pub(super) fn sources() -> BTreeSet<String> {
         ));
     }
     for name in [
+        "mod",
+        "files",
+        "plan",
+        "worker",
+        "execute",
+        "request",
+        "tests",
+        "lifecycle",
+    ] {
+        names.insert(format!("xtask/src/ci/ops_artifact/export/{name}.rs"));
+    }
+    for name in [
+        "files",
+        "options",
+        "oracle_tests",
+        "process",
+        "process_io_tests",
+        "process_restore_io_tests",
+        "process_tests",
+        "tests",
+        "reentry",
+        "reentry/tests",
+    ] {
+        names.insert(format!("ops/src/release/attestation/stage/{name}.rs"));
+    }
+    for name in [
+        "budget",
+        "bulk_effect_tests",
+        "effect_tests",
+        "execution",
+        "files",
+        "maintenance",
+        "maintenance_effect_tests",
+        "maintenance_selection",
+        "options",
+        "oracle_tests",
+        "policy",
+        "process",
+        "records",
+        "replacement",
+        "retention",
+        "rollback_diagnostic",
+        "rollback_effect_tests",
+        "steps",
+        "tests",
+    ] {
+        names.insert(format!("ops/src/release/attestation/deploy/{name}.rs"));
+    }
+    for name in [
+        "assets",
+        "assets_capture",
+        "assets_capture_tests",
+        "assets_commit",
+        "assets_files",
+        "assets_host",
+        "assets_host_tests",
+        "assets_lock",
+        "assets_model",
+        "assets_oracle_tests",
+        "assets_scope",
+        "assets_scope_tests",
+        "assets_store",
+        "assets_tests",
+    ] {
+        names.insert(format!("ops/src/release/{name}.rs"));
+    }
+    for name in [
+        "docker",
+        "generator",
+        "generator_config",
+        "generator_oci",
+        "generator_tests",
+        "index",
+        "oci",
+        "tests",
+    ] {
+        names.insert(format!("ops/src/release/archive/{name}.rs"));
+    }
+    for name in [
         "control",
         "effects/actors",
         "effects/effects_tests",
@@ -217,6 +325,12 @@ pub(super) fn sources() -> BTreeSet<String> {
         "effects/policy",
         "files",
         "guest_tests",
+        "host",
+        "host/effects",
+        "host/events",
+        "host/files",
+        "host/tests",
+        "host/upgrade",
         "materials",
         "materials_tests",
         "mod",

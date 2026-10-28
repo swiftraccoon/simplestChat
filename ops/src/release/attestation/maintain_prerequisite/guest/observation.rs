@@ -168,7 +168,10 @@ pub(super) fn native_frame(bytes: &[u8]) -> Result<Value> {
     {
         return Err(Error::Refused);
     }
-    let facts = &value["facts"];
+    facts_shape(&value["facts"])?;
+    Ok(value)
+}
+fn facts_shape(facts: &Value) -> Result<()> {
     let mut keys = BOOLEANS.to_vec();
     keys.extend(HASHES);
     keys.extend([
@@ -216,7 +219,7 @@ pub(super) fn native_frame(bytes: &[u8]) -> Result<Value> {
     {
         return Err(Error::Refused);
     }
-    Ok(value)
+    Ok(())
 }
 fn allowed(value: &Value, names: &[&str]) -> bool {
     value.as_str().is_some_and(|v| names.contains(&v))
@@ -233,7 +236,8 @@ pub(super) fn require_native(
     request: &Request,
     hashes: &BTreeMap<String, String>,
 ) -> Result<()> {
-    let (expected, failure) = match request.scenario.as_str() {
+    let scenario = request.native_scenario();
+    let (expected, failure) = match scenario {
         "positive" => (0, None),
         "dirty-source" => (1, Some("command")),
         "cancel-owned-launcher" => (143, Some("terminate")),
@@ -248,7 +252,15 @@ pub(super) fn require_native(
     {
         return Err(Error::Refused);
     }
-    let facts = &value["facts"];
+    require_facts(&value["facts"], expected, scenario, hashes)
+}
+pub(super) fn require_facts(
+    facts: &Value,
+    expected: i32,
+    scenario: &str,
+    hashes: &BTreeMap<String, String>,
+) -> Result<()> {
+    facts_shape(facts)?;
     for name in HASHES {
         if !facts[name]
             .as_str()
@@ -273,17 +285,17 @@ pub(super) fn require_native(
         .ok_or(Error::Refused)?;
     for name in BOOLEANS {
         let expected = match name {
-            "termSeen" => request.scenario == "cancel-owned-launcher",
-            "workCapExpired" => request.scenario == "timeout-stopped-launcher",
-            "nestedClientObserved" | "launcherStopped" => raw == 143 || raw == 124,
+            "termSeen" => scenario == "cancel-owned-launcher",
+            "workCapExpired" => scenario == "timeout-stopped-launcher",
+            "nestedClientObserved" | "launcherStopped" => expected == 143 || expected == 124,
             _ => true,
         };
         if facts[name].as_bool() != Some(expected) {
             return Err(Error::Refused);
         }
     }
-    if (launcher == 0) != (request.scenario == "positive")
-        || (request.scenario == "timeout-stopped-launcher" && elapsed < 900_000_000_000)
+    if (launcher == 0) != (scenario == "positive")
+        || (scenario == "timeout-stopped-launcher" && elapsed < 900_000_000_000)
     {
         return Err(Error::Refused);
     }

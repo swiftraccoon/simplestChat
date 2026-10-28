@@ -1,5 +1,5 @@
-//! Original-pinned first installation at one fixed managed path. This operation
-//! never verifies a signature, runs a candidate, upgrades an existing binary or
+//! Original-pinned installation and explicit expected-old upgrade at one fixed
+//! managed path. Neither operation verifies signatures, runs a candidate or
 //! switches production callers. Authentication remains the controller's job.
 //!
 //! The native CLI is synchronous and must own its calling thread: Linux signalfd
@@ -24,7 +24,7 @@ use crate::{
 };
 use control::{Owner, Phase};
 use files::{Access, Tree};
-use request::Request;
+use request::{Request, UpgradeRequest};
 use serde::Serialize;
 use std::{fmt, path::Path};
 
@@ -141,12 +141,50 @@ pub fn install(path: &Path, original_sha256: &str) -> Result<Receipt> {
     run(path, original_sha256, Access::default(), &Native, owner)
 }
 
+/// Replace only a caller-selected old canonical executable with the separately
+/// authenticated candidate. Schema 2 adds `installedBinary {sha256,bytes}` to
+/// the original manifest/selection/binary pins; it grants no signature authority.
+/// The caller must authenticate the exact candidate before creating this request.
+///
+/// The existing workload lock and journal checks cover replacement and repeat.
+/// Exact candidate bytes are a no-op; absence, a different old identity or a
+/// foreign pending name refuse. Replacement atomically exchanges the two known
+/// leaves and removes the retained old inode only after rejoining both originals.
+/// A failure after exchange retains the candidate; it never rolls back. Cleanup
+/// uncertainty can retain the old temporary, which later attempts do not adopt.
+///
+/// # Errors
+/// Returns the same fixed failure vocabulary and checked-finalization statuses
+/// as [`install`]. This operation does not authenticate its own running image.
+pub fn upgrade(path: &Path, original_sha256: &str) -> Result<Receipt> {
+    let owner = Owner::native()?;
+    transact(
+        path,
+        original_sha256,
+        Access::default(),
+        &Native,
+        owner,
+        true,
+    )
+}
+
 fn run(
     path: &Path,
     selected: &str,
     access: Access,
     host: &impl Host,
+    owner: Owner,
+) -> Result<Receipt> {
+    transact(path, selected, access, host, owner, false)
+}
+
+fn transact(
+    path: &Path,
+    selected: &str,
+    access: Access,
+    host: &impl Host,
     mut owner: Owner,
+    upgrading: bool,
 ) -> Result<Receipt> {
     let mut tree = None;
     let mut lock = None;
@@ -159,7 +197,12 @@ fn run(
         tree = Some(Tree::open(access)?);
         let tree = tree.as_mut().unwrap();
         let (_, original) = tree.request(path, selected, &mut owner)?;
-        let request = Request::decode(&original)?;
+        let (request, installed) = if upgrading {
+            let request = UpgradeRequest::decode(&original)?;
+            (request.candidate, Some(request.installed))
+        } else {
+            (Request::decode(&original)?, None)
+        };
         host.platform()?;
         owner.check(Phase::Body)?;
         let manifest = tree.input(request.manifest.clone(), 0o600, &mut owner)?;
@@ -191,13 +234,32 @@ fn run(
             .unwrap()
             .validate()
             .map_err(|_| Failure::Unproven)?;
-        let changed = !tree.existing(destination, &request.binary, &mut owner)?;
+        let existing = installed
+            .as_ref()
+            .map(|installed| {
+                tree.upgrade_existing(destination, &request.binary, installed, &mut owner)
+            })
+            .transpose()?;
+        let changed = match existing {
+            Some(previous) => previous.is_some(),
+            None => !tree.existing(destination, &request.binary, &mut owner)?,
+        };
         if changed {
             lock.as_ref()
                 .unwrap()
                 .validate()
                 .map_err(|_| Failure::Unproven)?;
-            tree.publish(destination, binary, &mut owner, lock.as_ref().unwrap())?;
+            if let Some(Some(previous)) = existing {
+                tree.replace(
+                    destination,
+                    binary,
+                    previous,
+                    &mut owner,
+                    lock.as_ref().unwrap(),
+                )?;
+            } else {
+                tree.publish(destination, binary, &mut owner, lock.as_ref().unwrap())?;
+            }
         }
         owner.check(Phase::Body)?;
         Ok(Receipt::new(&request, changed))

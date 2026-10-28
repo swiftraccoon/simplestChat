@@ -150,6 +150,10 @@ impl Session {
         if control.settling {
             return Err(Error::Refused);
         }
+        let guest: String = match control.purpose() {
+            super::super::options::Purpose::Prerequisite => "guest".into(),
+            super::super::options::Purpose::Host => "host-guest".into(),
+        };
         let args = vm.ssh(
             runner,
             control,
@@ -159,7 +163,7 @@ impl Session {
                 "/usr/local/libexec/simplestchat-public/simplestchat-ops".into(),
                 "release".into(),
                 "maintain-prerequisite".into(),
-                "guest".into(),
+                guest,
             ],
         )?;
         let mut command = runner.command("ssh", &args, control)?;

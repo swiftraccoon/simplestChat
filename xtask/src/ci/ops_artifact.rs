@@ -6,6 +6,7 @@
 pub(super) mod acquire;
 pub(in crate::ci) mod capacity_vps;
 mod execute;
+mod export;
 #[cfg(test)]
 mod files_tests;
 #[cfg(test)]
@@ -34,19 +35,31 @@ use sha2::{Digest, Sha256};
 use std::time::{Duration, Instant};
 
 const USAGE: &str = "usage: cargo run --locked -q -p xtask -- ops-artifact \
-build|source|registry|verify-retained|acquire|runtime \
+build|source|registry|verify-retained|acquire|export|runtime \
 --request PATH --request-sha256 SHA256\n\
 cargo run --locked -q -p xtask -- ops-artifact hosted --output PATH\n\
 cargo run --locked -q -p xtask -- ops-artifact signing-inputs --directory PATH --output PATH\n\
 cargo run --locked -q -p xtask -- ops-artifact runtime-diagnostics\n\
 xtask ops-artifact maintain-runtime --run-id N --run-attempt N --artifact-id N \
---scenario CASE --output ABS";
+--scenario CASE --output ABS\n\
+xtask ops-artifact maintain-host-runtime --run-id N --run-attempt N --artifact-id N \
+--scenario host-success|host-launcher-refusal --output ABS";
 
 pub(super) fn run(arguments: &[String]) -> anyhow::Result<std::process::ExitCode> {
     if let Some((operation, arguments)) = arguments.split_first()
         && operation == "maintain-runtime"
     {
         return Ok(maintain_runtime::run(arguments));
+    }
+    if let Some((operation, arguments)) = arguments.split_first()
+        && operation == "maintain-host-runtime"
+    {
+        return Ok(maintain_runtime::run_host(arguments));
+    }
+    if let Some((operation, arguments)) = arguments.split_first()
+        && operation == "export"
+    {
+        return Ok(export::run(arguments));
     }
     if arguments == ["--help"] {
         println!("{USAGE}");

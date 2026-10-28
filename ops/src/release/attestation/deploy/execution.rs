@@ -6,6 +6,13 @@ mod bulk_effect_tests;
 #[cfg(test)]
 #[path = "effect_tests.rs"]
 mod effect_tests;
+#[path = "maintenance.rs"]
+pub(super) mod maintenance;
+#[cfg(test)]
+#[path = "maintenance_effect_tests.rs"]
+mod maintenance_effect_tests;
+#[path = "maintenance_selection.rs"]
+mod maintenance_selection;
 #[path = "replacement.rs"]
 mod replacement;
 #[path = "retention.rs"]
@@ -214,6 +221,12 @@ struct State {
     pending_logs: Vec<(usize, Vec<u8>)>,
     quiet_rooms: Option<Json>,
     replacement_rooms: Option<Json>,
+    maintenance_directories: Vec<Dir>,
+    maintenance_candidate_input: Option<usize>,
+    maintenance_revision: Option<String>,
+    maintenance_git: Option<std::path::PathBuf>,
+    maintenance_source: Option<std::path::PathBuf>,
+    maintenance_evidence: Option<maintenance::Evidence>,
     #[cfg(test)]
     fault: Option<super::files::Fault>,
 }
@@ -240,6 +253,12 @@ impl State {
             pending_logs: Vec::new(),
             quiet_rooms: None,
             replacement_rooms: None,
+            maintenance_directories: Vec::new(),
+            maintenance_candidate_input: None,
+            maintenance_revision: None,
+            maintenance_git: None,
+            maintenance_source: None,
+            maintenance_evidence: None,
             #[cfg(test)]
             fault: access.fault,
         }
@@ -303,6 +322,13 @@ impl State {
             self.stage.originals(owner)?;
         }
         self.records.verify(owner, recovery)?;
+        for directory in &self.maintenance_directories {
+            if recovery {
+                directory.final_namespace(owner)?;
+            } else {
+                directory.check(owner, Window::Body)?;
+            }
+        }
         records::check(owner, recovery)
     }
     fn input(
@@ -469,7 +495,8 @@ impl State {
             self.rollback.logs_admitted(self.commands);
         }
         let curl = matches!(role, Role::Ready | Role::Metrics);
-        let arguments = if curl {
+        let source = role == Role::Source;
+        let arguments = if curl || source {
             arguments
         } else {
             let mut fixed = argv(&["--host", "unix:///var/run/docker.sock"]);
@@ -480,6 +507,11 @@ impl State {
             self.asset_remove_dispatched = true;
         }
         self.rollback.boundary(Boundary::Executor);
+        if role == Role::Stop
+            && let Some(evidence) = self.maintenance_evidence.as_mut()
+        {
+            evidence.stop_dispatch(owner)?;
+        }
         let output = executor
             .run(
                 owner,
@@ -487,6 +519,8 @@ impl State {
                     role,
                     program: if curl {
                         access.curl.clone()
+                    } else if source {
+                        self.maintenance_git.clone().ok_or(Cause::Input)?
                     } else {
                         access.docker.clone()
                     },
@@ -796,6 +830,17 @@ pub(super) async fn execute(
             .await
     }
     .await;
+    finish_operation(state, report, operation, access, owner, executor).await
+}
+
+async fn finish_operation(
+    mut state: State,
+    mut report: Value,
+    operation: Result<()>,
+    access: &Access,
+    owner: &mut Owner,
+    executor: &mut impl Executor,
+) -> Outcome {
     if let Err(cause) = operation {
         owner.record(cause);
     }
@@ -886,6 +931,9 @@ pub(super) async fn execute(
         }
     }
     state.records.finish(owner);
+    for directory in state.maintenance_directories.into_iter().rev() {
+        directory.finish(owner);
+    }
     if let Some(directory) = state.curl_directory.take() {
         directory.finish(owner);
     }

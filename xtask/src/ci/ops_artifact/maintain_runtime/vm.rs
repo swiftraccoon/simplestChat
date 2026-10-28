@@ -45,13 +45,25 @@ const IMAGE_MAX: u64 = 2 * GIB;
 const STREAM_MAX: usize = 2 * 1024 * 1024;
 const POLL: Duration = Duration::from_millis(100);
 
-fn watchdog_seconds(end: Instant, now: Instant) -> Result<u64> {
-    let seconds = end.saturating_duration_since(now).as_secs().min(1800);
+fn watchdog_seconds_for(
+    purpose: super::options::Purpose,
+    end: Instant,
+    now: Instant,
+) -> Result<u64> {
+    let maximum = match purpose {
+        super::options::Purpose::Prerequisite => 1800,
+        super::options::Purpose::Host => 3780,
+    };
+    let seconds = end.saturating_duration_since(now).as_secs().min(maximum);
     if seconds == 0 {
         Err(Error::Deadline)
     } else {
         Ok(seconds)
     }
+}
+#[cfg(test)]
+fn watchdog_seconds(end: Instant, now: Instant) -> Result<u64> {
+    watchdog_seconds_for(super::options::Purpose::Prerequisite, end, now)
 }
 fn remaining_streams(observed: [usize; 2]) -> Result<[usize; 2]> {
     Ok([
@@ -1061,8 +1073,9 @@ impl Vm {
         if self.end != control.end() {
             return Err(Error::Changed);
         }
-        let seconds = watchdog_seconds(self.end, Instant::now())?;
-        let arguments = qemu_arguments(
+        let seconds = watchdog_seconds_for(control.purpose(), self.end, Instant::now())?;
+        let arguments = qemu_arguments_for(
+            control.purpose(),
             &self.work,
             self.port,
             run_id,
@@ -1382,6 +1395,7 @@ impl Vm {
     }
 }
 
+#[cfg(test)]
 fn qemu_arguments(
     work: &Path,
     port: u16,
@@ -1391,8 +1405,38 @@ fn qemu_arguments(
     restricted: bool,
     seconds: u64,
 ) -> Result<Vec<OsString>> {
+    qemu_arguments_for(
+        super::options::Purpose::Prerequisite,
+        work,
+        port,
+        run_id,
+        prlimit,
+        qemu,
+        restricted,
+        seconds,
+    )
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "The closed purpose selects its own existing fixed QEMU profile"
+)]
+fn qemu_arguments_for(
+    purpose: super::options::Purpose,
+    work: &Path,
+    port: u16,
+    run_id: &str,
+    prlimit: OsString,
+    qemu: OsString,
+    restricted: bool,
+    seconds: u64,
+) -> Result<Vec<OsString>> {
     if port < 1024
-        || !(1..=1800).contains(&seconds)
+        || !(1..=match purpose {
+            super::options::Purpose::Prerequisite => 1800,
+            super::options::Purpose::Host => 3780,
+        })
+            .contains(&seconds)
         || !files::safe_path(work)
         || run_id.len() != 32
         || !run_id
@@ -2585,6 +2629,46 @@ mod tests {
         assert_eq!(
             cloud_passed(&serde_json::to_vec(&row).unwrap(), 0),
             Err(Error::Refused)
+        );
+    }
+}
+
+#[cfg(test)]
+mod host_profile_tests {
+    use super::*;
+    use crate::ci::ops_artifact::maintain_runtime::options::Purpose;
+
+    #[test]
+    fn watchdog_extension_belongs_only_to_the_explicit_host_purpose() {
+        let arguments = |purpose, seconds| {
+            qemu_arguments_for(
+                purpose,
+                Path::new("/tmp/owned"),
+                2222,
+                &"a".repeat(32),
+                "/usr/bin/prlimit".into(),
+                "/usr/bin/qemu-system-x86_64".into(),
+                true,
+                seconds,
+            )
+        };
+        assert_eq!(
+            arguments(Purpose::Prerequisite, 1800).unwrap(),
+            arguments(Purpose::Host, 1800).unwrap()
+        );
+        assert!(arguments(Purpose::Prerequisite, 1801).is_err());
+        assert!(arguments(Purpose::Host, 3780).is_ok());
+        assert!(arguments(Purpose::Host, 3781).is_err());
+        let now = Instant::now();
+        let end = now + Duration::from_secs(4000);
+        assert_eq!(
+            watchdog_seconds_for(Purpose::Prerequisite, end, now),
+            Ok(1800)
+        );
+        assert_eq!(watchdog_seconds_for(Purpose::Host, end, now), Ok(3780));
+        assert_eq!(
+            watchdog_seconds_for(Purpose::Host, end, end),
+            Err(Error::Deadline)
         );
     }
 }

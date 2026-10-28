@@ -27,6 +27,7 @@ const USAGE: &str = concat!(
     "       simplestchat-ops release deploy [OPTIONS]\n",
     "       simplestchat-ops release backup verify [OPTIONS]\n",
     "       simplestchat-ops release maintain-prerequisite [OPTIONS]\n",
+    "       simplestchat-ops release maintain [OPTIONS]\n",
     "       simplestchat-ops release attestation prepare [OPTIONS]\n",
     "       simplestchat-ops release attestation verify [OPTIONS]\n",
     "       simplestchat-ops release manifest --path PATH\n",
@@ -40,6 +41,7 @@ const USAGE: &str = concat!(
     "       simplestchat-ops release assets publish --capture REV TAR [--capture REV TAR]\n",
     "       simplestchat-ops distribution inspect-executable --path PATH\n",
     "       simplestchat-ops distribution install --request ABS --request-sha256 SHA\n",
+    "       simplestchat-ops distribution upgrade --request ABS --request-sha256 SHA\n",
     "       simplestchat-ops distribution verify-pair --manifest PATH ",
     "--path PATH --selection PATH\n",
     "       simplestchat-ops distribution build-plan --selection PATH --source-root PATH\n",
@@ -52,6 +54,9 @@ const USAGE: &str = concat!(
 
 fn main() -> ExitCode {
     let args: Vec<OsString> = std::env::args_os().skip(1).collect();
+    if args.len() >= 2 && args[0] == "release" && args[1] == "maintain" {
+        return simplestchat_ops::release::maintain::run(&args[2..]);
+    }
     if args.len() >= 2 && args[0] == "release" && args[1] == "maintain-prerequisite" {
         return simplestchat_ops::release::maintain_prerequisite::run(&args[2..]);
     }
@@ -114,7 +119,10 @@ fn main() -> ExitCode {
         eprintln!("{USAGE}");
         return ExitCode::from(2);
     }
-    if args.len() >= 2 && args[0] == "distribution" && args[1] == "install" {
+    if args.len() >= 2
+        && args[0] == "distribution"
+        && matches!(args[1].to_str(), Some("install" | "upgrade"))
+    {
         if args.len() != 6 || args[2] != "--request" || args[4] != "--request-sha256" {
             eprintln!("{USAGE}");
             return ExitCode::from(2);
@@ -122,7 +130,13 @@ fn main() -> ExitCode {
         let result = args[5]
             .to_str()
             .ok_or(distribution::install::Failure::Unproven)
-            .and_then(|sha| distribution::install::install(Path::new(&args[3]), sha));
+            .and_then(|sha| {
+                if args[1] == "upgrade" {
+                    distribution::install::upgrade(Path::new(&args[3]), sha)
+                } else {
+                    distribution::install::install(Path::new(&args[3]), sha)
+                }
+            });
         let (value, code) = match result {
             Ok(receipt) => (serde_json::to_value(receipt), ExitCode::SUCCESS),
             Err(error) => (

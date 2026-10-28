@@ -14,7 +14,7 @@ use std::{
     os::fd::{AsFd, OwnedFd},
     os::unix::process::{CommandExt, ExitStatusExt},
     process::{Child, Command, ExitCode, ExitStatus, Stdio},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 #[derive(Serialize)]
@@ -29,15 +29,81 @@ struct Report {
     facts: Facts,
 }
 
+/// Observed normal transport facts, including facts from failed attempts.
+/// Callers must validate status and closure flags before claiming success. This
+/// passive record owns no process, signal registration, descriptor or clock.
+#[derive(Serialize)]
+pub(in crate::release::attestation) struct NormalLaunch {
+    facts: Facts,
+}
+
+#[derive(Clone, Copy)]
+enum InitRole {
+    Fixed,
+    Inherited,
+}
+
+/// Run the fixed normal launcher using the caller's original owner and its
+/// reserved post-launch ceiling. No report or outer owner is created here.
+pub(in crate::release::attestation) fn launch_normal(
+    owner: &mut Owner,
+    ceiling: Instant,
+    observed: &mut Option<NormalLaunch>,
+) -> Result<()> {
+    owner.check(Window::Body)?;
+    if observed.is_some() {
+        return fail(owner, Cause::Input);
+    }
+    let end = owner
+        .now()
+        .checked_add(Duration::from_secs(super::WHOLE))
+        .ok_or(Cause::Input)?
+        .min(ceiling);
+    let body = end
+        .checked_sub(Duration::from_secs(super::FINAL))
+        .ok_or(Cause::Input)?;
+    let clock = Clock::inherited(owner, body, end)?;
+    clock.require_work(owner)?;
+    owner.begin_maintain_launcher(body, end)?;
+    let mut phase = Phase::Admission;
+    let mut facts = Facts::default();
+    let result = outer(
+        owner,
+        clock,
+        Trial::Normal,
+        InitRole::Inherited,
+        &mut phase,
+        &mut facts,
+    );
+    if let Err(first) = result {
+        owner.record(first);
+    }
+    let fence = owner.final_work();
+    if let Err(first) = fence {
+        owner.record(first);
+    }
+    owner.end_maintain_launcher();
+    *observed = Some(NormalLaunch { facts });
+    result?;
+    fence?;
+    owner.check(Window::Body)?;
+    Ok(())
+}
+
 pub(super) fn entry(options: Options, origin: u64) -> ExitCode {
     let (clock, trial, is_inner) = match &options {
         Options::Run(trial) => (Clock::new(origin), *trial, false),
         Options::Init { clock, trial, .. } => (Ok(*clock), *trial, true),
+        Options::NormalInit { clock, .. } => (Ok(*clock), Trial::Normal, true),
     };
     let Ok(clock) = clock else {
         return ExitCode::FAILURE;
     };
-    let mut owner = match clock.owner() {
+    let admitted = match &options {
+        Options::NormalInit { .. } => clock.inherited_owner(),
+        _ => clock.owner(),
+    };
+    let mut owner = match admitted {
         Ok(owner) => owner,
         Err(cause) => return ExitCode::from(super::status(Some(cause))),
     };
@@ -45,10 +111,25 @@ pub(super) fn entry(options: Options, origin: u64) -> ExitCode {
     let mut phase = Phase::Admission;
     let mut facts = Facts::default();
     let result = match options {
-        Options::Run(_) => outer(&mut owner, clock, trial, &mut phase, &mut facts),
+        Options::Run(_) => outer(
+            &mut owner,
+            clock,
+            trial,
+            InitRole::Fixed,
+            &mut phase,
+            &mut facts,
+        ),
         Options::Init { nonce, .. } => {
             inner(&mut owner, clock, trial, &nonce, &mut phase, &mut facts)
         }
+        Options::NormalInit { nonce, .. } => inner(
+            &mut owner,
+            clock,
+            Trial::Normal,
+            &nonce,
+            &mut phase,
+            &mut facts,
+        ),
     };
     if let Err(first) = result {
         owner.record(first);
@@ -227,6 +308,7 @@ fn outer(
     owner: &mut Owner,
     clock: Clock,
     trial: Trial,
+    init_role: InitRole,
     phase: &mut Phase,
     facts: &mut Facts,
 ) -> Result<()> {
@@ -288,9 +370,16 @@ fn outer(
                     .outer_alias(proc.as_ref().ok_or(Cause::Input)?, owner)?,
                 "release",
                 "maintain-prerequisite",
-                "init",
-                "--trial",
-                trial_name(trial),
+            ]);
+            match init_role {
+                InitRole::Fixed => {
+                    cmd.args(["init", "--trial", trial_name(trial)]);
+                }
+                InitRole::Inherited => {
+                    cmd.arg("normal-init");
+                }
+            }
+            cmd.args([
                 "--nonce",
                 &nonce,
                 "--origin-monotonic-ns",
