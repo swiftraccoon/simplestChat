@@ -77,6 +77,7 @@ struct Context {
     wire: Wire,
     socket: Option<(PathBuf, std::fs::Metadata)>,
     host_retired: BTreeSet<usize>,
+    host_diagnostic: Option<Value>,
 }
 impl Context {
     pub fn admit_socket(&mut self) -> Result<()> {
@@ -528,6 +529,7 @@ fn entry(arguments: &[OsString], host: bool) -> ExitCode {
         wire,
         socket: None,
         host_retired: BTreeSet::new(),
+        host_diagnostic: None,
     };
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)

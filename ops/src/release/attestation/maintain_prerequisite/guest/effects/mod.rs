@@ -3,8 +3,10 @@
 mod actors;
 #[path = "../host/effects.rs"]
 mod host;
+mod migration_upgrade;
 mod observation;
 mod policy;
+pub(super) mod proxy_upgrade;
 #[cfg(test)]
 #[path = "effects_tests.rs"]
 mod tests;
@@ -57,6 +59,7 @@ pub(super) struct Fixture {
     socket: Option<(PathBuf, Metadata)>,
     body_finished: bool,
     local_finished: bool,
+    host_proxy_legacy: bool,
 }
 impl Fixture {
     pub fn new(request: &Request) -> Self {
@@ -85,6 +88,7 @@ impl Fixture {
             socket: None,
             body_finished: false,
             local_finished: false,
+            host_proxy_legacy: false,
         }
     }
     fn check_socket(&self) -> Result<()> {
@@ -580,13 +584,24 @@ impl Fixture {
         let row = policy::one(
             &Self::docker(ctx, "proxy-profile", &["inspect".into(), id.into()], 15).await?,
         )?;
-        policy::proxy_profile(
-            &row,
-            id,
-            &self.caddy_image,
-            &ctx.request.caddy_image,
-            &self.bridge,
-        )?;
+        if self.host_proxy_legacy {
+            require(ctx.request.proxy_upgrade())?;
+            policy::legacy_proxy_profile(
+                &row,
+                id,
+                &self.caddy_image,
+                &ctx.request.caddy_image,
+                &self.bridge,
+            )?;
+        } else {
+            policy::proxy_profile(
+                &row,
+                id,
+                &self.caddy_image,
+                &ctx.request.caddy_image,
+                &self.bridge,
+            )?;
+        }
         Ok(row)
     }
     async fn endpoint(

@@ -223,9 +223,9 @@ impl Fixture {
         baseline: &Baseline,
         attempt: &Path,
         observed: &mut Observed,
-    ) -> Result<()> {
+    ) -> Result<Value> {
         require(ctx.request.is_host())?;
-        let success = ctx.request.scenario == "host-success";
+        let success = ctx.request.host_success();
         ctx.control.checkpoint = "host-events";
         // Freeze the complete operation history before independent SQL observers.
         // The same collector remains owned and is joined again idempotently.
@@ -247,16 +247,29 @@ impl Fixture {
         let image = self.caddy_image.clone();
         let (proxy, proxy_row) = self.host_service(ctx, "caddy", &image, success).await?;
         require(
-            proxy == baseline.proxy
-                && if success {
-                    app != baseline.app
-                } else {
-                    app == baseline.app
-                },
+            (if ctx.request.proxy_upgrade() {
+                proxy != baseline.proxy
+            } else {
+                proxy == baseline.proxy
+            }) && if success {
+                app != baseline.app
+            } else {
+                app == baseline.app
+            },
         )?;
         if success {
             let env = app_row["Config"]["Env"].as_array().ok_or(Error::Refused)?;
-            require(env.iter().filter(|value| *value == "MAX_ROOMS=176").count() == 1)?;
+            let expected = if ctx.request.proxy_upgrade() {
+                "MAX_ROOMS=175"
+            } else {
+                "MAX_ROOMS=176"
+            };
+            require(
+                env.iter()
+                    .filter(|value| value.as_str() == Some(expected))
+                    .count()
+                    == 1,
+            )?;
         }
         let current = policy::ids(
             &Self::docker(
@@ -274,6 +287,7 @@ impl Fixture {
         )?;
         require(current == BTreeSet::from([pg.clone(), app.clone(), proxy.clone()]))?;
         observed.set("freshActorInventoryJoined", true)?;
+        ctx.control.checkpoint = "host-none-network";
         let fresh_none = policy::one(
             &Self::docker(
                 ctx,
@@ -291,6 +305,7 @@ impl Fixture {
             .as_ref()
             .ok_or(Error::Refused)?
             .check(&fresh_none)?;
+        ctx.control.checkpoint = "host-attempt-delta";
         let names = directory_names(&Path::new(PUBLIC).join("results"))?;
         let added = names
             .difference(&baseline.attempts)
@@ -308,6 +323,7 @@ impl Fixture {
         let suffix = shell.strip_prefix("deploy.").ok_or(Error::Refused)?;
         require(suffix.len() == 8 && suffix.bytes().all(|v| v.is_ascii_alphanumeric()))?;
         let shell_path = Path::new(PUBLIC).join("results").join(shell);
+        ctx.control.checkpoint = "host-shell-outcome";
         let outcome = policy::decode(&read(ctx, &shell_path.join("outcome.json"), 131072).await?)?;
         super::super::protocol::exact(
             &outcome,
@@ -326,6 +342,7 @@ impl Fixture {
                 && outcome["phase"] == if success { "complete" } else { "configuration" }
                 && outcome["serverImage"] == self.image,
         )?;
+        ctx.control.checkpoint = "host-shell-validation";
         let validation = if success {
             Some(
                 std::str::from_utf8(
@@ -354,13 +371,18 @@ impl Fixture {
             proxy_row: baseline.proxy_row.clone(),
             attempts: baseline.attempts.clone(),
         };
-        events::validate(
+        ctx.control.checkpoint = "host-event-history";
+        if let Err(failed) = events::validate(
             &self.native_rows,
             &inputs,
             &ctx.request,
             &app_row,
             &proxy_row,
-        )?;
+        ) {
+            ctx.control.checkpoint = failed.checkpoint;
+            ctx.host_diagnostic = failed.diagnostic;
+            return Err(failed.cause);
+        }
         observed.set("finiteDaemonHistoryObserved", true)?;
         observed.set("backupListPassed", true)?;
         // Only an independently bounded global inventory plus closed histories
@@ -403,7 +425,8 @@ impl Fixture {
         self.source_observe_for(ctx, !success).await?;
         observed.set("sourceCleanObserved", success)?;
         observed.set("sourceDirtyObserved", !success)?;
-        ctx.check()
+        ctx.check()?;
+        Ok(proxy_row)
     }
 }
 

@@ -34,7 +34,7 @@ fn negative_projection_requires_actual_borrowed_launcher_facts() {
         "phase":"launcher","launcherPassed":false,"environmentChanges":["MAX_ROOMS"],
         "nativeLauncher":{"facts":{}},"maintenanceEvidence":chronology(false)});
     assert_eq!(
-        projection(&report, false, &"a".repeat(40))
+        projection(&report, false, &"a".repeat(40), false)
             .unwrap()
             .as_object()
             .unwrap()
@@ -42,25 +42,33 @@ fn negative_projection_requires_actual_borrowed_launcher_facts() {
         8
     );
     report["nativeLauncher"] = Value::Null;
-    assert!(projection(&report, false, &"a".repeat(40)).is_err());
+    assert!(projection(&report, false, &"a".repeat(40), false).is_err());
     report["nativeLauncher"] = json!({"facts":{},"assumedCleanup":true});
-    assert!(projection(&report, false, &"a".repeat(40)).is_err());
+    assert!(projection(&report, false, &"a".repeat(40), false).is_err());
 }
 #[test]
 fn all_host_observations_are_closed_and_each_is_required() {
-    for scenario in ["host-success", "host-launcher-refusal"] {
+    for scenario in [
+        "host-success",
+        "host-launcher-refusal",
+        "host-migration-upgrade",
+        "host-proxy-upgrade",
+    ] {
         let mut observations = Observed::new();
-        assert_eq!(observations.0.len(), 26);
+        assert_eq!(observations.0.len(), 28);
         assert!(observations.validate(scenario).is_err());
         for name in NAMES {
             let expected = match name {
                 "sourceCleanObserved" | "applicationReadinessObserved" => {
-                    scenario == "host-success"
+                    scenario != "host-launcher-refusal"
                 }
                 "sourceDirtyObserved" | "applicationStoppedObserved" => {
                     scenario == "host-launcher-refusal"
                 }
                 "daemonEffectsUncertain" => false,
+                "reviewedSettingObserved" | "candidateConsumed" => scenario != "host-proxy-upgrade",
+                "roleNumberingUpgradeObserved" => scenario == "host-migration-upgrade",
+                "browserProxyUpgradeObserved" => scenario == "host-proxy-upgrade",
                 _ => true,
             };
             observations.set(name, expected).unwrap();
@@ -74,4 +82,20 @@ fn all_host_observations_are_closed_and_each_is_required() {
         }
         assert_eq!(observations.set("retryAllowed", true), Err(Error::Input));
     }
+}
+
+#[test]
+fn proxy_projection_preserves_absent_setting_changes_and_requires_actual_upgrade_flag() {
+    let mut report = json!({"action":"maintain","revision":"a".repeat(40),"passed":true,
+        "phase":"complete","launcherPassed":true,"browserAssetProxyUpgraded":true,
+        "nativeLauncher":{"facts":{}},"maintenanceEvidence":chronology(true)});
+    let projected = projection(&report, true, &"a".repeat(40), true).unwrap();
+    assert!(projected["environmentChanges"].is_null());
+    for changes in [Value::Null, json!([]), json!(["MAX_ROOMS"])] {
+        report["environmentChanges"] = changes;
+        assert!(projection(&report, true, &"a".repeat(40), true).is_err());
+    }
+    report.as_object_mut().unwrap().remove("environmentChanges");
+    report["browserAssetProxyUpgraded"] = false.into();
+    assert!(projection(&report, true, &"a".repeat(40), true).is_err());
 }

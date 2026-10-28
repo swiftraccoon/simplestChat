@@ -106,3 +106,37 @@ do not establish live Docker, SQL migration, TLS or native pipe behavior.
 The separate prepared-host signed fixture must establish those applicable live
 conditions and actual invocation/job/workflow completion. The earlier four-case
 prerequisite proof and its original timing/containment criteria remain unchanged.
+
+The separate upgrade fixtures admit a closed source-bound SQL generation and an
+exact legacy proxy profile. The SQL fixture changes both actual role columns
+and constraints before deleting only the verified 035/036 ledger rows, then
+observes data, validated checks and exact ledgers independently. A lost mutation
+result remains an uncertain effect; no retry or positive observation clears it.
+The proxy fixture starts and inspects the real three-bind legacy proxy before
+maintenance, then requires the source Caddy publication, same-image new proxy,
+four exact binds and complete replacement history. Its missing environment
+change field stays null in the passive projection rather than becoming a
+fabricated setting change. `C-VALIDATE`, `C-CUSTOM-TYPE` and `C-SERDE` apply to the
+closed generations, nullable evidence and strict numeric/constraint profiles.
+
+These fixtures preserve the original 3,780/120 host owner and its setup and
+observation ceilings. Additional SQL work and settlement remain inside those
+ceilings; no maximum-fit guarantee or renewed timer is introduced. Fixture
+source, synthetic validation neighbors, actual signed execution and operational
+caller authorization remain distinct evidence scopes. The detailed case
+contracts are in the [testing guide](testing.md#prepared-host-native-maintenance).
+
+The asset container's finite trace includes one `archive-path` event between
+creation and destruction. The pinned
+[Docker 29.8.2 implementation](https://github.com/moby/moby/blob/docker-v29.8.2/daemon/archive_unix.go#L84)
+emits that event when opening an archive stream, without a path attribute.
+The event alone proves neither the requested path nor completed copying. Those
+obligations remain bound to the fixed native asset-copy invocation and its
+actual process, sealed bytes and publication checks. Unknown actors, duplicate
+archive events and other lifecycle neighbors remain refused.
+
+Failed host observations retain a fixed checkpoint and, where available, the
+first bounded command-hash/count diagnostic. The closed diagnostic excludes
+raw commands, SQL, IDs, labels, URLs and stderr; it cannot accompany a passed
+receipt or grant execution authority. This improves attribution without
+changing the required lifecycle, checksum, packet or cleanup observations.

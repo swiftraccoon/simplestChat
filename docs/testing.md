@@ -3497,8 +3497,9 @@ gh workflow run maintenance-host-runtime.yml --ref main \
   -f run_id="$CI_RUN" -f run_attempt="$CI_ATTEMPT" -f artifact_id="$OPS_ARTIFACT"
 ```
 
-Its `host-success` and `host-launcher-refusal` cases each own a fresh disposable
-Debian guest. The host profile has its own fixed 3,780/120-second owner, setup
+Its four fixed cases each own a fresh disposable Debian guest: `host-success`,
+`host-launcher-refusal`, `host-migration-upgrade` and `host-proxy-upgrade`.
+The host profile has its own fixed 3,780/120-second owner, setup
 ceiling 1,560, complete-maintain 1800/60 and remaining post-GO debt 2,040. Setup
 includes the existing general preparation plus an actual normal-launcher
 bootstrap. The longer test owner is specific to this two-operation fixture;
@@ -3525,7 +3526,28 @@ The host fixture's guest DATA roster remains the 52 rendered-input source files
 and 15 helper files. The new Rust host/controller implementation executes from the
 current authenticated Ops binary and is additionally bound by the expanded
 outer source catalogue; it is not interpreted from those 52 guest DATA files.
-Whole-host schema migration execution needs its own source-bound older-schema
-trial or authenticated historical distribution; deleting ledger rows alone
-cannot establish that proof. Preserve all failed trials and report the exact
-scope of the successful cases.
+The migration case reconstructs a source-bound pre-035 generation: it seeds
+member and invitation rows, reverses both real role columns and validated
+constraints, and removes only the verified 035/036 ledger rows in one transaction.
+Independent reads require the exact source prefix, actual old data and checks
+before maintenance, then transformed data, both newly validated checks and the
+full source ledger afterward. The redemption role stays unchanged. This tests
+actual current migration execution against controlled older schema and data;
+it does not run a historical server. Ledger-only deletion is insufficient.
+
+The proxy case starts an actual legacy proxy using the exact historical
+Caddyfile from `51e70de6` and a count-checked removal of the asset-store mount.
+It independently verifies three legacy binds and no installed receipt before
+maintenance. No environment candidate is supplied. The actual upgrade must
+validate through the old proxy, publish the current source Caddyfile and receipt,
+replace the proxy with the same pinned image and four exact binds, and retain
+the complete observed replacement history. Historical configuration bytes do
+not establish a historical executable signature.
+
+`upgradeEvidence` preserves nullable pre/post SQL observations and the proxy
+generation record; the applicable successful case requires its complete evidence.
+Added SQL work caps (30 seconds in setup and 15 in observation) remain within the
+existing original setup and 60-second observation ceilings, including settlement.
+No timer restarts or worst-case fit guarantee are introduced. Source checks and
+synthetic neighbors are separate from signed runtime evidence. Preserve failed
+trials and report the exact successful source and case set.

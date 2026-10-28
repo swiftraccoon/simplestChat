@@ -4,6 +4,7 @@
 //! installed `release maintain` owns the new event epoch and host observations.
 pub(super) mod events;
 mod files;
+pub(super) mod migration;
 #[cfg(test)]
 mod tests;
 pub(super) mod upgrade;
@@ -35,7 +36,7 @@ pub(super) struct Baseline {
     pub attempts: std::collections::BTreeSet<String>,
 }
 
-const NAMES: [&str; 26] = [
+const NAMES: [&str; 28] = [
     "baselinePassed",
     "distributionPublished",
     "reviewedSettingObserved",
@@ -62,6 +63,8 @@ const NAMES: [&str; 26] = [
     "sourceDirtyObserved",
     "daemonEffectsUncertain",
     "authenticatedOpsUpgradeObserved",
+    "roleNumberingUpgradeObserved",
+    "browserProxyUpgradeObserved",
 ];
 pub(super) struct Observed(BTreeMap<String, bool>);
 impl Observed {
@@ -73,16 +76,27 @@ impl Observed {
         Ok(())
     }
     fn validate(&self, scenario: &str) -> Result<()> {
-        require(["host-success", "host-launcher-refusal"].contains(&scenario))?;
+        require(
+            [
+                "host-success",
+                "host-launcher-refusal",
+                "host-migration-upgrade",
+                "host-proxy-upgrade",
+            ]
+            .contains(&scenario),
+        )?;
         for (name, value) in &self.0 {
             let expected = match name.as_str() {
                 "applicationReadinessObserved" | "sourceCleanObserved" => {
-                    scenario == "host-success"
+                    scenario != "host-launcher-refusal"
                 }
                 "applicationStoppedObserved" | "sourceDirtyObserved" => {
                     scenario == "host-launcher-refusal"
                 }
                 "daemonEffectsUncertain" => false,
+                "reviewedSettingObserved" | "candidateConsumed" => scenario != "host-proxy-upgrade",
+                "roleNumberingUpgradeObserved" => scenario == "host-migration-upgrade",
+                "browserProxyUpgradeObserved" => scenario == "host-proxy-upgrade",
                 _ => true,
             };
             require(*value == expected)?;
@@ -103,6 +117,7 @@ struct Run {
     report: Option<Value>,
     attempt: Option<PathBuf>,
     observed: Observed,
+    upgrade_evidence: Value,
 }
 impl Run {
     fn new() -> Self {
@@ -112,6 +127,7 @@ impl Run {
             report: None,
             attempt: None,
             observed: Observed::new(),
+            upgrade_evidence: json!({"migrationBefore":null,"migrationAfter":null,"proxy":null}),
         }
     }
     async fn invoke(&mut self, ctx: &mut Context) -> Result<()> {
@@ -123,19 +139,27 @@ impl Run {
                 >= Duration::from_secs(2040),
         )?;
         let phase = ctx.control.push_phase(Duration::from_secs(1800))?;
-        let args = vec![
+        let mut args = vec![
             "ops".into(),
             "release".into(),
             "maintain".into(),
             "--revision".into(),
             ctx.request.revision.clone(),
-            "--candidate-env".into(),
-            format!("{}/app.env.candidate", super::CONFIG),
+        ];
+        if ctx.request.proxy_upgrade() {
+            args.push("--browser-assets-upgrade".into());
+        } else {
+            args.extend([
+                "--candidate-env".into(),
+                format!("{}/app.env.candidate", super::CONFIG),
+            ]);
+        }
+        args.extend([
             "--timeout-seconds".into(),
             "1800".into(),
             "--finalization-seconds".into(),
             "60".into(),
-        ];
+        ]);
         let mut running = match ctx.commands.spawn(
             &mut ctx.control,
             "host-native",
@@ -173,10 +197,15 @@ impl Run {
         let result = (|| {
             pumped?;
             let output = finished?;
-            let success = ctx.request.scenario == "host-success";
+            let success = ctx.request.host_success();
             require(output.status == if success { 0 } else { 1 })?;
             let report = decoded?;
-            let projection = projection(&report, success, &ctx.request.revision)?;
+            let projection = projection(
+                &report,
+                success,
+                &ctx.request.revision,
+                ctx.request.proxy_upgrade(),
+            )?;
             let hashes = BTreeMap::from([
                 ("opsSha256".into(), ctx.request.binary.sha256.clone()),
                 (
@@ -234,7 +263,14 @@ fn evidence(value: &Value, success: bool) -> Result<()> {
     }
     Ok(())
 }
-fn projection(report: &Value, success: bool, revision: &str) -> Result<Value> {
+fn projection(report: &Value, success: bool, revision: &str, proxy: bool) -> Result<Value> {
+    let changes = if proxy {
+        success
+            && report.get("environmentChanges").is_none()
+            && report["browserAssetProxyUpgraded"] == true
+    } else {
+        report["environmentChanges"] == json!(["MAX_ROOMS"])
+    };
     require(
         report.is_object()
             && report["action"] == "maintain"
@@ -242,7 +278,7 @@ fn projection(report: &Value, success: bool, revision: &str) -> Result<Value> {
             && report["passed"] == success
             && report["launcherPassed"] == success
             && report["phase"] == if success { "complete" } else { "launcher" }
-            && report["environmentChanges"] == json!(["MAX_ROOMS"]),
+            && changes,
     )?;
     protocol::exact(&report["nativeLauncher"], &["facts"])?;
     evidence(&report["maintenanceEvidence"], success)?;
@@ -252,7 +288,7 @@ fn projection(report: &Value, success: bool, revision: &str) -> Result<Value> {
         "passed":success,
         "phase":report["phase"],
         "launcherPassed":success,
-        "environmentChanges":["MAX_ROOMS"],
+        "environmentChanges":report["environmentChanges"],
         "nativeLauncher":report["nativeLauncher"],
         "maintenanceEvidence":report["maintenanceEvidence"]
     }))
@@ -291,6 +327,7 @@ async fn body(ctx: &mut Context, fixture: &mut Fixture, run: &mut Run) -> Result
     upgraded(ctx)?;
     run.observed.set("authenticatedOpsUpgradeObserved", true)?;
     let general = ctx.control.push_phase(Duration::from_secs(510))?;
+    let mut proxy_candidate = None;
     let prepared = async {
         sources::prepare(ctx).await?;
         fixture.prepare_payload(ctx).await?;
@@ -298,6 +335,10 @@ async fn body(ctx: &mut Context, fixture: &mut Fixture, run: &mut Run) -> Result
         fixture.setup_network(ctx).await?;
         fixture.setup_database(ctx).await?;
         fixture.prepare_caddy(ctx).await?;
+        if ctx.request.proxy_upgrade() {
+            ctx.control.checkpoint = "host-proxy-prepare";
+            proxy_candidate = Some(fixture.proxy_prepare(ctx)?);
+        }
         fixture.setup_complete(ctx).await?;
         ctx.control.checkpoint = "host-distribution";
         files::distribution(ctx)?;
@@ -311,16 +352,36 @@ async fn body(ctx: &mut Context, fixture: &mut Fixture, run: &mut Run) -> Result
     run.bootstrap.invoke(ctx).await?;
     ctx.control.checkpoint = "host-baseline-observe";
     let mut baseline = fixture.host_baseline(ctx).await?;
+    if ctx.request.proxy_upgrade() {
+        ctx.control.checkpoint = "host-proxy-baseline";
+        fixture.proxy_baseline(ctx, &baseline)?;
+    }
     run.observed.set("baselinePassed", true)?;
     ctx.control.checkpoint = "host-trust";
     files::trust_ready(ctx).await?;
     run.observed.set("naturalRootTrusted", true)?;
     ctx.control.checkpoint = "host-candidate";
-    let selection = files::candidate(ctx)?;
+    if ctx.request.migration_upgrade() {
+        run.upgrade_evidence["migrationBefore"] =
+            fixture.host_migration_prepare(ctx, &baseline).await?;
+    }
+    let selection = if let Some(candidate) = &proxy_candidate {
+        files::Selection {
+            environment: candidate.environment.clone(),
+            compose: candidate.compose.clone(),
+            images: candidate.images.clone(),
+        }
+    } else {
+        files::candidate(ctx)?
+    };
     if ctx.request.scenario == "host-launcher-refusal" {
         sources::dirty(ctx).await?;
     }
-    files::retire_selection(ctx)?;
+    if let Some(candidate) = &proxy_candidate {
+        fixture.proxy_selected_retire(ctx, candidate)?;
+    } else {
+        files::retire_selection(ctx)?;
+    }
     ctx.control.checkpoint = "host-ready";
     ctx.check()?;
     let ready = json!({
@@ -346,17 +407,45 @@ async fn body(ctx: &mut Context, fixture: &mut Fixture, run: &mut Run) -> Result
     let observe = ctx.control.push_phase(Duration::from_secs(60))?;
     let result = async {
         files::selected(ctx, &selection)?;
-        run.observed.set("reviewedSettingObserved", true)?;
-        run.observed.set("candidateConsumed", true)?;
+        if !ctx.request.proxy_upgrade() {
+            run.observed.set("reviewedSettingObserved", true)?;
+            run.observed.set("candidateConsumed", true)?;
+        }
         run.observed.set("selectionRetained", true)?;
-        fixture
+        let proxy_row = fixture
             .host_observe(
                 ctx,
                 &baseline,
                 run.attempt.as_deref().ok_or(Error::Refused)?,
                 &mut run.observed,
             )
-            .await
+            .await?;
+        if ctx.request.migration_upgrade() {
+            run.upgrade_evidence["migrationAfter"] =
+                fixture.host_migration_observe(ctx, &baseline).await?;
+            run.observed.set("roleNumberingUpgradeObserved", true)?;
+        }
+        if let Some(candidate) = &proxy_candidate {
+            ctx.control.checkpoint = "host-proxy-verify";
+            fixture.proxy_verify(
+                ctx,
+                candidate,
+                &baseline,
+                &proxy_row,
+                run.attempt.as_deref().ok_or(Error::Refused)?,
+            )?;
+            run.upgrade_evidence["proxy"] = json!({
+                "schemaVersion":1,"scope":"PreparedHostBrowserProxyUpgrade",
+                "legacyCaddyfileSha256":concat!(
+                    "ea24dcb24b1285b4529e3aa70083550d",
+                    "25431c56cc3a762b8891a53f1306f3ab"
+                ),
+                "currentCaddyfileSha256":ctx.request.source_pins["Caddyfile"],
+                "legacyProxyId":baseline.proxy,"replacementProxyId":proxy_row["Id"],
+            });
+            run.observed.set("browserProxyUpgradeObserved", true)?;
+        }
+        ctx.check()
     }
     .await;
     let fence = ctx.control.pop_phase(observe);
@@ -388,6 +477,8 @@ fn receipt(ctx: &Context, run: &Run, checkpoint: &str, cleanup: bool) -> Value {
         "hostRawExit":run.raw,
         "hostReport":run.report,
         "observations":run.observed.0,
+        "hostDiagnostic":ctx.host_diagnostic,
+        "upgradeEvidence":run.upgrade_evidence,
         "sourcePins":ctx.request.source_pins
     })
 }

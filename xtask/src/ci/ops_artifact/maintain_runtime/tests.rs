@@ -828,6 +828,8 @@ fn whole_host_entry_binds_its_fixed_operation_without_extending_rendered_data_ro
     for file in [
         ".github/workflows/maintenance-host-runtime.yml",
         "xtask/src/ci/ops_artifact/maintain_runtime/host_projection.rs",
+        "xtask/src/ci/ops_artifact/maintain_runtime/host_diagnostic.rs",
+        "xtask/src/ci/ops_artifact/maintain_runtime/host_upgrade.rs",
         "ops/src/release/attestation/maintain.rs",
         "ops/src/release/attestation/deploy/maintenance.rs",
         "ops/src/release/attestation/deploy/maintenance_selection.rs",
@@ -835,6 +837,13 @@ fn whole_host_entry_binds_its_fixed_operation_without_extending_rendered_data_ro
         "ops/src/release/attestation/stage/reentry.rs",
         "ops/src/release/attestation/maintain_prerequisite/guest/host.rs",
         "ops/src/release/attestation/maintain_prerequisite/guest/host/effects.rs",
+        "ops/src/release/attestation/maintain_prerequisite/guest/host/migration.rs",
+        "ops/src/release/attestation/maintain_prerequisite/guest/effects/migration_upgrade.rs",
+        "ops/src/release/attestation/maintain_prerequisite/guest/effects/proxy_upgrade.rs",
+        "ops/src/release/attestation/maintain_prerequisite/guest/effects/proxy-legacy.Caddyfile",
+        "ops/src/release/attestation/maintain_prerequisite/guest/effects/policy/legacy_proxy.rs",
+        "ops/src/release/attestation/maintain_prerequisite/guest/host/events/proxy_upgrade.rs",
+        "ops/src/release/attestation/maintain_prerequisite/guest/host/events/diagnostic.rs",
     ] {
         assert!(sources.contains(file), "{file}");
     }
@@ -884,7 +893,7 @@ fn retained_catalog_covers_every_guest_controller_and_authenticated_producer_mod
         }
         let retained = catalog
             .iter()
-            .filter(|name| name.starts_with(&format!("{prefix}/")))
+            .filter(|name| name.starts_with(&format!("{prefix}/")) && name.ends_with(".rs"))
             .cloned()
             .collect();
         assert_eq!(actual, retained, "{prefix}");

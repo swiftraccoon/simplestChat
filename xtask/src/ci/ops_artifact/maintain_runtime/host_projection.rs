@@ -1,9 +1,14 @@
 //! Closed prepared-host receipt projection, distinct from prerequisite success.
 
 use super::{Error, Result, catalog, options, projection};
-use serde_json::Value;
+use serde_json::{Value, json};
 
-const OBSERVATIONS: [&str; 26] = [
+#[path = "host_diagnostic.rs"]
+mod diagnostic;
+#[path = "host_upgrade.rs"]
+mod upgrade_evidence;
+
+const OBSERVATIONS: [&str; 28] = [
     "baselinePassed",
     "distributionPublished",
     "reviewedSettingObserved",
@@ -30,13 +35,21 @@ const OBSERVATIONS: [&str; 26] = [
     "sourceDirtyObserved",
     "daemonEffectsUncertain",
     "authenticatedOpsUpgradeObserved",
+    "roleNumberingUpgradeObserved",
+    "browserProxyUpgradeObserved",
 ];
-const HOST_CHECKPOINTS: [&str; 13] = [
+const HOST_CHECKPOINTS: [&str; 19] = [
     "host-distribution",
     "host-baseline",
     "host-baseline-observe",
     "host-trust",
     "host-candidate",
+    "host-migration-prepare",
+    "host-migration-before",
+    "host-migration-after",
+    "host-proxy-prepare",
+    "host-proxy-baseline",
+    "host-proxy-verify",
     "host-ready",
     "host-native",
     "host-result",
@@ -127,10 +140,16 @@ fn host_report(value: &Value, expected: &Value, positive: bool) -> Result<()> {
     {
         return Err(Error::Refused);
     }
-    let changes = value["environmentChanges"]
-        .as_array()
-        .ok_or(Error::Refused)?;
-    if !changes.is_empty() && changes != &[Value::String("MAX_ROOMS".into())] {
+    let proxy_upgrade = expected["scenario"] == "host-proxy-upgrade";
+    let changes = &value["environmentChanges"];
+    let valid_changes = if proxy_upgrade {
+        changes.is_null()
+    } else {
+        changes.as_array().is_some_and(|changes| {
+            changes.is_empty() || changes == &[Value::String("MAX_ROOMS".into())]
+        })
+    };
+    if !valid_changes {
         return Err(Error::Refused);
     }
     if !value["nativeLauncher"].is_null() {
@@ -138,7 +157,7 @@ fn host_report(value: &Value, expected: &Value, positive: bool) -> Result<()> {
         launcher_facts(
             &value["nativeLauncher"]["facts"],
             expected,
-            expected["scenario"] == "host-success",
+            options::host_success(expected["scenario"].as_str().unwrap_or("")),
         )?;
     }
     let evidence = &value["maintenanceEvidence"];
@@ -153,11 +172,11 @@ fn host_report(value: &Value, expected: &Value, positive: bool) -> Result<()> {
         }
     }
     if positive {
-        let success = expected["scenario"] == "host-success";
+        let success = options::host_success(expected["scenario"].as_str().unwrap_or(""));
         if value["passed"].as_bool() != Some(success)
             || value["phase"] != if success { "complete" } else { "launcher" }
             || value["launcherPassed"].as_bool() != Some(success)
-            || changes != &[Value::String("MAX_ROOMS".into())]
+            || (!proxy_upgrade && changes != &json!(["MAX_ROOMS"]))
             || value["nativeLauncher"].is_null()
         {
             return Err(Error::Refused);
@@ -200,6 +219,8 @@ pub(super) fn guest(value: Value, expected: &Value) -> Result<Value> {
             "hostReport",
             "observations",
             "sourcePins",
+            "upgradeEvidence",
+            "hostDiagnostic",
         ],
     )?;
     if expected["scope"] != "PreparedHostMaintenanceRequest"
@@ -211,7 +232,9 @@ pub(super) fn guest(value: Value, expected: &Value) -> Result<Value> {
         || value["passed"].as_bool().is_none()
         || value["cleanupPassed"].as_bool().is_none()
         || !value["checkpoint"].as_str().is_some_and(|mark| {
-            projection::GUEST_CHECKPOINTS.contains(&mark) || HOST_CHECKPOINTS.contains(&mark)
+            projection::GUEST_CHECKPOINTS.contains(&mark)
+                || HOST_CHECKPOINTS.contains(&mark)
+                || diagnostic::STAGES.contains(&mark)
         })
         || !value["finalStatus"]
             .as_u64()
@@ -264,6 +287,11 @@ pub(super) fn guest(value: Value, expected: &Value) -> Result<Value> {
         projection::native(&value["bootstrapFrame"])?;
     }
     let positive = value["passed"] == true;
+    diagnostic::validate(
+        &value["hostDiagnostic"],
+        positive,
+        value["checkpoint"].as_str().ok_or(Error::Refused)?,
+    )?;
     if !value["hostReport"].is_null() {
         host_report(&value["hostReport"], expected, positive)?;
     }
@@ -273,8 +301,14 @@ pub(super) fn guest(value: Value, expected: &Value) -> Result<Value> {
             return Err(Error::Refused);
         }
     }
+    upgrade_evidence::validate(
+        &value["upgradeEvidence"],
+        expected,
+        positive,
+        &value["observations"],
+    )?;
     if positive {
-        let success = expected["scenario"] == "host-success";
+        let success = options::host_success(expected["scenario"].as_str().unwrap_or(""));
         if !value["failure"].is_null()
             || value["checkpoint"] != "complete"
             || value["finalStatus"].as_u64() != Some(0)
@@ -293,6 +327,11 @@ pub(super) fn guest(value: Value, expected: &Value) -> Result<Value> {
                 "daemonEffectsUncertain" => false,
                 "applicationReadinessObserved" | "sourceCleanObserved" => success,
                 "applicationStoppedObserved" | "sourceDirtyObserved" => !success,
+                "reviewedSettingObserved" | "candidateConsumed" => {
+                    expected["scenario"] != "host-proxy-upgrade"
+                }
+                "roleNumberingUpgradeObserved" => expected["scenario"] == "host-migration-upgrade",
+                "browserProxyUpgradeObserved" => expected["scenario"] == "host-proxy-upgrade",
                 _ => true,
             };
             if value["observations"][name].as_bool() != Some(wanted) {
@@ -308,16 +347,12 @@ mod tests {
     use super::*;
     use serde_json::json;
 
-    fn fixture(success: bool) -> (Value, Value) {
+    fn fixture_case(scenario: &str) -> (Value, Value) {
+        let success = options::host_success(scenario);
         let pins = catalog::guest_sources()
             .into_iter()
             .map(|name| (name, "d".repeat(64)))
             .collect::<std::collections::BTreeMap<_, _>>();
-        let scenario = if success {
-            "host-success"
-        } else {
-            "host-launcher-refusal"
-        };
         let helpers = catalog::HELPERS
             .into_iter()
             .map(|name| (name, "c".repeat(64)))
@@ -361,6 +396,9 @@ mod tests {
                 "daemonEffectsUncertain" => false,
                 "applicationReadinessObserved" | "sourceCleanObserved" => success,
                 "applicationStoppedObserved" | "sourceDirtyObserved" => !success,
+                "reviewedSettingObserved" | "candidateConsumed" => scenario != "host-proxy-upgrade",
+                "roleNumberingUpgradeObserved" => scenario == "host-migration-upgrade",
+                "browserProxyUpgradeObserved" => scenario == "host-proxy-upgrade",
                 _ => true,
             }
             .into();
@@ -371,22 +409,37 @@ mod tests {
             host_facts["launcherRawStatus"] = 1.into();
         }
         let native = json!({"facts":host_facts});
+        let environment_changes = if scenario == "host-proxy-upgrade" {
+            Value::Null
+        } else {
+            json!(["MAX_ROOMS"])
+        };
         let report = json!({"action":"maintain","revision":expected["revision"],"passed":success,
             "phase":if success {"complete"} else {"launcher"},"launcherPassed":success,
-            "environmentChanges":["MAX_ROOMS"],"nativeLauncher":native,
+            "environmentChanges":environment_changes,
+            "nativeLauncher":native,
             "maintenanceEvidence":evidence});
         let receipt = json!({"schemaVersion":1,"scope":"PreparedHostMaintenanceGuest",
             "runId":expected["runId"],"revision":expected["revision"],"scenario":scenario,
             "passed":true,"failure":null,"checkpoint":"complete","finalStatus":0,
             "cleanupPassed":true,"bootstrapRawExit":0,"bootstrapFrame":bootstrap,
             "hostRawExit":if success {0} else {1},"hostReport":report,"observations":observations,
-            "sourcePins":expected["sourcePins"]});
+            "sourcePins":expected["sourcePins"],
+            "upgradeEvidence":upgrade_evidence::fixture(scenario, &expected),
+            "hostDiagnostic":null});
         (receipt, expected)
+    }
+    fn fixture(success: bool) -> (Value, Value) {
+        fixture_case(if success {
+            "host-success"
+        } else {
+            "host-launcher-refusal"
+        })
     }
     #[test]
     fn separate_host_cases_require_both_real_operation_and_bootstrap_shapes() {
-        for success in [true, false] {
-            let (receipt, expected) = fixture(success);
+        for scenario in options::HOST_CASES {
+            let (receipt, expected) = fixture_case(scenario);
             assert!(guest(receipt.clone(), &expected).is_ok());
             let mut old_scope = expected.clone();
             old_scope["scope"] = "MaintainLauncherPrerequisiteRequest".into();
@@ -395,11 +448,14 @@ mod tests {
     }
     #[test]
     fn complete_host_request_and_passing_receipts_fit_the_existing_session_frame() {
-        for success in [true, false] {
-            let (receipt, request) = fixture(success);
+        for scenario in options::HOST_CASES {
+            let (receipt, request) = fixture_case(scenario);
             assert_eq!(request.as_object().unwrap().len(), 18);
             assert_eq!(request["sourcePins"].as_object().unwrap().len(), 52);
             assert_eq!(request["helperPins"].as_object().unwrap().len(), 15);
+            assert_eq!(receipt.as_object().unwrap().len(), 18);
+            assert_eq!(receipt["observations"].as_object().unwrap().len(), 28);
+            assert_eq!(receipt["upgradeEvidence"].as_object().unwrap().len(), 3);
             for facts in [
                 &receipt["bootstrapFrame"]["facts"],
                 &receipt["hostReport"]["nativeLauncher"]["facts"],
@@ -407,10 +463,46 @@ mod tests {
                 assert_eq!(facts.as_object().unwrap().len(), 40);
             }
             guest(receipt.clone(), &request).unwrap();
-            for value in [&request, &receipt] {
-                let bytes = serde_json::to_vec(value).unwrap();
-                assert!(bytes.len() < 16384, "{} bytes plus newline", bytes.len());
+            let mut negative = receipt.clone();
+            negative["passed"] = false.into();
+            negative["failure"] = "refused".into();
+            negative["finalStatus"] = 1.into();
+            negative["cleanupPassed"] = false.into();
+            negative["hostDiagnostic"] = diagnostic::fixture();
+            negative["checkpoint"] = negative["hostDiagnostic"]["stage"].clone();
+            guest(negative.clone(), &request).unwrap();
+            for value in [&request, &receipt, &negative] {
+                let bytes = super::super::auth::encoded(value).unwrap();
+                assert_eq!(bytes.last(), Some(&b'\n'));
+                assert!(
+                    bytes.len() <= 16384,
+                    "{scenario}: {} bytes including newline",
+                    bytes.len()
+                );
             }
+            let mut oversized = negative;
+            oversized["hostDiagnostic"]["observedCommandSha256"] = "a".repeat(16384).into();
+            assert!(super::super::auth::encoded(&oversized).unwrap().len() > 16384);
+            assert!(guest(oversized, &request).is_err());
+        }
+    }
+    #[test]
+    fn diagnostics_cannot_change_a_positive_verdict_or_outlive_the_first_failure_checkpoint() {
+        for scenario in options::HOST_CASES {
+            let (receipt, expected) = fixture_case(scenario);
+            let mut changed = receipt.clone();
+            changed["hostDiagnostic"] = diagnostic::fixture();
+            changed["checkpoint"] = changed["hostDiagnostic"]["stage"].clone();
+            assert!(guest(changed.clone(), &expected).is_err());
+            changed["passed"] = false.into();
+            changed["failure"] = "refused".into();
+            changed["finalStatus"] = 1.into();
+            guest(changed.clone(), &expected).unwrap();
+            changed["checkpoint"] = "host-cleanup".into();
+            assert!(guest(changed, &expected).is_err());
+            let mut changed = receipt;
+            changed.as_object_mut().unwrap().remove("hostDiagnostic");
+            assert!(guest(changed, &expected).is_err());
         }
     }
     #[test]
@@ -433,8 +525,8 @@ mod tests {
     }
     #[test]
     fn each_required_observation_and_current_binary_are_fenced() {
-        for success in [true, false] {
-            let (receipt, expected) = fixture(success);
+        for scenario in options::HOST_CASES {
+            let (receipt, expected) = fixture_case(scenario);
             for name in OBSERVATIONS {
                 let mut invalid = receipt.clone();
                 invalid["observations"][name] =
@@ -463,8 +555,8 @@ mod tests {
     }
     #[test]
     fn both_host_cases_require_complete_launcher_facts_and_exact_statuses() {
-        for success in [true, false] {
-            let (receipt, expected) = fixture(success);
+        for scenario in options::HOST_CASES {
+            let (receipt, expected) = fixture_case(scenario);
             let mut absent = receipt.clone();
             absent["hostReport"]["nativeLauncher"] = Value::Null;
             assert!(guest(absent, &expected).is_err());
@@ -476,6 +568,55 @@ mod tests {
                 let mut invalid = receipt.clone();
                 invalid["hostReport"]["nativeLauncher"]["facts"][name] = value;
                 assert!(guest(invalid, &expected).is_err(), "{name}");
+            }
+        }
+    }
+    #[test]
+    fn proxy_only_normalizes_absent_environment_changes_and_unused_candidate_observations() {
+        for scenario in options::HOST_CASES {
+            let (receipt, expected) = fixture_case(scenario);
+            let proxy = scenario == "host-proxy-upgrade";
+            assert_eq!(receipt["hostReport"]["environmentChanges"].is_null(), proxy);
+            for name in ["reviewedSettingObserved", "candidateConsumed"] {
+                assert_eq!(receipt["observations"][name].as_bool(), Some(!proxy));
+            }
+            let mut changed = receipt.clone();
+            changed["hostReport"]["environmentChanges"] = if proxy {
+                json!(["MAX_ROOMS"])
+            } else {
+                Value::Null
+            };
+            assert!(guest(changed, &expected).is_err());
+            let mut changed = receipt;
+            changed["hostReport"]
+                .as_object_mut()
+                .unwrap()
+                .remove("environmentChanges");
+            assert!(guest(changed, &expected).is_err());
+        }
+    }
+    #[test]
+    fn negative_host_receipts_keep_validated_partial_upgrade_evidence() {
+        let (mut receipt, expected) = fixture_case("host-migration-upgrade");
+        receipt["passed"] = false.into();
+        receipt["failure"] = "command".into();
+        receipt["checkpoint"] = "host-migration-after".into();
+        receipt["finalStatus"] = 1.into();
+        receipt["hostRawExit"] = 1.into();
+        receipt["hostReport"] = Value::Null;
+        receipt["observations"]["roleNumberingUpgradeObserved"] = false.into();
+        receipt["upgradeEvidence"]["migrationAfter"] = Value::Null;
+        guest(receipt.clone(), &expected).unwrap();
+        receipt["upgradeEvidence"]["migrationBefore"]["snapshot"]["memberRole"] = 2.into();
+        assert!(guest(receipt, &expected).is_err());
+        for scenario in ["host-migration-upgrade", "host-proxy-upgrade"] {
+            let (receipt, expected) = fixture_case(scenario);
+            for name in ["migrationBefore", "migrationAfter", "proxy"] {
+                if !receipt["upgradeEvidence"][name].is_null() {
+                    let mut changed = receipt.clone();
+                    changed["upgradeEvidence"][name] = Value::Null;
+                    assert!(guest(changed, &expected).is_err(), "{scenario}: {name}");
+                }
             }
         }
     }
