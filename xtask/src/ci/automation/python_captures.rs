@@ -1,7 +1,8 @@
-//! Two bounded private captures. Replay borrows the caller's output and clock;
+//! Two current captures and one bounded legacy-class capture share one clock.
+//! Replay borrows the caller's output and clock;
 //! no capture, pathname or earlier report can authorize a successful result.
 
-use super::python_shards::{Cause, Control, Outcome};
+use super::python_shards::{Cause, Control, Outcome, Role};
 use crate::{
     ci::bounded_log::{Finished, Log},
     tooling::Environment,
@@ -17,12 +18,12 @@ use std::{
 
 pub(super) const MAX_LOG: u64 = 8 * 1024 * 1024;
 static NEXT: AtomicU64 = AtomicU64::new(0);
-const NAMES: [&str; 2] = ["shard-0.log", "shard-1.log"];
+const NAMES: [&str; 3] = ["shard-0.log", "shard-1.log", "legacy-maintenance.log"];
 
 pub(super) struct Captures {
     path: PathBuf,
     original: Option<File>,
-    files: [Option<(u64, u64)>; 2],
+    files: [Option<(u64, u64)>; 3],
 }
 impl Captures {
     pub(super) fn create(environment: &Environment) -> Outcome<Self> {
@@ -53,7 +54,7 @@ impl Captures {
                         Ok(fd) => Ok(Self {
                             path,
                             original: Some(File::from(fd)),
-                            files: [None, None],
+                            files: [None, None, None],
                         }),
                         Err(_) => {
                             let _ = fs::remove_dir(&path);
@@ -83,7 +84,8 @@ impl Captures {
         Ok(())
     }
 
-    pub(super) fn log(&mut self, ordinal: usize) -> Outcome<Log> {
+    pub(super) fn log(&mut self, role: Role) -> Outcome<Log> {
+        let ordinal = role.index();
         self.current()?;
         let file = File::from(
             rustix::fs::openat(
@@ -107,19 +109,20 @@ impl Captures {
                 return Err(first);
             }
         }
-        Log::start(file, MAX_LOG).map_err(|_| Cause::Io)
+        Log::start(file, role.maximum_log()).map_err(|_| Cause::Io)
     }
 
     pub(super) fn replay(
         &self,
-        ordinal: usize,
+        role: Role,
         finished: &Finished,
         output: &mut dyn Write,
         control: &mut Control,
     ) -> Outcome<()> {
+        let ordinal = role.index();
         control.final_fence()?;
         self.current()?;
-        if !finished.complete || finished.bytes > MAX_LOG {
+        if !finished.complete || finished.bytes > role.maximum_log() {
             return Err(Cause::Io);
         }
         let mut file = File::from(

@@ -6,6 +6,8 @@ use std::ffi::OsString;
 use std::path::Path;
 use std::process::ExitCode;
 
+#[cfg(test)]
+mod maintenance_caller_tests;
 mod python_captures;
 mod python_inventory;
 mod python_shards;

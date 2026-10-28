@@ -225,6 +225,110 @@
       changed_when: true
       when: not ansible_check_mode
 
+    # The original signed predicate is custody evidence, not a new verifier or receipt marker.
+    - name: Snapshot the original verified controller predicate
+      ansible.builtin.stat:
+        path: >-
+          {{ (scpub_validated_release.stdout | from_json).directory }}/release-predicate.json
+        follow: false
+        get_checksum: true
+        checksum_algorithm: sha256
+      delegate_to: localhost
+      become: false
+      register: scpub_release_predicate_source
+      when: not ansible_check_mode
+
+    - name: Snapshot the actual published signed application manifest
+      ansible.builtin.stat:
+        path: "{{ scpub_root }}/releases/{{ scpub_release_revision }}/release.json"
+        follow: false
+        get_checksum: true
+        checksum_algorithm: sha256
+      register: scpub_release_published_manifest
+      when: not ansible_check_mode
+
+    - name: Inspect any existing retained application predicate without following links
+      ansible.builtin.stat:
+        path: "{{ scpub_root }}/releases/{{ scpub_release_revision }}/release-predicate.json"
+        follow: false
+        get_checksum: true
+        checksum_algorithm: sha256
+      register: scpub_release_predicate_existing
+      when: not ansible_check_mode
+
+    - name: Require original staged bytes and an absent or exact retained predicate
+      ansible.builtin.assert:
+        that:
+          - scpub_release_predicate_source.stat.isreg | default(false)
+          - not (scpub_release_predicate_source.stat.islnk | default(false))
+          - scpub_release_predicate_source.stat.nlink == 1
+          - scpub_release_predicate_source.stat.size > 0
+          - scpub_release_predicate_source.stat.size <= 67108864
+          - scpub_release_predicate_source.stat.checksum is match('^[a-f0-9]{64}$')
+          - scpub_release_published_manifest.stat.isreg | default(false)
+          - not (scpub_release_published_manifest.stat.islnk | default(false))
+          - scpub_release_published_manifest.stat.uid == 0
+          - scpub_release_published_manifest.stat.gid == 0
+          - scpub_release_published_manifest.stat.mode == '0600'
+          - >-
+            scpub_release_published_manifest.stat.checksum ==
+            (scpub_validated_release.stdout | from_json)['release.json']
+          - >-
+            not scpub_release_predicate_existing.stat.exists or
+            (scpub_release_predicate_existing.stat.isreg | default(false) and
+             not (scpub_release_predicate_existing.stat.islnk | default(false)) and
+             scpub_release_predicate_existing.stat.uid == 0 and
+             scpub_release_predicate_existing.stat.gid == 0 and
+             scpub_release_predicate_existing.stat.mode == '0600' and
+             scpub_release_predicate_existing.stat.nlink == 1 and
+             scpub_release_predicate_existing.stat.size ==
+             scpub_release_predicate_source.stat.size and
+             scpub_release_predicate_existing.stat.checksum ==
+             scpub_release_predicate_source.stat.checksum)
+        fail_msg: >-
+          Retained staged identity must be absent or the exact original signed predicate.
+      when: not ansible_check_mode
+
+    - name: Copy only the original verified predicate without replacing existing evidence
+      ansible.builtin.copy:
+        src: >-
+          {{ (scpub_validated_release.stdout | from_json).directory }}/release-predicate.json
+        dest: "{{ scpub_root }}/releases/{{ scpub_release_revision }}/release-predicate.json"
+        owner: root
+        group: root
+        mode: '0600'
+        follow: false
+        local_follow: false
+        force: false
+      when: not ansible_check_mode
+
+    - name: Recheck the actual transferred predicate before staging can succeed
+      ansible.builtin.stat:
+        path: "{{ scpub_root }}/releases/{{ scpub_release_revision }}/release-predicate.json"
+        follow: false
+        get_checksum: true
+        checksum_algorithm: sha256
+      register: scpub_release_predicate_retained
+      when: not ansible_check_mode
+
+    - name: Require the retained original predicate bytes and private profile
+      ansible.builtin.assert:
+        that:
+          - scpub_release_predicate_retained.stat.isreg | default(false)
+          - not (scpub_release_predicate_retained.stat.islnk | default(false))
+          - scpub_release_predicate_retained.stat.uid == 0
+          - scpub_release_predicate_retained.stat.gid == 0
+          - scpub_release_predicate_retained.stat.mode == '0600'
+          - scpub_release_predicate_retained.stat.nlink == 1
+          - >-
+            scpub_release_predicate_retained.stat.size ==
+            scpub_release_predicate_source.stat.size
+          - >-
+            scpub_release_predicate_retained.stat.checksum ==
+            scpub_release_predicate_source.stat.checksum
+        fail_msg: The transferred predicate must retain its original verified bytes.
+      when: not ansible_check_mode
+
     - name: Replace only the application when deployment was explicitly selected
       vars:
         ansible_python_interpreter: /usr/bin/python3

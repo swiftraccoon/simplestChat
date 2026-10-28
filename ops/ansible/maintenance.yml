@@ -18,6 +18,298 @@
           - scpub_config == '/etc/simplestchat-public'
           - scpub_root == '/srv/simplestchat-public'
         fail_msg: Stage the exact 40-character revision with release.yml first.
+    # The caller-trusted source-built controller and gh are keepers.
+    - name: Deliver the signed current Ops executable through native policy
+      when: not ansible_check_mode
+      block:
+        - name: Match the exact maintenance revision and trusted controller paths
+          ansible.builtin.assert:
+            that:
+              - scpub_release_repository is string
+              - scpub_release_ci_run is integer
+              - scpub_release_ci_run > 0
+              - scpub_ops_selection.repository == scpub_release_repository
+              - scpub_ops_selection.buildRunId == scpub_release_ci_run
+              - scpub_ops_selection.revision == scpub_release_revision
+              - scpub_ops_selection.revision == scpub_release_expected_revision
+              - scpub_ops_xtask is match('^/')
+              - scpub_ops_gh_executable is match('^/')
+              - scpub_ops_gh_executable | realpath | basename == 'gh'
+
+        # Existing signed staging is authority; these are original-byte custody joins.
+        - name: Snapshot the retained signed application predicate
+          ansible.builtin.stat:
+            path: "{{ scpub_root }}/releases/{{ scpub_release_revision }}/release-predicate.json"
+            follow: false
+            get_checksum: true
+            checksum_algorithm: sha256
+          register: scpub_app_predicate_file
+
+        - name: Snapshot the actual staged application manifest
+          ansible.builtin.stat:
+            path: "{{ scpub_root }}/releases/{{ scpub_release_revision }}/release.json"
+            follow: false
+            get_checksum: true
+            checksum_algorithm: sha256
+          register: scpub_app_manifest_file
+
+        - name: Require protected original application identity files
+          ansible.builtin.assert:
+            that:
+              - scpub_app_predicate_file.stat.isreg | default(false)
+              - not (scpub_app_predicate_file.stat.islnk | default(false))
+              - scpub_app_predicate_file.stat.uid == 0
+              - scpub_app_predicate_file.stat.gid == 0
+              - scpub_app_predicate_file.stat.mode == '0600'
+              - scpub_app_predicate_file.stat.nlink == 1
+              - scpub_app_predicate_file.stat.size > 0
+              - scpub_app_predicate_file.stat.size <= 67108864
+              - scpub_app_predicate_file.stat.checksum is match('^[a-f0-9]{64}$')
+              - scpub_app_manifest_file.stat.isreg | default(false)
+              - not (scpub_app_manifest_file.stat.islnk | default(false))
+              - scpub_app_manifest_file.stat.uid == 0
+              - scpub_app_manifest_file.stat.gid == 0
+              - scpub_app_manifest_file.stat.mode == '0600'
+              - scpub_app_manifest_file.stat.checksum is match('^[a-f0-9]{64}$')
+            fail_msg: Restage the selected signed application before native maintenance.
+
+        - name: Read the original retained application predicate
+          ansible.builtin.slurp:
+            src: "{{ scpub_root }}/releases/{{ scpub_release_revision }}/release-predicate.json"
+          register: scpub_app_predicate_bytes
+          no_log: true
+
+        - name: Decode the retained predicate only for passive identity joins
+          ansible.builtin.set_fact:
+            scpub_app_predicate: "{{ scpub_app_predicate_bytes.content | b64decode | from_json }}"
+            cacheable: false
+          no_log: true
+
+        - name: Join staged application bytes and exact Ops selection before export
+          ansible.builtin.assert:
+            that:
+              - >-
+                scpub_app_predicate_bytes.content | b64decode | hash('sha256') ==
+                scpub_app_predicate_file.stat.checksum
+              - scpub_app_predicate is mapping
+              - scpub_app_predicate.repository == scpub_ops_selection.repository
+              - scpub_app_predicate.revision == scpub_ops_selection.revision
+              - scpub_app_predicate.runId is integer
+              - scpub_app_predicate.runId == scpub_ops_selection.buildRunId
+              - scpub_app_predicate.runAttempt is integer
+              - scpub_app_predicate.runAttempt == scpub_ops_selection.runAttempt
+              - >-
+                scpub_app_predicate.fileDigests['release.json'] ==
+                scpub_app_manifest_file.stat.checksum
+            fail_msg: >-
+              The retained staged application and Ops must select the same signed CI identity.
+
+        - name: Create a private controller evidence directory
+          ansible.builtin.tempfile:
+            state: directory
+            prefix: simplestchat-native-maintenance-
+          delegate_to: localhost
+          become: false
+          register: scpub_ops_local
+
+        - name: Select this operation's private paths
+          ansible.builtin.set_fact:
+            scpub_ops_controller: "{{ scpub_ops_local.path | realpath }}"
+            scpub_ops_nonce: >-
+              {{ lookup('ansible.builtin.password', '/dev/null', length=32,
+                        chars=['digits', 'abcdef']) }}
+            scpub_ops_gh: "{{ scpub_ops_gh_executable | realpath }}"
+            cacheable: false
+
+        - name: Snapshot fixed canonical bytes as expected-old custody only
+          ansible.builtin.stat:
+            path: /usr/local/libexec/simplestchat-public/simplestchat-ops
+            follow: false
+            get_checksum: true
+            checksum_algorithm: sha256
+          register: scpub_ops_old
+
+        - name: Serialize one original request for the strict native decoder
+          ansible.builtin.set_fact:
+            scpub_ops_request: >-
+              {{ {
+                'schemaVersion': 1, 'selection': scpub_ops_selection,
+                'artifactId': scpub_ops_artifact_id,
+                'output': scpub_ops_controller ~ '/export',
+                'authentication': 'gh-token',
+                'remoteInput': '/run/simplestchat-ops-bootstrap/' ~ scpub_ops_nonce ~ '/input'
+              } | combine({'installedBinary': {
+                'sha256': scpub_ops_old.stat.checksum, 'bytes': scpub_ops_old.stat.size
+              }} if scpub_ops_old.stat.exists else {}) | to_json }}
+            cacheable: false
+
+        - name: Retain the original controller request privately
+          ansible.builtin.copy:
+            content: "{{ scpub_ops_request }}"
+            dest: "{{ scpub_ops_controller }}/export-request.json"
+            mode: '0600'
+          delegate_to: localhost
+          become: false
+
+        - name: Read the user's gh token only when GH_TOKEN was not supplied
+          ansible.builtin.command:
+            argv: [/usr/bin/env, -u, GH_TOKEN, -u, GITHUB_TOKEN,
+                   "{{ scpub_ops_gh }}", auth, token, --hostname, github.com]
+          delegate_to: localhost
+          become: false
+          register: scpub_ops_credential
+          changed_when: false
+          no_log: true
+          timeout: 30
+          when: lookup('ansible.builtin.env', 'GH_TOKEN') | length == 0
+
+        - name: Authenticate and export the exact signed pair through Rust
+          ansible.builtin.command:
+            argv:
+              - "{{ scpub_ops_xtask }}"
+              - ops-artifact
+              - export
+              - --request
+              - "{{ scpub_ops_controller }}/export-request.json"
+              - --request-sha256
+              - "{{ scpub_ops_request | hash('sha256') }}"
+          environment:
+            PATH: "{{ scpub_ops_gh | dirname }}:/usr/bin:/bin"
+            GH_TOKEN: >-
+              {{ lookup('ansible.builtin.env', 'GH_TOKEN') or scpub_ops_credential.stdout | trim }}
+            GITHUB_TOKEN: ''
+          delegate_to: localhost
+          become: false
+          register: scpub_ops_export
+          changed_when: false
+          no_log: true
+          timeout: 1920
+
+        - name: Read the current receipt only after actual native command success
+          ansible.builtin.set_fact:
+            scpub_ops_receipt: "{{ scpub_ops_export.stdout | from_json }}"
+            scpub_ops_remote: "/run/simplestchat-ops-bootstrap/{{ scpub_ops_nonce }}"
+            cacheable: false
+
+        - name: Refuse an unknown bootstrap parent without repairing it
+          ansible.builtin.stat:
+            path: /run/simplestchat-ops-bootstrap
+            follow: false
+            get_checksum: false
+          register: scpub_ops_parent
+
+        - name: Require a private existing bootstrap parent
+          ansible.builtin.assert:
+            that:
+              - scpub_ops_parent.stat.isdir and not scpub_ops_parent.stat.islnk
+              - scpub_ops_parent.stat.uid == 0 and scpub_ops_parent.stat.gid == 0
+              - scpub_ops_parent.stat.mode == '0700'
+          when: scpub_ops_parent.stat.exists
+
+        - name: Create only an absent fixed bootstrap parent
+          ansible.builtin.command:
+            argv: [/usr/bin/mkdir, --mode=0700, --, /run/simplestchat-ops-bootstrap]
+          when: not scpub_ops_parent.stat.exists
+          changed_when: true
+
+        - name: Exclusively create this nonce and its private empty input directory
+          ansible.builtin.command:
+            argv: [/usr/bin/mkdir, --mode=0700, --, "{{ item }}"]
+          loop: ["{{ scpub_ops_remote }}", "{{ scpub_ops_remote }}/input"]
+          changed_when: true
+
+        - name: Copy only the native export's tar and original installer request
+          ansible.builtin.copy:
+            src: "{{ scpub_ops_controller }}/export/{{ item }}"
+            dest: "{{ scpub_ops_remote }}/{{ item }}"
+            owner: root
+            group: root
+            mode: '0600'
+            force: false
+          loop: [ops-pair.tar, install-request.json]
+
+        - name: Join the actual received tar before the trusted parser runs
+          ansible.builtin.stat:
+            path: "{{ scpub_ops_remote }}/ops-pair.tar"
+            follow: false
+            get_checksum: true
+            checksum_algorithm: sha256
+          register: scpub_ops_tar
+
+        - name: Require the exact Rust-produced three-member transport
+          ansible.builtin.assert:
+            that:
+              - scpub_ops_tar.stat.size == scpub_ops_receipt.transfer.bytes
+              - scpub_ops_tar.stat.checksum == scpub_ops_receipt.transfer.sha256
+
+        - name: Extract only the three fixed members into the fresh private directory
+          ansible.builtin.command:
+            argv:
+              - /usr/bin/tar
+              - --extract
+              - --file
+              - "{{ scpub_ops_remote }}/ops-pair.tar"
+              - --directory
+              - "{{ scpub_ops_remote }}/input"
+              - --keep-old-files
+              - --no-same-owner
+              - --no-same-permissions
+              - --no-overwrite-dir
+              - --no-wildcards
+              - --
+              - ops-release.json
+              - ops-selection.json
+              - simplestchat-ops
+          changed_when: true
+
+        - name: Join the candidate bytes before their first execution
+          ansible.builtin.stat:
+            path: "{{ scpub_ops_remote }}/input/simplestchat-ops"
+            follow: false
+            get_checksum: true
+            checksum_algorithm: sha256
+          register: scpub_ops_candidate
+
+        - name: Require the native authenticated candidate pin
+          ansible.builtin.assert:
+            that:
+              - scpub_ops_candidate.stat.size == scpub_ops_receipt.binary.bytes
+              - scpub_ops_candidate.stat.checksum == scpub_ops_receipt.binary.sha256
+
+        - name: Make only this candidate executable
+          ansible.builtin.file:
+            path: "{{ scpub_ops_remote }}/input/simplestchat-ops"
+            mode: '0755'
+            follow: false
+
+        - name: Install or upgrade through the authenticated candidate and native checks
+          ansible.builtin.command:
+            argv:
+              - "{{ scpub_ops_remote }}/input/simplestchat-ops"
+              - distribution
+              - "{{ scpub_ops_receipt.operation }}"
+              - --request
+              - "{{ scpub_ops_remote }}/install-request.json"
+              - --request-sha256
+              - "{{ scpub_ops_receipt.installerRequest.sha256 }}"
+          environment:
+            PATH: /usr/sbin:/usr/bin:/sbin:/bin
+            GH_TOKEN: ''
+            GITHUB_TOKEN: ''
+          changed_when: true
+          timeout: 150
+
+        - name: Record the bounded private evidence retained for this operation
+          ansible.builtin.debug:
+            msg: >-
+              Native delivery completed. Private evidence retained at
+              {{ scpub_ops_controller }} on the controller and {{ scpub_ops_remote }} on the host.
+      always:
+        - name: Clear the noncached token-bearing command result
+          ansible.builtin.set_fact:
+            scpub_ops_credential: {}
+            cacheable: false
+          no_log: true
   tasks:
     # The launcher checks the packaged migrations against this clean checkout.
     - name: Obtain the exact application source for the launcher's checks
@@ -105,24 +397,35 @@
             scpub_browser_assets_revision: "{{ (scpub_selected_images.content | b64decode | from_json).revision }}"
             scpub_browser_assets_record_installed: false
 
-    - name: Replace the application through the launcher as a transient unit
+    - name: Replace the application through the native maintenance transaction
       vars:
         ansible_python_interpreter: /usr/bin/python3
       ansible.builtin.command:
         argv:
           - systemd-run
-          - "--unit=simplestchat-maintenance-{{ scpub_release_revision[:12] }}-{{ lookup('ansible.builtin.pipe', 'date -u +%Y%m%dT%H%M%S') }}"
+          - >-
+            --unit=simplestchat-maintenance-{{ scpub_release_revision[:12] }}-{{ scpub_ops_nonce }}
           - --property=Type=exec
           - --property=RuntimeMaxSec=1800
           - --property=TimeoutStopSec=240
           - --wait
-          - /usr/bin/python3
-          - -B
-          - /usr/local/libexec/simplestchat-public/release-public.py
+          - /usr/local/libexec/simplestchat-public/simplestchat-ops
+          - release
           - maintain
+          - --revision
           - "{{ scpub_release_revision }}"
           - --candidate-env
           - "{{ scpub_config }}/app.env.candidate"
-          - "{{ '--browser-assets-upgrade' if scpub_browser_assets_upgrade | default(false) | bool else '--no-browser-assets-upgrade' }}"
+          - >-
+            {{ '--browser-assets-upgrade' if scpub_browser_assets_upgrade | default(false) | bool
+               else '--no-browser-assets-upgrade' }}
+          - --timeout-seconds
+          - '1800'
+          - --finalization-seconds
+          - '60'
+      environment:
+        PATH: /usr/sbin:/usr/bin:/sbin:/bin
+        GH_TOKEN: ''
+        GITHUB_TOKEN: ''
       changed_when: true
       when: not ansible_check_mode
